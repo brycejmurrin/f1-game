@@ -1384,6 +1384,68 @@ const Tracks = (function () {
       sceneryTheme = landmarkKit = circuitKit = null;
     }
     const modelGroup = (id, bounds, emit, opts) => models.modelGroup(id, bounds, emit, opts);
+
+    // ── Vertical placement helpers (docs/SCENERY-GROUNDING.md) ──────────────
+    // Every guard in this file is HORIZONTAL (onTrack/rejBox/blockAt keep props
+    // off the racing line); nothing asserted that a prop meets the ground, and
+    // every floating-scenery defect found by tools/float-audit.cjs was vertical.
+    // These three close that gap by expressing intent instead of arithmetic.
+    const UPV = [0, 1, 0];
+
+    // seat.*: emit a primitive standing ON `foot` — the point it rests on.
+    // addBox/addPyramid centre their `c` while addPrism/addCyl/addCone/
+    // addFrustum anchor at the BASE, and callers treating them alike produced
+    // seven separate floating-roof defects. Going through seat.* makes that
+    // mistake unexpressible: one convention, every primitive.
+    const seat = {
+      box:     (o, foot, sz, col, b) => addBox(o, vadd(foot, (b ? b[1] : UPV), sz[1] / 2), sz, col, b),
+      prism:   (o, foot, sz, col, b) => addPrism(o, foot, sz, col, b),
+      cyl:     (o, foot, rad, h, col, seg, b) => addCyl(o, foot, rad, h, col, seg, b),
+      cone:    (o, foot, rad, h, col, seg, b) => addCone(o, foot, rad, h, col, seg, b),
+      frustum: (o, foot, r0, r1, h, col, seg, b) => addFrustum(o, foot, r0, r1, h, col, seg, b),
+    };
+
+    // foundation(): fill from `top` down to the LOWEST ground under the
+    // footprint. Samples corners AND centre, because a single groundYAt() reuse
+    // across a wide model assumes flat ground (Imola's village stood 47 m clear
+    // of its hillside that way). Sinks below grade so the seam never shows and
+    // inherits addBox's on-track rejection.
+    const foundation = (o, spec) => {
+      spec = spec || {};
+      const c = spec.center, size = spec.size, top = spec.top;
+      if (!c || !size || !Number.isFinite(top)) return false;
+      const b = spec.basis || [[1, 0, 0], UPV, [0, 0, 1]];
+      const r = b[0], f = b[2];
+      let lo = Infinity;
+      for (const sx of [-0.5, 0, 0.5]) for (const sf of [-0.5, 0, 0.5]) {
+        const x = c[0] + r[0] * sx * size[0] + f[0] * sf * size[1];
+        const z = c[2] + r[2] * sx * size[0] + f[2] * sf * size[1];
+        const y = terrainYAt(x, z);
+        if (y != null && y < lo) lo = y;
+      }
+      if (!Number.isFinite(lo)) lo = Number.isFinite(spec.ground) ? spec.ground : NaN;
+      if (!Number.isFinite(lo)) return false;
+      const embed = spec.embed != null ? spec.embed : 0.6;
+      const h = (top - lo) + embed;
+      if (h <= 0.05) return false;
+      return addBox(o, [c[0], lo - embed + h / 2, c[2]],
+                    [size[0], h, size[1]], spec.col || [0.42, 0.43, 0.47], b);
+    };
+
+    // cantilever(): a head offset from a mast MUST carry a visible member.
+    // Hungaroring's lamps omitted the arm and 168 heads hovered beside bare
+    // poles — the exact signature float-audit reports.
+    const cantilever = (o, top, outM, side, headSz, headCol, armCol, b) => {
+      const rr = b ? b[0] : [1, 0, 0];
+      const reach = Math.abs(outM);
+      if (reach > 0.35)
+        // Overrun both ends by 0.25 m so the member genuinely meets the mast at
+        // one end and the head at the other — an arm that merely touches can
+        // still read (and audit) as a gap.
+        addBox(o, vadd(top, rr, side * outM / 2), [reach + 0.5, 0.18, 0.22],
+               armCol || [0.30, 0.30, 0.34], b);
+      addBox(o, vadd(top, rr, side * outM), headSz, headCol, b);
+    };
     const overheadSpan = (spec) => models.overheadSpan(spec);
     const waterSurface = (k, side, gap, sz, col, opts) => {
       opts = opts || {};
@@ -2382,7 +2444,7 @@ const Tracks = (function () {
         sec(podH, w * 0.7, h - podH, d * 0.7, k * 5.1 + side * 2);  // slender tower
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.45, 1.0, d * 0.45], cap, b);
       } else if (kind === "slab") {
-        sec(0, w, h, d, k * 3.7 + side * 1.9);                     // clean tall slab
+        if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents // clean tall slab
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.92, 1.0, d * 0.92], cap, b);
       } else if (kind === "twin") {
         const td = d * 0.4, off = d * 0.28;
@@ -2424,35 +2486,34 @@ const Tracks = (function () {
         }
         if (NIGHT) addBox(out, vadd(a.c, a.u, h + 1.2), [1.4, 1.4, 1.4], neonOn ? [3.0, 1.6, 0.6] : [3.0, 0.6, 0.4], b);  // apex beacon
       } else if (kind === "screen") {                             // giant neon screen building (BRIGHT)
-        sec(0, w, h, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         const sc = neonOn ? [neon[0] * 1.25, neon[1] * 1.25, neon[2] * 1.25] : (NIGHT ? [warm[0] * 0.9, warm[1] * 0.9, warm[2] * 0.9] : [0.30, 0.33, 0.40]);
         addBox(out, vadd(vadd(a.c, a.u, h * 0.56), b[0], -side * (w / 2 + 0.25)), [0.3, h * 0.66, d * 0.82], sc, b);
         if (neonOn) addBox(out, vadd(vadd(a.c, a.u, h * 0.56), b[0], -side * (w / 2 + 0.28)), [0.1, h * 0.6, d * 0.74], [neon[0] * 0.4, neon[1] * 0.4, neon[2] * 0.4], b);
       } else if (kind === "clad") {                               // neon-banded tower (BRIGHT)
-        sec(0, w, h, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         if (neonOn) { const bands = Math.max(4, Math.round(h / 5)); for (let i = 1; i < bands; i++) addBox(out, vadd(a.c, a.u, i * (h / bands)), [w * 1.04, (h / bands) * 0.22, d * 1.04], neon, b); }
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.6, 1.0, d * 0.6], cap, b);
       } else if (kind === "dome") {                              // body + drum + dome cap (civic landmark)
         const bh = h * 0.78, R = reach * 0.34;
-        sec(0, w, bh, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, bh, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         addCyl(out, vadd(a.c, a.u, bh), R, h * 0.10, cap, 14, b);                                            // drum
         addCone(out, vadd(a.c, a.u, bh + h * 0.10), R * 1.1, h * 0.16, neonOn ? neon : (NIGHT ? warm : cap), 14, b);  // dome
         if (NIGHT) addBox(out, vadd(a.c, a.u, h + 0.6), [0.7, 0.7, 0.7], neonOn ? [3.0, 2.0, 0.8] : [3.0, 0.6, 0.4], b);
       } else if (kind === "chevron") {                           // pitched / gabled roof block
         const bh = h * 0.82;
-        sec(0, w, bh, d, k * 3.7 + side * 1.9);
-        // addPrism takes its `c` as the BASE, not the centre (unlike addBox), so
+        if (sec(0, w, bh, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents // addPrism takes its `c` as the BASE, not the centre (unlike addBox), so
         // adding half the roof height here lifted the gable clear of the tower —
         // h*0.09 of open sky under every chevron roof (9 m on a 100 m tower).
-        addPrism(out, vadd(a.c, a.u, bh), [w, h * 0.18, d], cap, b);                                         // gable roof (ridge along tangent)
+        seat.prism(out, vadd(a.c, a.u, bh), [w, h * 0.18, d], cap, b);                                       // gable roof, seated on the body
         if (neonOn) addBox(out, vadd(a.c, a.u, bh + h * 0.18), [w * 1.02, 0.5, d * 1.02], neon, b);          // eave neon
       } else if (kind === "notch") {                             // twin slabs split by a vertical slot
         const podH = h * 0.22, off = w * 0.30;
-        sec(0, w, podH, d, k * 3.1 + side);                                                                   // shared podium base
+        if (sec(0, w, podH, d, k * 3.1 + side) === false) return;   // body rejected -> drop its dependents // shared podium base
         for (const o2 of [-off, off]) sec(podH, w * 0.42, h - podH, d, k * 4.3 + side + o2, o2);             // two towers
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.92, 1.0, d * 0.9], cap, b);
       } else if (kind === "fin") {                               // slab with proud vertical fins on the face
-        sec(0, w, h, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         const fins = Math.max(3, Math.round(w / 4));
         for (let i = 0; i < fins; i++) {
           const fx = (-0.5 + (i + 0.5) / fins) * w, lit = neonOn && hash(k + i * 5.1 + side) < 0.5;
@@ -2460,7 +2521,7 @@ const Tracks = (function () {
         }
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.92, 1.0, d * 0.92], cap, b);
       } else if (kind === "antenna") {                           // flat-top tower + mast cluster + beacons
-        sec(0, w, h, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         addBox(out, vadd(a.c, a.u, h + 0.4), [w * 0.9, 0.8, d * 0.9], cap, b);
         const masts = 3;
         for (let i = 0; i < masts; i++) {
@@ -2469,7 +2530,7 @@ const Tracks = (function () {
           if (NIGHT) addBox(out, vadd(vadd(a.c, a.u, h + mh), b[2], mx), [0.5, 0.5, 0.5], [3.0, 0.5, 0.35], b);  // beacon
         }
       } else if (kind === "cross") {                             // two perpendicular slabs (+ footprint)
-        sec(0, w, h, d * 0.5, k * 3.7 + side * 1.9);                                                          // arm along tangent
+        if (sec(0, w, h, d * 0.5, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents // arm along tangent
         const cen2 = vadd(a.c, a.u, h * 0.5);
         addBox(out, cen2, [w * 0.5, h, d], bodyCol, b);                                                       // arm along width
         if (NIGHT) neonFacade(cen2, b, side, w * 0.5, h, d, neon, k * 6.1 + side, na);
@@ -2493,12 +2554,12 @@ const Tracks = (function () {
         addCyl(out, vadd(a.c, a.u, dh + 1.0), R * 0.7, 0.8, cap, 18, b);                    // shallow dome hint
       } else if (kind === "hall") {                              // low wide gabled hall (market / depot)
         const hh = h * 0.5;
-        sec(0, w, hh * 0.7, d, k * 3.3 + side);                                             // low body
-        addPrism(out, vadd(a.c, a.u, hh * 0.7), [w, hh * 0.3, d], cap, b);                  // gable roof (base-anchored)
+        if (sec(0, w, hh * 0.7, d, k * 3.3 + side) === false) return;   // body rejected -> drop its dependents // low body
+        seat.prism(out, vadd(a.c, a.u, hh * 0.7), [w, hh * 0.3, d], cap, b);               // gable roof, seated on the body
         if (neonOn) addBox(out, vadd(a.c, a.u, hh * 0.7), [w * 1.02, 0.4, d * 1.02], neon, b);  // eave neon
       } else { // setback
         const setH = h * 0.84;
-        sec(0, w, setH, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, setH, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         out._mat = bmat;
         addBox(out, vadd(a.c, a.u, setH + (h - setH) / 2), [w * 0.72, h - setH, d * 0.72], bodyCol, b);
         out._mat = MAT.METAL;
@@ -2543,8 +2604,8 @@ const Tracks = (function () {
         addBox(out, vadd(a.c, a.u, h), [0.5, 0.5, 0.5], lit, b);
       } else {                                                                               // cantilever arm
         const top = vadd(a.c, a.u, h);
-        addBox(out, vadd(top, b[0], -side * 0.9), [1.9, 0.22, 0.4], pole, b);                // arm over road
-        addBox(out, vadd(vadd(top, b[0], -side * 1.7), a.u, -0.2), [0.85, 0.35, 0.55], lit, b);  // head
+        // arm + head as one cantilever: the member is never optional
+        cantilever(out, vadd(top, a.u, -0.2), 1.7, -side, [0.85, 0.35, 0.55], lit, pole, b);
       }
     };
     // cityFront(): a CONTINUOUS, ALIGNED street wall of buildings from lap-fraction
@@ -3499,6 +3560,7 @@ const Tracks = (function () {
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
         modelGroup, overheadSpan, waterSurface, groundPatch, groundedSegments,
+        seat, foundation, cantilever,
         // Resolved data and opt-in architectural/facility helpers. Merely binding
         // these does not emit geometry; each circuit remains responsible for calls.
         sceneryTheme, landmarkKit, circuitKit,
