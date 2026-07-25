@@ -301,13 +301,15 @@ test("deselecting every telemetry driver synchronously restores the empty state"
   const driver = page.locator(".dh-dchip").first();
   await expect(driver).toBeVisible();
 
+  // Current flow: chip click selects; the LOAD LAP button starts the fetch.
   await driver.click();
+  await page.getByRole("button", { name: "LOAD LAP" }).click();
   await expect.poll(() => page.evaluate(() => window.__life.telemetryCalls.length)).toBe(1);
   await expect(page.locator(".dh-telem-detail .dh-spinner")).toHaveCount(1);
   await driver.click();
 
   await expect(page.locator(".dh-telem-detail .dh-spinner")).toHaveCount(0);
-  await expect(page.locator(".dh-telem-detail")).toContainText("Pick a driver");
+  await expect(page.locator(".dh-telem-detail")).toContainText("Pick 1 or 2 drivers");
 });
 
 test("data hub exposes modal tabs, traps focus, and restores its opener", async ({ page }) => {
@@ -362,6 +364,8 @@ test("telemetry popup is a labelled modal and restores driver focus", async ({ p
   await page.locator(".dh-tab").filter({ hasText: "TELEMETRY" }).click();
   const driver = page.getByRole("button", { name: "INI" });
   await driver.click();
+  // Current flow: the popup opens from LOAD LAP, not from the chip itself.
+  await page.getByRole("button", { name: "LOAD LAP" }).click();
 
   const popup = page.getByRole("dialog", { name: /Initial Driver/ });
   await expect(popup).toHaveAttribute("aria-modal", "true");

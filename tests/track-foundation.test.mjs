@@ -55,9 +55,18 @@ test("Miami declares explicit racing scenery and source-mapped Turnpike elevatio
   assert.equal(miami.flatTerrain, true);
   assert.equal(miami.terrainOuter, 90);
   assert.ok(Math.abs(TrackSpace.toRacingFrac(miami, miami.elevations[0].s) - 0.66) < 1e-12);
-  assert.ok(miami.dressingExclusions.some((rule) =>
-    rule.s0 === 0 && rule.s1 === 1 &&
-    rule.kinds.includes("city") && rule.kinds.includes("foliage")));
+  // Curated hero zones only (eb0b6b3 narrowed the old full-lap exclusion):
+  // Hard Rock bowl horizon, marina, and beach club.
+  const cityFoliage = Array.from(miami.dressingExclusions) // host-realm copy for deepEqual
+    .filter((rule) => rule.kinds && rule.kinds.includes("city") && rule.kinds.includes("foliage"))
+    .map(({ s0, s1, side }) => ({ s0, s1, side }));
+  assert.deepEqual(cityFoliage, [
+    { s0: 0.94, s1: 0.08, side: undefined },
+    { s0: 0.26, s1: 0.38, side: 1 },
+    { s0: 0.60, s1: 0.72, side: undefined },
+  ]);
+  assert.ok(!miami.dressingExclusions.some((rule) => rule.s0 === 0 && rule.s1 === 1),
+    "full-lap dressing exclusions must stay gone (scenery-density regression)");
 });
 
 test("TrackSurface creates monotonic rails and one terrain/grounding height contract", () => {

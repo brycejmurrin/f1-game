@@ -53,9 +53,10 @@ test("Baku owns its coordinate space and protected scenery sectors", () => {
       side: rule.side,
     })),
     [
-      { kinds: ["city"], s0: 0, s1: 1, side: undefined },
-      { kinds: ["lamps", "foliage", "floodlights"], s0: 0.36, s1: 0.56, side: undefined },
-      { kinds: ["lamps", "foliage", "floodlights"], s0: 0.58, s1: 0.97, side: -1 },
+      // Curated zones only (eb0b6b3 narrowed the old full-lap city exclusion):
+      // Old City / castle section, then the open Caspian side of Neftchilar Ave.
+      { kinds: ["city", "lamps", "foliage", "floodlights"], s0: 0.36, s1: 0.56, side: undefined },
+      { kinds: ["city", "lamps", "foliage", "floodlights"], s0: 0.58, s1: 0.97, side: -1 },
     ],
   );
   assert.deepEqual(
