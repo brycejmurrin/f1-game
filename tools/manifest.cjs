@@ -60,6 +60,7 @@ const FULL = [
   "js/track/landmark-kit.js",
   "js/track/circuit-kit.js",
   "js/track/spline.js",
+  "js/track/mesh.js",
   ...circuitFiles,
   "js/track/tracks.js",
   "js/track/maps.js",
@@ -130,6 +131,7 @@ const TRACK_VM = [
   "js/track/landmark-kit.js",
   "js/track/circuit-kit.js",
   "js/track/spline.js",
+  "js/track/mesh.js",
   "@circuits",
   "js/track/tracks.js",
 ];
@@ -145,6 +147,9 @@ const HARD_EDGES = [
   ["js/render/webgpu/wgx.js", "js/render/gfx.js"],
   ["js/track/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
+  ["js/track/geom.js", "js/track/mesh.js"],                 // mesh destructures TrackGeom at eval
+  ["js/track/spline.js", "js/track/mesh.js"],               // mesh destructures TrackSpline at eval
+  ["js/track/mesh.js", "js/track/tracks.js"],               // tracks destructures TrackMesh at eval
   ["js/track/geo-paths.js", "js/track/tracks.js"],          // CircuitPaths read by LIST build
   ["js/track/space.js", "js/track/surface.js"],
   ["js/track/models.js", "js/track/circuit-kit.js"],
