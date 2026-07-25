@@ -301,7 +301,9 @@
         const put = (alongM, outM, rise, w, h, d, col) => {
           const foot = vadd(vadd(vadd(base, t, alongM), r, -outM), u, rise);
           addBox(out, vadd(foot, u, h / 2), [w, h, d], col, [r, u, t]);
-          addPrism(out, vadd(foot, u, h + 1.0), [w, 2.6, d], TERRA, [r, u, t]);
+          // Roof sits ON the wall box (which spans foot .. foot+h). addPrism
+          // anchors at its BASE, so the +1.0 left every village roof hovering.
+          addPrism(out, vadd(foot, u, h), [w, 2.6, d], TERRA, [r, u, t]);
         };
         for (let i = 0; i < 6; i++) {
           const h2 = hash(i * 17 + 5);
