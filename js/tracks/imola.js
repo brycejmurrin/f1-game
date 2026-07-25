@@ -36,9 +36,10 @@
       { s: 0.295, halfM: 320, rise: -14 },
     ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, hash, every, place, prop, backdrop,
+      const { out, MAT, n, px, pz, hw, pyMin, hash, every, place, prop, backdrop,
               groundPatch, waterSurface, modelGroup,
               groundYAt, onTrack, addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
+              seat, foundation,
               along, mountain, tree, pine, hedge, bush,
               grandstand, building, motorhome, tower, billboard, marshalPost, gantry,
               fence, guardrail, tyreWall, wall,
@@ -190,7 +191,9 @@
         const tH = 30;
         addCyl(out, ac.c, 2.0, tH, STONE2, 8, [ac.r, ac.u, ac.t]);
         addBox(out, vadd(ac.c, ac.u, tH), [5.0, 2.4, 5.0], STONE, [ac.r, ac.u, ac.t]);
-        addCone(out, vadd(ac.c, ac.u, tH + 2.4), 2.5, 7, [0.44, 0.34, 0.28], 7, [ac.r, ac.u, ac.t]);
+        // Belfry cap is a CENTRED box at tH, so its top face is tH + 1.2, not
+        // tH + 2.4 — the spire used to hover a cap-height above the bell stage.
+        seat.cone(out, vadd(ac.c, ac.u, tH + 1.2), 2.5, 7, [0.44, 0.34, 0.28], 7, [ac.r, ac.u, ac.t]);
         for (let qi = 0; qi < 2; qi++) {
           const ofs = (qi === 0) ? ac.r : ac.t;
           for (const sg of [-1, 1]) {
@@ -302,16 +305,38 @@
         // (K(0.02), 110) was reused for a village spread ±80 m along the track
         // and out past 180 m, so on Imola's hillside the huts stood up to 47 m
         // clear of the land they were meant to sit on.
-        const dsM = Math.hypot(px[1] - px[0], pz[1] - pz[0]) || 1;   // node spacing
+        const footAt = (alongM, outM, rise) => {
+          // Sample the ground at the building's OWN XZ. Walking `alongM` down
+          // node-0's tangent is not the same as walking the curved centreline,
+          // so an index estimate (K(0.02) + alongM/nodeSpacing) reads the
+          // hillside tens of metres from where the hut actually lands — and
+          // groundYAt's lateral argument is measured from the ROAD EDGE, not
+          // from `base`. Resolve both by finding the nearest centreline node.
+          const flat = vadd(vadd(base, t, alongM), r, -outM);
+          let bk = 0, bd = Infinity;
+          for (let k2 = 0; k2 < n; k2++) {
+            const dd = (flat[0] - px[k2]) ** 2 + (flat[2] - pz[k2]) ** 2;
+            if (dd < bd) { bd = dd; bk = k2; }
+          }
+          const gy = groundYAt(bk, Math.max(0, Math.sqrt(bd) - hw[bk]));
+          const y = Number.isFinite(gy) ? gy : base[1];
+          return { p: [flat[0], y + rise, flat[2]], gy: y };
+        };
+        // `rise` is what stacks the old town up the hill, but the land below it
+        // is nearly level out here — so every building hovered by exactly its
+        // own rise (2.5–17 m). Terrace them in: a stone retaining plinth spans
+        // the building's foot down to the lowest ground under its footprint.
+        const terrace = (f, w, d) => foundation(out, {
+          center: f.p, size: [w * 1.08, d * 1.08], top: f.p[1],
+          basis: [r, u, t], col: STONE, ground: f.gy,
+        });
         const put = (alongM, outM, rise, w, h, d, col) => {
-          const kk = ((K(0.02) + Math.round(alongM / dsM)) % n + n) % n;
-          const gy = groundYAt(kk, 110 + outM);
-          const here = [base[0], Number.isFinite(gy) ? gy : base[1], base[2]];
-          const foot = vadd(vadd(vadd(here, t, alongM), r, -outM), u, rise);
-          addBox(out, vadd(foot, u, h / 2), [w, h, d], col, [r, u, t]);
+          const f = footAt(alongM, outM, rise);
+          terrace(f, w, d);
+          addBox(out, vadd(f.p, u, h / 2), [w, h, d], col, [r, u, t]);
           // Roof sits ON the wall box (which spans foot .. foot+h). addPrism
           // anchors at its BASE, so the +1.0 left every village roof hovering.
-          addPrism(out, vadd(foot, u, h), [w, 2.6, d], TERRA, [r, u, t]);
+          seat.prism(out, vadd(f.p, u, h), [w, 2.6, d], TERRA, [r, u, t]);
         };
         for (let i = 0; i < 6; i++) {
           const h2 = hash(i * 17 + 5);
@@ -321,15 +346,25 @@
           const h2 = hash(i * 31 + 9);
           put(-40 + i * 36, 46 + h2 * 30, 12 + h2 * 8, 18 + h2 * 6, 11 + h2 * 5, 16, h2 < 0.5 ? STONE2 : CONC);
         }
-        const churchFoot = vadd(vadd(vadd(base, t, 55), r, -42), u, 18);
+        // The church sat on `base` — the ONE sample taken at (K(0.02), 110) —
+        // plus an 18 m lift, 55 m along and 42 m further out. Ground it at its
+        // own position like the huts, and terrace the lift.
+        const churchAt = footAt(55, 42, 18);
+        const churchFoot = churchAt.p;
+        terrace(churchAt, 18, 28);
         addBox(out, vadd(churchFoot, u, 8), [18, 16, 28], STONE2, [r, u, t]);
-        addPrism(out, vadd(churchFoot, u, 17), [18, 5.5, 28], TERRA, [r, u, t]);
+        // Nave box is CENTRED at +8 with height 16 → its top face is 16.
+        seat.prism(out, vadd(churchFoot, u, 16), [18, 5.5, 28], TERRA, [r, u, t]);
         addBox(out, vadd(churchFoot, u, 6), [18, 2.5, 0.4], WIN_LIT, [r, u, t]);
         const towerFoot = vadd(churchFoot, t, 22);
         const campH = 28;
+        // Campanile stands 22 m clear of the nave, past the church's own
+        // terrace, so it needs its own plinth down to the land beneath it.
+        terrace({ p: towerFoot, gy: churchAt.gy }, 6, 6);
         addCyl(out, towerFoot, 1.8, campH, STONE, 8, [r, u, t]);
         addBox(out, vadd(towerFoot, u, campH), [5.5, 2.2, 5.5], STONE2, [r, u, t]);
-        addCone(out, vadd(towerFoot, u, campH + 2.2), 2.8, 8, [0.44, 0.34, 0.28], 7, [r, u, t]);
+        // Belfry cap top = campH + half its 2.2 m height, not campH + 2.2.
+        seat.cone(out, vadd(towerFoot, u, campH + 1.1), 2.8, 8, [0.44, 0.34, 0.28], 7, [r, u, t]);
         for (const sg of [-1, 1]) {
           addBox(out, vadd(vadd(towerFoot, u, campH + 0.8), r, sg * 2.2), [0.5, 1.0, 0.3], WIN_LIT, [r, u, t]);
         }
@@ -372,7 +407,8 @@
       {
         const a = anchor(K(0.92), -1, 30);
         addBox(out, vadd(a.c, a.u, 2.2), [16, 4.4, 12], [0.90, 0.90, 0.88], [a.r, a.u, a.t]);
-        addPrism(out, vadd(a.c, a.u, 5.8), [16, 2.8, 12], [0.94, 0.94, 0.92], [a.r, a.u, a.t]);
+        // Marquee body is CENTRED at 2.2 with height 4.4 → ridge starts at 4.4.
+        seat.prism(out, vadd(a.c, a.u, 4.4), [16, 2.8, 12], [0.94, 0.94, 0.92], [a.r, a.u, a.t]);
       }
 
       // ---- Lamp posts along pit straight and corner exits ----
@@ -555,7 +591,8 @@
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(base, a.u, 3.5), [26, 7, 30], [0.88, 0.82, 0.70], b);
-          addPrism(stage, vadd(base, a.u, 8.4), [28, 3.2, 32], TERRA, b);
+          // Body box is CENTRED at 3.5 with height 7 → top face at 7.
+          seat.prism(stage, vadd(base, a.u, 7), [28, 3.2, 32], TERRA, b);
           // Shallow track-facing arcade: five pale piers and dark recessed bays.
           for (let i = 0; i < 5; i++) {
             const z = (i - 2) * 5.4;
@@ -569,7 +606,8 @@
           // Compact timing turret, intentionally below the nearby tree crowns.
           const turret = vadd(vadd(base, a.r, 7), a.t, -9);
           addBox(stage, vadd(turret, a.u, 6.5), [7, 13, 8], STONE2, b);
-          addPrism(stage, vadd(turret, a.u, 14.2), [8, 2.4, 9], TERRA, b);
+          // Turret box is CENTRED at 6.5 with height 13 → top face at 13.
+          seat.prism(stage, vadd(turret, a.u, 13), [8, 2.4, 9], TERRA, b);
           stage._mat = MAT.METAL;
           addBox(stage, vadd(vadd(turret, a.r, -3.6), a.u, 9.5),
                  [0.25, 2.2, 5.4], WIN_LIT, b);
