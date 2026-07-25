@@ -4120,7 +4120,17 @@ function render(dt) {
   // dash fascia a proven 0.39 m from the eye (COCKPIT_EYE_FWD + _rigT), so 0.3
   // still clears it with ~9 cm to spare while raising the far/near precision
   // floor ~1.5x vs 0.2.
-  M4.perspectiveTo(_mProj, fovY, gfx.aspect, 0.3, farPlane);
+  // Per-camera near plane. Depth precision is governed by the near:far RATIO,
+  // and a 0.3 m near against a 900 m far spends almost all of it in the first
+  // few metres — which is why distant coplanar geometry z-fights. The near
+  // plane CANNOT simply be raised globally: the cockpit rig sits 0.39 m from
+  // the eye (see _rigT), so anything above ~0.35 slices the steering wheel and
+  // fascia out of frame. Only cockpit/hood views have geometry that close, so
+  // they keep 0.3 and every other view takes a near plane that buys back a lot
+  // of depth resolution for free.
+  const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
+  const _nearM = (_projMode === "cockpit" || _projMode === "hood") ? 0.3 : 0.9;
+  M4.perspectiveTo(_mProj, fovY, gfx.aspect, dbgCam ? 0.3 : _nearM, farPlane);
   // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
   // module-scope scratch vectors (no per-frame V3 array allocation); same math.
   {
