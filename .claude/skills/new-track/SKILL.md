@@ -1,15 +1,15 @@
 ---
 name: new-track
-description: Author a new circuit or edit an existing track's geometry/metadata in js/tracks/. Covers the track-definition schema (segs, palette, theme, bridges, elevations), registering the file, the headless verify-track build guard, and screenshot/test validation. Use for "add a track", "edit the Monza layout", "fix a circuit's corners", "change a track's palette/theme".
+description: Author a new circuit or edit an existing track's geometry/metadata in js/circuits/. Covers the track-definition schema (segs, palette, theme, bridges, elevations), registering the file, the headless verify-track build guard, and screenshot/test validation. Use for "add a track", "edit the Monza layout", "fix a circuit's corners", "change a track's palette/theme".
 ---
 
 # Author or edit a track
 
-Each circuit is a self-contained IIFE in `js/tracks/<id>.js` that pushes a plain
-data object onto the global `window.TrackDefs` list. The engine (`js/tracks.js`)
+Each circuit is a self-contained IIFE in `js/circuits/<id>.js` that pushes a plain
+data object onto the global `window.TrackDefs` list. The engine (`js/track/tracks.js`)
 reads `TrackDefs`, builds a Catmull-Rom spline from the segments (or an OSM trace
-in `js/circuits.js` if one exists for that id), and extrudes the road, terrain,
-and prop meshes. **Track files load before `js/tracks.js`** in `index.html`.
+in `js/track/geo-paths.js` if one exists for that id), and extrudes the road, terrain,
+and prop meshes. **Track files load before `js/track/tracks.js`** in `index.html`.
 
 ## Track-definition schema
 
@@ -56,14 +56,16 @@ in metres (0 → `track.total`), lateral `x` in metres (+ = right of centreline)
 
 ## Workflow
 
-1. **Create / edit** `js/tracks/<id>.js` with the schema above. Copy a similar
-   existing track (`js/tracks/spa.js` for a green/forest road course,
-   `js/tracks/monaco.js` for a street circuit, `js/tracks/monza.js` for a parkland
+1. **Create / edit** `js/circuits/<id>.js` with the schema above. Copy a similar
+   existing track (`js/circuits/spa.js` for a green/forest road course,
+   `js/circuits/monaco.js` for a street circuit, `js/circuits/monza.js` for a parkland
    layout) and adapt it — don't start from a blank file.
-2. **Register it** (new tracks only): add `<script src="js/tracks/<id>.js?v=N"></script>`
-   to `index.html` in the track block (before `js/tracks.js`), and add the id to
-   the circuit list / calendar where tracks are enumerated. Verify with
-   `__apex.tracks()` that the id appears.
+2. **Register it** (new tracks only): add `<script src="js/circuits/<id>.js?v=N"></script>`
+   to `index.html` in the circuit block (before `js/track/tracks.js`) **and add the
+   matching entry to `tools/manifest.cjs`** — the load-order single source of
+   truth; `tests/load-order.test.mjs` (`npm run test:tooling`) fails if the two
+   diverge. Tag order == `Tracks.LIST` == picker/season order, so the position
+   matters. Verify with `__apex.tracks()` that the id appears.
 3. **Headless build guard** — the fast pre-push check that needs no browser:
    ```sh
    node tools/verify-track.cjs <id>
@@ -96,7 +98,7 @@ in metres (0 → `track.total`), lateral `x` in metres (+ = right of centreline)
 - **The loop must close.** The engine distributes any residual position/elevation
   around the lap and applies mild Laplacian smoothing, but wildly unclosed
   `segs` produce kinks. Keep cumulative turn near a multiple of 360°.
-- **OSM trace wins over `segs`.** If `js/circuits.js` has a path for this id, your
+- **OSM trace wins over `segs`.** If `js/track/geo-paths.js` has a path for this id, your
   `segs` are ignored for the centreline (still useful as a fallback). Use
   `reverse`/`startFrac` to orient a trace, not `segs` rewrites.
 - **`street: true` removes the terrain ribbon** — barriers must line the edge or

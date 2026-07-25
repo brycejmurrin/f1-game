@@ -59,18 +59,18 @@ terrain-over-road class.
 
 ### 3 · Edit
 - **Props / dressing** (trees, buildings, barriers, water, landmarks): edit
-  `js/tracks/<id>.js` `scenery(api)` — follow **scenery-dress** and
+  `js/circuits/<id>.js` `scenery(api)` — follow **scenery-dress** and
   `docs/SCENERY-API.md`. Anchor with `anchor()` (seats on the *rendered* ribbon),
   not raw `groundYAt`, so props don't float where the ribbon is carved/sags.
 - **The ground itself** (how wide/flat the land is): the terrain ribbon is built by
-  `buildTerrain` in `js/tracks.js`, driven per-track by `def.terrainOuter` (ribbon
+  `buildTerrain` in the `js/track/` engine, driven per-track by `def.terrainOuter` (ribbon
   width) and the sag/ease model. A flat man-made island wants a **wide, level**
   shelf out to the shoreline, not a narrow sagging verge backed by a separate slab
   — otherwise props in the gap between them float (the Montreal case below). New
   per-track terrain behaviour is added as a **`def` flag** read in `buildTerrain`
   **and** mirrored in `groundYAt` so props anchor to the same surface.
   - ⚠️ A `def` key only reaches the engine if it's copied in the `LIST = DEFS.map`
-    block near the bottom of `js/tracks.js` (it whitelists keys). Add your new key
+    block near the bottom of `js/track/tracks.js` (it whitelists keys). Add your new key
     there or it silently reads as `undefined`.
 
 ### 4 · Verify the build

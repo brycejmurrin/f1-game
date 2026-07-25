@@ -12,7 +12,7 @@ npx serve -l 3456 .               # run locally (or: python3 -m http.server 3456
 node tools/verify-track.cjs <id>  # headless build check (no browser) — catches a
                                   #   scenery/buildRoad/buildProps THROW that would
                                   #   strand the game on the menu (e.g. a bad ref).
-                                  #   Fast pre-push guard for tracks.js scenery edits.
+                                  #   Fast pre-push guard for track scenery edits.
 npx playwright test               # run all specs
 npx playwright test tests/<file>.spec.js   # single spec
 npx playwright test tests/ui-audit.spec.js # → artifacts/galleries-<port>/ui-audit/
@@ -128,42 +128,102 @@ Linux/SwiftShader regeneration as a separate required operation before treating
 
 ## File layout
 
+Modules are grouped by domain. **`js/track/` is the ENGINE** (spline, mesh,
+scenery placement — shared code); **`js/circuits/` is the DATA** (one def file
+per circuit). Don't mix them up: a circuit edit goes in `js/circuits/<id>.js`,
+an engine/placement change goes in `js/track/`. `tools/manifest.cjs` is the
+single source of truth for load order (see Critical conventions).
+
 ```
 js/mat4.js       M4, V3         matrix math
-js/shaders/glx-shaders.js  GLXShaders  all GLSL sources (pure data; loads before glx.js)
-js/glx.js        GLX            WebGL2 renderer
-js/gfx.js        Gfx            renderer façade — selects GLX (WebGL2) or WGX (WebGPU),
+js/game.js       (main)         entry — game loop, physics, AI, race logic; owns the
+                                  closure state and hands the G ctx façade to js/game/*
+
+js/render/       — renderers —
+  gfx.js         Gfx            renderer façade — selects GLX (WebGL2) or WGX (WebGPU),
                                   both expose the same surface to game.js
-js/webgpu/*.js   WGX            WebGPU backend (wgx.js) + WGSL sources
+  glx.js         GLX            WebGL2 renderer core
+  glx/           GLXPost, GLXShadow, GLXChunked   post chain / shadow passes /
+                                  chunked-mesh path, wired via the GLXCore ctx
+  shaders/       GLXChunks, GLXShaders   chunks.js = shared GLSL leaves;
+                                  lit.js / sky.js / fx.js / post.js assemble GLXShaders
+                                  (pure data; loads before glx.js)
+  gltf.js        GLTF           binary .glb loader → plain {pos,nrm,col,idx}
+  webgpu/        WGX            WebGPU backend (wgx.js) + WGSL sources
                                   (wgsl-chunks/-post/-fx.js); feature-detected, GLX fallback
-js/teams.js      Teams          2026 grid (11 teams, 22 drivers, engine supplier per team)
-js/track-geom.js TrackGeom      pure geometry emitters (addBox/emit/addCyl/…) + MAT ids
-js/track-scenery-data.js  TrackSceneryData  static buildProps tables (BARRIER, FURN,
+
+js/track/        — track ENGINE (shared code) —
+  tracks.js      Tracks         engine shell: spline resolve, build orchestration
+  spline.js      TrackSpline    Catmull-Rom sampling / curvature
+  mesh.js        TrackMesh      road/terrain mesh extrusion
+  geom.js        TrackGeom      pure geometry emitters (addBox/emit/addCyl/…) + MAT ids
+  space.js       TrackSpace     world↔track (Frenet) projection
+  surface.js     TrackSurface   road surface build / tarmac-verge tinting
+  markings.js    CircuitMarkings  curated FIA sector splits + turn apexes
+  models.js      TrackModels    composite prop models
+  themes.js      SceneryThemes  theme tables for the city generator
+  landmark-kit.js, circuit-kit.js   landmark/circuit composite kits
+  geo-paths.js   CircuitPaths   OSM circuit centrelines (was circuits.js)
+  maps.js        TrackMaps      offline 2D picker outlines (was trackmaps.js)
+  scenery-data.js  TrackSceneryData  static buildProps tables (BARRIER, FURN,
                                   city palettes/styles) — data only, no placement logic
-js/tracks/*.js   TrackDefs      24 circuits (one file each, registers on Tracks.LIST)
-js/tracks.js     Tracks         spline engine, mesh builder, prop placement
-js/parts.js      Parts          upgrade catalog (8 categories, getMods, getCost, statMult)
-js/car3d.js      Car3D          procedural F1 car geometry + liveries
-js/input.js      Input          keyboard / gamepad / touch / tilt
-js/audio.js      GameAudio      WebAudio synth: engine, sfx, music
-js/api.js        F1API          Jolpica + OpenF1 clients, localStorage cache
-js/data-telemetry.js  DataTelemetry  data hub TELEMETRY tab (trace viewer/map/playback);
-                                  instantiated by data.js via DataTelemetry.create(ctx)
-js/data-export.js     DataExport     data hub EXPORT dev tool (GPS traces → ZIP)
-js/data.js       DataHub        data hub DOM overlay (shell + schedule/standings/
-                                  last-race/live tabs + shared session plumbing)
-js/light-presets.js  LightPresets  shipped lighting-tuner values, keyed
-                                  "track|tod|weather" (baked from the in-game
-                                  LIGHTING TUNER panel's COPY VALUES export)
-js/game/tables.js    GameTables  static game data (CAM_MODES, DIFF, gears, paints)
-js/game/lighting.js  LightTune   TUNE_DEFS registry, live LT values, floodColor,
-                                  LAMP_KINDS, buildTrackLights (profile store stays
-                                  in game.js — it reads live track/tod/weather state)
-js/game/carmesh.js   CarMesh     car decal/effect/cockpit-instrument geometry
+  scenery-nature.js / scenery-city.js / scenery-structures.js / scenery-identity.js
+                 Scenery*.create(ctx)   the buildProps split; together they serve the
+                                  84-member scenery(api) contract frozen by
+                                  tests/scenery-api-contract.test.mjs
+
+js/circuits/     — circuit DATA —
+  <id>.js        TrackDefs      24 circuits (one file each, registers on Tracks.LIST);
+                                  script-tag order == Tracks.LIST == picker/season order
+
+js/car/          — car —
+  car3d.js       Car3D          procedural F1 car geometry
+  liveries.js    Liveries       custom paint jobs
+  liverytex.js   LiveryTex      canvas-2D livery texture atlas (crests/sponsors/number)
+  parts.js       Parts          upgrade catalog (8 categories, getMods, getCost, statMult)
+  ghost.js       Ghost          time-trial ghost record/replay data layer
+  teams.js       Teams          2026 grid (11 teams, 22 drivers, engine supplier per team)
+
+js/data/         — data hub —
+  api.js         F1API          Jolpica + OpenF1 clients, localStorage cache
+  hub.js         DataHub        data hub DOM overlay shell + shared session plumbing
+                                  (was data.js)
+  telemetry.js   DataTelemetry  TELEMETRY tab (trace viewer/map/playback), created by
+                                  hub.js via DataTelemetry.create(ctx)
+  export.js      DataExport     EXPORT dev tool (GPS traces → ZIP)
+  schedule.js / standings.js / lastrace.js / live.js   the other tabs, same
+                                  Data*.create(ctx) pattern
+
+js/game/         — game modules (each created with the G ctx façade from game.js) —
+  tables.js      GameTables     static game data (CAM_MODES, DIFF, gears, paints)
+  lighting.js    LightTune      TUNE_DEFS registry, live LT values, floodColor,
+                                  LAMP_KINDS, buildTrackLights, setFrameLights,
+                                  appendCarTailLights (profile store stays in game.js —
+                                  it reads live track/tod/weather state)
+  light-presets.js  LightPresets  shipped lighting-tuner values, keyed "track|tod|weather"
+                                  (baked from the LIGHTING TUNER panel's COPY VALUES export)
+  carmesh.js     CarMesh        car decal/effect/cockpit-instrument geometry
                                   (renderer handle injected via CarMesh.init(gfx))
-js/game.js       (main)         game loop, physics, AI, race logic, __apex API
+  particles.js   Particles      transient particle pool (smoke/sparks/spray) + the
+                                  rain overlay (Particles.rain*)
+  input.js       Input          keyboard / gamepad / touch / tilt
+  audio.js       GameAudio      WebAudio synth: engine, sfx, music
+  store.js       GameStore      localStorage persistence
+  perf.js        PerfGov        adaptive performance governor
+  cameras.js     GameCams       the 13 player camera modes + debug free-cam
+  hud.js         GameHud        in-race DOM HUD
+  results.js     GameResults    results / season-end screens
+  apex.js        ApexApi        the whole window.__apex dev API
+  atmosphere.js  Atmosphere     applyRaceSettings — time-of-day/weather scene state
+  setup-ui.js    SetupUI        CAR SETUP screen
+  menus.js       Menus          menu/select/pause DOM flows
+  photomode.js   Photomode      photo mode
+  tuner.js       TunerPanel     LIGHTING TUNER pause-menu panel
+  steer-tuning.js  SteerTuning  ADVANCED STEERING panel
+
 css/style.css                   all styles
 index.html                      shell — script tags, DOM structure, cache-bust version
+tools/manifest.cjs              load-order single source of truth (script tags must match)
 tests/*.spec.js                 Playwright test suite (45 specs)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
@@ -182,6 +242,22 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
   pause-menu button).
 - **No ES modules** — everything is `"use strict"` IIFE, assigns one global. No
   `import`/`export`.
+- **Load order lives in `tools/manifest.cjs`** — the single source of truth,
+  asserted against `index.html` by `tests/load-order.test.mjs` (run via
+  `npm run test:tooling`). **New-file checklist:** (1) create the IIFE file in the
+  right `js/<domain>/` dir; (2) add its `<script>` tag to `index.html` at the
+  correct position; (3) add the matching entry to `tools/manifest.cjs` — the test
+  catches any divergence; (4) bump `?v=N` + `version.json`. `HARD_EDGES` in the
+  manifest records eval-time load dependencies (A must load before B because B
+  reads A's global at eval time). `tools/verify-track.cjs` and the VM-based tests
+  read the manifest's `TRACK_VM` list instead of hardcoding paths.
+  `tools/extract-module.mjs` assists further game.js extractions.
+- **`js/track/` = engine, `js/circuits/` = data.** Circuit defs (one per track)
+  live in `js/circuits/<id>.js`; all shared spline/mesh/scenery code lives in
+  `js/track/`. Circuit script-tag order == `Tracks.LIST` == picker/season order.
+- **The `G` ctx façade**: extracted `js/game/*` modules never reach into game.js —
+  game.js builds one `G` object of live getters/setters over its closure state
+  plus stable helpers, and instantiates each module via `Module.create(G)`.
 - **localStorage keys** are all prefixed `apex26.` (e.g. `apex26.team`,
   `apex26.parts.mercedes`).
 - **Coordinates**: +Y up, distances in metres, angles in radians, arc position `s`
@@ -189,7 +265,7 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ---
 
-## Parts system (`js/parts.js`)
+## Parts system (`js/car/parts.js`)
 
 `Parts.CATALOG` — an **array** of 8 category objects (ordered, not keyed by id):
 `engine`, `aero`, `suspension`, `brakes`, `tyres`, `ers`, `gearbox`, `fuel`. Each
@@ -224,7 +300,7 @@ under hard braking (`brakeFade`) to kill the turn-in snap.
 
 ---
 
-## Lighting & sky (`js/glx.js` + `applyRaceSettings` in `game.js`)
+## Lighting & sky (`js/render/glx.js` + `applyRaceSettings` in `js/game/atmosphere.js`)
 
 Lit shader = directional sun (shadow map) + hemisphere ambient (`uAmbSky`/`uAmbGround`)
 + up to 32 point lights (uniform arrays, 15 floats per light). Composite: ACES tone-map + `colourGrade` + bloom +
@@ -250,7 +326,7 @@ driver reads `LT.<id>` each frame instead of a literal (shader-side ones upload
 via `frame.tune`/`opts.tune` — `u:` field names the uniform). Values are stored
 **per (track, time-of-day, weather) profile**. Resolution, lowest→highest
 precedence: `TUNE_DEFS.def` → `LightPresets["*"]` → `LightPresets["track|tod|wx"]`
-→ localStorage `"*"` → localStorage `"track|tod|wx"`. So `js/light-presets.js` is
+→ localStorage `"*"` → localStorage `"track|tod|wx"`. So `js/game/light-presets.js` is
 the shipped baseline and a player's live edits (localStorage `apex26.lightTune`)
 always win. Panel COPY VALUES exports the merged store as the paste-ready
 `window.LightPresets = {…}` body to bake in. `__apex.lightTune(obj?)` gets/sets
@@ -260,7 +336,7 @@ the current profile. Add a knob: append to `TUNE_DEFS` (+ a shader uniform &
 
 ---
 
-## City & scenery dressing (`buildProps` / `buildRoad` in `js/tracks.js`)
+## City & scenery dressing (`buildProps` / `buildRoad` in the `js/track/` engine)
 
 Procedural per-circuit dressing on top of each track's `scenery(api)` callback.
 Session-time-aware (rebuilt on day↔night flip). Street/modern themes get the city
@@ -357,5 +433,5 @@ the wrong button.
 
 ## Git branch
 
-Active development branch: `claude/f1-game-project-26h3ng`. Never push to main
+Active development branch: `claude/project-architecture-reorganize-7hv8ez`. Never push to main
 without review.

@@ -1,6 +1,6 @@
 ---
 name: bake-lighting
-description: Bake the in-game LIGHTING TUNER's copied settings into the shipped js/light-presets.js and commit + push. Use when the user pastes a "window.LightPresets = {…}" blob (the panel's COPY VALUES export) and wants it saved into the game / deployed. Triggers - "bake these lighting settings", "save my lighting presets", "apply the copied lighting values", "commit the lighting tune", "here are my LightPresets", a pasted window.LightPresets = {…} object.
+description: Bake the in-game LIGHTING TUNER's copied settings into the shipped js/game/light-presets.js and commit + push. Use when the user pastes a "window.LightPresets = {…}" blob (the panel's COPY VALUES export) and wants it saved into the game / deployed. Triggers - "bake these lighting settings", "save my lighting presets", "apply the copied lighting values", "commit the lighting tune", "here are my LightPresets", a pasted window.LightPresets = {…} object.
 ---
 
 # Bake copied LIGHTING TUNER settings and push
@@ -10,11 +10,11 @@ edits in localStorage — new edits go to the GLOBAL `"*"` profile (one value
 across every time-of-day/weather; legacy per-condition profiles are still
 honoured) — and its **COPY VALUES** button exports the file+local merge as a
 `window.LightPresets = {…}` blob. This skill takes that
-blob, writes it into the committed `js/light-presets.js` (the shipped baseline
+blob, writes it into the committed `js/game/light-presets.js` (the shipped baseline
 everyone sees), bumps the cache version, and commits + pushes — the "apply" step
 that turns a personal tuning session into the deployed look.
 
-Background: `js/light-presets.js` is the low-precedence baseline; a player's
+Background: `js/game/light-presets.js` is the low-precedence baseline; a player's
 localStorage edits always win over it (see the tuner section in `CLAUDE.md`).
 Baking a blob here changes the look for everyone on the deployed build.
 
@@ -47,7 +47,7 @@ you don't merge by hand.
    BLOB
    ```
 
-2. **Bake + bump** (writes `js/light-presets.js`, increments `?v=` across
+2. **Bake + bump** (writes `js/game/light-presets.js`, increments `?v=` across
    `index.html` + `version.json`; validates shape, never commits):
    ```sh
    node .claude/skills/bake-lighting/bake.mjs artifacts/tmp/presets.txt
@@ -55,8 +55,8 @@ you don't merge by hand.
 
 3. **Review + syntax-check:**
    ```sh
-   git --no-pager diff js/light-presets.js index.html version.json
-   node --check js/light-presets.js
+   git --no-pager diff js/game/light-presets.js index.html version.json
+   node --check js/game/light-presets.js
    ```
    Sanity: every key looks like `track|tod|weather`, values are plausible
    (lampLevel ~0.05–1, tint −1..1, etc.). If a knob id looks wrong, stop and ask
@@ -71,7 +71,7 @@ you don't merge by hand.
    `claude/f1-game-project-26h3ng`; never push to `main`). Use the git retry/
    backoff from the repo's git rules:
    ```sh
-   git add js/light-presets.js index.html version.json
+   git add js/game/light-presets.js index.html version.json
    git commit -m "Bake lighting presets: <one line — which tracks/conditions>"
    git push -u origin <dev-branch>
    ```
@@ -81,7 +81,7 @@ you don't merge by hand.
 - The helper takes the blob from a file arg OR stdin (`… bake.mjs - < blob`).
 - It replaces the ENTIRE `window.LightPresets` literal — the export already
   includes existing file entries merged with the new edits, so nothing is lost.
-- Only `js/light-presets.js` values change the shipped look; a player's own
+- Only `js/game/light-presets.js` values change the shipped look; a player's own
   localStorage still overrides them locally until they RESET.
 - If the blob fails to parse, the helper prints the error and writes nothing —
   fix the paste (usually a stray trailing comma or truncated copy) and re-run.

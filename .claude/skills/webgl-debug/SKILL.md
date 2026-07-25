@@ -5,7 +5,7 @@ description: Diagnose WebGL2/GLX renderer issues — lights wrong, shadow acne o
 
 # Debug WebGL2 / GLX renderer issues
 
-The renderer lives in `js/glx.js` (the `GLX` IIFE). It uses WebGL2 with
+The renderer lives in `js/render/glx.js` (the `GLX` IIFE). It uses WebGL2 with
 uniform-array point lights, a 2048² sun shadow map (+ 512² PCSS blocker map),
 ACES tone-map, bloom, and lens flare. Most rendering bugs fall into a small set
 of root causes — start with the probes below before reading shader source.

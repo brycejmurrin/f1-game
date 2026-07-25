@@ -127,12 +127,13 @@ sensors require a secure context.
 ## Project layout
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module contract.
-Plain script-tag IIFE modules, in load order: `mat4` (matrix math), `glx`
-(WebGL2 renderer), `teams` (2026 grid data), `tracks` (spline → mesh circuit
-builder), `parts` (8-category upgrade catalog), `car3d` (procedural car
-geometry), `input` (keyboard/gamepad/touch/tilt), `audio` (WebAudio synth),
-`api` (Jolpica/OpenF1 clients), `data` (data hub UI), `game` (loop, physics,
-AI, race logic).
+Plain script-tag IIFE modules, grouped by domain: `js/render/` (WebGL2/WebGPU
+renderers + shaders), `js/track/` (the spline → mesh track engine),
+`js/circuits/` (the 24 circuit data files), `js/car/` (procedural car geometry,
+liveries, the 8-category upgrade catalog, the 2026 grid), `js/data/`
+(Jolpica/OpenF1 clients + the data hub UI), `js/game/` (input, audio, HUD,
+cameras, lighting, …), with `js/game.js` as the entry (loop, physics, AI, race
+logic). Load order is defined in `tools/manifest.cjs`.
 
 ## Testing & development
 

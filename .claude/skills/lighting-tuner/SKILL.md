@@ -16,10 +16,10 @@ __apex.lightTune({ lampLevel: 0.4 })  // set knobs live (same as the panel slide
 ```
 
 Knob resolution, lowest→highest precedence: `TUNE_DEFS.def` → shipped
-`js/light-presets.js` `"*"` → shipped `"track|tod|weather"` → localStorage
+`js/game/light-presets.js` `"*"` → shipped `"track|tod|weather"` → localStorage
 `"*"` (player's GLOBAL slider edits) → legacy localStorage per-condition.
 Slider edits write the global `"*"` profile; ship a look by baking the panel's
-COPY VALUES export into `js/light-presets.js` (see the **bake-lighting**
+COPY VALUES export into `js/game/light-presets.js` (see the **bake-lighting**
 skill). Edit `applyRaceSettings` only for STRUCTURAL changes (new branch
 logic, per-theme behavior) — not for values a knob already owns.
 
@@ -61,7 +61,7 @@ node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw
 # 1. Capture baseline
 node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
 
-# 2. Edit applyRaceSettings in js/game.js (or a TUNE_DEFS default in js/game/lighting.js)
+# 2. Edit applyRaceSettings in js/game/atmosphere.js (or a TUNE_DEFS default in js/game/lighting.js)
 # 3. Bump cache version, reload
 
 # 4. Capture after

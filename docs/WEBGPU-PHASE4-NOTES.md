@@ -1,14 +1,14 @@
 # WebGPU migration — Phase 4 notes (post chain + foreground FX)
 
 Scope of this pass: wire the Phase-4 post-processing chain and foreground FX into
-the WebGPU backend. **Only `js/webgpu/wgx.js` was edited** (plus this doc).
+the WebGPU backend. **Only `js/render/webgpu/wgx.js` was edited** (plus this doc).
 
 > **Update (Phase 4b):** the items this doc originally listed as deferred — the
 > wet-road **SSR** pass, the composite **chromatic aberration / unsharp sharpen /
 > radial speed-blur** image FX, and the **env-probe cube** — have since been
-> ported. `index.html` now loads the WebGPU stack (`js/webgpu/wgsl-chunks.js`,
-> `js/webgpu/wgsl-post.js`, `js/webgpu/wgsl-fx.js`, `js/webgpu/wgx.js`,
-> `js/gfx.js`); it is **opt-in** via `localStorage apex26.gfxBackend = "webgpu"`
+> ported. `index.html` now loads the WebGPU stack (`js/render/webgpu/wgsl-chunks.js`,
+> `js/render/webgpu/wgsl-post.js`, `js/render/webgpu/wgsl-fx.js`, `js/render/webgpu/wgx.js`,
+> `js/render/gfx.js`); it is **opt-in** via `localStorage apex26.gfxBackend = "webgpu"`
 > and `WGX.create()` returns `null` on any failure so the game falls back to GLX.
 > The "Stubbed / reduced" section is annotated below with what has landed.
 >
@@ -16,17 +16,17 @@ the WebGPU backend. **Only `js/webgpu/wgx.js` was edited** (plus this doc).
 > **volumetrics**, the **PCSS** soft-shadow quality, **MSAA stays at 1**, and
 > there is **no `gpuTimer`** on the WebGPU path.
 
-`node --check js/webgpu/wgx.js` passes.
+`node --check js/render/webgpu/wgx.js` passes.
 
 Grounding references (cited inline in the code):
-- Backend being extended: `js/webgpu/wgx.js` (device/context, LIT pass into
+- Backend being extended: `js/render/webgpu/wgx.js` (device/context, LIT pass into
   `sceneTex` rgba16float + `depthTex`, sky pass, Phase-3 sun SHADOW pass, the
   tonemap-only `present()`, `ensureTargets()`, the `Z01` GL→WebGPU clip remap).
-- Post shader contract: `js/webgpu/wgsl-post.js` (`WGSLPost`) — header +
+- Post shader contract: `js/render/webgpu/wgsl-post.js` (`WGSLPost`) — header +
   per-shader bind-group/uniform docs, `PASS_ORDER`, `*_UNIFORM_BYTES`.
-- FX shader contract: `js/webgpu/wgsl-fx.js` (`WGSLFx`) — vertex layouts, bind
+- FX shader contract: `js/render/webgpu/wgsl-fx.js` (`WGSLFx`) — vertex layouts, bind
   layouts, `*_UNIFORM_BYTES`, `*_VERTEX_BYTES`, blend modes.
-- Real backend semantics: `js/glx.js` `present()` (:3372), `drawShadow` (:3246),
+- Real backend semantics: `js/render/glx.js` `present()` (:3372), `drawShadow` (:3246),
   `drawMark` (:3264), `drawSkidBatch` (:3285), `drawGlow` (:3309),
   `drawDecal` (:2722), `createTexture` (:2703), `createTexMesh` (:2672),
   `envFaceBegin/End` (:2798/:2817). Present-`opts` field names read from
@@ -96,7 +96,7 @@ attachment:
 - `drawSkidBatch` — one batched draw. game.js supplies stride-20 `pos3+uv2`; the
   SKID shader wants stride-36 `pos3+uv2+rgba`, so the incoming verts are expanded
   with `rgba=(0,0,0,1)` (black opaque = exact GL look) into a grown dynamic VBO.
-- `drawGlow` — the GLX billboard build (`js/glx.js:3309`) ported verbatim
+- `drawGlow` — the GLX billboard build (`js/render/glx.js:3309`) ported verbatim
   (distance fade, colour normalisation, `_glowCorners`), emitting stride-36
   `(corner2,center3,color3,radius1)`, one **additive** (`ONE,ONE`) draw into the
   HDR scene so it blooms in the post chain.

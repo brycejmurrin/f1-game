@@ -62,5 +62,5 @@ node tools/apex-capture.mjs tracks scratch/captures/apex-capture/tracks spa monz
 ```
 The manifest flags any `blank:true` render. For geometry regressions the full
 suite's `terrain-over-road.spec.js` and `tracks-walls.spec.js` are the assertions;
-these hooks are how you investigate a failure. After any `js/tracks/*` edit, run
+these hooks are how you investigate a failure. After any `js/circuits/*` edit, run
 `node tools/verify-track.cjs <id>` first (see the **new-track** skill).
