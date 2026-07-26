@@ -114,10 +114,15 @@ function buildContext(opts) {
         if (stackFor) {
           const key = `${minX.toFixed(1)}|${minY.toFixed(1)}|${minZ.toFixed(1)}`;
           if (stackFor.has(key)) {
-            const st = new Error().stack.split("\n").slice(2, 6)
+            // Keep a DEEP slice. tracks.js wraps every emitter in a culling
+            // shim, so the innermost one or two frames are always that shim
+            // (addBox -> RAW.addBox) and say nothing about who asked for the
+            // geometry. The reporter walks outward past them to the first frame
+            // that names a real builder.
+            const st = new Error().stack.split("\n").slice(2, 14)
               .map((l) => l.trim().replace(/^at\s+/, ""))
               .filter((l) => !/track-geom/.test(l));
-            rec.stack = st.slice(0, 3).join("  <-  ");
+            rec.stack = st.slice(0, 6).join("  <-  ");
           }
         }
         prims.push(rec);
@@ -480,9 +485,15 @@ function foliageAudit(id) {
     }
     return best;
   };
+  // A tree canopy is at most a few metres across. backdrop() emits its distant
+  // wooded landforms in the SAME foliage material, and those AABBs are hundreds
+  // of metres wide, so without a size gate every hillside "intersects" every
+  // trackside post inside its bounding box — that single false-positive class
+  // was most of redbull's count and all of spa's.
+  const isCanopy = (p) => Math.max(p.maxX - p.minX, p.maxZ - p.minZ) < 15;
   const bar = [], fol = [];
   for (const p of prims) {
-    if (isFol(p)) { fol.push(p); continue; }
+    if (isFol(p)) { if (isCanopy(p)) fol.push(p); continue; }
     if (p.mat === M.CONCRETE || p.mat === M.METAL || p.mat === 0) {
       const h = p.maxY - p.minY, w = Math.max(p.maxX - p.minX, p.maxZ - p.minZ);
       if (h > 0.5 && h < 6 && w < 12) bar.push(p);   // wall/fence/guardrail-shaped
@@ -513,18 +524,75 @@ function foliageAudit(id) {
       }
   }
   hits.sort((x, y) => y.pen - x.pen);
-  return { id, hits };
+  // Lap fraction of each hit, so a reported intersection can be looked AT
+  // (`__apex.orbit(frac, …)`) instead of only counted. The AABB screen below
+  // over-reports by construction — a fence panel is 0.05 m thick but its
+  // axis-aligned box is metres wide wherever the barrier runs diagonally — so
+  // eyeballing the top hits is part of using this tool, not optional polish.
+  const fracOf = (x, z) => {
+    let best = Infinity, bk = 0;
+    for (let k = 0; k < track.n; k++) {
+      const dx = x - track.px[k], dz = z - track.pz[k], d = dx * dx + dz * dz;
+      if (d < best) { best = d; bk = k; }
+    }
+    return bk / track.n;
+  };
+  for (const h of hits) h.frac = fracOf((h.f.minX + h.f.maxX) / 2, (h.f.minZ + h.f.maxZ) / 2);
+  // Raw hit counts are PRIMITIVE-pair counts and badly overstate the problem: a
+  // single tree overlapping a single box scores once per canopy tier per box
+  // face, so redbull's 613 collapse to two actual spots on the circuit. Cluster
+  // by 10 m cell to report how many places are really affected.
+  const spots = new Set();
+  for (const h of hits)
+    spots.add(`${Math.round((h.f.minX + h.f.maxX) / 20)}|${Math.round((h.f.minZ + h.f.maxZ) / 20)}`);
+  const key = (p) => `${p.minX.toFixed(1)}|${p.minY.toFixed(1)}|${p.minZ.toFixed(1)}`;
+  const flagKeys = new Set();
+  for (const h of hits) { flagKeys.add(key(h.f)); flagKeys.add(key(h.b)); }
+  return { id, hits, spots: spots.size, flagKeys, key };
 }
 
 if (args.includes("--foliage")) {
+  const why = args.includes("--why");
   const ids = args[0] === "--all" ? buildContext().Tracks.LIST.map((d) => d.id) : [args[0]];
   for (const id of ids) {
     const r = foliageAudit(id);
-    console.log(`\n${r.id.padEnd(13)} ${r.hits.length} canopy/barrier intersection(s)`);
-    for (const h of r.hits.slice(0, 6))
+    console.log(`\n${r.id.padEnd(13)} ${String(r.hits.length).padStart(4)} prim-pair hit(s) ` +
+                `across ${r.spots} distinct location(s)`);
+    for (const h of r.hits.slice(0, why ? 3 : 6))
       console.log(`   ${h.pen.toFixed(2).padStart(6)} m into a ${h.b.name}  ` +
                   `canopy ${h.f.name} @(${((h.f.minX + h.f.maxX) / 2).toFixed(0)}, ` +
-                  `${((h.f.minZ + h.f.maxZ) / 2).toFixed(0)})`);
+                  `${((h.f.minZ + h.f.maxZ) / 2).toFixed(0)})  frac ${h.frac.toFixed(3)}`);
+    if (!why) continue;
+    // Second deterministic pass with stack capture on exactly the flagged prims,
+    // so each hit can be attributed to the call site that emitted it. Without
+    // this the counts are unactionable: "a canopy overlaps a box" says nothing
+    // about whether the box is a catch fence (a real defect) or a crowd terrace
+    // / landform slab / signboard (deliberate, or an artefact of the shape
+    // heuristic that decides what counts as a barrier).
+    const { Tracks, prims } = buildContext({ stackFor: r.flagKeys });
+    Tracks.build(Tracks.LIST.find((d) => d.id === id));
+    const stackAt = new Map();
+    for (const p of prims) if (p.stack) stackAt.set(r.key(p), p.stack);
+    // Walk outward past the emitter shims to the frame that names a real
+    // builder (tree/fence/grandstand/backdrop/…), which is the only thing that
+    // tells you whether a hit is a defect or deliberate detailing.
+    const RAWFN = /^(addBox|addCyl|addCone|addFrustum|addPrism|addPyramid|emit|addTube|addSphere)\b/;
+    // Two frames, not one: the species helper (tree/pine/…) is never the useful
+    // answer on its own — what matters is who ASKED for a tree there, i.e.
+    // forestEdge vs the roadside scatter vs a direct call in a track file.
+    const site = (s) => {
+      const fr = (s || "?").split("  <-  ").filter((f) => !RAWFN.test(f));
+      return (fr.length ? fr.slice(0, 2) : ["?"]).join(" < ").replace(/Object\./g, "");
+    };
+    const pairs = new Map();
+    for (const h of r.hits) {
+      const kk = `${site(stackAt.get(r.key(h.f)))}   ==>   ${site(stackAt.get(r.key(h.b)))}`;
+      const e = pairs.get(kk) || { n: 0, pen: 0 };
+      e.n++; e.pen = Math.max(e.pen, h.pen); pairs.set(kk, e);
+    }
+    console.log(`  canopy call site  ==>  obstacle call site   (${pairs.size} distinct pairing(s)):`);
+    for (const [p, e] of [...pairs.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 10))
+      console.log(`   x${String(e.n).padStart(4)} max ${e.pen.toFixed(2)}m  ${p}`);
   }
   process.exit(0);
 }

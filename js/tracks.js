@@ -1493,24 +1493,122 @@ const Tracks = (function () {
       return emitted;
     };
     const groundedSegments = (spec) => models.groundedSegments(spec);
+    // Flat [x0,z0,x1,z1,…] run of every barrier face segment recorded this
+    // build, in world XZ. Consumed by the spatial index defined below
+    // recordBarrier(), which is the only writer.
+    const barSegs = [];
     // Tighten the driving boundary along a solid barrier placed from lap-fraction
     // s0→s1 on `side` at clearance `gap` beyond the road edge. Skips nodes where
     // the barrier geometry would be suppressed (a parallel stretch of track), so
     // we never raise a phantom wall the player can't see.
-    const recordBarrier = (s0, s1, side, gap) => {
+    // `tighten` separates the two things this used to conflate. Feeding the
+    // spatial index is about where SOLID GEOMETRY stands; tightening barL/barR
+    // is about where the CAR is allowed to go. They are not the same question,
+    // and a catch fence is the case that proves it: it is solid enough that a
+    // tree must not grow through it, but it sits back beyond the runoff, so
+    // moving the driving limit out to meet it would change how the circuit
+    // drives. indexBarrier() registers the geometry without touching physics.
+    const scanBarrier = (s0, s1, side, gap, tighten) => {
       const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
       // 0→1 denotes a complete lap. Modulo node conversion maps both endpoints
       // to zero, so preserve the authored full-range intent before wrapping.
       const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
       const arr = side > 0 ? track.barR : track.barL;
+      let prev = null;                  // previous recorded face point, for segments
       for (let i = 0; i <= span; i++) {
         const k = (k0 + i) % n;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const o = side * (hw[k] + gap);
-        if (onTrack(px[k] + r[0] * o, pz[k] + r[2] * o, 0.3)) continue;
-        const lim = Math.max(hw[k] - 1.2, hw[k] + gap - WALL_CLEAR);
-        if (lim < arr[k]) arr[k] = lim;
+        const fx = px[k] + r[0] * o, fz2 = pz[k] + r[2] * o;
+        if (onTrack(fx, fz2, 0.3)) { prev = null; continue; }
+        if (tighten) {
+          const lim = Math.max(hw[k] - 1.2, hw[k] + gap - WALL_CLEAR);
+          if (lim < arr[k]) arr[k] = lim;
+        }
+        // Feed the spatial index below. `prev` resets on a suppressed node so we
+        // never bridge a segment across a gap where no barrier is actually built.
+        if (prev) { barSegs.push(prev[0], prev[1], fx, fz2); barGrid = null; }
+        prev = [fx, fz2];
       }
+    };
+    const recordBarrier = (s0, s1, side, gap) => scanBarrier(s0, s1, side, gap, true);
+    const indexBarrier = (s0, s1, side, gap) => scanBarrier(s0, s1, side, gap, false);
+    // ── Spatial barrier index (world XZ) ──────────────────────────────────
+    // Every existing guard in this engine is horizontal-vs-ROAD (onTrack,
+    // rejBox, blockAt) or vertical (the support/grounding tests). None is
+    // horizontal-vs-BARRIER — which is why tree crowns still grow through
+    // catch fences. barL/barR cannot close that gap: they hold the DRIVING
+    // limit, a per-node LATERAL number, so (a) a close fence records a SMALL
+    // clearance and clamping against it can only ever push a prop out to the
+    // 9 m runoff default, never past the fence, and (b) a barrier belonging to
+    // a DIFFERENT part of the lap — Suzuka's pit straight running alongside
+    // the Esses verge, Spa's Raidillon wrapping back onto Kemmel — is not
+    // expressible in a per-node lateral table at all. Both cases are the same
+    // question asked in the wrong space. Here the barrier's actual face is
+    // stored as world-space SEGMENTS, so the query is a plain point-to-segment
+    // distance that neither knows nor cares which node a wall came from.
+    const BAR_CELL = 24;                // grid cell (m) — comfortably > any canopy
+    // Built lazily and INVALIDATED on every new segment. forestEdge() queries
+    // mid-scenery, while barriers are still being registered around it, so a
+    // grid cached once would go stale and silently under-report for everything
+    // planted afterwards.
+    let barGrid = null;
+    const barCellKey = (cx, cz) => cx * 100003 + cz;
+    const buildBarGrid = () => {
+      barGrid = new Map();
+      for (let i = 0; i < barSegs.length; i += 4) {
+        const x0 = barSegs[i], z0 = barSegs[i + 1], x1 = barSegs[i + 2], z1 = barSegs[i + 3];
+        const cx0 = Math.floor(Math.min(x0, x1) / BAR_CELL), cx1 = Math.floor(Math.max(x0, x1) / BAR_CELL);
+        const cz0 = Math.floor(Math.min(z0, z1) / BAR_CELL), cz1 = Math.floor(Math.max(z0, z1) / BAR_CELL);
+        for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
+          const key = barCellKey(cx, cz);
+          let b = barGrid.get(key); if (!b) barGrid.set(key, b = []);
+          b.push(i);
+        }
+      }
+    };
+    // Distance² from (x,z) to segment i of barSegs.
+    const segDist2 = (i, x, z) => {
+      const x0 = barSegs[i], z0 = barSegs[i + 1];
+      const dx = barSegs[i + 2] - x0, dz = barSegs[i + 3] - z0;
+      const len2 = dx * dx + dz * dz;
+      let t = len2 > 1e-9 ? ((x - x0) * dx + (z - z0) * dz) / len2 : 0;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const ex = x - (x0 + dx * t), ez = z - (z0 + dz * t);
+      return ex * ex + ez * ez;
+    };
+    // True when NO recorded barrier face lies within `r` metres of (x,z).
+    const barrierClear = (x, z, r) => {
+      if (!barGrid) buildBarGrid();
+      if (!barGrid.size) return true;
+      const r2 = r * r;
+      const cx0 = Math.floor((x - r) / BAR_CELL), cx1 = Math.floor((x + r) / BAR_CELL);
+      const cz0 = Math.floor((z - r) / BAR_CELL), cz1 = Math.floor((z + r) / BAR_CELL);
+      for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
+        const b = barGrid.get(barCellKey(cx, cz)); if (!b) continue;
+        for (let j = 0; j < b.length; j++) if (segDist2(b[j], x, z) < r2) return false;
+      }
+      return true;
+    };
+    // Walk a candidate tree OUTWARD (never inward — inward is the road) until
+    // its crown clears every recorded barrier face. Returns the adjusted trunk
+    // distance, or null when nothing within reach is clear, in which case the
+    // caller drops the tree: a missing tree in a gap with no room for one reads
+    // as correct, a tree growing through a catch fence never does.
+    const clearTreeDist = (k, side, dist, crown) => {
+      const kk = ((k % n) + n) % n;
+      const rx = track.rx[kk], rz = track.rz[kk];
+      const at = (dd) => {
+        const o = side * (hw[kk] + dd);
+        return [px[kk] + rx * o, pz[kk] + rz * o];
+      };
+      let p = at(dist);
+      if (barrierClear(p[0], p[1], crown)) return dist;
+      for (let extra = 1.5; extra <= 12; extra += 1.5) {
+        p = at(dist + extra);
+        if (barrierClear(p[0], p[1], crown)) return dist + extra;
+      }
+      return null;
     };
     const place = (k, side, dist, sz, col) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -2001,6 +2099,11 @@ const Tracks = (function () {
     };
     // Catch / debris fence: posts + a pale mesh panel (reads as see-through wire).
     const fence = (s0, s1, side, gap, h, col) => {
+      // Geometry-only registration: a catch fence is solid to scenery but must
+      // not move the driving limit (it stands behind the runoff by design).
+      // Until this existed, fences were the ONLY barrier class no guard could
+      // see — and they are the obstacle in most surviving canopy intersections.
+      indexBarrier(s0, s1, side, gap);
       along(s0, s1, 5, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
@@ -2068,7 +2171,16 @@ const Tracks = (function () {
       if (kind === "palm") return 5.2;                    // frond hub 2.4 + blade spread
       return (3.7 + h * 0.14) * jMax + 0.4;               // tree(): widest bulge cone
     };
-    const forestEdge = (s0, s1, side, gap, opts) => {
+    // Queued, then flushed after def.scenery() returns. A track file is written
+    // in whatever order reads well — imola plants its treelines at the top and
+    // builds its catch fences 280 lines later — so a forestEdge() that consults
+    // the barrier index the moment it is called is usually consulting an empty
+    // one. Deferring every treeline to the end of the scenery pass makes the
+    // guard order-independent: authors keep writing scenery in any order they
+    // like, and the foliage always sees the finished barrier set.
+    const deferredFoliage = [];
+    const forestEdge = (...a) => { deferredFoliage.push(a); };
+    const forestEdgeNow = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const hMin = opts.hMin != null ? opts.hMin : 7;
       const hMax = opts.hMax != null ? opts.hMax : 13;
@@ -2087,8 +2199,14 @@ const Tracks = (function () {
         const dist = gap + canopy;
         // stagger a back row slightly for depth on the densest treelines
         const back = (dens > 0.6 && hash(k * 8.9 + side) < 0.4) ? canopy * 1.4 : 0;
-        if (isPine) pine(k, side, dist + back, h, pineCol);
-        else        tree(k, side, dist + back, h, treeCol);
+        // Same world-space guard the roadside scatter uses. The canopy sizing
+        // above only guarantees clearance from the ROAD EDGE; a treeline run
+        // alongside a stretch that also carries a catch fence still grows
+        // straight through it, which is every surviving hit on imola.
+        const d = clearTreeDist(k, side, dist + back, canopy);
+        if (d == null) return;
+        if (isPine) pine(k, side, d, h, pineCol);
+        else        tree(k, side, d, h, treeCol);
       });
     };
 
@@ -3011,6 +3129,11 @@ const Tracks = (function () {
           // record the tyre barrier along its span so the car stops just short of it
           for (let d = 0; d < step; d++) markBarrier((k + d) % n, outside, 2.2);
         }
+        // markBarrier only moves the DRIVING limit; it does not tell the scenery
+        // engine that a metre-wide stack of tyres physically stands here. These
+        // corner barriers were the second-largest obstacle class in the
+        // surviving canopy hits, so register the geometry too.
+        indexBarrier((((c.k - lo) % n + n) % n) / n, (((c.k + hi) % n + n) % n) / n, outside, 2.2);
       }
     }
 
@@ -3083,7 +3206,12 @@ const Tracks = (function () {
       // radius) of a catch fence grew straight through it. Suzuka was worst hit:
       // fences cover ~32% of its lap.
       const kind = fz.tree === "palm" ? "palm" : fz.tree === "fir" ? "fir" : "broad";
-      const d = dist + canopyR(kind, h);
+      const crown = canopyR(kind, h);
+      // Spatial barrier guard — the canopy allowance above only clears the
+      // barrier belonging to THIS node, and the hits that survived it were with
+      // walls belonging to other parts of the lap.
+      const d = clearTreeDist(k, side, dist + crown, crown);
+      if (d == null) return;
       if (fz.tree === "palm") palm(k, side, d, h, col);
       else if (fz.tree === "fir") conifer(k, side, d, h, col);
       else tree(k, side, d, h, col);
@@ -3108,14 +3236,13 @@ const Tracks = (function () {
     // edge. Forest/green circuits get a denser stand (a cluster of a few trees at
     // staggered depths, each with its own varied colour) so the treeline reads as
     // real mixed woodland; street circuits keep a sparser line.
-    // NOTE: this scatter cannot self-guard against barriers. track.barL/barR
-    // hold the DRIVING limit (the tightest lateral value), so a close fence
-    // records a SMALL clearance — clamping a tree against it can only ever push
-    // to the 9 m runoff default, never past the fence. And the intersections
-    // that remain are with barriers belonging to OTHER parts of the lap, which a
-    // per-node lateral table cannot express at all. A real guard needs a spatial
-    // query against recorded barrier geometry by world XZ. Until then the canopy
-    // allowance in plantTree() is what keeps crowns out of adjacent walls.
+    // DEFERRED to after def.scenery() — see the call site. plantTree()'s barrier
+    // guard queries the world-XZ index, and almost every barrier on a circuit is
+    // recorded by the track's own scenery() callback, which has not run yet at
+    // this point in the build. Scattering here would query an index holding only
+    // the handful of barriers the generic passes registered, and re-introduce
+    // exactly the crowns-through-fences the guard exists to prevent.
+    const plantRoadsideTrees = () => {
     if (fz.tree && fz.tree !== "none") {
       const step = fz.sparse ? 30 : (def.street ? 24 : 18);   // street denser than before; sparse = coastal scrub
       every(step, (k) => {
@@ -3131,6 +3258,7 @@ const Tracks = (function () {
         }
       });
     }
+    };
 
     // marshal post + signal board every 270 m on alternating sides (skip street circuits with continuous barriers)
     if (!def.street) {
@@ -3652,6 +3780,13 @@ const Tracks = (function () {
         sceneryApi = transformSceneryApi(sceneryApi, def, n);
       def.scenery(sceneryApi);
     }
+
+    // Foliage runs LAST, once every barrier on the circuit is registered, so the
+    // world-XZ guard in clearTreeDist() sees the finished set: the per-track
+    // treelines queued by forestEdge() during scenery, then the generic roadside
+    // scatter deferred out of the FURN pass above.
+    for (const a of deferredFoliage) forestEdgeNow.apply(null, a);
+    plantRoadsideTrees();
 
     // Generic floodlight masts — EVERY circuit gets them (visible day and night).
     // Co-located with the point lights (game.js buildTrackLights uses the same

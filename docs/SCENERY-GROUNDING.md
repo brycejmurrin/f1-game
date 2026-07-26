@@ -244,10 +244,10 @@ introducing it:
   a catch fence grew through it. This alone was Suzuka 326 → 190 canopy hits and
   Silverstone 7 → 1.
 
-**What the contract still cannot do**, and why the obvious fix does not work:
-the remaining intersections are trees hitting barriers that belong to a
-*different part of the lap* — Suzuka's Esses inner verge and its pit straight
-are the same strip of ground, Spa's Raidillon wraps back onto Kemmel.
+**What the contract cannot do on its own**: the intersections it leaves are
+trees hitting barriers that belong to a *different part of the lap* — Suzuka's
+Esses inner verge and its pit straight are the same strip of ground, Spa's
+Raidillon wraps back onto Kemmel.
 
 The tempting fix is to have the scatter consult `track.barL/barR`, deferring it
 until after `def.scenery()` has recorded the per-circuit fences. **This was
@@ -257,8 +257,62 @@ clamping a tree against it can only ever push out to the 9 m `RUNOFF_DEFAULT`,
 never past the fence. And a per-node lateral table cannot represent a barrier
 that belongs to another node's stretch of road at all.
 
-A real guard has to be spatial: test the candidate trunk's world XZ (plus
-`canopyR`) against recorded barrier *geometry*, the way `onTrack()` already
-tests against the road. That is the missing piece — every existing guard in the
-scenery engine is either horizontal-vs-road or vertical, and none is
-horizontal-vs-barrier.
+### The spatial barrier index
+
+The working guard asks the question in world space instead. `scanBarrier()`
+records each barrier's **face as XZ segments** into `barSegs`; `barrierClear(x,
+z, r)` answers "is any barrier face within `r` of this point" via a uniform grid
+(`BAR_CELL = 24 m`) and point-to-segment distance. It neither knows nor cares
+which node a wall came from, so the cross-lap cases above are ordinary hits.
+
+`clearTreeDist()` walks a candidate trunk outward in 1.5 m steps until its crown
+clears, up to +12 m, and **drops the tree** if nothing within reach is clear. A
+missing tree in a gap with no room for one reads as correct; a tree growing
+through a catch fence never does. Both foliage producers use it — the roadside
+scatter in `plantTree()` and the per-track treelines in `forestEdge()`.
+
+**Everything that plants foliage now runs last**, after `def.scenery()` returns:
+the scatter is deferred out of the FURN pass, and `forestEdge()` only queues its
+arguments (`deferredFoliage`) to be replayed at the end. This is not stylistic.
+A track file is written in whatever order reads well — imola plants its
+treelines at line 106 and builds the catch fences they intersect at line 387 —
+so a guard that runs at call time is usually querying an empty index. Deferring
+makes it order-independent: authors keep writing scenery in any order, and the
+foliage always sees the finished barrier set. (Deferral *alone* was tried before
+the index existed and did nothing; it needed both.) `barGrid` is invalidated on
+every new segment for the same reason.
+
+Two things this exposed that were not visible before:
+
+- **`fence()` never registered its geometry at all.** `wall`, `guardrail` and
+  `tyreWall` all called `recordBarrier`; `fence` called nothing. Catch fences
+  were the one barrier class no guard in the engine could see — and the
+  attribution pass showed they were the obstacle in most canopy intersections.
+  They now call `indexBarrier()`, which feeds the spatial index **without**
+  tightening `barL/barR`: a fence is solid enough that a tree must not grow
+  through it, but it stands back beyond the runoff, so moving the driving limit
+  out to meet it would change how the circuit drives. Keep those two concerns
+  separate — `scanBarrier`'s `tighten` flag is the seam.
+- **The generic corner tyre stacks had the mirror-image bug.** `buildProps`
+  called `markBarrier` along each stack, which moves the driving limit but never
+  tells the scenery engine that a metre-wide barrier physically stands there.
+  They now also `indexBarrier()`. The two calls answer different questions and a
+  barrier generally needs both.
+- **The `--foliage` counts were never what they looked like.** They are
+  primitive-*pair* counts: one tree overlapping one box scores once per canopy
+  tier per box, so redbull's 613 collapsed to 25 real locations. The audit now
+  prints distinct locations alongside the raw count, gates canopies by size
+  (`backdrop()`'s wooded landforms share the foliage material and are hundreds
+  of metres wide — that one false-positive class was most of redbull's count and
+  all of spa's), and `--foliage --why` attributes each hit to the call sites that
+  emitted both prims. Use `--why` before acting on any absolute number here.
+
+**The counts that remain are an upper bound, not a defect list.** The screen is
+AABB-vs-AABB. A fence panel is 0.05 m thick, but wherever the barrier runs
+diagonally its *axis-aligned* box is metres wide, so a canopy comfortably clear
+of the real panel still registers an overlap. The guard is exact — true
+point-to-segment distance against the barrier face — so where the two disagree
+it is the audit that is wrong. Each hit line now prints its lap fraction; feed
+that to `__apex.orbit(frac, az, el, dist)` and *look* before treating a number
+as a bug. Tightening this needs an oriented (or exact-geometry) test in the
+audit, which is the obvious next piece of work here.
