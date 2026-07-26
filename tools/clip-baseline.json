@@ -1,1 +1,26 @@
-{}
+{
+  "mexico": 45,
+  "zandvoort": 40,
+  "madrid": 32,
+  "baku": 31,
+  "monza": 28,
+  "jeddah": 27,
+  "miami": 25,
+  "monaco": 22,
+  "singapore": 18,
+  "shanghai": 14,
+  "vegas": 12,
+  "montreal": 11,
+  "abudhabi": 9,
+  "silverstone": 7,
+  "spa": 6,
+  "suzuka": 5,
+  "albert_park": 3,
+  "bahrain": 3,
+  "redbull": 3,
+  "hungaroring": 2,
+  "imola": 2,
+  "cota": 1,
+  "interlagos": 1,
+  "qatar": 1
+}

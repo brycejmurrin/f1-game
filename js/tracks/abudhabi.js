@@ -745,7 +745,12 @@
         out._mat = MAT.FABRIC;
         for (let i = 0; i < 7; i++) {
           const ak = anchor(K(0.56 + i * 0.020), 1, 19);
-          addPrism(out, vadd(ak.c, ak.u, 3.5), [7, 4.8, 9], [0.96, 0.96, 0.98], [ak.r, ak.u, ak.t]);
+          // addPrism anchors at the BASE, so the +3.5 lift hung the whole tent
+          // in the air. seat.prism says "stand this on that" and cannot be got
+          // wrong. (A neighbouring tree used to sit close enough that the float
+          // audit accepted it as support; once foliage stopped growing through
+          // the scenery the tent had nothing under it.)
+          seat.prism(out, ak.c, [7, 4.8, 9], [0.96, 0.96, 0.98], [ak.r, ak.u, ak.t]);
           // tent lighting
           addBox(out, vadd(ak.c, ak.u, 2), [7.2, 0.8, 9.2], [1.0, 0.88, 0.60], [ak.r, ak.u, ak.t]);
         }

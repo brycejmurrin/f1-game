@@ -1673,6 +1673,49 @@ const Tracks = (function () {
     // Point form, for a single boxy prop at node k rather than a run. `halfLen`
     // is its extent along the track, `halfW` across; the record is the box's
     // own centre line inflated by halfW.
+    // ── Building-mass occupancy ───────────────────────────────────────────
+    // Buildings come from three independent producers — cityFront's row, the
+    // neonTower front/back rows, and bespoke per-track calls — and none of them
+    // knows what the others already placed. Each steps by CENTRELINE arc
+    // length while standing metres out from the road edge, where the true world
+    // chord shrinks by (1 - curvature*distance), so on a street circuit's
+    // corners their footprints simply share volume (baku: 8 m between adjacent
+    // facades, 11.5 m between a row unit and a tower).
+    //
+    // Re-spacing the rows was tried and made things WORSE fleet-wide (478 ->
+    // 488 severe spots): narrowing a unit moves its centre, which just relocates
+    // the collision to a different producer. So don't re-space — let the mass
+    // that got there first WIN, and make the later one yield. `massBlocked`
+    // answers "is this footprint already occupied", and the caller drops it.
+    //
+    // Footprints are oriented rectangles; the test is a cheap separating-axis
+    // check on the two rectangles' own axes (exact for the rectangle-vs-
+    // rectangle case, unlike an AABB, which on a diagonal street over-reports
+    // by metres and would delete half the skyline).
+    const masses = [];
+    const massBlocked = (c, w, d, b, shrink) => {
+      const ax = b[0], az = b[2];
+      const hw1 = w / 2 * (shrink || 1), hd1 = d / 2 * (shrink || 1);
+      for (let i = 0; i < masses.length; i++) {
+        const m = masses[i];
+        const dx = c[0] - m.c[0], dz = c[2] - m.c[2];
+        if (dx * dx + dz * dz > (hw1 + hd1 + m.r) * (hw1 + hd1 + m.r)) continue;
+        let sep = false;
+        for (const A of [[ax[0], ax[2]], [az[0], az[2]], [m.ax[0], m.ax[2]], [m.az[0], m.az[2]]]) {
+          const L = Math.hypot(A[0], A[1]) || 1;
+          const ux = A[0] / L, uz = A[1] / L;
+          const p1 = hw1 * Math.abs(ax[0] * ux + ax[2] * uz) + hd1 * Math.abs(az[0] * ux + az[2] * uz);
+          const p2 = m.hw * Math.abs(m.ax[0] * ux + m.ax[2] * uz) + m.hd * Math.abs(m.az[0] * ux + m.az[2] * uz);
+          if (Math.abs(dx * ux + dz * uz) > p1 + p2) { sep = true; break; }
+        }
+        if (!sep) return true;
+      }
+      return false;
+    };
+    const massAdd = (c, w, d, b) => {
+      masses.push({ c: [c[0], c[1], c[2]], hw: w / 2, hd: d / 2,
+                    ax: b[0], az: b[2], r: Math.hypot(w / 2, d / 2) });
+    };
     const indexSolidAt = (k, side, dist, halfW, halfLen) => {
       const kk = ((k % n) + n) % n;
       const o = side * (hw[kk] + dist);
@@ -2493,6 +2536,16 @@ const Tracks = (function () {
       // the full oriented-footprint Minkowski test over every node within reach.
       // clearMargin pads the street-circuit barrier allowance into the box.
       const clearMargin = def.street ? 3.0 : 1.2;
+      // Yield to a building mass that is already standing here. The 0.82 shrink
+      // is the tolerance for "touching is fine, interpenetrating is not": a
+      // terrace of abutting facades is what a street SHOULD look like, so only
+      // a footprint well inside its neighbour counts as blocked.
+      //
+      // Dropping the GEOMETRY must not drop the DRIVING BOUNDARY. The ground is
+      // occupied either way — by the mass that got here first — so the car must
+      // still be stopped before it. Skipping blockAt() here loosened the limit
+      // on every street circuit and broke the walled-tight guarantee.
+      if (massBlocked(p.c, w, d, b, 0.82)) { blockAt(k, side, gap, d / 2); return; }
       if (rejBox(p.c, [w + clearMargin * 2, h, d + clearMargin * 2], b)) {
         console.warn(`[scenery] building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (footprint over track)`);
         return;
@@ -2690,6 +2743,7 @@ const Tracks = (function () {
         }
       }
       blockAt(k, side, gap, d / 2);   // solid: stop the car before the façade
+      massAdd(p.c, w, d, b);          // claim the ground so later masses yield
     };
     // neonTower(): the INNER-ring filler model — a dark detailed tower sharing the
     // neonFacade() treatment with the building() landmarks. `kind` varies the
@@ -2709,6 +2763,13 @@ const Tracks = (function () {
       // tiered), so pad the tested extents to the widest section.
       const gw = reach * 1.4;
       if (rejBox(a.c, [gw, h, gw], b)) return;
+      // Yield to a mass already standing here — the front/back tower rows and
+      // cityFront's row are independent producers stepping by arc length, so on
+      // a corner they place units on top of one another. Dropping the geometry
+      // must not drop the driving boundary (see building()): the ground is
+      // occupied by whichever mass got here first, so still stop the car.
+      if (massBlocked(a.c, w, d, b, 0.82)) { blockAt(k, side, dist - reach / 2, reach / 2); return; }
+      massAdd(a.c, w, d, b);
       const bodyCol = NIGHT ? (tone && tone.n || [0.14, 0.14, 0.17]) : (tone && tone.d || [0.40, 0.41, 0.44]);
       const cap = NIGHT ? [0.09, 0.09, 0.12] : [0.31, 0.32, 0.35];
       const na = neonAmt == null ? (theme === "street_night" ? 1 : 0) : neonAmt;  // 0=general … 1=neon
