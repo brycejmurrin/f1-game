@@ -33,7 +33,7 @@ const CONTRACT = [
   "pastelStreetRow", "peak", "pine", "place", "prop", "px", "py", "pyMin",
   "pz", "recordBarrier", "ridge", "runoffApron", "sailCanopy", "sceneryTheme", "seat",
   "signBoard", "theme", "tower", "track", "tree", "tyreWall",
-  "underpassPortal", "upOf", "vadd", "wall", "waterField", "waterSurface",
+  "underpassPortal", "upOf", "vadd", "wall", "waterBand", "waterField", "waterSurface",
 ];
 
 test("buildProps sceneryApi surface matches the frozen contract", () => {

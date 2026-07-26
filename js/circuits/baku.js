@@ -41,7 +41,7 @@
     elevations: [{ s: 0.46, halfM: 500, rise: 14 }],
     scenery: function (api) {
       const {
-        out, MAT, n, backdrop, groundPatch, waterSurface, modelGroup, building, tower, wall,
+        out, MAT, n, backdrop, groundPatch, waterSurface, waterBand, modelGroup, building, tower, wall,
         fence, guardrail, tyreWall, grandstand, gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
         addFrustum, ferrisWheel, vadd, hash, cityFront,
@@ -728,10 +728,7 @@
       // A genuine reflective water buffer mirroring the night sky/skyline,
       // laid across the seafront left of the long straight. Narrow overlapping
       // panels avoid spanning the circuit's nearby foldbacks.
-      for (let i = 0; i < 5; i++) {
-        waterSurface(K(0.63 + i * 0.075), -1, 16, [120, 1.2, 220], SEA,
-          { id: `baku-caspian-${i}` });
-      }
+      waterBand(0.63, 0.93, -1, 16, 236, 12, SEA, { id: "baku-caspian" });
 
       // ── BAKU EYE — Ferris wheel pushed to far silhouette (sea void mid culled)
       ferrisWheel(K(0.80), -1, 88, 28);

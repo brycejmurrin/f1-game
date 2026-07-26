@@ -47,7 +47,7 @@
         building, anchor, addBox, addCyl, addFrustum, vadd, hash,
         fence, tyreWall, hedge, billboard, gantry, marshalPost, bush,
         ferrisWheel, tower, onTrack, forestEdge, cityFront,
-        modelGroup, overheadSpan, waterSurface, groundPatch,
+        modelGroup, overheadSpan, waterSurface, waterBand, groundPatch,
         cross, norm, MAT, COL } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -118,16 +118,17 @@
       // St. Lawrence River: typed water strips begin beyond the 70 m terrain
       // ribbon. Segmenting the surround keeps each footprint away from foldbacks
       // and sends reflections through the dedicated water mesh.
-      for (let i = 0; i < 16; i++) {
-        const k = K(i / 16);
-        for (const side of [-1, 1]) {
-          if ((i === 4 && side === 1) || (i === 7 && side === -1) ||
-              (i === 11 && side === 1)) continue;
-          waterSurface(k, side, 72, [70, 0.3, 150], i % 2 ? RIVER : RIVER2, {
-            id: `montreal-river-${i}-${side < 0 ? "l" : "r"}`,
+      // Continuous bands per bank. This was 16 stations of 150 m panels spaced
+      // ~272 m apart, so well over half the river was bare ground; worse, the
+      // colour alternated RIVER/RIVER2 per station, which turned what did get
+      // drawn into a visible checkerboard. The runs below are the old station
+      // list with its three skipped segments (i=4 and i=11 on the right bank,
+      // i=7 on the left) expressed as gaps between bands instead.
+      for (const [side, runs] of [[-1, [[0, 6], [8, 15]]], [1, [[0, 3], [5, 10], [12, 15]]]])
+        for (const [a, b] of runs)
+          waterBand(a / 16, (b + 1) / 16, side, 72, 180, 12, RIVER, {
+            id: `montreal-river-${a}-${side < 0 ? "l" : "r"}`,
           });
-        }
-      }
 
       // ── Far-bank land strip: a flat shoreline slab across the water that the
       // downtown skyline / Biosphère / La Ronde stand ON (so they read as a city
@@ -263,12 +264,8 @@
       // s 0.07–0.20 L — Olympic Basin rowing lake (continuous water band)
       // ===================================================================
       {
-        for (let i = 0; i < 10; i++) {
-          const bk = K(0.065 + i * 0.015);
-          waterSurface(bk, -1, 26, [58, 0.3, 110], BASIN, {
-            id: `montreal-olympic-basin-north-${i}`,
-          });
-        }
+        waterBand(0.065, 0.20, -1, 26, 136, 12, BASIN,
+          { id: "montreal-olympic-basin-north" });
       }
       // Far bank of the basin: dense broadleaf forestEdge (pushed out across the water)
       // (increased gap from 36m to 42m to clear curve intrusion around s=0.20)
@@ -413,8 +410,13 @@
       // ── Near far-bank (Île Sainte-Hélène) strip across a water channel on the
       // NW (left) side: the Biosphère + La Ronde stand on THIS, beyond the river
       // margin, so they read as a neighbouring island across the water. ──
-      for (let i = 0; i < 7; i++) {
-        farBank(K(0.27 + i * 0.030), -1, 185, 320, 220);
+      // Stations at half the old spacing so consecutive slabs OVERLAP. At
+      // 0.030 apart (~131 m) against a 135 m along-track extent they only just
+      // touched on a straight, and split open into separated rectangles
+      // wherever the bank curved — the far shore read as three floating slabs
+      // rather than a continuous island.
+      for (let i = 0; i < 13; i++) {
+        farBank(K(0.27 + i * 0.015), -1, 185, 320, 220);
       }
 
       // ===================================================================
@@ -613,12 +615,8 @@
       // the parkland treeline is pushed out to the far bank behind it.
       // ===================================================================
       {
-        for (let i = 0; i < 7; i++) {
-          const bk = K(0.565 + i * 0.019);
-          waterSurface(bk, 1, 24, [62, 0.3, 120], BASIN, {
-            id: `montreal-olympic-basin-straight-${i}`,
-          });
-        }
+        waterBand(0.565, 0.679, 1, 24, 144, 12, BASIN,
+          { id: "montreal-olympic-basin-straight" });
       }
       // Small white regatta lane/start towers standing in the basin water
       for (const s of [0.60, 0.67]) {
