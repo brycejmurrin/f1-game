@@ -1945,7 +1945,26 @@ const Tracks = (function () {
                 crowd ? [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4] : null);
       // Roof slab cantilevered over the crowd, lifted on the up axis
       const a = anchor(k, side, gap + 5);
-      addBox(out, vadd(a.c, a.u, 13), [12, 0.8, len + 2], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
+      const roofC = vadd(a.c, a.u, 13);
+      addBox(out, roofC, [12, 0.8, len + 2], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
+      // Rear fascia — closes the gap between the back shell's top and the roof
+      // underside. Without it the roof is a slab hanging in air on EVERY
+      // grandstand on every circuit: the shell tops out at ground+11.2 while the
+      // roof's underside sits at ground+12.3. The two are also sampled at
+      // different lateral distances (gap+7.5 via groundYAt vs gap+5 via the
+      // anchor's terrain raycast), so the shortfall varies with the verge slope
+      // rather than being a fixed 1.1 m — hence solving it from the two pieces'
+      // ACTUAL world-space tops instead of a constant. Placed at the roof's
+      // outer edge (over the shell, behind the crowd) so it never occludes the
+      // under-roof night strip, and is itself hidden by the roof from trackside.
+      {
+        const shellTop = cShell[1] + 6, roofUnder = roofC[1] - 0.4;
+        if (roofUnder > shellTop - 0.1) {
+          const oF = side * (hw[k] + gap + 9);
+          addBox(out, [px[k] + r[0] * oF, (shellTop + roofUnder) / 2, pz[k] + r[2] * oF],
+                 [4, roofUnder - shellTop + 0.2, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
+        }
+      }
       // Under-roof lighting: a warm emissive strip beneath the roof slab so a
       // night grandstand reads as a lit, occupied stand instead of a dark hulk.
       if (NIGHT) addBox(out, vadd(a.c, a.u, 12.35), [8.5, 0.28, len - 1], [1.30, 1.12, 0.74], [a.r, a.u, a.t]);
@@ -2035,6 +2054,20 @@ const Tracks = (function () {
     // accounts for the canopy radius (which grows with tree height), so a tree
     // called at small gap can never poke its canopy through a wall/hedge/fence.
     //   opts: { density, hMin, hMax, col, col2, pineFrac }
+    // Canopy outer radius for a species at height h — the SINGLE source of truth
+    // for "how far does this tree's foliage actually reach sideways". Both
+    // forestEdge() and the FURN roadside scatter derive placement from it.
+    // Keeping two hand-copied estimates is what let forestEdge's drift stale:
+    // it still described tree()'s old (2.9 + h*0.12) skirt after the broadleaf
+    // crown was widened to (3.7 + h*0.14), leaving the "GUARANTEED not to clip
+    // barriers" contract ~0.9 m optimistic at h=16.
+    const canopyR = (kind, h) => {
+      const jMax = 1.15;                                  // per-instance jitter ceiling
+      if (kind === "pine") return 2.7 * jMax + 0.4;       // pine(): widest lower tier
+      if (kind === "fir")  return 2.1 + h * 0.06 + 0.4;   // conifer(): no jitter applied
+      if (kind === "palm") return 5.2;                    // frond hub 2.4 + blade spread
+      return (3.7 + h * 0.14) * jMax + 0.4;               // tree(): widest bulge cone
+    };
     const forestEdge = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const hMin = opts.hMin != null ? opts.hMin : 7;
@@ -2049,15 +2082,11 @@ const Tracks = (function () {
         const s = hash(k * 4.3 + side * 1.1);
         const h = hMin + s * (hMax - hMin);
         const isPine = hash(k * 6.7 + side * 0.7) < pineFrac;
-        // Canopy outer radius: pine peaks at ~2.7*1.15 (jitter max) for its widest
-        // skirt cone; tree's base cone is (2.9 + h*0.12)*1.15. Add a small margin.
-        const jMax = 1.15;
-        const canopyR = isPine ? 2.7 * jMax + 0.4
-                               : (2.9 + h * 0.12) * jMax + 0.4;
+        const canopy = canopyR(isPine ? "pine" : "broad", h);
         // dist so the canopy's inner edge sits `gap` beyond the road edge
-        const dist = gap + canopyR;
+        const dist = gap + canopy;
         // stagger a back row slightly for depth on the densest treelines
-        const back = (dens > 0.6 && hash(k * 8.9 + side) < 0.4) ? canopyR * 1.4 : 0;
+        const back = (dens > 0.6 && hash(k * 8.9 + side) < 0.4) ? canopy * 1.4 : 0;
         if (isPine) pine(k, side, dist + back, h, pineCol);
         else        tree(k, side, dist + back, h, treeCol);
       });
@@ -2714,8 +2743,13 @@ const Tracks = (function () {
       const awnC = vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.u, loH * 0.92);
       addBox(out, awnC, [0.05, 0.10, d * 0.9], opts.awning || [0.20, 0.22, 0.26], b);
       for (const e of [-1, 1]) {
-        const postC = vadd(vadd(awnC, p.t, e * d * 0.42), p.u, -loH * 0.44);
-        addCyl(out, postC, 0.05, loH * 0.82, [0.35, 0.35, 0.38], 4, b);
+        // Posts stand on the GROUND and rise to the awning. addCyl is
+        // BASE-anchored, so offsetting down from the awning by less than the
+        // post's own length (−loH*0.44 for a loH*0.82 post) left each foot
+        // loH*0.48 in the air — 2.3 m on a tall unit — while overshooting the
+        // canopy it holds up by loH*0.38.
+        const postC = vadd(vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.t, e * d * 0.42), p.u, -0.2);
+        addCyl(out, postC, 0.05, loH * 0.92 + 0.25, [0.35, 0.35, 0.38], 4, b);
       }
       // Roof AC / satellite unit.
       if (hh > 0.25) addBox(out, vadd(p.c, p.u, h + 0.3), [w * 0.28, 0.5, d * 0.20], [0.55, 0.56, 0.58], b);
@@ -2764,8 +2798,16 @@ const Tracks = (function () {
       const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
       const b = [aL.r, u, aL.t];
-      addCyl(out, aL.c, 0.3, h, c, 6, b);
-      addCyl(out, aR.c, 0.3, h, c, 6, [aR.r, u, aR.t]);
+      // Mast height is SOLVED to the beam, not assumed. The masts stand on the
+      // verge (anchor(), which sits on the terrain and sinks 0.3) while
+      // overheadSpan measures its clearance from the ROAD datum. Where the verge
+      // runs below the road — shanghai −1.5 m, zandvoort −1.7 m — a flat `h`
+      // leaves each mast over a metre short of the beam it is meant to carry.
+      // Solved per leg, since the two verges need not be at the same height.
+      const uy = Math.max(0.5, u[1]);
+      const legH = (aC) => (h - 0.45) + (py[k] - aC[1]) / uy + 0.3;   // +0.3 into the beam
+      addCyl(out, aL.c, 0.3, legH(aL.c), c, 6, b);
+      addCyl(out, aR.c, 0.3, legH(aR.c), c, 6, [aR.r, u, aR.t]);
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       // Span legs: half-width + 1.5 m clearance each side + 1 m past each mast.
       overheadSpan({
@@ -3034,9 +3076,17 @@ const Tracks = (function () {
       // broadleaf stands (≈22%) so a treeline shows seasonal colour, not one green.
       if (fz.tree === "broad" && hash(seed * 5.5) < 0.22)
         col = [0.60 + hash(seed) * 0.28, 0.34 + hash(seed * 2.1) * 0.22, 0.10 + hash(seed * 3.3) * 0.10];
-      if (fz.tree === "palm") palm(k, side, dist, h, col);
-      else if (fz.tree === "fir") conifer(k, side, dist, h, col);
-      else tree(k, side, dist, h, col);
+      // `dist` is the clearance wanted for the canopy's INNER EDGE, matching
+      // forestEdge()'s contract — push the TRUNK out by the crown's reach. The
+      // scatter used to pass dist straight through as a trunk distance with no
+      // canopy allowance, so any tree it dropped within (barrier gap + crown
+      // radius) of a catch fence grew straight through it. Suzuka was worst hit:
+      // fences cover ~32% of its lap.
+      const kind = fz.tree === "palm" ? "palm" : fz.tree === "fir" ? "fir" : "broad";
+      const d = dist + canopyR(kind, h);
+      if (fz.tree === "palm") palm(k, side, d, h, col);
+      else if (fz.tree === "fir") conifer(k, side, d, h, col);
+      else tree(k, side, d, h, col);
     };
     // Lamp posts — streets / modern / desert. Alternate sides, set behind the
     // barrier line; the head glows HDR at night via streetLamp(). ~12% of posts
@@ -3058,6 +3108,14 @@ const Tracks = (function () {
     // edge. Forest/green circuits get a denser stand (a cluster of a few trees at
     // staggered depths, each with its own varied colour) so the treeline reads as
     // real mixed woodland; street circuits keep a sparser line.
+    // NOTE: this scatter cannot self-guard against barriers. track.barL/barR
+    // hold the DRIVING limit (the tightest lateral value), so a close fence
+    // records a SMALL clearance — clamping a tree against it can only ever push
+    // to the 9 m runoff default, never past the fence. And the intersections
+    // that remain are with barriers belonging to OTHER parts of the lap, which a
+    // per-node lateral table cannot express at all. A real guard needs a spatial
+    // query against recorded barrier geometry by world XZ. Until then the canopy
+    // allowance in plantTree() is what keeps crowns out of adjacent walls.
     if (fz.tree && fz.tree !== "none") {
       const step = fz.sparse ? 30 : (def.street ? 24 : 18);   // street denser than before; sparse = coastal scrub
       every(step, (k) => {

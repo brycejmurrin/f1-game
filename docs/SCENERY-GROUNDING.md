@@ -226,3 +226,39 @@ material* (untagged or hard-material boxes 0.5–6 m tall within 6 m of the road
 edge), which also catches marshal posts, signage and stand fronts. Suzuka
 reports 641 and Monza 1 — the ordering is meaningful, the absolute counts are
 not. Tightening it needs the same call-site tagging as `--clip`.
+
+### The canopy contract, and where it still does not reach
+
+`canopyR(kind, h)` in `js/tracks.js` is now the single source of truth for how
+far a species' foliage reaches sideways. Both `forestEdge()` and the FURN
+roadside scatter derive placement from it, so `dist` means *the clearance the
+canopy's inner edge gets* — not the trunk offset. Two bugs were fixed by
+introducing it:
+
+- `forestEdge()` carried its own copy of the estimate, which still described
+  `tree()`'s old `(2.9 + h*0.12)` skirt after the broadleaf crown was widened to
+  `(3.7 + h*0.14)`. Its "GUARANTEED not to clip barriers" contract was ~0.9 m
+  optimistic at h=16.
+- The FURN scatter had no allowance at all — it passed `dist` straight through
+  as a trunk offset, so any tree dropped within (barrier gap + crown radius) of
+  a catch fence grew through it. This alone was Suzuka 326 → 190 canopy hits and
+  Silverstone 7 → 1.
+
+**What the contract still cannot do**, and why the obvious fix does not work:
+the remaining intersections are trees hitting barriers that belong to a
+*different part of the lap* — Suzuka's Esses inner verge and its pit straight
+are the same strip of ground, Spa's Raidillon wraps back onto Kemmel.
+
+The tempting fix is to have the scatter consult `track.barL/barR`, deferring it
+until after `def.scenery()` has recorded the per-circuit fences. **This was
+tried and reverted — it cannot work.** Those arrays hold the *driving limit*,
+i.e. the tightest lateral value, so a close fence records a SMALL clearance;
+clamping a tree against it can only ever push out to the 9 m `RUNOFF_DEFAULT`,
+never past the fence. And a per-node lateral table cannot represent a barrier
+that belongs to another node's stretch of road at all.
+
+A real guard has to be spatial: test the candidate trunk's world XZ (plus
+`canopyR`) against recorded barrier *geometry*, the way `onTrack()` already
+tests against the road. That is the missing piece — every existing guard in the
+scenery engine is either horizontal-vs-road or vertical, and none is
+horizontal-vs-barrier.
