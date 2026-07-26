@@ -159,8 +159,11 @@ Add to CI once a circuit reaches zero:
 ```
 
 Gate per-circuit rather than fleet-wide while counts are non-zero — a ratchet
-that forbids regressions on already-clean circuits (currently Miami and Vegas)
-is more useful than a red build everywhere.
+that forbids regressions on already-clean circuits is more useful than a red
+build everywhere. (Don't trust a "currently clean" list in prose: measured on
+the current tree it is 5 circuits, not the 2 an earlier draft of this doc
+claimed. Run `node tools/float-audit.cjs --all` rather than believing this
+paragraph.)
 
 ## 6. Clipping — the other half
 
@@ -168,28 +171,108 @@ Grounding and clipping are the same question on different axes, and the
 horizontal side is already well served (`rejBox` footprint tests, the shoulder
 bury, the terrain over-track clip). Two gaps remain:
 
-- **Prop-vs-prop interpenetration** is unguarded. `along()` documents the
-  hazard — a box longer than the true node spacing shares volume with its
-  neighbour, which shows as z-fighting on straights and visible overlap on
-  hairpins — but nothing enforces it.
+- **Prop-vs-prop interpenetration** — now guarded and measured; see §6.1–6.2.
+  `along()` documents part of the hazard (a box longer than the true node
+  spacing shares volume with its neighbour), but that is *same-model* overlap,
+  which blends and is deliberately accepted. The damage was cross-model.
 - **Deliberate overhead geometry** bypasses footprint rejection by design and is
   only protected by `minimumClearance`. That contract is sound; it just has to
   be used (`overheadSpan`) rather than hand-rolled with raw boxes. The Suzuka
   crossover regressed precisely because its deck was authored 720 m away from
   the crossing it was meant to span, and no check related the two.
 
-`float-audit.cjs --clip` implements the first half of this: it reports primitive
-pairs sharing significant volume, filtered to trackside props of comparable size
-(landforms are excluded — mountains and backdrop mounds are *built* to
-interpenetrate, and unfiltered they drown everything else).
+### 6.1 The detector — `tools/clip-audit.cjs`
 
-**It is exploratory, not a defect count.** Dense scenery interpenetrates by
-design — forest canopies, crowd boxes, stacked building detail — and the pass
-cannot separate those from mistakes because it has no model identity: on Monza
-it reports ~15 700 pairs, nearly all legitimate. Finishing it means tagging each
-primitive with its emitting call site (the machinery `--why` already uses) and
-reporting only pairs from DIFFERENT models. That is the remaining work; until
-then the ranked list is a lead, not a verdict.
+The old exploratory `--clip` mode is gone. It reported ~15 700 pairs on Monza
+and disclaimed its own numbers, and the fix it recommended — *"tag each
+primitive with its emitting call site and report only pairs from DIFFERENT
+models"* — **was tried and measured insufficient**: call-site identity alone
+still leaves **3 207** Monza pairs, essentially all trees from one treeline
+overlapping trees from another. That recommendation was wrong; this is what
+works.
+
+Four filters, in order, each justified by measurement:
+
+| Filter | Effect on Monza | Why |
+|---|---|---|
+| soft-material class (both `FOLIAGE`/`WOOD`) | 15 962 → 1 874 | a forest is *supposed* to interpenetrate |
+| emission adjacency (`\|q_a − q_b\| ≤ 8`) | 1 874 → 1 194 | primitives emitted back-to-back are ONE assembly — a bush's lobes, a tree's canopy tiers, a building's sections, one `along()` step's members |
+| convex point-set SAT | rejects ~42 % (Monaco ~59 %) | an AABB over a diagonal wall is a fat over-approximation, and the error is worst exactly on corners, where the defects live |
+| penetration depth ≥ 0.5 m | the reporting gate | see below |
+
+Emission order is a better model-identity proxy than the call site, and it is
+free — no stack capture. Call-site attribution stays, but for **naming** in the
+report (`--why`), not filtering.
+
+SAT runs over each primitive's **own vertices**, not an OBB rebuilt from
+constructor arguments: `addPrism` is triangular, `addPyramid`/`addCone`/
+`addFrustum` taper, and raw `emit()` polygons are arbitrary — an OBB over a cone
+over-reports about as badly as an AABB over a diagonal wall.
+
+**Severity is penetration DEPTH, not overlap volume.** Volume ranks by prop
+size; depth ranks by what a player sees. Monza's largest-volume pair (609 m³) is
+4 m deep, while Monaco's 8.8 m penetration is 2 219 m³.
+
+```sh
+node tools/clip-audit.cjs <track> [--why]     # defect list + call-site pairings
+node tools/clip-audit.cjs --all --gate        # npm run test:clip
+```
+
+Gated by `tests/prop-clipping.test.mjs` against `tools/clip-baseline.json`, on
+the same ratchet semantics as `props-over-road.spec.js`: a circuit not in the
+map must read 0, a capped circuit fails when it grows, no `ALLOW` hatch.
+
+### 6.2 Blocking, not separating
+
+Where two models meet, whichever got there first wins and the later one yields.
+Overlap *within* one model is accepted — consecutive hedge or wall segments
+sharing volume through a corner apex are the same colour and material, the
+shared volume is interior, and it already blends.
+
+**Re-spacing was tried and made things worse.** `cityFront`'s row, the
+`neonTower` rows and bespoke per-track calls all step by CENTRELINE arc length
+while standing metres out from the road edge, where the true world chord shrinks
+by `(1 − curvature·distance)`; on a street circuit's corners their footprints
+share volume. Clamping each unit's width to the chord actually available took
+the fleet from **478 to 488** severe spots — narrowing a unit moves its centre,
+which relocates the collision to a different producer instead of removing it.
+`massBlocked()`/`massAdd()` replaced it: a later mass ≥82 % inside an existing
+one is simply dropped.
+
+Two rules this exposed, both load-bearing:
+
+- **Dropping geometry must not drop the driving boundary.** `building()` and
+  `neonTower()` still call `blockAt()` on the yield path — the ground is
+  occupied either way. Skipping it loosened the limit on every street circuit
+  and broke the walled-tight guarantee.
+- **The index must know a model's bulk, not just its face.** `barSegs` records
+  now carry a half-width, so `barrierClear()` measures to an obstacle's SURFACE.
+  `indexSolid()`/`indexSolidAt()` register hedges, grandstands, seat bowls and
+  placed props — which `recordBarrier` never did — so the existing
+  `clearTreeDist()` move-or-drop handles foliage against them with no new code
+  path. That one gap was ~89 % of Monza's cross-model pairs.
+
+Fleet result: **679 → 348 severe spots**, no circuit regressed.
+
+### 6.3 `safe()` can silently delete a whole circuit's scenery
+
+Worth knowing before trusting any prop count. `Tracks.build` wraps each mesh in
+`safe(name, geo)`, which on a `validateGeometry` failure logs a `console.warn`
+and substitutes an **empty buffer**. One NaN vertex anywhere therefore costs the
+entire mesh.
+
+Silverstone shipped that way: `plantRoadsideTrees` spreads a stand over
+neighbouring nodes as `k + (i%2) - (i>1?1:0)`, which at `k=0, i=2` is node
+**−1**; `anchor()` read `undefined` off the typed arrays and the NaN propagated
+through the whole props buffer. **783 066 vertices discarded**, the circuit
+rendered with no scenery at all, and the only symptom was a warning nothing
+reads. `anchor()` now normalises its node index defensively.
+
+Check it directly rather than inferring it from vertex counts:
+
+```js
+track.geometryDiagnostics   // [{ name, ok, reason, vertices }] per mesh
+```
 
 ## 7. Clipping you can fix in the RENDERER, without moving models
 
