@@ -389,15 +389,23 @@
         for (let j = 0; j < 3; j++) {
           const ang = j * 2.0944;            // 0°, 120°, 240°
           const cs = Math.cos(ang), sn = Math.sin(ang);
-          // blade direction: a mix of track-right and track-forward, both horizontal
-          const bldR = [a.r[0] * cs + a.t[0] * sn,
-                        a.r[1] * cs + a.t[1] * sn,
-                        a.r[2] * cs + a.t[2] * sn];
+          // Blade radiates from the hub in the ROTOR plane (track-right × up),
+          // so the rotor reads edge-on from the road like a real turbine.
+          const bldR = [a.r[0] * cs + a.u[0] * sn,
+                        a.r[1] * cs + a.u[1] * sn,
+                        a.r[2] * cs + a.u[2] * sn];
+          const perp = [a.u[0] * cs - a.r[0] * sn,
+                        a.u[1] * cs - a.r[1] * sn,
+                        a.u[2] * cs - a.r[2] * sn];
           // blade center is 15m out from hub in blade direction
           const bldC = [hubPt[0] + bldR[0] * 15,
                         hubPt[1] + bldR[1] * 15,
                         hubPt[2] + bldR[2] * 15];
-          addBox(out, bldC, [2, 30, 1.5], [0.94, 0.94, 0.96], [bldR, a.u, a.t]);
+          // The 30 m span runs ALONG the blade, so each blade meets the nacelle.
+          // As [2, 30, 1.5] the span sat on the basis' UP axis instead: a 30 m
+          // vertical slab hanging 15 m out from the hub, attached to nothing —
+          // nine of them, 65 m above the dunes.
+          addBox(out, bldC, [30, 2, 1.5], [0.94, 0.94, 0.96], [bldR, perp, a.t]);
         }
       }
 
@@ -535,6 +543,15 @@
         if (onTrack(a.c[0], a.c[2], 6)) continue;
         const b = [a.r, a.u, a.t];
         const buntingCol = [0.96, 0.40, 0.02];
+        const poleCol = [0.30, 0.31, 0.34];
+        // Bunting HANGS from something. The capsules alone were 11 pennants a
+        // side floating 6–9 m up in front of the stand, so string them on two
+        // cables carried by a pole at each end of the run (±24.5 m along t,
+        // just past the outermost capsule at ±22.5).
+        for (const e of [-1, 1])
+          addBox(out, vadd(vadd(a.c, a.u, 5.2), a.t, e * 24.5), [0.3, 10.4, 0.3], poleCol, b);
+        for (const cableY of [7.9, 10.3])
+          addBox(out, vadd(a.c, a.u, cableY), [0.14, 0.14, 49], poleCol, b);
         for (let i = -5; i <= 5; i++)
           addBox(out, vadd(vadd(a.c, a.u, 7.2), a.t, i * 4.5),
                  [0.7, 1.4, 2.6], buntingCol, b);

@@ -326,9 +326,13 @@
         // is nearly level out here — so every building hovered by exactly its
         // own rise (2.5–17 m). Terrace them in: a stone retaining plinth spans
         // the building's foot down to the lowest ground under its footprint.
+        // embed 4 m, not the default 0.6: out here the village straddles the
+        // outer edge of the terrain ribbon, and foundation() only samples the
+        // ribbon — so on the far side, where the land has already dropped to the
+        // universal floor, a shallow plinth stops short of it.
         const terrace = (f, w, d) => foundation(out, {
           center: f.p, size: [w * 1.08, d * 1.08], top: f.p[1],
-          basis: [r, u, t], col: STONE, ground: f.gy,
+          basis: [r, u, t], col: STONE, ground: f.gy, embed: 4,
         });
         const put = (alongM, outM, rise, w, h, d, col) => {
           const f = footAt(alongM, outM, rise);
