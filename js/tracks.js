@@ -1598,10 +1598,22 @@ const Tracks = (function () {
       return emitted;
     };
     const groundedSegments = (spec) => models.groundedSegments(spec);
-    // Flat [x0,z0,x1,z1,…] run of every barrier face segment recorded this
-    // build, in world XZ. Consumed by the spatial index defined below
-    // recordBarrier(), which is the only writer.
+    // Flat [x0,z0,x1,z1,halfW,…] run of every SOLID scenery footprint recorded
+    // this build, in world XZ. A barrier face is a bare line (halfW 0); a solid
+    // model — hedge, grandstand, building, placed prop — is the same line
+    // inflated by its own half-width, so a clearance query accounts for the
+    // obstacle's real bulk and not just the plane of one face.
     const barSegs = [];
+    const SEG = 5;                      // stride of one barSegs record
+    // Widest half-width in the index. barrierClear() sweeps grid cells around
+    // the query point, so it must reach out by this much to find a wide record
+    // whose centre line lies outside the cells the query itself touches.
+    let barMaxHalf = 0;
+    const pushSeg = (x0, z0, x1, z1, w) => {
+      barSegs.push(x0, z0, x1, z1, w);
+      if (w > barMaxHalf) barMaxHalf = w;
+      barGrid = null;                   // invalidate: queries run mid-scenery
+    };
     // Tighten the driving boundary along a solid barrier placed from lap-fraction
     // s0→s1 on `side` at clearance `gap` beyond the road edge. Skips nodes where
     // the barrier geometry would be suppressed (a parallel stretch of track), so
@@ -1632,12 +1644,43 @@ const Tracks = (function () {
         }
         // Feed the spatial index below. `prev` resets on a suppressed node so we
         // never bridge a segment across a gap where no barrier is actually built.
-        if (prev) { barSegs.push(prev[0], prev[1], fx, fz2); barGrid = null; }
+        if (prev) pushSeg(prev[0], prev[1], fx, fz2, 0);
         prev = [fx, fz2];
       }
     };
     const recordBarrier = (s0, s1, side, gap) => scanBarrier(s0, s1, side, gap, true);
     const indexBarrier = (s0, s1, side, gap) => scanBarrier(s0, s1, side, gap, false);
+    // Register a SOLID model's footprint (not just a face) so foliage and other
+    // placement guards can see it. `s0→s1` on `side`, its inner face `gap`
+    // beyond the road edge, `width` across. The recorded centreline sits half a
+    // width out from the inner face and carries width/2 as its half-width, so
+    // barrierClear() measures from the model's SURFACE. Purely geometric — it
+    // never touches barL/barR, exactly like indexBarrier().
+    const indexSolid = (s0, s1, side, gap, width) => {
+      const halfW = Math.max(0, (width || 0) / 2);
+      const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
+      const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
+      let prev = null;
+      for (let i = 0; i <= span; i++) {
+        const k = (k0 + i) % n;
+        const o = side * (hw[k] + gap + halfW);
+        const cx = px[k] + track.rx[k] * o, cz = pz[k] + track.rz[k] * o;
+        if (onTrack(cx, cz, 0.3)) { prev = null; continue; }
+        if (prev) pushSeg(prev[0], prev[1], cx, cz, halfW);
+        prev = [cx, cz];
+      }
+    };
+    // Point form, for a single boxy prop at node k rather than a run. `halfLen`
+    // is its extent along the track, `halfW` across; the record is the box's
+    // own centre line inflated by halfW.
+    const indexSolidAt = (k, side, dist, halfW, halfLen) => {
+      const kk = ((k % n) + n) % n;
+      const o = side * (hw[kk] + dist);
+      const cx = px[kk] + track.rx[kk] * o, cz = pz[kk] + track.rz[kk] * o;
+      const L = Math.max(0, halfLen || 0);
+      const tx = track.tx[kk] * L, tz = track.tz[kk] * L;
+      pushSeg(cx - tx, cz - tz, cx + tx, cz + tz, Math.max(0, halfW || 0));
+    };
     // ── Spatial barrier index (world XZ) ──────────────────────────────────
     // Every existing guard in this engine is horizontal-vs-ROAD (onTrack,
     // rejBox, blockAt) or vertical (the support/grounding tests). None is
@@ -1661,10 +1704,14 @@ const Tracks = (function () {
     const barCellKey = (cx, cz) => cx * 100003 + cz;
     const buildBarGrid = () => {
       barGrid = new Map();
-      for (let i = 0; i < barSegs.length; i += 4) {
+      for (let i = 0; i < barSegs.length; i += SEG) {
         const x0 = barSegs[i], z0 = barSegs[i + 1], x1 = barSegs[i + 2], z1 = barSegs[i + 3];
-        const cx0 = Math.floor(Math.min(x0, x1) / BAR_CELL), cx1 = Math.floor(Math.max(x0, x1) / BAR_CELL);
-        const cz0 = Math.floor(Math.min(z0, z1) / BAR_CELL), cz1 = Math.floor(Math.max(z0, z1) / BAR_CELL);
+        // Bucket by the INFLATED bounds: a wide record (a grandstand, a
+        // building) reaches into cells its centre line never enters, and a
+        // query in one of those cells must still find it.
+        const w = barSegs[i + 4];
+        const cx0 = Math.floor((Math.min(x0, x1) - w) / BAR_CELL), cx1 = Math.floor((Math.max(x0, x1) + w) / BAR_CELL);
+        const cz0 = Math.floor((Math.min(z0, z1) - w) / BAR_CELL), cz1 = Math.floor((Math.max(z0, z1) + w) / BAR_CELL);
         for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
           const key = barCellKey(cx, cz);
           let b = barGrid.get(key); if (!b) barGrid.set(key, b = []);
@@ -1682,16 +1729,23 @@ const Tracks = (function () {
       const ex = x - (x0 + dx * t), ez = z - (z0 + dz * t);
       return ex * ex + ez * ez;
     };
-    // True when NO recorded barrier face lies within `r` metres of (x,z).
+    // True when NO recorded solid lies within `r` metres of (x,z). Each record
+    // carries its own half-width, so the test is against the obstacle's surface:
+    // clear iff distance to its centre line exceeds r + halfW.
     const barrierClear = (x, z, r) => {
       if (!barGrid) buildBarGrid();
       if (!barGrid.size) return true;
-      const r2 = r * r;
-      const cx0 = Math.floor((x - r) / BAR_CELL), cx1 = Math.floor((x + r) / BAR_CELL);
-      const cz0 = Math.floor((z - r) / BAR_CELL), cz1 = Math.floor((z + r) / BAR_CELL);
+      // Widen the cell sweep by the largest half-width in the index, or a wide
+      // record whose centre line sits outside the queried cells is missed.
+      const reach = r + barMaxHalf;
+      const cx0 = Math.floor((x - reach) / BAR_CELL), cx1 = Math.floor((x + reach) / BAR_CELL);
+      const cz0 = Math.floor((z - reach) / BAR_CELL), cz1 = Math.floor((z + reach) / BAR_CELL);
       for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
         const b = barGrid.get(barCellKey(cx, cz)); if (!b) continue;
-        for (let j = 0; j < b.length; j++) if (segDist2(b[j], x, z) < r2) return false;
+        for (let j = 0; j < b.length; j++) {
+          const i = b[j], rr = r + barSegs[i + 4];
+          if (segDist2(i, x, z) < rr * rr) return false;
+        }
       }
       return true;
     };
@@ -1734,6 +1788,11 @@ const Tracks = (function () {
       if (addBox(out, c, sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
       // solid box → the car must stop before its inner face (sz[0] across, sz[2] long)
       blockAt(k, side, dist - sz[0] / 2, sz[2] / 2);
+      // …and the scenery engine must know a solid body physically stands here,
+      // which blockAt does NOT say — it only moves the driving limit. Without
+      // this, roadside foliage happily grows straight through every placed prop
+      // (suzuka `place x tree` x31, montreal x18).
+      indexSolidAt(k, side, dist, sz[0] / 2, sz[2] / 2);
     };
     const every = (m, fn) => { const stp = Math.max(1, Math.round(m / ds)); for (let k = 0; k < n; k += stp) fn(k); };
     const dressingExcluded = (kind, k, side) => {
@@ -1844,7 +1903,15 @@ const Tracks = (function () {
     // ---------- composite scenery models (beyond single boxes) ----------
     // Resolve a trackside anchor: ground position + the track basis [r,u,t] at
     // node k, `dist` beyond the road edge on `side`. Shared by the model helpers.
-    const anchor = (k, side, dist) => {
+    const anchor = (kRaw, side, dist) => {
+      // Normalise the node index. Callers derive k with arithmetic (k-1, k+1,
+      // k+step) and an out-of-range index reads `undefined` from the typed
+      // arrays, which turns the whole model into NaN. That is not a local
+      // failure: validateGeometry() rejects the buffer, safe() substitutes an
+      // empty one, and the circuit ships with NO PROPS AT ALL. Silverstone did
+      // exactly that — 783 066 vertices discarded because one roadside tree
+      // resolved to node -1.
+      const k = ((kRaw % n) + n) % n;
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
@@ -2128,6 +2195,12 @@ const Tracks = (function () {
       const k = Math.round(s * n) % n;
       const halfFrac = (len / 2) / track.total;
       recordBarrier(s - halfFrac, s + halfFrac, side, gap);
+      // recordBarrier only registers the stand's FRONT FACE. The stand itself is
+      // a ~12.5 m deep mass (crowd bank, back shell centred at gap+7.5 and 10
+      // wide, roof over the top), and nothing told the scenery engine that —
+      // so treelines planted behind a stand grew straight up through it
+      // (suzuka `crowdBank<grandstand x tree` x36).
+      indexSolid(s - halfFrac, s + halfFrac, side, gap, 12.5);
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
@@ -2246,14 +2319,22 @@ const Tracks = (function () {
       });
     };
     // Low clipped hedge / continuous treeline.
+    const HEDGE_W = 2.4;
     const hedge = (s0, s1, side, gap, h, col) => {
+      // A hedge is a solid 2.4 m-wide body, but it is not a barrier — it must
+      // not move the driving limit. Index the geometry only. This is the single
+      // largest source of cross-model clipping on the fleet: without it the
+      // roadside tree scatter plants straight through every hedge run (monza
+      // `hedge x plantTree` x645, ~89% of that circuit's cross-model pairs).
+      // The box straddles the anchor, so its inner face is half a width in.
+      indexSolid(s0, s1, side, gap - HEDGE_W / 2, HEDGE_W);
       along(s0, s1, 4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.2)) {
           console.warn(`[scenery] hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addBox(out, vadd(p.c, p.u, (h - 0.4) / 2), [2.4, h + 0.4, spacing], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]);   // base sunk 0.4
+        addBox(out, vadd(p.c, p.u, (h - 0.4) / 2), [HEDGE_W, h + 0.4, spacing], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]);   // base sunk 0.4
       });
     };
     // forestEdge(): a DENSE treeline (mix of pine/tree) from s0→s1 on `side`,
@@ -3359,7 +3440,12 @@ const Tracks = (function () {
           : 2 + Math.floor(hash(k * 13) * 2);                      // green: 2–3 per stand
         for (let i = 0; i < cluster; i++) {
           const dist = (def.street ? 6 : 8) + hash(k * 3 + side + i * 4.4) * (def.street ? 4 : 14);
-          plantTree(k + (i % 2) - (i > 1 ? 1 : 0), side, dist, baseH + hash(k * 5 + i * 2.7) * 6);
+          // Spread a stand over neighbouring nodes (k, k+1, k-1). WRAP it — the
+          // third tree of the stand at k=0 resolved to node -1, and an
+          // out-of-range index reads undefined off the typed arrays and NaNs
+          // the entire props buffer (see anchor()).
+          const kt = ((k + (i % 2) - (i > 1 ? 1 : 0)) % n + n) % n;
+          plantTree(kt, side, dist, baseH + hash(k * 5 + i * 2.7) * 6);
         }
       });
     }
@@ -3752,6 +3838,8 @@ const Tracks = (function () {
         [0.92, 0.28, 0.55], [0.95, 0.45, 0.12], [0.18, 0.72, 0.42],
         [0.98, 0.82, 0.10], [0.94, 0.94, 0.92], [0.22, 0.42, 0.78], [0.90, 0.30, 0.24],
       ];
+      // Solid seating mass — index it so foliage cannot grow through the bowl.
+      indexSolid(s0, s1, side, gap - thick / 2, thick);
       along(s0, s1, opts.step || 7, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], thick / 2 + 2)) return;
