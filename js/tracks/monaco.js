@@ -48,7 +48,7 @@
     // not a wide terrain ribbon, so elevation was always safe here.
     elevations: [{ s: 0.10, halfM: 340, rise: 30 }, { s: 0.55, halfM: 220, rise: -10 }],
     scenery: function (api) {
-      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, waterSurface, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
+      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
       const KR = (s) => TrackSpace.sourceNodeToRacing(def, K(s), n);
       const racingSide = (side) => def.reverse ? -side : side;
@@ -584,14 +584,25 @@
       // Three longitudinal stations × eight outward ranks form a bounded tiled
       // basin. Individual 46×48 m panels cannot chord across Monaco's foldbacks.
       const harbourStations = [0.365, 0.545, 0.59]; // racing fractions
-      const harbourRanks = [22, 68, 114, 252, 298, 344, 390, 436];
+      // Rasterised as a fine grid rather than 46x48 m slabs. The slab version
+      // needed 27 m of road clearance per panel, so the basin came out as
+      // separated blue rectangles on bare ground — and the 138 m band between
+      // ranks 114 and 252, where the lap folds back through the water, was
+      // rejected outright at every station (verified: re-adding those ranks
+      // fails the build three times over). At 12 m cells the same region closes
+      // up to the kerb and only the road corridor itself stays open.
       for (let station = 0; station < harbourStations.length; station++) {
-        for (let rank = 0; rank < harbourRanks.length; rank++) {
-          waterSurface(K(harbourStations[station]), 1, harbourRanks[rank],
-            [46, 0.35, 48], (station + rank) % 2 ? SEA2 : SEA,
-            { id: `monaco-harbour-water-${station}-${rank}`, required: true });
-        }
+        waterField(K(harbourStations[station]), 1, 16, 300, 72, 12, SEA,
+          { id: `monaco-harbour-water-${station}`, required: true });
       }
+      // NOTE: do not widen this by adding more stations around the lap. It was
+      // tried (0.63…0.07, 72 of 96 panels placed, build stayed green) and the
+      // result was visibly WRONG: side +1 is only the harbour for this handful
+      // of fractions, so most of the new panels laid sea between the city
+      // buildings on the inland side. The onTrack guard only rejects geometry
+      // that overlaps the ROAD — it has no idea what is land. Widening the
+      // basin needs a real harbour polygon in world XZ, not more track-relative
+      // stations.
 
       // ── FLAGSHIP SUPERYACHT — bespoke multi-deck megayacht ───────────────
       // Hull prism bow + stacked white superstructure decks + wrap-around

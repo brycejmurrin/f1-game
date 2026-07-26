@@ -1462,6 +1462,89 @@ const Tracks = (function () {
       }
       return models.waterSurface({ id: opts.id || `water-${k}`, center, size: sz, color: col, required: opts.required });
     };
+    // A continuous sheet of water rasterised from FINE cells, instead of a
+    // handful of big slabs. waterSurface() places one box per call and rejects
+    // the WHOLE box if any part of it is near the road, with a sz/2+4 margin —
+    // so a 46 m panel needs 27 m of clearance and a basin built from them ends
+    // up as scattered rectangles separated by wide bare bands wherever the lap
+    // folds back through the water. Same region here, but stepped in `cell`
+    // metre squares: rejection is per-cell, so the sheet closes right up to the
+    // road edge and the holes shrink to the road corridor itself.
+    //
+    // Cells follow the track's own frame (each along-step re-reads that node's
+    // right vector), so the basin curves with the shoreline instead of being an
+    // axis-aligned rectangle. Colour is ONE sea tone with a small per-cell
+    // drift — the old code alternated two tones on a checkerboard, which is
+    // most of what made the water read as tiles rather than as a surface.
+    // The region is described in TRACK space (a window along the lap, a span
+    // outward) but rasterised onto a fixed WORLD-XZ grid. Both halves matter.
+    // Stepping in track space and emitting world-axis-aligned boxes does not
+    // tile: the outward rays fan apart as the radius grows, so the basin breaks
+    // into separated squares a hundred metres out even though every step was
+    // uniform at the centreline. Splatting the track-space samples onto a world
+    // grid and emitting one box per occupied cell makes neighbours abut exactly
+    // by construction, at any curvature. Occupied cells are then merged into
+    // flat quad runs, so the output is a sheet rather than a field of tiles.
+    const waterField = (k, side, gap0, gap1, halfLen, cell, col, opts) => {
+      opts = opts || {};
+      const c = Math.max(4, cell || 12);
+      const half = Math.max(1, Math.round(halfLen / ds));
+      const step = c / 2;                       // sample finer than the grid
+      const cells = new Map();
+      for (let a = -half; a <= half; a++) {
+        const k0 = (((k + a) % n) + n) % n, k1 = (((k + a + 1) % n) + n) % n;
+        for (let d = gap0; d <= gap1; d += step) {
+          const o0 = side * (hw[k0] + d), o1 = side * (hw[k1] + d);
+          const x0 = px[k0] + track.rx[k0] * o0, z0 = pz[k0] + track.rz[k0] * o0;
+          const x1 = px[k1] + track.rx[k1] * o1, z1 = pz[k1] + track.rz[k1] * o1;
+          // Walk the gap to the NEXT node's ray. On a corner that gap is many
+          // times the centreline node spacing; subdividing it is what stops the
+          // fan from opening holes in the outer basin.
+          const sub = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / step));
+          for (let i = 0; i < sub; i++) {
+            const t = i / sub;
+            const x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
+            cells.set(Math.floor(x / c) + "|" + Math.floor(z / c), 1);
+          }
+        }
+      }
+      // Keep only the cells that clear the road. Margin is the cell's own
+      // half-width plus a small lip, NOT a fixed constant — that is what lets a
+      // fine grid close right up to the kerb where a 46 m slab needed 27 m of
+      // clearance and dropped out entirely.
+      const rows = new Map();                   // iz -> sorted list of ix
+      for (const key of cells.keys()) {
+        const p = key.indexOf("|");
+        const ix = +key.slice(0, p), iz = +key.slice(p + 1);
+        if (onTrack((ix + 0.5) * c, (iz + 0.5) * c, c / 2 + 1.5)) continue;
+        let a = rows.get(iz); if (!a) rows.set(iz, a = []);
+        a.push(ix);
+      }
+      // Emit ONE merged sheet, not one box per cell. Per-cell boxes are what
+      // made this read as a grid: each carried its own side walls and its own
+      // shade, so every cell boundary was a visible edge. Runs of adjacent
+      // cells in a row collapse into a single flat quad at a single colour, so
+      // within a run there is no interior geometry at all and nothing to see
+      // but water. Coplanar neighbouring runs leave no seam either.
+      const y = pyMin - 0.8;
+      let placed = 0;
+      for (const [iz, list] of rows) {
+        list.sort((a, b) => a - b);
+        for (let i = 0; i < list.length; ) {
+          let j = i;
+          while (j + 1 < list.length && list[j + 1] === list[j] + 1) j++;
+          const x0 = list[i] * c, x1 = (list[j] + 1) * c;
+          const z0 = iz * c, z1 = (iz + 1) * c;
+          emit(waterBuf, [[x0, y, z0], [x0, y, z1], [x1, y, z1], [x1, y, z0]],
+               col, [(x0 + x1) / 2, y - 10, (z0 + z1) / 2]);
+          placed++;
+          i = j + 1;
+        }
+      }
+      if (!placed && opts.required)
+        diagnostics.suppressed.push({ id: opts.id || "waterfield", required: true, reason: "no cell placed" });
+      return placed;
+    };
     const groundPatch = (k, side, gap, sz, col, opts) => {
       opts = opts || {};
       if (!finiteVec(sz, 3, true)) {
@@ -3748,7 +3831,7 @@ const Tracks = (function () {
         // Named atmosphere / colour packs (js/track-scenery-data.js)
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
-        modelGroup, overheadSpan, waterSurface, groundPatch, groundedSegments,
+        modelGroup, overheadSpan, waterSurface, waterField, groundPatch, groundedSegments,
         seat, foundation, cantilever,
         // Resolved data and opt-in architectural/facility helpers. Merely binding
         // these does not emit geometry; each circuit remains responsible for calls.
