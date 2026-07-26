@@ -371,12 +371,18 @@
       forestEdge(0.29, 0.42,  1, 129, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Stowe right (post-Hangar)
       forestEdge(0.58, 0.68, -1, 119, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Abbey/Loop left
       forestEdge(0.78, 0.90, -1, 124, { density: 0.45, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Luffield left
-      forestEdge(0.05, 0.12, -1, 134, { density: 0.4,  hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Maggotts far side
-      forestEdge(0.44, 0.52,  1, 139, { density: 0.4,  hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // behind The Wing
+      // These two belts break mid-run. At 130-140 m out they leave the outfield and
+      // come back over the lap on the far side (s≈0.06-0.08 lands on the National
+      // straight; s≈0.47-0.52 lands on the start/finish complex), where their
+      // canopies grew through the guardrails and lighting masts standing there.
+      forestEdge(0.05, 0.061, -1, 134, { density: 0.4, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Maggotts far side
+      forestEdge(0.078, 0.12, -1, 134, { density: 0.4, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55});
+      forestEdge(0.44, 0.468,  1, 139, { density: 0.4, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // behind The Wing
       // Outer broadleaf copse belts (the named Silverstone landscape copses)
       // Maggotts outer belt ends before Hangar Straight; Stowe belt starts after.
       forestEdge(0.14, 0.17, -1, 114, { density: 0.55, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Maggotts outer (pre-Hangar)
-      forestEdge(0.49, 0.53,  1, 104, { density: 0.55, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Wing outer belt
+      forestEdge(0.49, 0.497, 1, 104, { density: 0.55, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Wing outer belt
+      forestEdge(0.516, 0.53, 1, 104, { density: 0.55, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); //  (breaks over the pit complex)
       forestEdge(0.71, 0.75,  1, 109, { density: 0.5,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Loop outer copse
       forestEdge(0.61, 0.65, -1, 124, { density: 0.45, hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Abbey outer belt
       forestEdge(0.35, 0.39, -1, 139, { density: 0.4,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Stowe outer field copse

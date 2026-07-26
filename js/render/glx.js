@@ -952,7 +952,16 @@ const GLX = (function () {
     // coincident duplicate to z-fight.
     const dbl = opts && opts.doubleSided;
     if (dbl) gl.disable(gl.CULL_FACE);
+    // Depth bias for DECAL geometry (start line, road markings): nudge the
+    // fragment's depth toward the camera instead of lifting the mesh in Y.
+    // A geometric lift is resolution-dependent — it holds up close and
+    // z-fights at distance, where depth precision collapses under a 0.3 m
+    // near plane. polygonOffset scales with the local depth slope, so a
+    // decal wins at every distance and grazing angle without moving it.
+    const _db = opts && opts.depthBias;
+    if (_db) { gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(_db[0], _db[1]); }
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    if (_db) { gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); }
     if (dbl) gl.enable(gl.CULL_FACE);
     if (noAW) gl.colorMask(true, true, true, true);
   }

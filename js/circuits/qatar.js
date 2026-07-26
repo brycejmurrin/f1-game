@@ -196,12 +196,22 @@
       })();
       building(K(0.01), -1, 17, 13, 8, 160,
         { wall: [0.90, 0.90, 0.88], window: WIN_COOL, floor: 3.2 });
-      // Horizontal banding stripe along the pit face (Tilke language)
-      along(0.0, 0.12, 10, (k) => {
-        const a = anchor(k, -1, 1.2), b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 5.5), [0.25, 0.45, 10], [0.78, 0.78, 0.76], b);
-        addBox(out, vadd(a.c, a.u, 11.4), [0.35, 0.9, 8], WIN_WARM, b);
-      });
+      // Horizontal banding stripe along the pit face (Tilke language).
+      // These band the PIT BUILDING emitted just above — but were anchored via
+      // along() at 1.2 m off the TRACK edge, 16 m inboard of that facade and up
+      // to 11 m in the air, so 70 stripes hung over the pit lane attached to
+      // nothing. They must follow the BUILDING, not the centreline: building()
+      // emits one straight 160 m slab oriented at K(0.01), so stepping along the
+      // curving track diverges from it. Step along the slab's own tangent from
+      // the same anchor, and keep both bands inside its 8 m height.
+      {
+        const pb = anchor(K(0.01), -1, 16.6), bb = [pb.r, pb.u, pb.t];
+        for (let i = -7; i <= 7; i++) {
+          const c = vadd(pb.c, pb.t, i * 10.6);
+          addBox(out, vadd(c, pb.u, 3.4), [0.25, 0.45, 10], [0.78, 0.78, 0.76], bb);
+          addBox(out, vadd(c, pb.u, 6.6), [0.35, 0.9, 8], WIN_WARM, bb);
+        }
+      }
       (function pitGarages() {
         let i = 0;
         along(0.0, 0.12, 6, (k) => {

@@ -12,6 +12,7 @@ const SceneryCity = (function () {
 
   function create(ctx) {
     const { out, glassBuf, def, theme, NIGHT, MAT, lod,
+            seat, cantilever,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             rejBox, blockAt, onTrack, hash, vadd,
             anchor, along } = ctx;
@@ -301,7 +302,13 @@ const SceneryCity = (function () {
           const by = topY * (0.5 + hash(k * 2.3 + side) * 0.32);
           addBox(out, vadd(p.c, p.u, by), [topW * 1.05, 0.7, topD * 1.05], neon, b);
         }
-        if (h > 38) addBox(out, vadd(p.c, p.u, topY + 2.4), [1.1, 1.1, 1.1], [3.2, 0.4, 0.3], b);  // red beacon
+        if (h > 38) {
+          // Beacon sits 2.4 m over the roof, so it needs the mast a real
+          // aviation light stands on — without it the red cube hung in clear
+          // air above every tall tower on every city circuit.
+          addCyl(out, vadd(p.c, p.u, topY), 0.14, 2.4, [0.30, 0.30, 0.34], 4, b);          // beacon mast
+          addBox(out, vadd(p.c, p.u, topY + 2.4), [1.1, 1.1, 1.1], [3.2, 0.4, 0.3], b);    // red beacon
+        }
       }
       blockAt(k, side, gap, d / 2);   // solid: stop the car before the façade
     };
@@ -372,10 +379,15 @@ const SceneryCity = (function () {
         const cen = vadd(vadd(a.c, a.u, yb + sh / 2), b[2], to || 0);
         const prevMat = out._mat;
         out._mat = bmat;
-        addBox(out, cen, [sw, sh, sd], bodyCol, b);
+        // Return the guarded emitter's verdict: false = body rejected, so the
+        // caller drops roofs/caps/masts that would otherwise float (deploy-side
+        // grounding fix, ported onto the split module).
+        const okB = addBox(out, cen, [sw, sh, sd], bodyCol, b);
         out._mat = prevMat;
+        if (okB === false) return false;
         if (NIGHT) neonFacade(cen, b, side, sw, sh, sd, neon, seed, na);
         else dayGridAt(cen, sw, sh, sd);
+        return okB;
       };
       // Caps / antennas / trim below default to METAL (roofline plant, masts,
       // beacons) unless a branch overrides it locally.
@@ -391,7 +403,7 @@ const SceneryCity = (function () {
         sec(podH, w * 0.7, h - podH, d * 0.7, k * 5.1 + side * 2);  // slender tower
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.45, 1.0, d * 0.45], cap, b);
       } else if (kind === "slab") {
-        sec(0, w, h, d, k * 3.7 + side * 1.9);                     // clean tall slab
+        if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents // clean tall slab
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.92, 1.0, d * 0.92], cap, b);
       } else if (kind === "twin") {
         const td = d * 0.4, off = d * 0.28;
@@ -433,32 +445,34 @@ const SceneryCity = (function () {
         }
         if (NIGHT) addBox(out, vadd(a.c, a.u, h + 1.2), [1.4, 1.4, 1.4], neonOn ? [3.0, 1.6, 0.6] : [3.0, 0.6, 0.4], b);  // apex beacon
       } else if (kind === "screen") {                             // giant neon screen building (BRIGHT)
-        sec(0, w, h, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         const sc = neonOn ? [neon[0] * 1.25, neon[1] * 1.25, neon[2] * 1.25] : (NIGHT ? [warm[0] * 0.9, warm[1] * 0.9, warm[2] * 0.9] : [0.30, 0.33, 0.40]);
         addBox(out, vadd(vadd(a.c, a.u, h * 0.56), b[0], -side * (w / 2 + 0.25)), [0.3, h * 0.66, d * 0.82], sc, b);
         if (neonOn) addBox(out, vadd(vadd(a.c, a.u, h * 0.56), b[0], -side * (w / 2 + 0.28)), [0.1, h * 0.6, d * 0.74], [neon[0] * 0.4, neon[1] * 0.4, neon[2] * 0.4], b);
       } else if (kind === "clad") {                               // neon-banded tower (BRIGHT)
-        sec(0, w, h, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         if (neonOn) { const bands = Math.max(4, Math.round(h / 5)); for (let i = 1; i < bands; i++) addBox(out, vadd(a.c, a.u, i * (h / bands)), [w * 1.04, (h / bands) * 0.22, d * 1.04], neon, b); }
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.6, 1.0, d * 0.6], cap, b);
       } else if (kind === "dome") {                              // body + drum + dome cap (civic landmark)
         const bh = h * 0.78, R = reach * 0.34;
-        sec(0, w, bh, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, bh, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         addCyl(out, vadd(a.c, a.u, bh), R, h * 0.10, cap, 14, b);                                            // drum
         addCone(out, vadd(a.c, a.u, bh + h * 0.10), R * 1.1, h * 0.16, neonOn ? neon : (NIGHT ? warm : cap), 14, b);  // dome
         if (NIGHT) addBox(out, vadd(a.c, a.u, h + 0.6), [0.7, 0.7, 0.7], neonOn ? [3.0, 2.0, 0.8] : [3.0, 0.6, 0.4], b);
       } else if (kind === "chevron") {                           // pitched / gabled roof block
         const bh = h * 0.82;
-        sec(0, w, bh, d, k * 3.7 + side * 1.9);
-        addPrism(out, vadd(a.c, a.u, bh + h * 0.09), [w, h * 0.18, d], cap, b);                              // gable roof (ridge along tangent)
+        if (sec(0, w, bh, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents // addPrism takes its `c` as the BASE, not the centre (unlike addBox), so
+        // adding half the roof height here lifted the gable clear of the tower —
+        // h*0.09 of open sky under every chevron roof (9 m on a 100 m tower).
+        seat.prism(out, vadd(a.c, a.u, bh), [w, h * 0.18, d], cap, b);                                       // gable roof, seated on the body
         if (neonOn) addBox(out, vadd(a.c, a.u, bh + h * 0.18), [w * 1.02, 0.5, d * 1.02], neon, b);          // eave neon
       } else if (kind === "notch") {                             // twin slabs split by a vertical slot
         const podH = h * 0.22, off = w * 0.30;
-        sec(0, w, podH, d, k * 3.1 + side);                                                                   // shared podium base
+        if (sec(0, w, podH, d, k * 3.1 + side) === false) return;   // body rejected -> drop its dependents // shared podium base
         for (const o2 of [-off, off]) sec(podH, w * 0.42, h - podH, d, k * 4.3 + side + o2, o2);             // two towers
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.92, 1.0, d * 0.9], cap, b);
       } else if (kind === "fin") {                               // slab with proud vertical fins on the face
-        sec(0, w, h, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         const fins = Math.max(3, Math.round(w / 4));
         for (let i = 0; i < fins; i++) {
           const fx = (-0.5 + (i + 0.5) / fins) * w, lit = neonOn && hash(k + i * 5.1 + side) < 0.5;
@@ -466,7 +480,7 @@ const SceneryCity = (function () {
         }
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.92, 1.0, d * 0.92], cap, b);
       } else if (kind === "antenna") {                           // flat-top tower + mast cluster + beacons
-        sec(0, w, h, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         addBox(out, vadd(a.c, a.u, h + 0.4), [w * 0.9, 0.8, d * 0.9], cap, b);
         const masts = 3;
         for (let i = 0; i < masts; i++) {
@@ -475,7 +489,7 @@ const SceneryCity = (function () {
           if (NIGHT) addBox(out, vadd(vadd(a.c, a.u, h + mh), b[2], mx), [0.5, 0.5, 0.5], [3.0, 0.5, 0.35], b);  // beacon
         }
       } else if (kind === "cross") {                             // two perpendicular slabs (+ footprint)
-        sec(0, w, h, d * 0.5, k * 3.7 + side * 1.9);                                                          // arm along tangent
+        if (sec(0, w, h, d * 0.5, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents // arm along tangent
         const cen2 = vadd(a.c, a.u, h * 0.5);
         addBox(out, cen2, [w * 0.5, h, d], bodyCol, b);                                                       // arm along width
         if (NIGHT) neonFacade(cen2, b, side, w * 0.5, h, d, neon, k * 6.1 + side, na);
@@ -499,12 +513,12 @@ const SceneryCity = (function () {
         addCyl(out, vadd(a.c, a.u, dh + 1.0), R * 0.7, 0.8, cap, 18, b);                    // shallow dome hint
       } else if (kind === "hall") {                              // low wide gabled hall (market / depot)
         const hh = h * 0.5;
-        sec(0, w, hh * 0.7, d, k * 3.3 + side);                                             // low body
-        addPrism(out, vadd(a.c, a.u, hh * 0.7 + hh * 0.15), [w, hh * 0.3, d], cap, b);      // gable roof
+        if (sec(0, w, hh * 0.7, d, k * 3.3 + side) === false) return;   // body rejected -> drop its dependents // low body
+        seat.prism(out, vadd(a.c, a.u, hh * 0.7), [w, hh * 0.3, d], cap, b);               // gable roof, seated on the body
         if (neonOn) addBox(out, vadd(a.c, a.u, hh * 0.7), [w * 1.02, 0.4, d * 1.02], neon, b);  // eave neon
       } else { // setback
         const setH = h * 0.84;
-        sec(0, w, setH, d, k * 3.7 + side * 1.9);
+        if (sec(0, w, setH, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
         out._mat = bmat;
         addBox(out, vadd(a.c, a.u, setH + (h - setH) / 2), [w * 0.72, h - setH, d * 0.72], bodyCol, b);
         out._mat = MAT.METAL;
@@ -549,8 +563,8 @@ const SceneryCity = (function () {
         addBox(out, vadd(a.c, a.u, h), [0.5, 0.5, 0.5], lit, b);
       } else {                                                                               // cantilever arm
         const top = vadd(a.c, a.u, h);
-        addBox(out, vadd(top, b[0], -side * 0.9), [1.9, 0.22, 0.4], pole, b);                // arm over road
-        addBox(out, vadd(vadd(top, b[0], -side * 1.7), a.u, -0.2), [0.85, 0.35, 0.55], lit, b);  // head
+        // arm + head as one cantilever: the member is never optional
+        cantilever(out, vadd(top, a.u, -0.2), 1.7, -side, [0.85, 0.35, 0.55], lit, pole, b);
       }
     };
     // cityFront(): a CONTINUOUS, ALIGNED street wall of buildings from lap-fraction
@@ -659,8 +673,13 @@ const SceneryCity = (function () {
       const awnC = vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.u, loH * 0.92);
       addBox(out, awnC, [0.05, 0.10, d * 0.9], opts.awning || [0.20, 0.22, 0.26], b);
       for (const e of [-1, 1]) {
-        const postC = vadd(vadd(awnC, p.t, e * d * 0.42), p.u, -loH * 0.44);
-        addCyl(out, postC, 0.05, loH * 0.82, [0.35, 0.35, 0.38], 4, b);
+        // Posts stand on the GROUND and rise to the awning. addCyl is
+        // BASE-anchored, so offsetting down from the awning by less than the
+        // post's own length (−loH*0.44 for a loH*0.82 post) left each foot
+        // loH*0.48 in the air — 2.3 m on a tall unit — while overshooting the
+        // canopy it holds up by loH*0.38.
+        const postC = vadd(vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.t, e * d * 0.42), p.u, -0.2);
+        addCyl(out, postC, 0.05, loH * 0.92 + 0.25, [0.35, 0.35, 0.38], 4, b);
       }
       // Roof AC / satellite unit.
       if (hh > 0.25) addBox(out, vadd(p.c, p.u, h + 0.3), [w * 0.28, 0.5, d * 0.20], [0.55, 0.56, 0.58], b);
@@ -677,7 +696,10 @@ const SceneryCity = (function () {
       }
       addFrustum(out, vadd(p.c, p.u, -0.6), baseW * 0.5, baseW * 0.335, h + 0.6, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);   // base sunk 0.6
       if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
-      if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.18 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
+      // Mast stands on the CAP's top face. The cap box is centred at h with
+      // height baseW*0.18, so its top is h + baseW*0.09 — using the full 0.18
+      // left the mast hanging half a cap-height above it.
+      if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.09 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
       blockAt(k, side, dist - baseW * 0.5, baseW * 0.5);   // solid base
     };
     // Advertising hoarding / billboard: a panel on two slim posts.

@@ -13,6 +13,7 @@ const SceneryNature = (function () {
 
   function create(ctx) {
     const { out, track, n, hw, px, pz, NIGHT, MAT,
+            clearTreeDist,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             addMountain, emit, RAW, rejBox, recordBarrier, groundYAt,
             terrainYAt, onTrack, hash, upOf, vadd } = ctx;
@@ -273,7 +274,12 @@ const SceneryNature = (function () {
         // safely behind the shell never trips it, so intended crowds are unchanged.
         out._mat = MAT.CONCRETE;
         const riserC = vadd(vadd(a.c, a.u, up), a.r, side * back);
-        if (!rejBox(riserC, [1.3, 1.5, len], b)) RAW.addBox(out, riserC, [1.3, 1.5, len], riser, b);
+        // If the riser is rejected, this row has no seating — so skip its
+        // spectators too. The bodies below go out through RAW (unguarded), so
+        // without this they stayed behind as a row of people sitting on thin
+        // air where the stand had been dropped.
+        if (rejBox(riserC, [1.3, 1.5, len], b)) continue;
+        RAW.addBox(out, riserC, [1.3, 1.5, len], riser, b);
         out._mat = MAT.FABRIC;
         for (let s2 = 0; s2 < perRow; s2++) {
           if (s2 % 10 === 9) continue;                       // aisle / vomitory gap
@@ -319,7 +325,26 @@ const SceneryNature = (function () {
                 crowd ? [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4] : null);
       // Roof slab cantilevered over the crowd, lifted on the up axis
       const a = anchor(k, side, gap + 5);
-      addBox(out, vadd(a.c, a.u, 13), [12, 0.8, len + 2], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
+      const roofC = vadd(a.c, a.u, 13);
+      addBox(out, roofC, [12, 0.8, len + 2], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
+      // Rear fascia — closes the gap between the back shell's top and the roof
+      // underside. Without it the roof is a slab hanging in air on EVERY
+      // grandstand on every circuit: the shell tops out at ground+11.2 while the
+      // roof's underside sits at ground+12.3. The two are also sampled at
+      // different lateral distances (gap+7.5 via groundYAt vs gap+5 via the
+      // anchor's terrain raycast), so the shortfall varies with the verge slope
+      // rather than being a fixed 1.1 m — hence solving it from the two pieces'
+      // ACTUAL world-space tops instead of a constant. Placed at the roof's
+      // outer edge (over the shell, behind the crowd) so it never occludes the
+      // under-roof night strip, and is itself hidden by the roof from trackside.
+      {
+        const shellTop = cShell[1] + 6, roofUnder = roofC[1] - 0.4;
+        if (roofUnder > shellTop - 0.1) {
+          const oF = side * (hw[k] + gap + 9);
+          addBox(out, [px[k] + r[0] * oF, (shellTop + roofUnder) / 2, pz[k] + r[2] * oF],
+                 [4, roofUnder - shellTop + 0.2, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
+        }
+      }
       // Under-roof lighting: a warm emissive strip beneath the roof slab so a
       // night grandstand reads as a lit, occupied stand instead of a dark hulk.
       if (NIGHT) addBox(out, vadd(a.c, a.u, 12.35), [8.5, 0.28, len - 1], [1.30, 1.12, 0.74], [a.r, a.u, a.t]);
@@ -341,7 +366,30 @@ const SceneryNature = (function () {
     // accounts for the canopy radius (which grows with tree height), so a tree
     // called at small gap can never poke its canopy through a wall/hedge/fence.
     //   opts: { density, hMin, hMax, col, col2, pineFrac }
-    const forestEdge = (s0, s1, side, gap, opts) => {
+    // Canopy outer radius for a species at height h — the SINGLE source of truth
+    // for "how far does this tree's foliage actually reach sideways". Both
+    // forestEdge() and the FURN roadside scatter derive placement from it.
+    // Keeping two hand-copied estimates is what let forestEdge's drift stale:
+    // it still described tree()'s old (2.9 + h*0.12) skirt after the broadleaf
+    // crown was widened to (3.7 + h*0.14), leaving the "GUARANTEED not to clip
+    // barriers" contract ~0.9 m optimistic at h=16.
+    const canopyR = (kind, h) => {
+      const jMax = 1.15;                                  // per-instance jitter ceiling
+      if (kind === "pine") return 2.7 * jMax + 0.4;       // pine(): widest lower tier
+      if (kind === "fir")  return 2.1 + h * 0.06 + 0.4;   // conifer(): no jitter applied
+      if (kind === "palm") return 5.2;                    // frond hub 2.4 + blade spread
+      return (3.7 + h * 0.14) * jMax + 0.4;               // tree(): widest bulge cone
+    };
+    // Queued, then flushed after def.scenery() returns. A track file is written
+    // in whatever order reads well — imola plants its treelines at the top and
+    // builds its catch fences 280 lines later — so a forestEdge() that consults
+    // the barrier index the moment it is called is usually consulting an empty
+    // one. Deferring every treeline to the end of the scenery pass makes the
+    // guard order-independent: authors keep writing scenery in any order they
+    // like, and the foliage always sees the finished barrier set.
+    const deferredFoliage = [];
+    const forestEdge = (...a) => { deferredFoliage.push(a); };
+    const forestEdgeNow = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const hMin = opts.hMin != null ? opts.hMin : 7;
       const hMax = opts.hMax != null ? opts.hMax : 13;
@@ -355,17 +403,19 @@ const SceneryNature = (function () {
         const s = hash(k * 4.3 + side * 1.1);
         const h = hMin + s * (hMax - hMin);
         const isPine = hash(k * 6.7 + side * 0.7) < pineFrac;
-        // Canopy outer radius: pine peaks at ~2.7*1.15 (jitter max) for its widest
-        // skirt cone; tree's base cone is (2.9 + h*0.12)*1.15. Add a small margin.
-        const jMax = 1.15;
-        const canopyR = isPine ? 2.7 * jMax + 0.4
-                               : (2.9 + h * 0.12) * jMax + 0.4;
+        const canopy = canopyR(isPine ? "pine" : "broad", h);
         // dist so the canopy's inner edge sits `gap` beyond the road edge
-        const dist = gap + canopyR;
+        const dist = gap + canopy;
         // stagger a back row slightly for depth on the densest treelines
-        const back = (dens > 0.6 && hash(k * 8.9 + side) < 0.4) ? canopyR * 1.4 : 0;
-        if (isPine) pine(k, side, dist + back, h, pineCol);
-        else        tree(k, side, dist + back, h, treeCol);
+        const back = (dens > 0.6 && hash(k * 8.9 + side) < 0.4) ? canopy * 1.4 : 0;
+        // Same world-space guard the roadside scatter uses. The canopy sizing
+        // above only guarantees clearance from the ROAD EDGE; a treeline run
+        // alongside a stretch that also carries a catch fence still grows
+        // straight through it, which is every surviving hit on imola.
+        const d = clearTreeDist(k, side, dist + back, canopy);
+        if (d == null) return;
+        if (isPine) pine(k, side, d, h, pineCol);
+        else        tree(k, side, d, h, treeCol);
       });
     };
     // Bush / shrub clump: 2-3 jittered cones offset around a centre so it reads
@@ -395,7 +445,8 @@ const SceneryNature = (function () {
     };
 
     return { anchor, pine, tree, palm, conifer, peak, mountain, ridge,
-             crowdBank, grandstand, bush, hedge, forestEdge };
+             crowdBank, grandstand, bush, hedge, forestEdge,
+             canopyR, forestEdgeNow, deferredFoliage };
   }
 
   return { create };

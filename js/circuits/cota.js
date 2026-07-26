@@ -57,8 +57,13 @@
         const bv = [a.r, a.u, a.t], step = 2.5, rise = 1.7;
         // terrace shell (concrete wedge) beneath the crowd
         out._mat = MAT.CONCRETE;
-        addPrism(out, vadd(a.c, a.u, rows * rise * 0.5),
-                 [rows * step, rows * rise, len], [0.40, 0.41, 0.45], [a.t, a.u, a.r]);
+        // Terrace mass under the seating. Was an addPrism lifted by half the
+        // bank height, but addPrism anchors at its BASE — so the ramp started in
+        // mid-air, and its footprint axes were swapped against the seats (which
+        // spread by `len` along a.t and step by rows*step along a.r), leaving
+        // whole rows over nothing.
+        addBox(out, vadd(a.c, a.u, rows * rise * 0.5),
+               [len, rows * rise, rows * step], [0.40, 0.41, 0.45], [a.t, a.u, a.r]);
         out._mat = 0;
         const seats = Math.floor(len / (dens || 2.1));
         for (let r = 0; r < rows; r++) {

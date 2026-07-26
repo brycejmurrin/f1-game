@@ -11,6 +11,7 @@ const SceneryStructures = (function () {
 
   function create(ctx) {
     const { out, track, def, n, ds, hw, px, py, pz, NIGHT, MAT,
+            indexBarrier,
             addBox, addCyl, addFrustum, RAW, blockAt, recordBarrier,
             groundYAt, onTrack, overheadSpan, hash, cross, norm, vadd,
             anchor } = ctx;
@@ -47,6 +48,11 @@ const SceneryStructures = (function () {
     };
     // Catch / debris fence: posts + a pale mesh panel (reads as see-through wire).
     const fence = (s0, s1, side, gap, h, col) => {
+      // Geometry-only registration: a catch fence is solid to scenery but must
+      // not move the driving limit (it stands behind the runoff by design).
+      // Until this existed, fences were the ONLY barrier class no guard could
+      // see — and they are the obstacle in most surviving canopy intersections.
+      indexBarrier(s0, s1, side, gap);
       along(s0, s1, 5, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
@@ -92,8 +98,16 @@ const SceneryStructures = (function () {
       const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
       const b = [aL.r, u, aL.t];
-      addCyl(out, aL.c, 0.3, h, c, 6, b);
-      addCyl(out, aR.c, 0.3, h, c, 6, [aR.r, u, aR.t]);
+      // Mast height is SOLVED to the beam, not assumed. The masts stand on the
+      // verge (anchor(), which sits on the terrain and sinks 0.3) while
+      // overheadSpan measures its clearance from the ROAD datum. Where the verge
+      // runs below the road — shanghai −1.5 m, zandvoort −1.7 m — a flat `h`
+      // leaves each mast over a metre short of the beam it is meant to carry.
+      // Solved per leg, since the two verges need not be at the same height.
+      const uy = Math.max(0.5, u[1]);
+      const legH = (aC) => (h - 0.45) + (py[k] - aC[1]) / uy + 0.3;   // +0.3 into the beam
+      addCyl(out, aL.c, 0.3, legH(aL.c), c, 6, b);
+      addCyl(out, aR.c, 0.3, legH(aR.c), c, 6, [aR.r, u, aR.t]);
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       // Span legs: half-width + 1.5 m clearance each side + 1 m past each mast.
       overheadSpan({

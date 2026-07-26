@@ -317,7 +317,17 @@
       //    Esses sector: dense mixed conifer + broadleaf on both sides ───────────
       forestEdge(0.10, 0.24,  1, 14, { density: 0.72, hMin: 9, hMax: 16,
         col:  [0.13, 0.34, 0.15], col2: [0.16, 0.36, 0.14], pineFrac: 0.65 });
-      forestEdge(0.10, 0.24, -1, 14, { density: 0.68, hMin: 8, hMax: 15,
+      // The Esses INNER verge and the pit-straight LEFT verge are the same strip of
+      // ground: s≈0.133–0.175 backs straight onto s≈0.95–0.99, only ~23 m edge to
+      // edge, and each side already has a catch fence 5–6 m in. That leaves a ~12 m
+      // plantable band — narrower than a broadleaf crown (~13 m across), which is
+      // why a mixed treeline here pushed through both fences. Plant the pinch once,
+      // with the narrow cedars that do fit; the wide sections keep the mixed forest.
+      forestEdge(0.10, 0.133, -1, 14, { density: 0.68, hMin: 8, hMax: 15,
+        col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.60 });
+      forestEdge(0.133, 0.175, -1, 8, { density: 0.60, hMin: 8, hMax: 14,
+        col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 1 });
+      forestEdge(0.175, 0.24, -1, 14, { density: 0.68, hMin: 8, hMax: 15,
         col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.60 });
 
       // Degner / back straight hillside — Japanese cedar + broadleaf mix
@@ -338,14 +348,26 @@
       forestEdge(0.57, 0.70, 1, 34, { density: 0.32, hMin: 10, hMax: 16,
         col: [0.12, 0.31, 0.14], col2: [0.17, 0.37, 0.16], pineFrac: 0.62 });
 
-      // Back straight / 130R / Casio sector
-      forestEdge(0.72, 0.92,  1, 12, { density: 0.65, hMin: 8, hMax: 13,
+      // Back straight / 130R / Casio sector. Both ranks break either side of the
+      // figure-8 crossover (s≈0.805–0.83): there the verge is the bridge approach
+      // over the lower road at s≈0.226, so a 12 m treeline reached across and into
+      // that road's catch fence.
+      forestEdge(0.72, 0.805,  1, 12, { density: 0.65, hMin: 8, hMax: 13,
         col:  [0.13, 0.34, 0.15], col2: [0.16, 0.36, 0.14], pineFrac: 0.55 });
-      forestEdge(0.72, 0.92, -1, 12, { density: 0.62, hMin: 7, hMax: 13,
+      forestEdge(0.83, 0.92,   1, 12, { density: 0.65, hMin: 8, hMax: 13,
+        col:  [0.13, 0.34, 0.15], col2: [0.16, 0.36, 0.14], pineFrac: 0.55 });
+      forestEdge(0.72, 0.805, -1, 12, { density: 0.62, hMin: 7, hMax: 13,
+        col:  [0.12, 0.33, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.52 });
+      forestEdge(0.83, 0.92,  -1, 12, { density: 0.62, hMin: 7, hMax: 13,
         col:  [0.12, 0.33, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.52 });
 
-      // Main straight / pit straight back verge (left side, behind grandstands)
-      forestEdge(0.92, 0.10,  -1, 20, { density: 0.55, hMin: 8, hMax: 14,
+      // Main straight / pit straight back verge (left side, behind grandstands).
+      // s≈0.94–0.99 is the far end of the shared Esses corridor above and is
+      // planted from that side, so this rank stops short of it rather than
+      // dropping a second treeline into the same 12 m strip.
+      forestEdge(0.92, 0.94,  -1, 20, { density: 0.55, hMin: 8, hMax: 14,
+        col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.55 });
+      forestEdge(0.99, 0.10,  -1, 20, { density: 0.55, hMin: 8, hMax: 14,
         col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.55 });
 
       // ── Sakura cherry-blossom — Esses climb identity only ─────────────────────

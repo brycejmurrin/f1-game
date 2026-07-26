@@ -2808,9 +2808,14 @@ const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0
 const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0 };
 const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0 };
 const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0 };
-const _wmStartWet = { roughness: 0.16, specular: 0.80, detail: 0 };
-const _wmStartN = { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0 };
-const _wmStartD = { roughness: 0.80, specular: 0.22, detail: 0 };
+// depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
+// bias its depth toward the camera rather than relying on the small geometric
+// lift alone — that lift is fixed in metres and loses to depth quantisation at
+// range, which is what makes a decal shimmer and drop out as you approach.
+const _startBias = [-1, -2];
+const _wmStartWet = { roughness: 0.16, specular: 0.80, detail: 0, depthBias: _startBias };
+const _wmStartN = { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0, depthBias: _startBias };
+const _wmStartD = { roughness: 0.80, specular: 0.22, detail: 0, depthBias: _startBias };
 const _wmPropsWetN = { emissive: 0, roughness: 0.55, specular: 0.38 };
 const _wmPropsWetD = { roughness: 0.55, specular: 0.38 };
 const _wmPropsDryN = { emissive: 0, roughness: 0.85, specular: 0.20 };
@@ -3020,7 +3025,17 @@ function render(dt) {
   // dash fascia a proven 0.39 m from the eye (COCKPIT_EYE_FWD + _rigT), so 0.3
   // still clears it with ~9 cm to spare while raising the far/near precision
   // floor ~1.5x vs 0.2.
-  M4.perspectiveTo(_mProj, fovY, gfx.aspect, 0.3, farPlane);
+  // Per-camera near plane. Depth precision is governed by the near:far RATIO,
+  // and a 0.3 m near against a 900 m far spends almost all of it in the first
+  // few metres — which is why distant coplanar geometry z-fights. The near
+  // plane CANNOT simply be raised globally: the cockpit rig sits 0.39 m from
+  // the eye (see _rigT), so anything above ~0.35 slices the steering wheel and
+  // fascia out of frame. Only cockpit/hood views have geometry that close, so
+  // they keep 0.3 and every other view takes a near plane that buys back a lot
+  // of depth resolution for free.
+  const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
+  const _nearM = (_projMode === "cockpit" || _projMode === "hood") ? 0.3 : 0.9;
+  M4.perspectiveTo(_mProj, fovY, gfx.aspect, dbgCam ? 0.3 : _nearM, farPlane);
   // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
   // module-scope scratch vectors (no per-frame V3 array allocation); same math.
   {

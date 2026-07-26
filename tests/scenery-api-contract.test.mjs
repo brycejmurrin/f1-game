@@ -23,17 +23,17 @@ const CONTRACT = [
   "ATM", "COL", "MAT",
   "addBox", "addCone", "addCyl", "addFrustum", "addMountain", "addPrism", "addPyramid",
   "along", "anchor", "backdrop", "bankedKerbStrip", "billboard", "bowlSeatWall",
-  "building", "bush", "circuitKit", "cityFront", "concreteCanyon", "conifer",
+  "building", "bush", "cantilever", "circuitKit", "cityFront", "concreteCanyon", "conifer",
   "cross", "def", "ds", "every", "fence", "ferrisWheel", "floodMast",
-  "floodMastRing", "forestEdge", "gantry", "grandstand", "gridshellCanopy",
+  "floodMastRing", "forestEdge", "foundation", "gantry", "grandstand", "gridshellCanopy",
   "groundPatch", "groundPlane", "groundYAt", "groundedSegments", "guardrail",
   "hash", "hedge", "house", "hw", "landmarkKit", "ledFacadeBands", "lerp",
   "marshalPost", "modelDiagnostics", "modelGroup", "motorhome", "mountain",
   "n", "night", "norm", "onTrack", "out", "overheadSpan", "pal", "palm",
   "pastelStreetRow", "peak", "pine", "place", "prop", "px", "py", "pyMin",
-  "pz", "recordBarrier", "ridge", "runoffApron", "sailCanopy", "sceneryTheme",
+  "pz", "recordBarrier", "ridge", "runoffApron", "sailCanopy", "sceneryTheme", "seat",
   "signBoard", "theme", "tower", "track", "tree", "tyreWall",
-  "underpassPortal", "upOf", "vadd", "wall", "waterSurface",
+  "underpassPortal", "upOf", "vadd", "wall", "waterField", "waterSurface",
 ];
 
 test("buildProps sceneryApi surface matches the frozen contract", () => {

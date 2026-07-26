@@ -32,7 +32,7 @@
       { t: -60, l: 90 }, { t: 0, l: 300 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: -90, l: 100 }, { t: 60, l: 80 },
     ],
     scenery: function (api) {
-      const { out, MAT, n, px, py, pz, pyMin, place, prop, groundPlane, addBox,
+      const { out, MAT, n, px, py, pz, pyMin, place, prop, groundPlane, addBox, seat,
         anchor, onTrack, hash, vadd, building, motorhome, tower, grandstand, billboard,
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
@@ -69,6 +69,16 @@
           id: "kit:abudhabi:race-control", frac: 0.985, side: 1, gap: 78,
           size: [12, 26, 14], style: "tapered", required: true,
         });
+        // LandmarkKit.tower() sizes each of its six tiers at 86 % of its slot,
+        // so the stack has ~0.6 m of air between tiers and only the bottom one
+        // reached the ground. A slim lift core runs the full height inside the
+        // narrowest tier (half-width 4.25 m at the top) and carries them all.
+        {
+          const a = anchor(K(0.985), 1, 78 + 6);   // kit centres the tower at gap + size[0]/2
+          out._mat = MAT.CONCRETE;
+          seat.cyl(out, a.c, 3.2, 25.5, [0.20, 0.21, 0.26], 8, [a.r, a.u, a.t]);
+          out._mat = 0;
+        }
         // Marina-club suites deepen the hospitality edge beyond the yacht basin.
         circuitKit.hospitality({
           id: "kit:abudhabi:marina-hospitality", frac: 0.735, side: 1, gap: 58,
@@ -216,8 +226,11 @@
         place(k, 1, 100, [180, 26, 150], FERRARI);               // vast red roof mass
         place(k, 1, 103, [184, 5, 154], [0.55, 0.05, 0.06]);     // shaded eave band
         const a = anchor(k, 1, 70);
-        addCyl(out, vadd(a.c, a.u, 30), 22, 3, [0.95, 0.93, 0.85], 14, [a.r, a.u, a.t]);   // logo disc
-        addCyl(out, vadd(a.c, a.u, 31.5), 11, 2, [1.00, 0.85, 0.10], 12, [a.r, a.u, a.t]); // yellow centre
+        // Logo lies ON the red roof. place() sinks its base 0.8 m and anchor()
+        // another 0.3, so the roof's top face is at 26 - 0.8 + 0.3 = 25.5 above
+        // this anchor — the old 30/31.5 left the disc hovering over the roof.
+        seat.cyl(out, vadd(a.c, a.u, 25.5), 22, 3, [0.95, 0.93, 0.85], 14, [a.r, a.u, a.t]);   // logo disc
+        seat.cyl(out, vadd(a.c, a.u, 28.5), 11, 2, [1.00, 0.85, 0.10], 12, [a.r, a.u, a.t]);   // yellow centre
       }
 
       // ===================================================================
@@ -287,7 +300,10 @@
         const hc = vadd(a.c, a.t, off);
         const big = (i % 7 === 0) ? 1.35 : (i % 3 === 1 ? 1.1 : 0.85);
         addBox(out, vadd(hc, a.u, 1.1 * big), [4.2 * big, 2.2 * big, 11 * big], [0.94, 0.95, 0.96], [a.r, a.u, a.t]);
-        addCyl(out, vadd(hc, a.u, 8.0 * big), 0.18, 11 * big, [0.86, 0.88, 0.92], 4, [a.r, a.u, a.t]);
+        // Mast steps off the DECK. The hull box is centred at 1.1*big with
+        // height 2.2*big, so its top face is 2.2*big — the old 8.0*big origin
+        // (addCyl anchors at its base) left the mast hanging clear of the boat.
+        seat.cyl(out, vadd(hc, a.u, 2.2 * big), 0.18, 11 * big, [0.86, 0.88, 0.92], 4, [a.r, a.u, a.t]);
         addBox(out, vadd(hc, a.u, 0.4), [4.6 * big, 0.35, 11.5 * big], [1.0, 0.85, 0.50], [a.r, a.u, a.t]);
         if (big > 1.2)
           addBox(out, vadd(hc, a.u, 2.3 * big), [2.2 * big, 1.3 * big, 4.2 * big], [0.82, 0.84, 0.90], [a.r, a.u, a.t]);
@@ -401,24 +417,30 @@
           }, { required: true });
         };
 
-        // Four corner legs retain the hotel veil silhouette while keeping every
-        // foot well outside the road corridor.
-        for (const [label, frac] of [["front", 0.872], ["rear", 0.888]]) {
-          for (const side of [-1, 1])
-            hotelSupport(`yas-hotel-gridshell-${label}-${side < 0 ? "left" : "right"}-support`,
-              frac, side, 14.5, 1.2, 15.5, 2.2, [0.06, 0.07, 0.10], MAT.METAL);
-        }
-
         // Colour-cycling validated cross-members form the arched gridshell veil.
         // Their underside rises toward the centre of the hotel, preserving the
         // teal→magenta→amber identity without raw road-crossing geometry.
         const shellClearances = [18, 22, 27, 31, 27, 22, 18];
+        const shellThick = 0.65;
+
+        // Four corner legs retain the hotel veil silhouette while keeping every
+        // foot well outside the road corridor. overheadSpan() emits the deck
+        // ONLY, so these legs are the sole thing carrying the two end arches —
+        // sized to that arch's clearance (a fixed 15.5 m left them 2.5 m short,
+        // and the outer arches hung in mid-air).
+        const shellLegH = shellClearances[0] + shellThick / 2;
+        for (const [label, frac] of [["front", 0.872], ["rear", 0.888]]) {
+          for (const side of [-1, 1])
+            hotelSupport(`yas-hotel-gridshell-${label}-${side < 0 ? "left" : "right"}-support`,
+              frac, side, 14.5, 1.2, shellLegH, 2.2, [0.06, 0.07, 0.10], MAT.METAL);
+        }
+
         for (let i = 0; i < shellClearances.length; i++) {
           const frac = 0.872 + i * (0.016 / (shellClearances.length - 1));
           overheadSpan({
             id: `yas-hotel-gridshell-arch-${i + 1}`,
             frac, clearance: shellClearances[i], minimumClearance: 4.8,
-            thickness: 0.65, depth: 2.2, span: 56,
+            thickness: shellThick, depth: 2.2, span: 56,
             supportGap: 14.5, supportWidth: 1.2,
             color: LED_CYCLE[i % LED_CYCLE.length], required: true,
           });
@@ -517,7 +539,8 @@
         const off = ((i % 4) - 1.5) * 9;
         const hc = vadd(a.c, a.t, off);
         addBox(out, vadd(hc, a.u, 1.0), [3.2, 1.8, 8], [0.90, 0.91, 0.93], [a.r, a.u, a.t]);
-        addCyl(out, vadd(hc, a.u, 6.5), 0.14, 9, [0.84, 0.85, 0.88], 4, [a.r, a.u, a.t]);
+        // Deck (centred hull at 1.0, height 1.8) is at 1.9 — not 6.5.
+        seat.cyl(out, vadd(hc, a.u, 1.9), 0.14, 9, [0.84, 0.85, 0.88], 4, [a.r, a.u, a.t]);
         addBox(out, vadd(hc, a.u, 0.3), [3.6, 0.25, 8.5], LED_AMBER, [a.r, a.u, a.t]);
       }
 
@@ -713,8 +736,9 @@
         addBox(out, vadd(hc, a.u, 4.5), [8, 4.5, 25], [0.91, 0.92, 0.95], [a.r, a.u, a.t]);
         // bridge deck windows (lit)
         addBox(out, vadd(hc, a.u, 8), [6, 3.2, 14], [0.75, 0.82, 0.95], [a.r, a.u, a.t]);
-        // mast
-        addCyl(out, vadd(hc, a.u, 13), 0.28, 16, [0.87, 0.88, 0.92], 4, [a.r, a.u, a.t]);
+        // mast — stands on the bridge-deck roof (that box is centred at 8 with
+        // height 3.2, so its top is 9.6; addCyl anchors at the base).
+        seat.cyl(out, vadd(hc, a.u, 9.6), 0.28, 16, [0.87, 0.88, 0.92], 4, [a.r, a.u, a.t]);
         // water reflection highlight
         addBox(out, vadd(hc, a.u, 0.6), [11, 0.5, 40], [1.0, 0.86, 0.50], [a.r, a.u, a.t]);
         // deck lighting accent
@@ -782,26 +806,44 @@
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
         out._mat = MAT.METAL;
         const R = 24, base = vadd(a.c, a.u, 2);
-        let prev = null;
+        let prev = null, prevTh = 0;
         for (let i = 0; i <= 26; i++) {
           const th = i / 26 * Math.PI * 2;
           const p = vadd(vadd(base, a.r, Math.sin(th) * R), a.u, R - Math.cos(th) * R);
           if (prev) {
             const mid = [(prev[0] + p[0]) / 2, (prev[1] + p[1]) / 2, (prev[2] + p[2]) / 2];
-            addBox(out, mid, [1.3, 1.5, 1.6], FERRARI, b);
+            // Rail segment ROTATED onto the chord it spans. An axis-aligned
+            // 1.3x1.5 box covered only a fraction of the 5.8 m step between ring
+            // points, so the loop was 26 disconnected beads with 4 m of air
+            // between them — each one unsupported, and the ring never read as
+            // continuous rail. Chord components live in the (right, up) plane.
+            const dr = R * (Math.sin(th) - Math.sin(prevTh));
+            const du = R * (Math.cos(prevTh) - Math.cos(th));
+            const len = Math.hypot(dr, du) || 1;
+            const dir = [(a.r[0] * dr + a.u[0] * du) / len, (a.r[1] * dr + a.u[1] * du) / len,
+                         (a.r[2] * dr + a.u[2] * du) / len];
+            const nrm = [(a.u[0] * dr - a.r[0] * du) / len, (a.u[1] * dr - a.r[1] * du) / len,
+                         (a.u[2] * dr - a.r[2] * du) / len];
+            addBox(out, mid, [len + 0.3, 1.3, 1.6], FERRARI, [dir, nrm, a.t]);
           }
-          prev = p;
+          prev = p; prevTh = th;
         }
         // rising launch ramp feeding the loop
         for (let i = 0; i < 12; i++) {
           const t = i / 11;
           const c = vadd(vadd(base, a.t, -34 + t * 28), a.u, t * t * 22);
           addBox(out, c, [1.5, 1.3, 3.2], FERRARI, b);
-          if (i % 3 === 0) addCyl(out, [c[0], (a.c[1] + c[1]) / 2, c[2]], 0.45, c[1] - a.c[1], [0.70, 0.70, 0.72], 5, b);
+          // Pylon stands on the sand directly under the ramp. addCyl anchors at
+          // its BASE, so the old mid-height origin left every pylon hanging half
+          // its own length above the ground.
+          if (i % 3 === 0) seat.cyl(out, [c[0], a.c[1], c[2]], 0.45, c[1] - a.c[1], [0.70, 0.70, 0.72], 5, b);
         }
-        // loop support columns
-        for (const dz of [-R * 0.5, R * 0.5])
-          addCyl(out, vadd(vadd(a.c, a.t, dz), a.u, R), 0.6, R * 2, [0.70, 0.70, 0.72], 6, b);
+        // Loop support columns rise from the sand to the two points where the
+        // ring passes at height R (th = ±90°, lateral ±R) — the classic vertical
+        // loop bracing. They were previously started at u = R, i.e. 24 m up in
+        // the air, so nothing carried the loop at all.
+        for (const dr of [-R, R])
+          seat.cyl(out, vadd(vadd(a.c, a.r, dr), a.t, 1.2), 0.6, R + 2, [0.70, 0.70, 0.72], 6, b);
         out._mat = 0;
       };
       coasterLoop(K(0.185), 1, 58);

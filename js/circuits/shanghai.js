@@ -43,7 +43,7 @@
     ],
     scenery: function (api) {
       const { out, track, n, px, pz, py, hw, pyMin, hash, vadd,
-        place, prop, backdrop, groundYAt, anchor, addBox, addCyl, addCone,
+        place, prop, backdrop, groundYAt, anchor, addBox, addCyl, addCone, seat,
         addFrustum, addPrism, addPyramid, along, every,
         building, motorhome, tower, cityFront, grandstand, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm,
@@ -101,6 +101,13 @@
           addBox(out, vadd(vadd(a.c, a.u, 7.5), a.r, 1), [14, 2.6, 5], CROWD, b);
           addBox(out, vadd(vadd(a.c, a.u, 8), a.r, 14), [14, 16, 2.5], CONC, b);
           addBox(out, vadd(vadd(a.c, a.u, 16.5), a.r, 4), [14.5, 1.1, 20], WHITE, b);
+          // Rear roof columns. The front screen above is the only other thing
+          // tall enough to carry the roof, and it sits 6 m off the road edge —
+          // close enough that rejBox culls it wherever the coil folds back past
+          // this stand (5 of these 7 modules), leaving the roof on nothing. The
+          // columns stand inside the roof's own footprint, which always clears.
+          for (const tOff of [-6, 0, 6])
+            seat.cyl(out, vadd(vadd(a.c, a.t, tOff), a.r, -3), 0.35, 16.2, STEEL, 6, b);
         }
 
         // Two slim wing decks: guarded off-edge pillars plus intentional overhead
@@ -115,9 +122,15 @@
             aR.c[0] - aL.c[0], aR.c[1] - aL.c[1], aR.c[2] - aL.c[2]
           );
 
+          // Pillar height is NOT `hgt`: overheadSpan measures its clearance from
+          // the ROAD datum (py) while anchor() sits on the verge terrain and
+          // sinks 0.3 m — and here the verge runs ~1.5 m below the road, so the
+          // old `hgt - 0.8` pillars stopped 2.3 m short of the deck they carry.
+          // Solve for the deck underside and overrun 0.5 m into the slab.
+          const deckTopY = py[K(sLap)] + hgt + 0.5;
           for (const tOff of [-2.4, 2.4]) {
-            addCyl(out, vadd(aL.c, aL.t, tOff), 0.45, hgt - 0.8, STEEL, 6, bL);
-            addCyl(out, vadd(aR.c, aR.t, tOff), 0.45, hgt - 0.8, STEEL, 6, bR);
+            seat.cyl(out, vadd(aL.c, aL.t, tOff), 0.45, deckTopY - aL.c[1], STEEL, 6, bL);
+            seat.cyl(out, vadd(aR.c, aR.t, tOff), 0.45, deckTopY - aR.c[1], STEEL, 6, bR);
           }
 
           overheadSpan({
@@ -179,8 +192,10 @@
         for (const [s, sd, d, w, h, len] of pavilions) {
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, len], WHITE, b);
-          // Red pagoda-ish roof (prism) — Yu Garden homage, not team motorhomes
-          addPrism(out, vadd(a.c, a.u, h + 1.1), [w * 1.2, 2.2, len * 1.2], RED, b);
+          // Red pagoda-ish roof (prism) — Yu Garden homage, not team motorhomes.
+          // addPrism anchors at its BASE while the body box is CENTRED, so the
+          // body's top face is h; the old `h + 1.1` floated every roof by 1.1 m.
+          seat.prism(out, vadd(a.c, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
           // Tiny lit window band
           addBox(out, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.48),
                  [0.35, h * 0.35, len * 0.55], WIN_LIT, b);
@@ -575,6 +590,11 @@
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           for (let i = 0; i < 5; i++) {
             const off = (i - 2) * 12;
+            // Terrace under the crowd: the banked slab used to start 4.9 m up
+            // with open air beneath it, so the spectators read as a block
+            // hovering beside the circuit rather than a stand.
+            addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 2.45), a.r, 2),
+                   [9, 4.9, 5], [0.42, 0.43, 0.47], b);
             addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 6), a.r, 2),
                    [9, 2.2, 5], i % 2 ? CROWD : [0.50, 0.34, 0.40], b);
           }

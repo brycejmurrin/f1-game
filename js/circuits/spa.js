@@ -126,7 +126,10 @@
         for (const side of [-1, 1]) {
           const r = hash(k * 53 + side);
           pine(k, side, 7 + r * 10, 10 + r * 10, [0.08 + r * 0.05, 0.31, 0.15]);
-          if (r > 0.5) pine(k, side, 20 + r * 18, 13 + r * 9, [0.10 + r * 0.04, 0.28, 0.13]);
+          // Second rank capped at ~30 m: Eau Rouge doubles back on itself inside
+          // 150 m, so past that the "deep" pines came out on the Raidillon verge
+          // and grew through its marshal posts and lighting masts.
+          if (r > 0.5) pine(k, side, 20 + r * 10, 13 + r * 9, [0.10 + r * 0.04, 0.28, 0.13]);
         }
       });
 
@@ -322,7 +325,12 @@
       // and braking sightline clear while making the climb read through tree depth.
       forestEdge(0.050, 0.112, -1, 30, { density: 0.64, hMin: 14, hMax: 25,
         col: [0.07, 0.24, 0.11], col2: [0.13, 0.34, 0.15], pineFrac: 0.94 });
-      forestEdge(0.058, 0.108,  1, 38, { density: 0.58, hMin: 15, hMax: 26,
+      // The right-hand rank breaks over s≈0.070–0.088: the climb wraps back on
+      // itself there, so 38 m outside Raidillon is already the Kemmel verge — that
+      // stretch put 26 m pines through its lighting masts and trackside furniture.
+      forestEdge(0.058, 0.070,  1, 38, { density: 0.58, hMin: 15, hMax: 26,
+        col: [0.08, 0.25, 0.12], col2: [0.14, 0.35, 0.16], pineFrac: 0.92 });
+      forestEdge(0.088, 0.108,  1, 38, { density: 0.58, hMin: 15, hMax: 26,
         col: [0.08, 0.25, 0.12], col2: [0.14, 0.35, 0.16], pineFrac: 0.92 });
 
       // 5. Pouhon's grassy bowl gets short individually grounded crowd bays.

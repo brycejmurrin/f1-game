@@ -15,10 +15,8 @@
 // Read the PNGs (the EYE shots expose floating props/gaps best) AND the probe table.
 // For just the numbers without screenshots, use ground-profile.mjs.
 
-import { spawn } from "node:child_process";
-import { createRequire } from "node:module";
-import { existsSync, mkdirSync } from "node:fs";
-import { createServer } from "node:net";
+import { mkdirSync } from "node:fs";
+import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
 import {
   assertSafePathToken,
   resolveContainedChild,
@@ -26,8 +24,6 @@ import {
 } from "./output-paths.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
-const require = createRequire(ROOT + "/");
-const { chromium } = require("playwright");
 
 const [idArg, labelArg = "survey", fracsArg] = process.argv.slice(2);
 if (!idArg) { console.error("usage: survey-track.mjs <id> [label] [fracs]"); process.exit(2); }
@@ -38,29 +34,18 @@ const LATS = [8, 12, 20, 30, 45, 70, 110];   // lateral metres for the ground pr
 const OUT = resolveRepoDefault(ROOT, "scratch", "captures", "survey-track", id);
 mkdirSync(OUT, { recursive: true });
 
-const freePort = () => new Promise((res, rej) => {
-  const s = createServer();
-  s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); });
-  s.on("error", rej);
-});
-const pickChromium = () => ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"].find(existsSync);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const pct = (f) => String(Math.round(f * 100)).padStart(2, "0");
 
-const PORT = await freePort();
-const server = spawn("python3", ["-m", "http.server", String(PORT)], { cwd: ROOT, stdio: "ignore" });
-const done = () => { try { server.kill(); } catch {} };
-process.on("exit", done);
+const srv = await startStaticServer(ROOT);
 
 const shots = [];
 let probeRows = [], errs = [];
 try {
-  await sleep(700);
-  const browser = await chromium.launch({ executablePath: pickChromium(), args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"] });
+  const browser = await launchChromium({ args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on("pageerror", (e) => errs.push(String(e.message).split("\n")[0]));
   page.setDefaultTimeout(60000);
-  await page.goto(`http://127.0.0.1:${PORT}/`);
+  await page.goto(srv.url);
   await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
 
   // race the track (retry once if a concurrent edit briefly broke the page)
@@ -70,7 +55,11 @@ try {
     ok = await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 9000 }).then(() => true).catch(() => false);
     if (!ok) await sleep(500);
   }
-  if (!ok) { console.error(`FAILED to load ${id} — scenery(api) may throw. Run: node tools/verify-track.cjs ${id}`); await browser.close(); process.exit(1); }
+  if (!ok) {
+    console.error(`FAILED to load ${id} — scenery(api) may throw. Run: node tools/verify-track.cjs ${id}`);
+    await shutdown();
+    process.exit(1);
+  }
   await sleep(1400);
   await page.evaluate(() => window.__apex.hud(false));
 
@@ -114,11 +103,13 @@ try {
     }
     return out;
   }, { fracs: FRACS, lats: LATS });
-
-  await browser.close();
 } catch (err) {
   console.error("survey failed:", err.message);
   process.exitCode = 1;
+} finally {
+  // Browser + server go together, on the throw path as well — a screenshot
+  // timeout used to leave both alive and pin the box.
+  await shutdown();
 }
 
 // ---- report -------------------------------------------------------------
@@ -153,4 +144,3 @@ if (flags.length) { console.log("⚠ geometry flags (confirm with the EYE shots)
 else console.log("✓ no terrain holes/steps flagged on the probed fractions\n");
 if (shots.some((s) => s.blank)) console.log("⚠ one or more shots look blank — check scenery / camera.");
 if (errs.length) console.log("page errors:", errs.slice(0, 5));
-done();
