@@ -56,7 +56,7 @@
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
               addPrism, addFrustum, grandstand, gantry, marshalPost, palm, bush,
               fence, tyreWall, vadd, hash, cityFront, tower, ferrisWheel, modelGroup,
-              overheadSpan, waterSurface, floodMastRing, circuitKit } = api;
+              overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Shared-kit adoption: bounded race operations outside the bay hero zones.
@@ -625,12 +625,13 @@
       // ── Reflective Marina Bay water ──────────────────────────────────────
       // A true reflective buffer mirroring the lit skyline across the bay,
       // laid along the R (waterfront) side of the bay sections.
-      for (const s of [0.30, 0.84]) {
-        waterSurface(K(s), 1, 40, [80, 0.3, 64], BAY, {
-          id: `marina-water-${Math.round(s * 100)}`,
-          required: true,
-        });
-      }
+      // Bands, not two isolated 80 m panels on a bay that runs for hundreds of
+      // metres — the water used to appear as a pair of rectangles adrift on
+      // bare ground rather than as a waterfront.
+      // Depth stays at the original 64 m — pushing the bay further out put the
+      // waterfront towers in the water. Only the along-lap coverage changes.
+      waterBand(0.26, 0.36, 1, 40, 104, 12, BAY, { id: "marina-water-30", required: true });
+      waterBand(0.80, 0.90, 1, 40, 104, 12, BAY, { id: "marina-water-84", required: true });
 
       // ═══════════════════════════════════════════════════════════════════
       // 2026 SCENERY DRESS PASS — six bounded Marina Bay hero layers.
@@ -671,7 +672,7 @@
       // These overlap the bay visually, but remain separate bounded water
       // models so the waterfront has foreground, middle and far depth.
       for (const [s, gap, depth] of [[0.20, 52, 52], [0.44, 58, 58]]) {
-        waterSurface(K(s), 1, gap, [66, 0.3, depth], BAY, {
+        waterBand(s - 0.03, s + 0.03, 1, gap, gap + depth, 12, BAY, {
           id: `marina-water-depth-${Math.round(s * 100)}`,
         });
         const a = anchor(K(s), 1, 30);

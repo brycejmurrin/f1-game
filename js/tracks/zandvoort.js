@@ -41,7 +41,7 @@
       const { out, MAT, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane,
               addBox, addCyl, addPrism, addPyramid, addCone, addFrustum, anchor, vadd, onTrack, hash, every,
               along, runoffApron, bowlSeatWall,
-              modelGroup, waterSurface, groundPatch,
+              modelGroup, waterSurface, waterBand, groundPatch,
               mountain, peak, bush, hedge, grandstand, tower,
               pine, tree, forestEdge,
               fence, guardrail, tyreWall, billboard, gantry, marshalPost, recordBarrier } = api;
@@ -74,6 +74,11 @@
       // where the banked terrain ribbon dipped. These helpers keep water in its
       // reflective mesh and settle each sand strip onto the shared surface.
       // -----------------------------------------------------------------------
+      // NOTE: left as discrete panels deliberately. waterBand was tried here
+      // and is the WRONG tool: a band follows the circuit at a fixed offset, so
+      // on a closed loop it draws a channel winding between the dunes rather
+      // than an open sea. Bands suit a coastline the track runs ALONG (jeddah,
+      // baku, montreal's river); an open sea wants one large plane instead.
       for (const [i, s] of [0.30, 0.38, 0.46, 0.54, 0.62, 0.70, 0.78].entries()) {
         waterSurface(K(s), 1, 310, [150, 0.8, 150], seaCol, {
           id: `north-sea-${i}`,

@@ -43,7 +43,7 @@
       const { out, MAT, n, pyMin, place, backdrop,
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
         grandstand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
-        cityFront, modelGroup, waterSurface, onTrack, hash, every, circuitKit } = api;
+        cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Night Corniche palette ─────────────────────────────────────────────
@@ -166,16 +166,16 @@
         marshalPost(K(s), side, 2.4);
       }
 
-      // ── Red Sea: typed reflective surfaces, segmented around foldbacks ─────
-      for (let i = 0; i < 8; i++) {
-        const s = 0.06 + i * 0.045;
-        waterSurface(K(s), 1, 35, [110, 0.5, 100], SEA, { id: `jeddah-red-sea-${i}` });
-      }
-      for (let i = 0; i < 7; i++) {
-        const s = 0.43 + i * 0.035;
-        waterSurface(K(s), 1, 28, [90, 0.45, 85], [0.018, 0.035, 0.080],
-          { id: `jeddah-marina-water-${i}` });
-      }
+      // ── Red Sea + marina: continuous bands, not spaced panels ─────────────
+      // These were 8 and 7 fixed slabs dropped at even fractions. The stations
+      // sit ~278 m apart while the slabs are only 100 m long, so two thirds of
+      // the frontage was bare ground and the sea read as separated rectangles.
+      // waterBand rasterises the whole stretch instead. The marina and lagoon
+      // are ONE band: they used to overlap both radially and along the lap at
+      // the same water height, which is a z-fight waiting to happen.
+      waterBand(0.06, 0.375, 1, 35, 260, 12, SEA, { id: "jeddah-red-sea" });
+      waterBand(0.43, 0.64, 1, 22, 150, 12, [0.018, 0.035, 0.080],
+        { id: "jeddah-marina-water" });
       // Waterfront light ribbon: waist-high amber/cool bollards, concentrated
       // at the marina rather than repeated around the full lap.
       for (let i = 0; i < 11; i++) {
@@ -277,11 +277,9 @@
       grandstand(0.525, 1, 22, 52, [0.12, 0.13, 0.17], [0.42, 0.54, 0.68]);
       tyreWall(0.485, 0.515, -1, 3.5, MAGENTA);
 
-      // ── CORNICHE LAGOON — s 0.55–0.64 R (water; LEDs already ring the lap) ─
-      for (let i = 0; i < 6; i++) {
-        waterSurface(K(0.55 + i * 0.015), 1, 22, [72, 0.4, 55], [0.05, 0.08, 0.14],
-          { id: `jeddah-lagoon-${i}` });
-      }
+      // ── CORNICHE LAGOON — folded into the marina band above (s 0.43–0.64).
+      // Kept as a separate set of panels it overlapped that band at the same
+      // height, so the two surfaces fought for the same pixels.
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
       building(K(0.69), -1, 60, 26, 68, 22, { wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8 });

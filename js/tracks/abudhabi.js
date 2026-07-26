@@ -37,7 +37,7 @@
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
         cityFront, forestEdge, backdrop, mountain, ferrisWheel,
-        modelGroup, overheadSpan, waterSurface, groundPatch, circuitKit } = api;
+        modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- twilight/night marina palette ----
@@ -284,13 +284,11 @@
       // hierarchy (mega + mid + slim), warm dock lamps, hotel glow sightline.
       // ===================================================================
       // Continuous overlapping reflective-water ribbon (basin, not land boxes).
-      for (let i = 0; i < 18; i++)
-        waterSurface(K(0.52 + i * 0.013), 1, 18, [78, 0.35, 76], WATER,
-          { id: `marina-inner-${i}` });
-      // Outer water shelf for depth
-      for (let i = 0; i < 10; i++)
-        waterSurface(K(0.53 + i * 0.022), 1, 70, [86, 0.35, 82], WATER,
-          { id: `marina-outer-${i}` });
+      // One rasterised band rather than two overlapping rows of slabs. The
+      // inner and outer rows were laid at different station spacings over the
+      // same stretch, so they interleaved into a patchwork and fought for the
+      // same pixels wherever they overlapped at the shared water height.
+      waterBand(0.52, 0.76, 1, 18, 200, 12, WATER, { id: "marina-water" });
 
       // Yacht hierarchy — fewer, clearer sizes (slim → mid → mega at 0.66)
       for (let i = 0; i < 14; i++) {

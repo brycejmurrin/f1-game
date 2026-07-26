@@ -1485,14 +1485,14 @@ const Tracks = (function () {
     // grid and emitting one box per occupied cell makes neighbours abut exactly
     // by construction, at any curvature. Occupied cells are then merged into
     // flat quad runs, so the output is a sheet rather than a field of tiles.
-    const waterField = (k, side, gap0, gap1, halfLen, cell, col, opts) => {
-      opts = opts || {};
-      const c = Math.max(4, cell || 12);
-      const half = Math.max(1, Math.round(halfLen / ds));
+    // Rasterise one node run into occupied world-grid cells. kFrom/kTo are raw
+    // (may exceed n; wrapped here) so a caller can express either a window
+    // around a station or a whole band of lap.
+    const waterRaster = (kFrom, kTo, side, gap0, gap1, c) => {
       const step = c / 2;                       // sample finer than the grid
       const cells = new Map();
-      for (let a = -half; a <= half; a++) {
-        const k0 = (((k + a) % n) + n) % n, k1 = (((k + a + 1) % n) + n) % n;
+      for (let a = kFrom; a <= kTo; a++) {
+        const k0 = ((a % n) + n) % n, k1 = (((a + 1) % n) + n) % n;
         for (let d = gap0; d <= gap1; d += step) {
           const o0 = side * (hw[k0] + d), o1 = side * (hw[k1] + d);
           const x0 = px[k0] + track.rx[k0] * o0, z0 = pz[k0] + track.rz[k0] * o0;
@@ -1508,6 +1508,11 @@ const Tracks = (function () {
           }
         }
       }
+      return cells;
+    };
+    // Merge occupied cells into flat quad runs and emit them as the water sheet.
+    const waterEmit = (cells, c, col, opts) => {
+      opts = opts || {};
       // Keep only the cells that clear the road. Margin is the cell's own
       // half-width plus a small lip, NOT a fixed constant — that is what lets a
       // fine grid close right up to the kerb where a 46 m slab needed 27 m of
@@ -1544,6 +1549,23 @@ const Tracks = (function () {
       if (!placed && opts.required)
         diagnostics.suppressed.push({ id: opts.id || "waterfield", required: true, reason: "no cell placed" });
       return placed;
+    };
+    // A basin around ONE station: ±halfLen metres of lap, gap0→gap1 outward.
+    const waterField = (k, side, gap0, gap1, halfLen, cell, col, opts) => {
+      const c = Math.max(4, cell || 12);
+      const half = Math.max(1, Math.round(halfLen / ds));
+      return waterEmit(waterRaster(k - half, k + half, side, gap0, gap1, c), c, col, opts);
+    };
+    // A continuous band of water along a RANGE of lap, s0→s1. This is the right
+    // shape for a coastline: the old pattern of dropping N fixed panels at
+    // evenly spaced fractions left the sea in stripes whenever the station
+    // spacing exceeded the panel length (jeddah spaced 8 panels 278 m apart and
+    // made them 100 m long, so two thirds of its Red Sea frontage was bare).
+    const waterBand = (s0, s1, side, gap0, gap1, cell, col, opts) => {
+      const c = Math.max(4, cell || 12);
+      const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
+      const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
+      return waterEmit(waterRaster(k0, k0 + span, side, gap0, gap1, c), c, col, opts);
     };
     const groundPatch = (k, side, gap, sz, col, opts) => {
       opts = opts || {};
@@ -3831,7 +3853,7 @@ const Tracks = (function () {
         // Named atmosphere / colour packs (js/track-scenery-data.js)
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
-        modelGroup, overheadSpan, waterSurface, waterField, groundPatch, groundedSegments,
+        modelGroup, overheadSpan, waterSurface, waterField, waterBand, groundPatch, groundedSegments,
         seat, foundation, cantilever,
         // Resolved data and opt-in architectural/facility helpers. Merely binding
         // these does not emit geometry; each circuit remains responsible for calls.
