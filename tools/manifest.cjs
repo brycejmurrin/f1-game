@@ -111,7 +111,12 @@ const FULL = [
 ];
 
 // Stylesheet <link> order in index.html.
-const CSS = ["css/style.css", "css/data.css"];
+const CSS = [
+  "css/tokens.css", "css/components.css", "css/tuner.css", "css/menus.css",
+  "css/carsetup.css", "css/hud.css", "css/overlays.css", "css/responsive.css",
+  "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
+  "css/data.css",
+];
 
 // tools/carview.html <script> subset, in order (paths repo-relative; the file
 // itself uses ../js/... since it is served from /tools/).

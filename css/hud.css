@@ -1,0 +1,253 @@
+/* Apex 26 — in-race HUD, start lights, photo-mode controls.
+   Split from css/style.css (lines 788-1037 of the original); the <link>
+   order in index.html preserves the original source order, so the cascade
+   is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+.hud-top {
+  position: absolute;
+  top: calc(8px + var(--sat));
+  left: 50%; transform: translateX(-50%);
+  display: flex; gap: 10px;
+}
+.hud-box {
+  background: rgba(8, 8, 14, 0.78);
+  border-left: 3px solid var(--red);
+  padding: 4px 12px;
+  border-radius: 4px;
+  text-align: center;
+  /* no backdrop-filter: this panel sits over the live 3D canvas, and a blur
+     here forces the compositor to re-blur the backdrop EVERY frame while
+     racing (top mobile compositing cost). The tinted bg carries the look. */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+.hud-label { font-size: 9px; letter-spacing: 0.16em; color: var(--dim); }
+.hud-value { font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.hud-gaps {
+  position: absolute;
+  top: calc(64px + var(--sat));
+  left: 50%; transform: translateX(-50%);
+  text-align: center; font-size: 12px; color: #ddd;
+  font-variant-numeric: tabular-nums;
+  background: rgba(8,8,14,0.62); padding: 2px 10px; border-radius: 4px;
+  /* no backdrop-filter — over the live canvas (see .hud-box) */
+}
+.hud-bottom {
+  position: absolute;
+  bottom: calc(12px + var(--sab));
+  left: 50%; transform: translateX(-50%);
+  /* compact centred stack so it never collides with the corner buttons */
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+#hud-speed { font-size: 34px; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; text-shadow: 0 2px 12px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.9); }
+.hud-unit { font-size: 12px; color: var(--dim); margin-left: 4px; }
+#hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 2px; background: rgba(8,8,14,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 5px 8px; }
+#hud-gear {
+  font-size: 58px; font-weight: 800; font-style: italic; line-height: 0.85;
+  color: #fff; font-variant-numeric: tabular-nums;
+  min-width: 50px; text-align: center;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.9);
+}
+#hud-tach {
+  width: 132px; height: 16px; border-radius: 8px;
+  background: rgba(8, 8, 14, 0.72); border: 1px solid rgba(255, 255, 255, 0.4);
+  overflow: hidden; position: relative;
+}
+#hud-tach::after {           /* redline zone marker */
+  content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 12%;
+  background: rgba(225, 6, 0, 0.55);
+}
+#hud-rpm-fill {
+  height: 100%; width: 0%; position: relative; z-index: 1;
+  background: linear-gradient(90deg, #2ad1ff, #aeea00 65%, #ffd600 88%);
+}
+#hud-tach.redline #hud-rpm-fill { background: var(--red); animation: pulse 0.4s infinite; }
+#hud-energy {
+  width: 130px; height: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 7px;
+  position: relative; overflow: hidden;
+  margin-bottom: 8px;
+}
+#hud-energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #00c853, #aeea00); }
+.hud-energy-label { position: absolute; inset: 0; font-size: 8px; letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: rgba(0,0,0,0.55); }
+#hud-ot {
+  font-size: 13px; font-weight: 800; font-style: italic;
+  padding: 5px 10px; border-radius: 5px;
+  margin-bottom: 6px;
+}
+#hud-ot.ot-off { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); }
+#hud-ot.ot-armed { color: #0a0a0f; background: #aeea00; animation: pulse 0.8s infinite; }
+#hud-ot.ot-active { color: #fff; background: var(--red); }
+#hud-ot.ot-cool { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); opacity: 0.5; }
+@keyframes pulse { 50% { opacity: 0.55; } }
+#minimap {
+  position: absolute;
+  left: calc(10px + var(--sal));
+  top: calc(8px + var(--sat));
+  width: 112px; height: 112px;
+  opacity: 0.90;
+  background: rgba(8,8,14,0.55); box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+#hud-flag {
+  position: absolute; top: calc(100px + var(--sat)); left: 50%; transform: translateX(-50%);
+  padding: 6px 16px; border-radius: 6px; font-weight: 800;
+  background: #ffd600; color: #000;
+}
+#hud-sectors {
+  position: fixed;
+  top: calc(56px + var(--sat));
+  right: calc(10px + var(--sar));
+  background: rgba(8, 8, 14, 0.72);
+  border-radius: 6px;
+  padding: 5px 9px;
+  /* no backdrop-filter — over the live canvas (see .hud-box) */
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  border-left: 3px solid rgba(255,255,255,0.25);
+}
+.sec-row { display: flex; gap: 6px; align-items: baseline; }
+.sec-lbl { font-weight: 800; font-size: 10px; letter-spacing: 0.1em; min-width: 16px; }
+.sec-val { color: #e8e8ee; }
+
+/* ---------- start lights ---------- */
+#lights {
+  position: fixed;
+  top: calc(18vh + var(--sat));
+  left: 50%; transform: translateX(-50%);
+  display: flex; gap: 12px;
+  background: rgba(8, 8, 12, 0.85);
+  padding: 14px 18px;
+  border-radius: 10px;
+  z-index: 15;
+}
+.light { width: 26px; height: 26px; border-radius: 50%; background: #2a2a32; }
+.light.on { background: #ff1a1a; box-shadow: 0 0 18px rgba(255, 26, 26, 0.9); }
+
+#announce {
+  position: fixed;
+  top: 30vh; left: 50%; transform: translateX(-50%);
+  font-size: clamp(30px, 8vw, 64px);
+  font-weight: 800; font-style: italic;
+  text-shadow: 0 0 24px rgba(225, 6, 0, 0.8);
+  z-index: 15;
+  white-space: nowrap;
+}
+
+/* ---------- photo mode (free-fly camera) ---------- */
+/* Full-screen click-through overlay; only the sticks/buttons take pointer input
+   so a drag on the empty scene rotates the look (handled in game.js). */
+#photo-controls {
+  position: fixed; inset: 0; z-index: 44;   /* above the docked tuner panel (42) so sticks stay tappable */
+  pointer-events: none;
+  touch-action: none;
+  font-family: inherit;
+}
+#photo-controls > * { pointer-events: auto; }
+.pc-stickwrap {
+  position: fixed; bottom: calc(20px + var(--sab));
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.pc-move-wrap { left: calc(20px + var(--sal)); }
+.pc-look-wrap { left: calc(168px + var(--sal)); }
+.pc-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
+.pc-stick {
+  position: relative; width: 118px; height: 118px; border-radius: 50%;
+  background: rgba(18,18,26,0.42); border: 1px solid rgba(255,255,255,0.28);
+  box-shadow: inset 0 0 24px rgba(0,0,0,0.4);
+  touch-action: none; cursor: grab;
+}
+.pc-nub {
+  position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px;
+  border-radius: 50%; background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.4);
+  will-change: transform;
+}
+.pc-altcol {
+  position: fixed; bottom: calc(20px + var(--sab)); left: calc(300px + var(--sal));
+  display: flex; flex-direction: column; gap: 10px;
+}
+.pc-btn {
+  width: 64px; height: 58px; border-radius: 12px; margin: 0;
+  font-size: 18px; font-weight: 800;
+  background: rgba(20,20,30,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.25);
+  display: flex; align-items: center; justify-content: center;
+}
+.pc-btn:active { background: rgba(255,255,255,0.2); }
+#pc-bar {
+  position: fixed; top: calc(14px + var(--sat)); left: calc(20px + var(--sal));
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 8px 14px; border-radius: 12px;
+  background: rgba(10,10,16,0.55); border: 1px solid rgba(255,255,255,0.14);
+  max-width: min(70vw, 720px);
+}
+/* The tuner panel stays docked right while free-cam flies (see enterPhotoMode
+   in game.js), so on narrow/landscape screens the 720px-wide fly-cam bar can
+   run out past the panel's left edge and render OVER its title/EXIT — keep it
+   clipped to the gap left of the panel (mirrors #lighting-inner's own
+   right:8px + min(88vw,380px) sizing) so the two never overlap. Only while the
+   panel is actually showing (pc-nopanel tucks it away and frees the width). */
+body.lt-open:not(.pc-nopanel) #pc-bar {
+  max-width: max(160px, min(70vw, 720px, calc(100vw - min(88vw, 380px) - 40px - var(--sal))));
+  gap: 8px; padding: 6px 10px;
+}
+/* Same context: the tuner panel already carries plenty of on-screen text, so
+   drop the keyboard hint and shrink the FOV slider/buttons — a compact bar
+   reads cleaner next to the panel than the full touch-sized controls. */
+body.lt-open:not(.pc-nopanel) .pc-hint { display: none; }
+body.lt-open:not(.pc-nopanel) .pc-fovlab { font-size: 10px; }
+body.lt-open:not(.pc-nopanel) .pc-fovlab input[type="range"] { width: 70px; }
+body.lt-open:not(.pc-nopanel) #pc-exit,
+body.lt-open:not(.pc-nopanel) #pc-panel,
+body.lt-open:not(.pc-nopanel) #pc-hud {
+  padding: 5px 10px; font-size: 10.5px;
+}
+.pc-hint { font-size: 11px; color: rgba(255,255,255,0.66); letter-spacing: 0.02em; }
+.pc-fovlab { display: flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--dim); }
+.pc-fovlab input[type="range"] { width: 110px; margin-left: 6px; }
+#pc-exit, #pc-panel, #pc-hud {
+  width: auto; margin: 0; padding: 7px 16px; border-radius: 8px;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+}
+#pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
+#pc-panel, #pc-hud { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.22); }
+/* the FREE CAMERA launch button in the tuner actions */
+#pc-toggle {
+  width: auto; margin: 0; padding: 9px 14px; border-radius: 8px;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.04em;
+  background: rgba(0,140,200,0.2); color: #6cf; border: 1px solid rgba(0,160,220,0.45);
+}
+/* Tuner panel tucked away (body.pc-nopanel) → the right half of the screen is
+   free, so switch to a classic dual-stick layout: LOOK stick under the right
+   thumb in the bottom-right corner, up/down column just inboard of it. */
+body.pc-nopanel .pc-look-wrap { left: auto; right: calc(20px + var(--sar)); }
+body.pc-nopanel .pc-altcol   { left: auto; right: calc(152px + var(--sar)); }
+/* Photo-mode HIDE HUD (body.pc-uihidden): clean unobstructed frame — every
+   photo control (bar, sticks, buttons) and the docked tuner panel disappear;
+   only the tiny restore eye stays. Keyboard flying keeps working. */
+body.pc-uihidden #photo-controls > :not(#pc-restore) { display: none !important; }
+body.pc-uihidden #lighting-inner { display: none !important; }
+#pc-restore {
+  position: fixed;
+  top: calc(8px + var(--sat));
+  right: calc(10px + var(--sar));
+  width: 36px; height: 36px;
+  padding: 0; margin: 0;
+  border-radius: 8px;
+  font-size: 16px; line-height: 1;
+  opacity: 0.5;
+  display: none;            /* only visible while the photo UI is hidden */
+}
+#pc-restore:hover, #pc-restore:active { opacity: 0.95; }
+body.pc-uihidden #pc-restore { display: block; }
+/* touch: hide the desktop key hint (no keyboard); narrow screens too */
+@media (pointer: coarse), (max-width: 720px) { .pc-hint { display: none; } }
+/* while the LIGHTING TUNER is open (free camera or not) hide every in-race
+   overlay underneath it — HUD, start lights, CHASE/pause, and ALL touch driving
+   controls (GAS/BRAKE/BOOST/OT/shift/steer) — so the scene reads clean.
+   Reversible: removing .lt-open restores each to its own hidden state. */
+body.lt-open #hud,
+body.lt-open #lights,
+body.lt-open #btn-cam,
+body.lt-open #pausebtn,
+body.lt-open .touchbtn { display: none !important; }

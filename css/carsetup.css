@@ -1,0 +1,320 @@
+/* Apex 26 — the CAR SETUP screen (tabs, options, livery swatches + creator).
+   Split from css/style.css (lines 471-787 of the original); the <link>
+   order in index.html preserves the original source order, so the cascade
+   is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
+/* ---------- car setup ---------- */
+.sel-edit-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.sel-edit-row .sel-edit { margin-top: 0; }
+
+/* Docked to the RIGHT edge with no backdrop, same pattern as #lighting /
+   #lighting-inner: the game keeps rendering behind the panel — here, the
+   live 3D car preview (renderSetupPreview in game.js) — so the left of the
+   screen shows the car updating as parts are picked. */
+#carsetup {
+  position: fixed; inset: 0; z-index: 35;
+  background: transparent; pointer-events: none;
+  padding: 0;
+}
+#cs-inner {
+  pointer-events: auto;
+  position: fixed;
+  top: calc(var(--sat) + 8px); right: calc(var(--sar) + 8px);
+  bottom: calc(var(--sab) + 8px); left: auto;
+  width: min(90vw, 430px);
+  background: rgba(12, 14, 20, 0.92); border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 14px 16px;
+  overflow: hidden;
+  display: flex; flex-direction: column; gap: 12px;
+}
+#cs-header {
+  display: flex; flex-direction: column; gap: 9px;
+  flex-shrink: 0;
+}
+#cs-titlebar { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+#cs-titlebar h2 { margin: 0; font-size: 21px; letter-spacing: 0.14em; }
+#cs-team {
+  font-size: 13px; font-weight: 800; font-style: italic; letter-spacing: 0.08em;
+  color: var(--red);
+}
+#cs-stats-inner {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+  padding: 7px 14px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;
+}
+
+/* stats rows */
+.cs-stat-row {
+  display: flex; align-items: center; gap: 10px; margin: 6px 0;
+  font-size: 11px; letter-spacing: 0.08em; color: var(--dim);
+}
+.cs-stat-label { width: 84px; flex-shrink: 0; }
+.cs-stat-bar-wrap {
+  flex: 1; height: 12px; background: rgba(255,255,255,0.08);
+  border-radius: 6px; overflow: hidden; position: relative;
+}
+.cs-stat-base {
+  position: absolute; left: 0; top: 0; height: 100%;
+  background: rgba(255,255,255,0.32); border-radius: 6px;
+}
+.cs-stat-boost {
+  position: absolute; top: 0; height: 100%; background: var(--red); opacity: 0.92;
+}
+.cs-stat-boost.penalty { background: #f90; }
+.cs-stat-val {
+  width: 34px; flex-shrink: 0; text-align: right;
+  font-size: 14px; font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.cs-stat-val.up { color: #4df; }
+.cs-stat-val.down { color: #f90; }
+
+/* ---- Category tabs: one horizontally-scrollable row ---- */
+#cs-tabs {
+  display: flex; gap: 6px; flex-shrink: 0;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; touch-action: pan-x;
+  scrollbar-width: none; padding-bottom: 2px;
+}
+#cs-tabs::-webkit-scrollbar { display: none; }
+.cs-tab {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 7px 12px; border-radius: 9px; min-width: 76px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+  cursor: pointer; text-align: left;
+}
+.cs-tab-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; color: var(--dim); }
+.cs-tab-cur {
+  font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.4);
+  white-space: nowrap; max-width: 96px; overflow: hidden; text-overflow: ellipsis;
+}
+.cs-tab.upgraded .cs-tab-lbl { color: #4df; }
+.cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }
+.cs-tab.active { background: rgba(225,6,0,0.16); border-color: var(--red); }
+.cs-tab.active .cs-tab-lbl { color: #fff; }
+.cs-tab.active .cs-tab-cur { color: rgba(255,255,255,0.72); }
+
+/* ---- Options list for the open category (fills + scrolls) ---- */
+#cs-options {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding-right: 2px;
+}
+.cs-opt {
+  display: flex; align-items: flex-start; gap: 10px; text-align: left; width: 100%;
+  padding: 10px 12px; border-radius: 10px;
+  background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+}
+.cs-opt-dot {
+  flex: 0 0 auto; width: 15px; height: 15px; margin-top: 2px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.28); box-sizing: border-box;
+}
+.cs-opt-main { flex: 1 1 auto; min-width: 0; }
+.cs-opt-name { font-size: 13px; font-weight: 700; color: var(--text); }
+/* paint-job swatch (two-tone) in the LIVERY tab */
+.cs-liv-swatch {
+  flex: 0 0 auto; width: 38px; height: 24px; border-radius: 6px; align-self: center;
+  border: 1px solid rgba(255,255,255,0.25);
+  box-shadow: inset 0 0 6px rgba(0,0,0,0.35);
+}
+.cs-liv .cs-opt-main { align-self: center; }
+/* centre racing-stripe band drawn over the two-tone swatch */
+.cs-liv-swatch { position: relative; overflow: hidden; }
+.cs-liv-stripe {
+  position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 7px; border-radius: 1px; box-shadow: 0 0 2px rgba(0,0,0,0.5);
+}
+/* ＋ CREATE row: dashed "add" affordance */
+.cs-liv-plus {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.05); border-style: dashed;
+}
+.cs-liv-create { border-style: dashed; border-color: rgba(255,255,255,0.2); }
+.cs-liv-row { display: flex; align-items: stretch; gap: 6px; width: 100%; }
+.cs-liv-row > .cs-liv { flex: 1 1 auto; min-width: 0; width: auto; }
+/* delete affordance on a custom livery row */
+.cs-liv-del {
+  flex: 0 0 auto; align-self: center; width: 24px; height: 24px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: rgba(255,120,110,0.85);
+  background: rgba(255,60,50,0.1); border: 1px solid rgba(255,80,70,0.25);
+  cursor: pointer; margin: 0; padding: 0;
+}
+.cs-liv-del:hover { background: rgba(255,60,50,0.22); color: #fff; }
+/* edit affordance on a custom livery row */
+.cs-liv-edit {
+  flex: 0 0 auto; align-self: center; width: 24px; height: 24px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: rgba(120,200,255,0.9);
+  background: rgba(60,150,255,0.1); border: 1px solid rgba(80,170,255,0.28);
+  cursor: pointer; margin: 0; padding: 0;
+}
+.cs-liv-edit:hover { background: rgba(60,150,255,0.24); color: #fff; }
+.cs-liv-custom .cs-opt-tag { background: rgba(80,210,255,0.18); color: #4df; }
+
+/* ---- Inline livery creator ---- */
+.cs-liv-editor { display: flex; flex-direction: column; gap: 9px; padding: 2px; }
+.cs-liv-ed-head {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.14em; color: var(--dim);
+}
+.cs-liv-ed-prev {
+  width: 100%; height: 44px; border-radius: 8px; align-self: stretch;
+}
+.cs-liv-ed-row { display: flex; align-items: center; gap: 10px; }
+.cs-liv-ed-lbl {
+  flex: 0 0 68px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim);
+}
+.cs-liv-ed-row input[type="color"] {
+  flex: 0 0 auto; width: 46px; height: 30px; padding: 0; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.2); background: none; cursor: pointer;
+}
+.cs-liv-ed-row input[type="color"].cs-liv-off { opacity: 0.35; }
+.cs-liv-ed-none {
+  flex: 0 0 auto; width: auto; margin: 0;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
+  padding: 4px 8px; border-radius: 5px;
+  background: rgba(255,255,255,0.06); color: var(--dim);
+  border: 1px solid rgba(255,255,255,0.14);
+}
+.cs-liv-ed-name {
+  flex: 1 1 auto; min-width: 0;
+  font-size: 13px; font-weight: 600; color: var(--text);
+  padding: 6px 9px; border-radius: 6px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14);
+}
+.cs-liv-ed-btns { display: flex; gap: 8px; margin-top: 2px; }
+.cs-liv-ed-cancel, .cs-liv-ed-save {
+  flex: 1 1 0; width: auto; margin: 0;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+  padding: 9px 0; border-radius: 8px; cursor: pointer;
+}
+.cs-liv-ed-cancel { background: rgba(255,255,255,0.06); color: var(--dim); border: 1px solid rgba(255,255,255,0.14); }
+.cs-liv-ed-save { background: var(--red); color: #fff; border: 1px solid var(--red); }
+.cs-opt-deltas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.cs-delta {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.04em;
+  padding: 1px 5px; border-radius: 3px;
+}
+.cs-delta.up { background: rgba(80,210,255,0.16); color: #4df; }
+.cs-delta.down { background: rgba(255,150,0,0.16); color: #f90; }
+.cs-opt-desc { font-size: 11px; color: var(--dim); line-height: 1.35; margin-top: 6px; }
+.cs-opt-cost {
+  flex: 0 0 auto; align-self: center;
+  font-size: 12px; font-weight: 700; color: var(--dim);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.cs-opt-cost.free { color: rgba(255,255,255,0.3); font-weight: 600; }
+.cs-opt.active {
+  background: rgba(225,6,0,0.14); border-color: var(--red);
+  box-shadow: 0 2px 16px rgba(225,6,0,0.22);
+}
+.cs-opt.active .cs-opt-dot { border-color: var(--red); background: radial-gradient(circle, #fff 0 3px, var(--red) 4px); }
+.cs-opt.active .cs-opt-cost { color: #fff; }
+.cs-opt.over-budget { opacity: 0.5; }
+.cs-opt.budget-reject { animation: cs-shake 0.32s ease; }
+@keyframes cs-shake {
+  0%,100% { transform: translateX(0); }
+  25%      { transform: translateX(-5px); }
+  75%      { transform: translateX(5px); }
+}
+.cs-opt-tag {
+  display: inline-block; margin-left: 7px; vertical-align: middle;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
+  background: rgba(255,200,40,0.18); color: #f5c842;
+  border-radius: 3px; padding: 1px 5px;
+}
+.cs-opt.exclusive { border-color: rgba(255,200,60,0.4); }
+.cs-opt.exclusive.active {
+  background: rgba(184,150,10,0.22); border-color: #c9a80e;
+  box-shadow: 0 2px 16px rgba(200,160,10,0.3);
+}
+.cs-opt.exclusive.active .cs-opt-dot { border-color: #e6c02a; background: radial-gradient(circle,#fff 0 3px,#e6c02a 4px); }
+#cs-budget-wrap { display: flex; flex-direction: column; gap: 6px; }
+#cs-budget-bar {
+  height: 6px; background: rgba(255,255,255,0.1);
+  border-radius: 3px; overflow: hidden;
+}
+#cs-budget-fill {
+  height: 100%; width: 100%; background: linear-gradient(90deg, #e10600, #ff5a3c);
+  border-radius: 3px; transform-origin: left;
+  transition: transform 0.22s ease;
+}
+#cs-budget-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#cs-budget {
+  font-size: 11px; letter-spacing: 0.06em; color: var(--dim);
+}
+#cs-budget.tight { color: #f90; }
+#cs-budget.over  { color: var(--red); }
+#cs-budget.unlimited { color: #0c8; }
+.cs-unlimited-btn {
+  flex: 0 0 auto; width: auto; margin: 0;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
+  padding: 5px 10px; border-radius: 6px;
+  background: rgba(255,255,255,0.06); color: var(--dim);
+  border: 1px solid rgba(255,255,255,0.14);
+}
+.cs-unlimited-btn.on {
+  background: rgba(0,204,136,0.18); color: #0c8;
+  border-color: rgba(0,204,136,0.4);
+}
+
+/* portrait / narrow: single-column stats */
+@media (max-width: 600px) {
+  #cs-stats-inner { grid-template-columns: 1fr; }
+}
+
+/* car setup: DONE pinned at the panel foot (options list scrolls above it) */
+#carsetup .sel-actions {
+  flex-shrink: 0;
+  width: 100%;
+  padding-top: 4px;
+  margin-top: 2px;
+  justify-content: center;
+}
+
+/* short landscape (phones): tighten spacing, widen the docked panel since
+   there's less vertical room to spread content out */
+/* landscape / short height: two-pane setup — a compact header across the top, a
+   vertical category rail on the LEFT, and the options list filling the full
+   panel height on the RIGHT, so many options are visible at once instead of one
+   at a time. Portrait keeps the stacked layout above. */
+@media (orientation: landscape) and (max-height: 600px) {
+  #cs-inner {
+    width: min(54vw, 500px);   /* leave the left ~half of the screen for the car */
+    padding: 11px 14px; gap: 7px 12px;
+    display: grid;
+    grid-template-columns: 142px 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "header header"
+      "tabs   options"
+      "done   done";
+  }
+  #cs-header {
+    grid-area: header;
+    flex-direction: row; align-items: flex-start; flex-wrap: wrap; gap: 6px 14px;
+  }
+  #cs-titlebar { flex: 0 0 auto; }
+  #cs-titlebar h2 { font-size: 17px; }
+  #cs-budget-wrap { flex: 1 1 auto; min-width: 175px; }
+  #cs-budget { white-space: nowrap; font-size: 10px; }
+  #cs-stats-inner { flex: 1 1 100%; padding: 4px 12px; }   /* stats on their own row */
+  #cs-stats-inner .cs-stat-row { margin: 3px 0; }
+  #cs-tabs {
+    grid-area: tabs; min-height: 0;
+    flex-direction: column; flex-wrap: nowrap;
+    overflow-y: auto; overflow-x: hidden; gap: 5px; padding-bottom: 0;
+    touch-action: pan-y;   /* vertical rail — override the portrait row's pan-x so it scrolls */
+  }
+  .cs-tab {
+    width: 100%; min-width: 0;
+    flex-direction: row; align-items: baseline; justify-content: space-between; gap: 8px;
+  }
+  .cs-tab-cur { max-width: 92px; }
+  #cs-options { grid-area: options; min-height: 0; margin: 0; }
+  .cs-opt { padding: 8px 11px; }
+  #carsetup .sel-actions { grid-area: done; margin: 0; padding-top: 2px; }
+}

@@ -1,0 +1,277 @@
+/* Apex 26 — touch controls (incl. landscape pass), results, how to play.
+   Split from css/style.css (lines 1038-1311 of the original); the <link>
+   order in index.html preserves the original source order, so the cascade
+   is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
+/* ---------- touch controls ---------- */
+/* Every control button is the same size, with perfectly centred text. */
+.touchbtn {
+  position: fixed;
+  z-index: 12;
+  font-weight: 800;
+  background: rgba(20, 20, 30, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  width: 76px; height: 76px;
+  font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; line-height: 1;
+  padding: 0;
+}
+/* LEFT thumb column: GAS (bottom) + BRAKE (above) — always.
+   RIGHT thumb column: BOOST + OT by default; in MANUAL mode the gearbox
+   takes the right column (DN bottom, UP above) and BOOST/OT move to centre. */
+#btn-throttle { left: calc(16px + var(--sal)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
+#btn-throttle:active { background: rgba(0, 210, 90, 0.75); }
+#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(100px + var(--sab)); background: rgba(180, 35, 35, 0.42); }
+#btn-brake:active { background: rgba(230, 45, 45, 0.75); }
+
+#btn-boost { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); background: rgba(0, 150, 200, 0.4); }
+#btn-boost.on { background: rgba(0, 200, 90, 0.85); border-color: #aeea00; box-shadow: 0 0 18px rgba(120, 230, 80, 0.7); color: #04210a; }
+#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(100px + var(--sab)); }
+#btn-ot.armed { background: #aeea00; color: #0a0a0f; border-color: #aeea00; animation: pulse 0.8s infinite; }
+#btn-ot.on { background: var(--red); color: #fff; border-color: var(--red); }
+
+/* gear shift buttons: right column, stacked (DN bottom, UP above) with 8 px gaps */
+.shiftbtn { flex-direction: column; font-size: 15px; line-height: 1.05; }
+.shiftbtn small { font-size: 9px; letter-spacing: 0.1em; color: var(--dim); }
+#shift-down { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
+#shift-up   { right: calc(16px + var(--sar)); bottom: calc(108px + var(--sab)); }
+
+/* steer buttons: CONSOLE layout — both arrows in the bottom-LEFT, side by side,
+   so the left thumb steers like a d-pad and the right thumb stays free for the
+   action buttons (BRAKE/BOOST/OT). */
+.steerbtn { font-size: 22px; background: rgba(20, 20, 30, 0.55); width: 84px; height: 84px; }
+.steerbtn:active { background: rgba(255, 255, 255, 0.18); }
+#btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(16px + var(--sab)); }
+#btn-steer-right { left: calc(108px + var(--sal)); bottom: calc(16px + var(--sab)); }
+
+/* MANUAL (portrait): right column holds everything, stacked with 8 px gaps —
+   shift DN, shift UP, then BOOST and OT above them */
+body.manual #btn-boost { bottom: calc(200px + var(--sab)); }
+body.manual #btn-ot    { bottom: calc(292px + var(--sab)); }
+
+/* BUTTON mode (console): arrows are bottom-left; right thumb gets GAS (bottom),
+   BRAKE above it, BOOST above that, OT at the top — all at right+16. */
+body.steer-buttons #btn-throttle { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
+body.steer-buttons #btn-brake    { left: auto; right: calc(16px + var(--sar)); bottom: calc(108px + var(--sab)); }
+body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar)); bottom: calc(200px + var(--sab)); }
+body.steer-buttons #btn-ot       { left: auto; right: calc(16px + var(--sar)); bottom: calc(292px + var(--sab)); }
+
+/* TOUCH mode (steer by screen halves, auto-throttle): BRAKE drops to the left
+   corner (no GAS); BOOST/OT keep the right corner. */
+body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
+
+/* In PORTRAIT button mode the steering arrows are bottom-left; the HUD bottom
+   stays clear of the right-side GAS button (bottom+16 + 84 px tall). */
+@media (orientation: portrait) {
+  body.steer-buttons .hud-bottom { bottom: calc(112px + var(--sab)); }
+}
+
+/* ---------- LANDSCAPE: short viewport, lots of width ---------- */
+@media (orientation: landscape) {
+  /* HUD becomes a short horizontal strip at the very bottom so the big gear
+     no longer floats up over the car */
+  .hud-bottom { flex-direction: row; align-items: flex-end; gap: 18px; bottom: calc(8px + var(--sab)); }
+  /* Nudge the strip 20px left of centre so OVERTAKE stays clear of BOOST/OT buttons
+     (right:16) which would otherwise overlap the rightmost flex item. */
+  .hud-bottom { left: calc(50% - 20px); }
+  /* In manual mode BOOST/OT move inward to right:100 (x≈668), so shift more. */
+  body.manual .hud-bottom { left: calc(50% - 55px); }
+  #hud-gearbox { gap: 3px; }
+  #hud-gear { font-size: 48px; }
+  #hud-tach { width: 92px; height: 13px; }
+  #hud-speed { font-size: 26px; }
+  #hud-energy { width: 112px; }
+  /* manual: keep everything on the right — shifts in the outer column, BOOST/OT
+     in a second column just inboard (vertical space is too short to stack four).
+     Override shift positions so both columns align at the same row heights. */
+  #shift-down { bottom: calc(12px + var(--sab)); }
+  #shift-up   { bottom: calc(96px + var(--sab)); }
+  body.manual #btn-boost { left: auto; right: calc(100px + var(--sar)); bottom: calc(12px + var(--sab)); }
+  body.manual #btn-ot    { left: auto; right: calc(100px + var(--sar)); bottom: calc(96px + var(--sab)); }
+  /* console steer: arrows bottom-left, side by side (left thumb home) */
+  #btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(12px + var(--sab)); }
+  #btn-steer-right { left: calc(108px + var(--sal)); bottom: calc(12px + var(--sab)); }
+  /* button mode: 2×2 grid on the right — GAS/BOOST bottom-right column,
+     BRAKE/OT second column (landscape has width to spread horizontally) */
+  body.steer-buttons #btn-throttle { left: auto; right: calc(16px + var(--sar));  bottom: calc(12px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
+  body.steer-buttons #btn-brake    { left: auto; right: calc(100px + var(--sar)); bottom: calc(12px + var(--sab)); }
+  body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar));  bottom: calc(100px + var(--sab)); }
+  body.steer-buttons #btn-ot       { left: auto; right: calc(100px + var(--sar)); bottom: calc(100px + var(--sab)); }
+  /* Buttons mode: steer arrows occupy the left 192px, action buttons the right 176px.
+     Pin the HUD strip inside that clear zone so OVERTAKE can't bleed into the buttons. */
+  body.steer-buttons .hud-bottom {
+    left: calc(200px + var(--sal));
+    right: calc(180px + var(--sar));
+    transform: none;
+    justify-content: center;
+  }
+  /* touch: BRAKE left corner, BOOST/OT right corner */
+  body.steer-touch #btn-brake { bottom: calc(12px + var(--sab)); }
+  body.steer-touch #btn-boost { right: calc(16px + var(--sar)); bottom: calc(12px + var(--sab)); }
+  body.steer-touch #btn-ot    { right: calc(16px + var(--sar)); bottom: calc(96px + var(--sab)); }
+}
+
+#pausebtn {
+  position: fixed;
+  top: calc(8px + var(--sat));
+  right: calc(10px + var(--sar));
+  z-index: 14;
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  padding: 0;
+}
+/* CAM mode button sits just left of the pause button (top-right). */
+#btn-cam {
+  position: fixed;
+  top: calc(8px + var(--sat));
+  right: calc(58px + var(--sar));
+  z-index: 14;
+  height: 40px;
+  min-width: 76px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+/* HUD-hidden mode: "HIDE HUD" (pause menu) strips every overlay for a clean,
+   cinematic view — readouts, minimap, cam/pause buttons and the touch pads —
+   leaving only the small restore eye. Tapping it brings everything back. */
+body.hud-hidden #hud,
+body.hud-hidden #btn-cam,
+body.hud-hidden #pausebtn,
+body.hud-hidden .touchbtn { display: none !important; }
+#hud-restore {
+  position: fixed;
+  top: calc(8px + var(--sat));
+  right: calc(10px + var(--sar));
+  z-index: 16;
+  width: 36px; height: 36px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 16px; line-height: 1;
+  opacity: 0.5;
+  display: none;            /* only visible while the HUD is hidden */
+}
+#hud-restore:hover, #hud-restore:active { opacity: 0.95; }
+body.hud-hidden #hud-restore { display: block; }
+/* Camera picker grid: opened by press-and-hold on the CAM button. Anchored
+   under the button (top-right), thumb-reachable in landscape. */
+#campicker {
+  position: fixed;
+  top: calc(52px + var(--sat));
+  right: calc(58px + var(--sar));
+  z-index: 24;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(84px, 1fr));
+  gap: 6px;
+  padding: 8px;
+  background: rgba(8, 8, 14, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+#campicker button {
+  height: 38px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: #eef0f6;
+}
+#campicker button.active {
+  background: rgba(225, 6, 0, 0.75);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+#soundbtn {
+  position: fixed;
+  top: calc(8px + var(--sat));
+  right: calc(10px + var(--sar));
+  z-index: 22;
+}
+
+/* ---------- results ---------- */
+/* Header + scrolling table + fixed action bar. The bar was position:sticky over
+   the scrolling panel — rows ghosted through its translucent backing and bled
+   into the panel's bottom padding strip. Scrolling only the table keeps
+   MENU / RACE AGAIN solid and always tappable. */
+#results, #standings { display: flex; flex-direction: column; overflow: hidden; }
+#results-table, #standings-body { overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+#results .sel-actions,
+#standings .sel-actions {
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  justify-content: center;
+}
+#results-table { font-size: 14px; font-variant-numeric: tabular-nums; }
+#results-table .res-row { display: flex; gap: 10px; padding: 8px 6px; align-items: center; border-radius: 5px; }
+#results-table .res-row:nth-child(even) { background: rgba(255,255,255,0.03); }
+#results-table .res-row.you { color: #aeea00; font-weight: 700; background: rgba(174,234,0,0.08); padding-left: 5px; }
+#results-table .res-row.you:not(.p1):not(.p2):not(.p3) { border-left: 3px solid #aeea00; }
+#results-table .res-row.p1 { color: #ffd700; background: rgba(255,215,0,0.10); border-left: 3px solid #ffd700; padding-left: 5px; }
+#results-table .res-row.p2 { color: #c0c0c0; background: rgba(192,192,192,0.07); border-left: 3px solid #c0c0c0; padding-left: 5px; }
+#results-table .res-row.p3 { color: #cd9b5a; background: rgba(205,155,90,0.07); border-left: 3px solid #cd9b5a; padding-left: 5px; }
+#results-table .res-row.p1 .res-pos,
+#results-table .res-row.p2 .res-pos,
+#results-table .res-row.p3 .res-pos { color: inherit; font-weight: 700; }
+#results-table .res-pos { width: 26px; text-align: right; color: var(--dim); }
+#results-table .res-swatch { width: 4px; height: 20px; border-radius: 2px; flex-shrink: 0; }
+#results-table .res-name { flex: 1; }
+#results-table .res-pts { width: 62px; text-align: right; white-space: nowrap; }
+
+/* ---------- how to play ---------- */
+#howtoplay { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); }
+#howtoplay-inner { width: min(92vw, 560px); }
+/* Same fixed-footer pattern as #results: title + scrollable body (.panel-scroll
+   / dl) + solid DONE bar, replacing the sticky bar that floated over content. */
+#howtoplay-inner,
+#advanced-inner { display: flex; flex-direction: column; overflow: hidden; }
+#howtoplay-inner dl,
+#advanced-inner .panel-scroll { overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+#howtoplay-inner .sel-actions,
+#advanced-inner .sel-actions {
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  justify-content: center;
+}
+#howtoplay dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 18px;
+  align-items: start;
+}
+#howtoplay dt {
+  color: var(--red); font-weight: 700; font-size: 12px;
+  letter-spacing: 0.08em; padding: 6px 0 2px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+}
+#howtoplay dt:first-child { border-top: none; }
+#howtoplay dd {
+  color: var(--text); font-size: 13px; margin-left: 0; line-height: 1.45;
+  padding: 6px 0 2px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+#howtoplay dd:first-of-type { border-top: none; }
+.key {
+  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 12px;
+}
+
+#nogl {
+  position: fixed; inset: 0; z-index: 99;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+}

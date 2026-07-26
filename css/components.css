@@ -1,0 +1,72 @@
+/* Apex 26 — shared components: .bigbtn/.panel, pause menu, settings sub-menu, advanced shell.
+   Split from css/style.css (lines 63-131 of the original); the <link>
+   order in index.html preserves the original source order, so the cascade
+   is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
+.bigbtn {
+  display: block;
+  width: min(78vw, 340px);
+  margin: 10px auto;
+  padding: 14px 20px;
+  font-size: 20px;
+  background: linear-gradient(135deg, #f01000 0%, #b30000 100%);
+  border: none;
+  border-radius: 10px;
+  transform: skewX(-6deg);
+  box-shadow: 0 4px 18px rgba(225, 6, 0, 0.4);
+}
+.bigbtn:hover { background: linear-gradient(135deg, #ff2010 0%, #c50000 100%); box-shadow: 0 6px 24px rgba(225,6,0,0.6); }
+.bigbtn.alt { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.14); color: rgba(242,242,245,0.72); box-shadow: none; border: 1px solid rgba(255,255,255,0.14); }
+.bigbtn.alt:hover { background: rgba(255, 255, 255, 0.16); box-shadow: none; }
+
+.panel {
+  position: fixed;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  padding: 22px 26px;
+  z-index: 30;
+  max-width: min(92vw, 520px);
+  max-height: 86vh;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.panel h2 { color: var(--red); margin-bottom: 14px; }
+.panel button { display: block; width: 100%; margin: 8px 0; }
+#pm-resume { background: var(--red); color: #fff !important; border-color: var(--red); font-weight: 700; font-size: 15px; }
+#pm-standings { border-color: #f6d200; color: #f6d200; }
+#pm-settings { border-color: var(--red); color: var(--red); }
+
+/* ---------- settings sub-menu (opened from the pause menu) ---------- */
+/* Full-screen overlay like #advanced; sits above the pause menu but below the
+   advanced-steering / lighting-tuner panels that open on top of it. */
+#pmsettings { position: fixed; inset: 0; z-index: 35; background: rgba(0, 0, 0, 0.6); }
+#pmsettings-inner { width: min(94vw, 520px); }
+/* Grouped controls: DRIVING / AUDIO / DISPLAY, so 11 toggles read as three
+   short scannable lists instead of one long undifferentiated stack. The groups
+   are the panel's scroll region — SETTINGS title and BACK stay fixed, so the
+   way out never scrolls off screen. */
+#pmsettings-inner { display: flex; flex-direction: column; overflow: hidden; }
+#pmsettings-inner h2,
+#pm-settings-close { flex-shrink: 0; }
+.pm-groups {
+  display: flex; flex-direction: column; gap: 15px; margin: 6px 0 2px;
+  overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch;
+}
+.pm-group { display: flex; flex-direction: column; }
+.pm-group-h {
+  color: var(--red); font-size: 11px; font-weight: 700; letter-spacing: 0.11em;
+  margin: 0 0 7px; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.pm-group button { margin: 4px 0; }
+#pm-settings-close { margin-top: 16px; border-color: var(--red); color: var(--red); }
+
+/* ---------- advanced steering panel ---------- */
+#advanced { position: fixed; inset: 0; z-index: 41; background: rgba(0, 0, 0, 0.6); }
+#advanced-inner { width: min(94vw, 600px); }

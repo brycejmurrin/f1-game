@@ -1,0 +1,128 @@
+/* Apex 26 — lighting tuner panel + the shared .adv-*/.tune-*/.opt-*/.preset-* control vocabulary.
+   Split from css/style.css (lines 132-256 of the original); the <link>
+   order in index.html preserves the original source order, so the cascade
+   is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
+/* ---------- lighting tuner ---------- */
+/* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
+   panel is open, so the left of the screen is the live preview. */
+#lighting { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
+#lighting-inner {
+  pointer-events: auto;
+  left: auto; top: 8px; right: 8px; bottom: 8px;
+  transform: none;
+  width: min(88vw, 380px);
+  max-height: none;
+  background: rgba(12, 14, 20, 0.86);
+  padding: 14px 18px;
+  /* Fixed head (title / preview chips / tabs) + scrolling #lt-rows + fixed
+     RESET/COPY/DONE footer — with 80+ sliders the actions used to live at the
+     end of the scroll, a full panel-length swipe away. */
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#lt-rows { flex: 1 1 auto; overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+#lt-json { flex-shrink: 0; }
+#lighting-inner .adv-item { margin: 7px 0; }
+#lighting-inner .adv-help { display: none; }        /* hidden unless "Show explanations" is on… */
+#lighting-inner.lt-show-help .adv-help { display: block; }   /* …then every row explains itself */
+.lt-help-toggle {
+  display: flex; align-items: center; gap: 7px; margin: 8px 0 4px;
+  font-size: 11px; opacity: 0.8; cursor: pointer;
+}
+.lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
+/* Category tabs — split the 80+ sliders into one group at a time. Part of the
+   panel's fixed head (only #lt-rows scrolls), so the chips are always visible. */
+.lt-tabs {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin: 2px -18px 6px; padding: 6px 18px 8px;
+  background: rgba(12, 14, 20, 0.94);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+#lt-tabs .lt-tab {
+  display: inline-flex; width: auto; margin: 0;
+  padding: 5px 9px; font-size: 10px; letter-spacing: 0.04em;
+  border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.72);
+  cursor: pointer; white-space: nowrap; transition: background 0.12s, color 0.12s;
+}
+#lt-tabs .lt-tab:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+#lt-tabs .lt-tab.on { background: var(--red); border-color: var(--red); color: #fff; }
+.lt-group { display: none; }
+.lt-group.active { display: block; }
+/* The active tab already names the group, so drop the in-panel section header. */
+.lt-group .adv-sec { display: none; }
+.lt-section {
+  margin: 16px 0 7px;
+  padding: 0 0 4px;
+  color: rgba(255,255,255,.72);
+  border-bottom: 1px solid rgba(255,255,255,.12);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+.lt-group .lt-section:first-of-type { margin-top: 6px; }
+/* panel header: title + FREE CAMERA button on one line */
+#lt-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+#lt-head h2 { margin: 0; }
+/* preview time/weather: one compact line each — small inline label + tight chips */
+.lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
+.lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
+.lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; margin: 0; padding: 4px 3px; font-size: 10px; }
+.lt-preview-row .opt-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
+#lighting-inner .sel-actions {
+  display: flex; gap: 8px; flex-shrink: 0;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+}
+#lighting-inner .sel-actions button { margin: 0; }
+#lt-json {
+  width: 100%; height: 72px; margin-top: 10px; resize: none;
+  font: 10px/1.5 ui-monospace, monospace; color: #cfe0ff;
+  background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px; padding: 6px;
+}
+.adv-intro { font-size: 12px; opacity: 0.7; margin: 0 0 6px; line-height: 1.45; }
+.adv-sec {
+  color: var(--red); font-size: 12px; letter-spacing: 0.08em;
+  margin: 16px 0 8px; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.adv-sec span {
+  color: rgba(255, 255, 255, 0.45); font-size: 10px;
+  letter-spacing: 0.02em; margin-left: 6px;
+}
+.adv-item { margin: 11px 0; }
+.adv-help { font-size: 11px; opacity: 0.6; margin: 3px 0 0; line-height: 1.4; }
+.tune-row { display: block; margin: 0; }
+.tune-label {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12px; letter-spacing: 0.04em; opacity: 0.9; margin-bottom: 2px;
+}
+.tune-label b { color: var(--red); font-size: 13px; }
+.tune-row input[type="range"] {
+  width: 100%; margin: 0; accent-color: var(--red); height: 24px; cursor: pointer;
+}
+.preset-row { display: flex; gap: 8px; margin: 4px 0 6px; }
+.preset-row .preset-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  flex: 1; width: auto; margin: 0; padding: 9px 6px; text-align: center;
+  letter-spacing: 0.06em; font-size: 13px;
+}
+.preset-btn small {
+  font-size: 9.5px; letter-spacing: 0.01em; opacity: 0.6; font-weight: normal;
+  text-transform: none; line-height: 1.2;
+}
+.preset-btn.active {
+  background: var(--red); border-color: var(--red); color: #fff;
+}
+.preset-btn.active small { opacity: 0.85; }
+/* segmented option groups (STEERING / DRIVING HELP / RACING LINE) */
+.opt-row { display: flex; gap: 6px; margin-top: 4px; }
+.opt-row .opt-btn {
+  flex: 1; width: auto; margin: 0; padding: 8px 4px;
+  font-size: 12px; letter-spacing: 0.03em; text-align: center;
+}
+.opt-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
+/* advanced disclosure */
+.adv-more-btn { width: 100%; margin: 14px 0 2px; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85; }
+#adv-extra { margin-top: 4px; }
