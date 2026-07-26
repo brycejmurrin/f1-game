@@ -40,7 +40,14 @@ const circuitFiles = CIRCUITS.map((id) => `${CIRCUITS_DIR}/${id}.js`);
 // Every js file, in exact index.html <script> tag order.
 const FULL = [
   "js/mat4.js",
-  "js/render/shaders/glx-shaders.js",
+  "js/render/shaders/chunks.js",
+  "js/render/shaders/lit.js",
+  "js/render/shaders/sky.js",
+  "js/render/shaders/fx.js",
+  "js/render/shaders/post.js",
+  "js/render/glx/post.js",
+  "js/render/glx/shadow.js",
+  "js/render/glx/chunked.js",
   "js/render/glx.js",
   "js/render/webgpu/wgsl-chunks.js",
   "js/render/webgpu/wgsl-post.js",
@@ -110,7 +117,14 @@ const CSS = ["css/style.css", "css/data.css"];
 // itself uses ../js/... since it is served from /tools/).
 const CARVIEW = [
   "js/mat4.js",
-  "js/render/shaders/glx-shaders.js",
+  "js/render/shaders/chunks.js",
+  "js/render/shaders/lit.js",
+  "js/render/shaders/sky.js",
+  "js/render/shaders/fx.js",
+  "js/render/shaders/post.js",
+  "js/render/glx/post.js",
+  "js/render/glx/shadow.js",
+  "js/render/glx/chunked.js",
   "js/render/glx.js",
   "js/car/teams.js",
   "js/car/parts.js",
@@ -147,7 +161,23 @@ const TRACK_VM = [
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
   ["js/mat4.js", "js/render/glx.js"],                       // glx uses M4 at init
-  ["js/render/shaders/glx-shaders.js", "js/render/glx.js"], // glx destructures GLXShaders at eval
+  // chunks.js before every shader file (lit/sky/post interpolate GLXChunks at
+  // eval; fx.js is chunk-free today but keeps the uniform ordering contract).
+  ["js/render/shaders/chunks.js", "js/render/shaders/lit.js"],
+  ["js/render/shaders/chunks.js", "js/render/shaders/sky.js"],
+  ["js/render/shaders/chunks.js", "js/render/shaders/fx.js"],
+  ["js/render/shaders/chunks.js", "js/render/shaders/post.js"],
+  // every shader file before glx.js (it destructures GLXShaders at eval)
+  ["js/render/shaders/lit.js", "js/render/glx.js"],
+  ["js/render/shaders/sky.js", "js/render/glx.js"],
+  ["js/render/shaders/fx.js", "js/render/glx.js"],
+  ["js/render/shaders/post.js", "js/render/glx.js"],
+  // glx/ subsystem modules before glx.js (GLX.init calls GLXPost/GLXShadow/
+  // GLXChunked.init — call-time, but the globals must exist by then; keep the
+  // ordering explicit)
+  ["js/render/glx/post.js", "js/render/glx.js"],
+  ["js/render/glx/shadow.js", "js/render/glx.js"],
+  ["js/render/glx/chunked.js", "js/render/glx.js"],
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
   ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx.js"],
@@ -182,7 +212,9 @@ const HARD_EDGES = [
 // follows automatically.
 const PATHS = {
   TRACKS_ENGINE: "js/track/tracks.js",
-  GLX_SHADERS: "js/render/shaders/glx-shaders.js",
+  GLX_CHUNKS: "js/render/shaders/chunks.js",
+  GLX_SHADERS_LIT: "js/render/shaders/lit.js",
+  GLX_SHADERS_POST: "js/render/shaders/post.js", // grade/composite GLSL (image-grade-shaders.test.mjs)
   WGSL_CHUNKS: "js/render/webgpu/wgsl-chunks.js",
   WGSL_POST: "js/render/webgpu/wgsl-post.js",
   WGX: "js/render/webgpu/wgx.js",
