@@ -61,6 +61,10 @@ const FULL = [
   "js/track/circuit-kit.js",
   "js/track/spline.js",
   "js/track/mesh.js",
+  "js/track/scenery-nature.js",
+  "js/track/scenery-structures.js",
+  "js/track/scenery-city.js",
+  "js/track/scenery-identity.js",
   ...circuitFiles,
   "js/track/tracks.js",
   "js/track/maps.js",
@@ -132,6 +136,10 @@ const TRACK_VM = [
   "js/track/circuit-kit.js",
   "js/track/spline.js",
   "js/track/mesh.js",
+  "js/track/scenery-nature.js",
+  "js/track/scenery-structures.js",
+  "js/track/scenery-city.js",
+  "js/track/scenery-identity.js",
   "@circuits",
   "js/track/tracks.js",
 ];
@@ -150,6 +158,10 @@ const HARD_EDGES = [
   ["js/track/geom.js", "js/track/mesh.js"],                 // mesh destructures TrackGeom at eval
   ["js/track/spline.js", "js/track/mesh.js"],               // mesh destructures TrackSpline at eval
   ["js/track/mesh.js", "js/track/tracks.js"],               // tracks destructures TrackMesh at eval
+  ["js/track/scenery-nature.js", "js/track/tracks.js"],     // buildProps calls Scenery*.create (build time, keep ordered)
+  ["js/track/scenery-structures.js", "js/track/tracks.js"],
+  ["js/track/scenery-city.js", "js/track/tracks.js"],
+  ["js/track/scenery-identity.js", "js/track/tracks.js"],
   ["js/track/geo-paths.js", "js/track/tracks.js"],          // CircuitPaths read by LIST build
   ["js/track/space.js", "js/track/surface.js"],
   ["js/track/models.js", "js/track/circuit-kit.js"],
