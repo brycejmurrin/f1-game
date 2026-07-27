@@ -81,6 +81,19 @@ const TrackGeom = (function () {
   // point) — so callers never have to reason about CCW winding under backface
   // culling. Normal is the face normal (flat shading, matches the box look).
   function emit(out, verts, col, ref) {
+    // Reject non-finite geometry at the door. The GUARDED wrappers in tracks.js
+    // (addBox/addCyl/…) already finite-check their arguments, so for years a
+    // NaN anchor merely dropped the affected prop. emit() is the raw path with
+    // no such check, and the moment a helper started using it directly — the
+    // tree() canopy underside — a single tree resolving to node -1 pushed NaN
+    // into the shared props buffer. validateGeometry then rejects the WHOLE
+    // mesh and safe() substitutes an empty one, so one bad vertex costs a
+    // circuit every prop it has. Silverstone shipped with no scenery that way.
+    // Dropping one triangle is always better than losing the buffer.
+    for (let i = 0; i < verts.length; i++) {
+      const v = verts[i];
+      if (!v || !Number.isFinite(v[0]) || !Number.isFinite(v[1]) || !Number.isFinite(v[2])) return false;
+    }
     let nv = norm(cross(
       [verts[1][0] - verts[0][0], verts[1][1] - verts[0][1], verts[1][2] - verts[0][2]],
       [verts[2][0] - verts[0][0], verts[2][1] - verts[0][1], verts[2][2] - verts[0][2]]));

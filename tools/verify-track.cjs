@@ -156,10 +156,26 @@ function verifyTrack(id) {
     if (hard.length) throw new Error(`required model diagnostics: ${JSON.stringify(hard)}`);
   }
 
+  // A mesh that fails validateGeometry is not an exception — Tracks.build's
+  // safe() logs a console.warn (which this harness swallows) and substitutes an
+  // EMPTY buffer, so the build "succeeds" while the circuit ships with nothing
+  // in it. Silverstone shipped that way for three days across five commits,
+  // reported OK by this very tool, because one NaN vertex from a tree at node
+  // -1 poisoned all 783 066 of its prop vertices. Read the diagnostics.
+  const geo = track.geometryDiagnostics || [];
+  const rejected = geo.filter((g) => !g.ok);
+  if (rejected.length)
+    throw new Error(`mesh rejected by validateGeometry — SHIPS EMPTY: ` +
+      rejected.map((g) => `${g.name} (${g.reason})`).join(", "));
+
   const road    = track.meshes.road    ? track.meshes.road.verts    : 0;
   const terrain = track.meshes.terrain ? track.meshes.terrain.verts : 0;
   const props   = track.meshes.props   ? track.meshes.props.verts   : 0;
   const total   = road + terrain + props;
+
+  // Belt and braces: every circuit dresses itself, so zero props means the
+  // scenery pass produced nothing even if validation passed.
+  if (props === 0) throw new Error("props mesh is EMPTY — the circuit has no scenery");
 
   console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain}) — ${total} total`);
 }
