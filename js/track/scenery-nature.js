@@ -22,6 +22,13 @@ const SceneryNature = (function () {
     // Resolve a trackside anchor: ground position + the track basis [r,u,t] at
     // node k, `dist` beyond the road edge on `side`. Shared by the model helpers.
     const anchor = (k, side, dist) => {
+      // WRAP the node index. Callers legitimately walk off either end (the
+      // roadside-tree scatter plants at k-1/k+1, `along()` steps past the seam),
+      // and an out-of-range index reads `undefined` out of the per-node arrays →
+      // NaN vertices. A single NaN position makes validateGeometry() reject the
+      // WHOLE props mesh, so one stray k=-1 silently strips a circuit of every
+      // prop it has (this is exactly what happened to Silverstone).
+      k = ((k | 0) % n + n) % n;
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
