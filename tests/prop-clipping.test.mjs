@@ -34,6 +34,18 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // until adjacent footprints share volume.
 // Kept in tools/clip-baseline.json so the tool's own --gate and this test can
 // never disagree about what the caps are.
+//
+// KNOWN LIMITATION behind silverstone's cap. The emission-adjacency filter
+// (|q_a - q_b| <= 8) is how the detector recognises "these primitives are one
+// assembly", and it is what makes same-model overlap — accepted as blending —
+// invisible to the report. It fails for a helper that emits MANY primitives per
+// along() step: crowdMound emits 3 earth steps plus ~10 spectators per node, so
+// consecutive steps of the same run land >8 apart in emission order and read as
+// cross-model. They are the same colour and material and the shared volume is
+// interior, so nothing is visible on screen (verified by eye at frac 0.021).
+// Widening the window would blind the detector to real defects, so the cap
+// carries the cost instead. Tightening this properly needs a real model token
+// rather than an emission-order proxy.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "clip-baseline.json"), "utf8"),
 );
