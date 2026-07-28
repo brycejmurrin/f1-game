@@ -1,7 +1,7 @@
 # Lighting presets — per-track / time / weather
 
 Goal: ship a hand-considered lighting-tuner preset for **every track × time-of-day ×
-weather**, baked into `js/light-presets.js`. This doc is the shared brief: the
+weather**, baked into `js/game/light-presets.js`. This doc is the shared brief: the
 per-track subagents read it, and it tracks which tracks are done.
 
 ---
@@ -13,7 +13,7 @@ TUNE_DEFS default  →  file "*"  →  file "track|tod|wx"  →  player localSto
 ```
 
 - `js/game/lighting.js` `TUNE_DEFS` holds each knob's factory **default**.
-- `js/light-presets.js` `window.LightPresets` holds the shipped overrides:
+- `js/game/light-presets.js` `window.LightPresets` holds the shipped overrides:
   - `"*"` — a **global baseline** applied to every condition (currently `carGloss: 0.35`, near-matte paint).
   - `"track|tod|wx"` — a per-condition override that wins over `"*"`.
 - A player's live tuner edits always win over the file; RESET falls back to the file.
@@ -224,6 +224,6 @@ Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `light-presets.js`
 
 ## Workflow
 
-1. One subagent per track proposes presets for all meaningful `tod × wx` combos (this doc = its brief; it also reads `js/tracks/<id>.js` for palette/locale).
-2. Proposals are baked into `js/light-presets.js` and the row flipped to ✅.
+1. One subagent per track proposes presets for all meaningful `tod × wx` combos (this doc = its brief; it also reads `js/circuits/<id>.js` for palette/locale).
+2. Proposals are baked into `js/game/light-presets.js` and the row flipped to ✅.
 3. Bump `index.html` `?v=` + `version.json`, verify no page errors, then push.

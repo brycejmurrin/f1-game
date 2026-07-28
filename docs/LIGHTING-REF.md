@@ -1,8 +1,8 @@
 # Lighting & sky reference
 
-`js/glx.js` owns the shaders and light upload; `game.js` (`applyRaceSettings`,
-`setFrameLights`) and `js/game/lighting.js` (`buildTrackLights`) drive the
-per-frame state.
+`js/render/glx.js` owns the shaders and light upload; `js/game/atmosphere.js`
+(`applyRaceSettings`) and `js/game/lighting.js` (`buildTrackLights`,
+`setFrameLights`, `appendCarTailLights`) drive the per-frame state.
 
 ---
 
@@ -159,7 +159,7 @@ Colour is chosen by `floodColor(theme)`:
 | `street_day` / `street_night` / `modern` | Cool LED white |
 | `green` (classic) | Neutral warm white |
 
-**Masts**: `buildProps` (tracks.js) emits a floodlight mast mesh at every light
+**Masts**: `buildProps` (the `js/track/` scenery modules) emits a floodlight mast mesh at every light
 position using the same stride/offset/side — masts are visible day and night, so
 each light pool reads as physically cast by a real structure.
 

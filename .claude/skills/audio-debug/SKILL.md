@@ -1,11 +1,11 @@
 ---
 name: audio-debug
-description: Inspect and tune the WebAudio synth engine in js/audio.js — engine pitch curve, sfx triggers, music layers, and mute/volume state — using the __apex audio hooks and the browser console. Use for "the engine sounds flat at high speed", "sfx isn't triggering", "tune the gear-shift audio", "the music cuts out", "audio debug". Triggers - "audio", "sound", "engine pitch", "sfx", "music layer", "mute".
+description: Inspect and tune the WebAudio synth engine in js/game/audio.js — engine pitch curve, sfx triggers, music layers, and mute/volume state — using the __apex audio hooks and the browser console. Use for "the engine sounds flat at high speed", "sfx isn't triggering", "tune the gear-shift audio", "the music cuts out", "audio debug". Triggers - "audio", "sound", "engine pitch", "sfx", "music layer", "mute".
 ---
 
 # Debug and tune the audio engine
 
-The game uses a WebAudio synth (`js/audio.js` — the `GameAudio` IIFE). The
+The game uses a WebAudio synth (`js/game/audio.js` — the `GameAudio` IIFE). The
 engine voice has two layers: a **sample-based core** (CC0 MP3s in
 `assets/sfx/f1_engine.mp3` + `f1_rev.mp3`, pitched via `playbackRate`) and a
 **synth fallback** (detuned sawtooth oscillators + lowpass) that takes over if
@@ -57,13 +57,13 @@ GameAudio.centroidHz()  // e.g. 340 at idle, higher at speed
 
 ## Tuning the engine pitch curve
 
-The pitch mapping lives in `js/audio.js` — search for the `setEngine(speed,
+The pitch mapping lives in `js/game/audio.js` — search for the `setEngine(speed,
 gear, ...)` function.  The **sample core** sets `playbackRate` proportional to
 RPM (derived from `speed` and the per-gear ratio array near that function).  The
 **synth fallback** sets oscillator frequencies directly.  To shift the tonal
 range, adjust the gear-ratio constants or the RPM→rate mapping in `setEngine`.
 
-After editing `js/audio.js`, **bump the cache version** (`bump-cache` skill) and
+After editing `js/game/audio.js`, **bump the cache version** (`bump-cache` skill) and
 reload — WebAudio doesn't hot-reload.  Use `GameAudio.rate()` before and after
 to confirm the playback-rate changed at the same speed.
 

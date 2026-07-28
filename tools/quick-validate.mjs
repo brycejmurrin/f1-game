@@ -4,8 +4,10 @@
 //   __apex + the named page globals exist,
 //   a race starts, physics steps, telemetry + lighting probes respond.
 // Usage: node tools/quick-validate.mjs [port]     (default 3477)
-import { chromium } from "playwright";
-import { spawn } from "node:child_process";
+// NOTE: playwright/child_process are imported lazily inside main() so that
+// tests/quick-validate.test.mjs can import the pure helpers below without
+// pulling in (or depending on the availability of) the whole playwright
+// package — a heavy, environment-sensitive import the helpers never use.
 import { fileURLToPath } from "node:url";
 
 export function probeFailures(probe, errors) {
@@ -42,6 +44,10 @@ export function evaluateLiveProbe(
 }
 
 async function main() {
+ const [{ chromium }, { spawn }] = await Promise.all([
+   import("playwright"),
+   import("node:child_process"),
+ ]);
  const PORT = Number(process.argv[2] || 3477);
  const srv = spawn("python3", ["-m", "http.server", String(PORT)], { stdio: "ignore" });
  const errors = [];

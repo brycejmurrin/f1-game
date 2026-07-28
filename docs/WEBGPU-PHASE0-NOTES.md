@@ -7,8 +7,8 @@ records the `Gfx` backend seam (Phase 0) and the WebGPU device/clear/sky skeleto
 [`docs/WEBGPU-MAINTAINABILITY.md`](./WEBGPU-MAINTAINABILITY.md).
 
 > **Update:** the "wiring it in" step below has since been done — `index.html`
-> now loads `js/webgpu/wgsl-chunks.js`, `js/webgpu/wgsl-post.js`,
-> `js/webgpu/wgsl-fx.js`, `js/webgpu/wgx.js` and `js/gfx.js`, and the whole stack
+> now loads `js/render/webgpu/wgsl-chunks.js`, `js/render/webgpu/wgsl-post.js`,
+> `js/render/webgpu/wgsl-fx.js`, `js/render/webgpu/wgx.js` and `js/render/gfx.js`, and the whole stack
 > has advanced through **Phase 4b**. The backend is still strictly **opt-in**
 > (`localStorage apex26.gfxBackend = "webgpu"`) and falls back to WebGL2/GLX on
 > any failure, so the default shipping path is unchanged. The text below is the
@@ -23,9 +23,9 @@ not opted in), so it cannot affect the shipping WebGL2 game.
 
 | File | Global | Role |
 |------|--------|------|
-| `js/gfx.js` | `Gfx` | The seam. `Gfx.create(canvas, opts)` (async) feature-detects WebGPU and returns a WGX backend, or `null` so the caller falls back to GLX. Header comment documents the full ~35-method backend interface + `frame`/`opts`/`sky` shapes. |
-| `js/webgpu/wgx.js` | `WGX` | The WebGPU backend. `WGX.create(canvas, opts)` (async) acquires adapter/device, configures the canvas context, and returns an object implementing the GLX interface. **Real:** device, context configure, DPR/resize, device-lost reload, `begin()`/`present()` clear + one real SKY pass. **Stubbed:** every heavier method (tagged with its phase). |
-| `js/webgpu/wgsl-chunks.js` | `WGSLChunks` | Minimal shader-chunk registry: shared WGSL math leaves (`hash`, `vnoise`+`fbm`, `tonemap`, `fullscreenTri`) + the first real shader `SKY` (a reduced faithful port of GLX `SKY_FS`, `js/glx.js:901`), composed from the leaves. |
+| `js/render/gfx.js` | `Gfx` | The seam. `Gfx.create(canvas, opts)` (async) feature-detects WebGPU and returns a WGX backend, or `null` so the caller falls back to GLX. Header comment documents the full ~35-method backend interface + `frame`/`opts`/`sky` shapes. |
+| `js/render/webgpu/wgx.js` | `WGX` | The WebGPU backend. `WGX.create(canvas, opts)` (async) acquires adapter/device, configures the canvas context, and returns an object implementing the GLX interface. **Real:** device, context configure, DPR/resize, device-lost reload, `begin()`/`present()` clear + one real SKY pass. **Stubbed:** every heavier method (tagged with its phase). |
+| `js/render/webgpu/wgsl-chunks.js` | `WGSLChunks` | Minimal shader-chunk registry: shared WGSL math leaves (`hash`, `vnoise`+`fbm`, `tonemap`, `fullscreenTri`) + the first real shader `SKY` (a reduced faithful port of GLX `SKY_FS`, `js/render/glx.js:901`), composed from the leaves. |
 | `docs/WEBGPU-PHASE0-NOTES.md` | — | This document. |
 
 All three JS files pass `node --check`.
@@ -43,7 +43,7 @@ Load order (when integrated): `wgsl-chunks.js` → `wgx.js` → `gfx.js` → …
 - **Adapter/device acquisition** (`requestAdapter` → `requestDevice`), async.
 - **Context configure** with `navigator.gpu.getPreferredCanvasFormat()`
   (`bgra8unorm` on most platforms), `alphaMode:"opaque"`.
-- **Resize / DPR** mirrors `GLX.resize()` (`js/glx.js:2585-2603`): DPR capped at
+- **Resize / DPR** mirrors `GLX.resize()` (`js/render/glx.js:2585-2603`): DPR capped at
   **1.5 on the mobile tier, 2 otherwise**, times `renderScale`; `setRenderScale`
   clamps 0.5–1 with the same 0.02 hysteresis.
 - **Device-lost handling**: `device.lost` → `location.reload()` (mirrors GLX's
@@ -70,9 +70,9 @@ The scaffolding isn't in `index.html`, so test it with a tiny standalone harness
 <!doctype html>
 <meta charset="utf-8">
 <canvas id="c" style="width:640px;height:360px"></canvas>
-<script src="js/webgpu/wgsl-chunks.js"></script>
-<script src="js/webgpu/wgx.js"></script>
-<script src="js/gfx.js"></script>
+<script src="js/render/webgpu/wgsl-chunks.js"></script>
+<script src="js/render/webgpu/wgx.js"></script>
+<script src="js/render/gfx.js"></script>
 <script>
 (async () => {
   const canvas = document.getElementById("c");
@@ -117,7 +117,7 @@ page prints the fallback message (in the real game that branch runs `GLX`).
 
 Every heavy GLX method exists on the WGX backend as a safe no-op so the object
 satisfies the interface and the game boots (the frame still clears + shows sky).
-Each stub is tagged in `js/webgpu/wgx.js` with the phase that fills it in:
+Each stub is tagged in `js/render/webgpu/wgx.js` with the phase that fills it in:
 
 | Phase | Stubs to implement | Notes |
 |-------|--------------------|-------|
@@ -134,8 +134,8 @@ land: `hdrMode()→false` (Phase 2→true), `msaa()→1` (Phase 4), `pcss()→fa
 
 ## The backend interface contract (the seam)
 
-The authoritative, transcribed copy lives in the header of **`js/gfx.js`**. In
-brief, both `GLX` (`js/glx.js:3693-3769`) and `WGX` expose the same ~35 methods:
+The authoritative, transcribed copy lives in the header of **`js/render/gfx.js`**. In
+brief, both `GLX` (`js/render/glx.js:3693-3769`) and `WGX` expose the same ~35 methods:
 
 - **Lifecycle/capability**: `init`, `resize`, `setRenderScale`, `getRenderScale`,
   `width`/`height`/`aspect`, `hdrMode`, `msaa`, `pcss`, `isMobile`, `mobileTier`.
@@ -148,7 +148,7 @@ brief, both `GLX` (`js/glx.js:3693-3769`) and `WGX` expose the same ~35 methods:
 - **Env probe**: `envFaceBegin`, `envFaceEnd`, `envProbeReady`, `envProbeReset`.
 
 Object shapes (`frame`, `sky`, `draw` opts, `present` opts) and the required
-per-frame call ordering are documented in full in the `js/gfx.js` header, sourced
+per-frame call ordering are documented in full in the `js/render/gfx.js` header, sourced
 from the real GLX call sites. WGX adds one non-GLX property, `backend:"webgpu"`,
 so a future `__apex.gfxBackend()` can report the active path (harmless additive).
 
@@ -172,8 +172,8 @@ In Phase 2 this maps directly onto a WGSL storage buffer (`array<Light>`), 4×
 **Not done here.** When WebGPU is committed, integration is one bounded change:
 
 1. **`index.html`**: add three `<script src>` tags **before** `js/game.js`, in
-   order — `js/webgpu/wgsl-chunks.js?v=N`, `js/webgpu/wgx.js?v=N`,
-   `js/gfx.js?v=N` — and bump the cache-bust `?v=N` on every asset URL **and**
+   order — `js/render/webgpu/wgsl-chunks.js?v=N`, `js/render/webgpu/wgx.js?v=N`,
+   `js/render/gfx.js?v=N` — and bump the cache-bust `?v=N` on every asset URL **and**
    `version.json` `{ "build": N }` to the same N (per `CLAUDE.md`).
 2. **`js/game.js`**: change the synchronous boot at `js/game.js:39`
    (`if (!GLX.init(canvas)) { $("nogl").hidden = false; return; }`) to await the

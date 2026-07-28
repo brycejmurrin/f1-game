@@ -1,0 +1,248 @@
+/* Apex 26 — photo mode for js/game.js: the free-fly camera (WASD/mouse/touch
+   sticks), enter/exit plumbing (render-scale bump, HUD hide, LT copy helpers)
+   and its DOM wiring. Live camera/session state comes through the ctx façade
+   G handed to Photomode.create(G); the photoCam/photoKeys/... scratch objects
+   arrive by destructure (stable refs, mutated in place). Consumes globals
+   GameAudio, PerfGov. Must load BEFORE js/game.js (see index.html). */
+const Photomode = (function () {
+  "use strict";
+
+function create(G) {
+// Stable bindings from the game.js closure.
+const { $, gfx, photoCam, photoKeys, photoMouse, photoMove, photoLook,
+        applyResMode, setPaused, ltKey, persistLightTune, applyLightTune,
+        refreshLightTunePanel } = G;
+
+function initPhotoCam() {
+  photoCam.pos[0] = G.camEye[0]; photoCam.pos[1] = G.camEye[1]; photoCam.pos[2] = G.camEye[2];
+  let dx = G.camTgt[0] - G.camEye[0], dy = G.camTgt[1] - G.camEye[1], dz = G.camTgt[2] - G.camEye[2];
+  const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
+  photoCam.pitch = Math.asin(Math.max(-1, Math.min(1, dy)));
+  photoCam.yaw = Math.atan2(dx, -dz);
+  photoCam.fov = G.camFov;
+  const fv = $("pc-fov"); if (fv) fv.value = Math.round(G.camFov);
+  photoMove.x = photoMove.y = photoLook.x = photoLook.y = 0;
+  photoMouse.dx = photoMouse.dy = 0; photoMouse.drag = false; G.photoAlt = 0; G.photoVertT = 0;
+  for (const k in photoKeys) photoKeys[k] = false;
+}
+// Integrate held input into the fly-cam each paused frame and publish dbgCam.
+function updatePhotoCam(dt) {
+  const spd = photoKeys.boost ? 95 : 34;          // m/s (Shift = boost)
+  const lookRate = 1.7;                           // rad/s for key/stick look
+  // Look: arrow keys + touch look stick + mouse drag delta.
+  const yawIn   = (photoKeys.yr ? 1 : 0) - (photoKeys.yl ? 1 : 0) + photoLook.x;
+  const pitchIn = (photoKeys.pu ? 1 : 0) - (photoKeys.pd ? 1 : 0) - photoLook.y;
+  photoCam.yaw   += yawIn * lookRate * dt + photoMouse.dx * 0.0032;
+  photoCam.pitch += pitchIn * lookRate * dt - photoMouse.dy * 0.0032;
+  photoMouse.dx = 0; photoMouse.dy = 0;
+  photoCam.pitch = Math.max(-1.45, Math.min(1.45, photoCam.pitch));
+  const cp = Math.cos(photoCam.pitch), sp = Math.sin(photoCam.pitch);
+  const fwd = [Math.sin(photoCam.yaw) * cp, sp, -Math.cos(photoCam.yaw) * cp];
+  const rgt = [Math.cos(photoCam.yaw), 0, Math.sin(photoCam.yaw)];
+  // Move: WASD + touch move stick (forward follows the look pitch); R/F + up/down
+  // buttons ride the WORLD vertical so you can climb straight up.
+  const mf = (photoKeys.w ? 1 : 0) - (photoKeys.s ? 1 : 0) - photoMove.y;   // stick UP (dy<0) = forward
+  const ms = (photoKeys.d ? 1 : 0) - (photoKeys.a ? 1 : 0) + photoMove.x;
+  // Vertical input (R/F keys + up/down buttons) ramps with hold time so height
+  // can be framed precisely: a tap nudges ~0.4 m, a hold accelerates to the
+  // full fly speed over ~2 s.
+  const mvIn = (photoKeys.up ? 1 : 0) - (photoKeys.dn ? 1 : 0) + G.photoAlt;
+  G.photoVertT = mvIn ? G.photoVertT + dt : 0;
+  const vRamp = Math.min(1, 0.12 + 0.88 * Math.pow(Math.min(G.photoVertT / 2.2, 1), 1.6));
+  const mv = mvIn * vRamp;
+  const k = spd * dt;
+  photoCam.pos[0] += (fwd[0] * mf + rgt[0] * ms) * k;
+  photoCam.pos[1] += (fwd[1] * mf + mv) * k;
+  photoCam.pos[2] += (fwd[2] * mf + rgt[2] * ms) * k;
+  const e = photoCam.pos;
+  // far: the far plane is the game's ONLY distance cull (chunk AABBs test against
+  // the frustum incl. far; fog never culls). 2500 m from altitude framed EVERY
+  // chunk of a street circuit — ~1.1 M tris / ~970 draw calls per frame on Vegas,
+  // which overflows a mobile TBDR tiler and gets the web app jetsam-killed. Keep
+  // 1100 m on mobile (fog hides the edge); desktop can afford the full vista.
+  // fog: 1.0 — the 0.15× default at the dbgCam branch was meant for the dev
+  // view() hook; the tuner preview should show the REAL race fog anyway.
+  G.dbgCam = { eye: [e[0], e[1], e[2]], target: [e[0] + fwd[0] * 100, e[1] + fwd[1] * 100, e[2] + fwd[2] * 100],
+             fov: photoCam.fov, far: gfx.isMobile ? 1100 : 2500, fog: 1.0 };   // not 8000 — a huge far plane wrecks depth precision → z-fighting/flicker
+}
+// Free-cam is a sub-mode OF the lighting tuner: the tuner panel stays open (docked
+// right) so sliders can be adjusted while the camera flies, and the effect is seen
+// from any angle. Only the race HUD is hidden (body.photo-mode) to declutter.
+function enterPhotoMode() {
+  if (G.photoMode) return;
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  G.photoMode = true;
+  // Lock resolution while flying (no governor stepping — every scale change
+  // reallocates the whole post chain). The previous scale is restored on exit
+  // (NOT a snap to full res, which was a reallocation burst at the worst moment).
+  // Follows the user's RESOLUTION setting as-is — no forced downgrade; the
+  // far-plane clamp in updatePhotoCam is what bounds draw volume/GPU cost.
+  PerfGov.setAutoRes(false);
+  G._photoPrevScale = gfx.getRenderScale ? gfx.getRenderScale() : 1;
+  initPhotoCam();
+  document.body.classList.add("photo-mode");
+  $("photo-controls").hidden = false;
+  const t = $("pc-toggle"); if (t) { t.classList.add("on"); t.innerHTML = "● FREE CAMERA"; }
+  window.addEventListener("keydown", photoKeyHandler, true);
+  window.addEventListener("keyup", photoKeyHandler, true);
+}
+function exitPhotoMode() {
+  if (!G.photoMode) return;
+  G.photoMode = false;
+  G.dbgCam = null;                          // hand the game camera back
+  document.body.classList.remove("photo-mode", "pc-nopanel", "pc-uihidden");
+  $("photo-controls").hidden = true;
+  $("lighting-inner").hidden = false;     // un-hide the tuner if it was tucked away
+  const pb = $("pc-panel"); if (pb) pb.textContent = "HIDE PANEL";
+  const t = $("pc-toggle"); if (t) { t.classList.remove("on"); t.innerHTML = "📷 FREE CAMERA"; }
+  window.removeEventListener("keydown", photoKeyHandler, true);
+  window.removeEventListener("keyup", photoKeyHandler, true);
+  // Restore the pre-photo scale, then re-apply the user's RESOLUTION setting
+  // (fixed modes re-pin their scale + keep the governor off; AUTO re-enables it).
+  if (gfx.setRenderScale) gfx.setRenderScale(G._photoPrevScale || 1);
+  applyResMode();
+}
+// Temporarily tuck the tuner panel away for an unobstructed scene, still flying.
+// With the panel gone the right half of the screen frees up, so body.pc-nopanel
+// relocates the LOOK stick + up/down column to the bottom-right corner (classic
+// dual-stick ergonomics); showing the panel again moves them back left.
+function togglePhotoPanel() {
+  const p = $("lighting-inner"); if (!p) return;
+  const hide = !p.hidden;
+  p.hidden = hide;
+  document.body.classList.toggle("pc-nopanel", hide);
+  const pb = $("pc-panel"); if (pb) pb.textContent = hide ? "SHOW PANEL" : "HIDE PANEL";
+  if (G.soundOn) GameAudio.uiTick();
+}
+// Photo-mode HIDE HUD: hide every control (bar, sticks, tuner panel) for a
+// clean frame; the tiny top-right eye brings it all back. Keys keep flying.
+function setPhotoUiHidden(hide) {
+  document.body.classList.toggle("pc-uihidden", hide);
+  if (G.soundOn) GameAudio.uiTick();
+}
+// Dedicated key handler (not Input.onKey) so photo controls never touch driving.
+function photoKeyHandler(e) {
+  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  if (e.code !== "Escape" && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;  // typing in a slider
+  const down = e.type === "keydown";
+  let hit = true;
+  switch (e.code) {
+    case "KeyW": photoKeys.w = down; break;
+    case "KeyS": photoKeys.s = down; break;
+    case "KeyA": photoKeys.a = down; break;
+    case "KeyD": photoKeys.d = down; break;
+    case "KeyR": case "Space": photoKeys.up = down; break;
+    case "KeyF": photoKeys.dn = down; break;
+    case "ArrowUp": photoKeys.pu = down; break;
+    case "ArrowDown": photoKeys.pd = down; break;
+    case "ArrowLeft": photoKeys.yl = down; break;
+    case "ArrowRight": photoKeys.yr = down; break;
+    case "ShiftLeft": case "ShiftRight": photoKeys.boost = down; break;
+    case "Escape": if (down) setPaused(false); hit = true; break;
+    default: hit = false;
+  }
+  if (hit) { e.preventDefault(); e.stopPropagation(); }
+}
+// Virtual thumbstick: pointer offset from centre → normalised (−1..1) vector.
+function wirePhotoStick(id, vec) {
+  const el = $(id); if (!el) return;
+  const nub = el.querySelector(".pc-nub");
+  let pid = null;
+  const set = (cx, cy) => {
+    const r = el.getBoundingClientRect();
+    const rad = r.width / 2;
+    let dx = (cx - (r.left + rad)) / rad, dy = (cy - (r.top + rad)) / rad;
+    const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+    vec.x = dx; vec.y = dy;
+    if (nub) nub.style.transform = "translate(" + (dx * rad * 0.6) + "px," + (dy * rad * 0.6) + "px)";
+  };
+  const end = () => { vec.x = 0; vec.y = 0; pid = null; if (nub) nub.style.transform = "translate(0,0)"; };
+  el.addEventListener("pointerdown", (e) => { pid = e.pointerId; el.setPointerCapture(pid); set(e.clientX, e.clientY); e.preventDefault(); });
+  el.addEventListener("pointermove", (e) => { if (e.pointerId === pid) { set(e.clientX, e.clientY); e.preventDefault(); } });
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+}
+function wirePhotoHold(id, on, off) {
+  const el = $(id); if (!el) return;
+  el.addEventListener("pointerdown", (e) => { on(); e.preventDefault(); });
+  el.addEventListener("pointerup", off);
+  el.addEventListener("pointercancel", off);
+  el.addEventListener("pointerleave", off);
+}
+wirePhotoStick("pc-move", photoMove);
+wirePhotoStick("pc-look", photoLook);
+wirePhotoHold("pc-up", () => G.photoAlt = 1, () => G.photoAlt = 0);
+wirePhotoHold("pc-down", () => G.photoAlt = -1, () => G.photoAlt = 0);
+// Drag anywhere on the scene (outside the sticks) to look — mouse or a spare finger.
+{
+  const canvas = $("game");
+  if (canvas) {
+    canvas.addEventListener("pointerdown", (e) => {
+      if (!G.photoMode) return;
+      photoMouse.drag = true; photoMouse.px = e.clientX; photoMouse.py = e.clientY;
+    });
+    window.addEventListener("pointermove", (e) => {
+      if (!G.photoMode || !photoMouse.drag) return;
+      photoMouse.dx += e.clientX - photoMouse.px; photoMouse.dy += e.clientY - photoMouse.py;
+      photoMouse.px = e.clientX; photoMouse.py = e.clientY;
+    });
+    window.addEventListener("pointerup", () => { photoMouse.drag = false; });
+  }
+}
+$("pc-toggle").onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.photoMode ? exitPhotoMode() : enterPhotoMode(); };
+$("pc-exit").onclick = () => { if (G.soundOn) GameAudio.uiTick(); exitPhotoMode(); };
+$("pc-panel").onclick = togglePhotoPanel;
+$("pc-hud").onclick = () => setPhotoUiHidden(true);
+$("pc-restore").onclick = () => setPhotoUiHidden(false);
+$("pc-fov").oninput = (e) => { photoCam.fov = +e.target.value; };
+$("lt-help-on").onchange = (e) => {
+  document.getElementById("lighting-inner").classList.toggle("lt-show-help", e.target.checked);
+};
+$("lt-reset").onclick = () => {
+  // Drop this condition's LOCAL edits so it falls back to the shipped file /
+  // defaults (leaves other conditions and the file untouched).
+  const key = ltKey();
+  if (key && G._ltStore[key]) delete G._ltStore[key];
+  persistLightTune();
+  applyLightTune();
+  refreshLightTunePanel();
+  $("lt-json").hidden = true;
+};
+$("lt-copy").onclick = () => {
+  // Export the FULL set (shipped file merged with every local edit, local
+  // winning) as the paste-ready body for js/light-presets.js — replace that
+  // file's `window.LightPresets = {…}` literal with this to bake it in.
+  const merged = {};
+  const F = window.LightPresets || {};
+  for (const k in F) merged[k] = Object.assign({}, F[k]);
+  for (const k in G._ltStore) merged[k] = Object.assign(merged[k] || {}, G._ltStore[k]);
+  // Drop any now-empty condition maps for a clean file.
+  for (const k in merged) if (!Object.keys(merged[k]).length) delete merged[k];
+  const json = "window.LightPresets = " + JSON.stringify(merged, null, 2) + ";";
+  const ta = $("lt-json");
+  ta.value = json; ta.hidden = false;
+  ta.focus(); ta.select(); ta.setSelectionRange(0, json.length);   // iOS needs the explicit range
+  const btn = $("lt-copy");
+  const flash = (ok) => {
+    btn.textContent = ok ? "COPIED ✓" : "SELECT & COPY ↑";
+    setTimeout(() => { btn.textContent = "COPY VALUES"; }, 1800);
+  };
+  // Auto-copy: prefer the async Clipboard API (the button click is the required
+  // user gesture); fall back to execCommand on the selected textarea for older
+  // mobile / installed-PWA webviews where navigator.clipboard is unavailable or
+  // rejects. The textarea stays visible either way as a manual fallback.
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(json).then(() => flash(true), () => {
+      let ok = false; try { ok = document.execCommand && document.execCommand("copy"); } catch (e) {}
+      flash(ok);
+    });
+  } else {
+    let ok = false; try { ok = document.execCommand && document.execCommand("copy"); } catch (e) {}
+    flash(ok);
+  }
+};
+return { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode };
+}
+
+return { create };
+})();

@@ -6,12 +6,13 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const TRACK_FILE = path.join(ROOT, "js/tracks/albert_park.js");
+const TRACK_REL = (await import("node:module")).createRequire(import.meta.url)("../tools/manifest.cjs").circuitPath("albert_park");
+const TRACK_FILE = path.join(ROOT, TRACK_REL);
 
 function loadDefinition() {
   const window = { TrackDefs: [] };
   vm.runInNewContext(fs.readFileSync(TRACK_FILE, "utf8"), { window }, {
-    filename: "js/tracks/albert_park.js",
+    filename: TRACK_REL,
   });
   return window.TrackDefs[0];
 }

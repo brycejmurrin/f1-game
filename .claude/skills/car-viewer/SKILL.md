@@ -1,6 +1,6 @@
 ---
 name: car-viewer
-description: Inspect the procedural F1 car in ISOLATION (no track) from any angle, distance, livery, parts spec, and lighting — a fast standalone "photo studio" for verifying js/car3d.js, js/liverytex.js, js/liveries.js, or js/parts.js changes. Renders the real GLX-shaded car + LiveryTex decals on a plain backdrop, with controllable point-light rigs for reflection/material tests. Triggers - "show me the car", "render the <team> livery", "how does the new wing/gearbox/brake look", "check the sponsors/number on the car", "test the reflections", "car from the front/side/rear", "does the accent colour read".
+description: Inspect the procedural F1 car in ISOLATION (no track) from any angle, distance, livery, parts spec, and lighting — a fast standalone "photo studio" for verifying js/car/car3d.js, js/car/liverytex.js, js/car/liveries.js, or js/car/parts.js changes. Renders the real GLX-shaded car + LiveryTex decals on a plain backdrop, with controllable point-light rigs for reflection/material tests. Triggers - "show me the car", "render the <team> livery", "how does the new wing/gearbox/brake look", "check the sponsors/number on the car", "test the reflections", "car from the front/side/rear", "does the accent colour read".
 ---
 
 # Car viewer — isolated car photo studio
@@ -58,7 +58,7 @@ az/el/dist per category. `--preset=list` prints all names.
 - `engine` `brakes` `tyres` `ers` `gearbox` — a close, part-focused shot (main +
   ±30° flanking angles), aimed via a `look` target offset at the actual part
   instead of the car's centre (front axle z≈+1.7 / rear axle z≈-1.6, see
-  `js/car3d.js` `addWheel` calls) so it fills the frame instead of the whole car.
+  `js/car/car3d.js` `addWheel` calls) so it fills the frame instead of the whole car.
   `ers`/`fuel` default to dusk to show their glow.
 - `suspension` `fuel` — kept at a WIDER contextual distance on purpose: the
   wishbones are thin/dark and sit inboard of the (much bigger) wheel, and the
@@ -84,7 +84,7 @@ node tools/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,nig
 ### Options
 - Car: `--team=` `--livery=` `--num=` and any part to inspect its geometry:
   `--engine= --aero= --brakes= --gearbox= --ers= --tyres= --suspension= --fuel=`
-  (option ids are in `js/parts.js`).
+  (option ids are in `js/car/parts.js`).
 - Lighting: `--tod=day|dusk|dawn|night|void` · `--rig=studio|3point|rim|topdown|none`
   · `--intensity=<n>` · `--exp=<n>` (exposure/brightness) · `--bg=RRGGBB`.
 - Reflection: `--refl=<0..1>` scales EVERYTHING shine-related together — roughness,

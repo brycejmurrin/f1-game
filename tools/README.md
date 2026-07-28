@@ -6,7 +6,9 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 
 | Tool | Does | Paired skill |
 |---|---|---|
-| **verify-track.cjs** | Headless build guard — loads the track defs + engine in a VM, runs `buildRoad/Terrain/Props/Gate`, fails on any THROW. `verify-track.cjs <id>` or `--all`. The fast pre-push check for any `js/tracks/*` edit. | debug-tracks |
+| **verify-track.cjs** | Headless build guard — loads the track defs + engine in a VM (file list from `manifest.cjs` `TRACK_VM`), runs `buildRoad/Terrain/Props/Gate`, fails on any THROW. `verify-track.cjs <id>` or `--all`. The fast pre-push check for any `js/circuits/*` or `js/track/*` edit. | debug-tracks |
+| **manifest.cjs** | The **load-order single source of truth** — every `js/` file in dependency order, `HARD_EDGES` (eval-time load dependencies), and `TRACK_VM` (the subset verify-track/VM tests load). `index.html` script tags must match it; `tests/load-order.test.mjs` (`npm run test:tooling`) asserts they do. Adding a file = script tag + manifest entry. | check-changes |
+| **extract-module.mjs** | Assists further `game.js` extractions — moves a block into a new `js/game/` module with the `Module.create(G)` boilerplate and updates the manifest + script tags. | — |
 | **apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON. `apex-eval.mjs '__apex.corners()'`. | playwright-probe |
 | **apex-capture.mjs** | Parallel headless screenshot capture across cameras/tracks/modes for visual validation. Default output lives under `scratch/captures/apex-capture/<purpose>/`. | playwright-probe |
 | **motion-capture.mjs** | Capture RENDERED MOTION (screenshots can't — headless rAF is frozen at 0 fps). Records a driven clip via `recordVideo` (which ticks the loop), extracts frames, scores per-frame flicker. For temporal artifacts (z-fight/clipping flicker, shadow crawl, pop-in) and A/B-verifying a renderer fix. Default output: `scratch/captures/motion-capture/<track>/`. `motion-capture.mjs <track> [sec] [speed]`. | motion-capture |
@@ -16,7 +18,7 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **check-bank.mjs**, **check-grip.mjs**, **check-roadfollow.mjs**, **check-steer.mjs** | Physics stability probes — verify no-NaN / forward-motion / banking grip / steering authority via the headless loop. | tune-physics |
 | **audio-test.cjs** | Objective engine-audio pitch test (we can't listen headless). | audio-debug |
 | **bake-elevation.mjs** | Offline elevation baker — precompute per-track elevation profiles. | new-track |
-| **gltf-selftest.mjs** | Self-test for the `js/gltf.js` GLB loader (Node ESM, no deps). | webgl-debug |
+| **gltf-selftest.mjs** | Self-test for the `js/render/gltf.js` GLB loader (Node ESM, no deps). | webgl-debug |
 | **quick-validate.mjs** | Fast refactor gate — boots the game headless ONCE and probes critical paths (page loads clean, `__apex`/globals exist, race starts, physics steps, telemetry/lighting respond) in ~30-60 s, no test-runner overhead. `quick-validate.mjs [port]`. | — |
 | **aerial-survey.mjs** | Top-down + high-oblique aerial survey of ONE circuit — spots floor gaps, floating models, terrain holes, props off the ground. `TRACK=monaco PORT=3510 aerial-survey.mjs [label]` → `scratch/captures/aerial-survey/<track>/`. | survey-track |
 | **measure-props-over-road.mjs** | Measures prop geometry on/above the racing line; JSON report, `--shots` writes PNGs to `artifacts/tmp/`. `TRACK=redbull PORT=3471 measure-props-over-road.mjs [--shots]`. | scenery-dress |

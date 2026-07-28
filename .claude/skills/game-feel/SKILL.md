@@ -176,7 +176,7 @@ The snippets above are GDScript/C#, but every pattern maps onto this codebase:
 - **Feedback events here** → collisions, kerb strikes, wall scrapes, gear
   shifts, overtakes, ERS deploy, lap/sector splits — wire bundles where
   `GameAudio` sfx already fire.
-- **Audio layer** → `js/audio.js` WebAudio synth; see **audio-debug**.
+- **Audio layer** → `js/game/audio.js` WebAudio synth; see **audio-debug**.
 - **Any dt/force change must not destabilize physics** → A/B with
   **tune-physics** (`obs/act/reset` loop) before shipping.
 - **Accessibility** → expose a "reduce shake/flash" toggle like the existing

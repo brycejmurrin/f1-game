@@ -1,6 +1,7 @@
 # Debug & test hooks — `window.__apex`
 
-`js/game.js` exposes a `window.__apex` object: a scripting API for driving the
+`js/game/apex.js` (`ApexApi`, instantiated by `js/game.js` with the `G` ctx
+façade) exposes a `window.__apex` object: a scripting API for driving the
 game from the devtools console or a headless (Playwright) harness. It lets you
 jump into any circuit, position the car, frame the camera, pump the physics at a
 fixed timestep, set up collision/AI scenarios, and read telemetry — without
@@ -427,7 +428,7 @@ screenshot — avoids calling `info()`, `camera()`, and `probe()` separately.
 ### `corners() → [number, …]`
 Lap-fractions of **curvature-peak** apexes (local maxima of `|curvature|`). Handy
 for parking at sharp bends. This is **not** the curated FIA turn list — that lives
-on `info().turns` / `track.def.turns` from `js/circuit-markings.js`.
+on `info().turns` / `track.def.turns` from `js/track/markings.js`.
 
 ### `nodeAt(frac) → {k, frac, x, y, z, tx, tz, rx, rz} | null`
 World position and orientation of the track node closest to lap-fraction `frac`

@@ -16,14 +16,14 @@ const vm = require("vm");
 
 const ROOT = path.resolve(__dirname, "..");
 
-// Engine sources, in load order. tracks.js LAST — it destructures TrackGeom at
-// load time, so the emitter wrappers below must already be installed.
-const PRELUDE = [
-  "js/circuits.js", "js/track-geom.js", "js/track-scenery-data.js",
-  "js/circuit-markings.js", "js/track-space.js", "js/track-surface.js",
-  "js/track-models.js", "js/scenery-themes.js", "js/landmark-kit.js",
-  "js/circuit-kit.js",
-];
+// Engine load order comes from tools/manifest.cjs (TRACK_VM) — the same source
+// of truth the load-order test asserts index.html against, so a file added to
+// the engine cannot silently go missing here. "@circuits" expands to every
+// circuit definition; js/track/tracks.js runs LAST because it destructures
+// TrackGeom at load time and the emitter wrappers must already be installed.
+const MANIFEST = require("./manifest.cjs");
+const TRACKS_ENTRY = "js/track/tracks.js";
+const PRELUDE = MANIFEST.TRACK_VM.filter((e) => e !== "@circuits" && e !== TRACKS_ENTRY);
 
 // Emitters that name a primitive but never the model that wanted one. The
 // reporters walk outward past these to the first frame that names a real
@@ -125,11 +125,11 @@ function buildContext(opts) {
     };
   }
   ctx.__prims = prims;
-  for (const f of fs.readdirSync(path.join(ROOT, "js/tracks"))
+  for (const f of fs.readdirSync(path.join(ROOT, MANIFEST.CIRCUITS_DIR))
                     .filter((f) => f.endsWith(".js")).sort()) {
-    runFile(path.join("js/tracks", f));
+    runFile(path.join(MANIFEST.CIRCUITS_DIR, f));
   }
-  runFile("js/tracks.js");
+  runFile(TRACKS_ENTRY);
 
   if (!ctx.Tracks || !ctx.Tracks.LIST) throw new Error("Tracks.LIST missing");
   return {

@@ -6,6 +6,8 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const MANIFEST = (await import("node:module")).createRequire(import.meta.url)("../tools/manifest.cjs");
+const P = MANIFEST.PATHS;
 
 function loadGlobal(file, name) {
   const sandbox = { console, Math, Array, Object, Number, Float32Array, Map, Set };
@@ -16,7 +18,7 @@ function loadGlobal(file, name) {
 }
 
 test("TrackSpace converts source and racing fractions reversibly", () => {
-  const TrackSpace = loadGlobal("js/track-space.js", "TrackSpace");
+  const TrackSpace = loadGlobal(P.TRACK_SPACE, "TrackSpace");
   for (const def of [{ startFrac: 0.25 }, { startFrac: 0.25, reverse: true }]) {
     for (const source of [0, 0.1, 0.25, 0.75, 1.2, -0.1]) {
       const racing = TrackSpace.toRacingFrac(def, source);
@@ -29,7 +31,7 @@ test("TrackSpace converts source and racing fractions reversibly", () => {
 });
 
 test("TrackSpace converts nodes, samples source data, and preserves legacy scenery", () => {
-  const TrackSpace = loadGlobal("js/track-space.js", "TrackSpace");
+  const TrackSpace = loadGlobal(P.TRACK_SPACE, "TrackSpace");
   const def = { startFrac: 0.25, reverse: true };
   assert.equal(TrackSpace.sourceNodeToRacing(def, 25, 100), 0);
   assert.equal(TrackSpace.racingNodeToSource(def, 0, 100), 25);
@@ -46,20 +48,29 @@ test("TrackSpace converts nodes, samples source data, and preserves legacy scene
 });
 
 test("Miami declares explicit racing scenery and source-mapped Turnpike elevation", () => {
-  const TrackSpace = loadGlobal("js/track-space.js", "TrackSpace");
-  const [miami] = loadGlobal("js/tracks/miami.js", "TrackDefs");
+  const TrackSpace = loadGlobal(P.TRACK_SPACE, "TrackSpace");
+  const [miami] = loadGlobal(MANIFEST.circuitPath("miami"), "TrackDefs");
   assert.equal(miami.id, "miami");
   assert.equal(miami.sceneryCoordinates, "racing");
   assert.equal(miami.flatTerrain, true);
   assert.equal(miami.terrainOuter, 90);
   assert.ok(Math.abs(TrackSpace.toRacingFrac(miami, miami.elevations[0].s) - 0.66) < 1e-12);
-  assert.ok(miami.dressingExclusions.some((rule) =>
-    rule.s0 === 0 && rule.s1 === 1 &&
-    rule.kinds.includes("city") && rule.kinds.includes("foliage")));
+  // Curated hero zones only (eb0b6b3 narrowed the old full-lap exclusion):
+  // Hard Rock bowl horizon, marina, and beach club.
+  const cityFoliage = Array.from(miami.dressingExclusions) // host-realm copy for deepEqual
+    .filter((rule) => rule.kinds && rule.kinds.includes("city") && rule.kinds.includes("foliage"))
+    .map(({ s0, s1, side }) => ({ s0, s1, side }));
+  assert.deepEqual(cityFoliage, [
+    { s0: 0.94, s1: 0.08, side: undefined },
+    { s0: 0.26, s1: 0.38, side: 1 },
+    { s0: 0.60, s1: 0.72, side: undefined },
+  ]);
+  assert.ok(!miami.dressingExclusions.some((rule) => rule.s0 === 0 && rule.s1 === 1),
+    "full-lap dressing exclusions must stay gone (scenery-density regression)");
 });
 
 test("TrackSurface creates monotonic rails and one terrain/grounding height contract", () => {
-  const TrackSurface = loadGlobal("js/track-surface.js", "TrackSurface");
+  const TrackSurface = loadGlobal(P.TRACK_SURFACE, "TrackSurface");
   const track = {
     n: 3, total: 12,
     py: new Float32Array([10, 5, 8]),
@@ -79,7 +90,7 @@ test("TrackSurface creates monotonic rails and one terrain/grounding height cont
 });
 
 test("TrackModels groups are atomic and invalid or unsafe models are diagnosed", () => {
-  const TrackModels = loadGlobal("js/track-models.js", "TrackModels");
+  const TrackModels = loadGlobal(P.TRACK_MODELS, "TrackModels");
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const water = { pos: [], nrm: [], col: [], idx: [] };
   const api = TrackModels.create({
@@ -115,7 +126,7 @@ test("TrackModels groups are atomic and invalid or unsafe models are diagnosed",
 });
 
 function budgetFixture() {
-  const TrackModels = loadGlobal("js/track-models.js", "TrackModels");
+  const TrackModels = loadGlobal(P.TRACK_MODELS, "TrackModels");
   const out = {
     pos: [9, 9, 9],
     nrm: [0, 1, 0],
@@ -196,7 +207,7 @@ test("TrackModels rejects invalid configured vertex budgets without committing",
 });
 
 test("TrackModels ground helpers sample terrain instead of one endpoint", () => {
-  const TrackModels = loadGlobal("js/track-models.js", "TrackModels");
+  const TrackModels = loadGlobal(P.TRACK_MODELS, "TrackModels");
   const emitted = [];
   const api = TrackModels.create({
     out: { pos: [], nrm: [], col: [], idx: [] },
@@ -212,7 +223,7 @@ test("TrackModels ground helpers sample terrain instead of one endpoint", () => 
 });
 
 test("TrackModels validates complete finite mesh buffers", () => {
-  const TrackModels = loadGlobal("js/track-models.js", "TrackModels");
+  const TrackModels = loadGlobal(P.TRACK_MODELS, "TrackModels");
   assert.equal(TrackModels.validateGeometry({
     pos: [0, 0, 0], nrm: [0, 1, 0], col: [1, 1, 1], idx: [0],
   }).ok, true);

@@ -1,11 +1,13 @@
 ---
 name: scenery-dress
-description: Write or edit a track's scenery(api) callback in js/tracks/<id>.js — the per-circuit prop dressing (trees, buildings, grandstands, barriers, mountains, billboards, floodlights). Covers the placement model, the composite-model helpers, the on-track rejection guard, terrain anchoring, the vertex budget, and common failure modes. Use for "add buildings to Monaco", "make Spa's forest denser", "the trees are floating", "dress this circuit".
+description: Write or edit a track's scenery(api) callback in js/circuits/<id>.js — the per-circuit prop dressing (trees, buildings, grandstands, barriers, mountains, billboards, floodlights). Covers the placement model, the composite-model helpers, the on-track rejection guard, terrain anchoring, the vertex budget, and common failure modes. Use for "add buildings to Monaco", "make Spa's forest denser", "the trees are floating", "dress this circuit".
 ---
 
 # Dress a circuit's scenery
 
-`buildProps` in `js/tracks.js` calls each track's `def.scenery(api)` to lay down
+`buildProps` (the `js/track/scenery-*.js` modules — nature/city/structures/identity,
+orchestrated by `js/track/tracks.js`; the 84-member `api` surface is frozen by
+`tests/scenery-api-contract.test.mjs`) calls each track's `def.scenery(api)` to lay down
 3D props, then merges everything into one mesh. The full reference is
 `docs/SCENERY-API.md` — **read it before non-trivial work**. This skill is the
 working summary.
@@ -54,7 +56,7 @@ scenery: function (api) {
 
 - **On-track rejection guard.** Every primitive emitter (`addBox`/`addCyl`/…) is
   wrapped in a Minkowski test against the road half-width at each node (`rejBox`/
-  `onRoadHit` in `js/tracks.js`). If a prop's **full oriented footprint** covers
+  `onRoadHit` in the `js/track/` scenery modules). If a prop's **full oriented footprint** covers
   tarmac at **any** node it rises above, the **entire shape is dropped** (logged as
   `[scenery] ... SUPPRESSED at k=...`). So props never half-clip the track — but a
   too-close prop silently vanishes. If something you placed isn't showing, check

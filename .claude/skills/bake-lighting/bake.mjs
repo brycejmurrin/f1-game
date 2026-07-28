@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Bake copied LIGHTING TUNER settings into js/light-presets.js and bump the
+// Bake copied LIGHTING TUNER settings into js/game/light-presets.js and bump the
 // cache version — the "apply" step of the in-game tuner's COPY VALUES export.
 //
 // Usage:
@@ -10,7 +10,7 @@
 // bare `{…}` object. The export is strict JSON; hand-edited JS object literals
 // (unquoted keys) are tolerated via a fallback. Validates shape (keys are
 // "track|tod|weather" or "*", values are {knobId:number}) before writing, then
-// replaces the assignment in js/light-presets.js and increments ?v= across
+// replaces the assignment in js/game/light-presets.js and increments ?v= across
 // index.html + version.json. Does NOT commit — the skill drives review + push.
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -51,14 +51,14 @@ for (const [k, v] of Object.entries(obj)) {
   }
 }
 
-// Replace the assignment in js/light-presets.js, preserving the file header.
-const lpPath = ROOT + "js/light-presets.js";
+// Replace the assignment in js/game/light-presets.js, preserving the file header.
+const lpPath = ROOT + "js/game/light-presets.js";
 let src = readFileSync(lpPath, "utf8");
 // Anchor to line-start so the real assignment is matched, NOT the
 // `//   window.LightPresets = {…}` example inside the header comment (which is
 // indented behind `//`). Multiline flag: `^window…` and the closing `^};`.
 const re = /^window\.LightPresets\s*=\s*\{[\s\S]*?^\};/m;
-if (!re.test(src)) { console.error("Could not find the window.LightPresets assignment in js/light-presets.js"); process.exit(1); }
+if (!re.test(src)) { console.error("Could not find the window.LightPresets assignment in js/game/light-presets.js"); process.exit(1); }
 src = src.replace(re, "window.LightPresets = " + JSON.stringify(obj, null, 2) + ";");
 writeFileSync(lpPath, src);
 
@@ -72,6 +72,6 @@ idx = idx.replace(/\?v=\d+/g, "?v=" + next);
 writeFileSync(idxPath, idx);
 writeFileSync(ROOT + "version.json", `{ "build": ${next} }\n`);
 
-console.log(`Baked ${Object.keys(obj).length} profile(s) / ${nKnobs} value(s) into js/light-presets.js`);
+console.log(`Baked ${Object.keys(obj).length} profile(s) / ${nKnobs} value(s) into js/game/light-presets.js`);
 console.log(`Cache bumped to ?v=${next} (index.html + version.json).`);
 console.log("Next: review `git diff`, then commit + push (the bake-lighting skill drives this).");

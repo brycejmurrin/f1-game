@@ -77,10 +77,12 @@ function buildContext(opts) {
     vm.runInContext(src.replace(/^const\b/gm, "var"), ctx, { filename: relPath });
   }
 
-  for (const f of ["js/circuits.js", "js/track-geom.js", "js/track-scenery-data.js",
-                   "js/circuit-markings.js", "js/track-space.js", "js/track-surface.js",
-                   "js/track-models.js", "js/scenery-themes.js", "js/landmark-kit.js",
-                   "js/circuit-kit.js"]) runFile(f);
+  // Load list comes from tools/manifest.cjs (TRACK_VM) — same source of truth
+  // as verify-track.cjs. Everything before the instrumentation point (the
+  // emitter wrappers below must install before tracks.js runs).
+  const MANIFEST = require("./manifest.cjs");
+  const PRE = MANIFEST.TRACK_VM.slice(0, MANIFEST.TRACK_VM.indexOf("@circuits"));
+  for (const f of PRE) runFile(f);
 
   // Instrument the geometry emitters so every flagged cluster can name the
   // primitive that produced it. tracks.js destructures TrackGeom at load time,
@@ -131,11 +133,11 @@ function buildContext(opts) {
     };
   }
   ctx.__prims = prims;
-  for (const f of fs.readdirSync(path.join(ROOT, "js/tracks"))
+  for (const f of fs.readdirSync(path.join(ROOT, MANIFEST.CIRCUITS_DIR))
                     .filter((f) => f.endsWith(".js")).sort()) {
-    runFile(path.join("js/tracks", f));
+    runFile(path.join(MANIFEST.CIRCUITS_DIR, f));
   }
-  runFile("js/tracks.js");
+  runFile("js/track/tracks.js");
 
   if (!ctx.Tracks || !ctx.Tracks.LIST) throw new Error("Tracks.LIST missing");
   return { Tracks: ctx.Tracks, TrackSurface: ctx.TrackSurface, TrackGeom: ctx.TrackGeom, prims };

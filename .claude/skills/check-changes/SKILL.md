@@ -17,16 +17,18 @@ git status --short && git diff --stat
 
 | You changed… | Run |
 |---|---|
-| `js/tracks/<id>.js` (geometry/metadata) | `node tools/verify-track.cjs <id>` → `npm run test:circuit` → `npm run test:barriers` |
+| `js/circuits/<id>.js` (geometry/metadata) | `node tools/verify-track.cjs <id>` → `npm run test:circuit` → `npm run test:barriers` |
 | a track's `scenery(...)` | `node tools/verify-track.cjs <id>` → (full suite's `terrain-over-road.spec.js` for terrain) |
-| `js/tracks.js` (engine) or many tracks | `node tools/verify-track.cjs --all` (all 24 circuits, ~30 s) → `npm run test:circuit` |
+| `js/track/*` (engine) or many tracks | `node tools/verify-track.cjs --all` (all 24 circuits, ~30 s) → `npm run test:circuit` |
+| `js/track/scenery-*.js` (buildProps split) | `node tools/verify-track.cjs --all` → `npm run test:tooling` (scenery-api contract) → `npm run test:scenery` |
+| added/renamed a JS file, or touched `<script>` order | update `tools/manifest.cjs` too, then `npm run test:tooling` (load-order) + `npm run test:smoke` |
 | collision / drift / off-track only | `npm run test:collision` (narrower than `test:behaviour`) |
 | `js/game.js` physics/AI | `npm run test:physics` + `npm run test:behaviour` (+ `test:steering` if steering) |
-| `js/game.js` `__apex` API | `npm run test:api` (dev-tools + headless + obs/act edge + new-hooks) |
+| `js/game/apex.js` (`__apex` API) | `npm run test:api` (dev-tools + headless + obs/act edge + new-hooks) |
 | headless loop only (fast) | `npm run test:headless` (headless-api + obs-act-edge, no render) |
-| `js/parts.js` | `npm run test:parts` |
-| `js/input.js` / steering modes | `npm run test:steering` |
-| `js/glx.js` / lighting / `css/` / UI DOM | `npm run test:ui` (slow) and/or `npm run test:visual` |
+| `js/car/parts.js` | `npm run test:parts` |
+| `js/game/input.js` / steering modes | `npm run test:steering` |
+| `js/render/glx.js` / lighting / `css/` / UI DOM | `npm run test:ui` (slow) and/or `npm run test:visual` |
 | game modes (season / time-trial) | `npm run test:modes` |
 | broad / unsure | `npm run test:fast` (smoke + api + collision + parts, ~3 min) |
 
@@ -36,7 +38,7 @@ git status --short && git diff --stat
    (`FAIL <id>: <msg>` means the game would strand on the menu — non-negotiable):
    ```sh
    node tools/verify-track.cjs <id>     # one circuit
-   node tools/verify-track.cjs --all    # all 24 (tracks.js engine edits)
+   node tools/verify-track.cjs --all    # all 24 (js/track/* engine edits)
    ```
 2. **Cache version bumped — BOTH files?** If you changed any `js/*.js` or
    `css/*.css`, the `?v=N` in `index.html` must be incremented AND
@@ -47,9 +49,10 @@ git status --short && git diff --stat
    # exactly ONE ?v= line, and version.json build == that N
    ```
    Forgetting this ships a change users never see (stale CDN/browser cache).
-3. **Smoke** if you touched load order, `index.html`, or a core module:
+3. **Smoke + load order** if you touched load order, `index.html`, or a core
+   module (`index.html` script tags must match `tools/manifest.cjs`):
    ```sh
-   npm run test:smoke
+   npm run test:tooling && npm run test:smoke
    ```
 
 ## Reading failures (house rule)

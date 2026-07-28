@@ -6,6 +6,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const P = (await import("node:module")).createRequire(import.meta.url)("../tools/manifest.cjs").PATHS;
 function load(file, name, globals = {}) {
   const sandbox = { console, Math, Array, Object, Number, Map, Set, ...globals };
   sandbox.window = sandbox;
@@ -15,7 +16,7 @@ function load(file, name, globals = {}) {
 }
 
 test("SceneryThemes resolves named themes and track overrides", () => {
-  const Themes = load("js/scenery-themes.js", "SceneryThemes");
+  const Themes = load(P.SCENERY_THEMES, "SceneryThemes");
   const theme = Themes.resolve("desert", {
     palette: { accent: [1, 0, 0] },
     budgets: { facility: 12000 },
@@ -28,7 +29,7 @@ test("SceneryThemes resolves named themes and track overrides", () => {
 });
 
 test("SceneryThemes resolves neutral defaults and unknown themes fall back to neutral", () => {
-  const Themes = load("js/scenery-themes.js", "SceneryThemes");
+  const Themes = load(P.SCENERY_THEMES, "SceneryThemes");
   const neutral = Themes.resolve();
   const unknown = Themes.resolve("not-a-theme");
 
@@ -39,14 +40,14 @@ test("SceneryThemes resolves neutral defaults and unknown themes fall back to ne
 });
 
 test("SceneryThemes exposes only the immutable public operations", () => {
-  const Themes = load("js/scenery-themes.js", "SceneryThemes");
+  const Themes = load(P.SCENERY_THEMES, "SceneryThemes");
 
   assert.deepEqual(Object.keys(Themes).sort(), ["resolve", "variant"]);
   assert.equal(Themes.THEMES, undefined);
 });
 
 test("SceneryThemes variant selection is stable and bounded", () => {
-  const Themes = load("js/scenery-themes.js", "SceneryThemes");
+  const Themes = load(P.SCENERY_THEMES, "SceneryThemes");
   const choices = ["flat", "sawtooth", "cantilever"];
   const first = Themes.variant("spa", "pit-roof", 3, choices);
   assert.equal(first, Themes.variant("spa", "pit-roof", 3, choices));
@@ -63,7 +64,7 @@ function landmarkHarness(overrides = {}) {
     };
   }
   Object.assign(primitives, overrides);
-  const LandmarkKit = load("js/landmark-kit.js", "LandmarkKit");
+  const LandmarkKit = load(P.LANDMARK_KIT, "LandmarkKit");
   return { emitted, kit: LandmarkKit.create(primitives) };
 }
 
@@ -296,7 +297,7 @@ function circuitHarness(overrides = {}) {
   if (overrides.models) deps.models = Object.assign(models, overrides.models);
   if (overrides.landmarks)
     deps.landmarks = Object.assign(landmarks, overrides.landmarks);
-  const CircuitKit = load("js/circuit-kit.js", "CircuitKit");
+  const CircuitKit = load(P.CIRCUIT_KIT, "CircuitKit");
   return { calls, kit: CircuitKit.create(deps) };
 }
 
@@ -523,7 +524,7 @@ test("CircuitKit propagates model and landmark helper failures without throwing"
 });
 
 test("CircuitKit fails closed when dependencies are missing or invalid", () => {
-  const CircuitKit = load("js/circuit-kit.js", "CircuitKit");
+  const CircuitKit = load(P.CIRCUIT_KIT, "CircuitKit");
   for (const deps of [undefined, null, {}, { models: {}, landmarks: {}, theme: {} }]) {
     const kit = CircuitKit.create(deps);
     for (const method of CIRCUIT_METHODS) {

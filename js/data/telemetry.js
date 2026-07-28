@@ -178,7 +178,10 @@ const DataTelemetry = (function () {
           loadBtn.style.width = "100%";
           loadBtn.type = "button";
           loadBtn.addEventListener("click", function () {
-            loadTelemetrySet(meta.sessionKey, picked.slice(), detail, syncChips);
+            // Return focus to the primary driver's chip when the popup closes —
+            // the LOAD button itself is destroyed while the popup is open.
+            loadTelemetrySet(meta.sessionKey, picked.slice(), detail, syncChips,
+              chipByNum[picked[0].num]);
           });
           summary.appendChild(loadBtn);
           detail.appendChild(summary);
@@ -259,9 +262,13 @@ const DataTelemetry = (function () {
     if (restore && restore.isConnected && restore.focus) restore.focus();
   }
 
-  function openTelemPopup(tels) {
+  function openTelemPopup(tels, returnFocus) {
     closeTelemPopup();
-    telemReturnFocus = document.activeElement;
+    // Prefer the caller-supplied element (the driver chip): the activeElement
+    // here is usually the LOAD button, which syncChips/clear(detail) already
+    // removed from the DOM, so closing would drop focus onto <body>.
+    telemReturnFocus = (returnFocus && returnFocus.isConnected)
+      ? returnFocus : document.activeElement;
     const overlay = el("div", "dh-tpopup");
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
@@ -328,7 +335,7 @@ const DataTelemetry = (function () {
     }, 0);
   }
 
-  function loadTelemetrySet(sessionKey, picked, detail, syncChips) {
+  function loadTelemetrySet(sessionKey, picked, detail, syncChips, returnFocus) {
     const myGen = ++telGen;
     stopTelAnim();
     if (!picked.length) {
@@ -341,7 +348,7 @@ const DataTelemetry = (function () {
       .then(function (tels) {
         if (myGen !== telGen) return;
         if (syncChips) syncChips();
-        openTelemPopup(tels);
+        openTelemPopup(tels, returnFocus);
       }, function (err) {
         if (myGen !== telGen) return;
         clear(detail);

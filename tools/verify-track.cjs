@@ -19,8 +19,12 @@ const path = require("path");
 const vm   = require("vm");
 
 const ROOT = path.resolve(__dirname, "..");
+const MANIFEST = require("./manifest.cjs");
 
 // --all mode: run verification for every track id found in Tracks.LIST
+if (require.main === module) main();
+
+function main() {
 if (process.argv[2] === "--all") {
   // Extract ids by loading the script once and reading LIST
   let uniqueIds;
@@ -60,6 +64,7 @@ if (process.argv[2] === "--all") {
     if (process.env.VERBOSE) console.error(e.stack);
     process.exit(1);
   }
+}
 }
 
 // ---------------------------------------------------------------------------
@@ -105,29 +110,24 @@ function buildContext() {
     vm.runInContext(patched, ctx, { filename: relPath });
   }
 
-  runFile("js/circuits.js");    // provides CircuitPaths
-  runFile("js/track-geom.js");  // provides TrackGeom (emitters; tracks.js destructures it)
-  runFile("js/track-scenery-data.js");  // provides TrackSceneryData (buildProps tables)
-  runFile("js/circuit-markings.js");    // provides CircuitMarkings (sectors + turn apexes)
-  runFile("js/track-space.js");         // explicit source/racing coordinate transforms
-  runFile("js/track-surface.js");       // shared terrain + grounding profile
-  runFile("js/track-models.js");        // atomic/overhead/water model helpers
-  runFile("js/scenery-themes.js");      // deterministic resolved scenery styles
-  runFile("js/landmark-kit.js");        // staged architectural forms
-  runFile("js/circuit-kit.js");         // complete facilities through TrackModels
-  // Each circuit's definition lives in js/tracks/<id>.js and pushes itself onto
-  // window.TrackDefs; tracks.js reads that list at load time (DEFS = window.
-  // TrackDefs), so these must run BEFORE it — mirroring the <script> order in
-  // index.html. Without them Tracks.LIST is empty and every id is "not found".
-  for (const f of fs.readdirSync(path.join(ROOT, "js/tracks"))
-                    .filter((f) => f.endsWith(".js")).sort()) {
-    runFile(path.join("js/tracks", f));
+  // The load list lives in tools/manifest.cjs (TRACK_VM) — the same source of
+  // truth the load-order test asserts index.html against. "@circuits" expands
+  // to every js/tracks/<id>.js: each pushes itself onto window.TrackDefs, and
+  // tracks.js reads that list at load time, so they must run BEFORE it.
+  for (const entry of MANIFEST.TRACK_VM) {
+    if (entry === "@circuits") {
+      for (const f of fs.readdirSync(path.join(ROOT, MANIFEST.CIRCUITS_DIR))
+                        .filter((f) => f.endsWith(".js")).sort()) {
+        runFile(path.join(MANIFEST.CIRCUITS_DIR, f));
+      }
+    } else {
+      runFile(entry);
+    }
   }
-  runFile("js/tracks.js");    // provides Tracks (reads TrackDefs, depends on GLX)
 
   const Tracks = ctx.Tracks;
   if (!Tracks || !Tracks.LIST) {
-    throw new Error("js/tracks.js did not define global Tracks.LIST");
+    throw new Error("js/track/tracks.js did not define global Tracks.LIST");
   }
   return Tracks;
 }
@@ -179,3 +179,6 @@ function verifyTrack(id) {
 
   console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain}) — ${total} total`);
 }
+
+// Reusable VM harness — consumed by tests (scenery-api-contract, foundation).
+module.exports = { buildContext, loadTrackIds, verifyTrack };

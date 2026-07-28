@@ -10,7 +10,7 @@ RGBA16F HDR scene target, and a tonemap blit to the swapchain. Per the plan
 The backend is now loaded by `index.html` but stays **opt-in**
 (`localStorage apex26.gfxBackend = "webgpu"`); it is feature-detected and inert
 otherwise (`WGX.create()` returns `null` → caller falls back to GLX). Files:
-`js/webgpu/wgx.js`, `js/webgpu/wgsl-chunks.js`. `js/gfx.js` is the seam and
+`js/render/webgpu/wgx.js`, `js/render/webgpu/wgsl-chunks.js`. `js/render/gfx.js` is the seam and
 forwards every method. All pass `node --check`.
 
 ---
@@ -32,7 +32,7 @@ forwards every method. All pass `node --check`.
 ### The shared shader leaves (single-source math)
 
 `WGSLChunks` grew a `brdf` leaf (`D_GGX`/`V_SmithGGX`/`F_Schlick`, verbatim from
-GLX `js/glx.js:107-125`) composed into `LIT`, plus a `BLIT` shader reusing the
+GLX `js/render/glx.js:107-125`) composed into `LIT`, plus a `BLIT` shader reusing the
 existing `tonemap` + `fullscreenTri` leaves. This keeps the microfacet + tonemap
 math in one textual place per the maintainability plan.
 

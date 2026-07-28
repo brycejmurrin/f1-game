@@ -1,10 +1,14 @@
 # Per-circuit scenery API — `scenery(api)`
 
-Each circuit's bespoke surroundings live in `js/tracks/<id>.js` as a
+Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
 `scenery(api)` function (see [ARCHITECTURE.md](ARCHITECTURE.md)). The engine
-(`buildProps` in `js/tracks.js`) calls it once with an `api` of placement
-helpers, geometry primitives, and composite models. Everything emits flat-shaded
-geometry into the track's prop mesh.
+(`buildProps`, split across the `js/track/scenery-nature.js` / `scenery-city.js`
+/ `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
+`js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
+primitives, and composite models. The **84-member `api` surface is a frozen
+contract** — `tests/scenery-api-contract.test.mjs` fails on any rename/removal,
+because every circuit callback destructures from it. Everything emits
+flat-shaded geometry into the track's prop mesh.
 
 The per-circuit visual targets are the briefs in [docs/tracks/](tracks/); this
 is the toolkit for building them. Verify with the `__apex.view` survey camera —
@@ -251,7 +255,7 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 
 ### Atmosphere / colour packs (`api.ATM` / `api.COL`)
 
-Exported from `js/track-scenery-data.js` and exposed on the scenery `api`.
+Exported from `js/track/scenery-data.js` and exposed on the scenery `api`.
 Merge into a track `pal` or use as literal colours:
 
 | Pack | Intent |
@@ -319,7 +323,7 @@ for (const [extra, wMin, hMin, count, col] of [
 ## Workflow per track
 
 1. Read the brief in `docs/tracks/<id>.md` (landmarks by lap-fraction, palette).
-2. Rebuild `scenery(api)` in `js/tracks/<id>.js` using the models above.
+2. Rebuild `scenery(api)` in `js/circuits/<id>.js` using the models above.
 3. Survey it: `__apex.race("<id>")`, then `__apex.view(...)` aerial + trackside.
 4. Iterate, then commit.
 

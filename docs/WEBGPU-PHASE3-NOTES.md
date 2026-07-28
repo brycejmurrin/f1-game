@@ -1,7 +1,7 @@
 # WebGPU migration — Phase 3 notes (sun shadows)
 
-Phase 3 fills the shadow-pass stubs on the WGX backend (`js/webgpu/wgx.js`) and
-the LIT shader (`js/webgpu/wgsl-chunks.js`). Additive and **opt-in**: the WebGPU
+Phase 3 fills the shadow-pass stubs on the WGX backend (`js/render/webgpu/wgx.js`) and
+the LIT shader (`js/render/webgpu/wgsl-chunks.js`). Additive and **opt-in**: the WebGPU
 backend is now loaded by `index.html` but only activates under
 `localStorage apex26.gfxBackend = "webgpu"` (WebGL2/GLX remains the default,
 always-present fallback), so the shipping WebGL2 game is untouched. Both files
@@ -87,5 +87,5 @@ half of every scene — and every shadow caster — would have been clipped.
   active. See `docs/WEBGPU-PHASE4-NOTES.md`.
 - **Phase 5** — instancing (`drawElementsInstanced` equivalent) for lamps/trees/
   wheels/blob-shadows to cut draw calls.
-- **Integration** — wire `js/gfx.js` into `index.html` + the async boot in
+- **Integration** — wire `js/render/gfx.js` into `index.html` + the async boot in
   `js/game.js` (still a deliberate later step; see WEBGPU-PHASE0-NOTES).

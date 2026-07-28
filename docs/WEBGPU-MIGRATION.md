@@ -3,15 +3,15 @@
 > **Status update (superseded in part):** this document is the original
 > *planning* doc. Since it was written, the additive WebGPU backend has been
 > **built and wired in, opt-in, through Phase 4b** — `index.html` loads
-> `js/webgpu/wgsl-chunks.js`, `js/webgpu/wgsl-post.js`, `js/webgpu/wgsl-fx.js`,
-> `js/webgpu/wgx.js` and `js/gfx.js`, and the backend activates only when
+> `js/render/webgpu/wgsl-chunks.js`, `js/render/webgpu/wgsl-post.js`, `js/render/webgpu/wgsl-fx.js`,
+> `js/render/webgpu/wgx.js` and `js/render/gfx.js`, and the backend activates only when
 > `localStorage apex26.gfxBackend = "webgpu"` is set (it falls back to WebGL2/GLX
 > on any failure). WebGL2 remains the default, always-present path. See the
 > `WEBGPU-PHASE0/2/3/4-NOTES.md` for the as-built state. The Phase table and
 > recommendation below are retained as the original design rationale.
 
 This is a concrete, executable plan for adding an *additive* WebGPU rendering
-path alongside the existing WebGL2 renderer (`js/glx.js`), with WebGL2 remaining
+path alongside the existing WebGL2 renderer (`js/render/glx.js`), with WebGL2 remaining
 the default, always-present fallback.
 
 ## TL;DR / recommendation
@@ -19,10 +19,10 @@ the default, always-present fallback.
 WebGPU is **not worth a full port today**, and this document says so up front so
 nobody starts at Phase 2 by accident. The renderer is one ~3,700-line file of
 hand-tuned GLSL that is still under active art-direction churn (see the density
-of tuning comments in `js/glx.js`); maintaining a second, WGSL copy of that
+of tuning comments in `js/render/glx.js`); maintaining a second, WGSL copy of that
 shader with **no build step to keep the two in sync** is the dominant cost and
 the dominant risk. The devices that crash today — older iPhones on the tight
-WKWebView jetsam budget (`MOBILE_TIER`, `js/glx.js:2035-2044`) — get **zero
+WKWebView jetsam budget (`MOBILE_TIER`, `js/render/glx.js:2035-2044`) — get **zero
 benefit**, because WebGPU only shipped in Safari with iOS 26 (fall 2025) and
 those phones can't run it.
 
@@ -43,10 +43,10 @@ for the full argument.
 
 ## Step 1 — Inventory of the current renderer
 
-Everything below lives in `js/glx.js`, a single `"use strict"` IIFE that assigns
+Everything below lives in `js/render/glx.js`, a single `"use strict"` IIFE that assigns
 one global `GLX`. Shaders are GLSL ES 3.00 (`#version 300 es`) inline template
 strings. `js/game.js` is the only consumer; it touches the renderer **only**
-through the ~35 methods on the returned `GLX` object (`js/glx.js:3665-3741`).
+through the ~35 methods on the returned `GLX` object (`js/render/glx.js:3665-3741`).
 That object is the real abstraction boundary and the thing Step 3 formalises.
 
 Two corrections to the top-level `CLAUDE.md` description, verified against the
@@ -54,8 +54,8 @@ code:
 
 - **There are no UBOs.** `CLAUDE.md` says point lights ride in a UBO; they do
   not. The lit shader declares plain uniform arrays `uLightPos[32]` etc.
-  (`js/glx.js:96-102`) uploaded with `uniform3fv`/`uniform1fv` every frame
-  (`js/glx.js:2946-2972`). A grep for `uniformBlockBinding`/`bindBufferBase`/
+  (`js/render/glx.js:96-102`) uploaded with `uniform3fv`/`uniform1fv` every frame
+  (`js/render/glx.js:2946-2972`). A grep for `uniformBlockBinding`/`bindBufferBase`/
   `UNIFORM_BUFFER` returns nothing. This actually *raises* the WebGPU effort,
   because WebGPU has no loose uniforms — everything must become a buffer/bind
   group (see Step 2).
@@ -64,10 +64,12 @@ code:
 
 ### 1a. Shader programs
 
-> **Note (current tree):** the GLSL sources are no longer inline in `js/glx.js` —
-> they now live in `js/shaders/glx-shaders.js` as `GLXShaders.LIT_VS` / `LIT_FS` /
-> `SKY_*` / etc. (pure data, loaded before glx.js). The `file:line` column below is
-> the original inline layout this plan was written against; names are unchanged.
+> **Note (current tree):** the GLSL sources are no longer inline in `js/render/glx.js` —
+> they now live under `js/render/shaders/` (`chunks.js` shared `GLXChunks` +
+> `lit.js`/`sky.js`/`fx.js`/`post.js`, all assembling the `GLXShaders` global) as
+> `GLXShaders.LIT_VS` / `LIT_FS` / `SKY_*` / etc. (pure data, loaded before glx.js).
+> The `file:line` column below is the original inline layout this plan was written
+> against; names are unchanged.
 
 | # | Program | VS / FS (file:line) | Role |
 |---|---------|--------------------|------|
@@ -96,27 +98,27 @@ shaders alone are ~1,240 lines and carry essentially all of the visual identity.
 
 - **GLSL ES 3.00**: `flat` varyings (`flat out float vMat`, 22), `gl_VertexID`
   fullscreen triangles (Sky, Post, 894/1304 — no vertex buffer), `textureLod`,
-  `dFdx`/`dFdy` derivatives (specular AA `js/glx.js:505`, SSAO/SSR normal
+  `dFdx`/`dFdy` derivatives (specular AA `js/render/glx.js:505`, SSAO/SSR normal
   reconstruction), integer bit ops.
-- **`sampler2DShadow`** hardware depth-compare PCF (Lit `js/glx.js:67`, God-ray
-  1481) with `TEXTURE_COMPARE_MODE = COMPARE_REF_TO_TEXTURE` (`js/glx.js:2422`).
+- **`sampler2DShadow`** hardware depth-compare PCF (Lit `js/render/glx.js:67`, God-ray
+  1481) with `TEXTURE_COMPARE_MODE = COMPARE_REF_TO_TEXTURE` (`js/render/glx.js:2422`).
 - **`samplerCube`** live env probe (`uEnvCube` 65) with `textureLod` mip
   selection by roughness (715).
 - **Uniform arrays, not UBOs**: 32 point lights × 6 arrays in Lit; 12 × 7 in
   God-ray. Re-uploaded per frame.
-- **Sampler objects** (`gl.createSampler`, `js/glx.js:2456`) to read the depth
+- **Sampler objects** (`gl.createSampler`, `js/render/glx.js:2456`) to read the depth
   texture with compare **off** for the blocker pass — the legal WebGL2 way to
   view a depth texture two ways.
-- **Extensions**: exactly one — `EXT_color_buffer_float` (`js/glx.js:2203`),
+- **Extensions**: exactly one — `EXT_color_buffer_float` (`js/render/glx.js:2203`),
   gating RGBA16F HDR / R16F blocker / RGBA16F env cube. Everything degrades to
-  `RGBA8`/`UNSIGNED_BYTE` when absent (`colorType`, `js/glx.js:2204`).
+  `RGBA8`/`UNSIGNED_BYTE` when absent (`colorType`, `js/render/glx.js:2204`).
 - **No** MRT, **no** instancing, **no** transform feedback, **no** compute.
 
 ### 1c. Render targets, formats, and `createTargets()`
 
-`initPost()` (`js/glx.js:2200`) picks `colorType = HALF_FLOAT` if
+`initPost()` (`js/render/glx.js:2200`) picks `colorType = HALF_FLOAT` if
 `EXT_color_buffer_float` is renderable, else `UNSIGNED_BYTE`. `createTargets()`
-(`js/glx.js:2255`) (re)allocates on resize / render-scale change and is
+(`js/render/glx.js:2255`) (re)allocates on resize / render-scale change and is
 careful to bind-before-delete to avoid transient double-resident surfaces (a
 jetsam kill on mobile — see the long comment at 2270).
 
@@ -134,12 +136,12 @@ jetsam kill on mobile — see the long comment at 2270).
 | `envTex` (cube) + `envDepthRB` | RGBA16F/8 cube + D16 | 64² ×6 | 2754-2778 |
 
 MSAA sample count is queried, not assumed (`getInternalformatParameter`,
-`js/glx.js:2222`), capped at 2×, and **off entirely on `MOBILE_TIER`**. Resolve
-is a `blitFramebuffer` in `present()` (`js/glx.js:3351`), followed by
+`js/render/glx.js:2222`), capped at 2×, and **off entirely on `MOBILE_TIER`**. Resolve
+is a `blitFramebuffer` in `present()` (`js/render/glx.js:3351`), followed by
 `invalidateFramebuffer` so tiled GPUs skip the tile-store.
 
 **Texture-unit convention** (must be reproduced by any backend): 0 = shadow map,
-5 = decal atlas, 6 = env cube, 7 = blocker map (`js/glx.js:2898-2936`).
+5 = decal atlas, 6 = env cube, 7 = blocker map (`js/render/glx.js:2898-2936`).
 
 ### 1d. Point-light layout + update path
 
@@ -152,16 +154,16 @@ equivalent lives game-side, not in glx). Per light:
    0  1  2   3  4  5    6     7     8     9        10        11        12     13      14
 ```
 
-`begin()` (`js/glx.js:2946-2972`) unpacks fields 0-12 into six scratch
+`begin()` (`js/render/glx.js:2946-2972`) unpacks fields 0-12 into six scratch
 `Float32Array`s and uploads them with `uniform3fv`/`uniform1fv`/`uniform2fv`;
 `uNumLights` bounds the loop. Field 13 (`volW`) is consumed only by the god-ray
-pass, field 14 (`glareW`) only by `drawGlow()` (`js/glx.js:3281`). This flat,
+pass, field 14 (`glareW`) only by `drawGlow()` (`js/render/glx.js:3281`). This flat,
 already-packed layout is a **gift** for WebGPU: it maps almost verbatim onto a
 storage buffer (Step 2).
 
 ### 1e. The draw API surface (the abstraction boundary)
 
-`js/game.js` calls exactly these (return block `js/glx.js:3665-3741`):
+`js/game.js` calls exactly these (return block `js/render/glx.js:3665-3741`):
 
 - **Lifecycle / targets**: `init(canvas)`, `resize()`, `setRenderScale`,
   `getRenderScale`, `width`/`height`/`aspect`, `hdrMode`, `msaa`, `pcss`,
@@ -185,7 +187,7 @@ ambient, fog, sky colours, wetness, cloud, time, `frame.tune` live knobs,
 `frame.lights`). `present()` consumes `{exposure, bloom, ssao, contact,
 threshold, tune, …}`.
 
-**Note the per-draw uniform mutation**: `draw()` (`js/glx.js:2977-3019`)
+**Note the per-draw uniform mutation**: `draw()` (`js/render/glx.js:2977-3019`)
 re-uploads `uModel` and up to nine material scalars **every call** (cached
 against last value, 2992-3000). This is idiomatic WebGL and the single biggest
 conceptual mismatch with WebGPU (Step 2e).
@@ -233,11 +235,11 @@ Concrete syntactic mappings:
 | loop `for(int i…)` | `for (var i…)`; dynamic loop bounds are fine in WGSL |
 
 The **derivative-heavy** normal reconstruction (SSAO 1429, SSR 1745-1747) and
-specular-AA (`js/glx.js:505`) port 1:1 to `dpdx/dpdy`. The `sampler2DShadow`
+specular-AA (`js/render/glx.js:505`) port 1:1 to `dpdx/dpdy`. The `sampler2DShadow`
 PCF taps (`sampleShadow` 337) become `textureSampleCompare` with an explicit
 comparison sampler — semantically identical, and WebGPU’s comparison sampler
 gives the same hardware 2×2 PCF the current `LINEAR` depth texture relies on
-(`js/glx.js:2418`).
+(`js/render/glx.js:2418`).
 
 ### 2b. Uniform arrays / loose uniforms → bind groups + buffers
 
@@ -298,10 +300,10 @@ FXAA                         → pass into the swapchain view
 ```
 
 WebGPU’s built-in MSAA **resolve target** replaces the manual
-`blitFramebuffer`+`invalidateFramebuffer` dance (`js/glx.js:3351-3360`)
+`blitFramebuffer`+`invalidateFramebuffer` dance (`js/render/glx.js:3351-3360`)
 outright — set `multisample.count` on the pipeline and `resolveTarget` on the
 color attachment. Additive bloom upsample (`UP_FS`, blend `ONE,ONE`) and the
-additive glow billboards (`GLOW_FS`, `js/glx.js:3332`) become pipeline
+additive glow billboards (`GLOW_FS`, `js/render/glx.js:3332`) become pipeline
 `blend` states, which in WebGPU are **baked into the pipeline** — so each
 distinct blend/target combo is a distinct pipeline object (2e).
 
@@ -309,7 +311,7 @@ distinct blend/target combo is a distinct pipeline object (2e).
 
 This is the one place the architecture actually changes, not just the syntax.
 Today `draw()` mutates `uModel` and material scalars per call
-(`js/glx.js:2979-3000`). WebGPU **discourages per-draw uniform writes** into a
+(`js/render/glx.js:2979-3000`). WebGPU **discourages per-draw uniform writes** into a
 single buffer within a pass (the writes would serialise against in-flight draws).
 The idiomatic answers, in increasing effort:
 
@@ -319,7 +321,7 @@ The idiomatic answers, in increasing effort:
    the `draw()` loop. **Recommended default.**
 2. **Instancing** — the car wheels, skid marks, glow billboards, and the
    repeated HUD/prop meshes are natural instance batches. The chunked prop mesh
-   (`createChunkedMesh`/`drawChunked`, `js/glx.js:3065`/`3128`) already
+   (`createChunkedMesh`/`drawChunked`, `js/render/glx.js:3065`/`3128`) already
    frustum-culls per chunk and would benefit most. This is where WebGPU can
    actually *beat* WebGL2 on draw-call-bound scenes.
 3. **Bindless-ish material atlas** — overkill here; the material is 9 scalars.
@@ -334,11 +336,11 @@ alpha-write-on / off. `polygonOffset` becomes `depthBias` in
 
 ### 2f. VAOs/VBOs/IBOs → `GPUBuffer` + vertex layout
 
-`createMesh` (`js/glx.js:2611`) already interleaves `[pos3,nrm3,col3(,mat1)]`
+`createMesh` (`js/render/glx.js:2611`) already interleaves `[pos3,nrm3,col3(,mat1)]`
 into one buffer with a fixed stride — a direct match for a WebGPU
 `vertexBufferLayout` with `arrayStride` 36/40 and 3-4 attributes. `createTexMesh`
 (stride 32, `[pos3,nrm3,uv2]`) likewise. Index buffers map to
-`GPUBuffer(INDEX)`; the Uint16/Uint32 selection (`js/glx.js:2618-2621`) becomes
+`GPUBuffer(INDEX)`; the Uint16/Uint32 selection (`js/render/glx.js:2618-2621`) becomes
 the `indexFormat` on `drawIndexed`. The empty-VAO fullscreen-triangle trick
 (`skyVAO`, drawn with `gl_VertexID`) becomes a pipeline with **no vertex buffers**
 and `draw(3)` — WGSL generates the positions from `@builtin(vertex_index)`,
@@ -348,19 +350,19 @@ identical to now.
 
 - **Context**: `navigator.gpu.requestAdapter()` → `adapter.requestDevice()`
   (async — a real change from the synchronous `getContext("webgl2")` at
-  `js/glx.js:2468`; `init()` must become async or gate the game-start on a
+  `js/render/glx.js:2468`; `init()` must become async or gate the game-start on a
   promise). `canvas.getContext("webgpu")` + `context.configure({device, format,
   alphaMode})`.
 - **Swapchain format**: `navigator.gpu.getPreferredCanvasFormat()`
   (`bgra8unorm` on most platforms). The final FXAA pass writes here.
 - **HDR**: RGBA16F is **guaranteed renderable** in WebGPU (`rgba16float` is a
   core renderable/blendable format) — no extension probe, so the
-  `EXT_color_buffer_float` fallback logic (`js/glx.js:2203`) simply disappears
+  `EXT_color_buffer_float` fallback logic (`js/render/glx.js:2203`) simply disappears
   on the WebGPU path. R16F/`r16float` likewise core.
-- **DPR / resize**: same `devicePixelRatio` math (`js/glx.js:2579-2597`);
+- **DPR / resize**: same `devicePixelRatio` math (`js/render/glx.js:2579-2597`);
   reconfigure the context and reallocate targets on size change.
 - **Context loss**: `device.lost` is a promise (vs the
-  `webglcontextlost`/`restored` events at `js/glx.js:2484-2493`). Same recovery
+  `webglcontextlost`/`restored` events at `js/render/glx.js:2484-2493`). Same recovery
   policy — reload to rebuild all GPU resources.
 
 ---
@@ -371,16 +373,16 @@ Introduce one new interface that both backends implement, so `game.js` never
 names `GLX` or `WGX` directly.
 
 ```
-js/gfx.js            Gfx       façade: feature-detects, picks a backend, re-exports the chosen device
-js/glx.js            GLX       existing WebGL2 backend (unchanged behaviour)
-js/webgpu/wgx.js     WGX       WebGPU backend (implements the same surface)
+js/render/gfx.js            Gfx       façade: feature-detects, picks a backend, re-exports the chosen device
+js/render/glx.js            GLX       existing WebGL2 backend (unchanged behaviour)
+js/render/webgpu/wgx.js     WGX       WebGPU backend (implements the same surface)
 ```
 
 - **The interface = today’s `GLX` return object** (1e). That is deliberate:
-  `GLX` already *is* the contract. `js/webgpu/wgx.js` must expose the same ~35 methods
+  `GLX` already *is* the contract. `js/render/webgpu/wgx.js` must expose the same ~35 methods
   with the same signatures and the same `frame`/`opts` object shapes. No new
   abstraction is invented; the existing one is merely named and documented.
-- **`Gfx` façade** (`js/gfx.js`, loaded before `game.js`):
+- **`Gfx` façade** (`js/render/gfx.js`, loaded before `game.js`):
 
   ```js
   const Gfx = (function () {
@@ -389,7 +391,7 @@ js/webgpu/wgx.js     WGX       WebGPU backend (implements the same surface)
       if (wantGPU) {
         try {
           // WGX.create() requests its own adapter/device and returns null on any
-          // failure (see js/webgpu/wgx.js) → fall through to WebGL2.
+          // failure (see js/render/webgpu/wgx.js) → fall through to WebGL2.
           const dev = await WGX.create(canvas, {});
           if (dev) return dev;
         } catch (_) { /* fall through to WebGL2 */ }
@@ -420,8 +422,8 @@ js/webgpu/wgx.js     WGX       WebGPU backend (implements the same surface)
 
 | Phase | Scope | Effort | Risk | Validate |
 |---|---|---|---|---|
-| **0. Abstraction seam** | Add `js/gfx.js` façade; make `game.js` boot async through `Gfx.create`; route all `GLX.` calls via the returned handle. **WebGL2 only, zero behaviour change.** | **M** | **Low** | Full existing Playwright suite passes unchanged (`npm run test:fast`, `test:visual`); pixel-diff regression shows **zero** delta. |
-| **1. WebGPU device + clear + swapchain** | `js/webgpu/wgx.js`: adapter/device, `context.configure`, resize/DPR, a stub that clears to `frame.fogColor` and no-ops every draw. Wire feature detection. | **M** | **Low** | On an iOS 26 / Chrome device: boots, shows a cleared canvas, `__apex.gfxBackend()==='webgpu'`; on old iOS: still WebGL2. |
+| **0. Abstraction seam** | Add `js/render/gfx.js` façade; make `game.js` boot async through `Gfx.create`; route all `GLX.` calls via the returned handle. **WebGL2 only, zero behaviour change.** | **M** | **Low** | Full existing Playwright suite passes unchanged (`npm run test:fast`, `test:visual`); pixel-diff regression shows **zero** delta. |
+| **1. WebGPU device + clear + swapchain** | `js/render/webgpu/wgx.js`: adapter/device, `context.configure`, resize/DPR, a stub that clears to `frame.fogColor` and no-ops every draw. Wire feature detection. | **M** | **Low** | On an iOS 26 / Chrome device: boots, shows a cleared canvas, `__apex.gfxBackend()==='webgpu'`; on old iOS: still WebGL2. |
 | **2. Lit + Sky pass** | Port `createMesh`/`createTexMesh` → GPUBuffers + vertex layouts; `FRAME` uniform buffer + light storage buffer; WGSL `LIT`/`SKY`; per-draw model/material via dynamic offsets; opaque + a couple of blend pipelines; render to an RGBA16F scene texture blitted to screen (no post yet). | **XL** | **High** | Side-by-side screenshot vs WebGL2 at fixed `__apex.park()` poses on ~5 tracks, day + night; car + track read correct. This is the make-or-break phase for shader fidelity. |
 | **3. Shadow + env probe** | Depth-only shadow pass + comparison sampler PCF; PCSS-lite blocker downsample; the 64² env cube (one face/frame). Wire `sampler2DShadow`→`textureSampleCompare`. | **L** | **Med** | Shadow acne/penumbra and car reflections match WebGL2 within tolerance; `wallStats`/lighting probes unaffected. |
 | **4. Post chain** | Bright/down/up bloom mips, SSAO+contact, god-ray march, composite (SSR + tonemap + grade + flare + vignette + grain), FXAA. MSAA via pipeline `resolveTarget`. | **XL** | **High** | Visual-regression specs (`test:visual`) pass on the WebGPU path; bloom/SSR/tonemap match within pixel tolerance; frame-time not worse than WebGL2 on a mid GPU. |
@@ -444,7 +446,7 @@ Add a backend switch so each spec can run twice.
 | # | Risk | Severity | Notes / mitigation |
 |---|---|---|---|
 | R1 | **Two shader languages, no build step, no compiler to catch drift.** `LIT_FS`+`COMPOSITE_FS` are ~1,240 lines of hot, frequently-edited GLSL. Every future art tweak must be made twice and can silently diverge. | **Critical** | The whole reason the recommendation is "Phase 0 only." Mitigate by factoring shared math (noise/BRDF/tonemap) into concatenated string fragments used by both; consider generating WGSL offline from GLSL as a seed. There is no full mitigation without adding a build step, which the project forbids. |
-| R2 | **The crash-prone devices get nothing.** `MOBILE_TIER` iPhones on the WKWebView jetsam budget (`js/glx.js:2031-2044`) are pre-iOS-26 → no WebGPU. The memory work that actually helps them is all in the WebGL2 path already. | **High** | Accept and state plainly: WebGPU is an upside for *new* hardware, not a fix for the current failure mode. Any effort spent here is not spent on the devices that crash. |
+| R2 | **The crash-prone devices get nothing.** `MOBILE_TIER` iPhones on the WKWebView jetsam budget (`js/render/glx.js:2031-2044`) are pre-iOS-26 → no WebGPU. The memory work that actually helps them is all in the WebGL2 path already. | **High** | Accept and state plainly: WebGPU is an upside for *new* hardware, not a fix for the current failure mode. Any effort spent here is not spent on the devices that crash. |
 | R3 | **Testing matrix doubles.** 50+ specs × 2 backends, plus the tracks-visual tolerances must be re-baselined for WebGPU (subtly different filtering/rounding will never be bit-identical to WebGL2). | **High** | Backend switch on every spec (Step 3); accept per-backend golden images; gate CI on both. |
 | R4 | **Fidelity gap on the lit/composite port.** ~2,000 lines of hand-tuned, mobile-GPU-quirk-laden GLSL (note the many `pow(0,x)` NaN guards, e.g. 688/704/718/849 — added for real mobile-driver bugs). Reproducing the exact look in WGSL is fiddly and un-fun. | **High** | Phase 2/4 side-by-side screenshot gates; port the NaN guards verbatim (WGSL `pow` has the same footguns). |
 | R5 | **Async init reshapes boot.** `getContext("webgl2")` is sync; `requestAdapter/requestDevice` are promises. `game.js:39` and everything assuming a ready renderer at module-eval time must tolerate an await. | **Med** | Contained by Phase 0/1: the façade returns a ready device or the WebGL2 fallback; game start gates on the promise. |
