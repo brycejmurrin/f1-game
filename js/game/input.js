@@ -56,6 +56,14 @@ const Input = (function () {
   let padSteer = 0;            // -1..1 from left stick / d-pad
   let padThrottle = false;
   let padBrake = false;
+  // Analog pedal travel, kept alongside the boolean. The triggers report 0..1 and
+  // the physics rewards MODULATION — trail-braking is a documented core mechanic
+  // (the friction ellipse hands grip back to the front tyres as you ease off) —
+  // but thresholding the trigger to a boolean here threw all of that away, so a
+  // pad driver could only stamp or lift. throttle()/braking() stay boolean for
+  // every existing caller; throttleLevel()/brakeLevel() expose the travel.
+  let padThrottleVal = 0;
+  let padBrakeVal = 0;
   let padPrevButtons = [];     // previous frame's pressed state, for rising edges
   const PAD_DEADZONE = 0.14;   // left-stick centre slop (ignored, then re-scaled)
 
@@ -515,6 +523,7 @@ const Input = (function () {
     if (!pad) {
       padConnected = false;
       padSteer = 0; padThrottle = false; padBrake = false;
+      padThrottleVal = 0; padBrakeVal = 0;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       return;
     }
@@ -528,8 +537,10 @@ const Input = (function () {
     else if (btnDown(pad, 14)) ax = -1;
     padSteer = clamp(ax, -1, 1);
     // pedals: analog triggers or the A/B face buttons.
-    padThrottle = btnVal(pad, 7) > 0.12 || btnDown(pad, 0);
-    padBrake = btnVal(pad, 6) > 0.12 || btnDown(pad, 1);
+    padThrottleVal = btnDown(pad, 0) ? 1 : clamp(btnVal(pad, 7), 0, 1);
+    padBrakeVal = btnDown(pad, 1) ? 1 : clamp(btnVal(pad, 6), 0, 1);
+    padThrottle = padThrottleVal > 0.12;
+    padBrake = padBrakeVal > 0.12;
     // edge-triggered actions reuse the same latches the keyboard sets.
     if (btnEdge(pad, 2)) boostTogglePressed = true;
     if (btnEdge(pad, 3)) overtakePressed = true;
@@ -583,6 +594,17 @@ const Input = (function () {
 
   function braking() {
     return keyBrake || btnBrake || padBrake;
+  }
+
+  // 0..1 pedal travel. Keyboard / on-screen / face buttons are digital, so they
+  // are full travel; an analog trigger reports how far it is actually pressed.
+  function throttleLevel() {
+    if (keyThrottle || btnThrottle) return 1;
+    return padThrottleVal > 0.12 ? padThrottleVal : 0;
+  }
+  function brakeLevel() {
+    if (keyBrake || btnBrake) return 1;
+    return padBrakeVal > 0.12 ? padBrakeVal : 0;
   }
 
   function consumeBoostToggle() {
@@ -698,6 +720,7 @@ const Input = (function () {
     window.addEventListener("gamepadconnected", function () { padConnected = true; });
     window.addEventListener("gamepaddisconnected", function () {
       padConnected = false; padSteer = 0; padThrottle = padBrake = false;
+      padThrottleVal = padBrakeVal = 0;
       padPrevButtons.length = 0;
     });
   }
@@ -724,6 +747,8 @@ const Input = (function () {
     padSteer = 0;
     padThrottle = false;
     padBrake = false;
+    padThrottleVal = 0;
+    padBrakeVal = 0;
     padPrevButtons.length = 0;
   }
 
@@ -756,6 +781,8 @@ const Input = (function () {
     steer,
     throttle,
     braking,
+    throttleLevel,
+    brakeLevel,
     consumeBoostToggle,
     consumeOvertake,
     consumeShiftUp,

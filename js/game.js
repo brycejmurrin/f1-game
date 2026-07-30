@@ -485,11 +485,16 @@ let paused = false;
 // manual (default), >0 gently pulls toward the racing line through corners,
 // <0 pushes the car wide. Always an added bias the driver can steer against.
 let raceLineAssist = 0;
-// Fixed tilt-authority gain, applied after Input.steer() when tilt is active so
-// tilt steering is a touch gentler than keys/pad (it trims on top of the road-
-// follow assist rather than throwing full lock). Sensitivity proper — how far you
-// tilt for a given steer — is the single MAX_TILT knob in the Input module.
-const TILT_OUTPUT_SCALE = 0.7;
+// Tilt used to be multiplied by a fixed 0.7 here "so it trims on top of the
+// road-follow assist rather than throwing full lock". That rationale is gone —
+// the assist ships at 0 — and the multiply was worse than it looked: it landed
+// BEFORE the expo curve, so at the default STEER_EXPO 2.389 the real authority
+// was 0.7^2.389 = 0.43. A tilt driver could not reach even half of STEER_MAX_SLIP
+// at any lean, on any slider setting, and no knob exposed it. That is the
+// "I lean the phone to the stop and the car won't turn" feeling.
+// Tilt now gets the same lock range as every other input. Sensitivity (how far
+// you tilt for a given steer) is still MAX_TILT, and jitter is still the
+// One-Euro SMOOTHING slider — two knobs that a player can actually see.
 // Debug/screenshot freeze: skip the simulation (physics + AI) but keep rendering,
 // so the camera still settles to a parked view yet nothing moves — giving the
 // visual-regression harness a deterministic frame. Only set by __apex.park().
@@ -2041,8 +2046,14 @@ function updateCar(c, dt, ranked) {
 
   // --- braking / target speed ---
   let braking = false;
+  // Pedal travel 0..1 (analog on a pad trigger, 1 on any digital source). The
+  // brake force and the longitudinal-accel estimate that feeds the friction
+  // ellipse both scale by it, so easing off the brake actually hands grip back
+  // to the front tyres — trail-braking you can modulate, not just stamp/lift.
+  let brakeLvl = 1;
   if (c.isPlayer) {
     braking = _testInput ? !!_testInput.brake : Input.braking();
+    brakeLvl = _testInput ? 1 : Math.max(0.15, Input.brakeLevel());
   } else {
     // AI: brake for upcoming curvature
     const look = clamp(c.speed * 1.7, 30, 160);
@@ -2093,7 +2104,7 @@ function updateCar(c, dt, ranked) {
     : true;
   if (braking) {
     if (c.speed > 0) {
-      c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking : 1) * dt);
+      c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking * brakeLvl : 1) * dt);
     } else if (c.isPlayer && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
@@ -2179,7 +2190,6 @@ function updateCar(c, dt, ranked) {
   let steer;
   if (c.isPlayer) {
     steer = _testInput ? (_testInput.steer ?? 0) : Input.steer();
-    if (!_testInput && Input.tiltActive()) steer *= TILT_OUTPUT_SCALE;
   }
   else {
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
@@ -2381,7 +2391,7 @@ function updateCar(c, dt, ranked) {
     // speed-limited the throttle is still held but real accel ≈ 0, so without
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
-    const axEstTarget = braking ? -BRAKE
+    const axEstTarget = braking ? -BRAKE * brakeLvl
       : (onThrottle
           ? ACCEL * PACE * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
