@@ -276,8 +276,14 @@ const SceneryIdentity = (function () {
         const a = anchor(k, side, 1.35);
         if (onTrack(a.c[0], a.c[2], 1.1)) return;
         const b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 0.16), [1.05, 0.26, spacing * 0.90], col, b);
-        addBox(out, vadd(vadd(a.c, a.r, side * 0.38), a.u, 0.30),
+        // anchor() deliberately sinks its point 0.3 m so a flat-based model
+        // tucks under the terrain instead of z-fighting it. A kerb is 0.26 m
+        // tall, so that sink alone buries it completely — it has to sit ON the
+        // surface, not in it. Add the sink back for the ribbon pieces (the
+        // safer barrier below is 1.1 m tall and wants to stay embedded).
+        const SINK = 0.3;
+        addBox(out, vadd(a.c, a.u, 0.16 + SINK), [1.05, 0.26, spacing * 0.90], col, b);
+        addBox(out, vadd(vadd(a.c, a.r, side * 0.38), a.u, 0.30 + SINK),
                [0.32, 0.42, spacing * 0.90], col, b);
       });
       if (!doSafer) return;
