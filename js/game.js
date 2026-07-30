@@ -3219,9 +3219,6 @@ function render(dt) {
     // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), {
       bankDy, deploy: player.deploying, slipLat: player.vLat || 0,
-      // the car's real world pose, so the chase rig can follow the CAR
-      carPos: player.px != null ? [player.px, player.pz] : null,
-      carHead: player.head || 0,
     });
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov;
     if (shake > 0) {
