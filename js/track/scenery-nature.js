@@ -16,7 +16,7 @@ const SceneryNature = (function () {
             clearTreeDist,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             addMountain, emit, RAW, rejBox, recordBarrier, groundYAt,
-            terrainYAt, onTrack, hash, upOf, vadd } = ctx;
+            terrainYAt, onTrack, hash, upOf, vadd, bankOffsetAt } = ctx;
     const { CROWD_DAY } = TrackSceneryData;
 
     // Resolve a trackside anchor: ground position + the track basis [r,u,t] at
@@ -43,8 +43,20 @@ const SceneryNature = (function () {
       // on the downhill side. Every anchored model (engine helpers AND raw
       // per-track props) inherits the embed; tops drop by the same 0.3, which
       // is visually negligible on multi-metre props.
+      // On a BANKED corner the road pivots about its centreline, and the
+      // terrain ribbon rides with it — but the ribbon only starts ~2.2 m beyond
+      // the tarmac, and groundYAt()/TrackSurface.heightAt() is a flat
+      // cross-section with no banking term at all. Anything anchored inside
+      // that gap (Zandvoort's kerb strip sits at 1.35 m) therefore fell back to
+      // the UNBANKED height while the road edge moved +/-2.26 m: a 2 m cliff
+      // between the tarmac and its own kerb on the low side, and the road
+      // climbing straight over the kerb on the high side. Apply the same pivot
+      // to the fallback so both sides of the seam agree. Not applied to the
+      // terrainYAt branch — the ribbon already carries it, and adding it twice
+      // would double the bank.
       const ty = terrainYAt(cx, cz);
-      return { c: [cx, (ty == null ? groundYAt(k, dist) : ty) - 0.3, cz], r, u, t };
+      const base = ty == null ? groundYAt(k, dist) + bankOffsetAt(track, k, o) : ty;
+      return { c: [cx, base - 0.3, cz], r, u, t };
     };
     // Conifer/pine: tapered trunk + stacked cones. col = needle green. Three
     // silhouette variants selected per-instance so a treeline doesn't read as

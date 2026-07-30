@@ -120,6 +120,28 @@ const TrackMesh = (function () {
     return { lift, bsign };
   }
 
+  // Cross-track banking offset (metres along the node's up axis) at lateral
+  // offset `o` from the centreline. THE single source of truth for the pivot:
+  // the section rotates about its own centreline, so the inner edge drops
+  // lift/2 and the outer edge rises lift/2, and anything past the tarmac clamps
+  // to the corresponding edge height.
+  //
+  // Everything laid alongside the road must use this. buildRoad applied the
+  // pivot inline while buildKerbs did not, so on Zandvoort's banked corners the
+  // road edge moved +/-2.4 m while the kerb ribbon stayed at the unbanked
+  // height — the tarmac fell away from its own kerb into a cliff on the low
+  // side and swallowed it on the high side.
+  function bankOffsetAt(track, k, o) {
+    const bp = track.bankP;
+    if (!bp) return 0;
+    const lift = bp.lift[k];
+    if (!(lift > 0)) return 0;
+    const w = track.hw[k];
+    let frac = (bp.bsign[k] * o + w) / (2 * w);
+    frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
+    return lift * (frac - 0.5);
+  }
+
   // Lay raised red/white kerb ribbons at corner apexes (inside edge, full
   // corner) and exits (outside edge, shorter), appended to the road mesh.
   function buildKerbs(track, out) {
@@ -148,7 +170,9 @@ const TrackMesh = (function () {
         const oB = side > 0 ? w + 0.05 + KW : -(w + 0.05);
         const ai = out.pos.length / 3;
         for (const o of [oA, oB]) {
-          out.pos.push(px[k] + r[0] * o + u[0] * KH, py[k] + r[1] * o + u[1] * KH + 0.03, pz[k] + r[2] * o + u[2] * KH);
+          // Ride the banked road surface, not the unbanked centreline plane.
+          const h = KH + bankOffsetAt(track, k, o);
+          out.pos.push(px[k] + r[0] * o + u[0] * h, py[k] + r[1] * o + u[1] * h + 0.03, pz[k] + r[2] * o + u[2] * h);
           out.nrm.push(u[0], u[1], u[2]);
         }
         const c = (Math.floor(i / stripeNodes) % 2) === 0 ? ka : kb;
@@ -330,19 +354,11 @@ const TrackMesh = (function () {
       // Banking pivots each cross-section around its centreline (inner edge
       // -> -lift/2, outer edge -> +lift/2). Verts past the road clamp to those
       // edge heights so kerbs/shoulders ride with it rather than tearing away.
-      const bankLift = bp ? bp.lift[k] : 0;
-      const bankSide = bp ? bp.bsign[k] : 0;
       for (let v = 0; v < V; v++) {
         const o = offs[v];
-        let by = 0;
-        if (bankLift > 0) {
-          // Pivot around the centreline: -lift/2 at the inner edge, +lift/2
-          // at the outer edge. This preserves the intended crossfall without
-          // raising the whole road into a short longitudinal hump.
-          let frac = (bankSide * o + w) / (2 * w);
-          frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
-          by = bankLift * (frac - 0.5);
-        }
+        // Shared with buildKerbs so the two can never disagree about where the
+        // banked surface is — see bankOffsetAt().
+        const by = bankOffsetAt(track, k, o);
         const wx = px[k] + r[0] * o + u[0] * (rise[v] + by);
         let   wy = py[k] + r[1] * o + u[1] * (rise[v] + by) + 0.02;
         const wz = pz[k] + r[2] * o + u[2] * (rise[v] + by);
@@ -599,7 +615,14 @@ const TrackMesh = (function () {
             // to the mound's natural height further out. Heading-independent, and
             // gated on wy>py[j]+0.3 so flat verges (always at/below grade) are
             // untouched.
-            if (wy > py[j] + 0.3) {
+            // ...but NOT when this vert is high because its OWN section is
+            // banked. A banked verge is not a mound: it rises with the tarmac it
+            // belongs to, by design. Zandvoort's Hugenholtz doubles back to
+            // within 12 m of itself, so the returning leg saw the banked outer
+            // verge sitting 2.26 m above it and carved it flat — leaving the
+            // banked road edge standing proud of the ground beside it with a
+            // 2 m drop, which reads as the road corkscrewing the wrong way.
+            if (wy > py[j] + 0.3 && !(by > 0.3)) {
               const fr = hw[j] + 26, nr = hw[j] + 0.5;
               if (d2 < fr * fr) {
                 const dist = Math.sqrt(d2);
@@ -707,6 +730,6 @@ const TrackMesh = (function () {
   }
 
   // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
-  return { upOf, hash, findCorners, bankingProfile, onKerb, bankAngle, banking,
+  return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
            nodeGrid, buildRoad, buildTerrain, buildFloor };
 })();

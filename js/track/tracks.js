@@ -21,7 +21,7 @@ const Tracks = (function () {
   // Kerb/banking band + road/terrain/floor mesh builders live in
   // js/track/mesh.js (global TrackMesh, loaded before this file — HARD EDGE:
   // destructured here at eval).
-  const { upOf, hash, findCorners, bankingProfile, onKerb, bankAngle, banking,
+  const { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
           nodeGrid, buildRoad, buildTerrain, buildFloor } = TrackMesh;
   const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -1178,7 +1178,7 @@ const Tracks = (function () {
       emit, RAW, rejBox, rejRad,
       // guard / grounding / boundary core
       markBarrier, blockAt, recordBarrier, indexBarrier, clearTreeDist,
-      indexSolid, indexSolidAt, massBlocked, massAdd,
+      indexSolid, indexSolidAt, massBlocked, massAdd, bankOffsetAt,
       seat, foundation, cantilever, groundYAt, terrainYAt, onTrack,
       frameAt, overheadSpan, models,
       // placement primitives + math helpers
