@@ -34,6 +34,18 @@
     // plateau, then drops through the Senna S; the same wrapped hill creates the
     // long climb from Junção through Subida dos Boxes.
     elevations: [{ s: 0.97, halfM: 650, rise: 43 }],
+    // Interlagos camber. Curva do Sol and the Arquibancadas run onto the pit
+    // straight are the genuinely banked ones — the whole point of the layout is
+    // that both are taken flat — with 3-4° elsewhere.
+    bankZones: [
+      { frac: 0.0663, angleDeg: 3.5, widthM: 120 },   // Senna S, first apex
+      { frac: 0.1167, angleDeg: 7.0, widthM: 240 },   // Curva do Sol
+      { frac: 0.4547, angleDeg: 4.0, widthM: 200 },   // Ferradura
+      { frac: 0.6265, angleDeg: 3.0, widthM: 160 },   // Bico de Pato
+      { frac: 0.6629, angleDeg: 4.0, widthM: 180 },   // Mergulho
+      { frac: 0.7414, angleDeg: 3.5, widthM: 90 },    // Junção
+      { frac: 0.8375, angleDeg: 6.0, widthM: 160 },   // Arquibancadas
+    ],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
               addBox, every, onTrack, hash, vadd, anchor, along, building, motorhome, tower,

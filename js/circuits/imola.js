@@ -35,6 +35,17 @@
       { s: 0.135, halfM: 360, rise: 16 },
       { s: 0.295, halfM: 320, rise: -14 },
     ],
+    // Imola camber. An old-school permanent circuit: the hillside corners
+    // (Piratella, Acque Minerali, both Rivazzas) are dished into the slope, the
+    // chicanes are essentially flat.
+    bankZones: [
+      { frac: 0.1905, angleDeg: 3.0, widthM: 60 },    // Villeneuve/Tosa link
+      { frac: 0.3440, angleDeg: 4.0, widthM: 90 },    // Piratella
+      { frac: 0.3703, angleDeg: 3.5, widthM: 90 },    // Acque Minerali
+      { frac: 0.7874, angleDeg: 4.0, widthM: 70 },    // Rivazza 1
+      { frac: 0.8456, angleDeg: 4.0, widthM: 110 },   // Rivazza 2
+      { frac: 0.9737, angleDeg: 3.0, widthM: 120 },   // final sweep to the line
+    ],
     scenery: function (api) {
       const { out, MAT, n, px, pz, hw, pyMin, hash, every, place, prop, backdrop,
               groundPatch, waterSurface, modelGroup,

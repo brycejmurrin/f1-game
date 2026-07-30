@@ -51,6 +51,25 @@
       { s: 0.6075, halfM: 120, rise: -2.5 },
       { s: 0.1275, halfM: 120, rise: 2.5 },
     ],
+    // Marina Bay runs on real city streets: the bay-front boulevards are wide,
+    // the Turn 1-3 complex, the Anderson Bridge link and the Esplanade squeeze
+    // are not. s0/s1 are CONTROL-POINT index fractions in SOURCE space; the
+    // racing-lap arc each lands on is in the trailing comment.
+    hwZones: [
+      { s0: 0.5890, s1: 0.6642, hw: 5.2, ease: 0.012 },  // arc 0.098-0.152 T1-T3
+      { s0: 0.1020, s1: 0.1774, hw: 5.1, ease: 0.012 },  // arc 0.650-0.685 bridge link
+      { s0: 0.2341, s1: 0.2901, hw: 5.3, ease: 0.012 },  // arc 0.808-0.838 Esplanade
+      { s0: 0.3236, s1: 0.4067, hw: 5.3, ease: 0.012 },  // arc 0.925-0.955 final corners
+    ],
+    // Flat city tarmac — crown only, 2.5-3°. Nothing here is banked.
+    bankZones: [
+      { frac: 0.1043, angleDeg: 3.0, widthM: 100 },
+      { frac: 0.3562, angleDeg: 3.0, widthM: 130 },
+      { frac: 0.4377, angleDeg: 3.0, widthM: 90 },
+      { frac: 0.6585, angleDeg: 2.5, widthM: 80 },
+      { frac: 0.7694, angleDeg: 3.0, widthM: 80 },
+      { frac: 0.0114, angleDeg: 3.0, widthM: 130 },
+    ],
     scenery: function (api) {
       const { out, MAT, n, place, backdrop,
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
@@ -152,19 +171,30 @@
       // comparable to the original loop (~80 buildings vs. 112 in old band).
       // The far backdrop() layer handles the rest of the horizon.
       // ===================================================================
-      // Right side: Marina Bay waterfront (main-straight & bay sections)
-      cityFront(0.90, 0.35, 1, 106, {
+      // Right side: the Republic Boulevard canyon. These facades used to stand
+      // 106 m off the barrier, which is not what Marina Bay looks like from the
+      // car — the CBD towers rise straight off the pavement there, and at 106 m
+      // the whole row read as horizon haze. gap 20 puts the street wall where
+      // the driver actually sees it.
+      cityFront(0.90, 0.16, 1, 20, {
         minH: 55, maxH: 165, depth: 28, lit: true,
         palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.16, 0.18, 0.26]],
         windowCol: WIN_CYAN, floor: 18, step: 44,
       });
-      // Left side: colonial district & back-straights
-      cityFront(0.00, 0.20, -1, 94, {
+      // s 0.16–0.35 R is open bay (waterBand + Marina Bay Sands beyond), so
+      // that stretch keeps its across-the-water setback.
+      cityFront(0.16, 0.35, 1, 104, {
+        minH: 55, maxH: 165, depth: 28, lit: true,
+        palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.16, 0.18, 0.26]],
+        windowCol: WIN_CYAN, floor: 18, step: 62,
+      });
+      // Left side: colonial district & back-straights — inland, street-tight.
+      cityFront(0.00, 0.20, -1, 18, {
         minH: 26, maxH: 90, depth: 22, lit: true,
         palette: [WALL_WARM, WALL_CBD, [0.20, 0.18, 0.24], WALL_LITE],
         windowCol: WIN_WARM, floor: 14, step: 44,
       });
-      cityFront(0.48, 0.88, -1, 90, {
+      cityFront(0.48, 0.88, -1, 18, {
         minH: 26, maxH: 95, depth: 22, lit: true,
         palette: [WALL_WARM, [0.22, 0.20, 0.26], WALL_CBD, WALL_LITE],
         floor: 14, step: 48,
@@ -501,7 +531,9 @@
       // FLOODLIGHT MASTS — one intentional warm-white ring. Shared generic
       // floodlights are excluded above, avoiding duplicate poles and pools.
       // ===================================================================
-      floodMastRing(75, { h: 24, dist: 12, cool: false, pool: true, arms: 3 });
+      // ~1600 projectors on masts down both kerbs is the defining look of the
+      // Singapore night race; a 75 m spacing left long unlit-looking gaps.
+      floodMastRing(38, { h: 24, dist: 11, cool: false, pool: true, arms: 3 });
 
       // ===================================================================
       // MAIN STRAIGHT — pit building (L) + Float@Marina Bay grandstands (R),
@@ -558,6 +590,12 @@
         // Sit behind the 1.2 m concrete wall rather than sharing its edge.
         fence(s0, s1, side, 3.0, 3.4, [0.66, 0.70, 0.78]);
       }
+      // Marina Bay is fenced end to end; the runs above left most of the
+      // right-hand side bare. Close them.
+      for (const [s0, s1, side] of [
+        [0.17, 0.29,  1], [0.45, 0.54,  1], [0.67, 0.79,  1], [0.80, 0.91,  1],
+        [0.185, 0.195, -1], [0.405, 0.415, -1], [0.625, 0.635, -1],
+      ]) fence(s0, s1, side, 3.0, 3.4, [0.66, 0.70, 0.78]);
 
       // ===================================================================
       // TYRE WALLS at tight 90-degree apex/exit kerbs
@@ -572,12 +610,15 @@
       // ===================================================================
       // TROPICAL PALMS & LANDSCAPING
       // ===================================================================
-      every(48, (k) => {
+      every(26, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 5 + side) < 0.50) continue;
-          palm(k, side, 9 + hash(k + side) * 6, 9 + hash(k * 2 + side) * 5, [0.18, 0.42, 0.20]);
+          if (hash(k * 5 + side) < 0.30) continue;
+          palm(k, side, 8 + hash(k + side) * 5, 9 + hash(k * 2 + side) * 5, [0.18, 0.42, 0.20]);
         }
       });
+      // Kept at the original spacing/offset: the generic street dressing puts a
+      // 9 m-wide retail box centred 9 m out, so a denser shrub line here simply
+      // grows through it.
       every(62, (k) => {
         if (hash(k * 9) < 0.60) return;
         bush(k, hash(k) < 0.5 ? -1 : 1, 8 + hash(k) * 5, [0.14, 0.36, 0.18]);
@@ -590,6 +631,32 @@
         [0.08, 1, 2], [0.31, 1, 1], [0.53, -1, 1], [0.77, 1, 2], [0.90, 1, 1],
       ]) {
         billboard(K(s), side, 12, 14 + hash(K(s)) * 6, 9, NEON[hue]);
+      }
+      // Continuous barrier-top hoarding line round the lap.
+      for (let i = 0; i < 32; i++) {
+        const sf = i / 32;
+        const side = (i % 2) ? 1 : -1;
+        billboard(K(sf), side, 8, 10 + hash(i * 4.1) * 5, 4.5, NEON[i % 4]);
+      }
+      // Padang / Esplanade / Bay grandstand ring — Marina Bay seats ~40 000 and
+      // the lap carried seven stands.
+      for (const [s, side, gap, len] of [
+        [0.115, -1, 14, 52], [0.150,  1, 16, 46], [0.245, -1, 14, 48],
+        [0.330, -1, 15, 44], [0.415,  1, 16, 50], [0.500, -1, 14, 46],
+        [0.585,  1, 15, 48], [0.640, -1, 14, 44], [0.700,  1, 16, 46],
+        [0.865, -1, 15, 50], [0.905,  1, 14, 48],
+      ]) grandstand(s, side, gap, len, [0.20, 0.22, 0.28],
+                    [0.46 + hash(K(s)) * 0.1, 0.32, 0.42]);
+      for (const [s, side, gap, len] of [
+        [0.060, -1, 15, 44], [0.205,  1, 15, 42], [0.290,  1, 16, 44],
+        [0.455, -1, 15, 42], [0.545,  1, 15, 44], [0.815, -1, 16, 46],
+      ]) grandstand(s, side, gap, len, [0.19, 0.21, 0.27],
+                    [0.42, 0.32 + hash(K(s)) * 0.1, 0.48]);
+      // Apex kerb flashes at the 90-degree corners.
+      for (const [s, side] of [[0.09, 1], [0.24, -1], [0.36, 1], [0.48, -1],
+                               [0.56, 1], [0.67, 1], [0.72, -1], [0.83, -1]]) {
+        place(K(s), side, 2.2, [0.5, 0.22, 8], [0.86, 0.16, 0.16]);
+        place(K(s), side, 3.2, [1.6, 0.18, 8], [0.92, 0.92, 0.94]);
       }
 
       // ===================================================================

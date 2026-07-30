@@ -35,11 +35,27 @@
       { t: 0, l: 400 }, { t: 50, l: 130 }, { t: 180, l: 200 }, { t: 50, l: 100 }, { t: 0, l: 250 }, { t: -90, l: 100 },
       { t: 0, l: 550 }, { t: -60, l: 90 }, { t: 60, l: 80 }, { t: -70, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 200 },
     ],
-    // Elevations use source-trace fractions. With startFrac 0.1525 these place
-    // subtle racing-lap rises at T1–2 (~0.06) and T6 (~0.30).
+    // Shanghai camber. The T1-2-3 decreasing-radius spiral and the long T11-13
+    // sweep are the cambered ones; the snail and the hairpin get plain crown.
+    bankZones: [
+      { frac: 0.0133, angleDeg: 5.0, widthM: 200 },   // T1-2-3 spiral
+      { frac: 0.1433, angleDeg: 3.0, widthM: 110 },
+      { frac: 0.2134, angleDeg: 4.0, widthM: 250 },
+      { frac: 0.2888, angleDeg: 3.5, widthM: 180 },
+      { frac: 0.4431, angleDeg: 4.0, widthM: 300 },   // the long left onto the back straight
+      { frac: 0.7326, angleDeg: 3.0, widthM: 100 },   // T13 hairpin
+      { frac: 0.9985, angleDeg: 4.0, widthM: 280 },   // final corner onto the pit straight
+    ],
+    // Elevations use source-trace fractions. The Jiading site is reclaimed marsh
+    // — flat by F1 standards but engineered with ~6 m of long-wavelength relief
+    // (the spiral climbs, the back straight crests). Grades stay under ~1.7 %.
+    // The crest keeps the original s=0.4525 anchor and stays at 6.5 m: raising
+    // the s=0.2125 bump instead trips the prop-interpenetration ratchet, and a
+    // taller crest lifts the ground out from under the far skyline towers.
     elevations: [
       { s: 0.2125, halfM: 105, rise: 0.8 },
-      { s: 0.4525, halfM: 120, rise: 1.0 },
+      { s: 0.4525, halfM: 600, rise: 6.5 },
+      { s: 0.0125, halfM: 350, rise: 2.5 },
     ],
     scenery: function (api) {
       const { out, track, n, px, pz, py, hw, pyMin, hash, vadd,

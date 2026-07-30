@@ -39,6 +39,20 @@
       { s: 0.46, halfM: 760, rise: 24 },   // rolling high ground before the descent
       { s: 0.72, halfM: 680, rise: -18 },  // Stavelot valley
     ],
+    // Spa camber. Pouhon and Stavelot are the two genuinely banked corners (both
+    // dished into the hillside, both taken far faster than their radius suggests);
+    // Raidillon and Blanchimont carry real camber too. La Source is deliberately
+    // left flat — it is close to off-camber in reality.
+    bankZones: [
+      { frac: 0.1854, angleDeg: 5.0, widthM: 130 },   // Raidillon
+      { frac: 0.3685, angleDeg: 3.0, widthM: 80 },    // Les Combes
+      { frac: 0.4531, angleDeg: 4.0, widthM: 170 },   // Bruxelles
+      { frac: 0.5648, angleDeg: 6.0, widthM: 160 },   // Pouhon
+      { frac: 0.6626, angleDeg: 3.5, widthM: 140 },   // Fagnes
+      { frac: 0.7277, angleDeg: 3.5, widthM: 100 },   // Campus
+      { frac: 0.7576, angleDeg: 6.0, widthM: 150 },   // Stavelot
+      { frac: 0.8572, angleDeg: 4.0, widthM: 140 },   // Blanchimont
+    ],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, hash, every, place, backdrop, pal,
               addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,

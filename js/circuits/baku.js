@@ -28,7 +28,21 @@
     pal: { horizon: [0.10, 0.12, 0.22], zenith: [0.04, 0.05, 0.14], sunColor: [0.72, 0.74, 0.88], ambientSky: [0.24, 0.26, 0.36], ambientGround: [0.20, 0.20, 0.28], fogColor: [0.08, 0.10, 0.18], fogDensity: 0.0016 },
     // Castle Section squeeze (~7.6 m full width). CircuitPaths ignores segs `w:`;
     // hwZones overlays half-width onto the real trace (see applyHwZones in tracks.js).
-    hwZones: [{ s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 }],
+    // Neftchilar Ave is the widest thing on the calendar; the Old City approach
+    // and the T15/T16 seafront kink are noticeably tighter than the base 12 m.
+    hwZones: [
+      { s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 },      // Castle Section
+      // NB s0/s1 are CONTROL-POINT index fractions (applyHwZones walks pts by
+      // index, and the OSM trace is not evenly spaced) — these are the values
+      // that land on racing-lap arc 0.075-0.098 / 0.32-0.345 / 0.735-0.775.
+      { s0: 0.0874, s1: 0.1194, hw: 5.3, ease: 0.012 },  // T2 tight left
+      { s0: 0.2577, s1: 0.3233, hw: 5.4, ease: 0.012 },  // T6/T7 into the Old City
+      { s0: 0.8232, s1: 0.8825, hw: 5.4, ease: 0.012 },  // T15/T16 seafront kink
+    ],
+    // No bankZones on purpose: Baku is flat city tarmac with a drainage crown
+    // and no measurable corner banking, and tilting the road edge here pushes the
+    // armco liveries (placed hard against the road edge) over the lowered inner
+    // verge — the props-over-road probe picks it up immediately.
     // Castle Section (s≈0.42–0.50): narrow to ~7.6 m full width (w = half-width).
     // segs `w:` still documents intent / applies if the CircuitPaths trace drops.
     segs: [

@@ -39,6 +39,24 @@
     // s=0.35 with startFrac 0.8575: a shallow Sphere-sector underpass dip,
     // while the Strip remains essentially level as in the circuit brief.
     elevations: [{ s: 0.2075, halfM: 130, rise: -1.2 }],
+    // The Strip and Koval are enormous multi-lane boulevards; the Sphere-sector
+    // link roads and the last corner are ordinary city streets. s0/s1 are
+    // CONTROL-POINT index fractions in SOURCE space; the racing-lap arc each
+    // lands on is in the trailing comment.
+    hwZones: [
+      { s0: 0.2164, s1: 0.2374, hw: 6.2, ease: 0.012 },  // arc 0.400-0.432 T7
+      { s0: 0.3139, s1: 0.4596, hw: 6.1, ease: 0.012 },  // arc 0.478-0.532 T9-T10
+      { s0: 0.5623, s1: 0.6186, hw: 6.3, ease: 0.012 },  // arc 0.665-0.695 T13
+      { s0: 0.8221, s1: 0.8832, hw: 6.3, ease: 0.012 },  // arc 0.985-0.012 T17
+    ],
+    // Public roads, so crown rather than banking: 2.5-3° on the sweeps only.
+    bankZones: [
+      { frac: 0.2080, angleDeg: 3.0, widthM: 190 },
+      { frac: 0.2664, angleDeg: 3.0, widthM: 180 },
+      { frac: 0.4893, angleDeg: 3.0, widthM: 220 },
+      { frac: 0.5949, angleDeg: 2.5, widthM: 130 },
+      { frac: 0.6481, angleDeg: 2.5, widthM: 130 },
+    ],
     scenery: function (api) {
       const { out, MAT, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
         addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,
@@ -115,6 +133,21 @@
       guardrail(0.45, 0.49, -1, 1.0, [0.80, 0.80, 0.84]);          // T12 onto the Strip
       tyreWall(0.305, 0.345, -1, 1.2, MAGENTA);                     // Sphere chicane apex
       tyreWall(0.955, 0.985, 1, 1.2, CYAN);                        // Harmon chicane apex
+      // Debris fencing above the concrete barrier, right round the lap. The Strip
+      // race is screened end to end and the lap carried two short spans; this is
+      // also most of what the driver sees in the first 10 m of verge.
+      for (const [s0, s1, side] of [
+        [0.07, 0.30,  1], [0.30, 0.50,  1], [0.50, 0.72,  1], [0.72, 0.99,  1],
+        [0.00, 0.25, -1], [0.25, 0.48, -1], [0.48, 0.70, -1], [0.70, 0.83, -1],
+        [0.91, 0.99, -1],
+      ]) fence(s0, s1, side, 3.4, 3.6, [0.55, 0.56, 0.60]);
+      // Lit hoarding band on the barrier top — continuous neon advertising.
+      for (const [s0, s1, side] of [
+        [0.00, 0.32,  1], [0.34, 0.64,  1], [0.66, 0.98,  1],
+        [0.02, 0.33, -1], [0.35, 0.65, -1], [0.67, 0.97, -1],
+      ]) wall(s0, s1, side, 2.4, 1.5,
+              NEON[Math.round(s0 * 13) % NEON.length], 0.35);
+
       // Marshal posts dotted around the lap (off the tarmac via clearance guard)
       for (const [s, side] of [[0.12, 1], [0.22, -1], [0.33, 1], [0.49, -1],
                                [0.62, 1], [0.78, -1], [0.92, 1]]) {
@@ -253,8 +286,8 @@
         });
         place(K(0.0 + i * 0.011), 1, 13, [10.6, 1.0, 25], LED);   // bright fascia rim band
       }
-      grandstand(0.035, 1, 28, 82, [0.28, 0.29, 0.34], [0.42, 0.44, 0.58]); // paddock stand (brighter)
-      grandstand(0.07, -1, 26, 72, [0.26, 0.27, 0.32], [0.45, 0.40, 0.52]); // opposite stand
+      grandstand(0.035, 1, 20, 82, [0.28, 0.29, 0.34], [0.42, 0.44, 0.58]); // paddock stand (brighter)
+      grandstand(0.07, -1, 18, 72, [0.26, 0.27, 0.32], [0.45, 0.40, 0.52]); // opposite stand
       // pit-lane light masts — bright LED headlights (supplement engine's generic posts)
       for (let i = 0; i < 4; i++) {
         const a = anchor(K(0.01 + i * 0.012), 1, 9);
@@ -264,21 +297,21 @@
 
       // --- s 0.05–0.28: paddock approach + T1-T5 sector casino facades ---
       // Billboard towers at the entrance to T1
-      billboard(K(0.05), -1, 30, 22, 13, MAGENTA);
-      billboard(K(0.05), -1, 58, 18, 11, CYAN);
+      billboard(K(0.05), -1, 16, 22, 13, MAGENTA);
+      billboard(K(0.05), -1, 40, 18, 11, CYAN);
       // Prominent hotel towers either side of the start/finish straight approach
-      building(K(0.10), -1, 40, 30, 78, 30, { wall: [0.20, 0.19, 0.22], window: ROSE, floor: 8, lit: true });
-      building(K(0.14), 1, 36, 26, 64, 26, { wall: [0.22, 0.20, 0.20], window: CYAN, floor: 8, lit: true });
+      building(K(0.10), -1, 22, 30, 78, 30, { wall: [0.20, 0.19, 0.22], window: ROSE, floor: 8, lit: true });
+      building(K(0.14), 1, 20, 26, 64, 26, { wall: [0.22, 0.20, 0.20], window: CYAN, floor: 8, lit: true });
       // cityFront fills the T3-T8 sector with a continuous lit casino street-wall.
       // Start at 0.12 (after the two explicit buildings at s 0.10/0.14) to avoid
       // duplicate geometry on the same nodes. Gap 52 safely clears T3 apex.
-      cityFront(0.12, 0.20, -1, 52, { minH: 28, maxH: 72, depth: 22, step: 30,
+      cityFront(0.12, 0.20, -1, 20, { minH: 28, maxH: 72, depth: 22, step: 30,
         palette: [[0.20, 0.18, 0.24], [0.22, 0.20, 0.22]], lit: true, windowCol: ROSE });
-      cityFront(0.12, 0.20,  1, 52, { minH: 24, maxH: 68, depth: 20, step: 30,
+      cityFront(0.12, 0.20,  1, 20, { minH: 24, maxH: 68, depth: 20, step: 30,
         palette: [[0.20, 0.20, 0.22], [0.18, 0.19, 0.24]], lit: true, windowCol: BLUE });
       // Mid-sector buildings around T3-T5 corner
-      building(K(0.22), 1, 60, 30, 72, 28, { wall: [0.20, 0.19, 0.22], window: VIOLET, floor: 8, lit: true });
-      building(K(0.28), -1, 70, 34, 84, 30, { wall: [0.22, 0.20, 0.22], window: BLUE, floor: 8, lit: true });
+      building(K(0.22), 1, 26, 30, 72, 28, { wall: [0.20, 0.19, 0.22], window: VIOLET, floor: 8, lit: true });
+      building(K(0.28), -1, 30, 34, 84, 30, { wall: [0.22, 0.20, 0.22], window: BLUE, floor: 8, lit: true });
 
       // --- s 0.30 L near: MSG Sphere — single-hue LED orb hero ---
       // Open technical sector: one giant silhouette, not a rainbow onion. Venetian
@@ -324,23 +357,23 @@
       // ═══════════════════════════════════════════════════════════════════
 
       // --- s ~0.49 L: Venetian / Palazzo at Strip entry ---
-      building(K(0.49), -1, 48, 42, 98, 40, { wall: [0.64, 0.60, 0.52], window: [1.0, 0.85, 0.35], floor: 8 });
-      building(K(0.505), -1, 78, 32, 75, 32, { wall: [0.62, 0.58, 0.50], window: [0.98, 0.80, 0.30], floor: 8 });
-      tower(K(0.492), -1, 92, 18, 60, { col: [0.58, 0.54, 0.46], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
-      place(K(0.49), -1, 30, [28, 1.8, 8], [1.0, 0.85, 0.25]); // golden uplighting
+      building(K(0.49), -1, 20, 42, 98, 40, { wall: [0.64, 0.60, 0.52], window: [1.0, 0.85, 0.35], floor: 8 });
+      building(K(0.505), -1, 46, 32, 75, 32, { wall: [0.62, 0.58, 0.50], window: [0.98, 0.80, 0.30], floor: 8 });
+      tower(K(0.492), -1, 70, 18, 60, { col: [0.58, 0.54, 0.46], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
+      place(K(0.49), -1, 9, [28, 1.8, 8], [1.0, 0.85, 0.25]); // golden uplighting
 
       // --- s ~0.55 L/east: High Roller (LINQ) — world's tallest observation wheel ---
       // East of Blvd = left when racing southbound. Rim clearance: dist 85 − r 65.
       ferrisWheel(K(0.55), -1, 85, 65);
-      billboard(K(0.56), -1, 36, 16, 10, CYAN);
-      building(K(0.55), -1, 48, 36, 18, 28, { wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
-      place(K(0.55), -1, 34, [24, 0.7, 24], [0.15, 0.45, 0.65]);
-      place(K(0.55), -1, 28, [20, 0.5, 20], [0.10, 0.30, 0.50]);
+      billboard(K(0.56), -1, 18, 16, 10, CYAN);
+      building(K(0.55), -1, 22, 36, 18, 28, { wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
+      place(K(0.55), -1, 10, [24, 0.7, 24], [0.15, 0.45, 0.65]);
+      place(K(0.55), -1, 10, [20, 0.5, 20], [0.10, 0.30, 0.50]);
 
       // --- s ~0.62 R: Caesars Palace — wide cream box, gold up-lights ---
-      building(K(0.62), 1, 46, 62, 75, 46, { wall: [0.68, 0.64, 0.56], window: [1.0, 0.85, 0.40], floor: 8 });
-      place(K(0.62), 1, 28, [44, 2.4, 8], [1.0, 0.88, 0.30]);
-      place(K(0.62), 1, 20, [50, 1.2, 10], [0.95, 0.75, 0.15]);
+      building(K(0.62), 1, 22, 62, 75, 46, { wall: [0.68, 0.64, 0.56], window: [1.0, 0.85, 0.40], floor: 8 });
+      place(K(0.62), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
+      place(K(0.62), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
 
       // --- s ~0.68 R: Bellagio + fountains + reflective lake ---
       building(K(0.68), 1, 40, 60, 55, 40, { wall: [0.58, 0.55, 0.50], window: [1.0, 0.85, 0.40], floor: 7 });
@@ -356,9 +389,9 @@
 
       // --- s ~0.74 L: Paris Las Vegas — Eiffel replica ---
       tower(K(0.74), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
-      place(K(0.74), -1, 30, [10, 1.6, 10], [1.0, 0.80, 0.25]);
-      place(K(0.74), -1, 50, [14, 0.7, 14], [0.95, 0.75, 0.20]);
-      building(K(0.73), -1, 50, 36, 55, 34, { wall: [0.62, 0.58, 0.48], window: [1.0, 0.82, 0.30], floor: 7 });
+      place(K(0.74), -1, 20, [10, 1.6, 10], [1.0, 0.80, 0.25]);
+      place(K(0.74), -1, 22, [14, 0.7, 14], [0.95, 0.75, 0.20]);
+      building(K(0.73), -1, 24, 36, 55, 34, { wall: [0.62, 0.58, 0.48], window: [1.0, 0.82, 0.30], floor: 7 });
 
       // --- s 0.85 both near: Final neon gates ---
       for (const [side, col1, col2] of [[-1, MAGENTA, CYAN], [1, CYAN, MAGENTA]]) {
@@ -370,13 +403,13 @@
       }
 
       // --- s 0.90–0.97: Harmon Ave chicane grandstands + casino backdrop ---
-      grandstand(0.965, 1, 20, 70, [0.18, 0.18, 0.22], [0.50, 0.40, 0.58]);
-      grandstand(0.90, -1, 22, 60, [0.18, 0.18, 0.22], [0.45, 0.40, 0.58]);
+      grandstand(0.965, 1, 16, 70, [0.18, 0.18, 0.22], [0.50, 0.40, 0.58]);
+      grandstand(0.90, -1, 16, 60, [0.18, 0.18, 0.22], [0.45, 0.40, 0.58]);
       grandstand(0.945, 1, 20, 40, [0.16, 0.16, 0.22], [0.42, 0.38, 0.52]);
-      building(K(0.93), 1, 42, 28, 52, 26, { wall: [0.22, 0.18, 0.24], window: VIOLET, floor: 7, lit: true });
-      building(K(0.97), -1, 38, 26, 46, 24, { wall: [0.20, 0.18, 0.22], window: ROSE, floor: 7, lit: true });
-      billboard(K(0.94), -1, 32, 18, 11, CYAN);
-      billboard(K(0.96), 1, 30, 16, 10, MAGENTA);
+      building(K(0.93), 1, 22, 28, 52, 26, { wall: [0.22, 0.18, 0.24], window: VIOLET, floor: 7, lit: true });
+      building(K(0.97), -1, 20, 26, 46, 24, { wall: [0.20, 0.18, 0.22], window: ROSE, floor: 7, lit: true });
+      billboard(K(0.94), -1, 18, 18, 11, CYAN);
+      billboard(K(0.96), 1, 17, 16, 10, MAGENTA);
 
       // --- CONTINUOUS STRIP SKYLINE CANYON (s ~0.49–0.81): packed neon walls on both sides ---
       // Near wall: cityFront() for a proper aligned casino facade (not raw boxy slabs).
@@ -409,34 +442,49 @@
         const casinoPalL = [[0.22, 0.18, 0.22], [0.18, 0.17, 0.24], [0.24, 0.20, 0.20], [0.20, 0.18, 0.26]];
         const casinoPalR = [[0.20, 0.19, 0.26], [0.24, 0.20, 0.22], [0.18, 0.18, 0.22], [0.22, 0.21, 0.20]];
         // Near facade row — primary casino street-wall (gap 56, step 38)
-        cityFront(s0, s1, -1, 56, { minH: 40, maxH: 85, depth: 26, step: 38,
+        cityFront(s0, s1, -1, 19, { minH: 40, maxH: 85, depth: 20, step: 26,
           palette: casinoPalL, lit: true, windowCol: WARM });
-        cityFront(s0, s1,  1, 56, { minH: 40, maxH: 85, depth: 26, step: 38,
+        cityFront(s0, s1,  1, 19, { minH: 40, maxH: 85, depth: 20, step: 26,
           palette: casinoPalR, lit: true, windowCol: CYAN });
-        // Setback taller buildings behind (gap 96, step 50 — sparser, provides depth)
-        cityFront(s0, s1, -1, 96, { minH: 60, maxH: 120, depth: 24, step: 50,
-          palette: [[0.20, 0.17, 0.22], [0.17, 0.16, 0.20]], lit: true, windowCol: GOLD });
-        cityFront(s0, s1,  1, 96, { minH: 60, maxH: 120, depth: 24, step: 50,
-          palette: [[0.18, 0.17, 0.24], [0.22, 0.18, 0.20]], lit: true, windowCol: VIOLET });
+        // The old setback row (gap 96) sat entirely outside the visible band and
+        // duplicated the shared street-night generator's own back row, which
+        // already fills 40-70 m on both sides. Dropped: the near canyon above
+        // now owns the foreground and the generator owns the depth.
 
         // Tall signature casino towers punched along the canyon (prominent landmarks)
         for (let j = 0; j < 8; j++) {
           const s = s0 + (j + 0.5) / 8 * span, side = (j % 2) ? -1 : 1;
           const windowCol = [WARM, CYAN, MAGENTA, GOLD, VIOLET][j % 5];
-          building(K(s), side, 110, 46, 120 + hash(j * 17) * 65, 36,
+          // On the street line with the rest of the canyon (they used to stand
+          // 62 m back, i.e. behind the shared generator's own back row).
+          building(K(s), side, 17, 28, 120 + hash(j * 17) * 65, 36,
             { wall: [0.22, 0.20, 0.22], window: windowCol, floor: 16, lit: true });
         }
 
         // Strip-side neon billboards (spaced, not every step — avoids overdraw)
         for (let j = 0; j < 8; j++) {
           const s = s0 + (j + 0.3) / 8 * span, side = (j % 2) ? 1 : -1;
-          billboard(K(s), side, 48, 16 + hash(j * 3) * 6, 10, NEON[(j + 2) % NEON.length]);
+          billboard(K(s), side, 16, 16 + hash(j * 3) * 6, 10, NEON[(j + 2) % NEON.length]);
         }
         // Palm rows flanking the Strip edge (Vegas Boulevard is lined with palms)
-        for (let j = 0; j < 10; j++) {
-          const s = s0 + (j + 0.2) / 10 * span, side = (j % 2) ? 1 : -1;
-          palm(K(s), side, 24, 11 + hash(j * 23) * 4, LIME);
-          palm(K(s + 0.004), -side, 24, 10 + hash(j * 29) * 3, LIME);
+        for (let j = 0; j < 44; j++) {
+          const s = s0 + (j + 0.2) / 44 * span, side = (j % 2) ? 1 : -1;
+          palm(K(s), side, 15, 11 + hash(j * 23) * 4, LIME);
+          palm(K(s + 0.004), -side, 15, 10 + hash(j * 29) * 3, LIME);
+        }
+        // Continuous hoarding line on the barrier verge — the Strip is wall to
+        // wall signage, and the lap only carried eight boards down its longest
+        // straight.
+        for (let j = 0; j < 54; j++) {
+          const s = s0 + (j + 0.6) / 54 * span, side = (j % 2) ? -1 : 1;
+          billboard(K(s), side, 9, 11 + hash(j * 7.3) * 5, 4.6, NEON[j % NEON.length]);
+        }
+        // Grandstand ring down the Boulevard: the real event seats ~40 000 in
+        // temporary stands along the Strip and at the Sphere.
+        for (let j = 0; j < 14; j++) {
+          const s = s0 + (j + 0.35) / 14 * span, side = (j % 2) ? 1 : -1;
+          grandstand(s, side, 15, 56, [0.20, 0.20, 0.26],
+                     [0.44 + hash(j * 5.1) * 0.14, 0.34, 0.50]);
         }
       }
 
@@ -446,15 +494,15 @@
         palm(K(s), side, 18, 10 + hash(s * 100) * 3, LIME);
         palm(K(s + 0.006), side, 22, 9 + hash(s * 131) * 3, LIME);
       }
-      billboard(K(0.34), -1, 40, 16, 10, VIOLET);
-      billboard(K(0.58), 1, 50, 16, 10, GOLD);
-      billboard(K(0.67), 1, 38, 14, 9, LIME);
-      billboard(K(0.18), 1, 34, 14, 9, ROSE);
-      billboard(K(0.26), -1, 36, 14, 9, BLUE);
+      billboard(K(0.34), -1, 24, 16, 10, VIOLET);
+      billboard(K(0.58), 1, 17, 16, 10, GOLD);
+      billboard(K(0.67), 1, 16, 14, 9, LIME);
+      billboard(K(0.18), 1, 18, 14, 9, ROSE);
+      billboard(K(0.26), -1, 18, 14, 9, BLUE);
 
       // --- s 0.38–0.47: Sphere approach ---
       // Keep this mid-ground open so the Sphere reads as a standalone landmark.
-      building(K(0.40), -1, 64, 28, 66, 26, { wall: [0.20, 0.19, 0.20], window: ROSE, floor: 8, lit: true });
+      building(K(0.40), -1, 34, 28, 66, 26, { wall: [0.20, 0.19, 0.20], window: ROSE, floor: 8, lit: true });
 
       // --- Extra near red-rock desert outcrops (dark, denser silhouette layer) ---
       for (let j = 0; j < 6; j++) {

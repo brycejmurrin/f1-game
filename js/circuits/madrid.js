@@ -20,6 +20,13 @@
     banked: true,
     bankZones: [
       { frac: 0.75, angleDeg: 13.5, widthM: 180 }, // 24% grade = atan(0.24)
+      // Ordinary road camber on the rest of the permanent loop — the bullring
+      // bowl is the exception, not the rule.
+      { frac: 0.0524, angleDeg: 3.0, widthM: 180 },
+      { frac: 0.3990, angleDeg: 3.5, widthM: 110 },
+      { frac: 0.5711, angleDeg: 3.0, widthM: 90 },
+      { frac: 0.6557, angleDeg: 3.0, widthM: 180 },
+      { frac: 0.9296, angleDeg: 3.0, widthM: 90 },
     ],
     // The generic city/furniture base layer carries most of the circuit's
     // density — the bespoke IFEMA halls and La Monumental bowl layer on top of

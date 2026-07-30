@@ -38,6 +38,17 @@
       { s: 0.12, halfM: 340, rise: -22 },  // T1 plunge / T2–4 basin low
       { s: 0.52, halfM: 380, rise: 16 },   // mid-sector climb crest (T10–11)
     ],
+    // Hungaroring camber. T4 is the notably banked one (a genuinely dished left
+    // that lets the cars carry speed downhill); the rest of the amphitheatre
+    // sits on 3-3.5° of ordinary camber.
+    bankZones: [
+      { frac: 0.1888, angleDeg: 3.0, widthM: 100 },   // T1 downhill right
+      { frac: 0.2961, angleDeg: 3.5, widthM: 150 },   // T2
+      { frac: 0.3474, angleDeg: 6.0, widthM: 90 },    // T4 — the banked left
+      { frac: 0.5197, angleDeg: 3.0, widthM: 170 },   // hilltop sweep
+      { frac: 0.8506, angleDeg: 3.0, widthM: 70 },    // T11
+      { frac: 0.9624, angleDeg: 3.5, widthM: 190 },   // final long right
+    ],
     scenery: function (api) {
       const { out, MAT, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
               mountain, peak, ridge, tree, pine, bush, hedge, grandstand, building, motorhome, tower,
