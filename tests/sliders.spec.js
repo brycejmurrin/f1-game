@@ -107,10 +107,18 @@ test.describe("Apex 26 — steering sliders", () => {
       window.__apex.freeze(false);        // ...but we want to drive
       window.__apex.jump(0.0, 0, 0);
       window.__apex.setInput({ steer: 0, throttle: true });
-      for (let i = 0; i < 420; i++) window.__apex.step(1 / 60, 1);  // ~7 s
-      const v = window.__apex.probe().speed;
+      // PEAK speed, not the final one. Un-steered, the car eventually leaves the
+      // road and settles at the off-track floor (10.8 m/s) — which erased whatever
+      // it had actually reached and made both pace settings report the same
+      // number. What the slider changes is how fast the car CAN go, so measure
+      // the maximum it got to.
+      let peak = 0;
+      for (let i = 0; i < 420; i++) {
+        window.__apex.step(1 / 60, 1);
+        peak = Math.max(peak, window.__apex.probe().speed);
+      }
       window.__apex.clearInput();
-      return v;
+      return peak;
     }, paceSlider);
     const slow = await playerTop(2);
     const fast = await playerTop(9);

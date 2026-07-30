@@ -169,15 +169,16 @@ test.describe("Apex 26 — longitudinal & grip", () => {
       // finding its own way round, so opt the assist in explicitly to carry it
       // there. (Previously it relied on the assist being on by default.)
       window.__apex.setPhysics({ roadFollow: 0.7 });
-      // 45 m/s, not 60: frac 0.97 is Parabolica, and flat out an un-steered car
-      // runs wide there whatever the assist does — then genuinely slows on the
-      // grass (grass drag no longer pins an off-track car at 10.8 m/s), so it
-      // never reached the line. 45 m/s is a speed the corner holds.
-      window.__apex.jump(0.97, 45, 0);
+      // Start just BEFORE the line (0.995 ~ 29 m out), not at 0.97: frac 0.97 is
+      // Parabolica, and an un-steered car runs wide there whatever the assist
+      // does — measured 156 ticks off-road, which broke the monotonic-progress
+      // check even once the wrap itself worked. From 0.995 the car crosses the
+      // line within a second and spends the rest of the run on the main straight.
+      window.__apex.jump(0.995, 40, 0);
       window.__apex.setInput({ steer: 0, throttle: true });
       const startLap = window.__apex.cars().find((c) => c.p).lap;
       let prev = window.__apex.probe().s, wraps = 0, monotoneBreaks = 0;
-      for (let i = 0; i < 420; i++) {        // ~7 s — enough to reach & cross s=0
+      for (let i = 0; i < 240; i++) {        // ~4 s — crosses s=0 then runs the straight
         window.__apex.step(1 / 60, 1);
         const s = window.__apex.probe().s;
         let d = s - prev;
