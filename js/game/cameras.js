@@ -67,6 +67,25 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // minus these offsets.
     const eyeFwd = mode === "cockpit" ? COCKPIT_EYE_FWD : 0.55;
     const eyeUp  = mode === "cockpit" ? COCKPIT_EYE_UP : 0.95;
+    if (extra.carPos) {
+      // FREE-WORLD ONBOARD. These are bolted to the CAR, so they must sit at the
+      // car and look down the CAR's nose. They used to be built from the road:
+      // the eye was placed along the ROAD tangent from a road-frame point, and
+      // the aim ran 30 m down the centreline — hood was 100 % curved look-ahead,
+      // cockpit 85 % road tangent + 15 % curve. (The old cockpit comment claimed
+      // it faced "the car's own heading"; `t` is the road tangent at the car, not
+      // c.head, so it never did.) Driving straight through a bend swung the view
+      // round the corner while the nose slid across the frame — the arc reaching
+      // the driver through the most immersive camera in the game.
+      // The road still supplies eye HEIGHT and the gradient the view pitches
+      // with (t[1]) — surface, not line.
+      const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
+      eye = [extra.carPos[0] + hx * eyeFwd, p[1] + eyeUp, extra.carPos[1] + hz * eyeFwd];
+      const aimUp = mode === "cockpit" ? eyeUp - 0.15 : eyeUp + 1.2;
+      tgt = [extra.carPos[0] + hx * 30, p[1] + aimUp + t[1] * 30, extra.carPos[1] + hz * 30];
+      fov = lerp(64, 78, spN) + dep * 3;
+      return { eye, tgt, fov };   // cockpit/hood skip the ground clamp anyway
+    }
     eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
     if (mode === "cockpit") {
       // Face straight FORWARD down the car's own heading (the tangent at the
@@ -163,8 +182,24 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const eyeUp = far ? 4.2 : 2.1;
     Tracks.sample(track, wrapS(s - back), cvB);
     const cx = x * 0.5;
-    eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
-    tgt = aheadPt(far ? 9 : 6, far ? 1.0 : 0.7, x * 0.4);
+    if (extra.carPos) {
+      // FREE-WORLD CHASE: sit behind the CAR, along the CAR's heading, and look
+      // where the CAR is pointing. This used to sit an arc-distance back along
+      // the ROAD and aim at the centreline metres up the road, deliberately
+      // "bending with the corner" — so the rig rode the road, not the car. Drive
+      // straight through a bend with the assists off and the camera swung round
+      // the corner while the car slid across the screen: the track's arc reaching
+      // the driver through the viewport, however clean the physics underneath.
+      // The road is still consulted for HEIGHT (and the ground clamp below), which
+      // is what it should be for.
+      const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
+      const lead = far ? 9 : 6;
+      eye = [extra.carPos[0] - hx * back, cvB.p[1] + eyeUp + bankDy, extra.carPos[1] - hz * back];
+      tgt = [extra.carPos[0] + hx * lead, p[1] + (far ? 1.0 : 0.7), extra.carPos[1] + hz * lead];
+    } else {
+      eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
+      tgt = aheadPt(far ? 9 : 6, far ? 1.0 : 0.7, x * 0.4);
+    }
     fov = lerp(52, 66, spN) + (far ? 4 : 0) + dep * 3;
   }
   // ---- ground floor -------------------------------------------------------
