@@ -595,6 +595,15 @@ const TrackMesh = (function () {
             if (dd * ds < 6) continue;                  // always skip the vert's immediate own road
             const ex = wx - px[j], ez = wz - pz[j];
             const d2 = ex * ex + ez * ez;
+            // The height to clip AGAINST is node j's ROAD SURFACE at the lateral
+            // position this vert sits at — including j's banking. Clipping
+            // against the bare centreline py[j] is wrong on any banked corner:
+            // it carves the verge below a low edge that has itself dropped
+            // 2.3 m, and leaves terrain sitting above a high edge that has
+            // risen 2.3 m. Both happen at Zandvoort, where the hairpins double
+            // back inside the clip radius of their own banked verges.
+            const oj = ex * track.rx[j] + ez * track.rz[j];
+            const roadYj = py[j] + bankOffsetAt(track, j, oj);
             // A vert (or the face it anchors) that lands ON another node's tarmac
             // is buried well under that road UNCONDITIONALLY — heading-independent.
             // This kills the green wedge where the inside verge of a corner chords
@@ -603,7 +612,7 @@ const TrackMesh = (function () {
             // own verge sits ~2 m beyond its edge so it never enters this radius.
             const onEdge = hw[j] - 0.3;
             if (d2 < onEdge * onEdge) {
-              if (wy > py[j] - 0.5) wy = py[j] - 0.5;
+              if (wy > roadYj - 0.5) wy = roadYj - 0.5;
               continue;
             }
             // Elevated terrain hanging over a LOWER road: an elevation mound
@@ -615,19 +624,35 @@ const TrackMesh = (function () {
             // to the mound's natural height further out. Heading-independent, and
             // gated on wy>py[j]+0.3 so flat verges (always at/below grade) are
             // untouched.
-            // ...but NOT when this vert is high because its OWN section is
-            // banked. A banked verge is not a mound: it rises with the tarmac it
-            // belongs to, by design. Zandvoort's Hugenholtz doubles back to
-            // within 12 m of itself, so the returning leg saw the banked outer
-            // verge sitting 2.26 m above it and carved it flat — leaving the
-            // banked road edge standing proud of the ground beside it with a
-            // 2 m drop, which reads as the road corkscrewing the wrong way.
-            if (wy > py[j] + 0.3 && !(by > 0.3)) {
+            // Measured against j's banked surface, so a banked verge that
+            // legitimately rises with its own tarmac is not mistaken for a mound
+            // — while terrain genuinely hanging over the racing line still gets
+            // carved, banked or not.
+            if (wy > roadYj + 0.3) {
               const fr = hw[j] + 26, nr = hw[j] + 0.5;
               if (d2 < fr * fr) {
                 const dist = Math.sqrt(d2);
                 const tt = Math.max(0, Math.min(1, (dist - nr) / (fr - nr)));
-                const tgt = (py[j] - 0.4) * (1 - tt * tt) + wy * (tt * tt);
+                let tgt = (roadYj - 0.4) * (1 - tt * tt) + wy * (tt * tt);
+                // A verge must still MEET the tarmac it borders. The channel
+                // reaches 26 m to catch a broad mound (Miami's Hard Rock rise
+                // bulges over the track from ~20 m out), but on a banked corner
+                // whose lap doubles back — Zandvoort's hairpins run ~28 m apart —
+                // that reach lands on the far road's own banked verge and drags
+                // it a metre below the tarmac it belongs to, leaving a ledge
+                // along the outside of the banking.
+                //
+                // Hold the vert at its OWN section's road-edge height for the
+                // first few metres past the tarmac, releasing over 8 m so the
+                // channel still wins where the mound actually is. Verts that sit
+                // ON another road never get here: the unconditional bury above
+                // fires first and continues.
+                const ownDist = Math.abs(o) - w;
+                if (ownDist < 8) {
+                  const hold = 1 - ownDist / 8;
+                  const floorY = py[k] + bankOffsetAt(track, k, o) - 0.35;
+                  if (tgt < floorY) tgt += (floorY - tgt) * hold;
+                }
                 if (wy > tgt) wy = tgt;
               }
             }
@@ -643,7 +668,7 @@ const TrackMesh = (function () {
             const near = hw[j] + 1.0;
             const dist = Math.sqrt(d2);
             const tt = Math.max(0, Math.min(1, (dist - near) / (far - near)));
-            const target = (py[j] - 1.6) + tt * tt * 1.6;   // dip under the road, easing back to grade
+            const target = (roadYj - 1.6) + tt * tt * 1.6;   // dip under the road (banked), easing back to grade
             if (wy > target) wy = target;
           }
           pos.push(wx, wy, wz);
