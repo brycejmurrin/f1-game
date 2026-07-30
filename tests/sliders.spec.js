@@ -94,9 +94,17 @@ test.describe("Apex 26 — steering sliders", () => {
   test("OVERALL SPEED lifts BOTH the player's and the AI's top speed", async ({ page }) => {
     await startRace(page);
     // Top speed reached flat-out on the straight at a given pace, for the player.
+    // Measure the player ALONE. This used to jump into the middle of the live
+    // 22-car grid at s = 0 with zero speed, so what it actually measured was a car
+    // stuck in traffic: ~40-85 m of progress in 7 s, usually ending on the grass at
+    // the off-track floor, and different every run. Both pace settings returned the
+    // same pinned speed and the test failed regardless of the slider. Shove the
+    // field out of the way (park() does exactly this) and give the car clear road.
     const playerTop = (paceSlider) => page.evaluate((sv) => {
       const el = document.getElementById("pm-pace");
       el.value = String(sv); el.dispatchEvent(new Event("input", { bubbles: true }));
+      window.__apex.park(0.0);            // clears the field, freezes
+      window.__apex.freeze(false);        // ...but we want to drive
       window.__apex.jump(0.0, 0, 0);
       window.__apex.setInput({ steer: 0, throttle: true });
       for (let i = 0; i < 420; i++) window.__apex.step(1 / 60, 1);  // ~7 s
@@ -112,7 +120,10 @@ test.describe("Apex 26 — steering sliders", () => {
     const aiTop = (paceSlider) => page.evaluate((sv) => {
       const el = document.getElementById("pm-pace");
       el.value = String(sv); el.dispatchEvent(new Event("input", { bubbles: true }));
-      window.__apex.race("monza", "day", "dry"); window.__apex.go();
+      // NOTE: race() rebuilds the track asynchronously; go() and step() used to run
+      // immediately after it, so this raced the build. Reuse the already-loaded
+      // track instead — the pace slider is what is under test, not a reload.
+      window.__apex.go();
       window.__apex.setInput({ steer: 0, throttle: false });
       for (let i = 0; i < 600; i++) window.__apex.step(1 / 60, 1);  // 10 s of AI racing
       const ai = window.__apex.cars().filter((c) => !c.p);

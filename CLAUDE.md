@@ -321,6 +321,37 @@ curvature of the arc the car is actually on (`kPath = k/h`, not the centreline's
 the driver keeps full manual authority to recover, and fades under hard braking
 (`brakeFade`) to kill the turn-in snap.
 
+**Changing an assist DEFAULT does not reach existing players.** `store.get(k, d)`
+returns the stored value whenever the key exists, so a new default only lands on a
+fresh install — anyone who ever opened the settings keeps the old behaviour
+forever. `drivingHelp` and `raceLine` are migrated once via `STEER_SCHEMA` in
+`js/game/steer-tuning.js`; bump it if a slider's *meaning* changes again (an old
+stored number does not carry over when the scale it was written against moves).
+
+### The arc must not reach the driver
+
+With the assists off, **nothing derived from the track's curvature or its racing
+line may affect the player** — not just the forces. Auditing forces alone missed
+several channels, each of which read as "the car is being pulled":
+
+| channel | must come from |
+|---|---|
+| steering | driver input + tyre forces (assist only when opted in) |
+| lap progress | the car's own world motion, via `trackFrom()` |
+| rendered position | `px`/`pz` interpolated in **world** space, never lerped/damped `(s, x)` |
+| drawn nose angle | the real heading `psi`, unclamped and unlagged |
+| tyre squeal / marks / smoke | body **slip angle**, never `|k| * speed` |
+| barrier alignment | the **barrier's** tangent (`wallAt` slope), not the centreline's |
+| chase / cockpit / hood cameras | the car's world pose + heading |
+
+Legitimate track reads are *surface* properties — grip, kerbs, banking, slope
+gravity, crest/dip vertical load, road width, barrier position — plus AI-only
+logic (racing line, corner braking, ERS) and the broadcast cameras.
+
+When adding anything that reads `Tracks.curvature()`, ask which column it belongs
+in. `grep -rn "Tracks.curvature\|kCur" js/game.js js/game/*.js` is the sweep;
+every hit should be AI-only, assist-gated, broadcast-only, or surface.
+
 ---
 
 ## Lighting & sky (`js/render/glx.js` + `applyRaceSettings` in `js/game/atmosphere.js`)
