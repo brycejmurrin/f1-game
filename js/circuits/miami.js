@@ -42,6 +42,15 @@
     // Elevations are authored in source-trace coordinates. 0.8925 maps through
     // startFrac 0.2325 to racing s=0.66: the Turnpike T14–15 crest, ~11 ft.
     elevations: [{ s: 0.8925, halfM: 220, rise: 3.5 }],
+    // Hard Rock is car-park flat and laid over temporary tarmac, so camber is
+    // modest throughout — 3-3.5° on the sweeps, nothing dramatic anywhere.
+    bankZones: [
+      { frac: 0.0775, angleDeg: 3.5, widthM: 240 },
+      { frac: 0.3785, angleDeg: 3.0, widthM: 130 },
+      { frac: 0.6788, angleDeg: 3.5, widthM: 200 },
+      { frac: 0.7496, angleDeg: 3.0, widthM: 180 },
+      { frac: 0.8808, angleDeg: 3.0, widthM: 240 },
+    ],
     scenery: function (api) {
       const {
         out, MAT, COL, n, px, pz, pyMin, place, prop, backdrop, grandstand,

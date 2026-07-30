@@ -29,6 +29,19 @@
     bankZones: [
       { frac: 0.1575, angleDeg: 18, widthM: 140 },  // Hugenholtz banked hairpin
       { frac: 0.9687, angleDeg: 19, widthM: 140 },  // Arie Luyendyk banked final turn
+      // The rest of the lap is not a bowl, but the dune circuit still carries
+      // ordinary 3-4° camber — Tarzan most of all.
+      { frac: 0.0683, angleDeg: 4.0, widthM: 200 },  // Tarzan
+      { frac: 0.5047, angleDeg: 3.0, widthM: 110 },  // Hugenholtz-side sweep
+      { frac: 0.7590, angleDeg: 3.5, widthM: 140 },  // Hans Ernst
+    ],
+    // Zandvoort is one of the narrowest circuits on the calendar and the infield
+    // is tighter than the banked corners. s0/s1 are CONTROL-POINT index fractions
+    // in SOURCE space; the racing-lap arc each lands on is in the comment.
+    hwZones: [
+      { s0: 0.7310, s1: 0.8081, hw: 6.0, ease: 0.012 },  // arc 0.395-0.432 infield esses
+      { s0: 0.0142, s1: 0.0785, hw: 6.0, ease: 0.012 },  // arc 0.748-0.778 Hans Ernst
+      { s0: 0.1745, s1: 0.2287, hw: 6.1, ease: 0.012 },  // arc 0.868-0.898 Kumho
     ],
     pal: { zenith: [0.28, 0.41, 0.60], horizon: [0.82, 0.78, 0.70], grass: [0.42, 0.50, 0.25], runoff: [0.60, 0.52, 0.34], fog: [0.74, 0.73, 0.70], fogDensity: 0.0024, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.94, 0.80], sunColor: [1, 0.9, 0.74] },
     segs: [

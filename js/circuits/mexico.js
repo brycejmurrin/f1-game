@@ -33,10 +33,27 @@
       { t: 0, l: 300 }, { t: -90, l: 100 }, { t: 80, l: 90 }, { t: 0, l: 250 }, { t: 90, l: 100 }, { t: 0, l: 500 },
       { t: -60, l: 80 }, { t: 60, l: 70 }, { t: 0, l: 200 }, { t: 90, l: 100 }, { t: -130, l: 120 },
     ],
-    // The real circuit is effectively flat. These source-coordinate undulations
-    // put less than a metre of relief under the final Estadio/Peraltada complex;
-    // the previous ±7 m pair remapped across start/finish and invented a 12 m hill.
-    elevations: [{ s: 0.535, halfM: 180, rise: 0.7 }, { s: 0.605, halfM: 150, rise: -0.25 }],
+    // Peraltada camber. The old banked bowl only survives as the final right/left
+    // onto the pit straight, but it is still the one genuinely banked corner here
+    // — everything else is ordinary 3° road camber.
+    bankZones: [
+      { frac: 0.1866, angleDeg: 3.5, widthM: 200 },   // the long right after the esses
+      { frac: 0.7808, angleDeg: 3.0, widthM: 80 },
+      { frac: 0.8834, angleDeg: 3.0, widthM: 90 },    // Foro Sol stadium section
+      { frac: 0.9039, angleDeg: 3.0, widthM: 100 },
+      { frac: 0.9692, angleDeg: 6.0, widthM: 120 },   // Peraltada
+      { frac: 0.0075, angleDeg: 5.0, widthM: 140 },   // Peraltada exit onto the straight
+    ],
+    // Source-coordinate undulations. Hermanos Rodríguez sits on a drained lakebed
+    // and is gentle, but not flat: it climbs through the esses, crests before the
+    // stadium and drops through Foro Sol — ~7 m end to end, under 2 % anywhere.
+    // (The old ±7 m pair remapped across start/finish and invented a 12 m hill;
+    // these are authored in SOURCE space so that cannot happen.)
+    elevations: [
+      { s: 0.855, halfM: 420, rise: 5.2 },
+      { s: 0.245, halfM: 380, rise: 3.2 },
+      { s: 0.520, halfM: 280, rise: -1.8 },
+    ],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, place, backdrop, groundPlane,
               addBox, addCyl, addPrism, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,

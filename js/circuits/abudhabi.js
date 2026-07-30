@@ -27,6 +27,25 @@
       { kind: "floodlights", s0: 0.855, s1: 0.895 },
     ],
     pal: { horizon: [0.32, 0.16, 0.08], zenith: [0.10, 0.06, 0.24], sunColor: [0.90, 0.68, 0.38], ambientSky: [0.36, 0.28, 0.24], ambientGround: [0.32, 0.20, 0.12], fogColor: [0.22, 0.12, 0.06], fogDensity: 0.0020, sunDir: [0.55, 0.15, 0.32], concrete: [0.28, 0.27, 0.26], runoff: [0.24, 0.23, 0.22], grass: [0.20, 0.18, 0.14] },
+    // Yas Marina camber. The 2021 remodel turned the old north hairpin into one
+    // long banked left (the 280 m sweeper here) — that gets the most bank; the
+    // rest of the lap carries ordinary road-course camber of 2.5-3°.
+    bankZones: [
+      { frac: 0.0425, angleDeg: 3.0, widthM: 180 },   // T1 opening right
+      { frac: 0.1509, angleDeg: 3.0, widthM: 120 },   // T2 left
+      { frac: 0.5777, angleDeg: 5.0, widthM: 240 },   // the banked long left
+      { frac: 0.7453, angleDeg: 3.0, widthM: 110 },   // hotel-section left
+      { frac: 0.8446, angleDeg: 3.0, widthM: 100 },   // marina right
+      { frac: 0.9500, angleDeg: 2.5, widthM: 90 },    // final left onto the straight
+    ],
+    // Yas Marina is near sea level but not dead flat: it climbs gently away from
+    // the pit straight, crests over the north loop, then eases back down through
+    // the marina. ~9 m end to end, no gradient over ~2 %. (s = SOURCE fraction.)
+    elevations: [
+      { s: 0.230, halfM: 460, rise: 3.5 },
+      { s: 0.635, halfM: 700, rise: 7.5 },
+      { s: 0.945, halfM: 300, rise: -1.5 },
+    ],
     segs: [
       { t: 0, l: 300 }, { t: 60, l: 90 }, { t: -70, l: 80 }, { t: 0, l: 400 }, { t: -90, l: 100 }, { t: 0, l: 200 },
       { t: -60, l: 90 }, { t: 0, l: 300 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: -90, l: 100 }, { t: 60, l: 80 },

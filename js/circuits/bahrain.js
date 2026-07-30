@@ -32,6 +32,16 @@
     // source 0.645/0.725 place the gentle T8 descent and T9–10 rise at racing
     // fractions 0.42/0.50 instead of the old, misplaced T1/back-straight humps.
     elevations: [{ s: 0.645, halfM: 260, rise: -3 }, { s: 0.725, halfM: 180, rise: 2 }],
+    // Sakhir camber: the fast desert sweeps (T5-T7, T10) carry real banking so
+    // they can be leaned on; the stop-start 90° corners get a road crown only.
+    bankZones: [
+      { frac: 0.0475, angleDeg: 3.0, widthM: 120 },   // T1
+      { frac: 0.1166, angleDeg: 3.0, widthM: 100 },   // T4
+      { frac: 0.3373, angleDeg: 4.0, widthM: 220 },   // T5-T7 sweep
+      { frac: 0.4064, angleDeg: 3.5, widthM: 190 },
+      { frac: 0.6077, angleDeg: 3.0, widthM: 130 },   // T10
+      { frac: 0.9799, angleDeg: 3.0, widthM: 100 },   // final right
+    ],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, hash, vadd,
         place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid,
