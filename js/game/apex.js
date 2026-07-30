@@ -433,11 +433,22 @@ const api = {
   // track edge.
   eyeAt(f, lat = 0, h = 2.5, lookF, lookLat = 0, lookH = 1) {
     if (!G.track) return false;
-    Tracks.sample(G.track, ((f % 1) + 1) % 1 * G.track.total, smp);
-    const eye = [smp.p[0] + smp.r[0] * lat, smp.p[1] + h, smp.p[2] + smp.r[2] * lat];
+    // `h` is height above the ROAD SURFACE, which on a banked corner is not the
+    // centreline plane: at Zandvoort the outer edge stands 2.4 m proud of it.
+    // Without the bank term, eyeAt(f, -6.5, 1.2) put the eye a metre UNDER the
+    // tarmac and rendered the world from inside the terrain — which reads
+    // exactly like the ground covering the track, and is the sort of false
+    // alarm this hook exists to rule out. Ride the bank like the in-race
+    // cameras do (game.js applies the same banking() dy).
+    const sPos = ((f % 1) + 1) % 1 * G.track.total;
+    Tracks.sample(G.track, sPos, smp);
+    const bk = Tracks.banking(G.track, sPos, lat);
+    const eye = [smp.p[0] + smp.r[0] * lat, smp.p[1] + h + (bk ? bk.dy : 0), smp.p[2] + smp.r[2] * lat];
     const lf = lookF == null ? f + 0.01 : lookF;
-    Tracks.sample(G.track, ((lf % 1) + 1) % 1 * G.track.total, smp2);
-    const tgt = [smp2.p[0] + smp2.r[0] * lookLat, smp2.p[1] + lookH, smp2.p[2] + smp2.r[2] * lookLat];
+    const lPos = ((lf % 1) + 1) % 1 * G.track.total;
+    Tracks.sample(G.track, lPos, smp2);
+    const lbk = Tracks.banking(G.track, lPos, lookLat);
+    const tgt = [smp2.p[0] + smp2.r[0] * lookLat, smp2.p[1] + lookH + (lbk ? lbk.dy : 0), smp2.p[2] + smp2.r[2] * lookLat];
     G.dbgCam = { eye, target: tgt, fov: 60, far: 6000 };
     return { eye, target: tgt };
   },
