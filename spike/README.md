@@ -53,6 +53,17 @@ node spike/capture.mjs all              # both → scratch/captures/spike/result
 timeboxed 1-day Babylon.js 8 comparison reusing `spike-data.js` (UMD script tag,
 `VertexData` with RGB→RGBA repack, DefaultRenderingPipeline), else stay on GLX/WGX.
 
+## WebGPU headless status (criterion 7 constraint)
+
+`navigator.gpu` is **absent** in this environment's headless Chromium 141 under
+every flag combination tried (`--headless=new`, `--enable-unsafe-webgpu`,
+`--use-webgpu-adapter=swiftshader`, `--enable-features=Vulkan`,
+`--enable-blink-features=WebGPU`), even though the SwiftShader Vulkan ICD ships
+with the build (`vk_swiftshader_icd.json`). Criterion 7's WebGPU half therefore
+cannot be proven headless here — open `spike/three-spike.html` (no `?gl=1`) in a
+desktop Chrome/Edge and confirm the HUD reads `backend webgpu`. The WebGL2 half
+(same TSL material compiled to GLSL) is what CI exercises.
+
 ## Port-cost notes (criterion 6, filled during implementation)
 
 - Surface-noise chunk (hash21/vnoise), the lamp loop (windowed inverse-square +
