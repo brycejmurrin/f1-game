@@ -26,6 +26,19 @@ async function startRace(page, id) {
   await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
   await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
+  // info().track goes non-null as soon as the track OBJECT exists, which is before
+  // its elevation is necessarily in place. Scanning that window reads the flat
+  // default tangent, so the "this track really does descend" assertion saw dn = 0
+  // exactly — intermittently, and worst on the circuits with the least relief
+  // (abudhabi 9.2 m of range, qatar 6.7 m). Run in isolation the same scan finds
+  // dn = -0.0226, so this was a race with the build, not a claim about the data.
+  // Wait for the profile to actually show relief before anything reads a slope.
+  await page.waitForFunction(() => {
+    const p = window.__apex.trackProfile(120);
+    if (!p || !p.length) return false;
+    const ys = p.map((q) => q.y);
+    return Math.max(...ys) - Math.min(...ys) > 0.5;   // metres of elevation range
+  }, { timeout: 20000 });
   await page.evaluate(() => window.__apex.go());
 }
 
