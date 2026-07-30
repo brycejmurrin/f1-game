@@ -70,13 +70,28 @@ desktop Chrome/Edge and confirm the HUD reads `backend webgpu`. The WebGL2 half
   aimed cone + bleed), and 2 of 15 procedural materials transliterated to TSL in
   ~120 lines of `three-spike.js` (vs ~140 lines of the corresponding GLSL) —
   mostly mechanical `a.mul(b)` chaining. `uniformArray` + `Loop`/`If`/`Break`
-  express the stride-15 flat light array directly.
-- Friction found so far: TSL method-chaining is verbose vs infix GLSL; the
+  express the stride-15 flat light array directly, **including dynamic indexing
+  on the WebGL backend** (verified in dumped GLSL: `buffer[i]` UBO access,
+  vec3→vec4 padding, Break-in-If — all compile correctly).
+- **Biggest friction found — TSL stranded-assignment pitfall**: TSL emits a
+  cached property chain (`normalWorld` → `normalView` → varying) at its FIRST
+  USE SITE. A first use inside `If`/`ElseIf` strands the assignments in that
+  branch; every out-of-branch consumer then silently reads an uninitialized
+  local (our lamps went black on all non-METAL surfaces; even the sun/hemisphere
+  terms were corrupted). Rule: **anchor shared varying-derived nodes with
+  `.toVar()` as an unconditional Fn-body statement** before any conditional use;
+  a `.toVar()` outside an Fn body does NOT anchor (also emits at first use —
+  measured). Cost: a day of bisecting; the `__spike.shader()` GLSL-dump hook and
+  `?viz=` modes now make this class of bug diagnosable in minutes.
+- Friction (minor): TSL method-chaining is verbose vs infix GLSL; the
   Narkowicz-parameterised ACES + 61-uniform composite would need a custom
   `outputNode` chain (bloom addon shows the pattern); three's ACESFilmic is the
   Hill fit (grade shift accepted under "retune after").
 - The game's no-sRGB-encode calibration is reproducible
   (`ColorManagement.enabled = false` + `LinearSRGBColorSpace`).
+- Authentic-brightness note: lamp records must be scaled by the game's night
+  ramp (`LT.lampLevel` 0.26, as game.js does) — at scale 1.0 the 2,400-HDR pit
+  straight records blow the road to white.
 
 ## Known spike simplifications (deliberate, Phase-B work if this graduates)
 
