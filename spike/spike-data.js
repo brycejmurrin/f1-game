@@ -84,7 +84,10 @@ const SpikeData = (function () {
    * ahead bias, per-lamp flicker). Returns the flat stride-15 array or null. */
   function frameLights(eye, fwd) {
     if (!_track) return null;
-    LightTune.setFrameLights(_frame, _track, [], eye, 1, fwd || [0, 0, 0], false);
+    // Authentic night brightness: game.js passes scale = floodDayLvl(1 at deep
+    // night) * LT.lampLevel (def 0.26) — not 1.0 (4x too hot, blows the road out).
+    const scale = LightTune.LT.lampLevel != null ? LightTune.LT.lampLevel : 0.26;
+    LightTune.setFrameLights(_frame, _track, [], eye, scale, fwd || [0, 0, 0], false);
     return _frame.lights || null;
   }
 

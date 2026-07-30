@@ -100,6 +100,16 @@ const vnoise = Fn(([pIn]) => {
 // distance fades (far 90-260 m, near 26-90 m, brushed 26-55 m) as lit.js.
 // Returns vec4(albedo, roughness).
 const applyMaterial = Fn(([mid, baseCol, baseRough, wp, nrm, vd]) => {
+  // PORT FRICTION (root cause of the black-lamp defect, confirmed via generated-
+  // GLSL dumps): TSL emits a cached property chain (normalWorld -> normalView ->
+  // v_normalViewGeometry) at its FIRST USE SITE. When that first use sits inside
+  // an If/ElseIf branch (METAL below), the assignments strand in that branch and
+  // every later out-of-branch consumer (the emissive lamp loop, even the PBR sun/
+  // hemisphere terms) reads an uninitialized local. A .toVar() anchor as an
+  // UNCONDITIONAL Fn-body statement forces the chain into main scope — Fn-body
+  // statements emit in order; a .toVar() outside an Fn body does NOT anchor
+  // (it also emits at first use — measured, not guessed).
+  const N = vec3(nrm).toVar();
   const albedo = vec3(baseCol).toVar();
   const rough = float(baseRough).toVar();
   const far = clamp(vd.sub(90.0).div(170.0).oneMinus(), 0.0, 1.0);
@@ -110,7 +120,7 @@ const applyMaterial = Fn(([mid, baseCol, baseRough, wp, nrm, vd]) => {
     albedo.mulAssign(g.mul(0.22).mul(far).add(1.0));
     albedo.y.mulAssign(g.mul(0.08).mul(far).add(1.0));
   }).ElseIf(mid.greaterThan(3.5).and(mid.lessThan(4.5)), () => {    // METAL
-    const an = normalize(nrm).abs();
+    const an = normalize(N).abs();
     const hc = select(an.x.greaterThan(an.z), wp.z, wp.x);
     const brushFade = clamp(vd.sub(26.0).div(29.0).oneMinus(), 0.0, 1.0);
     albedo.mulAssign(vnoise(vec2(hc.mul(40.0), wp.y.mul(2.0))).sub(0.5).mul(0.12).mul(brushFade).add(1.0));
@@ -122,7 +132,8 @@ const applyMaterial = Fn(([mid, baseCol, baseRough, wp, nrm, vd]) => {
 // PORT: the punctual-lamp loop from lit.js:775-860 — windowed inverse-square
 // (1-(d/r)^4)^2 / (max(d,4)^2+1), aimed cone smoothstep(cosOuter,cosInner) with
 // bleed floor, lambert pool + a Blinn specular standing in for the GGX lobe.
-const lampLight = Fn(([albedo, N, wp, rough]) => {
+const lampLight = Fn(([albedo, Nin, wp, rough]) => {
+  const N = vec3(Nin).toVar();      // same unconditional-anchor discipline
   const sum = vec3(0).toVar();
   const V = normalize(cameraPosition.sub(wp));
   Loop({ start: int(0), end: int(MAX_LIGHTS), type: 'int', condition: '<' }, ({ i }) => {
@@ -162,25 +173,15 @@ function litMaterial(baseRough, opts = {}) {
   const matId = attribute('mat', 'float');
   const baseCol = attribute('color', 'vec3');
   const vd = length(positionWorld.sub(cameraPosition));
-  const packed = applyMaterial(matId, baseCol, float(baseRough), positionWorld, normalWorld, vd);
+  // normalWorld's stranded-assignment fix lives in applyMaterial's body top
+  // (see the PORT FRICTION note there) — anchors must be Fn-body statements.
+  const N = normalWorld;
+  const packed = applyMaterial(matId, baseCol, float(baseRough), positionWorld, N, vd);
   if (VIZ === 'u0' || VIZ === 'pool') {
     const m = new THREE.MeshBasicNodeMaterial();
     m.colorNode = VIZ === 'u0'
       ? uLampCol.element(int(0)).div(500.0)
-      : lampLight(vec3(0.25), normalWorld, positionWorld, float(0.5));
-    if (opts.doubleSided) m.side = THREE.DoubleSide;
-    return m;
-  }
-  if (VIZ === 'em' || VIZ === 'em0' || VIZ === 'empk') {
-    // bisect: same standard material, emissiveNode variants
-    const m = new THREE.MeshStandardNodeMaterial({ metalness: 0.0 });
-    m.colorNode = packed.xyz;
-    m.roughnessNode = packed.w;
-    m.emissiveNode = VIZ === 'em0'
-      ? uLampCol.element(int(0)).div(500.0)                                 // no loop
-      : VIZ === 'em'
-        ? lampLight(vec3(0.25), normalWorld, positionWorld, float(0.5))    // loop, const args
-        : lampLight(packed.xyz, normalWorld, positionWorld, packed.w);     // loop, packed args (== defect)
+      : lampLight(vec3(0.25), N, positionWorld, float(0.5));
     if (opts.doubleSided) m.side = THREE.DoubleSide;
     return m;
   }
@@ -189,7 +190,7 @@ function litMaterial(baseRough, opts = {}) {
   m.roughnessNode = packed.w;
   // Lamps ride emissiveNode: additive on top of the sun+hemisphere standard
   // lighting, unshadowed — same as GLX (no per-light shadows in the loop).
-  m.emissiveNode = lampLight(packed.xyz, normalWorld, positionWorld, packed.w);
+  m.emissiveNode = lampLight(packed.xyz, N, positionWorld, packed.w);
   if (opts.doubleSided) m.side = THREE.DoubleSide;
   return m;
 }
