@@ -12,7 +12,7 @@ const SceneryNature = (function () {
   "use strict";
 
   function create(ctx) {
-    const { out, track, n, hw, px, pz, NIGHT, MAT,
+    const { out, track, n, hw, px, py, pz, NIGHT, MAT,
             clearTreeDist,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             addMountain, emit, RAW, rejBox, recordBarrier, groundYAt,
@@ -54,8 +54,20 @@ const SceneryNature = (function () {
       // to the fallback so both sides of the seam agree. Not applied to the
       // terrainYAt branch — the ribbon already carries it, and adding it twice
       // would double the bank.
-      const ty = terrainYAt(cx, cz);
-      const base = ty == null ? groundYAt(k, dist) + bankOffsetAt(track, k, o) : ty;
+      // Inside the road-to-ribbon GAP the ground is not terrain at all — the
+      // rendered ribbon starts ~2.2 m out, and TrackSurface.heightAt() is a flat
+      // cross-section that knows nothing about the road it borders. Anything
+      // anchored in that band (kerb strips sit at 1.35 m) must follow the ROAD
+      // SURFACE, which on a banked corner is the edge height, not a notional
+      // shelf 1.3 m below it.
+      // Inside the band the ROAD's own shoulder covers, the road defines the
+      // ground — do not consult terrainYAt at all. At a hairpin that doubles
+      // back on itself (Zandvoort) the XZ lookup happily resolves the OTHER
+      // leg's ribbon, which sits a metre higher and buried the kerb strip.
+      const base = dist < 2.2
+        ? py[k] + bankOffsetAt(track, k, o)
+        : (() => { const ty = terrainYAt(cx, cz);
+                   return ty != null ? ty : groundYAt(k, dist) + bankOffsetAt(track, k, o); })();
       return { c: [cx, base - 0.3, cz], r, u, t };
     };
     // Conifer/pine: tapered trunk + stacked cones. col = needle green. Three
