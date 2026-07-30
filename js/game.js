@@ -2502,8 +2502,16 @@ function updateCar(c, dt, ranked) {
   }
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
+    // Squeal from the CAR's own slip, not from the road's curvature. This used to
+    // be |k| * speed — so the tyres screamed because the ROAD bent, even if you
+    // were driving dead straight through the corner with the tyres perfectly
+    // stuck, and stayed silent while you were genuinely sliding down a straight.
+    // With the assists off the arc must not reach the driver at all, and that
+    // includes what they hear. Body slip angle: ~6 deg starts to talk, ~17 deg is
+    // a full slide.
+    const slipAng = Math.abs(Math.atan2(c.vLat || 0, Math.max(4, Math.abs(c.speed))));
     c.skidIntensity = c.offroad ? 0.5
-      : clamp(Math.abs(k) * c.speed * 0.05 - 0.35, 0, 1);
+      : clamp((slipAng - 0.10) / 0.20, 0, 1);
   }
   // wall
   // The driving boundary is per-side and derived from where solid barriers were
@@ -3175,6 +3183,9 @@ function render(dt) {
     // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), {
       bankDy, deploy: player.deploying, slipLat: player.vLat || 0,
+      // the car's real world pose, so the chase rig can follow the CAR
+      carPos: player.px != null ? [player.px, player.pz] : null,
+      carHead: player.head || 0,
     });
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov;
     if (shake > 0) {

@@ -163,8 +163,24 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const eyeUp = far ? 4.2 : 2.1;
     Tracks.sample(track, wrapS(s - back), cvB);
     const cx = x * 0.5;
-    eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
-    tgt = aheadPt(far ? 9 : 6, far ? 1.0 : 0.7, x * 0.4);
+    if (opts.carPos) {
+      // FREE-WORLD CHASE: sit behind the CAR, along the CAR's heading, and look
+      // where the CAR is pointing. This used to sit an arc-distance back along
+      // the ROAD and aim at the centreline metres up the road, deliberately
+      // "bending with the corner" — so the rig rode the road, not the car. Drive
+      // straight through a bend with the assists off and the camera swung round
+      // the corner while the car slid across the screen: the track's arc reaching
+      // the driver through the viewport, however clean the physics underneath.
+      // The road is still consulted for HEIGHT (and the ground clamp below), which
+      // is what it should be for.
+      const hx = Math.sin(opts.carHead || 0), hz = Math.cos(opts.carHead || 0);
+      const lead = far ? 9 : 6;
+      eye = [opts.carPos[0] - hx * back, cvB.p[1] + eyeUp + bankDy, opts.carPos[1] - hz * back];
+      tgt = [opts.carPos[0] + hx * lead, p[1] + (far ? 1.0 : 0.7), opts.carPos[1] + hz * lead];
+    } else {
+      eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
+      tgt = aheadPt(far ? 9 : 6, far ? 1.0 : 0.7, x * 0.4);
+    }
     fov = lerp(52, 66, spN) + (far ? 4 : 0) + dep * 3;
   }
   // ---- ground floor -------------------------------------------------------
