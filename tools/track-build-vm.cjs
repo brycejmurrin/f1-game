@@ -142,9 +142,28 @@ function buildContext(opts) {
 }
 
 // Drop primitives whose buffer never reached a captured mesh — see liveBufs.
+//
+// modelGroup stages an emission into a scratch buffer and copies it into the
+// real one, so its primitives are recorded against the STAGE, which is never a
+// live mesh. Filtering on liveBufs alone therefore threw away every
+// modelGroup-built model — on Zandvoort that hid the start/finish gantry from
+// the audit entirely. TrackModels.appendBuffer now records each copy on
+// `target.__blocks`, so a staged prim can be remapped onto the buffer that
+// actually shipped and keeps its real vertex range.
 function shipped(prims, liveBufs) {
   if (!liveBufs || !liveBufs.size) return prims;
-  return prims.filter((p) => liveBufs.has(p.buf));
+  const remap = new Map();               // stage buffer -> {buf, base}
+  for (const buf of liveBufs) {
+    if (!buf || !buf.__blocks) continue;
+    for (const b of buf.__blocks) remap.set(b.from, { buf, base: b.base * 3 });
+  }
+  const out = [];
+  for (const p of prims) {
+    if (liveBufs.has(p.buf)) { out.push(p); continue; }
+    const r = remap.get(p.buf);
+    if (r) out.push(Object.assign({}, p, { buf: r.buf, s: p.s + r.base, e: p.e + r.base }));
+  }
+  return out;
 }
 
 // Resolve a captured stack to the call sites that actually name a builder.
