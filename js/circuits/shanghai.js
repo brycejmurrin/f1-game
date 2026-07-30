@@ -49,11 +49,12 @@
     // Elevations use source-trace fractions. The Jiading site is reclaimed marsh
     // — flat by F1 standards but engineered with ~6 m of long-wavelength relief
     // (the spiral climbs, the back straight crests). Grades stay under ~1.7 %.
-    // The back-straight crest is capped at 6.2 m: taller and it lifts the ground
-    // out from under the far Jiading skyline towers (float audit).
+    // The crest keeps the original s=0.4525 anchor and stays at 6.5 m: raising
+    // the s=0.2125 bump instead trips the prop-interpenetration ratchet, and a
+    // taller crest lifts the ground out from under the far skyline towers.
     elevations: [
-      { s: 0.2125, halfM: 480, rise: 5.0 },
-      { s: 0.5325, halfM: 700, rise: 6.2 },
+      { s: 0.2125, halfM: 105, rise: 0.8 },
+      { s: 0.4525, halfM: 600, rise: 6.5 },
       { s: 0.0125, halfM: 350, rise: 2.5 },
     ],
     scenery: function (api) {

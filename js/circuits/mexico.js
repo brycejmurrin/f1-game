@@ -50,9 +50,9 @@
     // (The old ±7 m pair remapped across start/finish and invented a 12 m hill;
     // these are authored in SOURCE space so that cannot happen.)
     elevations: [
-      { s: 0.855, halfM: 420, rise: 5.2 },
-      { s: 0.245, halfM: 380, rise: 3.2 },
-      { s: 0.520, halfM: 280, rise: -1.8 },
+      { s: 0.855, halfM: 420, rise: 5.0 },
+      { s: 0.245, halfM: 380, rise: 3.0 },
+      { s: 0.520, halfM: 280, rise: -1.6 },
     ],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, place, backdrop, groundPlane,
