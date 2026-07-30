@@ -163,11 +163,24 @@ function litMaterial(baseRough, opts = {}) {
   const baseCol = attribute('color', 'vec3');
   const vd = length(positionWorld.sub(cameraPosition));
   const packed = applyMaterial(matId, baseCol, float(baseRough), positionWorld, normalWorld, vd);
-  if (VIZ) {
+  if (VIZ === 'u0' || VIZ === 'pool') {
     const m = new THREE.MeshBasicNodeMaterial();
     m.colorNode = VIZ === 'u0'
       ? uLampCol.element(int(0)).div(500.0)
       : lampLight(vec3(0.25), normalWorld, positionWorld, float(0.5));
+    if (opts.doubleSided) m.side = THREE.DoubleSide;
+    return m;
+  }
+  if (VIZ === 'em' || VIZ === 'em0' || VIZ === 'empk') {
+    // bisect: same standard material, emissiveNode variants
+    const m = new THREE.MeshStandardNodeMaterial({ metalness: 0.0 });
+    m.colorNode = packed.xyz;
+    m.roughnessNode = packed.w;
+    m.emissiveNode = VIZ === 'em0'
+      ? uLampCol.element(int(0)).div(500.0)                                 // no loop
+      : VIZ === 'em'
+        ? lampLight(vec3(0.25), normalWorld, positionWorld, float(0.5))    // loop, const args
+        : lampLight(packed.xyz, normalWorld, positionWorld, packed.w);     // loop, packed args (== defect)
     if (opts.doubleSided) m.side = THREE.DoubleSide;
     return m;
   }
@@ -353,6 +366,11 @@ window.__spike = {
   toggleInstancing(on) { setInstancing(on != null ? on : !instancing); return instancing; },
   setLightCount(nMax) { lightCap = Math.max(0, Math.min(MAX_LIGHTS, nMax | 0)); return lightCap; },
   resetMs() { msN = 0; msIdx = 0; },
+  async shader(idx = 0) {  // generated GLSL/WGSL for scene mesh #idx (debug)
+    const meshes = scene.children.filter((o) => o.isMesh);
+    const out = await renderer.debug.getShaderAsync(scene, camera, meshes[idx]);
+    return { vertex: out.vertexShader, fragment: out.fragmentShader };
+  },
   debugLamps(k = 4) {   // CPU-side view of what uniformArray should be uploading
     const out = [];
     for (let i = 0; i < Math.min(k, uNumLights.value); i++) out.push({
