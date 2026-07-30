@@ -154,13 +154,24 @@ const lampLight = Fn(([albedo, N, wp, rough]) => {
   return sum;
 });
 
-/* material factory: shared node graph, per-mesh base roughness */
+/* material factory: shared node graph, per-mesh base roughness.
+ * ?viz=u0   — paint everything with lamp[0]'s colour uniform (data-arrival test)
+ * ?viz=pool — paint raw lampLight() output only (loop-math test)              */
+const VIZ = params.get('viz');
 function litMaterial(baseRough, opts = {}) {
-  const m = new THREE.MeshStandardNodeMaterial({ metalness: 0.0 });
   const matId = attribute('mat', 'float');
   const baseCol = attribute('color', 'vec3');
   const vd = length(positionWorld.sub(cameraPosition));
   const packed = applyMaterial(matId, baseCol, float(baseRough), positionWorld, normalWorld, vd);
+  if (VIZ) {
+    const m = new THREE.MeshBasicNodeMaterial();
+    m.colorNode = VIZ === 'u0'
+      ? uLampCol.element(int(0)).div(500.0)
+      : lampLight(vec3(0.25), normalWorld, positionWorld, float(0.5));
+    if (opts.doubleSided) m.side = THREE.DoubleSide;
+    return m;
+  }
+  const m = new THREE.MeshStandardNodeMaterial({ metalness: 0.0 });
   m.colorNode = packed.xyz;
   m.roughnessNode = packed.w;
   // Lamps ride emissiveNode: additive on top of the sun+hemisphere standard
