@@ -51,6 +51,25 @@
       { s: 0.6075, halfM: 120, rise: -2.5 },
       { s: 0.1275, halfM: 120, rise: 2.5 },
     ],
+    // Marina Bay runs on real city streets: the bay-front boulevards are wide,
+    // the Turn 1-3 complex, the Anderson Bridge link and the Esplanade squeeze
+    // are not. s0/s1 are CONTROL-POINT index fractions in SOURCE space; the
+    // racing-lap arc each lands on is in the trailing comment.
+    hwZones: [
+      { s0: 0.5890, s1: 0.6642, hw: 5.2, ease: 0.012 },  // arc 0.098-0.152 T1-T3
+      { s0: 0.1020, s1: 0.1774, hw: 5.1, ease: 0.012 },  // arc 0.650-0.685 bridge link
+      { s0: 0.2341, s1: 0.2901, hw: 5.3, ease: 0.012 },  // arc 0.808-0.838 Esplanade
+      { s0: 0.3236, s1: 0.4067, hw: 5.3, ease: 0.012 },  // arc 0.925-0.955 final corners
+    ],
+    // Flat city tarmac — crown only, 2.5-3°. Nothing here is banked.
+    bankZones: [
+      { frac: 0.1043, angleDeg: 3.0, widthM: 100 },
+      { frac: 0.3562, angleDeg: 3.0, widthM: 130 },
+      { frac: 0.4377, angleDeg: 3.0, widthM: 90 },
+      { frac: 0.6585, angleDeg: 2.5, widthM: 80 },
+      { frac: 0.7694, angleDeg: 3.0, widthM: 80 },
+      { frac: 0.0114, angleDeg: 3.0, widthM: 130 },
+    ],
     scenery: function (api) {
       const { out, MAT, n, place, backdrop,
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,

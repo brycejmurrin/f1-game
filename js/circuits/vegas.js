@@ -39,6 +39,24 @@
     // s=0.35 with startFrac 0.8575: a shallow Sphere-sector underpass dip,
     // while the Strip remains essentially level as in the circuit brief.
     elevations: [{ s: 0.2075, halfM: 130, rise: -1.2 }],
+    // The Strip and Koval are enormous multi-lane boulevards; the Sphere-sector
+    // link roads and the last corner are ordinary city streets. s0/s1 are
+    // CONTROL-POINT index fractions in SOURCE space; the racing-lap arc each
+    // lands on is in the trailing comment.
+    hwZones: [
+      { s0: 0.2164, s1: 0.2374, hw: 6.2, ease: 0.012 },  // arc 0.400-0.432 T7
+      { s0: 0.3139, s1: 0.4596, hw: 6.1, ease: 0.012 },  // arc 0.478-0.532 T9-T10
+      { s0: 0.5623, s1: 0.6186, hw: 6.3, ease: 0.012 },  // arc 0.665-0.695 T13
+      { s0: 0.8221, s1: 0.8832, hw: 6.3, ease: 0.012 },  // arc 0.985-0.012 T17
+    ],
+    // Public roads, so crown rather than banking: 2.5-3° on the sweeps only.
+    bankZones: [
+      { frac: 0.2080, angleDeg: 3.0, widthM: 190 },
+      { frac: 0.2664, angleDeg: 3.0, widthM: 180 },
+      { frac: 0.4893, angleDeg: 3.0, widthM: 220 },
+      { frac: 0.5949, angleDeg: 2.5, widthM: 130 },
+      { frac: 0.6481, angleDeg: 2.5, widthM: 130 },
+    ],
     scenery: function (api) {
       const { out, MAT, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
         addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,

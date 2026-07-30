@@ -50,6 +50,29 @@
       { s: 0.3125, halfM: 220, rise: -1.5 },
       { s: 0.4925, halfM: 340, rise: 4.5 },
     ],
+    // Monza is a wide, fast park circuit but the three chicanes are deliberately
+    // pinched — the Rettifilo most of all. hwZones can only narrow, so the 16 m
+    // base stays the straights, Curva Grande and the Parabolica.
+    // s0/s1 are CONTROL-POINT index fractions in SOURCE space; the racing-lap arc
+    // each lands on is in the trailing comment.
+    hwZones: [
+      { s0: 0.0155, s1: 0.0949, hw: 6.8, ease: 0.012 },  // arc 0.003-0.024 Rettifilo
+      { s0: 0.2821, s1: 0.3460, hw: 7.0, ease: 0.012 },  // arc 0.212-0.234 Roggia
+      { s0: 0.5960, s1: 0.7315, hw: 7.2, ease: 0.012 },  // arc 0.524-0.572 Ascari
+    ],
+    // Monza camber. The Parabolica (Curva Alboreto) and both Lesmos are the
+    // properly cambered corners — they are what let the whole corner be taken at
+    // one steady, very high speed; Curva Grande and Ascari carry less.
+    bankZones: [
+      { frac: 0.0769, angleDeg: 3.0, widthM: 240 },   // Curva Grande
+      { frac: 0.2964, angleDeg: 6.0, widthM: 140 },   // Lesmo 1
+      { frac: 0.3456, angleDeg: 6.0, widthM: 80 },    // Lesmo 2
+      { frac: 0.5443, angleDeg: 3.5, widthM: 110 },   // Ascari
+      // Parabolica is capped at 4°: above that the dropped inner edge slides out
+      // from under the apex kerb/apron props and the ground-over-road probe
+      // starts reporting the verge sitting over the tarmac.
+      { frac: 0.7355, angleDeg: 4.0, widthM: 300 },   // Parabolica
+    ],
     scenery: function (api) {
       const { out, MAT, n, ds, pyMin, place, prop, backdrop, groundYAt, every,
         onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, motorhome, tower,

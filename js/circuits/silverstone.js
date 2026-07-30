@@ -39,6 +39,18 @@
       { s: 0.76, halfM: 420, rise: 7 },
       { s: 0.19, halfM: 480, rise: -7 },
     ],
+    // Silverstone camber. An old airfield: nothing is steeply banked, but Copse,
+    // Becketts and Stowe all carry enough camber to be taken at the speeds they
+    // are — 3.5-4.5°, with the Luffield/Woodcote loop a touch flatter.
+    bankZones: [
+      { frac: 0.0267, angleDeg: 4.0, widthM: 110 },   // Copse
+      { frac: 0.2122, angleDeg: 3.5, widthM: 190 },   // Becketts
+      { frac: 0.3723, angleDeg: 4.5, widthM: 150 },   // Stowe
+      { frac: 0.5359, angleDeg: 3.5, widthM: 150 },   // Vale/Club
+      { frac: 0.7064, angleDeg: 4.0, widthM: 200 },
+      { frac: 0.8001, angleDeg: 3.5, widthM: 200 },   // Luffield
+      { frac: 0.9199, angleDeg: 3.0, widthM: 100 },
+    ],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash, pal,
               grandstand, building, motorhome, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,

@@ -41,6 +41,17 @@
       { s: 0.4075, halfM: 430, rise: 32 },  // racing 0.22: Remus crest / high point
       { s: 0.6075, halfM: 430, rise: -28 }, // racing 0.42: post-Remus / T4 descent
     ],
+    // Spielberg camber. The hillside corners are dished into the slope — Remus
+    // and the downhill T4/T5 pair notably so — which is what lets the Red Bull
+    // Ring's few corners be taken so fast.
+    bankZones: [
+      { frac: 0.1961, angleDeg: 4.0, widthM: 260 },   // T1 climb / Niki Lauda
+      { frac: 0.3072, angleDeg: 4.0, widthM: 180 },   // Remus
+      { frac: 0.3810, angleDeg: 4.0, widthM: 160 },   // T4 descent
+      { frac: 0.4370, angleDeg: 3.0, widthM: 120 },   // T5
+      { frac: 0.5574, angleDeg: 3.5, widthM: 110 },
+      { frac: 0.6097, angleDeg: 3.5, widthM: 90 },
+    ],
     scenery: function (api) {
       const { out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan } = api;
       const K = (s) => Math.round(s * n) % n;

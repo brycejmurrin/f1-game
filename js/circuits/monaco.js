@@ -47,6 +47,30 @@
     // tunnel toward the harbour (~42 m top-to-bottom). Street circuit: barriers,
     // not a wide terrain ribbon, so elevation was always safe here.
     elevations: [{ s: 0.10, halfM: 340, rise: 30 }, { s: 0.55, halfM: 220, rise: -10 }],
+    // Monaco does not have a constant road width — it pinches through Loews and
+    // Portier and round the swimming pool, and only really opens up on the pit
+    // straight, in the tunnel and along the harbour. hwZones can only NARROW, so
+    // the base 10 m stays the wide sections and these squeeze the tight ones.
+    // s0/s1 are CONTROL-POINT index fractions in SOURCE space (applyHwZones walks
+    // pts by index and the trace is not evenly spaced); the racing-lap arc each
+    // one lands on is in the trailing comment.
+    hwZones: [
+      { s0: 0.1524, s1: 0.2131, hw: 4.6, ease: 0.012 },  // arc 0.112-0.150 Massenet/Casino
+      { s0: 0.8217, s1: 0.8864, hw: 4.1, ease: 0.012 },  // arc 0.432-0.462 Loews hairpin
+      { s0: 0.7430, s1: 0.7741, hw: 4.3, ease: 0.012 },  // arc 0.485-0.510 Portier
+      { s0: 0.5579, s1: 0.5879, hw: 4.5, ease: 0.012 },  // arc 0.770-0.792 Tabac
+      { s0: 0.4848, s1: 0.5349, hw: 4.4, ease: 0.012 },  // arc 0.815-0.855 swimming pool
+      { s0: 0.3488, s1: 0.3918, hw: 4.3, ease: 0.012 },  // arc 0.930-0.955 Rascasse
+    ],
+    // Public roads with a drainage crown, not banking — 2.5-3° is all Monaco has,
+    // and several corners (Loews especially) are close to flat in reality.
+    bankZones: [
+      { frac: 0.1286, angleDeg: 3.0, widthM: 60 },    // Massenet
+      { frac: 0.2961, angleDeg: 3.0, widthM: 160 },   // Mirabeau/descent
+      { frac: 0.7791, angleDeg: 3.0, widthM: 120 },   // Tabac
+      { frac: 0.8847, angleDeg: 2.5, widthM: 140 },   // swimming pool
+      { frac: 0.9417, angleDeg: 2.5, widthM: 100 },   // Rascasse
+    ],
     scenery: function (api) {
       const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;

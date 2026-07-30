@@ -34,8 +34,22 @@
       { t: 0, l: 380 }, { t: 80, l: 90 }, { t: -90, l: 100 }, { t: 0, l: 300 }, { t: 90, l: 90 }, { t: 0, l: 420 },
       { t: -80, l: 90 }, { t: 60, l: 70 }, { t: -60, l: 70 }, { t: 0, l: 220 }, { t: 100, l: 110 }, { t: -100, l: 110 },
     ],
-    // Île Notre-Dame is nearly level; retain only the faint bridge approach.
-    elevations: [{ s: 0.52, halfM: 220, rise: 1.25 }],
+    // Île Notre-Dame is a flat island and its corners are correspondingly low
+    // camber — 3° at most, just enough for the chicanes and the hairpin to bite.
+    bankZones: [
+      { frac: 0.2171, angleDeg: 3.0, widthM: 120 },
+      { frac: 0.3698, angleDeg: 3.0, widthM: 120 },
+      { frac: 0.4443, angleDeg: 3.0, widthM: 110 },
+      { frac: 0.6136, angleDeg: 3.0, widthM: 90 },
+      { frac: 0.7599, angleDeg: 3.0, widthM: 80 },    // the hairpin
+    ],
+    // Île Notre-Dame is nearly level: the bridge approach plus a couple of metres
+    // of island roll — ~3 m over the lap, nothing over ~1.2 %.
+    elevations: [
+      { s: 0.52, halfM: 220, rise: 1.25 },
+      { s: 0.115, halfM: 300, rise: 2.2 },
+      { s: 0.755, halfM: 260, rise: -1.0 },
+    ],
     // Île Notre-Dame is a flat, man-made island sitting ~level with the water.
     // flatTerrain makes the terrain ribbon a WIDE, dead-level grass shelf so there
     // is real green land all around the road (trees/props sit on it instead of

@@ -37,6 +37,18 @@
       { s: 0.0350, halfM: 280, rise: 3 },
       { s: 0.3550, halfM: 240, rise: 2.5 },
     ],
+    // COTA camber. Tilke built real banking into the uphill T1 and the long
+    // multi-apex left before the back straight; the esses and the tight links
+    // get ordinary 3-4° road camber.
+    bankZones: [
+      { frac: 0.0000, angleDeg: 5.0, widthM: 100 },   // uphill T1
+      { frac: 0.3670, angleDeg: 4.0, widthM: 160 },
+      { frac: 0.3852, angleDeg: 4.0, widthM: 170 },
+      { frac: 0.5022, angleDeg: 3.0, widthM: 80 },
+      { frac: 0.7035, angleDeg: 3.5, widthM: 160 },
+      { frac: 0.8161, angleDeg: 4.5, widthM: 200 },   // the long multi-apex sweep
+      { frac: 0.8430, angleDeg: 4.0, widthM: 120 },
+    ],
     scenery: function (api) {
       const { out, MAT, n, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, grandstand, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;

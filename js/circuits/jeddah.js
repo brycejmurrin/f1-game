@@ -36,9 +36,28 @@
       { t: 0, l: 700 }, { t: 80, l: 70 }, { t: -75, l: 60 }, { t: 0, l: 120 }, { t: 70, l: 65 }, { t: -70, l: 60 },
       { t: 0, l: 300 }, { t: -90, l: 80 }, { t: 0, l: 600 }, { t: -90, l: 80 }, { t: 65, l: 70 }, { t: -70, l: 70 },
     ],
-    // Reclaimed seafront: retain only a subtle drainage-scale grade. The
-    // circuit's notable vertical character is camber, not a 14 m hill.
-    elevations: [{ s: 0.30, halfM: 480, rise: -1.2 }, { s: 0.62, halfM: 400, rise: 1.0 }],
+    // Jeddah's headline vertical feature IS camber: three corners are banked up
+    // to 12° in reality (the long left onto the north loop, the sweeper after it,
+    // and the final right). Modelled a little shallower here so the AI line and
+    // the wall geometry stay sane; the rest of the lap is street-crown 3°.
+    bankZones: [
+      { frac: 0.1825, angleDeg: 3.0, widthM: 90 },
+      { frac: 0.2662, angleDeg: 3.0, widthM: 160 },
+      { frac: 0.3188, angleDeg: 3.0, widthM: 160 },
+      { frac: 0.4792, angleDeg: 7.0, widthM: 240 },   // banked left onto the north loop
+      { frac: 0.5552, angleDeg: 6.0, widthM: 200 },   // banked sweeper
+      { frac: 0.6110, angleDeg: 3.0, widthM: 120 },
+      { frac: 0.9981, angleDeg: 6.0, widthM: 120 },   // banked final right
+    ],
+    // Reclaimed seafront: still a drainage-scale grade, but the trace shipped
+    // essentially level (2.2 m) where the real corniche rolls ~9 m across the
+    // lap. Long wavelengths only — every gradient stays under ~2 %.
+    elevations: [
+      { s: 0.16, halfM: 520, rise: 6.5 },
+      { s: 0.30, halfM: 480, rise: -3.0 },
+      { s: 0.62, halfM: 460, rise: 5.0 },
+      { s: 0.84, halfM: 300, rise: -1.5 },
+    ],
     scenery: function (api) {
       const { out, MAT, n, pyMin, place, backdrop,
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,

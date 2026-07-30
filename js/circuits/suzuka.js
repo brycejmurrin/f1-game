@@ -39,6 +39,26 @@
     // tucks exactly beneath the upper ribbon instead of clipping through it.
     elevations: [{ s: 0.8125, halfM: 300, rise: 11 }, { s: 0.0625, halfM: 260, rise: -5 }],
     bridges: [{ s: 0.4298, halfM: 160, rise: 13.5 }],
+    // Suzuka's Esses are noticeably narrower than the rest of the lap. s0/s1 are
+    // CONTROL-POINT index fractions in SOURCE space (applyHwZones walks pts by
+    // index and the trace is not evenly spaced); the racing-lap arc is in the
+    // trailing comment. Spoon and the Casio triangle are deliberately left at
+    // base width — narrowing there lets the bespoke Casio wall props through the
+    // on-track rejection guard and they end up over the tarmac.
+    hwZones: [
+      { s0: 0.8710, s1: 0.9671, hw: 6.1, ease: 0.012 },  // arc 0.300-0.348 the Esses
+    ],
+    // Suzuka camber. 130R is the one that matters — a genuinely banked, long
+    // radius left taken flat — with 3.5-4° through the rest of the figure-of-8.
+    bankZones: [
+      { frac: 0.0622, angleDeg: 4.0, widthM: 260 },   // T1/T2
+      { frac: 0.3306, angleDeg: 3.5, widthM: 220 },   // Dunlop / Degner approach
+      { frac: 0.5194, angleDeg: 3.5, widthM: 150 },
+      { frac: 0.6549, angleDeg: 3.5, widthM: 170 },
+      { frac: 0.8015, angleDeg: 4.0, widthM: 80 },    // Spoon
+      { frac: 0.8562, angleDeg: 7.0, widthM: 100 },   // 130R
+      { frac: 0.9281, angleDeg: 4.0, widthM: 240 },   // final corner
+    ],
     scenery: function (api) {
       const { out, track, n, px, py, pz, hw, pyMin, place, every, ferrisWheel,
               hash, mountain, pine, tree, bush, grandstand, building, tower, billboard,
