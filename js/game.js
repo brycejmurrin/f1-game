@@ -224,7 +224,15 @@ const ASSIST_KUS = 0.0008;  // s²/m — speed² term in the DRIVING-HELP steer 
 // tyres (grip-limited) like the driver's own steering, it can't teleport the
 // heading. 0 = pure manual (the car runs straight off at corners), 0.9 = the
 // car nearly steers the corner for you. The driver always adds on top.
-let ROAD_FOLLOW = 0.7;
+//
+// DEFAULT 0 — OPT-IN. This used to ship at 0.7, with a slider that bottomed out
+// at 0.25, so a quarter to a half of every corner was steered for you and there
+// was no way to turn it off. At 50 m/s through a 100 m corner that is ~20 % of
+// your available lock applied by the game; in a slow corner nearer 40 %. You felt
+// it as a car that resisted your inputs and pulled toward the road — driving
+// against an invisible hand. The assist still exists, and RELAX still turns it
+// on, but nothing steers the car by default except the driver.
+let ROAD_FOLLOW = 0;
 // Gain on the RACING LINE assist's pure-pursuit steer term (see the assist block
 // in updateCar). 1 = textbook pursuit — reach the line in exactly one look-ahead
 // distance; a little over that so the slider's top notch has real authority
@@ -259,6 +267,43 @@ const LINE_PURSUIT = 2.6;
 const H_D = 2;   // m — half-window of the central difference
 const _hA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _hB = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const _trk = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+// READ (s, x) OFF the car's world position — a MEASUREMENT, not a constraint.
+// The player is a rigid body in metres of world space (px, pz, head); the track
+// is something it happens to be driving over. This is the timing loop, not the
+// steering: nothing here may ever push the car around.
+//
+// Predictor + LOCAL refinement, deliberately never a global search:
+//   - the predictor advances s by the distance travelled along the road, divided
+//     by the Frenet stretch h, so it is already correct to first order;
+//   - two Newton steps then pin s to the exact foot of the perpendicular
+//     ((P - C(s))·t = 0), so the reading cannot drift away from the truth.
+// Because s never moves more than a few metres from last frame's value, it
+// cannot snap onto the wrong leg of a hairpin — which is exactly what a global
+// Tracks.project() search used to do, and why this code once integrated in the
+// road frame instead. Keeping the search local buys the robustness of the road
+// frame without surrendering the car's independence to it.
+// Writes into the module-scope _tf (no per-frame allocation, like the rest of
+// the loop). Returns it for convenience.
+const _tf = { s: 0, x: 0 };
+function trackFrom(px, pz, sPredicted) {
+  let s = wrapS(sPredicted);
+  for (let i = 0; i < 2; i++) {
+    Tracks.sample(track, s, _trk);
+    let tx = _trk.t[0], tz = _trk.t[2];
+    const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+    const along = (px - _trk.p[0]) * tx + (pz - _trk.p[2]) * tz;
+    if (Math.abs(along) < 1e-3) break;
+    // Cap the step so one bad sample can't fling the reading down the track.
+    s = wrapS(s + clamp(along, -12, 12));
+  }
+  Tracks.sample(track, s, _trk);
+  let rx = _trk.r[0], rz = _trk.r[2];
+  const rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
+  _tf.s = s;
+  _tf.x = (px - _trk.p[0]) * rx + (pz - _trk.p[2]) * rz;
+  return _tf;
+}
 function frenetH(s, x) {
   Tracks.sample(track, wrapS(s - H_D), _hA);
   Tracks.sample(track, wrapS(s + H_D), _hB);
@@ -2349,26 +2394,24 @@ function updateCar(c, dt, ranked) {
     // world velocity = forward + lateral slip (perp = (fz, -fx) = +right)…
     const vWx = c.speed * fx + c.vLat * fz;
     const vWz = c.speed * fz - c.vLat * fx;
-    // …advance (s, x) by projecting that velocity onto the local road frame:
-    // tangent → arc-length progress, right → lateral. No world-point round-trip —
-    // no Tracks.project() search to snap progress onto the wrong leg at a hairpin,
-    // and (s, x) can never desync from a separate world position.
+    // …and MOVE THE CAR, in world metres. This is the whole model: a rigid body
+    // going where its own tyres point. The road is not in this equation.
     //
-    // The tangent component is divided by the FRENET SCALE FACTOR h. The road
-    // frame stretches with distance from the centreline: a metre driven along a
-    // line x metres to the side of a centreline of curvature k covers only 1/h
-    // metres of centreline (h = 1 + k·x — see frenetH). Dropping that divisor,
-    // as this used to, welds the car to the centreline in the worst way: the
-    // rendered position is REBUILT from (s, x) below, so an off-centre car in a
-    // corner was drawn travelling at the wrong speed for its own heading — it
-    // visibly skated forward on the inside of a hairpin and dragged on the
-    // outside, and the middle of the road was the only place the motion looked
-    // right. It also made every line worth exactly the same lap distance, so
-    // apexing bought you nothing and running wide cost you nothing.
+    // (s, x) used to be the authority here, with the world position rebuilt from
+    // it every frame — so the car lived inside the road's coordinate chart and
+    // inherited every kink and stretch in it. Now the arrow points the other way:
+    // px/pz/head are the truth, and (s, x) is READ BACK off them below purely so
+    // the rest of the game (lap timing, walls, kerbs, race position, the HUD) can
+    // ask "where on the track is that?".
+    c.px += vWx * dt;
+    c.pz += vWz * dt;
+    // Predict s from the distance covered along the road (÷ h, the Frenet stretch
+    // — see frenetH), then let trackFrom() pin it to the true perpendicular foot.
+    // The predictor only has to be close; it exists so the refinement stays local.
     let tX = smp.t[0], tZ = smp.t[2]; const tL = Math.hypot(tX, tZ) || 1; tX /= tL; tZ /= tL;
-    let rX = smp.r[0], rZ = smp.r[2]; const rL = Math.hypot(rX, rZ) || 1; rX /= rL; rZ /= rL;
-    c.s = wrapS(c.s + (vWx * tX + vWz * tZ) * dt / hFrenet);
-    c.x += (vWx * rX + vWz * rZ) * dt;               // lateral  = velocity · right
+    const tf = trackFrom(c.px, c.pz, c.s + (vWx * tX + vWz * tZ) * dt / hFrenet);
+    c.s = tf.s;
+    c.x = tf.x;
     steer = clamp(shaped, -1, 1);   // steer vis = driver input only, not assist
   } else {
     // While rubbing another car (contactT>0) the AI goes compliant: it stops
@@ -2388,9 +2431,11 @@ function updateCar(c, dt, ranked) {
   // instead of clipping through it — consistent across street and open circuits.
   const wallR = Tracks.wallAt(track, c.s, 1);
   const wallL = Tracks.wallAt(track, c.s, -1);
+  let xPinned = false;   // did the barrier clamp c.x? (see the writeback below)
   if (c.x > wallR || c.x < -wallL) {
     const into = c.x > wallR ? 1 : -1;          // +1 = hit right wall, -1 = left
     c.x = into > 0 ? wallR : -wallL;
+    xPinned = true;
     if (c.isPlayer) {
       // Slide along the barrier instead of stopping dead. Decompose the car's
       // heading into the part running ALONG the wall (kept) and the part driving
@@ -2439,13 +2484,22 @@ function updateCar(c, dt, ranked) {
     c.wasOnWall = false;
     if (c.isPlayer) c.wallT = Math.max(0, (c.wallT || 0) - dt);
   }
-  // Re-sample at the NEW c.s and refresh the debug px/pz mirror from the
-  // authoritative (s, x); also gives the yawVis below the tangent at the car's
-  // current position.
+  // Re-sample at the NEW c.s — the yawVis block below reads the tangent here.
+  //
+  // The barrier is the ONE thing allowed to move the player in ROAD coordinates,
+  // because it is a hard constraint rather than a suggestion: when it clamps c.x,
+  // that has to be pushed back into the authoritative world position. Every other
+  // frame the arrow points the other way (world → (s, x)), so this rebuild is now
+  // CONDITIONAL. It used to be unconditional — correct back when (s, x) was the
+  // authority, but fatal now: it would overwrite the car's own integration with a
+  // point reconstructed from the road every single frame, quietly putting the car
+  // straight back onto the road's rails.
   if (c.isPlayer && c.px != null) {
     Tracks.sample(track, c.s, smp);
-    c.px = smp.p[0] + smp.r[0] * c.x;
-    c.pz = smp.p[2] + smp.r[2] * c.x;
+    if (xPinned) {
+      c.px = smp.p[0] + smp.r[0] * c.x;
+      c.pz = smp.p[2] + smp.r[2] * c.x;
+    }
   }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
   // Visual nose yaw. The player uses its REAL heading relative to the track

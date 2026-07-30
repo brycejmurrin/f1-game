@@ -59,10 +59,12 @@ test.describe("Apex 26 — world-space player physics", () => {
     expect(await measure(-0.5)).toBeLessThan(0);
   });
 
-  test("no input runs wide with road-follow off; tracks the corner at the default", async ({ page }) => {
+  // The assist is opt-in now (ships at 0), so the "on" leg uses an explicit gain
+  // instead of the shipped default — this tests the mechanism, not the default.
+  test("no input runs wide with road-follow off; tracks the corner once switched on", async ({ page }) => {
     await startRace(page);
     const r = await page.evaluate(() => {
-      const def = window.__apex.tuning().roadFollow;
+      const def = 0.6;                      // explicit opted-in assist
       const corners = window.__apex.corners();
       const meas = (frac, rf) => {
         window.__apex.setPhysics({ roadFollow: rf });
@@ -79,17 +81,17 @@ test.describe("Apex 26 — world-space player physics", () => {
       for (const frac of corners.slice(0, 12)) {
         const off = meas(frac, 0);            // pure world-space: no auto-steer
         if (Math.abs(off.k) < 0.012) continue;
-        const on = meas(frac, def);           // shipped default: road-follow tracks
+        const on = meas(frac, def);           // opted in: road-follow tracks
         out.push({ k: off.k, dxOff: off.dx, dxOn: on.dx });
       }
-      window.__apex.setPhysics({ roadFollow: def });
+      window.__apex.setPhysics({ roadFollow: 0 });   // restore the shipped default
       return out;
     });
     expect(r.length).toBeGreaterThan(0);
     for (const { k, dxOff, dxOn } of r) {
-      // Road-follow OFF: the car holds a straight world line and runs wide to the
-      // OUTSIDE (+sign(k)). At the shipped default it tracks the bend and stays
-      // much closer to the line (the "fix Bahrain slide-off" / DRIVING HELP design).
+      // Road-follow OFF (the shipped default): the car holds a straight world line
+      // and runs wide to the OUTSIDE (+sign(k)). Switched on, it tracks the bend and
+      // stays much closer to the line — that is what the DRIVING HELP slider buys.
       expect(Math.sign(dxOff)).toBe(Math.sign(k));
       expect(Math.abs(dxOn)).toBeLessThan(Math.abs(dxOff));
     }

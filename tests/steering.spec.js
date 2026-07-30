@@ -81,11 +81,13 @@ async function findStraight(page) {
 }
 
 test.describe("Apex 26 — steering", () => {
-  test("road-follow is active and changes the cornering line", async ({ page }) => {
+  // NOTE: the DRIVING HELP assist is OPT-IN — it ships at 0 (see the default
+  // contract test below), so this exercises the assist MECHANISM at an explicit
+  // gain rather than "whatever ships". It used to read tuning().roadFollow and
+  // assert it was > 0, which encoded the old always-on design.
+  test("road-follow, when switched on, is active and changes the cornering line", async ({ page }) => {
     await startLiveRace(page);
-    // Capture the shipped default road-follow so we can A/B it against OFF.
-    const def = await page.evaluate(() => window.__apex.tuning().roadFollow);
-    expect(def).toBeGreaterThan(0);                   // an assist ships on by default
+    const def = 0.6;                                  // an explicit, opted-in assist
     const corners = await page.evaluate(() => window.__apex.corners());
     expect(corners.length).toBeGreaterThan(0);
 
@@ -103,7 +105,7 @@ test.describe("Apex 26 — steering", () => {
       const dxOff = off.after.x - off.before.x;
       expect(Math.sign(dxOff)).toBe(Math.sign(off.before.k));   // off-model runs wide
       expect(Math.abs(dxOff)).toBeGreaterThan(0.6);             // a real slide, not a wobble
-      // Road-follow at the shipped default steers into the bend through the tyres,
+      // Road-follow, once opted into, steers into the bend through the tyres,
       // so the car takes a MEASURABLY different line than with the assist off. (We
       // assert the assist is active and alters the corner rather than a fragile
       // "stays nearer the line": with a real slip model, steering into a corner also
@@ -114,8 +116,39 @@ test.describe("Apex 26 — steering", () => {
       const on = await run(page, { frac, speed: 13, throttle: false, ticks: 70 });
       expect(Math.abs(on.after.x - off.after.x)).toBeGreaterThan(0.25);
     }
-    await page.evaluate((rf) => window.__apex.setPhysics({ roadFollow: rf }), def);
+    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
     expect(checked).toBeGreaterThan(0);
+  });
+
+  // THE DEFAULT CONTRACT: nothing steers the car but the driver.
+  // The assist used to ship at 0.7 with a slider that bottomed out at 0.25, so a
+  // quarter to a half of every corner was steered for you and it could not be
+  // switched off. Now it is opt-in, and this is the test that says so.
+  test("by default nothing steers the car: zero input holds a straight world line", async ({ page }) => {
+    await startLiveRace(page);
+    // Nothing in the shipped configuration touches the wheel…
+    expect(await page.evaluate(() => window.__apex.tuning().roadFollow)).toBe(0);
+    expect(await page.evaluate(() => window.__apex.tuning().raceLineAssist)).toBe(0);
+
+    const { frac, k } = await firstCorner(page);
+    expect(Math.abs(k)).toBeGreaterThan(0.02);
+    // …so through a real corner, with the stick centred, the car's ABSOLUTE world
+    // heading must not move at all. (Heading relative to the tangent necessarily
+    // changes — the road turns underneath the car. That is the whole point.)
+    const swing = await page.evaluate((f) => {
+      window.__apex.jump(f, 22, 0);
+      window.__apex.setInput({ steer: 0, throttle: false, brake: false });
+      window.__apex.step(1 / 60, 2);
+      const h0 = window.__apex.physState().head;
+      window.__apex.step(1 / 60, 45);
+      const h1 = window.__apex.physState().head;
+      window.__apex.clearInput();
+      let d = h1 - h0;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      return Math.abs(d) * 180 / Math.PI;
+    }, frac);
+    expect(swing).toBeLessThan(0.5);   // degrees — straight, not "mostly straight"
   });
 
   test("steering has authority to fight the curvature drift", async ({ page }) => {

@@ -126,14 +126,16 @@ test.describe("Apex 26 — audit regressions", () => {
   });
 
   test("road-following: entering Bahrain T1 at speed with no steer stays within track limits", async ({ page }) => {
-    // Regression for the Bahrain corner slide-off: in the pure world-space bicycle
-    // model the car went straight through every corner without road-following yaw.
-    // The fix adds passive road-curvature yaw so the car tracks ~70% of the corner
-    // automatically. With zero steering the car should stay on the road surface.
+    // Regression for the Bahrain corner slide-off: without the assist the car goes
+    // straight through every corner. The assist adds road-curvature yaw so the car
+    // tracks most of the corner automatically. It is OPT-IN now (ships at 0), so
+    // this enables it explicitly — the subject is that the assist still works, not
+    // that it is on by default (see steering.spec.js for the default contract).
     await race(page, "bahrain");
     const r = await page.evaluate(() => {
       // Approach Bahrain T1 (first right-hand corner, frac ~0.10) at a brisk speed
       // from just before the corner; no steering — the road-following must do the work.
+      window.__apex.setPhysics({ roadFollow: 0.7 });
       window.__apex.jump(0.08, 55, 0);
       window.__apex.setInput({ steer: 0, throttle: false });
       const hw = window.__apex.probe().hw;
@@ -150,8 +152,9 @@ test.describe("Apex 26 — audit regressions", () => {
   });
 
   test("road-following: ROAD_FOLLOW=0 reverts to straight-line in corners", async ({ page }) => {
-    // Confirm that disabling road-following restores the pure world-space behaviour
-    // (car goes straight, runs wide) vs the default that tracks the curve.
+    // Confirm that with road-following off — the SHIPPED default — the car holds a
+    // pure world-space straight line and runs wide, vs tracking the curve when the
+    // player opts the assist in.
     await race(page, "bahrain");
     const r = await page.evaluate(() => {
       const runCorner = (rf) => {
@@ -168,7 +171,7 @@ test.describe("Apex 26 — audit regressions", () => {
       };
       const withFollow = runCorner(0.7);
       const withoutFollow = runCorner(0.0);
-      window.__apex.setPhysics({ roadFollow: 0.7 });   // restore default
+      window.__apex.setPhysics({ roadFollow: 0 });     // restore the shipped default
       return { withFollow, withoutFollow };
     });
     // With road-following the car drifts far less wide through the corner.
