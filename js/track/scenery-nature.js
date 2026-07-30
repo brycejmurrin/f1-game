@@ -246,9 +246,18 @@ const SceneryNature = (function () {
     // Distant mountain peak (world coords), pyramid so it reads as a summit, with
     // a lower foot skirt so it doesn't look like a floating spike. Simple/clean —
     // use mountain() for organic, colour-zoned, snow-capped summits.
+    // onTrack() measures against the TARMAC half-width. The road mesh is wider
+    // than that: a gravel runoff apron runs 2.2 m beyond the edge and the kerb
+    // ribbons are props at ~1.35 m out. A landform only has to clear the tarmac
+    // to pass the guard, so it can still bury the kerb and the runoff — which on
+    // screen reads as the hillside covering the track. Landforms must clear the
+    // road's whole built width, not just the racing surface.
+    const ROAD_SKIRT = 2.6;
     const peak = (x, z, baseY, w, h, col) => {
-      // Skip if the pyramid's footprint (outer base radius w*0.75) reaches tarmac.
-      if (onTrack(x, z, w * 0.75)) {
+      // The foot pyramid's base is a SQUARE of side w*1.5, so its CORNERS reach
+      // w*0.75*sqrt(2) ~= w*1.061. The old w*0.75 guard measured to an edge
+      // midpoint and let the four corners overhang it by 41 %.
+      if (onTrack(x, z, w * 1.061 + ROAD_SKIRT)) {
         console.warn(`[scenery] peak SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
         return;
       }
@@ -261,14 +270,28 @@ const SceneryNature = (function () {
     // zones (forest → rock → snow). opts passes seed/snowline/colours — see
     // addMountain. A low foot skirt blends the base into the ground.
     const mountain = (x, z, baseY, w, h, opts) => {
-      // Skip if the skirt footprint (radius w*0.62) would reach the tarmac.
-      // This prevents backdrop mountains from clipping through the racing surface
-      // when extra < w*0.62 (ring placed too close relative to mountain width).
-      if (onTrack(x, z, w * 0.62)) {
+      opts = opts || {};
+      // The skirt is w*0.62, but addMountain displaces its base ring OUTWARD by
+      // `rough`: a base point reaches w*0.5*(1+0.7*rough)*(1+0.35*rough), which
+      // is ~w*0.70 at the default roughness. Guarding on the skirt alone let a
+      // big rough dune throw a ridge clean over the racing surface — Zandvoort's
+      // 58-100 m dunes reached 7.4 m INSIDE the tarmac edge, which reads on
+      // screen as the hillside eating the track.
+      const rough = opts.rough != null ? opts.rough : 0.34;
+      const reach = (ww) =>
+        ROAD_SKIRT +
+        Math.max(ww * 0.62, ww * 0.5 * (1 + 0.7 * rough) * (1 + 0.35 * rough));
+      // Shrink to fit before giving up. Suppressing punches a hole in the ridge
+      // line; a narrower dune in the same place keeps the horizon continuous,
+      // and the road always wins the overlap.
+      let fit = w;
+      for (let i = 0; i < 6 && onTrack(x, z, reach(fit)); i++) fit *= 0.88;
+      if (onTrack(x, z, reach(fit))) {
         console.warn(`[scenery] mountain SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
         return;
       }
-      opts = opts || {};
+      if (fit < w) h *= Math.sqrt(fit / w);   // narrower dune, plausible slope
+      w = fit;
       addFrustum(out, [x, baseY - 2, z], w * 0.62, w * 0.42, h * 0.18,
                  opts.forest || [0.20, 0.34, 0.20], 9, null);   // skirt
       addMountain(out, [x, baseY, z], w * 0.5, h, opts);
@@ -277,7 +300,7 @@ const SceneryNature = (function () {
     // `ang` (radians, in the XZ plane). Chain these for a jagged range.
     const ridge = (x, z, baseY, ang, len, w, h, col) => {
       // Skip if footprint half-extent reaches tarmac.
-      if (onTrack(x, z, Math.max(len, w) * 0.5)) {
+      if (onTrack(x, z, Math.max(len, w) * 0.5 + ROAD_SKIRT)) {
         console.warn(`[scenery] ridge SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: len=${len} w=${w}`);
         return;
       }
@@ -395,8 +418,21 @@ const SceneryNature = (function () {
       // the roadside tree scatter plants straight through every hedge run
       // (monza's hedge x plantTree bucket was ~89% of that circuit's pairs).
       // The box straddles the anchor, so its inner face is half a width in.
+      // A hedge run is laid out purely by arc length and never asks whether
+      // something solid is already standing on the line, so at Zandvoort it grew
+      // straight through a tyre wall (frac 0.959, 1.25 m of shared volume). A
+      // safety barrier outranks planting, so the hedge yields segment by segment
+      // — the run keeps its ends and simply stops at the obstruction.
+      // Clearance is decided BEFORE indexSolid registers the hedge's own mass,
+      // or every segment would read as blocked by itself.
+      const blocked = new Set();
+      ctx.along(s0, s1, 4, (k) => {
+        const p = anchor(k, side, gap);
+        if (!ctx.barrierClear(p.c[0], p.c[2], HEDGE_W / 2)) blocked.add(k);
+      });
       ctx.indexSolid(s0, s1, side, gap - HEDGE_W / 2, HEDGE_W);
       ctx.along(s0, s1, 4, (k, spacing) => {
+        if (blocked.has(k)) return;
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.2)) {
           console.warn(`[scenery] hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);

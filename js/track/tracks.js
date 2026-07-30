@@ -1224,7 +1224,7 @@ const Tracks = (function () {
       emit, RAW, rejBox, rejRad,
       // guard / grounding / boundary core
       markBarrier, blockAt, recordBarrier, indexBarrier, clearTreeDist,
-      indexSolid, indexSolidAt, massBlocked, massAdd, bankOffsetAt,
+      indexSolid, indexSolidAt, barrierClear, massBlocked, massAdd, bankOffsetAt,
       seat, foundation, cantilever, groundYAt, terrainYAt, onTrack,
       frameAt, overheadSpan, models,
       // placement primitives + math helpers
