@@ -485,11 +485,16 @@ let paused = false;
 // manual (default), >0 gently pulls toward the racing line through corners,
 // <0 pushes the car wide. Always an added bias the driver can steer against.
 let raceLineAssist = 0;
-// Fixed tilt-authority gain, applied after Input.steer() when tilt is active so
-// tilt steering is a touch gentler than keys/pad (it trims on top of the road-
-// follow assist rather than throwing full lock). Sensitivity proper — how far you
-// tilt for a given steer — is the single MAX_TILT knob in the Input module.
-const TILT_OUTPUT_SCALE = 0.7;
+// Tilt used to be multiplied by a fixed 0.7 here "so it trims on top of the
+// road-follow assist rather than throwing full lock". That rationale is gone —
+// the assist ships at 0 — and the multiply was worse than it looked: it landed
+// BEFORE the expo curve, so at the default STEER_EXPO 2.389 the real authority
+// was 0.7^2.389 = 0.43. A tilt driver could not reach even half of STEER_MAX_SLIP
+// at any lean, on any slider setting, and no knob exposed it. That is the
+// "I lean the phone to the stop and the car won't turn" feeling.
+// Tilt now gets the same lock range as every other input. Sensitivity (how far
+// you tilt for a given steer) is still MAX_TILT, and jitter is still the
+// One-Euro SMOOTHING slider — two knobs that a player can actually see.
 // Debug/screenshot freeze: skip the simulation (physics + AI) but keep rendering,
 // so the camera still settles to a parked view yet nothing moves — giving the
 // visual-regression harness a deterministic frame. Only set by __apex.park().
@@ -1778,7 +1783,13 @@ function update(dt) {
   if (soundOn) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad, clamp(player.speed / VMAX, 0, 1), player.gear);
-    GameAudio.setSkid(player.offroad ? 0.4 : clamp(Math.abs(Tracks.curvature(track, player.s)) * player.speed * 0.05 - 0.35, 0, 1));
+    // Squeal from the CAR's slip, via the same skidIntensity the marks and smoke
+    // use. This was a SECOND, independent copy of the old curvature formula
+    // (|k| * speed), so the tyres you HEAR still screamed at the road's arc —
+    // every corner squealed whether or not the car was actually sliding, and a
+    // genuine slide down a straight was silent. Fixing the visual copy alone left
+    // the most audible arc-coupling in the game untouched.
+    GameAudio.setSkid(player.skidIntensity || 0);
   }
 }
 
@@ -2041,8 +2052,14 @@ function updateCar(c, dt, ranked) {
 
   // --- braking / target speed ---
   let braking = false;
+  // Pedal travel 0..1 (analog on a pad trigger, 1 on any digital source). The
+  // brake force and the longitudinal-accel estimate that feeds the friction
+  // ellipse both scale by it, so easing off the brake actually hands grip back
+  // to the front tyres — trail-braking you can modulate, not just stamp/lift.
+  let brakeLvl = 1;
   if (c.isPlayer) {
     braking = _testInput ? !!_testInput.brake : Input.braking();
+    brakeLvl = _testInput ? 1 : Math.max(0.15, Input.brakeLevel());
   } else {
     // AI: brake for upcoming curvature
     const look = clamp(c.speed * 1.7, 30, 160);
@@ -2093,7 +2110,7 @@ function updateCar(c, dt, ranked) {
     : true;
   if (braking) {
     if (c.speed > 0) {
-      c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking : 1) * dt);
+      c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking * brakeLvl : 1) * dt);
     } else if (c.isPlayer && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
@@ -2146,7 +2163,16 @@ function updateCar(c, dt, ranked) {
   c.offroad = Math.abs(c.x) > hw && !c.onKerb;
   if (c.offroad) {
     const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
-    if (c.speed > 0) c.speed = Math.max(GRASS_V * 0.6, c.speed - (20 + offDepth * 28) * dt);
+    // Grass DRAG: slows you toward a crawl, and never speeds you up. The floor
+    // used to be a bare Math.max, so any time you were off-track below 10.8 m/s
+    // it RAISED your speed to 10.8 — you could not brake below 39 km/h on the
+    // grass (BRAKE removes 0.37 m/s per frame and this put it straight back),
+    // could not stop at all, and crawling out of a gravel trap at 3 m/s snapped
+    // you to 10.8 in a single frame. It also runs after the accel/brake/slope
+    // integration, so it overrode all of them.
+    if (c.speed > GRASS_V * 0.6) {
+      c.speed = Math.max(GRASS_V * 0.6, c.speed - (20 + offDepth * 28) * dt);
+    }
     c.offT += dt;
     if (c.offT > 1.2) {
       c.offT = -2;   // grace before next count
@@ -2179,7 +2205,6 @@ function updateCar(c, dt, ranked) {
   let steer;
   if (c.isPlayer) {
     steer = _testInput ? (_testInput.steer ?? 0) : Input.steer();
-    if (!_testInput && Input.tiltActive()) steer *= TILT_OUTPUT_SCALE;
   }
   else {
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
@@ -2381,7 +2406,7 @@ function updateCar(c, dt, ranked) {
     // speed-limited the throttle is still held but real accel ≈ 0, so without
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
-    const axEstTarget = braking ? -BRAKE
+    const axEstTarget = braking ? -BRAKE * brakeLvl
       : (onThrottle
           ? ACCEL * PACE * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
@@ -2483,8 +2508,16 @@ function updateCar(c, dt, ranked) {
   }
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
+    // Squeal from the CAR's own slip, not from the road's curvature. This used to
+    // be |k| * speed — so the tyres screamed because the ROAD bent, even if you
+    // were driving dead straight through the corner with the tyres perfectly
+    // stuck, and stayed silent while you were genuinely sliding down a straight.
+    // With the assists off the arc must not reach the driver at all, and that
+    // includes what they hear. Body slip angle: ~6 deg starts to talk, ~17 deg is
+    // a full slide.
+    const slipAng = Math.abs(Math.atan2(c.vLat || 0, Math.max(4, Math.abs(c.speed))));
     c.skidIntensity = c.offroad ? 0.5
-      : clamp(Math.abs(k) * c.speed * 0.05 - 0.35, 0, 1);
+      : clamp((slipAng - 0.10) / 0.20, 0, 1);
   }
   // wall
   // The driving boundary is per-side and derived from where solid barriers were
@@ -2504,19 +2537,41 @@ function updateCar(c, dt, ranked) {
       // a head-on hit scrubs hard. The nose is rotated toward the wall tangent so
       // the car runs parallel rather than re-pinning every frame.
       Tracks.sample(track, c.s, smp);
-      const tHead = Math.atan2(smp.t[0], smp.t[2]);
+      // The BARRIER's own tangent, not the centreline's. This used to measure
+      // against the road tangent while the comment claimed it was the wall — so
+      // anywhere the barrier diverges from the road (a run-off funnel, an escape
+      // road, a pit entry) the car was straightened to a direction the wall does
+      // not actually run in. wallAt() gives the boundary's lateral offset, so its
+      // slope in s IS the barrier's heading in the road frame.
+      const wallXAt = (ss) => into > 0 ? Tracks.wallAt(track, ss, 1)
+                                       : -Tracks.wallAt(track, ss, -1);
+      const dW = 3;
+      const wSlope = clamp((wallXAt(wrapS(c.s + dW)) - wallXAt(wrapS(c.s - dW))) / (2 * dW), -2, 2);
+      const wtx = smp.t[0] + smp.r[0] * wSlope, wtz = smp.t[2] + smp.r[2] * wSlope;
+      const tHead = Math.atan2(wtx, wtz);
       let rel = c.head - tHead;
       while (rel > Math.PI) rel -= 2 * Math.PI;
       while (rel < -Math.PI) rel += 2 * Math.PI;
       const noseIn = into > 0 ? rel > 0 : rel < 0;        // nose pointing into wall?
       const incidence = Math.min(1, Math.abs(Math.sin(rel)));  // 0 graze … 1 head-on
-      if (c.vLat) c.vLat = 0;                             // slip into the wall is gone
+      // Kill only the slip heading INTO the barrier. This used to zero c.vLat
+      // unconditionally every frame of contact, so slip AWAY from the wall was
+      // erased too and the car could not rotate itself out of the scrape.
+      if (c.vLat && Math.sign(c.vLat) === into) c.vLat = 0;
       if (noseIn) {
         // first-frame impact: lose only the normal component — a graze is nearly
         // free, a head-on hit bites hard.
         if (!c.wasOnWall) c.speed *= 1 - incidence * (track.street ? 0.5 : 0.28);
         // straighten the nose toward the wall tangent so the car slides along it
-        c.head -= rel * Math.min(1, (4 + incidence * 8) * dt);
+        // Exponential, not a raw rate*dt: Math.min(1, ...) SNAPPED the heading
+        // exactly onto the tangent in a single step at any dt >= 0.083 s (a 12 fps
+        // frame, or a headless step()), making the rotation frame-rate dependent.
+        // Scaled by speed as well — a car sitting still against a barrier has no
+        // velocity to justify being turned, and the old form spun a stopped or
+        // spun car parallel in ~0.2 s regardless.
+        const wallAlign = (1 - Math.exp(-(4 + incidence * 8) * dt))
+                        * clamp(Math.abs(c.speed) / 8, 0, 1);
+        c.head -= rel * wallAlign;
         if (track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {
           shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
           if (soundOn) GameAudio.collision();
@@ -2575,11 +2630,19 @@ function updateCar(c, dt, ranked) {
     let psi = Math.atan2(smp.t[0], smp.t[2]) - c.head;   // + = nose turned right (+x)
     while (psi > Math.PI) psi -= 2 * Math.PI;
     while (psi < -Math.PI) psi += 2 * Math.PI;
-    yawTarget = clamp(psi, -0.7, 0.7);
+    // No clamp, no lag: the player's psi IS the real world heading relative to
+    // the road, and it is already smooth (world-space integration). Clamping it
+    // to +-0.7 rad meant the DRAWN car could never point more than 40 deg off the
+    // track direction — a spin rendered as a 40 deg crab — and the damp below
+    // added ~0.17 s of lag TOWARD the road. Both are the presentation quietly
+    // re-orienting the driver to the arc, the same family as the render-position
+    // and camera couplings. AI cars still damp (they have no real heading).
+    c.yawVis = psi;
+    yawTarget = psi;
   } else {
     yawTarget = c.steerVis * 0.35 + clamp(-k * c.speed * 0.14, -0.28, 0.28);
   }
-  c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
+  if (!(c.isPlayer && c.head != null)) c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
   // Pitch animation: nose lifts under throttle (rear squat), dives under braking.
   // Stored so the render loop can apply it without re-evaluating throttle/brake state.
   const pitchTarget = c.isPlayer
@@ -2703,7 +2766,16 @@ function updateCar(c, dt, ranked) {
     // that's the wedged-against-a-wall case. A player who deliberately parks
     // (lets off gas) is never rescued, regardless of how long they sit still.
     const stoppedOnTrack = onThrottle && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
-    const stuck = c.offroad || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
+    // Being OFF-TRACK is not the same as being stuck. The driving boundary sits
+    // ~9 m beyond the road edge, so a driver can be metres into a wide run-off,
+    // fully in control and steering back to the track — and the bare c.offroad
+    // clause used to teleport them anyway after 3 s: to x = 0, heading force-
+    // aligned to the tangent, and speed RAISED to 16 m/s. Rescue is for being
+    // beached, so it now needs the car to actually be going nowhere. Same
+    // principle the stoppedOnTrack clause above already applies to a parked car.
+    // (Reachable now that grass drag no longer pins you at 10.8 m/s.)
+    const beached = c.offroad && c.speed < 8;
+    const stuck = beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
     // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
     // stuck conditions. Only applies once a rescue has actually happened —
     // (c.rescueLastT || 0) defaulted to 0 and blocked rescue for the first 4 s of
@@ -2775,6 +2847,17 @@ function coast(c, dt) {
   const kA = Tracks.curvature(track, wrapS(c.s + 30));
   // Finished cars cruise the inside line (-sign(k)), same convention as the AI.
   c.x = damp(c.x, clamp(-kA * 130, -0.5, 0.5) * smp.hw, 2, dt);
+  // A finished car is driven kinematically in (s, x) — so the PLAYER's world
+  // position has to be carried along with it. Without this the car is rendered
+  // from a px/pz that stopped updating at the finish line (renderPosOf) while the
+  // camera, anchored to s/x, drives away down the track: the car sits frozen on
+  // the line for the ~2 s until the results screen. Heading follows the road
+  // because nothing is steering any more.
+  if (c.isPlayer && c.px != null) {
+    const w = worldFromTrack(c.s, c.x, smp);
+    c.px = w.x; c.pz = w.z;
+    c.head = Math.atan2(smp.t[0], smp.t[2]);
+  }
 }
 
 // Lighting tuner registry (TUNE_DEFS), the live LT values, floodColor and
