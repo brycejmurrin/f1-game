@@ -167,6 +167,33 @@ function vantage(track, mode, s, x, spd, now, extra) {
     tgt = aheadPt(far ? 9 : 6, far ? 1.0 : 0.7, x * 0.4);
     fov = lerp(52, 66, spN) + (far ? 4 : 0) + dep * 3;
   }
+  // ---- ground floor -------------------------------------------------------
+  // The broadcast framings (heli, cinematic, roadside, low, drift) place the eye
+  // by arc offset and lateral distance with no idea what the ground does out
+  // there. On a circuit with real relief that puts the camera INSIDE a hillside
+  // or under a banked verge, and once the eye is below the surface the world
+  // renders from the inside: near faces cull as backfacing and you see straight
+  // through the terrain. Zandvoort's banked corners are the worst case — the
+  // outer edge alone stands 2.4 m above the centreline plane these offsets are
+  // measured from.
+  //
+  // Clamp the eye to the ground beneath it plus a small clearance. The ground
+  // is the same lateral profile the terrain ribbon is built from, plus the
+  // corner's banking, so this agrees with what is actually drawn. Cockpit and
+  // hood are exempt — they ride the car, and their eye is already on the
+  // surface by construction.
+  if (mode !== "cockpit" && mode !== "hood" && track.surface) {
+    const n = track.n;
+    const k = ((Math.round(s / track.total * n) % n) + n) % n;
+    // lateral distance of the eye from this node's centreline
+    const ex = eye[0] - track.px[k], ez = eye[2] - track.pz[k];
+    const lat = ex * track.rx[k] + ez * track.rz[k];
+    const beyond = Math.max(0, Math.abs(lat) - track.hw[k]);
+    const bank = Tracks.banking ? Tracks.banking(track, s, lat) : null;
+    const ground = track.surface.heightAt(k, beyond) + (bank ? bank.dy : 0);
+    const MIN_CLEAR = 0.8;
+    if (eye[1] < ground + MIN_CLEAR) eye[1] = ground + MIN_CLEAR;
+  }
   return { eye, tgt, fov };
 }
 

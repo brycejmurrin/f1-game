@@ -98,6 +98,52 @@ const Tracks = (function () {
         if (d < e.halfM) py[k] += e.rise * 0.5 * (1 + Math.cos(Math.PI * d / e.halfM));
       }
     }
+    // ---- fine surface undulation -------------------------------------------
+    // The authored profile is a handful of BROAD cosine bumps — Spa carries all
+    // 102 m of its elevation in four, with halfM 360-920 m. Between them the
+    // road is mathematically flat: measured over 20 m windows, the MEDIAN
+    // gradient on Suzuka and Monaco is 0.0%. Real circuits never are. That
+    // constant small compression-and-release is most of what makes a car feel
+    // alive under you, and its absence is why every circuit reads the same
+    // between corners.
+    //
+    // Add a low-amplitude ripple: three harmonics at 30-110 m wavelengths,
+    // summed so the result never repeats obviously. Written in CYCLES PER LAP
+    // (integer) rather than metres so the profile is continuous across the
+    // start/finish seam — a wavelength that does not divide the lap leaves a
+    // step there, and the car would hit it every lap.
+    //
+    // Amplitude scales with the track's own relief: a circuit that already
+    // climbs (Spa, Red Bull) gets a little more, a flat street circuit stays
+    // nearly smooth, and nothing exceeds UNDULATE_MAX. Deterministic — seeded
+    // off the circuit id — so a lap is repeatable and ghosts stay valid.
+    if (def.undulate !== false) {
+      let lo = Infinity, hi = -Infinity;
+      for (let k = 0; k < n; k++) { if (py[k] < lo) lo = py[k]; if (py[k] > hi) hi = py[k]; }
+      const relief = hi - lo;
+      // 0.14 m on a dead-flat circuit rising to 0.42 m on Spa-like relief.
+      const amp = Math.min(0.42, 0.14 + relief * 0.0028);
+      let seed = 0;
+      for (let i = 0; i < String(def.id).length; i++) seed = (seed * 31 + String(def.id).charCodeAt(i)) % 9973;
+      const rnd = (i) => { const x = Math.sin((seed + i * 78.233) * 12.9898) * 43758.5453; return x - Math.floor(x); };
+      // Wavelengths ~30-110 m expressed as whole cycles per lap.
+      const waves = [];
+      for (let h = 0; h < 3; h++) {
+        const targetLen = 30 + h * 38 + rnd(h) * 22;
+        const cycles = Math.max(4, Math.round(total / targetLen));
+        // Weight RISES with wavelength: long swells carry the amplitude, short
+        // ripples are small. The other way round makes the peak GRADIENT scale
+        // with 1/wavelength and turns a gentle 0.4 m ripple into a 9% ramp.
+        waves.push({ cycles, phase: rnd(h + 7) * Math.PI * 2, w: h + 1 });
+      }
+      const norm = waves.reduce((a, b) => a + b.w, 0) || 1;
+      for (let k = 0; k < n; k++) {
+        const u = k / n;
+        let v = 0;
+        for (const wv of waves) v += Math.sin(u * wv.cycles * Math.PI * 2 + wv.phase) * wv.w;
+        py[k] += (v / norm) * amp;
+      }
+    }
 
     // tangents by central difference (wrap), then right + banking
     for (let k = 0; k < n; k++) {

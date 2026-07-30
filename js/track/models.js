@@ -10,6 +10,13 @@ const TrackModels = (function () {
 
   function appendBuffer(target, source) {
     const base = target.pos.length / 3;
+    // Record where this staged block landed in the target. modelGroup emits
+    // into a scratch buffer and copies it out, so a primitive recorded against
+    // the STAGE carries vertex indices that mean nothing in the shipped mesh —
+    // headless audits (float/clip) could not attribute any modelGroup geometry
+    // at all and silently skipped it. One entry per copy is enough to remap.
+    (target.__blocks || (target.__blocks = []))
+      .push({ base, from: source, count: source.pos.length / 3 });
     target.pos.push(...source.pos);
     target.nrm.push(...source.nrm);
     target.col.push(...source.col);
