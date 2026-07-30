@@ -67,6 +67,25 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // minus these offsets.
     const eyeFwd = mode === "cockpit" ? COCKPIT_EYE_FWD : 0.55;
     const eyeUp  = mode === "cockpit" ? COCKPIT_EYE_UP : 0.95;
+    if (extra.carPos) {
+      // FREE-WORLD ONBOARD. These are bolted to the CAR, so they must sit at the
+      // car and look down the CAR's nose. They used to be built from the road:
+      // the eye was placed along the ROAD tangent from a road-frame point, and
+      // the aim ran 30 m down the centreline — hood was 100 % curved look-ahead,
+      // cockpit 85 % road tangent + 15 % curve. (The old cockpit comment claimed
+      // it faced "the car's own heading"; `t` is the road tangent at the car, not
+      // c.head, so it never did.) Driving straight through a bend swung the view
+      // round the corner while the nose slid across the frame — the arc reaching
+      // the driver through the most immersive camera in the game.
+      // The road still supplies eye HEIGHT and the gradient the view pitches
+      // with (t[1]) — surface, not line.
+      const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
+      eye = [extra.carPos[0] + hx * eyeFwd, p[1] + eyeUp, extra.carPos[1] + hz * eyeFwd];
+      const aimUp = mode === "cockpit" ? eyeUp - 0.15 : eyeUp + 1.2;
+      tgt = [extra.carPos[0] + hx * 30, p[1] + aimUp + t[1] * 30, extra.carPos[1] + hz * 30];
+      fov = lerp(64, 78, spN) + dep * 3;
+      return { eye, tgt, fov };   // cockpit/hood skip the ground clamp anyway
+    }
     eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
     if (mode === "cockpit") {
       // Face straight FORWARD down the car's own heading (the tangent at the
