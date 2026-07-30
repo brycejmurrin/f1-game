@@ -225,6 +225,49 @@ const ASSIST_KUS = 0.0008;  // s²/m — speed² term in the DRIVING-HELP steer 
 // heading. 0 = pure manual (the car runs straight off at corners), 0.9 = the
 // car nearly steers the corner for you. The driver always adds on top.
 let ROAD_FOLLOW = 0.7;
+// Gain on the RACING LINE assist's pure-pursuit steer term (see the assist block
+// in updateCar). 1 = textbook pursuit — reach the line in exactly one look-ahead
+// distance; a little over that so the slider's top notch has real authority
+// without the assist ever outrunning the front tyre.
+const LINE_PURSUIT = 2.6;
+// FRENET SCALE FACTOR. The (s, x) road frame is not rigid: it stretches on the
+// outside of a corner and compresses on the inside. A line running x metres to
+// the side of a centreline of curvature k is itself an arc of curvature k/h and
+// length h × (centreline length), where
+//                              h = 1 + k·x
+// (+x is right of the centreline; k > 0 curves toward screen-left, so its centre
+// of curvature is on the -x side and moving to +x moves you AWAY from it — the
+// radius grows from R = 1/k to R + x, hence h = 1 + k·x). Everything the player's
+// physics does in the track frame needs it: arc-length progress divides by h, and
+// the curvature the car actually has to steer is k/h.
+//
+// MEASURED, not modelled. h is read off the SAME sampler that rebuilds the car's
+// world position from (s, x) — the ratio of the offset line's chord to the
+// centreline's over a ±H_D window — so the two can never disagree. Using the
+// closed form with Tracks.curvature() instead looks tidier but is wrong where it
+// matters: that k is smoothed over a ±12 m window, and at the tight corners where
+// h is furthest from 1 the smoothed value badly under-reads the real local
+// geometry (measured error at Bahrain's hairpins: ~34 % modelled vs ~2 % here).
+// The ±H_D window also gives the factor a little natural smoothing, so a
+// curvature spike can't put a step in the car's progress rate.
+//
+// Clamped because the chart is only valid inside the centre of curvature
+// (h → 0 at x = -1/k). The floor bites only where a curvature spike meets a wide
+// road — on the shipped circuits the tightest real corner at the outermost
+// drivable x lands near h ≈ 0.5, so 0.45 leaves the honest geometry untouched and
+// only tames the singular case.
+const H_D = 2;   // m — half-window of the central difference
+const _hA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const _hB = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+function frenetH(s, x) {
+  Tracks.sample(track, wrapS(s - H_D), _hA);
+  Tracks.sample(track, wrapS(s + H_D), _hB);
+  const cx = _hB.p[0] - _hA.p[0], cz = _hB.p[2] - _hA.p[2];
+  const ox = cx + (_hB.r[0] - _hA.r[0]) * x, oz = cz + (_hB.r[2] - _hA.r[2]) * x;
+  const cLen = Math.hypot(cx, cz);
+  if (!(cLen > 1e-4)) return 1;
+  return clamp(Math.hypot(ox, oz) / cLen, 0.45, 1.8);
+}
 // Combined-slip friction ellipse: grip used braking/accelerating is taken out of
 // the cornering budget. LONG_GRIP is the longitudinal axis of the ellipse (m/s²),
 // set a little above BRAKE (22) so straight-line braking keeps most grip, but
@@ -2174,14 +2217,52 @@ function updateCar(c, dt, ranked) {
     // crosses the kerb smoothly (slightly less assist ON the kerb — more
     // manual authority there, which kerb-riding wants anyway).
     const offAssistFade = Math.max(0, 1 - Math.max(0, Math.abs(c.x) - hw) / 3);
+    // --- the car drives ITS OWN line, not the centreline (see frenetH).
+    // Everything below that used to read the centreline's curvature k now reads
+    // kPath: the curvature of the arc the car is ACTUALLY on, `x` metres to the
+    // side of it. Outside of a corner = bigger radius = less curvature; inside =
+    // tighter. Feeding the centreline's k to a car that isn't on the centreline
+    // is what made the middle of the road feel "sticky": the assist always asked
+    // for the centreline's radius, so it over-steered you whenever you ran wide
+    // and under-steered you whenever you took an apex, quietly herding the car
+    // back to the middle and fighting any line of your own.
+    const hFrenet = frenetH(c.s, c.x);
+    const kPath = k / hFrenet;
     let yawEase = 1;
-    const rNeed = c.speed * k;
+    const rNeed = c.speed * kPath;
     if (rNeed !== 0) {
       const ratio = (c.yawRateCur || 0) / rNeed;   // >1 = rotating faster than needed
       if (ratio > 1) yawEase = clamp(1 - (ratio - 1) * 0.6, 0.3, 1);
     }
-    const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * k * yawEase * offAssistFade;
-    const delta = clamp(driverDelta + assistDelta, -0.7, 0.7);
+    const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * kPath * yawEase * offAssistFade;
+    // --- RACING LINE assist (pause-menu slider; 0 = off, the default). Two
+    // things deliberately set it apart from the line the AI drives.
+    //   1. It is the PLAYER's line. The AI aims at `-k·130` — the inside of
+    //      whichever corner it is in right now — so it sits mid-track on entry
+    //      and exit and only ever finds the apex. This samples the corner AHEAD
+    //      and the one just BEHIND as well, so the car is opened out wide before
+    //      turn-in and allowed to run wide on exit: the out-in-out arc, which the
+    //      AI's formula cannot express.
+    //   2. It acts through the FRONT TYRE like every other steering input. The
+    //      old version added straight to c.x, sliding the car across the road
+    //      without turning it — the chassis crabbed, and the assist could drag
+    //      the car sideways through grip it did not have (or into a wall).
+    let lineDelta = 0;
+    if (raceLineAssist !== 0) {
+      const look = clamp(Math.abs(c.speed) * 0.9, 25, 90);
+      const kAhead = Tracks.curvature(track, wrapS(c.s + look));
+      const kBehind = Tracks.curvature(track, wrapS(c.s - look * 0.7));
+      // k > 0 curves toward screen-left, so the inside is -x: -k pulls to the
+      // apex of this corner, +kAhead/+kBehind push wide for the next/last one.
+      const lineX = clamp(-k * 170 + (kAhead + kBehind) * 85, -0.72, 0.72) * Math.max(0, hw - 0.6);
+      // Pure pursuit: closing a lateral error e over a look-ahead distance Ld
+      // needs a path curvature of about 2e/Ld², and a road-wheel angle of
+      // WHEELBASE × that. Speed-scaling falls out of Ld, so the correction stays
+      // gentle at 300 km/h and still finds the line in a slow corner.
+      const Ld = clamp(Math.abs(c.speed) * 1.2, 22, 70);
+      lineDelta = raceLineAssist * LINE_PURSUIT * WHEELBASE * 2 * (lineX - c.x) / (Ld * Ld) * offAssistFade;
+    }
+    const delta = clamp(driverDelta + assistDelta + lineDelta, -0.7, 0.7);
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
     // shifts load to the front under braking (sharper turn-in) and the rear on
     // power (a touch of throttle-on looseness) — emergent, not a special case.
@@ -2268,22 +2349,27 @@ function updateCar(c, dt, ranked) {
     // world velocity = forward + lateral slip (perp = (fz, -fx) = +right)…
     const vWx = c.speed * fx + c.vLat * fz;
     const vWz = c.speed * fz - c.vLat * fx;
-    // …advance (s, x) by projecting that velocity straight onto the local road
-    // frame: tangent → arc-length progress, right → lateral. Same first-order step
-    // the old code took, minus the world-point round-trip — no Tracks.project()
-    // search to snap progress onto the wrong leg at a hairpin, and (s, x) can never
-    // desync from a separate world position.
+    // …advance (s, x) by projecting that velocity onto the local road frame:
+    // tangent → arc-length progress, right → lateral. No world-point round-trip —
+    // no Tracks.project() search to snap progress onto the wrong leg at a hairpin,
+    // and (s, x) can never desync from a separate world position.
+    //
+    // The tangent component is divided by the FRENET SCALE FACTOR h. The road
+    // frame stretches with distance from the centreline: a metre driven along a
+    // line x metres to the side of a centreline of curvature k covers only 1/h
+    // metres of centreline (h = 1 + k·x — see frenetH). Dropping that divisor,
+    // as this used to, welds the car to the centreline in the worst way: the
+    // rendered position is REBUILT from (s, x) below, so an off-centre car in a
+    // corner was drawn travelling at the wrong speed for its own heading — it
+    // visibly skated forward on the inside of a hairpin and dragged on the
+    // outside, and the middle of the road was the only place the motion looked
+    // right. It also made every line worth exactly the same lap distance, so
+    // apexing bought you nothing and running wide cost you nothing.
     let tX = smp.t[0], tZ = smp.t[2]; const tL = Math.hypot(tX, tZ) || 1; tX /= tL; tZ /= tL;
     let rX = smp.r[0], rZ = smp.r[2]; const rL = Math.hypot(rX, rZ) || 1; rX /= rL; rZ /= rL;
-    c.s = wrapS(c.s + (vWx * tX + vWz * tZ) * dt);   // progress = velocity · tangent
+    c.s = wrapS(c.s + (vWx * tX + vWz * tZ) * dt / hFrenet);
     c.x += (vWx * rX + vWz * rZ) * dt;               // lateral  = velocity · right
     steer = clamp(shaped, -1, 1);   // steer vis = driver input only, not assist
-    if (raceLineAssist !== 0) {
-      const sLook = wrapS(c.s + clamp(c.speed * 0.6, 12, 50));
-      // Racing line is on the inside = -sign(k); PULL eases the car toward it.
-      const lineX = clamp(-Tracks.curvature(track, sLook) * 130, -0.62, 0.62) * hw;
-      c.x += (lineX - c.x) * raceLineAssist * 2.2 * latFac * dt;
-    }
   } else {
     // While rubbing another car (contactT>0) the AI goes compliant: it stops
     // driving hard back to its racing line, so a player leaning on it can
