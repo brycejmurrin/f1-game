@@ -164,6 +164,11 @@ test.describe("Apex 26 — longitudinal & grip", () => {
     const r = await page.evaluate(() => {
       const total = window.__apex.info().total;
       // Start just before the line on the main straight, flat out, no steering.
+      // The DRIVING HELP assist ships at 0 now, so an un-steered car leaves the
+      // road — this test is about the lap counter wrapping, not about the car
+      // finding its own way round, so opt the assist in explicitly to carry it
+      // there. (Previously it relied on the assist being on by default.)
+      window.__apex.setPhysics({ roadFollow: 0.7 });
       window.__apex.jump(0.97, 60, 0);
       window.__apex.setInput({ steer: 0, throttle: true });
       const startLap = window.__apex.cars().find((c) => c.p).lap;
@@ -178,6 +183,7 @@ test.describe("Apex 26 — longitudinal & grip", () => {
       }
       const endLap = window.__apex.cars().find((c) => c.p).lap;
       window.__apex.clearInput();
+      window.__apex.setPhysics({ roadFollow: 0 });   // restore the shipped default
       return { wraps, monotoneBreaks, startLap, endLap };
     });
     expect(r.wraps).toBe(1);                    // crossed the line exactly once
