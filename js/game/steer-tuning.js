@@ -133,7 +133,27 @@ function refreshMacros() {
   }
 }
 
+// One-time migration for the DRIVING HELP rescale.
+//
+// Changing the default from 6 to 1 only reaches a FRESH install: store.get()
+// returns the stored value whenever the key exists, so every player who had ever
+// opened the settings kept the old always-on assist — the exact behaviour the
+// rescale was meant to remove, still steering ~0.39 of every corner for them.
+//
+// The slider's MEANING changed too (it used to bottom out at 0.25 and now
+// bottoms out at a true 0), so an old stored number does not carry over: 6 no
+// longer denotes what it denoted when it was written. That makes a one-time
+// reset the honest migration rather than an attempt to rescale the number.
+// Player-set values for every OTHER slider are untouched.
+const STEER_SCHEMA = 2;
+function migrateSteerStore() {
+  if (store.get("steerSchema", 1) >= STEER_SCHEMA) return;
+  store.set("drivingHelp", 1);          // assist off, matching the new default
+  store.set("steerSchema", STEER_SCHEMA);
+}
+
 function applySteerTuning() {
+  migrateSteerStore();
   const rate    = store.get("steerRate",  5);
   const expo    = store.get("steerExpo",  5);
   const smooth  = store.get("steerSmooth", 6);

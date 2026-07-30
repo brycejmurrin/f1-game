@@ -627,6 +627,33 @@ function lerpS(prev, cur, a) {
   if (d > L * 0.5) d -= L; else if (d < -L * 0.5) d += L;
   return wrapS(prev + d * a);
 }
+// The PLAYER is drawn where it actually is. Its world position is exact and
+// already smooth (world-space integration), so render interpolates px/pz
+// directly and never round-trips through the road frame.
+//
+// Every one of these call sites used to rebuild the drawn position from a lerped
+// (s, x) PLUS a 30 Hz low-pass on the lateral coordinate. That damping was a
+// workaround for Frenet-projection noise back when (s, x) was the authority —
+// its own comment said so. Against a car that is now exact in world space it
+// only adds a first-order lag TOWARD THE ROAD FRAME: steer, and the mesh trails
+// sideways then catches up. That is a "pulled and oscillating about the centre
+// line" feel baked into the presentation, and it would survive any amount of
+// physics work. AI cars keep the old path — they have no world position, their
+// motion IS road-frame by construction.
+// Writes world X/Z into _rp; the caller still samples the road for HEIGHT.
+const _rp = { x: 0, z: 0, world: false };
+function renderPosOf(c, cS, renderX) {
+  if (c.isPlayer && c.px != null && c.rPrevPx !== undefined) {
+    _rp.x = c.rPrevPx + (c.px - c.rPrevPx) * renderAlpha;
+    _rp.z = c.rPrevPz + (c.pz - c.rPrevPz) * renderAlpha;
+    _rp.world = true;
+  } else if (c.isPlayer && c.px != null) {
+    _rp.x = c.px; _rp.z = c.pz; _rp.world = true;
+  } else {
+    _rp.world = false;
+  }
+  return _rp;
+}
 function basisMat(r, u, f, p, out) {
   out[0] = r[0]; out[1] = r[1]; out[2] = r[2]; out[3] = 0;
   out[4] = u[0]; out[5] = u[1]; out[6] = u[2]; out[7] = 0;
@@ -997,9 +1024,10 @@ function currentCarGroundMat(c, out, dt) {
   const renderX = c.xVis === undefined ? cX : damp(c.xVis, cX, 30, dt);
   Tracks.sample(track, cS, smp2);
   const bankC = Tracks.banking(track, cS, renderX, _bankScratch);
-  tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
-  tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);
-  tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
+  const rp = renderPosOf(c, cS, renderX);   // player: exact world position
+  tmpP[0] = rp.world ? rp.x : smp2.p[0] + smp2.r[0] * renderX;
+  tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
+  tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
   const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
   for (let i = 0; i < 3; i++) {
     _groundF[i] = smp2.t[i] * cy + smp2.r[i] * sy;
@@ -3094,6 +3122,11 @@ function render(dt) {
     const px = (player.rPrevX === undefined) ? player.x
              : player.rPrevX + (player.x - player.rPrevX) * renderAlpha;
     Tracks.sample(track, pS, smp);
+    // NOTE: the camera rig is still built from (pS, px) inside camVantage(). That
+    // is a much smaller coupling than the body had — (s, x) is now an exact
+    // reading of the world position, so the rebuilt anchor lands within a
+    // centimetre of the car, versus the 0.1 s lateral LAG the mesh carried. Left
+    // alone deliberately rather than reworked blind.
     // ride the bank with the car so the camera doesn't sink into the banked road
     const bankCam = Tracks.banking(track, pS, px);
     const bankDy = bankCam ? bankCam.dy : 0;
@@ -3785,12 +3818,15 @@ function render(dt) {
     if (c.xVis === undefined) c.xVis = cX;
     else c.xVis = damp(c.xVis, cX, c.isPlayer ? 30 : 16, dt);
     let renderX = c.xVis;
+    // The player is placed from its own world position below; xVis is kept up to
+    // date only because the surface/bank lookup and the AI path still read it.
+    const rp = renderPosOf(c, cS, renderX);
     // banking: sit the car ON the banked surface (raise it by the local lift)
     // instead of the flat centreline, so it doesn't float/sink in the corner.
     const bankC = Tracks.banking(track, cS, renderX, _bankScratch);
-    tmpP[0] = smp2.p[0] + smp2.r[0] * renderX;
-    tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);
-    tmpP[2] = smp2.p[2] + smp2.r[2] * renderX;
+    tmpP[0] = rp.world ? rp.x : smp2.p[0] + smp2.r[0] * renderX;
+    tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
+    tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
     // Behind-camera cull: AI cars strictly behind the view direction are never
     // visible in ANY camera mode (no mirrors), so skip all their draws (mesh +
     // shadow + brake rings + rain light). ~half the field sits behind you
@@ -4374,7 +4410,10 @@ function tickBody(now) {
       // snapshot each car's pre-step arc/lateral position so render can interpolate
       // between the last two physics steps (snapshotting every step leaves rPrev*
       // holding the state just before the final step taken this frame).
-      for (let i = 0; i < cars.length; i++) { const c = cars[i]; c.rPrevS = c.s; c.rPrevX = c.x; }
+      for (let i = 0; i < cars.length; i++) {
+        const c = cars[i]; c.rPrevS = c.s; c.rPrevX = c.x;
+        c.rPrevPx = c.px; c.rPrevPz = c.pz;   // player renders from WORLD space
+      }
       update(PHYS_DT); physAcc -= PHYS_DT; steps++;
     }
     if (steps === 5) physAcc = 0;             // fell badly behind — drop the backlog
