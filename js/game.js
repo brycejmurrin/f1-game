@@ -2157,7 +2157,16 @@ function updateCar(c, dt, ranked) {
   c.offroad = Math.abs(c.x) > hw && !c.onKerb;
   if (c.offroad) {
     const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
-    if (c.speed > 0) c.speed = Math.max(GRASS_V * 0.6, c.speed - (20 + offDepth * 28) * dt);
+    // Grass DRAG: slows you toward a crawl, and never speeds you up. The floor
+    // used to be a bare Math.max, so any time you were off-track below 10.8 m/s
+    // it RAISED your speed to 10.8 — you could not brake below 39 km/h on the
+    // grass (BRAKE removes 0.37 m/s per frame and this put it straight back),
+    // could not stop at all, and crawling out of a gravel trap at 3 m/s snapped
+    // you to 10.8 in a single frame. It also runs after the accel/brake/slope
+    // integration, so it overrode all of them.
+    if (c.speed > GRASS_V * 0.6) {
+      c.speed = Math.max(GRASS_V * 0.6, c.speed - (20 + offDepth * 28) * dt);
+    }
     c.offT += dt;
     if (c.offT > 1.2) {
       c.offT = -2;   // grace before next count
@@ -2713,7 +2722,16 @@ function updateCar(c, dt, ranked) {
     // that's the wedged-against-a-wall case. A player who deliberately parks
     // (lets off gas) is never rescued, regardless of how long they sit still.
     const stoppedOnTrack = onThrottle && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
-    const stuck = c.offroad || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
+    // Being OFF-TRACK is not the same as being stuck. The driving boundary sits
+    // ~9 m beyond the road edge, so a driver can be metres into a wide run-off,
+    // fully in control and steering back to the track — and the bare c.offroad
+    // clause used to teleport them anyway after 3 s: to x = 0, heading force-
+    // aligned to the tangent, and speed RAISED to 16 m/s. Rescue is for being
+    // beached, so it now needs the car to actually be going nowhere. Same
+    // principle the stoppedOnTrack clause above already applies to a parked car.
+    // (Reachable now that grass drag no longer pins you at 10.8 m/s.)
+    const beached = c.offroad && c.speed < 8;
+    const stuck = beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
     // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
     // stuck conditions. Only applies once a rescue has actually happened —
     // (c.rescueLastT || 0) defaulted to 0 and blocked rescue for the first 4 s of
@@ -2785,6 +2803,17 @@ function coast(c, dt) {
   const kA = Tracks.curvature(track, wrapS(c.s + 30));
   // Finished cars cruise the inside line (-sign(k)), same convention as the AI.
   c.x = damp(c.x, clamp(-kA * 130, -0.5, 0.5) * smp.hw, 2, dt);
+  // A finished car is driven kinematically in (s, x) — so the PLAYER's world
+  // position has to be carried along with it. Without this the car is rendered
+  // from a px/pz that stopped updating at the finish line (renderPosOf) while the
+  // camera, anchored to s/x, drives away down the track: the car sits frozen on
+  // the line for the ~2 s until the results screen. Heading follows the road
+  // because nothing is steering any more.
+  if (c.isPlayer && c.px != null) {
+    const w = worldFromTrack(c.s, c.x, smp);
+    c.px = w.x; c.pz = w.z;
+    c.head = Math.atan2(smp.t[0], smp.t[2]);
+  }
 }
 
 // Lighting tuner registry (TUNE_DEFS), the live LT values, floodColor and
