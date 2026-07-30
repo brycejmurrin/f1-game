@@ -633,7 +633,26 @@ const TrackMesh = (function () {
               if (d2 < fr * fr) {
                 const dist = Math.sqrt(d2);
                 const tt = Math.max(0, Math.min(1, (dist - nr) / (fr - nr)));
-                const tgt = (roadYj - 0.4) * (1 - tt * tt) + wy * (tt * tt);
+                let tgt = (roadYj - 0.4) * (1 - tt * tt) + wy * (tt * tt);
+                // A verge must still MEET the tarmac it borders. The channel
+                // reaches 26 m to catch a broad mound (Miami's Hard Rock rise
+                // bulges over the track from ~20 m out), but on a banked corner
+                // whose lap doubles back — Zandvoort's hairpins run ~28 m apart —
+                // that reach lands on the far road's own banked verge and drags
+                // it a metre below the tarmac it belongs to, leaving a ledge
+                // along the outside of the banking.
+                //
+                // Hold the vert at its OWN section's road-edge height for the
+                // first few metres past the tarmac, releasing over 8 m so the
+                // channel still wins where the mound actually is. Verts that sit
+                // ON another road never get here: the unconditional bury above
+                // fires first and continues.
+                const ownDist = Math.abs(o) - w;
+                if (ownDist < 8) {
+                  const hold = 1 - ownDist / 8;
+                  const floorY = py[k] + bankOffsetAt(track, k, o) - 0.35;
+                  if (tgt < floorY) tgt += (floorY - tgt) * hold;
+                }
                 if (wy > tgt) wy = tgt;
               }
             }
