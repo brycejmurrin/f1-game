@@ -40,13 +40,16 @@ node spike/capture.mjs all              # both → scratch/captures/spike/result
 
 | # | Criterion | Threshold | Result |
 |---|---|---|---|
-| 1 | SwiftShader renderability (`?gl=1`, headless) | renders, no console errors — **hard gate** | _TBD_ |
-| 2 | Frame time vs GLX (Singapore night, 22 cars, 32 lamps) | spike-WebGL ≥ 0.8× GLX fps | _TBD_ |
-| 3 | 32-lamp forward viability | no cliff > 2× vs 8 lamps | _TBD_ |
-| 4 | Draw calls + instancing win | cars 22→1 draw; record deltas | _TBD_ |
-| 5 | Visual acceptability | side-by-side sheet, owner judgment | _TBD_ |
-| 6 | Port-cost extrapolation | < ~6k lines projected, no blocked capability | _TBD_ |
-| 7 | Single-source proof (same TSL on WebGL2 + WebGPU) | yes/no | _TBD_ |
+| 1 | SwiftShader renderability (`?gl=1`, headless) | renders, no console errors — **hard gate** | **PASS** — 4/4 shots non-blank, 0 errors (run 3) |
+| 2 | Frame time vs GLX (Singapore night, 22 cars, 32 lamps) | spike-WebGL ≥ 0.8× GLX fps | **PASS** — spike 4,583 ms/frame vs GLX 9,170 ms on the same SwiftShader box ≈ **2.0× faster** (CPU-contention caveats; relative, not absolute) |
+| 3 | 32-lamp forward viability | no cliff > 2× vs 8 lamps | **PASS** — 32 lamps 4,583 ms vs 8 lamps 6,814 ms: no light-count cliff at all (geometry/fill-bound; noise dominates) |
+| 4 | Draw calls + instancing win | cars 22→1 draw; record deltas | **PASS** — 54 → 25 GL draws/frame with `InstancedMesh` (GLX baseline: 94 draws); ms flat on SwiftShader (not draw-bound there) |
+| 5 | Visual acceptability | side-by-side sheet, owner judgment | **PASS (pending owner)** — `spike-t030.png` vs `glx-t030.png`: warm pools, floodlit barriers, shadows, lit windows in the same family; a155 sits inside a building (angle quirk, both renderers) |
+| 6 | Port-cost extrapolation | < ~6k lines projected, no blocked capability | **PASS** — ~120 TSL lines ≈ 140 GLSL lines ported 1:1; extrapolates to ~2-3k for all 15 materials + composite; one landmine documented (stranded-assignment) |
+| 7 | Single-source proof (same TSL on WebGL2 + WebGPU) | yes/no | **WebGL2 half PROVEN** (this is what CI runs); WebGPU half needs a one-time desktop-browser check (headless WebGPU unavailable here — see above) |
+
+**No kill condition triggered.** Numbers: `scratch/captures/spike/results.json`
+(spike run 3 + GLX baseline sections).
 
 **Kill conditions:** #1 fails · spike-WebGL < 0.6× GLX · TSL cannot express the
 `mat`-keyed procedural materials or the flat 32-lamp uniform array. On a kill →
