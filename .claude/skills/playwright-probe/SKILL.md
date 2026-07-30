@@ -87,6 +87,30 @@ minute. `apex-capture` already does this (`startServers(4)` + `fanout`).
    ~1.6 s settle for the mesh build before probing/shooting.
 5. **Viewports**: in-race shots use **landscape** `{844,390}` (avoids the
    `#rotate-device` overlay); DOM screens (menu/results) use a larger viewport.
+6. **THE CAMERA LAGS — call `snapCam()`.** The game camera eases toward its rig
+   target exponentially, so after a `jump()`/`park()` teleport it spends a second
+   or more *flying* to the car. Screenshot in that window and you get an empty
+   frame, the car half out of shot, or scenery from 300 m back — and any
+   `camState()` reading is of a camera still in transit, not of the rig.
+   ```js
+   __apex.park(0.12);   // stationary + frozen: the deterministic-shot hook
+   __apex.snapCam();    // REQUIRED: bypasses the damping, rig lands exactly
+   ```
+   Waiting longer is not a fix (the ease is slow and `freeze()` can hold it).
+   Symptom to recognise: eye-to-car distance in the hundreds of metres, when
+   chase should read ~5.8 m and cockpit/hood ~0.3-0.6 m.
+
+   If you are comparing camera BEHAVIOUR (does the rig follow the car or the
+   road?), note that `park()` cannot tell them apart: it puts the car on the
+   centreline with heading == tangent, exactly where every rig coincides. Yaw the
+   car off the road first (steer for ~45 ticks), then `freeze()` + `snapCam()`,
+   and compare the eye→target bearing against `physState().head` vs the road
+   tangent (`head + probe().angle`).
+7. **There are TWO camera call sites.** The live rig is solved in `render()`;
+   `snapCam()`/`startRace()` go through `snapGameCam()`, and `previewCam()`
+   through its own `camVantage()` call with an empty `extra`. They are meant to
+   frame identically — if you add anything to the camera's inputs, wire all of
+   them, or a snapped/preview shot will silently disagree with the live view.
 
 ## Custom-harness skeleton
 

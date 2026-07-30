@@ -112,10 +112,23 @@ Like `park()`, but tilts the camera toward the horizon so sky/clouds are clearly
 visible. Eye 3.5 m up, target 20 m ahead and 34 m higher (~58° up) so the horizon
 drops to the lower third and the frame fills with sky.
 
-### `snapCam() → void`
+### `snapCam() → void`  — **call this before every screenshot**
 Instantly snap the camera to the current mode's vantage (no damping) — every mode,
 not just chase. Call right after `jump()`/`park()` so the very next rendered frame
 is clean.
+
+**Skip it and your screenshot is of a camera in transit.** The rig eases toward
+its target exponentially, so a `jump()`/`park()` teleport leaves it flying to the
+car for a second or more: empty frames, the car out of shot, or scenery from
+hundreds of metres back. `camState()` read in that window describes the camera's
+current position, not the mode's framing. Waiting longer is not a reliable fix —
+`freeze()` can hold the ease. Sanity numbers once snapped: chase eye ≈ 5.8 m from
+the car, cockpit ≈ 0.36 m, hood ≈ 0.58 m.
+
+Note `park()` places the car on the centreline with heading == the road tangent —
+the one pose where every camera rig coincides. It is the right hook for a clean
+shot, but it cannot show whether a rig follows the CAR or the ROAD; yaw the car
+off the tangent first if that is what you are testing.
 
 ---
 
