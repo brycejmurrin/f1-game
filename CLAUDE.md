@@ -377,6 +377,9 @@ See `docs/SCENERY-API.md` for the `scenery(api)` reference, building kinds, tabl
 ```js
 __apex.race("monza")          // load track, skip menus
 __apex.park(0.1)              // stationary at 10% lap, frozen for screenshot
+__apex.snapCam()              // REQUIRED after park()/jump() before a shot: the camera
+                              //   eases toward its rig target, so without this you
+                              //   photograph a camera still flying to the car
 __apex.jump(0.5, 60, 0)       // teleport to 50% lap at 60 m/s
 __apex.go()                   // start race, grid intact
 __apex.finishRace()           // trigger results screen
