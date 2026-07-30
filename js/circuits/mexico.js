@@ -43,8 +43,11 @@
               building, motorhome, grandstand, billboard, tree, hedge, fence, palm, pine,
               guardrail, tyreWall, marshalPost, tower, gantry, mountain, wall,
               modelGroup, groundPatch, groundedSegments,
-              cityFront, forestEdge } = api;
+              cityFront, forestEdge, bush } = api;
       const K = (s) => Math.round(s * n) % n;
+      // Lap sectors where dressingExclusions leaves the generic city generator
+      // running — see the def's `dressingExclusions` above.
+      const cityBand = (s) => (s > 0.14 && s < 0.60) || s > 0.94 || s < 0.02;
 
       // Track centre + radius for far horizon rings
       let cx = 0, cz = 0;
@@ -223,17 +226,17 @@
       // s=0.06  PARK TREE-LINE — DRS straight Mixhuca green (park-first)
       // Dense broadleaf corridor so the long straight reads as park before city.
       // ════════════════════════════════════════════════════════════════════════
-      hedge(0.04, 0.14, 1, 22, 3.2, TREEGRN);
-      hedge(0.04, 0.12, -1, 28, 2.8, PARKGRN);
-      forestEdge(0.04, 0.14, 1, 26, { density: 0.92, hMin: 8, hMax: 15, col: TREEGRN, col2: PARKGRN, pineFrac: 0.25 });
-      forestEdge(0.04, 0.14, -1, 34, { density: 0.72, hMin: 7, hMax: 13, col: PARKGRN, col2: TREEGRN, pineFrac: 0.20 });
+      hedge(0.04, 0.14, 1, 13, 3.2, TREEGRN);
+      hedge(0.04, 0.12, -1, 16, 2.8, PARKGRN);
+      forestEdge(0.04, 0.14, 1, 17, { density: 0.92, hMin: 8, hMax: 15, col: TREEGRN, col2: PARKGRN, pineFrac: 0.25 });
+      forestEdge(0.04, 0.14, -1, 20, { density: 0.72, hMin: 7, hMax: 13, col: PARKGRN, col2: TREEGRN, pineFrac: 0.20 });
       // Second rank behind the near treeline (depth without city walls)
-      forestEdge(0.05, 0.13, 1, 48, { density: 0.55, hMin: 9, hMax: 16, col: TREEGRN, col2: PARKGRN, pineFrac: 0.35 });
+      forestEdge(0.05, 0.13, 1, 30, { density: 0.55, hMin: 9, hMax: 16, col: TREEGRN, col2: PARKGRN, pineFrac: 0.35 });
 
       // Mid-lap park densify (T1 → Horquilla approach) — Mixhuca before skyline
-      forestEdge(0.14, 0.30, 1, 20, { density: 0.78, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
-      forestEdge(0.14, 0.28, -1, 44, { density: 0.50, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
-      forestEdge(0.30, 0.48, 1, 24, { density: 0.62, hMin: 7, hMax: 12, col: TREEGRN, col2: PARKGRN, pineFrac: 0.20 });
+      forestEdge(0.14, 0.30, 1, 22, { density: 0.78, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
+      forestEdge(0.14, 0.28, -1, 22, { density: 0.50, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
+      forestEdge(0.30, 0.48, 1, 22, { density: 0.62, hMin: 7, hMax: 12, col: TREEGRN, col2: PARKGRN, pineFrac: 0.20 });
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.12  TURN 1 GRANDSTAND
@@ -313,9 +316,11 @@
                  { wall: [0.86, 0.86, 0.84], window: [0.40, 0.46, 0.50], floor: 2 });
       }
       // Park trees both sides of the sports facility section — denser toward stadium
-      forestEdge(0.48, 0.68, 1, 16, { density: 0.82, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
-      forestEdge(0.48, 0.68, -1, 48, { density: 0.68, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
-      forestEdge(0.62, 0.70, 1, 22, { density: 0.70, hMin: 8, hMax: 14, col: TREEGRN, col2: PARKGRN, pineFrac: 0.25 });
+      forestEdge(0.48, 0.60, 1, 22, { density: 0.82, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
+      forestEdge(0.60, 0.68, 1, 11, { density: 0.82, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
+      forestEdge(0.48, 0.60, -1, 22, { density: 0.68, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
+      forestEdge(0.60, 0.68, -1, 24, { density: 0.68, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
+      forestEdge(0.62, 0.70, 1, 14, { density: 0.70, hMin: 8, hMax: 14, col: TREEGRN, col2: PARKGRN, pineFrac: 0.25 });
 
       // Palacio de los Deportes — the landmark copper geodesic dome that sits in
       // this very sports park. A wide, low hyperbolic-paraboloid roof clad in
@@ -394,32 +399,32 @@
         boundedStand(s, -1, 30, 24, [0.66, 0.64, 0.62], fiesta[0], s === 0.78);
         boundedStand(s, -1, 50, 26, [0.58, 0.56, 0.54], fiesta[2], false);
         if (s !== 0.75) boundedStand(s, 1, 30, 24, [0.66, 0.64, 0.62], fiesta[1], s === 0.78);
-        if (s === 0.78 || s === 0.84) boundedStand(s, 1, 50, 26, [0.58, 0.56, 0.54], fiesta[3], false);
+        if (s === 0.78 || s === 0.84) boundedStand(s, 1, 36, 26, [0.58, 0.56, 0.54], fiesta[3], false);
       }
 
       // Packed upper terraces cresting the rim (both sides)
       for (const s of [0.755, 0.805, 0.845]) {
-        crowdBank(s, -1, 68, 28, 6);
-        if (s === 0.845) crowdBank(s, 1, 68, 28, 6);
+        crowdBank(s, -1, 34, 28, 6);
+        if (s === 0.845) crowdBank(s, 1, 34, 28, 6);
       }
       // Entry/exit end caps stay behind the bright apertures.
-      boundedStand(0.715, -1, 68, 20, [0.58, 0.56, 0.54], fiesta[2], false);
-      boundedStand(0.875, -1, 68, 20, [0.58, 0.56, 0.54], fiesta[0], false);
-      boundedStand(0.875,  1, 68, 20, [0.58, 0.56, 0.54], fiesta[1], false);
+      boundedStand(0.715, -1, 36, 20, [0.58, 0.56, 0.54], fiesta[2], false);
+      boundedStand(0.875, -1, 36, 20, [0.58, 0.56, 0.54], fiesta[0], false);
+      boundedStand(0.875,  1, 36, 20, [0.58, 0.56, 0.54], fiesta[1], false);
 
       // Sparse outer upper decks complete the bowl silhouette without filling
       // the bright entry/exit apertures or tightening the driver's sightline.
-      boundedStand(0.835, -1, 74, 20, [0.56, 0.55, 0.54], fiesta[2], false);
+      boundedStand(0.835, -1, 44, 20, [0.56, 0.55, 0.54], fiesta[2], false);
 
       // Foro Sol floodlight masts — ring the outer rim
       for (const s of [0.74, 0.77, 0.80, 0.83, 0.85]) {
-        lightMast(K(s), -1, 58, 52);
-        if (s >= 0.80) lightMast(K(s), 1, 58, 52);
+        lightMast(K(s), -1, 31, 52);
+        if (s >= 0.80) lightMast(K(s), 1, 31, 52);
       }
 
       // Foro Sol scoreboard / jumbotron at the far end of the stadium (s≈0.80)
       {
-        const k = K(0.80), a = anchor(k, -1, 90);
+        const k = K(0.80), a = anchor(k, -1, 46);
         modelGroup("foro-scoreboard", {
           center: vadd(a.c, a.u, 28),
           size: [34, 15, 2],
@@ -441,7 +446,7 @@
         [0.748, -1, 0], [0.772, 1, 1], [0.798, -1, 2],
         [0.822, 1, 3], [0.846, -1, 1],
       ]) {
-        place(K(s), side, 61, [0.8, 4.5, 12], fiesta[ci]);
+        place(K(s), side, 33, [0.8, 4.5, 12], fiesta[ci]);
       }
 
       // Interior fencing at trackside (safety fence inside stadium) — bowl only
@@ -456,7 +461,7 @@
       // Mexican flag colours on the stadium outer wall fascia (visible from outside)
       for (const side of [-1, 1]) {
         const points = [];
-        along(0.73, 0.86, 18, (k) => points.push({ k, side, dist: 58 }));
+        along(0.73, 0.86, 18, (k) => points.push({ k, side, dist: 31 }));
         groundedSegments({
           id: `foro-outer-fascia-${side}`,
           points, width: 1.0, height: 20,
@@ -469,12 +474,12 @@
       // ════════════════════════════════════════════════════════════════════════
       billboard(K(0.88), 1, 8, 14, 6, fiesta[1]);
       // Low media/hospitality wing outside the entry throat, behind the stands.
-      building(K(0.695), -1, 46, 22, 14, 28, {
+      building(K(0.695), -1, 30, 22, 14, 28, {
         wall: [0.76, 0.74, 0.72], window: [0.30, 0.38, 0.46],
         floor: 3, roof: [0.88, 0.24, 0.44],
       });
       // Soft park trees just past the exit gap (not walling it shut)
-      forestEdge(0.89, 0.94, -1, 28, { density: 0.55, hMin: 7, hMax: 12, col: PARKGRN, col2: TREEGRN, pineFrac: 0.2 });
+      forestEdge(0.89, 0.94, -1, 17, { density: 0.55, hMin: 7, hMax: 12, col: PARKGRN, col2: TREEGRN, pineFrac: 0.2 });
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.92  PERALTADA / ESTADIO STAND
@@ -526,11 +531,110 @@
       billboard(K(0.33), -1, 16, 14, 5, fiesta[1]);
       billboard(K(0.46),  1, 10, 10, 4, fiesta[0]);
 
+      // ── Continuous perimeter: debris fence + hoarding line ──────────────────
+      // The Autodromo is fenced end to end, and the near band outside the
+      // stadium carried almost no structure — the fence/guardrail runs above
+      // covered barely a fifth of the lap. Everything here sits inside 12 m so
+      // it reads from the car, and stays clear of the generic city front row
+      // (which starts 13 m beyond the edge).
+      const FENCE_M = [0.80, 0.82, 0.84];
+      for (const [s0, s1, side] of [
+        [0.00, 0.10,  1], [0.00, 0.10, -1],
+        [0.16, 0.30,  1], [0.10, 0.30, -1],
+        [0.30, 0.48,  1], [0.30, 0.48, -1],
+        [0.48, 0.60,  1], [0.48, 0.60, -1],
+        [0.60, 0.72,  1], [0.60, 0.72, -1],
+        [0.86, 1.00,  1], [0.86, 1.00, -1],
+      ]) fence(s0, s1, side, 5.5, 3.4, FENCE_M);
+      // Clipped park hedging along the verge footing. hedge() registers through
+      // indexSolid — it is solid to the scenery guards but does NOT move the
+      // driving limit, which a wall()/place() hoarding band would: a continuous
+      // solid at 4 m pulled the mean barrier line in by ~3 m and quietly took
+      // half the run-off off the circuit.
+      for (const [s0, s1, side] of [
+        [0.00, 0.10,  1], [0.16, 0.30,  1], [0.30, 0.48, -1],
+        [0.48, 0.60,  1], [0.60, 0.72, -1], [0.86, 1.00,  1],
+        [0.10, 0.30, -1], [0.48, 0.60, -1], [0.86, 1.00, -1],
+      ]) hedge(s0, s1, side, 2.4, 1.4, side < 0 ? PARKGRN : TREEGRN);
+      // Sponsor hoardings on the fence line, right round the lap — these carry
+      // the fiesta colour the wall used to.
+      for (let i = 0; i < 44; i++) {
+        const sf = i / 44;
+        if (sf > 0.72 && sf < 0.87) continue;      // Foro Sol bowl is dressed already
+        const side = (i % 2) ? 1 : -1;
+        billboard(K(sf), side, 9, 10 + hash(i * 3.7) * 4, 4.2, fiesta[i % 4]);
+      }
+      // Papel-picado runs between the hoardings.
+      for (const s of [0.03, 0.17, 0.26, 0.35, 0.50, 0.58, 0.64, 0.95])
+        banners(s, s > 0.5 ? -1 : 1, 7);
+      // Marshal posts on the other side too.
+      for (const s of [0.16, 0.26, 0.36, 0.50, 0.60, 0.70, 0.95])
+        marshalPost(K(s), -1, 6);
+
+      // ── Named enclosures the lap was missing ────────────────────────────────
+      // Grandstands 1-9 ring the Esses, Horquilla and the Peraltada run-in; the
+      // circuit previously had four stands outside the stadium.
+      for (const [s, side, gap, len, crowd] of [
+        [0.055,  1, 10, 56, ORANGE], [0.055, -1, 11, 48, PINK],
+        [0.165,  1, 10, 50, PINK],   [0.245, -1, 10, 52, GREEN],
+        [0.285,  1, 11, 46, ORANGE], [0.345, -1, 10, 48, PINK],
+        [0.455, -1, 11, 44, GREEN],  [0.520,  1, 10, 50, ORANGE],
+        [0.575, -1, 10, 46, PINK],   [0.655,  1, 11, 48, GREEN],
+        [0.905, -1, 11, 52, ORANGE], [0.945,  1, 10, 54, PINK],
+      ]) grandstand(s, side, gap, len, SEATS, crowd);
+      // Packed standing terraces behind the Esses and the Peraltada banking.
+      bowlSeatWall(0.215, 0.265,  1, 20, { h: 5.4, thick: 3.4, shell: CONCRETE, step: 9 });
+      bowlSeatWall(0.915, 0.965, -1, 20, { h: 5.6, thick: 3.4, shell: CONCRETE, step: 9 });
+
+      // ── Magdalena Mixhuca park corridor: a real avenue, not a thin hedge ────
+      // The DRS straight and the run down to the stadium are lined with mature
+      // park trees on both shoulders. Second and third ranks at 13/22 m fill
+      // the band between the fence and the first treeline.
+      for (const [s0, s1, side] of [
+        [0.055, 0.14,  1], [0.055, 0.14, -1],
+        [0.60, 0.70,  1], [0.60, 0.70, -1],
+        [0.89, 0.94, -1], [0.89, 0.94,  1],
+      ]) {
+        forestEdge(s0, s1, side, 13, { density: 0.55, hMin: 7, hMax: 12,
+          col: TREEGRN, col2: PARKGRN, pineFrac: 0.18 });
+        forestEdge(s0, s1, side, 22, { density: 0.45, hMin: 8, hMax: 14,
+          col: PARKGRN, col2: TREEGRN, pineFrac: 0.24 });
+      }
+      // Shrub clumps in the strip between the fence line (5.5 m) and the first
+      // treeline — the only band on this circuit with nothing else in it.
+      every(26, (k) => {
+        const sf = k / n;
+        if (sf > 0.72 && sf < 0.87) return;                 // stadium bowl
+        for (const side of [-1, 1]) {
+          if (hash(k * 71 + side) > 0.55) continue;
+          bush(k, side, 8.5 + hash(k * 73 + side) * 1.5, PARKGRN);
+        }
+      });
+      // Tyre stacks on the corner apexes that had none.
+      tyreWall(0.055, 0.075, -1, 4.5, ORANGE);
+      tyreWall(0.235, 0.255,  1, 4.5, PINK);
+      tyreWall(0.285, 0.305, -1, 4.5, GREEN);
+      tyreWall(0.415, 0.435, -1, 4.5, ORANGE);
+      tyreWall(0.505, 0.525,  1, 4.5, PINK);
+      tyreWall(0.645, 0.665, -1, 4.5, GREEN);
+      tyreWall(0.925, 0.945,  1, 4.5, ORANGE);
+      // Kerb accents at the remaining apexes.
+      for (const [s, side] of [[0.06, -1], [0.24, 1], [0.29, -1], [0.34, 1],
+                               [0.52, 1], [0.58, -1], [0.65, -1], [0.93, 1]]) {
+        kerb(s, side, 8);
+      }
+      // Boulevard lamp posts down the park straights.
+      for (let i = 0; i < 30; i++) {
+        const sf = i / 30;
+        if (sf > 0.70 && sf < 0.90) continue;
+        lampPost(K(sf), (i % 2) ? 1 : -1, 11);
+      }
+
       // ════════════════════════════════════════════════════════════════════════
       // VEGETATION: palms along the straights, park trees
       // ════════════════════════════════════════════════════════════════════════
       for (const s of [0.05, 0.08, 0.92, 0.97]) {
-        palm(K(s), 1, 18 + hash(K(s)) * 10, 9 + hash(K(s) * 3) * 4, GREEN);
+        palm(K(s), 1, 12 + hash(K(s)) * 7, 9 + hash(K(s) * 3) * 4, GREEN);
       }
       // Sparse trees on open sections (avoiding stadium and park sections)
       every(22, (k) => {
@@ -539,7 +643,11 @@
         if (s > 0.70 && s < 0.90) return;   // stadium section
         for (const side of [-1, 1]) {
           if (hash(k * 91 + side) > 0.50) continue;
-          const d = 26 + hash(k * 92 + side) * 50;
+          // Inside the generic city sectors the skyline towers occupy the whole
+          // 8-80 m band, so a tree dropped in there grows through one. Park
+          // sectors get the near planting; city sectors keep the old set-back.
+          const d = cityBand(s) ? 22 + hash(k * 92 + side) * 8
+                                : 13 + hash(k * 92 + side) * 22;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 9)) continue;
           tree(k, side, d, 8 + hash(k * 94 + side) * 5,
@@ -571,12 +679,13 @@
           if (s < 0.04 || (s > 0.04 && s < 0.50)) continue;   // start-finish straight + park/city sections handled elsewhere
           if (s > 0.70 && s < 0.90) continue;   // stadium section
           if (hash(k * 57 + side) > 0.62) continue;
-          const d = 30 + hash(k * 63 + side) * 34;
+          const d = cityBand(s) ? 22 + hash(k * 63 + side) * 8
+                                : 15 + hash(k * 63 + side) * 20;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 8)) continue;
           const r = hash(k * 67 + side);
           tree(k, side, d, 6.5 + r * 4.5, [0.15 + r * 0.07, 0.34 + r * 0.06, 0.17]);
-          if (r > 0.62) tree(k, side, d + 5 + r * 6, 5 + r * 3, [0.17, 0.32, 0.16]);
+          if (r > 0.62) tree(k, side, d + 4 + r * 5, 5 + r * 3, [0.17, 0.32, 0.16]);
         }
       });
 

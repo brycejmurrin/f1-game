@@ -153,16 +153,17 @@
       // Hangar Straight (≈0.18–0.28) kept OPEN — no dense outfield belt there.
       // The copses are the circuit's OWN trees, not distant farmland — Chapel
       // and Cheese Copse stand just past the run-off, and the Village/Loop and
-      // Luffield woods crowd the infield. They used to sit 64-114 m out, which
-      // from the car put every leaf beyond the fog and left the trackside bare.
-      forestEdge(0.14, 0.17, -1, 30, { density: 0.8, hMin: 9, hMax: 14, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Chapel/Cheese Copse
-      forestEdge(0.61, 0.64,  1, 26, { density: 0.75,hMin: 8, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.15 }); // Village-side copse
-      forestEdge(0.69, 0.71, -1, 24, { density: 0.8, hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Loop infield copse
-      forestEdge(0.44, 0.47, -1, 62, { density: 0.7, hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.15 }); // behind the Wing paddock
-      forestEdge(0.77, 0.80,  1, 28, { density: 0.75,hMin: 8, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Brooklands outer
-      forestEdge(0.89, 0.92, -1, 26, { density: 0.7, hMin: 8, hMax: 12, col: COPSE2, col2: COPSE,  pineFrac: 0.2  }); // Woodcote area
-      forestEdge(0.34, 0.36,  1, 44, { density: 0.65,hMin: 8, hMax: 12, col: COPSE,  col2: COPSE2, pineFrac: 0.2  }); // Vale outfield copse
-      forestEdge(0.57, 0.60, -1, 34, { density: 0.65,hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Farm curve infield copse
+      // Luffield woods crowd the infield. They used to sit 24-62 m out, which
+      // from the car put most of the leaf area past the enclosures; 13-16 m
+      // puts them where the real copses are, just beyond the debris fencing.
+      forestEdge(0.14, 0.17, -1, 14, { density: 0.8, hMin: 9, hMax: 14, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Chapel/Cheese Copse
+      forestEdge(0.61, 0.64,  1, 14, { density: 0.75,hMin: 8, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.15 }); // Village-side copse
+      forestEdge(0.69, 0.71, -1, 13, { density: 0.8, hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Loop infield copse
+      forestEdge(0.44, 0.47, -1, 16, { density: 0.7, hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.15 }); // behind the Wing paddock
+      forestEdge(0.77, 0.80,  1, 14, { density: 0.75,hMin: 8, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Brooklands outer
+      forestEdge(0.89, 0.92, -1, 14, { density: 0.7, hMin: 8, hMax: 12, col: COPSE2, col2: COPSE,  pineFrac: 0.2  }); // Woodcote area
+      forestEdge(0.34, 0.36,  1, 15, { density: 0.65,hMin: 8, hMax: 12, col: COPSE,  col2: COPSE2, pineFrac: 0.2  }); // Vale outfield copse
+      forestEdge(0.57, 0.60, -1, 16, { density: 0.65,hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Farm curve infield copse
       // Scattered broadleaf fringe past the enclosures. This used to be ONE
       // full-lap belt at a flat 48 m: a continuous treeline the whole way round,
       // parked far enough out to be fog. It is now per-sector, so the trees sit
@@ -170,16 +171,21 @@
       // the Wellington/Luffield perimeter) and stay away — or away entirely —
       // where the airfield is genuinely open.
       for (const [s0, s1, side, gap, dens] of [
-        [0.96, 0.10, -1, 26, 0.08],   // National straight infield / Copse inside
-        [0.02, 0.09,  1, 34, 0.06],   // Copse outfield, past the run-off
-        [0.10, 0.18, -1, 34, 0.07],   // Maggotts/Becketts infield
-        [0.30, 0.42, -1, 30, 0.08],   // Stowe > Vale infield
-        [0.30, 0.42,  1, 46, 0.05],   // Vale/Club outfield, beyond the stands
-        [0.52, 0.60,  1, 40, 0.06],   // Abbey/Farm outer
-        [0.60, 0.76, -1, 24, 0.10],   // Village > Aintree infield woods
-        [0.64, 0.76,  1, 34, 0.07],   // Wellington outer
-        [0.76, 0.96,  1, 26, 0.09],   // Brooklands > Woodcote perimeter belt
-        [0.80, 0.95, -1, 30, 0.07],   // Luffield infield
+        // The Copse-inside infield (s 0.96-0.048 L) is a narrow strip between
+        // the National straight and the pit straight. A treeline planted in it
+        // gets walked outward by the barrier guard until it is clear, which on
+        // this pinch means ACROSS the pit straight — that left a canopy 3.6 m
+        // over the racing line at s=0.036. Start past the pinch.
+        [0.048, 0.10, -1, 20, 0.10],  // Copse inside
+        [0.02, 0.09,  1, 24, 0.08],   // Copse outfield, past the run-off
+        [0.10, 0.18, -1, 24, 0.09],   // Maggotts/Becketts infield
+        [0.30, 0.42, -1, 21, 0.10],   // Stowe > Vale infield
+        [0.30, 0.42,  1, 30, 0.07],   // Vale/Club outfield, beyond the stands
+        [0.52, 0.60,  1, 27, 0.08],   // Abbey/Farm outer
+        [0.60, 0.76, -1, 18, 0.12],   // Village > Aintree infield woods
+        [0.64, 0.76,  1, 24, 0.09],   // Wellington outer
+        [0.76, 0.96,  1, 19, 0.11],   // Brooklands > Woodcote perimeter belt
+        [0.80, 0.95, -1, 21, 0.09],   // Luffield infield
       ]) forestEdge(s0, s1, side, gap, { density: dens, hMin: 7, hMax: 12, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
       // Hangar Straight (0.18-0.28) gets NO near fringe on either side — the
       // open airfield vista between the hangars is the point of the place.
@@ -435,25 +441,28 @@
       // Windbreaks: mix of conifer/broadleaf at mid-distances using forestEdge.
       // pineFrac=0.6 gives the classic Silverstone mixed-hedgerow/conifer windbreak feel.
       // Hangar Straight (0.18–0.28) deliberately skipped — open airfield vista.
-      forestEdge(0.14, 0.17,  1, 68, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Maggotts right (pre-Hangar)
-      forestEdge(0.29, 0.42,  1, 74, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Stowe right (post-Hangar)
-      forestEdge(0.58, 0.68, -1, 64, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Abbey/Loop left
-      forestEdge(0.78, 0.90, -1, 70, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Luffield left
-      // These two belts break mid-run. At 130-140 m out they leave the outfield and
-      // come back over the lap on the far side (s≈0.06-0.08 lands on the National
-      // straight; s≈0.47-0.52 lands on the start/finish complex), where their
-      // canopies grew through the guardrails and lighting masts standing there.
-      forestEdge(0.05, 0.061, -1, 122, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Maggotts far side
-      forestEdge(0.078, 0.12, -1, 122, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55});
-      forestEdge(0.44, 0.468,  1, 128, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // behind The Wing
-      // Outer broadleaf copse belts (the named Silverstone landscape copses)
-      // Maggotts outer belt ends before Hangar Straight; Stowe belt starts after.
-      forestEdge(0.14, 0.17, -1, 82, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Maggotts outer (pre-Hangar)
-      forestEdge(0.49, 0.497, 1, 96, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Wing outer belt
-      forestEdge(0.516, 0.53, 1, 96, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); //  (breaks over the pit complex)
-      forestEdge(0.71, 0.75,  1, 78, { density: 0.4,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Aintree outer copse
-      forestEdge(0.61, 0.65, -1, 86, { density: 0.35, hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Village outer belt
-      forestEdge(0.35, 0.39, -1, 112, { density: 0.3,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Vale outer field copse
+      forestEdge(0.14, 0.17,  1, 17, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Maggotts right (pre-Hangar)
+      forestEdge(0.29, 0.42,  1, 18, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Stowe right (post-Hangar)
+      forestEdge(0.58, 0.68, -1, 15, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Abbey/Loop left
+      forestEdge(0.78, 0.90, -1, 17, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Luffield left
+      // These belts still break mid-run, but for a different reason now they are
+      // in the visible band: a belt that reaches far out on this airfield leaves
+      // its own outfield and comes back over the lap on the far side (s≈0.06-0.08
+      // landed on the National straight, s≈0.47-0.52 on the start/finish complex,
+      // and the 122 m Maggotts belt put a canopy 2.8 m over the pit straight).
+      forestEdge(0.05, 0.061, -1, 18, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Maggotts far side
+      forestEdge(0.078, 0.12, -1, 18, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55});
+      forestEdge(0.44, 0.468,  1, 19, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // behind The Wing
+      // Broadleaf copse belts (the named Silverstone landscape copses), mixed
+      // through the conifer windbreaks above at the same depth rather than
+      // stacked 80-110 m behind them where nothing was legible.
+      // Maggotts belt ends before Hangar Straight; Stowe belt starts after.
+      forestEdge(0.14, 0.17, -1, 18, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Maggotts outer (pre-Hangar)
+      forestEdge(0.49, 0.497, 1, 18, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Wing outer belt
+      forestEdge(0.516, 0.53, 1, 18, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); //  (breaks over the pit complex)
+      forestEdge(0.71, 0.75,  1, 18, { density: 0.4,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Aintree outer copse
+      forestEdge(0.61, 0.65, -1, 18, { density: 0.35, hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Village outer belt
+      forestEdge(0.35, 0.39, -1, 19, { density: 0.3,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Vale outer field copse
       // Very thin Hangar Straight fringe only — silhouette hangars need sky behind them
       forestEdge(0.18, 0.28,  1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
       forestEdge(0.18, 0.28, -1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
