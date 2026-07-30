@@ -186,10 +186,10 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         // Road-following on the grade: approach the sharpest corner with NO steer
         // at a moderate corner speed, and confirm the assist tracks the road
         // instead of running off (which on a slope would also pitch it up/down the
-        // bank). NOTE: the driving-help assist is intentionally light by default
-        // (~0.50), so an un-steered car at full racing pace WILL run to the runoff
-        // on a tight corner — that's by design (you must steer). This checks the
-        // assist still holds at a sensible corner speed, not that it defies physics.
+        // bank). The assist is OPT-IN now (ships at 0 — an un-steered car is meant
+        // to drive straight off), so switch it on explicitly: what's under test is
+        // that it still holds a car on a SLOPED, BANKED road, not that it's on.
+        window.__apex.setPhysics({ roadFollow: 0.6 });
         const corners = window.__apex.corners();
         let widest = 0, hw = 7;
         for (const f of corners) {
@@ -205,6 +205,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
           }
         }
         window.__apex.clearInput();
+        window.__apex.setPhysics({ roadFollow: 0 });   // restore the shipped default
         return { dn, up, maxV, flatMax, climbGain: cv1 - cv0, widest, hw, finite };
       });
 
@@ -230,7 +231,10 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
       await startRace(page, id);
       const r = await page.evaluate(() => {
         // The two highest-curvature corners carry the banking (~19 m radius). Drive
-        // each at a corner-appropriate speed and let road-following ride the curve;
+        // each at a corner-appropriate speed and let road-following ride the curve.
+        // The assist is opt-in (ships at 0), so enable it explicitly — the subject
+        // here is the BANKED road, not the default.
+        window.__apex.setPhysics({ roadFollow: 0.6 });
         // the car must track the banked road cleanly (stay on the paved surface) and
         // keep moving forward through the apex rather than understeering off.
         const corners = window.__apex.corners();

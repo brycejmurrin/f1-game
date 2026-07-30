@@ -291,12 +291,35 @@ axis of the traction circle. Braking or accelerating consumes longitudinal grip;
 rotates the car; hard braking mid-corner understeers. Exposed via `physState()`
 fields `axEstSm`, `axFrac`, `slipFactor`.
 
-**Road-follow assist + off-track**: the `ROAD_FOLLOW` driving-help assist steers
-toward the track curvature `k`. It **fades to zero off-track** (`offAssistFade`,
-tapering over ~3 m of grass past the edge) so the driver keeps full manual
-authority to recover — otherwise the curvature assist keeps steering toward the
-corner and the car feels "pushed" one way on the grass. The assist also fades
-under hard braking (`brakeFade`) to kill the turn-in snap.
+**The player is a world-space rigid body.** `px`/`pz`/`head` are the authority:
+the car integrates its own position in world metres from tyre forces alone and
+owes the road nothing. `(s, x)` is READ BACK off that position each frame by
+`trackFrom()` — a predictor (distance along the road ÷ the Frenet stretch `h`,
+see `frenetH`) plus two local Newton steps onto the perpendicular foot — purely
+so the rest of the game can ask "where on the track is that?" (lap timing, walls,
+kerbs, race position, HUD). The refinement is deliberately **local**: it never
+leaves a few metres of last frame's `s`, so it cannot snap onto the wrong leg of
+a hairpin the way a global `Tracks.project()` search does. That was the original
+reason this code integrated in the road frame instead — keeping the search local
+buys the road frame's robustness without surrendering the car's independence.
+
+Only two things may move the player in road coordinates, because both are hard
+constraints rather than suggestions: the **barrier clamp** (`xPinned`) and
+**car-to-car collisions** (resolved in the `(prog, x)` plane). Both write back
+into `px`/`pz`. Everything else flows world → `(s, x)`. Rebuilding the world
+position from `(s, x)` unconditionally — as the code did when `(s, x)` was the
+authority — silently puts the car back on the road's rails.
+
+**Road-follow assist is OPT-IN and ships at 0.** `ROAD_FOLLOW` used to default to
+0.7 with a DRIVING HELP slider that bottomed out at 0.25, so a quarter to a half
+of every corner was steered for you and it could not be switched off (~20 % of
+available lock at 50 m/s, ~40 % in a slow corner). Nothing steers the car by
+default now except the driver; `helpFromSlider` runs `0 .. 0.70` with v1 = OFF,
+and RELAX is the preset that opts back in. When enabled it steers toward the
+curvature of the arc the car is actually on (`kPath = k/h`, not the centreline's),
+**fades to zero off-track** (`offAssistFade`, over ~3 m of grass past the edge) so
+the driver keeps full manual authority to recover, and fades under hard braking
+(`brakeFade`) to kill the turn-in snap.
 
 ---
 

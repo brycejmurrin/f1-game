@@ -42,10 +42,12 @@ function lockFromSlider(v)   { return 0.18 + (0.42 - 0.18) * (v - 1) / 9; } // r
 function speedRefFromSlider(v) { return 44 + (124 - 44) * (v - 1) / 9; } // 44..124, v5≈80
 function paceFromSlider(v)   { return v <= 5 ? 0.5 + (v - 1) * 0.125 : 1.0 + (v - 5) * 0.06; } // 0.50..1.30, v5=1.0
 // DRIVING HELP = ROAD_FOLLOW: how much of each corner the car tracks for you.
-// v6 ≈ 0.70 (the original feel); higher = the car does more of the steering.
-function helpFromSlider(v)   { return 0.25 + (v - 1) / 9 * 0.45; }      // 0.25..0.70 assist gain, v6≈0.50
-                                                                       // (gentle: the snappy/grippy car
-                                                                       // over-steers if the assist is too strong)
+// v1 is a true ZERO — the car does exactly, and only, what the driver asks.
+// This used to bottom out at 0.25, so the assist was always steering a quarter of
+// every corner and there was no way to switch it off; you were permanently
+// driving against a hand you could not see or disable. That is the "forced" feel.
+// It is now opt-IN: the default is v1 (off), and the range runs 0 .. 0.70.
+function helpFromSlider(v)   { return (v - 1) / 9 * 0.70; }            // 0..0.70 assist gain, v1 = OFF
 function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " + (-v)); }
 
 // ---- presets ----
@@ -57,11 +59,11 @@ function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " 
 // out — it's a race-wide setting, not a handling feel.
 const PRESETS = {
   relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 4,
-              steerExpo: 4, steerLock: 5, steerSpeed: 4, drivingHelp: 9, raceLine: 2 },
+              steerExpo: 4, steerLock: 5, steerSpeed: 4, drivingHelp: 8, raceLine: 2 },
   standard: { tiltDeg: 6, steerSmooth: 6, steerRate: 5,
-              steerExpo: 5, steerLock: 5, steerSpeed: 5, drivingHelp: 6, raceLine: 0 },
+              steerExpo: 5, steerLock: 5, steerSpeed: 5, drivingHelp: 1, raceLine: 0 },
   pro:      { tiltDeg: 7, steerSmooth: 3, steerRate: 7,
-              steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 3, raceLine: 0 },
+              steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0 },
 };
 const PRESET_STORE = {  // slider store-key  ->  preset field
   tiltDeg: "tiltDeg", steerSmooth: "steerSmooth",
@@ -82,7 +84,7 @@ const STEER_LEVELS = {
 };
 const STEER_LEVEL_ORDER = ["easy", "assist", "normal", "sim"];
 const STEER_DEFAULTS = { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 5 };
-const HELP_LEVELS = { low: 3, med: 6, high: 9 };
+const HELP_LEVELS = { low: 1, med: 5, high: 9 };   // low = OFF (see helpFromSlider)
 const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
 function applyPreset(name) {
   const p = PRESETS[name];
@@ -119,8 +121,8 @@ function refreshMacros() {
   for (const n of STEER_LEVEL_ORDER) {
     const b = $("pm-steer-" + n); if (b) b.classList.toggle("active", n === lvl);
   }
-  const dh = store.get("drivingHelp", 6);
-  const hb = dh <= 4 ? "low" : dh <= 7 ? "med" : "high";
+  const dh = store.get("drivingHelp", 1);
+  const hb = dh <= 3 ? "low" : dh <= 7 ? "med" : "high";
   for (const n of ["low", "med", "high"]) {
     const b = $("pm-help-" + n); if (b) b.classList.toggle("active", n === hb);
   }
@@ -138,7 +140,7 @@ function applySteerTuning() {
   const tiltdeg = store.get("tiltDeg",    6);   // 6→32° for full lock (tuner optimum)
   const lock    = store.get("steerLock",  5);
   const spdsteer = store.get("steerSpeed", 5);
-  const help    = store.get("drivingHelp", 6);
+  const help    = store.get("drivingHelp", 1);   // default: assist OFF
   const pace    = store.get("pace",       5);
   const line    = store.get("raceLine",   0);
   G.PACE           = paceFromSlider(pace);
