@@ -42,8 +42,19 @@ const TrackSurface = (function () {
     const outerW = Math.max(0.5, Number(def.terrainOuter) || (street ? 28 : 120));
     const rails = monotonicRails(def, outerW, street, flat);
     const n = track.n;
+    // pyMin must be the lowest point of the ROAD SURFACE, not of the centreline.
+    // Banking pivots about the centre, so a banked node's low edge sits lift/2
+    // BELOW py[k] — and floorY is the flat world slab every circuit is drawn on.
+    // Measuring the centreline alone let that slab cover the bottom of a banked
+    // corner: at Zandvoort the deepest banking (4.82 m lift) coincides with the
+    // lowest part of the lap, putting the low edge 1.37 m under the floor, which
+    // reads on screen as the ground swallowing the inside of the bank.
+    const bp = track.bankP;
     let pyMin = Infinity;
-    for (let k = 0; k < n; k++) pyMin = Math.min(pyMin, track.py[k]);
+    for (let k = 0; k < n; k++) {
+      const lift = bp && bp.lift[k] > 0 ? bp.lift[k] / 2 : 0;
+      pyMin = Math.min(pyMin, track.py[k] - lift);
+    }
     const floorY = pyMin - 1;
     const ground = new Float32Array(track.py);
 
