@@ -2531,19 +2531,41 @@ function updateCar(c, dt, ranked) {
       // a head-on hit scrubs hard. The nose is rotated toward the wall tangent so
       // the car runs parallel rather than re-pinning every frame.
       Tracks.sample(track, c.s, smp);
-      const tHead = Math.atan2(smp.t[0], smp.t[2]);
+      // The BARRIER's own tangent, not the centreline's. This used to measure
+      // against the road tangent while the comment claimed it was the wall — so
+      // anywhere the barrier diverges from the road (a run-off funnel, an escape
+      // road, a pit entry) the car was straightened to a direction the wall does
+      // not actually run in. wallAt() gives the boundary's lateral offset, so its
+      // slope in s IS the barrier's heading in the road frame.
+      const wallXAt = (ss) => into > 0 ? Tracks.wallAt(track, ss, 1)
+                                       : -Tracks.wallAt(track, ss, -1);
+      const dW = 3;
+      const wSlope = clamp((wallXAt(wrapS(c.s + dW)) - wallXAt(wrapS(c.s - dW))) / (2 * dW), -2, 2);
+      const wtx = smp.t[0] + smp.r[0] * wSlope, wtz = smp.t[2] + smp.r[2] * wSlope;
+      const tHead = Math.atan2(wtx, wtz);
       let rel = c.head - tHead;
       while (rel > Math.PI) rel -= 2 * Math.PI;
       while (rel < -Math.PI) rel += 2 * Math.PI;
       const noseIn = into > 0 ? rel > 0 : rel < 0;        // nose pointing into wall?
       const incidence = Math.min(1, Math.abs(Math.sin(rel)));  // 0 graze … 1 head-on
-      if (c.vLat) c.vLat = 0;                             // slip into the wall is gone
+      // Kill only the slip heading INTO the barrier. This used to zero c.vLat
+      // unconditionally every frame of contact, so slip AWAY from the wall was
+      // erased too and the car could not rotate itself out of the scrape.
+      if (c.vLat && Math.sign(c.vLat) === into) c.vLat = 0;
       if (noseIn) {
         // first-frame impact: lose only the normal component — a graze is nearly
         // free, a head-on hit bites hard.
         if (!c.wasOnWall) c.speed *= 1 - incidence * (track.street ? 0.5 : 0.28);
         // straighten the nose toward the wall tangent so the car slides along it
-        c.head -= rel * Math.min(1, (4 + incidence * 8) * dt);
+        // Exponential, not a raw rate*dt: Math.min(1, ...) SNAPPED the heading
+        // exactly onto the tangent in a single step at any dt >= 0.083 s (a 12 fps
+        // frame, or a headless step()), making the rotation frame-rate dependent.
+        // Scaled by speed as well — a car sitting still against a barrier has no
+        // velocity to justify being turned, and the old form spun a stopped or
+        // spun car parallel in ~0.2 s regardless.
+        const wallAlign = (1 - Math.exp(-(4 + incidence * 8) * dt))
+                        * clamp(Math.abs(c.speed) / 8, 0, 1);
+        c.head -= rel * wallAlign;
         if (track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {
           shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
           if (soundOn) GameAudio.collision();
@@ -2602,11 +2624,19 @@ function updateCar(c, dt, ranked) {
     let psi = Math.atan2(smp.t[0], smp.t[2]) - c.head;   // + = nose turned right (+x)
     while (psi > Math.PI) psi -= 2 * Math.PI;
     while (psi < -Math.PI) psi += 2 * Math.PI;
-    yawTarget = clamp(psi, -0.7, 0.7);
+    // No clamp, no lag: the player's psi IS the real world heading relative to
+    // the road, and it is already smooth (world-space integration). Clamping it
+    // to +-0.7 rad meant the DRAWN car could never point more than 40 deg off the
+    // track direction — a spin rendered as a 40 deg crab — and the damp below
+    // added ~0.17 s of lag TOWARD the road. Both are the presentation quietly
+    // re-orienting the driver to the arc, the same family as the render-position
+    // and camera couplings. AI cars still damp (they have no real heading).
+    c.yawVis = psi;
+    yawTarget = psi;
   } else {
     yawTarget = c.steerVis * 0.35 + clamp(-k * c.speed * 0.14, -0.28, 0.28);
   }
-  c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
+  if (!(c.isPlayer && c.head != null)) c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
   // Pitch animation: nose lifts under throttle (rear squat), dives under braking.
   // Stored so the render loop can apply it without re-evaluating throttle/brake state.
   const pitchTarget = c.isPlayer
