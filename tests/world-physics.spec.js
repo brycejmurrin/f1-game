@@ -121,16 +121,17 @@ test.describe("Apex 26 — world-space player physics", () => {
   test("AI stays on track and progresses after the racing-line flip", async ({ page }) => {
     await startRace(page);
     const r = await page.evaluate(() => {
-      // This test is about the AI, but it holds the PLAYER flat-out with no
-      // steering for 10 s as a way to let the race run. With the assist now
-      // shipping at 0 the un-steered player simply drives off the road and trips
-      // the |x| > 18 check, so opt the assist in to keep it on track — the AI
-      // behaviour under test is unaffected either way.
-      window.__apex.setPhysics({ roadFollow: 0.7 });
-      window.__apex.setInput({ steer: 0, throttle: true });
+      // This test is about the AI. It used to hold the PLAYER flat-out with no
+      // steering for 10 s merely as a way to let the race run — which only stayed
+      // on track because the assist was on by default. Opting the assist back in
+      // is not enough either: at 80+ m/s it cannot hold an un-steered car through
+      // a corner, and it is not supposed to be able to.
+      // So don't drive the player at all. step() runs the whole field regardless,
+      // and a stationary player sits at x ~ 0 instead of contaminating the
+      // off-track count that the AI is being judged by.
+      window.__apex.setInput({ steer: 0, throttle: false });
       for (let i = 0; i < 600; i++) window.__apex.step(1 / 60, 1);  // ~10 s
       window.__apex.clearInput();
-      window.__apex.setPhysics({ roadFollow: 0 });
       const cars = window.__apex.cars();
       const ai = cars.filter((c) => !c.p);   // the player is hand-driven here
       return {
