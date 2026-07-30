@@ -50,31 +50,31 @@
               grandstand, building, motorhome, tower, tree, palm, bush, hedge, billboard, gantry,
               marshalPost, fence, guardrail, tyreWall, anchor, vadd, addBox,
               addCyl, addCone, addFrustum, addPrism, addPyramid,
-              forestEdge, cityFront, bowlSeatWall, MAT, circuitKit } = api;
+              forestEdge, cityFront, bowlSeatWall, MAT, circuitKit, seat } = api;
       const k = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
         circuitKit.marshalShelter({
           id: "kit:albert_park:marshal-shelter", frac: 0.72,
-          side: 1, gap: 35, size: [6, 3, 5], required: true,
+          side: 1, gap: 20, size: [6, 3, 5], required: true,
         });
         circuitKit.recoveryBay({
           id: "kit:albert_park:recovery-bay", frac: 0.70,
-          side: 1, gap: 55, size: [12, 5, 18], required: true,
+          side: 1, gap: 32, size: [12, 5, 18], required: true,
         });
         circuitKit.trackSigns({
           id: "kit:albert_park:track-signs", frac: 0.88,
-          side: 1, gap: 45, size: [3, 3, 42], count: 6, required: true,
+          side: 1, gap: 22, size: [3, 3, 42], count: 6, required: true,
         });
         // Temporary Melbourne GP village: premium suites by the lake and the
         // bounded support compound tucked behind the pit-entry tree line.
         circuitKit.hospitality({
           id: "kit:albert_park:lakeside-hospitality", frac: 0.635,
-          side: 1, gap: 72, size: [20, 9, 38], modules: 5,
+          side: 1, gap: 38, size: [20, 9, 38], modules: 5,
         });
         circuitKit.serviceCompound({
           id: "kit:albert_park:pit-entry-service", frac: 0.965,
-          side: -1, gap: 76, size: [24, 6, 34], vehicles: 7,
+          side: -1, gap: 42, size: [24, 6, 34], vehicles: 7,
         });
       }
 
@@ -263,76 +263,76 @@
       const EUC2 = [0.34, 0.46, 0.30];   // slightly lighter canopy twin
 
       // ---- Main straight LHS (pit wall side) — sparse, behind grandstand ----
-      forestEdge(0.00, 0.10, -1, 20, {
+      forestEdge(0.00, 0.10, -1, 11, {
         density: 0.45, hMin: 9, hMax: 16,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
       // ---- Main straight RHS — grandstands + hospitality, tight parkland strip ----
-      forestEdge(0.00, 0.10, 1, 22, {
+      forestEdge(0.00, 0.10, 1, 13, {
         density: 0.40, hMin: 8, hMax: 14,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
       // ---- Fast sweeps T1–T4 (s=0.10–0.27), both sides ----
-      forestEdge(0.10, 0.27, -1, 16, {
+      forestEdge(0.10, 0.27, -1, 9, {
         density: 0.60, hMin: 10, hMax: 17,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
-      forestEdge(0.10, 0.27, 1, 18, {
+      forestEdge(0.10, 0.27, 1, 10, {
         density: 0.55, hMin: 9, hMax: 16,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
       // ---- Lakeside RHS (s=0.27–0.65) — parkland strip (CBD is now beyond water L) ----
-      forestEdge(0.27, 0.65, 1, 26, {
+      forestEdge(0.27, 0.65, 1, 13, {
         density: 0.45, hMin: 10, hMax: 17,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
       // ---- Lakeside LHS — sparse shore figs/eucalyptus so water + skyline read ----
-      forestEdge(0.27, 0.65, -1, 36, {
+      forestEdge(0.27, 0.65, -1, 19, {
         density: 0.40, hMin: 11, hMax: 18,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
       // ---- Southern park loop (s=0.65–0.85) — denser native eucalyptus ----
-      forestEdge(0.65, 0.85, -1, 16, {
+      forestEdge(0.65, 0.85, -1, 9, {
         density: 0.70, hMin: 11, hMax: 19,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
-      forestEdge(0.65, 0.85, 1, 18, {
+      forestEdge(0.65, 0.85, 1, 10, {
         density: 0.65, hMin: 10, hMax: 18,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
       // ---- Pit approach (s=0.85–1.00) — both sides, lighter canopy ----
-      forestEdge(0.85, 1.00, -1, 16, {
+      forestEdge(0.85, 1.00, -1, 9, {
         density: 0.45, hMin: 9, hMax: 15,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
-      forestEdge(0.85, 1.00, 1, 22, {
+      forestEdge(0.85, 1.00, 1, 12, {
         density: 0.40, hMin: 8, hMax: 14,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
       // ---- Chicane complex (s=0.75–0.82) — taller eucalyptus specimens ----
-      forestEdge(0.75, 0.82, -1, 20, {
+      forestEdge(0.75, 0.82, -1, 11, {
         density: 0.70, hMin: 13, hMax: 20,
         col: EUC2, col2: [0.36, 0.48, 0.32], pineFrac: 0,
       });
-      forestEdge(0.75, 0.82, 1, 22, {
+      forestEdge(0.75, 0.82, 1, 12, {
         density: 0.65, hMin: 12, hMax: 19,
         col: EUC2, col2: [0.36, 0.48, 0.32], pineFrac: 0,
       });
 
       // A second, looser rank behind the eastern sweeps and southern loop gives
       // the temporary road circuit genuine avenue depth rather than a flat hedge.
-      forestEdge(0.12, 0.25, 1, 48, {
+      forestEdge(0.12, 0.25, 1, 27, {
         density: 0.30, hMin: 13, hMax: 20,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
-      forestEdge(0.68, 0.84, -1, 46, {
+      forestEdge(0.68, 0.84, -1, 26, {
         density: 0.34, hMin: 14, hMax: 21,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
@@ -342,7 +342,7 @@
         for (const side of [-1, 1]) {
           if (side === -1 && kk >= k(0.27) && kk <= k(0.65)) continue; // keep lake sightline open
           if (hash(kk * 53 + side) > 0.45) continue;
-          const dist = 92 + hash(kk * 57 + side) * 72;
+          const dist = 34 + hash(kk * 57 + side) * 44;
           tree(kk, side, dist, 13 + hash(kk * 61 + side) * 8, EUC);
         }
       });
@@ -352,23 +352,23 @@
       // the guardrail at gap=3 and the grandstand shell that extends to ~gap+15m.
       for (let j = 0; j < 10; j++) {
         const kk = (k(0.52) + j * 2) % n;
-        palm(kk, -1, 26 + hash(kk * 9 + j) * 10, 12 + hash(kk * 12 + j) * 4, [0.21, 0.47, 0.25]);
+        palm(kk, -1, 15 + hash(kk * 9 + j) * 8, 12 + hash(kk * 12 + j) * 4, [0.21, 0.47, 0.25]);
       }
       // Palm accent clusters around key grandstands + pits
       for (let j = 0; j < 3; j++) {
-        palm((k(0.0) + j * 3) % n, 1, 26 + j * 10, 13 + hash(j * 3) * 3, [0.21, 0.47, 0.25]);
-        palm((k(0.94) + j * 3) % n, 1, 26 + j * 10, 12 + hash(j * 5) * 3, [0.21, 0.47, 0.25]);
+        palm((k(0.0) + j * 3) % n, 1, 20 + j * 7, 13 + hash(j * 3) * 3, [0.21, 0.47, 0.25]);
+        palm((k(0.94) + j * 3) % n, 1, 20 + j * 7, 12 + hash(j * 5) * 3, [0.21, 0.47, 0.25]);
       }
 
       // ---- Rowing boathouses + aquatic structures (s≈0.40 L) ----
       // gap=60 keeps inner face well clear of road; boathouses add lakeside character
       for (let j = 0; j < 2; j++) {
-        building(k(0.40 + j * 0.04), -1, 60 + j * 12, 16, 8, 28, {
+        building(k(0.40 + j * 0.04), -1, 30 + j * 10, 16, 8, 28, {
           wall: [0.86, 0.88, 0.86], window: [0.22, 0.52, 0.72], floor: 3 });
       }
       // Lakeside Recreation Reserve + stadium (s≈0.62–0.68 L)
       for (let j = 0; j < 2; j++) {
-        building(k(0.63 + j * 0.05), -1, 62 + j * 8, 18, 10, 32, {
+        building(k(0.63 + j * 0.05), -1, 32 + j * 8, 18, 10, 32, {
           wall: [0.82, 0.84, 0.86], window: [0.28, 0.53, 0.73], floor: 3 });
       }
 
@@ -408,11 +408,11 @@
       }
       // marquee tent caps beside the s≈0.62 grandstand — at dist≥42, clear of stand
       for (let j = 0; j < 3; j++) {
-        const a = anchor(k(0.62), 1, 42 + j * 10);
+        const a = anchor(k(0.62), 1, 34 + j * 8);
         if (onTrack(a.c[0], a.c[2], 6)) continue;
         // White tent body + coloured prism ridge roof
         addBox(out, vadd(a.c, a.u, 2.2), [11.0, 4.0, 11.0], WHITE, [a.r, a.u, a.t]);
-        addPrism(out, vadd(a.c, a.u, 4.8), [11.0, 2.0, 11.0],
+        seat.prism(out, vadd(a.c, a.u, 4.2), [11.0, 2.0, 11.0],
                  [[0.20, 0.44, 0.72], [0.86, 0.28, 0.18], [0.90, 0.78, 0.24]][j % 3],
                  [a.r, a.u, a.t]);
       }
@@ -520,9 +520,47 @@
       tyreWall(0.77, 0.81,  1, 3.5, RED);
       tyreWall(0.78, 0.82, -1, 3.5, WHITE);
 
+      // A Melbourne GP lap is debris-fenced end to end — the park roads are
+      // public the other 51 weeks, so the temporary perimeter is continuous.
+      // The runs above left s=0.14-0.60 and s=0.84-0.90 bare, which is most of
+      // the lakeside and Lakeside Drive: no near-track structure at all through
+      // the fastest half of the circuit. Close the gaps on both sides.
+      fence(0.14, 0.42,  1,  9, 3.6, FENCE_COL);
+      fence(0.14, 0.41, -1,  9, 3.6, FENCE_COL);
+      fence(0.42, 0.60,  1,  9, 3.6, FENCE_COL);
+      fence(0.59, 0.74, -1,  9, 3.6, FENCE_COL);
+      fence(0.72, 0.75,  1,  9, 3.6, FENCE_COL);
+      fence(0.84, 0.92,  1,  9, 3.6, FENCE_COL);
+      fence(0.84, 0.90, -1,  9, 3.6, FENCE_COL);
+      // Waist-high spectator rail set just outside the debris fence — the
+      // second line every temporary parkland circuit runs behind its catch
+      // fencing, and it puts readable structure in the first 15 m of verge.
+      guardrail(0.15, 0.40, -1, 13, ARMCO);
+      guardrail(0.60, 0.73,  1, 13, ARMCO);
+      guardrail(0.86, 0.94, -1, 13, ARMCO);
+
       for (const [s, side] of [[0.05, 1], [0.30, 1], [0.55, -1],
-                                [0.62, 1], [0.78, -1], [0.90, 1]]) {
+                                [0.62, 1], [0.78, -1], [0.90, 1],
+                                [0.18, -1], [0.24, 1], [0.36, -1],
+                                [0.48, 1], [0.68, -1], [0.84, 1]]) {
         marshalPost(k(s), side, 6);
+      }
+
+      // Temporary bleacher ranks in the parkland viewing areas the stands above
+      // skip — Lakeside, Jones/Ascari and the pit-entry banks. Short runs so the
+      // lap still reads as separate enclosures rather than one wall of seating.
+      for (const [s, side, gap, len] of [
+        [0.235, -1, 15, 40], [0.375,  1, 15, 42], [0.415, -1, 16, 38],
+        [0.505,  1, 16, 44], [0.700, -1, 15, 40], [0.855,  1, 15, 42],
+      ]) grandstand(s, side, gap, len, SHELL, CROWD);
+
+      // Trackside sponsor hoardings on the fence line, every parkland sector.
+      for (const [s, side] of [[0.17, -1], [0.22, 1], [0.34, -1], [0.40, 1],
+                               [0.50, -1], [0.58, 1], [0.66, -1], [0.73, 1],
+                               [0.82, -1], [0.92, 1]]) {
+        billboard(k(s), side, 12, 11, 4.0,
+                  [0.20 + hash(k(s) * 3.1) * 0.6, 0.34 + hash(k(s) * 5.3) * 0.4,
+                   0.30 + hash(k(s) * 7.7) * 0.5]);
       }
 
       // ====================================================================
@@ -606,7 +644,7 @@
           if (onTrack(a.c[0], a.c[2], 6)) continue;
           addBox(out, vadd(a.c, a.u, 2.0), [11, 4.0, 11],
                  [0.93, 0.93, 0.94], [a.r, a.u, a.t]);
-          addPrism(out, vadd(a.c, a.u, 4.8), [11, 1.8, 11],
+          seat.prism(out, vadd(a.c, a.u, 4.0), [11, 1.8, 11],
                    [[0.86, 0.30, 0.20], [0.20, 0.46, 0.70], [0.90, 0.80, 0.26]][j % 3],
                    [a.r, a.u, a.t]);
         }

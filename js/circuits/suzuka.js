@@ -420,6 +420,14 @@
       fence(0.10, 0.24,  1, 6, 4, [0.70, 0.72, 0.76]);   // Esses outer
       fence(0.10, 0.24, -1, 6, 4, [0.70, 0.72, 0.76]);   // Esses inner
       fence(0.80, 0.90,  1, 6, 4, [0.70, 0.72, 0.76]);   // 130R outer
+      // 130R INNER (left). Suzuka fences both sides here, and without a barrier
+      // on this verge nothing stopped the roadside foliage scatter dropping a
+      // broadleaf inside the road edge: a tree anchored at s=0.8935 landed 4.3 m
+      // off the tarmac at s=0.869 and leant its crown 3.1 m over the racing line
+      // (the crown's underside skirt goes through the raw emit path, which the
+      // footprint guard does not cover). The fence puts that stretch into the
+      // spatial barrier index, so clearTreeDist() moves the tree out or drops it.
+      fence(0.845, 0.925, -1, 6, 4, [0.70, 0.72, 0.76]);
       fence(0.92, 0.98,  1, 5, 4, [0.70, 0.72, 0.76]);   // Casio chicane
       fence(0.92, 0.98, -1, 5, 4, [0.70, 0.72, 0.76]);
       guardrail(0.24, 0.36, -1, 3, [0.84, 0.84, 0.88]);  // Degner inner
