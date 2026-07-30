@@ -304,6 +304,27 @@ function trackFrom(px, pz, sPredicted) {
   _tf.x = (px - _trk.p[0]) * rx + (pz - _trk.p[2]) * rz;
   return _tf;
 }
+// The EXACT INVERSE of trackFrom's lateral step — same normalisation, so a
+// world → (s, x) → world round-trip is the identity.
+//
+// This has to be exact, because the two are used in a loop: the car's world
+// position produces (s, x), and the hard constraints (barrier, car-to-car
+// contact) push (s, x) back into the world position. Reconstructing with the RAW
+// sample.r instead makes that loop lossy. sample() lerps between adjacent unit
+// node vectors, so |r| = cos(θ/2) < 1, and on a banked corner the horizontal
+// part shrinks further to cos(bank) — about 0.95 through Zandvoort's banking.
+// A loop with per-frame gain 0.95 drags x to 5 % of itself in one second: the
+// car gets sucked onto the centreline and fights you the whole way there. That
+// is precisely the "pulled and oscillating around the centre line" bug.
+const _wf = { x: 0, z: 0 };   // world X/Z out-param (no per-frame allocation)
+function worldFromTrack(s, x, out) {
+  Tracks.sample(track, s, out);
+  let rx = out.r[0], rz = out.r[2];
+  const rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
+  _wf.x = out.p[0] + rx * x;
+  _wf.z = out.p[2] + rz * x;
+  return _wf;
+}
 function frenetH(s, x) {
   Tracks.sample(track, wrapS(s - H_D), _hA);
   Tracks.sample(track, wrapS(s + H_D), _hB);
@@ -1768,6 +1789,9 @@ function collideFx(a, b, impact) {
 // merged. The player is "heavier" (invMass 0.5) so the AI can't shove them off.
 function resolveCollisions(ranked, dt) {
   const LCAR = 4.8, WCAR = 2.0, PASSES = 4;
+  // Snapshot the player's road coords so the writeback at the end can tell
+  // whether this pass actually shoved it (see there for why that matters).
+  const _preColS = player ? player.s : 0, _preColX = player ? player.x : 0;
   // Side-rub speed scrub as a RATE: 0.995/frame was authored at the fixed
   // 1/60 step (identical there: 0.995^1), but the headless harness steps at
   // arbitrary dt — unscaled, a rub scrubbed per CALL, not per second.
@@ -1884,13 +1908,21 @@ function resolveCollisions(ranked, dt) {
     const wr = Tracks.wallAt(track, c.s, 1), wl = Tracks.wallAt(track, c.s, -1);
     if (c.x > wr) c.x = wr; else if (c.x < -wl) c.x = -wl;
   }
-  // The player runs world-space physics; collisions just moved its (s, x), so
-  // feed that back into px/pz or the next frame's integration would overwrite the
-  // push (cars would slide through each other). Heading is unchanged by a bump.
-  if (player && player.px != null && !player.finished) {
-    Tracks.sample(track, player.s, smp);
-    player.px = smp.p[0] + smp.r[0] * player.x;
-    player.pz = smp.p[2] + smp.r[2] * player.x;
+  // The player runs world-space physics; if this pass actually MOVED its (s, x)
+  // — a bump, a shove, a barrier clamp — feed that back into px/pz, or the next
+  // frame's integration would overwrite the push and cars would slide through
+  // each other. Heading is unchanged by a bump.
+  //
+  // ONLY when it moved. This used to run every frame unconditionally, which
+  // quietly turned world → (s, x) → world into a per-frame feedback loop; with a
+  // reconstruction that wasn't quite the inverse of the read (see
+  // worldFromTrack) the loop had gain < 1 and dragged the car onto the
+  // centreline. Untouched frames must leave the car's own integration alone.
+  if (player && player.px != null && !player.finished &&
+      (player.s !== _preColS || player.x !== _preColX)) {
+    const w = worldFromTrack(player.s, player.x, smp);
+    player.px = w.x;
+    player.pz = w.z;
   }
 }
 
@@ -2214,8 +2246,9 @@ function updateCar(c, dt, ranked) {
   // only as a derived mirror for debug/telemetry. See the constants block.
   if (c.isPlayer) {
     if (c.px == null) {   // init world pos from current Frenet state (first frame)
-      c.px = smp.p[0] + smp.r[0] * c.x;
-      c.pz = smp.p[2] + smp.r[2] * c.x;
+      const w0 = worldFromTrack(c.s, c.x, smp);   // exact inverse of trackFrom
+      c.px = w0.x;
+      c.pz = w0.z;
       c.head = Math.atan2(smp.t[0], smp.t[2]);
       c.vLat = 0;
       c.yawRateCur = 0;
@@ -2495,10 +2528,12 @@ function updateCar(c, dt, ranked) {
   // point reconstructed from the road every single frame, quietly putting the car
   // straight back onto the road's rails.
   if (c.isPlayer && c.px != null) {
-    Tracks.sample(track, c.s, smp);
     if (xPinned) {
-      c.px = smp.p[0] + smp.r[0] * c.x;
-      c.pz = smp.p[2] + smp.r[2] * c.x;
+      const w = worldFromTrack(c.s, c.x, smp);   // exact inverse of trackFrom
+      c.px = w.x;
+      c.pz = w.z;
+    } else {
+      Tracks.sample(track, c.s, smp);            // yawVis below needs the tangent
     }
   }
   c.steerVis = damp(c.steerVis, steer, 10, dt);

@@ -35,8 +35,9 @@ const api = {
     // the track tangent. Done immediately (not lazily) so the car is deterministic
     // and probe() reads a correct heading offset right after a teleport.
     Tracks.sample(G.track, G.player.s, smp);
-    G.player.px = smp.p[0] + smp.r[0] * G.player.x;
-    G.player.pz = smp.p[2] + smp.r[2] * G.player.x;
+    { const rl = Math.hypot(smp.r[0], smp.r[2]) || 1;   // see worldFromTrack in game.js
+      G.player.px = smp.p[0] + smp.r[0] / rl * G.player.x;
+      G.player.pz = smp.p[2] + smp.r[2] / rl * G.player.x; }
     G.player.head = Math.atan2(smp.t[0], smp.t[2]);
     G.player.vLat = 0; G.player.yawRateCur = 0;
     // Sync render-interpolation anchors so lerpS(rPrevS, s, alpha) == s regardless
@@ -1420,8 +1421,9 @@ const api = {
     G.player.lap   = 0; G.player.axEstSm = 0;
     // seed world-space position + heading from (s, x) immediately, same as jump()
     Tracks.sample(G.track, G.player.s, smp);
-    G.player.px   = smp.p[0] + smp.r[0] * G.player.x;
-    G.player.pz   = smp.p[2] + smp.r[2] * G.player.x;
+    { const rl = Math.hypot(smp.r[0], smp.r[2]) || 1;   // see worldFromTrack in game.js
+      G.player.px   = smp.p[0] + smp.r[0] / rl * G.player.x;
+      G.player.pz   = smp.p[2] + smp.r[2] / rl * G.player.x; }
     G.player.head = Math.atan2(smp.t[0], smp.t[2]);
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;   // sync render anchors (see jump)
     G._testInput = null;
