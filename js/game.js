@@ -1393,6 +1393,11 @@ function snapGameCam() {
   const mode = CAM_MODES[camMode].id;
   const v = camVantage(mode, player.s, player.x, player.speed || 0, 0, {
     bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0,
+    // Same car pose the live rig uses. Without it snapCam() silently fell back to
+    // the road-frame framing, so the snapped view disagreed with the live one —
+    // which the comment above says they must not do.
+    carPos: player.px != null ? [player.px, player.pz] : null,
+    carHead: player.head || 0,
   });
   camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
