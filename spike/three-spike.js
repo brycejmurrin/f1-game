@@ -342,6 +342,14 @@ window.__spike = {
   toggleInstancing(on) { setInstancing(on != null ? on : !instancing); return instancing; },
   setLightCount(nMax) { lightCap = Math.max(0, Math.min(MAX_LIGHTS, nMax | 0)); return lightCap; },
   resetMs() { msN = 0; msIdx = 0; },
+  debugLamps(k = 4) {   // CPU-side view of what uniformArray should be uploading
+    const out = [];
+    for (let i = 0; i < Math.min(k, uNumLights.value); i++) out.push({
+      pos: lampPos[i].toArray(), col: lampCol[i].toArray(),
+      dir: lampDir[i].toArray(), geo: lampGeo[i].toArray(),
+    });
+    return { n: uNumLights.value, cam: camera.position.toArray(), lamps: out };
+  },
 };
 
 placeCamera();
