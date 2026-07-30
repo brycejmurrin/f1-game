@@ -145,10 +145,22 @@ function refreshMacros() {
 // longer denotes what it denoted when it was written. That makes a one-time
 // reset the honest migration rather than an attempt to rescale the number.
 // Player-set values for every OTHER slider are untouched.
+//
+// raceLine is reset for the same reason. It is the other thing that steers the
+// car toward a line, its mechanism changed too (a positional shove on c.x became
+// a pure-pursuit steer angle), and the RELAX preset writes raceLine: 2 — so
+// every player who so much as tried RELAX has a 0.4 line-pull saved and would
+// keep it forever.
+//
+// Both of these grew with SPEED, which is why the old build felt like holding
+// the gas made the car adjust itself onto the line: ROAD_FOLLOW carries an
+// ASSIST_KUS*v^2 term (2.6x stronger at 80 m/s than at rest) and the old racing
+// line pull scaled by latFac = |speed|/18. Off by default now means off.
 const STEER_SCHEMA = 2;
 function migrateSteerStore() {
   if (store.get("steerSchema", 1) >= STEER_SCHEMA) return;
   store.set("drivingHelp", 1);          // assist off, matching the new default
+  store.set("raceLine", 0);             // no racing-line pull by default either
   store.set("steerSchema", STEER_SCHEMA);
 }
 
