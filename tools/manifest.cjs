@@ -56,6 +56,7 @@ const FULL = [
   "js/render/three/tsl-chunks.js",
   "js/render/three/tsl-lit.js",
   "js/render/three/tsl-sky.js",
+  "js/render/three/tsl-fx.js",
   "js/render/three/tlx-shadow.js",
   "js/render/three/tlx.js",
   "js/render/gfx.js",
@@ -198,6 +199,7 @@ const HARD_EDGES = [
   ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
   ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
   ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],   // TLX.create invokes TLXShaders.sky
+  ["js/render/three/tsl-fx.js", "js/render/three/tlx.js"],    // TLX.create invokes TLXShaders.fx
   ["js/render/three/tlx-shadow.js", "js/render/three/tlx.js"],  // TLX.create invokes TLXShaders.shadowSys
   ["js/render/three/tlx.js", "js/render/gfx.js"],      // gfx.create branches on the TLX global
   ["js/track/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
