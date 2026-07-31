@@ -245,6 +245,71 @@ test.describe("field()", () => {
   });
 });
 
+// ── atmosphere() — the light, narrated ───────────────────────────────────────
+// lightState() is rich but raw; an agent cannot act on an RGB triple. These pin
+// that the narration is CORRECT, which is where the bugs were: at night the
+// renderer keeps the sun direction and dims it to moonlight, so anything that
+// infers darkness from sun elevation reports a high sun over a floodlit midnight.
+
+test.describe("atmosphere()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("narrates a day scene and keeps the raw numbers", async ({ page }) => {
+    await load(page);
+    const a = await page.evaluate(async () => {
+      window.__apex.setTimeOfDay("day");
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return window.__apex.atmosphere();
+    });
+    expect(a.ok).not.toBe(false);
+    expect(typeof a.brief).toBe("string");
+    expect(a.dark).toBe(false);
+    expect(a.sun.body).toBe("sun");
+    // raw kept for measurement
+    expect(a.raw.sunDir).not.toBeNull();
+    // it is a description, not a dump
+    expect(JSON.stringify(a).length).toBeLessThan(2000);
+  });
+
+  test("night is dark, floodlit, and names the moon — not a high sun", async ({ page }) => {
+    await load(page);
+    const a = await page.evaluate(async () => {
+      window.__apex.setTimeOfDay("night");
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return window.__apex.atmosphere();
+    });
+    expect(a.dark).toBe(true);
+    // darkness must come from the session, not from sun elevation
+    expect(a.sun.body).toBe("moon");
+    expect(a.brief).not.toMatch(/\bsun\b/);
+    // the floodlights carrying the scene must be reported
+    expect(a.lights.active).toBeGreaterThan(0);
+    expect(a.brief).toMatch(/floodlit/);
+  });
+
+  test("wet weather is called out and matches the grip model", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(async () => {
+      window.__apex.setTimeOfDay("day");
+      window.__apex.weather("rain");
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return { a: window.__apex.atmosphere(),
+               grip: window.__apex.world({ detail: "drive" }).ego.grip };
+    });
+    expect(r.a.wetRoad).toBe(true);
+    expect(r.a.brief).toMatch(/wet|rain/);
+    // the narration must agree with the physics the agent will feel
+    expect(r.grip.gripMult).toBeLessThan(1);
+  });
+
+  test("visibility is a distance, not a raw fog density", async ({ page }) => {
+    await load(page);
+    const v = await page.evaluate(() => window.__apex.atmosphere().visibility);
+    expect(typeof v.fogDensity).toBe("number");
+    expect(v.approxRangeM).toBeGreaterThan(0);
+  });
+});
+
 // ── describe() / query() — the drill-down layer ──────────────────────────────
 // The detail model: the world stays STORED in full, and the agent PULLS detail
 // by id. Flat-serialising a rich scene is both infeasible and less accurate than

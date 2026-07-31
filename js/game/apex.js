@@ -1512,6 +1512,13 @@ const api = {
   // from scene()/query()/trackInfo()/field().
   describe(id) { return agentView.describe(id); },
 
+  // atmosphere() — the LIGHT as text. lightState() is rich but raw (RGB triples,
+  // a sun vector, a fog density); an agent can't act on [0.31,0.44,0.68]. This
+  // narrates it: sun elevation and where it sits relative to the car, brightness,
+  // whether floodlights carry the scene, visibility range through fog, wet road.
+  // Raw numbers kept alongside for anything that measures rather than reads.
+  atmosphere() { return agentView.atmosphere(); },
+
   // query({kind, near, fromS, toS, limit}?) — a bounded SLICE of the world.
   // Filters compose (kind, radius around the car, arc-position window); the
   // answer is capped, id-bearing, and returned as prototype + instances so

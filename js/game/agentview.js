@@ -2136,6 +2136,109 @@ const AgentView = (function () {
                   'ids are "prop:<n>", "corner:<turn>", "car:<n>" or "span:<n>"');
     }
 
+    // ── atmosphere() — the light, as text ────────────────────────────────────
+    // The largest reservoir of world state that never reached the agent.
+    // __apex.lightState() is rich but raw: RGB triples, a sun vector, a fog
+    // density. An agent cannot do anything with [0.31, 0.44, 0.68]. So this
+    // NARRATES it — sun elevation and where it sits relative to the car,
+    // brightness, whether the floodlights are carrying the scene, how far you
+    // can see through the fog — and keeps the raw numbers alongside for anything
+    // that wants to measure rather than read.
+    function lum(c) { return c ? 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] : 0; }
+
+    function atmosphere() {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      const fr = G.frame || {}, sky = G.frameSky || {};
+      const tod = G.raceTimeOfDay || "default";
+      const wx = G.raceWeather || "dry";
+      const sun = fr.sunDir || sky.sunDir || null;
+
+      // Night is a SESSION fact, not something to infer from the sun vector: at
+      // night the renderer keeps the sun direction and just dims it to moonlight,
+      // so elevation still reads +43 deg. Deriving darkness from it reported "sun
+      // to your right" under a floodlit midnight sky, and suppressed the
+      // floodlight phrase because the sun looked high.
+      const dark = tod === "night" || tod === "dusk" || tod === "dawn"
+                || (tod === "default" && !!(G.track.def && G.track.def.night));
+
+      // Elevation from the direction vector's up component; azimuth relative to
+      // the car's heading, so "behind you on the left" is expressible. At night
+      // this describes the MOON, so it is named accordingly.
+      const body = dark ? "moon" : "sun";
+      let elevDeg = null, relBearingDeg = null, where = null;
+      if (sun) {
+        elevDeg = r1(Math.asin(clamp(sun[1], -1, 1)) * 180 / Math.PI);
+        if (G.player && G.player.px != null) {
+          const b = angDiff(Math.atan2(sun[0], sun[2]), G.player.head) * 180 / Math.PI;
+          relBearingDeg = r1(b);
+          const a = Math.abs(b);
+          where = elevDeg < 0 ? "below the horizon"
+                : a < 30 ? (dark ? "ahead" : "ahead — low sun in your eyes on this stretch")
+                : a > 150 ? "behind you"
+                : b > 0 ? "to your right" : "to your left";
+        }
+      }
+
+      const ambSky = fr.ambientSky ? fr.ambientSky.slice(0, 3) : null;
+      const ambGround = fr.ambientGround ? fr.ambientGround.slice(0, 3) : null;
+      const skyL = lum(ambSky), sunL = lum(fr.sunColor);
+      const nLights = fr.lights ? fr.lights.length / 15 : 0;
+      const flood = G._lastFloodEmit || 0;
+
+      // Fog as a VISIBILITY DISTANCE, which is the actionable form. Exponential
+      // squared falloff: the range where the fog factor drops to ~0.05.
+      const fog = fr.fogDensity != null ? +fr.fogDensity : null;
+      const visM = fog && fog > 1e-6 ? Math.round(Math.sqrt(3) / fog) : null;
+
+      const brightness = skyL > 0.55 ? "bright"
+                       : skyL > 0.25 ? "overcast-bright"
+                       : skyL > 0.08 ? "dim"
+                       : "dark";
+      const wet = wx === "wet" || wx === "rain";
+
+      const bits = [];
+      bits.push(tod === "default" ? (dark ? "night" : "day") : tod);
+      bits.push(brightness);
+      if (wet) bits.push(wx === "rain" ? "raining, road wet and reflective"
+                                       : "road wet and reflective");
+      else if (wx !== "dry") bits.push(wx);
+      if (dark && (flood > 0.01 || nLights > 0)) {
+        bits.push("floodlit (" + Math.round(nLights) + " lights active)");
+      }
+      if (where) bits.push(body + " " + where);
+      if (visM != null && visM < 900) bits.push("visibility ~" + visM + " m");
+      if (sky.stars) bits.push("stars out");
+      if (sky.moon) bits.push("moon up");
+
+      return {
+        apiVersion: API_VERSION, seq: ++seq,
+        brief: bits.join(", ") + ".",
+        timeOfDay: tod, weather: wx, wetRoad: wet,
+        dark, brightness,
+        sun: { body, elevationDeg: elevDeg, relBearingDeg, where,
+               brightness: r2(sunL),
+               note: "elevation + = above the horizon; relBearingDeg is from the "
+                     + "car's nose, + = to its right. At night the renderer keeps "
+                     + "the sun direction and dims it to moonlight, so `body` says "
+                     + "which one this actually is" },
+        lights: { active: Math.round(nLights), floodEmit: r2(flood),
+                  builtForNight: !!G.builtTrackNight },
+        visibility: { fogDensity: fog != null ? +fog.toFixed(5) : null,
+                      approxRangeM: visM },
+        exposure: fr.exposure != null ? r2(fr.exposure) : null,
+        raw: { ambientSky: ambSky ? ambSky.map(r2) : null,
+               ambientGround: ambGround ? ambGround.map(r2) : null,
+               sunColor: fr.sunColor ? fr.sunColor.slice(0, 3).map(r2) : null,
+               sunDir: sun ? sun.slice(0, 3).map(r2) : null,
+               fogColor: fr.fogColor ? fr.fogColor.slice(0, 3).map(r2) : null },
+        note: "grip is affected by weather — see world().ego.grip.gripMult. "
+              + "Raw RGB is kept for measurement; read `brief` to know the scene",
+      };
+    }
+
     // ── query() — pull a bounded subgraph ────────────────────────────────────
     // The other half of drill-down: ask for a SLICE of the world rather than the
     // whole thing. Filters compose — kind, an arc-position window, a radius
@@ -2955,8 +3058,8 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, field, trackInfo, scene, describe, query, carView, render,
-             survey, rollout, agentHelp, corners, terminal,
+    return { world, field, trackInfo, scene, describe, query, atmosphere,
+             carView, render, survey, rollout, agentHelp, corners, terminal,
              // deprecated aliases — prefer render({what}) and scene({visible})
              visible, worldModel, frame, plan,
              API_VERSION, PHYSICS_VERSION };
