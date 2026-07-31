@@ -68,6 +68,34 @@
  * path keeps the flat fogColor clear, and the env-probe double-call (M9)
  * just overwrites uniforms (last drawSky before render wins). No post yet
  * (M8).
+ *
+ * M6 STATUS: the FX draw paths are live (tsl-fx.js, TLXShaders.fx): blob
+ * shadows + per-mark skid stamps (shared unit quad, per-draw w/l baked into
+ * the record's matrix), the one-draw skid batch, additive lamp glare halos
+ * (built from frame.lights stride-15 records with GLX's near-field fade +
+ * colour normalisation), the two-group particle batches, and the textured
+ * car decals (material cached per texture+glow). Each is a draw-list record
+ * like the world draws; every FX material is transparent, so three renders
+ * them in its transparent pass AFTER all opaques (strictly safer than GLX's
+ * inline order — FX never write depth, so a later opaque would stomp them),
+ * and present() stamps renderOrder = submission index on every record so
+ * the callers' relative FX order (shadows -> decals -> glow -> skids ->
+ * particles) survives three's z-sort. GLX's colorMask-alpha-off on
+ * particles/decals maps to blendSrcAlpha=Zero/blendDstAlpha=One (three has
+ * only a boolean Material.colorWrite — see the tsl-fx.js header).
+ *
+ * M7 STATUS: the chunked-mesh path is live (tlx-chunked.js,
+ * TLXShaders.chunked): createChunkedMesh bins the city/props triangles into
+ * 72 m XZ cells (GLXChunked port — shared attribute set, one index buffer +
+ * AABB per cell, staged release of the multi-million-element source arrays),
+ * drawChunked records the WHOLE chunked mesh and present() culls it against
+ * begin()'s viewProj copy + frame.cullDist when the camera is final — every
+ * visible chunk becomes one pooled mesh stamping the record's renderOrder
+ * (the M6 LOAD-BEARING rule holds: FX/glass interleaving survives).
+ * castShadowChunked culls against the shadow system's castCullVP (lamp cone)
+ * or the sun lightVP, radial cull OFF — an off-camera building still casts
+ * into view. Probe: __tlx.chunkState() = {on, total, visible} from the last
+ * presented frame.
  */
 "use strict";
 
@@ -175,6 +203,33 @@ const TLX = (function () {
         sky = null;
       }
 
+      // ── M6: the FX materials (tsl-fx.js factory) ─────────────────────────
+      // Guarded like the others: missing/broken keeps every FX member a safe
+      // no-op (drawSkidBatch still returns true — the per-mark fallback is
+      // fx-backed too, so falling back would only spam dead records).
+      let fx = null;
+      try {
+        if (window.TLXShaders && TLXShaders.fx) {
+          fx = TLXShaders.fx(THREE, TSL, { chunks });
+        }
+      } catch (e) {
+        try { console.warn("TLX: fx factory failed, FX paths off —", e); } catch (_) {}
+        fx = null;
+      }
+
+      // ── M7: the chunked-mesh subsystem (tlx-chunked.js factory) ──────────
+      // Guarded like the others: missing/broken keeps the M2 single-geometry
+      // fallback (one un-culled draw — correct, just slower on street props).
+      let chunkedSys = null;
+      try {
+        if (window.TLXShaders && TLXShaders.chunked) {
+          chunkedSys = TLXShaders.chunked(THREE, {});
+        }
+      } catch (e) {
+        try { console.warn("TLX: chunked factory failed, un-culled props —", e); } catch (_) {}
+        chunkedSys = null;
+      }
+
       // Debug viz mode (?viz=mat|normal|lamp or localStorage apex26.tlxViz):
       // paints the mat attribute / world normal / raw lamp-loop output — the
       // bisect views that cracked the spike's black-lamp defect.
@@ -230,6 +285,91 @@ const TLX = (function () {
       const meshPool = [];          // recycled THREE.Mesh wrappers
       let poolUsed = 0;
       const _tmpMat4 = new THREE.Matrix4();
+
+      // ── M6 FX plumbing ───────────────────────────────────────────────────
+      // Shared unit quad for blob shadows + per-mark skid stamps: the GLX
+      // shadowVAO 1:1 — xz footprint -0.5..0.5, y=0.02 (SHADOW_VS's lift
+      // baked into the vertices; the matrix scale below never touches y).
+      let fxQuadGeo = null;
+      function getFxQuad() {
+        if (!fxQuadGeo) {
+          fxQuadGeo = new THREE.BufferGeometry();
+          fxQuadGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
+            -0.5, 0.02, -0.5, -0.5, 0.02, 0.5, 0.5, 0.02, 0.5, 0.5, 0.02, -0.5]), 3));
+          fxQuadGeo.setIndex(new THREE.BufferAttribute(new Uint16Array([0, 1, 2, 0, 2, 3]), 1));
+        }
+        return fxQuadGeo;
+      }
+      // Per-record matrix pool (reset each begin): drawShadow/drawMark bake
+      // the GLX uSize scale into record.m = model * scale(w,1,l) — the caller
+      // reuses its matrix arrays, so records must not alias them, and the
+      // shader-side uSize uniform would otherwise force per-draw materials.
+      const _fxMats = [];
+      let _fxMatUsed = 0;
+      function fxMatFor(model, w, l) {
+        let a = _fxMats[_fxMatUsed] || (_fxMats[_fxMatUsed] = new Float32Array(16));
+        _fxMatUsed++;
+        for (let r = 0; r < 4; r++) {
+          a[r] = model[r] * w;
+          a[4 + r] = model[4 + r];
+          a[8 + r] = model[8 + r] * l;
+          a[12 + r] = model[12 + r];
+        }
+        return a;
+      }
+      // Dynamic interleaved vertex streams (skid batch / glow / particles):
+      // ONE InterleavedBuffer each — the GLX VBO layouts verbatim, with the
+      // billboard center riding in "position" so three derives the draw
+      // count naturally. ensureStream grows (recreates) on demand; true =
+      // freshly (re)created, so callers re-upload even when not dirty.
+      function ensureStream(slot, verts) {
+        if (slot.geo && slot.cap >= verts) return false;
+        const cap = Math.max(slot.cap * 2, verts, slot.min);
+        if (slot.geo) slot.geo.dispose();
+        const geo = new THREE.BufferGeometry();
+        const ib = new THREE.InterleavedBuffer(new Float32Array(cap * slot.stride), slot.stride);
+        ib.setUsage(THREE.DynamicDrawUsage);
+        for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
+        geo.setDrawRange(0, 0);
+        slot.geo = geo; slot.ib = ib; slot.cap = cap;
+        return true;
+      }
+      function uploadStream(slot, floats) {
+        slot.ib.clearUpdateRanges();
+        slot.ib.addUpdateRange(0, floats);
+        slot.ib.needsUpdate = true;
+      }
+      // Skid trail: [px,py,pz,u,v] stride 5, 6 verts/mark (game.js MAX_SKID
+      // 120 marks). Glow: [cornerX,cornerY, cx,cy,cz, r,g,b, radius] stride 9
+      // (32 lamps preallocated — the frame.lights cull cap). Particles:
+      // [corner2, center3, rgb3, size, alpha] stride 10 (pool cap 256), one
+      // slot per blend group (particles.js issues one call per group/frame).
+      const skidStream = { geo: null, ib: null, cap: 0, min: 120 * 6, stride: 5,
+        attrs: [["position", 3, 0], ["uv", 2, 3]] };
+      const glowStream = { geo: null, ib: null, cap: 0, min: 32 * 6, stride: 9,
+        attrs: [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxRadius", 1, 8]] };
+      const PART_ATTRS = [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxSize", 1, 8], ["fxAlpha", 1, 9]];
+      const partStreams = [
+        { geo: null, ib: null, cap: 0, min: 256 * 6, stride: 10, attrs: PART_ATTRS },   // alpha group
+        { geo: null, ib: null, cap: 0, min: 256 * 6, stride: 10, attrs: PART_ATTRS },   // additive group
+      ];
+      // GLX _glowCorners with the GLOW_VS y*2-1 remap pre-baked (y 0..1 -> ±1).
+      const _glowCorners = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
+      let frameEye = null;          // frame.eye — the glow near-field fade origin
+      // ── M7 chunked-cull frame state ──────────────────────────────────────
+      // begin() copies frame.viewProj here (game.js may swap the frame's own
+      // array between begin and present — the env-probe path does on GLX);
+      // present() culls chunked records against THIS frustum, when the
+      // frame's camera is final.
+      const _frameVP = new Float32Array(16);
+      let frameCullDist = 0;        // frame.cullDist — the radial draw cap (0 = off)
+      const _chunkFrame = { total: 0, visible: 0 };   // reset each begin
+      const _chunkLast = { total: 0, visible: 0 };    // latched at present — __tlx.chunkState()
+      const _mirrorRelease = [];    // chunked meshes whose first lit draw is THIS render
+      // Per-frame FX record counters (reset in begin, latched at present) —
+      // the __tlx.fxState() probe the M6 tests assert against.
+      const _fxFrame = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0 };
+      const _fxLast = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0 };
 
       function acquireMesh(geo, matrixArr, material) {
         let m = meshPool[poolUsed];
@@ -326,11 +466,12 @@ const TLX = (function () {
           g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
           return { __tlx: true, geo: g, tex: true, count: data.idx.length };
         },
-        // M2: chunked meshes are a single un-culled geometry (one draw).
-        // tlx-chunked.js (M7) adds binning + frustum/radial culling + the
-        // staged memory-release discipline.
-        createChunkedMesh(data) {
+        // M7: real chunked build (tlx-chunked.js) — spatial binning, per-cell
+        // AABBs, staged release of the source arrays. Falls back to the M2
+        // single un-culled geometry when the factory is missing.
+        createChunkedMesh(data, cellSize) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
+          if (chunkedSys) return chunkedSys.build(data, cellSize);
           return { __tlx: true, geo: buildGeometry(data), chunked: true, count: (data.idx && data.idx.length) || 0 };
         },
         createTexture(src) {
@@ -342,14 +483,31 @@ const TLX = (function () {
           return { __tlx: true, tex: t };
         },
         freeMesh(m) { if (m && m.geo) { m.geo.dispose(); m.geo = null; } },
-        freeChunkedMesh(m) { if (m && m.geo) { m.geo.dispose(); m.geo = null; } },
+        freeChunkedMesh(m) {
+          if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
+          if (m && m.geo) { m.geo.dispose(); m.geo = null; }
+        },
         freeTexture(t) { if (t && t.tex) { t.tex.dispose(); t.tex = null; } },
 
         // frame protocol — shadow passes delegate to the M4 subsystem
         // (tlx-shadow.js); a missing factory keeps them as safe no-ops.
         shadowBegin(vp) { if (shadowSys) shadowSys.shadowBegin(vp); },
         castShadow(mesh, model) { if (shadowSys) shadowSys.castShadow(mesh, model); },
-        castShadowChunked(mesh, model) { if (shadowSys) shadowSys.castShadowChunked(mesh, model); },
+        // M7: cull chunked casters against the ACTIVE depth pass's light
+        // frustum — castCullVP (the lamp's perspective cone between
+        // lampShadowBegin/End) or the static sun box (glx/chunked.js:170-191).
+        // NO radial cull: an off-camera building can still cast INTO view.
+        castShadowChunked(mesh, model) {
+          if (!shadowSys) return;
+          const S = shadowSys.S;
+          if (mesh && mesh.chunks && chunkedSys && S.depthPassOn) {
+            const n = chunkedSys.cull(mesh, S.castCullVP || S.lightVP, null, 0);
+            const vis = chunkedSys.visList;
+            for (let i = 0; i < n; i++) shadowSys.castShadow(vis[i].wrap, model);
+            return;
+          }
+          shadowSys.castShadowChunked(mesh, model);
+        },
         shadowEnd() { if (shadowSys) shadowSys.shadowEnd(); },
         carShadowBegin(vp) { if (shadowSys) shadowSys.carShadowBegin(vp); },
         carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
@@ -385,6 +543,17 @@ const TLX = (function () {
           // M3: push the frame + tune uniforms (sun/ambient/fog/wetness/knobs
           // + the stride-15 lamp arrays, capped 32) into the shared lit set.
           if (lit && frame) lit.updateFrame(frame);
+          // M6: decal-pass uniforms (keyMul sun / ambientMul ambient) + the
+          // per-frame FX pools.
+          if (fx && frame) fx.updateFrame(frame);
+          frameEye = (frame && frame.eye) || null;
+          // M7: latch the cull frustum + radial cap for present()'s chunk cull.
+          if (frame && frame.viewProj) _frameVP.set(frame.viewProj);
+          frameCullDist = (frame && frame.cullDist) || 0;
+          _chunkFrame.total = 0; _chunkFrame.visible = 0;
+          _fxMatUsed = 0;
+          _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
+          _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0;
           // M5: sky is opt-in PER FRAME — a frame that issues no drawSky
           // (menus, no-track) keeps the flat fogColor clear above.
           scene.backgroundNode = null;
@@ -405,17 +574,158 @@ const TLX = (function () {
         draw(mesh, model, opts) {
           if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model, mat: materialFor(opts, false) });
         },
+        // M7: a chunked mesh records the WHOLE handle; present() culls it per
+        // chunk against the frame's final camera. The M2 fallback shape
+        // (chunks null / factory missing) stays a single-geometry record.
         drawChunked(mesh, model, opts) {
-          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model, mat: materialFor(opts, true) });
+          if (!mesh) return;
+          if (mesh.chunks && chunkedSys) {
+            drawList.push({ geo: null, chunked: mesh, m: model, mat: materialFor(opts, true) });
+          } else if (mesh.geo) {
+            drawList.push({ geo: mesh.geo, m: model, mat: materialFor(opts, true) });
+          }
         },
-        drawShadow() {}, drawMark() {},
-        drawSkidBatch() { return true; },    // true: swallow the batch (no per-mark fallback spam)
-        drawGlow() {}, drawParticles() {}, drawDecal() {},
+        // ── M6 FX paths — each appends a draw-list record; blend/offset/mask
+        // state lives on the tsl-fx materials (three applies it per material,
+        // nothing leaks into the next pass — the M4 caster-bug lesson). ─────
+        // Blob shadow under a car: glx.js drawShadow — the record's matrix
+        // bakes uSize (model * scale(w,1,l); the quad's y=0.02 lift is in the
+        // shared geometry, untouched by the scale).
+        drawShadow(modelMat, w, l) {
+          if (!fx || !modelMat) return;
+          drawList.push({ geo: getFxQuad(), m: fxMatFor(modelMat, w, l), mat: fx.shadowMat });
+          _fxFrame.shadows++;
+        },
+        // Single skid-mark stamp — the per-mark fallback when a caller skips
+        // the batch (same quad + matrix treatment, MARK_FS falloff).
+        drawMark(modelMat, w, l) {
+          if (!fx || !modelMat) return;
+          drawList.push({ geo: getFxQuad(), m: fxMatFor(modelMat, w, l), mat: fx.markMat });
+          _fxFrame.marks++;
+        },
+        // Batched skid trail: glx.js drawSkidBatch — `verts` is the game's
+        // complete interleaved CPU array ([pos3,uv2] x 6 verts/mark), so a
+        // grow-recreate can re-upload it wholesale even when not dirty.
+        // Always returns true (handled) — on a missing fx factory the per-
+        // mark fallback would be dead records through the same factory.
+        drawSkidBatch(verts, vertCount, dirty) {
+          if (!fx || !verts || !(vertCount > 0)) return true;
+          const fresh = ensureStream(skidStream, vertCount);
+          if (dirty || fresh) {
+            skidStream.ib.array.set(verts.subarray(0, vertCount * 5));
+            uploadStream(skidStream, vertCount * 5);
+          }
+          skidStream.geo.setDrawRange(0, vertCount);
+          drawList.push({ geo: skidStream.geo, m: null, mat: fx.skidMat });
+          _fxFrame.skidVerts = vertCount;
+          return true;
+        },
+        // Additive lamp lens-glare halos: glx.js drawGlow verbatim — reads
+        // stride-15 frame.lights records (fields 0-6 + 14), skips glareW<=0,
+        // near-field fade over 60..170 m, physical-intensity colour
+        // normalisation, lens-housing radius — into one billboard batch.
+        drawGlow(lights, str) {
+          if (!fx || !lights || !lights.length || !(str > 0)) return;
+          const nL = (lights.length / 15) | 0;
+          ensureStream(glowStream, nL * 6);
+          const out = glowStream.ib.array;
+          let p = 0, nDraw = 0;
+          const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
+          for (let i = 0; i < nL; i++) {
+            const o = i * 15;
+            const glareW = lights[o + 14];   // 0 = fixture-less light — no halo
+            if (!(glareW > 0)) continue;
+            const cx = lights[o], cy = lights[o + 1], cz = lights[o + 2];
+            const dxE = cx - ex, dyE = cy - ey, dzE = cz - ez;
+            const dEye = Math.sqrt(dxE * dxE + dyE * dyE + dzE * dzE);
+            const fade = Math.min(1, Math.max(0, (170 - dEye) / 110));
+            if (fade <= 0) continue;
+            let r = lights[o + 3], g = lights[o + 4], b = lights[o + 5];
+            const rad = lights[o + 6];
+            const cm = Math.max(r, g, b) || 1;
+            const csc = Math.min(1, 3.2 / cm) * (0.5 + 0.5 * Math.min(1, cm / 40)) * fade * glareW;
+            r *= csc; g *= csc; b *= csc;
+            const brad = Math.min(2.2, rad * 0.10) * (0.7 + 0.6 * Math.min(glareW, 2));
+            for (let v = 0; v < 12; v += 2) {
+              out[p++] = _glowCorners[v]; out[p++] = _glowCorners[v + 1];
+              out[p++] = cx; out[p++] = cy; out[p++] = cz;
+              out[p++] = r; out[p++] = g; out[p++] = b;
+              out[p++] = brad;
+            }
+            nDraw++;
+          }
+          if (!nDraw) return;
+          fx.glowStr.value = str;
+          uploadStream(glowStream, p);
+          glowStream.geo.setDrawRange(0, nDraw * 6);
+          drawList.push({ geo: glowStream.geo, m: null, mat: fx.glowMat });
+          _fxFrame.glow = nDraw;
+        },
+        // Transient FX particle batch: glx.js drawParticles — `data` is the
+        // particles.js interleaved stream, copied wholesale into the group's
+        // slot (one call per blend group per frame; a second same-group call
+        // in one frame would overwrite — particles.js never does).
+        drawParticles(data, floatCount, additive) {
+          if (!fx || !data || !(floatCount > 0) || !frameEye) return;
+          const slot = partStreams[additive ? 1 : 0];
+          const verts = (floatCount / 10) | 0;
+          ensureStream(slot, verts);
+          slot.ib.array.set(data.subarray(0, floatCount));
+          uploadStream(slot, floatCount);
+          slot.geo.setDrawRange(0, verts);
+          drawList.push({ geo: slot.geo, m: null, mat: fx.particleMats[additive ? 1 : 0] });
+          _fxFrame.particles += verts / 6;
+        },
+        // Textured car decal: glx.js drawDecal — the record's material is
+        // cached per (texture, glow) inside the fx factory (~2 textures/car,
+        // 2 glow states). The matrix is copied (pool) — game.js reuses its
+        // per-index arrays.
+        drawDecal(mesh, modelMat, tex, opts) {
+          if (!fx || !mesh || !mesh.geo || !tex || !tex.tex || !modelMat) return;
+          drawList.push({ geo: mesh.geo, m: fxMatFor(modelMat, 1, 1),
+                          mat: fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0) });
+          _fxFrame.decals++;
+        },
         present() {
           poolUsed = 0;
-          for (let i = 0; i < drawList.length; i++) acquireMesh(drawList[i].geo, drawList[i].m, drawList[i].mat);
+          // renderOrder = submission index: three sorts opaque and transparent
+          // lists by renderOrder first, so caller order (the GLX contract)
+          // survives its z-sort in BOTH lists. Opaques still render before
+          // the transparent FX as a group — strictly safer than GLX's inline
+          // order because FX never write depth.
+          for (let i = 0; i < drawList.length; i++) {
+            const rec = drawList[i];
+            if (rec.chunked) {
+              // M7: cull NOW, against begin()'s viewProj copy — the camera is
+              // final at present time. Every visible chunk stamps the SAME
+              // renderOrder = submission index, so the record stays one unit
+              // in three's list sort (the M6 LOAD-BEARING rule).
+              const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist);
+              const vis = chunkedSys.visList;
+              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
+              _chunkFrame.total += rec.chunked.chunks.length;
+              _chunkFrame.visible += n;
+              // First lit render with >= 1 chunk drawn uploads the shared
+              // vertex attributes — the CPU mirrors can go after render()
+              // (kept under a viz override: viz materials consume a subset
+              // of the attributes, so not all buffers would be created).
+              if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat) _mirrorRelease.push(rec.chunked);
+              continue;
+            }
+            acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
+          }
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
           renderer.render(scene, camera);
+          _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
+          // M7 staged release, final stage: the render above created the GPU
+          // buffers for any first-drawn chunked mesh — drop its shared vertex
+          // mirrors (glx/chunked.js:118 "uploaded to the VBO — drop the CPU
+          // copy"; see tlx-chunked.js releaseMirrors for why this is safe).
+          for (let i = 0; i < _mirrorRelease.length; i++) chunkedSys.releaseMirrors(_mirrorRelease[i]);
+          _mirrorRelease.length = 0;
+          _fxLast.shadows = _fxFrame.shadows; _fxLast.marks = _fxFrame.marks;
+          _fxLast.skidVerts = _fxFrame.skidVerts; _fxLast.glow = _fxFrame.glow;
+          _fxLast.particles = _fxFrame.particles; _fxLast.decals = _fxFrame.decals;
           drawList.length = 0;
           // Armed shadow flags clear AFTER the main render (GLX clears them
           // in the post-chain present; game.js re-arms every frame it runs
@@ -432,6 +742,18 @@ const TLX = (function () {
           get lit() { return lit; },
           get shadow() { return shadowSys; },
           get sky() { return sky; },
+          get fx() { return fx; },
+          // M6 probe: FX record counts from the last presented frame (blob
+          // shadows, per-mark stamps, skid batch verts, glare halos, live
+          // particles, decal draws) — what the M6 tests assert against.
+          fxState() {
+            return {
+              on: !!fx,
+              shadows: _fxLast.shadows, marks: _fxLast.marks,
+              skidVerts: _fxLast.skidVerts, glow: _fxLast.glow,
+              particles: _fxLast.particles, decals: _fxLast.decals,
+            };
+          },
           // M5 probe: is the sky armed for the current frame, and what did
           // the last drawSky upload? (tests assert the night/day gates here)
           skyState() {
@@ -441,6 +763,12 @@ const TLX = (function () {
               cloud: sky ? sky.uniforms.cloud.value : -1,
               sunDir: sky ? sky.uniforms.sunDir.value.toArray() : null,
             };
+          },
+          // M7 probe: chunk totals from the last presented frame, summed over
+          // every chunked record (props + glass on street circuits). visible
+          // < total at any parked camera proves the cull engages.
+          chunkState() {
+            return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
           },
           viz: vizMode,
           materialCacheSize() { return matCache.size; },

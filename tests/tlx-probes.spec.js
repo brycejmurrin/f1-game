@@ -122,6 +122,77 @@ test.describe("TLX — boot", () => {
     expect(errors).toEqual([]);
   });
 
+  test("M6 FX paths record on a night race (glow halos, blob shadows, decals)", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("singapore"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.evaluate(() => window.__apex.park(0.1));
+    // Singapore is a night race: floodlights populate frame.lights and the
+    // glare-halo pass runs. Wait for a presented frame that carried FX.
+    await page.waitForFunction(() => GLX.__tlx.fxState().glow > 0, { timeout: 60_000 });
+    const st = await page.evaluate(() => GLX.__tlx.fxState());
+    expect(st.on).toBe(true);
+    expect(st.glow).toBeGreaterThan(0);        // near-field lamp halos in view
+    expect(st.shadows).toBeGreaterThan(0);     // blob shadows under the field
+    expect(st.decals).toBeGreaterThan(0);      // car number/sponsor decals
+    expect(errors).toEqual([]);
+  });
+
+  test("M6 skid batch records after a hard driven stint", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    // Drive hard with full lock so the tyres slip and lay marks (the skid
+    // recorder keys off slip, not just steering).
+    await page.evaluate(() => {
+      window.__apex.jump(0.1, 70);
+      window.__apex.act({ steer: 1, throttle: true }, 1 / 60, 120);
+    });
+    await page.evaluate(() => window.__apex.freeze(true));
+    // Marks are recorded in the physics step; the batch record lands on the
+    // next presented frame.
+    await page.waitForFunction(() => GLX.__tlx.fxState().skidVerts > 0, { timeout: 30_000 });
+    const st = await page.evaluate(() => GLX.__tlx.fxState());
+    expect(st.skidVerts).toBeGreaterThan(0);
+    expect(st.skidVerts % 6).toBe(0);          // 6 verts per mark
+    expect(errors).toEqual([]);
+  });
+
+  test("M7 chunked path culls and frees the source arrays on a street circuit", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("singapore"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.evaluate(() => window.__apex.park(0.1));
+    // Wait for a presented frame that carried chunked records (props + glass).
+    await page.waitForFunction(() => GLX.__tlx.chunkState().total > 0, { timeout: 60_000 });
+    const st = await page.evaluate(() => {
+      const geo = window.__apex.trackGeometry();
+      return {
+        chunk: GLX.__tlx.chunkState(),
+        // Staged memory release: the game keeps track.propsGeo, but its raw
+        // multi-million-element source arrays must be freed by the build
+        // (data._keepPositions unset on the normal path).
+        propsFreed: !!geo && !!geo.props
+          && geo.props.pos === null && geo.props.idx === null && geo.props.nrm === null,
+      };
+    });
+    expect(st.chunk.on).toBe(true);
+    expect(st.chunk.total).toBeGreaterThan(20);              // the city actually binned
+    expect(st.chunk.visible).toBeGreaterThan(0);             // something survived the cull
+    expect(st.chunk.visible).toBeLessThan(st.chunk.total);   // culling engages at a parked cam
+    expect(st.propsFreed).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
   test("menu is reachable and canvas is sized (no-track begin/present path)", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
