@@ -41,7 +41,12 @@ const track = data.track;
 
 /* ── engine / scene ───────────────────────────────────────────────────────── */
 const canvas = document.getElementById("c");
-const engine = new BABYLON.Engine(canvas, true);   // WebGL2
+// FRICTION (SwiftShader): Babylon's WebGL2 path binds one uniform BLOCK per
+// light; SwiftShader reports GL_MAX_VERTEX_UNIFORM_BUFFERS = 14, so 34 lights
+// exceed the block limit and every shader fails to link. disableUniformBuffers
+// falls back to classic uniforms (arrays of vec4s — the GLX approach), which
+// compiles fine but disables Babylon's UBO fast path engine-wide.
+const engine = new BABYLON.Engine(canvas, true, { disableUniformBuffers: true });   // WebGL2
 // Force synchronous shader compile: with KHR_parallel_shader_compile the first
 // frames silently skip not-yet-ready materials, corrupting both the ready gate
 // and the compile-time measurement.
