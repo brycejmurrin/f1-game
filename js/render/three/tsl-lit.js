@@ -192,7 +192,7 @@
       U.skyRimGlow.value = k("skyRimGlow", 1.0);
       U.ambContactDark.value = k("ambContactDark", 1.0);
       U.lampWallSpill.value = k("lampWallSpill", 1.0);
-      U.envStr.value = 0;   // TODO M9: (envReady && !noEnv) ? tune.carEnvCube : 0
+      U.envStr.value = 0;   // M9: overwritten by lit.setEnvStr() in tlx.js begin() from the probe-ready state
       // ── M4 shadow upload (glx.js:752-823 1:1) ──────────────────────────
       if (shadowOn) {
         U.shadowBias.value = k("shadowBias", 0.001);
@@ -1152,7 +1152,12 @@
       return m;
     }
 
-    return { makeMaterial, makeViz, uniforms: U, updateFrame, MAX_LIGHTS };
+    // M9: live env-probe strength. tlx.js drives this each begin() from the
+    // probe's ready state × the CAR ENV REFLECTION (carEnvCube) knob — 0 keeps
+    // the analytic-gradient mirror only, >0 blends in the real cube fetch.
+    function setEnvStr(v) { U.envStr.value = +v || 0; }
+
+    return { makeMaterial, makeViz, uniforms: U, updateFrame, setEnvStr, MAX_LIGHTS };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { lit });

@@ -158,6 +158,19 @@ const TLX = (function () {
       let W = 1, H = 1;
       const DPR_CAP = isMobile ? 1.5 : 2;
 
+      // ── M9 GPU frame timer state ─────────────────────────────────────────
+      // supported only where three's timestamp-query feature is present — the
+      // WebGPU backend with the adapter feature; never on the WebGL2 fallback
+      // (SwiftShader/CI), keeping the GLX {supported:false} shape there.
+      let _gpuTimerOn = false, _gpuMs = -1;
+      function _gpuSupported() {
+        try {
+          return !!(renderer.backend && renderer.backend.isWebGPUBackend)
+            && typeof renderer.hasFeature === "function"
+            && !!renderer.hasFeature("timestamp-query");
+        } catch (_) { return false; }
+      }
+
       // The seam is immediate-mode (draw(mesh, model, opts) between begin and
       // present) while three is retained-mode. Bridge: draw() appends a
       // (geometry, matrix) record; present() materialises records into a
@@ -224,13 +237,43 @@ const TLX = (function () {
         post = null;
       }
 
+      // ── M9: the live environment probe cube target ───────────────────────
+      // A 64px cubemap rendered around the player car (one face per ~2 frames,
+      // driven by game.js's envFaceBegin/End), sky+world only. The car-paint
+      // clearcoat samples it for real reflections of the surroundings — GLX's
+      // envInit()/envFaceBegin/envFaceEnd port (glx.js:553-621). Built BEFORE
+      // the lit core so tsl-lit can bind ctx.envCube at factory time; starts
+      // black (rendered nothing yet) and uEnvStr gates it to 0 until the first
+      // full 6-face cycle completes. Type mirrors GLX: HDR (half-float) when
+      // the post chain reports a renderable float target, else 8-bit — same
+      // decision GLX makes via PST.hdrOk(). Guarded: a failure leaves envRT
+      // null and every env member a safe no-op (the pre-M9 analytic look).
+      // NO sRGB anywhere — NoColorSpace on the cube, the calibration invariant.
+      const ENV_SIZE = 64;
+      let envRT = null;
+      try {
+        const envHdr = !!(post && post.hdrOk());
+        envRT = new THREE.CubeRenderTarget(ENV_SIZE, {
+          type: envHdr ? THREE.HalfFloatType : THREE.UnsignedByteType,
+          format: THREE.RGBAFormat,
+          generateMipmaps: true,
+          minFilter: THREE.LinearMipmapLinearFilter,
+          magFilter: THREE.LinearFilter,
+        });
+        envRT.texture.colorSpace = THREE.NoColorSpace;   // no-sRGB invariant (probe target too)
+      } catch (e) {
+        try { console.warn("TLX: env-probe target alloc failed, analytic reflections only —", e); } catch (_) {}
+        envRT = null;
+      }
+
       // ── M3: the TSL lit core (tsl-chunks.js + tsl-lit.js factories) ──────
       // Guarded: a missing/broken factory keeps the unlit material — the
       // backend must still boot (Gfx.create's never-throw contract).
       let lit = null;
       try {
         if (window.TLXShaders && chunks && TLXShaders.lit) {
-          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!post });
+          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!post,
+            envCube: envRT ? envRT.texture : null });
         }
       } catch (e) {
         try { console.warn("TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
@@ -426,6 +469,26 @@ const TLX = (function () {
       const _fxFrame = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0 };
       const _fxLast = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0 };
 
+      // ── M9 env-probe frame state (glx.js:62-81 port) ─────────────────────
+      // A CubeCamera owns the 6 face sub-cameras with the correct cube-face
+      // orientations (fov 90, aspect 1, near 0.4, far 900 — GLX's
+      // perspectiveTo(π/2, 1, 0.4, 900)). envFaceBegin positions it at the
+      // probe eye and returns the CURRENT face's invViewProj so game.js can
+      // point the sky node's ray reconstruction at that face; envFaceEnd
+      // materialises the world draw-list (sky + track, NO cars/FX) into the
+      // face and advances the completed-face mask. A full 6-face cycle sets
+      // envReady — until then uEnvStr stays 0 and the cube reads black.
+      let envCubeCam = null;
+      let envFacesMask = 0, envReady = false, _envActive = false;
+      const _envInvArr = new Float32Array(16);
+      const _envVP = new THREE.Matrix4(), _envInvVP = new THREE.Matrix4();
+      function ensureEnvCam() {
+        if (envCubeCam || !envRT) return;
+        // CubeCamera(near, far, renderTarget): its 6 children are the face
+        // PerspectiveCameras (PX,NX,PY,NY,PZ,NZ) three keeps oriented for us.
+        envCubeCam = new THREE.CubeCamera(0.4, 900, envRT);
+      }
+
       function acquireMesh(geo, matrixArr, material) {
         let m = meshPool[poolUsed];
         if (!m) { m = new THREE.Mesh(geo, unlitMat); m.matrixAutoUpdate = false; m.frustumCulled = false; meshPool[poolUsed] = m; }
@@ -498,8 +561,23 @@ const TLX = (function () {
         pcss() { return false; },            // truthful: blocker map skipped (TODO M4-PCSS, tlx-shadow.js)
         isMobile,
         mobileTier,
-        gpuTimer() { return { supported: false, on: false }; },
-        gpuMs() { return -1; },
+        // GPU frame timer — the GLX gpuTimer/gpuMs contract (glx.js:1215-1226).
+        // WebGPU exposes it through three's timestamp-query pass; the WebGL2
+        // fallback (SwiftShader/CI via tlxForceGL) has no timestamp-query
+        // feature -> {supported:false} / gpuMs()=-1, byte-identical to GLX on
+        // SwiftShader. Never fabricates: gpuMs mirrors three's own resolved
+        // renderer.info.render.timestamp (already in ms), populated async in
+        // present() only while the timer is on.
+        gpuTimer(on) {
+          const sup = _gpuSupported();
+          if (on !== undefined) {
+            _gpuTimerOn = !!on && sup;
+            try { renderer.trackTimestamp = _gpuTimerOn; } catch (_) {}
+            if (!_gpuTimerOn) _gpuMs = -1;
+          }
+          return { supported: sup, on: _gpuTimerOn };
+        },
+        gpuMs() { return _gpuMs; },
         carShadowState() {
           const s = shadowSys && shadowSys.S;
           return s ? { enabled: s.carEnabled, arms: s.carArms } : { enabled: false, arms: 0 };
@@ -571,10 +649,66 @@ const TLX = (function () {
         carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
         lampShadowBegin(vp, idx) { if (shadowSys) shadowSys.lampShadowBegin(vp, idx); },
         lampShadowEnd() { if (shadowSys) shadowSys.lampShadowEnd(); },
-        envFaceBegin() { return null; },     // game.js skips the probe on null
-        envFaceEnd() {},
-        envProbeReady() { return false; },
-        envProbeReset() {},
+        // M9 env probe. game.js issues one face per ~2 frames on a live race
+        // (gated on LT.carEnvCube>0.001, tier<1, no debug/paused cam):
+        //   const inv = envFaceBegin(face, eye, frame);
+        //   if (inv) { frameSky.invViewProj = inv; drawSky(frameSky);
+        //              drawWorldMeshes(...); envFaceEnd(face); }
+        // Returning null (no cube target, or a probe-less setup-preview frame
+        // with no viewProj) makes game.js skip the pass — the self-disable
+        // invariant. begin() is NOT called between begin/end, so envFaceEnd
+        // owns the face render and leaves drawList clean for the main pass.
+        envFaceBegin(face, eye, frame) {
+          if (!envRT || !lit || !eye || !frame || !frame.viewProj) return null;
+          ensureEnvCam();
+          if (!envCubeCam) return null;
+          _envActive = true;
+          envCubeCam.position.set(eye[0], eye[1], eye[2]);
+          envCubeCam.updateMatrixWorld(true);
+          const faceCam = envCubeCam.children[face & 7];
+          if (!faceCam) { _envActive = false; return null; }
+          // invViewProj for THIS face -> the sky node's ray reconstruction.
+          _envVP.multiplyMatrices(faceCam.projectionMatrix, faceCam.matrixWorldInverse);
+          _envInvVP.copy(_envVP).invert();
+          _envInvVP.toArray(_envInvArr);
+          return _envInvArr;
+        },
+        envFaceEnd(face) {
+          if (!envRT || !envCubeCam || !_envActive) { _envActive = false; return; }
+          const faceCam = envCubeCam.children[face & 7];
+          // Materialise the world draw-list (sky background node + track meshes
+          // — game.js issued NO car/FX draws in the probe pass) into the face.
+          // Chunked records cull against the face frustum with cullDist=0 (no
+          // radial cap in the probe pass — GLX frameCullDist stays 0 here).
+          const faceVP = _envVP.elements;   // set in envFaceBegin for this face
+          poolUsed = 0;
+          for (let i = 0; i < drawList.length; i++) {
+            const rec = drawList[i];
+            if (rec.chunked) {
+              if (!chunkedSys) continue;
+              const n = chunkedSys.cull(rec.chunked, faceVP, null, 0);
+              const vis = chunkedSys.visList;
+              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
+              continue;
+            }
+            acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
+          }
+          for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
+          try {
+            renderer.setRenderTarget(envRT, face & 7);
+            renderer.render(scene, faceCam);
+          } catch (_) { /* a probe face must never strand the frame */ }
+          renderer.setRenderTarget(null);
+          drawList.length = 0;   // the main pass re-issues its own draws
+          poolUsed = 0;
+          _envActive = false;
+          envFacesMask |= 1 << (face & 7);
+          if (envFacesMask === 63) { envFacesMask = 0; envReady = true; }   // full cube captured
+        },
+        envProbeReady() { return envReady; },
+        // New track/session: the cube still holds the OLD circuit — hold the
+        // probe black (uEnvStr 0) until a fresh full cube captures (GLX 1:1).
+        envProbeReset() { envFacesMask = 0; envReady = false; },
         begin(frame) {
           resize();
           const f = (frame && frame.fogColor) || [0.04, 0.04, 0.06];
@@ -600,7 +734,18 @@ const TLX = (function () {
           if (frame && frame.eye) camera.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
           // M3: push the frame + tune uniforms (sun/ambient/fog/wetness/knobs
           // + the stride-15 lamp arrays, capped 32) into the shared lit set.
-          if (lit && frame) lit.updateFrame(frame);
+          if (lit && frame) {
+            lit.updateFrame(frame);
+            // M9: env-probe strength. 0 until a full cube has captured; forced
+            // 0 on a probe-less preview (frame.noEnv) even if a stale cube
+            // lingers — glx.js:864-867 1:1 (fallback mirrors TUNE_DEFS
+            // carEnvCube def 0). Held off while rendering INTO the cube.
+            if (lit.setEnvStr) {
+              const _T = frame.tune;
+              const _envOn = envRT && envReady && !frame.noEnv && !_envActive;
+              lit.setEnvStr(_envOn ? (_T && _T.carEnvCube != null ? _T.carEnvCube : 0) : 0);
+            }
+          }
           // M6: decal-pass uniforms (keyMul sun / ambientMul ambient) + the
           // per-frame FX pools.
           if (fx && frame) fx.updateFrame(frame);
@@ -819,6 +964,16 @@ const TLX = (function () {
           // the car/lamp passes). The lit uniforms latched the armed state at
           // begin(), so this never races the frame that armed them.
           if (shadowSys) shadowSys.clearArmed();
+          // M9: resolve the GPU timestamp for the frame just presented (async
+          // — the value lands a frame or two later, exactly like GLX's
+          // deferred query readback). Truthful: three's own resolved ms.
+          if (_gpuTimerOn) {
+            try {
+              renderer.resolveTimestampsAsync("render")
+                .then((v) => { if (v != null && isFinite(v)) _gpuMs = v; })
+                .catch(() => {});
+            } catch (_) {}
+          }
         },
 
         // debug — the __tlx tooling (mirrors the spike's __spike hooks):
@@ -863,6 +1018,15 @@ const TLX = (function () {
           // < total at any parked camera proves the cull engages.
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
+          },
+          // M9 probe: env-cube liveness — is the target allocated (on), which
+          // face captures next (face bit-mask -> lowest unset), the cube edge
+          // size, and whether a full 6-face cycle has completed (ready). The
+          // M9 test asserts the cube goes ready on a parked race frame.
+          envState() {
+            let face = 0;
+            while (face < 6 && (envFacesMask & (1 << face))) face++;
+            return { on: !!envRT, face, size: ENV_SIZE, ready: envReady };
           },
           viz: vizMode,
           materialCacheSize() { return matCache.size; },
