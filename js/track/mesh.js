@@ -13,7 +13,7 @@ const TrackMesh = (function () {
 
   // cross from js/track/geom.js; curvature (baked LUT reader) from
   // js/track/spline.js — eval-time destructures (hard edges).
-  const { cross } = TrackGeom;
+  const { cross, MAT } = TrackGeom;
   const { curvature } = TrackSpline;
   const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -177,6 +177,14 @@ const TrackMesh = (function () {
         }
         const c = (Math.floor(i / stripeNodes) % 2) === 0 ? ka : kb;
         out.col.push(c[0], c[1], c[2], c[0], c[1], c[2]);
+        // Painted kerb — smooth, like the road markings, so FLAT. Must stay in
+        // lockstep with pos: buildRoad now ships a mat array and this writes
+        // into the same accumulator.
+        if (out.mat) out.mat.push(MAT.FLAT, MAT.FLAT);
+        // hw = 0 so roadMarkings() skips the kerb ribbon — it is not road
+        // surface and must not have edge lines painted across it. Lockstep with
+        // pos (see the trk push in buildRoad).
+        if (out.trk) out.trk.push(k * ds, oA, 0, k * ds, oB, 0);
         base.push(ai);
       }
       for (let i = 0; i < count; i++) {
@@ -299,7 +307,7 @@ const TrackMesh = (function () {
 
   function buildRoad(track) {
     const { n, px, py, pz, hw } = track;
-    const pos = [], nrm = [], col = [];
+    const pos = [], nrm = [], col = [], mat = [], trk = [];
     const idxArr = [];
     const bp = track.bankP;
     const grid = nodeGrid(track);              // shared node grid (also used by buildTerrain/buildProps)
@@ -350,7 +358,8 @@ const TrackMesh = (function () {
       // keeping the shoulder only slightly recessed means props (fences, walls)
       // anchored to the terrain height still meet it with no gap underneath.
       const rise = [-0.05, -0.02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.02, -0.05];
-      const dash = (Math.floor((k * ds) / 7) % 2) === 0;   // dashed centre line
+      // (the per-node `dash` boolean lived here; the dash is now a continuous
+      // function of s in roadMarkings(), so it no longer beats against the grid)
       // Banking pivots each cross-section around its centreline (inner edge
       // -> -lift/2, outer edge -> +lift/2). Verts past the road clamp to those
       // edge heights so kerbs/shoulders ride with it rather than tearing away.
@@ -389,22 +398,35 @@ const TrackMesh = (function () {
         // The start/finish line is a separate chequered decal mesh (buildStartLine)
         // laid just above the asphalt here at s=0 — far cleaner than painting a
         // whole road segment solid white, which read as a sprayed-on blob.
-        let c;
+        // Per-vertex procedural material id. Until this existed the road was
+        // emitted with NO mat array at all, so the whole surface was MAT.FLAT
+        // and the material system never touched the one thing on screen for the
+        // entire race. Painted markings stay FLAT deliberately — road paint is
+        // smooth, and giving it aggregate relief makes the lines look gritty.
+        // The painted markings are NO LONGER vertex colour — roadMarkings() in
+        // the lit fragment shader draws the edge lines and the dashed centre
+        // line analytically from the (s, x, hw) in `trk`. Columns 2/3/10/11 and
+        // 6/7 still exist geometrically (they are removed in a follow-up) but
+        // now carry plain asphalt, so the shader owns the paint outright and
+        // the two cannot disagree. `line` stays referenced by nothing here.
+        let c, m;
         if (v === 0 || v === 13) {
-          c = grass;
+          c = grass; m = MAT.GRASS;
         } else if (v === 1 || v === 12) {
-          c = grass;   // kerb ribbons added separately by buildKerbs
-        } else if (v === 2 || v === 3 || v === 10 || v === 11) {
-          c = line;    // bold white edge line
-        } else if (v === 6 || v === 7) {
-          if (dash) c = line;          // dashed centre line
-          else { const f = wearF(v), g = (hash(k * 13 + v) - 0.5) * 0.016; c = [asphalt[0] * f + g, asphalt[1] * f + g, asphalt[2] * f + g]; }
+          c = grass; m = MAT.GRASS;   // kerb ribbons added separately by buildKerbs
         } else {
           // asphalt running surface: racing-line wear + subtle aggregate grain
           const f = wearF(v), grain = (hash(k * 13 + v) - 0.5) * 0.016;
           c = [asphalt[0] * f + grain, asphalt[1] * f + grain, asphalt[2] * f + grain];
+          m = MAT.ASPHALT;
         }
         col.push(c[0], c[1], c[2]);
+        mat.push(m);
+        // Track-space coords for the fragment-side marking SDF (roadMarkings()
+        // in js/render/shaders/lit.js). hw > 0 is what marks a vertex as road
+        // SURFACE — the kerb ribbon and the edge skirt push hw 0 so they are
+        // skipped. Must stay in lockstep with pos: three writers append here.
+        trk.push(k * ds, o, w);
       }
     }
     for (let k = 0; k < n; k++) {
@@ -449,6 +471,12 @@ const TrackMesh = (function () {
             pos.push(ex, ey, ez, ex, bottom, ez);
             nrm.push(nx, 0, nz, nx, 0, nz);
             col.push(topC[0], topC[1], topC[2], botC[0], botC[1], botC[2]);
+            // Vertical seam-filler that is normally occluded by the road above.
+            // Left FLAT: the ground materials key off world XZ, which barely
+            // varies across a vertical face and would streak.
+            mat.push(MAT.FLAT, MAT.FLAT);
+            // hw = 0: vertical seam filler, not road surface (see buildRoad).
+            trk.push(k * ds, 0, 0, k * ds, 0, 0);
           }
           for (let k = 0; k < n; k++) {
             const a = base + k * 2, b = base + ((k + 1) % n) * 2;
@@ -459,13 +487,13 @@ const TrackMesh = (function () {
         skirt(0); skirt(13);
       }
     }
-    buildKerbs(track, { pos, nrm, col, idx: idxArr });
-    return { pos, nrm, col, idx: idxArr };
+    buildKerbs(track, { pos, nrm, col, mat, trk, idx: idxArr });
+    return { pos, nrm, col, mat, trk, idx: idxArr };
   }
 
   function buildTerrain(track) {
     const { n, px, py, pz, hw, total } = track;
-    const pos = [], nrm = [], col = [];
+    const pos = [], nrm = [], col = [], mat = [];
     const idxArr = [];
     const pal = track.def.palette, grass = pal.grass, runoff = pal.runoff;
     const bp = track.bankP;
@@ -678,6 +706,11 @@ const TrackMesh = (function () {
           const gt = v / (NTV - 1);                          // 0 inner edge → 1 far
           const tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
           col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
+          // Match the material to the colour ramp the vert already sits on: the
+          // inner band IS the gravel runoff, everything beyond it is grass. ROCK
+          // rather than SAND for gravel — SAND's relief is a directional dune
+          // ripple, which reads as dunes on a flat trap; ROCK is granular.
+          mat.push(gt < 0.22 ? MAT.ROCK : MAT.GRASS);
         }
       }
       const faceSafe = (ia, ib, ic) => {
@@ -715,7 +748,7 @@ const TrackMesh = (function () {
     // climb, Monaco's hills). The ribbon tracks the road height per node, so props
     // anchored via anchor()/groundYAt sit on real ground along the whole lap.
     ribbon(latsL, false); ribbon(latsR, true);
-    return { pos, nrm, col, idx: idxArr };
+    return { pos, nrm, col, mat, idx: idxArr };
   }
 
   // A single large flat ground plane under the WHOLE circuit. Street circuits

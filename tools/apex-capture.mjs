@@ -14,7 +14,7 @@
 //   node tools/apex-capture.mjs modes   [outdir]
 //   node tools/apex-capture.mjs tracks  [outdir] [id ...]
 //   node tools/apex-capture.mjs identity [outdir] [id ...]   # aerial+tour+eye
-//   node tools/apex-capture.mjs lap-tour [track] [speed] [outdir]
+//   node tools/apex-capture.mjs lap-tour [track] [speed] [outdir] [weather=wet] [tod=dusk]
 //
 // Env: APEX_WORKERS=N  (default 2 for identity/tracks — 4+ OOMs SwiftShader on laptops)
 // Logs/redirects: use artifacts/tmp/ (never /tmp) — e.g.
@@ -350,9 +350,14 @@ async function main() {
       await staticSrv.kill();
       cleanup = async () => {};
     } else if (cmd === "lap-tour") {
-      const track = rest.find((x) => !x.includes("/") && !x.startsWith(".") && !/^\d/.test(x)) || "monza";
-      const speed = parseFloat(rest.find((x) => /^\d+(\.\d+)?$/.test(x)) || "60");
-      const dir = rest.find((x) => x.includes("/") || x.startsWith(".")) || `${ROOT}/scratch/captures/apex-capture/lap-tour`;
+      const weatherArg = rest.find((x) => x.startsWith("weather="));
+      const todArg = rest.find((x) => x.startsWith("tod="));
+      const positional = rest.filter((x) => !x.startsWith("weather=") && !x.startsWith("tod="));
+      const track = positional.find((x) => !x.includes("/") && !x.startsWith(".") && !/^\d/.test(x)) || "monza";
+      const speed = parseFloat(positional.find((x) => /^\d+(\.\d+)?$/.test(x)) || "60");
+      const dir = positional.find((x) => x.includes("/") || x.startsWith(".")) || `${ROOT}/scratch/captures/apex-capture/lap-tour`;
+      const weather = weatherArg && weatherArg.split("=")[1];
+      const tod = todArg && todArg.split("=")[1];
       mkdirSync(dir, { recursive: true });
       const staticSrv = await startStaticServer();
       const browser = await launchBrowser();
@@ -361,8 +366,16 @@ async function main() {
       await race(page, track);
       await page.evaluate(() => { window.__apex.go(); });
       await sleep(300);
+      if (weather || tod) {
+        await page.evaluate(({ weather, tod }) => {
+          if (weather) window.__apex.weather(weather);
+          if (tod) window.__apex.setTimeOfDay(tod);
+        }, { weather, tod });
+        await sleep(900); // weather/lighting rebuild settle
+      }
       manifest = [];
       const STEPS = 20;
+      const suffix = [weather, tod].filter(Boolean).join("-");
       for (let i = 0; i < STEPS; i++) {
         const frac = i / STEPS;
         await page.evaluate(({ f, s }) => {
@@ -371,7 +384,8 @@ async function main() {
           window.__apex.snapCam && window.__apex.snapCam();
         }, { f: frac, s: speed });
         await sleep(220);
-        manifest.push(await shotPng(page, dir, `${String(i + 1).padStart(2, "0")}-f${frac.toFixed(2)}`));
+        const label = `${String(i + 1).padStart(2, "0")}-f${frac.toFixed(2)}` + (suffix ? `-${suffix}` : "");
+        manifest.push(await shotPng(page, dir, label));
       }
       await browser.close();
       await staticSrv.kill();

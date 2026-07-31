@@ -16,6 +16,7 @@ layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNrm;
 layout(location=2) in vec3 aCol;
 layout(location=3) in float aMat;   // per-vertex material id (0 = FLAT/untextured)
+layout(location=4) in vec3 aTrk;    // road only: (arc-length s, signed lateral x, half-width). (0,0,0) elsewhere.
 uniform mat4 uModel;
 uniform mat4 uViewProj;
 uniform vec3 uEye;
@@ -26,6 +27,7 @@ out vec3 vWorldPos;
 out vec3 vObjPos;
 out float vDist;
 flat out float vMat;
+out vec3 vTrk;        // smooth (NOT flat): the marking SDF needs x/s to vary across the quad
 void main() {
   vec3 pos = aPos;
   // FLAG material (id 15, aMat 15.0..15.4): cloth wind-wave. The FRACTIONAL
@@ -44,6 +46,7 @@ void main() {
   vNrm = mat3(uModel) * aNrm;     // is glued to the panels, not streaming in world.
   vCol = aCol;
   vMat = aMat;                    // constant across the face (flat) — procedural material key
+  vTrk = aTrk;                    // road track-space coords; interpolated across the ribbon
   vDist = length(wp.xyz - uEye);
   gl_Position = uViewProj * wp;
 }`;
@@ -62,6 +65,7 @@ in vec3 vWorldPos;
 in vec3 vObjPos;
 in float vDist;
 flat in float vMat;   // procedural material id (0 = FLAT); textured in applyMaterial()
+in vec3 vTrk;         // road: (s, lateral x, half-width) — drives roadMarkings()
 uniform vec3 uEye;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
@@ -228,6 +232,10 @@ float matBumpHeight(int mid, vec2 uv) {
     return smoothstep(0.0, 0.16, d) * 0.55 + vnoise(uv * 5.0) * 0.15;
   } else if (mid == 14) {  // RUST / CORRUGATED METAL: real sinusoidal corrugation
     return sin(hc * 7.5) * 0.55 + vnoise(uv * 6.0) * 0.10;
+  } else if (mid == 16) {  // ASPHALT: fine aggregate only — no macro relief
+    // Two tight octaves and nothing below ~0.1 m. A low-frequency term here
+    // would read as a rippled/bumpy road under the car and crawl at speed.
+    return vnoise(uv * 9.0) * 0.34 + vnoise(uv * 26.0) * 0.16;
   }
   return 0.0;
 }
@@ -267,12 +275,23 @@ void applyMaterialNormal(int mid, inout vec3 N, float vd) {
     N = normalize(N + (T * (h0 - hx) + vec3(0.0, 1.0, 0.0) * (h0 - hy)) * (amt * bumpFade * aaFade / e));
   } else {
     vec2 p = vWorldPos.xz;
+    // Same grazing-angle guard the wallLike branch uses. Ground materials were
+    // exempt because you normally look DOWN at them — but the road is the one
+    // horizontal surface viewed almost edge-on at 80 m/s, where foreshortening
+    // makes a pixel span many times the probe epsilon and the 3-tap gradient
+    // aliases into crawling moiré. Fading relief by the per-pixel world
+    // footprint is the normal-map analog of mip-fading, and it only ever
+    // REDUCES bump, so head-on grass/sand/rock keep their existing look.
+    float fpG = max(fwidth(p.x), fwidth(p.y));
+    float aaG = clamp(1.0 - (fpG - 0.10) / 0.55, 0.0, 1.0);
+    if (aaG <= 0.005) return;
     float e = 0.22;
     float h0 = matBumpHeight(mid, p);
     float hx = matBumpHeight(mid, p + vec2(e, 0.0));
     float hz = matBumpHeight(mid, p + vec2(0.0, e));
-    float amt = mid == 8 ? 0.16 : mid == 10 ? 0.14 : 0.07;
-    N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade / e));
+    // ASPHALT (16) is deliberately the weakest relief in the table.
+    float amt = mid == 8 ? 0.16 : mid == 10 ? 0.14 : mid == 16 ? 0.025 : 0.07;
+    N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade * aaG / e));
   }
 }
 // Albedo + roughness modulation (unchanged call site: after rough is resolved).
@@ -385,7 +404,61 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     float rust = smoothstep(0.55, 0.9, vnoise(vec2(hc * 0.8, y * 0.35) + 5.0));
     albedo = mix(albedo, albedo * vec3(0.62, 0.42, 0.28), rust * 0.5 * far);
     rough = min(1.0, rough + 0.14 * far);
+  } else if (mid == 16) {    // ASPHALT — aggregate speckle + broad laying/wear patches (markings: roadMarkings())
+    // Deliberately understated: this is the surface under the car for the whole
+    // race, so it gets tone variation rather than pattern. No fract()/sin()
+    // term at all — nothing here can strobe, only soften.
+    // Broad patches read as laying joints / differential wear (mid range).
+    albedo *= 1.0 + (vnoise(wp.xz * 0.035) - 0.5) * 0.10 * far;
+    // Fine aggregate grain, near field only — replaces the per-vertex hash
+    // tint that buildRoad currently bakes in at 4 m node resolution.
+    albedo *= 1.0 + (vnoise(wp.xz * 7.0) - 0.5) * 0.13 * near;
+    // Tarmac is rough; the wet path (which runs after this) still overrides it.
+    rough = min(1.0, rough + 0.10 * far);
   }
+}
+// Road markings, evaluated analytically in TRACK space (s, lateral x, half-width)
+// rather than carried as geometry. The road used to spend four of its fourteen
+// cross-section columns purely on making a hard paint edge — two verts at line
+// colour, then a 5 cm step into asphalt — and the dashed centre line was a
+// per-NODE boolean, floor(s/7) mod 2, evaluated on the ~4 m node grid: a 7 m
+// period point-sampled every 4 m, so the dash lengths beat irregularly against
+// the sampling grid instead of reading as an even 3.5 m on / 3.5 m off.
+//
+// Here the marking is a signed-distance band filtered by fwidth(), so it stays
+// a crisp edge at any distance and any viewing angle, costs no vertices, and
+// cannot alias against the geometry. Gated on half-width so only road geometry
+// paints itself — every other mesh reads aTrk = (0,0,0).
+void roadMarkings(inout vec3 albedo, inout float rough) {
+  float hw = vTrk.z;
+  if (hw <= 0.5) return;                     // not road surface (or no trk attribute)
+  float s = vTrk.x, x = vTrk.y;
+  const vec3 paint = vec3(0.95, 0.95, 0.97);
+
+  // Lateral filter width. Clamped: at a grazing angle fwidth explodes and an
+  // unclamped band would smear the line into a wide grey wash.
+  float aaX = clamp(fwidth(x), 1e-4, 0.30);
+
+  // Edge lines — a 0.20 m band just inside each tarmac edge (matches the old
+  // -w .. -w+0.2 vertex columns).
+  float dEdge = abs(abs(x) - (hw - 0.10));
+  float edge = 1.0 - smoothstep(0.10 - aaX, 0.10 + aaX, dEdge);
+
+  // Dashed centre line — 0.60 m wide, 7 m period, 50% duty. Measuring distance
+  // from the dash CENTRE (0.25 of the period) keeps the band symmetric and
+  // wraps cleanly at the period seam, which a two-smoothstep gate does not.
+  float band = 1.0 - smoothstep(0.30 - aaX, 0.30 + aaX, abs(x));
+  float ph = fract(s / 7.0);
+  float aaS = clamp(fwidth(s) / 7.0, 1e-4, 0.24);
+  float dash = 1.0 - smoothstep(0.25 - aaS, 0.25 + aaS, abs(ph - 0.25));
+
+  // As a marking goes sub-pixel, fade its amplitude rather than let a
+  // half-covered band strobe — the standard minification response.
+  float mip = clamp(1.0 - (aaX - 0.06) / 0.24, 0.0, 1.0);
+  float m = max(edge, band * dash) * mip;
+
+  albedo = mix(albedo, paint, m);
+  rough = mix(rough, 0.55, m);                // paint is smoother than tarmac
 }
 // Cloud cover at a world point: project the point up the sun direction to the
 // cloud deck and sample a drifting FBM — gives moving dappled cloud SHADOWS on
@@ -704,6 +777,8 @@ void main() {
   if (uDetail > 0.0) rough = clamp(rough + (patchM - 0.5) * 0.16 * min(uDetail * 4.0, 1.0), 0.04, 1.0);
   // Procedural per-material surface texture (brick/glass/metal/wood/… ; 0 = FLAT).
   applyMaterial(int(vMat + 0.5), albedo, rough, vDist);
+  // After the material's grain/tint so the paint sits ON the tarmac, not under it.
+  roadMarkings(albedo, rough);
   // Specular anti-aliasing: widen roughness where the normal changes fast in
   // screen space (geometry edges, micro-normal at distance) so thin bright
   // highlights sheen smoothly instead of shimmering pixel-to-pixel.
@@ -720,26 +795,47 @@ void main() {
   // wet/puddle are reused below to brighten lamp reflections + sky env.
   float wet = 0.0;
   float puddle = 0.0;
+  // The specular WATER FILM, as opposed to "this surface is rained on". Every
+  // reflection-side use below must key off this, not plain wet — otherwise soaked
+  // grass still mirrors the lamps and the sky.
+  float wetSheen = 0.0;
   if (uWetness > 0.001) {
     float upFace = smoothstep(0.50, 0.90, N.y);      // flat ground only
+    // Water only SHEETS on a sealed surface. The up-facing test alone put the
+    // same mirror film on the grass verges and the gravel traps as on the
+    // tarmac — flat is flat to a normal test — so a wet lap read as a flooded
+    // canal with cyan banks. Porous ground drinks the water instead: it darkens
+    // (more than tarmac, since wet soil is markedly darker) but never polishes.
+    // This is only expressible now that road/terrain carry material ids.
+    int wmid = int(vMat + 0.5);
+    float porous = (wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11) ? 1.0 : 0.0;
     wet = uWetness * upFace;
     float pn = vnoise(vWorldPos.xz * 0.13 + 4.7);
     // Wide, soft puddle edges so pools BLEND into the wet sheet rather than reading
     // as hard painted ovals.
     puddle = smoothstep(0.48, 0.88, pn) * wet;        // only low spots pool
+    // Porous ground cannot hold standing water — no pooling, and no sheen below.
+    puddle *= 1.0 - porous;
     // Water absorbs light: wet asphalt reads notably darker, puddles a touch darker
     // (not stark, so they don't read as flat dark blobs). WET ROAD DARKEN knob
     // scales the absorption (uWetDark 1 = shipped 0.42 floor, 0 = no darkening).
-    albedo *= mix(1.0, clamp(1.0 - 0.58 * uWetDark, 0.0, 1.0), wet);
+    // Soaked grass/gravel darkens harder than tarmac and that is ALL it does.
+    float absorb = mix(clamp(1.0 - 0.58 * uWetDark, 0.0, 1.0),
+                       clamp(1.0 - 0.42 * uWetDark, 0.0, 1.0), porous);
+    albedo *= mix(1.0, absorb, wet);
     albedo *= mix(1.0, 0.50, puddle);
     // Polish: damp sheen → mirror in the puddles. A wet sheet is glossy but not
     // a perfect mirror except where water actually pools, so the general wet
     // roughness stays moderate (keeps the sun specular a streak, not a flare).
-    rough = mix(rough, 0.15, wet);
-    rough = mix(rough, 0.05, puddle);
+    // 0.15 was mirror-flat and turned the road into a canal; real wet asphalt
+    // keeps visible texture between the pools. Porous ground stays fully matte.
+    wetSheen = wet * (1.0 - porous);
+    rough = mix(rough, 0.30, wetSheen);
+    rough = mix(rough, 0.06, puddle);
     a = rough * rough;
     // Thin water film is a dielectric (~0.03 reflectance) — raise f0 toward it.
-    f0 = mix(f0, vec3(0.04), wet * 0.6);
+    // Only where a film can actually form.
+    f0 = mix(f0, vec3(0.04), wetSheen * 0.6);
   }
 
   vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
@@ -804,7 +900,7 @@ void main() {
     // not only inside its illumination cone. The floor is wetness-dependent:
     // high when wet (streaks from every visible lamp), lower when dry so a dry
     // night road keeps pool/valley contrast instead of a uniform specular sheet.
-    float spotS = mix(mix(0.16, 0.30, wet) * uLampWallSpill, 1.0, beam);   // LAMP WALL SPILL knob (def 1.0 = shipped floor)
+    float spotS = mix(mix(0.16, 0.30, wetSheen) * uLampWallSpill, 1.0, beam);   // LAMP WALL SPILL knob (def 1.0 = shipped floor)
     // Fog in-scatter: lamp irradiance reaching the fog column at this surface.
     // Windowed 1/d2 falloff (att) with a partial out-of-beam floor so the lens
     // glows the fog all around, brightest down the throw. Consumed by the fog
@@ -837,7 +933,7 @@ void main() {
     }
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
-    color += albedo * uLightCol[i] * (att * spotD * lampSh) * NoLl * (1.0 - metalness) * (1.0 - wet * 0.85);
+    color += albedo * uLightCol[i] * (att * spotD * lampSh) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
     // Bounce fill: pool light bounced off the road washes nearby surfaces
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so
@@ -1031,7 +1127,7 @@ void main() {
   // Wetness forces the surface glossy, so this kicks in hard on rainy roads —
   // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
   float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
-  envBlend = max(envBlend, wet * 0.15);   // wet-road reflection is owned by SSR now; keep only a faint env tint
+  envBlend = max(envBlend, wetSheen * 0.15);   // wet-road reflection is owned by SSR now; keep only a faint env tint
   if (envBlend > 0.001) {
     // reflect() computed here, not at the top: envBlend is ~0 for the matte
     // majority of the scene (road/terrain/walls), where Rv was pure waste.
@@ -1049,7 +1145,7 @@ void main() {
     // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
     // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
     // night sun is dim moonlight so this is naturally negligible after dark.
-    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wet) * envBlend * 0.6 * uWindowSunFlash;   // WINDOW SUN FLASH knob (def 1.0 = shipped)
+    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * uWindowSunFlash;   // WINDOW SUN FLASH knob (def 1.0 = shipped)
     // Roughness dampens the env contribution: rough surfaces see a blurry flat sky.
     float roughDamp = 1.0 - rough * 0.7;
     // Fresnel: reflection is strongest at grazing angles. On wet ground square
@@ -1058,8 +1154,8 @@ void main() {
     // Also dim the reflected sky a touch when wet (a wet road is never as bright
     // as the sky it mirrors).
     float envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), 1.0).x;
-    envFresnel = mix(envFresnel, envFresnel * envFresnel, wet);
-    vec3 envWet = envColor * (1.0 - wet * 0.90);   // whisper only on wet; SSR owns the reflection
+    envFresnel = mix(envFresnel, envFresnel * envFresnel, wetSheen);
+    vec3 envWet = envColor * (1.0 - wetSheen * 0.90);   // whisper only on wet; SSR owns the reflection
     // Soft-clip the reflection so a wet road can never blow out to a white sheet
     // (a low dusk/dawn sun + bright twilight sky otherwise push this past 1). A
     // Reinhard shoulder on the brightest channel keeps it bright where the scene
