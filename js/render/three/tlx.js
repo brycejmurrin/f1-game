@@ -96,6 +96,24 @@
  * or the sun lightVP, radial cull OFF — an off-camera building still casts
  * into view. Probe: __tlx.chunkState() = {on, total, visible} from the last
  * presented frame.
+ *
+ * M8 STATUS: the post-processing chain is live (tsl-post.js shaders +
+ * tlx-post.js orchestration): present() renders the world into a full-res
+ * HDR target (+ sampleable depth) and resolves through SSAO (+ bilateral
+ * upsample in the composite), the world-space godray march (sampling the M4
+ * sun/lamp shadow maps — the lamp's armed flag is read by the chain BEFORE
+ * clearArmed()), the bright-pass + 13/9-tap mip-chain bloom, the full
+ * 58-uniform COMPOSITE (parameterised Narkowicz ACES — never three's
+ * tone-mapping —, colour grade, wet-road + car-paint SSR reading the alpha
+ * tag, heat haze, lens dirt/flare, vignette, dither/grain) and FXAA. The lit
+ * core now writes the SSR car tag into alpha (tsl-lit ctx.ssrTag) and
+ * noAlphaWrite/translucent draws preserve dst alpha through the blend stage
+ * (Zero/One alpha factors — the GLX colorMask discipline). hdrMode() is true
+ * when the chain is up on a float target; every block bails per-frame on a
+ * probe-less path (setup preview: no proj/invProj -> no SSAO/SSR/shafts) and
+ * allocates nothing until first enabled. Debug: ?viz=ssao|bloom|shafts|
+ * composite-off bisect views + __tlx.postState(). MSAA stays off (FXAA
+ * carries AA — the GLX mobile-tier recipe; see tlx-post.js header).
  */
 "use strict";
 
@@ -158,6 +176,17 @@ const TLX = (function () {
       unlitMat.colorNode = TSL.attribute("color", "vec3");
       unlitMat.side = THREE.FrontSide;
 
+      // Debug viz mode (?viz=… or localStorage apex26.tlxViz), read BEFORE
+      // the factories: lit viz modes replace the scene material, post viz
+      // modes (M8) route through the chain's bisect blit instead.
+      const vizMode = (function () {
+        try {
+          return new URL(location.href).searchParams.get("viz")
+            || localStorage.getItem("apex26.tlxViz") || null;
+        } catch (_) { return null; }
+      })();
+      const LIT_VIZ = ["mat", "normal", "lamp"];
+
       // ── M4: the three-map shadow subsystem (tlx-shadow.js factory) ───────
       // Created BEFORE the lit core: tsl-lit builds its shadow sampling
       // around the subsystem's depth textures at factory time. Guarded like
@@ -173,15 +202,35 @@ const TLX = (function () {
         shadowSys = null;
       }
 
+      // Shared TSL chunk leaves — consumed by post, lit and sky below.
+      let chunks = null;
+      try {
+        if (window.TLXShaders && TLXShaders.chunks) chunks = TLXShaders.chunks(THREE, TSL);
+      } catch (_) { chunks = null; }
+
+      // ── M8: the post chain (tsl-post.js + tlx-post.js factories) ─────────
+      // Created BEFORE the lit core: lit bakes the SSR alpha-tag write only
+      // when an offscreen HDR target exists to carry it (ctx.ssrTag).
+      // Guarded: missing/broken keeps direct-to-canvas rendering (M7 look).
+      let post = null;
+      try {
+        if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
+          post = TLXShaders.postChain(THREE, TSL,
+            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode });
+          if (post && !post.enabled()) post = null;
+        }
+      } catch (e) {
+        try { console.warn("TLX: post factory failed, direct to canvas —", e); } catch (_) {}
+        post = null;
+      }
+
       // ── M3: the TSL lit core (tsl-chunks.js + tsl-lit.js factories) ──────
       // Guarded: a missing/broken factory keeps the unlit material — the
       // backend must still boot (Gfx.create's never-throw contract).
-      let chunks = null;
       let lit = null;
       try {
-        if (window.TLXShaders && TLXShaders.chunks && TLXShaders.lit) {
-          chunks = TLXShaders.chunks(THREE, TSL);
-          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys });
+        if (window.TLXShaders && chunks && TLXShaders.lit) {
+          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!post });
         }
       } catch (e) {
         try { console.warn("TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
@@ -230,16 +279,12 @@ const TLX = (function () {
         chunkedSys = null;
       }
 
-      // Debug viz mode (?viz=mat|normal|lamp or localStorage apex26.tlxViz):
-      // paints the mat attribute / world normal / raw lamp-loop output — the
-      // bisect views that cracked the spike's black-lamp defect.
-      const vizMode = (function () {
-        try {
-          return new URL(location.href).searchParams.get("viz")
-            || localStorage.getItem("apex26.tlxViz") || null;
-        } catch (_) { return null; }
-      })();
-      const vizMat = (lit && vizMode) ? lit.makeViz(vizMode) : null;
+      // ?viz=mat|normal|lamp paints the mat attribute / world normal / raw
+      // lamp-loop output (the spike's bisect views). Post viz modes (ssao/
+      // bloom/shafts/composite-off) must NOT mint a lit viz material — they
+      // keep the real scene shading and bisect inside the chain instead.
+      const vizMat = (lit && vizMode && LIT_VIZ.indexOf(vizMode) >= 0)
+        ? lit.makeViz(vizMode) : null;
 
       // ── material cache: GLX per-draw opts -> material variant ────────────
       // (see the M3 STATUS note in the header for why a cache, not per-draw
@@ -363,6 +408,16 @@ const TLX = (function () {
       // frame's camera is final.
       const _frameVP = new Float32Array(16);
       let frameCullDist = 0;        // frame.cullDist — the radial draw cap (0 = off)
+      // ── M8: frame state the post chain consumes at present() (the GLX
+      // frameInvProj/frameInvVP/frameSunVS/… latch — glx.js:666-682). All
+      // POINTERS into the game's stable per-frame arrays; nulled every
+      // begin() so a probe-less path (setup preview, menus) self-disables
+      // SSAO/SSR/godray rather than reconstructing with stale matrices. ─────
+      const _postF = {
+        proj: null, invProj: null, invVP: null, sunVS: null, upVS: null,
+        skyHi: null, skyLo: null, viewProj: null, sunDir: null, sunColor: null,
+        eye: null, time: 0, cloud: 0, cloudSpeed: 1, lights: null,
+      };
       const _chunkFrame = { total: 0, visible: 0 };   // reset each begin
       const _chunkLast = { total: 0, visible: 0 };    // latched at present — __tlx.chunkState()
       const _mirrorRelease = [];    // chunked meshes whose first lit draw is THIS render
@@ -413,6 +468,9 @@ const TLX = (function () {
         if (w !== W || h !== H) {
           W = w; H = h;
           renderer.setSize(w, h, false);    // false: CSS keeps sizing the canvas
+          // M8: the post targets track the scaled backing size (PerfGov
+          // renderScale changes land here through setRenderScale -> resize).
+          if (post) post.resize(w, h);
         }
       }
 
@@ -435,7 +493,7 @@ const TLX = (function () {
         get width() { return W; },
         get height() { return H; },
         get aspect() { return H ? W / H : 1; },
-        hdrMode() { return false; },         // truthful: direct-to-canvas 8-bit until M8's HDR post chain
+        hdrMode() { return !!(post && post.hdrOk()); },   // M8: float scene target when the chain is up
         msaa() { return 1; },
         pcss() { return false; },            // truthful: blocker map skipped (TODO M4-PCSS, tlx-shadow.js)
         isMobile,
@@ -550,6 +608,23 @@ const TLX = (function () {
           // M7: latch the cull frustum + radial cap for present()'s chunk cull.
           if (frame && frame.viewProj) _frameVP.set(frame.viewProj);
           frameCullDist = (frame && frame.cullDist) || 0;
+          // M8: latch the post chain's frame inputs (glx.js:666-682). The
+          // viewProj is the _frameVP COPY — immune to a swapped frame array.
+          _postF.proj = (frame && frame.proj) || null;
+          _postF.invProj = (frame && frame.invProj) || null;
+          _postF.invVP = (frame && frame.invViewProj) || null;
+          _postF.sunVS = (frame && frame.sunViewDir) || null;
+          _postF.upVS = (frame && frame.upViewDir) || null;
+          _postF.skyHi = (frame && frame.skyHorizon) || null;
+          _postF.skyLo = (frame && frame.skyZenith) || null;
+          _postF.viewProj = (frame && frame.viewProj) ? _frameVP : null;
+          _postF.sunDir = (frame && frame.sunDir) || null;
+          _postF.sunColor = (frame && frame.sunColor) || null;
+          _postF.eye = (frame && frame.eye) || null;
+          _postF.time = (frame && frame.time != null) ? frame.time : 0;
+          _postF.cloud = (frame && frame.cloud != null) ? frame.cloud : 0;
+          _postF.cloudSpeed = (frame && frame.cloudSpeed != null) ? frame.cloudSpeed : 1;
+          _postF.lights = (frame && frame.lights) || null;
           _chunkFrame.total = 0; _chunkFrame.visible = 0;
           _fxMatUsed = 0;
           _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
@@ -686,7 +761,7 @@ const TLX = (function () {
                           mat: fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0) });
           _fxFrame.decals++;
         },
-        present() {
+        present(opts) {
           poolUsed = 0;
           // renderOrder = submission index: three sorts opaque and transparent
           // lists by renderOrder first, so caller order (the GLX contract)
@@ -715,7 +790,19 @@ const TLX = (function () {
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
           }
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
-          renderer.render(scene, camera);
+          // M8: with the post chain up, the world (opaques, sky background
+          // node, transparent FX — glow/particles feed bloom) renders into
+          // the HDR scene target; the chain resolves it to the canvas. The
+          // chain reads the lamp shadow map + its armed flag BEFORE
+          // clearArmed() below retires them (godrays sample the spot map).
+          if (post) {
+            renderer.setRenderTarget(post.sceneTarget());
+            renderer.render(scene, camera);
+            post.present(opts, _postF);
+          } else {
+            renderer.setRenderTarget(null);
+            renderer.render(scene, camera);
+          }
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
           // M7 staged release, final stage: the render above created the GPU
           // buffers for any first-drawn chunked mesh — drop its shared vertex
@@ -743,6 +830,13 @@ const TLX = (function () {
           get shadow() { return shadowSys; },
           get sky() { return sky; },
           get fx() { return fx; },
+          get post() { return post; },
+          // M8 probe: chain liveness + which blocks ran on the last presented
+          // frame + the current target size — what the M8 tests assert.
+          postState() {
+            if (!post) return { on: false, hdr: false, blocks: {}, targets: [0, 0] };
+            return post.state();
+          },
           // M6 probe: FX record counts from the last presented frame (blob
           // shadows, per-mark stamps, skid batch verts, glare halos, live
           // particles, decal draws) — what the M6 tests assert against.
