@@ -237,6 +237,19 @@ body.hud-hidden #hud-restore { display: block; }
   border-top: 1px solid rgba(255,255,255,0.06);
 }
 #howtoplay dd:first-of-type { border-top: none; }
+/* Wide and short (a landscape phone) is the case this screen is worst at: one
+   tall term/description column ran ~2.5 screens deep, so every answer was a
+   scroll away. Given the room, take TWO pairs per row instead of one.
+   Deliberately a wider grid and not `columns: 2`: this <dl> IS the .sheet-body
+   scroll container, and multicol inside a height-constrained scroller lays its
+   overflow columns out SIDEWAYS — it fragmented the help into seven columns
+   2371px wide instead of two. A grid keeps the flow vertical. */
+@container sheet (min-width: 620px) {
+  #howtoplay dl {
+    grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
+    column-gap: 18px;
+  }
+}
 .key {
   display: inline-block;
   border: 1px solid rgba(255, 255, 255, 0.4);

@@ -35,11 +35,30 @@ window.ScrollFade = (function () {
   const watched = new WeakSet();
   let timer = 0;
 
+  const MIN_THUMB = 24;        // px: a 2px sliver would be unreadable as a position
+
   function paint(el) {
     const max = el.scrollHeight - el.clientHeight;
     const scrollable = max > EDGE;
     el.classList.toggle("sf-t", scrollable && el.scrollTop > EDGE);
     el.classList.toggle("sf-b", scrollable && el.scrollTop < max - EDGE);
+    // THE SCROLL POSITION INDICATOR. Touch platforms only show their own
+    // scrollbar mid-gesture, so a panel gives no standing answer to "how much
+    // is there, and where am I?" — the fade says there IS more, never how much.
+    // These two custom properties are the whole geometry of a scrollbar thumb;
+    // CSS draws it (see .sf-scroll in css/components.css).
+    el.classList.toggle("sf-scroll", scrollable);
+    if (scrollable) {
+      const track = el.clientHeight;
+      // proportional height, floored so a very long list still has a visible grip
+      const thumb = Math.max(MIN_THUMB, Math.round(track * track / el.scrollHeight));
+      const y = Math.round((el.scrollTop / max) * (track - thumb));
+      el.style.setProperty("--sf-h", thumb + "px");
+      el.style.setProperty("--sf-y", y + "px");
+    } else {
+      el.style.removeProperty("--sf-h");
+      el.style.removeProperty("--sf-y");
+    }
   }
 
   function paintAll() {
