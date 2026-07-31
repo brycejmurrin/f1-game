@@ -55,8 +55,19 @@
  * game.js), per-frame car map (1024², desktop) and nearest-floodlight spot
  * map (512², desktop), sampled in tsl-lit via hardware-compare depth taps.
  * Armed flags clear in present() like GLX's post present. PCSS blocker map
- * skipped (pcss() = false — TODO M4-PCSS in tlx-shadow.js). No sky / post
- * yet (M5/M8).
+ * skipped (pcss() = false — TODO M4-PCSS in tlx-shadow.js).
+ *
+ * M5 STATUS: the procedural sky is live (tsl-sky.js, TLXShaders.sky — the
+ * full SKY_FS port: gradient/golden hour, clouds, sun corona+disc, stars,
+ * moon, city glow, lightning, dither). Delivered as scene.backgroundNode:
+ * three renders it on its internal camera-following background mesh (depth
+ * off, drawn first, z pinned to the far plane — GLX's exact draw order) and
+ * the node reconstructs the per-pixel view ray from frameSky.invViewProj
+ * (screenUV -> NDC -> both z planes), identical to SKY_VS. begin() clears
+ * backgroundNode each frame; drawSky() re-arms it — so the no-track/menu
+ * path keeps the flat fogColor clear, and the env-probe double-call (M9)
+ * just overwrites uniforms (last drawSky before render wins). No post yet
+ * (M8).
  */
 "use strict";
 
@@ -137,15 +148,31 @@ const TLX = (function () {
       // ── M3: the TSL lit core (tsl-chunks.js + tsl-lit.js factories) ──────
       // Guarded: a missing/broken factory keeps the unlit material — the
       // backend must still boot (Gfx.create's never-throw contract).
+      let chunks = null;
       let lit = null;
       try {
         if (window.TLXShaders && TLXShaders.chunks && TLXShaders.lit) {
-          const chunks = TLXShaders.chunks(THREE, TSL);
+          chunks = TLXShaders.chunks(THREE, TSL);
           lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys });
         }
       } catch (e) {
         try { console.warn("TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
         lit = null;
+      }
+
+      // ── M5: the procedural sky (tsl-sky.js factory) ──────────────────────
+      // Guarded like the others: missing/broken keeps drawSky a no-op and the
+      // flat scene.background clear (the M4 look). Shares ctx.chunks for
+      // ignoise; the sky-family hash/vnoise/fbm live inside tsl-sky.js.
+      let sky = null;
+      try {
+        if (window.TLXShaders && TLXShaders.sky) {
+          if (!chunks && TLXShaders.chunks) chunks = TLXShaders.chunks(THREE, TSL);
+          sky = TLXShaders.sky(THREE, TSL, { chunks });
+        }
+      } catch (e) {
+        try { console.warn("TLX: sky factory failed, flat clear only —", e); } catch (_) {}
+        sky = null;
       }
 
       // Debug viz mode (?viz=mat|normal|lamp or localStorage apex26.tlxViz):
@@ -358,10 +385,23 @@ const TLX = (function () {
           // M3: push the frame + tune uniforms (sun/ambient/fog/wetness/knobs
           // + the stride-15 lamp arrays, capped 32) into the shared lit set.
           if (lit && frame) lit.updateFrame(frame);
+          // M5: sky is opt-in PER FRAME — a frame that issues no drawSky
+          // (menus, no-track) keeps the flat fogColor clear above.
+          scene.backgroundNode = null;
           drawList.length = 0;
           return true;
         },
-        drawSky() {},
+        // M5: update the sky uniforms from whatever frameSky carries and arm
+        // the background node for this frame's render. game.js may call this
+        // twice per frame (env-probe pass with a swapped invViewProj, then
+        // the main pass with the restored one — game.js:3744/3759); the env
+        // face is skipped on TLX until M9 (envFaceBegin -> null), and even
+        // when it lands, the LAST update before render owns the uniforms.
+        drawSky(frameSky) {
+          if (!sky || !frameSky) return;
+          sky.update(frameSky);
+          scene.backgroundNode = sky.node;
+        },
         draw(mesh, model, opts) {
           if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model, mat: materialFor(opts, false) });
         },
@@ -391,6 +431,17 @@ const TLX = (function () {
           renderer, THREE, TSL,
           get lit() { return lit; },
           get shadow() { return shadowSys; },
+          get sky() { return sky; },
+          // M5 probe: is the sky armed for the current frame, and what did
+          // the last drawSky upload? (tests assert the night/day gates here)
+          skyState() {
+            return {
+              on: !!(sky && scene.backgroundNode),
+              stars: sky ? sky.uniforms.stars.value : -1,
+              cloud: sky ? sky.uniforms.cloud.value : -1,
+              sunDir: sky ? sky.uniforms.sunDir.value.toArray() : null,
+            };
+          },
           viz: vizMode,
           materialCacheSize() { return matCache.size; },
           async shader(idx = 0) {

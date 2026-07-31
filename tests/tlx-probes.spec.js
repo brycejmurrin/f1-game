@@ -96,6 +96,32 @@ test.describe("TLX — boot", () => {
     expect(errors).toEqual([]);
   });
 
+  test("M5 sky arms on a race frame and honours the night gate", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.evaluate(() => window.__apex.park(0.1));
+    await page.waitForTimeout(400);
+    const day = await page.evaluate(() => GLX.__tlx.skyState());
+    // Day race: the background node is armed each frame, stars flag off.
+    expect(day.on).toBe(true);
+    expect(day.stars).toBe(0);
+    expect(day.sunDir[1]).toBeGreaterThan(0);   // sun above the horizon
+    // Night: uStars flips to 1 (SKY_FS's nightSky gate keys off it — the sun
+    // disc must never paint among the stars even though sunDir stays high).
+    await page.evaluate(() => window.__apex.setTimeOfDay("night"));
+    // The day->night flip rebuilds scenery before the next sky frame lands —
+    // wait on the uniform, not a fixed sleep (SwiftShader rebuilds are slow).
+    await page.waitForFunction(() => GLX.__tlx.skyState().stars === 1, { timeout: 60_000 });
+    const night = await page.evaluate(() => GLX.__tlx.skyState());
+    expect(night.on).toBe(true);
+    expect(night.stars).toBe(1);
+    expect(errors).toEqual([]);
+  });
+
   test("menu is reachable and canvas is sized (no-track begin/present path)", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
