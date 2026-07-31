@@ -245,6 +245,131 @@ test.describe("field()", () => {
   });
 });
 
+// ── describe() / query() — the drill-down layer ──────────────────────────────
+// The detail model: the world stays STORED in full, and the agent PULLS detail
+// by id. Flat-serialising a rich scene is both infeasible and less accurate than
+// querying it, and Monza registers ~2835 props — so these two verbs are how
+// "highly detailed" is delivered without a dump.
+
+test.describe("describe()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("expands a scene() row into everything known about that prop", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => {
+      const sc = window.__apex.scene({ radius: 140, limit: 5 });
+      const row = sc.props[0];
+      return { row, d: window.__apex.describe(row.id) };
+    });
+    // scene rows must carry a stable id, or drill-down is unreachable
+    expect(r.row.id).toMatch(/^prop:\d+$/);
+    expect(r.d.id).toBe(r.row.id);
+    expect(r.d.type).toBe("prop");
+    expect(r.d.kind).toBe(r.row.kind);
+    // the expansion adds what the list row omits
+    expect(r.d.world.length).toBe(3);
+    expect(r.d.sizeM.length).toBe(3);
+    expect(typeof r.d.volumeM3).toBe("number");
+    expect(typeof r.d.s).toBe("number");
+    // and anchors it to a corner, by id — so ids cross-reference
+    expect(r.d.nearestCorner.id).toMatch(/^corner:/);
+    // one entity stays cheap
+    expect(JSON.stringify(r.d).length).toBeLessThan(1200);
+  });
+
+  test("resolves corner, car and span ids", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => {
+      const turn = window.__apex.trackInfo({ what: "corners" }).corners[2].turn;
+      return { c: window.__apex.describe("corner:" + turn),
+               car: window.__apex.describe("car:0"),
+               turn };
+    });
+    expect(r.c.type).toBe("corner");
+    expect(r.c.corner.turn).toBe(r.turn);
+    // a corner knows what stands around it
+    expect(typeof r.c.sceneryWithin80m).toBe("object");
+    expect(r.car.type).toBe("car");
+    expect(r.car.team === null || typeof r.car.team === "string").toBe(true);
+    expect(["ahead", "behind", "self"]).toContain(r.car.rel);
+  });
+
+  test("unknown ids are typed errors that say how to find a real one", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => ({
+      missing: window.__apex.describe("prop:999999"),
+      badKind: window.__apex.describe("banana:1"),
+      empty: window.__apex.describe(),
+    }));
+    expect(r.missing.ok).toBe(false);
+    expect(r.missing.error).toBe("NotFoundError");
+    expect(r.missing.fix).toMatch(/indexed|scene\(\)|query\(\)/);
+    expect(r.badKind.ok).toBe(false);
+    expect(r.badKind.error).toBe("BadArgumentError");
+    expect(r.empty.ok).toBe(false);
+  });
+});
+
+test.describe("query()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("returns prototype + instances, not N near-identical records", async ({ page }) => {
+    await load(page);
+    const q = await page.evaluate(() =>
+      window.__apex.query({ kind: "pine", near: 250, limit: 8 }));
+    expect(q.matched).toBeGreaterThan(0);
+    expect(q.instances.length).toBeGreaterThan(0);
+    expect(q.instances.length).toBeLessThanOrEqual(8);
+    // the prototype carries the shape once...
+    expect(q.prototypes.pine.sizeM.length).toBe(3);
+    // ...so a typical instance does NOT repeat it
+    const plain = q.instances.filter((r) => !r.sizeM);
+    expect(plain.length).toBeGreaterThan(0);
+    for (const r of q.instances) {
+      expect(r.id).toMatch(/^prop:\d+$/);
+      expect(r.kind).toBe("pine");
+    }
+  });
+
+  test("is bounded and reports what it withheld", async ({ page }) => {
+    await load(page);
+    const q = await page.evaluate(() => window.__apex.query({ limit: 5 }));
+    expect(q.returned).toBeLessThanOrEqual(5);
+    // never a silent truncation — the caller is told how much it did not get
+    expect(q.matched).toBeGreaterThanOrEqual(q.returned);
+    expect(q.truncated).toBe(q.matched - q.returned);
+    // a bounded pull stays small even on a 2835-prop circuit
+    expect(JSON.stringify(q).length).toBeLessThan(4000);
+  });
+
+  test("filters compose: kind, arc window, radius", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => ({
+      win: window.__apex.query({ fromS: 0, toS: 300, limit: 50 }),
+      near: window.__apex.query({ near: 60, limit: 50 }),
+    }));
+    // every row of an arc-window query sits inside the window
+    for (const row of r.win.instances) {
+      expect(row.s).toBeGreaterThanOrEqual(0);
+      expect(row.s).toBeLessThanOrEqual(300);
+    }
+    // every row of a radius query sits inside the radius
+    for (const row of r.near.instances) expect(row.distM).toBeLessThanOrEqual(60);
+  });
+
+  test("ids from query resolve through describe", async ({ page }) => {
+    await load(page);
+    const ok = await page.evaluate(() => {
+      const q = window.__apex.query({ near: 200, limit: 3 });
+      return q.instances.every((r) => {
+        const d = window.__apex.describe(r.id);
+        return d.ok !== false && d.id === r.id && d.kind === r.kind;
+      });
+    });
+    expect(ok).toBe(true);
+  });
+});
+
 // ── delta mode ──────────────────────────────────────────────────────────────
 
 test.describe("world() delta mode", () => {

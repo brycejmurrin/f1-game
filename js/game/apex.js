@@ -1506,6 +1506,18 @@ const api = {
   // the CAMERA can see — the on-screen frustum list that used to be visible().
   scene(opts) { return agentView.scene(opts); },
 
+  // describe(id) — EVERYTHING known about one entity, by stable id:
+  // "prop:12" | "corner:T3" | "car:4" | "span:2". The drill-down half of the
+  // detail model — unbounded detail about ONE thing is cheap; the ids come back
+  // from scene()/query()/trackInfo()/field().
+  describe(id) { return agentView.describe(id); },
+
+  // query({kind, near, fromS, toS, limit}?) — a bounded SLICE of the world.
+  // Filters compose (kind, radius around the car, arc-position window); the
+  // answer is capped, id-bearing, and returned as prototype + instances so
+  // hundreds of near-identical props cost a shape plus a position each.
+  query(opts) { return agentView.query(opts); },
+
   // visible({limit}?) — DEPRECATED alias for scene({visible:true}): scenery
   // chunks in the camera frustum, every car with distance/bearing/screen
   // position, and corners in view. Needs a rendered frame — typed NoFrameError

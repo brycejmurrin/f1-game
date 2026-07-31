@@ -1986,6 +1986,257 @@ const AgentView = (function () {
       return modelCache.m;
     }
 
+    // ── stable ids + describe() — the drill-down spine ───────────────────────
+    // The research settles how to render a world in HIGH detail: not one big
+    // dump. Flat-serialising a rich scene graph runs to millions of tokens and
+    // scores WORSE than exposing it queryably, and thousands of near-identical
+    // props are the worst case for context rot. Monza alone registers ~2835
+    // props. So the world stays STORED in full and the agent PULLS detail:
+    // every entity gets a stable id, and describe(id) returns everything known
+    // about exactly that one thing.
+    //
+    // Ids are derived, not stored, so they survive a rebuild and cost nothing:
+    //   prop:<index>   corner:<turn>   car:<id>   span:<index>
+    function propId(i) { return "prop:" + i; }
+
+    function parseId(id) {
+      const s = String(id == null ? "" : id);
+      const c = s.indexOf(":");
+      return c < 0 ? { kind: s, ref: "" } : { kind: s.slice(0, c), ref: s.slice(c + 1) };
+    }
+
+    // Everything known about one entity, by id. Bounded by construction — one
+    // entity, all of its fields — which is the point: unbounded detail about
+    // ONE thing is cheap, unbounded detail about everything is the failure mode.
+    function describe(idOrOpts) {
+      const bad = notReady();
+      if (bad) return bad;
+      const o = (idOrOpts && typeof idOrOpts === "object") ? idOrOpts : { id: idOrOpts };
+      if (o.id == null || o.id === "") {
+        return fail("BadArgumentError", "describe(id) needs an id",
+                    'ids look like "prop:12", "corner:T3", "car:4", "span:2" — '
+                    + "scene()/trackInfo()/field() return them");
+      }
+      const { kind, ref } = parseId(o.id);
+      const track = G.track, total = track.total;
+
+      if (kind === "corner") {
+        const want = String(ref).toUpperCase();
+        const c = corners().find((x) => x.turn.toUpperCase() === want);
+        if (!c) {
+          return fail("NotFoundError", 'no corner "' + ref + '" on ' + track.def.id,
+                      'call trackInfo({what:"corners"}) for the turn ids');
+        }
+        const m = model();
+        const near = m.pts.filter((q) => {
+          let d = q.s - c.s; if (d > total / 2) d -= total; if (d < -total / 2) d += total;
+          return Math.abs(d) <= 80;
+        });
+        const byKind = {};
+        for (const q of near) byKind[q.p.kind] = (byKind[q.p.kind] || 0) + 1;
+        return {
+          apiVersion: API_VERSION, id: "corner:" + c.turn, type: "corner",
+          corner: c,
+          sceneryWithin80m: byKind,
+          note: "the full corner record plus what stands within 80 m of its apex",
+        };
+      }
+
+      if (kind === "car") {
+        const idx = Number(ref);
+        const car = G.cars.find((c, i) => (c.id != null ? c.id : i) === idx);
+        if (!car) {
+          return fail("NotFoundError", "no car " + ref,
+                      "call field() for the grid and its car ids");
+        }
+        const p = G.player;
+        const gap = (car.prog || 0) - (p.prog || 0);
+        return {
+          apiVersion: API_VERSION, id: "car:" + idx, type: "car",
+          code: car.code || null, name: car.name || null, team: teamIdOf(car),
+          isPlayer: !!car.isPlayer,
+          lap: car.lap || 0, frac: +((car.s || 0) / total).toFixed(4), s: r1(car.s || 0),
+          speedKph: r1((car.speed || 0) * 3.6), lateralM: r2(car.x || 0),
+          onKerb: !!car.onKerb, gapToPlayerM: car.isPlayer ? 0 : r1(gap),
+          rel: car.isPlayer ? "self" : gap >= 0 ? "ahead" : "behind",
+          finished: !!car.finished,
+        };
+      }
+
+      if (kind === "span") {
+        const idx = Number(ref);
+        const sp = (track.props && track.props.spans) || [];
+        if (!(idx >= 0 && idx < sp.length)) {
+          return fail("NotFoundError", "no span " + ref,
+                      "spans are indexed 0.." + Math.max(0, sp.length - 1)
+                      + '; call render({what:"circuit"}) to list them');
+        }
+        const s = sp[idx];
+        return {
+          apiVersion: API_VERSION, id: "span:" + idx, type: "span",
+          kind: s.kind, side: sideOf(s.side),
+          fromS: r1(s.s0), toS: r1(s.s1), lengthM: r1(Math.abs(s.s1 - s.s0)),
+          fromFrac: +(s.s0 / total).toFixed(4), toFrac: +(s.s1 / total).toFixed(4),
+          heightM: s.h != null ? r1(s.h) : null,
+          gapM: s.gap != null ? r1(s.gap) : null,
+          note: "linear furniture recorded as a span, not per segment",
+        };
+      }
+
+      if (kind === "prop") {
+        const idx = Number(ref);
+        const list = (track.props && track.props.list) || [];
+        if (!(idx >= 0 && idx < list.length)) {
+          return fail("NotFoundError", "no prop " + ref,
+                      "props are indexed 0.." + Math.max(0, list.length - 1)
+                      + "; call scene() or query() for ids near you");
+        }
+        const p = list[idx];
+        const pos = propPos(p);
+        const out = {
+          apiVersion: API_VERSION, id: propId(idx), type: "prop",
+          kind: p.kind,
+          world: [r1(p.x), r1(p.y), r1(p.z)],
+          sizeM: [r1(p.w), r1(p.h), r1(p.d)],
+          volumeM3: r1(p.w * p.h * p.d),
+          s: r1(pos.s), frac: +(pos.s / total).toFixed(4),
+          side: p.side != null ? sideOf(p.side)
+              : pos.lat == null ? "off-course" : pos.lat > 0 ? "right" : "left",
+          lateralM: pos.lat == null ? null : r1(pos.lat),
+          measured: !!p.measured, parts: p.parts != null ? p.parts : null,
+          fill: p.fill != null ? r2(p.fill) : null,
+        };
+        if (p.board) out.boardText = p.board;
+        if (p.value != null) out.value = p.value;
+        // Where it sits relative to the car, when there is one — the same
+        // egocentric framing scene() uses, so ids cross-reference cleanly.
+        if (G.player && G.player.px != null) {
+          const dx = p.x - G.player.px, dz = p.z - G.player.pz;
+          out.distM = r1(Math.hypot(dx, dz));
+          out.bearingDeg = r1(angDiff(Math.atan2(dx, dz), G.player.head) * 180 / Math.PI);
+        }
+        // Which corner it stands by — the anchor a driver would actually use.
+        const cs = corners();
+        if (cs.length) {
+          let best = null, bestD = Infinity;
+          for (const c of cs) {
+            let d = pos.s - c.s;
+            if (d > total / 2) d -= total; if (d < -total / 2) d += total;
+            if (Math.abs(d) < Math.abs(bestD)) { bestD = d; best = c; }
+          }
+          if (best) {
+            out.nearestCorner = { id: "corner:" + best.turn, turn: best.turn,
+                                  alongM: r1(bestD) };
+          }
+        }
+        return out;
+      }
+
+      return fail("BadArgumentError", 'unknown id kind "' + kind + '"',
+                  'ids are "prop:<n>", "corner:<turn>", "car:<n>" or "span:<n>"');
+    }
+
+    // ── query() — pull a bounded subgraph ────────────────────────────────────
+    // The other half of drill-down: ask for a SLICE of the world rather than the
+    // whole thing. Filters compose — kind, an arc-position window, a radius
+    // around the car — and the answer is always capped and id-bearing so the
+    // agent can follow up with describe().
+    //
+    // Repeated dressing is returned PROTOTYPE + INSTANCES, not N near-identical
+    // records: one shape/size for the kind, then a compact row per instance.
+    // Semantic similarity is what drives context rot, so collapsing 400 pines
+    // into "this is what a pine is" + 400 positions is both the token win and
+    // the accuracy win.
+    function query(opts) {
+      const bad = notReady();
+      if (bad) return bad;
+      const o = opts || {};
+      const track = G.track, total = track.total;
+      const reg = track.props;
+      if (!reg) {
+        return fail("NoRegistryError", "this track was built without a prop registry",
+                    'reload the track with __apex.race("<id>")');
+      }
+      const cap = clamp(o.limit | 0 || 40, 1, 400);
+      const kinds = o.kind ? (Array.isArray(o.kind) ? o.kind : [o.kind]) : null;
+
+      // near: metres around the car. from/to: an arc-position window in metres.
+      const nearM = o.near != null ? Math.max(1, +o.near) : null;
+      const hasWin = o.fromS != null && o.toS != null;
+      const s0 = hasWin ? wrapS(+o.fromS) : 0, s1 = hasWin ? wrapS(+o.toS) : 0;
+      const inWindow = (s) => {
+        if (!hasWin) return true;
+        return s0 <= s1 ? (s >= s0 && s <= s1) : (s >= s0 || s <= s1);
+      };
+      const px = G.player.px, pz = G.player.pz, head = G.player.head;
+
+      const hits = [];
+      for (let i = 0; i < reg.list.length; i++) {
+        const p = reg.list[i];
+        if (kinds && kinds.indexOf(p.kind) < 0) continue;
+        const pos = propPos(p);
+        if (!inWindow(pos.s)) continue;
+        const dx = p.x - px, dz = p.z - pz;
+        const d = Math.hypot(dx, dz);
+        if (nearM != null && d > nearM) continue;
+        hits.push({ i, p, pos, d,
+                    bearingDeg: r1(angDiff(Math.atan2(dx, dz), head) * 180 / Math.PI) });
+      }
+      hits.sort((a, b) => (nearM != null ? a.d - b.d : a.pos.s - b.pos.s));
+      const total_ = hits.length;
+      const page = hits.slice(0, cap);
+
+      // Prototype per kind: the median-ish size, so an instance row can be just
+      // a position. Instances that differ materially carry their own size.
+      const protos = {};
+      for (const h of page) {
+        const k = h.p.kind;
+        (protos[k] || (protos[k] = [])).push(h.p);
+      }
+      const prototypes = {};
+      for (const k of Object.keys(protos)) {
+        const arr = protos[k];
+        const mid = arr[Math.floor(arr.length / 2)];
+        prototypes[k] = { sizeM: [r1(mid.w), r1(mid.h), r1(mid.d)], count: arr.length };
+      }
+
+      const instances = page.map((h) => {
+        const row = {
+          id: propId(h.i), kind: h.p.kind,
+          s: r1(h.pos.s),
+          side: h.p.side != null ? sideOf(h.p.side)
+              : h.pos.lat == null ? "off-course" : h.pos.lat > 0 ? "right" : "left",
+          distM: r1(h.d), bearingDeg: h.bearingDeg,
+        };
+        // Only carry a size when it differs from the prototype by >25% on any
+        // axis — otherwise the prototype already said it.
+        const pr = prototypes[h.p.kind].sizeM;
+        const dv = [h.p.w, h.p.h, h.p.d];
+        for (let a = 0; a < 3; a++) {
+          if (pr[a] > 0.01 && Math.abs(dv[a] - pr[a]) / pr[a] > 0.25) {
+            row.sizeM = [r1(dv[0]), r1(dv[1]), r1(dv[2])];
+            break;
+          }
+        }
+        if (h.p.board) row.boardText = h.p.board;
+        return row;
+      });
+
+      return {
+        apiVersion: API_VERSION, seq: ++seq, conventions: CONVENTIONS,
+        filter: { kind: kinds, near: nearM, fromS: hasWin ? r1(s0) : null,
+                  toS: hasWin ? r1(s1) : null, limit: cap },
+        matched: total_, returned: instances.length,
+        truncated: total_ > instances.length ? total_ - instances.length : 0,
+        prototypes,
+        instances,
+        note: "prototypes give the shape per kind; an instance repeats sizeM only "
+              + "when it differs >25%. Call describe(id) for everything about one. "
+              + "Results are capped — narrow with kind/near/fromS+toS rather than "
+              + "raising limit",
+      };
+    }
+
     // Which corner-to-corner section an arc position falls in.
     function sectionsOf(list, total) {
       if (!list.length) return [{ from: "start", to: "start", s0: 0, s1: total }];
@@ -2429,13 +2680,17 @@ const AgentView = (function () {
 
       const byKind = {};
       const near = [];
-      for (const p of reg.list) {
+      for (let pi = 0; pi < reg.list.length; pi++) {
+        const p = reg.list[pi];
         byKind[p.kind] = (byKind[p.kind] || 0) + 1;
         if (kinds && kinds.indexOf(p.kind) < 0) continue;
         const dx = p.x - ox, dz = p.z - oz;
         if (dx * dx + dz * dz > radius * radius) continue;      // cheap reject
         const rr = rel(p.x, p.z);
-        near.push({ kind: p.kind, distM: rr.distM, bearingDeg: rr.bearingDeg,
+        // The stable id is the registry index — derived, not stored, so it
+        // survives a rebuild and costs nothing. describe(id) expands any row.
+        near.push({ id: propId(pi),
+                    kind: p.kind, distM: rr.distM, bearingDeg: rr.bearingDeg,
                     side: rr.bearingDeg > 8 ? "right" : rr.bearingDeg < -8 ? "left" : "ahead",
                     sizeM: [p.w, p.h, p.d], at: [p.x, p.y, p.z],
                     // whether sizeM came from the emitted geometry or the call
@@ -2700,8 +2955,8 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, field, trackInfo, scene, carView, render, survey, rollout,
-             agentHelp, corners, terminal,
+    return { world, field, trackInfo, scene, describe, query, carView, render,
+             survey, rollout, agentHelp, corners, terminal,
              // deprecated aliases — prefer render({what}) and scene({visible})
              visible, worldModel, frame, plan,
              API_VERSION, PHYSICS_VERSION };
