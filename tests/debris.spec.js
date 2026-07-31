@@ -48,6 +48,10 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
     }, { timeout: 30000 });
     const r = await page.evaluate(() => {
       window.__apex.jump(0.1, 40, 0);
+      // The world runs the WASM solve only when something dynamic is in play
+      // (idle fast-path skips it — that's the mobile-smoothness optimisation).
+      // Spawn a seeded burst so the side-world actually steps this check.
+      window.__apex.debris({ burst: 4, sev: 8 });
       window.__apex.step(1 / 60, 30);   // pump real physics ticks
       const st = window.__apex.debris();
       return {
@@ -56,6 +60,7 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
         ready: st.ready,
         error: st.error,
         stepped: st.stepped,
+        live: st.live,
         rapierFetches: performance.getEntriesByType("resource")
           .filter((e) => e.name.includes("rapier")).length,
       };
@@ -64,7 +69,8 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
     expect(r.active).toBe(true);        // the one boolean game.js reads — on by default
     expect(r.enabled).toBe(true);
     expect(r.ready).toBe(true);
-    expect(r.stepped).toBeGreaterThan(0);   // the side-world stepped in lockstep
+    expect(r.stepped).toBeGreaterThan(0);   // the burst made the side-world step
+    expect(r.live).toBeGreaterThan(0);      // and spawn debris
     expect(r.rapierFetches).toBeGreaterThan(0);
   });
 
