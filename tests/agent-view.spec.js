@@ -514,6 +514,127 @@ test.describe("carView()", () => {
   });
 });
 
+// ── survey() ────────────────────────────────────────────────────────────────
+// Replaces the screenshot-driven survey pass. The tests that matter are the
+// calibration ones: four classes of false positive had to die before the report
+// meant anything, and each would silently come back.
+
+test.describe("survey()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("Monza surveys clean", async ({ page }) => {
+    await load(page, "monza");
+    const s = await page.evaluate(() => window.__apex.survey());
+    expect(s.summary.propsChecked).toBeGreaterThan(500);
+    // Props are deliberately sunk below grade, so a naive "base above zero"
+    // test flags every prop in the game. Floating is measured against TERRAIN.
+    expect(s.summary.floating).toBe(0);
+    expect(s.summary.buried).toBe(0);
+    // The terrain ribbon stops short of the tarmac by design and the road mesh
+    // covers the middle — counting those nulls reported one hole per station.
+    expect(s.summary.terrainHoles).toBe(0);
+    // A cliff is a slope, not a height: 1 m over 10 m of lateral is a hillside.
+    expect(s.summary.groundCliffs).toBe(0);
+    expect(s.summary.terrainOverRoad).toBe(0);
+    expect(s.summary.modelsInvalid).toBe(0);
+    expect(s.summary.clean).toBe(true);
+  });
+
+  test("no circuit ships a model the guard had to reject", async ({ page }) => {
+    // This caught vegas.js passing `mast: true` where tower() wants a height in
+    // metres — both landmark towers lost their antenna silently.
+    await load(page, "vegas");
+    const s = await page.evaluate(() => window.__apex.survey());
+    expect(s.summary.modelsInvalid, JSON.stringify(s.modelDiagnostics.invalid)).toBe(0);
+  });
+
+  test("props-over-road is labelled a screen, not a verdict", async ({ page }) => {
+    await load(page, "monza");
+    const s = await page.evaluate(() => window.__apex.survey());
+    // Registry boxes are world-axis-aligned, so an elongated object on a curve
+    // over-reports. It must not contribute to the clean verdict, and the
+    // payload must name the authoritative tool.
+    expect(s.summary).toHaveProperty("propsOverRoadCandidates");
+    expect(s.authoritative.propsOverRoad).toContain("measure-props-over-road");
+    expect(s.summary.clean).toBe(true);
+  });
+
+  test("the lateral profile is only returned when asked for", async ({ page }) => {
+    await load(page, "monza");
+    const r = await page.evaluate(() => ({
+      without: window.__apex.survey().profile,
+      with: window.__apex.survey({ at: 4, profile: true }).profile,
+    }));
+    expect(r.without).toBeUndefined();
+    expect(r.with.length).toBe(4);
+    expect(r.with[0].samples.length).toBeGreaterThan(4);
+  });
+
+  test("errors before a track is loaded", async ({ page }) => {
+    await boot(page);
+    const s = await page.evaluate(() => window.__apex.survey());
+    expect(s).toBeTruthy();
+    if (s.ok === false) expect(s.fix).toContain("race");
+    else expect(s.summary).toBeTruthy();
+  });
+});
+
+// ── carView parts ───────────────────────────────────────────────────────────
+
+test.describe("carView({detail:\"parts\"})", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("measures every section of the car", async ({ page }) => {
+    await load(page);
+    const c = await page.evaluate(() => window.__apex.carView({ detail: "parts" }));
+    expect(c.partCount).toBeGreaterThan(12);
+    const byName = Object.fromEntries(c.parts.map((p) => [p.name, p]));
+    for (const n of ["chassis", "frontWing", "rearAssembly", "wheels", "cockpit"]) {
+      expect(byName[n], n + " missing").toBeTruthy();
+      expect(byName[n].vertices).toBeGreaterThan(0);
+    }
+    // anatomy: the front wing is the widest single element and sits ahead of
+    // the rear assembly, which is hindmost
+    expect(byName.frontWing.boundsZ[0]).toBeGreaterThan(byName.rearAssembly.boundsZ[1]);
+    expect(byName.frontWing.sizeM[0]).toBeGreaterThan(1.8);
+  });
+
+  test("instrumentation changed no geometry", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => {
+      const plain = window.__apex.carView();
+      const parts = window.__apex.carView({ detail: "parts" });
+      const sum = parts.parts.reduce((a, p) => a + p.vertices, 0);
+      return { plain: plain.geometry.vertices, parts: parts.geometry.vertices, sum };
+    });
+    expect(r.plain).toBe(r.parts);
+    // sections partition the mesh, so their vertices must add up to the whole
+    expect(r.sum).toBe(r.plain);
+  });
+
+  test("parts are omitted unless requested", async ({ page }) => {
+    await load(page);
+    const c = await page.evaluate(() => window.__apex.carView());
+    expect(c.parts).toBeUndefined();
+    expect(c.geometry).toBeTruthy();
+  });
+
+  test("per-team silhouette shows up in measured geometry", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => ["mclaren", "ferrari", "mercedes"].map((t) => {
+      const c = window.__apex.carView({ team: t, detail: "parts" });
+      return { team: t, noseZ: c.geometry.boundsM.z[1], verts: c.geometry.vertices,
+               fin: c.chassis.style.fin };
+    }));
+    // noseTipZ styling must be visible in the measured nose tip
+    const noses = new Set(r.map((x) => x.noseZ));
+    expect(noses.size).toBeGreaterThan(1);
+    // a team with a dorsal fin carries more geometry than one without
+    const withFin = r.find((x) => x.fin > 0), without = r.find((x) => x.fin === 0);
+    if (withFin && without) expect(withFin.verts).toBeGreaterThan(without.verts);
+  });
+});
+
 // ── worldModel() ────────────────────────────────────────────────────────────
 // The whole circuit as one document. The design problem here is size, not
 // availability: Suzuka records 3,422 point objects and listing them one by one

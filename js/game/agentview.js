@@ -930,7 +930,7 @@ const AgentView = (function () {
 
       // Build the real mesh and measure it — the dimensions an agent would
       // otherwise read off a screenshot with a ruler.
-      let geom = null;
+      let geom = null, parts = null;
       try {
         const mesh = Car3D.build(team.color, team.color2,
                                  { parts: res.visual, teamId: team.id });
@@ -944,6 +944,7 @@ const AgentView = (function () {
         }
         const mats = {};
         for (const m of (mesh.mat || [])) mats[m] = (mats[m] || 0) + 1;
+        parts = mesh.parts || null;
         geom = {
           vertices: pos.length / 3, triangles: (mesh.idx || []).length / 3,
           lengthM: r2(z1 - z0), widthM: r2(x1 - x0), heightM: r2(y1 - y0),
@@ -991,8 +992,14 @@ const AgentView = (function () {
                       cockpit: Car3D.CHASSIS.cockpit, floor: Car3D.CHASSIS.floor },
         },
         geometry: geom,
+        // Per-part boxes, measured from the vertices each section of Car3D.build
+        // emitted. "How big is the rear wing", "does the shark fin exist on this
+        // team", "is the nose the right length" — without rendering the car.
+        parts: (o.detail === "parts" || o.detail === "all") ? parts : undefined,
+        partCount: parts ? parts.length : undefined,
         note: "everything the car viewer shows except appearance itself — for a "
-              + "visual check use tools/render-car.mjs",
+              + "visual check use tools/render-car.mjs. "
+              + 'Pass {detail:"parts"} for per-part measured boxes.',
       };
     }
 
@@ -1618,9 +1625,12 @@ const AgentView = (function () {
           "worldModel({detail,offset,limit})":
             "WHAT IS THIS PLACE — the whole circuit as one document; "
             + "summary|sections|full",
-          "carView({team,parts})":
+          "survey({at,lats,reachM,limit,profile})":
+            "IS ANYTHING BROKEN — floating/buried props, props over the racing "
+            + "line, terrain through the road, holes and cliffs in the ground",
+          "carView({team,parts,detail})":
             "WHAT AM I DRIVING — team, parts spec and effects, chassis "
-            + "silhouette, measured geometry",
+            + 'silhouette, measured geometry; detail:"parts" adds per-part boxes',
         },
         act: {
           "rollout({seconds,dt,input,policy,policyHz,samples})":
@@ -1640,7 +1650,7 @@ const AgentView = (function () {
         setup: ['__apex.race("monza")', "__apex.go()", "__apex.jump(0.1, 55)"],
         loop: "world() -> decide -> rollout({seconds, policy}) -> read the digest",
         cli: "node tools/agent.mjs <track> <help|world|frame|scene|visible|"
-             + "track|model|car|rollout> [flags]",
+             + "track|model|car|survey|rollout> [flags]",
         notes: [
           "no agent hook returns null — failures are {ok:false, error, message, fix}",
           "an LLM cannot decide at 60 Hz: rollout runs your policy at policyHz "

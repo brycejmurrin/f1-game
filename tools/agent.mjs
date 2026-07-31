@@ -10,7 +10,8 @@
 //   node tools/agent.mjs spa    visible --limit 6
 //   node tools/agent.mjs monza rollout --seconds 6 --steer 0.1 --throttle
 //   node tools/agent.mjs monza  frame --cols 72 --rows 20
-//   node tools/agent.mjs monza  car --team ferrari
+//   node tools/agent.mjs monza  car --team ferrari --detail parts
+//   node tools/agent.mjs vegas  survey
 //   node tools/agent.mjs suzuka model --detail sections
 //   node tools/agent.mjs vegas  model --detail full --out artifacts/tmp/vegas.json
 //
@@ -36,7 +37,8 @@ const COMMANDS = {
   visible: "what is on screen   --limit <n>",
   rollout: "drive an interval   --seconds <s>  --steer <-1..1>  --throttle  --brake  --samples <n>",
   frame: "the view AS TEXT    --cols <n>  --rows <n>  --range <m>  (screenshot replacement)",
-  car: "the car as JSON      --team <id>",
+  car: "the car as JSON      --team <id>  --detail parts",
+  survey: "geometry DEFECTS    --at <n>  --lats <n>  --reach <m>  --profile",
   model: "the WHOLE circuit    --detail summary|sections|full  --offset <n>  --limit <n>  --out <file>",
 };
 
@@ -92,6 +94,10 @@ const opts = {
   rows: num("rows", 16),
   range: num("range", 500),
   team: flag("team", null),
+  at2: num("at", 0) > 1 ? num("at", 0) : 0,   // survey reuses --at as a COUNT
+  lats: num("lats", 0),
+  profileFlag: has("profile"),
+  reach: num("reach", 60),        // survey's lateral reach — distinct from frame's --range
   out: flag("out", null),
 };
 
@@ -145,7 +151,12 @@ const opts = {
           return a.frame({ cols: o.cols, rows: o.rows, rangeM: o.range,
                            limit: o.limit || undefined });
         case "car":
-          return a.carView(o.team ? { team: o.team } : undefined);
+          return a.carView({ team: o.team || undefined,
+                             detail: o.modelDetail === "parts" ? "parts" : undefined });
+        case "survey":
+          return a.survey({ at: o.at2 || undefined, lats: o.lats || undefined,
+                            reachM: o.reach, limit: o.limit || undefined,
+                            profile: o.profileFlag });
         case "model":
           return a.worldModel({ detail: o.modelDetail, offset: o.offset,
                                 limit: o.limit || undefined });

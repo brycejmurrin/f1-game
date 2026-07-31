@@ -891,6 +891,7 @@ measurements and the research behind each decision: `docs/AGENT-WORLD-API.md`.
 | `trackInfo()` | Corners, sectors, elevation | static — fetch once |
 | `worldModel()` | What is this place? The whole circuit | static — fetch once |
 | `carView()` | What am I driving? (replaces the car viewer) | static per setup |
+| `survey()` | Is anything broken? Geometry defects | static per track |
 | `rollout()` | Drive an interval, get a digest | runs the sim |
 | `terminal()` | Did the episode end, and why? | cheap |
 | `agentHelp()` | This table, from inside the API | cheap |
@@ -1198,7 +1199,49 @@ node tools/agent.mjs suzuka model --detail sections
 node tools/agent.mjs vegas  model --detail full --out artifacts/tmp/vegas.json
 ```
 
-### `carView({team, parts}?) → payload | typedError`
+### `survey({at, lats, reachM, limit, profile}?) → report | typedError`
+
+**Geometry defects as JSON** — the screenshot-driven survey pass, made
+queryable. The `survey-track` workflow hunts these classes by eye; measured
+prop bounds make them coordinates you can act on.
+
+```js
+__apex.survey().summary
+// { propsChecked:2160, floating:0, buried:0, overVoid:0,
+//   propsOverRoadCandidates:4, terrainHoles:0, groundCliffs:0,
+//   terrainOverRoad:0, modelsSuppressed:0, modelsInvalid:0, clean:true }
+```
+
+Lists: `floating` · `buried` · `overVoid` · `propsOverRoadCandidates` ·
+`terrainHoles` · `groundCliffs` · `terrainOverRoad` · `modelDiagnostics`.
+Pass `{profile:true}` for the full lateral ground table.
+
+It found a shipped bug on its first run: Vegas reported two invalid
+primitives, `size:[0.18,true]` — `js/circuits/vegas.js` passed `mast: true` to
+`tower()`, which takes a height in metres, and both landmark towers lost their
+antennas silently.
+
+**Thresholds are calibrated, and each guards a false positive that would
+otherwise swamp the report:**
+
+| Check | Why it isn't the obvious test |
+|---|---|
+| `floating` (base >0.6 m above **terrain**) | Props are deliberately sunk below grade — `place()` 0.8 m, `anchor()` 0.3 m. "Above zero" flags every prop in the game. |
+| grounded kinds only | A 12.8×1.1×49.3 m slab 13 m up is a **roof**; gantries span the road by design. |
+| `terrainHoles` outside `hw + 2.4 m` | The terrain ribbon stops ~2.2 m short of the tarmac by design and the road mesh covers the middle — counting those reported one hole per station on a clean circuit. |
+| `groundCliffs` as **slope** (>0.55) | A cliff is a gradient, not a height: 1 m of rise over 10 m of lateral is a hillside. Testing absolute rise called Spa "157 steps". |
+
+**`propsOverRoadCandidates` is a screen, not a verdict** — and is excluded from
+`clean` to say so. Registry boxes are world-axis-aligned with no orientation, so
+a 160 m grandstand on a curve inflates its apparent lateral extent: Monza lists
+4 candidates where the vertex-level ground truth is **0**. Confirm with
+`tools/measure-props-over-road.mjs`, which the payload names under
+`authoritative`.
+
+Monza reports `clean: true` while Spa, Monaco and Vegas do not — that
+discrimination is the property that makes the check worth running.
+
+### `carView({team, parts, detail}?) → payload | typedError`
 
 **The car-viewer replacement**, for everything except appearance itself.
 
@@ -1219,6 +1262,28 @@ __apex.carView({ team: "ferrari" })
 is the per-team silhouette: nose length/width/droop, airbox scale, dorsal fin,
 mirror housing, sidepod inlet bias — what makes a team's car recognisable
 independent of paint.
+
+`detail:"parts"` adds **per-part measured boxes**, taken from the vertices each
+section of `Car3D.build` emitted — 19 sections including `chassis`, `sidepods`,
+`engineCover`, `frontWing`, `rearAssembly`, `halo`, `mirrors`, `helmet`,
+`suspension`, `wheels`:
+
+```js
+__apex.carView({ detail: "parts" }).parts
+// [{ name:"frontWing", vertices:486, sizeM:[2.09,0.42,1.91],
+//    centreM:[0,0.3,1.77], boundsZ:[0.81,2.72] }, …]
+```
+
+Instrumentation only — the mesh is vertex-identical with or without it (10,992
+either way on the default car), and the sections partition the mesh exactly, so
+their vertex counts sum to the whole. Per-team silhouette shows up in the
+measurements: the nose tip sits at z 3.12 / 3.18 / 3.26 for McLaren / Ferrari /
+Mercedes, tracking each team's `noseTipZ`.
+
+Caveat: sections are **ranges between markers**, so a section can carry a little
+adjacent detail — `sharkFin` reports ~36 vertices even for a team whose
+`chassis.style.fin` is 0. Read a conditional feature's presence from
+`chassis.style`, not from a section's vertex count.
 
 For "does it *look* right" — reflections, decal placement, paint reading — use
 `tools/render-car.mjs`. This answers everything else without a render.
@@ -1299,7 +1364,8 @@ node tools/agent.mjs spa    visible --limit 6
 node tools/agent.mjs monaco track   --what corners
 node tools/agent.mjs suzuka model   --detail sections
 node tools/agent.mjs vegas  model   --detail full --out artifacts/tmp/vegas.json
-node tools/agent.mjs monza  car     --team ferrari
+node tools/agent.mjs monza  car     --team ferrari --detail parts
+node tools/agent.mjs vegas  survey  --at 32 --reach 80
 node tools/agent.mjs monza  rollout --seconds 6 --steer 0.1 --throttle
 ```
 

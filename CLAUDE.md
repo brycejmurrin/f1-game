@@ -217,7 +217,8 @@ js/game/         — game modules (each created with the G ctx façade from game
   apex.js        ApexApi        the whole window.__apex dev API
   agentview.js   AgentView      the agent-facing JSON world view — world()/
                                   trackInfo()/scene()/visible()/worldModel()/
-                                  rollout()/agentHelp(); composes the __apex hooks
+                                  frame()/carView()/survey()/rollout()/
+                                  agentHelp(); composes the __apex hooks
                                   into one egocentric snapshot with typed errors.
                                   worldModel() renders the whole circuit as text by
                                   clustering repeated dressing into features
@@ -444,8 +445,12 @@ __apex.worldModel({detail:"sections"}) // the WHOLE circuit as one document:
 __apex.visible()              // what is on screen (needs a rendered frame)
 __apex.frame({cols:56,rows:16}) // the VIEW AS TEXT — depth-sorted character
                               //   raster; replaces a screenshot for composition
-__apex.carView({team:"ferrari"}) // the car as JSON: team, parts spec + effects,
-                              //   chassis silhouette, MEASURED geometry
+__apex.carView({team:"ferrari", detail:"parts"}) // the car as JSON: team, parts
+                              //   spec + effects, chassis silhouette, MEASURED
+                              //   geometry, and per-part boxes from Car3D.build
+__apex.survey()               // geometry DEFECTS: floating/buried props, props
+                              //   over the racing line, terrain through the road,
+                              //   holes and cliffs in the ground ribbon
 __apex.rollout({seconds:5, policy})  // drive an interval → digest, not frames
 __apex.terminal()             // {done, reason} — finished|wrong_way|rescued
 ```
