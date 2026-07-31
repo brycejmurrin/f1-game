@@ -16,9 +16,23 @@ const renderStatBars = (...a) => G.renderStatBars(...a);
 // for a free crossfade, else run it plainly. Zero dependency, purely visual —
 // the swap always happens; only the animation is enhanced. Reduced-motion is
 // honoured by the ::view-transition CSS in css/tokens.css.
+//
+// The `applied` guard + timeout are not decoration: a fire-and-forget
+// startViewTransition can DROP its update callback when the page is not actively
+// compositing (reproduced opening the track-detail modal from the static select
+// screen, where no game-loop frames are running — the modal simply never
+// appeared). The safety net applies the DOM change directly if the transition
+// has not run it within a couple of frames; the guard makes a double-fire a
+// no-op if the transition callback later runs after all.
 const vt = (fn) => {
-  if (document.startViewTransition) document.startViewTransition(fn);
-  else fn();
+  if (!document.startViewTransition) { fn(); return; }
+  let applied = false;
+  const run = () => { if (applied) return; applied = true; fn(); };
+  try {
+    const t = document.startViewTransition(run);
+    if (t && t.updateCallbackDone) t.updateCallbackDone.catch(() => {});
+  } catch (_) { run(); return; }
+  setTimeout(run, 60);
 };
 
 // ---- team card + full-screen team picker ----------------------------------
