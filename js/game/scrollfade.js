@@ -16,13 +16,17 @@
 // The module owns no game state and self-initialises. CSS does all the
 // painting: `.sf-t` / `.sf-b` in css/components.css.
 window.ScrollFade = (function () {
-  // Every menu scroll region — static in index.html, or filled later by
-  // menus.js / setup-ui.js / tuner.js inside one of these containers.
+  // Every menu scroll region. `.pane` FIRST and by class, because that is the
+  // design system's own name for "a scroll region that says so" (see the header
+  // of css/components.css) — enumerating them by id instead meant the list
+  // silently drifted from the markup: #rs-body (RACE SETTINGS), #cz-body
+  // (CUSTOMIZE), the STEERING & ASSISTS body and the pause menu are all panes
+  // that were never selected, so they scrolled with no fade and no indicator at
+  // all. Matching the class covers those and anything added later for free.
+  // The rest are the scroll regions that are NOT panes.
   const SEL = [
-    "#sel-body", "#sel-left", "#sel-tracks", "#sel-teams", "#cs-options", "#cs-tabs",
-    ".pm-groups", ".panel-scroll", ".scroll-y",
-    "#results-table", "#standings-body", "#howtoplay-inner dl",
-    "#lt-rows", ".dh-content", "#track-detail-body",
+    ".pane", "#sel-body", ".panel-scroll", ".scroll-y",
+    ".dh-content", "#track-detail-body",
   ].join(",");
   // Overlays whose [hidden] flip is what first gives their regions a box. The
   // data hub (#datahub) and track detail (#track-detail) are toggled by the
