@@ -15,6 +15,7 @@ const GLXPost = (function () {
     const gl = core.gl;
     const { useProg, bindVAO, setBlend, setDepthMask, link, locs } = core;
     const MOBILE_TIER = core.MOBILE_TIER;
+    const IS_MOBILE = core.IS_MOBILE;
     const { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS,
             COMPOSITE_FS, FXAA_FS } = GLXShaders;
     const F = core.frame;
@@ -89,7 +90,10 @@ const GLXPost = (function () {
         // shimmer the lower sample count misses, so the perceptual gap is small.
         // Mobile tier: no MSAA at all — two extra full-res multisampled surfaces
         // (~20-30 MB) against a tight jetsam budget; FXAA alone carries the AA.
-        msaaSamples = MOBILE_TIER ? 0 : Math.min(2, cMax, dMax);
+        // True desktop only: 2x MSAA on the RGBA16F scene target + per-frame
+        // resolve was part of the GRAPHICS: HIGH lag on phones (HIGH used to
+        // flip the whole memory tier, not just visual quality).
+        msaaSamples = IS_MOBILE ? 0 : Math.min(2, cMax, dMax);
         if (msaaSamples < 2) msaaSamples = 0;
       } catch (e) { msaaSamples = 0; }
       compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uFlareStreak", "uFlareStreak2"]);
