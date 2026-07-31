@@ -36,6 +36,7 @@ const SceneryStructures = (function () {
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
     const wall = (s0, s1, side, gap, h, col, thick) => {
       const a = thick || 0.5;
+      ctx.noteSpan("wall", s0, s1, side, gap, { h });
       recordBarrier(s0, s1, side, gap);
       along(s0, s1, 6, (k, spacing) => {
         const p = anchor(k, side, gap);
@@ -52,6 +53,7 @@ const SceneryStructures = (function () {
       // not move the driving limit (it stands behind the runoff by design).
       // Until this existed, fences were the ONLY barrier class no guard could
       // see — and they are the obstacle in most surviving canopy intersections.
+      ctx.noteSpan("fence", s0, s1, side, gap, { h });
       indexBarrier(s0, s1, side, gap);
       along(s0, s1, 5, (k, spacing) => {
         const p = anchor(k, side, gap);
@@ -65,6 +67,7 @@ const SceneryStructures = (function () {
     };
     // Armco guardrail: a waist-high steel rail on posts (open-circuit edge).
     const guardrail = (s0, s1, side, gap, col) => {
+      ctx.noteSpan("guardrail", s0, s1, side, gap);
       recordBarrier(s0, s1, side, gap);
       along(s0, s1, 4, (k, spacing) => {
         const p = anchor(k, side, gap);
@@ -78,6 +81,7 @@ const SceneryStructures = (function () {
     };
     // Stacked-tyre barrier with a coloured conveyor-belt cap.
     const tyreWall = (s0, s1, side, gap, capCol) => {
+      ctx.noteSpan("tyreWall", s0, s1, side, gap);
       recordBarrier(s0, s1, side, gap);
       along(s0, s1, 3.4, (k, spacing) => {
         const p = anchor(k, side, gap);
@@ -97,6 +101,10 @@ const SceneryStructures = (function () {
     const gantry = (s, h, col) => {
       const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
+      ctx.note("gantry", [(aL.c[0] + aR.c[0]) / 2, aL.c[1] + h / 2,
+                          (aL.c[2] + aR.c[2]) / 2],
+               [Math.hypot(aR.c[0] - aL.c[0], aR.c[2] - aL.c[2]), h, 1],
+               { k, side: 0 });          // 0 = straddles the road
       const b = [aL.r, u, aL.t];
       // Mast height is SOLVED to the beam, not assumed. The masts stand on the
       // verge (anchor(), which sits on the terrain and sinks 0.3) while
@@ -156,6 +164,7 @@ const SceneryStructures = (function () {
         console.warn(`[scenery] marshalPost SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
         return;
       }
+      ctx.note("marshalPost", [p.c[0], p.c[1] + 1.2, p.c[2]], [1.2, 2.4, 1.2], { k, side });
       addBox(out, vadd(p.c, p.u, 1.1), [2.2, 3.0, 2.2], [0.85, 0.86, 0.88], b);   // base sunk 0.4
       addBox(out, vadd(p.c, p.u, 2.7), [2.5, 0.4, 2.5], [0.95, 0.55, 0.08], b);
       const polePos = vadd(p.c, p.r, side * 1.4);
@@ -192,6 +201,7 @@ const SceneryStructures = (function () {
         console.warn(`[scenery] signBoard SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
         return;
       }
+      ctx.note("signBoard", [p.c[0], p.c[1] + 1, p.c[2]], [2.5, 2, 0.3], { k, side, board: kind, value });
       const postH = 1.35;
       const proud = -side * 0.05;   // segment relief toward the viewer
       addCyl(out, vadd(p.c, p.u, -0.3), 0.06, postH + 0.3, [0.55, 0.55, 0.58], 4, b);   // base sunk

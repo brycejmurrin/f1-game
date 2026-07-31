@@ -801,6 +801,15 @@ const Car3D = (function () {
   function build(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+    // Section bookkeeping for the agent world view (carView({detail:"parts"})).
+    // Pure recording — no geometry changes, and the arrays are identical with or
+    // without it. Answers "how big is the rear wing" without rendering the car.
+    const sections = [];
+    const part = (name) => {
+      const at = out.pos.length / 3;
+      if (sections.length) sections[sections.length - 1].to = at;
+      sections.push({ name, from: at, to: at });
+    };
     const c1 = color  || [0.8, 0.05, 0.05];
     const c2 = color2 || [0.9, 0.9, 0.1];
     // Optional separate livery ACCENT colour for the extra paint-detail flashes
@@ -837,10 +846,12 @@ const Car3D = (function () {
     const teamStyle = teamStyleOf(opts && opts.teamId);
     const anchors = bodyAnchors(T, opts && opts.teamId);
 
+    part("chassis");
     // --- Shared chassis --- per-OPTION suspension shifts only ride height.
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
     buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle));
 
+    part("hood");
     // --- Hood / vanity deck: a raised central panel over the monocoque, rising
     // to a hump right in front of the cockpit. This is the "hood" the driver
     // looks over in the onboard view (the modern F1 dash bulge / vanity panel);
@@ -867,6 +878,7 @@ const Car3D = (function () {
     addBox(out, 0, ckpt ? 0.73 : 0.665, ckpt ? 0.90 : 0.45, 0.10, 0.02, ckpt ? 1.75 : 0.80,
            ersC2, SURFACES.paint);
 
+    part("bolsters");
     // --- Cockpit-side head-protection bolsters: the raised survival-cell edges
     // flanking the cockpit opening. They frame the driver's view left/right in
     // the onboard cam and give the tub real shoulders in chase. In cockpit view
@@ -905,6 +917,7 @@ const Car3D = (function () {
       }
     }
 
+    part("sidepods");
     // --- Sidepods: four body stations create a deep inlet, undercut, downwash
     // shoulder and coke-bottle tail. Geometry datums returned here anchor all
     // paint, sponsor, ERS and cooling details below.
@@ -945,6 +958,7 @@ const Car3D = (function () {
         CARBON, null, SURFACES.carbon);
     }
 
+    part("engineCover");
     // --- Airbox + engine cover: sit BEHIND the driver, so they're skipped in
     // the cockpit build (ckpt) — under brake pitch they'd otherwise swing up
     // into the top/back of the onboard frame ("the thing behind us cutting in").
@@ -1076,6 +1090,7 @@ const Car3D = (function () {
       }
     }
 
+    part("bodyDetail");
     // --- 2026 bodywork detailing: a recessed radiator inlet mouth punched into
     // the sidepod front (SHAPE varies per ENGINE_STYLE.inlet), and a row of
     // little floor-edge fences — the fiddly ground-effect furniture that reads
@@ -1104,6 +1119,7 @@ const Car3D = (function () {
       }
     }
 
+    part("livery");
     // --- Livery accents: nose stripe + airbox spine stripe (team colour 2) ---
     const noseAccentRear = anchors.noseAt(1.60), noseAccentFront = anchors.noseAt(2.66);
     addLoft(out, 1.60, 0, noseAccentRear.top + 0.008, 0.09, 0.016,
@@ -1185,6 +1201,7 @@ const Car3D = (function () {
     const camPod = anchors.noseAt(1.55);
     addBox(out, 0, camPod.top + 0.045, 1.55, 0.06, 0.08, 0.15, DARK);
 
+    part("cockpit");
     // --- Cockpit opening (dark) + halo + front pillar ---
     addBox(out, 0, 0.60, 0.12, 0.40, 0.045, 0.78, [0.04, 0.04, 0.05], SURFACES.carbon);
     for (const s of [-1, 1]) {
@@ -1194,6 +1211,7 @@ const Car3D = (function () {
     addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop
     addBox(out, 0, 0.60,  0.62, 0.05, 0.20, 0.05, DARK); // front pillar
 
+    part("mirrors");
     // --- Side mirrors ---. In cockpit view they're moved FORWARD (ahead of the eye at z0.32)
     // and out on longer stalks so they read at the sides of the onboard frame
     // like real F1 wing mirrors; the chase build keeps the tucked position.
@@ -1221,6 +1239,7 @@ const Car3D = (function () {
       addBox(out, s*mx, mY, mz + 0.066, 0.024, mH * 0.70, 0.018, [0.46, 0.56, 0.78], SURFACES.glass); // brighter blue reflective glass
     }
 
+    part("helmet");
     // --- Driver helmet: smooth dome + visor + crown stripe ---
     // Skipped for the first-person cockpit body (opts.noDriver): the camera
     // sits where the driver's head is.
@@ -1248,6 +1267,7 @@ const Car3D = (function () {
       addBox(out, 0, 0.988, -0.30, 0.03, 0.02, 0.03, [0.12, 0.75, 0.28], SURFACES.paint);
     }
 
+    part("halo");
     // --- Halo: the titanium cockpit-protection hoop (defining modern-F1 read).
     // A central front pillar rising off the chassis, then two tubular arms
     // arcing up-and-out over the driver and sweeping back down to the collar.
@@ -1263,6 +1283,7 @@ const Car3D = (function () {
       }
     }
 
+    part("exhaust");
     // --- Exhaust outlet poking from the tail cap --- per ENGINE option: a lone
     // slim pipe at low spec, a fat central tailpipe flanked by two extra tips
     // for engine recipes with the `twin` flag.
@@ -1286,6 +1307,7 @@ const Car3D = (function () {
       }
     }
 
+    part("sharkFin");
     // --- Shark fin (team accent colour) --- a swept aero surface, not a flat
     // plank: long raked leading edge (base front z-0.65 → top front z-1.15, a
     // 0.50 m rake) tapering to a near-vertical trailing edge (only 0.05 m rake),
@@ -1304,6 +1326,7 @@ const Car3D = (function () {
     // carDecalData / the nose number plate below), not blocky 7-seg geometry —
     // so it reads sharply and shows from the chase, hood AND cockpit cameras. ---
 
+    part("sponsorBoard");
     // --- Sponsor board on the sidepod flank + a base-paint NUMBER BOARD on each
     // Downforce level 0..4 — resolved up here (before the number board) so the
     // board tracks the rear-wing endplate for THIS aero setup. Per-option when
@@ -1325,6 +1348,7 @@ const Car3D = (function () {
       addBox(out, s*0.527, nb.cy, -2.42, 0.012, nb.h, 0.30, c1);
     }
 
+    part("frontWing");
     // --- Front wing: ANGLED wedge elements in the block language — thin
     // leading edges rising to thicker trailing edges (real attack angle),
     // swept endplates that grow rearward, and nose pylons so the wing hangs
@@ -1411,6 +1435,7 @@ const Car3D = (function () {
       }
     }
 
+    part("rearAssembly");
     // --- Rear assembly: wing, DRS pod, rain light, diffuser, gearbox strakes,
     // rear brake ducts. ALL of it sits well behind the driver, so the cockpit
     // build (ckpt) skips the lot — like the airbox/engine cover above, nothing
@@ -1558,6 +1583,7 @@ const Car3D = (function () {
       if (gbFin) addBox(out, 0, 0.27 + gbFinSY / 2, -2.30, 0.02, gbFinSY, gbFinSZ, CARBON);   // crash-structure fin
     }
 
+    part("brakeDucts");
     // --- Brake duct fairings (front + rear wheels) --- per BRAKES option: duct
     // size + a big-brake winglet. Cockpit build keeps only the FRONT ducts.
     const brakesT = tier("brakes");
@@ -1572,6 +1598,7 @@ const Car3D = (function () {
       if (!ckpt) addBox(out, s*0.58, 0.30, AXLES.rearZ - 0.20, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
     }
 
+    part("suspension");
     // --- Suspension wishbones --- SUSPENSION tier scales thickness + follows
     // the ride-height shift from the floor plank above. Cockpit build keeps
     // only the FRONT pair (rears sit behind the seat).
@@ -1622,6 +1649,7 @@ const Car3D = (function () {
       }
     }
 
+    part("wheels");
     // --- Wheels --- (skipped for the player car, which draws animated wheels)
     // Per-compound band and tread treatment from the resolved tyre recipe.
     if (!noWheels) {
@@ -1638,6 +1666,22 @@ const Car3D = (function () {
       }
     }
 
+    // Close the last section and measure each from the vertices it emitted.
+    if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
+    out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity,
+          z0 = Infinity, z1 = -Infinity;
+      for (let i = sec.from * 3; i < sec.to * 3; i += 3) {
+        if (out.pos[i] < x0) x0 = out.pos[i]; if (out.pos[i] > x1) x1 = out.pos[i];
+        if (out.pos[i + 1] < y0) y0 = out.pos[i + 1]; if (out.pos[i + 1] > y1) y1 = out.pos[i + 1];
+        if (out.pos[i + 2] < z0) z0 = out.pos[i + 2]; if (out.pos[i + 2] > z1) z1 = out.pos[i + 2];
+      }
+      const r2 = (v) => Math.round(v * 100) / 100;
+      return { name: sec.name, vertices: sec.to - sec.from,
+               sizeM: [r2(x1 - x0), r2(y1 - y0), r2(z1 - z0)],
+               centreM: [r2((x0 + x1) / 2), r2((y0 + y1) / 2), r2((z0 + z1) / 2)],
+               boundsZ: [r2(z0), r2(z1)] };
+    });
     return out;
   }
 

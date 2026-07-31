@@ -13,6 +13,13 @@ line, increasing in the racing direction. Internally that maps to an arc-length
 **`+` = right**, `−` = left. World heading lives in `player.head`; the steering /
 slip convention is `+steer → turns right (+x)`.
 
+> **Driving this as an LLM agent?** Skip to
+> [Agent world view](#agent-world-view). The ~89 hooks below are a dev console —
+> one narrow question each, `false`/`null` on failure. The agent layer composes
+> them into one egocentric snapshot per decision, renders the view as text
+> instead of a screenshot, and never returns `null`. Start with
+> `__apex.agentHelp()` or `node tools/agent.mjs help`.
+
 **Prefer these hooks for test assertions.** They give deterministic,
 geometry-/physics-grounded checks that don't drift when art or tuning changes:
 `step()`+`physState()`/`probe()` and the `obs()`/`act()`/`reset()` headless loop
@@ -870,6 +877,726 @@ and return a normalised, downsampled (≤400 pts) `{x, z}` track outline. `null`
 the session has no location rows. Find a `sessionKey` via `openf1()`.
 ```js
 await __apex.fetchTrackOutline(9149, 1);
+```
+
+---
+
+## Agent world view
+
+Everything above is a dev console: flat hooks, one narrow question each, `false`
+or `null` on failure. That is right for a human at a REPL and wrong for a
+text-only agent, which wants one egocentric snapshot per decision with the
+semantics sitting next to the numbers.
+
+These ten hooks are that layer (`js/game/agentview.js`). They compose the hooks
+above and change none of them — `__apex` is unchanged underneath. Design,
+measurements and the research behind each decision: `docs/AGENT-WORLD-API.md`.
+
+
+### The surface at a glance
+
+| Hook | Question it answers | Cost |
+|---|---|---|
+| `world()` | Where am I, what is next? | cheap — the per-tick call |
+| `frame()` | What does it look like? (replaces a screenshot) | moderate |
+| `scene()` | What is around the car? | moderate |
+| `visible()` | What is on screen, as a list? | moderate |
+| `trackInfo()` | Corners, sectors, elevation | static — fetch once |
+| `worldModel()` | What is this place? The whole circuit | static — fetch once |
+| `carView()` | What am I driving? (replaces the car viewer) | static per setup |
+| `survey()` | Is anything broken? Geometry defects | static per track |
+| `rollout()` | Drive an interval, get a digest | runs the sim |
+| `terminal()` | Did the episode end, and why? | cheap |
+| `agentHelp()` | This table, from inside the API | cheap |
+
+Overlaps worth settling before you pick one:
+
+- **`scene()` vs `visible()`/`frame()`** — `scene()` is a radius around the
+  **car** and ignores where the camera points; the other two are the **camera's**
+  view.
+- **`visible()` vs `frame()`** — `visible()` *names* what is in shot; `frame()`
+  shows *where* it sits and what hides what.
+- **`scene()` vs `worldModel()`** — live surroundings vs the static circuit.
+
+Every hook here returns `{ok:false, error, message, fix}` on failure and **never
+`null`**; `fix` names the call that resolves it.
+
+
+
+---
+
+### Perceive — what is happening now
+
+
+Called during a session. `world()` is the only one cheap enough per tick.
+
+
+### `world(opts?) → payload | typedError`
+
+One egocentric JSON snapshot. **Never returns `null`** — on failure it returns
+`{ok:false, error, message, fix, state}` where `fix` names the hook to call.
+
+| opt | default | meaning |
+|---|---|---|
+| `detail` | `"drive"` | `"brief"` (~ego + next corner + summary) · `"drive"` (+ lookahead, rivals, affordances) · `"full"` (+ session, terminal, raw physics, all 21 rivals) |
+| `horizonS` | `4` | lookahead horizon in **seconds** — the distance scales with speed |
+| `points` | `5` | lookahead samples (2–12) |
+| `since` | — | a `seq` you already hold; returns only what changed |
+
+**Cost, measured** (bytes per step, 20-step driving loop on Monza):
+
+| call | per step | vs `full` |
+|---|---|---|
+| `world({detail:"full"})` | 12,089 | 1× |
+| `world({detail:"drive"})` | 3,501 | 3.5× |
+| `world({detail:"drive", since})` | 2,908 | 4.2× |
+| `world({detail:"brief"})` | 1,026 | 11.8× |
+| **`world({detail:"brief", since})`** | **355** | **34×** |
+
+Read that before optimising the wrong thing. **`detail` is the dominant lever**;
+`since` is worth little on its own while the car is moving (1.20× on `drive`)
+because at 5.5 m of travel per step every number genuinely changes. It pays on
+`brief` (2.9×) where the unchanging envelope is a large share of a small
+payload, and on a mostly static scene (1.55× parked). A control-loop tick at
+`brief` + `since` costs ~355 bytes — about 90 tokens.
+
+Deltas pass numbers through a deadband of `max(0.25 absolute, 2% relative)`: a
+change smaller than you could act on is not reported. The baseline advances only
+by what was actually sent, so the error stays bounded by one deadband instead of
+drifting. Pass no `since` for a full resync at any time.
+
+```js
+__apex.world({ detail: "brief" })
+// { apiVersion, physicsVersion, seq, t, detail, conventions, raceState,
+//   track: {id, name, lengthM},
+//   ego: { lap, pos, of, frac, s, speedKph, speed, gear, lateralM,
+//          headingErrDeg, onTrack, halfWidthM, clearLeftM, clearRightM,
+//          energy, grip:{slipFactor, longUsedPct, state, surface, gripMult} },
+//   nextCorner: { turn, dir, radiusM, severity, distM, timeS, apexSpeedKph,
+//                 straightAfterM, exitsOntoStraight, suggestBrakeM, status, note },
+//   brief: "Lap 3, P4, 218 km/h in 6, T7 L in 84 m — BRAKE NOW for T7, …" }
+```
+
+`detail:"drive"` adds **`pacenotes`** — the road ahead as one rally co-driver's
+line, e.g. `"L1 @244m uphill don't-cut, L6 @398m uphill into-str, L4 @979m
+downhill"`. Direction + rally severity 1–6 (1 = tightest, from the radius) at a
+distance in metres, with the mutators that change the call: `uphill`/`downhill`,
+`off-camber`, `into-str` (opens onto a straight — prioritise exit), `don't-cut`
+(tight enough that an early apex throws the exit away). Three corners in ~60
+characters. It also adds
+`nextCorners:[{turn, dir, radiusM, severity, distM, apexSpeedKph, exitsOntoStraight,
+suggestBrakeM}]` (the next few corners as a sequence, ordered by distance),
+`rivals:[{id, code, team, rel, gapM, gapS, lateralM, side, speedKph, closingMps,
+threat, lap}]` (sorted by gap, capped at 4), and `affordances` / `unavailable`.
+
+**Road shape.** `bankingDeg` is the real road-plane roll (`+` = the right edge is
+raised, which holds a **left**-hander), and `camber` says what that means for
+*this* corner: `banked into the turn` / `off-camber` / `flat`. Note the source:
+authored `def.bankZones` → `track.bankP` → `Tracks.banking()`, **not**
+`Tracks.bankAngle()`/`track.bank[]`, which is a per-node tilt almost no circuit
+sets. `gradientPct`/`elevation` measure the climb across the corner, and `kerbs`
+lists the sides that carry one. The same facts appear as rally mutators in
+`world().pacenotes` (`uphill`, `downhill`, `off-camber`).
+
+**No prescribed racing line.** A crude `apexOffsetM`/`moveToApexM` "fast line"
+(apex = inside edge) was removed — it is confidently wrong (late apex onto a
+straight, chicanes link). Instead the agent chooses a line from honest geometry:
+`ego.lateralM` (offset from centre), `ego.headingErrDeg`, `ahead.pts` (curvature),
+plus per corner `straightAfterM` (road to the next corner) and `exitsOntoStraight`
+(true past ~120 m) — the cue to prioritise exit, without dictating the line.
+
+**`rivals[].lateralM` is relative to the PLAYER**, not the centreline — `+` is to
+your right. `rivals[].team` is a team **id string**, not the team object — rivals
+are the saliency-capped nearest few for a driving decision (`world().rivals`);
+for the full grid call `field()`. Everything else is the usual convention (`+x`
+right of centreline, `+k` right-hand turn), restated in every `conventions` field.
+
+`suggestBrakeM` is a **hint**, not the car's physics: it assumes ~30 m/s²
+braking and ~26 m/s² lateral grip. Treat it as a reference to check against, not
+a target.
+
+### `describe(id) → payload | typedError`
+
+Everything known about **one** entity, by stable id. Ids are derived from the
+registry/corner table, so they survive a rebuild and cost nothing to mint:
+
+| id | resolves to |
+|---|---|
+| `prop:<n>` | a registered prop — measured box, arc position, side, fill/parts, board text, egocentric distance/bearing, and the corner it stands by |
+| `corner:<turn>` | the full corner record + a census of scenery within 80 m |
+| `car:<n>` | one car: code, team id, lap, position, speed, gap to the player |
+| `span:<n>` | a barrier/fence run: kind, side, from/to, length, height |
+
+```js
+__apex.describe("prop:1980")   // ~314 bytes
+__apex.describe("corner:T3")   // corner + sceneryWithin80m
+```
+
+Ids come back from `scene()`, `query()`, `trackInfo()` and `field()`, and
+cross-reference each other (a prop names its `nearestCorner` as an id). An
+unknown id is a typed error that says how to find a real one.
+
+### `query({kind, near, fromS, toS, limit}?) → payload | typedError`
+
+A **bounded slice** of the world. Filters compose: `kind` (string or array),
+`near` (metres around the car), `fromS`/`toS` (an arc-position window), `limit`
+(capped, default 40).
+
+```js
+__apex.query({ kind: "pine", near: 250, limit: 8 })
+// { matched: 52, returned: 8, truncated: 44,
+//   prototypes: { pine: { sizeM: [5, 32.1, 5], count: 8 } },
+//   instances: [ { id:"prop:149", kind:"pine", s:288.1, side:"left",
+//                  distM:19.1, bearingDeg:92.4 }, … ] }
+```
+
+Repeated dressing comes back as **prototype + instances**: one shape per kind,
+then a position per instance, with `sizeM` repeated only when it differs by more
+than 25%. Never a silent truncation — `truncated` says what was withheld.
+Narrow the filter rather than raising `limit`.
+
+**Why these two exist.** The world is stored in full but never dumped: a flat
+serialisation of a rich scene is both enormous and *read worse* than a query,
+and thousands of near-identical props are the worst case. Monza registers 2835.
+So the default views stay lean and detail is **pulled** where a decision needs it.
+
+### `atmosphere() → payload | typedError`
+
+The light, narrated. `lightState()` is rich but raw — an agent can't act on an
+RGB triple — so this describes the scene and keeps the numbers alongside:
+
+```js
+__apex.atmosphere().brief
+// "night, dark, floodlit (29 lights active), moon to your right,
+//  visibility ~433 m, stars out, moon up."
+```
+
+Carries `timeOfDay`, `weather`, `wetRoad`, `dark`, `brightness`,
+`sun:{body,elevationDeg,relBearingDeg,where}`, `lights:{active,floodEmit}`,
+`visibility:{fogDensity,approxRangeM}`, `exposure`, and `raw` RGB.
+
+**`sun.body` is `"sun"` or `"moon"`** — at night the renderer keeps the sun
+direction and dims it to moonlight, so elevation alone would report a high sun
+over a floodlit midnight. Darkness comes from the session, not the sun vector.
+Fog is reported as a **visibility distance**, the actionable form.
+
+### `field({detail}?) → payload | typedError`
+
+The allocentric standings mirror of `fieldState()`/`cars()` — every car by race
+position with second-gaps, compact (team is an id string, one row per car):
+
+```js
+__apex.field({ detail: "brief" })
+// { raceState, of, lapsTarget, player:{pos,lap,gapToLeaderS,intervalS},
+//   positions:[{ pos, id, code, team, isPlayer, lap, gapToLeaderS, intervalS }, …] }
+```
+
+`detail:"full"` adds `frac`, `speedKph`, `gapToLeaderM`, `finished` per row.
+`world().rivals` is the egocentric nearest-few for the driving decision; `field()`
+answers "where is everyone". Part of agent view being the **text-native mirror of
+the whole `__apex` toolkit** — see `agentHelp()`, whose `read` section names the
+raw hooks that already return JSON (`physState`, `lightState`, `timing`, …) and
+whose `control` section names the drive/stage verbs.
+
+### `frame({cols, rows, camera, orbit, edges, depth, rangeM, cellAspect, limit}?) → render | typedError`
+
+**The screenshot replacement.** `visible()` lists what is on screen; this shows
+*where*, by rasterising the scene into a character grid with per-cell depth
+sorting — a real hidden-surface solve at grid resolution, not a guess.
+
+```
+ttttttttttttttttttttttttttt........tttttttttttttt.....tt
+tttttttttttttttttttttttttttttt..tttttttttttttttttttttttt
+######ttttttttttttt##tttttttttttttt###tttttttt######tttt
+######ttttttttttttt##:============:#################tttt
+######ttttttttt:=======@@@@@@@@@========:###########tttt
+:======================================================:
+```
+
+Returned as `grid.lines` plus a `legend` (only glyphs actually drawn),
+`coveragePct` per kind, `horizonRow`, ranked `objects`, camera and lighting.
+`node tools/agent.mjs monza frame --cols 72 --rows 20` prints the grid directly.
+
+Why a grid rather than a picture: [BALROG](https://arxiv.org/abs/2411.13543)
+found VLMs score *lower* with the image than with text alone, and a few hundred
+tokens of raster carries the composition and occlusion a screenshot carries.
+
+**Why it is not ASCII art.** The obvious "render to text" is a luminance ramp —
+map brightness to `.:-=+*#%@`. That is the wrong target for a model reader.
+[ASCIIEval](https://arxiv.org/abs/2410.01733) measures LLMs on exactly this and
+finds they "remain far behind human performance in shape recognition"; a ramp
+demands the model reconstruct a shape from shading, which is the documented
+weak spot. Semantic glyphs skip that step — each character already says what it
+is. Two further findings from the same work shape the defaults:
+
+- **Accuracy is sensitive to the LENGTH of the art**, and a low-resolution
+  prompting strategy *improves* perception. More cells is not more legible, so
+  the default grid is small on purpose. Ask for 160 columns and you will likely
+  read it worse.
+- **Text-and-image together scores below image alone.** Don't pair this with a
+  screenshot and expect the best of both.
+
+**Aspect.** A character cell is about twice as tall as it is wide, so a grid
+whose ratio matches the viewport renders *squashed*. `rows` is therefore derived
+from `gfx.aspect` and `cellAspect` (default 2) unless you pin it — the old fixed
+48x18 default was an effective 1.33 against a 2.16 viewport, stretching a square
+object 1.6x vertically. `grid.aspect` reports what was used and whether it was
+corrected.
+
+**Depth.** `{depth:true}` adds a second channel: per-cell distance as digits
+0 (near) to 9 (far), logarithmic so the near field where driving decisions live
+gets the resolution, with `scaleM` giving the metres for each digit. This is a
+real render target read out of the depth buffer the raster already builds — not
+a synthesised shading model — and reading it needs no shape recognition.
+
+**Any camera, not just the live one.** `{camera:"cockpit"}` (any of the 13
+modes — chase, cockpit, hood, heli, overhead, side, tcam, rear, …) or
+`{orbit:{az,el,dist}}` computes the shot fresh from the car's position, without
+moving it or waiting for a render. That is the text version of `apex-capture`'s
+per-mode screenshots and `previewCam()`. A synthetic camera is never stale, so
+`framePending` is false for it. Omit `camera` to use the live view.
+
+**Edges.** `{edges:true}` overlays the depth-discontinuity edges — the
+geometry-native version of the Acerola / Kang line pass — as `| - / \` over the
+semantic glyphs, so a car against the road or a building against the sky reads
+as an outline. Silhouettes and creases come straight from the depth buffer, not
+a luminance Sobel, so they are exact.
+
+```
+t##t#####ttt######t:====@@@@@@@@@===:######tttttttttt###     35551111155555555554444433333333344445555555555555555555
+t##t#####ttt:===========@@@@@@@@@==========:ttttttttt###     35551111155533333333333333333333333333333333555555555555
+t:=====================================================:    22222222222222222222222222222222222222222222222222222222
+```
+
+Known approximations, all in the same direction — read them before trusting a
+close call:
+
+- Objects are rasterised as **axis-aligned boxes**, so a yawed car or a rotated
+  building over-covers slightly at cell resolution.
+- Depth is the box **centre**, not its nearest face. Using the near corner made a
+  100 m assembly sort as if its far end were in front of the camera.
+- Anonymous `structure` hulls with a **fill ratio under 6%** are skipped as
+  occluders — they are scatter (lamp bases, fence posts), not walls. Painting one
+  solid put a 32×31 m box across 68% of a frame that actually showed sky.
+- Boxes containing the camera are skipped: a hull that encloses the viewer is not
+  an object in shot.
+- Tree canopies are cones drawn as boxes, so a dense treeline closes up gaps of
+  sky a render would show. Sky is under-reported in wooded scenes.
+
+### `scene({radius, kinds, limit}?) → payload | typedError`
+
+**Named** scenery near the car. `visible()` locates scenery mass; this says what
+it is.
+
+```js
+__apex.scene({ radius: 120, limit: 5 })
+// { origin:{from:"player", x, z, headingDeg, note},
+//   radiusM, counts:{lapTotal, byKindLapTotal:{tree:985, …}, inRadius},
+//   props:[{kind, distM, bearingDeg, side, sizeM:[w,h,d], at:[x,y,z]}],
+//   truncated, lamps:[{kind, distM, bearingDeg, side}],
+//   registry:{recorded, dropped, cap, complete, note} }
+```
+
+Egocentric: `distM` / `bearingDeg` are from the **player** (or the camera when
+there is no player — `origin.from` says which), `+bearing` = to its right,
+0 = straight ahead. Sorted by distance.
+
+Kinds: `tree` · `pine` · `palm` · `bush` · `building` · `house` · `motorhome` ·
+`tower` · `grandstand` · `billboard` · `signBoard` · `marshalPost` · `gantry` ·
+`mountain` · `peak` · `ridge` · `prop` (the generic `place()` box) · and
+`structure` — an **anonymous assembly** of primitives a circuit's own
+`scenery()` emitted without a named helper. Filter with `kinds: ["tree"]`.
+
+Sizes are **measured** from the primitives each placement actually emitted, not
+declared by the call site. The declarations were wrong in *both* directions
+depending on species — measured against nominal across Monza, pines came out at
+**0.39×** the guessed width (a 24.6 m pine is 5.7 m across, not 11.1 m) while
+broadleaf trees came out at **1.55×** it. Anything reasoning about clearance or
+screen coverage should trust `sizeM` now and should not have before. Records
+carry `measured: true` when the box came from geometry; anonymous `structure`
+records instead carry `parts` and `fill` (how much of the box is solid — a
+scatter of posts fills a few percent, a building most of it).
+
+Backed by `track.props`, filled by `note()` in `js/track/tracks.js` at each
+semantic emitter, **after** that emitter's on-track and mass-collision guards —
+so a suppressed prop never enters the registry and the list describes what
+actually stands there. It records semantic placements, **not primitives**: Vegas
+emits ~94k primitives but only ~450 placements, because one tree is a trunk plus
+several canopy tiers. Measured totals run 169 (Monaco) to 1,887 (Suzuka) against
+a 40,000 cap, so `dropped` is 0 everywhere and `registry.complete` is true — but
+check it rather than assume, because the registry is emission-ordered and a
+truncated one would under-report late-built areas non-uniformly.
+
+Not covered: kerbs, barriers, guardrails and other road furniture — those live
+in `track.barL`/`barR` as a driving limit, and `wallStats()` reports on them.
+
+### `visible({limit}?) → payload | typedError`
+
+What is actually on screen. The renderer answers this every frame — it extracts
+frustum planes from `frame.viewProj` and tests them against per-chunk AABBs —
+and then throws the answer away. This runs the **same** cull test
+(`GLX.makeFrustumPlanes` / `GLX.aabbInFrustum`, exported from
+`js/render/glx/chunked.js` rather than reimplemented, so the two cannot drift)
+and reports it.
+
+```js
+__apex.visible({ limit: 8 })
+// { camera:{eye,target,fovDeg,mode,debugCam}, framePending,
+//   scenery:{ available, cellSizeM:72, totalCells, visibleCells, cullDistM,
+//             nearest:[{distM,bearingDeg,centre,sizeM}], truncated, note },
+//   cars:[{id,code,isPlayer,distM,bearingDeg,inFrame,screenPct,behindCamera}],
+//   carsInFrame,
+//   corners:[{turn,dir,distM,bearingDeg,inFrame,behindCamera,screenPct}] }
+```
+
+Three things to know:
+
+- **It reflects the LAST RENDERED frame.** `jump()` does not move the camera
+  until a frame draws, and `headless(true)` skips `render()` entirely. Call it
+  after letting frames run, or you will read a camera hundreds of metres from
+  where you just put the car. `framePending` is set under headless and a
+  `warning` field explains it.
+- **Scenery resolution is the 72 m chunk grid, and chunks are anonymous.** This
+  locates scenery *mass* — "54 of 648 cells in view, nearest 24 m out on your
+  right" — it does not name a grandstand. Naming needs the prop registry.
+- **`screenPct` is null unless `inFrame`.** A point on the eye plane has `w→0`
+  and projects to coordinates like `27629%`. That is correct projective maths
+  and useless, so it isn't shipped. Corners behind you are still listed, with
+  `behindCamera: true` and a bearing near ±180° — "T2 is 80 m behind you" is
+  exactly what an agent needs after a spin.
+
+
+---
+
+### Know — what does not change
+
+
+Static for the session (or the car). Fetch once and keep it.
+
+
+### `trackInfo({what}?) → payload | typedError`
+
+Static per-track data — **fetch once per session, never per tick**.
+`what`: `"corners"` (default) · `"sectors"` · `"profile"` · `"all"`.
+
+```js
+__apex.trackInfo({ what: "corners" }).corners
+// [{ turn:"T9-T10", frac, s, dir:"L", radiusM:134, k, sweepDeg:-168,
+//    severity:"medium", widthM, entryS, exitS, lengthM, apexSpeedKph,
+//    straightAfterM, exitsOntoStraight,
+//    bankingDeg, camber, gradientPct, elevation, kerbs }, …]
+//    straightAfterM = road to the next corner; exitsOntoStraight past ~120 m
+```
+
+Corners come from the curated `CircuitMarkings` apex list (real FIA turn
+numbering) where a circuit has one, falling back to curvature peaks. Three
+things happen to make the table trustworthy on OSM-derived centrelines:
+
+- **Curvature is smoothed over a 30 m half-window.** Raw `Tracks.curvature`
+  differentiates over 12 m, which is right for physics and too sharp to
+  describe a corner — at Monza the point curvature through a fast right reads
+  `+0.024, +0.022, −0.039` over 50 m. Taken literally that is a 22 m hairpin
+  followed by a left. It is noise.
+- **Radius comes from heading swept across the whole corner**, not from any one
+  sample: `radius = arcLength / |Δheading|`.
+- **Curated apexes are snapped** to the nearest smoothed-curvature peak (bounded
+  by half the gap to the neighbouring turns), because `CircuitMarkings` is
+  documented as best-effort against this game's centreline. Overlapping results
+  are merged and keep both numbers (`"T9-T10"`).
+
+Sanity check: Monaco's Grand Hotel hairpin resolves to ~10 m, and integrated
+heading over a lap closes to exactly ±360°.
+
+### `worldModel({detail, offset, limit}?) → document | typedError`
+
+The **whole circuit as one structured document**. `scene()` answers "what is near
+me"; this answers "what is this place".
+
+The design problem is size, not availability. Suzuka records 3,422 point
+objects; listed individually that is ~85k tokens of `pine, pine, pine` and it
+describes the world no better than the raw vertex buffer did. So the model
+aggregates:
+
+- **`features`** — contiguous runs of one kind on one side, collapsed:
+  `{kind:"pine", count:247, side:"left", fromS, toS, runLengthM, avgHeightM}`.
+  A run is cut at a 60 m gap **or** 400 m of length, whichever comes first. The
+  length cap matters: without it, trees spaced under the gap threshold all the
+  way round a park circuit collapse into one feature covering 5,741 m of a
+  5,777 m lap — true, and a useless description.
+- **`landmarks`** — individually notable structures (grandstands, buildings,
+  towers, mountains, gantries) with position and size. Landform *segments*
+  (`ridge`, `peak`) cluster instead; a mountain range is hundreds of ridge
+  segments and listing each would bury the real landmarks.
+- **`spans`** — linear furniture (armco, catch fence, tyre walls, boundary
+  walls) as arc-length spans. These are emitted in 3–6 m steps by `along()`;
+  recorded per step they'd be thousands of records saying less. "Guardrail on
+  the right from 0.93 to 0.07, 809 m" *is* the object.
+- **`structure`** — an ANONYMOUS assembly. Each circuit's bespoke `scenery()`
+  also calls the raw guarded emitters directly, and on a street circuit that is
+  most of the world. Consecutive primitives that stay within 30 m of the running
+  centroid are accumulated into one structure with real measured bounds and a
+  `parts` count. Big ones (>6,000 m³ — casino frontages, pit complexes) are
+  promoted to landmarks; the rest cluster.
+- **`totals`** — counts by kind, plus `registryComplete`.
+
+**How complete is it?** Measured by asking, for every shipped primitive, whether
+its centroid falls inside some recorded placement's box: **99.5–99.8%** of
+primitives across Monza, Monaco, Vegas and Suzuka, at 1,078–3,944 records per
+circuit. Before the anonymous-assembly catch-all it was 85% on Monza and 21% on
+Vegas — the named emitters alone miss almost everything on a street circuit.
+
+**It is not vertex data.** `worldModel()` describes objects and bounds. For raw
+geometry use `__apex.trackGeometry()`, which needs `Tracks.setKeepGeometry(true)`
+before the build and returns megabytes of floats — a file to analyse with code,
+never something to read into context.
+
+`detail: "sections"` adds a corner-by-corner walk of the lap:
+
+```json
+{ "from":"T2", "to":"T3", "lengthM":1012.6,
+  "corner":{"dir":"L","radiusM":354.3,"severity":"kink"},
+  "contains":{"pine":247,"tree":188,"bush":24,"grandstand":1,"motorhome":4} }
+```
+
+`detail: "full"` adds the unaggregated object list, paginated via
+`offset`/`limit` (default 500, max 5000) with an `objectPage` cursor. Sign
+boards keep their meaning here — `{board:"corner", value:1}` is the Turn 1
+board, `{board:"braking", value:3}` the 300 m board.
+
+Sizes: summary ~23 KB on Monza; a full Suzuka dump is ~775 KB, so write it to a
+file rather than paging it through context:
+
+```sh
+node tools/agent.mjs suzuka model --detail sections
+node tools/agent.mjs vegas  model --detail full --out artifacts/tmp/vegas.json
+```
+
+### `survey({at, lats, reachM, limit, profile}?) → report | typedError`
+
+**Geometry defects as JSON** — the screenshot-driven survey pass, made
+queryable. The `survey-track` workflow hunts these classes by eye; measured
+prop bounds make them coordinates you can act on.
+
+```js
+__apex.survey().summary
+// { propsChecked:2160, floating:0, buried:0, overVoid:0,
+//   propsOverRoadCandidates:4, terrainHoles:0, groundCliffs:0,
+//   terrainOverRoad:0, modelsSuppressed:0, modelsInvalid:0, clean:true }
+```
+
+Lists: `floating` · `buried` · `overVoid` · `propsOverRoadCandidates` ·
+`terrainHoles` · `groundCliffs` · `terrainOverRoad` · `modelDiagnostics`.
+Pass `{profile:true}` for the full lateral ground table.
+
+It found a shipped bug on its first run: Vegas reported two invalid
+primitives, `size:[0.18,true]` — `js/circuits/vegas.js` passed `mast: true` to
+`tower()`, which takes a height in metres, and both landmark towers lost their
+antennas silently.
+
+**Thresholds are calibrated, and each guards a false positive that would
+otherwise swamp the report:**
+
+| Check | Why it isn't the obvious test |
+|---|---|
+| `floating` (base >0.6 m above **terrain**) | Props are deliberately sunk below grade — `place()` 0.8 m, `anchor()` 0.3 m. "Above zero" flags every prop in the game. |
+| grounded kinds only | A 12.8×1.1×49.3 m slab 13 m up is a **roof**; gantries span the road by design. |
+| `terrainHoles` outside `hw + 2.4 m` | The terrain ribbon stops ~2.2 m short of the tarmac by design and the road mesh covers the middle — counting those reported one hole per station on a clean circuit. |
+| `groundCliffs` as **slope** (>0.55) | A cliff is a gradient, not a height: 1 m of rise over 10 m of lateral is a hillside. Testing absolute rise called Spa "157 steps". |
+
+**`propsOverRoadCandidates` is a screen, not a verdict** — and is excluded from
+`clean` to say so. Registry boxes are world-axis-aligned with no orientation, so
+a 160 m grandstand on a curve inflates its apparent lateral extent: Monza lists
+4 candidates where the vertex-level ground truth is **0**. Confirm with
+`tools/measure-props-over-road.mjs`, which the payload names under
+`authoritative`.
+
+Monza reports `clean: true` while Spa, Monaco and Vegas do not — that
+discrimination is the property that makes the check worth running.
+
+### `plan({radiusM, cols, northUp}?) → map | typedError`
+
+The **allocentric top-down map** — the companion to `frame()`'s first-person
+view, and the text version of `aerial-survey.mjs`. `frame()` forces a
+reference-frame shift for any "where am I on the circuit" question; `plan()`
+answers it directly, drawn **car-up** (forward is up) so no rotation is needed to
+drive, or `{northUp:true}` for the world frame.
+
+```
+                     :#. t tt
+                   t    :.@. tt t          @ = you (centre, facing up)
+                 t      #:..: #t           . road   : kerb   t tree   # structure
+```
+
+Grounded in the research split: [VoT](https://arxiv.org/abs/2404.03622) (+27%
+from a 2-D text grid), [GSU](https://arxiv.org/pdf/2603.17333) (Cartesian
+coordinates beat an ASCII layout — so provide **both**), STMR (semantic +
+topological + metric together wins). The raster is the gestalt; the payload also
+carries a **metric index** so nothing is measured off the characters:
+
+```js
+{ frame:"car-up …", scale:{radiusM, metresPerCol, metresPerRow, cols, rows, note},
+  grid:{ lines, ruler, rulerLabel },
+  ego:{ headingDeg, speedKph, elevationM, onTrackFrac, lateralM, nextCorner },
+  corners:[{ turn, dir, radiusM, cell:[col,row], world:[x,z], aheadM, rightM, distM, bearingDeg }],
+  landmarks:[{ kind, sizeM, cell, world, aheadM, rightM, distM, bearingDeg }],
+  cars:[{ id, code, aheadM, rightM }] }
+```
+
+`node tools/agent.mjs monza plan --radius 200`.
+
+### `carView({team, parts, detail}?) → payload | typedError`
+
+**The car-viewer replacement**, for everything except appearance itself.
+
+```js
+__apex.carView({ team: "ferrari" })
+// { team:{id,name,engine,tier,colors,stats,drivers},
+//   parts:{ budget, spent, remaining,
+//           chosen:[{category,option,optionLabel,cost,desc,tier,supplier}] ×8,
+//           mods:{speed,accel,cornering,braking} },
+//   chassis:{ style:{noseTipZ,noseSlim,noseDroop,airbox,fin,mirror,inlet},
+//             bespokeSilhouette, axles, stations },
+//   geometry:{ vertices, triangles, lengthM, widthM, heightM, wheelbaseM,
+//              boundsM, note } }
+```
+
+`geometry` is **measured from a real `Car3D.build`**, not declared — 5.95 m long,
+2.10 m wide, 1.01 m tall, 3.30 m wheelbase on the default chassis. `chassis.style`
+is the per-team silhouette: nose length/width/droop, airbox scale, dorsal fin,
+mirror housing, sidepod inlet bias — what makes a team's car recognisable
+independent of paint.
+
+`detail:"render"` adds **orthographic edge+shade elevations** (side, top, front)
+rasterised from the real mesh — the text version of the car photo studio. Depth
+discontinuities become `| - / \` edges; interiors are Lambert-shaded into a
+` .:-=+*oO#%@` ramp. `node tools/agent.mjs monza car --detail render`.
+
+`detail:"parts"` adds **per-part measured boxes** under `partGeometry`
+(`parts` stays the parts *spec*), taken from the vertices each
+section of `Car3D.build` emitted — 19 sections including `chassis`, `sidepods`,
+`engineCover`, `frontWing`, `rearAssembly`, `halo`, `mirrors`, `helmet`,
+`suspension`, `wheels`:
+
+```js
+__apex.carView({ detail: "parts" }).partGeometry
+// [{ name:"frontWing", vertices:486, sizeM:[2.09,0.42,1.91],
+//    centreM:[0,0.3,1.77], boundsZ:[0.81,2.72] }, …]
+```
+
+Instrumentation only — the mesh is vertex-identical with or without it (10,992
+either way on the default car), and the sections partition the mesh exactly, so
+their vertex counts sum to the whole. Per-team silhouette shows up in the
+measurements: the nose tip sits at z 3.12 / 3.18 / 3.26 for McLaren / Ferrari /
+Mercedes, tracking each team's `noseTipZ`.
+
+Caveat: sections are **ranges between markers**, so a section can carry a little
+adjacent detail — `sharkFin` reports ~36 vertices even for a team whose
+`chassis.style.fin` is 0. Read a conditional feature's presence from
+`chassis.style`, not from a section's vertex count.
+
+For "does it *look* right" — reflections, decal placement, paint reading — use
+`tools/render-car.mjs`. This answers everything else without a render.
+
+
+---
+
+### Act — drive, and know when it ended
+
+
+### `rollout(opts?) → digest | typedError`
+
+Drive an interval and get a **digest**, not frames. A 5 s experiment at 60 Hz is
+300 observations; reading them back costs tens of thousands of tokens to answer
+a question a few hundred can ("did that change carry more speed through T4?").
+
+| opt | default | meaning |
+|---|---|---|
+| `seconds` | `5` | wall-clock sim seconds (0.05–120) |
+| `dt` | `1/60` | tick size |
+| `input` | — | constant `{steer,throttle,brake}` — open-loop probe |
+| `policy` | — | `(world) => {steer,throttle,brake}` — closed-loop |
+| `policyHz` | `10` | how often the policy is consulted |
+| `samples` | `12` | waypoints in the returned trace (2–60) |
+
+```js
+__apex.rollout({ seconds: 6, input: { steer: 0, throttle: true } })
+// { ran:{ticks,dt,seconds,policy}, from:{frac,lap}, to:{frac,lap}, distanceM,
+//   speedKph:{min,max,mean,final}, offTrack:{events,seconds,pct},
+//   minClearanceM, wallContacts, lapsCompleted, lastLapS,
+//   cornerMinSpeedKph:[{turn,minSpeedKph}], terminal:{done,reason,atS},
+//   samples:[{t,frac,speedKph,lateralM,gear}] }
+```
+
+`policy` implements the loop the real-time agent literature converges on: an LLM
+cannot decide at 60 Hz, so the policy is consulted at `policyHz` while physics
+steps every tick. A policy that throws returns a typed `PolicyError` rather than
+tearing down the run.
+
+`cornerMinSpeedKph` is the field to watch for setup and physics work — minimum
+speed through each corner *actually driven* is what a change moves.
+
+`rollout` calls `world()` internally when given a policy, and restores the
+`seq`/delta baseline afterwards, so it cannot silently break a caller's
+`since=` chain.
+
+### `terminal() → {done, reason} | null`
+
+`reason` is `"finished"` · `"wrong_way"` · `"rescued"` · `null`. `obs().done`
+conflates the last two, so an agent cannot tell "my policy spun the car" from
+"the sim teleported me".
+
+
+---
+
+### Discover and drive from a shell
+
+
+### `agentHelp() → manifest`
+
+~200 tokens naming the surface, the staging sequence and the loop, so an agent
+can find its way without loading this file. `node tools/agent.mjs help`.
+
+### From a shell — `tools/agent.mjs`
+
+The same surface as a CLI, so an agent driving from a terminal doesn't hand-roll
+Playwright boot + `race`/`go`/`jump` staging + `page.evaluate` for every
+question. That boilerplate is where the sharp edges are (a stale camera because
+no frame rendered; a null `obs()` because `player.px` was never initialised) —
+this does the staging correctly once.
+
+```sh
+node tools/agent.mjs help                                  # the manifest
+node tools/agent.mjs monza  world   --detail brief --at 0.25 --speed 70
+node tools/agent.mjs monza  frame   --cols 72 --rows 20    # prints the raster
+node tools/agent.mjs monza  scene   --radius 120 --kinds tree,building --limit 8
+node tools/agent.mjs spa    visible --limit 6
+node tools/agent.mjs monaco track   --what corners
+node tools/agent.mjs suzuka model   --detail sections
+node tools/agent.mjs vegas  model   --detail full --out artifacts/tmp/vegas.json
+node tools/agent.mjs monza  car     --team ferrari --detail parts
+node tools/agent.mjs vegas  survey  --at 32 --reach 80
+node tools/agent.mjs monza  rollout --seconds 6 --steer 0.1 --throttle
+```
+
+`frame` prints the grid itself rather than a JSON string array — the raster is
+meant to be looked at. `--out <file>` writes any command's JSON to disk, which
+is how you want a full `model` dump (hundreds of KB).
+
+Staging flags apply to every command: `--at <frac>` `--speed <m/s>`
+`--lateral <m>` `--weather` `--tod`. Use `apex-eval.mjs` for an arbitrary
+`__apex` expression when you need the escape hatch.
+
+### Recommended loop
+
+An LLM cannot sustain 60 Hz decisions. Use the deterministic stepping below to
+turn this into a turn-based problem:
+
+```js
+__apex.headless(true);
+__apex.race("monza"); __apex.go(); __apex.jump(0.1, 55);
+let w = __apex.world({ detail: "drive" });
+// decide from w …
+w = (__apex.act({ steer: 0.2, throttle: true }, 1/60, 10), __apex.world({ since: w.seq }));
 ```
 
 ---

@@ -254,7 +254,7 @@
       grandstand(0.05, -1, 4, 60, [0.42, 0.36, 0.40], [0.46, 0.30, 0.36]);
       gantry(0.0, 7.5, [0.14, 0.14, 0.18]);
       gantry(0.96, 7.0, [0.14, 0.14, 0.18]);
-      billboard(0.01, 1, 9, 14, 5, FLAME);
+      billboard(K(0.01), 1, 9, 14, 5, FLAME);   // K(): billboard takes a NODE, not a fraction
 
       // ===================================================================
       // National flag poles — three tall flagpoles at the civic plaza.
