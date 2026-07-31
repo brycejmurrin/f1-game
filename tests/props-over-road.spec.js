@@ -63,7 +63,12 @@ test("Shanghai uses the default clean prop-clearance baseline", () => {
 });
 
 test("no prop geometry on/above the racing line (all circuits)", async ({ page }) => {
-  test.setTimeout(600000);
+  // One test walks all 24 circuits, so the budget scales with the roster AND
+  // with how much geometry each circuit carries. 600 s was already marginal on
+  // a 4-core box (observed 616 s) — this is the guard that catches props over
+  // the racing line, so it has to survive a scenery-density pass rather than
+  // fail as a timeout and be mistaken for a geometry regression.
+  test.setTimeout(1500000);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, { timeout: 15000 });
   await page.evaluate(() => __apex.trackGeometry(true));
