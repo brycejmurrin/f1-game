@@ -16,6 +16,7 @@ layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNrm;
 layout(location=2) in vec3 aCol;
 layout(location=3) in float aMat;   // per-vertex material id (0 = FLAT/untextured)
+layout(location=4) in vec3 aTrk;    // road only: (arc-length s, signed lateral x, half-width). (0,0,0) elsewhere.
 uniform mat4 uModel;
 uniform mat4 uViewProj;
 uniform vec3 uEye;
@@ -26,6 +27,7 @@ out vec3 vWorldPos;
 out vec3 vObjPos;
 out float vDist;
 flat out float vMat;
+out vec3 vTrk;        // smooth (NOT flat): the marking SDF needs x/s to vary across the quad
 void main() {
   vec3 pos = aPos;
   // FLAG material (id 15, aMat 15.0..15.4): cloth wind-wave. The FRACTIONAL
@@ -44,6 +46,7 @@ void main() {
   vNrm = mat3(uModel) * aNrm;     // is glued to the panels, not streaming in world.
   vCol = aCol;
   vMat = aMat;                    // constant across the face (flat) — procedural material key
+  vTrk = aTrk;                    // road track-space coords; interpolated across the ribbon
   vDist = length(wp.xyz - uEye);
   gl_Position = uViewProj * wp;
 }`;
@@ -62,6 +65,7 @@ in vec3 vWorldPos;
 in vec3 vObjPos;
 in float vDist;
 flat in float vMat;   // procedural material id (0 = FLAT); textured in applyMaterial()
+in vec3 vTrk;         // road: (s, lateral x, half-width) — drives roadMarkings()
 uniform vec3 uEye;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
@@ -400,7 +404,7 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     float rust = smoothstep(0.55, 0.9, vnoise(vec2(hc * 0.8, y * 0.35) + 5.0));
     albedo = mix(albedo, albedo * vec3(0.62, 0.42, 0.28), rust * 0.5 * far);
     rough = min(1.0, rough + 0.14 * far);
-  } else if (mid == 16) {    // ASPHALT — aggregate speckle + broad laying/wear patches
+  } else if (mid == 16) {    // ASPHALT — aggregate speckle + broad laying/wear patches (markings: roadMarkings())
     // Deliberately understated: this is the surface under the car for the whole
     // race, so it gets tone variation rather than pattern. No fract()/sin()
     // term at all — nothing here can strobe, only soften.
@@ -412,6 +416,49 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     // Tarmac is rough; the wet path (which runs after this) still overrides it.
     rough = min(1.0, rough + 0.10 * far);
   }
+}
+// Road markings, evaluated analytically in TRACK space (s, lateral x, half-width)
+// rather than carried as geometry. The road used to spend four of its fourteen
+// cross-section columns purely on making a hard paint edge — two verts at line
+// colour, then a 5 cm step into asphalt — and the dashed centre line was a
+// per-NODE boolean, floor(s/7) mod 2, evaluated on the ~4 m node grid: a 7 m
+// period point-sampled every 4 m, so the dash lengths beat irregularly against
+// the sampling grid instead of reading as an even 3.5 m on / 3.5 m off.
+//
+// Here the marking is a signed-distance band filtered by fwidth(), so it stays
+// a crisp edge at any distance and any viewing angle, costs no vertices, and
+// cannot alias against the geometry. Gated on half-width so only road geometry
+// paints itself — every other mesh reads aTrk = (0,0,0).
+void roadMarkings(inout vec3 albedo, inout float rough) {
+  float hw = vTrk.z;
+  if (hw <= 0.5) return;                     // not road surface (or no trk attribute)
+  float s = vTrk.x, x = vTrk.y;
+  const vec3 paint = vec3(0.95, 0.95, 0.97);
+
+  // Lateral filter width. Clamped: at a grazing angle fwidth explodes and an
+  // unclamped band would smear the line into a wide grey wash.
+  float aaX = clamp(fwidth(x), 1e-4, 0.30);
+
+  // Edge lines — a 0.20 m band just inside each tarmac edge (matches the old
+  // -w .. -w+0.2 vertex columns).
+  float dEdge = abs(abs(x) - (hw - 0.10));
+  float edge = 1.0 - smoothstep(0.10 - aaX, 0.10 + aaX, dEdge);
+
+  // Dashed centre line — 0.60 m wide, 7 m period, 50% duty. Measuring distance
+  // from the dash CENTRE (0.25 of the period) keeps the band symmetric and
+  // wraps cleanly at the period seam, which a two-smoothstep gate does not.
+  float band = 1.0 - smoothstep(0.30 - aaX, 0.30 + aaX, abs(x));
+  float ph = fract(s / 7.0);
+  float aaS = clamp(fwidth(s) / 7.0, 1e-4, 0.24);
+  float dash = 1.0 - smoothstep(0.25 - aaS, 0.25 + aaS, abs(ph - 0.25));
+
+  // As a marking goes sub-pixel, fade its amplitude rather than let a
+  // half-covered band strobe — the standard minification response.
+  float mip = clamp(1.0 - (aaX - 0.06) / 0.24, 0.0, 1.0);
+  float m = max(edge, band * dash) * mip;
+
+  albedo = mix(albedo, paint, m);
+  rough = mix(rough, 0.55, m);                // paint is smoother than tarmac
 }
 // Cloud cover at a world point: project the point up the sun direction to the
 // cloud deck and sample a drifting FBM — gives moving dappled cloud SHADOWS on
@@ -730,6 +777,8 @@ void main() {
   if (uDetail > 0.0) rough = clamp(rough + (patchM - 0.5) * 0.16 * min(uDetail * 4.0, 1.0), 0.04, 1.0);
   // Procedural per-material surface texture (brick/glass/metal/wood/… ; 0 = FLAT).
   applyMaterial(int(vMat + 0.5), albedo, rough, vDist);
+  // After the material's grain/tint so the paint sits ON the tarmac, not under it.
+  roadMarkings(albedo, rough);
   // Specular anti-aliasing: widen roughness where the normal changes fast in
   // screen space (geometry edges, micro-normal at distance) so thin bright
   // highlights sheen smoothly instead of shimmering pixel-to-pixel.

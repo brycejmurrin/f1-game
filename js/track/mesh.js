@@ -181,6 +181,10 @@ const TrackMesh = (function () {
         // lockstep with pos: buildRoad now ships a mat array and this writes
         // into the same accumulator.
         if (out.mat) out.mat.push(MAT.FLAT, MAT.FLAT);
+        // hw = 0 so roadMarkings() skips the kerb ribbon — it is not road
+        // surface and must not have edge lines painted across it. Lockstep with
+        // pos (see the trk push in buildRoad).
+        if (out.trk) out.trk.push(k * ds, oA, 0, k * ds, oB, 0);
         base.push(ai);
       }
       for (let i = 0; i < count; i++) {
@@ -303,7 +307,7 @@ const TrackMesh = (function () {
 
   function buildRoad(track) {
     const { n, px, py, pz, hw } = track;
-    const pos = [], nrm = [], col = [], mat = [];
+    const pos = [], nrm = [], col = [], mat = [], trk = [];
     const idxArr = [];
     const bp = track.bankP;
     const grid = nodeGrid(track);              // shared node grid (also used by buildTerrain/buildProps)
@@ -354,7 +358,8 @@ const TrackMesh = (function () {
       // keeping the shoulder only slightly recessed means props (fences, walls)
       // anchored to the terrain height still meet it with no gap underneath.
       const rise = [-0.05, -0.02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.02, -0.05];
-      const dash = (Math.floor((k * ds) / 7) % 2) === 0;   // dashed centre line
+      // (the per-node `dash` boolean lived here; the dash is now a continuous
+      // function of s in roadMarkings(), so it no longer beats against the grid)
       // Banking pivots each cross-section around its centreline (inner edge
       // -> -lift/2, outer edge -> +lift/2). Verts past the road clamp to those
       // edge heights so kerbs/shoulders ride with it rather than tearing away.
@@ -398,16 +403,17 @@ const TrackMesh = (function () {
         // and the material system never touched the one thing on screen for the
         // entire race. Painted markings stay FLAT deliberately — road paint is
         // smooth, and giving it aggregate relief makes the lines look gritty.
+        // The painted markings are NO LONGER vertex colour — roadMarkings() in
+        // the lit fragment shader draws the edge lines and the dashed centre
+        // line analytically from the (s, x, hw) in `trk`. Columns 2/3/10/11 and
+        // 6/7 still exist geometrically (they are removed in a follow-up) but
+        // now carry plain asphalt, so the shader owns the paint outright and
+        // the two cannot disagree. `line` stays referenced by nothing here.
         let c, m;
         if (v === 0 || v === 13) {
           c = grass; m = MAT.GRASS;
         } else if (v === 1 || v === 12) {
           c = grass; m = MAT.GRASS;   // kerb ribbons added separately by buildKerbs
-        } else if (v === 2 || v === 3 || v === 10 || v === 11) {
-          c = line; m = MAT.FLAT;     // bold white edge line — smooth paint
-        } else if (v === 6 || v === 7) {
-          if (dash) { c = line; m = MAT.FLAT; }          // dashed centre line
-          else { const f = wearF(v), g = (hash(k * 13 + v) - 0.5) * 0.016; c = [asphalt[0] * f + g, asphalt[1] * f + g, asphalt[2] * f + g]; m = MAT.ASPHALT; }
         } else {
           // asphalt running surface: racing-line wear + subtle aggregate grain
           const f = wearF(v), grain = (hash(k * 13 + v) - 0.5) * 0.016;
@@ -416,6 +422,11 @@ const TrackMesh = (function () {
         }
         col.push(c[0], c[1], c[2]);
         mat.push(m);
+        // Track-space coords for the fragment-side marking SDF (roadMarkings()
+        // in js/render/shaders/lit.js). hw > 0 is what marks a vertex as road
+        // SURFACE — the kerb ribbon and the edge skirt push hw 0 so they are
+        // skipped. Must stay in lockstep with pos: three writers append here.
+        trk.push(k * ds, o, w);
       }
     }
     for (let k = 0; k < n; k++) {
@@ -464,6 +475,8 @@ const TrackMesh = (function () {
             // Left FLAT: the ground materials key off world XZ, which barely
             // varies across a vertical face and would streak.
             mat.push(MAT.FLAT, MAT.FLAT);
+            // hw = 0: vertical seam filler, not road surface (see buildRoad).
+            trk.push(k * ds, 0, 0, k * ds, 0, 0);
           }
           for (let k = 0; k < n; k++) {
             const a = base + k * 2, b = base + ((k + 1) % n) * 2;
@@ -474,8 +487,8 @@ const TrackMesh = (function () {
         skirt(0); skirt(13);
       }
     }
-    buildKerbs(track, { pos, nrm, col, mat, idx: idxArr });
-    return { pos, nrm, col, mat, idx: idxArr };
+    buildKerbs(track, { pos, nrm, col, mat, trk, idx: idxArr });
+    return { pos, nrm, col, mat, trk, idx: idxArr };
   }
 
   function buildTerrain(track) {
