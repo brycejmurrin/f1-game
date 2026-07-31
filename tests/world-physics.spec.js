@@ -121,21 +121,31 @@ test.describe("Apex 26 — world-space player physics", () => {
   test("AI stays on track and progresses after the racing-line flip", async ({ page }) => {
     await startRace(page);
     const r = await page.evaluate(() => {
-      // This test is about the AI. It used to hold the PLAYER flat-out with no
-      // steering for 10 s merely as a way to let the race run — which only stayed
-      // on track because the assist was on by default. Opting the assist back in
-      // is not enough either: at 80+ m/s it cannot hold an un-steered car through
-      // a corner, and it is not supposed to be able to.
-      // So don't drive the player at all. step() runs the whole field regardless,
-      // and a stationary player sits at x ~ 0 instead of contaminating the
-      // off-track count that the AI is being judged by.
-      window.__apex.setInput({ steer: 0, throttle: false });
+      // This test judges the AI, so BOTH its metrics must be AI-only. It used to
+      // hold the player flat-out with no steering merely to let the race run,
+      // which only stayed on track because the assist was on by default; with the
+      // assist now shipping at 0 the un-steered player leaves the road and tripped
+      // the |x| > 18 count. Simply not driving the player is worse — it parks a
+      // stationary car in the middle of the grid and the field piles into it
+      // (measured: minProg -120 after 10 s, i.e. the AI never got away).
+      // So drive the player as before and judge only the AI, below.
+      //
+      // STILL FAILING, and left failing rather than guessed at further. minProg
+      // after 10 s measures: -120 with the player parked in the pack (it blocks
+      // the grid), 16.8 driving through them as here, 6.9 with the player
+      // teleported half a lap away — so removing the player made it WORSE, which
+      // contradicts the blocking explanation and means the cause is not
+      // understood. Note the AI rubber-band reads player.prog
+      // (`gap = player.prog - c.prog`), so where the player is changes AI pace;
+      // that is the thread to pull. The 70 m threshold assumes a field that gets
+      // away cleanly, and something about the grid start no longer does.
+      window.__apex.setInput({ steer: 0, throttle: true });
       for (let i = 0; i < 600; i++) window.__apex.step(1 / 60, 1);  // ~10 s
       window.__apex.clearInput();
       const cars = window.__apex.cars();
       const ai = cars.filter((c) => !c.p);   // the player is hand-driven here
       return {
-        offTrack: cars.filter((c) => Math.abs(c.x) > 18).length,
+        offTrack: ai.filter((c) => Math.abs(c.x) > 18).length,   // AI only — see above
         minProg: Math.min(...ai.map((c) => c.prog)),
       };
     });
