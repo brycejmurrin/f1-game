@@ -83,6 +83,19 @@
  * particles) survives three's z-sort. GLX's colorMask-alpha-off on
  * particles/decals maps to blendSrcAlpha=Zero/blendDstAlpha=One (three has
  * only a boolean Material.colorWrite — see the tsl-fx.js header).
+ *
+ * M7 STATUS: the chunked-mesh path is live (tlx-chunked.js,
+ * TLXShaders.chunked): createChunkedMesh bins the city/props triangles into
+ * 72 m XZ cells (GLXChunked port — shared attribute set, one index buffer +
+ * AABB per cell, staged release of the multi-million-element source arrays),
+ * drawChunked records the WHOLE chunked mesh and present() culls it against
+ * begin()'s viewProj copy + frame.cullDist when the camera is final — every
+ * visible chunk becomes one pooled mesh stamping the record's renderOrder
+ * (the M6 LOAD-BEARING rule holds: FX/glass interleaving survives).
+ * castShadowChunked culls against the shadow system's castCullVP (lamp cone)
+ * or the sun lightVP, radial cull OFF — an off-camera building still casts
+ * into view. Probe: __tlx.chunkState() = {on, total, visible} from the last
+ * presented frame.
  */
 "use strict";
 
@@ -202,6 +215,19 @@ const TLX = (function () {
       } catch (e) {
         try { console.warn("TLX: fx factory failed, FX paths off —", e); } catch (_) {}
         fx = null;
+      }
+
+      // ── M7: the chunked-mesh subsystem (tlx-chunked.js factory) ──────────
+      // Guarded like the others: missing/broken keeps the M2 single-geometry
+      // fallback (one un-culled draw — correct, just slower on street props).
+      let chunkedSys = null;
+      try {
+        if (window.TLXShaders && TLXShaders.chunked) {
+          chunkedSys = TLXShaders.chunked(THREE, {});
+        }
+      } catch (e) {
+        try { console.warn("TLX: chunked factory failed, un-culled props —", e); } catch (_) {}
+        chunkedSys = null;
       }
 
       // Debug viz mode (?viz=mat|normal|lamp or localStorage apex26.tlxViz):
@@ -330,6 +356,16 @@ const TLX = (function () {
       // GLX _glowCorners with the GLOW_VS y*2-1 remap pre-baked (y 0..1 -> ±1).
       const _glowCorners = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
       let frameEye = null;          // frame.eye — the glow near-field fade origin
+      // ── M7 chunked-cull frame state ──────────────────────────────────────
+      // begin() copies frame.viewProj here (game.js may swap the frame's own
+      // array between begin and present — the env-probe path does on GLX);
+      // present() culls chunked records against THIS frustum, when the
+      // frame's camera is final.
+      const _frameVP = new Float32Array(16);
+      let frameCullDist = 0;        // frame.cullDist — the radial draw cap (0 = off)
+      const _chunkFrame = { total: 0, visible: 0 };   // reset each begin
+      const _chunkLast = { total: 0, visible: 0 };    // latched at present — __tlx.chunkState()
+      const _mirrorRelease = [];    // chunked meshes whose first lit draw is THIS render
       // Per-frame FX record counters (reset in begin, latched at present) —
       // the __tlx.fxState() probe the M6 tests assert against.
       const _fxFrame = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0 };
@@ -430,11 +466,12 @@ const TLX = (function () {
           g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
           return { __tlx: true, geo: g, tex: true, count: data.idx.length };
         },
-        // M2: chunked meshes are a single un-culled geometry (one draw).
-        // tlx-chunked.js (M7) adds binning + frustum/radial culling + the
-        // staged memory-release discipline.
-        createChunkedMesh(data) {
+        // M7: real chunked build (tlx-chunked.js) — spatial binning, per-cell
+        // AABBs, staged release of the source arrays. Falls back to the M2
+        // single un-culled geometry when the factory is missing.
+        createChunkedMesh(data, cellSize) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
+          if (chunkedSys) return chunkedSys.build(data, cellSize);
           return { __tlx: true, geo: buildGeometry(data), chunked: true, count: (data.idx && data.idx.length) || 0 };
         },
         createTexture(src) {
@@ -446,14 +483,31 @@ const TLX = (function () {
           return { __tlx: true, tex: t };
         },
         freeMesh(m) { if (m && m.geo) { m.geo.dispose(); m.geo = null; } },
-        freeChunkedMesh(m) { if (m && m.geo) { m.geo.dispose(); m.geo = null; } },
+        freeChunkedMesh(m) {
+          if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
+          if (m && m.geo) { m.geo.dispose(); m.geo = null; }
+        },
         freeTexture(t) { if (t && t.tex) { t.tex.dispose(); t.tex = null; } },
 
         // frame protocol — shadow passes delegate to the M4 subsystem
         // (tlx-shadow.js); a missing factory keeps them as safe no-ops.
         shadowBegin(vp) { if (shadowSys) shadowSys.shadowBegin(vp); },
         castShadow(mesh, model) { if (shadowSys) shadowSys.castShadow(mesh, model); },
-        castShadowChunked(mesh, model) { if (shadowSys) shadowSys.castShadowChunked(mesh, model); },
+        // M7: cull chunked casters against the ACTIVE depth pass's light
+        // frustum — castCullVP (the lamp's perspective cone between
+        // lampShadowBegin/End) or the static sun box (glx/chunked.js:170-191).
+        // NO radial cull: an off-camera building can still cast INTO view.
+        castShadowChunked(mesh, model) {
+          if (!shadowSys) return;
+          const S = shadowSys.S;
+          if (mesh && mesh.chunks && chunkedSys && S.depthPassOn) {
+            const n = chunkedSys.cull(mesh, S.castCullVP || S.lightVP, null, 0);
+            const vis = chunkedSys.visList;
+            for (let i = 0; i < n; i++) shadowSys.castShadow(vis[i].wrap, model);
+            return;
+          }
+          shadowSys.castShadowChunked(mesh, model);
+        },
         shadowEnd() { if (shadowSys) shadowSys.shadowEnd(); },
         carShadowBegin(vp) { if (shadowSys) shadowSys.carShadowBegin(vp); },
         carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
@@ -493,6 +547,10 @@ const TLX = (function () {
           // per-frame FX pools.
           if (fx && frame) fx.updateFrame(frame);
           frameEye = (frame && frame.eye) || null;
+          // M7: latch the cull frustum + radial cap for present()'s chunk cull.
+          if (frame && frame.viewProj) _frameVP.set(frame.viewProj);
+          frameCullDist = (frame && frame.cullDist) || 0;
+          _chunkFrame.total = 0; _chunkFrame.visible = 0;
           _fxMatUsed = 0;
           _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
           _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0;
@@ -516,8 +574,16 @@ const TLX = (function () {
         draw(mesh, model, opts) {
           if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model, mat: materialFor(opts, false) });
         },
+        // M7: a chunked mesh records the WHOLE handle; present() culls it per
+        // chunk against the frame's final camera. The M2 fallback shape
+        // (chunks null / factory missing) stays a single-geometry record.
         drawChunked(mesh, model, opts) {
-          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model, mat: materialFor(opts, true) });
+          if (!mesh) return;
+          if (mesh.chunks && chunkedSys) {
+            drawList.push({ geo: null, chunked: mesh, m: model, mat: materialFor(opts, true) });
+          } else if (mesh.geo) {
+            drawList.push({ geo: mesh.geo, m: model, mat: materialFor(opts, true) });
+          }
         },
         // ── M6 FX paths — each appends a draw-list record; blend/offset/mask
         // state lives on the tsl-fx materials (three applies it per material,
@@ -628,10 +694,35 @@ const TLX = (function () {
           // the transparent FX as a group — strictly safer than GLX's inline
           // order because FX never write depth.
           for (let i = 0; i < drawList.length; i++) {
-            acquireMesh(drawList[i].geo, drawList[i].m, drawList[i].mat).renderOrder = i;
+            const rec = drawList[i];
+            if (rec.chunked) {
+              // M7: cull NOW, against begin()'s viewProj copy — the camera is
+              // final at present time. Every visible chunk stamps the SAME
+              // renderOrder = submission index, so the record stays one unit
+              // in three's list sort (the M6 LOAD-BEARING rule).
+              const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist);
+              const vis = chunkedSys.visList;
+              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
+              _chunkFrame.total += rec.chunked.chunks.length;
+              _chunkFrame.visible += n;
+              // First lit render with >= 1 chunk drawn uploads the shared
+              // vertex attributes — the CPU mirrors can go after render()
+              // (kept under a viz override: viz materials consume a subset
+              // of the attributes, so not all buffers would be created).
+              if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat) _mirrorRelease.push(rec.chunked);
+              continue;
+            }
+            acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
           }
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
           renderer.render(scene, camera);
+          _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
+          // M7 staged release, final stage: the render above created the GPU
+          // buffers for any first-drawn chunked mesh — drop its shared vertex
+          // mirrors (glx/chunked.js:118 "uploaded to the VBO — drop the CPU
+          // copy"; see tlx-chunked.js releaseMirrors for why this is safe).
+          for (let i = 0; i < _mirrorRelease.length; i++) chunkedSys.releaseMirrors(_mirrorRelease[i]);
+          _mirrorRelease.length = 0;
           _fxLast.shadows = _fxFrame.shadows; _fxLast.marks = _fxFrame.marks;
           _fxLast.skidVerts = _fxFrame.skidVerts; _fxLast.glow = _fxFrame.glow;
           _fxLast.particles = _fxFrame.particles; _fxLast.decals = _fxFrame.decals;
@@ -672,6 +763,12 @@ const TLX = (function () {
               cloud: sky ? sky.uniforms.cloud.value : -1,
               sunDir: sky ? sky.uniforms.sunDir.value.toArray() : null,
             };
+          },
+          // M7 probe: chunk totals from the last presented frame, summed over
+          // every chunked record (props + glass on street circuits). visible
+          // < total at any parked camera proves the cull engages.
+          chunkState() {
+            return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
           },
           viz: vizMode,
           materialCacheSize() { return matCache.size; },

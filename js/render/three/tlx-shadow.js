@@ -62,6 +62,11 @@
       // are never created, so their Begins no-op but game.js still issues the
       // caster draws, which must be silently swallowed (GLX S.depthPassOn).
       depthPassOn: false,
+      // Light frustum the chunked shadow caster culls against: null = the
+      // static sun box (S.lightVP); lampShadowBegin points it at the lamp's
+      // perspective frustum for the duration of that pass (GLXShadow
+      // S.castCullVP 1:1 — consumed by tlx.js castShadowChunked, M7).
+      castCullVP: null,
       carEnabled: false, carLightVP: new Float32Array(16),
       carArmed: false,           // set by carShadowBegin, cleared each present()
       carArms: 0,                // lifetime Begin count (debug introspection)
@@ -200,8 +205,14 @@
       if (!S.lampEnabled) return;
       S.lampIdx = lightIdx | 0;
       beginPass(lampRT, lightVP, S.lampLightVP);
+      S.castCullVP = S.lampLightVP;   // chunked casters cull to the lamp cone
       S.lampArmed = true;
       S.lampArms++;
+    }
+
+    function lampShadowEnd() {
+      S.castCullVP = null;
+      endPass();
     }
 
     /** Armed flags: set by the Begins above each frame game.js runs the pass,
@@ -222,13 +233,14 @@
       pcss: false,               // TODO M4-PCSS (see header)
       shadowBegin,
       castShadow: cast,
-      // M4: chunked meshes are still one un-culled geometry (tlx.js
-      // createChunkedMesh), so the chunked caster IS the plain caster.
-      // tlx-chunked.js (M7) adds the light-frustum binning GLXChunked has.
+      // M7: tlx.js castShadowChunked owns the per-chunk light-frustum cull
+      // (tlx-chunked.js) and feeds each visible chunk through castShadow.
+      // This member stays the plain caster as the FALLBACK for the M2
+      // single-geometry chunked shape (chunked factory missing).
       castShadowChunked: cast,
       shadowEnd: endPass,
       carShadowEnd: endPass,
-      lampShadowEnd: endPass,
+      lampShadowEnd,
       carShadowBegin,
       lampShadowBegin,
       clearArmed,

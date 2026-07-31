@@ -16,7 +16,11 @@ const GLXShadow = (function () {
     const gl = core.gl;
     const { useProg, bindVAO, setBlend, setDepthMask, link, locs } = core;
     const { DEPTH_VS, DEPTH_FS, POST_VS, BLOCKER_FS } = GLXShaders;
-    const SHADOW_SIZE = core.MOBILE_TIER ? 1024 : 2048;   // 1024² saves 12 MB on the mobile tier
+    // Keyed on the DEVICE (IS_MOBILE), not the memory tier: GRAPHICS: HIGH on a
+    // phone must not 4x the snap-cache redraw cost (terrain+road+whole city into
+    // the map roughly every 10 m of travel) - that redraw frame was the periodic
+    // HIGH-tier stall. 1024² also saves 12 MB on every phone.
+    const SHADOW_SIZE = core.IS_MOBILE ? 1024 : 2048;
     const CAR_SHADOW_SIZE = 1024;                         // dynamic car-only shadow map (desktop tier)
     const LAMP_SHADOW_SIZE = 512;                         // nearest-floodlight spot map (desktop tier)
 
@@ -102,7 +106,7 @@ const GLXShadow = (function () {
       // blob-only (memory + fill cost), and WGX has no car pass yet (game.js
       // guards on gfx.carShadowBegin).
       S.carEnabled = false;
-      if (ok && !core.MOBILE_TIER) {
+      if (ok && !core.IS_MOBILE) {   // true desktop only - a per-frame pass is the HIGH-tier lag, not a memory cap
         S.carTex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, S.carTex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, CAR_SHADOW_SIZE, CAR_SHADOW_SIZE, 0,
@@ -126,7 +130,7 @@ const GLXShadow = (function () {
       // Desktop only, like the car map: per-frame depth passes and the extra
       // sampler are exactly the discretionary cost the mobile tier sheds.
       S.lampEnabled = false;
-      if (ok && !core.MOBILE_TIER) {
+      if (ok && !core.IS_MOBILE) {   // true desktop only - a per-frame pass is the HIGH-tier lag, not a memory cap
         S.lampTex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, S.lampTex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, LAMP_SHADOW_SIZE, LAMP_SHADOW_SIZE, 0,

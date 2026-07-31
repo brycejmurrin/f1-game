@@ -185,7 +185,7 @@ const GLX = (function () {
       // (Apple GPUs round the request up to 4×) — pure waste on the post path,
       // which renders offscreen and only blits a resolved image to the screen.
       // On the memory-tight mobile tier that's ~40-50 MB of IOSurface for nothing.
-      antialias: !MOBILE_TIER,
+      antialias: !IS_MOBILE,   // phones never take the context-level AA path (see GRAPHICS: HIGH note in shadow.js)
       alpha: false,
       powerPreference: "high-performance",
     });
@@ -242,6 +242,7 @@ const GLX = (function () {
     core = {
       gl,
       MOBILE_TIER,
+      IS_MOBILE,
       useProg, bindVAO, setBlend, setDepthMask,
       compile, link, locs,
       toF32, createMesh, litMaterial,

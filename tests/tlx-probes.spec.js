@@ -164,6 +164,35 @@ test.describe("TLX — boot", () => {
     expect(errors).toEqual([]);
   });
 
+  test("M7 chunked path culls and frees the source arrays on a street circuit", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("singapore"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.evaluate(() => window.__apex.park(0.1));
+    // Wait for a presented frame that carried chunked records (props + glass).
+    await page.waitForFunction(() => GLX.__tlx.chunkState().total > 0, { timeout: 60_000 });
+    const st = await page.evaluate(() => {
+      const geo = window.__apex.trackGeometry();
+      return {
+        chunk: GLX.__tlx.chunkState(),
+        // Staged memory release: the game keeps track.propsGeo, but its raw
+        // multi-million-element source arrays must be freed by the build
+        // (data._keepPositions unset on the normal path).
+        propsFreed: !!geo && !!geo.props
+          && geo.props.pos === null && geo.props.idx === null && geo.props.nrm === null,
+      };
+    });
+    expect(st.chunk.on).toBe(true);
+    expect(st.chunk.total).toBeGreaterThan(20);              // the city actually binned
+    expect(st.chunk.visible).toBeGreaterThan(0);             // something survived the cull
+    expect(st.chunk.visible).toBeLessThan(st.chunk.total);   // culling engages at a parked cam
+    expect(st.propsFreed).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
   test("menu is reachable and canvas is sized (no-track begin/present path)", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
