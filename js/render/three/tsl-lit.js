@@ -76,7 +76,14 @@
     // factory time. Null (no probe target) keeps the analytic-gradient mirror
     // ONLY — the pre-M9 look. A JS-level guard, so the cube fetch is absent
     // from the compiled program when there's no cube (no dummy binding needed).
+    // ONE shared cube node across every material variant (like the U.* uniform
+    // nodes): tlx.js swaps its .value to a black dummy cube while rendering
+    // INTO the probe (the env pass draws glass, an envSurface — sampling the
+    // live cube there would be a texture feedback loop; GLX's dummy-cube guard,
+    // glx.js:849-859). .sample(Rg) clones per use but resolves its binding
+    // from this base, so the swap covers all variants at once.
     const ENV_CUBE = ctx.envCube || null;
+    const envCubeNode = ENV_CUBE ? cubeTexture(ENV_CUBE) : null;
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
     const carShadowOn = !!(shadowOn && SHD.S.carEnabled && SHD.carTex);
     const lampShadowOn = !!(shadowOn && SHD.S.lampEnabled && SHD.lampTex);
@@ -911,12 +918,13 @@
           const horiz = smoothstep(-0.12, 0.30, Rg.y);
           const skyR = mix(vec3(U.skyHorizon).mul(1.2), vec3(U.skyZenith), sqrt(max(Rg.y, 0.0)));
           const envCC = mix(vec3(U.ambGround).mul(0.6), skyR, horiz).toVar();
-          // M9: fetch the real surroundings from the probe cube (roughness ->
-          // mip LOD for a soft reflection) and cross-fade the analytic mirror
-          // toward it by the probe strength. envCC is already .toVar()-anchored,
-          // so this unconditional reassign never strands (STANDING RULE).
-          if (ENV_CUBE) {
-            const cubeRefl = cubeTexture(ENV_CUBE, Rg, rough.mul(2.5)).rgb;
+          // M9: fetch the real surroundings from the probe cube along the
+          // reflection vector and cross-fade the analytic mirror toward it by
+          // the probe strength (uEnvStr, 0 off). envCC is already
+          // .toVar()-anchored, so this unconditional reassign never strands
+          // (STANDING RULE). .sample() shares the swappable base node.
+          if (envCubeNode) {
+            const cubeRefl = envCubeNode.sample(Rg).rgb;
             envCC.assign(mix(envCC, cubeRefl, probeLive));
           }
           // sun disc in the mirror: pow-400 lobe widened by the AA variance
@@ -1169,8 +1177,12 @@
     // probe's ready state × the CAR ENV REFLECTION (carEnvCube) knob — 0 keeps
     // the analytic-gradient mirror only, >0 blends in the real cube fetch.
     function setEnvStr(v) { U.envStr.value = +v || 0; }
+    // M9: swap the shared env-cube binding. tlx.js points it at a black dummy
+    // cube while rendering INTO the probe (feedback-loop guard) and back at the
+    // live cube for the main pass. No-op when there's no cube node.
+    function setEnvCube(tex) { if (envCubeNode && tex) envCubeNode.value = tex; }
 
-    return { makeMaterial, makeViz, uniforms: U, updateFrame, setEnvStr, MAX_LIGHTS };
+    return { makeMaterial, makeViz, uniforms: U, updateFrame, setEnvStr, setEnvCube, MAX_LIGHTS };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { lit });

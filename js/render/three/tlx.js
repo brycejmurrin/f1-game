@@ -250,20 +250,32 @@ const TLX = (function () {
       // null and every env member a safe no-op (the pre-M9 analytic look).
       // NO sRGB anywhere — NoColorSpace on the cube, the calibration invariant.
       const ENV_SIZE = 64;
-      let envRT = null;
+      let envRT = null, envDummy = null;
       try {
         const envHdr = !!(post && post.hdrOk());
-        envRT = new THREE.CubeRenderTarget(ENV_SIZE, {
+        const envOpts = {
           type: envHdr ? THREE.HalfFloatType : THREE.UnsignedByteType,
           format: THREE.RGBAFormat,
           generateMipmaps: true,
           minFilter: THREE.LinearMipmapLinearFilter,
           magFilter: THREE.LinearFilter,
-        });
+        };
+        envRT = new THREE.CubeRenderTarget(ENV_SIZE, envOpts);
         envRT.texture.colorSpace = THREE.NoColorSpace;   // no-sRGB invariant (probe target too)
+        // A COMPLETE black cube bound whenever the live probe must NOT be
+        // sampled: while rendering INTO envRT (feedback-loop guard) and before
+        // the first full capture. Cleared black once so it reads as no-mirror.
+        envDummy = new THREE.CubeRenderTarget(1, envOpts);
+        envDummy.texture.colorSpace = THREE.NoColorSpace;
+        const _prevTgt = renderer.getRenderTarget();
+        const _prevA = renderer.getClearAlpha ? renderer.getClearAlpha() : 1;
+        renderer.setClearColor(0x000000, 1);
+        for (let f = 0; f < 6; f++) { renderer.setRenderTarget(envDummy, f); renderer.clear(); }
+        renderer.setRenderTarget(_prevTgt);
+        try { renderer.setClearAlpha(_prevA); } catch (_) {}
       } catch (e) {
         try { console.warn("TLX: env-probe target alloc failed, analytic reflections only —", e); } catch (_) {}
-        envRT = null;
+        envRT = null; envDummy = null;
       }
 
       // ── M3: the TSL lit core (tsl-chunks.js + tsl-lit.js factories) ──────
@@ -485,8 +497,19 @@ const TLX = (function () {
       function ensureEnvCam() {
         if (envCubeCam || !envRT) return;
         // CubeCamera(near, far, renderTarget): its 6 children are the face
-        // PerspectiveCameras (PX,NX,PY,NY,PZ,NZ) three keeps oriented for us.
+        // PerspectiveCameras. three only orients them inside update() (which
+        // renders all 6 faces at once); we render ONE face per call, so we
+        // orient them ourselves via updateCoordinateSystem() — after which
+        // children[f] pairs with setRenderTarget(envRT, f), the exact face
+        // index/camera pairing three's own update() loop uses.
         envCubeCam = new THREE.CubeCamera(0.4, 900, envRT);
+        try {
+          envCubeCam.coordinateSystem = renderer.coordinateSystem;
+          envCubeCam.updateCoordinateSystem();
+        } catch (e) {
+          try { console.warn("TLX: env cube-cam orient failed, probe off —", e); } catch (_) {}
+          envCubeCam = null;
+        }
       }
 
       function acquireMesh(geo, matrixArr, material) {
@@ -695,10 +718,15 @@ const TLX = (function () {
           }
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
           try {
+            // Feedback-loop guard: the glass we're about to draw is an
+            // envSurface that samples the cube — point the shared cube node at
+            // the black dummy while envRT is the render target, restore after.
+            if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
             renderer.setRenderTarget(envRT, face & 7);
             renderer.render(scene, faceCam);
           } catch (_) { /* a probe face must never strand the frame */ }
           renderer.setRenderTarget(null);
+          if (lit && lit.setEnvCube) lit.setEnvCube(envRT.texture);
           drawList.length = 0;   // the main pass re-issues its own draws
           poolUsed = 0;
           _envActive = false;
