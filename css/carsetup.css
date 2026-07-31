@@ -326,6 +326,19 @@
 /* DONE is the only action; centre it in the pinned bar. */
 #carsetup .sheet-foot { justify-content: center; }
 
+/* Columns live on the sheet itself, so they cannot sit in a `@container sheet`
+   block — #cs-inner IS that container, and such a rule would resolve against a
+   non-existent outer one. Declared here instead, with every direct child
+   spanning both columns so the narrow layout is unchanged; the rail/list split
+   only takes effect once #cs-body dissolves in the wide block below. */
+#cs-inner {
+  grid-template-columns: minmax(112px, 27%) minmax(0, 1fr);
+  column-gap: var(--gap);
+}
+#cs-inner > .sheet-head,
+#cs-inner > .sheet-body,
+#cs-inner > .sheet-foot { grid-column: 1 / -1; }
+
 /* ================= LAYOUT: container queries on the sheet =================
    Not media queries. What the panel can afford is a function of the width it
    was given (which already accounts for the safe area and for the room the car
@@ -356,14 +369,26 @@
   #cs-budget { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #cs-stats-inner { flex: 1 1 100%; order: 3; }   /* stats get their own row */
 
-  #cs-body {
-    display: grid;
-    grid-template-columns: minmax(112px, 27%) minmax(0, 1fr);
-    align-items: stretch;
-  }
+  /* Same split as the select screen, for the same reason: DONE only ever sits
+     under the category rail, so a full-width action bar was stealing a row of
+     options from the list beside it. #cs-body goes `display: contents` (the
+     trick #cs-budget-wrap already uses above) so both panes become grid items
+     of the sheet, and the option list spans the body row AND the foot row —
+     full sheet height to scroll in. Each pane then carries the padding the
+     shared .sheet-body used to provide. */
+  #cs-body { display: contents; }
+  #cs-inner > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
   #cs-tabs {
-    max-height: none;
+    grid-column: 1; grid-row: 2;
+    max-height: none; min-height: 0;
     grid-template-columns: minmax(0, 1fr);
+    padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
   }
+  #cs-options {
+    grid-column: 2; grid-row: 2 / 4;
+    min-height: 0;
+    padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5) 0;
+  }
+  #cs-inner > .sheet-foot { grid-column: 1; grid-row: 3; }
 }
 } /* @layer components */

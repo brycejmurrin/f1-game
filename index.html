@@ -253,10 +253,6 @@
             <button id="sel-setup" class="sel-edit">&#9881; CAR SETUP</button>
           </div>
         </section>
-        <section class="sel-section" id="sel-diff-section">
-          <h3 class="sel-label" id="sel-diff-label">DIFFICULTY</h3>
-          <div id="sel-diff" class="chip-row" role="group" aria-labelledby="sel-diff-label"></div>
-        </section>
       </div>
 
       <!-- WHERE YOU RACE: label + preview are pinned, #sel-tracks scrolls. -->
@@ -344,6 +340,13 @@
       <div class="rs-row" id="rs-time-section">
         <h3 class="sel-label">TIME OF DAY</h3>
         <div id="rs-time" class="chip-row"></div>
+      </div>
+      <!-- DIFFICULTY lives here with the other race settings, not on the select
+           screen: it is a property of the race you are about to start, the same
+           as laps and weather. Hidden in a time trial — there is no AI to rate. -->
+      <div class="rs-row" id="rs-diff-section">
+        <h3 class="sel-label" id="rs-diff-label">DIFFICULTY</h3>
+        <div id="rs-diff" class="chip-row" role="group" aria-labelledby="rs-diff-label"></div>
       </div>
     </div>
     <div class="sheet-foot">
