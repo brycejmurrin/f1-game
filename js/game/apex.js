@@ -1453,6 +1453,12 @@ const api = {
   // and "what can I see" questions. Needs a rendered frame.
   frame(opts) { return agentView.frame(opts); },
 
+  // plan({radiusM, cols, northUp}?) — the world from ABOVE as a text map:
+  // track ribbon, named scenery and cars, drawn car-up so forward is up (or
+  // northUp for the world frame), with metric axes so every cell is a
+  // coordinate. The allocentric companion to frame()'s first-person view.
+  plan(opts) { return agentView.plan(opts); },
+
   // carView({team, parts}?) — the car as JSON: team identity, livery colours,
   // the full parts spec and its stat effects, the per-team chassis silhouette
   // knobs, and measured geometry from a real Car3D build. Replaces the car

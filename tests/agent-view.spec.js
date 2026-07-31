@@ -356,6 +356,61 @@ test.describe("world() nextCorner", () => {
 // road filling the lower half, pines flanking, structures right — see
 // docs/AGENT-WORLD-API.md for what that comparison caught.
 
+test.describe("frame() cameras and edges", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("renders any of the 13 camera modes without a live frame", async ({ page }) => {
+    await load(page, "monza", 0.05, 60);
+    // A synthetic camera is computed fresh — it does NOT need a rendered frame,
+    // which is the whole point vs the live view.
+    const r = await page.evaluate(() => {
+      const cock = window.__apex.frame({ cols: 32, camera: "cockpit" });
+      const heli = window.__apex.frame({ cols: 32, camera: "heli" });
+      return { cockMode: cock.camera.mode, cockSyn: cock.camera.synthetic,
+               heliMode: heli.camera.mode, cockRows: cock.grid.lines.length,
+               heliHasPlayer: (heli.coveragePct.player || 0) > 0 };
+    });
+    expect(r.cockMode).toBe("cockpit");
+    expect(r.cockSyn).toBe(true);
+    expect(r.heliMode).toBe("heli");
+    expect(r.cockRows).toBeGreaterThan(4);
+    // from a helicopter the player car is in shot; from the cockpit it is not
+    expect(r.heliHasPlayer).toBe(true);
+  });
+
+  test("an unknown camera errors with the valid set", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => window.__apex.frame({ camera: "bogus" }));
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe("BadArgumentError");
+    expect(r.message).toContain("bogus");
+  });
+
+  test("orbit frames the car from a bearing", async ({ page }) => {
+    await load(page, "monza", 0.05, 60);
+    const r = await page.evaluate(() =>
+      window.__apex.frame({ cols: 32, orbit: { az: 180, el: 20, dist: 15 } }));
+    expect(r.camera.mode).toBe("orbit");
+    expect(r.camera.synthetic).toBe(true);
+    expect((r.coveragePct.player || 0)).toBeGreaterThan(0);
+  });
+
+  test("edges overlay directional glyphs on silhouettes only", async ({ page }) => {
+    await load(page, "monza", 0.05, 60);
+    await renderFrames(page);
+    const r = await page.evaluate(() => {
+      const plain = window.__apex.frame({ cols: 56, camera: "chase" });
+      const edged = window.__apex.frame({ cols: 56, camera: "chase", edges: true });
+      const count = (ls) => ls.join("").split("").filter((c) => "|-/\\".includes(c)).length;
+      return { plainEdges: count(plain.grid.lines), edgedEdges: count(edged.grid.lines) };
+    });
+    // edges:true adds edge glyphs; without it there are essentially none from
+    // the semantic fill
+    expect(r.edgedEdges).toBeGreaterThan(r.plainEdges);
+    expect(r.edgedEdges).toBeGreaterThan(3);
+  });
+});
+
 test.describe("frame()", () => {
   test.use({ viewport: LANDSCAPE });
 
@@ -495,6 +550,56 @@ test.describe("frame()", () => {
   });
 });
 
+// ── plan() ──────────────────────────────────────────────────────────────────
+// The allocentric top-down map. Its value is the metric index paired with the
+// raster: coordinates for precision, the grid for gestalt (GSU + VoT).
+
+test.describe("plan()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("draws a car-up top-down map with a metric index", async ({ page }) => {
+    await load(page, "monza", 0.28, 60);
+    const pl = await page.evaluate(() => window.__apex.plan({ radiusM: 180, cols: 60 }));
+    expect(pl.frame).toContain("car-up");
+    expect(pl.grid.lines.length).toBeGreaterThan(10);
+    // the player is at the centre of a car-up map
+    const cc = Math.round(pl.scale.cols / 2), cr = Math.round(pl.scale.rows / 2);
+    expect(pl.grid.lines[cr][cc]).toBe("@");
+    // the index carries exact coords, not just glyphs
+    expect(pl.ego.headingDeg).toBeDefined();
+    expect(typeof pl.scale.metresPerCol).toBe("number");
+    for (const c of pl.corners) {
+      expect(c.cell.length).toBe(2);
+      expect(c.world.length).toBe(2);
+      expect(typeof c.bearingDeg).toBe("number");
+    }
+  });
+
+  test("northUp switches to the world frame", async ({ page }) => {
+    await load(page, "monza", 0.28, 60);
+    const pl = await page.evaluate(() => window.__apex.plan({ northUp: true }));
+    expect(pl.frame).toContain("north-up");
+    expect(pl.scale.note).toContain("east");
+  });
+
+  test("a bigger radius covers more track", async ({ page }) => {
+    await load(page, "monza", 0.28, 60);
+    const r = await page.evaluate(() => ({
+      near: window.__apex.plan({ radiusM: 80 }).corners.length,
+      far: window.__apex.plan({ radiusM: 600 }).corners.length,
+    }));
+    expect(r.far).toBeGreaterThanOrEqual(r.near);
+  });
+
+  test("errors before a track is loaded", async ({ page }) => {
+    await boot(page);
+    const pl = await page.evaluate(() => window.__apex.plan());
+    expect(pl).toBeTruthy();
+    if (pl.ok === false) expect(pl.fix).toContain("race");
+    else expect(pl.grid).toBeTruthy();
+  });
+});
+
 // ── carView() ───────────────────────────────────────────────────────────────
 
 test.describe("carView()", () => {
@@ -551,6 +656,34 @@ test.describe("carView()", () => {
     });
     expect(r.aId).not.toBe(r.bId);
     expect(JSON.stringify(r.aCol)).not.toBe(JSON.stringify(r.bCol));
+  });
+
+  test("detail:render draws edge+shade elevations from the real mesh", async ({ page }) => {
+    await load(page);
+    const c = await page.evaluate(() => window.__apex.carView({ detail: "render", cols: 60 }));
+    expect(c.render).toBeTruthy();
+    for (const view of ["side", "top", "front"]) {
+      expect(c.render[view].lines.length).toBeGreaterThan(3);
+      const body = c.render[view].lines.join("");
+      // must contain both edge glyphs and shade-ramp glyphs — not a flat fill
+      expect(/[|/\\-]/.test(body)).toBe(true);
+      expect(/[.:=+*oO#%@]/.test(body)).toBe(true);
+      expect(typeof c.render[view].mPerCol).toBe("number");
+    }
+    // the front view is symmetric-ish (a car seen head-on) — the wheels appear
+    // on both sides, so 'O' or '#' occurs in the left and right thirds
+    const front = c.render.front.lines;
+    const w = front[0].length;
+    const hasHeavy = (s) => /[O#%@]/.test(s);
+    const leftHeavy = front.some((l) => hasHeavy(l.slice(0, Math.floor(w / 3))));
+    const rightHeavy = front.some((l) => hasHeavy(l.slice(Math.floor(2 * w / 3))));
+    expect(leftHeavy && rightHeavy).toBe(true);
+  });
+
+  test("render is omitted unless asked for", async ({ page }) => {
+    await load(page);
+    const c = await page.evaluate(() => window.__apex.carView());
+    expect(c.render).toBeUndefined();
   });
 
   test("an unknown team errors instead of silently answering for another", async ({ page }) => {

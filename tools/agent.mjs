@@ -38,6 +38,7 @@ const COMMANDS = {
   rollout: "drive an interval   --seconds <s>  --steer <-1..1>  --throttle  --brake  --samples <n>",
   frame: "the view AS TEXT    --cols <n>  --rows <n>  --range <m>  (screenshot replacement)",
   car: "the car as JSON      --team <id>  --detail parts",
+  plan: "top-down MAP       --radius <m>  --cols <n>  --north",
   survey: "geometry DEFECTS    --at <n>  --lats <n>  --reach <m>  --profile",
   model: "the WHOLE circuit    --detail summary|sections|full  --offset <n>  --limit <n>  --out <file>",
 };
@@ -98,6 +99,9 @@ const opts = {
   lats: num("lats", 0),
   profileFlag: has("profile"),
   reach: num("reach", 60),        // survey's lateral reach — distinct from frame's --range
+  north: has("north"),
+  edges: has("edges"),
+  cam: flag("camera", null),
   out: flag("out", null),
 };
 
@@ -149,10 +153,15 @@ const opts = {
           return a.visible({ limit: o.limit || undefined });
         case "frame":
           return a.frame({ cols: o.cols, rows: o.rows, rangeM: o.range,
+                           camera: o.cam || undefined, edges: o.edges,
                            limit: o.limit || undefined });
+        case "plan":
+          return a.plan({ radiusM: o.radius !== 150 ? o.radius : undefined,
+                          cols: o.cols, northUp: o.north });
         case "car":
-          return a.carView({ team: o.team || undefined,
-                             detail: o.modelDetail === "parts" ? "parts" : undefined });
+          return a.carView({ team: o.team || undefined, cols: o.cols || undefined,
+                             detail: (o.modelDetail === "parts" || o.modelDetail === "render")
+                               ? o.modelDetail : undefined });
         case "survey":
           return a.survey({ at: o.at2 || undefined, lats: o.lats || undefined,
                             reachM: o.reach, limit: o.limit || undefined,
@@ -168,7 +177,7 @@ const opts = {
       }
     }, opts);
 
-    if (opts.cmd === "frame" && result && result.grid && !opts.out) {
+    if ((opts.cmd === "frame" || opts.cmd === "plan") && result && result.grid && result.grid.lines && !opts.out) {
       // Printing the raster inside a JSON string array defeats the purpose —
       // the grid is meant to be looked at.
       console.log(result.grid.lines.join("\n"));

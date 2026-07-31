@@ -60,7 +60,67 @@ const AgentView = (function () {
   }
 
   function create(G) {
-    const { wrapS, gripMult, LONG_GRIP, update, els } = G;
+    const { wrapS, gripMult, LONG_GRIP, update, els, camVantage } = G;
+
+    // Scratch matrices for rendering an arbitrary camera to text — so frame()
+    // is not tied to the LAST live frame. Built once; every call overwrites them.
+    const _vView = new Float32Array(16), _vProj = new Float32Array(16),
+          _vVP = new Float32Array(16);
+    function buildVP(eye, tgt, fovDeg, far) {
+      const aspect = (G.gfx && G.gfx.aspect) || 2.16;
+      M4.lookAtTo(_vView, eye, tgt, [0, 1, 0]);
+      M4.perspectiveTo(_vProj, fovDeg * Math.PI / 180, aspect, 0.3, far || 3000);
+      M4.mulTo(_vVP, _vProj, _vView);         // proj * view, column-major (as game.js)
+      return _vVP;
+    }
+
+    // Resolve which camera frame() renders. Default is the LIVE frame — the one
+    // actually on screen. Naming a mode ("cockpit", "heli", …) or an orbit
+    // frames the shot WITHOUT moving the car or waiting for a render, which is
+    // the text version of previewCam()/apex-capture's per-mode screenshots.
+    function resolveCamera(o) {
+      const p = G.player;
+      if (o.camera || o.orbit) {
+        if (!p || p.px == null) {
+          return fail("PlayerNotPlacedError",
+                      "a chosen camera frames the car, which has no position yet",
+                      "call __apex.jump(frac, speed) first, or omit camera to use the live view");
+        }
+      }
+      if (o.orbit) {
+        // {az deg (0=behind), el deg, dist m} around the car — the text carOrbit.
+        const az = (o.orbit.az || 0) * Math.PI / 180, el = (o.orbit.el || 15) * Math.PI / 180;
+        const dist = clamp(o.orbit.dist || 12, 2, 400);
+        const head = p.head || 0;
+        const dx = Math.sin(head + Math.PI + az), dz = Math.cos(head + Math.PI + az);
+        const eye = [p.px + dx * dist * Math.cos(el), 0.6 + dist * Math.sin(el),
+                     p.pz + dz * dist * Math.cos(el)];
+        const tgt = [p.px, 0.6, p.pz];
+        return { vp: buildVP(eye, tgt, o.fov || 45), eye, tgt, mode: "orbit", synthetic: true };
+      }
+      if (o.camera) {
+        const m = String(o.camera).toLowerCase();
+        if (!GameTables.CAM_MODES.some((c) => (c.id || c) === m)) {
+          return fail("BadArgumentError",
+                      'unknown camera "' + o.camera + '"',
+                      "one of: " + GameTables.CAM_MODES.map((c) => c.id || c).join(", "));
+        }
+        const v = camVantage(m, p.s, p.x, p.speed || 0, 0, {});
+        return { vp: buildVP(v.eye, v.tgt, v.fov), eye: v.eye.slice(),
+                 tgt: v.tgt.slice(), mode: m, fovDeg: v.fov, synthetic: true };
+      }
+      const fr = G.frame, vp = fr && fr.viewProj;
+      if (!vp) {
+        return fail("NoFrameError",
+                    "no rendered frame yet, and no camera was named",
+                    'name a camera — frame({camera:"chase"}) — or headless(false) '
+                    + "and let a frame draw");
+      }
+      return { vp, eye: fr.eye || G.camEye, tgt: G.camTgt,
+               mode: (GameTables.CAM_MODES[G.camMode] || {}).id
+                     || String(GameTables.CAM_MODES[G.camMode] || G.camMode),
+               fovDeg: G.camFov, synthetic: false };
+    }
 
     // Own scratch. apex.js shares `smp`/`smp2` with game.js and has to re-sample
     // to restore them after a lookahead loop (see obs()); borrowing that here
@@ -707,13 +767,11 @@ const AgentView = (function () {
         return fail("NoTrackError", "no track is loaded",
                     'call __apex.race("monza") first');
       }
-      const fr = G.frame, vp = fr && fr.viewProj;
-      if (!vp) {
-        return fail("NoFrameError",
-                    "no rendered frame yet, so there is no camera matrix",
-                    "call __apex.headless(false) and let one frame draw");
-      }
       const o = opts || {};
+      const cam = resolveCamera(o);
+      if (cam.ok === false) return cam;
+      const vp = cam.vp;
+      const fr = G.frame || {};             // lighting/cullDist still read live
       // ── raster geometry ──
       // A character cell is about twice as tall as it is wide, so a grid whose
       // ratio equals the viewport's renders SQUASHED. The default was 48x18:
@@ -726,7 +784,7 @@ const AgentView = (function () {
       const autoRows = Math.round(cols / (viewAspect * cellAspect));
       const rows = clamp(o.rows | 0 || autoRows, 4, 60);
       const range = clamp(o.rangeM || 500, 50, 3000);
-      const eye = fr.eye || G.camEye;
+      const eye = cam.eye;
 
       // depth buffer + kind buffer, one entry per cell
       const N = cols * rows;
@@ -855,8 +913,9 @@ const AgentView = (function () {
       // Ray elevation per row from the camera pitch and vertical FOV; cheaper and
       // steadier than unprojecting, and it puts the horizon where the renderer
       // does to within a row.
-      const fwdY = (G.camTgt[1] - eye[1]);
-      const fwdH = Math.hypot(G.camTgt[0] - eye[0], G.camTgt[2] - eye[2]) || 1;
+      const tgt = cam.tgt || G.camTgt;
+      const fwdY = (tgt[1] - eye[1]);
+      const fwdH = Math.hypot(tgt[0] - eye[0], tgt[2] - eye[2]) || 1;
       const pitch = Math.atan2(fwdY, fwdH);
       const vfovR = (G.camFov || 60) * Math.PI / 180;
       let horizonRow = null;
@@ -869,10 +928,40 @@ const AgentView = (function () {
         }
       }
 
+      // Optional EDGE overlay — the same depth-discontinuity edges the car
+      // render uses, over the scene's semantic glyphs. Silhouettes (a car
+      // against the road, a building against the sky) become | - / \ lines, so
+      // the composition reads as a drawing rather than a fill. Sky/ground are
+      // left alone. Uses the cell depth buffer already built for occlusion.
+      const edges = o.edges ? new Array(N).fill(null) : null;
+      if (edges) {
+        const FAR = 1e6;
+        const dAt = (x, y) => { const i = y * cols + x;
+          return (kind[i] === "sky" || kind[i] === "ground" || !isFinite(depth[i]))
+            ? FAR : depth[i]; };
+        let dmax = 1;
+        for (let i = 0; i < N; i++) if (isFinite(depth[i]) && depth[i] < FAR && depth[i] > dmax) dmax = depth[i];
+        for (let y = 1; y < rows - 1; y++) {
+          for (let x = 1; x < cols - 1; x++) {
+            const i = y * cols + x;
+            if (kind[i] === "sky" || kind[i] === "ground") continue;
+            const gx = dAt(x + 1, y) - dAt(x - 1, y), gy = dAt(x, y + 1) - dAt(x, y - 1);
+            const mag = Math.hypot(gx, gy) / dmax;
+            if (mag > (o.edgeThresh || 0.35)) {
+              const AX = Math.abs(gx), AY = Math.abs(gy);
+              edges[i] = AX > AY * 2.4 ? "|" : AY > AX * 2.4 ? "-" : (gx * gy > 0 ? "\\" : "/");
+            }
+          }
+        }
+      }
+
       const lines = [];
       for (let y = 0; y < rows; y++) {
         let line = "";
-        for (let x = 0; x < cols; x++) line += GLYPHS[kind[y * cols + x]] || "?";
+        for (let x = 0; x < cols; x++) {
+          const i = y * cols + x;
+          line += (edges && edges[i]) || GLYPHS[kind[i]] || "?";
+        }
         lines.push(line);
       }
 
@@ -913,14 +1002,15 @@ const AgentView = (function () {
 
       return {
         apiVersion: API_VERSION, conventions: CONVENTIONS,
-        camera: { eye: eye.map(r1), target: G.camTgt.map(r1),
-                  fovDeg: r1(G.camFov), pitchDeg: r1(pitch * 180 / Math.PI),
-                  mode: (GameTables.CAM_MODES[G.camMode] || {}).id
-                        || String(GameTables.CAM_MODES[G.camMode] || G.camMode),
-                  debugCam: !!G.dbgCam },
-        framePending: !!G.headlessMode,
-        warning: G.headlessMode
-          ? "headless(true) skips render(), so the camera may be stale" : undefined,
+        camera: { eye: eye.map(r1), target: (cam.tgt || G.camTgt).map(r1),
+                  fovDeg: r1(cam.fovDeg || G.camFov), pitchDeg: r1(pitch * 180 / Math.PI),
+                  mode: cam.mode, synthetic: cam.synthetic, debugCam: !!G.dbgCam },
+        // A synthetic camera is computed fresh, so it is never stale; only the
+        // live view depends on a rendered frame.
+        framePending: !cam.synthetic && !!G.headlessMode,
+        warning: (!cam.synthetic && G.headlessMode)
+          ? "headless(true) skips render(), so the live camera may be stale — "
+            + "name a camera to compute a fresh one" : undefined,
         grid: {
           cols, rows, rangeM: range, horizonRow, lines,
           // Keep it small on purpose. ASCIIEval finds model accuracy is
@@ -957,6 +1047,357 @@ const AgentView = (function () {
       };
     }
 
+    // ── the high-detail rasterizer — edge + shade, from real triangles ──────
+    // The Acerola / Kang pipeline (https://www.youtube.com/watch?v=gg40RWiaHRY),
+    // geometry-native: instead of a screen-space Difference-of-Gaussians + Sobel
+    // on luminance, edges come straight from the DEPTH buffer (silhouettes and
+    // creases are exact depth discontinuities), and interiors are Lambert-shaded
+    // from the real surface normals into a density ramp. Sharper than the
+    // photographic version because it never guesses a shape from shading.
+    //
+    // Supersampled ss x ss per character cell for anti-aliasing and gradient
+    // room; composed down to one glyph: an edge cell gets a directional line
+    // (| - / \) from the depth gradient, an interior cell a ramp glyph from its
+    // shade, empty stays blank.
+    const RAMP = " .:-=+*oO#%@";           // dark -> light
+    const LIGHT = (() => { const l = [0.4, 0.75, 0.5]; const m = Math.hypot(l[0], l[1], l[2]);
+                           return [l[0] / m, l[1] / m, l[2] / m]; })();
+
+    // tris: {pos, idx, nrm}. project(vx,vy,vz)->{x,y,depth}|null in sub-pixels.
+    // Returns { lines, cols, rows } after composing.
+    function rasterTris(pos, idx, nrm, project, cols, rows, ss, edgeThresh) {
+      const sw = cols * ss, sh = rows * ss, S = sw * sh;
+      const depth = new Float64Array(S).fill(Infinity);
+      const shade = new Float32Array(S).fill(-1);
+      const nTris = idx && idx.length ? idx.length : pos.length / 3;
+      const vi = (t, k) => idx && idx.length ? idx[t + k] : t + k;
+      const P = [null, null, null];
+      for (let t = 0; t < nTris; t += 3) {
+        const ia = vi(t, 0) * 3, ib = vi(t, 1) * 3, ic = vi(t, 2) * 3;
+        P[0] = project(pos[ia], pos[ia + 1], pos[ia + 2]);
+        P[1] = project(pos[ib], pos[ib + 1], pos[ib + 2]);
+        P[2] = project(pos[ic], pos[ic + 1], pos[ic + 2]);
+        if (!P[0] || !P[1] || !P[2]) continue;
+        // flat shade from the geometric normal (averaged) if present
+        let sh2 = 0.6;
+        if (nrm) {
+          const nx = nrm[ia] + nrm[ib] + nrm[ic], ny = nrm[ia + 1] + nrm[ib + 1] + nrm[ic + 1],
+                nz = nrm[ia + 2] + nrm[ib + 2] + nrm[ic + 2];
+          const nl = Math.hypot(nx, ny, nz) || 1;
+          sh2 = clamp((nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]) / nl, -1, 1) * 0.45 + 0.5;
+        }
+        const ax = P[0].x, ay = P[0].y, bx = P[1].x, by = P[1].y, cxx = P[2].x, cyy = P[2].y;
+        const d = (bx - ax) * (cyy - ay) - (cxx - ax) * (by - ay);
+        if (Math.abs(d) < 1e-9) continue;
+        const minx = Math.max(0, Math.floor(Math.min(ax, bx, cxx)));
+        const maxx = Math.min(sw - 1, Math.ceil(Math.max(ax, bx, cxx)));
+        const miny = Math.max(0, Math.floor(Math.min(ay, by, cyy)));
+        const maxy = Math.min(sh - 1, Math.ceil(Math.max(ay, by, cyy)));
+        for (let y = miny; y <= maxy; y++) {
+          for (let x = minx; x <= maxx; x++) {
+            const w1 = ((bx - x) * (cyy - y) - (cxx - x) * (by - y)) / d;
+            const w2 = ((cxx - x) * (ay - y) - (ax - x) * (cyy - y)) / d;
+            const w3 = 1 - w1 - w2;
+            if (w1 < -0.01 || w2 < -0.01 || w3 < -0.01) continue;
+            const dz = w1 * P[0].depth + w2 * P[1].depth + w3 * P[2].depth;
+            const i = y * sw + x;
+            if (dz < depth[i]) { depth[i] = dz; shade[i] = sh2; }
+          }
+        }
+      }
+      // Edge magnitude + direction per sub-sample, Sobel on depth (empty = far).
+      const far = 1e6;
+      const dAt = (x, y) => { const i = y * sw + x; return isFinite(depth[i]) ? depth[i] : far; };
+      const lines = [];
+      // normalise depth spread so edgeThresh is scale-free
+      let dmin = Infinity, dmax = -Infinity;
+      for (let i = 0; i < S; i++) if (isFinite(depth[i])) { if (depth[i] < dmin) dmin = depth[i]; if (depth[i] > dmax) dmax = depth[i]; }
+      const dspan = (dmax - dmin) || 1;
+      for (let cy2 = 0; cy2 < rows; cy2++) {
+        let line = "";
+        for (let cx2 = 0; cx2 < cols; cx2++) {
+          // aggregate the ss x ss block
+          let cov = 0, shSum = 0, gx = 0, gy = 0, emax = 0;
+          for (let sy = 0; sy < ss; sy++) {
+            for (let sx = 0; sx < ss; sx++) {
+              const X = cx2 * ss + sx, Y = cy2 * ss + sy, i = Y * sw + X;
+              if (isFinite(depth[i])) { cov++; shSum += shade[i]; }
+              if (X > 0 && X < sw - 1 && Y > 0 && Y < sh - 1) {
+                const gxx = (dAt(X + 1, Y) - dAt(X - 1, Y));
+                const gyy = (dAt(X, Y + 1) - dAt(X, Y - 1));
+                const mag = Math.hypot(gxx, gyy) / dspan;
+                if (mag > emax) { emax = mag; gx = gxx; gy = gyy; }
+              }
+            }
+          }
+          if (emax > edgeThresh) {
+            const AX = Math.abs(gx), AY = Math.abs(gy);
+            line += AX > AY * 2.4 ? "|" : AY > AX * 2.4 ? "-" : (gx * gy > 0 ? "\\" : "/");
+          } else if (cov > 0) {
+            const sAvg = shSum / cov;
+            line += RAMP[clamp(Math.round(sAvg * (RAMP.length - 1)), 1, RAMP.length - 1)];
+          } else line += " ";
+        }
+        lines.push(line.replace(/\s+$/, ""));
+      }
+      return { lines, cols, rows };
+    }
+
+    // ── carRender() — orthographic edge+shade elevations of the car ─────────
+    // The text version of the car photo studio (render-car.mjs). Real mesh, real
+    // normals; +z forward, +y up.
+    function orthoCar(pos, idx, nrm, ha, va, hSign, vSign, oa, cols, cellAspect, ss, EDGE_T) {
+      let h0 = Infinity, h1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+      for (let i = 0; i < pos.length; i += 3) {
+        const h = pos[i + ha] * hSign, v = pos[i + va] * vSign;
+        if (h < h0) h0 = h; if (h > h1) h1 = h; if (v < v0) v0 = v; if (v > v1) v1 = v;
+      }
+      const wSpan = (h1 - h0) || 1, hSpan = (v1 - v0) || 1;
+      const mPerCol = wSpan / cols;
+      const rows = clamp(Math.round(hSpan / mPerCol / cellAspect), 4, 44);
+      const sw = cols * ss, sh = rows * ss;
+      const project = (x, y, z) => {
+        const c = [x, y, z];
+        const h = c[ha] * hSign, v = c[va] * vSign;
+        return { x: (h - h0) / wSpan * (sw - 1), y: (v1 - v) / hSpan * (sh - 1),
+                 depth: -c[oa] };            // nearest along the view axis
+      };
+      const r = rasterTris(pos, idx, nrm, project, cols, rows, ss, EDGE_T);
+      return { lines: r.lines, cols, rows, mPerCol: r2(mPerCol) };
+    }
+
+    function carRender(mesh, cols, edgeT) {
+      const pos = mesh.pos, idx = mesh.idx, nrm = mesh.nrm;
+      const ss = 3, ET = edgeT || 0.45;
+      return {
+        legend: { "| - / \\": "edges (silhouette + creases)",
+                  " .:-=+*oO#%@": "surface, dark -> lit" },
+        side: orthoCar(pos, idx, nrm, 2, 1, 1, 1, 0, cols, 2, ss, ET),           // z,y  view along x
+        top: orthoCar(pos, idx, nrm, 2, 0, 1, 1, 1, cols, 2, ss, ET),            // z,x  view along y (top-down)
+        front: orthoCar(pos, idx, nrm, 0, 1, -1, 1, 2, Math.round(cols * 0.55), 2, ss, ET), // x,y view along z
+        note: "orthographic edge+shade from the real mesh; +z forward (nose "
+              + "to the right in side/top). Edges are true depth discontinuities; "
+              + "the ramp is Lambert shading. mPerCol converts columns to metres.",
+      };
+    }
+
+    // ── plan() — the world from ABOVE, as text ──────────────────────────────
+    // frame() is first-person, so any "where am I on the circuit / what is
+    // around me in world terms" question forces the reference-frame shift models
+    // are documented to be worst at (REM 2512.00736: they "lack mechanisms for
+    // dynamic perspective-taking"). plan() gives the allocentric view directly:
+    // a top-down map, drawn car-up so forward is up and no rotation is needed to
+    // drive, with metric axes so every cell is also a coordinate.
+    //
+    // Grounded in the split the research shows: VoT (+27% from a 2D text grid),
+    // GSU (Cartesian coordinates beat an ASCII layout — so provide BOTH), STMR
+    // (semantic + topological + metric together beats any one). This is the text
+    // version of aerial-survey.mjs / the survey-track aerial.
+    const PLAN_GLYPH = {
+      road: ".", kerb: ":", car: "o", player: "@",
+      tree: "t", pine: "t", palm: "t", conifer: "t", bush: ",", hedge: ",",
+      building: "B", house: "h", motorhome: "m", tower: "I", structure: "#",
+      grandstand: "A", billboard: "b", signBoard: "s", marshalPost: "p",
+      gantry: "=", mountain: "^", peak: "^", ridge: "^", prop: "o",
+    };
+
+    function plan(opts) {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      const o = opts || {};
+      const p = G.player;
+      const cols = clamp(o.cols | 0 || 60, 12, 200);
+      const cellAspect = clamp(o.cellAspect || 2, 1, 4);
+      // World-square cells: a char cell is ~2x taller than wide, so a row must
+      // span cellAspect x the metres a column does, or the map is stretched.
+      const rows = clamp(Math.round(cols / cellAspect), 6, 100);
+      const radius = clamp(o.radiusM || 200, 20, 4000);
+      const mPerCol = (2 * radius) / cols;
+      const mPerRow = mPerCol * cellAspect;
+
+      // Origin + orientation. Car-up rotates the world so the car's heading points
+      // to -row (up); north-up leaves world axes (─north-up is +z? use +x=east,
+      // -z=north as the map convention, matching mapPts y=north).
+      let ox, oz, rot, frame;
+      const carUp = o.northUp ? false : true;
+      if (p && p.px != null) { ox = p.px; oz = p.pz; }
+      else {
+        const b = Tracks; Tracks.sample(G.track, 0, scr); ox = scr.p[0]; oz = scr.p[2];
+      }
+      if (carUp && p && p.head != null) {
+        rot = -p.head; frame = "car-up (up = the way the car faces)";
+      } else {
+        rot = 0; frame = "north-up (up = -z / north, right = +x / east)";
+      }
+      const cosR = Math.cos(rot), sinR = Math.sin(rot);
+      // world (x,z) -> cell. Rotate about origin, then scale. Up (-row) is the
+      // rotated -z (forward) in car-up, or world -z in north-up.
+      const toCell = (x, z) => {
+        const dx = x - ox, dz = z - oz;
+        const rx = dx * cosR - dz * sinR;      // rotated east
+        const rz = dx * sinR + dz * cosR;      // rotated north(-ish): forward = -rz
+        const cx = Math.round(cols / 2 + rx / mPerCol);
+        const cy = Math.round(rows / 2 + rz / mPerRow);   // +rz downward
+        return { cx, cy, rx, rz };
+      };
+
+      const grid = new Array(cols * rows).fill(null);
+      const near = new Float64Array(cols * rows).fill(Infinity);
+      const put = (cx, cy, kind, priority) => {
+        if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return false;
+        const i = cy * cols + cx;
+        if (priority < near[i]) { near[i] = priority; grid[i] = kind; return true; }
+        return false;
+      };
+
+      // ── the track ribbon ──
+      // Walk the whole lap; for each node in range, fill across the road width so
+      // the ribbon reads as a band, not a hairline. Priority 5 (below props/cars).
+      const total = G.track.total, step = Math.max(2, mPerCol * 0.5);
+      let onScreenNodes = 0;
+      for (let s = 0; s < total; s += step) {
+        Tracks.sample(G.track, s, scr);
+        if (Math.hypot(scr.p[0] - ox, scr.p[2] - oz) > radius * 1.6) continue;
+        const rl = Math.hypot(scr.r[0], scr.r[2]) || 1;
+        const ex = scr.r[0] / rl, ez = scr.r[2] / rl;
+        const half = scr.hw;
+        for (let lat = -half; lat <= half; lat += mPerCol * 0.5) {
+          const c = toCell(scr.p[0] + ex * lat, scr.p[2] + ez * lat);
+          const kind = Math.abs(lat) > half - mPerCol * 0.5 ? "kerb" : "road";
+          if (put(c.cx, c.cy, kind, 5)) onScreenNodes++;
+        }
+      }
+
+      // ── named scenery ──
+      const reg = G.track.props;
+      const counts = {};
+      if (reg) {
+        for (const q of reg.list) {
+          if (Math.hypot(q.x - ox, q.z - oz) > radius * 1.5) continue;
+          const c = toCell(q.x, q.z);
+          if (put(c.cx, c.cy, q.kind, 3)) counts[q.kind] = (counts[q.kind] || 0) + 1;
+        }
+      }
+
+      // ── cars ──
+      const cars = [];
+      for (const car of G.cars) {
+        const [wx, wz] = carWorld(car);
+        if (Math.hypot(wx - ox, wz - oz) > radius * 1.5) continue;
+        const c = toCell(wx, wz);
+        const isP = car.isPlayer;
+        put(c.cx, c.cy, isP ? "player" : "car", isP ? -1 : 1);
+        if (!isP) cars.push({ id: car.id, code: car.code || null,
+                              aheadM: r1(-c.rz), rightM: r1(c.rx) });
+      }
+      // Ensure the player is always the centre glyph in car-up.
+      if (carUp && p && p.px != null) put(Math.round(cols / 2), Math.round(rows / 2), "player", -2);
+
+      const lines = [];
+      for (let y = 0; y < rows; y++) {
+        let line = "";
+        for (let x = 0; x < cols; x++) {
+          const k = grid[y * cols + x];
+          line += k ? (PLAN_GLYPH[k] || "?") : " ";
+        }
+        lines.push(line.replace(/\s+$/, ""));
+      }
+
+      const used = {};
+      for (const k of grid) if (k) used[k] = 1;
+      const legend = {};
+      for (const k of Object.keys(used)) legend[PLAN_GLYPH[k] || "?"] = k;
+
+      // ── the index: every notable thing on the map, keyed to its cell AND to
+      // metric coordinates, so the raster is the gestalt and this is the ground
+      // truth. GSU: coordinates beat an ASCII layout, so ship both.
+      const cc = Math.round(cols / 2), cr = Math.round(rows / 2);
+      const bearing = (rx, rz) => r1(Math.atan2(rx, -rz) * 180 / Math.PI); // 0=ahead,+=right
+      const entry = (x, z, extra) => {
+        const c = toCell(x, z);
+        const o2 = { cell: [c.cx, c.cy], world: [r1(x), r1(z)],
+                     aheadM: r1(-c.rz), rightM: r1(c.rx),
+                     distM: r1(Math.hypot(c.rx, c.rz)), bearingDeg: bearing(c.rx, c.rz) };
+        return Object.assign(o2, extra);
+      };
+
+      // Corners visible on the map, numbered — the topological skeleton.
+      const cornersOnMap = [];
+      for (const co of corners()) {
+        Tracks.sample(G.track, co.s, scr);
+        if (Math.hypot(scr.p[0] - ox, scr.p[2] - oz) > radius * 1.4) continue;
+        cornersOnMap.push(entry(scr.p[0], scr.p[2],
+          { turn: co.turn, dir: co.dir, radiusM: co.radiusM, severity: co.severity }));
+      }
+      cornersOnMap.sort((a, b) => a.distM - b.distM);
+
+      // Individually notable structures (not the repeated tree/bush dressing).
+      const NOTABLE = ["grandstand", "building", "tower", "house", "motorhome",
+                       "mountain", "gantry", "structure", "billboard"];
+      const landmarks = [];
+      if (reg) {
+        for (const q of reg.list) {
+          if (NOTABLE.indexOf(q.kind) < 0) continue;
+          if (Math.hypot(q.x - ox, q.z - oz) > radius * 1.4) continue;
+          landmarks.push(entry(q.x, q.z, { kind: q.kind, sizeM: [q.w, q.h, q.d] }));
+        }
+        landmarks.sort((a, b) => a.distM - b.distM);
+      }
+
+      // A metric ruler so any glyph converts to metres without arithmetic.
+      const tick = (n) => { let s = ""; for (let i = 0; i < cols; i++)
+        s += (i === cc ? "|" : i % 10 === cc % 10 ? "'" : " "); return s; };
+      const ruler = tick();
+      const rulerLabel = (() => {
+        const chars = new Array(cols).fill(" ");
+        for (let i = 0; i < cols; i += 10) {
+          const m = Math.round((i - cc) * mPerCol);
+          const lab = (m > 0 ? "+" : "") + m;
+          for (let j = 0; j < lab.length && i + j < cols; j++) chars[i + j] = lab[j];
+        }
+        return chars.join("").replace(/\s+$/, "");
+      })();
+
+      const p2 = G.player;
+      const ego = p2 && p2.px != null ? {
+        headingDeg: r1((p2.head || 0) * 180 / Math.PI),
+        speedKph: r1((p2.speed || 0) * 3.6),
+        elevationM: (Tracks.sample(G.track, p2.s, scr), r1(scr.p[1])),
+        onTrackFrac: +(p2.s / total).toFixed(4),
+        lateralM: r2(p2.x || 0),
+        nextCorner: nextCorner(p2.s, p2.speed || 0),
+      } : null;
+
+      return {
+        apiVersion: API_VERSION, conventions: CONVENTIONS,
+        frame,
+        origin: { x: r1(ox), z: r1(oz),
+                  headingDeg: p && p.head != null ? r1(p.head * 180 / Math.PI) : null,
+                  onTrackFrac: p && p.s != null ? +(p.s / total).toFixed(4) : null },
+        scale: { radiusM: radius, metresPerCol: r2(mPerCol), metresPerRow: r2(mPerRow),
+                 cols, rows,
+                 note: "cell (col,row) from centre = ((col-" + cc
+                       + ")*mPerCol, (row-" + cr + ")*mPerRow) in the "
+                       + (carUp ? "car frame: -row = ahead, +col = right"
+                                : "world frame: -row = north(-z), +col = east(+x)") },
+        grid: { lines, ruler, rulerLabel,
+                note: "ruler ' marks every 10 cols, | is centre; rulerLabel gives "
+                      + "the metres east/right at those ticks" },
+        legend,
+        ego,
+        corners: cornersOnMap,
+        landmarks,
+        cars: cars.sort((a, b) => Math.hypot(a.aheadM, a.rightM) - Math.hypot(b.aheadM, b.rightM)),
+        sceneryCounts: counts,
+        note: "top-down map with a metric index. The raster is the gestalt; "
+              + "corners/landmarks/cars carry exact cell + world coords + bearing "
+              + "so nothing needs measuring off the characters. {northUp:true} for "
+              + "the world frame, {radiusM} to zoom.",
+      };
+    }
+
     // ── carView() — the car, without rendering it ───────────────────────────
     // Replaces tools/render-car.mjs for everything except "does it LOOK right":
     // team identity, livery, the full parts spec and what it does to the car,
@@ -983,10 +1424,11 @@ const AgentView = (function () {
 
       // Build the real mesh and measure it — the dimensions an agent would
       // otherwise read off a screenshot with a ruler.
-      let geom = null, parts = null;
+      let geom = null, parts = null, render = null, meshRef = null;
       try {
         const mesh = Car3D.build(team.color, team.color2,
                                  { parts: res.visual, teamId: team.id });
+        meshRef = mesh;
         const pos = mesh.pos;
         let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity,
             z0 = Infinity, z1 = -Infinity;
@@ -1009,6 +1451,13 @@ const AgentView = (function () {
         };
       } catch (e) {
         geom = { error: "build failed: " + (e && e.message) };
+      }
+
+      // Orthographic text elevations — the text version of the car photo studio
+      // (render-car.mjs). A filled-triangle silhouette from the real mesh, so
+      // the outline is measured, not drawn. Three standard views; +z forward.
+      if ((o.detail === "render" || o.detail === "all" || o.render) && meshRef && !geom.error) {
+        render = carRender(meshRef, o.cols | 0 || 46, o.edgeThresh);
       }
 
       return {
@@ -1045,6 +1494,7 @@ const AgentView = (function () {
                       cockpit: Car3D.CHASSIS.cockpit, floor: Car3D.CHASSIS.floor },
         },
         geometry: geom,
+        render,
         // Per-part boxes, measured from the vertices each section of Car3D.build
         // emitted. "How big is the rear wing", "does the shark fin exist on this
         // team", "is the nose the right length" — without rendering the car.
@@ -1667,9 +2117,13 @@ const AgentView = (function () {
             + "`since` returns only what changed",
           "frame({cols,rows,cellAspect,rangeM,depth,limit})":
             "WHAT DOES IT LOOK LIKE — the view as a depth-sorted character "
-            + "raster, semantic glyphs not shading; {depth:true} adds a depth "
-            + "channel. Keep the grid SMALL — accuracy falls as the art grows. "
-            + "Use instead of a screenshot. Needs a rendered frame",
+            + "raster; {camera:'cockpit'|...} renders any of the 13 modes fresh, "
+            + "{edges:true} adds silhouette line-glyphs, {depth:true} a depth "
+            + "channel. Keep the grid small. Screenshot replacement",
+          "plan({radiusM,cols,northUp})":
+            "WHERE ON THE MAP — top-down view, car-up, with a metric index "
+            + "(corners/landmarks/cars carry cell + world coords). Allocentric "
+            + "companion to frame(); the text version of an aerial",
           "scene({radius,kinds,limit})":
             "WHAT IS AROUND ME — named scenery by distance and bearing",
           "visible({limit})":
@@ -2032,7 +2486,7 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, trackInfo, visible, scene, worldModel, frame, carView, survey, rollout, agentHelp, corners, terminal,
+    return { world, trackInfo, visible, scene, worldModel, frame, plan, carView, survey, rollout, agentHelp, corners, terminal,
              API_VERSION, PHYSICS_VERSION };
   }
 

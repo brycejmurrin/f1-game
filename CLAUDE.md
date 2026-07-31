@@ -217,7 +217,7 @@ js/game/         — game modules (each created with the G ctx façade from game
   apex.js        ApexApi        the whole window.__apex dev API
   agentview.js   AgentView      the agent-facing JSON world view — world()/
                                   trackInfo()/scene()/visible()/worldModel()/
-                                  frame()/carView()/survey()/rollout()/
+                                  frame()/plan()/carView()/survey()/rollout()/
                                   agentHelp(); composes the __apex hooks
                                   into one egocentric snapshot with typed errors.
                                   worldModel() renders the whole circuit as text by
@@ -443,11 +443,14 @@ __apex.worldModel({detail:"sections"}) // the WHOLE circuit as one document:
                               //   clustered features + landmarks + barrier spans
                               //   + a corner-by-corner walk; "full" = raw objects
 __apex.visible()              // what is on screen (needs a rendered frame)
-__apex.frame({cols:56,rows:16}) // the VIEW AS TEXT — depth-sorted character
-                              //   raster; replaces a screenshot for composition
-__apex.carView({team:"ferrari", detail:"parts"}) // the car as JSON: team, parts
-                              //   spec + effects, chassis silhouette, MEASURED
-                              //   geometry, and per-part boxes from Car3D.build
+__apex.frame({cols:56,rows:16}) // the VIEW AS TEXT — depth-sorted raster;
+                              //   {camera:"cockpit"} any of 13 modes, {edges:true}
+                              //   silhouette lines, {depth:true} depth channel
+__apex.plan({radiusM:200})    // top-down MAP, car-up, with a metric index
+                              //   (corners/landmarks/cars carry cell+world coords)
+__apex.carView({team:"ferrari", detail:"render"}) // the car as JSON + edge+shade
+                              //   text elevations (side/top/front) from the real
+                              //   mesh; detail:"parts" = per-part measured boxes
 __apex.survey()               // geometry DEFECTS: floating/buried props, props
                               //   over the racing line, terrain through the road,
                               //   holes and cliffs in the ground ribbon

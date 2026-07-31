@@ -976,7 +976,7 @@ your right. Everything else is the usual convention (`+x` right of centreline,
 braking and ~26 m/s² lateral grip. Treat it as a reference to check against, not
 a target.
 
-### `frame({cols, rows, cellAspect, rangeM, depth, limit}?) → render | typedError`
+### `frame({cols, rows, camera, orbit, edges, depth, rangeM, cellAspect, limit}?) → render | typedError`
 
 **The screenshot replacement.** `visible()` lists what is on screen; this shows
 *where*, by rasterising the scene into a character grid with per-cell depth
@@ -1026,6 +1026,19 @@ corrected.
 gets the resolution, with `scaleM` giving the metres for each digit. This is a
 real render target read out of the depth buffer the raster already builds — not
 a synthesised shading model — and reading it needs no shape recognition.
+
+**Any camera, not just the live one.** `{camera:"cockpit"}` (any of the 13
+modes — chase, cockpit, hood, heli, overhead, side, tcam, rear, …) or
+`{orbit:{az,el,dist}}` computes the shot fresh from the car's position, without
+moving it or waiting for a render. That is the text version of `apex-capture`'s
+per-mode screenshots and `previewCam()`. A synthetic camera is never stale, so
+`framePending` is false for it. Omit `camera` to use the live view.
+
+**Edges.** `{edges:true}` overlays the depth-discontinuity edges — the
+geometry-native version of the Acerola / Kang line pass — as `| - / \` over the
+semantic glyphs, so a car against the road or a building against the sky reads
+as an outline. Silhouettes and creases come straight from the depth buffer, not
+a luminance Sobel, so they are exact.
 
 ```
 t##t#####ttt######t:====@@@@@@@@@===:######tttttttttt###     35551111155555555554444433333333344445555555555555555555
@@ -1275,6 +1288,37 @@ a 160 m grandstand on a curve inflates its apparent lateral extent: Monza lists
 Monza reports `clean: true` while Spa, Monaco and Vegas do not — that
 discrimination is the property that makes the check worth running.
 
+### `plan({radiusM, cols, northUp}?) → map | typedError`
+
+The **allocentric top-down map** — the companion to `frame()`'s first-person
+view, and the text version of `aerial-survey.mjs`. `frame()` forces a
+reference-frame shift for any "where am I on the circuit" question; `plan()`
+answers it directly, drawn **car-up** (forward is up) so no rotation is needed to
+drive, or `{northUp:true}` for the world frame.
+
+```
+                     :#. t tt
+                   t    :.@. tt t          @ = you (centre, facing up)
+                 t      #:..: #t           . road   : kerb   t tree   # structure
+```
+
+Grounded in the research split: [VoT](https://arxiv.org/abs/2404.03622) (+27%
+from a 2-D text grid), [GSU](https://arxiv.org/pdf/2603.17333) (Cartesian
+coordinates beat an ASCII layout — so provide **both**), STMR (semantic +
+topological + metric together wins). The raster is the gestalt; the payload also
+carries a **metric index** so nothing is measured off the characters:
+
+```js
+{ frame:"car-up …", scale:{radiusM, metresPerCol, metresPerRow, cols, rows, note},
+  grid:{ lines, ruler, rulerLabel },
+  ego:{ headingDeg, speedKph, elevationM, onTrackFrac, lateralM, nextCorner },
+  corners:[{ turn, dir, radiusM, cell:[col,row], world:[x,z], aheadM, rightM, distM, bearingDeg }],
+  landmarks:[{ kind, sizeM, cell, world, aheadM, rightM, distM, bearingDeg }],
+  cars:[{ id, code, aheadM, rightM }] }
+```
+
+`node tools/agent.mjs monza plan --radius 200`.
+
 ### `carView({team, parts, detail}?) → payload | typedError`
 
 **The car-viewer replacement**, for everything except appearance itself.
@@ -1296,6 +1340,11 @@ __apex.carView({ team: "ferrari" })
 is the per-team silhouette: nose length/width/droop, airbox scale, dorsal fin,
 mirror housing, sidepod inlet bias — what makes a team's car recognisable
 independent of paint.
+
+`detail:"render"` adds **orthographic edge+shade elevations** (side, top, front)
+rasterised from the real mesh — the text version of the car photo studio. Depth
+discontinuities become `| - / \` edges; interiors are Lambert-shaded into a
+` .:-=+*oO#%@` ramp. `node tools/agent.mjs monza car --detail render`.
 
 `detail:"parts"` adds **per-part measured boxes** under `partGeometry`
 (`parts` stays the parts *spec*), taken from the vertices each
