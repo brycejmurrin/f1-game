@@ -493,9 +493,16 @@
       // sand-coloured terrain immediately beyond — the Lusail edge signature.
       // This is a visual ground patch, not a solid `place()` box, so it conforms
       // to the shared terrain profile without creating phantom boundaries.
-      every(24, (k) => {
+      // 14 m segments, not 28. A ground patch is a straight box, so on Lusail's
+      // long sweeps a 28 m one chords across the arc and its ends land on the
+      // tarmac — the footprint guard then rejected 109 of 450 (24%), leaving the
+      // verge visibly patchy through exactly the corners it should dress. Half
+      // the length follows the curve well enough to drop that to 14%, and at
+      // double the placement rate it lays MORE verge than before (10.8 km vs
+      // 9.5 km) rather than less.
+      every(12, (k) => {
         for (const side of [-1, 1]) {
-          groundPatch(k, side, 0.3, [3.6, 0.16, 28], GRASS,
+          groundPatch(k, side, 0.3, [3.6, 0.16, 14], GRASS,
             { id: `qatar-green-verge-${k}-${side}`, samples: 2 });
         }
       });
