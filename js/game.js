@@ -3305,7 +3305,22 @@ function render(dt) {
     if (!player) return;
     // Interpolated arc/lateral position so the chase anchor tracks the car
     // smoothly between physics steps (no high-refresh judder).
-    const pS = lerpS(player.rPrevS, player.s, renderAlpha);
+    let pS = lerpS(player.rPrevS, player.s, renderAlpha);
+    // BACKWARD-JOLT GUARD. player.s is READ BACK each step by trackFrom (a local
+    // Frenet perpendicular-foot solve, game.js:2573) — not integrated — so it is
+    // not monotonic: steering through a corner can regress s a few cm while the
+    // world position px/pz advances. The car body is drawn from world px/pz, but
+    // this anchor drives the camera rig, and onboard cams LOCK to it (λ400, no
+    // damping) — so a backward s-dip snaps the eye back for a frame: a visible
+    // "skip backwards" jolt (chase cams damp it to a faint wobble). Hold the
+    // anchor forward-only while driving forward; genuine reverse (wrongWay) and a
+    // large jump (start/finish wrap / teleport) pass through untouched.
+    if (_camPSout !== undefined && player.speed > 2 && !player.wrongWay) {
+      const L = track.total;
+      let d = pS - _camPSout; if (d > L * 0.5) d -= L; else if (d < -L * 0.5) d += L;
+      if (d < 0 && d > -3) pS = _camPSout;   // suppress the sub-metre Frenet read-back dip
+    }
+    _camPSout = pS;
     const px = (player.rPrevX === undefined) ? player.x
              : player.rPrevX + (player.x - player.rPrevX) * renderAlpha;
     Tracks.sample(track, pS, smp);
@@ -4546,6 +4561,7 @@ function render(dt) {
 // ---------- main loop ----------
 let physAcc = 0;                 // leftover sim time carried between frames
 let renderAlpha = 1;             // leftover-step fraction (0..1) for render interpolation
+let _camPSout;                   // last camera arc-anchor (forward-monotonic clamp — see renderPosOf note)
 // Adaptive-resolution governor + feature-shedding tiers + mobile crash
 // sentinel live in js/game/perf.js (PerfGov, initialised at boot with gfx).
 // render() gates features on PerfGov.tier(); tickBody feeds PerfGov.tick(ms).
