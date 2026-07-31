@@ -14,7 +14,7 @@ const SceneryStructures = (function () {
             indexBarrier,
             addBox, addCyl, addFrustum, RAW, blockAt, recordBarrier,
             groundYAt, onTrack, overheadSpan, hash, cross, norm, vadd,
-            anchor } = ctx;
+            anchor, rejBox } = ctx;
     const { SIGN_SEG, SIGN_DIGIT } = TrackSceneryData;
 
     // ---------- linear track furniture (run along the track from s0→s1) ----------
@@ -169,6 +169,77 @@ const SceneryStructures = (function () {
       if (NIGHT) addBox(out, vadd(polePos, p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
       blockAt(k, side, gap, 1.3);   // solid hut
     };
+    // cameraTower(): lattice camera mast — four legs braced in X, a railed
+    // platform and a camera head on a short boom. Every circuit has these at its
+    // broadcast vantage points; only Silverstone had one, hand-rolled locally.
+    //   opts: { h, col, boom, railCol }
+    const cameraTower = (k, side, gap, opts) => {
+      opts = opts || {};
+      const h = Math.max(5, Math.min(40, opts.h != null ? opts.h : 14));
+      const col = opts.col || [0.40, 0.42, 0.46];
+      const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
+      const legR = 1.1;
+      // Full-footprint guard: the tower is a ~2.6 m square mass rising the whole
+      // height, so test the box, never a single point.
+      if (rejBox(vadd(p.c, p.u, h / 2), [legR * 2 + 0.6, h, legR * 2 + 0.6], b)) {
+        console.warn(`[scenery] cameraTower SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        return;
+      }
+      for (const sr of [-1, 1]) for (const st of [-1, 1]) {
+        const foot = vadd(vadd(p.c, p.r, sr * legR), p.t, st * legR);
+        addCyl(out, vadd(foot, p.u, h / 2 - 0.4), 0.13, h + 0.8, col, 4, b);
+      }
+      // X-bracing every ~3 m — what makes a lattice read as a lattice.
+      const bays = Math.max(1, Math.round(h / 3));
+      for (let i = 1; i < bays; i++) {
+        const y = (i / bays) * h;
+        for (const sr of [-1, 1])
+          addBox(out, vadd(vadd(p.c, p.r, sr * legR), p.u, y), [0.1, 0.12, legR * 2], col, b);
+        for (const st of [-1, 1])
+          addBox(out, vadd(vadd(p.c, p.t, st * legR), p.u, y), [legR * 2, 0.12, 0.1], col, b);
+      }
+      // Platform + rail
+      addBox(out, vadd(p.c, p.u, h), [3.0, 0.2, 3.0], [0.52, 0.54, 0.58], b);
+      addBox(out, vadd(p.c, p.u, h + 0.55), [3.1, 0.09, 3.1], opts.railCol || [0.70, 0.72, 0.76], b);
+      // Camera head on a short boom, pointing back over the track.
+      const head = vadd(vadd(p.c, p.u, h + 0.85), p.r, -side * (opts.boom != null ? opts.boom : 1.1));
+      addBox(out, head, [0.75, 0.45, 0.5], [0.12, 0.12, 0.14], b);
+      addCyl(out, vadd(head, p.r, -side * 0.42), 0.16, 0.3, [0.06, 0.06, 0.08], 6,
+             [p.u, p.r, p.t]);
+      blockAt(k, side, gap, legR + 0.4);
+    };
+
+    // sponsorHoarding(): a continuous run of trackside advertising boards on
+    // short posts. Long straights (Monza, Spa's Kemmel, Baku, Bahrain's back
+    // straight, Jeddah) currently read empty over hundreds of metres; a real
+    // circuit lines every one of them with boards. Cheap: two boxes per panel.
+    //   opts: { h, step, palette, postCol, gapFrac }
+    const sponsorHoarding = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const h = opts.h != null ? opts.h : 1.15;
+      const step = opts.step || 9;
+      const postCol = opts.postCol || [0.24, 0.25, 0.28];
+      const pal = (opts.palette && opts.palette.length) ? opts.palette : [
+        [0.86, 0.16, 0.14], [0.94, 0.92, 0.90], [0.10, 0.34, 0.72],
+        [0.96, 0.76, 0.06], [0.12, 0.52, 0.30], [0.16, 0.17, 0.20],
+      ];
+      let idx = 0;
+      along(s0, s1, step, (k, spacing) => {
+        const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
+        // Panel length tracks the ACTUAL node spacing (see along()'s contract) —
+        // a padded constant makes adjacent panels share volume on curves.
+        const panel = spacing * 0.92;
+        const c = vadd(p.c, p.u, 0.45 + h / 2);
+        if (rejBox(c, [0.16, h, panel], b)) return;
+        addBox(out, c, [0.16, h, panel], pal[idx % pal.length], b);
+        // Two stubby posts holding the board clear of the ground.
+        for (const st of [-1, 1])
+          addBox(out, vadd(vadd(p.c, p.t, st * panel * 0.36), p.u, 0.22),
+                 [0.13, 0.9, 0.14], postCol, b);
+        idx++;
+      });
+    };
+
     // Draw one digit centred at `c`, spanning [w,h] in the (t=horizontal,
     // u=vertical) plane, raised `proud` along r toward the viewer so the
     // segments sit visibly above the panel face instead of z-fighting it.
@@ -277,7 +348,8 @@ const SceneryStructures = (function () {
     }
 
     return { along, wall, fence, guardrail, tyreWall, gantry, flagQuad,
-             marshalPost, signDigit, signBoard, ferrisWheel };
+             marshalPost, cameraTower, sponsorHoarding, signDigit, signBoard,
+             ferrisWheel };
   }
 
   return { create };

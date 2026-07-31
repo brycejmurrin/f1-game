@@ -276,17 +276,19 @@ const Tracks = (function () {
     // (k, side, ...rest): index + side based
     for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree",
                         "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
-                        "marshalPost", "bush", "signBoard", "ferrisWheel", "floodMast", "runoffApron"]) {
+                        "marshalPost", "bush", "signBoard", "ferrisWheel", "floodMast", "runoffApron",
+                        "cameraTower", "broadcastCompound"]) {
       const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), SIDE(side), ...r);
     }
     // (s, side, ...rest): single fraction + side
-    for (const name of ["grandstand"]) {
+    for (const name of ["grandstand", "grandstandEx"]) {
       const f = api[name]; if (f) w[name] = (s, side, ...r) => f(RS(s), SIDE(side), ...r);
     }
     // (s0, s1, side, ...rest): fraction RANGE + side — swap ends and mirror both
     for (const name of ["wall", "fence", "guardrail", "tyreWall", "hedge",
                         "forestEdge", "cityFront", "recordBarrier", "concreteCanyon",
-                        "bankedKerbStrip", "bowlSeatWall", "pastelStreetRow"]) {
+                        "bankedKerbStrip", "bowlSeatWall", "pastelStreetRow",
+                        "spectatorHill", "sponsorHoarding"]) {
       const f = api[name]; if (f) w[name] = (s0, s1, side, ...r) => {
         const range = TrackSpace.range(def, s0, s1, "source");
         return f(range.s0, range.s1, SIDE(side), ...r);
@@ -1254,14 +1256,15 @@ const Tracks = (function () {
     // scenery-nature (created above); the flush pass below and plantTree need them.
     const { canopyR, forestEdgeNow, deferredFoliage } = ctx;
     const { anchor, pine, tree, palm, conifer, peak, mountain, ridge,
-            crowdBank, grandstand, bush, hedge, forestEdge,
+            crowdBank, grandstand, grandstandEx, spectatorHill, bush, hedge, forestEdge,
             along, wall, fence, guardrail, tyreWall, gantry, marshalPost,
-            signBoard, ferrisWheel,
+            signBoard, sponsorHoarding, cameraTower, ferrisWheel,
             building, house, motorhome, tower, billboard, cityFront,
             streetLamp, neonSign, neonTower,
             underpassPortal, floodMast, floodMastRing, ledFacadeBands,
             concreteCanyon, sailCanopy, gridshellCanopy, runoffApron,
-            bankedKerbStrip, bowlSeatWall, pastelStreetRow } = ctx;
+            bankedKerbStrip, bowlSeatWall, pastelStreetRow,
+            broadcastCompound } = ctx;
 
     const bt = BARRIER[def.id] || { a: [0.92, 0.92, 0.94], b: [0.85, 0.18, 0.16], c: [0.55, 0.57, 0.62], night: [0.18, 0.18, 0.22], tyre: [0.24, 0.22, 0.20] };
     const btSeq = [bt.a, bt.b, bt.c];
@@ -1541,9 +1544,15 @@ const Tracks = (function () {
       });
     }
 
-    // --- main grandstand + pit complex on the start/finish straight (every GP) ---
+    // --- main grandstand + pit complex on the start/finish straight ---
+    // A crude 112 m fallback slab down each side of the first ~100 m of the lap.
+    // It predates the per-circuit scenery callbacks and is unconditional, so on
+    // any circuit that builds its own pit complex it lands ON TOP of the bespoke
+    // model (Monza's Tribuna Centrale and pit canopy, for one). Circuits that
+    // dress their own start/finish straight opt out with `ownPitStraight: true`;
+    // everything else keeps the fallback so no circuit loses its pit lane.
     const crowd = def.night ? [0.45, 0.28, 0.3] : [0.78, 0.42, 0.32];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < (def.ownPitStraight ? 0 : 7); i++) {
       const k = (i * 4) % n;
       place(k, -1, 14, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
       crowdBank(k, -1, 8, 16, 7, 4.2,                        // speckled tiered crowd
@@ -1589,14 +1598,17 @@ const Tracks = (function () {
         addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain, anchor, along,
         // landscape + vegetation
         pine, tree, palm, bush, hedge, peak, mountain, ridge, forestEdge, conifer,
+        // spectator terracing (informal grass banks — see docs/SCENERY-API.md)
+        spectatorHill,
         // structures
-        building, house, motorhome, tower, grandstand, billboard, gantry, marshalPost, cityFront,
+        building, house, motorhome, tower, grandstand, grandstandEx, billboard,
+        gantry, marshalPost, cameraTower, cityFront,
         // shared identity-pass toolkit
         underpassPortal, floodMast, floodMastRing, ledFacadeBands,
         concreteCanyon, sailCanopy, gridshellCanopy, runoffApron,
-        bankedKerbStrip, bowlSeatWall, pastelStreetRow,
+        bankedKerbStrip, bowlSeatWall, pastelStreetRow, broadcastCompound,
         // signage
-        signBoard,
+        signBoard, sponsorHoarding,
         // barriers / track furniture
         wall, fence, guardrail, tyreWall, recordBarrier,
       };

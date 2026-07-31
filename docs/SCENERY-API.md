@@ -229,7 +229,12 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 |---|---|
 | `building(k, side, gap, w, h, d, opts)` | mass + window bands; 3rd arg is **clearance** `gap` (metres beyond the road edge; the emitter computes `dist = gap + w/2` so the inner face sits `gap` off the edge). `opts:{wall,window,floor,setback,roof}` |
 | `tower(k, side, dist, baseW, h, opts)` | tapered tower; `opts:{col,seg,cap,capCol,mast}` |
-| `grandstand(s, side, gap, len, shell, crowd)` | raked stand: shell + crowd + cantilever roof |
+| `grandstand(s, side, gap, len, shell, crowd)` | raked stand: shell + crowd + cantilever roof (legacy 6-arg form; delegates to `grandstandEx` with no opts) |
+| `grandstandEx(s, side, gap, len, shell, crowd, opts)` | the full stand model — see **Grandstand variants** below |
+| `spectatorHill(s0, s1, side, gap, opts)` | informal grass-bank terracing: stepped earth risers + standing crowd, no shell/roof. `opts:{rows,rise,depth,grass,riser,density,step,crowd}` |
+| `cameraTower(k, side, gap, opts)` | lattice camera mast + railed platform + camera head. `opts:{h,col,boom,railCol}` |
+| `broadcastCompound(k, side, gap, opts)` | OB-truck row + satellite uplink dishes + link mast. `opts:{vans,dishes,mastH,vanCol,dishCol,spacing}` |
+| `sponsorHoarding(s0, s1, side, gap, opts)` | continuous trackside advertising-board run. `opts:{h,step,palette,postCol}` |
 | `billboard(k, side, gap, w, h, col)` | advertising hoarding on two posts |
 | `gantry(s, h, col)` | overhead structure spanning the track (start/scoring) |
 | `marshalPost(k, side, gap)` | orange-roofed post + flag pole |
@@ -244,6 +249,42 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 | `bankedKerbStrip(s0, s1, side, opts)` | tilted red/white kerbs + optional SAFER rail. `opts:{saferGap,safer,step,kerbRed,kerbWht,saferCol}` |
 | `bowlSeatWall(s0, s1, side, gap, opts)` | continuous eye-height seat/crowd wall. `opts:{h,thick,shell,step,crowdCols}` |
 | `pastelStreetRow(s0, s1, side, gap, opts)` | sparse Med apartment boxes. `opts:{palette,minH,maxH,depth,step,lit,windowCol}` |
+
+### Grandstand variants (`grandstandEx`)
+
+`grandstand()` is one template, and the 24 circuit files call it 248 times — with
+only `len` and two colours variable, every stand on every circuit rendered the
+same 12 m grey box. `grandstandEx` adds the shape knobs; the legacy entry point
+delegates to it, so existing calls are unchanged.
+
+| `opts` key | Effect |
+|---|---|
+| `livery` | name into `TrackSceneryData.STAND_LIVERIES` — supplies shell/roof/fascia/crowd in one go. Explicit `shell`/`crowd` args still win. |
+| `tiers` | 1–3 raked decks; each upper deck is set back and lifted with a concourse band closing the step |
+| `h` | back-shell height (default 12) |
+| `roof` | `"cantilever"` (default), `"flat"` (tight over the shell), `"truss"` (open lattice deck on cross-braces), `"none"` (uncovered bleacher) |
+| `suites` | glazed hospitality band under the roof at the back of the top rake |
+| `endWalls` | closing walls at both ends — stops a stand reading as a slab cut off mid-air |
+| `pylons` | support columns under the roof's trackside edge |
+| `roofCol` / `fasciaCol` / `suiteCol` | explicit colour overrides |
+
+Liveries live in `js/track/scenery-data.js`: `STAND_LIVERIES` holds the named
+families (`steel`, `darkSteel`, `concrete`, `alu`, `scaffold`, `sandstone`,
+`terracotta`, `pastel`, `crimson`, `navy`, `teal`, `orange`) and `STAND_SETS`
+maps each circuit to the families it should rotate through, so a venue's stands
+differ from each other while staying recognisably one place.
+
+```js
+// A big two-tier main stand with hospitality suites and a truss roof
+grandstandEx(0.00, -1, 12, 120, null, null,
+  { livery: "navy", tiers: 2, roof: "truss", suites: true, endWalls: true });
+// General-admission grass bank at a fast corner — no shell, no roof
+spectatorHill(0.43, 0.52, 1, 14, { rows: 5, density: 0.6 });
+```
+
+**Cost note:** `spectatorHill` runs ~70 verts/metre (the standing bodies dominate),
+so a 350 m bank spends a facility-sized budget rather than a furniture-sized one.
+Lower `density`/`rows` or raise `step` on long runs.
 
 ### Composite models — barriers / track furniture
 | Model | Builds |

@@ -314,13 +314,16 @@ const SceneryNature = (function () {
     // most bodies go dark with a sparse scatter of phone-lights / camera flashes.
     // Emitted with RAW.addBox (spectators always sit safely behind the shell, so
     // the per-box on-road test is skipped for speed).
-    const crowdBank = (k, side, gap, len, rise, depth, riserCol) => {
+    // `lift` (optional) raises the whole bank on the up axis — used by
+    // grandstandEx to stack an upper deck above the lower rake.
+    const crowdBank = (k, side, gap, len, rise, depth, riserCol, lift) => {
       const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
       const rows = Math.max(3, Math.round(rise / 1.4));
       const perRow = Math.max(6, Math.round(len / 1.15));
       const riser = riserCol || (NIGHT ? [0.10, 0.10, 0.13] : [0.28, 0.26, 0.27]);
+      const y0 = lift || 0;
       for (let r = 0; r < rows; r++) {
-        const f = (r + 0.5) / rows, up = f * rise, back = f * depth;
+        const f = (r + 0.5) / rows, up = y0 + f * rise, back = f * depth;
         // dark step riser behind each seating row (blocks sky/ground show-through).
         // Guarded (unlike the tiny spectator boxes): the riser is a wide flat slab,
         // so a mis-placed bank whose front row creeps toward the tarmac would
@@ -356,7 +359,34 @@ const SceneryNature = (function () {
       }
       out._mat = 0;
     };
-    const grandstand = (s, side, gap, len, shell, crowd) => {
+    // grandstandEx(): the full raked-stand model. grandstand() below is the
+    // legacy 6-arg entry point and delegates here with `opts` empty — with no
+    // opts this emits byte-identical geometry to the pre-split implementation,
+    // so all 248 existing call sites are untouched.
+    //
+    // opts (all optional):
+    //   livery     name into TrackSceneryData.STAND_LIVERIES; supplies
+    //              shell/roof/fascia/crowd colours in one go. Explicit
+    //              shell/crowd args still win over the livery.
+    //   tiers      1..3 raked decks stacked with a concourse band between them
+    //   h          back-shell height (default 12)
+    //   roof       "cantilever" (default) | "flat" | "truss" | "none"
+    //   suites     glazed hospitality band under the roof
+    //   endWalls   closing walls at both ends of the stand
+    //   pylons     support columns under the roof's outer edge
+    //   roofCol / fasciaCol / suiteCol   explicit colour overrides
+    const grandstandEx = (s, side, gap, len, shell, crowd, opts) => {
+      opts = opts || {};
+      const lib = TrackSceneryData.STAND_LIVERIES || {};
+      const liv = (opts.livery && lib[opts.livery]) || null;
+      shell = shell || (liv && liv.shell) || null;
+      crowd = crowd || (liv && liv.crowd) || null;
+      const roofKind = opts.roof || "cantilever";
+      const roofCol = opts.roofCol || (liv && liv.roof) || [0.86, 0.88, 0.92];
+      const fasciaCol = opts.fasciaCol || (liv && liv.fascia) || shell || [0.40, 0.41, 0.46];
+      const tiers = Math.max(1, Math.min(3, Math.round(opts.tiers || 1)));
+      const shellH = opts.h != null ? Math.max(6, opts.h) : 12;
+
       const k = Math.round(s * n) % n;
       const halfFrac = (len / 2) / track.total;
       recordBarrier(s - halfFrac, s + halfFrac, side, gap);
@@ -377,16 +407,77 @@ const SceneryNature = (function () {
       }
       // Back shell — center at gap+7.5 beyond road edge
       const oShell = side * (hw[k] + gap + 7.5);
-      const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + 7.5) + 6 - 0.8, pz[k] + r[2] * oShell];
-      addBox(out, cShell, [10, 12, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
+      const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + 7.5) + shellH / 2 - 0.8, pz[k] + r[2] * oShell];
+      addBox(out, cShell, [10, shellH, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
       // Raked crowd: speckled spectators rising from the front toward the shell.
       // (`crowd` colour, kept for call-site compatibility, tints the dark risers.)
-      crowdBank(k, side, gap + 1.5, len - 2, 7, 4.2,
-                crowd ? [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4] : null);
+      const riserTint = crowd ? [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4] : null;
+      crowdBank(k, side, gap + 1.5, len - 2, 7, 4.2, riserTint);
+      // Upper decks: each extra tier is a shorter bank set back and lifted above
+      // the one below, with a dark concourse band closing the step between them.
+      // Two- and three-tier stands are how every large modern stand actually
+      // reads on camera; one flat rake cannot produce that silhouette.
+      const tierLift = [];
+      for (let ti = 1; ti < tiers; ti++) {
+        const lift = 7.6 * ti, back = 4.6 * ti, tl = len - 2 - ti * 4;
+        if (tl < 8) break;
+        const ca = anchor(k, side, gap + 1.5 + back);
+        const cb = [ca.r, ca.u, ca.t];
+        // concourse band under the deck — hides the gap between the rakes
+        const bandC = vadd(ca.c, ca.u, lift - 0.9);
+        if (!rejBox(bandC, [5.2, 1.8, tl], cb)) {
+          addBox(out, bandC, [5.2, 1.8, tl], fasciaCol, cb);
+          crowdBank(k, side, gap + 1.5 + back, tl, 7, 4.2, riserTint, lift);
+        }
+        tierLift.push(lift);
+      }
+      const topLift = tierLift.length ? tierLift[tierLift.length - 1] : 0;
       // Roof slab cantilevered over the crowd, lifted on the up axis
       const a = anchor(k, side, gap + 5);
-      const roofC = vadd(a.c, a.u, 13);
-      addBox(out, roofC, [12, 0.8, len + 2], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
+      const roofY = 13 + topLift;
+      const roofC = vadd(a.c, a.u, roofY);
+      if (roofKind !== "none") {
+        if (roofKind === "truss") {
+          // Open lattice: a thin deck on repeated cross-braces — reads as an
+          // exposed steel roof rather than a solid slab.
+          addBox(out, roofC, [12, 0.35, len + 2], roofCol, [a.r, a.u, a.t]);
+          const bays = Math.max(2, Math.min(14, Math.round(len / 9)));
+          for (let i = 0; i < bays; i++) {
+            const off = ((i + 0.5) / bays - 0.5) * len;
+            addBox(out, vadd(vadd(a.c, a.t, off), a.u, roofY - 0.9), [11.4, 1.1, 0.5], roofCol, [a.r, a.u, a.t]);
+          }
+        } else {
+          // "flat" sits tight over the shell; "cantilever" (default) overhangs.
+          const rw = roofKind === "flat" ? 10 : 12;
+          addBox(out, roofC, [rw, 0.8, len + 2], roofCol, [a.r, a.u, a.t]);
+        }
+        // Support columns under the roof's outer (trackside) edge.
+        if (opts.pylons) {
+          const posts = Math.max(2, Math.min(12, Math.round(len / 14)));
+          for (let i = 0; i < posts; i++) {
+            const off = ((i + 0.5) / posts - 0.5) * len;
+            const pc = vadd(vadd(a.c, a.t, off), a.r, -side * 4.6);
+            addCyl(out, vadd(pc, a.u, (roofY - 0.5) / 2), 0.28, roofY - 0.5, fasciaCol, 6, [a.r, a.u, a.t]);
+          }
+        }
+      }
+      // Glazed hospitality band tucked under the roof at the back of the top rake.
+      if (opts.suites) {
+        const sc = anchor(k, side, gap + 7.0);
+        const suiteC = vadd(sc.c, sc.u, roofY - 2.6);
+        const suiteCol = opts.suiteCol || (NIGHT ? [1.10, 1.02, 0.80] : [0.34, 0.46, 0.58]);
+        if (!rejBox(suiteC, [3.2, 3.0, len - 3], [sc.r, sc.u, sc.t]))
+          addBox(out, suiteC, [3.2, 3.0, len - 3], suiteCol, [sc.r, sc.u, sc.t]);
+      }
+      // Closing walls at both ends — stops a stand reading as a slab cut off
+      // mid-air when seen from along the straight.
+      if (opts.endWalls) {
+        for (const sgn of [-1, 1]) {
+          const ec = vadd(vadd(a.c, a.t, sgn * (len / 2)), a.u, (roofY - 1) / 2);
+          if (!rejBox(ec, [11, roofY - 1, 0.5], [a.r, a.u, a.t]))
+            addBox(out, ec, [11, roofY - 1, 0.5], fasciaCol, [a.r, a.u, a.t]);
+        }
+      }
       // Rear fascia — closes the gap between the back shell's top and the roof
       // underside. Without it the roof is a slab hanging in air on EVERY
       // grandstand on every circuit: the shell tops out at ground+11.2 while the
@@ -397,17 +488,75 @@ const SceneryNature = (function () {
       // ACTUAL world-space tops instead of a constant. Placed at the roof's
       // outer edge (over the shell, behind the crowd) so it never occludes the
       // under-roof night strip, and is itself hidden by the roof from trackside.
-      {
-        const shellTop = cShell[1] + 6, roofUnder = roofC[1] - 0.4;
+      if (roofKind !== "none") {
+        const shellTop = cShell[1] + shellH / 2, roofUnder = roofC[1] - 0.4;
         if (roofUnder > shellTop - 0.1) {
           const oF = side * (hw[k] + gap + 9);
           addBox(out, [px[k] + r[0] * oF, (shellTop + roofUnder) / 2, pz[k] + r[2] * oF],
-                 [4, roofUnder - shellTop + 0.2, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
+                 [4, roofUnder - shellTop + 0.2, len], fasciaCol, [r, u, t]);
         }
       }
       // Under-roof lighting: a warm emissive strip beneath the roof slab so a
       // night grandstand reads as a lit, occupied stand instead of a dark hulk.
-      if (NIGHT) addBox(out, vadd(a.c, a.u, 12.35), [8.5, 0.28, len - 1], [1.30, 1.12, 0.74], [a.r, a.u, a.t]);
+      if (NIGHT && roofKind !== "none")
+        addBox(out, vadd(a.c, a.u, roofY - 0.65), [8.5, 0.28, len - 1], [1.30, 1.12, 0.74], [a.r, a.u, a.t]);
+    };
+    // Legacy 6-arg entry point — 248 call sites across js/circuits/*.js. With no
+    // opts, grandstandEx reproduces the original geometry exactly.
+    const grandstand = (s, side, gap, len, shell, crowd) =>
+      grandstandEx(s, side, gap, len, shell, crowd, null);
+
+    // spectatorHill(): informal grass-bank terracing — stepped earth risers
+    // climbing away from the track with a sparse standing crowd on top. This is
+    // what general-admission viewing actually looks like at Monza's Lesmo, Spa's
+    // Pouhon banks, Suzuka's Spoon, COTA's Turn 1 and the Red Bull Ring's Green
+    // Hill; a roofed grandstand() is the wrong silhouette for all of them and
+    // costs far more geometry. Terrain-anchored per node, so it follows a slope.
+    //   opts: { rows, rise, depth, grass, riser, density, step, crowd }
+    const spectatorHill = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const rows = Math.max(2, Math.min(8, Math.round(opts.rows || 4)));
+      const rise = opts.rise != null ? opts.rise : 1.15;      // per-row height gain
+      const depth = opts.depth != null ? opts.depth : 2.0;    // per-row setback
+      const grass = opts.grass || [0.26, 0.42, 0.20];
+      const riser = opts.riser || [0.30, 0.30, 0.28];
+      const dens = opts.density != null ? Math.max(0.05, Math.min(1, opts.density)) : 0.65;
+      const step = opts.step || 5;
+      // The bank is a solid mass — index it so treelines cannot grow through it.
+      ctx.indexSolid(s0, s1, side, gap, rows * depth + 1);
+      ctx.along(s0, s1, step, (k, spacing) => {
+        for (let r = 0; r < rows; r++) {
+          const back = r * depth, up = r * rise;
+          const a = anchor(k, side, gap + back);
+          const b = [a.r, a.u, a.t];
+          // Terrace tread: a wide flat step. Guarded — a bank creeping toward
+          // the tarmac must be dropped, not left overhanging the road.
+          const tc = vadd(a.c, a.u, up + rise * 0.5);
+          if (rejBox(tc, [depth, rise + 0.5, spacing], b)) continue;
+          out._mat = MAT.CONCRETE;
+          addBox(out, tc, [depth, rise + 0.5, spacing], r % 2 ? riser : grass, b);
+          out._mat = MAT.FABRIC;
+          // Standing spectators on the tread — sparser and more scattered than a
+          // seated crowdBank, which is what a grass bank reads like. Spaced at
+          // 1.8 m rather than crowdBank's 1.15 m seat pitch: people stand further
+          // apart on a bank, and the bodies are the bulk of this model's cost
+          // (a long hill is repeated furniture, budget 10k verts per sector).
+          const perRow = Math.max(2, Math.round(spacing / 1.8));
+          for (let i = 0; i < perRow; i++) {
+            const h1 = hash(k * 3.3 + r * 7.1 + i * 2.3 + side * 1.9);
+            if (h1 > dens) continue;
+            const h2 = hash(k * 5.9 + r * 2.7 + i * 6.1 + side * 4.3);
+            const off = ((i + 0.5) / perRow - 0.5) * spacing + (h2 - 0.5) * 0.5;
+            const c = vadd(vadd(vadd(a.c, a.t, off), a.u, up + rise + 0.55),
+                           a.r, side * (h2 - 0.5) * depth * 0.5);
+            const col = NIGHT
+              ? (h2 > 0.95 ? [2.4, 2.2, 1.9] : [0.12, 0.13, 0.17])
+              : (opts.crowd || CROWD_DAY)[Math.floor(h2 * (opts.crowd || CROWD_DAY).length) % (opts.crowd || CROWD_DAY).length];
+            RAW.addBox(out, c, [0.5, 0.86 + h1 * 0.2, 0.46], col, b);
+          }
+          out._mat = 0;
+        }
+      });
     };
     // Low clipped hedge / continuous treeline.
     const HEDGE_W = 2.4;
@@ -526,7 +675,7 @@ const SceneryNature = (function () {
     };
 
     return { anchor, pine, tree, palm, conifer, peak, mountain, ridge,
-             crowdBank, grandstand, bush, hedge, forestEdge,
+             crowdBank, grandstand, grandstandEx, spectatorHill, bush, hedge, forestEdge,
              canopyR, forestEdgeNow, deferredFoliage };
   }
 
