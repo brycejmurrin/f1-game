@@ -52,6 +52,22 @@ test.describe("TLX — boot", () => {
     expect(backend).toBeUndefined();   // plain GLX carries no backend id
   });
 
+  test("track renders a non-blank frame on TLX (M2 world geometry)", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.evaluate(() => window.__apex.park(0));
+    await page.waitForTimeout(400);
+    // Same heuristic as smoke.spec.js: a rendered scene PNG is tens of KB,
+    // a blank/solid canvas < ~2 KB.
+    const buf = await page.locator("canvas#game").screenshot();
+    expect(buf.length).toBeGreaterThan(5000);
+    expect(errors).toEqual([]);
+  });
+
   test("menu is reachable and canvas is sized (no-track begin/present path)", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });

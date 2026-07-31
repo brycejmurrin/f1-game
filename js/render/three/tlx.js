@@ -79,11 +79,57 @@ const TLX = (function () {
       let W = 1, H = 1;
       const DPR_CAP = isMobile ? 1.5 : 2;
 
-      // M1 clear-path scene: present() renders this empty scene so the canvas
-      // clears to frame.fogColor every frame (the no-track menu fallback).
+      // The seam is immediate-mode (draw(mesh, model, opts) between begin and
+      // present) while three is retained-mode. Bridge: draw() appends a
+      // (geometry, matrix) record; present() materialises records into a
+      // pooled set of THREE.Mesh objects IN SUBMISSION ORDER (GLX semantics:
+      // caller order is draw order) and renders once. InstancedMesh batching
+      // of repeated geometries lands with the lit material (M3+).
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0.04, 0.04, 0.06);
       const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 4000);
+      camera.matrixAutoUpdate = false;
+
+      // M2 material: unlit vertex colour (albedo passthrough — lighting M3).
+      const unlitMat = new THREE.MeshBasicNodeMaterial();
+      unlitMat.colorNode = TSL.attribute("color", "vec3");
+      unlitMat.side = THREE.FrontSide;
+
+      const drawList = [];          // {geo, matrix} in submission order
+      const meshPool = [];          // recycled THREE.Mesh wrappers
+      let poolUsed = 0;
+      const _tmpMat4 = new THREE.Matrix4();
+
+      function acquireMesh(geo, matrixArr) {
+        let m = meshPool[poolUsed];
+        if (!m) { m = new THREE.Mesh(geo, unlitMat); m.matrixAutoUpdate = false; m.frustumCulled = false; meshPool[poolUsed] = m; }
+        m.geometry = geo;
+        if (matrixArr) m.matrix.fromArray(matrixArr); else m.matrix.identity();
+        m.visible = true;
+        poolUsed++;
+        if (!m.parent) scene.add(m);
+        return m;
+      }
+
+      /** raw {pos,nrm,col,idx,mat?} (plain or typed arrays) -> BufferGeometry */
+      function buildGeometry(data) {
+        const g = new THREE.BufferGeometry();
+        const pos = data.pos.length ? data.pos : [0, 0, 0];
+        const verts = pos.length / 3;
+        g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pos), 3));
+        g.setAttribute("normal", new THREE.BufferAttribute(
+          new Float32Array(data.nrm && data.nrm.length === pos.length ? data.nrm : verts * 3), 3));
+        g.setAttribute("color", new THREE.BufferAttribute(
+          new Float32Array(data.col && data.col.length === pos.length ? data.col : verts * 3), 3));
+        // per-vertex procedural material id (0 = FLAT); consumed by tsl-lit (M3)
+        if (data.mat && data.mat.length === verts) {
+          g.setAttribute("mat", new THREE.BufferAttribute(new Float32Array(data.mat), 1));
+        }
+        if (data.idx && data.idx.length) {
+          g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+        }
+        return g;
+      }
 
       function resize() {
         const cw = canvas.clientWidth || canvas.width || 1;
@@ -131,14 +177,38 @@ const TLX = (function () {
         carShadowState() { return { enabled: carShadow.enabled, arms: carShadow.arms }; },
         lampShadowState() { return { enabled: lampShadow.enabled, arms: lampShadow.arms, idx: lampShadow.idx }; },
 
-        // resources (M2)
-        createMesh: noopMesh,
-        createTexMesh: noopMesh,
-        createChunkedMesh: noopMesh,
-        createTexture() { return { __tlx: true }; },
-        freeMesh() {},
-        freeChunkedMesh() {},
-        freeTexture() {},
+        // resources
+        createMesh(data) {
+          if (!data || !data.pos || !data.pos.length) return noopMesh();
+          return { __tlx: true, geo: buildGeometry(data), count: (data.idx && data.idx.length) || 0 };
+        },
+        createTexMesh(data) {
+          if (!data || !data.pos || !data.pos.length) return noopMesh();
+          const g = new THREE.BufferGeometry();
+          g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data.pos), 3));
+          g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(data.nrm), 3));
+          g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(data.uv), 2));
+          g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+          return { __tlx: true, geo: g, tex: true, count: data.idx.length };
+        },
+        // M2: chunked meshes are a single un-culled geometry (one draw).
+        // tlx-chunked.js (M7) adds binning + frustum/radial culling + the
+        // staged memory-release discipline.
+        createChunkedMesh(data) {
+          if (!data || !data.pos || !data.pos.length) return noopMesh();
+          return { __tlx: true, geo: buildGeometry(data), chunked: true, count: (data.idx && data.idx.length) || 0 };
+        },
+        createTexture(src) {
+          const t = new THREE.Texture(src);
+          t.flipY = true;                       // GLX uploads UNPACK_FLIP_Y
+          t.anisotropy = 4;
+          t.colorSpace = THREE.NoColorSpace;    // no-sRGB calibration invariant
+          t.needsUpdate = true;
+          return { __tlx: true, tex: t };
+        },
+        freeMesh(m) { if (m && m.geo) { m.geo.dispose(); m.geo = null; } },
+        freeChunkedMesh(m) { if (m && m.geo) { m.geo.dispose(); m.geo = null; } },
+        freeTexture(t) { if (t && t.tex) { t.tex.dispose(); t.tex = null; } },
 
         // frame protocol — M1: clear-only; every draw is a safe no-op
         shadowBegin() {}, castShadow() {}, castShadowChunked() {}, shadowEnd() {},
@@ -152,13 +222,45 @@ const TLX = (function () {
           resize();
           const f = (frame && frame.fogColor) || [0.04, 0.04, 0.06];
           scene.background.setRGB(f[0], f[1], f[2]);
+          // Camera from the game's column-major matrices. Main path supplies
+          // proj + invProj + viewProj (view = invProj * viewProj); the
+          // setup-preview and no-track paths supply only viewProj — then the
+          // projection IS the viewProj with an identity view (correct MVP;
+          // view-space effects self-disable on those paths anyway).
+          camera.matrixWorldAutoUpdate = false;
+          if (frame && frame.proj && frame.invProj && frame.viewProj) {
+            camera.projectionMatrix.fromArray(frame.proj);
+            camera.matrixWorldInverse.multiplyMatrices(
+              _tmpMat4.fromArray(frame.invProj),
+              new THREE.Matrix4().fromArray(frame.viewProj));
+            camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+          } else if (frame && frame.viewProj) {
+            camera.projectionMatrix.fromArray(frame.viewProj);
+            camera.matrixWorldInverse.identity();
+            camera.matrixWorld.identity();
+          }
+          camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+          if (frame && frame.eye) camera.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
+          drawList.length = 0;
           return true;
         },
-        drawSky() {}, draw() {}, drawChunked() {},
+        drawSky() {},
+        draw(mesh, model) {
+          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model });
+        },
+        drawChunked(mesh, model) {
+          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model });
+        },
         drawShadow() {}, drawMark() {},
         drawSkidBatch() { return true; },    // true: swallow the batch (no per-mark fallback spam)
         drawGlow() {}, drawParticles() {}, drawDecal() {},
-        present() { renderer.render(scene, camera); },
+        present() {
+          poolUsed = 0;
+          for (let i = 0; i < drawList.length; i++) acquireMesh(drawList[i].geo, drawList[i].m);
+          for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
+          renderer.render(scene, camera);
+          drawList.length = 0;
+        },
 
         // debug (grows into the __tlx shader-dump/?viz= tooling from M3 on)
         __tlx: { renderer, THREE, TSL },
