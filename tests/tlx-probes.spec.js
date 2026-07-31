@@ -92,7 +92,51 @@ test.describe("TLX — boot", () => {
     expect(st.lamp.arms).toBe(0);
     expect(st.lamp.idx).toBe(-1);
     expect(st.pcss).toBe(false);   // TODO M4-PCSS: blocker map not ported
-    expect(st.hdr).toBe(false);    // truthful until M8's HDR post chain
+    expect(st.hdr).toBe(true);     // M8: post chain renders into a float scene target
+    expect(errors).toEqual([]);
+  });
+
+  test("M8 post chain resolves a day race (HDR target, bloom live)", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.evaluate(() => window.__apex.park(0.1));
+    await page.waitForTimeout(600);
+    const st = await page.evaluate(() => GLX.__tlx.postState());
+    expect(st.on).toBe(true);
+    expect(st.hdr).toBe(true);
+    expect(st.blocks.bloom).toBe(true);     // day defaults keep bloomAmt > 0
+    expect(st.blocks.fxaa).toBe(true);      // the unconditional LDR resolve
+    expect(st.targets[0]).toBeGreaterThan(0);
+    expect(st.targets[1]).toBeGreaterThan(0);
+    // The chain must still produce a real image on the canvas.
+    const buf = await page.locator("canvas#game").screenshot();
+    expect(buf.length).toBeGreaterThan(5000);
+    expect(errors).toEqual([]);
+  });
+
+  test("M8 godray path arms on a night race (lamp snapshot consumed)", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("singapore"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.evaluate(() => window.__apex.park(0.1));
+    // Singapore night: lampVol > 0 opens the volumetric pass, and the lamp
+    // spot map arms per frame — present() snapshots the armed flag for the
+    // godray lamp-index mapping before clearArmed() retires it.
+    await page.waitForFunction(() => GLX.__tlx.postState().blocks.shafts === true, { timeout: 60_000 });
+    const st = await page.evaluate(() => ({
+      post: GLX.__tlx.postState(),
+      lamp: GLX.lampShadowState(),
+    }));
+    expect(st.post.on).toBe(true);
+    expect(st.post.blocks.shafts).toBe(true);   // lamp volumetrics marched
+    expect(st.lamp.arms).toBeGreaterThan(0);    // spot map armed -> snapshot taken
     expect(errors).toEqual([]);
   });
 

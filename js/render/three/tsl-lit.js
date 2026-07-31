@@ -23,9 +23,9 @@
  *     compare-off (see tlx-shadow.js header)          (TODO M4-PCSS)
  *   - live env CUBE probe               -> uEnvStr = 0, analytic-gradient
  *     mirror only (the uEnvStr<0.999 branch of lit.js:962-979)  (TODO M9)
- *   - SSR car-paint ALPHA TAG: computed but NOT written — M3 renders straight
- *     to the composited canvas, where a 0.35 alpha ghosts the cars against the
- *     page. M8's offscreen HDR target must route the tag through. (TODO M8)
+ *   - SSR car-paint ALPHA TAG (M8): written when ctx.ssrTag is set — the
+ *     post chain's offscreen HDR target carries it to the composite's SSR.
+ *     Without a chain (direct to canvas) the tag stays off (the M3 rule).
  *
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.lit = (THREE, TSL, ctx) => ({ makeMaterial, makeViz,
@@ -68,6 +68,10 @@
     //    the mobile tier never compiles them, mirroring GLX's always-bound-
     //    texture trick without needing dummy bindings. ─────────────────────
     const SHD = (ctx.shadow && ctx.shadow.S) ? ctx.shadow : null;
+    // M8: the offscreen HDR target exists — write the SSR car-paint tag into
+    // alpha (lit.js:1171-1174). False (no post chain) keeps the M3 behaviour:
+    // the canvas is the target and a 0.35 alpha would ghost the cars.
+    const SSR_TAG = !!ctx.ssrTag;
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
     const carShadowOn = !!(shadowOn && SHD.S.carEnabled && SHD.carTex);
     const lampShadowOn = !!(shadowOn && SHD.S.lampEnabled && SHD.lampTex);
@@ -1018,13 +1022,15 @@
         });
 
         // ── output alpha ──────────────────────────────────────────────────────
-        // GLX tags car-paint pixels in alpha (0.35) for the composite SSR pass
-        // (lit.js:1171-1174). TODO M8: emit `select(carPaint.greaterThan(0.001),
-        // float(0.35), matU.alpha)` once the scene renders into the offscreen
-        // HDR target — in M3 the target IS the composited canvas, where a 0.35
-        // alpha would ghost the cars against the page. Until then: translucent
-        // draws carry their real alpha (blending), opaque draws write 1.
-        return vec4(color, matU.alpha);
+        // M8: car-paint pixels are TAGGED in alpha (0.35 — lit.js:1171-1174)
+        // when the offscreen HDR target carries the frame; the composite's SSR
+        // reads the road/car masks off it. Opaque draws write it directly;
+        // translucent/noAlphaWrite draws preserve dst alpha through the blend
+        // stage (Zero/One alpha factors in makeMaterial — GLX's colorMask).
+        // Without the post chain (direct to canvas) the tag stays off.
+        return vec4(color, SSR_TAG
+          ? select(carPaint.greaterThan(0.001), float(0.35), matU.alpha)
+          : matU.alpha);
       })();
     }
 
@@ -1078,10 +1084,23 @@
         m.polygonOffsetFactor = o.depthBias[0];
         m.polygonOffsetUnits = o.depthBias[1];
       }
-      // noAlphaWrite (GLX colorMask RGB-only): moot while opaque alpha is
-      // pinned to 1 (see the output-alpha note above). TODO M8: honour it on
-      // the offscreen target (three has no per-channel colorWrite — mask the
-      // tag in the shader instead: alpha = noAlphaWrite ? 1 : tag).
+      // M8 alpha discipline (GLX draw(): noAW = noAlphaWrite || alpha < 1 ->
+      // colorMask(r,g,b,FALSE), glx.js:947-967 — the SSR tag underneath must
+      // survive). three has only a boolean colorWrite, so the mask maps to
+      // the blend stage: blendSrcAlpha=Zero / blendDstAlpha=One preserves dst
+      // alpha exactly (the tsl-fx.js particles/decals discipline). Colour
+      // factors keep each path's GLX blend: classic alpha for translucent,
+      // One/Zero overwrite for opaque noAlphaWrite draws (still sorted into
+      // three's opaque list — transparent stays false there).
+      if (alpha < 1 || o.noAlphaWrite) {
+        m.blending = THREE.CustomBlending;
+        m.blendEquation = THREE.AddEquation;
+        m.blendSrc = alpha < 1 ? THREE.SrcAlphaFactor : THREE.OneFactor;
+        m.blendDst = alpha < 1 ? THREE.OneMinusSrcAlphaFactor : THREE.ZeroFactor;
+        m.blendEquationAlpha = THREE.AddEquation;
+        m.blendSrcAlpha = THREE.ZeroFactor;   // dst alpha preserved (SSR tag / canvas)
+        m.blendDstAlpha = THREE.OneFactor;
+      }
       m.__tlxMatU = matU;   // per-draw uniform handles (tlx.js refresh path)
       return m;
     }

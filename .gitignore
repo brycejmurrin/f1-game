@@ -3,8 +3,9 @@
 .claude/*
 !.claude/skills/
 
-# Node
+# Node (both the real dir and the self-referential symlink worktree runs create)
 node_modules/
+node_modules
 
 # Regenerable output
 scratch/
