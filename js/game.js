@@ -1627,6 +1627,11 @@ const G = {
   // initialised before ApexApi.create(G) runs at the end of boot).
   smp, smp2, canvas,
   get gfx() { return gfx; },
+  // Local (s,x)↔world helpers for the incident sim's guarded handover writeback
+  // (js/game/incidentsim.js). trackFrom is the LOCAL predictor+Newton read (never
+  // a global search — see its comment), worldFromTrack its exact inverse.
+  trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
+  worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
   GAME_LAPS, TT_LAPS, LONG_GRIP,
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
@@ -1656,6 +1661,12 @@ const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/game/debrisworld.js) — render-only, opt-in,
 // inert (a single boolean check) unless enabled via apex26.debris/__apex.debris.
 DebrisWorld.create(G);
+// R2/R3/C1 bounded-takeover incident sim (js/game/incidentsim.js) — the ONLY
+// additive-Rapier layer allowed to move a car, and only inside a bounded,
+// flagged, fallback-guarded window (extends the sacred xPinned + (prog,x)
+// exceptions). Inert (owns() is a Set read) unless a flag is on AND the debris
+// side-world is live. DEFAULT ON per feature (apex26.r2Airborne/r3Contact/c1Pileup).
+const incidentSim = IncidentSim.create(G);
 // C2 visual suspension (js/game/bodyattitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
@@ -1798,7 +1809,18 @@ function update(dt) {
 
   // Rapier debris side-world: reads car poses (kinematic mirrors), owns only
   // its own shards, writes NOTHING back to gameplay. Inert unless enabled.
-  if (DebrisWorld.active()) DebrisWorld.step(dt);
+  //
+  // Incident sim (R2/R3/C1): preStep promotes any triggered takeover to a Rapier
+  // dynamic body BEFORE the world steps (DebrisWorld then skips posing it);
+  // postStep reads the 6-DoF pose back into the owned car(s) and hands each back
+  // once it settles. postStep runs unconditionally so an in-flight takeover is
+  // always progressed / degraded to bespoke, even if the side-world was just
+  // disabled mid-incident.
+  if (DebrisWorld.active()) {
+    incidentSim.preStep(dt);
+    DebrisWorld.step(dt);
+  }
+  incidentSim.postStep(dt);
 
   // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
   // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
@@ -1868,10 +1890,14 @@ function resolveCollisions(ranked, dt) {
     for (let ii = 0; ii < ranked.length; ii++) {
       const i = fwd ? ii : ranked.length - 1 - ii;
       const a = ranked[i];
+      // Incident-sim takeover owns this car's contacts in Rapier — the (prog,x)
+      // plane must not fight the 6-DoF body.
+      if (incidentSim.owns(a)) continue;
       // Full field: next-10 race ranks miss leader↔backmarker pairs that wrap
       // to |dProg|≈0 at the same s. 22 cars × LCAR cull is cheap.
       for (let j = i + 1; j < ranked.length; j++) {
         const b = ranked[j];
+        if (incidentSim.owns(b)) continue;
         let dProg = a.prog - b.prog;
         if (!Number.isFinite(dProg)) continue;   // never let a corrupt car spread NaN
         const L = track.total;
@@ -1926,6 +1952,11 @@ function resolveCollisions(ranked, dt) {
             if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
             // Debris hook (render-only side-world): closing speed = severity.
             if (last && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
+            // Incident sim (R3/C3 + C1): a hard closing contact queues a
+            // candidate. Only clears the R3 threshold for a real shunt (see
+            // incidentsim); below it the cheap (prog,x) plane above stays the
+            // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
+            if (last) incidentSim.notifyCar(a, b, relV);
           }
         }
       }
@@ -1938,8 +1969,10 @@ function resolveCollisions(ranked, dt) {
   const SLOP = 0.05;
   for (let i = 0; i < ranked.length; i++) {
     const a = ranked[i];
+    if (incidentSim.owns(a)) continue;   // Rapier owns this car's separation
     for (let j = i + 1; j < ranked.length; j++) {
       const b = ranked[j];
+      if (incidentSim.owns(b)) continue;
       let dProg = a.prog - b.prog;
       if (!Number.isFinite(dProg)) continue;
       const L = track.total;
@@ -1973,6 +2006,7 @@ function resolveCollisions(ranked, dt) {
   }
   // keep everyone inside the per-side barriers after being shoved around
   for (const c of ranked) {
+    if (incidentSim.owns(c)) continue;   // Rapier owns the clamp for this car
     const wr = Tracks.wallAt(track, c.s, 1), wl = Tracks.wallAt(track, c.s, -1);
     if (c.x > wr) c.x = wr; else if (c.x < -wl) c.x = -wl;
   }
@@ -1986,7 +2020,7 @@ function resolveCollisions(ranked, dt) {
   // reconstruction that wasn't quite the inverse of the read (see
   // worldFromTrack) the loop had gain < 1 and dragged the car onto the
   // centreline. Untouched frames must leave the car's own integration alone.
-  if (player && player.px != null && !player.finished &&
+  if (player && player.px != null && !player.finished && !incidentSim.owns(player) &&
       (player.s !== _preColS || player.x !== _preColX)) {
     const w = worldFromTrack(player.s, player.x, smp);
     player.px = w.x;
@@ -1996,6 +2030,11 @@ function resolveCollisions(ranked, dt) {
 
 function updateCar(c, dt, ranked) {
   if (c.finished) { coast(c, dt); c._prevS = c.s; return; }
+  // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
+  // the bespoke integration + wall clamp + collision writeback are SKIPPED —
+  // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
+  // fallback-guarded; outside the window this early-out is never taken.
+  if (incidentSim.owns(c)) { c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
@@ -2566,7 +2605,14 @@ function updateCar(c, dt, ranked) {
       // the bespoke xPinned clamp below is UNCHANGED; broken panels are never a
       // collision surface for the car (that would be R3). promoteBarrier gates
       // on its own severity minimum and is a no-op when the flag is off.
-      DebrisWorld.promoteBarrier(c, into, xOver * 60 + Math.abs(c.speed || 0) * 0.15);
+      const _wallSev = xOver * 60 + Math.abs(c.speed || 0) * 0.15;
+      DebrisWorld.promoteBarrier(c, into, _wallSev);
+      // Incident sim (R2 airborne): a GENUINELY hard wall strike launches this
+      // car into a bounded 6-DoF Rapier tumble (queued now, promoted in preStep).
+      // Only clears R2_WALL_SEV — ordinary scrapes never trigger. The bespoke
+      // xPinned clamp below still runs this trigger frame; the takeover begins
+      // next tick from the resulting pose. Self-guarding no-op otherwise.
+      incidentSim.notifyWall(c, into, _wallSev);
     }
     c.x = into > 0 ? wallR : -wallL;
     xPinned = true;
@@ -2735,15 +2781,21 @@ function updateCar(c, dt, ranked) {
   // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
   if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
+    // A takeover (R2/R3/C1) during this lap invalidates it EXPLICITLY: the car
+    // was moved by Rapier, so the lap is not a legitimate timed lap. Don't let it
+    // set a personal best or become the stored ghost; just start the next lap
+    // clean. The flag is set by IncidentSim and cleared here at the line.
+    const lapValid = !c.incidentInvalidLap;
     if (c.lap > 1) {
       const lapDone = c.lapTime;
       c.lastLap = lapDone;
-      if (lapDone < c.best) c.best = lapDone;
+      if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
-      if (c.isPlayer && timeTrial) onTTLap(lapDone);
+      if (c.isPlayer && timeTrial) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
     } else if (c.isPlayer && timeTrial) {
       Ghost.startLap();
     }
+    c.incidentInvalidLap = false;   // the new lap starts clean
     c.lapTime = 0;
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     if (c.isPlayer && c.lap === lapsTarget) announce("FINAL LAP", 1.6);
@@ -2753,7 +2805,9 @@ function updateCar(c, dt, ranked) {
       if (c.isPlayer) announce("FINISH!", 2);
     }
   }
-  if (timeTrial && c.isPlayer) Ghost.record(c.lapTime, c.s, c.x);
+  // Skip ghost recording while the current lap is incident-invalidated (a
+  // takeover jumps s/x — recording it would corrupt the ghost trace).
+  if (timeTrial && c.isPlayer && !c.incidentInvalidLap) Ghost.record(c.lapTime, c.s, c.x);
 
   // --- wrong-way + auto-rescue (player only) ---
   if (c.isPlayer && state === "race" && !c.finished) {

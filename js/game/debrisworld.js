@@ -49,6 +49,12 @@ let _loadErr = null;
 let world = null;        // RAPIER.World
 let _worldTrack = null;  // track identity the trimesh was built for
 let _mirrors = [];       // one kinematicPositionBased body per car (cars[] order)
+let _worldGen = 0;       // bumped every buildWorld — the incident sim aborts a takeover if this changes under it
+// Incident-sim takeover (R2/R3/C1, js/game/incidentsim.js): indices whose mirror
+// has been promoted kinematic→DYNAMIC and is owned by IncidentSim. step()'s
+// mirror-sync loop SKIPS these (a dynamic body must not be pose-driven), so the
+// bespoke->Rapier handover keeps a single authority for the duration.
+let _dynCars = new Set();
 let _slots = [];         // fixed debris pool: { body, live, scale, restT, spawnTick }
 let _cap = 0;            // pool size for the CURRENT world (48 desktop / 16 mobile tier)
 let _queue = [];         // impacts queued by the game-side hooks, consumed next step
@@ -194,7 +200,62 @@ function create(ctx) {
   try { _marbleGripOn = (localStorage.getItem("apex26.marbleGrip") || "1") !== "0"; } catch (e) {}
   if (opt === "1") setEnabled(true);   // default ON; async load, never blocks boot (set "0" to disable)
   return { active, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
-           registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags };
+           registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags,
+           rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose, isCarDynamic };
+}
+
+// ── Incident-sim takeover interface (consumed by js/game/incidentsim.js) ─────
+// These promote/read/restore a car MIRROR as a Rapier 6-DoF dynamic body for a
+// bounded, flagged, fallback-guarded incident window. They NEVER write a car —
+// IncidentSim reads carBodyPose() back and does all the guarded writeback. When
+// no takeover is active (_dynCars empty) these are never called and the debris
+// side-world is bit-identical to before.
+function rapierReady() { return _loadState === 2 && !!world; }
+function worldGen() { return _worldGen; }
+function isCarDynamic(i) { return _dynCars.has(i); }
+
+// Promote mirror i from kinematicPositionBased → dynamic, seeded with world
+// linear/angular velocity. Marks it in _dynCars so step() stops posing it.
+// Returns false (a no-op the caller degrades to bespoke on) if anything is wrong.
+function promoteCarDynamic(i, lin, ang) {
+  if (!world || !RAPIER || i < 0 || i >= _mirrors.length) return false;
+  const b = _mirrors[i];
+  if (!b) return false;
+  try {
+    b.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    if (lin) b.setLinvel({ x: lin.x || 0, y: lin.y || 0, z: lin.z || 0 }, true);
+    if (ang) b.setAngvel({ x: ang.x || 0, y: ang.y || 0, z: ang.z || 0 }, true);
+    _dynCars.add(i);
+    return true;
+  } catch (e) {
+    try { b.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true); } catch (_e) {}
+    _dynCars.delete(i);
+    return false;
+  }
+}
+
+// Flip mirror i back to kinematic; step() resumes posing it from the car's
+// (handed-back) pose next tick.
+function demoteCarKinematic(i) {
+  _dynCars.delete(i);
+  if (!world || !RAPIER || i < 0 || i >= _mirrors.length) return false;
+  const b = _mirrors[i];
+  if (!b) return false;
+  try { b.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true); } catch (e) { return false; }
+  return true;
+}
+
+// Read mirror i's 6-DoF pose + velocities (only while it is dynamic/owned).
+function carBodyPose(i) {
+  if (!world || i < 0 || i >= _mirrors.length || !_dynCars.has(i)) return null;
+  const b = _mirrors[i];
+  if (!b) return null;
+  try {
+    const t = b.translation(), q = b.rotation(), lv = b.linvel(), av = b.angvel();
+    return { x: t.x, y: t.y, z: t.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w,
+             vx: lv.x, vy: lv.y, vz: lv.z, wx: av.x, wy: av.y, wz: av.z,
+             sleeping: b.isSleeping() };
+  } catch (e) { return null; }
 }
 
 // Group B flag get/set (used by __apex + tests). Passing an object sets flags;
@@ -216,6 +277,7 @@ function destroyWorld() {
   if (_events) { try { _events.free(); } catch (e) {} }
   if (world) { try { world.free(); } catch (e) {} }
   world = null; _worldTrack = null; _mirrors = []; _slots = []; _queue.length = 0;
+  _dynCars.clear();   // any in-flight takeover's bodies die with the world — IncidentSim aborts via worldGen()
   _events = null; _colliderCar = null; _furnHandles = null;
   _marbles = []; _marbleCap = 0; _furn = []; _furnBuilt = false;
   _carForce = []; _spallCool = []; _forceBuf.length = 0; _lastForce = 0;
@@ -333,6 +395,7 @@ function buildWorld(track, cars) {
     _furnBuilt = _furn.length > 0;
   }
   _worldTrack = track;
+  _worldGen++;   // a rebuilt world invalidates any incident-sim takeover (checked via worldGen())
 }
 
 // Derive a ≤cap near-apex cone list from the loaded circuit's curated turn
@@ -608,6 +671,9 @@ function step(dt) {
   // the world heading for the player / the track tangent for AI). ~0.01 ms
   // for 22 cars (DEEP-DIVE §2).
   for (let i = 0; i < cars.length; i++) {
+    // Incident sim owns this index as a DYNAMIC body — do NOT pose it (a dynamic
+    // body has no setNextKinematic* semantics). IncidentSim reads it back instead.
+    if (_dynCars.has(i)) continue;
     const c = cars[i], m = _mirrors[i];
     Tracks.sample(track, c.s, _smp);
     const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
@@ -989,5 +1055,6 @@ function status() {
 function _panelLive() { let n = 0; for (const p of _panels) if (p.live) n++; return n; }
 
 return { create, active, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
-         registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags };
+         registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags,
+         rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose, isCarDynamic };
 })();
