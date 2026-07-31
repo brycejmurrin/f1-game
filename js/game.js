@@ -370,6 +370,12 @@ const LONG_GRIP = 34;
 const WHEEL_R = 0.34;         // wheel radius (m) — matches Car3D geometry, for spin rate
 const WHEEL_STEER_VIS = 0.5;  // rad of visible front-wheel steer at full lock
 const GRASS_V = 18;         // crawl speed on grass
+const KERB_SHAKE = 0.22;    // sustained kerb rumble trauma (was inline 0.3): amt =
+                            //   shake²·0.9 drops 0.081 → 0.044 m of random eye jitter;
+                            //   crash-shake writers are untouched.
+const KERB_CUE_HOLD = 0.10; // s — bridges the ~20 Hz per-node flicker of the raw
+                            //   onKerb flag (~2 node periods at 300 km/h) so the
+                            //   rumble/shake/haptic cue can't machine-gun on/off.
 const DEPLOY_A = 3.0;       // extra accel from electric deploy
 const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed band
 function isErsDeploying(c) {
@@ -514,6 +520,7 @@ let _cloudBase = 0.4;
 const teamMeshes = {};   // teamId -> renderer mesh handle
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
+let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
@@ -720,6 +727,14 @@ function playerAnchor(c) {
   }
   return _pa;
 }
+// yawVis is produced in the physics step; render it interpolated like position,
+// or the mesh orientation leads the interpolated position by one full physics
+// step (16.7 ms) — a small orientation-vs-position judder during yaw transients.
+// yawVis is a damped residual clamped well inside ±π, so a plain lerp is safe.
+function yawVisInterp(c) {
+  const y1 = c.yawVis || 0;
+  return c.rPrevYawVis === undefined ? y1 : c.rPrevYawVis + (y1 - c.rPrevYawVis) * renderAlpha;
+}
 function basisMat(r, u, f, p, out) {
   out[0] = r[0]; out[1] = r[1]; out[2] = r[2]; out[3] = 0;
   out[4] = u[0]; out[5] = u[1]; out[6] = u[2]; out[7] = 0;
@@ -906,7 +921,8 @@ function gridUp() {
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
-    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0;
+    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0;
+    c.kerbGripSm = 1; c.kerbCueT = 0;
   });
 }
 function smpHw(s) { Tracks.sample(track, s, smp); return smp.hw; }
@@ -1088,12 +1104,18 @@ function currentCarGroundMat(c, out, dt) {
   // mutating xVis twice. Shadow and body therefore share one lateral position.
   const renderX = c.xVis === undefined ? cX : damp(c.xVis, cX, 30, dt);
   Tracks.sample(track, cS, smp2);
+  // Normalize the lerped tangent/right — same fix as the body loop: raw they
+  // scale the shadow-caster basis at the 4 m node rate (see the note there).
+  { const t = smp2.t, r = smp2.r;
+    let l = Math.sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]) || 1; t[0] /= l; t[1] /= l; t[2] /= l;
+    l = Math.sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]) || 1; r[0] /= l; r[1] /= l; r[2] /= l; }
   const bankC = Tracks.banking(track, cS, renderX, _bankScratch);
   const rp = renderPosOf(c, cS, renderX);   // player: exact world position
   tmpP[0] = rp.world ? rp.x : smp2.p[0] + smp2.r[0] * renderX;
   tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
   tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
-  const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
+  const yv = yawVisInterp(c);   // same interpolated yaw as the body loop
+  const cy = Math.cos(yv), sy = Math.sin(yv);
   for (let i = 0; i < 3; i++) {
     _groundF[i] = smp2.t[i] * cy + smp2.r[i] * sy;
     _groundR[i] = smp2.r[i] * cy - smp2.t[i] * sy;
@@ -1497,7 +1519,7 @@ function startRace() {
   gridUp();
   recomputePlayerMods();
   resultT = 0;
-  camRoll = 0;
+  camRoll = 0; camSlipSm = 0;
   sectorIdx = sectorAt(player.s); sectorStartT = 0;
   // Arm the crash sentinel (mobile only) and, after a strike, start the
   // session pre-scaled-down — the governor may restore upward, but only under
@@ -2320,13 +2342,19 @@ function updateCar(c, dt, ranked) {
   // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
   // grip + speed, but you can stay on it. Distinct from going off into grass.
   if (c.onKerb) {
-    c.speed -= 6 * dt;                       // slight scrub
-    if (c.isPlayer) {
-      shake = Math.max(shake, 0.3);          // continuous light rumble via shake
-      c.kerbSndT = (c.kerbSndT || 0) - dt;
-      if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-      if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
-    }
+    c.speed -= 6 * dt;                       // slight scrub (raw contact only)
+    if (c.isPlayer) c.kerbCueT = KERB_CUE_HOLD;
+  }
+  // The raw onKerb flag is a floor-indexed per-node lookup (TrackMesh.onKerb)
+  // and flickers at the ~4 m node rate at speed (≈20 Hz at 300 km/h) when the
+  // car straddles the kerb line. Run the CUES on a short sticky hold so
+  // rumble/shake/haptics read as one continuous kerb strike instead of a
+  // machine-gun re-arm of the trauma shake every node.
+  if (c.isPlayer && (c.kerbCueT = Math.max(0, (c.kerbCueT || 0) - dt)) > 0) {
+    shake = Math.max(shake, KERB_SHAKE);     // continuous light rumble via shake
+    c.kerbSndT = (c.kerbSndT || 0) - dt;
+    if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
+    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
   }
 
   // --- lateral ---
@@ -2408,7 +2436,13 @@ function updateCar(c, dt, ranked) {
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(Math.abs(c.speed) / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
-  const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
+  // Riding a kerb loses a little grip — damped continuous instead of a binary
+  // 1↔0.7 flip: the raw flag flickers at the ~4 m node rate at speed, and a
+  // 30% lateral-grip square wave at ~20 Hz was genuine yaw dither in the
+  // physics. λ=12 (τ≈83 ms): a solid kerb ride reaches the full 0.7 penalty in
+  // ~0.25 s (handling penalty preserved); a one-tick flicker moves grip <2%.
+  // Deterministic (damp is exp-based, dt here is the fixed PHYS_DT).
+  const kerbGrip = (c.kerbGripSm = damp(c.kerbGripSm ?? 1, c.onKerb ? 0.7 : 1, 12, dt));
   // Banking: computed once, shared between player and AI so both get grip boost.
   const bankPhys = Tracks.banking(track, c.s, 0, _bankScratchP);
   const bankRoll = Math.max(bankPhys ? Math.abs(bankPhys.roll) : 0,
@@ -3537,9 +3571,15 @@ function render(dt) {
   if (dbgCam) {
     camRoll = 0;
   } else {
-    const slip = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
-    const targetRoll = roadCamRoll + clamp(slip, -1, 1) * 0.07;
-    camRoll += (targetRoll - camRoll) * Math.min(1, dt / 0.15);
+    // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
+    // physics values, and feeding them straight into screen roll printed every
+    // physics step onto the horizon — the most visible jitter class. λ7 on the
+    // roll itself matches the old linear dt/0.15 blend at 60 fps
+    // (1−e^(−7/60) ≈ 0.110 ≈ (1/60)/0.15) but is frame-rate independent, so
+    // 30 and 120 Hz devices converge at the same real-time rate.
+    const slipRaw = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
+    camSlipSm = damp(camSlipSm, clamp(slipRaw, -1, 1), 10, dt);
+    camRoll = damp(camRoll, roadCamRoll + camSlipSm * 0.07, 7, dt);
   }
 
   // Debug free camera (set via __apex.view) overrides the chase cam — instant
@@ -4146,6 +4186,15 @@ function render(dt) {
     const pa = playerAnchor(c);
     const cS = pa.cS, cX = pa.cX;
     Tracks.sample(track, cS, smp2);
+    // sample() lerps unit node vectors, so mid-segment |t|,|r| dip to cos(θ/2)
+    // (up to ~4.7% on Spa's tightest) — used un-normalized they SCALE the drawn
+    // car at the 4 m node rate (~21 Hz at speed): a visible width/length pulse
+    // against a road mesh built at exact nodes (see worldFromTrack's comment on
+    // this exact hazard). Normalize in place: smp2 is a scratch every consumer
+    // re-samples before reading, so nothing downstream sees raw values.
+    { const t = smp2.t, r = smp2.r;
+      let l = Math.sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]) || 1; t[0] /= l; t[1] /= l; t[2] /= l;
+      l = Math.sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]) || 1; r[0] /= l; r[1] /= l; r[2] /= l; }
     // Smooth RENDERED lateral position. Physics c.x stays exact (used for walls,
     // collisions, racing-line assist). Only the mesh position is low-passed so
     // Frenet-projection noise doesn't appear as visible left-right wobble.
@@ -4179,8 +4228,9 @@ function render(dt) {
       const dy = tmpP[1] - camEye[1];
       if (dx * dx + dy * dy + dz * dz < 3.4 * 3.4) continue;
     }
-    // yaw the forward/right around up by yawVis
-    const cy = Math.cos(c.yawVis || 0), sy = Math.sin(c.yawVis || 0);
+    // yaw the forward/right around up by yawVis (interpolated, like position)
+    const yv = yawVisInterp(c);
+    const cy = Math.cos(yv), sy = Math.sin(yv);
     for (let i = 0; i < 3; i++) {
       tmpF[i] = smp2.t[i] * cy + smp2.r[i] * sy;
       tmpR[i] = smp2.r[i] * cy - smp2.t[i] * sy;
@@ -4208,7 +4258,9 @@ function render(dt) {
     // clamped pitch/roll/heave offsets. Render-only — applied to the BODY basis
     // (tmpMat) below; _groundMat (wheels/contact/shadow) is already built and is
     // never touched. When disabled these all come back 0 (rigid chassis).
-    const _ba = bodyAttitude.update(c, tmpP[1], dt);
+    // ygV = speed × road slope (smp2.t normalized above): the ground's vertical
+    // velocity under the car, analytic — bodyattitude never differentiates height.
+    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1]);
     const _baPitch = _ba.pitch, _baRoll = _ba.roll, _baHeave = _ba.heave;
     // Pitch: rotate forward+up around the right axis (positive = nose up). This
     // gives throttle-squat (nose lifts) and brake-dive (nose dips) without moving
@@ -4482,6 +4534,10 @@ function render(dt) {
     if (g && !g.done) { const d = Math.abs(g.s - player.s); gDs = Math.min(d, track.total - d); }
     if (g && !g.done && gDs > 3.0) {
       Tracks.sample(track, g.s, smp2);
+      // Normalize the lerped basis — same node-rate scale-pulse fix as the cars.
+      { const t = smp2.t, r = smp2.r;
+        let l = Math.sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]) || 1; t[0] /= l; t[1] /= l; t[2] /= l;
+        l = Math.sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]) || 1; r[0] /= l; r[1] /= l; r[2] /= l; }
       tmpP[0] = smp2.p[0] + smp2.r[0] * g.x;
       tmpP[1] = smp2.p[1];
       tmpP[2] = smp2.p[2] + smp2.r[2] * g.x;
@@ -4754,6 +4810,7 @@ function tickBody(now) {
       for (let i = 0; i < cars.length; i++) {
         const c = cars[i]; c.rPrevS = c.s; c.rPrevX = c.x;
         c.rPrevPx = c.px; c.rPrevPz = c.pz;   // player renders from WORLD space
+        c.rPrevYawVis = c.yawVis;             // orientation interpolates like position
       }
       update(PHYS_DT); physAcc -= PHYS_DT; steps++;
     }
