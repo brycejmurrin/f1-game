@@ -87,7 +87,7 @@
 "use strict";
 
 const Gfx = (function () {
-  const BACKEND_KEY = "apex26.gfxBackend";   // "webgl2" opts out of WebGPU
+  const BACKEND_KEY = "apex26.gfxBackend";   // "webgl2" opts out | "webgpu" = WGX | "three" = TLX
 
   /**
    * create(canvas, opts) -> Promise<backend | null>
@@ -107,12 +107,22 @@ const Gfx = (function () {
    */
   async function create(canvas, opts) {
     try {
+      let pref = null;
+      try { pref = localStorage.getItem(BACKEND_KEY); } catch (_) {}
+
+      // "three" -> TLX (three.js/TSL backend; WebGPU with automatic WebGL2
+      // fallback inside three, so no navigator.gpu requirement here).
+      if (pref === "three") {
+        if (typeof TLX === "undefined" || !TLX || typeof TLX.create !== "function") return null;
+        const backend = await TLX.create(canvas, opts || {});
+        return backend || null;   // TLX.create returns null on any failure
+      }
+
+      // Anything else follows the original WebGPU/WGX rules verbatim:
       if (typeof navigator === "undefined" || !navigator.gpu) return null;
 
       // User / test opt-out: force the WebGL2 path.
-      let optOut = false;
-      try { optOut = localStorage.getItem(BACKEND_KEY) === "webgl2"; } catch (_) {}
-      if (optOut) return null;
+      if (pref === "webgl2") return null;
 
       // WGX must be loaded (script order). If not, fall back silently.
       if (typeof WGX === "undefined" || !WGX || typeof WGX.create !== "function") return null;
