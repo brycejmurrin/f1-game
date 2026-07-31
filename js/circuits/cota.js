@@ -50,7 +50,7 @@
       { frac: 0.8430, angleDeg: 4.0, widthM: 120 },
     ],
     scenery: function (api) {
-      const { out, MAT, n, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, grandstand, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop } = api;
+      const { out, MAT, n, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, waterSurface, grandstand, grandstandEx, spectatorHill, cameraTower, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ======================= BESPOKE COTA MODELS =======================
@@ -147,30 +147,61 @@
       const lampPost  = [0.36, 0.36, 0.40];
       const lampHead  = [0.98, 0.94, 0.78];   // warm white sodium
 
-      // ---- Main grandstand on the start/finish straight (s≈0.00, R) ----
-      grandstand(0.00,  1,  8, 150, [0.34, 0.35, 0.40], [0.5, 0.5, 0.54]);
+      // ---- Grandstands: THREE colour families instead of one grey box ----
+      // STAND_SETS.cota = ["alu", "darkSteel", "sandstone"]. The real T1
+      // bleachers are bare uncovered aluminium temp seating; the main
+      // straight/pit cluster is dark permanent steel; the infield and back
+      // straight stands run warm sandstone/tan. Passing shell/crowd as null
+      // lets the named livery supply shell/roof/fascia/crowd in one go.
+
+      // Main grandstand on the start/finish straight (s≈0.00, R) — the hero
+      // stand: two raked tiers, glazed suites, closed end walls, roof pylons.
+      grandstandEx(0.00, 1, 8, 150, null, null,
+        { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      // Bespoke swept accent riding above the standard cantilever slab — the
+      // real Miró Rivera roof is one continuous sweep, not a flat cap. A
+      // shallow arc of tapering ribs that crowns at the stand's centre and
+      // eases down to the standard roofline at both ends. Sits clear above
+      // the cantilever (roofY+0.4 top) so it reads as an added upper sweep,
+      // not a clipping double roof.
+      {
+        const kMain = K(0.00), segs_ = 10, roofY = 13 + 7.6; // matches tiers:2 (one 7.6 m tier lift)
+        const aMain = anchor(kMain, 1, 8 + 5), mb = [aMain.r, aMain.u, aMain.t];
+        for (let i = 0; i < segs_; i++) {
+          const tt = (i + 0.5) / segs_ - 0.5;             // -0.5..0.5 along the 150 m stand
+          const crown = Math.cos(tt * Math.PI) * 2.6;      // peaks at centre, 0 at the ends
+          addBox(out, vadd(vadd(aMain.c, aMain.t, tt * 150), aMain.u, roofY + 1.1 + crown),
+                 [11.6, 0.5, 150 / segs_ + 0.8], [0.30, 0.32, 0.37], mb);
+        }
+      }
       // Opposite paddock-side stand on the main straight (s≈0.00, L)
-      grandstand(0.985, -1, 16, 90, [0.36, 0.37, 0.42], [0.5, 0.5, 0.54]);
+      grandstandEx(0.985, -1, 16, 90, null, null, { livery: "darkSteel", endWalls: true });
       // Final-corner stepped stand leading onto the main straight (s≈0.95, R)
-      grandstand(0.95,  1,  9, 80, [0.36, 0.37, 0.42], [0.52, 0.5, 0.5]);
-      // Turn-1 hill stand catching the climb (s≈0.07, L) — set back enough to clear road
-      grandstand(0.07, -1, 14, 80, [0.42, 0.43, 0.48], [0.50, 0.50, 0.54]);
-      // T1 hill stand mid-rise (s≈0.11, L)
-      grandstand(0.11, -1, 18, 60, [0.38, 0.39, 0.44], [0.52, 0.5, 0.5]);
-      // T1 amphitheatre upper tier (s≈0.13, L)
-      grandstand(0.13, -1, 26, 64, [0.36, 0.37, 0.42], [0.5, 0.5, 0.54]);
-      // Esses outside stand (s≈0.20, L)
-      grandstand(0.20, -1, 16, 56, [0.40, 0.41, 0.46], [0.5, 0.5, 0.54]);
-      // Esses-exit stand (s≈0.24, R)
-      grandstand(0.24,  1, 18, 54, [0.38, 0.39, 0.44], [0.5, 0.5, 0.54]);
-      // Back-straight grandstand (s≈0.46, L)
-      grandstand(0.46, -1, 12, 70, [0.40, 0.41, 0.46], [0.5, 0.5, 0.54]);
-      // Turn-12 hairpin braking-zone stand (s≈0.625, R)
-      grandstand(0.625, 1, 14, 70, [0.38, 0.39, 0.44], [0.5, 0.5, 0.54]);
-      // Triple-apex sweeper stand (s≈0.83, R)
-      grandstand(0.83,  1, 16, 64, [0.40, 0.41, 0.46], [0.5, 0.5, 0.54]);
+      grandstandEx(0.95, 1, 9, 80, null, null, { livery: "darkSteel", endWalls: true });
+      // Turn-1 hill stand catching the climb (s≈0.07, L) — bare aluminium
+      // bleachers, uncovered (roof:"none") — set back enough to clear road.
+      grandstandEx(0.07, -1, 14, 80, null, null, { livery: "alu", roof: "none" });
+      // T1 hill stand mid-rise (s≈0.11, L) — uncovered alu
+      grandstandEx(0.11, -1, 18, 60, null, null, { livery: "alu", roof: "none" });
+      // T1 amphitheatre upper tier (s≈0.13, L) — uncovered alu
+      grandstandEx(0.13, -1, 26, 64, null, null, { livery: "alu", roof: "none" });
+      // Esses outside stand (s≈0.20, L) — infield sandstone family
+      grandstandEx(0.20, -1, 16, 56, null, null, { livery: "sandstone" });
+      // Esses-exit stand (s≈0.24, R) — infield sandstone family
+      grandstandEx(0.24, 1, 18, 54, null, null, { livery: "sandstone" });
+      // Back-straight grandstand (s≈0.46, L) — sandstone family
+      grandstandEx(0.46, -1, 12, 70, null, null, { livery: "sandstone" });
+      // Turn-12 hairpin braking-zone stand (s≈0.625, R) — sandstone family
+      grandstandEx(0.625, 1, 14, 70, null, null, { livery: "sandstone" });
+      // Turn 15 grandstand (s≈0.685, R) — the corner between the T12 hairpin
+      // and the T16-18 sweepers/amphitheatre gets its OWN stand rather than
+      // being folded into the generic T12 (0.625) or back-straight (0.46)
+      // calls that used to be the only cover for this whole sector.
+      grandstandEx(0.685, 1, 14, 55, null, null, { livery: "sandstone" });
+      // Triple-apex sweeper stand (s≈0.83, R) — sandstone family
+      grandstandEx(0.83, 1, 16, 64, null, null, { livery: "sandstone" });
       // Extra deep main-straight upper tier behind the front stand (s≈0.02, R far)
-      grandstand(0.02,  1, 30, 130, [0.30, 0.31, 0.36], [0.48, 0.48, 0.52]);
+      grandstandEx(0.02, 1, 30, 130, null, null, { livery: "darkSteel", roof: "flat" });
 
       // ---- Pit/paddock building cluster (s≈0.97–0.05, L) ----
       // long low pit garage block flanking the main straight
@@ -220,6 +251,13 @@
       crowdBank(0.135, -1, 46, 70, 6, 2.2);
       // Final-corner / main-straight packed terrace (s≈0.98, R)
       crowdBank(0.975, 1, 34, 120, 6, 2.2);
+
+      // ---- Turn 1 hill — the real natural grass amphitheatre ----
+      // The built crowdBank terraces above are the temporary stands; behind
+      // and above them the actual hill is informal grass-bank viewing, which
+      // is what makes T1 famous. Set further back (gap 58) than the crowdBank
+      // terraces so it reads as the hillside rising behind the built seating.
+      spectatorHill(0.088, 0.118, -1, 58, { rows: 5, rise: 1.3, depth: 2.2, density: 0.55, grass: dryGrass });
 
       // ---- Austin360 Amphitheater + Observation Tower (T16–18, s≈0.76–0.80, R) ----
       // Real COTA: 251 ft Miró Rivera tower sits ON the amphitheater — pale shaft
@@ -296,6 +334,17 @@
         }, { required: true });
       }
 
+      // ---- Grand Plaza reflecting pool, beneath the Observation Tower ----
+      // The tower (s≈0.78, R, base ~90 m out) stood over bare ground — the
+      // real Grand Plaza is a paved concourse with a dark reflecting pool at
+      // its centre. Pale concrete apron first (closer to the track, wider
+      // footprint so it reads as the plaza floor), then the pool sitting
+      // within it, further out toward the tower.
+      groundPatch(K(0.775), 1, 14, [40, 0.14, 34], [0.72, 0.71, 0.68],
+                  { id: "cota-plaza-apron", samples: 8 });
+      waterSurface(K(0.775), 1, 32, [22, 0.3, 12], [0.06, 0.22, 0.24],
+                   { id: "cota-plaza-pool" });
+
       // ---- 2026 dress pass: amphitheatre lawn bowl (s≈0.73–0.80, R) ----
       // Three low, raked earth terraces frame the stage/tower campus. They stay
       // below eye level near the circuit and rise only toward the concert lawn.
@@ -335,6 +384,48 @@
       redFramework(K(0.65), 1, 78);    // second red stand behind the first
       redFramework(K(0.84), 1, 52);    // red framework at the triple-apex sweeper
       redFramework(K(0.30), 1, 62);    // red framework over the dry-grass field
+
+      // ---- Fan campground: RV/tailgating fields (s≈0.285–0.395, L) ----
+      // s≈0.28–0.42 is the deadest stretch of the lap — no stands, no
+      // billboards, just sparse trees and distant hills — and it's exactly
+      // where COTA's real tailgating and RV camping fields sit on the Hill
+      // Country side of the Esses/mid-lap section. A loose grid of small
+      // gable tents and boxy RVs in varied hues sells the tailgate
+      // atmosphere cheaply: each unit is one addPrism or addBox call, so
+      // every unit self-guards its own footprint via the engine's
+      // per-primitive rejBox test — no separate composite guard needed.
+      {
+        const tentCols = [
+          [0.78, 0.22, 0.20], [0.20, 0.42, 0.70], [0.86, 0.78, 0.24],
+          [0.30, 0.62, 0.34], [0.70, 0.42, 0.16], [0.46, 0.28, 0.60],
+          [0.20, 0.58, 0.58], [0.82, 0.50, 0.62],
+        ];
+        const rvCols = [[0.90, 0.90, 0.88], [0.94, 0.92, 0.84], [0.86, 0.88, 0.90]];
+        let camp = 0;
+        along(0.285, 0.395, 15, (k) => {
+          for (let row = 0; row < 3; row++) {
+            const rowDist = 24 + row * 12;
+            const jit = (hash(k * 5 + row * 11) - 0.5) * 5;
+            const a = anchor(k, -1, rowDist + jit);
+            const bv = [a.r, a.u, a.t];
+            const h1 = hash(k * 7 + row * 3);
+            if (row === 2 && h1 > 0.4) {
+              // RV box, parked lengthwise along the field
+              const col = rvCols[Math.floor(hash(k * 13 + row) * rvCols.length) % rvCols.length];
+              addBox(out, vadd(a.c, a.u, 1.5), [2.5, 3.0, 8.0], col, bv);
+            } else {
+              // small gable tent — alternate ridge orientation for variety
+              const swap = hash(k * 17 + row * 9) > 0.5;
+              const basis = swap ? [a.t, a.u, a.r] : bv;
+              const w = 2.6 + hash(k * 19 + row) * 0.8;
+              const len_ = 1.8 + hash(k * 23 + row) * 0.7;
+              addPrism(out, a.c, [w, 1.7 + hash(k * 29 + row) * 0.5, len_],
+                       tentCols[(k + row * 5 + camp) % tentCols.length], basis);
+            }
+            camp++;
+          }
+        });
+      }
 
       // Velocity Tower + water tower culled — open Hill Country frame (Top-3 #3).
 
@@ -500,13 +591,12 @@
         place(kh, -1, 9 + i, [1.0, 2.4, 0.4], white);
       });
 
-      // ---- TV camera towers at scenic vantage points ----
+      // ---- Broadcast camera towers at scenic vantage points ----
+      // Shared cameraTower() (lattice mast + railed platform + camera head on
+      // a boom) replaces the old single-pole-and-box hand-roll; it self-guards
+      // its full footprint via rejBox.
       [[0.10, -1, 22], [0.50, 1, 24], [0.84, -1, 24]].forEach(([s, side, d]) => {
-        const kc = K(s), ac = anchor(kc, side, d), cb = [ac.r, ac.u, ac.t];
-        if (!onTrack(ac.c[0], ac.c[2], 18)) {
-          addCyl(out, ac.c, 0.6, 11, darkSteel, 4, cb);
-          addBox(out, vadd(ac.c, ac.u, 11), [2.4, 1.6, 1.6], [0.1, 0.1, 0.12], cb);
-        }
+        cameraTower(K(s), side, d, { h: 15, col: darkSteel });
       });
 
       // ---- Paddock car park rows (s≈0.55, L far) ----

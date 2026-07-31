@@ -153,13 +153,19 @@
       // facility kit. Spa previously used NO facility kit at all — the whole
       // complex was one undifferentiated 64 m building() slab with no bay
       // rhythm — and no race-control tower closed it off.
+      // frac 0.006/0.014 (not 0.0): the last corner folds back close enough to
+      // the pit straight's LEFT edge that a facility centred exactly on the
+      // line clips it once its footprint is checked properly — building()'s
+      // own inline guard tests only half its true height and missed this; the
+      // kit's modelGroup preflight does not. A few metres downtrack of the
+      // line clears it with the same footprint.
       if (circuitKit) {
         circuitKit.pitBuilding({
-          id: "kit:spa:pit-building", frac: 0.0, side: -1, gap: 9,
+          id: "kit:spa:pit-building", frac: 0.006, side: -1, gap: 9,
           size: [14, 11, 64], garages: 16, required: true,
         });
         circuitKit.raceControl({
-          id: "kit:spa:race-control", frac: 0.005, side: -1, gap: 45,
+          id: "kit:spa:race-control", frac: 0.014, side: -1, gap: 45,
           size: [12, 24, 14], required: true,
         });
       }
@@ -384,7 +390,7 @@
       // amphitheatres while leaving Kemmel and Blanchimont's road-level views open.
 
       // 4. Raidillon elevation theatre — two distant, staggered woodland ranks
-      // rise behind the Gold 3 stands and camps. The large gaps keep the crest
+      // rise behind the Gold 4 stands and camps. The large gaps keep the crest
       // and braking sightline clear while making the climb read through tree depth.
       forestEdge(0.050, 0.112, -1, 30, { density: 0.64, hMin: 14, hMax: 25,
         col: [0.07, 0.24, 0.11], col2: [0.13, 0.34, 0.15], pineFrac: 0.94 });
@@ -449,7 +455,7 @@
       // --- Barriers: catch fence at the packed stands, armco on the fast forest
       //     sweepers, tyre stacks at the heavy braking zones.
       fence(0.0, 0.03, 1, 6, 4.2, [0.74, 0.76, 0.80]);        // main straight stand
-      fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Raidillon Gold-3 amphitheatre
+      fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Raidillon Gold-4 amphitheatre
       fence(0.15, 0.18, 1, 7, 4.2, [0.74, 0.76, 0.80]);       // Les Combes
       fence(0.90, 0.94, 1, 6, 4.2, [0.74, 0.76, 0.80]);       // Bus Stop
       guardrail(0.42, 0.58, -1, 3.4, [0.84, 0.85, 0.88]);     // Pouhon sweep

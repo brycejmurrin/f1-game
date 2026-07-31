@@ -128,6 +128,10 @@
       // Villeneuve to Tosa — river fades; still mostly broadleaf
       forestEdge(0.14, 0.17, -1, 12, { density: 0.36, hMin: 9, hMax: 14,
         col: WOODS, col2: WOODS2, pineFrac: 0.15 });
+      // Was a bald ~250 m gap between the two calls above/below (0.17–0.22,
+      // inside of Villeneuve→Tosa) — the treeline just stopped and resumed.
+      forestEdge(0.17, 0.22, -1, 12, { density: 0.36, hMin: 9, hMax: 14,
+        col: WOODS, col2: WOODS2, pineFrac: 0.15 });
       forestEdge(0.22, 0.30, -1, 12, { density: 0.36, hMin: 9, hMax: 14,
         col: WOODS, col2: WOODS2, pineFrac: 0.15 });
       forestEdge(0.14, 0.30,  1, 20, { density: 0.38, hMin: 9, hMax: 14,
@@ -234,6 +238,11 @@
       terrainPatch("villeneuve-gravel", 0.12, -1, 5, [24, 30], GRAVEL);
       place(K(0.12), -1, 2, [0.4, 0.3, 7], RED);
       place(K(0.13), -1, 2, [0.4, 0.3, 7], WHITE);
+      // One of Imola's three signature chicanes had no spectators at all —
+      // just gravel and kerbs. Informal grass-bank terracing behind the trap
+      // (clear of the gravel's dist-17 outer edge and the billboard at gap 16).
+      spectatorHill(0.113, 0.138, -1, 20, { rows: 3, rise: 1.1, depth: 2.0,
+        density: 0.5, grass: BANK, crowd: [CROWD_A, CROWD_B, CROWD_C, WHITE] });
 
       // ---- Tosa tight hairpin: grandstands + gravel ----
       grandstand(0.28, -1, 12, 60, [0.52, 0.55, 0.60], RED);
@@ -263,15 +272,19 @@
       terrainPatch("rivazza-bank-2", 0.82,  1, 16, [28, 40], BANK);
 
       // ---- Italian town buildings at Variante Alta / Rivazza ----
+      // Was the same building() call 5×, differentiated only by a height
+      // threshold swapping two wall tints. Vary roof massing (`arch`) and
+      // depth explicitly per building so the row reads as a town, not one
+      // template recoloured.
       const TOWN_POS = [
-        [0.60, -1, 85,  14, 18],
-        [0.63, -1, 92,  12, 22],
-        [0.66, -1, 100, 16, 15],
-        [0.70, -1, 88,  13, 25],
-        [0.74, -1, 95,  15, 20],
+        [0.60, -1, 85,  14, 18, 12, "flat",    STONE3],
+        [0.63, -1, 92,  12, 22, 20, "setback", TERRA2],
+        [0.66, -1, 100, 16, 15, 22, "flat",    CONC],
+        [0.70, -1, 88,  13, 25, 10, "taper",   STONE2],
+        [0.74, -1, 95,  15, 20, 17, "setback", TERRA2],
       ];
-      for (const [s, side, dist, bw, bh] of TOWN_POS) {
-        building(K(s), side, dist, bw, bh, bw * 0.8, { wall: bh > 20 ? TERRA2 : STONE3, window: WIN_LIT, floor: 3, lit: true });
+      for (const [s, side, dist, bw, bh, bd, arch, wall] of TOWN_POS) {
+        building(K(s), side, dist, bw, bh, bd, { wall, window: WIN_LIT, floor: 3, lit: true, arch });
       }
 
       // ---- Variante Bassa / pit approach: kerbs (river already continuous above) ----
@@ -303,7 +316,52 @@
         const aB = anchor(K(0.92), -1, 63);
         addCyl(out, aB.c, 1.6, 11, [0.78, 0.74, 0.60], 8, [aB.r, aB.u, aB.t]);
       }
-      tower(K(0.99), -1, 16, 9, 22, { col: [0.78, 0.80, 0.82], cap: true, capCol: [0.2, 0.2, 0.24], mast: 6 });
+      // Torre di Controllo — was a 9×22 m single-cap silo (`tower()`); the real
+      // building is 7 floors (~28 m) with glass panoramic terraces and is the
+      // paddock's tallest landmark, not a minor silo. Bespoke stacked-floor
+      // composite: alternating spandrel/glass bands, a cantilevered glass
+      // terrace deck, a rooftop race-director's cabin, then the antenna mast.
+      (function raceControlTower() {
+        const rcSide = -1;
+        const a = anchor(K(0.99), rcSide, 16);
+        const b = [a.r, a.u, a.t], base = a.c;
+        const floors = 7, floorH = 3.85, shaftH = floors * floorH; // ~27 m
+        const w = 9, d = 9;
+        modelGroup("imola-race-control-tower", {
+          center: vadd(base, a.u, 17), size: [13, 34, 13], basis: b,
+        }, (stage) => {
+          for (let f = 0; f < floors; f++) {
+            const y0 = f * floorH;
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(base, a.u, y0 + floorH * 0.5), [w, floorH - 0.5, d],
+                   f % 2 ? [0.72, 0.74, 0.77] : [0.66, 0.68, 0.72], b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(base, a.u, y0 + floorH * 0.62), a.r, rcSide * (w / 2 + 0.02)),
+                   [0.06, floorH * 0.42, d * 0.86],
+                   [0.32, 0.42, 0.54], b);
+          }
+          // Cantilevered glass panoramic terrace — jutting past the shaft face
+          // with a railed open deck, the tower's signature real-world feature.
+          stage._mat = MAT.CONCRETE;
+          const terraceY = shaftH;
+          addBox(stage, vadd(base, a.u, terraceY + 0.5), [w + 2.4, 1.0, d + 2.4], [0.70, 0.72, 0.75], b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(base, a.u, terraceY + 1.9), a.r, rcSide * (w / 2 + 1.1)),
+                 [0.08, 2.2, d + 2.0], [0.34, 0.45, 0.58], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(base, a.u, terraceY + 2.95), [w + 2.4, 0.12, d + 2.4], [0.30, 0.30, 0.32], b);
+          // Rooftop race-director's cabin + antenna mast.
+          stage._mat = MAT.CONCRETE;
+          const cabH = 3.4;
+          addBox(stage, vadd(base, a.u, terraceY + 3.0 + cabH / 2), [6.2, cabH, 6.2], [0.78, 0.80, 0.82], b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(base, a.u, terraceY + 3.0 + cabH * 0.55), a.r, rcSide * 3.05),
+                 [0.06, cabH * 0.55, 5.6], [0.30, 0.38, 0.50], b);
+          stage._mat = MAT.METAL;
+          addCyl(stage, vadd(base, a.u, terraceY + 3.0 + cabH), 0.16, 6.5, [0.30, 0.30, 0.32], 4, b);
+          stage._mat = 0;
+        }, { required: true });
+      })();
       wall(0.95, 0.06, -1, 2, 1.0, PITWALL, 0.5);
 
       // ---- Hillside old town with church (far left of pit straight / T1) ----
@@ -417,8 +475,19 @@
       billboard(K(0.82), -1, 18, 12, 5, [0.86, 0.16, 0.14]);
       billboard(K(0.95),  1, 16, 12, 5, [0.90, 0.80, 0.20]);
 
-      // ---- Trackside hospitality + paddock marquee ----
-      motorhome(K(0.49), 1, 30, 20, 6, 16, { wall: PITWALL, window: WIN_LIT });
+      // ---- Paddock hospitality cluster + VIP marquee ----
+      // Was one motorhome stranded at s0.49 mid-hillside at Acque Minerali —
+      // nothing else is out there, real team hospitality units live in the
+      // paddock. Moved to s0.94-0.96 L, in the clear belt between the close
+      // pit building (gap 18-25) and the far paddock block (gap 46-76).
+      const HOSPITALITY_POS = [
+        [0.944, 34, [0.86, 0.16, 0.14]],
+        [0.951, 37, [0.20, 0.40, 0.72]],
+        [0.958, 40, [0.90, 0.80, 0.20]],
+      ];
+      for (const [s, gap, accent] of HOSPITALITY_POS) {
+        motorhome(K(s), -1, gap, 18, 6, 14, { wall: PITWALL, window: WIN_LIT, accent });
+      }
       {
         const a = anchor(K(0.92), -1, 30);
         addBox(out, vadd(a.c, a.u, 2.2), [16, 4.4, 12], [0.90, 0.90, 0.88], [a.r, a.u, a.t]);
@@ -570,11 +639,18 @@
                [0.20, 0.20, 0.24], [aR.r, aR.u, aR.t]);
         out._mat = 0;
       }
-      tieredBowl(0.285, -1, 16, 60, 4);   // Tosa hairpin bank
-      // Rivazza plunge amphitheatre — longer, higher tiers for the downhill beat
-      tieredBowl(0.795, -1, 14, 68, 5);
-      tieredBowl(0.835, -1, 18, 52, 4);
-      tieredBowl(0.51, 1, 22, 48, 3);     // Acque Minerali (kept lighter — hollow is the hero)
+      tieredBowl(0.285, -1, 16, 60, 4);   // Tosa hairpin bank — a real built stand, keeps its shell
+
+      // Rivazza plunge amphitheatre & Acque Minerali hollow: both are natural
+      // hillside terracing, not a flat-ground built stand — tieredBowl's tiers
+      // stack straight up regardless of slope. spectatorHill follows the actual
+      // terrain per row instead, which is what these hillside banks need.
+      spectatorHill(0.788, 0.802, -1, 14, { rows: 5, rise: 1.3, depth: 2.2,
+        density: 0.6, grass: BANK, crowd: [CROWD_A, CROWD_B, CROWD_C, WHITE] });
+      spectatorHill(0.830, 0.840, -1, 18, { rows: 4, rise: 1.2, depth: 2.0,
+        density: 0.55, grass: BANK, crowd: [CROWD_A, CROWD_B, CROWD_C, WHITE] });
+      spectatorHill(0.505, 0.515, 1, 22, { rows: 3, rise: 1.1, depth: 1.8,
+        density: 0.45, grass: BANK, crowd: [CROWD_A, CROWD_B, CROWD_C, WHITE] }); // Acque Minerali — kept lighter, the hollow is the hero
 
       // ====================================================================
       // AUTHENTIC HERO-SECTOR DRESS PASS — five bounded additions that deepen
@@ -682,7 +758,10 @@
       fence(0.015, 0.145, -1, 6.8, 4.2, [0.58, 0.61, 0.62]);
       guardrail(0.43, 0.56, 1, 2.8, [0.74, 0.75, 0.77]);
       fence(0.43, 0.49, 1, 6.5, 4.0, [0.56, 0.59, 0.60]);
-      guardrail(0.775, 0.86, -1, 2.8, [0.76, 0.77, 0.79]);
+      // Was cut off at 0.86, leaving a bare stretch through to the next run
+      // starting at 0.96 — bridge the thin patch by carrying the Rivazza-exit
+      // guardrail on the remaining 0.02 to 0.88.
+      guardrail(0.775, 0.88, -1, 2.8, [0.76, 0.77, 0.79]);
     },
   }
   );
