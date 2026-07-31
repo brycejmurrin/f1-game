@@ -1083,6 +1083,25 @@ const api = {
     return DebrisWorld.status();
   },
 
+  // bodyAttitude(arg?) — the C2 visual-suspension springs (js/game/bodyattitude.js).
+  //   bodyAttitude()            → status { enabled, offsets:{pitch,roll,heave,enabled} }
+  //                               (offsets are the player's current render offsets,
+  //                               radians for pitch/roll, metres for heave)
+  //   bodyAttitude(true|false)  → enable/disable (persists to apex26.bodyAttitude)
+  //   bodyAttitude({reset:true})→ reset every car's springs to a settled chassis
+  //   bodyAttitude({car:idx})   → status with offsets for cars[idx] (tests)
+  // Render-only: never touches px/pz/head or (s, x); disabling forces all offsets 0.
+  bodyAttitude(arg) {
+    if (arg === undefined) return BodyAttitude.status();
+    if (typeof arg === "boolean") return BodyAttitude.setEnabled(arg);
+    if (arg && typeof arg === "object") {
+      if (arg.reset) { BodyAttitude.reset(); return BodyAttitude.status(); }
+      if (arg.car != null && G.cars && G.cars[arg.car])
+        return { enabled: BodyAttitude.active(), offsets: BodyAttitude.offsets(G.cars[arg.car]) };
+    }
+    return BodyAttitude.status();
+  },
+
   // renderScale(v?) — adaptive-resolution control. No arg: report current state
   // { scale, fps, auto }. Number: pin the 3D render scale (0.5–1) and disable
   // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
@@ -1461,6 +1480,7 @@ const api = {
       G.player.pz   = smp.p[2] + smp.r[2] / rl * G.player.x; }
     G.player.head = Math.atan2(smp.t[0], smp.t[2]);
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;   // sync render anchors (see jump)
+    BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
     G._testInput = null;
     return this.obs();
   },
