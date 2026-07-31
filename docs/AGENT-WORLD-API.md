@@ -366,6 +366,60 @@ kerbs and the road surface itself, and materials/colours. Sizes for a few
 vegetation kinds are nominal envelopes rather than measured bounds, noted at the
 call sites.
 
+## 5d. Replacing the screenshot — and checking it against one
+
+`frame()` rasterises the scene into a character grid with per-cell depth
+sorting. The justification is the same finding the whole design rests on: BALROG
+measured VLMs scoring *lower* with an image than with text alone, so a few
+hundred tokens of raster is not a degraded screenshot, it is the better channel
+for composition and occlusion.
+
+**It was validated against an actual render at the same pose**, and that is the
+only reason it works. Four bugs survived reasoning and died on contact with the
+picture:
+
+1. **A tree beside the car painted the whole frame.** A box straddling the near
+   plane was widened to full screen, on the theory that its visible corners
+   understate it. But "partly behind the camera" also describes a 22 m pine
+   standing 20 m to the *side*, and the render came back 100% tree. The centre
+   must be in front of the eye or the object is not in shot, whatever its
+   corners do.
+2. **One structure owned 74% of the frame.** Depth was the box's nearest corner,
+   so a 100 m assembly sorted as if its far end were against the lens. Depth is
+   now the centre.
+3. **A 32×31 m hull of lamp bases blocked the sky.** Anonymous assemblies are
+   loose hulls, mostly air. They now carry a `fill` ratio (summed primitive
+   volume ÷ hull volume) and sparse ones are skipped as occluders.
+4. **The road read as 6% of a frame it half fills.** Sampling a wide surface as
+   isolated points cannot cover it; the road is now scan-filled as trapezoids
+   between its projected edges.
+
+Every one of those produced confident, well-formed, plausible output. That is
+the fourth time in this work that the failure mode was *plausible staleness*
+rather than an error — enough to call it the characteristic risk of this kind of
+API, and the reason `frame()` documents its approximations inline rather than
+presenting the grid as ground truth.
+
+The fix in (3) also improved the registry generally: named placements now take
+**measured** bounds from the primitives they emit, instead of the nominal
+envelopes their call sites guessed. Those guesses were wrong in a consistent
+direction — a 20 m pine was recorded 9 m wide against a real ~5.4 m canopy,
+which both closed up the sky in the raster and over-stated every proximity
+query.
+
+Remaining honest limit: tree canopies are cones drawn as boxes, so a dense
+treeline still closes gaps of sky a render shows. Sky is under-reported in
+wooded scenes and the docs say so.
+
+## 5e. Replacing the car viewer
+
+`carView()` returns team identity, livery colours, the full parts spec with its
+stat effects, the per-team chassis silhouette knobs, and geometry **measured
+from a real `Car3D.build`** — 5.95 m long, 2.10 m wide, 1.01 m tall, 3.30 m
+wheelbase. That is everything `tools/render-car.mjs` conveys except appearance
+itself: reflections, decal placement and whether a paint scheme reads are still
+render questions, and the tool stays for them.
+
 ## 6. Open questions
 
 - **Prop registry granularity.** Per composite model, or per emitted

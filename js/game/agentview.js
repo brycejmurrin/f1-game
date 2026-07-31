@@ -586,6 +586,366 @@ const AgentView = (function () {
       return { done: reason != null, reason };
     }
 
+    // ── frame() — the rendered view, as text ────────────────────────────────
+    // The screenshot replacement. visible() lists WHAT is on screen; this says
+    // WHERE, by rasterising the scene into a coarse character grid — the same
+    // information a screenshot carries about composition and occlusion, at a
+    // few hundred tokens instead of an image the model reads worse than text
+    // (BALROG: VLMs score lower with the image than without it).
+    //
+    // Every object is projected as its axis-aligned box, depth-sorted per cell.
+    // That is a real hidden-surface solve at grid resolution, not a guess: a
+    // grandstand in front of a treeline occludes it, and the cell says so.
+
+    const GLYPHS = {
+      road: "=", kerb: ":", car: "C", player: "@",
+      tree: "t", pine: "t", palm: "t", conifer: "t", bush: ",", hedge: ",",
+      building: "B", house: "h", motorhome: "m", tower: "I", structure: "#",
+      grandstand: "A", billboard: "b", signBoard: "s", marshalPost: "p",
+      gantry: "T", mountain: "^", peak: "^", ridge: "^", prop: "o",
+      sky: ".", ground: "_",
+    };
+
+    function projPoint(vp, x, y, z) {
+      const cx = vp[0] * x + vp[4] * y + vp[8] * z + vp[12];
+      const cy = vp[1] * x + vp[5] * y + vp[9] * z + vp[13];
+      const cw = vp[3] * x + vp[7] * y + vp[11] * z + vp[15];
+      if (!(cw > 1e-6)) return null;
+      return { x: cx / cw, y: cy / cw, w: cw };
+    }
+
+    // Screen rect of a world AABB. Projecting all eight corners and taking the
+    // extent is conservative (it over-covers a rotated box) but never misses
+    // geometry, which is the right error for an occlusion raster.
+    function boxRect(vp, cx, cy, cz, hw, hh, hd) {
+      // The object's CENTRE must be in front of the eye. Without this test a
+      // box that merely straddles the near plane still projects a rect — and a
+      // 22 m pine standing 20 m to the SIDE of the car straddles it, so it
+      // painted the entire grid and reported the frame as 100% tree. Anything
+      // whose centre is behind the camera is not in shot, whatever its corners
+      // do.
+      const mid = projPoint(vp, cx, cy, cz);
+      if (!mid) return null;
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      let near = Infinity, seen = 0;
+      for (let i = 0; i < 8; i++) {
+        const p = projPoint(vp, cx + (i & 1 ? hw : -hw), cy + (i & 2 ? hh : -hh),
+                            cz + (i & 4 ? hd : -hd));
+        if (!p) continue;
+        seen++;
+        if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x;
+        if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y;
+        if (p.w < near) near = p.w;
+      }
+      if (!seen) return null;
+      // Corners behind the plane are simply dropped; the surviving extent
+      // understates a straddling box slightly, which is the safe direction —
+      // over-covering is what wrecks the raster.
+      //
+      // Depth is the CENTRE, not the nearest corner. An anonymous assembly can
+      // be 100 m long, and taking its near corner made its far end sort as if it
+      // were right in front of the camera — one structure then won every cell
+      // and reported the frame as 74% building with the road hidden behind it.
+      return { x0, x1, y0, y1, near: mid.w };
+    }
+
+    // A box the camera stands inside is not an object in shot — it is a loose
+    // hull that happens to enclose the viewer. Anonymous assemblies do this
+    // whenever their primitives straddle the track.
+    function containsEye(eye, cx, cy, cz, hw, hh, hd) {
+      return Math.abs(eye[0] - cx) <= hw && Math.abs(eye[2] - cz) <= hd
+             && Math.abs(eye[1] - cy) <= hh;
+    }
+
+    function frame(opts) {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      const fr = G.frame, vp = fr && fr.viewProj;
+      if (!vp) {
+        return fail("NoFrameError",
+                    "no rendered frame yet, so there is no camera matrix",
+                    "call __apex.headless(false) and let one frame draw");
+      }
+      const o = opts || {};
+      const cols = clamp(o.cols | 0 || 48, 8, 160);
+      const rows = clamp(o.rows | 0 || 18, 4, 60);
+      const range = clamp(o.rangeM || 500, 50, 3000);
+      const eye = fr.eye || G.camEye;
+
+      // depth buffer + kind buffer, one entry per cell
+      const N = cols * rows;
+      const depth = new Float64Array(N).fill(Infinity);
+      const kind = new Array(N).fill(null);
+      const idOf = new Array(N).fill(null);
+      const seenKinds = {};
+
+      // NDC -> cell. NDC y is +up, rows run top-down.
+      const cellX = (ndc) => Math.floor((ndc + 1) / 2 * cols);
+      const cellY = (ndc) => Math.floor((1 - ndc) / 2 * rows);
+
+      function paint(rect, k, id) {
+        const cx0 = Math.max(0, cellX(rect.x0)), cx1 = Math.min(cols - 1, cellX(rect.x1));
+        const cy0 = Math.max(0, cellY(rect.y1)), cy1 = Math.min(rows - 1, cellY(rect.y0));
+        if (cx1 < cx0 || cy1 < cy0) return 0;
+        let n = 0;
+        for (let y = cy0; y <= cy1; y++) {
+          for (let x = cx0; x <= cx1; x++) {
+            const i = y * cols + x;
+            if (rect.near < depth[i]) { depth[i] = rect.near; kind[i] = k; idOf[i] = id; n++; }
+          }
+        }
+        return n;
+      }
+
+      const objects = [];
+
+      // ── the road itself ──
+      // Sampled as a lattice of surface points rather than a box: the ribbon is
+      // long, thin and curved, and one AABB round it would cover the sky.
+      const roadPts = clamp(o.roadSamples | 0 || 90, 10, 400);
+      const player = G.player;
+      const s0 = player && player.s != null ? player.s : 0;
+      // The road is a surface, not a point cloud. Sampling its edges and filling
+      // the span between them is the only way to cover it: near the camera the
+      // ribbon is dozens of cells wide, and no affordable number of point
+      // samples fills that — the first attempt reported a road that fills the
+      // lower half of the render as 6% of the frame.
+      //
+      // Each pair of consecutive arc positions gives a trapezoid (left/right
+      // edge at two depths); scan-fill it row by row with interpolated columns.
+      const BEHIND = 60;
+      const edgeAt = (d) => {
+        const ss = wrapS(s0 + d);
+        Tracks.sample(G.track, ss, scr);
+        const rl = Math.hypot(scr.r[0], scr.r[2]) || 1;
+        const ex = scr.r[0] / rl, ez = scr.r[2] / rl, y = scr.p[1] + 0.05;
+        const L = projPoint(vp, scr.p[0] - ex * scr.hw, y, scr.p[2] - ez * scr.hw);
+        const R = projPoint(vp, scr.p[0] + ex * scr.hw, y, scr.p[2] + ez * scr.hw);
+        return L && R ? { L, R, w: (L.w + R.w) / 2 } : null;
+      };
+      let prev = null;
+      for (let i = 0; i <= roadPts; i++) {
+        const f = i / roadPts;
+        const d = -BEHIND + Math.pow(f, 1.8) * (range + BEHIND);
+        const cur = edgeAt(d);
+        if (prev && cur) {
+          const yA = cellY(Math.max(prev.L.y, prev.R.y)), yB = cellY(Math.max(cur.L.y, cur.R.y));
+          const yLo = Math.max(0, Math.min(yA, yB)), yHi = Math.min(rows - 1, Math.max(yA, yB));
+          for (let y = yLo; y <= yHi; y++) {
+            const t = yA === yB ? 0 : (y - yA) / (yB - yA);
+            const lx = prev.L.x + (cur.L.x - prev.L.x) * t;
+            const rx = prev.R.x + (cur.R.x - prev.R.x) * t;
+            const w = prev.w + (cur.w - prev.w) * t;
+            let c0 = cellX(Math.min(lx, rx)), c1 = cellX(Math.max(lx, rx));
+            if (c1 < 0 || c0 >= cols) continue;
+            c0 = Math.max(0, c0); c1 = Math.min(cols - 1, c1);
+            for (let x = c0; x <= c1; x++) {
+              const idx = y * cols + x;
+              if (w < depth[idx]) {
+                depth[idx] = w;
+                kind[idx] = (x === c0 || x === c1) && c1 > c0 + 1 ? "kerb" : "road";
+                idOf[idx] = null;
+              }
+            }
+          }
+        }
+        prev = cur || prev;
+      }
+
+      // ── scenery ──
+      const reg = G.track.props;
+      if (reg) {
+        for (const p of reg.list) {
+          const dx = p.x - eye[0], dz = p.z - eye[2];
+          const dist = Math.hypot(dx, dz);
+          if (dist > range) continue;
+          if (containsEye(eye, p.x, p.y, p.z, p.w / 2, p.h / 2, p.d / 2)) continue;
+          // A sparse hull is scatter, not a wall. Painting one solid put a
+          // 32x31 m box of lamp bases across 68% of the frame where the render
+          // shows sky and trees. Small props are exempt — their boxes ARE their
+          // geometry however low the ratio computes.
+          if (p.fill != null && p.fill < 0.06 && p.w * p.d > 150) continue;
+          const rect = boxRect(vp, p.x, p.y, p.z, p.w / 2, p.h / 2, p.d / 2);
+          if (!rect) continue;
+          const painted = paint(rect, p.kind, null);
+          if (painted) {
+            seenKinds[p.kind] = (seenKinds[p.kind] || 0) + 1;
+            if (painted >= 2) {
+              objects.push({ kind: p.kind, distM: r1(dist), cells: painted,
+                             sizeM: [p.w, p.h, p.d] });
+            }
+          }
+        }
+      }
+
+      // ── cars (painted last so they win ties against scenery at equal depth) ──
+      for (const c of G.cars) {
+        const [wx, wz] = carWorld(c);
+        const dist = Math.hypot(wx - eye[0], wz - eye[2]);
+        if (dist > range) continue;
+        // ~F1 dimensions; the box is axis-aligned, which over-covers a yawed car
+        const rect = boxRect(vp, wx, 0.55, wz, 1.1, 0.55, 2.6);
+        if (!rect) continue;
+        const k = c.isPlayer ? "player" : "car";
+        const painted = paint(rect, k, c.id != null ? c.id : G.cars.indexOf(c));
+        if (painted) {
+          seenKinds[k] = (seenKinds[k] || 0) + 1;
+          objects.push({ kind: k, id: c.id, code: c.code || null,
+                         distM: r1(dist), cells: painted });
+        }
+      }
+
+      // ── sky / ground for everything untouched ──
+      // Ray elevation per row from the camera pitch and vertical FOV; cheaper and
+      // steadier than unprojecting, and it puts the horizon where the renderer
+      // does to within a row.
+      const fwdY = (G.camTgt[1] - eye[1]);
+      const fwdH = Math.hypot(G.camTgt[0] - eye[0], G.camTgt[2] - eye[2]) || 1;
+      const pitch = Math.atan2(fwdY, fwdH);
+      const vfovR = (G.camFov || 60) * Math.PI / 180;
+      let horizonRow = null;
+      for (let y = 0; y < rows; y++) {
+        const elev = pitch + (0.5 - (y + 0.5) / rows) * vfovR;
+        if (horizonRow === null && elev <= 0) horizonRow = y;
+        for (let x = 0; x < cols; x++) {
+          const i = y * cols + x;
+          if (kind[i] === null) kind[i] = elev > 0 ? "sky" : "ground";
+        }
+      }
+
+      const lines = [];
+      for (let y = 0; y < rows; y++) {
+        let line = "";
+        for (let x = 0; x < cols; x++) line += GLYPHS[kind[y * cols + x]] || "?";
+        lines.push(line);
+      }
+
+      // legend covers only what actually appears, so it stays small
+      const used = {};
+      for (let i = 0; i < N; i++) used[kind[i]] = (used[kind[i]] || 0) + 1;
+      const legend = {};
+      for (const k of Object.keys(used)) legend[GLYPHS[k] || "?"] = k;
+
+      objects.sort((a, b) => b.cells - a.cells);
+      const cover = {};
+      for (const k of Object.keys(used)) cover[k] = r1(used[k] / N * 100);
+
+      return {
+        apiVersion: API_VERSION, conventions: CONVENTIONS,
+        camera: { eye: eye.map(r1), target: G.camTgt.map(r1),
+                  fovDeg: r1(G.camFov), pitchDeg: r1(pitch * 180 / Math.PI),
+                  mode: (GameTables.CAM_MODES[G.camMode] || {}).id
+                        || String(GameTables.CAM_MODES[G.camMode] || G.camMode),
+                  debugCam: !!G.dbgCam },
+        framePending: !!G.headlessMode,
+        warning: G.headlessMode
+          ? "headless(true) skips render(), so the camera may be stale" : undefined,
+        grid: { cols, rows, rangeM: range, horizonRow, lines },
+        legend,
+        coveragePct: cover,
+        objects: objects.slice(0, clamp(o.limit | 0 || 20, 1, 100)),
+        lighting: {
+          timeOfDay: G.raceTimeOfDay, weather: G.raceWeather,
+          exposure: fr.exposure != null ? r2(fr.exposure) : null,
+          sunDir: fr.sunDir ? fr.sunDir.map(r2) : null,
+          fogDensity: fr.fogDensity != null ? +fr.fogDensity.toFixed(5) : null,
+          lights: fr.lights ? fr.lights.length / 15 : 0,
+        },
+        note: "occlusion is solved per cell by depth, so a nearer object hides "
+              + "what is behind it. Boxes are axis-aligned, so a yawed car or a "
+              + "rotated building over-covers slightly at cell resolution.",
+      };
+    }
+
+    // ── carView() — the car, without rendering it ───────────────────────────
+    // Replaces tools/render-car.mjs for everything except "does it LOOK right":
+    // team identity, livery, the full parts spec and what it does to the car,
+    // the chassis silhouette knobs, and measured geometry from a real build.
+    function carView(opts) {
+      const o = opts || {};
+      const teamId = o.team || (G.player && G.player.team)
+                     || (Teams.LIST[G.teamIdx] || Teams.LIST[0]).id;
+      const team = Teams.LIST.find((t) => t.id === teamId);
+      if (!team) {
+        // Falling back to the first team would answer a question nobody asked
+        // and look like a valid result.
+        return fail("NoTeamError", 'unknown team "' + teamId + '"',
+                    "call __apex.teams() for the valid ids");
+      }
+      const setup = o.parts || G.getTeamParts(team.id);
+      const res = Parts.resolveSetup(setup, team);
+      const style = Car3D.teamStyleOf(team.id);
+
+      // Build the real mesh and measure it — the dimensions an agent would
+      // otherwise read off a screenshot with a ruler.
+      let geom = null;
+      try {
+        const mesh = Car3D.build(team.color, team.color2,
+                                 { parts: res.visual, teamId: team.id });
+        const pos = mesh.pos;
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity,
+            z0 = Infinity, z1 = -Infinity;
+        for (let i = 0; i < pos.length; i += 3) {
+          if (pos[i] < x0) x0 = pos[i]; if (pos[i] > x1) x1 = pos[i];
+          if (pos[i + 1] < y0) y0 = pos[i + 1]; if (pos[i + 1] > y1) y1 = pos[i + 1];
+          if (pos[i + 2] < z0) z0 = pos[i + 2]; if (pos[i + 2] > z1) z1 = pos[i + 2];
+        }
+        const mats = {};
+        for (const m of (mesh.mat || [])) mats[m] = (mats[m] || 0) + 1;
+        geom = {
+          vertices: pos.length / 3, triangles: (mesh.idx || []).length / 3,
+          lengthM: r2(z1 - z0), widthM: r2(x1 - x0), heightM: r2(y1 - y0),
+          wheelbaseM: r2(Car3D.AXLES.frontZ - Car3D.AXLES.rearZ),
+          wheelRadiusM: Car3D.AXLES.wheelY,
+          boundsM: { x: [r2(x0), r2(x1)], y: [r2(y0), r2(y1)], z: [r2(z0), r2(z1)] },
+          note: "car local space: +z forward, +y up, +x right; origin at the "
+                + "chassis datum, not the floor",
+        };
+      } catch (e) {
+        geom = { error: "build failed: " + (e && e.message) };
+      }
+
+      return {
+        apiVersion: API_VERSION,
+        team: { id: team.id, name: team.name, short: team.short,
+                engine: team.engine, tier: team.tier,
+                colors: { primary: team.color, secondary: team.color2 },
+                stats: team.stats,
+                drivers: team.drivers.map((d) => ({ name: d.name, code: d.code, num: d.num })) },
+        parts: {
+          budget: Parts.BUDGET, spent: res.cost,
+          remaining: Parts.BUDGET - res.cost,
+          chosen: Parts.CATALOG.map((cat) => {
+            const id = res.setup[cat.id];
+            const opt = cat.options.find((x) => x.id === id) || cat.options[0];
+            return { category: cat.id, label: cat.label, option: opt.id,
+                     optionLabel: opt.label, cost: opt.cost, desc: opt.desc,
+                     tier: res.tiers ? res.tiers[cat.id] : undefined,
+                     supplier: opt.supplier };
+          }),
+          mods: res.mods,
+        },
+        // The per-team silhouette knobs — what makes this chassis look like this
+        // team's car independent of paint. Documented in js/car/car3d.js.
+        chassis: {
+          style,
+          // TEAM_STYLE is keyed by team id and DEFAULT_STYLE is not exported, so
+          // "does this team have a bespoke silhouette" is a key test, not an
+          // identity test against a value that isn't reachable from here.
+          bespokeSilhouette: Object.prototype.hasOwnProperty.call(
+            Car3D.TEAM_STYLE, team.id),
+          axles: Car3D.AXLES,
+          stations: { nose: Car3D.CHASSIS.nose, monocoque: Car3D.CHASSIS.monocoque,
+                      cockpit: Car3D.CHASSIS.cockpit, floor: Car3D.CHASSIS.floor },
+        },
+        geometry: geom,
+        note: "everything the car viewer shows except appearance itself — for a "
+              + "visual check use tools/render-car.mjs",
+      };
+    }
+
     // ── worldModel() — the whole world as readable text ─────────────────────
     // scene() answers "what is near me". This answers "what IS this place" —
     // the entire circuit as one structured document.
@@ -1322,7 +1682,7 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, trackInfo, visible, scene, worldModel, rollout, agentHelp, corners, terminal,
+    return { world, trackInfo, visible, scene, worldModel, frame, carView, rollout, agentHelp, corners, terminal,
              API_VERSION, PHYSICS_VERSION };
   }
 

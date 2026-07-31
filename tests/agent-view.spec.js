@@ -351,6 +351,149 @@ test.describe("world() nextCorner", () => {
   });
 });
 
+// ── frame() ─────────────────────────────────────────────────────────────────
+// The screenshot replacement. Validated against a real render at the same pose:
+// road filling the lower half, pines flanking, structures right — see
+// docs/AGENT-WORLD-API.md for what that comparison caught.
+
+test.describe("frame()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("rasterises the view into a labelled grid", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    const f = await page.evaluate(() => window.__apex.frame({ cols: 48, rows: 16 }));
+    expect(f.grid.cols).toBe(48);
+    expect(f.grid.lines.length).toBe(16);
+    for (const line of f.grid.lines) expect(line.length).toBe(48);
+    // every glyph drawn must be in the legend, or the render is unreadable
+    const glyphs = new Set(f.grid.lines.join("").split(""));
+    for (const g of glyphs) expect(f.legend[g]).toBeTruthy();
+    // coverage must account for the whole frame
+    const total = Object.values(f.coveragePct).reduce((a, b) => a + b, 0);
+    expect(Math.abs(total - 100)).toBeLessThan(1.5);
+  });
+
+  test("driving on track, the road dominates the lower frame", async ({ page }) => {
+    await load(page, "monza", 0.05, 60);
+    await renderFrames(page);
+    const f = await page.evaluate(() => window.__apex.frame({ cols: 48, rows: 16 }));
+    // The bug this pins: sampling the road as isolated points instead of
+    // scan-filling between its edges reported a road that fills half the render
+    // as 6% of the frame, and called the rest "ground".
+    expect(f.coveragePct.road).toBeGreaterThan(20);
+    const lower = f.grid.lines.slice(-4).join("");
+    const roadCells = lower.split("").filter((c) => c === "=" || c === ":").length;
+    expect(roadCells / lower.length).toBeGreaterThan(0.7);
+  });
+
+  test("the player car is drawn, and no single object owns the frame", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    const f = await page.evaluate(() => window.__apex.frame({ cols: 48, rows: 16 }));
+    expect(f.coveragePct.player).toBeGreaterThan(0);
+    // A 22 m pine standing 20 m to the SIDE once painted every cell, because a
+    // box straddling the near plane was widened to the full screen.
+    for (const [kind, pct] of Object.entries(f.coveragePct)) {
+      expect(pct, kind + " covers the whole frame").toBeLessThan(85);
+    }
+  });
+
+  test("sky sits above the horizon row and ground below", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    const f = await page.evaluate(() => window.__apex.frame({ cols: 32, rows: 16 }));
+    expect(typeof f.grid.horizonRow).toBe("number");
+    const below = f.grid.lines.slice(f.grid.horizonRow + 1).join("");
+    expect(below.includes(".")).toBe(false);      // no sky under the horizon
+  });
+
+  test("objects are ranked by how much of the frame they hold", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    const objs = await page.evaluate(() => window.__apex.frame().objects);
+    expect(objs.length).toBeGreaterThan(0);
+    for (let i = 1; i < objs.length; i++) {
+      expect(objs[i].cells).toBeLessThanOrEqual(objs[i - 1].cells);
+    }
+  });
+
+  test("errors without a rendered frame rather than drawing a stale one", async ({ page }) => {
+    await boot(page);
+    const f = await page.evaluate(() => window.__apex.frame());
+    expect(f.ok).toBe(false);
+    expect(["NoTrackError", "NoFrameError"]).toContain(f.error);
+    expect(f.fix).toBeTruthy();
+  });
+});
+
+// ── carView() ───────────────────────────────────────────────────────────────
+
+test.describe("carView()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("measures the car from a real build", async ({ page }) => {
+    await load(page);
+    const c = await page.evaluate(() => window.__apex.carView());
+    expect(c.geometry.vertices).toBeGreaterThan(500);
+    expect(c.geometry.triangles).toBeGreaterThan(200);
+    // a modern F1 car: ~5-6 m long, ~2 m wide, under 1.2 m tall
+    expect(c.geometry.lengthM).toBeGreaterThan(4.5);
+    expect(c.geometry.lengthM).toBeLessThan(6.5);
+    expect(c.geometry.widthM).toBeGreaterThan(1.8);
+    expect(c.geometry.widthM).toBeLessThan(2.4);
+    expect(c.geometry.heightM).toBeLessThan(1.3);
+    expect(c.geometry.wheelbaseM).toBeCloseTo(3.3, 1);
+  });
+
+  test("reports the full parts spec and its effect", async ({ page }) => {
+    await load(page);
+    const c = await page.evaluate(() => window.__apex.carView());
+    expect(c.parts.chosen.length).toBe(8);
+    const cats = c.parts.chosen.map((p) => p.category);
+    expect(cats).toContain("engine");
+    expect(cats).toContain("aero");
+    expect(c.parts.budget).toBe(600);
+    expect(c.parts.spent + c.parts.remaining).toBe(600);
+    for (const k of ["speed", "accel", "cornering", "braking"]) {
+      expect(typeof c.parts.mods[k]).toBe("number");
+    }
+  });
+
+  test("carries team identity and the chassis silhouette knobs", async ({ page }) => {
+    await load(page);
+    const c = await page.evaluate(() => window.__apex.carView({ team: "ferrari" }));
+    expect(c.team.id).toBe("ferrari");
+    expect(c.team.colors.primary.length).toBe(3);
+    expect(c.team.drivers.length).toBeGreaterThan(0);
+    expect(typeof c.chassis.style.noseSlim).toBe("number");
+    expect(typeof c.chassis.bespokeSilhouette).toBe("boolean");
+    expect(c.chassis.axles.frontZ).toBeGreaterThan(c.chassis.axles.rearZ);
+  });
+
+  test("a different team gives different geometry or identity", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => {
+      const a = window.__apex.carView({ team: "ferrari" });
+      const b = window.__apex.carView({ team: "mercedes" });
+      return { aId: a.team.id, bId: b.team.id,
+               aStyle: JSON.stringify(a.chassis.style),
+               bStyle: JSON.stringify(b.chassis.style),
+               aCol: a.team.colors.primary, bCol: b.team.colors.primary };
+    });
+    expect(r.aId).not.toBe(r.bId);
+    expect(JSON.stringify(r.aCol)).not.toBe(JSON.stringify(r.bCol));
+  });
+
+  test("an unknown team errors instead of silently answering for another", async ({ page }) => {
+    await load(page);
+    const c = await page.evaluate(() => window.__apex.carView({ team: "nosuchteam" }));
+    expect(c.ok).toBe(false);
+    expect(c.error).toBe("NoTeamError");
+    expect(c.fix).toContain("teams()");
+  });
+});
+
 // ── worldModel() ────────────────────────────────────────────────────────────
 // The whole circuit as one document. The design problem here is size, not
 // availability: Suzuka records 3,422 point objects and listing them one by one

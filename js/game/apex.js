@@ -1447,6 +1447,18 @@ const api = {
   // "profile" | "all". Constant for a session — fetch once, never per tick.
   trackInfo(opts) { return agentView.trackInfo(opts); },
 
+  // frame({cols, rows, rangeM, limit}?) — the RENDERED VIEW as text: the scene
+  // rasterised into a character grid with per-cell depth sorting, so occlusion
+  // is really solved rather than guessed. Replaces a screenshot for composition
+  // and "what can I see" questions. Needs a rendered frame.
+  frame(opts) { return agentView.frame(opts); },
+
+  // carView({team, parts}?) — the car as JSON: team identity, livery colours,
+  // the full parts spec and its stat effects, the per-team chassis silhouette
+  // knobs, and measured geometry from a real Car3D build. Replaces the car
+  // viewer for everything except appearance itself.
+  carView(opts) { return agentView.carView(opts); },
+
   // worldModel({detail, offset, limit}?) — the WHOLE circuit as one structured
   // document: layout, totals by kind, clustered scenery features, linear
   // furniture spans, landmarks, and (detail:"sections") a corner-by-corner walk.

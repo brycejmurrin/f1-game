@@ -938,6 +938,69 @@ things happen to make the table trustworthy on OSM-derived centrelines:
 Sanity check: Monaco's Grand Hotel hairpin resolves to ~10 m, and integrated
 heading over a lap closes to exactly ±360°.
 
+### `frame({cols, rows, rangeM, limit}?) → render | typedError`
+
+**The screenshot replacement.** `visible()` lists what is on screen; this shows
+*where*, by rasterising the scene into a character grid with per-cell depth
+sorting — a real hidden-surface solve at grid resolution, not a guess.
+
+```
+ttttttttttttttttttttttttttt........tttttttttttttt.....tt
+tttttttttttttttttttttttttttttt..tttttttttttttttttttttttt
+######ttttttttttttt##tttttttttttttt###tttttttt######tttt
+######ttttttttttttt##:============:#################tttt
+######ttttttttt:=======@@@@@@@@@========:###########tttt
+:======================================================:
+```
+
+Returned as `grid.lines` plus a `legend` (only glyphs actually drawn),
+`coveragePct` per kind, `horizonRow`, ranked `objects`, camera and lighting.
+`node tools/agent.mjs monza frame --cols 72 --rows 20` prints the grid directly.
+
+Why a grid rather than a picture: [BALROG](https://arxiv.org/abs/2411.13543)
+found VLMs score *lower* with the image than with text alone, and a few hundred
+tokens of raster carries the composition and occlusion a screenshot carries.
+
+Known approximations, all in the same direction — read them before trusting a
+close call:
+
+- Objects are rasterised as **axis-aligned boxes**, so a yawed car or a rotated
+  building over-covers slightly at cell resolution.
+- Depth is the box **centre**, not its nearest face. Using the near corner made a
+  100 m assembly sort as if its far end were in front of the camera.
+- Anonymous `structure` hulls with a **fill ratio under 6%** are skipped as
+  occluders — they are scatter (lamp bases, fence posts), not walls. Painting one
+  solid put a 32×31 m box across 68% of a frame that actually showed sky.
+- Boxes containing the camera are skipped: a hull that encloses the viewer is not
+  an object in shot.
+- Tree canopies are cones drawn as boxes, so a dense treeline closes up gaps of
+  sky a render would show. Sky is under-reported in wooded scenes.
+
+### `carView({team, parts}?) → payload | typedError`
+
+**The car-viewer replacement**, for everything except appearance itself.
+
+```js
+__apex.carView({ team: "ferrari" })
+// { team:{id,name,engine,tier,colors,stats,drivers},
+//   parts:{ budget, spent, remaining,
+//           chosen:[{category,option,optionLabel,cost,desc,tier,supplier}] ×8,
+//           mods:{speed,accel,cornering,braking} },
+//   chassis:{ style:{noseTipZ,noseSlim,noseDroop,airbox,fin,mirror,inlet},
+//             bespokeSilhouette, axles, stations },
+//   geometry:{ vertices, triangles, lengthM, widthM, heightM, wheelbaseM,
+//              boundsM, note } }
+```
+
+`geometry` is **measured from a real `Car3D.build`**, not declared — 5.95 m long,
+2.10 m wide, 1.01 m tall, 3.30 m wheelbase on the default chassis. `chassis.style`
+is the per-team silhouette: nose length/width/droop, airbox scale, dorsal fin,
+mirror housing, sidepod inlet bias — what makes a team's car recognisable
+independent of paint.
+
+For "does it *look* right" — reflections, decal placement, paint reading — use
+`tools/render-car.mjs`. This answers everything else without a render.
+
 ### `worldModel({detail, offset, limit}?) → document | typedError`
 
 The **whole circuit as one structured document**. `scene()` answers "what is near

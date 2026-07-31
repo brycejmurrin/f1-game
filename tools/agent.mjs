@@ -9,6 +9,8 @@
 //   node tools/agent.mjs monza scene --radius 120 --kinds tree,building --limit 8
 //   node tools/agent.mjs spa    visible --limit 6
 //   node tools/agent.mjs monza rollout --seconds 6 --steer 0.1 --throttle
+//   node tools/agent.mjs monza  frame --cols 72 --rows 20
+//   node tools/agent.mjs monza  car --team ferrari
 //   node tools/agent.mjs suzuka model --detail sections
 //   node tools/agent.mjs vegas  model --detail full --out artifacts/tmp/vegas.json
 //
@@ -33,6 +35,8 @@ const COMMANDS = {
   scene: "named scenery nearby  --radius <m>  --kinds a,b  --limit <n>",
   visible: "what is on screen   --limit <n>",
   rollout: "drive an interval   --seconds <s>  --steer <-1..1>  --throttle  --brake  --samples <n>",
+  frame: "the view AS TEXT    --cols <n>  --rows <n>  --range <m>  (screenshot replacement)",
+  car: "the car as JSON      --team <id>",
   model: "the WHOLE circuit    --detail summary|sections|full  --offset <n>  --limit <n>  --out <file>",
 };
 
@@ -84,6 +88,10 @@ const opts = {
   samples: num("samples", 8),
   modelDetail: flag("detail", "summary"),
   offset: num("offset", 0),
+  cols: num("cols", 56),
+  rows: num("rows", 16),
+  range: num("range", 500),
+  team: flag("team", null),
   out: flag("out", null),
 };
 
@@ -133,6 +141,11 @@ const opts = {
                            kinds: o.kinds ? o.kinds.split(",") : undefined });
         case "visible":
           return a.visible({ limit: o.limit || undefined });
+        case "frame":
+          return a.frame({ cols: o.cols, rows: o.rows, rangeM: o.range,
+                           limit: o.limit || undefined });
+        case "car":
+          return a.carView(o.team ? { team: o.team } : undefined);
         case "model":
           return a.worldModel({ detail: o.modelDetail, offset: o.offset,
                                 limit: o.limit || undefined });
@@ -144,6 +157,16 @@ const opts = {
       }
     }, opts);
 
+    if (opts.cmd === "frame" && result && result.grid && !opts.out) {
+      // Printing the raster inside a JSON string array defeats the purpose —
+      // the grid is meant to be looked at.
+      console.log(result.grid.lines.join("\n"));
+      console.log(JSON.stringify({ legend: result.legend, coveragePct: result.coveragePct,
+                                   horizonRow: result.grid.horizonRow,
+                                   camera: result.camera, lighting: result.lighting,
+                                   objects: result.objects }, null, 2));
+      return;
+    }
     const json = JSON.stringify(result, null, 2);
     if (opts.out) {
       // A full world dump is megabytes on a street circuit — writing it beats

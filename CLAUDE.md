@@ -442,6 +442,10 @@ __apex.worldModel({detail:"sections"}) // the WHOLE circuit as one document:
                               //   clustered features + landmarks + barrier spans
                               //   + a corner-by-corner walk; "full" = raw objects
 __apex.visible()              // what is on screen (needs a rendered frame)
+__apex.frame({cols:56,rows:16}) // the VIEW AS TEXT — depth-sorted character
+                              //   raster; replaces a screenshot for composition
+__apex.carView({team:"ferrari"}) // the car as JSON: team, parts spec + effects,
+                              //   chassis silhouette, MEASURED geometry
 __apex.rollout({seconds:5, policy})  // drive an interval → digest, not frames
 __apex.terminal()             // {done, reason} — finished|wrong_way|rescued
 ```
