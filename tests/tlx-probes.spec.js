@@ -304,6 +304,39 @@ test.describe("TLX — boot", () => {
     expect(st.lamp.idx).toBe(-1);      // Monza day never opens the lamp pass
   });
 
+  test("M10 track builds its meshes through the injected TLX backend (façade wiring)", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    // Singapore is a street circuit: the build emits both plain meshes
+    // (floor/road/terrain/water/gate/startline) AND chunked meshes (props +
+    // glass), so it exercises createMesh AND createChunkedMesh on the backend.
+    await page.evaluate(() => window.__apex.race("singapore"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.evaluate(() => window.__apex.park(0.1));
+    await page.waitForTimeout(400);
+    const st = await page.evaluate(() => ({
+      backend: GLX.backend,
+      mesh: GLX.__tlx.meshState(),
+      geo: window.__apex.trackGeometry(),
+    }));
+    // TLX is the active backend...
+    expect(st.backend).toBe("three");
+    // ...and tracks.js routed its mesh builds through it. game.js hands the
+    // active backend to Tracks.build via opts.gfx; tracks.js resolves that
+    // handle (not a hardcoded GLX — GLX's WebGL2 context is never init'd on the
+    // TLX opt-in path) and creates every mesh on it. Non-zero counts prove the
+    // whole façade wiring carried the build.
+    expect(st.mesh.mesh).toBeGreaterThan(0);        // floor/road/terrain/... via createMesh
+    expect(st.mesh.chunked).toBeGreaterThan(0);     // props + glass via createChunkedMesh
+    // The build produced real geometry to hand back (proves it actually ran).
+    expect(st.geo).not.toBeNull();
+    expect(st.geo.road).toBeTruthy();
+    expect(st.geo.terrain).toBeTruthy();
+    expect(errors).toEqual([]);
+  });
+
   test("menu is reachable and canvas is sized (no-track begin/present path)", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });

@@ -1,7 +1,9 @@
 /* Apex 26 — Tracks engine: turns per-circuit definitions (js/tracks/<id>.js,
    registered on the global TrackDefs list) into resampled closed Catmull-Rom
    splines extruded into 3D meshes. Contract: docs/ARCHITECTURE.md.
-   Depends on globals TrackDefs + CircuitPaths (data) and GLX (mesh upload). */
+   Depends on globals TrackDefs + CircuitPaths (data). Mesh upload goes through
+   the renderer backend injected via Tracks.build's opts.gfx (the GLX/TLX/WGX
+   façade), falling back to the GLX global only for the Node-VM build guard. */
 const Tracks = (function () {
   "use strict";
   let keepGeometry = false;
@@ -183,7 +185,17 @@ const Tracks = (function () {
     // Session darkness drives whether buildings/skyline light their windows.
     // Falls back to the track's default (def.night) when not specified.
     track._night = opts && opts.night != null ? !!opts.night : !!def.night;
-    if (typeof GLX !== "undefined" && GLX.createMesh) {
+    // Façade wiring: the active renderer backend flows in through opts.gfx
+    // (game.js passes `gfx`). This ends tracks.js's reliance on reaching the
+    // GLX global directly — the injected handle is the WebGL2/TLX/WGX backend
+    // actually in use. The `typeof GLX` branch is the fallback for callers that
+    // don't inject one: the Node-VM build guard (tools/verify-track.cjs) and the
+    // VM tests, which install a stub GLX global instead of an opts.gfx.
+    const G = (opts && opts.gfx) || (typeof GLX !== "undefined" ? GLX : null);
+    // Stash it so buildProps (which only takes `track`) can read mobileTier off
+    // the same backend rather than the GLX global.
+    track._gfx = G;
+    if (G && G.createMesh) {
       track.geometryDiagnostics = [];
       const safe = (name, geo) => {
         const result = TrackModels.validateGeometry(geo);
@@ -192,14 +204,14 @@ const Tracks = (function () {
         console.warn(`[geometry] ${def.id}/${name} skipped: ${result.reason}`);
         return { pos: [], nrm: [], col: [], idx: [], mat: [] };
       };
-      track.meshes.floor = GLX.createMesh(safe("floor", buildFloor(track)));
+      track.meshes.floor = G.createMesh(safe("floor", buildFloor(track)));
       const roadGeo = safe("road", buildRoad(track));
       track.roadGeo = roadGeo;
-      track.meshes.road = GLX.createMesh(roadGeo);
+      track.meshes.road = G.createMesh(roadGeo);
       const terrainGeo = buildTerrain(track);
       const terrainSafe = safe("terrain", terrainGeo);
       track.terrainGeo = terrainSafe;   // validated raw geometry kept for the groundY() debug probe
-      track.meshes.terrain = GLX.createMesh(terrainSafe);
+      track.meshes.terrain = G.createMesh(terrainSafe);
       const _props = buildProps(track);
       // Chunked + frustum-culled: the city/props mesh is huge (up to ~5 M verts),
       // and most of it is off-screen each frame — drawing only visible XZ cells
@@ -207,7 +219,7 @@ const Tracks = (function () {
       const propsGeo = safe("props", _props.out);
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = keepGeometry;
-      track.meshes.props = GLX.createChunkedMesh ? GLX.createChunkedMesh(propsGeo, 72) : GLX.createMesh(propsGeo);
+      track.meshes.props = G.createChunkedMesh ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
       const glassGeo = safe("glass", _props.glass);
       const waterGeo = safe("water", _props.water);
       track.glassGeo = glassGeo;
@@ -216,10 +228,10 @@ const Tracks = (function () {
       // Glass rides the SAME chunk grid as the props: it was one un-culled
       // createMesh draw of every window pane in the whole city, every frame —
       // full clearcoat+env fill for panes behind the camera and past the fog.
-      track.meshes.glass = GLX.createChunkedMesh ? GLX.createChunkedMesh(glassGeo, 72) : GLX.createMesh(glassGeo);
-      track.meshes.water = GLX.createMesh(waterGeo);
-      track.meshes.gate = GLX.createMesh(safe("gate", buildGate(track)));
-      track.meshes.startline = GLX.createMesh(safe("startline", buildStartLine(track)));
+      track.meshes.glass = G.createChunkedMesh ? G.createChunkedMesh(glassGeo, 72) : G.createMesh(glassGeo);
+      track.meshes.water = G.createMesh(waterGeo);
+      track.meshes.gate = G.createMesh(safe("gate", buildGate(track)));
+      track.meshes.startline = G.createMesh(safe("startline", buildStartLine(track)));
     }
     return track;
   }
@@ -309,7 +321,10 @@ const Tracks = (function () {
     // verts on the dense street tracks that OOM-crash iOS — the exact jetsam trigger.
     // CITY_LOD = 1 on desktop and HIGH-tier phones ⇒ geometry is byte-identical there;
     // `lod()` only ever shrinks a count and never below its floor.
-    const CITY_LOD = (typeof GLX !== "undefined" && GLX.mobileTier) ? 0.72 : 1;
+    // Façade wiring: read mobileTier off the injected backend (stashed on the
+    // track by build()), falling back to the GLX global for VM/stub callers.
+    const G = track._gfx || (typeof GLX !== "undefined" ? GLX : null);
+    const CITY_LOD = (G && G.mobileTier) ? 0.72 : 1;
     const lod = (nn, floor) => Math.max(floor, Math.round(nn * CITY_LOD));
     // `mat` holds a per-vertex procedural-material id (0 = FLAT). `_mat` is the
     // CURRENT material register: emitters (addBox/emit) stamp it onto every vertex,
