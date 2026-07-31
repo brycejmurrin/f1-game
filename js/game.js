@@ -679,6 +679,30 @@ function renderPosOf(c, cS, renderX) {
   }
   return _rp;
 }
+// Unified player render anchor. Returns the (s, x) the camera, the car body's
+// height/orientation, and banking should all sample — derived, for the player,
+// from the SAME interpolated WORLD position the body is drawn at (renderPosOf):
+// project that world point ONCE via trackFrom. World interpolation is smooth,
+// so this s is smooth AND identical across all three consumers. Deriving each
+// consumer independently from the arc read-back lerpS(rPrevS, s) diverged —
+// that read-back is non-monotonic (game.js:2573), which showed as a backwards
+// jolt (camera), a speed-dependent fore/aft slide (car vs camera), and
+// residual height/orientation jitter at speed. AI cars (no world position)
+// fall back to the arc interpolation unchanged.
+const _pa = { world: false, cS: 0, cX: 0 };
+function playerAnchor(c) {
+  if (c.isPlayer && c.px != null) {
+    const wx = (c.rPrevPx === undefined) ? c.px : c.rPrevPx + (c.px - c.rPrevPx) * renderAlpha;
+    const wz = (c.rPrevPz === undefined) ? c.pz : c.rPrevPz + (c.pz - c.rPrevPz) * renderAlpha;
+    const tf = trackFrom(wx, wz, c.s);   // read-only; never writes c.s
+    _pa.world = true; _pa.cS = tf.s; _pa.cX = tf.x;
+  } else {
+    _pa.world = false;
+    _pa.cS = lerpS(c.rPrevS, c.s, renderAlpha);
+    _pa.cX = (c.rPrevX === undefined) ? c.x : c.rPrevX + (c.x - c.rPrevX) * renderAlpha;
+  }
+  return _pa;
+}
 function basisMat(r, u, f, p, out) {
   out[0] = r[0]; out[1] = r[1]; out[2] = r[2]; out[3] = 0;
   out[4] = u[0]; out[5] = u[1]; out[6] = u[2]; out[7] = 0;
@@ -1041,9 +1065,8 @@ function cameraFollowsBank(mode) {
 // so the player matrix must be resolved here instead of reusing last frame's
 // pooled transform (which trails by speed × frame time on slower devices).
 function currentCarGroundMat(c, out, dt) {
-  const cS = lerpS(c.rPrevS, c.s, renderAlpha);
-  const cX = (c.rPrevX === undefined) ? c.x
-           : c.rPrevX + (c.x - c.rPrevX) * renderAlpha;
+  const pa = playerAnchor(c);   // player: (s,x) from the drawn world point; AI: arc interp
+  const cS = pa.cS, cX = pa.cX;
   // Predict the same damping step the later body loop will apply, without
   // mutating xVis twice. Shadow and body therefore share one lateral position.
   const renderX = c.xVis === undefined ? cX : damp(c.xVis, cX, 30, dt);
@@ -3303,30 +3326,12 @@ function render(dt) {
     fovT = 58;
   } else {
     if (!player) return;
-    // Anchor the camera to the SAME interpolated WORLD position the car body is
-    // drawn at (renderPosOf), then project it to the road frame for the rig.
-    // The car is drawn in world space (rPrevPx→px by renderAlpha); deriving the
-    // camera from the ARC read-back instead (lerpS of player.s) diverged from
-    // it — world-space vs arc-space interpolation cut the corner differently, so
-    // the model slid fore/aft as speed grew — and player.s is a non-monotonic
-    // trackFrom read-back (game.js:2573), so its backward dips jolted the locked
-    // onboard eye. trackFrom of a SMOOTH world input is smooth and is exactly
-    // where the car is drawn, so camera and car share one motion: no fore/aft
-    // shift, no backwards jolt.
-    let pS, px;
-    if (player.px != null) {
-      const wx = (player.rPrevPx === undefined) ? player.px
-               : player.rPrevPx + (player.px - player.rPrevPx) * renderAlpha;
-      const wz = (player.rPrevPz === undefined) ? player.pz
-               : player.rPrevPz + (player.pz - player.rPrevPz) * renderAlpha;
-      const tf = trackFrom(wx, wz, player.s);   // read-only; never writes player.s
-      pS = tf.s; px = tf.x;
-    } else {
-      // No world position yet (pre-jump/menu): fall back to the arc interpolation.
-      pS = lerpS(player.rPrevS, player.s, renderAlpha);
-      px = (player.rPrevX === undefined) ? player.x
-         : player.rPrevX + (player.x - player.rPrevX) * renderAlpha;
-    }
+    // Anchor the camera to the SAME (s, x) the car body samples — playerAnchor
+    // derives it from the drawn WORLD position, shared with currentCarGroundMat
+    // and the body loop, so camera and car move as one (no fore/aft slide, no
+    // backwards jolt, no height/orientation jitter). Pre-jump/menu → arc interp.
+    const pa = playerAnchor(player);
+    const pS = pa.cS, px = pa.cX;
     Tracks.sample(track, pS, smp);
     // NOTE: the camera rig is still built from (pS, px) inside camVantage(). That
     // is a much smaller coupling than the body had — (s, x) is now an exact
@@ -4010,11 +4015,12 @@ function render(dt) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
     }
-    // Interpolate the arc/lateral position between the last two physics steps so
-    // the car renders smoothly between fixed steps (no judder on high-refresh).
-    const cS = lerpS(c.rPrevS, c.s, renderAlpha);
-    const cX = (c.rPrevX === undefined) ? c.x
-             : c.rPrevX + (c.x - c.rPrevX) * renderAlpha;
+    // Interpolate between the last two physics steps so the car renders smoothly
+    // between fixed steps (no judder on high-refresh). PLAYER derives (s,x) from
+    // its drawn WORLD position (playerAnchor) so its height/orientation sample
+    // the same smooth s as the camera; AI uses the arc interp.
+    const pa = playerAnchor(c);
+    const cS = pa.cS, cX = pa.cX;
     Tracks.sample(track, cS, smp2);
     // Smooth RENDERED lateral position. Physics c.x stays exact (used for walls,
     // collisions, racing-line assist). Only the mesh position is low-passed so
