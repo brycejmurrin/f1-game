@@ -4951,6 +4951,13 @@ $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
 // Team picker: opened by the team card on the select screen (js/game/menus.js).
 // Closing without choosing leaves the current team as-is.
 $("tp-close").onclick = () => { $("teampicker").hidden = true; };
+// BACK + the tappable circuit preview. Both lookups existed in `els` but no
+// handler was ever attached on this branch — the select screen's BACK button
+// was simply dead (surfaced by the button-walk audit; the wiring lived on an
+// unmerged branch).
+els.selBack.onclick = () => { els.select.hidden = true; els.overlay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
+els.selPreviewMap.onclick = openTrackDetail;
+$("track-detail-close").onclick = () => { $("track-detail").hidden = true; };
 // ── SETTINGS sub-menu ── keeps the pause screen down to RESUME/RESTART/QUIT;
 // every tuning + toggle control lives on this page. Opening it hides the pause
 // menu (one panel at a time); BACK (or resume) returns to it.
