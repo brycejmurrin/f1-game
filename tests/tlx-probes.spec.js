@@ -237,6 +237,73 @@ test.describe("TLX — boot", () => {
     expect(errors).toEqual([]);
   });
 
+  test("M9 env probe captures a full cube on a parked race (car reflections live)", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    // The probe only runs when CAR ENV REFLECTION (carEnvCube) > 0 — many
+    // shipped profiles default it to 0, so opt the knob on for this test.
+    await page.evaluate(() => window.__apex.lightTune({ carEnvCube: 0.6 }));
+    await page.evaluate(() => window.__apex.park(0.1));
+    // A full 6-face cube takes ~12 frames (one face every OTHER frame); wait on
+    // the ready flag rather than a fixed sleep (SwiftShader is slow).
+    await page.waitForFunction(() => {
+      const e = GLX.__tlx.envState();
+      return e && e.on && e.ready;
+    }, { timeout: 60_000 });
+    const st = await page.evaluate(() => ({
+      env: GLX.__tlx.envState(),
+      readyHook: GLX.envProbeReady(),
+    }));
+    expect(st.env.on).toBe(true);
+    expect(st.env.size).toBe(64);
+    expect(st.env.ready).toBe(true);
+    expect(st.readyHook).toBe(true);
+    // Still a real image on the canvas (the probe pass must not strand the frame).
+    const buf = await page.locator("canvas#game").screenshot();
+    expect(buf.length).toBeGreaterThan(5000);
+    expect(errors).toEqual([]);
+  });
+
+  test("M9 gpuTimer is contract-legal on the WebGL2 fallback (SwiftShader)", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    const st = await page.evaluate(() => {
+      const before = GLX.gpuTimer();
+      const on = GLX.gpuTimer(true);
+      const ms = GLX.gpuMs();
+      GLX.gpuTimer(false);
+      return { before, on, ms };
+    });
+    // tlxForceGL pins three on WebGL2 (SwiftShader in CI): no timestamp-query
+    // feature, so the timer reports unsupported and never turns on — the exact
+    // {supported:false} shape GLX returns on SwiftShader. gpuMs stays -1.
+    expect(typeof st.before.supported).toBe("boolean");
+    expect(st.before.supported).toBe(false);
+    expect(st.on.supported).toBe(false);
+    expect(st.on.on).toBe(false);      // can't enable an unsupported timer
+    expect(st.ms).toBe(-1);
+  });
+
+  test("M4 shadow-state hooks report through the TLX surface (car + lamp)", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.evaluate(() => window.__apex.park(0.1));
+    await page.waitForFunction(() => GLX.carShadowState().arms > 0, { timeout: 30_000 });
+    const st = await page.evaluate(() => ({ car: GLX.carShadowState(), lamp: GLX.lampShadowState() }));
+    expect(st.car.enabled).toBe(true);
+    expect(st.car.arms).toBeGreaterThan(0);
+    expect(typeof st.lamp.enabled).toBe("boolean");
+    expect(st.lamp.idx).toBe(-1);      // Monza day never opens the lamp pass
+  });
+
   test("menu is reachable and canvas is sized (no-track begin/present path)", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
