@@ -1091,6 +1091,17 @@ whose `control` section names the drive/stage verbs.
 *where*, by rasterising the scene into a character grid with per-cell depth
 sorting — a real hidden-surface solve at grid resolution, not a guess.
 
+**Resolution.** `cols` defaults to 48 (what an agent should read) and clamps
+1–400; `rows` derives from the real viewport aspect unless pinned, clamped
+4–150. Raising `cols` is a human-facing quality knob — a large, sharp view on
+request — not something the default loop should reach for; `agentHelp()` keeps
+pointing decisions at `world()`/`scene()`/`trackInfo()`. `carView({detail:
+"render", cols, ss})` has the matching knob for the car elevations: `ss`
+(supersampling, 1–6, default 3) trades render cost for a sharper edge+shade
+result through the existing Sobel-on-depth pipeline — no new glyphs, just more
+samples per cell. Both `cols` and `ss` clamp rather than hang the tab on an
+unreasonable request.
+
 ```
 ttttttttttttttttttttttttttt........tttttttttttttt.....tt
 tttttttttttttttttttttttttttttt..tttttttttttttttttttttttt

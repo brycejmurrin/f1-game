@@ -1006,9 +1006,13 @@ const AgentView = (function () {
       // the real aspect unless the caller pins them.
       const cellAspect = clamp(o.cellAspect || 2, 1, 4);
       const viewAspect = (G.gfx && G.gfx.aspect) || 2.16;
-      const cols = clamp(o.cols | 0 || 48, 8, 160);
+      // Default stays coarse — 48 cols is what an agent should read. The cap is
+      // raised so a caller can ask for a large, sharp view on request; this is a
+      // human-facing quality knob, not something the default agent loop uses
+      // (see agentHelp: decisions come from world()/scene()/trackInfo()).
+      const cols = clamp(o.cols | 0 || 48, 8, 400);
       const autoRows = Math.round(cols / (viewAspect * cellAspect));
-      const rows = clamp(o.rows | 0 || autoRows, 4, 60);
+      const rows = clamp(o.rows | 0 || autoRows, 4, 150);
       const range = clamp(o.rangeM || 500, 50, 3000);
       const eye = cam.eye;
 
@@ -1380,7 +1384,7 @@ const AgentView = (function () {
       }
       const wSpan = (h1 - h0) || 1, hSpan = (v1 - v0) || 1;
       const mPerCol = wSpan / cols;
-      const rows = clamp(Math.round(hSpan / mPerCol / cellAspect), 4, 44);
+      const rows = clamp(Math.round(hSpan / mPerCol / cellAspect), 4, 100);
       const sw = cols * ss, sh = rows * ss;
       const project = (x, y, z) => {
         const c = [x, y, z];
@@ -1392,18 +1396,26 @@ const AgentView = (function () {
       return { lines: r.lines, cols, rows, mPerCol: r2(mPerCol) };
     }
 
-    function carRender(mesh, cols, edgeT) {
+    // ss = supersamples per character cell (anti-aliasing + gradient room in the
+    // existing Sobel-on-depth pipeline — see rasterTris above). Default 3 is what
+    // an agent should read; a caller can raise it for a sharper human-facing
+    // render, unclamped detail traded for real render time since rasterTris cost
+    // is O(cols*rows*ss^2). Both cols and ss are clamped here — carRender used to
+    // pass an uncapped o.cols straight through, so a bad call could hang the tab.
+    function carRender(mesh, cols, edgeT, ssArg) {
       const pos = mesh.pos, idx = mesh.idx, nrm = mesh.nrm;
-      const ss = 3, ET = edgeT || 0.45;
+      const c = clamp(cols | 0 || 46, 12, 300);
+      const ss = clamp(ssArg | 0 || 3, 1, 6), ET = edgeT || 0.45;
       return {
         legend: { "| - / \\": "edges (silhouette + creases)",
                   " .:-=+*oO#%@": "surface, dark -> lit" },
-        side: orthoCar(pos, idx, nrm, 2, 1, 1, 1, 0, cols, 2, ss, ET),           // z,y  view along x
-        top: orthoCar(pos, idx, nrm, 2, 0, 1, 1, 1, cols, 2, ss, ET),            // z,x  view along y (top-down)
-        front: orthoCar(pos, idx, nrm, 0, 1, -1, 1, 2, Math.round(cols * 0.55), 2, ss, ET), // x,y view along z
+        side: orthoCar(pos, idx, nrm, 2, 1, 1, 1, 0, c, 2, ss, ET),           // z,y  view along x
+        top: orthoCar(pos, idx, nrm, 2, 0, 1, 1, 1, c, 2, ss, ET),            // z,x  view along y (top-down)
+        front: orthoCar(pos, idx, nrm, 0, 1, -1, 1, 2, Math.round(c * 0.55), 2, ss, ET), // x,y view along z
         note: "orthographic edge+shade from the real mesh; +z forward (nose "
               + "to the right in side/top). Edges are true depth discontinuities; "
-              + "the ramp is Lambert shading. mPerCol converts columns to metres.",
+              + "the ramp is Lambert shading. mPerCol converts columns to metres. "
+              + "ss raises supersampling (1-6) for a sharper render at more cost.",
       };
     }
 
@@ -1434,11 +1446,12 @@ const AgentView = (function () {
       }
       const o = opts || {};
       const p = G.player;
-      const cols = clamp(o.cols | 0 || 60, 12, 200);
+      // Default stays coarse; the cap is raised for an on-request detailed map.
+      const cols = clamp(o.cols | 0 || 60, 12, 300);
       const cellAspect = clamp(o.cellAspect || 2, 1, 4);
       // World-square cells: a char cell is ~2x taller than wide, so a row must
       // span cellAspect x the metres a column does, or the map is stretched.
-      const rows = clamp(Math.round(cols / cellAspect), 6, 100);
+      const rows = clamp(Math.round(cols / cellAspect), 6, 150);
       const radius = clamp(o.radiusM || 200, 20, 4000);
       const mPerCol = (2 * radius) / cols;
       const mPerRow = mPerCol * cellAspect;
@@ -1685,7 +1698,7 @@ const AgentView = (function () {
       // (render-car.mjs). A filled-triangle silhouette from the real mesh, so
       // the outline is measured, not drawn. Three standard views; +z forward.
       if ((o.detail === "render" || o.detail === "all" || o.render) && meshRef && !geom.error) {
-        render = carRender(meshRef, o.cols | 0 || 46, o.edgeThresh);
+        render = carRender(meshRef, o.cols | 0 || 46, o.edgeThresh, o.ss);
       }
 
       return {
@@ -2755,9 +2768,11 @@ const AgentView = (function () {
             "WHAT DOES IT LOOK LIKE OUT THERE — the light narrated: day/night, "
             + "brightness, sun or moon and where it sits, floodlights, fog "
             + "visibility range, wet road. Raw RGB kept for measurement",
-          "render({what,...})":
+          "render({what,cols,ss,...})":
             "SHOW IT — the one optional raster, APPROXIMATE. what: 'view'|'map'|"
-            + "'circuit'|'car'. For intuition/debugging, not measurement",
+            + "'circuit'|'car'. Defaults are coarse (what an agent should read); "
+            + "cols and, for 'car', ss (supersampling 1-6) can be raised for a "
+            + "sharp human-facing render. For intuition/debugging, not measurement",
         },
         // DRILL-DOWN: the world is stored in full and PULLED by id. Dumping it
         // would be both huge and less accurate — ask for one thing, or a slice.

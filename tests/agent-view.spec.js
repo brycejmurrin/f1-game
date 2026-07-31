@@ -1398,6 +1398,51 @@ test.describe("agentHelp()", () => {
 // `what` switch, flagged approximate. These pin that the dispatch is correct
 // and that the demotion is visible in the payload.
 
+// ── render() higher fidelity — a human-facing opt-in ─────────────────────────
+// User-requested despite the evidence saying denser rasters don't help agent
+// comprehension: kept as an explicit opt-in for looking at, not measuring from.
+// Defaults must stay coarse, and an unreasonable request must clamp rather than
+// hang the tab.
+
+test.describe("render() higher fidelity", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("the default view is unchanged; cols raises the resolution on request", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => ({
+      def: window.__apex.render({ what: "view", camera: "chase" }).grid.cols,
+      big: window.__apex.render({ what: "view", cols: 200, camera: "chase" }).grid.cols,
+      overCap: window.__apex.render({ what: "view", cols: 5000, camera: "chase" }).grid.cols,
+    }));
+    expect(r.def).toBe(48);
+    expect(r.big).toBe(200);
+    // an unreasonable request clamps rather than hanging the tab
+    expect(r.overCap).toBeLessThan(5000);
+    expect(r.overCap).toBeGreaterThan(200);
+  });
+
+  test("ss raises supersampling on the car render and visibly changes it", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => {
+      const lo = window.__apex.carView({ team: "ferrari", detail: "render", cols: 40, ss: 1 });
+      const hi = window.__apex.carView({ team: "ferrari", detail: "render", cols: 40, ss: 6 });
+      const huge = window.__apex.carView({ team: "ferrari", detail: "render", cols: 999999, ss: 999 });
+      return { lo: lo.render.side.lines.join("\n"), hi: hi.render.side.lines.join("\n"),
+               hugeCols: huge.render.side.cols };
+    });
+    expect(r.lo).not.toBe(r.hi);
+    // an unreasonable request clamps rather than hanging the tab
+    expect(r.hugeCols).toBeLessThan(999999);
+  });
+
+  test("stays flagged approximate and does not become the default surface", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() =>
+      window.__apex.render({ what: "view", cols: 200, camera: "chase" }));
+    expect(r.aid).toContain("APPROXIMATE");
+  });
+});
+
 test.describe("render() consolidation", () => {
   test.use({ viewport: LANDSCAPE });
 
