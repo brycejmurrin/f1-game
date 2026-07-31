@@ -88,6 +88,25 @@ const SCREENS = [
      if (load) load.click();
      await until('.dh-tpopup .dh-canvas', 12000);
    `, ".dh-tpopup", { mock: 1, wait: 900 }],
+
+  // ── LIGHTING TUNER + TRACK DETAIL — both open on top of another screen, so
+  //    they need the race/select to exist first. ──
+  ["tuner", `
+     window.__apex.race('bahrain');
+     await until('#pausemenu', 6000).catch(() => {});
+     window.__apex.park(0.1);
+     const rd = document.getElementById('rotate-device'); if (rd) rd.hidden = true;
+     document.getElementById('pausemenu').hidden = false;
+     document.getElementById('pm-settings').click();
+     document.getElementById('pm-lighting').click();
+     await until('#lt-rows .tune-row', 6000).catch(() => {});
+   `, "#lighting", { wait: 2600 }],
+  ["track-detail", `
+     document.getElementById('mb-race').click();
+     await until('#sel-preview-map', 4000);
+     document.getElementById('sel-preview-map').click();
+     await until('#track-detail-list .tdc-row, #track-detail-list', 4000).catch(() => {});
+   `, "#track-detail", { wait: 1000 }],
 ];
 
 // Injected before every setup body so a screen can wait for async content.
