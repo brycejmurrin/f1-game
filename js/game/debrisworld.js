@@ -132,6 +132,7 @@ const MARBLE_SLIP_GATE = 0.09;     // rad — |slip| ≥ this = a real slide
 const MARBLE_REF_SCALE = 0.025;    // marble mesh reference half-extent (draw scaling)
 // A3 furniture tuning
 const FURN_CAP_DESKTOP = 24, FURN_CAP_MOBILE = 12;
+const FURN_WAKE_M = 14;      // arc distance (m) within which a car keeps the world stepping so cones can be punted
 const CONE_HX = 0.13, CONE_HY = 0.22, CONE_HZ = 0.13;  // cone body half-extents
 // B1 hazard-query tuning (settled bodies ON the racing surface)
 const HAZARD_Y_TOL = 1.6;      // m — ignore bodies this far above/below the road (airborne / sunk)
@@ -655,6 +656,25 @@ function spawnImpact(imp, track) {
 }
 
 // ── per-tick step (ONE call site in game.js's fixed-step update) ────────────
+// Idle-check helpers (cheap, no Rapier): any live pool slot? any car within
+// FURN_WAKE_M arc of a registered clippable cone?
+function _anyLive(pool) {
+  for (let i = 0; i < pool.length; i++) if (pool[i].live) return true;
+  return false;
+}
+function _carNearFurn(track, cars) {
+  if (!_furn.length) return false;
+  const L = (track && track.total) || 0;
+  for (let k = 0; k < _furn.length; k++) {
+    const fs = _furn[k].s;
+    for (let i = 0; i < cars.length; i++) {
+      let d = Math.abs((cars[i].s || 0) - fs);
+      if (L) d = Math.min(d, L - d);
+      if (d < FURN_WAKE_M) return true;
+    }
+  }
+  return false;
+}
 function step(dt) {
   const track = G.track, cars = G.cars;
   if (!track || !cars || !cars.length) { _queue.length = 0; return; }
@@ -662,6 +682,18 @@ function step(dt) {
   if (world && (_worldTrack !== track || _mirrors.length !== cars.length)) destroyWorld();
   if (!world) buildWorld(track, cars);
   if (world.timestep !== dt) world.timestep = dt;
+  // Idle fast-path (mobile smoothness): when nothing dynamic is in play, the
+  // WASM solve + the 22 kinematic-mirror syncs below are pure per-tick cost
+  // with no visible effect — and that per-frame variance shows up as
+  // micro-stutter at speed on phones. Skip the whole step when there are no
+  // queued impacts, no live debris/marbles, no incident-owned dynamic car, and
+  // no car near a clippable cone (which needs the world running to be punted).
+  // Cheap CPU checks only — no Rapier calls — and it resumes the instant any of
+  // those becomes true (a spawn syncs the mirrors that same tick before use).
+  if (_queue.length === 0 && _dynCars.size === 0
+      && !_anyLive(_slots) && !_anyLive(_marbles) && !_carNearFurn(track, cars)) {
+    return;
+  }
   _tick++;
   // A1: decay per-car spall cooldowns.
   for (let i = 0; i < _spallCool.length; i++)
