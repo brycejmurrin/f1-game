@@ -13,11 +13,15 @@ the game shippable.
   One landmine documented (stranded-assignment: anchor varying-derived nodes
   with `.toVar()` as unconditional Fn-body statements) plus working debug
   tooling (`__spike.shader()` GLSL dump, `?viz=` bisect modes).
-- **Babylon.js comparison arm: verdict pending** (harness committed, agent
-  measuring). It changes the graphics pick only if it dramatically outperforms —
-  its structural disadvantage stands regardless: our custom materials/composite
-  would be dual-source (GLSL+WGSL) again, which is the exact WGX failure mode
-  the migration exists to end.
+- **Babylon.js comparison arm: measured, and the pick stands — three.js/TSL.**
+  Babylon 9.19.0 rendered the same scene ≈1.25× faster than three (2,044 ms
+  instanced vs 4,757; 18 vs 25 draws) and compiled 34 lights in 412 ms — but
+  needed `disableUniformBuffers` to link on SwiftShader at all, fights the
+  target look at the material level (StandardMaterial clamps pools to albedo;
+  different spot falloff), and our custom materials/composite would be
+  dual-source GLSL+WGSL (or a NodeMaterial rewrite) — the exact WGX failure
+  mode the migration exists to end. Babylon = benchmarked fallback; its speed
+  is a floor, not a cliff. Full numbers in spike/README.md.
 - **Rapier 0.19.3: additive-only adoption recommended.** Bitwise deterministic
   (124 contact-rich bodies, 600 steps, bit-identical), ≤1.5 ms worst-case step
   with vehicle + 22 cars + 100 debris on the real 42k-tri road trimesh. The

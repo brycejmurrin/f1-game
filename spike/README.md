@@ -56,6 +56,36 @@ node spike/capture.mjs all              # both → scratch/captures/spike/result
 timeboxed 1-day Babylon.js 8 comparison reusing `spike-data.js` (UMD script tag,
 `VertexData` with RGB→RGBA repack, DefaultRenderingPipeline), else stay on GLX/WGX.
 
+## Babylon.js comparison arm (run anyway — the numbers were worth having)
+
+`babylon-spike.html/.js` (369 LOC, Babylon **9.19.0** UMD vendored) renders the
+identical SpikeData scene. Same protocol/viewport as three run-3:
+
+| | ms/frame | GL draws/frame |
+|---|---:|---:|
+| Babylon 32 lamps, 22 car meshes | 3,661 | 47 |
+| Babylon 32 lamps + thin instances | **2,044** | **18** |
+| three run-3 (32 lamps / instanced) | 4,583 / 4,757 | 54 / 25 |
+| GLX baseline | 9,170 | 94 |
+
+Babylon ≈1.25× faster than three here, ≈2.5× faster than GLX; thin instances
+bought a real −44% frame time (shadow pass collapses too). 34 simultaneous
+lights compiled in 412 ms — but only after `engine.disableUniformBuffers=true`:
+Babylon binds one uniform block per light and SwiftShader caps vertex uniform
+buffers at 14, so every shader failed to link out of the box. Other friction:
+StandardMaterial clamps `lighting+emissive` to albedo (GLX's hot pool centres
+unreachable without PBR/custom materials); spot falloff shape ≠ the game's
+windowed inverse-square + bleed; and the `mat`-id procedural materials + 61-
+uniform composite would land in ShaderMaterial **GLSL+WGSL (dual-source again)**
+or a NodeMaterial rewrite — the exact failure mode the TSL arm eliminates.
+Shots: `bab-a155/t030/topdown.png` (zero console errors) — same family as
+glx-t030, pools flatter.
+
+**Comparison verdict: three.js/TSL stays the migration pick** — the migration
+cost is dominated by porting custom shading, and only TSL ports it single-source
+1:1. Babylon's numbers make it a benchmarked fallback (a performance floor, not
+a cliff).
+
 ## WebGPU headless status (criterion 7 constraint)
 
 `navigator.gpu` is **absent** in this environment's headless Chromium 141 under

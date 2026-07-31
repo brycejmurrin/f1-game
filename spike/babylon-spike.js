@@ -28,7 +28,7 @@
 const params = new URL(location.href).searchParams;
 const TRACK_ID = params.get("track") || "singapore";
 const MAX_LIGHTS = Math.max(0, Math.min(32, parseInt(params.get("lamps") || "32", 10)));
-const LAMP_GAIN = parseFloat(params.get("gain") || "0.012");
+const LAMP_GAIN = parseFloat(params.get("gain") || "0.055");
 
 const hud = document.getElementById("hud");
 const say = (t) => { hud.textContent = t; };
@@ -68,7 +68,10 @@ const hemi = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), 
 hemi.diffuse = new BABYLON.Color3(0.157, 0.196, 0.290);   // cool sky ~0x28324a
 hemi.groundColor = new BABYLON.Color3(0.047, 0.055, 0.078);
 hemi.specular = new BABYLON.Color3(0, 0, 0);
-hemi.intensity = 1.15;
+// Kept LOW: StandardMaterial clamps (lighting + emissive) to 1 before the
+// albedo multiply, so lamp pools cap at surface albedo — the night reading
+// comes from a dark ambient floor + exposure lift instead (see pipeline).
+hemi.intensity = 0.55;
 
 const sun = new BABYLON.DirectionalLight("moon",
   new BABYLON.Vector3(-180, -420, -120).normalize(), scene);     // moonlight
@@ -108,11 +111,11 @@ const SIM_LIGHTS = MAX_LIGHTS + 2;   // + hemi + moon (Babylon default is 4!)
 // { emissive } values are the game's own night draw opts (game.js _wm* tables);
 // specularPower approximates the per-mesh roughness the game passes.
 const MESH_OPTS = {
-  road:      { emissive: 0.09, rough: 0.82 },
-  floor:     { emissive: 0.14, rough: 0.98 },
-  terrain:   { emissive: 0.18, rough: 0.97 },
-  props:     { emissive: 0.55, rough: 0.85 },   // floodEmit ramp at deep night
-  glass:     { emissive: 0.30, rough: 0.13, doubleSided: true },
+  road:      { emissive: 0.06, rough: 0.82 },
+  floor:     { emissive: 0.09, rough: 0.98 },
+  terrain:   { emissive: 0.11, rough: 0.97 },
+  props:     { emissive: 0.70, rough: 0.85 },   // floodEmit ramp at deep night
+  glass:     { emissive: 0.45, rough: 0.13, doubleSided: true },
   water:     { emissive: 0.04, rough: 0.10 },
   gate:      { emissive: 0.20, rough: 0.45 },
   startline: { emissive: 0.10, rough: 0.80 },
@@ -229,13 +232,13 @@ window.addEventListener("resize", () => engine.resize());
 const pipeline = new BABYLON.DefaultRenderingPipeline("post", true /* HDR */, scene, [camera]);
 pipeline.fxaaEnabled = true;
 pipeline.bloomEnabled = true;
-pipeline.bloomThreshold = 0.55;
-pipeline.bloomWeight = 0.55;
+pipeline.bloomThreshold = 0.45;
+pipeline.bloomWeight = 0.65;
 pipeline.bloomKernel = 64;
 pipeline.bloomScale = 0.5;
 pipeline.imageProcessing.toneMappingEnabled = true;
 pipeline.imageProcessing.toneMappingType = BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
-pipeline.imageProcessing.exposure = 1.35;      // slight lift, matches three arm
+pipeline.imageProcessing.exposure = 1.75;      // lift compensating the diffuse clamp
 
 /* ── per-frame lamp cull (the REAL game path) → SpotLight updates ─────────── */
 const eyeArr = [0, 0, 0], fwdArr = [0, 0, 0];
@@ -270,10 +273,15 @@ function updateLamps() {
 
 /* ── render loop + stats ──────────────────────────────────────────────────── */
 const msRing = new Float32Array(90); let msIdx = 0, msN = 0, lastT = performance.now();
-let frames = 0, lastDraws = 0, compileMs = -1;
+let frames = 0, lastDraws = 0, compileMs = -1, _prevDrawCum = 0;
 function avgMs() { let s = 0; for (let i = 0; i < msN; i++) s += msRing[i]; return msN ? s / msN : 0; }
 function drawCalls() {
-  return (engine._drawCalls && engine._drawCalls.current) || lastDraws || 0;
+  // engine._drawCalls is CUMULATIVE without EngineInstrumentation (nothing
+  // calls fetchNewFrame) — report the per-frame delta.
+  const cum = (engine._drawCalls && engine._drawCalls.current) || 0;
+  const d = cum - _prevDrawCum;
+  _prevDrawCum = cum;
+  return d > 0 ? d : lastDraws;
 }
 function hudText() {
   return "babylon.js spike — " + TRACK_ID + "\n"
@@ -308,7 +316,14 @@ window.__bspike = {
     say(hudText());
   },
   toggleInstancing(on) { setInstancing(on != null ? on : !instancing); return instancing; },
-  setLightCount(nMax) { lightCap = Math.max(0, Math.min(MAX_LIGHTS, nMax | 0)); return lightCap; },
+  setLightCount(nMax) {   // REAL light-count A/B: shrink the compiled shader too
+    lightCap = Math.max(0, Math.min(MAX_LIGHTS, nMax | 0));
+    for (let i = 0; i < MAX_LIGHTS; i++) lamps[i].setEnabled(i < lightCap);
+    const sim = lightCap + 2;
+    for (const m of scene.materials)
+      if (m.maxSimultaneousLights != null) m.maxSimultaneousLights = sim;   // dirties + recompiles
+    return lightCap;
+  },
   resetMs() { msN = 0; msIdx = 0; },
   _dev: null,       // live handles for headless tuning (set below)
   debugLamps(k) {   // CPU-side view of what the SpotLights hold
