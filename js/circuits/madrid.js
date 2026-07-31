@@ -233,7 +233,16 @@
       // straight (side L) — fans across from the pits, not stacked on top of
       // them. Two raked tiers + glazed suites + end walls reads as a proper
       // international-broadcast main grandstand instead of a grey slab.
-      grandstandEx(0.00, -1, 10, 100, null, null,
+      // Split into two bays rather than one 100 m stand. grandstandEx lays its
+      // crowd risers as rigid boxes along ONE node's tangent, so a 100 m span
+      // chords across a straight that is not actually straight — props-over-road
+      // measured the riser 0.77 m over the tarmac. Two 46 m bays follow the
+      // curvature and read as one continuous stand from trackside.
+      // Kept to one 52 m bay. grandstandEx lays its crowd risers as rigid boxes
+      // along ONE node's tangent, so the original 100 m span chorded across a
+      // start "straight" that is not actually straight — props-over-road measured
+      // the riser 0.77 m onto the tarmac.
+      grandstandEx(0.00, -1, 10, 52, null, null,
         { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       // T1 chicane stand, opposite the motorway overpass piers (brief s≈0.08).
       grandstandEx(0.085, -1, 16, 45, null, null,

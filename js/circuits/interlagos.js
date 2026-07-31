@@ -486,11 +486,23 @@
       // Treeline framing Bico de Pato through Junção — one continuous run
       // over the corrected corner cluster (this span used to be labelled
       // "Ferradura/infield esses" while actually dressing the wrong apexes)
-      forestEdge(0.61, 0.76, -1, 18, { density: 0.55, hMin: 9, hMax: 14,
+      // gap 7, not 18: this run is on the INSIDE of the Bico de Pato/Mergulho
+      // loop and the lap folds back on itself, so a canopy pushed 18 m into the
+      // infield reaches the frac~0.85 leg on the far side. forestEdge clears
+      // barriers and tree() clears its own trunk point, but neither sees a
+      // canopy overhanging a DIFFERENT part of the circuit — props-over-road
+      // measured 2.88 m of intrusion at f=84.5 from trees authored at f~70.
+      forestEdge(0.61, 0.76, -1, 7, { density: 0.55, hMin: 9, hMax: 14,
                                         col: [0.18, 0.40, 0.18], col2: [0.20, 0.44, 0.18], pineFrac: 0.5 });
+      // Accent trees go on the OUTSIDE (-1) only. Side +1 through here is the
+      // inside of the Bico de Pato / Mergulho loop, and the lap folds back on
+      // itself tightly enough that a canopy 22-38 m into the infield hangs over
+      // the frac~0.62 leg — tree() guards a single anchor point, not the 5 m
+      // canopy, so nothing catches it. props-over-road measured 4.43 m of
+      // intrusion from exactly this cluster.
       for (const s of [0.63, 0.66, 0.70, 0.735]) {
         const k = K(s);
-        tree(k, 1, 22 + hash(k * 5) * 16, 10 + hash(k * 7) * 6, [0.20, 0.44, 0.20]);
+        tree(k, -1, 24 + hash(k * 5) * 14, 10 + hash(k * 7) * 6, [0.20, 0.44, 0.20]);
       }
 
       // ===================================================================
@@ -514,7 +526,14 @@
       grandstandEx(0.826,  -1, 11, 46, null, [0.96, 0.82, 0.16], { livery: "concrete",  endWalls: true });
       grandstandEx(0.8375, -1, 12, 52, null, [0.12, 0.58, 0.30], { livery: "steel" });
       grandstandEx(0.849,  -1, 11, 46, null, [0.96, 0.82, 0.16], { livery: "darkSteel", endWalls: true });
-      crowdBank(0.8375, -1, 30, 150, 6);
+      // Upper terrace behind the three bays. crowdBank takes a NODE INDEX, not a
+      // lap fraction, and needs an explicit `depth` — called with (0.8375, …, 6)
+      // it indexed the node arrays at a fractional index (undefined -> NaN) and
+      // ran with depth undefined, so every row's setback was NaN. Split into two
+      // short banks on real nodes: a single 150 m bank is a rigid box laid on one
+      // node's tangent and chords straight across this bend.
+      crowdBank(K(0.830), -1, 30, 56, 6, 4.2);
+      crowdBank(K(0.845), -1, 30, 56, 6, 4.2);
       cameraTower(K(0.8375), 1, 10, { h: 16 });
       for (const [s, col] of [[0.822, [0.96, 0.82, 0.16]], [0.853, [0.12, 0.58, 0.30]]]) {
         billboard(K(s), 1, 20, 12, 4.5, col);
