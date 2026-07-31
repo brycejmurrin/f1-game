@@ -45,9 +45,10 @@
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, hash, vadd,
         place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid,
-        bush, grandstand, building, cityFront, tower, billboard, overheadSpan, marshalPost,
+        bush, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
-        floodMast: apiFloodMast, floodMastRing, sailCanopy, circuitKit } = api;
+        floodMast: apiFloodMast, floodMastRing, ledFacadeBands, cameraTower, broadcastCompound,
+        circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
@@ -96,11 +97,10 @@
       // Night-lit windows: warm amber (office glow), cool blue (control/tech rooms)
       const WIN_WARM    = [0.92, 0.80, 0.44];  // office/hospitality lit window — warm amber
       const WIN_COOL    = [0.52, 0.70, 0.94];  // timing/technical lit window — cool blue
-      // Sakhir Tower: pale cream cylindrical shaft + bright LED video façade bands
+      // Sakhir Tower: pale cream cylindrical shaft + full-height LED video façade
       const TOWER_CYL   = [0.84, 0.83, 0.79];
       const TOWER_PALE  = [0.85, 0.85, 0.80];
       const TOWER_LED   = [1.45, 1.28, 0.62];  // HDR warm LED rings (brighten for night read)
-      const SAIL_COL    = [0.96, 0.94, 0.90];
       // Night-race beacon: warm amber nav light + cool video-screen accent
       const BEACON_WARM = [0.98, 0.75, 0.35];
       const BEACON_COOL = [0.70, 0.88, 0.98];
@@ -257,32 +257,40 @@
         { wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 3 });
 
       // ── Sakhir Tower ─────────────────────────────────────────────────────
-      // Iconic cylindrical tower with bright LED façade + sail canopy crown.
-      // Placed left of pit complex (L, 52 m gap). Shaft → LED bands → sail.
+      // The real Sakhir Tower stands over Turn 1's braking zone, not by the
+      // pit straight — and it is a ~10-storey building wrapped full-height in
+      // LED video panels, not a cream cylinder under a sail canopy. Relocated
+      // from s≈0.005 to s≈0.055 (T1) and rebuilt on the shared ledFacadeBands
+      // helper, which wraps the whole shaft in stacked emissive bands instead
+      // of the old hand-rolled frustum rings + sailCanopy crown.
       (function sakhirTower() {
-        const a = anchor(K(0.005), -1, 52), b = [a.r, a.u, a.t];
+        const kT = K(0.055);
+        const a = anchor(kT, -1, 50), b = [a.r, a.u, a.t];
         const BASE = a.c;
-        // Main shaft: pale-cream cylinder
-        addCyl(out, BASE, 7.2, 62, TOWER_CYL, 12, b);
-        // Eight horizontal LED bands — brightened for night-race silhouette
-        for (let i = 0; i < 8; i++) {
-          const yBase = 4 + (i / 7) * 54;
-          addFrustum(out, vadd(BASE, b[1], yBase), 8.5, 8.1, 1.15, TOWER_LED, 12, b);
-        }
-        // Sail canopy over the shaft (shared helper when available)
-        if (typeof sailCanopy === "function") {
-          sailCanopy(BASE, b, {
-            rad: 16, rx: 18, rz: 12, h: 64, col: SAIL_COL, ribs: 10, thick: 0.7,
+        const TOWER_H = 40;   // ~10 storeys
+        const TOWER_R = 6.6;
+        // Core shaft: the structural mass behind the LED skin.
+        addCyl(out, BASE, TOWER_R * 0.92, TOWER_H, TOWER_CYL, 12, b);
+        // Full-height LED video façade — the tower's defining feature. Uses
+        // the shared wrap instead of a hand-rolled ring loop.
+        if (typeof ledFacadeBands === "function") {
+          ledFacadeBands(BASE, TOWER_H, {
+            r: TOWER_R, bands: 10, seg: 12, basis: b,
+            cols: [TOWER_LED, [1.05, 0.85, 1.15], BEACON_COOL, [1.30, 0.98, 0.35]],
           });
         } else {
-          addCyl(out, vadd(BASE, b[1], 62), 9.0, 2.5, FLOOD, 10, b);
+          for (let i = 0; i < 8; i++) {
+            addFrustum(out, vadd(BASE, b[1], 4 + (i / 7) * (TOWER_H - 8)), TOWER_R + 1.3, TOWER_R + 0.9, 1.1, TOWER_LED, 12, b);
+          }
         }
-        // Antenna / beacon above the crown
-        addCyl(out, vadd(BASE, b[1], 64.5), 0.4, 6.0, STEEL, 5, b);
-        addCone(out, vadd(BASE, b[1], 64.5), 3.8, 5.0, BEACON_WARM, 8, b);
-        addBox(out, vadd(BASE, b[1], 70.5), [3.0, 1.2, 3.0], BEACON_COOL, b);
+        // Capped deck roofline (the sail canopy crown is gone — the real
+        // tower's roof is a simple flat cap) + antenna/beacon above it.
+        addBox(out, vadd(BASE, b[1], TOWER_H + 0.4), [TOWER_R + 0.8, 0.8, TOWER_R + 0.8], STAND_CREAM, b);
+        addCyl(out, vadd(BASE, b[1], TOWER_H + 0.8), 0.4, 6.0, STEEL, 5, b);
+        addCone(out, vadd(BASE, b[1], TOWER_H + 0.8), 3.4, 4.5, BEACON_WARM, 8, b);
+        addBox(out, vadd(BASE, b[1], TOWER_H + 5.3), [2.6, 1.1, 2.6], BEACON_COOL, b);
         // Light pool at tower base
-        addBox(out, vadd(BASE, b[1], 0.15), [18.0, 0.30, 18.0], POOL, b);
+        addBox(out, vadd(BASE, b[1], 0.15), [16.0, 0.30, 16.0], POOL, b);
       })();
 
       // Paddock buildings behind pit complex (left side, s 0.97–0.04)
