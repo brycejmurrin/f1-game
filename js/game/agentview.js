@@ -2146,6 +2146,45 @@ const AgentView = (function () {
       };
     }
 
+    // ── render() — the one optional composition aid ─────────────────────────
+    // The machine-observation research is blunt about character rasters: the
+    // same content reads 30-45 pts worse as a grid of glyphs than as the image,
+    // and denser grids read WORSE, not better. So the four rasters — the camera
+    // view, the top-down map, the whole-circuit document, the car elevations —
+    // are demoted from four peer perception tools to ONE call behind a `what`
+    // switch, explicitly flagged as approximate. Decisions should come from
+    // world()/scene()/trackInfo(); render() is for coarse spatial intuition and
+    // human-readable debugging, not for reading geometry off the pixels.
+    //
+    // frame()/plan()/worldModel() stay exported as deprecated aliases so the
+    // dev console and older callers keep working; the agent-facing surface is
+    // this one call.
+    function render(opts) {
+      const o = opts || {};
+      const what = o.what || "view";
+      let out, kind;
+      switch (what) {
+        case "view":    out = frame(o);      kind = "camera view";   break;
+        case "map":     out = plan(o);       kind = "top-down map";  break;
+        case "circuit": out = worldModel(o); kind = "whole circuit"; break;
+        case "car":
+          out = carView(Object.assign({}, o, { detail: o.detail || "render" }));
+          kind = "car elevations";
+          break;
+        default:
+          return fail("BadArgumentError",
+                      'what must be "view", "map", "circuit" or "car"',
+                      'call render({what:"view"})');
+      }
+      if (out && out.ok !== false) {
+        out.what = what;
+        out.aid = "APPROXIMATE " + kind + " raster — a coarse composition aid, "
+                + "not a measurement. Read geometry from world()/scene()/"
+                + "trackInfo(), not from these glyphs.";
+      }
+      return out;
+    }
+
     // ── agentHelp() — discovery ─────────────────────────────────────────────
     // Progressive disclosure: ~200 tokens naming the surface and the loop, so an
     // agent can find its way without loading docs/DEBUG-HOOKS.md.
@@ -2153,69 +2192,72 @@ const AgentView = (function () {
       return {
         apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
         conventions: CONVENTIONS,
-        // Grouped by the question being asked, because the overlap between
-        // scene/visible/frame/worldModel is the part that is genuinely
-        // confusing — `whenToUse` below exists to settle it in one read.
+        // Six calls, grouped by the question being asked. The surface is
+        // deliberately small: symbolic/relational data (world/scene/trackInfo)
+        // is what an agent reads to DECIDE; render() is the one optional raster,
+        // demoted to a coarse composition aid because character grids read worse
+        // than the structured numbers they are drawn from.
         perceive: {
-          "world({detail,horizonS,points,since})":
-            "WHERE AM I — egocentric snapshot; detail brief|drive|full; "
-            + "`since` returns only what changed",
-          "frame({cols,rows,cellAspect,rangeM,depth,limit})":
-            "WHAT DOES IT LOOK LIKE — the view as a depth-sorted character "
-            + "raster; {camera:'cockpit'|...} renders any of the 13 modes fresh, "
-            + "{edges:true} adds silhouette line-glyphs, {depth:true} a depth "
-            + "channel. Keep the grid small. Screenshot replacement",
-          "plan({radiusM,cols,northUp})":
-            "WHERE ON THE MAP — top-down view, car-up, with a metric index "
-            + "(corners/landmarks/cars carry cell + world coords). Allocentric "
-            + "companion to frame(); the text version of an aerial",
-          "scene({radius,kinds,limit})":
-            "WHAT IS AROUND ME — named scenery by distance and bearing",
-          "visible({limit})":
-            "WHAT IS ON SCREEN — a list, not a picture. Needs a rendered frame",
+          "world({detail,horizonS,points,corners,since})":
+            "WHERE AM I — dynamic egocentric snapshot; the spine, read per tick. "
+            + "detail brief|drive|full; drive adds the ideal line "
+            + "(nextCorner.moveToApexM) + the corner sequence; `since` returns "
+            + "only what changed",
+          "scene({radius,kinds,limit} | {visible:true})":
+            "WHAT IS AROUND ME — named scenery by distance and bearing. Default "
+            + "is a radius around the CAR; {visible:true} switches to the "
+            + "CAMERA's on-screen list (the old visible())",
+          "render({what,...})":
+            "SHOW IT — the one optional raster, APPROXIMATE. what: 'view' (the "
+            + "camera view, any of 13 modes, edges/depth), 'map' (top-down, "
+            + "car-up, metric index), 'circuit' (the whole track as a document), "
+            + "'car' (measured elevations). For intuition/debugging, not "
+            + "measurement — read geometry from world()/scene()/trackInfo()",
         },
         know: {
           "trackInfo({what})":
-            "STATIC per-track data — corners|sectors|profile|all. "
-            + "Constant for a session: fetch once, never per tick",
-          "worldModel({detail,offset,limit})":
-            "WHAT IS THIS PLACE — the whole circuit as one document; "
-            + "summary|sections|full",
-          "survey({at,lats,reachM,limit,profile})":
-            "IS ANYTHING BROKEN — floating/buried props, props over the racing "
-            + "line, terrain through the road, holes and cliffs in the ground",
+            "STATIC substrate — corners|sectors|profile|all. Constant for a "
+            + "session: fetch ONCE, never per tick. Corners carry apexOffsetM "
+            + "(the ideal line at each apex)",
           "carView({team,parts,detail})":
             "WHAT AM I DRIVING — team, parts spec and effects, chassis "
             + 'silhouette, measured geometry; detail:"parts" adds per-part boxes',
+          "survey({at,lats,reachM,limit,profile})":
+            "IS ANYTHING BROKEN — floating/buried props, props over the racing "
+            + "line, terrain through the road, holes and cliffs in the ground",
         },
         act: {
           "rollout({seconds,dt,input,policy,policyHz,samples})":
             "drive an interval, return a digest instead of every frame",
           "terminal()": "{done, reason} — finished|wrong_way|rescued|null",
+          "agentHelp()": "this manifest",
         },
-        whenToUse: {
-          "near vs on-screen": "scene() is a radius around the CAR and ignores "
-            + "the camera; visible() and frame() are the CAMERA's view",
-          "list vs picture": "visible() names what is in shot; frame() shows "
-            + "where it sits and what hides what",
-          "now vs always": "scene() is live; worldModel() is the static circuit",
+        model: {
+          "static vs dynamic": "trackInfo() + carView() are constant for the "
+            + "session — fetch once. world() + scene() are the live frame — read "
+            + "per decision. Never poll trackInfo per tick",
+          "decide vs show": "read world()/scene()/trackInfo() to DECIDE; call "
+            + "render() only to SEE — its glyphs are approximate and read worse "
+            + "than the numbers they came from",
           "per tick": 'world({detail:"brief", since:<seq>}) — ~355 bytes/step, '
             + "34x cheaper than full. detail is the big lever; `since` only pays "
             + "on brief or a static scene (measured: 1.2x on drive while moving)",
         },
         setup: ['__apex.race("monza")', "__apex.go()", "__apex.jump(0.1, 55)"],
         loop: "world() -> decide -> rollout({seconds, policy}) -> read the digest",
-        cli: "node tools/agent.mjs <track> <help|world|frame|scene|visible|"
-             + "track|model|car|survey|rollout> [flags]",
+        cli: "node tools/agent.mjs <track> <help|world|scene|render|track|"
+             + "car|survey|rollout> [flags]",
         notes: [
           "no agent hook returns null — failures are {ok:false, error, message, fix}",
           "an LLM cannot decide at 60 Hz: rollout runs your policy at policyHz "
             + "(default 10) while physics runs every tick",
-          "visible() and frame() reflect the LAST RENDERED frame and are stale "
-            + "under headless(true) — both set framePending when they are",
-          "frame() rasterises axis-aligned boxes, so tree canopies (really cones) "
+          "render({what:'view'|...}) and scene({visible:true}) reflect the LAST "
+            + "RENDERED frame and are stale under headless(true) — flagged when so",
+          "render rasterises axis-aligned boxes, so tree canopies (really cones) "
             + "over-cover and sky is under-reported in wooded scenes",
-          "the ~89 hooks on __apex are the underlying dev console and still work",
+          "frame()/plan()/worldModel()/visible() remain as DEPRECATED aliases — "
+            + "prefer render({what}) and scene({visible}); the ~89 __apex hooks "
+            + "are the underlying dev console and still work",
         ],
       };
     }
@@ -2226,6 +2268,12 @@ const AgentView = (function () {
     // semantic emitter (js/track/tracks.js note()); before that existed the only
     // thing surviving a build with a label on it was track.lampPosts.
     function scene(opts) {
+      const o0 = opts || {};
+      // scene() answers "what is around me" two ways: by RADIUS around the car
+      // (the default) or, with {visible:true}, by what the CAMERA can actually
+      // see — the on-screen list that used to be visible(). One call, one
+      // question ("what is around me"), a mode switch for the frame of reference.
+      if (o0.visible) return visible(o0);
       if (!G.track) {
         return fail("NoTrackError", "no track is loaded",
                     'call __apex.race("monza") first');
@@ -2531,7 +2579,10 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, trackInfo, visible, scene, worldModel, frame, plan, carView, survey, rollout, agentHelp, corners, terminal,
+    return { world, trackInfo, scene, carView, render, survey, rollout, agentHelp,
+             corners, terminal,
+             // deprecated aliases — prefer render({what}) and scene({visible})
+             visible, worldModel, frame, plan,
              API_VERSION, PHYSICS_VERSION };
   }
 

@@ -1447,16 +1447,18 @@ const api = {
   // "profile" | "all". Constant for a session — fetch once, never per tick.
   trackInfo(opts) { return agentView.trackInfo(opts); },
 
-  // frame({cols, rows, rangeM, limit}?) — the RENDERED VIEW as text: the scene
-  // rasterised into a character grid with per-cell depth sorting, so occlusion
-  // is really solved rather than guessed. Replaces a screenshot for composition
-  // and "what can I see" questions. Needs a rendered frame.
-  frame(opts) { return agentView.frame(opts); },
+  // render({what, ...})? — the ONE optional composition aid, demoted from four
+  // peer rasters to a single call because character grids read worse than the
+  // structured numbers they are drawn from. what: "view" (the camera view, any
+  // of 13 modes, {edges}/{depth}), "map" (top-down, car-up, metric index),
+  // "circuit" (the whole track as a document), "car" (measured elevations).
+  // APPROXIMATE — for intuition and debugging; read geometry from world()/
+  // scene()/trackInfo(). The result carries an `aid` note saying so.
+  render(opts) { return agentView.render(opts); },
 
-  // plan({radiusM, cols, northUp}?) — the world from ABOVE as a text map:
-  // track ribbon, named scenery and cars, drawn car-up so forward is up (or
-  // northUp for the world frame), with metric axes so every cell is a
-  // coordinate. The allocentric companion to frame()'s first-person view.
+  // frame/plan — DEPRECATED aliases, kept for the dev console and older callers.
+  // Prefer render({what:"view"}) and render({what:"map"}).
+  frame(opts) { return agentView.frame(opts); },
   plan(opts) { return agentView.plan(opts); },
 
   // carView({team, parts}?) — the car as JSON: team identity, livery colours,
@@ -1475,7 +1477,7 @@ const api = {
   // document: layout, totals by kind, clustered scenery features, linear
   // furniture spans, landmarks, and (detail:"sections") a corner-by-corner walk.
   // detail:"full" adds the raw object list, paginated via offset/limit.
-  // scene() answers "what is near me"; this answers "what is this place".
+  // DEPRECATED alias — prefer render({what:"circuit"}).
   worldModel(opts) { return agentView.worldModel(opts); },
 
   // rollout({seconds, dt, input, policy, policyHz, samples}?) — drive an
@@ -1490,18 +1492,17 @@ const api = {
   // observe/decide/rollout loop, so an agent can discover it without the docs.
   agentHelp() { return agentView.agentHelp(); },
 
-  // scene({radius, kinds, limit}?) — NAMED scenery near the car: trees,
-  // buildings, grandstands, billboards, mountains, generic props, plus
-  // floodlight masts. Egocentric (distance + bearing from the player, or the
-  // camera when there is no player). visible() locates scenery mass; this
-  // names it.
+  // scene({radius, kinds, limit} | {visible:true})? — NAMED scenery around the
+  // car: trees, buildings, grandstands, billboards, mountains, generic props,
+  // plus floodlight masts. Default is a RADIUS around the car (egocentric
+  // distance + bearing). {visible:true} switches the frame of reference to what
+  // the CAMERA can see — the on-screen frustum list that used to be visible().
   scene(opts) { return agentView.scene(opts); },
 
-  // visible({limit}?) — what is actually on screen right now: scenery chunks in
-  // the camera frustum (72 m cells, anonymous mixed geometry), every car with
-  // distance/bearing/screen position, and corners in view. Runs the renderer's
-  // own cull test rather than a copy of it. Needs a rendered frame — returns a
-  // typed NoFrameError under headless(true).
+  // visible({limit}?) — DEPRECATED alias for scene({visible:true}): scenery
+  // chunks in the camera frustum, every car with distance/bearing/screen
+  // position, and corners in view. Needs a rendered frame — typed NoFrameError
+  // under headless(true).
   visible(opts) { return agentView.visible(opts); },
 
   // terminal() — episode end split into {done, reason}, where reason is

@@ -33,12 +33,13 @@ const COMMANDS = {
   help: "the agent surface manifest — no track needed",
   world: "egocentric snapshot   --detail brief|drive|full  --horizon <s>  --points <n>",
   track: "static track data     --what corners|sectors|profile|all",
-  scene: "named scenery nearby  --radius <m>  --kinds a,b  --limit <n>",
-  visible: "what is on screen   --limit <n>",
+  scene: "named scenery nearby  --radius <m>  --kinds a,b  --limit <n>  (--visible = on-screen)",
+  render: "the ONE raster aid  --what view|map|circuit|car  --cols <n>  --camera <mode>  (APPROXIMATE)",
   rollout: "drive an interval   --seconds <s>  --steer <-1..1>  --throttle  --brake  --samples <n>",
-  frame: "the view AS TEXT    --cols <n>  --rows <n>  --range <m>  (screenshot replacement)",
   car: "the car as JSON      --team <id>  --detail parts",
-  plan: "top-down MAP       --radius <m>  --cols <n>  --north",
+  visible: "[deprecated] scene --visible",
+  frame: "[deprecated] render --what view",
+  plan: "[deprecated] render --what map",
   survey: "geometry DEFECTS    --at <n>  --lats <n>  --reach <m>  --profile",
   model: "the WHOLE circuit    --detail summary|sections|full  --offset <n>  --limit <n>  --out <file>",
 };
@@ -101,6 +102,7 @@ const opts = {
   reach: num("reach", 60),        // survey's lateral reach — distinct from frame's --range
   north: has("north"),
   edges: has("edges"),
+  visibleFlag: has("visible"),
   cam: flag("camera", null),
   out: flag("out", null),
 };
@@ -147,10 +149,20 @@ const opts = {
         case "track":
           return a.trackInfo({ what: o.what });
         case "scene":
+          if (o.visibleFlag) return a.scene({ visible: true, limit: o.limit || undefined });
           return a.scene({ radius: o.radius, limit: o.limit || undefined,
                            kinds: o.kinds ? o.kinds.split(",") : undefined });
+        case "render": {
+          const w = (o.what && o.what !== "corners") ? o.what : "view";
+          return a.render({
+            what: w, cols: o.cols, rows: o.rows, rangeM: o.range,
+            camera: o.cam || undefined, edges: o.edges,
+            radiusM: o.radius !== 150 ? o.radius : undefined, northUp: o.north,
+            detail: o.modelDetail, offset: o.offset, team: o.team || undefined,
+            limit: o.limit || undefined });
+        }
         case "visible":
-          return a.visible({ limit: o.limit || undefined });
+          return a.scene({ visible: true, limit: o.limit || undefined });
         case "frame":
           return a.frame({ cols: o.cols, rows: o.rows, rangeM: o.range,
                            camera: o.cam || undefined, edges: o.edges,
@@ -177,7 +189,8 @@ const opts = {
       }
     }, opts);
 
-    if ((opts.cmd === "frame" || opts.cmd === "plan") && result && result.grid && result.grid.lines && !opts.out) {
+    if ((opts.cmd === "frame" || opts.cmd === "plan" || opts.cmd === "render")
+        && result && result.grid && result.grid.lines && !opts.out) {
       // Printing the raster inside a JSON string array defeats the purpose —
       // the grid is meant to be looked at.
       console.log(result.grid.lines.join("\n"));

@@ -1040,21 +1040,102 @@ test.describe("agentHelp()", () => {
     await boot(page);
     const h = await page.evaluate(() => window.__apex.agentHelp());
     expect(h.apiVersion).toBe(1);
-    // EVERY agent hook must appear, or discovery silently hides it — frame()
-    // and carView() were missing from this manifest for a whole revision, which
-    // made the screenshot and car-viewer replacements undiscoverable.
+    // EVERY primary agent call must appear, or discovery silently hides it. The
+    // surface is the consolidated six + the utilities — the four rasters are
+    // demoted behind render({what}), so they are NOT peer entries here.
     const listed = Object.keys(h.perceive)
       .concat(Object.keys(h.know), Object.keys(h.act)).join(" ");
-    for (const k of ["world(", "frame(", "scene(", "visible(", "trackInfo(",
-                     "worldModel(", "carView(", "rollout(", "terminal("]) {
+    for (const k of ["world(", "scene(", "render(", "trackInfo(",
+                     "carView(", "survey(", "rollout(", "terminal("]) {
       expect(listed, k + " missing from agentHelp()").toContain(k);
     }
+    // scene() must advertise its {visible} mode so the on-screen list is findable
+    expect(listed).toContain("visible");
+    // the deprecated rasters live in notes, not as a peer perception tool
+    const notes = h.notes.join(" ");
+    expect(notes).toContain("DEPRECATED");
+    expect(notes).toMatch(/frame\(\).*plan\(\).*worldModel\(\)|worldModel/);
     expect(h.loop).toContain("world()");
     expect(h.cli).toContain("agent.mjs");
-    expect(h.notes.join(" ")).toContain("null");
-    expect(Object.keys(h.whenToUse).length).toBeGreaterThan(2);
+    expect(notes).toContain("null");
+    // the static/dynamic model note replaces the old whenToUse block
+    expect(Object.keys(h.model).length).toBeGreaterThan(2);
     // it is a manifest, not documentation — keep it cheap
     expect(JSON.stringify(h).length).toBeLessThan(4000);
+  });
+});
+
+// ── render() — the consolidated composition aid ──────────────────────────────
+// The four rasters (frame/plan/worldModel/car) collapse to one call behind a
+// `what` switch, flagged approximate. These pin that the dispatch is correct
+// and that the demotion is visible in the payload.
+
+test.describe("render() consolidation", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("dispatches each what to the matching raster, flagged approximate", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => {
+      const view = window.__apex.render({ what: "view", cols: 40, camera: "chase" });
+      const map = window.__apex.render({ what: "map", cols: 40 });
+      const circuit = window.__apex.render({ what: "circuit", detail: "summary" });
+      const car = window.__apex.render({ what: "car", cols: 40 });
+      return {
+        view: { what: view.what, hasGrid: !!(view.grid && view.grid.lines), aid: view.aid },
+        map: { what: map.what, hasGrid: !!(map.grid && map.grid.lines), aid: map.aid },
+        circuit: { what: circuit.what, hasLayout: !!(circuit.layout || circuit.sections || circuit.summary), aid: circuit.aid },
+        car: { what: car.what, hasRender: !!car.render, aid: car.aid },
+      };
+    });
+    expect(r.view.what).toBe("view");
+    expect(r.view.hasGrid).toBe(true);
+    expect(r.view.aid).toContain("APPROXIMATE");
+    expect(r.map.what).toBe("map");
+    expect(r.map.hasGrid).toBe(true);
+    expect(r.circuit.what).toBe("circuit");
+    expect(r.car.what).toBe("car");
+    expect(r.car.hasRender).toBe(true);      // render forces detail:"render"
+    expect(r.car.aid).toContain("APPROXIMATE");
+  });
+
+  test("an unknown what is a typed error with the valid set", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => window.__apex.render({ what: "bogus" }));
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe("BadArgumentError");
+    expect(r.message).toMatch(/view.*map.*circuit.*car|view/);
+  });
+
+  test("render({what:'view'}) equals the frame() alias it replaces", async ({ page }) => {
+    await load(page);
+    const same = await page.evaluate(() => {
+      const viaRender = window.__apex.render({ what: "view", cols: 44, camera: "chase" });
+      const viaAlias = window.__apex.frame({ cols: 44, camera: "chase" });
+      return JSON.stringify(viaRender.grid.lines) === JSON.stringify(viaAlias.grid.lines);
+    });
+    expect(same).toBe(true);
+  });
+});
+
+// ── scene({visible}) absorbs visible() ───────────────────────────────────────
+
+test.describe("scene({visible}) consolidation", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("scene({visible:true}) returns the same on-screen list as visible()", async ({ page }) => {
+    await load(page);
+    const eq = await page.evaluate(() => {
+      const viaScene = window.__apex.scene({ visible: true });
+      const viaAlias = window.__apex.visible();
+      // structurally the same query — compare the stable summary fields
+      return { sOk: viaScene.ok !== false, aOk: viaAlias.ok !== false,
+               sCars: (viaScene.cars || []).length, aCars: (viaAlias.cars || []).length,
+               sKeys: Object.keys(viaScene).sort().join(","),
+               aKeys: Object.keys(viaAlias).sort().join(",") };
+    });
+    expect(eq.sOk).toBe(true);
+    expect(eq.sKeys).toBe(eq.aKeys);
+    expect(eq.sCars).toBe(eq.aCars);
   });
 });
 
