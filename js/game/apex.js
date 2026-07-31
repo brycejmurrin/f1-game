@@ -1447,6 +1447,13 @@ const api = {
   // "profile" | "all". Constant for a session — fetch once, never per tick.
   trackInfo(opts) { return agentView.trackInfo(opts); },
 
+  // worldModel({detail, offset, limit}?) — the WHOLE circuit as one structured
+  // document: layout, totals by kind, clustered scenery features, linear
+  // furniture spans, landmarks, and (detail:"sections") a corner-by-corner walk.
+  // detail:"full" adds the raw object list, paginated via offset/limit.
+  // scene() answers "what is near me"; this answers "what is this place".
+  worldModel(opts) { return agentView.worldModel(opts); },
+
   // rollout({seconds, dt, input, policy, policyHz, samples}?) — drive an
   // interval and return a DIGEST instead of every frame: speed min/max/mean,
   // off-track events, minimum barrier clearance, per-corner minimum speed, lap

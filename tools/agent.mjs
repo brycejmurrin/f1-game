@@ -9,6 +9,8 @@
 //   node tools/agent.mjs monza scene --radius 120 --kinds tree,building --limit 8
 //   node tools/agent.mjs spa    visible --limit 6
 //   node tools/agent.mjs monza rollout --seconds 6 --steer 0.1 --throttle
+//   node tools/agent.mjs suzuka model --detail sections
+//   node tools/agent.mjs vegas  model --detail full --out artifacts/tmp/vegas.json
 //
 // WHY a CLI on top of __apex.world() and friends: an agent driving this game
 // from a shell otherwise has to hand-roll the same Playwright boot, race/go/jump
@@ -31,6 +33,7 @@ const COMMANDS = {
   scene: "named scenery nearby  --radius <m>  --kinds a,b  --limit <n>",
   visible: "what is on screen   --limit <n>",
   rollout: "drive an interval   --seconds <s>  --steer <-1..1>  --throttle  --brake  --samples <n>",
+  model: "the WHOLE circuit    --detail summary|sections|full  --offset <n>  --limit <n>  --out <file>",
 };
 
 const argv = process.argv.slice(2);
@@ -79,6 +82,9 @@ const opts = {
   throttle: has("throttle"),
   brake: has("brake"),
   samples: num("samples", 8),
+  modelDetail: flag("detail", "summary"),
+  offset: num("offset", 0),
+  out: flag("out", null),
 };
 
 (async () => {
@@ -127,6 +133,9 @@ const opts = {
                            kinds: o.kinds ? o.kinds.split(",") : undefined });
         case "visible":
           return a.visible({ limit: o.limit || undefined });
+        case "model":
+          return a.worldModel({ detail: o.modelDetail, offset: o.offset,
+                                limit: o.limit || undefined });
         case "rollout":
           return a.rollout({ seconds: o.seconds, samples: o.samples,
                              input: { steer: o.steer, throttle: o.throttle, brake: o.brake } });
@@ -135,7 +144,19 @@ const opts = {
       }
     }, opts);
 
-    console.log(JSON.stringify(result, null, 2));
+    const json = JSON.stringify(result, null, 2);
+    if (opts.out) {
+      // A full world dump is megabytes on a street circuit — writing it beats
+      // paging it through a terminal, and the caller can then read what it needs.
+      const { writeFileSync, mkdirSync } = await import("node:fs");
+      const { dirname } = await import("node:path");
+      mkdirSync(dirname(opts.out), { recursive: true });
+      writeFileSync(opts.out, json);
+      console.log(JSON.stringify({ wrote: opts.out, bytes: json.length,
+                                   detail: opts.modelDetail }, null, 2));
+    } else {
+      console.log(json);
+    }
     if (result && result.ok === false) process.exitCode = 2;
   } catch (e) {
     console.error("agent failed:", e.message);

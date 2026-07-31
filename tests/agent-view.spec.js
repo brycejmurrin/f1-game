@@ -351,6 +351,121 @@ test.describe("world() nextCorner", () => {
   });
 });
 
+// ── worldModel() ────────────────────────────────────────────────────────────
+// The whole circuit as one document. The design problem here is size, not
+// availability: Suzuka records 3,422 point objects and listing them one by one
+// is ~85k tokens of "pine, pine, pine" that describes the place no better than
+// the vertex buffer did. These tests pin the aggregation that makes it readable.
+
+test.describe("worldModel()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("summary aggregates thousands of objects into a readable document", async ({ page }) => {
+    await load(page);
+    const w = await page.evaluate(() => window.__apex.worldModel({ detail: "summary" }));
+    expect(w.track.id).toBe("monza");
+    expect(w.totals.objects).toBeGreaterThan(1000);
+    expect(w.totals.registryComplete).toBe(true);
+    // aggregation must be a big win over the raw object count
+    expect(w.features.length).toBeLessThan(w.totals.objects / 5);
+    expect(w.features.length).toBeGreaterThan(5);
+    expect(w.landmarks.length).toBeGreaterThan(0);
+    expect(w.spans.length).toBeGreaterThan(0);
+    // summary must stay affordable to read
+    expect(JSON.stringify(w).length).toBeLessThan(120000);
+  });
+
+  test("no feature spans the whole lap", async ({ page }) => {
+    await load(page);
+    // The bug this pins: trees spaced under the cluster gap all the way round a
+    // park circuit collapsed into ONE feature covering 5,741 m of a 5,777 m lap.
+    // True, and a useless description of the place.
+    const w = await page.evaluate(() => window.__apex.worldModel());
+    const lap = w.track.lengthM;
+    for (const f of w.features) {
+      expect(f.runLengthM).toBeLessThan(lap * 0.2);
+      expect(f.count).toBeGreaterThanOrEqual(3);
+      expect(["left", "right", "across", "off-course"]).toContain(f.side);
+    }
+  });
+
+  test("landmarks are structures, not repeated dressing", async ({ page }) => {
+    await load(page);
+    const w = await page.evaluate(() => window.__apex.worldModel());
+    const kinds = new Set(w.landmarks.map((l) => l.kind));
+    // ridge/peak are landform SEGMENTS emitted in their hundreds — if they leak
+    // into landmarks they bury the things a driver would actually point at
+    expect(kinds.has("ridge")).toBe(false);
+    expect(kinds.has("peak")).toBe(false);
+    expect(kinds.has("tree")).toBe(false);
+    for (const l of w.landmarks) {
+      expect(l.sizeM.length).toBe(3);
+      expect(l.frac).toBeGreaterThanOrEqual(0);
+      expect(l.frac).toBeLessThan(1);
+    }
+  });
+
+  test("linear furniture is spans, not thousands of segments", async ({ page }) => {
+    await load(page);
+    const w = await page.evaluate(() => window.__apex.worldModel());
+    expect(w.spans.length).toBeLessThan(60);
+    for (const s of w.spans) {
+      expect(["guardrail", "fence", "tyreWall", "wall"]).toContain(s.kind);
+      expect(["left", "right"]).toContain(s.side);
+      expect(s.lengthM).toBeGreaterThan(0);
+    }
+  });
+
+  test("sections walk the lap corner by corner", async ({ page }) => {
+    await load(page);
+    const w = await page.evaluate(() => window.__apex.worldModel({ detail: "sections" }));
+    expect(w.sections.length).toBeGreaterThan(3);
+    let sum = 0;
+    for (const s of w.sections) {
+      expect(s.from).toMatch(/^T\d/);
+      expect(s.to).toMatch(/^T\d/);
+      expect(s.lengthM).toBeGreaterThan(0);
+      expect(typeof s.contains).toBe("object");
+      sum += s.lengthM;
+    }
+    // the sections must tile the lap, not overlap or leave gaps
+    expect(Math.abs(sum - w.track.lengthM)).toBeLessThan(w.track.lengthM * 0.02);
+  });
+
+  test("full paginates the raw object list", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => {
+      const a = window.__apex.worldModel({ detail: "full", limit: 50 });
+      const b = window.__apex.worldModel({ detail: "full", offset: 50, limit: 50 });
+      return { aN: a.objects.length, aPage: a.objectPage,
+               bFirst: b.objects[0], aFifty: a.objects[49] };
+    });
+    expect(r.aN).toBe(50);
+    expect(r.aPage.more).toBe(true);
+    expect(r.aPage.total).toBeGreaterThan(50);
+    // page 2 must start where page 1 ended, not repeat it
+    expect(JSON.stringify(r.bFirst)).not.toBe(JSON.stringify(r.aFifty));
+  });
+
+  test("sign boards keep their meaning", async ({ page }) => {
+    await load(page, "suzuka");
+    const boards = await page.evaluate(() =>
+      window.__apex.worldModel({ detail: "full", limit: 5000 })
+        .objects.filter((o) => o.board));
+    expect(boards.length).toBeGreaterThan(0);
+    // a corner board names its turn; a braking board names its distance
+    expect(boards.some((b) => b.board === "corner" && typeof b.value === "number")).toBe(true);
+  });
+
+  test("rejects an unknown detail level", async ({ page }) => {
+    await load(page);
+    const w = await page.evaluate(() => window.__apex.worldModel({ detail: "everything" }));
+    expect(w.ok).toBe(false);
+    expect(w.error).toBe("BadArgumentError");
+    expect(w.message).toContain("summary");
+  });
+});
+
 // ── rollout() ───────────────────────────────────────────────────────────────
 
 test.describe("rollout()", () => {

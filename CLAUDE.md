@@ -216,9 +216,11 @@ js/game/         — game modules (each created with the G ctx façade from game
   results.js     GameResults    results / season-end screens
   apex.js        ApexApi        the whole window.__apex dev API
   agentview.js   AgentView      the agent-facing JSON world view — world()/
-                                  trackInfo()/scene()/visible()/rollout()/
-                                  agentHelp(); composes the __apex hooks into one
-                                  egocentric snapshot with typed errors
+                                  trackInfo()/scene()/visible()/worldModel()/
+                                  rollout()/agentHelp(); composes the __apex hooks
+                                  into one egocentric snapshot with typed errors.
+                                  worldModel() renders the whole circuit as text by
+                                  clustering repeated dressing into features
                                   (docs/AGENT-WORLD-API.md)
   atmosphere.js  Atmosphere     applyRaceSettings — time-of-day/weather scene state
   setup-ui.js    SetupUI        CAR SETUP screen
@@ -436,6 +438,9 @@ __apex.agentHelp()            // manifest of this surface (~200 tokens)
 __apex.world({detail:"brief"})// egocentric snapshot; brief|drive|full; since= → delta
 __apex.trackInfo({what:"corners"}) // STATIC per-track: corners/sectors/profile
 __apex.scene({radius:120})    // NAMED scenery nearby (trees, buildings, stands…)
+__apex.worldModel({detail:"sections"}) // the WHOLE circuit as one document:
+                              //   clustered features + landmarks + barrier spans
+                              //   + a corner-by-corner walk; "full" = raw objects
 __apex.visible()              // what is on screen (needs a rendered frame)
 __apex.rollout({seconds:5, policy})  // drive an interval → digest, not frames
 __apex.terminal()             // {done, reason} — finished|wrong_way|rescued

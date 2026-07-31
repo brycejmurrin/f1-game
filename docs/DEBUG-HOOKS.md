@@ -938,6 +938,53 @@ things happen to make the table trustworthy on OSM-derived centrelines:
 Sanity check: Monaco's Grand Hotel hairpin resolves to ~10 m, and integrated
 heading over a lap closes to exactly ±360°.
 
+### `worldModel({detail, offset, limit}?) → document | typedError`
+
+The **whole circuit as one structured document**. `scene()` answers "what is near
+me"; this answers "what is this place".
+
+The design problem is size, not availability. Suzuka records 3,422 point
+objects; listed individually that is ~85k tokens of `pine, pine, pine` and it
+describes the world no better than the raw vertex buffer did. So the model
+aggregates:
+
+- **`features`** — contiguous runs of one kind on one side, collapsed:
+  `{kind:"pine", count:247, side:"left", fromS, toS, runLengthM, avgHeightM}`.
+  A run is cut at a 60 m gap **or** 400 m of length, whichever comes first. The
+  length cap matters: without it, trees spaced under the gap threshold all the
+  way round a park circuit collapse into one feature covering 5,741 m of a
+  5,777 m lap — true, and a useless description.
+- **`landmarks`** — individually notable structures (grandstands, buildings,
+  towers, mountains, gantries) with position and size. Landform *segments*
+  (`ridge`, `peak`) cluster instead; a mountain range is hundreds of ridge
+  segments and listing each would bury the real landmarks.
+- **`spans`** — linear furniture (armco, catch fence, tyre walls, boundary
+  walls) as arc-length spans. These are emitted in 3–6 m steps by `along()`;
+  recorded per step they'd be thousands of records saying less. "Guardrail on
+  the right from 0.93 to 0.07, 809 m" *is* the object.
+- **`totals`** — counts by kind, plus `registryComplete`.
+
+`detail: "sections"` adds a corner-by-corner walk of the lap:
+
+```json
+{ "from":"T2", "to":"T3", "lengthM":1012.6,
+  "corner":{"dir":"L","radiusM":354.3,"severity":"kink"},
+  "contains":{"pine":247,"tree":188,"bush":24,"grandstand":1,"motorhome":4} }
+```
+
+`detail: "full"` adds the unaggregated object list, paginated via
+`offset`/`limit` (default 500, max 5000) with an `objectPage` cursor. Sign
+boards keep their meaning here — `{board:"corner", value:1}` is the Turn 1
+board, `{board:"braking", value:3}` the 300 m board.
+
+Sizes: summary ~23 KB on Monza; a full Suzuka dump is ~775 KB, so write it to a
+file rather than paging it through context:
+
+```sh
+node tools/agent.mjs suzuka model --detail sections
+node tools/agent.mjs vegas  model --detail full --out artifacts/tmp/vegas.json
+```
+
 ### `rollout(opts?) → digest | typedError`
 
 Drive an interval and get a **digest**, not frames. A 5 s experiment at 60 Hz is

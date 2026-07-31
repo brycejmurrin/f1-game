@@ -419,8 +419,23 @@ const Tracks = (function () {
       if (extra) { for (const key in extra) rec[key] = extra[key]; }
       propList.push(rec);
     };
-    track.props = { list: propList, cap: PROP_CAP,
+    // Linear features — armco, catch fencing, tyre walls, boundary walls — are
+    // emitted by along() in 3–6 m steps. Recording each step would bury the
+    // registry in thousands of near-identical records and describe the world
+    // worse: "armco on the left from 1.20 to 1.55 km" IS the object. They carry
+    // an arc-length span instead of a world point.
+    const spanList = [];
+    const noteSpan = (kind, s0, s1, side, gap, extra) => {
+      if (spanList.length >= PROP_CAP) { propDropped++; return; }
+      const r3 = (v) => Math.round(v * 1000) / 1000;
+      const rec = { kind, s0: r3(s0), s1: r3(s1), side, gap: Math.round(gap * 10) / 10 };
+      if (extra) { for (const key in extra) rec[key] = extra[key]; }
+      spanList.push(rec);
+    };
+
+    track.props = { list: propList, spans: spanList, cap: PROP_CAP,
                     get count() { return propList.length; },
+                    get spanCount() { return spanList.length; },
                     get dropped() { return propDropped; } };
     const finiteVec = (v, len, positive) =>
       Array.isArray(v) && v.length === len && v.every((x) => Number.isFinite(x) && (!positive || x > 0));
@@ -1263,7 +1278,7 @@ const Tracks = (function () {
       hash, upOf, cross, norm, lerp, vadd,
       // semantic prop registry (see note() above) — scenery modules call this
       // after their own guards so only props that actually ship are recorded
-      note,
+      note, noteSpan,
     };
     Object.assign(ctx, SceneryNature.create(ctx));
     Object.assign(ctx, SceneryStructures.create(ctx));

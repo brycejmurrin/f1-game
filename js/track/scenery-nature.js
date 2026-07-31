@@ -81,6 +81,7 @@ const SceneryNature = (function () {
         console.warn(`[scenery] pine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
+      ctx.note("pine", a.c, [h * 0.45, h, h * 0.45], { k, side });
       // per-instance size jitter so a treeline doesn't read as identical clones
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
       const c2 = [col[0] * 0.86, col[1] * 0.86, col[2] * 0.82];   // shaded lower needles
@@ -182,6 +183,7 @@ const SceneryNature = (function () {
         console.warn(`[scenery] palm SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
+      ctx.note("palm", a.c, [h * 0.6, h, h * 0.6], { k, side });
       // Gently curved trunk: three tapering segments each leaning a touch further
       // (palms arc toward the light) instead of one dead-straight pole.
       const lean = (hash(k * 3.3 + side * 2.1 + dist) - 0.5) * 0.5;
@@ -255,6 +257,7 @@ const SceneryNature = (function () {
         console.warn(`[scenery] peak SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
         return;
       }
+      ctx.note("peak", [x, baseY + h / 2, z], [w, h, w]);
       out._mat = MAT.ROCK;
       addPyramid(out, [x, baseY, z], [w, h, w], col, null);
       addPyramid(out, [x, baseY - 2, z], [w * 1.5, h * 0.45, w * 1.5], [col[0] * 0.9, col[1] * 0.92, col[2] * 0.9], null);
@@ -285,6 +288,7 @@ const SceneryNature = (function () {
         console.warn(`[scenery] ridge SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: len=${len} w=${w}`);
         return;
       }
+      ctx.note("ridge", [x, baseY + h / 2, z], [w, h, len]);
       const f = [Math.cos(ang), 0, Math.sin(ang)], r = [-f[2], 0, f[0]];
       addPrism(out, [x, baseY, z], [w, h, len], col, [r, [0, 1, 0], f]);
     };
@@ -480,6 +484,10 @@ const SceneryNature = (function () {
         console.warn(`[scenery] bush SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
+      // Nominal envelope: lobes are radius ~1.1-2.0 spread over a ~0.6-1.1 m
+      // offset, standing 2.2-3.2 m tall. A bush takes no size argument, so this
+      // is the clump's typical extent rather than a measured bound.
+      ctx.note("bush", p.c, [3, 2.8, 3], { k, side });
       const bc = col || [0.20, 0.38, 0.18];
       const c2 = [bc[0] * 0.90, bc[1] * 0.94, bc[2] * 0.88];
       const jh = hash(k * 4.3 + side * 2.1 + dist);

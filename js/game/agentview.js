@@ -586,6 +586,234 @@ const AgentView = (function () {
       return { done: reason != null, reason };
     }
 
+    // ── worldModel() — the whole world as readable text ─────────────────────
+    // scene() answers "what is near me". This answers "what IS this place" —
+    // the entire circuit as one structured document.
+    //
+    // The problem is size, not availability. Suzuka records 3,422 point objects;
+    // listed individually that is ~85k tokens of "pine, pine, pine" and it does
+    // not describe the world any better than the raw vertex buffer did. So the
+    // model AGGREGATES: contiguous runs of the same kind on the same side become
+    // one feature — "412 pines along the left from 1.20 to 1.85 km" — which is
+    // both an order of magnitude cheaper and closer to what the place actually
+    // looks like. Individually interesting objects (grandstands, buildings,
+    // towers, mountains) stay as landmarks, and the lap is broken into
+    // corner-to-corner sections so the document can be read in order.
+    //
+    // detail: "summary" (totals + features + landmarks) | "sections" (+ a
+    // corner-by-corner walk) | "full" (+ the raw object list, paginated).
+
+    // Repeated dressing — clustered. Landforms cluster too: a mountain range is
+    // emitted as hundreds of ridge segments and listing each as a landmark buries
+    // the actual landmarks.
+    const CLUSTER_KINDS = ["pine", "tree", "palm", "conifer", "bush", "hedge",
+                           "prop", "signBoard", "marshalPost", "billboard",
+                           "ridge", "peak"];
+    // Individually notable structures — a driver would point at these.
+    const LANDMARK_KINDS = ["grandstand", "building", "house", "motorhome",
+                            "tower", "mountain", "gantry"];
+    // Same kind, same side, and no bigger gap than this between neighbours =
+    // one continuous feature. 60 m is about the point where a treeline reads as
+    // two stands rather than one.
+    const CLUSTER_GAP_M = 60;
+    // ...but a run is also cut here regardless of gaps. Without it, trees spaced
+    // every 20 m around a park circuit collapse into ONE feature covering the
+    // whole lap — true, and a useless description. Capping the run keeps every
+    // feature locally meaningful ("trees along the left, 0.0-0.4 km").
+    const CLUSTER_MAX_RUN_M = 400;
+
+    let modelCache = null;
+
+    // Arc position of a recorded prop. Most carry the node index they were
+    // placed from, which is exact and free; landforms placed in world coords
+    // (mountains, ridges) need the projection.
+    // Gantries straddle the road (side 0); landforms are placed in world coords
+    // and have no side at all. Collapsing both into "left" was wrong twice.
+    function sideOf(v) {
+      if (v == null) return "off-course";
+      return v > 0 ? "right" : v < 0 ? "left" : "across";
+    }
+
+    function propS(p) {
+      if (p.k != null) return (((p.k % G.track.n) + G.track.n) % G.track.n)
+                              / G.track.n * G.track.total;
+      const pr = Tracks.project(G.track, p.x, p.z, 0);
+      return pr ? pr.s : 0;
+    }
+
+    function buildModel() {
+      const track = G.track, total = track.total;
+      const reg = track.props;
+      const pts = reg.list.map((p) => {
+        const s = propS(p);
+        return { p, s, frac: s / total, side: sideOf(p.side) };
+      });
+      pts.sort((a, b) => (a.p.kind === b.p.kind
+        ? (a.side === b.side ? a.s - b.s : a.side < b.side ? -1 : 1)
+        : (a.p.kind < b.p.kind ? -1 : 1)));
+
+      const features = [], landmarks = [], singles = [];
+      let i = 0;
+      while (i < pts.length) {
+        const cur = pts[i];
+        if (CLUSTER_KINDS.indexOf(cur.p.kind) < 0) {
+          (LANDMARK_KINDS.indexOf(cur.p.kind) >= 0 ? landmarks : singles).push(cur);
+          i++; continue;
+        }
+        let j = i + 1;
+        while (j < pts.length && pts[j].p.kind === cur.p.kind
+               && pts[j].side === cur.side
+               && pts[j].s - pts[j - 1].s <= CLUSTER_GAP_M
+               && pts[j].s - cur.s <= CLUSTER_MAX_RUN_M) j++;
+        const run = pts.slice(i, j);
+        if (run.length < 3) { singles.push(...run); i = j; continue; }
+        let hSum = 0, hMax = 0;
+        for (const r of run) { hSum += r.p.h; if (r.p.h > hMax) hMax = r.p.h; }
+        features.push({
+          kind: cur.p.kind, count: run.length, side: cur.side,
+          fromFrac: +run[0].frac.toFixed(4),
+          toFrac: +run[run.length - 1].frac.toFixed(4),
+          fromS: r1(run[0].s), toS: r1(run[run.length - 1].s),
+          runLengthM: r1(run[run.length - 1].s - run[0].s),
+          avgHeightM: r1(hSum / run.length), maxHeightM: r1(hMax),
+        });
+        i = j;
+      }
+      features.sort((a, b) => a.fromS - b.fromS);
+      landmarks.sort((a, b) => a.s - b.s);
+      singles.sort((a, b) => a.s - b.s);
+      return { pts, features, landmarks, singles };
+    }
+
+    function model() {
+      const key = G.track.def.id + "|" + G.track.props.count + "|" + Math.round(G.track.total);
+      if (!modelCache || modelCache.key !== key) {
+        modelCache = { key, m: buildModel() };
+      }
+      return modelCache.m;
+    }
+
+    // Which corner-to-corner section an arc position falls in.
+    function sectionsOf(list, total) {
+      if (!list.length) return [{ from: "start", to: "start", s0: 0, s1: total }];
+      const out = [];
+      for (let i = 0; i < list.length; i++) {
+        const a = list[i], b = list[(i + 1) % list.length];
+        out.push({ from: a.turn, to: b.turn, s0: a.s, s1: b.s });
+      }
+      return out;
+    }
+
+    function inSection(s, sec, total) {
+      return sec.s0 <= sec.s1 ? (s >= sec.s0 && s < sec.s1)
+                              : (s >= sec.s0 || s < sec.s1);
+    }
+
+    function worldModel(opts) {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      if (!G.track.props) {
+        return fail("NoRegistryError",
+                    "this track was built without a prop registry",
+                    'reload the track with __apex.race("<id>")');
+      }
+      const o = opts || {};
+      const detail = o.detail || "summary";
+      if (["summary", "sections", "full"].indexOf(detail) < 0) {
+        return fail("BadArgumentError",
+                    'detail must be "summary", "sections" or "full"',
+                    'call worldModel({detail:"sections"})');
+      }
+      const track = G.track, total = track.total, def = track.def;
+      const reg = track.props;
+      const m = model();
+      const cs = corners();
+
+      const byKind = {};
+      for (const p of reg.list) byKind[p.kind] = (byKind[p.kind] || 0) + 1;
+      const spanByKind = {};
+      for (const sp of reg.spans) spanByKind[sp.kind] = (spanByKind[sp.kind] || 0) + 1;
+
+      const out = {
+        apiVersion: API_VERSION, conventions: CONVENTIONS, detail,
+        track: {
+          id: def.id, name: def.name, country: def.country || null,
+          lengthM: r1(total), street: !!def.street, laps: def.laps || null,
+          theme: def.theme || null, night: !!def.night,
+        },
+        layout: {
+          corners: cs.length,
+          turns: cs.map((c) => c.turn + " " + c.dir + " r" + c.radiusM),
+          sectors: def.sectors
+            ? [{ sector: 1, fromFrac: 0, toFrac: def.sectors[0] },
+               { sector: 2, fromFrac: def.sectors[0], toFrac: def.sectors[1] },
+               { sector: 3, fromFrac: def.sectors[1], toFrac: 1 }]
+            : null,
+        },
+        totals: {
+          objects: reg.count, spans: reg.spanCount,
+          byKind, spansByKind: spanByKind,
+          lampPosts: (track.lampPosts || []).length,
+          registryComplete: reg.dropped === 0, dropped: reg.dropped,
+        },
+        // Contiguous runs of one kind on one side, collapsed. This is the bulk
+        // of the circuit's dressing expressed as a few dozen lines.
+        features: m.features,
+        // Linear furniture — armco, catch fence, tyre walls, boundary walls —
+        // recorded as spans by the emitters rather than per 3-6 m segment.
+        spans: reg.spans.map((sp) => ({
+          kind: sp.kind, side: sp.side > 0 ? "right" : "left",
+          fromFrac: sp.s0, toFrac: sp.s1,
+          lengthM: r1((((sp.s1 - sp.s0) % 1 + 1) % 1) * total),
+          gapM: sp.gap, h: sp.h != null ? sp.h : undefined,
+        })),
+        landmarks: m.landmarks.map((L) => ({
+          kind: L.p.kind, frac: +L.frac.toFixed(4), s: r1(L.s), side: L.side,
+          sizeM: [L.p.w, L.p.h, L.p.d], at: [L.p.x, L.p.y, L.p.z],
+        })),
+        note: "features are CLUSTERED runs of one kind on one side; landmarks "
+              + "are individually notable structures; spans are linear furniture. "
+              + 'Use detail:"full" for the unaggregated object list.',
+      };
+
+      if (detail === "sections" || detail === "full") {
+        const secs = sectionsOf(cs, total);
+        out.sections = secs.map((sec) => {
+          const contains = {};
+          for (const q of m.pts) if (inSection(q.s, sec, total)) {
+            contains[q.p.kind] = (contains[q.p.kind] || 0) + 1;
+          }
+          const corner = cs.find((c) => c.turn === sec.from);
+          return {
+            from: sec.from, to: sec.to,
+            fromFrac: +(sec.s0 / total).toFixed(4),
+            lengthM: r1(((sec.s1 - sec.s0 + total) % total)),
+            corner: corner ? { dir: corner.dir, radiusM: corner.radiusM,
+                               severity: corner.severity } : null,
+            contains,
+          };
+        });
+      }
+
+      if (detail === "full") {
+        const off = Math.max(0, o.offset | 0);
+        const lim = clamp(o.limit | 0 || 500, 1, 5000);
+        out.objects = reg.list.slice(off, off + lim).map((p) => ({
+          kind: p.kind, at: [p.x, p.y, p.z], sizeM: [p.w, p.h, p.d],
+          side: sideOf(p.side),
+          frac: +(propS(p) / total).toFixed(4),
+          board: p.board, value: p.value,
+        }));
+        out.objectPage = { offset: off, limit: lim, returned: out.objects.length,
+                           total: reg.count,
+                           more: off + out.objects.length < reg.count };
+      }
+
+      return out;
+    }
+
     // ── rollout() — drive, then summarise ───────────────────────────────────
     // The single biggest token win available. A 5 s experiment at 60 Hz is 300
     // observations; reading them back frame by frame costs tens of thousands of
@@ -1065,7 +1293,7 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, trackInfo, visible, scene, rollout, agentHelp, corners, terminal,
+    return { world, trackInfo, visible, scene, worldModel, rollout, agentHelp, corners, terminal,
              API_VERSION, PHYSICS_VERSION };
   }
 
