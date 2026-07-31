@@ -52,12 +52,17 @@ try {
   if (optIn && typeof Gfx !== "undefined") {
     const backend = await Gfx.create(canvas, {});
     if (backend) {
-      // Route EVERY renderer call site onto the selected backend — not just
-      // game.js but the modules that reach the GLX global directly (tracks.js
-      // mesh build; tests monkey-patch GLX.* too, so OBJECT IDENTITY is the
-      // compatibility contract). Copy the backend's methods + live getters
-      // (width/height/aspect) onto the GLX object so `GLX.foo()` anywhere
-      // delegates. GLX's own WebGL context is never initialised here.
+      // Route EVERY renderer call site onto the selected backend. game.js and
+      // tracks.js already take the backend by injection (game.js via the `gfx`
+      // handle; tracks.js via Tracks.build's opts.gfx), so they need no patch.
+      // The descriptor-copy below exists ONLY for the ~8 spec files that
+      // monkey-patch GLX.* by OBJECT IDENTITY (webgl-probes, parts-mesh-cache,
+      // custom-team, lighting-ab, …) and read the page-scope GLX global
+      // directly — identity IS the compatibility contract. Copy the backend's
+      // methods + live getters (width/height/aspect) onto the GLX object so
+      // `GLX.foo()` anywhere delegates. GLX's own WebGL context is never
+      // initialised here. (liverytex/ghost/car3d do NOT call GLX — they build
+      // raw {pos,nrm,col,idx} geometry that game.js uploads via the gfx handle.)
       try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend)); gfx = GLX; }
       catch (_) { gfx = null; }
     }
@@ -361,7 +366,7 @@ const LONG_GRIP = 34;
 // corners (roll ∝ lateral g) and pitches to the road gradient, and the wheels
 // spin with speed + steer with input — all on a smoothed visual layer, the way
 // SuperTuxKart keeps a rigid physics body and animates only the model.
-const BODY_ROLL_MAX = 0.06;   // rad (~3.4°) max chassis lean at full lateral grip
+// (chassis cornering-lean cap now lives in js/game/bodyattitude.js as ROLL_MAX)
 const WHEEL_R = 0.34;         // wheel radius (m) — matches Car3D geometry, for spin rate
 const WHEEL_STEER_VIS = 0.5;  // rad of visible front-wheel steer at full lock
 const GRASS_V = 18;         // crawl speed on grass
@@ -414,6 +419,21 @@ let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
+// B1 — debris caution (local yellow / VSC / safety car). A READ-ONLY race-logic
+// layer: it consumes DebrisWorld.hazards() (settled debris/broken panels resting
+// ON the racing surface) and drives the HUD flag. It NEVER slows or moves a car
+// — no writes to speed/px/pz/head/(s,x). DEFAULT ON; disable apex26.caution="0".
+let _cautionOn = true;
+try { _cautionOn = (localStorage.getItem("apex26.caution") || "1") !== "0"; } catch (e) {}
+// level: 0 GREEN · 1 local YELLOW (sector) · 2 VSC · 3 SAFETY CAR.
+let caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
+let _cautionQT = 0;   // hazard-query throttle accumulator (s) — query at ~4 Hz
+const CAUTION_YELLOW_MIN = 3;   // settled hazards in ONE sector → local yellow
+const CAUTION_VSC_MIN = 6;      // total settled hazards on the surface → VSC
+const CAUTION_SC_MIN = 10;      // a big pile → full safety car
+const CAUTION_MIN_HOLD = 6;     // s a caution holds once raised (anti-flicker)
+const CAUTION_YELLOW_MAX = 30;  // s hard cap on a local yellow
+const CAUTION_SC_MAX = 90;      // s hard cap on VSC/SC — bounded, ~a lap or two
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let hideMeshes = {};   // debug: per-mesh visibility toggle (set via __apex.meshToggle)
 let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
@@ -1308,7 +1328,15 @@ function loadTrack(idx) {
     // resident at once. loadTrack is synchronous, so nothing can observe the
     // null between here and the assignment below.
     track = null;
-    track = Tracks.build(def, { night: sessionDark });
+    // Pass the active backend so tracks.js builds its meshes through the façade
+    // (opts.gfx) instead of reaching the GLX global directly. On the default
+    // path gfx===GLX; on a TLX/WGX opt-in it's that backend (descriptor-copied
+    // onto GLX, so object identity is preserved either way).
+    track = Tracks.build(def, { night: sessionDark, gfx });
+    // Rapier debris side-world: register the circuit's near-apex clippable cones
+    // (A3). Cheap pure derivation from track.def.turns; stores the list even when
+    // the side-world is disabled/loading so it's ready once rapier is live.
+    DebrisWorld.registerFurniture(track);
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
     // Env probe still holds the previous circuit — fall back to the analytic
@@ -1630,9 +1658,14 @@ const G = {
   // initialised before ApexApi.create(G) runs at the end of boot).
   smp, smp2, canvas,
   get gfx() { return gfx; },
+  // Local (s,x)↔world helpers for the incident sim's guarded handover writeback
+  // (js/game/incidentsim.js). trackFrom is the LOCAL predictor+Newton read (never
+  // a global search — see its comment), worldFromTrack its exact inverse.
+  trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
+  worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
   GAME_LAPS, TT_LAPS, LONG_GRIP,
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
-  camVantage, endRace, gridUp, gripMult, isErsDeploying,
+  camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
@@ -1659,6 +1692,15 @@ const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/game/debrisworld.js) — render-only, opt-in,
 // inert (a single boolean check) unless enabled via apex26.debris/__apex.debris.
 DebrisWorld.create(G);
+// R2/R3/C1 bounded-takeover incident sim (js/game/incidentsim.js) — the ONLY
+// additive-Rapier layer allowed to move a car, and only inside a bounded,
+// flagged, fallback-guarded window (extends the sacred xPinned + (prog,x)
+// exceptions). Inert (owns() is a Set read) unless a flag is on AND the debris
+// side-world is live. DEFAULT ON per feature (apex26.r2Airborne/r3Contact/c1Pileup).
+const incidentSim = IncidentSim.create(G);
+// C2 visual suspension (js/game/bodyattitude.js) — render-only cosmetic chassis
+// pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
+const bodyAttitude = BodyAttitude.create(G);
 
 function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
 function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
@@ -1798,7 +1840,22 @@ function update(dt) {
 
   // Rapier debris side-world: reads car poses (kinematic mirrors), owns only
   // its own shards, writes NOTHING back to gameplay. Inert unless enabled.
-  if (DebrisWorld.active()) DebrisWorld.step(dt);
+  //
+  // Incident sim (R2/R3/C1): preStep promotes any triggered takeover to a Rapier
+  // dynamic body BEFORE the world steps (DebrisWorld then skips posing it);
+  // postStep reads the 6-DoF pose back into the owned car(s) and hands each back
+  // once it settles. postStep runs unconditionally so an in-flight takeover is
+  // always progressed / degraded to bespoke, even if the side-world was just
+  // disabled mid-incident.
+  if (DebrisWorld.active()) {
+    incidentSim.preStep(dt);
+    DebrisWorld.step(dt);
+  }
+  incidentSim.postStep(dt);
+
+  // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
+  // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
+  updateCaution(dt);
 
   // race ends when the player finishes, or shortly after the winner does, or
   // at a hard time cap so it can never hang
@@ -1870,10 +1927,14 @@ function resolveCollisions(ranked, dt) {
     for (let ii = 0; ii < ranked.length; ii++) {
       const i = fwd ? ii : ranked.length - 1 - ii;
       const a = ranked[i];
+      // Incident-sim takeover owns this car's contacts in Rapier — the (prog,x)
+      // plane must not fight the 6-DoF body.
+      if (incidentSim.owns(a)) continue;
       // Full field: next-10 race ranks miss leader↔backmarker pairs that wrap
       // to |dProg|≈0 at the same s. 22 cars × LCAR cull is cheap.
       for (let j = i + 1; j < ranked.length; j++) {
         const b = ranked[j];
+        if (incidentSim.owns(b)) continue;
         let dProg = a.prog - b.prog;
         if (!Number.isFinite(dProg)) continue;   // never let a corrupt car spread NaN
         const L = track.total;
@@ -1928,6 +1989,11 @@ function resolveCollisions(ranked, dt) {
             if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
             // Debris hook (render-only side-world): closing speed = severity.
             if (last && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
+            // Incident sim (R3/C3 + C1): a hard closing contact queues a
+            // candidate. Only clears the R3 threshold for a real shunt (see
+            // incidentsim); below it the cheap (prog,x) plane above stays the
+            // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
+            if (last) incidentSim.notifyCar(a, b, relV);
           }
         }
       }
@@ -1940,8 +2006,10 @@ function resolveCollisions(ranked, dt) {
   const SLOP = 0.05;
   for (let i = 0; i < ranked.length; i++) {
     const a = ranked[i];
+    if (incidentSim.owns(a)) continue;   // Rapier owns this car's separation
     for (let j = i + 1; j < ranked.length; j++) {
       const b = ranked[j];
+      if (incidentSim.owns(b)) continue;
       let dProg = a.prog - b.prog;
       if (!Number.isFinite(dProg)) continue;
       const L = track.total;
@@ -1975,6 +2043,7 @@ function resolveCollisions(ranked, dt) {
   }
   // keep everyone inside the per-side barriers after being shoved around
   for (const c of ranked) {
+    if (incidentSim.owns(c)) continue;   // Rapier owns the clamp for this car
     const wr = Tracks.wallAt(track, c.s, 1), wl = Tracks.wallAt(track, c.s, -1);
     if (c.x > wr) c.x = wr; else if (c.x < -wl) c.x = -wl;
   }
@@ -1988,7 +2057,7 @@ function resolveCollisions(ranked, dt) {
   // reconstruction that wasn't quite the inverse of the read (see
   // worldFromTrack) the loop had gain < 1 and dragged the car onto the
   // centreline. Untouched frames must leave the car's own integration alone.
-  if (player && player.px != null && !player.finished &&
+  if (player && player.px != null && !player.finished && !incidentSim.owns(player) &&
       (player.s !== _preColS || player.x !== _preColX)) {
     const w = worldFromTrack(player.s, player.x, smp);
     player.px = w.x;
@@ -1998,6 +2067,11 @@ function resolveCollisions(ranked, dt) {
 
 function updateCar(c, dt, ranked) {
   if (c.finished) { coast(c, dt); c._prevS = c.s; return; }
+  // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
+  // the bespoke integration + wall clamp + collision writeback are SKIPPED —
+  // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
+  // fallback-guarded; outside the window this early-out is never taken.
+  if (incidentSim.owns(c)) { c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
@@ -2476,7 +2550,14 @@ function updateCar(c, dt, ranked) {
     const aeroGrip = 1 + DOWNFORCE * Math.min(1, (Math.abs(c.speed) / VMAX)) ** 2;
     const offDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
     const surfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, offDepth);
-    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult() * playerMods.cornering * bankMu * (1 + vertLoad) * slipFactor;
+    // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar
+    // for a player sitting on a settled off-line marble cluster, fed in ALONGSIDE
+    // gripMult()/kerbGrip/bankMu here — the existing mu-scaling seam. It NEVER
+    // touches LONG_GRIP or slipFactor (computed above, untouched) and never moves
+    // the car; it is a pure function of deterministic marble positions and returns
+    // 1.0 (a true no-op) off-path. Subtle by construction (≤7% via MARBLE_GRIP_MIN).
+    const marbleMu = DebrisWorld.active() ? DebrisWorld.marbleGrip(c) : 1;
+    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult() * playerMods.cornering * bankMu * (1 + vertLoad) * slipFactor * marbleMu;
     const muF = Math.max(0.5, muBase * loadF * FRONT_GRIP);
     const muR = Math.max(0.5, muBase * loadR * (1 - DRIFT * 0.55));
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
@@ -2488,6 +2569,10 @@ function updateCar(c, dt, ranked) {
     const vx = (c.speed < 0 ? -1 : 1) * Math.max(Math.abs(c.speed), 4);
     const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - delta;
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
+    // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the
+    // already-computed combined-slip signals READ-ONLY; cosmetic, never grip.
+    if (DebrisWorld.active())
+      DebrisWorld.tyreMarble(c, { lock: axFrac, slip: Math.max(Math.abs(slipF), Math.abs(slipR)), speed: c.speed });
     // Soft-saturating lateral tyre force (accel units): linear slope = stiffness
     // near centre, smoothly capped at the friction limit — how real tyres behave
     // and far more controllable on a noisy tilt signal than a hard clamp.
@@ -2541,6 +2626,16 @@ function updateCar(c, dt, ranked) {
     // actually move it sideways instead of bouncing off a rigid, on-rails line.
     const give = (c.contactT > 0) ? 0.4 : 1;
     c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * bankMu * give * dt;
+    // Debris side-world (A2): AI cars don't run the slip model, so estimate a
+    // slide from lateral-g demand (|k|·v²/g) and treat hard braking at speed as
+    // lock-up. READ-ONLY, cosmetic — matches the player marble hook.
+    if (DebrisWorld.active()) {
+      const latG = Math.abs(k) * c.speed * c.speed / 9.8;   // ~lateral g demand
+      DebrisWorld.tyreMarble(c, {
+        lock: (braking && c.speed > 30) ? 0.95 : 0,
+        slip: Math.max(0, Math.min(1, latG - 1.6)) * 0.14,   // → ~slip-angle rad at the limit
+        speed: c.speed });
+    }
   }
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
@@ -2566,8 +2661,23 @@ function updateCar(c, dt, ranked) {
     const into = c.x > wallR ? 1 : -1;          // +1 = hit right wall, -1 = left
     // Debris hook (render-only side-world): the pre-clamp overshoot is the
     // lateral speed into the wall × dt — the impact severity. First frame only.
-    if (!c.wasOnWall && DebrisWorld.active())
-      DebrisWorld.wallImpact(c, into, into > 0 ? c.x - wallR : -wallL - c.x);
+    if (!c.wasOnWall && DebrisWorld.active()) {
+      const xOver = into > 0 ? c.x - wallR : -wallL - c.x;
+      DebrisWorld.wallImpact(c, into, xOver);
+      // B2 (breakable barriers, flag apex26.breakBarriers): a hard hit promotes
+      // nearby BARRIER panels to jointed Rapier bodies that scatter. COSMETIC —
+      // the bespoke xPinned clamp below is UNCHANGED; broken panels are never a
+      // collision surface for the car (that would be R3). promoteBarrier gates
+      // on its own severity minimum and is a no-op when the flag is off.
+      const _wallSev = xOver * 60 + Math.abs(c.speed || 0) * 0.15;
+      DebrisWorld.promoteBarrier(c, into, _wallSev);
+      // Incident sim (R2 airborne): a GENUINELY hard wall strike launches this
+      // car into a bounded 6-DoF Rapier tumble (queued now, promoted in preStep).
+      // Only clears R2_WALL_SEV — ordinary scrapes never trigger. The bespoke
+      // xPinned clamp below still runs this trigger frame; the takeover begins
+      // next tick from the resulting pose. Self-guarding no-op otherwise.
+      incidentSim.notifyWall(c, into, _wallSev);
+    }
     c.x = into > 0 ? wallR : -wallL;
     xPinned = true;
     if (c.isPlayer) {
@@ -2690,13 +2800,14 @@ function updateCar(c, dt, ranked) {
   } else {
     yawTarget = c.steerVis * 0.35 + clamp(-k * c.speed * 0.14, -0.28, 0.28);
   }
+  // Keep the deploy-side player-heading guard: for the player with a real
+  // world heading, c.yawVis was already set to psi above — don't re-damp it
+  // toward the road (that re-orients the driver to the arc). AI/no-head damp.
   if (!(c.isPlayer && c.head != null)) c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
-  // Pitch animation: nose lifts under throttle (rear squat), dives under braking.
-  // Stored so the render loop can apply it without re-evaluating throttle/brake state.
-  const pitchTarget = c.isPlayer
-    ? (braking ? 0.018 : (onThrottle ? -0.010 : 0))
-    : (clamp(-k * c.speed * 0.002, -0.012, 0.012));   // AI: subtle pitch through corners
-  c.pitchVis = damp(c.pitchVis ?? 0, pitchTarget, 5, dt);
+  // Chassis pitch/roll/heave (brake dive, throttle squat, cornering lean, kerb
+  // bob) now live in the C2 visual-suspension springs (js/game/bodyattitude.js),
+  // advanced per car in the render loop from axEstSm/speed/yawRateCur/kCur +
+  // road height. Render-only — see BodyAttitude.
   // Brake-disc heat (render-only): glows up while braking at speed, cools after.
   // Drives the emissive brake-glow rings on the player's wheels.
   {
@@ -2775,15 +2886,21 @@ function updateCar(c, dt, ranked) {
   // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
   if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
+    // A takeover (R2/R3/C1) during this lap invalidates it EXPLICITLY: the car
+    // was moved by Rapier, so the lap is not a legitimate timed lap. Don't let it
+    // set a personal best or become the stored ghost; just start the next lap
+    // clean. The flag is set by IncidentSim and cleared here at the line.
+    const lapValid = !c.incidentInvalidLap;
     if (c.lap > 1) {
       const lapDone = c.lapTime;
       c.lastLap = lapDone;
-      if (lapDone < c.best) c.best = lapDone;
+      if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
-      if (c.isPlayer && timeTrial) onTTLap(lapDone);
+      if (c.isPlayer && timeTrial) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
     } else if (c.isPlayer && timeTrial) {
       Ghost.startLap();
     }
+    c.incidentInvalidLap = false;   // the new lap starts clean
     c.lapTime = 0;
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     if (c.isPlayer && c.lap === lapsTarget) announce("FINAL LAP", 1.6);
@@ -2793,7 +2910,9 @@ function updateCar(c, dt, ranked) {
       if (c.isPlayer) announce("FINISH!", 2);
     }
   }
-  if (timeTrial && c.isPlayer) Ghost.record(c.lapTime, c.s, c.x);
+  // Skip ghost recording while the current lap is incident-invalidated (a
+  // takeover jumps s/x — recording it would corrupt the ghost trace).
+  if (timeTrial && c.isPlayer && !c.incidentInvalidLap) Ghost.record(c.lapTime, c.s, c.x);
 
   // --- wrong-way + auto-rescue (player only) ---
   if (c.isPlayer && state === "race" && !c.finished) {
@@ -2855,6 +2974,59 @@ function updateCar(c, dt, ranked) {
     }
   }
   c._prevS = c.s;
+}
+
+// B1 — debris caution state machine. Consumes the deterministic
+// DebrisWorld.hazards() picture (settled debris/broken panels ON the racing
+// surface, bucketed per sector) at ~4 Hz and resolves the flag state with
+// hysteresis: a caution raises immediately but only lowers after CAUTION_MIN_HOLD
+// (or a hard time cap), so it can't flicker as debris despawns. READ-ONLY: it
+// sets flag state + drives the HUD; it never touches any car's motion. Inert
+// unless the debris side-world is live AND apex26.caution is on AND we're racing.
+const _CAUTION_LBL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR"];
+function resetCaution() {
+  caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
+  _cautionQT = 0;
+}
+function updateCaution(dt) {
+  if (!_cautionOn || !DebrisWorld.active() || state !== "race") {
+    if (caution.level !== 0) resetCaution();
+    return;
+  }
+  if (caution.level !== 0) caution.sinceT += dt;
+  _cautionQT += dt;
+  if (_cautionQT < 0.25) return;   // query hazards at ~4 Hz
+  _cautionQT = 0;
+  const hz = DebrisWorld.hazards();
+  let desired = 0, dsector = -1, dfrac = 0, dcause = "";
+  if (hz.total >= CAUTION_SC_MIN) { desired = 3; dcause = "SAFETY CAR"; }
+  else if (hz.total >= CAUTION_VSC_MIN) { desired = 2; dcause = "VSC"; }
+  else if (hz.worst.count >= CAUTION_YELLOW_MIN) {
+    desired = 1; dsector = hz.worst.sector; dfrac = hz.worst.frac; dcause = "YELLOW";
+  }
+  caution.total = hz.total;
+  caution.sectors = hz.sectors.slice();
+  if (desired > caution.level) {
+    caution.level = desired; caution.sector = dsector; caution.frac = dfrac;
+    caution.cause = dcause; caution.sinceT = 0;
+  } else if (desired < caution.level) {
+    const cap = caution.level >= 2 ? CAUTION_SC_MAX : CAUTION_YELLOW_MAX;
+    if (caution.sinceT >= CAUTION_MIN_HOLD || caution.sinceT >= cap) {
+      caution.level = desired;
+      caution.sector = desired === 1 ? (dsector >= 0 ? dsector : caution.sector) : -1;
+      caution.frac = dfrac; caution.cause = dcause; caution.sinceT = 0;
+    }
+  } else if (desired === 1 && dsector >= 0) {
+    caution.sector = dsector; caution.frac = dfrac;   // track the worst sector
+  }
+}
+function cautionInfo() {
+  return {
+    level: caution.level, label: _CAUTION_LBL[caution.level] || "GREEN",
+    sector: caution.sector, frac: caution.frac, total: caution.total,
+    sectors: caution.sectors, sinceT: +caution.sinceT.toFixed(2), cause: caution.cause,
+    enabled: _cautionOn,
+  };
 }
 
 // Put the player back on the racing line at its CURRENT progress, facing forward
@@ -4006,31 +4178,29 @@ function render(dt) {
       }
     }
     basisMat(_groundR, _groundU, _groundF, tmpP, _groundMat);
-    // Pitch: rotate forward+up around the right axis by pitchVis (positive = nose up).
-    // This gives throttle-squat (nose lifts) and brake-dive (nose dips) without
-    // moving the contact point — it's purely a mesh animation.
-    if (c.pitchVis) {
-      const cp = Math.cos(c.pitchVis), sp = Math.sin(c.pitchVis);
+    // C2 visual suspension: advance the cosmetic chassis springs from existing
+    // physics state + the road-surface height (tmpP[1]) and read back the small
+    // clamped pitch/roll/heave offsets. Render-only — applied to the BODY basis
+    // (tmpMat) below; _groundMat (wheels/contact/shadow) is already built and is
+    // never touched. When disabled these all come back 0 (rigid chassis).
+    const _ba = bodyAttitude.update(c, tmpP[1], dt);
+    const _baPitch = _ba.pitch, _baRoll = _ba.roll, _baHeave = _ba.heave;
+    // Pitch: rotate forward+up around the right axis (positive = nose up). This
+    // gives throttle-squat (nose lifts) and brake-dive (nose dips) without moving
+    // the contact point — it's purely a mesh animation.
+    if (_baPitch) {
+      const cp = Math.cos(_baPitch), sp = Math.sin(_baPitch);
       for (let i = 0; i < 3; i++) {
         const f = tmpF[i], u = tmpU[i];
         tmpF[i] = f * cp + u * sp;
         tmpU[i] = u * cp - f * sp;
       }
     }
-    // Cornering lean (render-only): roll the chassis toward the OUTSIDE of the
-    // corner, proportional to lateral g, so the car visibly leans into turns like
-    // a real F1 car. The body already follows the road slope via the tangent
-    // basis, so only roll (not gradient pitch) is added here. Player uses its real
-    // centripetal accel (speed·yawRate); AI uses curvature·speed².
-    // (curvature sign is opposite the yaw-rate sign — see the racing-line code,
-    // racingLine = -k·130 toward the inside — so the AI term is negated to lean
-    // outward like the player.)
-    const aLat = c.isPlayer ? c.speed * (c.yawRateCur || 0)
-                            : -c.speed * c.speed * (c.kCur || 0);
-    const rollTgt = clamp(aLat / LAT_MAX, -1, 1) * BODY_ROLL_MAX;
-    c.rollVis = (c.rollVis === undefined) ? rollTgt : damp(c.rollVis, rollTgt, 6, dt);
-    // roll the right/up basis about the forward axis: road bank + cornering lean.
-    const rollTot = (bankC && bankC.roll ? bankC.roll : 0) + (c.rollVis || 0);
+    // Cornering lean (render-only) comes from the C2 visual-suspension roll
+    // spring (_baRoll, computed above from lateral g). Combine it with the road
+    // bank, which is geometry (the car must sit ON the banked surface) and stays
+    // even when the cosmetic springs are disabled.
+    const rollTot = (bankC && bankC.roll ? bankC.roll : 0) + (_baRoll || 0);
     if (rollTot) {
       const cr = Math.cos(rollTot), sr = Math.sin(rollTot);
       for (let i = 0; i < 3; i++) {
@@ -4040,6 +4210,10 @@ function render(dt) {
       }
     }
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
+    // C2 visual suspension heave: bob the BODY up/down in world-Y only (kerb/crest
+    // absorption). tmpMat carries the body mesh; _groundMat (wheels/contact/shadow)
+    // was built from the un-offset tmpP, so the tyres stay planted on the road.
+    if (_baHeave) tmpMat[13] += _baHeave;
     let _sm = _shadowMats[_shadowCount];
     if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
     _sm.set(_groundMat);

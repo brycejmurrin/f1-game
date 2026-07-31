@@ -103,6 +103,7 @@ const FULL = [
   "js/game/tables.js",
   "js/game/lighting.js",
   "js/game/carmesh.js",
+  "js/game/bodyattitude.js",
   "js/game/particles.js",
   "js/game/atmosphere.js",
   "js/game/store.js",
@@ -116,6 +117,7 @@ const FULL = [
   "js/game/hud.js",
   "js/game/results.js",
   "js/game/debrisworld.js",
+  "js/game/incidentsim.js",
   "js/game/apex.js",
   "js/game.js",
 ];

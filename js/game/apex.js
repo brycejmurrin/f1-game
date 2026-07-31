@@ -1050,22 +1050,98 @@ const api = {
 
   // debris(arg?) — the Rapier debris side-world (js/game/debrisworld.js).
   //   debris()                → status { enabled, ready, active, live, cap,
-  //                             stepped, spawned, lastImpact, error }
+  //                             stepped, spawned, lastImpact, error, marbles,
+  //                             marbleCap, furniture, furnCount, lastForce }
+  //                             (Group A extras: live is impact-debris ONLY;
+  //                             marbles = tyre marbles [A2], furniture = clippable
+  //                             cone bodies [A3], lastForce = max real solved
+  //                             contact-force magnitude last tick [A1]).
   //   debris(true|false)      → enable/disable (enabling lazy-loads the vendored
   //                             rapier module; poll .ready) → status
   //   debris({reset:true})    → deterministic episode reset (world rebuilt,
   //                             counters zeroed) → status
   //   debris({burst:n, sev?}) → queue n synthetic impacts at the player (test
   //                             helper, deterministic) → status
+  //   debris({marble:true})   → force one seeded tyre-marble emission at the
+  //                             player (test helper) → status
+  //   debris({positions:true})→ status + flat positions[] for debris, marbles,
+  //                             furniture, then B2 panels (element order = live
+  //                             debris, marbles, furniture, panels)
+  //   status now also carries the Group B fields: panels (live B2 panels),
+  //   panelsBroken (cumulative snapped panels), breakBarriers, marbleGrip.
+  //   debris({hazards:true})  → status + hazards() {sectors[3], total, worst}
+  //                             (B1: settled bodies ON the racing surface)
+  //   debris({marbleGrip:true})→ status + marbleGrip factor for the player (B3)
+  //   debris({flags:{breakBarriers?,marbleGrip?}}) → set Group B disable flags
   debris(arg) {
     if (arg === undefined) return DebrisWorld.status();
     if (typeof arg === "boolean") return DebrisWorld.setEnabled(arg);
     if (arg && typeof arg === "object") {
       if (arg.reset) return DebrisWorld.reset();
       if (arg.burst) { DebrisWorld.burst(arg.burst, arg.sev); return DebrisWorld.status(); }
+      if (arg.marble && G.player) {
+        // Seeded emission at the player under a forced lock-up + slide signal.
+        DebrisWorld.tyreMarble(G.player, { lock: 1, slip: 0.5, speed: Math.max(12, Math.abs(G.player.speed || 0)) });
+        return DebrisWorld.status();
+      }
+      if (arg.flags) return DebrisWorld.groupBFlags(arg.flags);
+      if (arg.hazards) return Object.assign(DebrisWorld.status(), { hazards: DebrisWorld.hazards() });
+      if (arg.marbleGrip) return Object.assign(DebrisWorld.status(), { marbleGripFactor: DebrisWorld.marbleGrip(G.player) });
       if (arg.positions) return Object.assign(DebrisWorld.status(), { positions: DebrisWorld.positions() });
     }
     return DebrisWorld.status();
+  },
+
+  // incident(arg?) — the R2/R3/C1 bounded-takeover incident sim
+  //   (js/game/incidentsim.js). The ONE additive-Rapier layer that moves a car,
+  //   and only inside a bounded, flagged, fallback-guarded window.
+  //   incident()                → status { r2Airborne, r3Contact, c1Pileup,
+  //                               active, owned, incidents:[{kind,cars,ticks,seq}],
+  //                               count, lastKind, promoted, handbacks, fallbacks }
+  //   incident({launch:true})   → force-launch the player into an R2 airborne
+  //                               takeover next tick (deterministic; test/playtest)
+  //   incident({flags:{r2Airborne?,r3Contact?,c1Pileup?}}) → toggle features
+  //                               (turning one off hands its takeovers back safely)
+  //   incident({reset:true})    → abort every takeover back to bespoke, zero counters
+  incident(arg) {
+    if (arg && typeof arg === "object") {
+      if (arg.reset) return IncidentSim.reset();
+      if (arg.launch) return IncidentSim.forceLaunch();
+      if (arg.flags) return IncidentSim.setFlags(arg.flags);
+    }
+    return IncidentSim.status();
+  },
+
+  // caution(arg?) — the B1 debris caution state (local yellow / VSC / safety car),
+  // a READ-ONLY race-logic layer over DebrisWorld.hazards() (see js/game.js). It
+  // never slows or moves a car. No arg: current state
+  //   { level (0 GREEN·1 YELLOW·2 VSC·3 SC), label, sector, frac, total,
+  //     sectors[3], sinceT, cause, enabled }.
+  //   caution({hazards:true}) → the same state plus the live DebrisWorld.hazards().
+  caution(arg) {
+    const st = G.cautionInfo ? G.cautionInfo() : { level: 0, label: "GREEN", enabled: false };
+    if (arg && typeof arg === "object" && arg.hazards)
+      return Object.assign(st, { hazards: DebrisWorld.hazards() });
+    return st;
+  },
+
+  // bodyAttitude(arg?) — the C2 visual-suspension springs (js/game/bodyattitude.js).
+  //   bodyAttitude()            → status { enabled, offsets:{pitch,roll,heave,enabled} }
+  //                               (offsets are the player's current render offsets,
+  //                               radians for pitch/roll, metres for heave)
+  //   bodyAttitude(true|false)  → enable/disable (persists to apex26.bodyAttitude)
+  //   bodyAttitude({reset:true})→ reset every car's springs to a settled chassis
+  //   bodyAttitude({car:idx})   → status with offsets for cars[idx] (tests)
+  // Render-only: never touches px/pz/head or (s, x); disabling forces all offsets 0.
+  bodyAttitude(arg) {
+    if (arg === undefined) return BodyAttitude.status();
+    if (typeof arg === "boolean") return BodyAttitude.setEnabled(arg);
+    if (arg && typeof arg === "object") {
+      if (arg.reset) { BodyAttitude.reset(); return BodyAttitude.status(); }
+      if (arg.car != null && G.cars && G.cars[arg.car])
+        return { enabled: BodyAttitude.active(), offsets: BodyAttitude.offsets(G.cars[arg.car]) };
+    }
+    return BodyAttitude.status();
   },
 
   // renderScale(v?) — adaptive-resolution control. No arg: report current state
@@ -1446,6 +1522,7 @@ const api = {
       G.player.pz   = smp.p[2] + smp.r[2] / rl * G.player.x; }
     G.player.head = Math.atan2(smp.t[0], smp.t[2]);
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;   // sync render anchors (see jump)
+    BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
     G._testInput = null;
     return this.obs();
   },

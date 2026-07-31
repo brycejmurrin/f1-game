@@ -1,3 +1,4 @@
+@layer overlays {
 /* Apex 26 — season standings overlay, track-detail fullscreen modal + trailing orientation fixes.
    Split from css/style.css (lines 1561-1677 of the original); the <link>
    order in index.html preserves the original source order, so the cascade
@@ -119,3 +120,4 @@ body.cockpit-cam #hud-gearbox,
 body.cockpit-cam #hud-speed,
 body.cockpit-cam #hud-energy,
 body.cockpit-cam #hud-ot { display: none; }
+} /* @layer overlays */

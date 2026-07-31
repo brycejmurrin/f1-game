@@ -49,6 +49,12 @@ let _loadErr = null;
 let world = null;        // RAPIER.World
 let _worldTrack = null;  // track identity the trimesh was built for
 let _mirrors = [];       // one kinematicPositionBased body per car (cars[] order)
+let _worldGen = 0;       // bumped every buildWorld — the incident sim aborts a takeover if this changes under it
+// Incident-sim takeover (R2/R3/C1, js/game/incidentsim.js): indices whose mirror
+// has been promoted kinematic→DYNAMIC and is owned by IncidentSim. step()'s
+// mirror-sync loop SKIPS these (a dynamic body must not be pose-driven), so the
+// bespoke->Rapier handover keeps a single authority for the duration.
+let _dynCars = new Set();
 let _slots = [];         // fixed debris pool: { body, live, scale, restT, spawnTick }
 let _cap = 0;            // pool size for the CURRENT world (48 desktop / 16 mobile tier)
 let _queue = [];         // impacts queued by the game-side hooks, consumed next step
@@ -59,6 +65,52 @@ let _seq = 0;            // debris spawn sequence number
 let _spawnedTotal = 0;
 let _lastImpact = null;  // { kind, carIdx, sev, tick, spawned } — for tests
 
+// ── A1: real solved contact-force severity ──────────────────────────────────
+// The Rapier world has NO barrier colliders and cars are kinematic mirrors, so
+// real solved contact force exists ONLY for mirror(kin)↔dynamic(debris / A3
+// furniture) contacts. Car-car and car-wall keep the synthesised wallImpact /
+// carImpact severity as the fallback. Passing an EventQueue to world.step does
+// not alter the simulation, so debris determinism is preserved.
+let _events = null;      // reusable RAPIER.EventQueue(true)
+let _colliderCar = null; // Map: mirror collider handle → car idx (cars[] order)
+let _furnHandles = null; // Set: A3 furniture collider handles
+let _carForce = [];      // per-car real force accumulated this tick (mirror↔dynamic)
+let _spallCool = [];     // per-car spall-burst cooldown (s), decremented each tick
+const _forceBuf = [];    // scratch: drained contact-force events, sorted deterministically
+let _lastForce = 0;      // max real force magnitude seen last tick (status)
+
+// ── A2: marbles (separate seeded sub-pool, cosmetic only — never touches grip) ─
+let _marbles = [];       // fixed pool: { body, live, restT, spawnTick, scale }
+let _marbleCap = 0;
+let _marbleSeq = 0;      // deterministic marble spawn sequence
+
+// ── A3: clippable near-apex cones (dynamic, punted one-way by kinematic mirrors) ─
+let _furnList = null;    // per-track placement list [{s,x}] (survives reset())
+let _furnTrack = null;   // track identity _furnList was derived for
+let _furn = [];          // dynamic cone bodies for the CURRENT world: { body, s, x, home }
+let _furnBuilt = false;  // furniture built into the current world?
+
+// ── Group B gameplay-adjacent flags (all DEFAULT ON, each its own disable flag) ─
+// These READ the deterministic side-world and influence race logic (flags/grip)
+// but NEVER write px/pz/head/(s,x)/speed. B1 caution lives in game.js and reads
+// hazards() from here; B2 promotes barrier panels here; B3 returns a grip scalar.
+let _breakBarriers = true;   // B2 — apex26.breakBarriers ("0" disables)
+let _marbleGripOn = true;    // B3 — apex26.marbleGrip ("0" disables)
+
+// ── B2: breakable / knocked-back barrier panels ─────────────────────────────
+// A hard wall impact promotes a few BARRIER panels near the hit to Rapier
+// DYNAMIC bodies, each held to a FIXED backbone anchor by a fixed ImpulseJoint.
+// The kinematic car mirror shoves them (one-way punt); when the SOLVED contact
+// force on a panel exceeds a threshold the joint is removed (removeImpulseJoint)
+// and the panel scatters. COSMETIC-PLUS: the player still gets the SAME bespoke
+// xPinned clamp at the ORIGINAL barrier line — broken panels are never fed back
+// as a collision surface (that would be R3). Determinism: promotion is driven by
+// the deterministic wallImpact site; kicks are seeded from game state.
+let _panels = [];        // promoted panels: { body, anchor, joint, home, live, broken, force, restT, s, side }
+let _panelHandles = null;// Map: panel collider handle → index into _panels (force attribution)
+let _panelSeq = 0;       // deterministic promotion sequence
+let _panelsBroken = 0;   // cumulative panels that broke free (status/tests)
+
 // ── tuning ──────────────────────────────────────────────────────────────────
 const CAP_DESKTOP = 48, CAP_MOBILE = 16;
 const WALL_SEV_MIN = 3;      // severity gate for wall scrapes (see wallImpact)
@@ -66,6 +118,39 @@ const CAR_SEV_MIN = 3;       // closing speed (m/s) gate for car-car contacts
 const REST_DESPAWN_S = 4;    // seconds asleep before a shard returns to the pool
 const FAR_DESPAWN_M = 250;   // despawn beyond this distance from the player
 const MIRROR_HX = 0.75, MIRROR_HY = 0.4, MIRROR_HZ = 2.0;  // car half-extents (spike shape)
+// A1 real-force tuning
+const FORCE_MIN = 40;        // N — contact-force event threshold; gentle rubbing ignored
+const FORCE_SEV_SCALE = 500; // N per +1 severity when a real hit overrides a hint
+const SPALL_MIN = 600;       // N — a mirror ploughing a dynamic body this hard spalls
+const SPALL_COOL_S = 0.4;    // min seconds between spall bursts per car
+// A2 marble tuning
+const MARBLE_CAP_DESKTOP = 24, MARBLE_CAP_MOBILE = 8;
+const MARBLE_REST_DESPAWN_S = 12;  // marbles linger far longer than impact shards
+const MARBLE_MIN_SPEED = 8;        // m/s — no marbles when crawling
+const MARBLE_LOCK_GATE = 0.90;     // axFrac ≥ this = braking lock-up
+const MARBLE_SLIP_GATE = 0.09;     // rad — |slip| ≥ this = a real slide
+const MARBLE_REF_SCALE = 0.025;    // marble mesh reference half-extent (draw scaling)
+// A3 furniture tuning
+const FURN_CAP_DESKTOP = 24, FURN_CAP_MOBILE = 12;
+const CONE_HX = 0.13, CONE_HY = 0.22, CONE_HZ = 0.13;  // cone body half-extents
+// B1 hazard-query tuning (settled bodies ON the racing surface)
+const HAZARD_Y_TOL = 1.6;      // m — ignore bodies this far above/below the road (airborne / sunk)
+const FURN_DISTURB_M = 1.2;    // m — a cone counts as a hazard only once knocked this far from home
+// B2 breakable-barrier tuning
+const PANEL_CAP = 10;          // max concurrent promoted panels (bounded body budget)
+// Armco slab half-extents in the panel's LOCAL frame. The panel is yawed about Y
+// to face along the track, and a Y-yaw maps local +z → track-forward and local
+// +x → track-lateral, so the slab is THIN across the track (x) and LONG along it
+// (z): lateral(thin) / height / along-track(long).
+const PANEL_LAT = 0.12, PANEL_HY = 0.5, PANEL_LEN = 0.75;
+const PANEL_MASS = 12;         // kg-ish — heavy enough to look solid, light enough to scatter
+const PANEL_BREAK = 1400;      // N — solved contact force on a panel that snaps its joint
+const PANEL_REST_DESPAWN_S = 6;// broken panel asleep this long → freed back
+const PANEL_SEV_MIN = 8;       // only genuinely hard wall hits promote panels (gentle scrapes don't)
+// B3 marble-grip tuning (subtle — a few % over a settled marble cluster)
+const MARBLE_GRIP_R = 2.6;     // m — radius around the player that counts settled marbles
+const MARBLE_GRIP_PER = 0.010; // grip loss per settled marble in range (1%)
+const MARBLE_GRIP_MIN = 0.93;  // floor: never more than a 7% cornering-grip cut
 
 // Deterministic PRNG (mulberry32) — every stream is seeded from game state.
 function rng32(seed) {
@@ -83,6 +168,7 @@ const _mat = new Float32Array(16);   // reused draw matrix
 _mat[15] = 1;
 const _v = { x: 0, y: 0, z: 0 };     // reused vector for pose writes
 const _q = { x: 0, y: 0, z: 0, w: 1 };
+const _hinted = new Set();           // mirror indices hinted this tick (A1 spall dedup)
 
 // ── enable / load ───────────────────────────────────────────────────────────
 function _load() {
@@ -109,8 +195,77 @@ function create(ctx) {
   G = ctx;
   let opt = "1";
   try { opt = localStorage.getItem("apex26.debris") || "1"; } catch (e) {}
+  // Group B disable flags — default ON, read once at boot (any value but "0" is on).
+  try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) {}
+  try { _marbleGripOn = (localStorage.getItem("apex26.marbleGrip") || "1") !== "0"; } catch (e) {}
   if (opt === "1") setEnabled(true);   // default ON; async load, never blocks boot (set "0" to disable)
-  return { active, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst };
+  return { active, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
+           registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags,
+           rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose, isCarDynamic };
+}
+
+// ── Incident-sim takeover interface (consumed by js/game/incidentsim.js) ─────
+// These promote/read/restore a car MIRROR as a Rapier 6-DoF dynamic body for a
+// bounded, flagged, fallback-guarded incident window. They NEVER write a car —
+// IncidentSim reads carBodyPose() back and does all the guarded writeback. When
+// no takeover is active (_dynCars empty) these are never called and the debris
+// side-world is bit-identical to before.
+function rapierReady() { return _loadState === 2 && !!world; }
+function worldGen() { return _worldGen; }
+function isCarDynamic(i) { return _dynCars.has(i); }
+
+// Promote mirror i from kinematicPositionBased → dynamic, seeded with world
+// linear/angular velocity. Marks it in _dynCars so step() stops posing it.
+// Returns false (a no-op the caller degrades to bespoke on) if anything is wrong.
+function promoteCarDynamic(i, lin, ang) {
+  if (!world || !RAPIER || i < 0 || i >= _mirrors.length) return false;
+  const b = _mirrors[i];
+  if (!b) return false;
+  try {
+    b.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    if (lin) b.setLinvel({ x: lin.x || 0, y: lin.y || 0, z: lin.z || 0 }, true);
+    if (ang) b.setAngvel({ x: ang.x || 0, y: ang.y || 0, z: ang.z || 0 }, true);
+    _dynCars.add(i);
+    return true;
+  } catch (e) {
+    try { b.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true); } catch (_e) {}
+    _dynCars.delete(i);
+    return false;
+  }
+}
+
+// Flip mirror i back to kinematic; step() resumes posing it from the car's
+// (handed-back) pose next tick.
+function demoteCarKinematic(i) {
+  _dynCars.delete(i);
+  if (!world || !RAPIER || i < 0 || i >= _mirrors.length) return false;
+  const b = _mirrors[i];
+  if (!b) return false;
+  try { b.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true); } catch (e) { return false; }
+  return true;
+}
+
+// Read mirror i's 6-DoF pose + velocities (only while it is dynamic/owned).
+function carBodyPose(i) {
+  if (!world || i < 0 || i >= _mirrors.length || !_dynCars.has(i)) return null;
+  const b = _mirrors[i];
+  if (!b) return null;
+  try {
+    const t = b.translation(), q = b.rotation(), lv = b.linvel(), av = b.angvel();
+    return { x: t.x, y: t.y, z: t.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w,
+             vx: lv.x, vy: lv.y, vz: lv.z, wx: av.x, wy: av.y, wz: av.z,
+             sleeping: b.isSleeping() };
+  } catch (e) { return null; }
+}
+
+// Group B flag get/set (used by __apex + tests). Passing an object sets flags;
+// no arg returns the current values. Purely a boolean read on the hot path.
+function groupBFlags(o) {
+  if (o && typeof o === "object") {
+    if ("breakBarriers" in o) _breakBarriers = !!o.breakBarriers;
+    if ("marbleGrip" in o) _marbleGripOn = !!o.marbleGrip;
+  }
+  return { breakBarriers: _breakBarriers, marbleGrip: _marbleGripOn };
 }
 
 // The one call game.js guards everything with. Plain boolean read — the whole
@@ -119,8 +274,14 @@ function active() { return _active; }
 
 // ── world lifecycle ─────────────────────────────────────────────────────────
 function destroyWorld() {
+  if (_events) { try { _events.free(); } catch (e) {} }
   if (world) { try { world.free(); } catch (e) {} }
   world = null; _worldTrack = null; _mirrors = []; _slots = []; _queue.length = 0;
+  _dynCars.clear();   // any in-flight takeover's bodies die with the world — IncidentSim aborts via worldGen()
+  _events = null; _colliderCar = null; _furnHandles = null;
+  _marbles = []; _marbleCap = 0; _furn = []; _furnBuilt = false;
+  _carForce = []; _spallCool = []; _forceBuf.length = 0; _lastForce = 0;
+  _panels = []; _panelHandles = null;   // B2 — bodies die with the world
 }
 
 function capFor() {
@@ -129,10 +290,22 @@ function capFor() {
   if (Number.isFinite(o) && o > 0) return Math.min(o, 256);
   return (G.gfx && G.gfx.mobileTier) ? CAP_MOBILE : CAP_DESKTOP;
 }
+function marbleCapFor() { return (G.gfx && G.gfx.mobileTier) ? MARBLE_CAP_MOBILE : MARBLE_CAP_DESKTOP; }
+function furnCapFor() { return (G.gfx && G.gfx.mobileTier) ? FURN_CAP_MOBILE : FURN_CAP_DESKTOP; }
 
 function buildWorld(track, cars) {
   world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = 1 / 60;
+  // A1: one reusable event queue (autoDrain). Passing it to world.step does not
+  // change the sim, so determinism holds. Per-car force accumulators + spall
+  // cooldowns are sized to the field and zeroed here.
+  _events = new RAPIER.EventQueue(true);
+  _colliderCar = new Map();
+  _furnHandles = new Set();
+  _panelHandles = new Map();   // B2 — panel collider handle → _panels index
+  _panels = [];                // promoted panels are per-world (rebuilt on track/field change)
+  _carForce = new Array(cars.length).fill(0);
+  _spallCool = new Array(cars.length).fill(0);
   // Road trimesh — the raw {pos,nrm,idx} geometry tracks.js keeps on the track
   // object. FIX_INTERNAL_EDGES suppresses ghost bumps on the tessellated road
   // (the spike's collider setup, spike/physics/rapier-eval.mjs).
@@ -150,8 +323,13 @@ function buildWorld(track, cars) {
   _mirrors = [];
   for (let i = 0; i < cars.length; i++) {
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
-    world.createCollider(
+    const col = world.createCollider(
       RAPIER.ColliderDesc.cuboid(MIRROR_HX, MIRROR_HY, MIRROR_HZ).setFriction(0.8), body);
+    // A1: solved contact force reported for this mirror's contacts with dynamic
+    // bodies (debris / A3 cones). Gate out gentle rubbing with a force threshold.
+    col.setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS);
+    col.setContactForceEventThreshold(FORCE_MIN);
+    _colliderCar.set(col.handle, i);   // handle → cars[] index (stable order)
     _mirrors.push(body);
   }
   // Fixed debris pool: bodies are created ONCE (deterministic construction),
@@ -171,7 +349,83 @@ function buildWorld(track, cars) {
     // scale maps the shared ~0.2 m shard mesh onto this slot's collider size
     _slots.push({ body, live: false, scale: (hx + hz) * 5.0, restT: 0, spawnTick: 0 });
   }
+  // A2: marble sub-pool — created AFTER the debris pool (fixed insertion order →
+  // determinism). Tiny high-friction, low-restitution cuboids: they settle and
+  // linger off-line. Cosmetic only; the sim never reads them back into grip.
+  _marbleCap = marbleCapFor();
+  _marbles = [];
+  for (let i = 0; i < _marbleCap; i++) {
+    const r = rng32(0x3A7B + i * 104729);
+    const h = 0.018 + r() * 0.028;
+    const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic());
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(h, h * 0.7, h)
+        .setMass(0.05 + r() * 0.08).setFriction(1.1).setRestitution(0.05),
+      body);
+    body.setEnabled(false);
+    _marbles.push({ body, live: false, restT: 0, spawnTick: 0, scale: h / MARBLE_REF_SCALE });
+  }
+  // A3: near-apex cones — created AFTER the marble pool (fixed order). Dynamic
+  // bodies that settle on the road trimesh from t=0 (deterministic, no RNG) and
+  // sleep; a kinematic mirror punts them one-way (never pushes the car back).
+  _furn = [];
+  _furnBuilt = false;
+  if (_furnList && _furnTrack === track) {
+    for (let i = 0; i < _furnList.length; i++) {
+      const f = _furnList[i];
+      Tracks.sample(track, f.s, _smp);
+      const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
+      const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic());
+      const col = world.createCollider(
+        RAPIER.ColliderDesc.cuboid(CONE_HX, CONE_HY, CONE_HZ)
+          .setMass(1.2).setFriction(0.9).setRestitution(0.1),
+        body);
+      col.setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS);
+      col.setContactForceEventThreshold(FORCE_MIN);
+      _furnHandles.add(col.handle);
+      _v.x = _smp.p[0] + _smp.r[0] / rl * f.x;
+      _v.y = _smp.p[1] + CONE_HY + 0.02;
+      _v.z = _smp.p[2] + _smp.r[2] / rl * f.x;
+      body.setTranslation(_v, true);
+      // home = placed position — B1 counts a cone as a hazard only once it is
+      // knocked FURN_DISTURB_M off this (an untouched apex cone is scene dressing,
+      // not a yellow-flag hazard).
+      _furn.push({ body, s: f.s, x: f.x, home: { x: _v.x, y: _v.y, z: _v.z } });
+    }
+    _furnBuilt = _furn.length > 0;
+  }
   _worldTrack = track;
+  _worldGen++;   // a rebuilt world invalidates any incident-sim takeover (checked via worldGen())
+}
+
+// Derive a ≤cap near-apex cone list from the loaded circuit's curated turn
+// apexes (track.def.turns — the same source signBoard uses in tracks.js). Stored
+// regardless of active state so it's ready when the async rapier load finishes;
+// a cheap pure function (no Rapier), safe to call when disabled.
+function registerFurniture(track) {
+  if (!track || !track.def || !track.def.turns || !track.def.turns.length) {
+    _furnList = null; _furnTrack = null; return;
+  }
+  const turns = track.def.turns, total = track.total || 0;
+  const cap = furnCapFor();
+  const stride = Math.max(1, Math.ceil(turns.length / cap));
+  const list = [];
+  for (let i = 0; i < turns.length && list.length < cap; i += stride) {
+    const frac = (((turns[i] % 1) + 1) % 1);
+    const s = frac * total;
+    Tracks.sample(track, s, _smp);
+    const hw = _smp.hw || 6;
+    // Inside of the corner (apex kerb): k>0 curves screen-left → inside is -x
+    // (matches the race-line assist convention in game.js). Clamp inside the
+    // road so the cone rests on the trimesh instead of falling through an edge.
+    const inside = (Math.sign(Tracks.curvature(track, s)) > 0) ? -1 : 1;
+    const x = Math.max(-(hw - 0.3), Math.min(hw - 0.3, inside * (hw - 0.9)));
+    list.push({ s, x });
+  }
+  _furnList = list; _furnTrack = track;
+  // If a world is already live for this exact track but has no furniture yet,
+  // rebuild it on the next step so the cones appear.
+  if (world && _worldTrack === track && !_furnBuilt) destroyWorld();
 }
 
 // Full deterministic reset: tear the world down (it is rebuilt from scratch on
@@ -181,6 +435,11 @@ function buildWorld(track, cars) {
 function reset() {
   destroyWorld();
   _tick = 0; _seq = 0; _spawnedTotal = 0; _lastImpact = null;
+  _marbleSeq = 0; _furnBuilt = false; _lastForce = 0;
+  _panelSeq = 0; _panelsBroken = 0;   // B2 counters (bodies torn down in destroyWorld)
+  // NOTE: _furnList / _furnTrack are track DATA (from registerFurniture), not
+  // per-episode state — they survive reset() so the rebuilt world still gets its
+  // cones. buildWorld re-creates the cone bodies deterministically.
   return status();
 }
 
@@ -192,8 +451,12 @@ function reset() {
 function wallImpact(c, side, xOver) {
   const sev = (xOver || 0) * 60 + Math.abs(c.speed || 0) * 0.15;
   if (sev < WALL_SEV_MIN) return;
+  // mi = cars[] mirror index (A1): if this car also ploughs a dynamic body the
+  // same tick, the real solved force overrides the synthesised severity. carIdx
+  // stays the driver number (stable shard-scatter seed — unchanged behaviour).
+  const mi = G.cars ? G.cars.indexOf(c) : -1;
   _queue.push({ kind: "wall", s: c.s, x: c.x, side, sev,
-                speed: Math.abs(c.speed || 0), carIdx: c.num | 0 });
+                speed: Math.abs(c.speed || 0), carIdx: c.num | 0, mi });
 }
 
 // Car-car contact. Called from the (prog,x) rear-end resolution with the
@@ -202,6 +465,61 @@ function carImpact(a, b, relV) {
   if (relV < CAR_SEV_MIN) return;
   _queue.push({ kind: "car", s: b.s, x: (a.x + b.x) * 0.5, side: a.x >= b.x ? 1 : -1,
                 sev: relV, speed: Math.abs(b.speed || 0), carIdx: (a.num | 0) + (b.num | 0) });
+}
+
+// B2 game-side hook — called at the barrier clamp site (game.js wallImpact site)
+// on the FIRST pinned frame of a HARD hit. Promotes a bounded set of BARRIER
+// panels near the impact to Rapier DYNAMIC bodies, each pinned to a FIXED
+// backbone anchor by a fixed ImpulseJoint. The kinematic car mirror punts them
+// (one-way); the joint snaps in step() once the solved contact force clears
+// PANEL_BREAK. READ-ONLY w.r.t. the car: this NEVER moves the player — the
+// bespoke xPinned clamp at the ORIGINAL line is untouched, and broken panels are
+// never a collision surface for the car. Deterministic (driven by the
+// deterministic clamp site; kicks seeded from game state).
+function promoteBarrier(c, side, sev) {
+  if (!_breakBarriers || !world || !c) return 0;
+  if ((sev || 0) < PANEL_SEV_MIN) return 0;   // only hard hits knock barriers loose
+  const track = G.track;
+  if (!track) return 0;
+  if (_panels.length >= PANEL_CAP) return 0;
+  const room = PANEL_CAP - _panels.length;
+  const n = Math.max(1, Math.min(room, 2 + Math.floor((sev || 0) * 0.12)));
+  const s0 = c.s;
+  let made = 0;
+  for (let i = 0; i < n; i++) {
+    const so = s0 + (i - (n - 1) / 2) * (PANEL_LEN * 2.1);   // spaced along the wall line
+    Tracks.sample(track, so, _smp);
+    const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
+    const rx = _smp.r[0] / rl, rz = _smp.r[2] / rl;
+    const lat = Tracks.wallAt(track, so, side) * side;      // signed barrier-line offset
+    const wx = _smp.p[0] + rx * lat;
+    const wy = _smp.p[1] + PANEL_HY;
+    const wz = _smp.p[2] + rz * lat;
+    const yaw = Math.atan2(_smp.t[0], _smp.t[2]);            // face along the track
+    const rq = { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
+    // Fixed backbone anchor + dynamic panel body, co-located at the panel home.
+    const anchor = world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(wx, wy, wz).setRotation(rq));
+    const body = world.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic().setTranslation(wx, wy, wz).setRotation(rq));
+    const col = world.createCollider(
+      RAPIER.ColliderDesc.cuboid(PANEL_LAT, PANEL_HY, PANEL_LEN)
+        .setMass(PANEL_MASS).setFriction(0.7).setRestitution(0.1), body);
+    col.setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS);
+    col.setContactForceEventThreshold(FORCE_MIN);
+    // Fixed ImpulseJoint: identity local frames at each body origin → the panel is
+    // rigidly held at the backbone until the joint is removed on break.
+    const jd = RAPIER.JointData.fixed(
+      { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 },
+      { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 });
+    const joint = world.createImpulseJoint(jd, anchor, body, true);
+    _panelHandles.set(col.handle, _panels.length);
+    _panels.push({ body, anchor, joint, home: { x: wx, y: wy, z: wz },
+                   live: true, broken: false, force: 0, restT: 0, s: so, side });
+    made++;
+  }
+  if (made) _panelSeq++;
+  return made;
 }
 
 // Test helper (__apex.debris({burst:n})): queue n synthetic impacts at the
@@ -217,6 +535,26 @@ function burst(n, sev) {
   return k;
 }
 
+// A2 game-side hook (called near the combined-slip block for player + AI). m =
+// { lock: axFrac 0..1, slip: max |slip angle| rad, speed: m/s }. Emits a marble
+// only under real lock-up / slide, rate-limited by a seeded stream (NO
+// Date.now/Math.random). COSMETIC ONLY — reads game state, spawns from the car's
+// (s,x) READ-ONLY, never touches grip / px / pz / head / (s,x).
+function tyreMarble(c, m) {
+  if (!world || !_marbles.length || !c || !m) return;
+  if ((m.speed || 0) < MARBLE_MIN_SPEED) return;
+  const hot = (m.lock || 0) >= MARBLE_LOCK_GATE || (m.slip || 0) >= MARBLE_SLIP_GATE;
+  if (!hot) return;
+  const ci = G.cars ? G.cars.indexOf(c) : 0;
+  // Seeded per-car throttle: ~1 marble every few hot ticks. Seed is pure game
+  // state (tick, car idx, quantized slip) so two identical episodes match.
+  const seed = (Math.imul(_tick + 1, 0x9E3779B1) ^ Math.imul(ci + 1, 0x85EBCA6B)
+              ^ (Math.floor((m.slip || 0) * 997) | 0)) | 0;
+  const r = rng32(seed);
+  if (r() > 0.25) return;                 // rate-limit
+  spawnMarble(c, m, r);
+}
+
 // ── spawn ───────────────────────────────────────────────────────────────────
 function acquireSlot() {
   let oldest = null;
@@ -227,6 +565,48 @@ function acquireSlot() {
   return oldest;
 }
 
+function acquireMarble() {
+  let oldest = null;
+  for (const s of _marbles) {
+    if (!s.live) return s;
+    if (!oldest || s.spawnTick < oldest.spawnTick) oldest = s;   // recycle oldest
+  }
+  return oldest;
+}
+
+// Spawn ONE marble beside/behind the car, read-only from its (s,x). Seeded
+// stream `r` continues from tyreMarble so the whole emission is deterministic.
+function spawnMarble(c, m, r) {
+  const track = G.track;
+  if (!track) return;
+  Tracks.sample(track, c.s, _smp);
+  const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
+  const rx = _smp.r[0] / rl, rz = _smp.r[2] / rl;               // track right (planar)
+  const tl = Math.hypot(_smp.t[0], _smp.t[2]) || 1;
+  const fx = _smp.t[0] / tl, fz = _smp.t[2] / tl;               // track forward (planar)
+  const side = (r() < 0.5) ? 1 : -1;
+  const lat = c.x + side * (0.5 + r() * 0.4);                   // just off the tyre
+  const back = -(1.0 + r() * 2.0);                             // shed behind the car
+  const slot = acquireMarble();
+  if (!slot) return;
+  const b = slot.body;
+  b.setEnabled(true);
+  _v.x = _smp.p[0] + rx * lat + fx * back;
+  _v.y = _smp.p[1] + 0.12;
+  _v.z = _smp.p[2] + rz * lat + fz * back;
+  b.setTranslation(_v, true);
+  const vf = (m.speed || 0) * (0.02 + r() * 0.05);             // tiny forward carry
+  const vs = side * (0.3 + r() * 0.6);                        // low outward flick
+  _v.x = fx * vf + rx * vs; _v.y = 0.4 + r() * 0.6; _v.z = fz * vf + rz * vs;
+  b.setLinvel(_v, true);
+  _v.x = (r() - 0.5) * 12; _v.y = (r() - 0.5) * 12; _v.z = (r() - 0.5) * 12;
+  b.setAngvel(_v, true);
+  _q.x = 0; _q.y = 0; _q.z = 0; _q.w = 1;
+  b.setRotation(_q, true);
+  slot.live = true; slot.restT = 0; slot.spawnTick = _tick;
+  _marbleSeq++;
+}
+
 function spawnImpact(imp, track) {
   Tracks.sample(track, imp.s, _smp);
   const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
@@ -235,6 +615,15 @@ function spawnImpact(imp, track) {
   const fx = _smp.t[0] / tl, fz = _smp.t[2] / tl;              // track forward (planar)
   const cx = _smp.p[0] + rx * imp.x, cz = _smp.p[2] + rz * imp.x;
   const cy = _smp.p[1] + 0.35;
+  // A1: if this car had a REAL solved contact force this tick (a mirror
+  // ploughing a dynamic body), fold it into the severity so count/energy scale
+  // with the actual hit. Burst hints keep their fixed severity (the determinism
+  // spec depends on it), so this only lifts wall/car/spall impacts.
+  if (imp.kind !== "burst" && imp.mi != null && imp.mi >= 0 &&
+      imp.mi < _carForce.length && _carForce[imp.mi] > 0) {
+    const fsev = _carForce[imp.mi] / FORCE_SEV_SCALE;
+    if (fsev > imp.sev) imp.sev = fsev;
+  }
   const n = Math.max(2, Math.min(8, 2 + Math.floor(imp.sev * 0.5)));
   // Seed the shard scatter from game state only: tick counter, spawn sequence,
   // car index — never wall clock, never Math.random.
@@ -274,11 +663,17 @@ function step(dt) {
   if (!world) buildWorld(track, cars);
   if (world.timestep !== dt) world.timestep = dt;
   _tick++;
+  // A1: decay per-car spall cooldowns.
+  for (let i = 0; i < _spallCool.length; i++)
+    if (_spallCool[i] > 0) _spallCool[i] = Math.max(0, _spallCool[i] - dt);
 
   // sync-in: mirror every car's pose (position from the road frame, yaw from
   // the world heading for the player / the track tangent for AI). ~0.01 ms
   // for 22 cars (DEEP-DIVE §2).
   for (let i = 0; i < cars.length; i++) {
+    // Incident sim owns this index as a DYNAMIC body — do NOT pose it (a dynamic
+    // body has no setNextKinematic* semantics). IncidentSim reads it back instead.
+    if (_dynCars.has(i)) continue;
     const c = cars[i], m = _mirrors[i];
     Tracks.sample(track, c.s, _smp);
     const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
@@ -291,13 +686,20 @@ function step(dt) {
     m.setNextKinematicRotation(_q);
   }
 
-  // consume queued impacts → spawn pooled shards
+  // consume queued impacts → spawn pooled shards. Remember which mirror indices
+  // were hinted this tick so an A1 spall doesn't double-spawn for the same car.
+  _hinted.clear();
   if (_queue.length) {
-    for (const imp of _queue) spawnImpact(imp, track);
+    for (const imp of _queue) {
+      spawnImpact(imp, track);
+      if (imp.mi != null && imp.mi >= 0) _hinted.add(imp.mi);
+    }
     _queue.length = 0;
   }
 
-  world.step();
+  // A1: step WITH the event queue — this does NOT change the simulation, so
+  // debris positions stay bit-identical (determinism preserved).
+  world.step(_events);
 
   // bookkeeping: rest + distance despawn back into the pool
   const p = G.player;
@@ -316,11 +718,198 @@ function step(dt) {
     }
     if (s.restT > REST_DESPAWN_S || far) { b.setEnabled(false); s.live = false; }
   }
+  // A2: marbles despawn on a LONGER rest (they should linger as off-line
+  // texture) or far distance — same pool discipline as debris.
+  for (const s of _marbles) {
+    if (!s.live) continue;
+    const b = s.body;
+    if (b.isSleeping()) { s.restT += dt; } else { s.restT = 0; }
+    let far = false;
+    if (p) {
+      const t = b.translation();
+      const dx = t.x - px, dz = t.z - pz;
+      far = dx * dx + dz * dz > FAR_DESPAWN_M * FAR_DESPAWN_M;
+    }
+    if (s.restT > MARBLE_REST_DESPAWN_S || far) { b.setEnabled(false); s.live = false; }
+  }
+
+  // A1: drain the tick's contact-force events, canonicalise the order, and fold
+  // real force per car (mirror↔dynamic contacts only).
+  drainForces(cars);
+
+  // A1: a mirror ploughing a dynamic body (e.g. clipping an A3 cone) hard with
+  // NO queued hint still throws a bounded, seeded spall burst next tick.
+  for (let i = 0; i < _carForce.length; i++) {
+    if (_carForce[i] > SPALL_MIN && _spallCool[i] <= 0 && !_hinted.has(i)) {
+      const c = cars[i];
+      if (!c) continue;
+      _queue.push({ kind: "spall", s: c.s, x: c.x, side: (i & 1) ? 1 : -1,
+                    sev: Math.min(4, _carForce[i] / 400), speed: Math.abs(c.speed || 0),
+                    carIdx: i, mi: i });
+      _spallCool[i] = SPALL_COOL_S;
+    }
+  }
+
+  // B2: snap over-loaded panels off their joints and free settled/far ones.
+  if (_panels.length) updatePanels(dt, px, pz);
+}
+
+// B2: break panels whose SOLVED contact force (accumulated in drainForces this
+// tick) cleared PANEL_BREAK — removeImpulseJoint releases the panel and a seeded
+// kick scatters it — then free broken panels that have come to rest or wandered
+// far. The array is compacted and _panelHandles rebuilt only when it changes.
+function updatePanels(dt, px, pz) {
+  let changed = false;
+  for (const p of _panels) {
+    if (!p.live) continue;
+    if (!p.broken && p.joint && p.force > PANEL_BREAK) {
+      try { world.removeImpulseJoint(p.joint, true); } catch (e) {}
+      p.joint = null; p.broken = true; _panelsBroken++;
+      // Seeded scatter kick (game state only, no wall clock / Math.random).
+      const r = rng32((Math.imul(_tick + 1, 0x27D4EB2F) ^ Math.imul((p.s | 0) + 1, 0x9E3779B1)
+                     ^ Math.imul(_panelSeq + 1, 0x85EBCA6B)) | 0);
+      Tracks.sample(G.track, p.s, _smp);
+      const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
+      const rx = _smp.r[0] / rl, rz = _smp.r[2] / rl;
+      _v.x = rx * p.side * (2 + r() * 3); _v.y = 1.5 + r() * 2; _v.z = rz * p.side * (2 + r() * 3);
+      p.body.setLinvel(_v, true);
+      _v.x = (r() - 0.5) * 8; _v.y = (r() - 0.5) * 8; _v.z = (r() - 0.5) * 8;
+      p.body.setAngvel(_v, true);
+    }
+    if (p.broken) {
+      if (p.body.isSleeping()) p.restT += dt; else p.restT = 0;
+      const t = p.body.translation();
+      const dx = t.x - px, dz = t.z - pz;
+      const far = dx * dx + dz * dz > FAR_DESPAWN_M * FAR_DESPAWN_M;
+      if (p.restT > PANEL_REST_DESPAWN_S || far) {
+        try { world.removeRigidBody(p.body); } catch (e) {}
+        try { world.removeRigidBody(p.anchor); } catch (e) {}
+        p.live = false; p.body = null; p.anchor = null; changed = true;
+      }
+    }
+  }
+  if (changed) {
+    _panels = _panels.filter((p) => p.live);
+    _panelHandles.clear();
+    for (let i = 0; i < _panels.length; i++)
+      _panelHandles.set(_panels[i].body.collider(0).handle, i);
+  }
+}
+
+// ── B1: hazard query — settled bodies resting ON the racing surface ─────────
+// Deterministic read of the side-world consumed by the game.js caution state
+// machine. A body counts when it is (a) asleep (isSleeping), (b) roughly at road
+// height, and (c) inside the road half-width once projected back to (s, lat).
+// A3 cones count ONLY after being knocked FURN_DISTURB_M off their placed home —
+// an untouched apex cone is scene dressing, not a yellow-flag hazard. Returns
+// per-sector counts + the worst sector with a representative track fraction.
+// READ-ONLY: never writes a car / (s,x) / px / pz / head.
+function hazards() {
+  const out = { sectors: [0, 0, 0], total: 0, worst: { sector: -1, count: 0, frac: 0 } };
+  if (!world || !G.track) return out;
+  const track = G.track, total = track.total || 1;
+  const sec = track.def && track.def.sectors;
+  const splits = (sec && sec.length === 2) ? [sec[0], sec[1]] : [1 / 3, 2 / 3];
+  const secFrac = [0, 0, 0];
+  const consider = (body) => {
+    if (!body || !body.isSleeping()) return;
+    const t = body.translation();
+    const pr = Tracks.project(track, t.x, t.z);
+    Tracks.sample(track, pr.s, _smp);
+    const hw = _smp.hw || 6;
+    if (Math.abs(t.y - _smp.p[1]) > HAZARD_Y_TOL) return;   // airborne / sunk
+    if (Math.abs(pr.lat) > hw) return;                      // off the racing surface
+    const frac = (((pr.s / total) % 1) + 1) % 1;
+    const si = frac < splits[0] ? 0 : frac < splits[1] ? 1 : 2;
+    if (out.sectors[si] === 0) secFrac[si] = +frac.toFixed(4);
+    out.sectors[si]++; out.total++;
+  };
+  for (const s of _slots) if (s.live) consider(s.body);
+  for (const f of _furn) {
+    const t = f.body.translation();
+    const dx = t.x - f.home.x, dz = t.z - f.home.z;
+    if (dx * dx + dz * dz < FURN_DISTURB_M * FURN_DISTURB_M) continue;   // undisturbed cone
+    consider(f.body);
+  }
+  for (const p of _panels) if (p.live && p.broken) consider(p.body);
+  for (let i = 0; i < 3; i++)
+    if (out.sectors[i] > out.worst.count)
+      out.worst = { sector: i, count: out.sectors[i], frac: secFrac[i] };
+  return out;
+}
+
+// ── B3: marble-grip query — is the player over a settled marble cluster? ─────
+// Returns a grip SCALAR in [MARBLE_GRIP_MIN, 1] that game.js multiplies into the
+// EXISTING gripMult()/muBase composition. It NEVER touches LONG_GRIP/slipFactor
+// and NEVER moves the car — it is a pure function of the deterministic settled-
+// marble positions: sleeping marbles within MARBLE_GRIP_R of the car's world
+// position each shave MARBLE_GRIP_PER off grip, floored at MARBLE_GRIP_MIN. Any
+// off-path (flag off, cold world, no marbles near) returns 1.0 — a true no-op.
+function marbleGrip(c) {
+  if (!_marbleGripOn || !world || !c || !_marbles.length) return 1;
+  const track = G.track;
+  if (!track) return 1;
+  Tracks.sample(track, c.s, _smp);
+  const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
+  const cx = _smp.p[0] + _smp.r[0] / rl * (c.x || 0);
+  const cz = _smp.p[2] + _smp.r[2] / rl * (c.x || 0);
+  const R2 = MARBLE_GRIP_R * MARBLE_GRIP_R;
+  let n = 0;
+  for (const s of _marbles) {
+    if (!s.live || !s.body.isSleeping()) continue;
+    const t = s.body.translation();
+    const dx = t.x - cx, dz = t.z - cz;
+    if (dx * dx + dz * dz <= R2) n++;
+  }
+  return n ? Math.max(MARBLE_GRIP_MIN, 1 - n * MARBLE_GRIP_PER) : 1;
+}
+
+// A1: drain contact-force events into a scratch buffer, SORT deterministically
+// (Rapier's drain order is not guaranteed) by (min handle, max handle, quantized
+// force), then fold each event's force into the car whose mirror was involved.
+function drainForces(cars) {
+  for (let i = 0; i < _carForce.length; i++) _carForce[i] = 0;
+  if (_carForce.length !== cars.length) {
+    _carForce = new Array(cars.length).fill(0);
+    _spallCool = new Array(cars.length).fill(0);
+  }
+  // B2: zero every panel's per-tick solved force before re-accumulating.
+  for (const p of _panels) p.force = 0;
+  _forceBuf.length = 0;
+  if (!_events) { _lastForce = 0; return; }
+  _events.drainContactForceEvents((e) => {
+    _forceBuf.push({ h1: e.collider1(), h2: e.collider2(),
+                     f: e.totalForceMagnitude() });
+  });
+  _forceBuf.sort((a, b) => {
+    const a1 = Math.min(a.h1, a.h2), a2 = Math.max(a.h1, a.h2);
+    const b1 = Math.min(b.h1, b.h2), b2 = Math.max(b.h1, b.h2);
+    if (a1 !== b1) return a1 - b1;
+    if (a2 !== b2) return a2 - b2;
+    return Math.round(a.f) - Math.round(b.f);
+  });
+  let lf = 0;
+  for (const ev of _forceBuf) {
+    const ci = _colliderCar.has(ev.h1) ? _colliderCar.get(ev.h1)
+             : (_colliderCar.has(ev.h2) ? _colliderCar.get(ev.h2) : -1);
+    if (ci >= 0 && ci < _carForce.length) _carForce[ci] += ev.f;
+    // B2: the same solved contact force on a promoted panel drives its joint break.
+    if (_panelHandles) {
+      const pi = _panelHandles.has(ev.h1) ? _panelHandles.get(ev.h1)
+               : (_panelHandles.has(ev.h2) ? _panelHandles.get(ev.h2) : -1);
+      if (pi >= 0 && pi < _panels.length && _panels[pi]) _panels[pi].force += ev.f;
+    }
+    if (ev.f > lf) lf = ev.f;
+  }
+  _lastForce = +lf.toFixed(2);
 }
 
 // ── render (ONE guarded call in game.js's render loop, after the cars) ──────
-let _shardMesh = null;
+let _shardMesh = null, _marbleMesh = null, _coneMesh = null, _panelMesh = null;
 const _drawOpts = { roughness: 0.6, metalness: 0.2, specular: 0.35 };
+const _marbleOpts = { roughness: 0.9, metalness: 0.0, specular: 0.1 };
+const _coneOpts = { roughness: 0.55, metalness: 0.0, specular: 0.3, emissive: 0.08 };
+const _panelOpts = { roughness: 0.7, metalness: 0.1, specular: 0.25 };  // B2 armco slab
 
 function shardMesh() {
   if (_shardMesh) return _shardMesh;
@@ -335,35 +924,105 @@ function shardMesh() {
   _shardMesh = G.gfx.createMesh(out);
   return _shardMesh;
 }
+function marbleMesh() {
+  if (_marbleMesh) return _marbleMesh;
+  // A single tiny dark-rubber cube (~MARBLE_REF_SCALE half-extent); per-body
+  // scale maps it onto each marble's collider size.
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  TrackGeom.addBox(out, [0, 0, 0], [MARBLE_REF_SCALE, MARBLE_REF_SCALE * 0.7, MARBLE_REF_SCALE], [0.04, 0.04, 0.045]);
+  _marbleMesh = G.gfx.createMesh(out);
+  return _marbleMesh;
+}
+function coneMesh() {
+  if (_coneMesh) return _coneMesh;
+  // An orange marshalling cone centred on the origin (base at -CONE_HY so the
+  // mesh centroid lines up with the cuboid collider's centre). Drawn per-body
+  // with the Rapier transform, no per-body scale (scale 1).
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  TrackGeom.addBox(out, [0, -CONE_HY + 0.02, 0], [0.13, 0.02, 0.13], [0.9, 0.35, 0.05]); // base
+  TrackGeom.addCone(out, [0, -CONE_HY + 0.04, 0], 0.10, CONE_HY * 1.9, [0.95, 0.42, 0.08], 10); // body
+  _coneMesh = G.gfx.createMesh(out);
+  return _coneMesh;
+}
+
+// Draw one Rapier body's mesh: quaternion → column-major rotation, uniformly
+// scaled by `sc`, translated to the body position.
+function panelMesh() {
+  if (_panelMesh) return _panelMesh;
+  // A red/white armco slab centred on the origin at the panel collider size,
+  // shared by every promoted panel (drawn per-body with its Rapier transform).
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  TrackGeom.addBox(out, [0, 0, 0], [PANEL_LAT, PANEL_HY, PANEL_LEN], [0.90, 0.92, 0.94]);        // rail face
+  TrackGeom.addBox(out, [0, -PANEL_HY * 0.35, 0], [PANEL_LAT * 1.1, PANEL_HY * 0.25, PANEL_LEN], [0.86, 0.16, 0.15]); // red stripe
+  TrackGeom.addBox(out, [0, -PANEL_HY, 0], [PANEL_LAT * 1.3, PANEL_HY, PANEL_LEN * 0.12], [0.20, 0.20, 0.24]);        // post foot
+  _panelMesh = G.gfx.createMesh(out);
+  return _panelMesh;
+}
+
+function drawBody(body, sc, mesh, opts, gfx) {
+  const t = body.translation(), q = body.rotation();
+  const x = q.x, y = q.y, z = q.z, w = q.w;
+  const xx = x * x, yy = y * y, zz = z * z;
+  const xy = x * y, xz = x * z, yz = y * z, wx = w * x, wy = w * y, wz = w * z;
+  _mat[0] = (1 - 2 * (yy + zz)) * sc; _mat[1] = 2 * (xy + wz) * sc; _mat[2] = 2 * (xz - wy) * sc; _mat[3] = 0;
+  _mat[4] = 2 * (xy - wz) * sc; _mat[5] = (1 - 2 * (xx + zz)) * sc; _mat[6] = 2 * (yz + wx) * sc; _mat[7] = 0;
+  _mat[8] = 2 * (xz + wy) * sc; _mat[9] = 2 * (yz - wx) * sc; _mat[10] = (1 - 2 * (xx + yy)) * sc; _mat[11] = 0;
+  _mat[12] = t.x; _mat[13] = t.y; _mat[14] = t.z;
+  gfx.draw(mesh, _mat, opts);
+}
 
 function draw() {
-  if (!world || !_slots.length) return;
-  const mesh = shardMesh(), gfx = G.gfx;
-  for (const s of _slots) {
-    if (!s.live) continue;
-    const t = s.body.translation(), q = s.body.rotation();
-    // quaternion → column-major rotation, uniformly scaled by the slot size
-    const sc = s.scale;
-    const x = q.x, y = q.y, z = q.z, w = q.w;
-    const xx = x * x, yy = y * y, zz = z * z;
-    const xy = x * y, xz = x * z, yz = y * z, wx = w * x, wy = w * y, wz = w * z;
-    _mat[0] = (1 - 2 * (yy + zz)) * sc; _mat[1] = 2 * (xy + wz) * sc; _mat[2] = 2 * (xz - wy) * sc; _mat[3] = 0;
-    _mat[4] = 2 * (xy - wz) * sc; _mat[5] = (1 - 2 * (xx + zz)) * sc; _mat[6] = 2 * (yz + wx) * sc; _mat[7] = 0;
-    _mat[8] = 2 * (xz + wy) * sc; _mat[9] = 2 * (yz - wx) * sc; _mat[10] = (1 - 2 * (xx + yy)) * sc; _mat[11] = 0;
-    _mat[12] = t.x; _mat[13] = t.y; _mat[14] = t.z;
-    gfx.draw(mesh, _mat, _drawOpts);
+  if (!world) return;
+  const gfx = G.gfx;
+  if (_slots.length) {
+    const mesh = shardMesh();
+    for (const s of _slots) if (s.live) drawBody(s.body, s.scale, mesh, _drawOpts, gfx);
+  }
+  // A2 marbles — sibling loop, tiny cube mesh, per-body scale.
+  if (_marbles.length) {
+    const mesh = marbleMesh();
+    for (const s of _marbles) if (s.live) drawBody(s.body, s.scale, mesh, _marbleOpts, gfx);
+  }
+  // A3 cones — sibling loop, shared cone mesh at scale 1.
+  if (_furn.length) {
+    const mesh = coneMesh();
+    for (const f of _furn) drawBody(f.body, 1, mesh, _coneOpts, gfx);
+  }
+  // B2 promoted barrier panels — sibling loop, shared armco slab at scale 1.
+  if (_panels.length) {
+    const mesh = panelMesh();
+    for (const p of _panels) if (p.live) drawBody(p.body, 1, mesh, _panelOpts, gfx);
   }
 }
 
 // ── status (for __apex.debris and tests) ────────────────────────────────────
 function liveCount() { let n = 0; for (const s of _slots) if (s.live) n++; return n; }
-// Flat [x,y,z,qx,qy,qz,qw] per live slot, in slot order — the determinism
-// spec compares two seeded episodes' arrays element-for-element.
+function marbleCount() { let n = 0; for (const s of _marbles) if (s.live) n++; return n; }
+// Flat [x,y,z,qx,qy,qz,qw] per body — impact debris FIRST (unchanged order, so
+// the determinism spec still matches element-for-element), then marbles, then
+// furniture. Every source is deterministic for a fixed seeded episode.
 function positions() {
   const out = [];
   for (const s of _slots) {
     if (!s.live) continue;
     const t = s.body.translation(), q = s.body.rotation();
+    out.push(t.x, t.y, t.z, q.x, q.y, q.z, q.w);
+  }
+  for (const s of _marbles) {
+    if (!s.live) continue;
+    const t = s.body.translation(), q = s.body.rotation();
+    out.push(t.x, t.y, t.z, q.x, q.y, q.z, q.w);
+  }
+  for (const f of _furn) {
+    const t = f.body.translation(), q = f.body.rotation();
+    out.push(t.x, t.y, t.z, q.x, q.y, q.z, q.w);
+  }
+  // B2 panels appended LAST — the debris/marble/furniture prefix above is
+  // unchanged, so the debris determinism spec still matches element-for-element
+  // (a seeded debris episode never promotes panels — that needs a hard wall hit).
+  for (const p of _panels) {
+    if (!p.live) continue;
+    const t = p.body.translation(), q = p.body.rotation();
     out.push(t.x, t.y, t.z, q.x, q.y, q.z, q.w);
   }
   return out;
@@ -375,13 +1034,27 @@ function status() {
     loadState: _loadState,
     error: _loadErr,
     active: _active,
-    live: liveCount(),
+    live: liveCount(),          // impact-debris ONLY (cap spec asserts live===16)
     cap: _cap || capFor(),
     stepped: _tick,
     spawned: _spawnedTotal,
     lastImpact: _lastImpact,
+    // ── Group A extras: SEPARATE fields (never folded into live/cap) ──
+    marbles: marbleCount(),     // live A2 marbles
+    marbleCap: _marbleCap || marbleCapFor(),
+    furniture: _furn.length,    // A3 cone bodies in the current world
+    furnCount: _furnList ? _furnList.length : 0,
+    lastForce: _lastForce,      // max real solved contact force last tick (A1)
+    // ── Group B extras ──
+    panels: _panelLive(),       // B2 promoted panels currently in the world
+    panelsBroken: _panelsBroken,// B2 cumulative panels that snapped free
+    breakBarriers: _breakBarriers,
+    marbleGrip: _marbleGripOn,
   };
 }
+function _panelLive() { let n = 0; for (const p of _panels) if (p.live) n++; return n; }
 
-return { create, active, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions };
+return { create, active, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
+         registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags,
+         rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose, isCarDynamic };
 })();

@@ -1,7 +1,76 @@
 /* Apex 26 — design tokens (:root), base html/body/canvas, menu-toggle states.
-   Split from css/style.css (lines 1-62 of the original); the <link>
-   order in index.html preserves the original source order, so the cascade
-   is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
+   Split from css/style.css (lines 1-62 of the original). Now the FIRST-loaded
+   sheet, it declares the cascade-layer order once for the whole split stylesheet
+   (see tools/manifest.cjs CSS). Every split sheet wraps its rules in the layer
+   that matches its former load position, so the winner of every cross-file
+   collision is unchanged (the only bare-element base rules live here in `base`;
+   all later files override with higher class/id specificity, which layers keep
+   as the winner). The `@layer` declaration below just makes that ordering
+   explicit and deterministic instead of load-order-implicit. */
+
+/* Deterministic cascade-layer order across the split stylesheet. reset < base <
+   components < hud < overlays. Later layers win normal-declaration ties. */
+@layer reset, base, components, hud, overlays;
+
+/* Self-hosted web fonts (SIL OFL 1.1 — see assets/fonts/*-OFL.txt). Vendored via
+   `npm pack @fontsource/{titillium-web,rajdhani}`; latin woff2 subsets only.
+   Titillium Web is the family the real F1 site uses (menus/body); Rajdhani is a
+   condensed technical face for the numeric HUD/timing. `font-display: swap` so
+   the system-font fallback paints instantly and never blocks first render.
+   @font-face is layer-insensitive, so these sit outside the layer blocks.
+   Immutable vendored assets → NO ?v= cache-buster (same as vendor/three-*). */
+@font-face {
+  font-family: "Titillium Web"; font-style: normal; font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/titillium-web-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Titillium Web"; font-style: normal; font-weight: 600;
+  font-display: swap;
+  src: url("../assets/fonts/titillium-web-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Titillium Web"; font-style: normal; font-weight: 700;
+  font-display: swap;
+  src: url("../assets/fonts/titillium-web-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+  /* One italic face (700) covers the italic headings/labels; the browser
+     synth-bolds it for the 800 weights the design uses. */
+  font-family: "Titillium Web"; font-style: italic; font-weight: 700;
+  font-display: swap;
+  src: url("../assets/fonts/titillium-web-latin-700-italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Rajdhani"; font-style: normal; font-weight: 500;
+  font-display: swap;
+  src: url("../assets/fonts/rajdhani-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Rajdhani"; font-style: normal; font-weight: 600;
+  font-display: swap;
+  src: url("../assets/fonts/rajdhani-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Rajdhani"; font-style: normal; font-weight: 700;
+  font-display: swap;
+  src: url("../assets/fonts/rajdhani-latin-700-normal.woff2") format("woff2");
+}
+
+/* Native same-document View Transitions (progressive enhancement — menus.js
+   wraps its screen swaps in document.startViewTransition when supported). Give
+   the default root crossfade a snappy, game-appropriate duration, and cancel it
+   entirely under prefers-reduced-motion. Outside the layer blocks: these UA
+   pseudo-elements aren't part of the normal element cascade. */
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: 0.22s; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}
+
+@layer base {
 /* Apex 26 — layout, HUD, menus. Data hub styles live in css/data.css */
 
 :root {
@@ -19,7 +88,32 @@
   --r-sm:   4px;
   --r-md:   8px;
   --r-lg:   14px;
+  /* Type: menus/body use Titillium Web; the numeric HUD/timing uses the
+     condensed Rajdhani. Both fall back to the previous system stack so a
+     failed font load is invisible. */
+  --font-ui:  "Titillium Web", "Segoe UI", system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  --font-hud: "Rajdhani", "Titillium Web", "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* Team skin: one accent hex drives the HUD identity. Defaults to the F1 red;
+     a per-team override lives in the [data-team] blocks below, set on <html> by
+     the HUD when the player's team is known. --accent-dim is derived so it
+     tracks whatever --accent resolves to (custom props resolve at use-time). */
+  --accent: var(--red);
+  --accent-dim: color-mix(in oklab, var(--accent) 40%, var(--bg));
 }
+
+/* Per-team accents (ids + colours from js/car/teams.js — vivid brand colour of
+   each team; dark liveries use their secondary accent so it reads on --bg). */
+:root[data-team="mercedes"]    { --accent: #00b4ab; }
+:root[data-team="ferrari"]     { --accent: #dc0000; }
+:root[data-team="mclaren"]     { --accent: #ff8000; }
+:root[data-team="redbull"]     { --accent: #ffd700; }
+:root[data-team="alpine"]      { --accent: #0093cc; }
+:root[data-team="racingbulls"] { --accent: #1634cb; }
+:root[data-team="haas"]        { --accent: #da291c; }
+:root[data-team="williams"]    { --accent: #0f3cc9; }
+:root[data-team="audi"]        { --accent: #fa470d; }
+:root[data-team="astonmartin"] { --accent: #b7e11b; }
+:root[data-team="cadillac"]    { --accent: #f5f5f5; }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -28,7 +122,7 @@ html, body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: "Segoe UI", system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  font-family: var(--font-ui);
   -webkit-user-select: none; user-select: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: none;
@@ -63,3 +157,4 @@ button:active { background: rgba(255, 255, 255, 0.2); }
    so the next tap hit the wrong button. Dim, keep the slot. */
 button:disabled { opacity: 0.35; cursor: default; }
 button:disabled:hover { background: rgba(255, 255, 255, 0.07); }
+} /* @layer base */
