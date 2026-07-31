@@ -53,11 +53,12 @@
     ],
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash, pal,
-              grandstand, building, motorhome, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
-              pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum, along,
+              grandstandEx, building, motorhome, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
+              pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum,
               tower, forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
               groundedSegments, recordBarrier, circuitKit,
-              signBoard, seat, cantilever, addPyramid } = api;
+              signBoard, seat, addPyramid,
+              spectatorHill, cameraTower, sponsorHoarding } = api;
       const k = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
@@ -223,63 +224,81 @@
       // block at 18-22 m clearance swings its far end out over a doubling-back
       // stretch of the lap. Silverstone's stands are separate blocks anyway, so
       // the hero enclosures are split into adjacent 40-50 m sections.
+      //
+      // grandstandEx + STAND_SETS.silverstone ("navy","steel","alu") replaces
+      // the near-identical grey grandstand() boxes that used to stand at every
+      // one of these: each call now rotates a named shell family while a shared
+      // Silverstone-blue roof/fascia keeps the whole venue reading as one place
+      // (real Silverstone stands carry the same blue fascia trim regardless of
+      // shell colour). Hero corners (Copse, Stowe, the Wing) get raked two- or
+      // three-tier decks with hospitality suites; the rest stay single-tier to
+      // hold the vertex budget.
+      const STAND_LIVS = ["navy", "steel", "alu"];      // STAND_SETS.silverstone rotation
+      const SIL_ROOF   = [0.16, 0.30, 0.58];             // shared Silverstone-blue roof
+      const SIL_FASCIA = [0.09, 0.19, 0.42];             // shared deeper-blue fascia band
+      let standI = 0;
+      const nextLiv = () => STAND_LIVS[standI++ % STAND_LIVS.length];
+      const stand = (s, side, gap, len, opts) =>
+        grandstandEx(s, side, gap, len, null, null,
+          Object.assign({ livery: nextLiv(), roofCol: SIL_ROOF, fasciaCol: SIL_FASCIA }, opts));
+
       // Copse corner — large main straight view
-      grandstand(0.032, 1, 18, 42,  [0.44, 0.45, 0.50], [0.52, 0.30, 0.28]);
-      grandstand(0.048, 1, 18, 42,  [0.44, 0.45, 0.50], [0.52, 0.30, 0.28]);
+      stand(0.032, 1, 18, 42,  { tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      stand(0.048, 1, 18, 42,  { tiers: 2, roof: "cantilever", endWalls: true });
       // Maggotts/Becketts complex
-      grandstand(0.114, -1, 18, 40, [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
-      grandstand(0.128, -1, 18, 40, [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
+      stand(0.114, -1, 18, 40, { roof: "truss", endWalls: true });
+      stand(0.128, -1, 18, 40, { roof: "truss" });
       // Stowe — large sweeping stand
-      grandstand(0.292, 1, 16, 44,  [0.44, 0.45, 0.50], [0.54, 0.28, 0.28]);
-      grandstand(0.309, 1, 16, 44,  [0.44, 0.45, 0.50], [0.54, 0.28, 0.28]);
+      stand(0.292, 1, 16, 44,  { tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      stand(0.309, 1, 16, 44,  { tiers: 2, roof: "cantilever", endWalls: true });
       // Club — fast corner seating
-      grandstand(0.392, 1, 12, 46,  [0.44, 0.45, 0.50], [0.52, 0.30, 0.28]);
-      grandstand(0.410, 1, 12, 46,  [0.44, 0.45, 0.50], [0.52, 0.30, 0.28]);
+      stand(0.392, 1, 12, 46,  { roof: "flat" });
+      stand(0.410, 1, 12, 46,  { roof: "truss", endWalls: true });
       // The Loop — hairpin seating (both sides)
-      grandstand(0.66, -1, 14, 44,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
-      grandstand(0.67,  1, 16, 42,  [0.42, 0.44, 0.48], [0.46, 0.30, 0.28]);
+      stand(0.66, -1, 14, 44,  { roof: "flat" });
+      stand(0.67,  1, 16, 42,  { roof: "cantilever" });
       // Brooklands/Luffield — signature view
-      grandstand(0.843, -1, 14, 44, [0.44, 0.45, 0.50], [0.52, 0.30, 0.28]);
-      grandstand(0.858, -1, 14, 44, [0.44, 0.45, 0.50], [0.52, 0.30, 0.28]);
+      stand(0.843, -1, 14, 44, { tiers: 2, roof: "cantilever", endWalls: true });
+      stand(0.858, -1, 14, 44, { roof: "truss" });
       // Abbey (fast) — wide run-off viewing
-      grandstand(0.544, 1, 22, 42,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
-      grandstand(0.558, 1, 22, 42,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
+      stand(0.544, 1, 22, 42,  { roof: "cantilever", endWalls: true });
+      stand(0.558, 1, 22, 42,  { roof: "flat" });
       // Maggotts secondary stand (larger complex)
-      grandstand(0.10,  1, 20, 46,  [0.42, 0.44, 0.48], [0.50, 0.30, 0.28]);
+      stand(0.10,  1, 20, 46,  { roof: "cantilever" });
       // Chapel corner — fans favourite viewpoint
-      grandstand(0.17, -1, 20, 46,  [0.44, 0.45, 0.50], [0.48, 0.32, 0.30]);
+      stand(0.17, -1, 20, 46,  { roof: "truss", endWalls: true });
 
       // 4. Broad spectator fields: secondary stand ranks fill the famous viewing
       // bowls, while Hangar Straight itself remains deliberately open. These sat
       // 42-52 m back and read as distant scenery; a second rank at 26-34 m sits
       // BEHIND the front stands above and still reads as a stepped enclosure.
-      for (const [s, side, gap, len, crowd] of [
-        [0.105, -1, 34, 44, [0.50, 0.28, 0.26]], // Maggotts approach
-        [0.145,  1, 30, 46, [0.46, 0.30, 0.30]], // Becketts exit
-        [0.285,  1, 32, 46, [0.54, 0.28, 0.26]], // Stowe entry
-        [0.325, -1, 26, 46, [0.48, 0.30, 0.28]], // Vale
-        [0.815, -1, 28, 46, [0.52, 0.28, 0.26]], // Brooklands approach
-        [0.875, -1, 26, 46, [0.48, 0.30, 0.30]], // Luffield/Woodcote
-      ]) grandstand(s, side, gap, len, [0.42, 0.44, 0.48], crowd);
+      for (const [s, side, gap, len] of [
+        [0.105, -1, 34, 44], // Maggotts approach
+        [0.145,  1, 30, 46], // Becketts exit
+        [0.285,  1, 32, 46], // Stowe entry
+        [0.325, -1, 26, 46], // Vale
+        [0.815, -1, 28, 46], // Brooklands approach
+        [0.875, -1, 26, 46], // Luffield/Woodcote
+      ]) stand(s, side, gap, len, {});
 
       // 4b. The rest of the named Silverstone enclosures. Every British GP
       // grandstand has a name on the ticket, and the lap was missing most of
       // them — Village, Vale, Farm, Aintree, Woodcote and the National-straight
       // Copse/Becketts pair. Modest lengths so the lap reads as a ring of
       // separate stands rather than one continuous wall of seating.
-      for (const [s, side, gap, len, crowd] of [
-        [0.020,  1, 14, 46, [0.48, 0.30, 0.30]], // Copse entry (National straight)
-        [0.155, -1, 14, 44, [0.50, 0.28, 0.26]], // Becketts inner
-        [0.345,  1, 14, 62, [0.52, 0.30, 0.28]], // Vale
-        [0.375, -1, 16, 44, [0.46, 0.30, 0.30]], // Vale inner
-        [0.575, -1, 16, 48, [0.50, 0.30, 0.26]], // Farm curve
-        [0.620,  1, 13, 56, [0.54, 0.28, 0.28]], // Village
-        [0.635, -1, 15, 42, [0.46, 0.32, 0.30]], // Village inner
-        [0.715,  1, 14, 50, [0.48, 0.30, 0.28]], // Aintree
-        [0.790, -1, 15, 46, [0.52, 0.28, 0.26]], // Brooklands entry
-        [0.905, -1, 15, 58, [0.50, 0.30, 0.28]], // Woodcote
-        [0.940,  1, 16, 52, [0.48, 0.32, 0.30]], // National straight (old pits side)
-      ]) grandstand(s, side, gap, len, [0.43, 0.44, 0.49], crowd);
+      for (const [s, side, gap, len, opts] of [
+        [0.020,  1, 14, 46, {}],                            // Copse entry (National straight)
+        [0.155, -1, 14, 44, {}],                             // Becketts inner
+        [0.345,  1, 14, 62, { tiers: 2, endWalls: true }],   // Vale
+        [0.375, -1, 16, 44, {}],                             // Vale inner
+        [0.575, -1, 16, 48, {}],                             // Farm curve
+        [0.620,  1, 13, 56, { roof: "truss" }],               // Village
+        [0.635, -1, 15, 42, {}],                             // Village inner
+        [0.715,  1, 14, 50, {}],                             // Aintree
+        [0.790, -1, 15, 46, {}],                             // Brooklands entry
+        [0.905, -1, 15, 58, { tiers: 2, endWalls: true }],   // Woodcote
+        [0.940,  1, 16, 52, {}],                             // National straight (old pits side)
+      ]) stand(s, side, gap, len, opts);
 
       // ---- The Wing building (s≈0.43–0.47 R) — four grounded atomic bays ----
       // Four overlapping 64 m bays follow the pit-straight ground/heading and
@@ -290,8 +309,17 @@
         for (let i = 0; i < wingFracs.length; i++) {
           const a = anchor(k(wingFracs[i]), 1, 16);
           const b = [a.r, a.u, a.t];
+          // The Wing's signature is a swept, tapered cantilever roofline, not
+          // the flat constant-height slab this used to be. sweepPeak gives the
+          // whole building a shallow rise-and-fall along its length (low at
+          // both gable ends, cresting over the middle two bays); within each
+          // bay the roof is a 3-step TAPER from a thick spine over the back
+          // wall down to a thin leading edge cantilevered out over the road —
+          // an aerofoil-like cross-section instead of one uniform-height box.
+          const sweepPeak = Math.sin(((i + 0.5) / wingFracs.length) * Math.PI);
+          const roofY = 12.0 + sweepPeak * 1.8;
           modelGroup(`silverstone-wing-facade-${i + 1}`, {
-            center: vadd(a.c, a.u, 6.7), size: [24, 13.4, 64], basis: b,
+            center: vadd(a.c, a.u, 7.8), size: [26, 16, 64], basis: b,
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
             TrackGeom.addBox(stage, vadd(a.c, a.u, 5.5), [20, 11, 64], [0.86, 0.86, 0.88], b);
@@ -299,13 +327,28 @@
             TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [20.2, 3.8, 62], [0.10, 0.14, 0.22], b);
             TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [18, 3.2, 60], LIT_WIN, b);
             stage._mat = MAT.METAL;
-            TrackGeom.addBox(stage, vadd(a.c, a.u, 12.7), [24, 1.4, 64], [0.90, 0.92, 0.96], b);
+            // Tapered roof: three 8 m-wide bands stepping DOWN from the back
+            // (over the set-back wall) to the leading, trackside edge.
+            const bands = [
+              { rOff:  8, h: 1.7,  top: roofY + 0.9 },   // back spine (tallest)
+              { rOff:  0, h: 1.15, top: roofY + 0.35 },  // mid step
+              { rOff: -8, h: 0.55, top: roofY - 0.25 },  // thin cantilevered leading edge
+            ];
+            for (const bd of bands) {
+              const rc = vadd(vadd(a.c, a.r, bd.rOff), a.u, bd.top - bd.h / 2);
+              TrackGeom.addBox(stage, rc, [8.4, bd.h, 64], [0.90, 0.92, 0.96], b);
+            }
+            // Thin roof fin along the tallest (back) band — the accent blade
+            // that reads from trackside as the building's signature line.
+            TrackGeom.addBox(stage, vadd(vadd(a.c, a.r, 8), a.u, roofY + 1.6), [0.5, 1.0, 60], [0.86, 0.88, 0.92], b);
           }, { required: true });
         }
       }
 
-      // Wing grandstand (behind pit building, s≈0.46 R)
-      grandstand(0.46, 1, 12, 110, [0.48, 0.50, 0.54], [0.60, 0.24, 0.24]);
+      // Wing grandstand (behind pit building, s≈0.46 R) — the tall stepped
+      // seating the brief calls for flanking The Wing; the venue's biggest
+      // single stand gets the full three-tier treatment.
+      stand(0.46, 1, 12, 110, { tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
 
       // ---- The Wing: control tower rising from the building roofline (s≈0.44 R) ----
       // Placed at dist=32, anchored cleanly off track — uses tower() composite helper
@@ -473,7 +516,10 @@
       forestEdge(0.49, 0.497, 1, 18, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Wing outer belt
       forestEdge(0.516, 0.53, 1, 18, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); //  (breaks over the pit complex)
       forestEdge(0.71, 0.75,  1, 18, { density: 0.4,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Aintree outer copse
-      forestEdge(0.61, 0.65, -1, 18, { density: 0.35, hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Village outer belt
+      // (A "Village outer belt" forestEdge(0.61,0.65,-1,...) used to sit right
+      // here, duplicating the broadleaf fringe belt that already covers
+      // 0.60-0.76 on this side above — one of several stacked treatments
+      // relieving the Village/Loop infield's repetition; removed.)
       forestEdge(0.35, 0.39, -1, 19, { density: 0.3,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Vale outer field copse
       // Very thin Hangar Straight fringe only — silhouette hangars need sky behind them
       forestEdge(0.18, 0.28,  1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
@@ -565,26 +611,33 @@
       // BESPOKE AIRFIELD & FARMLAND LANDMARKS — local models from raw primitives
       // =======================================================================
 
-      // --- WWII curved-roof aircraft hangar: a corrugated barrel roof (a
-      //     horizontal octagon cylinder laid along the tangent, its lower half
-      //     hidden inside the hall) over a rectangular hall with big sliding
-      //     doors on both gable ends. The Silverstone airfield signature.
-      function hangar(kk, side, dist, w, bodyH, ln) {
+      // --- Silverstone Experience museum: the ONE former RAF hangar that
+      //     really is still standing at the circuit, re-clad in Silverstone
+      //     blue with a glazed entrance gable and forecourt sign rather than
+      //     left as bare wartime corrugated iron — the barrel-roofed hall
+      //     silhouette is unchanged, so the shape still reads as "ex-hangar".
+      function heritageMuseum(kk, side, dist) {
+        const w = 32, bodyH = 9, ln = 40;
         const a = anchor(kk, side, dist);
         if (onTrack(a.c[0], a.c[2], Math.max(w, ln) * 0.5 + 6)) return;
         const b = [a.r, a.u, a.t];
         out._mat = MAT.CONCRETE;
-        addBox(out, vadd(a.c, a.u, bodyH / 2), [w, bodyH, ln], [0.60, 0.60, 0.58], b);   // hall
+        addBox(out, vadd(a.c, a.u, bodyH / 2), [w, bodyH, ln], [0.84, 0.85, 0.86], b);   // re-clad hall
         out._mat = MAT.RUST;
         addCyl(out, vadd(vadd(a.c, a.u, bodyH), a.t, -ln / 2), w / 2, ln,
-               [0.52, 0.53, 0.55], 8, [a.r, a.t, a.u]);                                   // barrel roof
+               [0.58, 0.60, 0.65], 8, [a.r, a.t, a.u]);                                   // original barrel roof, repainted
         out._mat = MAT.METAL;
-        for (const end of [-1, 1]) {
-          addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.45), a.t, end * (ln / 2 + 0.05)),
-                 [w * 0.9, bodyH * 0.9, 0.3], [0.30, 0.31, 0.33], b);                     // sliding doors
-          addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.45), a.t, end * (ln / 2 + 0.12)),
-                 [0.2, bodyH * 0.9, 0.1], [0.50, 0.50, 0.52], b);                         // door split
-        }
+        // Silverstone-blue fascia band along the eaves — the branding line
+        // that marks this hangar out as the museum, not one more wartime shed.
+        addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.94), a.t, 0), [w + 0.4, 1.1, ln], [0.10, 0.20, 0.44], b);
+        // Glazed entrance gable + canopy at the trackside end.
+        const gable = vadd(vadd(a.c, a.u, bodyH * 0.42), a.t, -(ln / 2 + 0.05));
+        out._mat = MAT.GLASS;
+        addBox(out, gable, [w * 0.5, bodyH * 0.72, 0.3], [0.16, 0.22, 0.32], b);
+        out._mat = MAT.METAL;
+        addBox(out, vadd(gable, a.u, bodyH * 0.42), [w * 0.56, 0.5, 3.0], [0.10, 0.20, 0.44], b); // entrance canopy
+        // Forecourt sign panel — this reads as a museum now, not an aerodrome.
+        addBox(out, vadd(vadd(a.c, a.u, bodyH + 1.3), a.t, ln * 0.28), [7.5, 1.7, 0.3], [0.94, 0.95, 0.96], b);
         out._mat = 0;
       }
 
@@ -645,23 +698,20 @@
         out._mat = 0;
       }
 
-      // 3. Open Hangar Straight (≈0.18–0.28): mid-distance barrel hangar silhouettes
-      // on the former WWII airfield apron — reads against open sky, not forest wall.
-      hangar(k(0.19),  1,  95, 28, 8, 36);
-      hangar(k(0.21), -1, 100, 26, 7, 34);
-      hangar(k(0.24),  1, 105, 30, 8, 40);
-      hangar(k(0.26), -1,  98, 24, 7, 32);
-      hangar(k(0.275), 1, 112, 22, 7, 30);
-      // Far outfield hangars elsewhere (Wing / Loop / Maggotts far).
-      hangar(k(0.52),  1, 150, 24, 7, 32);
-      hangar(k(0.72),  1, 155, 22, 7, 30);
-      hangar(k(0.08), -1, 160, 22, 7, 28);
+      // 3. Hangar Straight (≈0.18–0.28) stays genuinely open. No hangars have
+      // stood here since RAF Silverstone closed in 1946 — the barrel-roofed
+      // WWII silhouettes that used to dress this stretch (and the outfield
+      // near the Wing/Loop/Maggotts) were an anachronism, removed outright.
       // Northamptonshire farm barns + grain silos gridding the fields.
       barn(k(0.30), -1, 165);
       barn(k(0.62), -1, 170);
       barn(k(0.86),  1, 160);
-      // Heritage Spitfire on a plinth — airfield history display near the paddock.
-      heritagePlane(k(0.50), 1, 120);
+      // Silverstone Experience museum (s≈0.95 R, paddock entrance) — the one
+      // former hangar that really is still standing at the circuit.
+      heritageMuseum(k(0.95), 1, 115);
+      // Heritage Spitfire on a plinth, moved to read ALONGSIDE the museum
+      // (it used to sit alone out by the Wing, unrelated to any building).
+      heritagePlane(k(0.953), 1, 92);
       // Rich start-light gantry cluster spanning the National straight.
       startGantryCluster(0.995);
 
@@ -745,72 +795,11 @@
         [0.36, 0.38, 0.42], [0.50, 0.46, 0.38],
       ];
 
-      // --- Trackside advertising hoarding: the continuous board line that backs
-      //     every run-off at a modern GP. Two prims per panel run, so a full
-      //     sector of it costs almost nothing but changes the read completely.
-      function hoardingLine(s0, s1, side, gap) {
-        along(s0, s1, 12, (kk, spacing) => {
-          const p = anchor(kk, side, gap);
-          if (onTrack(p.c[0], p.c[2], 1.4)) return;
-          const b = [p.r, p.u, p.t];
-          const col = SPONSOR[Math.floor(hash(kk * 3.1 + side) * SPONSOR.length) % SPONSOR.length];
-          addBox(out, vadd(p.c, p.u, 0.85), [0.25, 1.7, spacing], col, b);        // panel face
-          addBox(out, vadd(p.c, p.u, 1.78), [0.40, 0.20, spacing], WHITE, b);     // white top rail
-        });
-      }
-
-      // --- Terraced spectator mound: three earth steps rising AWAY from the
-      //     track with a speckled crowd blanket on each tread. Silverstone's
-      //     general-admission banks, not seating — low enough to keep the
-      //     horizon, dense enough to read as people rather than landform.
-      //     Walked with along() and re-anchored at every node: a single anchor
-      //     stretched over 60-70 m of a corner is a chord, and its ends lift off
-      //     the ground (docs/SCENERY-GROUNDING.md, "one ground sample reused").
-      //     seat.box() then puts each step's UNDERSIDE on that local ground, so
-      //     a step can never hover the way a hand-computed centre does.
-      function crowdMound(s0, s1, side, gap, rise) {
-        const steps = 3;
-        along(s0, s1, 7, (kk, spacing) => {
-          const a = anchor(kk, side, gap);
-          if (onTrack(a.c[0], a.c[2], 3)) return;
-          const b = [a.r, a.u, a.t];
-          for (let i = 0; i < steps; i++) {
-            const h = rise * (i + 1) / steps;
-            const foot = vadd(a.c, a.r, side * (1.8 + i * 3.4));
-            seat.box(out, foot, [3.4, h, spacing], i === steps - 1 ? BANK2 : BANK, b);
-            // spectators standing on the tread, ~20% gaps so it speckles
-            const bodies = Math.max(2, Math.round(spacing / 2.0));
-            for (let j = 0; j < bodies; j++) {
-              const hh = hash(kk * 2.3 + i * 7.1 + j * 1.7 + side);
-              if (hh > 0.72) continue;   // ~28% gaps so the bank speckles
-              const off = ((j + 0.5) / bodies - 0.5) * (spacing - 1.2) + (hh - 0.5) * 0.5;
-              const c = vadd(vadd(foot, a.t, off), a.u, h + 0.55);
-              addBox(out, vadd(c, a.r, side * (hh - 0.5) * 1.2),
-                     [0.5, 1.1, 0.45], CROWD_C[Math.floor(hh * 61) % CROWD_C.length], b);
-            }
-          }
-        });
-      }
-
-      // --- TV camera tower: a slim lattice mast with a railed platform and a
-      //     camera head on a real arm (cantilever emits the member, so the head
-      //     can never be left hovering beside a bare pole).
-      function tvTower(s, side, gap, h) {
-        const a = anchor(k(s), side, gap), b = [a.r, a.u, a.t];
-        if (onTrack(a.c[0], a.c[2], 4)) return;
-        out._mat = MAT.METAL;
-        for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
-          const leg = vadd(vadd(a.c, a.r, dr * 0.9), a.t, dt * 0.9);
-          seat.cyl(out, vadd(leg, a.u, -0.4), 0.11, h + 0.4, STEEL, 4, b);
-        }
-        for (let i = 1; i <= 3; i++)   // lattice bracing rings
-          addBox(out, vadd(a.c, a.u, h * i / 4), [2.1, 0.14, 2.1], STEEL, b);
-        seat.box(out, vadd(a.c, a.u, h), [3.0, 0.22, 3.0], [0.40, 0.42, 0.46], b);   // platform deck
-        addBox(out, vadd(a.c, a.u, h + 0.75), [3.1, 0.10, 3.1], [0.62, 0.64, 0.68], b); // hand rail
-        out._mat = 0;
-        cantilever(out, vadd(a.c, a.u, h + 0.6), 1.5, -side,
-                   [0.7, 0.5, 1.1], [0.14, 0.15, 0.18], STEEL, b);                   // camera + arm
-      }
+      // hoardingLine()/crowdMound()/tvTower() used to be hand-rolled here.
+      // They are now the shared engine models sponsorHoarding()/spectatorHill()/
+      // cameraTower() (js/track/scenery-structures.js + scenery-nature.js),
+      // called directly at their old call sites below — the local versions
+      // are gone.
 
       // --- Trackside marshal / recovery point: a low bunker, a fire-tender bay
       //     and a crane pad. Grouped so a rejected footprint drops all of it.
@@ -844,7 +833,7 @@
         [0.60, 0.72,  1], [0.60, 0.72, -1],   // Village / Loop / Aintree
         [0.76, 0.86, -1], [0.76, 0.86,  1],   // Brooklands / Luffield
         [0.86, 0.96, -1], [0.88, 0.96,  1],   // Woodcote > National
-      ]) hoardingLine(s0, s1, side, 9.5);
+      ]) sponsorHoarding(s0, s1, side, 9.5, { palette: SPONSOR, step: 12 });
 
       // ---- Debris fencing behind the hoardings, all the way round the
       //      spectator sectors. fence() indexes its geometry for the foliage
@@ -876,7 +865,10 @@
         [0.796, 0.814,  1, 22, 3.4],   // Brooklands outer
         [0.856, 0.874,  1, 20, 3.6],   // Luffield outer
         [0.915, 0.935, -1, 22, 3.4],   // Woodcote infield
-      ]) crowdMound(s0, s1, side, gap, rise);
+      ]) spectatorHill(s0, s1, side, gap, {
+        rows: 3, rise: rise / 3, depth: 3.4, step: 7, density: 0.7,
+        grass: BANK2, riser: BANK, crowd: CROWD_C,
+      });
 
       // ---- TV camera towers at the signature vantage points.
       for (const [s, side, gap, h] of [
@@ -884,7 +876,7 @@
         [0.305,  1, 24, 12], [0.405,  1, 18, 11], [0.475, -1, 20, 13],
         [0.555,  1, 26, 12], [0.665, -1, 20, 11], [0.845, -1, 20, 12],
         [0.915, -1, 22, 11],
-      ]) tvTower(s, side, gap, h);
+      ]) cameraTower(k(s), side, gap, { h, col: STEEL });
 
       // ---- Marshal / recovery bays behind the run-off at the high-risk points.
       for (const [id, s, side, gap] of [

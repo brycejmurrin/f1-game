@@ -56,7 +56,8 @@
     scenery: function (api) {
       const {
         out, MAT, n, backdrop, groundPatch, waterSurface, waterBand, modelGroup, building, tower, wall,
-        fence, guardrail, tyreWall, grandstand, gantry, marshalPost, billboard,
+        fence, guardrail, tyreWall, grandstand, grandstandEx, sponsorHoarding, broadcastCompound,
+        gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
         addFrustum, ferrisWheel, vadd, hash, cityFront,
         circuitKit,
@@ -256,6 +257,14 @@
       gantry(0.96, 7.0, [0.14, 0.14, 0.18]);
       billboard(0.01, 1, 9, 14, 5, FLAME);
 
+      // Broadcast/OB compound tucked behind the pit building (gap=55 clears the
+      // pit building's far face — circuitKit.pitBuilding sits at gap=30, size
+      // [18,11,76], so its outer edge is ~48m out) — every real paddock keeps
+      // its satellite trucks here and Baku had none.
+      if (broadcastCompound) {
+        broadcastCompound(K(0.975), 1, 55, { vans: 4, dishes: 2, mastH: 10 });
+      }
+
       // ===================================================================
       // National flag poles — three tall flagpoles at the civic plaza.
       // Azerbaijan flag (blue/red/green tricolour) represented as a lit
@@ -401,11 +410,16 @@
       // rampart. The merlon boxes are placed AT wall height to avoid
       // clipping into the wall body below. Dense old-town behind it.
       // ===================================================================
-      wall(0.36, 0.56, 1, 20, 9, SAND, 1.2);  // the main unbroken rampart
+      // The main unbroken rampart — carved into two runs, leaving a ~0.537–0.553
+      // gap for the Icheri Sheher grandstand (below) to stand clear in front of
+      // the wall instead of clipping through its 1.2m-thick shell.
+      wall(0.36, 0.537, 1, 20, 9, SAND, 1.2);
+      wall(0.553, 0.56, 1, 20, 9, SAND, 1.2);
 
       // Crenellations — placed at y = wall height (9m top), so they sit
       // ON TOP of the wall, never through it. Each segment has its own anchor.
       for (let p = 0; p < 10; p++) {
+        if (p === 9) continue;  // s=0.54 — inside the grandstand gap, no wall there to sit on
         const k = K(0.36 + p * 0.020);
         const a = anchor(k, 1, 20);
         // Merlons ON TOP of the 9m wall: y offset = 9 (top face) + 0.9 (half of merlon h)
@@ -429,8 +443,13 @@
           WIN_WARM, b);
       }
 
-      // Dense sandstone old-town behind the rampart
-      cityFront(0.36, 0.56, 1, 24, {
+      // Dense sandstone old-town behind the rampart — carved around the same
+      // 0.537–0.553 grandstand gap as the rampart above it.
+      cityFront(0.36, 0.537, 1, 24, {
+        minH: 6, maxH: 18, depth: 12, step: 16,
+        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
+      });
+      cityFront(0.553, 0.56, 1, 24, {
         minH: 6, maxH: 18, depth: 12, step: 16,
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
       });
@@ -612,12 +631,31 @@
         const STONE = [0.58, 0.52, 0.42];
         const oldCityData = [
           [0.51, 1, 24, 10, 10, 14],
-          [0.54, 1, 26, 12, 12, 12],
+          // Pushed from gap 26 -> 36: the Icheri Sheher grandstand below now
+          // occupies this stretch (reaches out to gap+12.5 = 28.5), so this
+          // building is moved back to stand behind it instead of through it.
+          [0.54, 1, 36, 12, 12, 12],
           [0.56, 1, 22, 14,  8, 16],
         ];
         for (const [s, side, dist, w, h, d] of oldCityData) {
           building(K(s), side, dist, w, h, d, { wall: STONE, window: WIN_WARM, floor: 3, lit: true });
         }
+      }
+
+      // ===================================================================
+      // s≈0.545 R — ICHERI SHEHER GRANDSTAND: the Old City castle-section exit,
+      // one of Baku's two empty hero grandstand slots (see plan doc §3). Sits
+      // in front of the rampart wall (carved above) with the historic wall as
+      // its backdrop. Multi-tier scaffold-on-stone temporary structure, matching
+      // STAND_SETS.baku's "sandstone" family for this Old City position.
+      // ===================================================================
+      if (grandstandEx) {
+        grandstandEx(0.545, 1, 16, 60, null, null, {
+          livery: "sandstone", tiers: 2, roof: "cantilever",
+          pylons: true, endWalls: true,
+        });
+      } else {
+        grandstand(0.545, 1, 16, 60, [0.68, 0.60, 0.47], [0.70, 0.46, 0.28]);
       }
 
       // ===================================================================
@@ -663,8 +701,14 @@
       }
 
       // Continuous modern Caspian-front skyline R: aligned glass tower facades
-      // (gap=14 keeps towers behind armco/fence combo at this section)
-      cityFront(0.63, 0.95, 1, 14, {
+      // (gap=14 keeps towers behind armco/fence combo at this section) — carved
+      // around 0.738–0.762 so the Filarmoniya/Azneft grandstand (below) has a
+      // clear stretch of its own instead of a tower row growing through it.
+      cityFront(0.63, 0.738, 1, 14, {
+        minH: 40, maxH: 100, depth: 20, step: 20,
+        palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
+      });
+      cityFront(0.762, 0.95, 1, 14, {
         minH: 40, maxH: 100, depth: 20, step: 20,
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
       });
@@ -696,25 +740,73 @@
       }
 
       // ===================================================================
+      // s≈0.75/0.755 — FILARMONIYA + AZNEFT GRANDSTAND PAIR at the seafront
+      // kink (T15/T16, hwZone-narrowed hw=5.4). The most photographed viewing
+      // point of the real GP and, until now, empty on both sides. Tall
+      // multi-tier temporary scaffold decks, per STAND_SETS.baku.
+      // ===================================================================
+      if (grandstandEx) {
+        // Filarmoniya side — inside of the kink, the larger of the pair.
+        grandstandEx(0.75, 1, 14, 70, null, null, {
+          livery: "scaffold", tiers: 3, roof: "truss",
+          pylons: true, endWalls: true, suites: true,
+        });
+        // Azneft side — outside of the kink, facing the Caspian.
+        grandstandEx(0.755, -1, 14, 70, null, null, {
+          livery: "scaffold", tiers: 2, roof: "truss",
+          pylons: true, endWalls: true,
+        });
+      } else {
+        grandstand(0.75, 1, 14, 70, [0.50, 0.52, 0.56], [0.60, 0.40, 0.36]);
+        grandstand(0.755, -1, 14, 70, [0.50, 0.52, 0.56], [0.60, 0.40, 0.36]);
+      }
+
+      // ===================================================================
       // s 0.78–0.86 R mid — prominent glass Caspian-front tower cluster
       // Three distinct tower heights (stepped, tapered, tower archetypes)
-      // visible behind the continuous cityFront wall.
+      // visible behind the continuous cityFront wall. i=2,3 (s 0.792/0.803)
+      // are singled out as the PORT BAKU TOWERS: a matched pair at equal
+      // height with a glass crown, distinguishing them from the other seven
+      // generic towers in the cluster.
       // ===================================================================
       for (let i = 0; i < 9; i++) {
         const k   = K(0.77 + i * 0.011);
+        const isPortBaku = i === 2 || i === 3;
         const bW  = 14 + (i % 2) * 4;
-        const h   = 85 + (i % 3) * 45;
+        const h   = isPortBaku ? 150 : 85 + (i % 3) * 45;
         tower(k, 1, 52 + (i % 4) * 24, bW, h,
           { col: GLASS, seg: 7, cap: true, capCol: i % 3 ? WIN_COOL : WIN_WARM });
         // Lit crown ring on each tower (emissive band near top)
         const a = anchor(k, 1, 52 + (i % 4) * 24);
         addFrustum(out, vadd(a.c, a.u, h - 6), bW * 0.32 * 1.1, bW * 0.32 * 0.9, 4,
           i % 3 ? WIN_COOL : WIN_WARM, 7, [a.r, a.u, a.t]);
+        // Port Baku Towers: an extra tapered glass crown on top of the lit
+        // ring — the detail that reads as a matched landmark pair rather
+        // than two more units in the generic cluster.
+        if (isPortBaku) {
+          addFrustum(out, vadd(a.c, a.u, h), bW * 0.30, bW * 0.14, 10, WIN_COOL, 7, [a.r, a.u, a.t]);
+          addCone(out, vadd(a.c, a.u, h + 10), bW * 0.10, 6, WIN_COOL, 7, [a.r, a.u, a.t]);
+        }
       }
 
       // Illuminated billboards along the Caspian straight
       for (let i = 0; i < 5; i++) {
         billboard(K(0.65 + i * 0.065), 1, 9, 14, 6, i % 2 ? FLAME : AZ_BLUE);
+      }
+
+      // Continuous sponsor hoarding along the ~2.2 km Neftchilar Ave straight
+      // (R side, just inside the guardrail/fence combo at gap 3–4) — the
+      // lap's defining feature had 800+ m of bare barrier. Carved around the
+      // 0.738–0.762 Filarmoniya grandstand window above.
+      if (sponsorHoarding) {
+        sponsorHoarding(0.655, 0.738, 1, 2.4, {
+          h: 1.2, step: 14, postCol: [0.20, 0.21, 0.24],
+          palette: [FLAME, AZ_BLUE, [0.90, 0.90, 0.92], TARMAC_AD, [0.14, 0.55, 0.28]],
+        });
+        sponsorHoarding(0.762, 0.94, 1, 2.4, {
+          h: 1.2, step: 14, postCol: [0.20, 0.21, 0.24],
+          palette: [FLAME, AZ_BLUE, [0.90, 0.90, 0.92], TARMAC_AD, [0.14, 0.55, 0.28]],
+        });
       }
 
       // ===================================================================
@@ -741,8 +833,12 @@
       // ── Reflective Caspian Sea ──────────────────────────────────────────
       // A genuine reflective water buffer mirroring the night sky/skyline,
       // laid across the seafront left of the long straight. Narrow overlapping
-      // panels avoid spanning the circuit's nearby foldbacks.
-      waterBand(0.63, 0.93, -1, 16, 236, 12, SEA, { id: "baku-caspian" });
+      // panels avoid spanning the circuit's nearby foldbacks. Split around
+      // 0.748–0.762 so the water recedes (gap0 16 -> 32) behind the Azneft
+      // grandstand instead of the stand appearing to float on the sea.
+      waterBand(0.63, 0.748, -1, 16, 236, 12, SEA, { id: "baku-caspian-a" });
+      waterBand(0.748, 0.762, -1, 32, 236, 12, SEA, { id: "baku-caspian-b" });
+      waterBand(0.762, 0.93, -1, 16, 236, 12, SEA, { id: "baku-caspian-c" });
 
       // ── BAKU EYE — Ferris wheel pushed to far silhouette (sea void mid culled)
       ferrisWheel(K(0.80), -1, 88, 28);
@@ -782,8 +878,40 @@
       }
       // Slim mast cluster further out on the water (far silhouettes)
       for (let i = 0; i < 5; i++) {
+        if (i === 1) continue;  // s=0.705 — National Flag Square (below) takes this spot instead
         const k = K(0.65 + i * 0.055), a = anchor(k, -1, 110 + hash(k) * 40);
         addCyl(out, vadd(a.c, a.u, 6), 0.2, 14 + hash(k * 3) * 8, [0.70, 0.72, 0.80], 4, [a.r, a.u, a.t]);
+      }
+
+      // ===================================================================
+      // s≈0.705 L — NATIONAL FLAG SQUARE: the 162 m flagpole (one of the
+      // tallest in the world) flying a huge Azerbaijan tricolour, on the
+      // Caspian side. Cheap — one tall shaft + a flag panel — for outsized
+      // recognisability. Scaled up with the rest of Baku's skyline landmarks
+      // (Flame Towers 210–240m in this scene) rather than modelled literally.
+      // ===================================================================
+      {
+        const kFlag = K(0.705);
+        const aFlag = anchor(kFlag, -1, 110);
+        if (!onTrack(aFlag.c[0], aFlag.c[2], 2)) {
+          const bFlag = [aFlag.r, aFlag.u, aFlag.t];
+          const poleH = 150;
+          // Plaza plinth
+          addBox(out, vadd(aFlag.c, aFlag.u, 0.3), [16, 0.6, 16], [0.30, 0.30, 0.32], bFlag);
+          // Tapered shaft (two stages — slightly narrower toward the top)
+          addCyl(out, vadd(aFlag.c, aFlag.u, poleH * 0.42), 1.1, poleH * 0.84, [0.72, 0.73, 0.76], 8, bFlag);
+          addCyl(out, vadd(aFlag.c, aFlag.u, poleH * 0.84 + poleH * 0.08), 0.65, poleH * 0.16, [0.76, 0.77, 0.80], 8, bFlag);
+          // Huge tricolour flag panel near the top — three horizontal stripes
+          // (blue / red / green, per the real Azerbaijan flag) hung off the shaft.
+          const flagY = poleH * 0.86;
+          const flagW = 22, flagH = 14;
+          addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY + flagH / 3), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], AZ_BLUE, bFlag);
+          addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], [0.80, 0.16, 0.16], bFlag);
+          addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY - flagH / 3), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], [0.14, 0.55, 0.28], bFlag);
+          // Finial ball + aircraft-warning beacon at the very tip
+          addCyl(out, vadd(aFlag.c, aFlag.u, poleH), 0.9, 1.4, [0.85, 0.72, 0.30], 8, bFlag);
+          addBox(out, vadd(aFlag.c, aFlag.u, poleH + 1.6), [0.5, 0.5, 0.5], [1.6, 0.2, 0.15], bFlag);
+        }
       }
 
       // ── CARPET MUSEUM — pushed to far L silhouette (mid-ground culled)

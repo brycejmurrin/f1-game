@@ -57,11 +57,12 @@
     flatTerrain: true,
     terrainOuter: 70,
     scenery: function (api) {
-      const { out, n, py, pyMin, place, backdrop, wall, grandstand,
+      const { out, n, py, pyMin, place, backdrop, wall, grandstandEx,
         building, anchor, addBox, addCyl, addFrustum, vadd, hash,
         fence, tyreWall, hedge, billboard, gantry, marshalPost, bush,
         ferrisWheel, tower, onTrack, forestEdge, cityFront,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch,
+        broadcastCompound, cameraTower, sponsorHoarding, circuitKit,
         cross, norm, MAT, COL } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -229,10 +230,15 @@
       // ===================================================================
       // s 0.02 R — Pit wall & main grandstand on the start straight
       // ===================================================================
-      grandstand(0.02,  1,  8, 120, [0.50, 0.51, 0.56], [0.62, 0.34, 0.30]);
-      grandstand(0.0,  -1, 10,  90, [0.46, 0.47, 0.52], [0.55, 0.40, 0.38]);
-      grandstand(0.06,  1,  9,  90, [0.48, 0.49, 0.55], [0.58, 0.36, 0.34]);
-      grandstand(0.96, -1, 11,  80, [0.47, 0.48, 0.53], [0.56, 0.38, 0.36]);
+      // Grandstands vary across the three montreal STAND_SETS families
+      // (steel / navy / alu) instead of one grey/warm palette repeated 11–12
+      // times; the main straight's flagship stand gets a second tier, suites
+      // and a truss roof to read as the venue's biggest structure.
+      grandstandEx(0.02,  1,  8, 120, null, null,
+        { livery: "navy", tiers: 2, roof: "truss", suites: true, endWalls: true, pylons: true });
+      grandstandEx(0.0,  -1, 10,  90, null, null, { livery: "steel", roof: "cantilever", endWalls: true });
+      grandstandEx(0.06,  1,  9,  90, null, null, { livery: "alu", roof: "flat" });
+      grandstandEx(0.96, -1, 11,  80, null, null, { livery: "navy", roof: "cantilever" });
 
       // Start/finish gantry spanning the main straight + a second timing arch
       gantry(0.005, 7.5, [0.14, 0.14, 0.18]);
@@ -243,23 +249,47 @@
       flagMast(K(0.005), -1, 10, 12, [0.88, 0.12, 0.16]);
       flagMast(K(0.999),  1,  9, 11, [0.88, 0.12, 0.16]);
 
-      // Pit lane garages / paddock buildings behind the left pit wall (long low row)
-      for (let i = 0; i < 6; i++) {
-        const s = 0.965 + i * 0.012;
-        building(K(s), -1, 13, 16, 9, 14,
-          { wall: [0.66, 0.67, 0.71], window: [0.44, 0.54, 0.64], floor: 4 });
+      // Pit lane / paddock behind the left pit wall — the 2019 Espace Paddock
+      // rebuild via the shared facility kit (circuitKit was previously entirely
+      // unused at Montreal; this replaced eight hand-rolled flat-roof
+      // building() boxes with a real garage-bay rhythm, a canopied hospitality
+      // wing, and the TV/service presence the paddock otherwise has none of).
+      if (circuitKit) {
+        circuitKit.pitBuilding({
+          id: "kit:montreal:pit-building", frac: 0.995,
+          side: -1, gap: 13, size: [18, 10, 260], garages: 16, required: true,
+        });
+        circuitKit.hospitality({
+          id: "kit:montreal:espace-paddock", frac: 0.015,
+          side: -1, gap: 30, size: [20, 15, 130], modules: 5,
+        });
+        // TV/service presence behind the paddock — none existed at all before.
+        circuitKit.cameraCrane({
+          id: "kit:montreal:camera-crane", frac: 0.945,
+          side: -1, gap: 40, size: [6, 17, 6],
+        });
+        circuitKit.serviceCompound({
+          id: "kit:montreal:service-compound", frac: 0.06,
+          side: -1, gap: 45, size: [24, 5, 42], vehicles: 8,
+        });
+        circuitKit.trackSigns({
+          id: "kit:montreal:pit-signage", frac: 0.05,
+          side: 1, gap: 24, size: [2.2, 2.2, 60], count: 8,
+        });
       }
-      // Paddock hospitality block + media centre, taller, set further back
-      building(K(0.0), -1, 30, 26, 16, 22,
-        { wall: [0.72, 0.74, 0.78], window: [0.52, 0.64, 0.76], floor: 4, setback: true, roof: true });
-      building(K(0.03), -1, 32, 22, 13, 20,
-        { wall: [0.68, 0.70, 0.74], window: [0.50, 0.60, 0.72], floor: 4, roof: true });
+      broadcastCompound(K(0.03), -1, 58, { vans: 3, dishes: 2, mastH: 10 });
 
-      // Pit-straight billboards / advertising hoardings (right verge, well clear)
-      for (const s of [0.01, 0.04, 0.97, 0.94]) {
-        billboard(K(s), 1, 10, 14, 4, [0.88, 0.82, 0.22]);
-      }
-      billboard(K(0.07), -1, 11, 12, 4, [0.86, 0.30, 0.26]);
+      // Pit-straight billboards / advertising hoardings (right verge, well clear).
+      // Warm zone (main straight) — varied amber/yellow/red instead of one
+      // repeated yellow board.
+      const STRAIGHT_HUES = [
+        [0.90, 0.62, 0.14], [0.88, 0.82, 0.22], [0.86, 0.24, 0.20], [0.92, 0.50, 0.12],
+      ];
+      [0.01, 0.04, 0.97, 0.94].forEach((s, i) => {
+        billboard(K(s), 1, 10, 14, 4, STRAIGHT_HUES[i]);
+      });
+      // Cooler basin zone starts here (Olympic Basin rowing lake) — teal/blue.
+      billboard(K(0.07), -1, 11, 12, 4, [0.18, 0.52, 0.58]);
 
       // ===================================================================
       // s 0.04 both — Senna S chicane: angled kerb slabs + tyre-wall funnel
@@ -308,8 +338,7 @@
 
       // Basin-entry spectator hero beat, opposite the water so the long view
       // remains open while the braking zone gains a recognisable event crowd.
-      grandstand(0.165, 1, 17, 66,
-        [0.48, 0.50, 0.54], [0.62, 0.34, 0.30]);
+      grandstandEx(0.165, 1, 17, 66, null, null, { livery: "steel", roof: "truss" });
 
       // ── s 0.10 L — Rowing regatta spectator platform overlooking the basin ──
       // A simple concrete deck on stilts — like the permanent grandstand at the
@@ -387,10 +416,21 @@
         bush(K(0.37 + i * 0.012), (i % 2) ? 1 : -1, 10 + hash(i * 7) * 4,
           (i % 2) ? [0.20, 0.40, 0.18] : [0.24, 0.44, 0.20]);
       }
+      // s 0.35–0.50 is the emptiest eighth of the lap (previously just
+      // forestEdge) — add a TV camera position and a sponsor hoarding run
+      // so the stretch reads as covered/dressed, not a gap in the broadcast.
+      cameraTower(K(0.385), 1, 25, { h: 16 });
+      sponsorHoarding(0.36, 0.44, 1, 11, {
+        palette: [[0.14, 0.42, 0.68], [0.90, 0.90, 0.90], [0.10, 0.34, 0.72], [0.90, 0.62, 0.14]],
+      });
+      billboard(K(0.44), -1, 10, 12, 4, [0.20, 0.46, 0.42]);
 
       // ===================================================================
-      // s 0.25 R far — Casino de Montréal (Expo 67 French Pavilion silhouette)
-      // Shorter finned pale mass (~30 m), NOT a 70 m glass tower.
+      // s 0.25 R far — Casino de Montréal (former France/Québec Expo 67
+      // pavilions, merged and raised for the 1993 casino conversion). The
+      // real building is 8–9 storeys (~48–55 m) and steps in as it climbs,
+      // wrapped in aluminium fins — modelled here as three tapering tiers
+      // (widest at grade, narrowest at the crown) instead of one 30 m slab.
       // ===================================================================
       {
         const k = K(0.25);
@@ -399,25 +439,33 @@
         const PALE   = [0.82, 0.84, 0.88];   // Expo concrete / aluminium
         const PALE2  = [0.88, 0.90, 0.93];   // brighter fin faces
         const WIN    = [0.55, 0.68, 0.78];   // recessed glazing between fins
-        const H = 30;                        // pavilion height (~25–35 m band)
-        const W = 48, D = 36;                // wide low footprint
+        // Three stacked tiers, each set back and narrower than the one below —
+        // total crown height ≈ 52 m plus the 2.4 m plinth and roof cap.
+        const TIERS = [
+          { H: 24, W: 48, D: 36, nfin: 9 },   // grade-level hall (original footprint)
+          { H: 17, W: 38, D: 28, nfin: 7 },   // first setback
+          { H: 11, W: 28, D: 20, nfin: 5 },   // crown
+        ];
         out._mat = MAT.CONCRETE;
-        // Main hall mass
-        addBox(out, vadd(a.c, a.u, H / 2), [W, H, D], PALE, b);
-        // Recessed glass ribbon mid-façade (reads as Expo curtain wall between fins)
-        addBox(out, vadd(vadd(a.c, a.u, H * 0.42), a.r, -W / 2 - 0.15),
-               [0.4, H * 0.55, D * 0.88], WIN, b);
-        // Vertical fins along the track-facing façade (Expo 67 French Pavilion read)
-        const NFIN = 9;
-        for (let i = 0; i < NFIN; i++) {
-          const ot = ((i / (NFIN - 1)) - 0.5) * (D - 4);
-          addBox(out, vadd(vadd(vadd(a.c, a.u, H * 0.52), a.r, -W / 2 - 1.2), a.t, ot),
-                 [2.4, H * 0.92, 1.1], PALE2, b);
+        let yBase = 1.2 + 2.4;   // top of the podium plinth
+        for (const tier of TIERS) {
+          const cy = yBase + tier.H / 2;
+          addBox(out, vadd(a.c, a.u, cy), [tier.W, tier.H, tier.D], PALE, b);
+          // Recessed glass ribbon mid-façade (Expo curtain wall between fins)
+          addBox(out, vadd(vadd(a.c, a.u, yBase + tier.H * 0.42), a.r, -tier.W / 2 - 0.15),
+                 [0.4, tier.H * 0.55, tier.D * 0.88], WIN, b);
+          // Vertical aluminium fins wrapping the track-facing façade of this tier
+          for (let i = 0; i < tier.nfin; i++) {
+            const ot = tier.nfin > 1 ? ((i / (tier.nfin - 1)) - 0.5) * (tier.D - 4) : 0;
+            addBox(out, vadd(vadd(vadd(a.c, a.u, yBase + tier.H * 0.52), a.r, -tier.W / 2 - 1.2), a.t, ot),
+                   [2.4, tier.H * 0.92, 1.1], PALE2, b);
+          }
+          yBase += tier.H;
         }
         // Low podium plinth under the hall
-        addBox(out, vadd(a.c, a.u, 1.2), [W + 8, 2.4, D + 8], [0.76, 0.78, 0.82], b);
-        // Shallow roof cap / parapet
-        addBox(out, vadd(a.c, a.u, H + 1.0), [W + 2, 2.0, D + 2], PALE2, b);
+        addBox(out, vadd(a.c, a.u, 1.2), [TIERS[0].W + 8, 2.4, TIERS[0].D + 8], [0.76, 0.78, 0.82], b);
+        // Shallow roof cap / parapet atop the crown tier
+        addBox(out, vadd(a.c, a.u, yBase + 1.0), [TIERS[2].W + 2, 2.0, TIERS[2].D + 2], PALE2, b);
         out._mat = 0;
       }
 
@@ -551,12 +599,89 @@
                  [22, 100 + hash(i * 13) * 70, 22], [0.54, 0.58, 0.64]);
       }
 
-      // Restrained Habitat 67 cue on the nearer city bearing: stepped pale
-      // modular silhouettes, low enough to remain a hint beneath downtown.
-      for (let i = 0; i < 5; i++) {
-        backdrop(K(0.332 + i * 0.0055), -1, 790 + hash(i * 23) * 55,
-          [14 + hash(i * 7) * 7, 18 + hash(i * 13) * 13, 20],
-          (i % 2) ? [0.67, 0.66, 0.62] : [0.74, 0.72, 0.67]);
+      // ===================================================================
+      // s 0.34–0.40 L far — Jacques Cartier Bridge: Montreal's most
+      // recognisable non-track structure, previously entirely absent. A
+      // distant steel cantilever through-truss silhouette on the downtown
+      // bearing, nearer than the skyline cluster but beyond Habitat 67 —
+      // geographically it crosses the St. Lawrence between the island and
+      // the far bank. Reuses strut() (built for the Biosphère lattice): a
+      // dozen repeated verticals + X-braced diagonals read as an open truss
+      // at 1.4 km without modelling individual rivets.
+      // ===================================================================
+      {
+        const jk = K(0.37);
+        const ja = anchor(jk, -1, 1400);
+        const jb = [ja.r, ja.u, ja.t];
+        const STEEL = [0.62, 0.64, 0.68];    // silver-grey painted steel truss
+        const SPAN = 500, DECK_Y = 16, TOP_Y = 45, BAYS = 12;
+        const half = SPAN / 2;
+        // Deck (roadway) — continuous low chord along the span
+        addBox(out, vadd(ja.c, ja.u, DECK_Y), [12, 2.4, SPAN], STEEL, jb);
+        // Top chord of the through-truss
+        addBox(out, vadd(ja.c, ja.u, TOP_Y), [8, 1.6, SPAN], STEEL, jb);
+        // A dozen bays of verticals + X-braced diagonals — the repeated-strut
+        // read that sells an open truss at distance.
+        let prevTop = vadd(vadd(ja.c, ja.t, -half), ja.u, TOP_Y);
+        let prevBot = vadd(vadd(ja.c, ja.t, -half), ja.u, DECK_Y + 1.2);
+        for (let i = 0; i <= BAYS; i++) {
+          const off = -half + (SPAN / BAYS) * i;
+          const top = vadd(vadd(ja.c, ja.t, off), ja.u, TOP_Y);
+          const bot = vadd(vadd(ja.c, ja.t, off), ja.u, DECK_Y + 1.2);
+          strut(bot, top, 0.5, STEEL, 4);        // vertical post
+          if (i > 0) {
+            strut(prevBot, top, 0.4, STEEL, 4);  // diagonal
+            strut(prevTop, bot, 0.4, STEEL, 4);  // opposing diagonal (X-bracing)
+          }
+          prevTop = top; prevBot = bot;
+        }
+        // Two main piers descending toward the water below the deck
+        for (const off of [-half * 0.55, half * 0.55]) {
+          addBox(out, vadd(vadd(ja.c, ja.t, off), ja.u, DECK_Y * 0.4),
+            [6, DECK_Y * 0.8, 6], [0.48, 0.49, 0.52], jb);
+        }
+      }
+
+      // ===================================================================
+      // s 0.332 L, 790 m — Habitat 67: Moshe Safdie's stepped modular
+      // apartment block, one of Montreal's most recognisable silhouettes.
+      // Five plain backdrop() boxes read as an anonymous ridge; a proper
+      // stepped-cube model — 15 offset concrete cubes climbing and receding
+      // in a pyramid, alternating pale tones — reads as the real building.
+      // ===================================================================
+      {
+        const hk = K(0.332);
+        const ha = anchor(hk, -1, 790);
+        const hb = [ha.r, ha.u, ha.t];
+        const CUBE = 9;                        // module edge length (m)
+        const TONE_A = [0.72, 0.70, 0.65];      // pale warm concrete
+        const TONE_B = [0.80, 0.79, 0.75];      // lighter tone
+        // [tangent offset (module units), level (module units), lateral jog
+        // (module units, away from the track as the stack climbs)] — five
+        // rows of 5/4/3/2/1 cubes, each row set back and up from the one below.
+        const LAYOUT = [
+          [0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0], [4, 0, 0],
+          [0.5, 1, 0.3], [1.5, 1, 0.3], [2.5, 1, 0.3], [3.5, 1, 0.3],
+          [1, 2, 0.6], [2, 2, 0.6], [3, 2, 0.6],
+          [1.5, 3, 0.9], [2.5, 3, 0.9],
+          [2, 4, 1.2],
+        ];
+        modelGroup("montreal-habitat67", {
+          center: vadd(vadd(vadd(ha.c, ha.t, CUBE * 2), ha.u, CUBE * 2.5), ha.r, -CUBE * 0.6),
+          size: [CUBE * 5 + 6, CUBE * 5 + 6, CUBE * 6 + 6],
+          basis: hb,
+        }, (stage) => {
+          for (let i = 0; i < LAYOUT.length; i++) {
+            const [tOff, level, rJog] = LAYOUT[i];
+            const c = vadd(vadd(vadd(ha.c,
+              ha.t, tOff * CUBE),
+              ha.u, CUBE / 2 + level * CUBE * 0.94),
+              ha.r, -rJog * CUBE);
+            addBox(stage, c, [CUBE * 0.92, CUBE * 0.92, CUBE * 0.92],
+              (i % 2) ? TONE_A : TONE_B, hb);
+          }
+          return true;
+        });
       }
 
       // ===================================================================
@@ -609,9 +734,9 @@
       // ===================================================================
       // s 0.55 both — L'Épingle hairpin: tight U of walls + grandstand
       // ===================================================================
-      grandstand(0.55,  1, 12, 70, [0.48, 0.49, 0.54], [0.60, 0.36, 0.32]);
-      grandstand(0.53, -1, 12, 60, [0.46, 0.47, 0.52], [0.58, 0.38, 0.34]);
-      grandstand(0.57,  1, 13, 60, [0.50, 0.51, 0.55], [0.62, 0.38, 0.34]);
+      grandstandEx(0.55,  1, 12, 70, null, null, { livery: "alu", roof: "cantilever" });
+      grandstandEx(0.53, -1, 12, 60, null, null, { livery: "navy", roof: "flat" });
+      grandstandEx(0.57,  1, 13, 60, null, null, { livery: "steel", roof: "cantilever" });
       for (const side of [-1, 1]) {
         for (let j = 0; j < 3; j++) place(K(0.55 + j * 0.004), side, 3, [3, 0.2, 4], (j % 2) ? KERB_R : KERB_W);
       }
@@ -619,8 +744,9 @@
       tyreWall(0.545, 0.565, -1, 3.0, [0.90, 0.85, 0.20]);
       tyreWall(0.548, 0.568,  1, 3.0, [0.85, 0.30, 0.20]);
       marshalPost(K(0.55), -1, 9);
-      billboard(K(0.52),  1, 11, 12, 4, [0.30, 0.50, 0.85]);
-      billboard(K(0.58), -1, 11, 12, 4, [0.88, 0.82, 0.22]);
+      billboard(K(0.52),  1, 11, 12, 4, [0.24, 0.30, 0.62]);
+      // Casino/back straight runs the length of the Olympic Basin — cool teal.
+      billboard(K(0.58), -1, 11, 12, 4, [0.14, 0.46, 0.62]);
 
       // ===================================================================
       // s 0.58–0.75 R — Casino/back Straight: the long Olympic Basin flanks the
@@ -657,14 +783,15 @@
       // Modelled after the permanent stands that overlook the run between
       // L'Épingle and the final chicane (the busiest spectator zone on the island).
       // (increased gap from 11m→14m→18m to clear curve intrusion at s=0.72)
-      grandstand(0.65, -1, 18, 80, [0.48, 0.50, 0.55], [0.58, 0.36, 0.32]);
+      grandstandEx(0.65, -1, 18, 80, null, null,
+        { livery: "navy", tiers: 2, roof: "cantilever", endWalls: true });
 
       // ===================================================================
       // s 0.66–0.90 — Back stretch through Parc Jean-Drapeau (parkland)
       // ===================================================================
       // Grandstand midway on the back straight
       // (increased gap from 11m→14m→18m to clear curve intrusion)
-      grandstand(0.74, -1, 18, 64, [0.48, 0.49, 0.54], [0.56, 0.40, 0.36]);
+      grandstandEx(0.74, -1, 18, 64, null, null, { livery: "steel", roof: "truss" });
 
       // Canal / water feature off the right verge — island park internal canal
       {
@@ -675,7 +802,8 @@
           });
         }
       }
-      billboard(K(0.84), -1, 11, 12, 4, [0.86, 0.30, 0.26]);
+      // Park canal frontage — cool green, matching the basin/canal identity.
+      billboard(K(0.84), -1, 11, 12, 4, [0.18, 0.48, 0.30]);
 
       // Parkland forestEdge: back straight and final sector
       // (replaces scattered tree() calls with clipping-safe placement)
@@ -706,7 +834,7 @@
       }
       tyreWall(0.915, 0.935, -1, 3.0, [0.90, 0.85, 0.20]);
       marshalPost(K(0.93), -1, 9);
-      grandstand(0.93, -1, 12, 70, [0.48, 0.49, 0.54], [0.58, 0.36, 0.32]);
+      grandstandEx(0.93, -1, 12, 70, null, null, { livery: "alu", roof: "flat" });
 
       // ===================================================================
       // s 0.95–0.99 R — Wall of Champions: taller pale hero wall + signage
@@ -743,8 +871,9 @@
         }
       }
       // Grandstand viewing the Wall + final chicane
-      grandstand(0.97, -1, 12, 90, [0.50, 0.51, 0.56], [0.60, 0.36, 0.30]);
-      billboard(K(0.96), -1, 12, 14, 4, [0.88, 0.82, 0.22]);
+      grandstandEx(0.97, -1, 12, 90, null, null,
+        { livery: "navy", roof: "truss", endWalls: true });
+      billboard(K(0.96), -1, 12, 14, 4, [0.85, 0.30, 0.16]);
     },
   }
   );
