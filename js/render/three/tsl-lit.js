@@ -52,7 +52,7 @@
 
   function lit(THREE, TSL, ctx) {
     const {
-      Fn, If, Loop, Break, uniform, uniformArray, attribute, texture,
+      Fn, If, Loop, Break, uniform, uniformArray, attribute, texture, cubeTexture,
       float, int, vec2, vec3, vec4,
       positionWorld, positionGeometry, positionLocal, normalLocal, normalWorld,
       cameraPosition, frontFacing,
@@ -72,6 +72,11 @@
     // alpha (lit.js:1171-1174). False (no post chain) keeps the M3 behaviour:
     // the canvas is the target and a 0.35 alpha would ghost the cars.
     const SSR_TAG = !!ctx.ssrTag;
+    // M9: the live env-probe cube (tlx.js CubeRenderTarget.texture), bound at
+    // factory time. Null (no probe target) keeps the analytic-gradient mirror
+    // ONLY — the pre-M9 look. A JS-level guard, so the cube fetch is absent
+    // from the compiled program when there's no cube (no dummy binding needed).
+    const ENV_CUBE = ctx.envCube || null;
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
     const carShadowOn = !!(shadowOn && SHD.S.carEnabled && SHD.carTex);
     const lampShadowOn = !!(shadowOn && SHD.S.lampEnabled && SHD.lampTex);
@@ -892,9 +897,9 @@
           color.addAssign(ccCol);
         });
 
-        // ── analytic clearcoat ENV mirror (lit.js:939-990). uEnvStr stays 0 in
-        //    M3 so only the analytic sky-gradient path runs. TODO M9: live env
-        //    cube fetch (textureLod(uEnvCube, Rg, rough*2.5)) + uEnvStr fade. ──
+        // ── clearcoat ENV mirror (lit.js:939-990). uEnvStr = 0 -> analytic
+        //    sky-gradient path only; > 0 blends in the M9 live cube fetch
+        //    (textureLod(uEnvCube, Rg, rough*2.5) × uEnvStr — glx.js parity). ──
         If(envSurface, () => {
           const Rg = reflect(V.negate(), Ngeo).toVar();
           const NoVc = max(dot(Ngeo, V), 1e-4);
@@ -906,6 +911,14 @@
           const horiz = smoothstep(-0.12, 0.30, Rg.y);
           const skyR = mix(vec3(U.skyHorizon).mul(1.2), vec3(U.skyZenith), sqrt(max(Rg.y, 0.0)));
           const envCC = mix(vec3(U.ambGround).mul(0.6), skyR, horiz).toVar();
+          // M9: fetch the real surroundings from the probe cube (roughness ->
+          // mip LOD for a soft reflection) and cross-fade the analytic mirror
+          // toward it by the probe strength. envCC is already .toVar()-anchored,
+          // so this unconditional reassign never strands (STANDING RULE).
+          if (ENV_CUBE) {
+            const cubeRefl = cubeTexture(ENV_CUBE, Rg, rough.mul(2.5)).rgb;
+            envCC.assign(mix(envCC, cubeRefl, probeLive));
+          }
           // sun disc in the mirror: pow-400 lobe widened by the AA variance
           const ccDiscA = sqrt(ccSaaVar.mul(0.25).add(0.0705 * 0.0705));
           const ccDiscExp = max(float(2.0).div(ccDiscA.mul(ccDiscA)).sub(2.0), 32.0);
