@@ -402,6 +402,21 @@ let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
+// B1 — debris caution (local yellow / VSC / safety car). A READ-ONLY race-logic
+// layer: it consumes DebrisWorld.hazards() (settled debris/broken panels resting
+// ON the racing surface) and drives the HUD flag. It NEVER slows or moves a car
+// — no writes to speed/px/pz/head/(s,x). DEFAULT ON; disable apex26.caution="0".
+let _cautionOn = true;
+try { _cautionOn = (localStorage.getItem("apex26.caution") || "1") !== "0"; } catch (e) {}
+// level: 0 GREEN · 1 local YELLOW (sector) · 2 VSC · 3 SAFETY CAR.
+let caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
+let _cautionQT = 0;   // hazard-query throttle accumulator (s) — query at ~4 Hz
+const CAUTION_YELLOW_MIN = 3;   // settled hazards in ONE sector → local yellow
+const CAUTION_VSC_MIN = 6;      // total settled hazards on the surface → VSC
+const CAUTION_SC_MIN = 10;      // a big pile → full safety car
+const CAUTION_MIN_HOLD = 6;     // s a caution holds once raised (anti-flicker)
+const CAUTION_YELLOW_MAX = 30;  // s hard cap on a local yellow
+const CAUTION_SC_MAX = 90;      // s hard cap on VSC/SC — bounded, ~a lap or two
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let hideMeshes = {};   // debug: per-mesh visibility toggle (set via __apex.meshToggle)
 let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
@@ -1614,7 +1629,7 @@ const G = {
   get gfx() { return gfx; },
   GAME_LAPS, TT_LAPS, LONG_GRIP,
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
-  camVantage, endRace, gridUp, gripMult, isErsDeploying,
+  camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
@@ -1784,6 +1799,10 @@ function update(dt) {
   // Rapier debris side-world: reads car poses (kinematic mirrors), owns only
   // its own shards, writes NOTHING back to gameplay. Inert unless enabled.
   if (DebrisWorld.active()) DebrisWorld.step(dt);
+
+  // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
+  // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
+  updateCaution(dt);
 
   // race ends when the player finishes, or shortly after the winner does, or
   // at a hard time cap so it can never hang
@@ -2436,7 +2455,14 @@ function updateCar(c, dt, ranked) {
     const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
-    const muBase = LAT_MAX * PLAYER_GRIP * gripScale * kerbGrip * gripMult() * playerMods.cornering * bankMu * (1 + vertLoad) * slipFactor;
+    // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar
+    // for a player sitting on a settled off-line marble cluster, fed in ALONGSIDE
+    // gripMult()/kerbGrip/bankMu here — the existing mu-scaling seam. It NEVER
+    // touches LONG_GRIP or slipFactor (computed above, untouched) and never moves
+    // the car; it is a pure function of deterministic marble positions and returns
+    // 1.0 (a true no-op) off-path. Subtle by construction (≤7% via MARBLE_GRIP_MIN).
+    const marbleMu = DebrisWorld.active() ? DebrisWorld.marbleGrip(c) : 1;
+    const muBase = LAT_MAX * PLAYER_GRIP * gripScale * kerbGrip * gripMult() * playerMods.cornering * bankMu * (1 + vertLoad) * slipFactor * marbleMu;
     const muF = Math.max(0.5, muBase * loadF * FRONT_GRIP);
     const muR = Math.max(0.5, muBase * loadR * (1 - DRIFT * 0.55));
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
@@ -2532,8 +2558,16 @@ function updateCar(c, dt, ranked) {
     const into = c.x > wallR ? 1 : -1;          // +1 = hit right wall, -1 = left
     // Debris hook (render-only side-world): the pre-clamp overshoot is the
     // lateral speed into the wall × dt — the impact severity. First frame only.
-    if (!c.wasOnWall && DebrisWorld.active())
-      DebrisWorld.wallImpact(c, into, into > 0 ? c.x - wallR : -wallL - c.x);
+    if (!c.wasOnWall && DebrisWorld.active()) {
+      const xOver = into > 0 ? c.x - wallR : -wallL - c.x;
+      DebrisWorld.wallImpact(c, into, xOver);
+      // B2 (breakable barriers, flag apex26.breakBarriers): a hard hit promotes
+      // nearby BARRIER panels to jointed Rapier bodies that scatter. COSMETIC —
+      // the bespoke xPinned clamp below is UNCHANGED; broken panels are never a
+      // collision surface for the car (that would be R3). promoteBarrier gates
+      // on its own severity minimum and is a no-op when the flag is off.
+      DebrisWorld.promoteBarrier(c, into, xOver * 60 + Math.abs(c.speed || 0) * 0.15);
+    }
     c.x = into > 0 ? wallR : -wallL;
     xPinned = true;
     if (c.isPlayer) {
@@ -2767,6 +2801,59 @@ function updateCar(c, dt, ranked) {
     }
   }
   c._prevS = c.s;
+}
+
+// B1 — debris caution state machine. Consumes the deterministic
+// DebrisWorld.hazards() picture (settled debris/broken panels ON the racing
+// surface, bucketed per sector) at ~4 Hz and resolves the flag state with
+// hysteresis: a caution raises immediately but only lowers after CAUTION_MIN_HOLD
+// (or a hard time cap), so it can't flicker as debris despawns. READ-ONLY: it
+// sets flag state + drives the HUD; it never touches any car's motion. Inert
+// unless the debris side-world is live AND apex26.caution is on AND we're racing.
+const _CAUTION_LBL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR"];
+function resetCaution() {
+  caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
+  _cautionQT = 0;
+}
+function updateCaution(dt) {
+  if (!_cautionOn || !DebrisWorld.active() || state !== "race") {
+    if (caution.level !== 0) resetCaution();
+    return;
+  }
+  if (caution.level !== 0) caution.sinceT += dt;
+  _cautionQT += dt;
+  if (_cautionQT < 0.25) return;   // query hazards at ~4 Hz
+  _cautionQT = 0;
+  const hz = DebrisWorld.hazards();
+  let desired = 0, dsector = -1, dfrac = 0, dcause = "";
+  if (hz.total >= CAUTION_SC_MIN) { desired = 3; dcause = "SAFETY CAR"; }
+  else if (hz.total >= CAUTION_VSC_MIN) { desired = 2; dcause = "VSC"; }
+  else if (hz.worst.count >= CAUTION_YELLOW_MIN) {
+    desired = 1; dsector = hz.worst.sector; dfrac = hz.worst.frac; dcause = "YELLOW";
+  }
+  caution.total = hz.total;
+  caution.sectors = hz.sectors.slice();
+  if (desired > caution.level) {
+    caution.level = desired; caution.sector = dsector; caution.frac = dfrac;
+    caution.cause = dcause; caution.sinceT = 0;
+  } else if (desired < caution.level) {
+    const cap = caution.level >= 2 ? CAUTION_SC_MAX : CAUTION_YELLOW_MAX;
+    if (caution.sinceT >= CAUTION_MIN_HOLD || caution.sinceT >= cap) {
+      caution.level = desired;
+      caution.sector = desired === 1 ? (dsector >= 0 ? dsector : caution.sector) : -1;
+      caution.frac = dfrac; caution.cause = dcause; caution.sinceT = 0;
+    }
+  } else if (desired === 1 && dsector >= 0) {
+    caution.sector = dsector; caution.frac = dfrac;   // track the worst sector
+  }
+}
+function cautionInfo() {
+  return {
+    level: caution.level, label: _CAUTION_LBL[caution.level] || "GREEN",
+    sector: caution.sector, frac: caution.frac, total: caution.total,
+    sectors: caution.sectors, sinceT: +caution.sinceT.toFixed(2), cause: caution.cause,
+    enabled: _cautionOn,
+  };
 }
 
 // Put the player back on the racing line at its CURRENT progress, facing forward

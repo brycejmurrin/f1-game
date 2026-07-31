@@ -17,6 +17,7 @@ const els = G.els;
 const mm = els.minimap.getContext("2d");
 let hudT = 0;
 let minimapBg = null;         // offscreen canvas with pre-rendered track shape
+let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
 
 // HUD write-caches: skip the DOM mutation when the value hasn't changed (the panel
 // ticks ~10Hz but most fields hold steady between updates). Keyed per element.
@@ -102,6 +103,20 @@ function updateHud(force) {
       const t = G.sectorLast[i];
       hText(_secRows[i], t == null ? "--" : t.toFixed(3));
     }
+  }
+  // B1 caution flag (local yellow / VSC / safety car) — driven by the debris
+  // caution state machine in game.js (READ-ONLY; the debris side-world never
+  // moves a car). Hidden when green.
+  if (els.flag) {
+    const cn = G.cautionInfo ? G.cautionInfo() : null;
+    const show = !!(cn && cn.level > 0);
+    if (show) {
+      const txt = cn.level === 1 ? "YELLOW" + (cn.sector >= 0 ? " S" + (cn.sector + 1) : "")
+                : cn.level === 2 ? "VSC" : "SAFETY CAR";
+      hText(els.flag, txt);
+      hClass(els.flag, cn.level === 3 ? "flag-sc" : cn.level === 2 ? "flag-vsc" : "flag-yellow");
+    }
+    if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; }
   }
   drawMinimap();
 }
