@@ -4860,6 +4860,9 @@ $("standings-close").onclick = () => { $("standings").hidden = true; };
 $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
+// Team picker: opened by the team card on the select screen (js/game/menus.js).
+// Closing without choosing leaves the current team as-is.
+$("tp-close").onclick = () => { $("teampicker").hidden = true; };
 // ── SETTINGS sub-menu ── keeps the pause screen down to RESUME/RESTART/QUIT;
 // every tuning + toggle control lives on this page. Opening it hides the pause
 // menu (one panel at a time); BACK (or resume) returns to it.
