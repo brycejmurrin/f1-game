@@ -53,6 +53,7 @@ const FULL = [
   "js/render/webgpu/wgsl-post.js",
   "js/render/webgpu/wgsl-fx.js",
   "js/render/webgpu/wgx.js",
+  "js/render/three/tlx.js",
   "js/render/gfx.js",
   "js/render/gltf.js",
   "js/car/teams.js",
@@ -188,6 +189,7 @@ const HARD_EDGES = [
   ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx.js", "js/render/gfx.js"],
+  ["js/render/three/tlx.js", "js/render/gfx.js"],      // gfx.create branches on the TLX global
   ["js/track/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
   ["js/track/geom.js", "js/track/mesh.js"],                 // mesh destructures TrackGeom at eval
