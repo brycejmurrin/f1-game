@@ -418,12 +418,32 @@ test.describe("frame()", () => {
     }
   });
 
-  test("errors without a rendered frame rather than drawing a stale one", async ({ page }) => {
+  test("never returns null — a render or an actionable error", async ({ page }) => {
     await boot(page);
     const f = await page.evaluate(() => window.__apex.frame());
-    expect(f.ok).toBe(false);
-    expect(["NoTrackError", "NoFrameError"]).toContain(f.error);
-    expect(f.fix).toBeTruthy();
+    expect(f).toBeTruthy();
+    if (f.ok === false) {
+      // no track, or no frame drawn yet
+      expect(["NoTrackError", "NoFrameError"]).toContain(f.error);
+      expect(f.fix).toBeTruthy();
+    } else {
+      // the menu runs a background flyby, so a real frame is often already
+      // drawn — rendering it is a legitimate answer
+      expect(f.grid.lines.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("flags a stale frame under headless", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    const f = await page.evaluate(() => {
+      window.__apex.headless(true);
+      const out = window.__apex.frame({ cols: 24, rows: 8 });
+      window.__apex.headless(false);
+      return out;
+    });
+    expect(f.framePending).toBe(true);
+    expect(f.warning).toContain("stale");
   });
 });
 

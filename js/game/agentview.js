@@ -865,7 +865,12 @@ const AgentView = (function () {
     // the chassis silhouette knobs, and measured geometry from a real build.
     function carView(opts) {
       const o = opts || {};
-      const teamId = o.team || (G.player && G.player.team)
+      // player.team is the team OBJECT, not an id (js/game.js makeCars), so
+      // taking it directly never matched Teams.LIST and every default-argument
+      // call failed with NoTeamError.
+      const pt = G.player && G.player.team;
+      const teamId = o.team
+                     || (pt && typeof pt === "object" ? pt.id : pt)
                      || (Teams.LIST[G.teamIdx] || Teams.LIST[0]).id;
       const team = Teams.LIST.find((t) => t.id === teamId);
       if (!team) {
