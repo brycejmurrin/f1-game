@@ -85,10 +85,11 @@ async function shot({ port, backend, track, name, query = "", postCheck = false 
       (GLX.__tlx && GLX.__tlx.postState) ? GLX.__tlx.postState() : null);
   }
   const file = join(OUT, name + ".png");
-  // page.screenshot with a clip: locator.screenshot's stability wait stalls
-  // on a continuously repainting SwiftShader canvas outside the test fixtures.
-  const box = await page.locator("canvas#game").boundingBox();
-  await page.screenshot({ path: file, clip: box || { x: 0, y: 0, width: VP.width, height: VP.height }, animations: "disabled", timeout: 60_000 });
+  // Fixed-clip page.screenshot: locator screenshot/boundingBox stability
+  // waits stall on a continuously repainting SwiftShader canvas outside the
+  // test fixtures. The canvas is fullscreen at the fixed viewport.
+  await page.screenshot({ path: file, clip: { x: 0, y: 0, width: VP.width, height: VP.height },
+    animations: "disabled", timeout: 90_000 });
   const size = statSync(file).size;
   await browser.close();
   return { name, size, blank: size < 5000, errors: errors.slice(0, 5), post };
