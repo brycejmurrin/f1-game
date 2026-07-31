@@ -203,11 +203,17 @@
       // ── Sculpted organic dune mound (replaces flat frustum wedge) ───────
       // Uses mountain() for irregular silhouette — more dune-like than a frustum.
       // gap is road-edge clearance; w/h are footprint/height in metres.
+      // seg/rough are derived per-call from k/side instead of a fixed
+      // seg:6/rough:0.32 — every one of these calls used identical params,
+      // so ~15 dune mounds looked stamped from one mould. Varying seg 5-8 and
+      // rough 0.2-0.4 gives each mound a distinct silhouette.
       const duneWedge = (k, side, gap, w, h) => {
         const a = anchor(k, side, gap + w * 0.3);
+        const seg = 5 + Math.floor(hash(k * 19 + side * 29) * 4);        // 5-8
+        const rough = 0.20 + hash(k * 23 + side * 31) * 0.20;            // 0.2-0.4
         mountain(a.c[0], a.c[2], pyMin, w * 0.55, h, {
-          seg: 6, seed: k * 3 + side * 17,
-          rough: 0.32, snowline: 99,
+          seg, seed: k * 3 + side * 17,
+          rough, snowline: 99,
           forest: DUNE, rock: SAND_DARK, snow: DUNE_LIT,
         });
       };
@@ -250,8 +256,12 @@
       });
       // Main grandstands on the pit straight — large pale-cream shells with dark navy seats.
       // Bahrain's main stands are tall (sand/cream colours) with blue seats.
-      grandstand(0.00,   1, 18, 140, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.985,  1, 90,  80, STAND_CREAM, SEAT_BLUE);
+      // Main straight hero stand: two-tier with hospitality suites + truss roof
+      // — the venue's single largest stand earns the shape investment.
+      grandstandEx(0.00,   1, 18, 140, STAND_CREAM, SEAT_BLUE,
+        { tiers: 2, roof: "truss", suites: true, endWalls: true });
+      grandstandEx(0.985,  1, 90,  80, STAND_CREAM, SEAT_BLUE,
+        { roof: "cantilever", endWalls: true, pylons: true });
       // Second pit-side building: timing/media centre with cool lit windows
       building(K(0.01), -1, 2, 10, 9, 40,
         { wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 3 });
@@ -310,9 +320,14 @@
       // ================= TURN 1 (s 0.05) =================
       // T1 is the famous heavy-braking zone into a 90-degree right-hander.
       // Grandstands wrap around the outside on both sides — blue-seated.
-      grandstand(0.05,   1, 24, 90, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.025,  1, 24, 60, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.065,  1, 28, 72, STAND_CREAM, SEAT);
+      // T1 main stand is the other hero-scale grandstand on the lap (heavy
+      // braking, prime overtake) — suites + truss roof; the two flanking
+      // sections rotate the sandstone/steel/alu STAND_SETS.bahrain families.
+      grandstandEx(0.05,   1, 24, 90, STAND_CREAM, SEAT_BLUE,
+        { roof: "truss", suites: true, endWalls: true });
+      grandstandEx(0.025,  1, 24, 60, null, null, { livery: "steel", roof: "flat", endWalls: true });
+      grandstandEx(0.065,  1, 28, 72, null, null, { livery: "sandstone", roof: "cantilever", pylons: true });
+      cameraTower(K(0.045), -1, 46, { h: 22 });
       // Inside of T1: access road + small pit buildings
       accessBox(K(0.03), -1, 36, 10, 6, 16);
       lightBank(K(0.06), 1, 36);
@@ -328,13 +343,23 @@
       // ================= UNIVERSITY GRANDSTAND (s 0.15–0.22) =================
       // The University grandstand complex runs along the back of T3-T4-T5.
       // Four separate stand sections — cream shells, blue/dark seats.
-      for (const [ds, dGap, seLen, seatC] of [
-        [-0.040, 26, 44, SEAT_BLUE],
-        [-0.010, 24, 38, SEAT],
-        [ 0.025, 24, 42, SEAT_BLUE],
-        [ 0.060, 28, 38, SEAT],
+      // Rotates through the sandstone/steel/alu family set (STAND_SETS.bahrain)
+      // on the odd sections so the four University stands read as distinct
+      // blocks instead of one long repeated cream shell; each closes with
+      // endWalls. Even sections keep Bahrain's signature cream/seat colours.
+      const UNI_LIVERY = ["steel", "alu"];
+      for (const [i, ds, dGap, seLen, seatC] of [
+        [0, -0.040, 26, 44, SEAT_BLUE],
+        [1, -0.010, 24, 38, SEAT],
+        [2,  0.025, 24, 42, SEAT_BLUE],
+        [3,  0.060, 28, 38, SEAT],
       ]) {
-        grandstand(0.18 + ds, 1, dGap, seLen, STAND_CREAM, seatC);
+        if (i % 2 === 0) {
+          grandstandEx(0.18 + ds, 1, dGap, seLen, STAND_CREAM, seatC, { endWalls: true });
+        } else {
+          grandstandEx(0.18 + ds, 1, dGap, seLen, null, null,
+            { livery: UNI_LIVERY[(i >> 1) % UNI_LIVERY.length], endWalls: true });
+        }
       }
       billboard(K(0.15), 1, 11, 12, 4, [0.90, 0.55, 0.05]);
       floodMast(K(0.16), 1, 34, 39);
@@ -363,10 +388,12 @@
       }
 
       // ================= TURN 3/4 COMPLEX (s 0.22–0.28) =================
-      grandstand(0.24,  1, 24, 60, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.26, -1, 26, 50, STAND_CREAM, SEAT);
+      grandstandEx(0.24,  1, 24, 60, null, null, { livery: "sandstone", roof: "flat", endWalls: true });
+      grandstandEx(0.26, -1, 26, 50, STAND_CREAM, SEAT, { roof: "truss", pylons: true });
       lightBank(K(0.25), -1, 34);
       lightBank(K(0.27),  1, 34);
+      // T4 broadcast vantage — the second of the four hero cameraTower spots.
+      cameraTower(K(0.235), -1, 40, { h: 20 });
       tyreWall(0.225, 0.255, 1, 4, TYRE_CAP);
       fence(0.22, 0.29, 1, 6, 3.2, [0.70, 0.72, 0.76]);
       billboard(K(0.23), -1, 11, 12, 4, [0.85, 0.12, 0.12]);
@@ -389,37 +416,43 @@
         if (hash(k * 13 + i) > 0.35) bush(k, side, d, SCRUB_DRY);
       }
       lightBank(K(0.35), -1, 36);
-      grandstand(0.37,  1, 26, 48, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.39, -1, 26, 38, [0.80, 0.78, 0.72], SEAT);
+      grandstandEx(0.37,  1, 26, 48, STAND_CREAM, SEAT_BLUE, { roof: "cantilever", pylons: true });
+      grandstandEx(0.39, -1, 26, 38, null, null, { livery: "alu", endWalls: true });
       fence(0.34, 0.41, 1, 6, 3.0, [0.70, 0.72, 0.76]);
       billboard(K(0.36), -1, 12, 12, 4, [0.10, 0.30, 0.70]);
 
       // ================= TURN 8 HAIRPIN (s 0.40–0.46) =================
       // The T8 hairpin has large grandstands wrapping the outside.
-      grandstand(0.42,  1, 22, 64, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.40,  1, 24, 48, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.44,  1, 24, 56, [0.80, 0.78, 0.72], [0.20, 0.30, 0.50]);
+      // Third hero cameraTower vantage — T8 is the downhill braking zone.
+      grandstandEx(0.42,  1, 22, 64, STAND_CREAM, SEAT_BLUE,
+        { roof: "truss", suites: true, endWalls: true });
+      grandstandEx(0.40,  1, 24, 48, null, null, { livery: "sandstone", roof: "flat" });
+      grandstandEx(0.44,  1, 24, 56, null, null, { livery: "alu", roof: "cantilever", endWalls: true });
       floodMast(K(0.42), 1, 34, 38);
       floodMast(K(0.44), -1, 32, 37);
       tyreWall(0.405, 0.44, 1, 4, TYRE_CAP);
       fence(0.40, 0.46, -1, 7, 3.2, [0.70, 0.72, 0.76]);
       billboard(K(0.43), 1, 11, 12, 4, [0.05, 0.45, 0.75]);
       marshalPost(K(0.43), -1, 26);
+      cameraTower(K(0.415), -1, 44, { h: 22 });
 
       // ================= OPEN DESERT FLATS (s 0.47–0.56) =================
-      // Wide open desert section — organic dune mounds pushed far back (90m+).
-      for (let i = 0; i < 3; i++) {
-        const k = (K(0.48) + i * Math.round(n * 0.016)) % n;
-        for (const side of [-1, 1]) duneWedge(k, side, 96 + i * 18, 48, 3.2);
+      // Real Sakhir is dead-flat scrubland through here; ~7 dune mounds per
+      // side at 3-5 m rise read as rolling hills instead. Count cut ~40%
+      // (7 → 4 per side) and the survivors raised slightly, so this reads as
+      // flat desert with sparse tan gravel rather than a dune field.
+      for (let i = 0; i < 2; i++) {
+        const k = (K(0.48) + i * Math.round(n * 0.022)) % n;
+        for (const side of [-1, 1]) duneWedge(k, side, 96 + i * 26, 52, 3.8);
       }
-      // Sparse organic dune mounds (mid-lap desert fill) — min gap 48 on far side
-      for (let i = 0; i < 4; i++) {
-        const k = (K(0.49) + Math.round(i * n * 0.014)) % n;
+      // Sparse organic dune mounds (mid-lap desert fill) — min gap 52 on far side
+      for (let i = 0; i < 2; i++) {
+        const k = (K(0.50) + Math.round(i * n * 0.020)) % n;
         for (const side of [-1, 1]) {
-          duneWedge(k, side, 48 + i * 16, 35 + hash(k * 3 + side) * 24, 3.3 + hash(k * 5) * 2.2);
+          duneWedge(k, side, 52 + i * 20, 34 + hash(k * 3 + side) * 22, 3.6 + hash(k * 5) * 2.0);
         }
       }
-      grandstand(0.52,  1, 28, 52, STAND_CREAM, SEAT);
+      grandstandEx(0.52,  1, 28, 52, null, null, { livery: "steel", roof: "flat" });
       lightBank(K(0.51), 1, 38);
       lightBank(K(0.54), -1, 38);
       marshalPost(K(0.50), -1, 26);
@@ -443,7 +476,7 @@
       // ================= TURN 9-10 (s 0.58–0.66) =================
       tyreWall(0.585, 0.62, 1, 4, TYRE_CAP);
       fence(0.58, 0.67, 1, 6, 3.2, [0.70, 0.72, 0.76]);
-      grandstand(0.63,  1, 24, 50, STAND_CREAM, [0.16, 0.24, 0.42]);
+      grandstandEx(0.63,  1, 24, 50, STAND_CREAM, [0.16, 0.24, 0.42], { pylons: true, endWalls: true });
       billboard(K(0.60), -1, 12, 12, 4, [0.90, 0.55, 0.05]);
       billboard(K(0.64),  1, 11, 12, 4, [0.85, 0.12, 0.12]);
       // Low timing/medical building cluster — cool lit windows for tech feel.
@@ -472,9 +505,9 @@
       // Their raw crowd rows bypass ordinary footprint rejection, so keep the
       // long curved stands well behind the runoff instead of allowing the
       // s≈0.84 crowd deck to chord across the racing surface.
-      grandstand(0.78, 1, 32, 32, [0.80, 0.78, 0.72], SEAT);
-      grandstand(0.82, 1, 34, 34, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.86, 1, 32, 30, STAND_CREAM, SEAT_BLUE);
+      grandstandEx(0.78, 1, 32, 32, null, null, { livery: "alu", endWalls: true });
+      grandstandEx(0.82, 1, 34, 34, STAND_CREAM, SEAT_BLUE, { roof: "truss", suites: true });
+      grandstandEx(0.86, 1, 32, 30, null, null, { livery: "steel", pylons: true });
       billboard(K(0.75), -1, 12, 14, 4, BILLBOARD_LITE);
       billboard(K(0.78),  1, 14, 14, 4, [0.05, 0.45, 0.75]);
       billboard(K(0.82), -1, 11, 12, 4, [0.85, 0.12, 0.12]);
@@ -498,10 +531,13 @@
       // ================= VICTORY GRANDSTAND / FINAL CORNER (s 0.91–0.94) ===
       // A compact roofed spectator hero closes the lap without crowding pit
       // entry. Paired cool masts make its cream shell readable at race night.
-      grandstand(0.925, 1, 34, 58, STAND_CREAM, SEAT_BLUE);
+      grandstandEx(0.925, 1, 34, 58, STAND_CREAM, SEAT_BLUE,
+        { roof: "truss", suites: true, endWalls: true });
       floodMast(K(0.912), 1, 42, 40);
       floodMast(K(0.940), 1, 42, 40);
       billboard(K(0.925), 1, 20, 14, 4, BILLBOARD_LITE);
+      // Fourth hero broadcast vantage — final corner onto the pit straight.
+      cameraTower(K(0.918), -1, 40, { h: 20 });
 
       // ================= PIT ENTRY (s 0.93–0.99, L) =================
       // Second pit building: media/control centre with cool lit windows
@@ -679,9 +715,16 @@
       // ── Extra floodlit crowd terraces (general-admission mounds) ─────────
       // Sparse spectator berms of packed dark seating on the desert flats —
       // grandstand() auto-speckles crowds. Fills quiet stretches of the lap.
-      grandstand(0.68,  1, 26, 46, STAND_CREAM, SEAT_BLUE);
-      grandstand(0.71,  1, 26, 40, [0.80, 0.78, 0.72], SEAT);
-      grandstand(0.335, 1, 28, 42, STAND_CREAM, SEAT_BLUE);
+      grandstandEx(0.68,  1, 26, 46, STAND_CREAM, SEAT_BLUE, { endWalls: true });
+      grandstandEx(0.71,  1, 26, 40, null, null, { livery: "alu" });
+      grandstandEx(0.335, 1, 28, 42, null, null, { livery: "sandstone", roof: "flat" });
+
+      // ── Broadcast compound behind the paddock ────────────────────────────
+      // Every real F1 venue keeps OB trucks + satellite uplink dishes behind
+      // the paddock; Bahrain's named satellite compound sits behind the
+      // hospitality row. Placed well back of the paddock buildings (gap 100)
+      // so its footprint clears the hospitality/windTower cluster ahead of it.
+      broadcastCompound(K(0.965), -1, 100, { vans: 4, dishes: 3, mastH: 10 });
 
       // (No encircling Manama city ring: the brief makes Sakhir an isolated
       // desert island — the mountain() dune bands own the horizon. The single
