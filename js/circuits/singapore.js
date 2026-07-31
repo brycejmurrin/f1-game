@@ -755,7 +755,10 @@
           const sf = (i + 0.5 + (hash(i * 3.3) - 0.5) * 0.6) / RING_N;
           if (sf > 0.895 && sf < 0.995) continue;   // pit-straight funnel's stretch
           const side = hash(i * 1.7) < 0.5 ? -1 : 1;
-          billboard(K(sf), side, 8, 10 + hash(i * 4.1) * 6, 4.5 + hash(i * 2.1) * 2, NEON[i % 4]);
+          // gap 9.5 clears billboard()'s own w/2+1 requirement at the widest
+          // jittered panel (w up to 16 → needs gap>9) — the old 32-slot ring
+          // used gap 8 here and silently dropped its widest instances.
+          billboard(K(sf), side, 9.5, 10 + hash(i * 4.1) * 6, 4.5 + hash(i * 2.1) * 2, NEON[i % 4]);
         }
       }
       // Low continuous ad-hoarding run along the pit-straight barrier — a
