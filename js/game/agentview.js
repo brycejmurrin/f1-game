@@ -1357,26 +1357,58 @@ const AgentView = (function () {
       return {
         apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
         conventions: CONVENTIONS,
-        tools: {
+        // Grouped by the question being asked, because the overlap between
+        // scene/visible/frame/worldModel is the part that is genuinely
+        // confusing — `whenToUse` below exists to settle it in one read.
+        perceive: {
           "world({detail,horizonS,points,since})":
-            "egocentric snapshot; detail brief|drive|full; `since` returns a delta",
-          "trackInfo({what})":
-            "STATIC per-track data — corners|sectors|profile|all. Fetch once, never per tick",
+            "WHERE AM I — egocentric snapshot; detail brief|drive|full; "
+            + "`since` returns only what changed",
+          "frame({cols,rows,rangeM,limit})":
+            "WHAT DOES IT LOOK LIKE — the view as a depth-sorted character "
+            + "raster. Use instead of a screenshot. Needs a rendered frame",
           "scene({radius,kinds,limit})":
-            "named scenery near you — trees, buildings, grandstands, billboards, masts",
+            "WHAT IS AROUND ME — named scenery by distance and bearing",
           "visible({limit})":
-            "what is on screen: scenery cells in frustum, cars, corners. Needs a rendered frame",
+            "WHAT IS ON SCREEN — a list, not a picture. Needs a rendered frame",
+        },
+        know: {
+          "trackInfo({what})":
+            "STATIC per-track data — corners|sectors|profile|all. "
+            + "Constant for a session: fetch once, never per tick",
+          "worldModel({detail,offset,limit})":
+            "WHAT IS THIS PLACE — the whole circuit as one document; "
+            + "summary|sections|full",
+          "carView({team,parts})":
+            "WHAT AM I DRIVING — team, parts spec and effects, chassis "
+            + "silhouette, measured geometry",
+        },
+        act: {
           "rollout({seconds,dt,input,policy,policyHz,samples})":
             "drive an interval, return a digest instead of every frame",
           "terminal()": "{done, reason} — finished|wrong_way|rescued|null",
         },
+        whenToUse: {
+          "near vs on-screen": "scene() is a radius around the CAR and ignores "
+            + "the camera; visible() and frame() are the CAMERA's view",
+          "list vs picture": "visible() names what is in shot; frame() shows "
+            + "where it sits and what hides what",
+          "now vs always": "scene() is live; worldModel() is the static circuit",
+          "per tick": 'world({detail:"brief"}) — everything else is too big to '
+            + "call in a loop",
+        },
         setup: ['__apex.race("monza")', "__apex.go()", "__apex.jump(0.1, 55)"],
         loop: "world() -> decide -> rollout({seconds, policy}) -> read the digest",
+        cli: "node tools/agent.mjs <track> <help|world|frame|scene|visible|"
+             + "track|model|car|rollout> [flags]",
         notes: [
           "no agent hook returns null — failures are {ok:false, error, message, fix}",
           "an LLM cannot decide at 60 Hz: rollout runs your policy at policyHz "
             + "(default 10) while physics runs every tick",
-          "visible() reflects the LAST RENDERED frame and is stale under headless(true)",
+          "visible() and frame() reflect the LAST RENDERED frame and are stale "
+            + "under headless(true) — both set framePending when they are",
+          "frame() rasterises axis-aligned boxes, so tree canopies (really cones) "
+            + "over-cover and sky is under-reported in wooded scenes",
           "the ~89 hooks on __apex are the underlying dev console and still work",
         ],
       };
@@ -1430,7 +1462,13 @@ const AgentView = (function () {
         const rr = rel(p.x, p.z);
         near.push({ kind: p.kind, distM: rr.distM, bearingDeg: rr.bearingDeg,
                     side: rr.bearingDeg > 8 ? "right" : rr.bearingDeg < -8 ? "left" : "ahead",
-                    sizeM: [p.w, p.h, p.d], at: [p.x, p.y, p.z] });
+                    sizeM: [p.w, p.h, p.d], at: [p.x, p.y, p.z],
+                    // whether sizeM came from the emitted geometry or the call
+                    // site's guess, and for anonymous assemblies how much of the
+                    // box is actually solid — a caller reasoning about clearance
+                    // needs both
+                    measured: p.measured || undefined,
+                    parts: p.parts, fill: p.fill });
       }
       near.sort((a, b) => a.distM - b.distM);
 

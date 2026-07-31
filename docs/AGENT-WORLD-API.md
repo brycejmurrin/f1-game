@@ -1,9 +1,12 @@
 # Agent World API — showing the game to an LLM agent as JSON
 
-**Status: implemented.** `world()`, `trackInfo()`, `terminal()`, `visible()` and
-`scene()` ship in `js/game/agentview.js`; the prop registry ships in
-`js/track/tracks.js` + the scenery modules. Reference docs live in
-`docs/DEBUG-HOOKS.md`; tests in `tests/agent-view.spec.js` (`npm run test:agent`).
+**Status: implemented.** Ten hooks ship in `js/game/agentview.js` —
+`world()`, `frame()`, `scene()`, `visible()`, `trackInfo()`, `worldModel()`,
+`carView()`, `rollout()`, `terminal()`, `agentHelp()` — plus the prop registry in
+`js/track/tracks.js` and the scenery modules, and a CLI at `tools/agent.mjs`.
+**Reference documentation is `docs/DEBUG-HOOKS.md` → "Agent world view"**; the
+API also describes itself via `__apex.agentHelp()`. Tests:
+`tests/agent-view.spec.js` (`npm run test:agent`, 63 tests).
 This document keeps the research and the reasoning — §2's audit describes the
 state of the codebase **before** the work, and is retained because it explains
 why the design is shaped the way it is.
@@ -402,10 +405,17 @@ presenting the grid as ground truth.
 
 The fix in (3) also improved the registry generally: named placements now take
 **measured** bounds from the primitives they emit, instead of the nominal
-envelopes their call sites guessed. Those guesses were wrong in a consistent
-direction — a 20 m pine was recorded 9 m wide against a real ~5.4 m canopy,
-which both closed up the sky in the raster and over-stated every proximity
-query.
+envelopes their call sites guessed.
+
+Measuring the error rather than assuming it turned out to matter. The first
+version of this note claimed the guesses were wrong "in a consistent direction",
+extrapolating from reading `pine()`'s cone radius. Checked across Monza, they are
+wrong in *both*: pines measure **0.39×** their guessed width (a 24.6 m pine is
+5.7 m across, not 11.1 m) and broadleaf trees **1.55×** it. Over-wide pines
+closed up the sky in the raster; under-wide trees under-stated clearance in every
+proximity query. A one-directional fudge factor would have fixed one and worsened
+the other — which is the argument for measuring rather than correcting a guess
+with another guess.
 
 Remaining honest limit: tree canopies are cones drawn as boxes, so a dense
 treeline still closes gaps of sky a render shows. Sky is under-reported in

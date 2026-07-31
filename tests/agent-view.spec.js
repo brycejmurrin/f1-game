@@ -726,13 +726,21 @@ test.describe("agentHelp()", () => {
     await boot(page);
     const h = await page.evaluate(() => window.__apex.agentHelp());
     expect(h.apiVersion).toBe(1);
-    for (const k of ["world", "trackInfo", "scene", "visible", "rollout", "terminal"]) {
-      expect(Object.keys(h.tools).some((t) => t.startsWith(k))).toBe(true);
+    // EVERY agent hook must appear, or discovery silently hides it — frame()
+    // and carView() were missing from this manifest for a whole revision, which
+    // made the screenshot and car-viewer replacements undiscoverable.
+    const listed = Object.keys(h.perceive)
+      .concat(Object.keys(h.know), Object.keys(h.act)).join(" ");
+    for (const k of ["world(", "frame(", "scene(", "visible(", "trackInfo(",
+                     "worldModel(", "carView(", "rollout(", "terminal("]) {
+      expect(listed, k + " missing from agentHelp()").toContain(k);
     }
     expect(h.loop).toContain("world()");
+    expect(h.cli).toContain("agent.mjs");
     expect(h.notes.join(" ")).toContain("null");
+    expect(Object.keys(h.whenToUse).length).toBeGreaterThan(2);
     // it is a manifest, not documentation — keep it cheap
-    expect(JSON.stringify(h).length).toBeLessThan(2500);
+    expect(JSON.stringify(h).length).toBeLessThan(4000);
   });
 });
 
