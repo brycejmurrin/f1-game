@@ -361,7 +361,7 @@ const LONG_GRIP = 34;
 // corners (roll ∝ lateral g) and pitches to the road gradient, and the wheels
 // spin with speed + steer with input — all on a smoothed visual layer, the way
 // SuperTuxKart keeps a rigid physics body and animates only the model.
-const BODY_ROLL_MAX = 0.06;   // rad (~3.4°) max chassis lean at full lateral grip
+// (chassis cornering-lean cap now lives in js/game/bodyattitude.js as ROLL_MAX)
 const WHEEL_R = 0.34;         // wheel radius (m) — matches Car3D geometry, for spin rate
 const WHEEL_STEER_VIS = 0.5;  // rad of visible front-wheel steer at full lock
 const GRASS_V = 18;         // crawl speed on grass
@@ -1309,6 +1309,10 @@ function loadTrack(idx) {
     // null between here and the assignment below.
     track = null;
     track = Tracks.build(def, { night: sessionDark });
+    // Rapier debris side-world: register the circuit's near-apex clippable cones
+    // (A3). Cheap pure derivation from track.def.turns; stores the list even when
+    // the side-world is disabled/loading so it's ready once rapier is live.
+    DebrisWorld.registerFurniture(track);
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
     // Env probe still holds the previous circuit — fall back to the analytic
@@ -1659,6 +1663,9 @@ const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/game/debrisworld.js) — render-only, opt-in,
 // inert (a single boolean check) unless enabled via apex26.debris/__apex.debris.
 DebrisWorld.create(G);
+// C2 visual suspension (js/game/bodyattitude.js) — render-only cosmetic chassis
+// pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
+const bodyAttitude = BodyAttitude.create(G);
 
 function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
 function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
@@ -2488,6 +2495,10 @@ function updateCar(c, dt, ranked) {
     const vx = (c.speed < 0 ? -1 : 1) * Math.max(Math.abs(c.speed), 4);
     const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - delta;
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
+    // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the
+    // already-computed combined-slip signals READ-ONLY; cosmetic, never grip.
+    if (DebrisWorld.active())
+      DebrisWorld.tyreMarble(c, { lock: axFrac, slip: Math.max(Math.abs(slipF), Math.abs(slipR)), speed: c.speed });
     // Soft-saturating lateral tyre force (accel units): linear slope = stiffness
     // near centre, smoothly capped at the friction limit — how real tyres behave
     // and far more controllable on a noisy tilt signal than a hard clamp.
@@ -2541,6 +2552,16 @@ function updateCar(c, dt, ranked) {
     // actually move it sideways instead of bouncing off a rigid, on-rails line.
     const give = (c.contactT > 0) ? 0.4 : 1;
     c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * bankMu * give * dt;
+    // Debris side-world (A2): AI cars don't run the slip model, so estimate a
+    // slide from lateral-g demand (|k|·v²/g) and treat hard braking at speed as
+    // lock-up. READ-ONLY, cosmetic — matches the player marble hook.
+    if (DebrisWorld.active()) {
+      const latG = Math.abs(k) * c.speed * c.speed / 9.8;   // ~lateral g demand
+      DebrisWorld.tyreMarble(c, {
+        lock: (braking && c.speed > 30) ? 0.95 : 0,
+        slip: Math.max(0, Math.min(1, latG - 1.6)) * 0.14,   // → ~slip-angle rad at the limit
+        speed: c.speed });
+    }
   }
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
@@ -2690,13 +2711,14 @@ function updateCar(c, dt, ranked) {
   } else {
     yawTarget = c.steerVis * 0.35 + clamp(-k * c.speed * 0.14, -0.28, 0.28);
   }
+  // Keep the deploy-side player-heading guard: for the player with a real
+  // world heading, c.yawVis was already set to psi above — don't re-damp it
+  // toward the road (that re-orients the driver to the arc). AI/no-head damp.
   if (!(c.isPlayer && c.head != null)) c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
-  // Pitch animation: nose lifts under throttle (rear squat), dives under braking.
-  // Stored so the render loop can apply it without re-evaluating throttle/brake state.
-  const pitchTarget = c.isPlayer
-    ? (braking ? 0.018 : (onThrottle ? -0.010 : 0))
-    : (clamp(-k * c.speed * 0.002, -0.012, 0.012));   // AI: subtle pitch through corners
-  c.pitchVis = damp(c.pitchVis ?? 0, pitchTarget, 5, dt);
+  // Chassis pitch/roll/heave (brake dive, throttle squat, cornering lean, kerb
+  // bob) now live in the C2 visual-suspension springs (js/game/bodyattitude.js),
+  // advanced per car in the render loop from axEstSm/speed/yawRateCur/kCur +
+  // road height. Render-only — see BodyAttitude.
   // Brake-disc heat (render-only): glows up while braking at speed, cools after.
   // Drives the emissive brake-glow rings on the player's wheels.
   {
@@ -4006,31 +4028,29 @@ function render(dt) {
       }
     }
     basisMat(_groundR, _groundU, _groundF, tmpP, _groundMat);
-    // Pitch: rotate forward+up around the right axis by pitchVis (positive = nose up).
-    // This gives throttle-squat (nose lifts) and brake-dive (nose dips) without
-    // moving the contact point — it's purely a mesh animation.
-    if (c.pitchVis) {
-      const cp = Math.cos(c.pitchVis), sp = Math.sin(c.pitchVis);
+    // C2 visual suspension: advance the cosmetic chassis springs from existing
+    // physics state + the road-surface height (tmpP[1]) and read back the small
+    // clamped pitch/roll/heave offsets. Render-only — applied to the BODY basis
+    // (tmpMat) below; _groundMat (wheels/contact/shadow) is already built and is
+    // never touched. When disabled these all come back 0 (rigid chassis).
+    const _ba = bodyAttitude.update(c, tmpP[1], dt);
+    const _baPitch = _ba.pitch, _baRoll = _ba.roll, _baHeave = _ba.heave;
+    // Pitch: rotate forward+up around the right axis (positive = nose up). This
+    // gives throttle-squat (nose lifts) and brake-dive (nose dips) without moving
+    // the contact point — it's purely a mesh animation.
+    if (_baPitch) {
+      const cp = Math.cos(_baPitch), sp = Math.sin(_baPitch);
       for (let i = 0; i < 3; i++) {
         const f = tmpF[i], u = tmpU[i];
         tmpF[i] = f * cp + u * sp;
         tmpU[i] = u * cp - f * sp;
       }
     }
-    // Cornering lean (render-only): roll the chassis toward the OUTSIDE of the
-    // corner, proportional to lateral g, so the car visibly leans into turns like
-    // a real F1 car. The body already follows the road slope via the tangent
-    // basis, so only roll (not gradient pitch) is added here. Player uses its real
-    // centripetal accel (speed·yawRate); AI uses curvature·speed².
-    // (curvature sign is opposite the yaw-rate sign — see the racing-line code,
-    // racingLine = -k·130 toward the inside — so the AI term is negated to lean
-    // outward like the player.)
-    const aLat = c.isPlayer ? c.speed * (c.yawRateCur || 0)
-                            : -c.speed * c.speed * (c.kCur || 0);
-    const rollTgt = clamp(aLat / LAT_MAX, -1, 1) * BODY_ROLL_MAX;
-    c.rollVis = (c.rollVis === undefined) ? rollTgt : damp(c.rollVis, rollTgt, 6, dt);
-    // roll the right/up basis about the forward axis: road bank + cornering lean.
-    const rollTot = (bankC && bankC.roll ? bankC.roll : 0) + (c.rollVis || 0);
+    // Cornering lean (render-only) comes from the C2 visual-suspension roll
+    // spring (_baRoll, computed above from lateral g). Combine it with the road
+    // bank, which is geometry (the car must sit ON the banked surface) and stays
+    // even when the cosmetic springs are disabled.
+    const rollTot = (bankC && bankC.roll ? bankC.roll : 0) + (_baRoll || 0);
     if (rollTot) {
       const cr = Math.cos(rollTot), sr = Math.sin(rollTot);
       for (let i = 0; i < 3; i++) {
@@ -4040,6 +4060,10 @@ function render(dt) {
       }
     }
     basisMat(tmpR, tmpU, tmpF, tmpP, tmpMat);
+    // C2 visual suspension heave: bob the BODY up/down in world-Y only (kerb/crest
+    // absorption). tmpMat carries the body mesh; _groundMat (wheels/contact/shadow)
+    // was built from the un-offset tmpP, so the tyres stay planted on the road.
+    if (_baHeave) tmpMat[13] += _baHeave;
     let _sm = _shadowMats[_shadowCount];
     if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
     _sm.set(_groundMat);
