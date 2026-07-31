@@ -38,7 +38,7 @@ const COMMANDS = {
   describe: "ONE thing in full   --id prop:12|corner:T3|car:4|span:2",
   query: "a bounded slice     --kind pine --near <m> --from <m> --to <m> --limit <n>",
   scene: "named scenery nearby  --radius <m>  --kinds a,b  --limit <n>  (--visible = on-screen)",
-  render: "the ONE raster aid  --what view|map|circuit|car  --cols <n>  --camera <mode>  (APPROXIMATE)",
+  render: "the ONE raster aid  --what view|map|circuit|car  --cols <n>  --ss <1-6>  --camera <mode>  (APPROXIMATE)",
   rollout: "drive an interval   --seconds <s>  --steer <-1..1>  --throttle  --brake  --samples <n>",
   car: "the car as JSON      --team <id>  --detail parts",
   visible: "[deprecated] scene --visible",
@@ -100,6 +100,7 @@ const opts = {
   offset: num("offset", 0),
   cols: num("cols", 56),
   rows: num("rows", 16),
+  ss: num("ss", 0),   // render({what:"car"}) supersampling override, 1-6 (0 = default)
   range: num("range", 500),
   team: flag("team", null),
   at2: num("at", 0) > 1 ? num("at", 0) : 0,   // survey reuses --at as a COUNT
@@ -178,7 +179,7 @@ const opts = {
           const w = (o.what && o.what !== "corners") ? o.what : "view";
           return a.render({
             what: w, cols: o.cols, rows: o.rows, rangeM: o.range,
-            camera: o.cam || undefined, edges: o.edges,
+            camera: o.cam || undefined, edges: o.edges, ss: o.ss || undefined,
             radiusM: o.radius !== 150 ? o.radius : undefined, northUp: o.north,
             detail: o.modelDetail, offset: o.offset, team: o.team || undefined,
             limit: o.limit || undefined });

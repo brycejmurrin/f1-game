@@ -618,6 +618,29 @@ the shape assertions were green:
 
 Tests prove a thing is correct; dogfooding proves it is good.
 
+## 5j. Higher-fidelity raster — a deliberate, informed exception
+
+Everything above argues for structured text over rasters. Asked directly
+whether to also raise the raster's fidelity, given that the evidence says
+denser character grids read *worse* for LLMs, the answer was still yes — as a
+**human-facing** inspection aid, not a change to what an agent should read.
+
+- `render({what:"view"})`/`frame()`: `cols` default stays 48, cap raised
+  8→400. `rows` derives from the true viewport aspect either way.
+- `render({what:"map"})`/`plan()`: `cols` cap raised 200→300, `rows` to 150.
+- `render({what:"car"})`/`carView({detail:"render"})`: gained a supersampling
+  knob, `ss` (1–6, default 3), through the *existing* Sobel-on-depth pipeline —
+  no new glyphs, just more samples per cell before composing down to one
+  character. Dogfooding confirmed `ss:1` and `ss:6` render visibly differently.
+- Every cap **clamps rather than hangs the tab** on an unreasonable request
+  (`cols:5000` → 400; `cols:100000, ss:999` → 300/6) — this was a real gap
+  before: `carRender`'s `cols` was previously unclamped end to end.
+
+Defaults are untouched and verified so (a fresh `render({what:"view"})` is
+still 48 columns), `agentHelp()` still points decisions at `world()`/`scene()`/
+`trackInfo()`, and the `aid: "APPROXIMATE…"` flag stays on every raster
+response. The honest framing: this is for looking at, not measuring from.
+
 ## 6. Open questions
 
 - **Prop registry granularity.** Per composite model, or per emitted
