@@ -938,6 +938,41 @@ things happen to make the table trustworthy on OSM-derived centrelines:
 Sanity check: Monaco's Grand Hotel hairpin resolves to ~10 m, and integrated
 heading over a lap closes to exactly ±360°.
 
+### `visible({limit}?) → payload | typedError`
+
+What is actually on screen. The renderer answers this every frame — it extracts
+frustum planes from `frame.viewProj` and tests them against per-chunk AABBs —
+and then throws the answer away. This runs the **same** cull test
+(`GLX.makeFrustumPlanes` / `GLX.aabbInFrustum`, exported from
+`js/render/glx/chunked.js` rather than reimplemented, so the two cannot drift)
+and reports it.
+
+```js
+__apex.visible({ limit: 8 })
+// { camera:{eye,target,fovDeg,mode,debugCam}, framePending,
+//   scenery:{ available, cellSizeM:72, totalCells, visibleCells, cullDistM,
+//             nearest:[{distM,bearingDeg,centre,sizeM}], truncated, note },
+//   cars:[{id,code,isPlayer,distM,bearingDeg,inFrame,screenPct,behindCamera}],
+//   carsInFrame,
+//   corners:[{turn,dir,distM,bearingDeg,inFrame,behindCamera,screenPct}] }
+```
+
+Three things to know:
+
+- **It reflects the LAST RENDERED frame.** `jump()` does not move the camera
+  until a frame draws, and `headless(true)` skips `render()` entirely. Call it
+  after letting frames run, or you will read a camera hundreds of metres from
+  where you just put the car. `framePending` is set under headless and a
+  `warning` field explains it.
+- **Scenery resolution is the 72 m chunk grid, and chunks are anonymous.** This
+  locates scenery *mass* — "54 of 648 cells in view, nearest 24 m out on your
+  right" — it does not name a grandstand. Naming needs the prop registry.
+- **`screenPct` is null unless `inFrame`.** A point on the eye plane has `w→0`
+  and projects to coordinates like `27629%`. That is correct projective maths
+  and useless, so it isn't shipped. Corners behind you are still listed, with
+  `behindCamera: true` and a bearing near ±180° — "T2 is 80 m behind you" is
+  exactly what an agent needs after a spin.
+
 ### `terminal() → {done, reason} | null`
 
 `reason` is `"finished"` · `"wrong_way"` · `"rescued"` · `null`. `obs().done`

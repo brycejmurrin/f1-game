@@ -351,6 +351,92 @@ test.describe("world() nextCorner", () => {
   });
 });
 
+// ── visible() ───────────────────────────────────────────────────────────────
+// visible() reads the LAST RENDERED frame, so every test here has to let frames
+// draw first. Skipping that was the first bug found while building it: the
+// camera still sat 380 m away at its pre-jump position.
+
+async function renderFrames(page, n = 10) {
+  await page.evaluate((count) => new Promise((res) => {
+    let i = 0;
+    const tick = () => (++i > count ? res(0) : requestAnimationFrame(tick));
+    requestAnimationFrame(tick);
+  }), n);
+}
+
+test.describe("visible()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("reports scenery chunks inside the camera frustum", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    const v = await page.evaluate(() => window.__apex.visible({ limit: 4 }));
+    expect(v.scenery.available).toBe(true);
+    expect(v.scenery.cellSizeM).toBe(72);
+    expect(v.scenery.totalCells).toBeGreaterThan(50);
+    // Some scenery must be in view, but never all of it — that would mean the
+    // cull test is passing everything and the answer is worthless.
+    expect(v.scenery.visibleCells).toBeGreaterThan(0);
+    expect(v.scenery.visibleCells).toBeLessThan(v.scenery.totalCells);
+    expect(v.scenery.nearest.length).toBeLessThanOrEqual(4);
+    for (const c of v.scenery.nearest) {
+      expect(c.distM).toBeGreaterThanOrEqual(0);
+      expect(c.sizeM.length).toBe(3);
+    }
+  });
+
+  test("the player car projects near the centre of frame", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    const p = await page.evaluate(() =>
+      window.__apex.visible().cars.find((c) => c.isPlayer));
+    expect(p.inFrame).toBe(true);
+    expect(p.screenPct[0]).toBeGreaterThan(20);
+    expect(p.screenPct[0]).toBeLessThan(80);
+    expect(p.screenPct[1]).toBeGreaterThan(20);
+    expect(p.screenPct[1]).toBeLessThan(80);
+    // chase cam sits right behind the car
+    expect(p.distM).toBeLessThan(40);
+  });
+
+  test("screenPct is null for anything not in frame", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    const cars = await page.evaluate(() => window.__apex.visible().cars);
+    const off = cars.filter((c) => !c.inFrame);
+    expect(off.length).toBeGreaterThan(0);
+    for (const c of off) expect(c.screenPct).toBeNull();
+    // and cars are ordered by distance from the camera
+    for (let i = 1; i < cars.length; i++) {
+      expect(cars[i].distM).toBeGreaterThanOrEqual(cars[i - 1].distM);
+    }
+  });
+
+  test("a corner behind the camera is kept, flagged, and bears ~180 deg", async ({ page }) => {
+    await load(page, "monza", 0.05, 60);
+    await renderFrames(page);
+    const cs = await page.evaluate(() => window.__apex.visible().corners);
+    const behind = cs.find((c) => c.behindCamera);
+    expect(behind).toBeTruthy();
+    expect(behind.screenPct).toBeNull();
+    expect(behind.inFrame).toBe(false);
+    expect(Math.abs(behind.bearingDeg)).toBeGreaterThan(120);
+  });
+
+  test("headless is flagged, because the frame is then stale", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    const v = await page.evaluate(() => {
+      window.__apex.headless(true);
+      const out = window.__apex.visible();
+      window.__apex.headless(false);
+      return out;
+    });
+    expect(v.framePending).toBe(true);
+    expect(v.warning).toContain("stale");
+  });
+});
+
 // ── terminal() ──────────────────────────────────────────────────────────────
 
 test.describe("terminal()", () => {

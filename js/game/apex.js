@@ -1447,6 +1447,13 @@ const api = {
   // "profile" | "all". Constant for a session — fetch once, never per tick.
   trackInfo(opts) { return agentView.trackInfo(opts); },
 
+  // visible({limit}?) — what is actually on screen right now: scenery chunks in
+  // the camera frustum (72 m cells, anonymous mixed geometry), every car with
+  // distance/bearing/screen position, and corners in view. Runs the renderer's
+  // own cull test rather than a copy of it. Needs a rendered frame — returns a
+  // typed NoFrameError under headless(true).
+  visible(opts) { return agentView.visible(opts); },
+
   // terminal() — episode end split into {done, reason}, where reason is
   // "finished" | "wrong_way" | "rescued" | null. obs().done conflates the last
   // two, which an agent needs to tell apart.

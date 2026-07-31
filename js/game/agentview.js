@@ -399,9 +399,13 @@ const AgentView = (function () {
         for (const [side, clear] of [["left", clearL], ["right", clearR]]) {
           const blocked = ahead.side === side && ahead.gapM < 12;
           if (clear > 3 && !blocked) {
+            // NB the parens: `a || b + c` binds as `a || (b + c)`, so writing
+            // `ahead.code || ("car " + id) + " " + gap` silently collapses the
+            // whole reason to just "VER" whenever the rival has a driver code.
+            const who = ahead.code || ("car " + ahead.id);
             can.push({ id: "overtake_" + side,
-                       why: ahead.code || ("car " + ahead.id) + " " + ahead.gapS
-                            + " s ahead, " + r1(clear) + " m clear to your " + side });
+                       why: who + " " + ahead.gapS + " s ahead, "
+                            + r1(clear) + " m clear to your " + side });
           } else {
             cannot.push({ id: "overtake_" + side,
                           why: blocked ? "rival is on that line"
@@ -582,6 +586,172 @@ const AgentView = (function () {
       return { done: reason != null, reason };
     }
 
+    // ── visible() — what is actually on screen ──────────────────────────────
+    // The renderer already answers this every frame: it extracts frustum planes
+    // from frame.viewProj and tests them against per-chunk AABBs. Nothing was
+    // retained, so the answer was thrown away 60 times a second. This runs the
+    // SAME cull test (GLX.makeFrustumPlanes / aabbInFrustum, exported from
+    // js/render/glx/chunked.js rather than reimplemented here so the two cannot
+    // drift) and reports it.
+    //
+    // Scenery resolution is the 72 m chunk grid, and chunks are anonymous mixed
+    // geometry — this says "scenery mass is in view over there", not "that is a
+    // grandstand". Naming things needs the prop registry.
+
+    // Project a world point through a COLUMN-MAJOR view-proj (m[col*4+row]).
+    function project(vp, x, y, z) {
+      const cx = vp[0] * x + vp[4] * y + vp[8] * z + vp[12];
+      const cy = vp[1] * x + vp[5] * y + vp[9] * z + vp[13];
+      const cw = vp[3] * x + vp[7] * y + vp[11] * z + vp[15];
+      if (!(cw > 1e-6)) return null;                 // at or behind the eye
+      const nx = cx / cw, ny = cy / cw;
+      const inFrame = nx >= -1 && nx <= 1 && ny >= -1 && ny <= 1;
+      // screenPct is only meaningful in frame. A point sitting on the eye plane
+      // has w -> 0 and projects to absurd coordinates (57.7% vs 27629%) — that
+      // is correct projective maths and useless to a reader, so don't ship it.
+      return {
+        inFrame,
+        ndc: inFrame ? [r2(nx), r2(ny)] : null,
+        screenPct: inFrame ? [r1((nx + 1) * 50), r1((1 - ny) * 50)] : null,
+      };
+    }
+
+    // World XZ of a car. Only the player carries px/pz — AI cars live in (s, x)
+    // and have to be rebuilt through the Frenet frame, the same way carOrbit()
+    // does it in apex.js.
+    function carWorld(c) {
+      if (c.isPlayer && c.px != null) return [c.px, c.pz];
+      Tracks.sample(G.track, c.s, scr);
+      const rl = Math.hypot(scr.r[0], scr.r[2]) || 1;
+      return [scr.p[0] + scr.r[0] / rl * c.x, scr.p[2] + scr.r[2] / rl * c.x];
+    }
+
+    function visible(opts) {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      const frame = G.frame;
+      const vp = frame && frame.viewProj;
+      if (!vp) {
+        return fail("NoFrameError",
+                    "no rendered frame yet, so there is no camera matrix to test against",
+                    "headless(true) skips render() — call __apex.headless(false) "
+                    + "and let one frame draw before calling visible()");
+      }
+      const o = opts || {};
+      const cap = Math.max(1, Math.min(o.limit | 0 || 16, 64));
+      const eye = frame.eye || G.camEye;
+
+      // Camera-forward, for bearings. + bearing = to the right of where you look.
+      const fwd = [G.camTgt[0] - eye[0], G.camTgt[1] - eye[1], G.camTgt[2] - eye[2]];
+      const fl = Math.hypot(fwd[0], fwd[2]) || 1;
+      const bearingTo = (wx, wz) => {
+        const a = Math.atan2(fwd[0] / fl, fwd[2] / fl);
+        const b = Math.atan2(wx - eye[0], wz - eye[2]);
+        return r1(angDiff(b, a) * 180 / Math.PI);
+      };
+      const distTo = (wx, wz) => r1(Math.hypot(wx - eye[0], wz - eye[2]));
+
+      const out = {
+        apiVersion: API_VERSION, seq: ++seq, conventions: CONVENTIONS,
+        camera: {
+          eye: eye.map(r1), target: G.camTgt.map(r1), fovDeg: r1(G.camFov),
+          mode: (GameTables.CAM_MODES[G.camMode] || {}).id
+                || String(GameTables.CAM_MODES[G.camMode] || G.camMode),
+          debugCam: !!G.dbgCam,
+        },
+        // Everything here describes the LAST RENDERED frame. render() is skipped
+        // under headless, and a jump()/camera change does not take effect until
+        // a frame draws — so without this flag an agent can read a camera that
+        // is hundreds of metres from where it just put the car.
+        framePending: !!G.headlessMode,
+      };
+      if (G.headlessMode) {
+        out.warning = "headless(true) skips render(), so this reflects the last "
+                    + "drawn frame and may be stale — call headless(false) and "
+                    + "let a frame draw for a live answer";
+      }
+
+      // ── scenery chunks ──
+      const mesh = G.track.meshes && G.track.meshes.props;
+      const chunks = mesh && mesh.chunks;
+      if (!chunks) {
+        out.scenery = {
+          available: false,
+          why: mesh ? "this track's props mesh is too small to be chunked "
+                      + "(under 2000 tris), so there is no spatial index"
+                    : "no props mesh on this track",
+        };
+      } else if (typeof GLX === "undefined" || !GLX.makeFrustumPlanes) {
+        out.scenery = { available: false,
+                        why: "chunk culling is a GLX feature; the active renderer does not expose it" };
+      } else {
+        const planes = GLX.makeFrustumPlanes(vp);
+        const cd = frame.cullDist || 0;
+        const hits = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const ch = chunks[i];
+          if (!GLX.aabbInFrustum(planes, ch.min, ch.max)) continue;
+          const cx = (ch.min[0] + ch.max[0]) / 2, cz = (ch.min[2] + ch.max[2]) / 2;
+          const d = distTo(cx, cz);
+          if (cd > 0 && d > cd) continue;            // fog hides it; so does the GPU
+          hits.push({ distM: d, bearingDeg: bearingTo(cx, cz),
+                      centre: [r1(cx), r1((ch.min[1] + ch.max[1]) / 2), r1(cz)],
+                      sizeM: [r1(ch.max[0] - ch.min[0]), r1(ch.max[1] - ch.min[1]),
+                              r1(ch.max[2] - ch.min[2])] });
+        }
+        hits.sort((a, b) => a.distM - b.distM);
+        out.scenery = {
+          available: true, cellSizeM: mesh.cellSize || null,
+          totalCells: chunks.length, visibleCells: hits.length,
+          cullDistM: cd || null,
+          nearest: hits.slice(0, cap),
+          truncated: hits.length > cap ? hits.length - cap : 0,
+          note: "cells are " + (mesh.cellSize || "?") + " m of MIXED anonymous "
+                + "geometry — this locates scenery mass, it does not name it",
+        };
+      }
+
+      // ── cars ──
+      out.cars = [];
+      for (const c of G.cars) {
+        const [wx, wz] = carWorld(c);
+        const p = project(vp, wx, 0.6, wz);           // ~roll-hoop height
+        out.cars.push({
+          id: c.id != null ? c.id : G.cars.indexOf(c),
+          code: c.code || null, isPlayer: !!c.isPlayer,
+          distM: distTo(wx, wz), bearingDeg: bearingTo(wx, wz),
+          inFrame: !!(p && p.inFrame),
+          screenPct: p ? p.screenPct : null,
+          behindCamera: !p,
+        });
+      }
+      out.cars.sort((a, b) => a.distM - b.distM);
+      out.carsInFrame = out.cars.filter((c) => c.inFrame).length;
+
+      // ── corners ──
+      out.corners = [];
+      for (const c of corners()) {
+        Tracks.sample(G.track, c.s, scr);
+        const wx = scr.p[0], wz = scr.p[2];
+        const d = distTo(wx, wz);
+        const p = project(vp, wx, scr.p[1], wz);
+        // A corner behind the camera projects to null — but "T1 is 190 m behind
+        // you" is exactly what an agent needs after a spin, so distance decides
+        // inclusion and the projection only decides whether it is on screen.
+        if (!(p && p.inFrame) && d > 400) continue;
+        out.corners.push({ turn: c.turn, dir: c.dir, distM: d,
+                           bearingDeg: bearingTo(wx, wz),
+                           inFrame: !!(p && p.inFrame),
+                           behindCamera: !p,
+                           screenPct: p ? p.screenPct : null });
+      }
+      out.corners.sort((a, b) => a.distM - b.distM);
+
+      return out;
+    }
+
     // ── trackInfo() — static, fetch once per session ─────────────────────────
     // Constant for the whole session, so it must never ride in the per-tick
     // payload. Progressive disclosure: hand the agent a pointer, not the data.
@@ -631,7 +801,8 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, trackInfo, corners, terminal, API_VERSION, PHYSICS_VERSION };
+    return { world, trackInfo, visible, corners, terminal,
+             API_VERSION, PHYSICS_VERSION };
   }
 
   return { create };
