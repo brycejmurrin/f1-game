@@ -47,7 +47,7 @@
     scenery: function (api) {
       const { out, n, px, pz, pyMin, place, prop, backdrop, waterSurface, groundPatch, modelGroup, groundYAt,
               every, hash, onTrack,
-              grandstand, building, motorhome, tower, tree, palm, bush, hedge, billboard, gantry,
+              grandstandEx, building, motorhome, tower, tree, palm, bush, hedge, billboard, gantry,
               marshalPost, fence, guardrail, tyreWall, anchor, vadd, addBox,
               addCyl, addCone, addFrustum, addPrism, addPyramid,
               forestEdge, cityFront, bowlSeatWall, MAT, circuitKit, seat } = api;
@@ -82,7 +82,6 @@
       const GRASS  = [0.32, 0.62, 0.28];
       const WATER  = [0.20, 0.45, 0.62];
       const WHITE  = [0.92, 0.92, 0.92], RED = [0.80, 0.15, 0.15];
-      const SHELL  = [0.46, 0.47, 0.52], CROWD = [0.70, 0.60, 0.55];
       // ---- Track centre (for skyline / lake placement reference) ----
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
@@ -354,40 +353,129 @@
         const kk = (k(0.52) + j * 2) % n;
         palm(kk, -1, 15 + hash(kk * 9 + j) * 8, 12 + hash(kk * 12 + j) * 4, [0.21, 0.47, 0.25]);
       }
-      // Palm accent clusters around key grandstands + pits
+      // Broadleaf avenue accent clusters (plane/elm) around the pit straight —
+      // real Albert Park's pit-straight avenue is lined with deciduous
+      // plane/elm trees, not palms; palms are a Lakeside Drive thing only
+      // (kept in the loop above).
+      const AVENUE = [0.30, 0.46, 0.22];
       for (let j = 0; j < 3; j++) {
-        palm((k(0.0) + j * 3) % n, 1, 20 + j * 7, 13 + hash(j * 3) * 3, [0.21, 0.47, 0.25]);
-        palm((k(0.94) + j * 3) % n, 1, 20 + j * 7, 12 + hash(j * 5) * 3, [0.21, 0.47, 0.25]);
+        tree((k(0.0) + j * 3) % n, 1, 20 + j * 7, 13 + hash(j * 3) * 3, AVENUE);
+        tree((k(0.94) + j * 3) % n, 1, 20 + j * 7, 12 + hash(j * 5) * 3, AVENUE);
       }
 
-      // ---- Rowing boathouses + aquatic structures (s≈0.40 L) ----
-      // gap=60 keeps inner face well clear of road; boathouses add lakeside character
-      for (let j = 0; j < 2; j++) {
-        building(k(0.40 + j * 0.04), -1, 30 + j * 10, 16, 8, 28, {
-          wall: [0.86, 0.88, 0.86], window: [0.22, 0.52, 0.72], floor: 3 });
-      }
-      // Lakeside Recreation Reserve + stadium (s≈0.62–0.68 L)
-      for (let j = 0; j < 2; j++) {
-        building(k(0.63 + j * 0.05), -1, 32 + j * 8, 18, 10, 32, {
-          wall: [0.82, 0.84, 0.86], window: [0.28, 0.53, 0.73], floor: 3 });
-      }
+      // ---- Rowing boathouses (s≈0.40, 0.44 L) ----
+      // The real lake shore is lined with low single-storey weatherboard rowing
+      // sheds — NOT the three-storey glass office blocks `building(floor:3,
+      // h:16-18)` used to emit here. Rebuilt at the right scale (~16w x 5h x
+      // 20d) with a pitched gable roof, cream/weatherboard cladding, a boat-bay
+      // door facing the water, a timber launch ramp and a couple of upturned
+      // hulls resting beside the shed. Each instance is one atomic modelGroup
+      // so its full footprint (walls + roof overhang + ramp) is guarded in one
+      // rejBox test rather than a single inner-face point.
+      const WBOARD = [0.75, 0.72, 0.62];
+      const boathouse = (kk, side, gap, seed) => {
+        const w = 16, wallH = 3.4, roofH = 1.8, d = 20;
+        const a = anchor(kk, side, gap + w / 2), b = [a.r, a.u, a.t];
+        modelGroup(`albert-boathouse-${seed}`, {
+          center: vadd(a.c, a.u, (wallH + roofH) / 2),
+          size: [w + 2, wallH + roofH + 0.4, d + 6],   // +6 on depth covers the ramp
+          basis: b,
+        }, (stage) => {
+          stage._mat = MAT.WOOD;
+          addBox(stage, vadd(a.c, a.u, wallH / 2), [w, wallH, d], WBOARD, b);
+          addPrism(stage, vadd(a.c, a.u, wallH), [w + 0.8, roofH, d + 1.2],
+                   [0.30, 0.28, 0.26], b);                       // pitched roof
+          // Boat-bay door on the lake-facing wall
+          addBox(stage, vadd(vadd(a.c, a.u, wallH * 0.42), a.r, -side * (w / 2 - 0.05)),
+                 [0.15, wallH * 0.72, d * 0.55], [0.20, 0.19, 0.17], b);
+          // Timber launch ramp down toward the water
+          addBox(stage, vadd(vadd(a.c, a.u, -0.35), a.r, -side * (w / 2 + 3)),
+                 [5.5, 0.3, 6], [0.55, 0.48, 0.36], b);
+          stage._mat = 0;
+          // A couple of upturned hulls resting beside the shed
+          for (let i = 0; i < 2; i++) {
+            const off = vadd(vadd(a.c, a.t, -d / 2 - 2 - i * 2.6), a.r, side * (2 + i * 1.5));
+            addPrism(stage, vadd(off, a.u, 0.32), [1.5, 0.65, 7.2], [0.60, 0.30, 0.22], b);
+          }
+        });
+      };
+      boathouse(k(0.40), -1, 26, 0);
+      boathouse(k(0.44), -1, 30, 1);
 
       // ====================================================================
-      // GRANDSTANDS — main straight + signature corners (crowd-tinted)
+      // LAKESIDE STADIUM (s≈0.645 R, ~32–40 m out) — the real athletics/soccer
+      // venue beside the track, previously modelled as a generic "Recreation
+      // Reserve" office block on the LAKE side. A slim white grandstand roof
+      // arcing over a flat oval pitch, on the inland (R) side between the two
+      // existing spectator grandstands at 0.62 and 0.66. One atomic modelGroup
+      // (shell + arcing roof segments + support pylons) guarded by a single
+      // full-footprint rejBox test; the oval pitch is its own guarded groundPatch.
       // ====================================================================
-      grandstand(0.00, -1, 14, 90, SHELL, CROWD);   // main grandstand, pit straight L
-      grandstand(0.07, -1, 14, 60, SHELL, CROWD);   // extended pit-straight bank L
-      grandstand(0.04,  1, 14, 55, SHELL, CROWD);   // Turn 1-2 sweep R
-      grandstand(0.12,  1, 16, 48, SHELL, CROWD);   // Turn 3 exit bank R
-      grandstand(0.30, -1, 16, 50, SHELL, CROWD);   // lakeside spectator bank L
-      grandstand(0.55, -1, 16, 55, SHELL, CROWD);   // Lakeside Drive bank L
-      grandstand(0.62,  1, 14, 60, SHELL, CROWD);   // spectator grandstand R
-      grandstand(0.66,  1, 16, 45, SHELL, CROWD);   // adjoining spectator bank R
-      grandstand(0.78, -1, 14, 45, SHELL, CROWD);   // chicane complex L
-      grandstand(0.90,  1, 18, 50, SHELL, CROWD);   // fan-hill grandstand R
-      grandstand(0.95, -1, 16, 48, SHELL, CROWD);   // pit-approach bank L
-      grandstand(0.20,  1, 16, 46, SHELL, CROWD);   // fast section R
-      grandstand(0.45, -1, 16, 44, SHELL, CROWD);   // lakeside bank L
+      {
+        const kk = k(0.645), gapShell = 36;
+        const a = anchor(kk, 1, gapShell), b = [a.r, a.u, a.t];
+        modelGroup("albert-lakeside-stadium", {
+          center: vadd(a.c, a.u, 4.0),
+          size: [14, 9, 64],
+          basis: b,
+        }, (stage) => {
+          // Slim single-tier stand shell along the pitch's far side
+          addBox(stage, vadd(a.c, a.u, 1.6), [8, 3.2, 60], [0.90, 0.90, 0.91], b);
+          // Slim arcing roof: tilted white segments rising then falling toward
+          // the ends — a shallow arc silhouette rather than a flat slab.
+          const segN = 9;
+          for (let i = 0; i < segN; i++) {
+            const f = (i + 0.5) / segN - 0.5;              // -0.5 .. 0.5 along length
+            const arc = 1 - f * f * 4;                      // parabolic arc profile
+            const liftY = 4.4 + Math.max(0, arc) * 3.2;
+            const off = f * 58;
+            addBox(stage, vadd(vadd(a.c, a.t, off), a.u, liftY),
+                   [9.5, 0.4, 60 / segN + 0.6], [0.94, 0.95, 0.97], b);
+          }
+          // Support pylons under the roof
+          for (const off of [-24, -8, 8, 24]) {
+            addCyl(stage, vadd(a.c, a.t, off), 0.3, 4.4, [0.60, 0.61, 0.63], 6, b);
+          }
+        }, { required: true, maxVertices: 6000 });
+      }
+      groundPatch(k(0.645), 1, 17, [30, 0.12, 66], [0.22, 0.50, 0.24],
+                  { id: "albert-lakeside-stadium-pitch", samples: 8 });
+
+      // ====================================================================
+      // GRANDSTANDS — main straight + signature corners, named after Albert
+      // Park's real stands (Brabham, Fangio, Hill, Ricciardo, Waite, Webber).
+      // All ~21 stands used to share one grey SHELL/CROWD pair — the single
+      // biggest repetition problem on this circuit. grandstandEx() rotates
+      // them through the circuit's STAND_SETS.albert_park liveries
+      // (steel/navy/alu) and varies roof style/tiers/detailing per stand so
+      // the venue reads as built up over years, not stamped from one mould.
+      // ====================================================================
+      grandstandEx(0.00, -1, 14, 90, null, null,             // Brabham — hero main stand
+        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      grandstandEx(0.07, -1, 14, 60, null, null,              // Fangio — pit-straight extension
+        { livery: "navy", roof: "flat" });
+      grandstandEx(0.04,  1, 14, 55, null, null,               // Hill — Turn 1-2 sweep
+        { livery: "alu", roof: "truss", pylons: true });
+      grandstandEx(0.12,  1, 16, 48, null, null,               // Waite — Turn 3 exit
+        { livery: "steel", roof: "cantilever" });
+      grandstandEx(0.30, -1, 16, 50, null, null,               // lakeside spectator bank
+        { livery: "navy", roof: "flat" });
+      grandstandEx(0.55, -1, 16, 55, null, null,               // Ricciardo — Lakeside Drive
+        { livery: "steel", roof: "truss", endWalls: true });
+      grandstandEx(0.62,  1, 14, 60, null, null,               // Webber — spectator grandstand
+        { livery: "navy", tiers: 2, roof: "cantilever", suites: true });
+      grandstandEx(0.66,  1, 16, 45, null, null,               // adjoining spectator bank
+        { livery: "alu", roof: "flat" });
+      grandstandEx(0.78, -1, 14, 45, null, null,               // chicane complex
+        { livery: "steel", roof: "truss" });
+      grandstandEx(0.90,  1, 18, 50, null, null,               // fan-hill grandstand
+        { livery: "alu", roof: "cantilever", pylons: true });
+      grandstandEx(0.95, -1, 16, 48, null, null,               // pit-approach bank
+        { livery: "navy", roof: "flat" });
+      grandstandEx(0.20,  1, 16, 46, null, null,               // fast-section stand
+        { livery: "steel", roof: "cantilever" });
+      grandstandEx(0.45, -1, 16, 44, null, null,               // lakeside bank
+        { livery: "alu", roof: "truss" });
 
       // Packed, low crowd banks at the two broadcast hero sectors. Their short
       // bounded runs sit behind the barriers and keep corner-exit sightlines open.
@@ -473,6 +561,24 @@
       ]) {
         place(k(s), side, 1.9, [0.55, 0.28, 7.0], col);
       }
+      // Fast sweeps (s≈0.18–0.26, real T5/T6) — named FIA corners that had NO
+      // kerbing at all despite the T1 and chicane treatment above.
+      for (const [s, side, col] of [
+        [0.180,  1, RED],   [0.185,  1, WHITE], [0.190,  1, RED],   [0.195,  1, WHITE],
+        [0.220, -1, RED],   [0.225, -1, WHITE], [0.230, -1, RED],   [0.235, -1, WHITE],
+        [0.250,  1, RED],   [0.255,  1, WHITE], [0.260,  1, RED],
+      ]) {
+        place(k(s), side, 1.9, [0.55, 0.28, 7.0], col);
+      }
+      // Lakeside rights (s≈0.53–0.60, real T9/T10) — same gap; matching FIA
+      // sausage kerbs so the lakeside apexes read the same as T1/the chicane.
+      for (const [s, side, col] of [
+        [0.530, -1, RED],   [0.535, -1, WHITE], [0.540, -1, RED],   [0.545, -1, WHITE],
+        [0.560, -1, RED],   [0.565, -1, WHITE], [0.570, -1, RED],
+        [0.585,  1, RED],   [0.590,  1, WHITE], [0.595,  1, RED],   [0.600,  1, WHITE],
+      ]) {
+        place(k(s), side, 1.9, [0.55, 0.28, 7.0], col);
+      }
       // Lighter mid-lap apex flashes + grass run-off framing
       for (const [s, side] of [[0.30, 1], [0.62, 1], [0.97, 1]]) {
         place(k(s), side, 2, [0.5, 0.25, 6], side > 0 ? RED : WHITE);
@@ -484,6 +590,28 @@
         groundPatch(k(s), side, 2, [10, 0.1, 12], GRASS,
                     { id: `albert-runoff-${s}-${side}`, samples: 5 });
       }
+
+      // ====================================================================
+      // ALBERT PARK GOLF COURSE — southern infield (s≈0.65–0.85 L). The real
+      // 18-hole public course occupies this interior; today it renders as
+      // unbroken eucalyptus canopy. A handful of fairway-green ground patches
+      // plus two pale sand bunkers, placed just beyond the southern loop's
+      // treelines (which reach out to ~gap 40 m there), read as golf turf
+      // glimpsed through the parkland rather than continuous forest.
+      // ====================================================================
+      const FAIRWAY = [0.30, 0.58, 0.24];
+      const BUNKER  = [0.86, 0.79, 0.62];
+      for (const [s, gap, w, len] of [
+        [0.665, 42, 26, 60], [0.705, 46, 28, 70], [0.745, 44, 26, 65],
+        [0.790, 40, 24, 60], [0.825, 42, 24, 55],
+      ]) {
+        groundPatch(k(s), -1, gap, [w, 0.12, len], FAIRWAY,
+                    { id: `albert-golf-fairway-${s}`, samples: 6 });
+      }
+      groundPatch(k(0.70), -1, 74, [14, 0.10, 14], BUNKER,
+                  { id: "albert-golf-bunker-1", samples: 3 });
+      groundPatch(k(0.80), -1, 70, [12, 0.10, 12], BUNKER,
+                  { id: "albert-golf-bunker-2", samples: 3 });
 
       // ====================================================================
       // Street-circuit temporary-style barriers — armco + catch fence densified
@@ -549,10 +677,13 @@
       // Temporary bleacher ranks in the parkland viewing areas the stands above
       // skip — Lakeside, Jones/Ascari and the pit-entry banks. Short runs so the
       // lap still reads as separate enclosures rather than one wall of seating.
+      // Uncovered bare-aluminium bleachers (roof:"none") — genuinely temporary
+      // general-admission seating, not another roofed permanent stand, and
+      // cheaper than the baseline cantilever-roof template they replace.
       for (const [s, side, gap, len] of [
         [0.235, -1, 15, 40], [0.375,  1, 15, 42], [0.415, -1, 16, 38],
         [0.505,  1, 16, 44], [0.700, -1, 15, 40], [0.855,  1, 15, 42],
-      ]) grandstand(s, side, gap, len, SHELL, CROWD);
+      ]) grandstandEx(s, side, gap, len, null, null, { livery: "alu", roof: "none" });
 
       // Trackside sponsor hoardings on the fence line, every parkland sector.
       for (const [s, side] of [[0.17, -1], [0.22, 1], [0.34, -1], [0.40, 1],

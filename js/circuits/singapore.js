@@ -604,35 +604,50 @@
       // MAIN STRAIGHT — continuous glass Pit Building (L) + race-control
       // tower, Float@Marina Bay grandstands (R), start gantry, marshal posts.
       // The real Pit Building is one continuous ~350 m three-storey glass
-      // structure, not five detached garage sheds — circuitKit.pitBuilding
-      // gives it real garage-bay rhythm under a single roofline. The
-      // race-control tower is a proper circuitKit facility (replacing the old
-      // hand-rolled timing-tower boxes), sharing the pit precinct's cool-glass
-      // palette set via sceneryThemeOverrides at the top of this file.
+      // structure, not five detached garage sheds. circuitKit.pitBuilding
+      // extrudes along a single fixed track frame, so one call can only span
+      // a LOCALLY STRAIGHT stretch of road — and measuring this circuit's
+      // own spline shows the pit-entry approach (s≈0.986-0.992) is a real
+      // dogleg kink, same as the source circuit's pit-lane entry. Four
+      // abutting facility segments — long where the road is straight, short
+      // through the kink — read as one continuous glazed structure (~245 m
+      // of built frontage across a ~290 m run) instead of five disconnected
+      // sheds, and each stays inside its own safe straight run so none of
+      // them oversweeps the actual tarmac. The race-control tower is a
+      // proper circuitKit facility (replacing the old hand-rolled
+      // timing-tower boxes), sharing the pit precinct's cool-glass palette
+      // set via sceneryThemeOverrides at the top of this file.
       // ===================================================================
       if (circuitKit) {
-        circuitKit.pitBuilding({
-          id: "kit:singapore:pit-building", frac: 0.989, side: -1, gap: 11,
-          size: [22, 16, 350], garages: 24, style: "flat", required: true,
-        });
-        // Thin cyan glazing bands — one per storey — read as a lit curtain
-        // wall at night against the 350 m frontage they dress. Cheap: three
-        // long thin boxes rather than per-bay glazing.
-        {
-          const a = anchor(K(0.989), -1, 11);
+        const PIT_SEGS = [
+          { id: "kit:singapore:pit-building-1", frac: 0.958,  len: 90, garages: 8 },
+          { id: "kit:singapore:pit-building-2", frac: 0.9755, len: 50, garages: 4 },
+          { id: "kit:singapore:pit-building-3", frac: 0.988,  len: 15, garages: 2 },
+          { id: "kit:singapore:pit-building-4", frac: 0.999,  len: 90, garages: 8 },
+        ];
+        for (const seg of PIT_SEGS) {
+          circuitKit.pitBuilding({
+            id: seg.id, frac: seg.frac, side: -1, gap: 11,
+            size: [22, 16, seg.len], garages: seg.garages, style: "flat",
+            required: true,
+          });
+          // Thin cyan glazing band — one per storey — reads as a lit
+          // curtain wall at night against each segment's own frontage.
+          const a = anchor(K(seg.frac), -1, 11);
           for (const yy of [4.0, 8.6, 13.2]) {
-            addBox(out, vadd(a.c, a.u, yy), [0.7, 2.6, 340], WIN_CYAN, [a.r, a.u, a.t]);
+            addBox(out, vadd(a.c, a.u, yy), [0.7, 2.6, seg.len - 4], WIN_CYAN, [a.r, a.u, a.t]);
           }
         }
-        // Race-control tower, set back behind the pit building roofline.
+        // Race-control tower, set back behind the pit building roofline at
+        // the finish-line end of the complex.
         circuitKit.raceControl({
-          id: "kit:singapore:pit-race-control", frac: 0.989, side: -1, gap: 46,
+          id: "kit:singapore:pit-race-control", frac: 0.999, side: -1, gap: 46,
           size: [14, 34, 16], required: true,
         });
         // Beacon light on the race-control roof — a landmark visible from
         // across the venue, echoing the old hand-rolled tower's night glow.
         {
-          const a = anchor(K(0.989), -1, 53);
+          const a = anchor(K(0.999), -1, 53);
           addCone(out, vadd(a.c, a.u, 35), 2.2, 6, NEON[1], 6, [a.r, a.u, a.t]);
         }
       }
