@@ -24,9 +24,15 @@ async function startTT(page, id) {
 }
 
 // Enable the side-world and wait for the lazy rapier import + WASM init.
+// Fails fast (with the module's own error string) if the import rejects.
 async function enableDebris(page) {
   await page.evaluate(() => window.__apex.debris(true));
-  await page.waitForFunction(() => window.__apex.debris().ready, { timeout: 20000 });
+  await page.waitForFunction(() => {
+    const st = window.__apex.debris();
+    return st.ready || st.loadState === -1;
+  }, { timeout: 30000 });
+  const st = await page.evaluate(() => window.__apex.debris());
+  if (!st.ready) throw new Error("rapier load failed: " + st.error);
 }
 
 test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
