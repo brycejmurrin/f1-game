@@ -201,6 +201,18 @@ const FRONT_WEIGHT = 0.47;  // static front-axle load fraction (F1 is rear-biase
 const CS_FRONT = 130;       // front cornering stiffness (accel per rad of slip)
 const CS_REAR  = 175;       // rear stiffer than front → understeer in the linear range too
 const WT_LONG = 0.22;       // longitudinal load transfer (braking loads the front axle)
+// AERODYNAMIC DOWNFORCE. Grip used to FALL with speed (gripScale: 1.00 at 10 m/s
+// down to 0.72 at VMAX) — an arcade understeer taper, and backwards for a car
+// with wings. Aero load rises with v², so a real F1 car pulls roughly 2 g in a
+// slow corner and 5 g in a fast one; this model did the opposite, which is why
+// quick corners felt vague and slow ones felt sharp. Lateral grip is now
+// 1 + DOWNFORCE·(v/VMAX)², so high-speed cornering firms up the way it should.
+const DOWNFORCE = 0.65;     // extra grip fraction at VMAX (0 = no wings)
+// Lateral grip OFF the racing surface. muBase had no off-track term at all, so
+// grass and gravel cornered exactly like tarmac and only scrubbed forward speed —
+// you could take a run-off at full lateral grip. Faded in over the first ~1.5 m
+// past the edge so the transition is continuous, not a step.
+const OFF_GRIP = 0.42;      // fraction of tarmac lateral grip on grass/gravel
 // These four are `let` so the emulation/tuning harness (setPhysics) can sweep them
 // — they are the core feel levers found by emulating real drivers, not pause-menu
 // sliders. FRONT_GRIP: front friction bias (<1) for an understeer-safe default.
@@ -2445,7 +2457,12 @@ function updateCar(c, dt, ranked) {
     const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
-    const muBase = LAT_MAX * PLAYER_GRIP * gripScale * kerbGrip * gripMult() * playerMods.cornering * bankMu * (1 + vertLoad) * slipFactor;
+    // Aero load (rises with v²) replaces the old speed taper, and the surface the
+    // car is actually on now scales lateral grip — see DOWNFORCE / OFF_GRIP.
+    const aeroGrip = 1 + DOWNFORCE * Math.min(1, (Math.abs(c.speed) / VMAX)) ** 2;
+    const offDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
+    const surfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, offDepth);
+    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult() * playerMods.cornering * bankMu * (1 + vertLoad) * slipFactor;
     const muF = Math.max(0.5, muBase * loadF * FRONT_GRIP);
     const muR = Math.max(0.5, muBase * loadR * (1 - DRIFT * 0.55));
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
