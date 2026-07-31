@@ -54,7 +54,8 @@
         place, backdrop, anchor, addBox, addCyl, addFrustum,
         palm, building, fence, wall, mountain, guardrail, tyreWall,
         billboard, marshalPost, gantry, tower, bush, along,
-        modelGroup, groundPatch, floodMast, floodMastRing, circuitKit } = api;
+        modelGroup, groundPatch, floodMast, floodMastRing, circuitKit,
+        bankedKerbStrip, sponsorHoarding } = api;
       const K = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
@@ -147,6 +148,15 @@
           }
         }, { required: !!required });
       };
+      // Per-family shell tints for the 7 non-main stands (T1, T2/T3, T16),
+      // mirroring STAND_SETS.qatar in js/track/scenery-data.js — the same
+      // ["sandstone", "steel", "concrete"] rotation grandstandEx() draws
+      // from, blended halfway back to the baseline Tilke grey. Lusail's real
+      // slabs are uniform, so this is deliberately a subtle warm/cool/pale
+      // rotation between stand groups, not a livery rainbow.
+      const SHELL_SANDSTONE = [0.58, 0.55, 0.50];
+      const SHELL_STEEL     = [0.44, 0.45, 0.50];
+      const SHELL_CONCRETE  = [0.51, 0.52, 0.53];
 
       // ---- LOW SAND-DUNE RING (culled from 3 tall rocky rings → 2 low rings) ----
       (function duneRing() {
@@ -199,18 +209,40 @@
         }
       }
 
+      // ================= APEX KERBS — bold red/white sawtooth ================
+      // The brief calls for "bold red-white sawtooth kerbs at every apex" and
+      // `bankZones` above already lists the 7 real cambered apexes — it was
+      // imported (see destructure) but never called. ±25 m window each side,
+      // both track edges, kerb-only (no SAFER rail: the fence/guardrail/
+      // tyreWall calls elsewhere already dress the runoff at these fracs).
+      if (typeof bankedKerbStrip === "function") {
+        const APEX = [0.0415, 0.1914, 0.4199, 0.4636, 0.6217, 0.7404, 0.8487]; // = bankZones[].frac
+        const KERB_HALF = 25 / 5400; // ±25 m in lap-fraction terms (lengthKm 5.4)
+        const KERB_R = [0.85, 0.15, 0.15], KERB_W = [0.92, 0.92, 0.90];
+        for (const f of APEX) {
+          for (const side of [-1, 1]) {
+            bankedKerbStrip(f - KERB_HALF, f + KERB_HALF, side,
+              { safer: false, kerbRed: KERB_R, kerbWht: KERB_W });
+          }
+        }
+      }
+
       // ================= START / FINISH — record pit slab + crescent =========
       // Tilke 402 m pit building: long low white slab + horizontal banding.
+      // Real Lusail pit building is 402 m with 50 garages — the world's
+      // longest — vs. the 212 m slab this shipped with. Extended to ~380 m
+      // (kept a hair under 402 so it doesn't crowd the T1 VVIP villas that
+      // sit further along the same side).
       (function pitSlab() {
         const a = anchor(K(0.00), -1, 9.2), b = [a.r, a.u, a.t];
         const c = vadd(a.c, a.u, 6.0);
         modelGroup("qatar-pit-slab", {
-          center: c, size: [18, 13, 212], basis: b,
+          center: c, size: [18, 13, 380], basis: b,
         }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, 5.5), [16, 11, 210], WHITE, b);
-          addBox(stage, vadd(vadd(a.c, a.u, 5.7), a.r, 8.05), [0.25, 0.5, 208], [0.78, 0.78, 0.76], b);
-          addBox(stage, vadd(vadd(a.c, a.u, 9.0), a.r, 8.08), [0.22, 1.2, 206], WIN_WARM, b);
-          addBox(stage, vadd(a.c, a.u, 11.35), [17.2, 0.7, 211], WHITE, b);
+          addBox(stage, vadd(a.c, a.u, 5.5), [16, 11, 378], WHITE, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 5.7), a.r, 8.05), [0.25, 0.5, 376], [0.78, 0.78, 0.76], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 9.0), a.r, 8.08), [0.22, 1.2, 374], WIN_WARM, b);
+          addBox(stage, vadd(a.c, a.u, 11.35), [17.2, 0.7, 379], WHITE, b);
         }, { required: true });
       })();
       building(K(0.01), -1, 17, 13, 8, 160,
@@ -295,9 +327,9 @@
 
       // ================= TURN 1 — North stand + Tilke VVIP canopy ============
       qatarStand("qatar-t1-stand-a", 0.053, 1, 20, 95,
-        [0.44, 0.45, 0.50], [0.18, 0.18, 0.21], true);
+        SHELL_SANDSTONE, [0.18, 0.18, 0.21], true);
       qatarStand("qatar-t1-stand-b", 0.070, 1, 20, 65,
-        [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
+        SHELL_SANDSTONE, [0.18, 0.18, 0.21]);
       tyreWall(0.04, 0.085, 1, 5, [0.90, 0.86, 0.20]);
       marshalPost(K(0.05), -1, 6);
       billboard(K(0.065), 1, 6, 12, 3.8, AD[0]);
@@ -343,7 +375,7 @@
       // ================= T2/T3 PAIRED GRANDSTANDS ============================
       for (const [i, s] of [0.162, 0.183, 0.204].entries()) {
         qatarStand(`qatar-t23-stand-${i}`, s, 1, 22, 52,
-          [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
+          SHELL_STEEL, [0.18, 0.18, 0.21]);
       }
       // Small hospitality villa terrace at T2/T3 (replaces fantasy marquees)
       for (let i = 0; i < 3; i++) {
@@ -366,6 +398,24 @@
             forest: DUNE, rock: DUNE_N, snow: DUNE_N });
       }
       marshalPost(K(0.30), -1, 6);
+
+      // ================= DEAD-ZONE FILL (s 0.30-0.36) =========================
+      // The dune ring above tapers off before the Turns 4-6 sweep dressing
+      // picks up at K(0.36), leaving ~150 m with nothing but the one marshal
+      // post. Scrub + a sponsor hoarding run close the gap cheaply.
+      for (let i = 0; i < 9; i++) {
+        const k = (K(0.305) + i * Math.round(n * 0.007)) % n;
+        for (const side of [-1, 1]) {
+          if (hash(k * 53 + side * 17) <= 0.55) {
+            const dd = 26 + hash(k * 59 + side) * 36;
+            const scrubCol = hash(k * 61 + side) < 0.5 ? [0.50, 0.46, 0.32] : [0.30, 0.36, 0.20];
+            bush(k, side, dd, scrubCol);
+          }
+        }
+      }
+      if (typeof sponsorHoarding === "function") {
+        sponsorHoarding(0.303, 0.357, 1, 6, { palette: AD });
+      }
 
       // ================= TURNS 4-6 SWEEP — open desert flats =================
       for (let i = 0; i < 5; i++) {
@@ -404,6 +454,10 @@
             const hf = hash(i * 7 + sBase * 30);
             const wf = hash(i * 3 + sBase * 20);
             const sFrac = (sBase + (i - 3) * 0.010 + 1) % 1;
+            // Leave the Katara Towers + Lusail Stadium hero landmarks (below)
+            // their own clear stretch of skyline instead of stacking an
+            // anonymous box behind them.
+            if (sFrac > 0.505 && sFrac < 0.535) continue;
             const dist  = 480 + hash(i * 5 + sBase * 70) * 160;
             const landmark = hash(i * 4.4 + sBase) > 0.88;
             const w = 5 + wf * 7;
@@ -417,6 +471,45 @@
             }
           }
         }
+      })();
+
+      // ================= KATARA TOWERS + LUSAIL STADIUM =======================
+      // Real Lusail landmarks the brief flags as missing from an otherwise
+      // anonymous random-box skyline. Both sit s 0.50-0.55, L, ~550 m out —
+      // the skyline() loop above carves out this frac range for them.
+      (function katharaAndStadium() {
+        const BRONZE = [0.20, 0.15, 0.10];
+        const GOLD = [0.58, 0.46, 0.20], GOLD_ROOF = [0.66, 0.54, 0.26];
+
+        // Katara Towers: twin leaning "scimitar" prisms, ~110 m, dark
+        // bronze-glass, bowing toward one another along the straight.
+        (function kataraTowers() {
+          const s = 0.515, dist = 540;
+          const a = anchor(K(s), -1, dist), b = [a.r, a.u, a.t];
+          modelGroup("qatar-katara-towers", {
+            center: vadd(a.c, a.u, 55), size: [40, 112, 40], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(a.c, a.u, 1.0), [34, 2.0, 34], BRONZE, b); // shared podium
+            for (const dz of [-14, 14]) {
+              const lean = dz > 0 ? -0.14 : 0.14; // opposing lean = bowed pair
+              const tiltU = [b[1][0] + b[2][0] * lean, b[1][1], b[1][2] + b[2][2] * lean];
+              const base = vadd(a.c, a.t, dz);
+              addFrustum(stage, base, 8.5, 4.0, 110, BRONZE, 4, [b[0], tiltU, b[2]]);
+            }
+          }, { required: true });
+        })();
+
+        // Lusail Stadium: wide low golden bowl/drum, ~45 m tall x 90 m wide.
+        (function lusailStadium() {
+          const s = 0.542, dist = 560;
+          const a = anchor(K(s), -1, dist), b = [a.r, a.u, a.t];
+          modelGroup("qatar-lusail-stadium", {
+            center: vadd(a.c, a.u, 22.5), size: [92, 46, 92], basis: b,
+          }, (stage) => {
+            addCyl(stage, a.c, 45, 32, GOLD, 16, b);
+            addFrustum(stage, vadd(a.c, a.u, 32), 45, 30, 13, GOLD_ROOF, 16, b);
+          }, { required: true });
+        })();
       })();
 
       // ================= MARSHAL / TIMING HUTS ==============================
@@ -461,9 +554,9 @@
 
       // ================= TURN 16 GRANDSTAND + PIT ENTRY =====================
       qatarStand("qatar-t16-stand-a", 0.930, 1, 17, 75,
-        [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
+        SHELL_CONCRETE, [0.18, 0.18, 0.21]);
       qatarStand("qatar-t16-stand-b", 0.952, 1, 17, 55,
-        [0.44, 0.45, 0.50], [0.18, 0.18, 0.21]);
+        SHELL_CONCRETE, [0.18, 0.18, 0.21]);
       tyreWall(0.91, 0.945, 1, 5, [0.90, 0.86, 0.20]);
       marshalPost(K(0.94), -1, 6);
       billboard(K(0.92), 1, 6, 12, 3.6, AD[5]);
