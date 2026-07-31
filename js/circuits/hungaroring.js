@@ -51,7 +51,8 @@
     ],
     scenery: function (api) {
       const { out, MAT, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
-              mountain, peak, ridge, tree, pine, bush, hedge, grandstand, building, motorhome, tower,
+              mountain, peak, ridge, tree, pine, bush, hedge, grandstand, grandstandEx, spectatorHill,
+              broadcastCompound, cameraTower, building, motorhome, tower,
               billboard, marshalPost, fence, guardrail, tyreWall,
               anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
               seat, foundation, cantilever,
@@ -143,18 +144,40 @@
       // STADIUM SECTION — Turns 1–4 + mid-lap stands (s=0 main tribune is bespoke below)
       // ====================================================================
       billboard(K(0.00), 1, 38, 22, 6, RED);
-      // T1 grandstand group: outside of Turn 1 braking zone
-      grandstand(0.06,  1, 11,  70, SHELL,  CROWD[0]);
+      // T1 grandstand group: outside of Turn 1 braking zone. grandstandEx with
+      // STAND_SETS.hungaroring liveries (steel/concrete/alu) so the ring varies
+      // circuit-to-circuit AND stand-to-stand instead of the old flat SHELL grey.
+      grandstandEx(0.06,  1, 11,  70, SHELL, CROWD[0],
+                   { livery: "steel", tiers: 2, roof: "cantilever", suites: true, pylons: true });
       // Stadium inside: Apex 1/2 banked stands inside Turn 1-2
-      grandstand(0.10, -1, 10,  56, SHELL,  CROWD[2]);
+      grandstandEx(0.10, -1, 10,  56, SHELL, CROWD[2],
+                   { livery: "concrete", tiers: 2, roof: "flat" });
       // Sector grandstands across the back of the circuit
-      grandstand(0.12, -1, 10, 44, SHELL,  CROWD[2]);
-      grandstand(0.35, -1, 12, 48, SHELL,  CROWD[1]);
-      grandstand(0.40,  1, 13, 46, SHELL,  CROWD[0]);
-      grandstand(0.55, -1, 10, 50, SHELL,  CROWD[1]);
-      grandstand(0.68, -1, 10, 44, SHELL,  CROWD[2]);
-      grandstand(0.80,  1, 10, 40, SHELL,  CROWD[3]);
-      grandstand(0.90,  1, 10, 62, SHELL,  CROWD[0]);   // Club stand — final corner
+      grandstandEx(0.12, -1, 10, 44, SHELL, CROWD[2],
+                   { livery: "alu", tiers: 1, roof: "truss" });
+      // ---- Turn 5 (Mogyoród) → Turn 6/7 chicane ("Driving Centre") ----
+      // s 0.12-0.30 was the clearest hole on the lap: no stand of any kind
+      // across ~800 m of a documented, heavily tree-lined grandstand location.
+      // Both new stands sit at generous `gap` so the deferred forestEdge() pass
+      // (it reads the barrier/solid index built by grandstandEx's recordBarrier
+      // + indexSolid AFTER this runs) frames them INSIDE the treeline rather
+      // than growing trees through them.
+      grandstandEx(0.155, 1, 24, 58, SHELL, CROWD[1],
+                   { livery: "alu", tiers: 1, roof: "truss", endWalls: true });     // Turn 5 Mogyoród
+      grandstandEx(0.255, -1, 22, 54, SHELL, CROWD[3],
+                   { livery: "steel", tiers: 1, roof: "cantilever", suites: true }); // T6/7 Driving Centre chicane
+      grandstandEx(0.35, -1, 12, 48, SHELL, CROWD[1],
+                   { livery: "concrete", tiers: 1, roof: "cantilever" });
+      grandstandEx(0.40,  1, 13, 46, SHELL, CROWD[0],
+                   { livery: "steel", tiers: 2, roof: "flat" });
+      grandstandEx(0.55, -1, 10, 50, SHELL, CROWD[1],
+                   { livery: "alu", tiers: 1, roof: "truss" });
+      grandstandEx(0.68, -1, 10, 44, SHELL, CROWD[2],
+                   { livery: "concrete", tiers: 1, roof: "cantilever" });
+      grandstandEx(0.80,  1, 10, 40, SHELL, CROWD[3],
+                   { livery: "steel", tiers: 1, roof: "flat" });
+      grandstandEx(0.90,  1, 10, 62, SHELL, CROWD[0],   // Club stand — final corner
+                   { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
 
       // ====================================================================
       // GRANDSTAND ACCENT STRIPS — lit fascia + concourse window bands
@@ -171,6 +194,8 @@
       standAccent(0.06, 1, 11,   70);
       standAccent(0.10, -1, 10, 56);
       standAccent(0.12, -1, 10, 44);
+      standAccent(0.155, 1, 24, 58);
+      standAccent(0.255, -1, 22, 54);
       standAccent(0.35, -1, 12, 48);
       standAccent(0.40,  1, 13, 46);
       standAccent(0.55, -1, 10, 50);
@@ -182,6 +207,8 @@
       const gsLit = [
         { s: 0.06, side: 1, gap: 18, len: 66 },
         { s: 0.10, side: -1, gap: 15, len: 52 },
+        { s: 0.155, side: 1, gap: 26, len: 54 },
+        { s: 0.255, side: -1, gap: 24, len: 50 },
         { s: 0.35, side: -1, gap: 17, len: 44 },
         { s: 0.55, side: -1, gap: 15, len: 46 },
         { s: 0.90, side: 1, gap: 15, len: 58 },
