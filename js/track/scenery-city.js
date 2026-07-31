@@ -723,7 +723,13 @@ const SceneryCity = (function () {
       // Mast stands on the CAP's top face. The cap box is centred at h with
       // height baseW*0.18, so its top is h + baseW*0.09 — using the full 0.18
       // left the mast hanging half a cap-height above it.
-      if (opts.mast) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.09 : 0)), 0.18, opts.mast, [0.3, 0.3, 0.32], 4, b);
+      // `mast` is a HEIGHT in metres. Two Vegas towers passed `mast: true`
+      // alongside `cap: true`, which reads naturally but made the height
+      // non-finite — the primitive guard rejected it and both landmarks lost
+      // their antenna silently. Coerce the boolean to a proportional default
+      // rather than leaving a plausible call site broken.
+      const mastH = opts.mast === true ? Math.max(4, h * 0.12) : opts.mast;
+      if (mastH) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.09 : 0)), 0.18, mastH, [0.3, 0.3, 0.32], 4, b);
       blockAt(k, side, dist - baseW * 0.5, baseW * 0.5);   // solid base
     };
     // Advertising hoarding / billboard: a panel on two slim posts.

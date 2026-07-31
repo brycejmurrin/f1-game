@@ -1459,6 +1459,12 @@ const api = {
   // viewer for everything except appearance itself.
   carView(opts) { return agentView.carView(opts); },
 
+  // survey({at, lats, reachM, limit, profile}?) — geometry DEFECT report:
+  // floating/buried props, props over the racing line, terrain poking through
+  // the road, holes and cliffs in the ground ribbon, plus rejected models.
+  // Replaces the screenshot-driven survey pass with coordinates you can act on.
+  survey(opts) { return agentView.survey(opts); },
+
   // worldModel({detail, offset, limit}?) — the WHOLE circuit as one structured
   // document: layout, totals by kind, clustered scenery features, linear
   // furniture spans, landmarks, and (detail:"sections") a corner-by-corner walk.
