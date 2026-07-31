@@ -480,6 +480,12 @@ const TLX = (function () {
       // the __tlx.fxState() probe the M6 tests assert against.
       const _fxFrame = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0 };
       const _fxLast = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0 };
+      // M10 façade-wiring probe: how many meshes this backend actually created.
+      // tracks.js resolves its gfx handle from Tracks.build's opts.gfx and routes
+      // createMesh/createChunkedMesh through it — so on the TLX opt-in path these
+      // counters prove the track build ran on THIS backend (never a real GLX
+      // WebGL2 context, which is never init'd when TLX is active).
+      const _meshMade = { mesh: 0, chunked: 0, tex: 0 };
 
       // ── M9 env-probe frame state (glx.js:62-81 port) ─────────────────────
       // A CubeCamera owns the 6 face sub-cameras with the correct cube-face
@@ -614,10 +620,12 @@ const TLX = (function () {
         // resources
         createMesh(data) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
+          _meshMade.mesh++;
           return { __tlx: true, geo: buildGeometry(data), count: (data.idx && data.idx.length) || 0 };
         },
         createTexMesh(data) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
+          _meshMade.tex++;
           const g = new THREE.BufferGeometry();
           g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data.pos), 3));
           g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(data.nrm), 3));
@@ -630,6 +638,7 @@ const TLX = (function () {
         // single un-culled geometry when the factory is missing.
         createChunkedMesh(data, cellSize) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
+          _meshMade.chunked++;
           if (chunkedSys) return chunkedSys.build(data, cellSize);
           return { __tlx: true, geo: buildGeometry(data), chunked: true, count: (data.idx && data.idx.length) || 0 };
         },
@@ -1046,6 +1055,13 @@ const TLX = (function () {
           // < total at any parked camera proves the cull engages.
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
+          },
+          // M10 probe: cumulative mesh-creation counts routed through THIS
+          // backend (createMesh/createChunkedMesh/createTexMesh). Non-zero after
+          // a track build proves tracks.js resolved its gfx from Tracks.build's
+          // opts.gfx and built through the façade, not a hardcoded GLX.
+          meshState() {
+            return { mesh: _meshMade.mesh, chunked: _meshMade.chunked, tex: _meshMade.tex };
           },
           // M9 probe: env-cube liveness — is the target allocated (on), which
           // face captures next (face bit-mask -> lowest unset), the cube edge

@@ -20,7 +20,8 @@ consult the manifest for the full, current order:
 js/mat4.js               -> M4, V3
 js/render/shaders/*      -> GLXChunks, GLXShaders   (pure data, before glx.js)
 js/render/glx.js + glx/* -> GLX        (default WebGL2 renderer + its passes)
-js/render/webgpu/*       -> WGX        (opt-in WebGPU renderer)
+js/render/webgpu/*       -> WGX        (opt-in WebGPU renderer, frozen)
+js/render/three/*        -> TLX        (opt-in three.js/TSL renderer)
 js/render/gfx.js         -> Gfx        (renderer selection seam)
 js/car/teams.js          -> Teams      (2026 grid data)
 js/track/*               -> the track engine (spline, mesh, scenery, markings…)
@@ -68,8 +69,13 @@ coherent after the split:
 
 - **game.js pass 2** — promote the remaining closure `let`s to a shared state
   object and split the two megafunctions (`render()`, `updateCar()`).
-- **tracks.js → GLX direct calls** — the track engine still calls `GLX.*`
-  directly in places, bypassing the `Gfx` façade; route them through the handle.
+- **~~tracks.js → GLX direct calls~~ (done, TLX M10)** — `Tracks.build` now
+  takes the active backend via `opts.gfx` and routes every `createMesh` /
+  `createChunkedMesh` / `mobileTier` read through that injected handle (falling
+  back to the `GLX` global only for the Node-VM build guard / VM tests that
+  install a stub `GLX`). game.js's descriptor-copy install onto the `GLX` object
+  is retained solely as the object-identity contract for the ~8 spec files that
+  monkey-patch `GLX.*`.
 - **`liverytex.js` duplicates GLX's mobile-tier detection** — extract one shared
   tier probe.
 - **`TUNE_DEFS` mirror-comment invariants** in `glx.js`/`gfx.js` — comments that
@@ -110,7 +116,57 @@ DEPTH) on the shared `GLXShaders` global. Replaces the old monolithic
 `js/shaders/glx-shaders.js`. `glx.js` destructures `GLXShaders` at the top of
 its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
 
-## js/render/glx.js (+ js/render/glx/) / js/render/webgpu/wgx.js / js/render/gfx.js — renderers
+## js/render/glx.js (+ js/render/glx/) / js/render/webgpu/wgx.js / js/render/three/* / js/render/gfx.js — renderers
+
+### Three backends behind one seam
+
+`js/render/gfx.js` (`Gfx`) is the renderer selection seam. `Gfx.create(canvas)`
+resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
+(or `null` → the caller falls back to GLX). Three backends implement the same
+~40-member contract (documented in the `gfx.js` header block):
+
+| `apex26.gfxBackend` | Backend | Notes |
+|---|---|---|
+| unset / `"webgl2"` | **GLX** | WebGL2 — the shipped default |
+| `"three"` | **TLX** | three.js r184 + TSL; WebGPU with automatic WebGL2 fallback inside three |
+| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; frozen (no new work) |
+
+GLX remains the default; TLX and WGX are **opt-in only**. The pause-menu
+**RENDERER** control is a 3-state cycle (WEBGL2 → THREE → WEBGPU-if-available)
+that writes the key and reloads. The eventual flip of the default and the
+deletion of GLX/WGX is "Phase D" — future work, out of scope here.
+
+**TLX (`js/render/three/`)** is the three.js/TSL backend: classic-IIFE scripts
+(`tlx.js` core + `tlx-shadow.js` / `tlx-post.js` / `tlx-chunked.js` passes +
+`tsl-*.js` shader-node factories on a `TLXShaders` global) that dynamically
+`import("three/webgpu")` inside `TLX.create()`. The `import` never touches
+`THREE` at script-eval (three doesn't exist until `create()`), so there is no
+deferred-ordering problem — the handshake IS the existing `await Gfx.create` in
+game.js. Vendored three r184 lives OUTSIDE `js/` at top-level
+`vendor/three-0.184.0/` (the load-order test walks `js/**`; an un-versioned
+transitive `three.core` import would break the uniform-`?v=` rule otherwise);
+an inline `<script type="importmap">` in `index.html` maps the `three`/`three/*`
+specifiers to that dir (invisible to the load-order regex and the sw.js precache
+parser). GLX users fetch zero vendor bytes; a dynamic-import failure resolves
+`TLX.create()` to `null` → GLX fallback, never a throw.
+
+**Façade wiring (TLX M10):** game.js talks to whichever backend `Gfx.create`
+returned through the local `gfx` handle, and now passes that handle into the
+track engine — `Tracks.build(def, { night, gfx })`. `tracks.js` resolves
+`const G = (opts && opts.gfx) || (typeof GLX !== "undefined" ? GLX : null)` and
+builds every mesh through `G` (`createMesh` / `createChunkedMesh` / `mobileTier`)
+instead of reaching the `GLX` global directly. The `GLX` fallback in that line
+serves only the Node-VM build guard (`tools/verify-track.cjs`) and the VM tests,
+which install a stub `GLX` rather than injecting `opts.gfx`. On an opt-in, game.js
+still descriptor-copies the backend's methods onto the `GLX` object — that
+monkey-patch is retained purely as the **object-identity compatibility contract**
+for the ~8 spec files that patch `GLX.*` and read the page-scope `GLX` global
+directly (webgl-probes, parts-mesh-cache, custom-team, lighting-ab, …). Because
+of the copy, `gfx === GLX` on every path, so injecting `opts.gfx` is
+behaviorally identical to the old direct calls while ending the reliance on the
+patch for the engine's own code.
+
+### GLX internals
 
 GLX is the default WebGL2 renderer. `js/render/glx.js` is the core; the
 heavier passes live beside it in `js/render/glx/` — `post.js` (`GLXPost`, the
@@ -259,7 +315,9 @@ trackDef = { id, name:"MONZA", gp:"Italian GP", country:"Italy",
                         sunDir:[x,y,z] },
              points: [ [x, y, z, halfWidth?, bank?], ... ] }  // halfWidth default 7, bank rad default 0
 
-Tracks.build(trackDef) -> track
+Tracks.build(trackDef, { night?, gfx? }) -> track   // gfx = active renderer backend
+                                                    //   (façade wiring; falls back to
+                                                    //   the GLX global for VM callers)
 track = { def, total,                       // total = length of loop in meters
           n,                                // sample count (spacing ~4 m)
           // parallel typed arrays, length n (closed loop, sample i at s = i*total/n):

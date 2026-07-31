@@ -52,12 +52,17 @@ try {
   if (optIn && typeof Gfx !== "undefined") {
     const backend = await Gfx.create(canvas, {});
     if (backend) {
-      // Route EVERY renderer call site onto the selected backend — not just
-      // game.js but the modules that reach the GLX global directly (tracks.js
-      // mesh build; tests monkey-patch GLX.* too, so OBJECT IDENTITY is the
-      // compatibility contract). Copy the backend's methods + live getters
-      // (width/height/aspect) onto the GLX object so `GLX.foo()` anywhere
-      // delegates. GLX's own WebGL context is never initialised here.
+      // Route EVERY renderer call site onto the selected backend. game.js and
+      // tracks.js already take the backend by injection (game.js via the `gfx`
+      // handle; tracks.js via Tracks.build's opts.gfx), so they need no patch.
+      // The descriptor-copy below exists ONLY for the ~8 spec files that
+      // monkey-patch GLX.* by OBJECT IDENTITY (webgl-probes, parts-mesh-cache,
+      // custom-team, lighting-ab, …) and read the page-scope GLX global
+      // directly — identity IS the compatibility contract. Copy the backend's
+      // methods + live getters (width/height/aspect) onto the GLX object so
+      // `GLX.foo()` anywhere delegates. GLX's own WebGL context is never
+      // initialised here. (liverytex/ghost/car3d do NOT call GLX — they build
+      // raw {pos,nrm,col,idx} geometry that game.js uploads via the gfx handle.)
       try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend)); gfx = GLX; }
       catch (_) { gfx = null; }
     }
@@ -1323,7 +1328,11 @@ function loadTrack(idx) {
     // resident at once. loadTrack is synchronous, so nothing can observe the
     // null between here and the assignment below.
     track = null;
-    track = Tracks.build(def, { night: sessionDark });
+    // Pass the active backend so tracks.js builds its meshes through the façade
+    // (opts.gfx) instead of reaching the GLX global directly. On the default
+    // path gfx===GLX; on a TLX/WGX opt-in it's that backend (descriptor-copied
+    // onto GLX, so object identity is preserved either way).
+    track = Tracks.build(def, { night: sessionDark, gfx });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
