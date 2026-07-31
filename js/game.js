@@ -2576,10 +2576,18 @@ function updateCar(c, dt, ranked) {
       while (rel < -Math.PI) rel += 2 * Math.PI;
       const noseIn = into > 0 ? rel > 0 : rel < 0;        // nose pointing into wall?
       const incidence = Math.min(1, Math.abs(Math.sin(rel)));  // 0 graze … 1 head-on
-      // Kill only the slip heading INTO the barrier. This used to zero c.vLat
-      // unconditionally every frame of contact, so slip AWAY from the wall was
-      // erased too and the car could not rotate itself out of the scrape.
-      if (c.vLat && Math.sign(c.vLat) === into) c.vLat = 0;
+      // Kill the slip while scraping a barrier, in BOTH directions.
+      //
+      // A previous pass made this directional — zeroing only slip heading INTO
+      // the wall — reasoning that erasing slip away from it stopped the car
+      // rotating out of a scrape. Sound in isolation, wrong in effect: a car at
+      // full lock washes wide into the barrier, and letting it keep lateral
+      // velocity there means the slide never decays. Bisected to this line:
+      // tests/drift.spec.js went 6/0 -> 4/2, with "full lock washes wide, never
+      // spins" reaching 82 deg of slip against its 45 deg limit, and "slide
+      // self-aligns" failing alongside it. The wall is a hard constraint; slip
+      // against it is not something the car gets to keep.
+      if (c.vLat) c.vLat = 0;
       if (noseIn) {
         // first-frame impact: lose only the normal component — a graze is nearly
         // free, a head-on hit bites hard.
