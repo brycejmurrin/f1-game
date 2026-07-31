@@ -1048,6 +1048,26 @@ const api = {
     return G.headlessMode;
   },
 
+  // debris(arg?) — the Rapier debris side-world (js/game/debrisworld.js).
+  //   debris()                → status { enabled, ready, active, live, cap,
+  //                             stepped, spawned, lastImpact, error }
+  //   debris(true|false)      → enable/disable (enabling lazy-loads the vendored
+  //                             rapier module; poll .ready) → status
+  //   debris({reset:true})    → deterministic episode reset (world rebuilt,
+  //                             counters zeroed) → status
+  //   debris({burst:n, sev?}) → queue n synthetic impacts at the player (test
+  //                             helper, deterministic) → status
+  debris(arg) {
+    if (arg === undefined) return DebrisWorld.status();
+    if (typeof arg === "boolean") return DebrisWorld.setEnabled(arg);
+    if (arg && typeof arg === "object") {
+      if (arg.reset) return DebrisWorld.reset();
+      if (arg.burst) { DebrisWorld.burst(arg.burst, arg.sev); return DebrisWorld.status(); }
+      if (arg.positions) return Object.assign(DebrisWorld.status(), { positions: DebrisWorld.positions() });
+    }
+    return DebrisWorld.status();
+  },
+
   // renderScale(v?) — adaptive-resolution control. No arg: report current state
   // { scale, fps, auto }. Number: pin the 3D render scale (0.5–1) and disable
   // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
