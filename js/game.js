@@ -4741,6 +4741,19 @@ function render(dt) {
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
   po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
+  // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
+  // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
+  // hides behind the car. A low ONBOARD eye (cockpit/hood/tcam) sits on the car
+  // and looks along the road, so that near dead-zone IS the driver's main view
+  // and the road climbs above the top cutoff — half the wet surface got no
+  // reflection, and the onboard speed-buzz kept nudging that band edge, reading
+  // as reflective patches flickering on and off. Raise the top cutoff and pull
+  // the near fade in for those cams so the reflective region covers the visible
+  // road with no live edge in frame; external cams keep the shipped values.
+  const _ssrLow = onboard;
+  po.ssrTopUV = _ssrLow ? 0.82 : 0.62;
+  po.ssrNear  = _ssrLow ? -1.0 : -2.5;
   po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
   // EXHAUST HEAT HAZE: project the recorded tailpipe position through the
   // frame's view-proj to a screen UV for the composite warp. Near-field only —

@@ -433,6 +433,16 @@ uniform float uCarGloss;     // car paint gloss (CAR tuner group; default 1.0) �
 uniform vec3 uReflSkyHi;     // horizon sky-glow (dim reflection fallback on a march miss)
 uniform vec3 uReflSkyLo;     // zenith sky-glow
 uniform float uSsrThick;     // wet-road SSR depth thickness gate (def 0.20)
+uniform float uSsrTopUV;     // top-of-screen SSR cutoff (def 0.62). The upper screen
+                             //   is "never wet road" ONLY for a high, down-looking
+                             //   chase eye; a low onboard eye (cockpit/hood) pushes the
+                             //   road far higher up the frame, so game.js raises this
+                             //   for those cams or the top half of the wet road gets no
+                             //   reflection and the band-edge sweeps as the car pitches.
+uniform float uSsrNear;      // near edge of the SSR road fade in view Z (def -2.5; the
+                             //   far edge is uSsrNear*2.8). Chase sits metres back so its
+                             //   road clears this; an onboard eye is on the car, so
+                             //   game.js pulls this toward 0 to reflect the near road too.
 uniform float uChromAb;      // chromatic aberration toward frame edges (def 0)
 uniform float uGrain;        // per-pixel film grain amount (def 0)
 uniform float uGrainTime;    // seconds — animates the grain so it isn't a frozen speckle
@@ -676,7 +686,7 @@ void main() {
   // Car-paint pixels (alpha tag < 0.5) reflect the world in EVERY session —
   // dry or wet — through the same march as the wet road.
   float carPx = 1.0 - smoothstep(0.42, 0.55, scn.a);
-  if (uSsrOk > 0.5 && (uReflect > 0.001 || carPx > 0.3) && texture(uDepth, vUV).r < 0.9999 && vUV.y < 0.62) {
+  if (uSsrOk > 0.5 && (uReflect > 0.001 || carPx > 0.3) && texture(uDepth, vUV).r < 0.9999 && vUV.y < uSsrTopUV) {
     vec3 P = ssrViewPos(vUV);
     // View-space normal from depth derivatives (cheap; rough at silhouettes, but
     // the road-mask + march thickness test reject the bad cases).
@@ -694,7 +704,7 @@ void main() {
     // speckle, and reflections compress to nothing near the horizon anyway — so
     // keep the clean, high-impact foreground and taper the distance out.
     float roadMask = smoothstep(0.40, 0.75, upDot)
-                   * smoothstep(-2.5, -7.0, P.z)
+                   * smoothstep(uSsrNear, uSsrNear * 2.8, P.z)
                    * (1.0 - smoothstep(-22.0, -55.0, P.z));
     // Car bodywork: up-facing-ish panels, allowed much nearer than the road
     // (the chase camera sits ~5-8 m behind the car).
@@ -768,7 +778,7 @@ void main() {
         float carSoft = clamp((1.4 - uCarGloss) * 0.5, 0.0, 1.0);
         float streak = (carTerm > roadTerm)
           ? uCarReflect * (0.006 + 0.030 * carSoft)
-          : uReflect * (0.010 + 0.022 * clamp((0.62 - vUV.y) / 0.62, 0.0, 1.0));
+          : uReflect * (0.010 + 0.022 * clamp((uSsrTopUV - vUV.y) / uSsrTopUV, 0.0, 1.0));
         // CONTACT HARDENING: real rough reflections blur with distance from the
         // reflector — the reflection of an object touching the wet road is
         // near-crisp, a distant tower smears. Scale the streak by the march's
@@ -833,14 +843,15 @@ void main() {
       // dry session silently crushes car reflections regardless of carReflect.
       float gateSrc = carDom ? uCarReflect : uReflect;
       strength *= min(gateSrc / 0.20, 1.0);
-      // The whole SSR branch above is gated by a HARD "vUV.y < 0.62" cutoff (a
-      // cheap early-out — the upper screen is sky, never wet road/car paint).
-      // That boolean gate is a step function: reflected pixels just below the
-      // line are full-strength, pixels just above get none, so any noticeable
-      // difference between the mirrored colour and the base scene shows as a
-      // visible seam slicing across the frame. Fade the last few percent out
-      // instead of cutting it off.
-      strength *= 1.0 - smoothstep(0.56, 0.62, vUV.y);
+      // The whole SSR branch above is gated by a HARD "vUV.y < uSsrTopUV" cutoff
+      // (a cheap early-out — for a high chase eye the upper screen is sky, never
+      // wet road/car paint; a low onboard eye raises uSsrTopUV since the road
+      // climbs higher up the frame). That boolean gate is a step function:
+      // reflected pixels just below the line are full-strength, pixels just above
+      // get none, so any noticeable difference between the mirrored colour and the
+      // base scene shows as a visible seam slicing across the frame. Fade the last
+      // few percent out instead of cutting it off.
+      strength *= 1.0 - smoothstep(uSsrTopUV - 0.06, uSsrTopUV, vUV.y);
       float mixAmt = clamp(strength * cover, 0.0, carDom ? 0.85 : 0.94);   // near-mirror, keeps a hint of pigment/asphalt
       // Near-full darker-mirror substitution — the car mirrors the scene it
       // reflects (bright on-screen lights punch through), keeping a whisper of
