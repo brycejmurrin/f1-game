@@ -1263,13 +1263,14 @@ is the per-team silhouette: nose length/width/droop, airbox scale, dorsal fin,
 mirror housing, sidepod inlet bias — what makes a team's car recognisable
 independent of paint.
 
-`detail:"parts"` adds **per-part measured boxes**, taken from the vertices each
+`detail:"parts"` adds **per-part measured boxes** under `partGeometry`
+(`parts` stays the parts *spec*), taken from the vertices each
 section of `Car3D.build` emitted — 19 sections including `chassis`, `sidepods`,
 `engineCover`, `frontWing`, `rearAssembly`, `halo`, `mirrors`, `helmet`,
 `suspension`, `wheels`:
 
 ```js
-__apex.carView({ detail: "parts" }).parts
+__apex.carView({ detail: "parts" }).partGeometry
 // [{ name:"frontWing", vertices:486, sizeM:[2.09,0.42,1.91],
 //    centreM:[0,0.3,1.77], boundsZ:[0.81,2.72] }, …]
 ```

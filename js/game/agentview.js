@@ -995,7 +995,9 @@ const AgentView = (function () {
         // Per-part boxes, measured from the vertices each section of Car3D.build
         // emitted. "How big is the rear wing", "does the shark fin exist on this
         // team", "is the nose the right length" — without rendering the car.
-        parts: (o.detail === "parts" || o.detail === "all") ? parts : undefined,
+        // NOT `parts` — that key is the parts SPEC above, and a second `parts`
+        // in the same literal silently won, deleting the spec from the payload.
+        partGeometry: (o.detail === "parts" || o.detail === "all") ? parts : undefined,
         partCount: parts ? parts.length : undefined,
         note: "everything the car viewer shows except appearance itself — for a "
               + "visual check use tools/render-car.mjs. "

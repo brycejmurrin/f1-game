@@ -588,7 +588,10 @@ test.describe("carView({detail:\"parts\"})", () => {
     await load(page);
     const c = await page.evaluate(() => window.__apex.carView({ detail: "parts" }));
     expect(c.partCount).toBeGreaterThan(12);
-    const byName = Object.fromEntries(c.parts.map((p) => [p.name, p]));
+    // the parts SPEC must survive alongside the part GEOMETRY — two `parts`
+    // keys in one literal silently dropped the spec
+    expect(c.parts.chosen.length).toBe(8);
+    const byName = Object.fromEntries(c.partGeometry.map((p) => [p.name, p]));
     for (const n of ["chassis", "frontWing", "rearAssembly", "wheels", "cockpit"]) {
       expect(byName[n], n + " missing").toBeTruthy();
       expect(byName[n].vertices).toBeGreaterThan(0);
@@ -604,7 +607,7 @@ test.describe("carView({detail:\"parts\"})", () => {
     const r = await page.evaluate(() => {
       const plain = window.__apex.carView();
       const parts = window.__apex.carView({ detail: "parts" });
-      const sum = parts.parts.reduce((a, p) => a + p.vertices, 0);
+      const sum = parts.partGeometry.reduce((a, p) => a + p.vertices, 0);
       return { plain: plain.geometry.vertices, parts: parts.geometry.vertices, sum };
     });
     expect(r.plain).toBe(r.parts);
@@ -615,7 +618,8 @@ test.describe("carView({detail:\"parts\"})", () => {
   test("parts are omitted unless requested", async ({ page }) => {
     await load(page);
     const c = await page.evaluate(() => window.__apex.carView());
-    expect(c.parts).toBeUndefined();
+    expect(c.partGeometry).toBeUndefined();
+    expect(c.parts.chosen.length).toBe(8);   // the spec is always present
     expect(c.geometry).toBeTruthy();
   });
 
