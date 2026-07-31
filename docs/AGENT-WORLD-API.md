@@ -430,6 +430,52 @@ wheelbase. That is everything `tools/render-car.mjs` conveys except appearance
 itself: reflections, decal placement and whether a paint scheme reads are still
 render questions, and the tool stays for them.
 
+## 5f. What using the API taught us
+
+The design was validated by driving it, not by reading it. Three findings, one
+of which invalidated a feature's rationale.
+
+**It is sufficient to drive on.** Interlagos — a circuit never inspected during
+development — was learned entirely through `worldModel({detail:"sections"})` in
+25 KB, then driven by a policy using *only* `nextCorner`, `ego.lateralM` and
+`ego.headingErrDeg`. Against a naive full-throttle baseline over the same 40 s:
+302 m → **1,358 m**, off-track 34.8 s → 11.0 s, mean speed 61.6 → 127.2 km/h.
+The API's own `"BRAKE NOW"` hint drove the braking. That an agent acting on the
+payload does materially better is stronger evidence than any shape assertion.
+
+**The hooks agree with each other.** At a fixed pose every kind `frame()`
+rasterises is one `scene()` independently reports (`unexplainedKinds: []`), and
+the corner `world()` calls next is one `visible()` independently puts on screen.
+Four hooks, four code paths, no disagreement — the check that would catch a
+projection or registry mismatch.
+
+**Delta mode was built on a precondition that does not hold here.** The
+diff-history result it was modelled on (~4× more usable context,
+<https://arxiv.org/abs/2312.07540>) comes from NetHack, where the world is
+discrete and mostly static between actions. A racing sim is the opposite.
+Measured across a 20-step driving loop, exact diffing saved **1.17×** — nothing.
+
+Adding a deadband (a change smaller than the agent could act on is not a change,
+with the baseline advancing only by what was reported so drift stays bounded)
+took it to 1.20×. Still not a win. The temptation was to widen the deadband until
+the number looked good; that would only have started hiding real changes.
+
+Measuring where the lever actually is settled it:
+
+| call | bytes/step | vs `full` |
+|---|---|---|
+| `full` | 12,089 | 1× |
+| `drive` | 3,501 | 3.5× |
+| `drive` + `since` | 2,908 | 4.2× |
+| `brief` | 1,026 | 11.8× |
+| `brief` + `since` | **355** | **34×** |
+
+`detail` is the dominant lever, not `since`. And `since` is worth 2.9× on
+`brief` against 1.20× on `drive`, because the unchanging envelope is a much
+larger share of a small payload — a combination never tested until the numbers
+forced the question. The feature earns its place, but not for the reason it was
+built, and not where it was expected to.
+
 ## 6. Open questions
 
 - **Prop registry granularity.** Per composite model, or per emitted

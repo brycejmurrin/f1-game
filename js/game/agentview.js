@@ -1439,8 +1439,9 @@ const AgentView = (function () {
           "list vs picture": "visible() names what is in shot; frame() shows "
             + "where it sits and what hides what",
           "now vs always": "scene() is live; worldModel() is the static circuit",
-          "per tick": 'world({detail:"brief"}) — everything else is too big to '
-            + "call in a loop",
+          "per tick": 'world({detail:"brief", since:<seq>}) — ~355 bytes/step, '
+            + "34x cheaper than full. detail is the big lever; `since` only pays "
+            + "on brief or a static scene (measured: 1.2x on drive while moving)",
         },
         setup: ['__apex.race("monza")', "__apex.go()", "__apex.jump(0.1, 55)"],
         loop: "world() -> decide -> rollout({seconds, policy}) -> read the digest",

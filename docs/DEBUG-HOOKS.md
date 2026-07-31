@@ -929,6 +929,28 @@ One egocentric JSON snapshot. **Never returns `null`** — on failure it returns
 | `points` | `5` | lookahead samples (2–12) |
 | `since` | — | a `seq` you already hold; returns only what changed |
 
+**Cost, measured** (bytes per step, 20-step driving loop on Monza):
+
+| call | per step | vs `full` |
+|---|---|---|
+| `world({detail:"full"})` | 12,089 | 1× |
+| `world({detail:"drive"})` | 3,501 | 3.5× |
+| `world({detail:"drive", since})` | 2,908 | 4.2× |
+| `world({detail:"brief"})` | 1,026 | 11.8× |
+| **`world({detail:"brief", since})`** | **355** | **34×** |
+
+Read that before optimising the wrong thing. **`detail` is the dominant lever**;
+`since` is worth little on its own while the car is moving (1.20× on `drive`)
+because at 5.5 m of travel per step every number genuinely changes. It pays on
+`brief` (2.9×) where the unchanging envelope is a large share of a small
+payload, and on a mostly static scene (1.55× parked). A control-loop tick at
+`brief` + `since` costs ~355 bytes — about 90 tokens.
+
+Deltas pass numbers through a deadband of `max(0.25 absolute, 2% relative)`: a
+change smaller than you could act on is not reported. The baseline advances only
+by what was actually sent, so the error stays bounded by one deadband instead of
+drifting. Pass no `since` for a full resync at any time.
+
 ```js
 __apex.world({ detail: "brief" })
 // { apiVersion, physicsVersion, seq, t, detail, conventions, raceState,
