@@ -735,6 +735,22 @@ function yawVisInterp(c) {
   const y1 = c.yawVis || 0;
   return c.rPrevYawVis === undefined ? y1 : c.rPrevYawVis + (y1 - c.rPrevYawVis) * renderAlpha;
 }
+// c.head is the player's real WORLD heading (full wrapping angle, unlike the
+// small clamped yawVis residual) — read raw by the free-world chase/onboard
+// camera rig (extra.carHead) to look "down the car's nose". Read raw at
+// render time it snaps a full physics step (16.7 ms) every frame instead of
+// gliding with renderAlpha like the position does: at speed that is a
+// held-then-jump stutter whose size scales with speed × dt — "vibrates more
+// as I speed up". Interpolate it exactly like position, with a wrap-safe
+// shortest-path delta since head crosses ±π every lap.
+function headInterp(c) {
+  const h1 = c.head || 0;
+  if (c.rPrevHead === undefined) return h1;
+  let dh = h1 - c.rPrevHead;
+  while (dh > Math.PI) dh -= 2 * Math.PI;
+  while (dh < -Math.PI) dh += 2 * Math.PI;
+  return c.rPrevHead + dh * renderAlpha;
+}
 function basisMat(r, u, f, p, out) {
   out[0] = r[0]; out[1] = r[1]; out[2] = r[2]; out[3] = 0;
   out[4] = u[0]; out[5] = u[1]; out[6] = u[2]; out[7] = 0;
@@ -922,6 +938,7 @@ function gridUp() {
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0;
+    c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
   });
 }
@@ -3500,11 +3517,21 @@ function render(dt) {
     roadCamRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
     // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
     // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
+    // The free-world chase/onboard rig needs the car's world pose too — but
+    // INTERPOLATED like everything else here, not raw. Raw px/pz/head only
+    // update once per 60 Hz physics tick, so reading them straight in a
+    // per-frame render loop snaps a full tick every frame instead of gliding
+    // by renderAlpha: on a display whose refresh doesn't line up 1:1 with the
+    // physics rate (common — 90/120 Hz, or ordinary vsync jitter at 60), that
+    // reads as a held-then-jump stutter whose size scales with speed × dt —
+    // "vibrates, worse the faster I go". renderPosOf/headInterp are the same
+    // interpolation the car body and playerAnchor already use.
+    const rpCam = renderPosOf(player, pS, px);
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), {
       bankDy, deploy: player.deploying, slipLat: player.vLat || 0,
       // the car's real world pose, so the chase rig can follow the CAR
-      carPos: player.px != null ? [player.px, player.pz] : null,
-      carHead: player.head || 0,
+      carPos: rpCam.world ? [rpCam.x, rpCam.z] : null,
+      carHead: headInterp(player),
     });
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov;
     if (shake > 0) {
@@ -4811,6 +4838,7 @@ function tickBody(now) {
         const c = cars[i]; c.rPrevS = c.s; c.rPrevX = c.x;
         c.rPrevPx = c.px; c.rPrevPz = c.pz;   // player renders from WORLD space
         c.rPrevYawVis = c.yawVis;             // orientation interpolates like position
+        c.rPrevHead = c.head;                 // world heading interpolates like position too
       }
       update(PHYS_DT); physAcc -= PHYS_DT; steps++;
     }

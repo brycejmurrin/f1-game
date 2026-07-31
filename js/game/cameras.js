@@ -24,6 +24,13 @@ const cvB = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 // two must stay identical or the driver's eye drifts out of the cockpit.
 const COCKPIT_EYE_FWD = 0.32, COCKPIT_EYE_UP = 0.99;
 
+// Chase eye sits BEHIND *and* OFFSET TO ONE SIDE of the car — a 3/4
+// over-the-shoulder framing — instead of dead-centre on the rear wing. The
+// look-AHEAD target stays on the car's own forward path (unchanged), so the
+// offset eye reads the car at an angle rather than face-on. Fraction of
+// `back` so near/far chase scale together. Flip the sign to switch sides.
+const CHASE_SIDE_FRAC = 0.3;
+
 // vantage(track, mode, s, x, spd, now, extra) → { eye, tgt, fov }
 // extra — { bankDy (banking lift), deploy (ERS FOV kick), slipLat (lateral
 // slip m/s, for the drift cam) } — all optional and treated as 0 when absent.
@@ -193,8 +200,15 @@ function vantage(track, mode, s, x, spd, now, extra) {
       // The road is still consulted for HEIGHT (and the ground clamp below), which
       // is what it should be for.
       const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
+      // Right vector, perpendicular to (hx, hz) — same (fz, -fx) convention
+      // the physics integrator uses for world-frame lateral/right (game.js's
+      // vWx/vWz comment). Offsetting the eye along it (not the target) gives
+      // the 3/4 "back and to the side" look without swinging the view off
+      // the car's own forward path.
+      const rx = hz, rz = -hx;
+      const side = back * CHASE_SIDE_FRAC;
       const lead = far ? 9 : 6;
-      eye = [extra.carPos[0] - hx * back, cvB.p[1] + eyeUp + bankDy, extra.carPos[1] - hz * back];
+      eye = [extra.carPos[0] - hx * back + rx * side, cvB.p[1] + eyeUp + bankDy, extra.carPos[1] - hz * back + rz * side];
       tgt = [extra.carPos[0] + hx * lead, p[1] + (far ? 1.0 : 0.7), extra.carPos[1] + hz * lead];
     } else {
       eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
