@@ -25,11 +25,17 @@
        Critically-damped analytic step (unconditionally stable), stiff + subtle.
      - roll  ← lateral accel. Player uses real centripetal accel speed·yawRate;
        AI (no world heading) uses -speed²·curvature. Critically-damped analytic.
-     - heave ← road-surface height under the car. A base-excited spring-mass:
-       the wheels track the ground exactly, the body lags through the (virtual)
-       suspension, so only vertical ACCELERATION (crests, dips, kerb edges) makes
-       a lasting deflection — steady slopes produce none, so the body never sinks
-       into a long climb. Reseeds instantly on a teleport (jump/reset).
+     - heave ← a base-excited spring in the RELATIVE coordinate z = body − ground
+       (z'' = −ω²z − 2ωz' − yg''): the wheels track the ground exactly, the body
+       lags through the (virtual) suspension. The ground's vertical velocity
+       arrives ANALYTIC from the caller (speed × road slope) — groundY is never
+       numerically differentiated, so frame-time jitter and the 4 m piecewise
+       lerp of the height profile cannot alias into body bob. The per-frame
+       forcing integral (−ΔygV) is applied as a velocity impulse and the spring
+       advances through the same closed-form crit() as pitch/roll — stable at
+       any dt. Steady slopes deflect nothing (constant ygV ⇒ zero impulse);
+       output saturates on a tanh soft knee (no hard-clamp flat-topping).
+       Reseeds instantly on a teleport (jump/reset) with zero transient.
 
    Created with the G ctx façade from game.js (BodyAttitude.create(G));
    must load BEFORE js/game.js (see index.html / tools/manifest.cjs). */
@@ -47,10 +53,20 @@ const PITCH_MAX   = 0.024;             // ≈1.4° cap
 const ROLL_OMEGA  = 7;                 // rad/s spring rate — cornering lean
 const ROLL_MAX    = 0.055;             // ≈3.1° cap at full lateral grip
 const LAT_MAX     = 22;                // m/s² cornering grip (mirrors game.js)
-const HEAVE_OMEGA = 12;                // rad/s — stiff vertical bob
-const HEAVE_MAX   = 0.05;              // ±5 cm cap
+const HEAVE_OMEGA = 20;                // rad/s (≈3.2 Hz natural freq). Was 12 (≈1.9 Hz) —
+                                       //   dead on the road ripple's 1.6-2.8 Hz band at
+                                       //   racing speed (tracks.js undulate, 30-52 m short
+                                       //   harmonic), so the body resonated against its own
+                                       //   wheels and railed the clamp ("the car shakes").
+const HEAVE_GAIN  = 0.55;              // gain on ground-velocity impulses. ζ=1 relative
+                                       //   response is |H| = Ω²/(ω²+Ω²): Spa's worst ripple
+                                       //   band now lands ~2 cm instead of demanding 9+ cm.
+                                       //   Feel knob: 0.4 (calmer) .. 0.7 (livelier).
+const HEAVE_MAX   = 0.05;              // ±5 cm ceiling — a tanh soft knee, not a hard rail
 const TELEPORT_DY = 1.5;               // m ground jump that means "teleport, reseed"
-const MAX_DT      = 0.033;             // clamp dt so a stalled frame can't blow up
+const MAX_DT      = 0.05;              // ONE dt clamp, matching render()'s Math.min(dt, 1/20)
+                                       //   — the old 0.033 disagreed with the caller and
+                                       //   inflated dt-sensitive terms 1.5× on slow frames
 
 const ZERO = Object.freeze({ pitch: 0, roll: 0, heave: 0 });
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -68,20 +84,26 @@ function crit(s, to, omega, dt) {
 }
 
 function seed(c) {
-  c._ba = { p: { x: 0, v: 0 }, r: { x: 0, v: 0 }, yb: 0, ybV: 0, prevYg: null };
+  c._ba = { p: { x: 0, v: 0 }, r: { x: 0, v: 0 }, z: { x: 0, v: 0 }, ygV0: 0, prevYg: null };
   c.baPitch = 0; c.baRoll = 0; c.baHeave = 0;
   return c._ba;
 }
 
 // Advance the springs for car `c` this frame and stash the offsets on it.
 // groundY = the road-surface world-Y the render loop already placed the car at.
+// ygV = the ground's vertical velocity under the car, ANALYTIC (speed × road
+// slope) — never a finite difference of groundY (see the heave note above).
 // Returns { pitch, roll, heave } (also mirrored to c.baPitch/baRoll/baHeave).
-function update(c, groundY, dt) {
+// The returned object is a reused module scratch — read it immediately, don't
+// retain it (offsets() builds a fresh object for the debug hooks).
+const _out = { pitch: 0, roll: 0, heave: 0 };
+function update(c, groundY, dt, ygV) {
   if (!c) return ZERO;
   const s = c._ba || seed(c);
+  ygV = ygV || 0;
   if (!enabled) {
-    s.p.x = s.p.v = s.r.x = s.r.v = s.ybV = 0;
-    s.yb = groundY; s.prevYg = groundY;
+    s.p.x = s.p.v = s.r.x = s.r.v = s.z.x = s.z.v = 0;
+    s.ygV0 = ygV; s.prevYg = groundY;
     c.baPitch = 0; c.baRoll = 0; c.baHeave = 0;
     return ZERO;
   }
@@ -100,20 +122,24 @@ function update(c, groundY, dt) {
   const rollT = clamp(aLat / LAT_MAX, -1, 1) * ROLL_MAX;
   crit(s.r, rollT, ROLL_OMEGA, dt);
 
-  // heave ← base-excited spring over the ground height. Reseed on a teleport so
-  // jump()/reset() don't fire a huge transient.
+  // heave ← the base-excited spring in the RELATIVE coordinate z = body − ground:
+  // z'' = −ω²z − 2ωz' − yg''. The forcing integral over a frame is exactly −ΔygV,
+  // applied as a velocity impulse; the homogeneous part then advances through the
+  // same closed-form crit() as pitch/roll — unconditionally stable at any dt.
+  // A teleport reseeds both z and ygV0 so jump()/reset() fire no transient.
   if (s.prevYg == null || Math.abs(groundY - s.prevYg) > TELEPORT_DY) {
-    s.yb = groundY; s.ybV = 0; s.prevYg = groundY;
+    s.z.x = 0; s.z.v = 0; s.ygV0 = ygV;
   }
-  const ygV = dt > 0 ? (groundY - s.prevYg) / dt : 0;      // ground vertical velocity
-  const acc = -HEAVE_OMEGA * HEAVE_OMEGA * (s.yb - groundY) - 2 * HEAVE_OMEGA * (s.ybV - ygV);
-  s.ybV += acc * dt;
-  s.yb  += s.ybV * dt;
+  s.z.v -= (ygV - s.ygV0) * HEAVE_GAIN;
+  s.ygV0 = ygV;
+  crit(s.z, 0, HEAVE_OMEGA, dt);
   s.prevYg = groundY;
-  const heave = clamp(s.yb - groundY, -HEAVE_MAX, HEAVE_MAX);
+  // soft saturation: approaches ±HEAVE_MAX asymptotically instead of flat-topping
+  const heave = HEAVE_MAX * Math.tanh(s.z.x / HEAVE_MAX);
 
   c.baPitch = s.p.x; c.baRoll = s.r.x; c.baHeave = heave;
-  return c._ba && { pitch: c.baPitch, roll: c.baRoll, heave: c.baHeave };
+  _out.pitch = s.p.x; _out.roll = s.r.x; _out.heave = heave;
+  return _out;
 }
 
 // Clear spring state. reset(c) for one car; reset() for the whole field — call
