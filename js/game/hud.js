@@ -18,6 +18,7 @@ const mm = els.minimap.getContext("2d");
 let hudT = 0;
 let minimapBg = null;         // offscreen canvas with pre-rendered track shape
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
+let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
 
 // HUD write-caches: skip the DOM mutation when the value hasn't changed (the panel
 // ticks ~10Hz but most fields hold steady between updates). Keyed per element.
@@ -49,6 +50,14 @@ function buildSecRows() {
 function updateHud(force) {
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
   if (!player) return;
+  // Per-team HUD skin: mirror the player's team id onto <html data-team> so the
+  // CSS --accent token resolves to the team colour (see css/tokens.css). Cached
+  // — the attribute write only fires when the team actually changes. Purely
+  // presentational; falls back to the default red accent if unset.
+  if (player.team && player.team.id !== _teamSkin) {
+    _teamSkin = player.team.id;
+    document.documentElement.dataset.team = _teamSkin;
+  }
   hudT -= 1;
   if (!force && hudT > 0) return;
   hudT = 6; // ~10Hz at 60fps

@@ -1,3 +1,4 @@
+@layer overlays {
 /* Apex 26 — F1 Data Hub overlay. All classes prefixed dh-. */
 
 .dh-overlay {
@@ -634,3 +635,4 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   /* Track map fits the sidebar */
   .dh-telem-side .dh-canvas.dh-map { max-width: 176px; }
 }
+} /* @layer overlays */

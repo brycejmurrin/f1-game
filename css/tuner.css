@@ -1,3 +1,4 @@
+@layer components {
 /* Apex 26 — lighting tuner panel + the shared .adv-*/.tune-*/.opt-*/.preset-* control vocabulary.
    Split from css/style.css (lines 132-256 of the original); the <link>
    order in index.html preserves the original source order, so the cascade
@@ -126,3 +127,4 @@
 /* advanced disclosure */
 .adv-more-btn { width: 100%; margin: 14px 0 2px; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85; }
 #adv-extra { margin-top: 4px; }
+} /* @layer components */

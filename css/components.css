@@ -1,3 +1,4 @@
+@layer components {
 /* Apex 26 — shared components: .bigbtn/.panel, pause menu, settings sub-menu, advanced shell.
    Split from css/style.css (lines 63-131 of the original); the <link>
    order in index.html preserves the original source order, so the cascade
@@ -70,3 +71,4 @@
 /* ---------- advanced steering panel ---------- */
 #advanced { position: fixed; inset: 0; z-index: 41; background: rgba(0, 0, 0, 0.6); }
 #advanced-inner { width: min(94vw, 600px); }
+} /* @layer components */

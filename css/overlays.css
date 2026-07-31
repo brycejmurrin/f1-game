@@ -1,3 +1,4 @@
+@layer overlays {
 /* Apex 26 — touch controls (incl. landscape pass), results, how to play.
    Split from css/style.css (lines 1038-1311 of the original); the <link>
    order in index.html preserves the original source order, so the cascade
@@ -275,3 +276,4 @@ body.hud-hidden #hud-restore { display: block; }
   display: flex; align-items: center; justify-content: center;
   background: var(--bg);
 }
+} /* @layer overlays */
