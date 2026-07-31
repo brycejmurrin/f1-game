@@ -63,13 +63,15 @@ test.describe("Apex 26 — player camera modes", () => {
       await page.evaluate((m) => window.__apex.camera(m), mode);
       // let the camera damp toward the new vantage and render a few frames
       await page.evaluate(() => { for (let i = 0; i < 30; i++) window.__apex.step(1 / 60, 1); });
-      await page.waitForTimeout(120);
-      // JPEG, not PNG. This test was the slowest in the whole suite (131 s, over
-      // the 120 s budget on a 4-core SwiftShader box) and almost all of it was 13
-      // full-size PNG encodes. We only need the frames to DIFFER from each other,
-      // so a lossy encode is fine and is several times cheaper.
-      shots[mode] = (await page.locator("canvas#game")
-        .screenshot({ type: "jpeg", quality: 60, animations: "disabled" })).toString("base64");
+      await page.waitForTimeout(250);
+      // NOTE: this is the slowest test in the suite (~131 s contended, 154 s
+      // isolated — over the 120 s budget either way). Switching these 13 captures
+      // from PNG to JPEG q60 was tried and made it WORSE, so the cost is NOT the
+      // image encode. It has not been measured further; whoever picks this up
+      // should instrument where the 13 iterations actually spend their time
+      // (camera settle? locator stability? the 30 physics steps? SwiftShader
+      // draw?) before changing anything, rather than guessing at it as I did.
+      shots[mode] = (await page.locator("canvas#game").screenshot()).toString("base64");
     }
     expect(errors).toEqual([]);
     // The four vantages must differ — no two modes collapse to the same frame.
