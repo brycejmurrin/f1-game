@@ -17,9 +17,20 @@
   /* Fixed head (title / preview chips / tabs) + scrolling #lt-rows + fixed
      RESET/COPY/DONE footer — with 80+ sliders the actions used to live at the
      end of the scroll, a full panel-length swipe away. */
-  display: flex; flex-direction: column; overflow: hidden;
+  display: flex; flex-direction: column;
+  /* overflow-y is the LAST-RESORT scroller: normally #lt-rows absorbs everything
+     and this never engages, but if the head + footer alone outgrow the panel
+     (see the short-screen block below) the whole panel scrolls rather than
+     clipping its own footer off the bottom with no way to reach it. */
+  overflow-x: hidden; overflow-y: auto;
 }
-#lt-rows { flex: 1 1 auto; overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+/* min-height must be a real floor, not 0. Every other child is intrinsically
+   sized (flex-shrink can't take a flex item below its content height), so
+   #lt-rows was the ONLY item that could give — on a landscape phone the head
+   (12 wrapped tab chips = 146px on their own) plus the footer ate all 374px of
+   the panel and the rows collapsed to 0px high: 80+ sliders still in the DOM,
+   nothing left to scroll. */
+#lt-rows { flex: 1 1 auto; overflow-y: auto; min-height: 84px; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
 #lt-json { flex-shrink: 0; }
 #lighting-inner .adv-item { margin: 7px 0; }
 #lighting-inner .adv-help { display: none; }        /* hidden unless "Show explanations" is on… */
@@ -123,6 +134,33 @@
   font-size: 12px; letter-spacing: 0.03em; text-align: center;
 }
 .opt-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
+/* ---------- short screens (landscape phones): compact tuner head ----------
+   The tuner is docked full-height, so on a ~390px-tall landscape phone the head
+   is what starves #lt-rows. Shrink every fixed row and — the big one — run the
+   category chips as a single horizontally-scrolling strip instead of a 5-row
+   wrapped block, which alone gives ~110px back to the sliders. */
+@media (max-height: 620px) {
+  #lighting-inner { padding: 10px 14px; }
+  #lt-head { margin-bottom: 2px; }
+  #lt-head h2 { font-size: 16px; }
+  #pc-toggle { padding: 6px 10px; font-size: 10.5px; }
+  #lt-profile { font-size: 10px; }
+  .lt-preview-row { gap: 3px; margin: 2px 0; }
+  .lt-preview-lbl { width: 46px; font-size: 9px; }
+  .lt-preview-row .opt-btn { padding: 3px 2px; font-size: 9.5px; min-width: 34px; }
+  .lt-help-toggle { margin: 4px 0 2px; font-size: 10px; }
+  .lt-tabs {
+    flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+    touch-action: pan-x; -webkit-overflow-scrolling: touch;
+    margin: 0 -14px 4px; padding: 5px 14px 6px;
+    scrollbar-width: none;
+  }
+  .lt-tabs::-webkit-scrollbar { display: none; }
+  #lighting-inner .sel-actions { margin-top: 6px; padding-top: 6px; }
+  #lighting-inner .sel-actions button { padding: 6px 10px; font-size: 12px; }
+  #lighting-inner .adv-item { margin: 5px 0; }
+  #lt-json { height: 54px; }
+}
 /* advanced disclosure */
 .adv-more-btn { width: 100%; margin: 14px 0 2px; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85; }
 #adv-extra { margin-top: 4px; }
