@@ -20,8 +20,8 @@ const els = {
   selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
   selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"),
   selPreviewRec: $("sel-preview-rec"),
-  selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"), selDiff: $("sel-diff"),
-  selDiffSection: $("sel-diff-section"), selCustomize: $("sel-customize"),
+  selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"),
+  selCustomize: $("sel-customize"),
   selBack: $("sel-back"), selGo: $("sel-go"),
   customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
@@ -5010,6 +5010,20 @@ function buildRaceSettings() {
     b.textContent = label;
     b.onclick = () => { raceTimeOfDay = id; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
     timeEl.appendChild(b);
+  }
+  // DIFFICULTY — a race setting like the rest, so it is built here rather than
+  // on the select screen. Unlike laps/weather/time it PERSISTS (store), because
+  // it is a standing preference rather than a per-race choice.
+  $("rs-diff-section").hidden = timeTrial;      // no AI to rate in a time trial
+  const diffEl = $("rs-diff");
+  diffEl.innerHTML = "";
+  for (const d of ["easy", "normal", "hard"]) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (difficulty === d ? " active" : "");
+    b.setAttribute("aria-pressed", difficulty === d ? "true" : "false");
+    b.textContent = d.toUpperCase();
+    b.onclick = () => { difficulty = d; store.set("difficulty", d); buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
+    diffEl.appendChild(b);
   }
 }
 
