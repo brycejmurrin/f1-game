@@ -58,14 +58,20 @@ test.describe("Apex 26 — smoke", () => {
     expect(pageErrors).toEqual([]);
   });
 
-  test("select screen shows team and track chips", async ({ page }) => {
+  test("select screen shows team card, picker and track rows", async ({ page }) => {
     await page.goto("/");
     await page.locator("#mb-race").click();
 
     await expect(page.locator("#select")).toBeVisible();
-    await expect(page.locator("#sel-teams .sel-chip").first()).toBeVisible();
+    // Teams are one card that opens a full picker sheet of .team-tile rows
+    // (menu redesign) — the old #sel-teams .sel-chip grid no longer exists.
+    await expect(page.locator("#sel-team-card")).toBeVisible();
     await expect(page.locator("#sel-tracks .track-row").first()).toBeVisible();
     await expect(page.locator("#sel-diff .sel-chip").first()).toBeVisible();
+    await page.locator("#sel-team-card").click();
+    await expect(page.locator("#sel-teams .team-tile").first()).toBeVisible();
+    await page.locator("#tp-close").click();
+    await expect(page.locator("#teampicker")).toBeHidden();
   });
 
   test("race starts and __apex hook is available", async ({ page }) => {
