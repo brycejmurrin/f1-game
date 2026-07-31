@@ -2804,7 +2804,12 @@ function updateCar(c, dt, ranked) {
     // beached, so it now needs the car to actually be going nowhere. Same
     // principle the stoppedOnTrack clause above already applies to a parked car.
     // (Reachable now that grass drag no longer pins you at 10.8 m/s.)
-    const beached = c.offroad && c.speed < 8;
+    // Threshold sits just ABOVE the off-track speed floor, not below it. Grass drag
+    // bottoms the car out at GRASS_V * 0.6 = 10.8 m/s, so the old `< 8` could never
+    // be reached by a car stuck in the run-off — it idles along at the floor
+    // forever, above the gate, and never counts as beached. Measured: a wrong-way
+    // car sat at 10.8 m/s and x = -10.9 while its rescue timer decayed back to 0.
+    const beached = c.offroad && c.speed < GRASS_V * 0.6 + 1.5;
     const stuck = beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
     // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
     // stuck conditions. Only applies once a rescue has actually happened —
