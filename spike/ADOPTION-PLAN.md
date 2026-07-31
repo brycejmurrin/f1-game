@@ -24,10 +24,23 @@ the game shippable.
   is a floor, not a cliff. Full numbers in spike/README.md.
 - **Rapier 0.19.3: additive-only adoption recommended.** Bitwise deterministic
   (124 contact-rich bodies, 600 steps, bit-identical), ≤1.5 ms worst-case step
-  with vehicle + 22 cars + 100 debris on the real 42k-tri road trimesh. The
-  raycast vehicle controller cannot express the combined-slip bicycle model
-  (no friction ellipse, no slip-angle tyres, ~2× understeer out of the box) —
-  **player and AI handling stay bespoke.**
+  with vehicle + 22 cars + 100 debris on the real 42k-tri road trimesh.
+  **Deep-dive corrections (spike/physics/DEEP-DIVE.md):** the baseline's "~2×
+  understeer" is retracted — that measurement caught a car already off the road
+  and falling; on a flat plane the controller corners at exactly the kinematic
+  radius. The structural finding is worse for replacement, not better: grip is
+  a binary load-scaled clamp (rigid rails below it), near-limit tunes
+  limit-cycle violently, and mid-corner braking is either inert or a divergent
+  spin — the **inverse** of the bespoke model's graduated trail-braking. No
+  tuning regime reproduces the friction ellipse. **Player and AI handling stay
+  bespoke** — for corrected, stronger reasons.
+  Deep-dive also measured: **R1 browser tax fits with margin** (side-world
+  total ~0.36 ms mean / ~1.1 ms p95 in-browser incl. mirror sync; load+init
+  ~90 ms; ~27 MB JS heap) and **R2 handover is clean** (|Δs| ≤ 0.37 m,
+  |Δhead| 0°, bitwise-deterministic across 20-episode suites) but needs an
+  explicit **rollover policy** — 8/20 moderate-energy episodes settle inverted
+  (clamp imparted roll at hand-to; route inverted-rest to the rescue flow; and
+  reconstruct y from road height at handback, never the proxy body's y).
 
 ## Part 1 — Graphics migration (three.js/TSL, pending the Babylon verdict)
 
@@ -88,7 +101,13 @@ physics regression suite must pass unchanged with the flag off.
   back to the bicycle model (blend pose, resync `(s,x)` via trackFrom). The
   takeover window is bounded and flagged; ghosts/laps invalidated during it if
   needed. New spec: handover invariants (no teleports, `(s,x)` continuity,
-  deterministic under act/obs).
+  deterministic under act/obs). *Deep-dive-mandated additions:* *(1)* clamp the
+  imparted roll energy at hand-to and route inverted-rest outcomes into the
+  existing rescue flow (8/20 moderate-energy episodes settled upside-down);
+  *(2)* at handback reconstruct y from road height, never the proxy body's
+  resting y (cuboid rests ~0.36 m vs the model's ~0.6 m ride height);
+  *(3)* handback speed retention 0.43–0.71× measured — tune the blend against
+  that range.
 - **R3 — car-car / wall contact resolution (the careful one, optional).**
   Replace the `(prog,x)`-plane car-car resolution and barrier clamp writeback
   with Rapier contact resolution. This touches the ONLY two things allowed to
