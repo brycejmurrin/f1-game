@@ -15,3 +15,4 @@ tools/_*.mjs
 
 # git worktrees for isolated agent work
 .worktrees/
+node_modules
