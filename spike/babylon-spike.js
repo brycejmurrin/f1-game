@@ -263,7 +263,7 @@ function updateLamps() {
     // stand-in for the game's smoothstep(cosOuter, cosInner) beam)
     L.exponent = cosOuter > 0.02
       ? Math.min(64, Math.max(1, Math.log(0.1) / Math.log(cosOuter))) : 1;
-    L.intensity = peak * LAMP_GAIN;
+    L.intensity = peak * (window.__bspikeGain != null ? window.__bspikeGain : LAMP_GAIN);
   }
   return n;
 }
@@ -310,6 +310,7 @@ window.__bspike = {
   toggleInstancing(on) { setInstancing(on != null ? on : !instancing); return instancing; },
   setLightCount(nMax) { lightCap = Math.max(0, Math.min(MAX_LIGHTS, nMax | 0)); return lightCap; },
   resetMs() { msN = 0; msIdx = 0; },
+  _dev: null,       // live handles for headless tuning (set below)
   debugLamps(k) {   // CPU-side view of what the SpotLights hold
     const out = [];
     for (let i = 0; i < Math.min(k || 4, activeLights); i++) out.push({
@@ -320,6 +321,10 @@ window.__bspike = {
     });
     return { n: activeLights, cam: camera.position.asArray(), lamps: out };
   },
+};
+
+window.__bspike._dev = { scene, engine, pipeline, lamps, hemi, sun, shadowGen,
+  setGain(g) { window.__bspikeGain = g; },   // consumed by updateLamps below
 };
 
 /* ── go: compile (timed), then loop ───────────────────────────────────────── */
