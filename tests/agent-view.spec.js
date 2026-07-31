@@ -351,6 +351,105 @@ test.describe("world() nextCorner", () => {
   });
 });
 
+// ── scene() ─────────────────────────────────────────────────────────────────
+// Before the registry existed, nothing that survived a build carried a label
+// except track.lampPosts — buildProps emitted straight into vertex buffers and
+// the footprint list died with the call. These tests pin the registry's two
+// load-bearing properties: it is COMPLETE (nothing silently dropped) and it is
+// EGOCENTRIC and self-describing.
+
+test.describe("scene()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("records every semantic placement, dropping none", async ({ page }) => {
+    await load(page);
+    const s = await page.evaluate(() => window.__apex.scene({ radius: 150 }));
+    expect(s.registry.dropped).toBe(0);
+    expect(s.registry.complete).toBe(true);
+    expect(s.registry.recorded).toBeGreaterThan(100);
+    expect(s.registry.recorded).toBeLessThan(s.registry.cap);
+    // Monza is a park circuit — trees must dominate, and the named structures
+    // must be present or the emitters aren't wired to note().
+    expect(s.counts.byKindLapTotal.tree).toBeGreaterThan(100);
+    expect(s.counts.byKindLapTotal.grandstand).toBeGreaterThan(0);
+    expect(s.counts.byKindLapTotal.building).toBeGreaterThan(0);
+  });
+
+  test("props are egocentric, sorted, and inside the radius", async ({ page }) => {
+    await load(page);
+    const s = await page.evaluate(() => window.__apex.scene({ radius: 120, limit: 20 }));
+    expect(s.origin.from).toBe("player");
+    expect(s.props.length).toBeGreaterThan(0);
+    for (let i = 0; i < s.props.length; i++) {
+      const p = s.props[i];
+      expect(p.distM).toBeLessThanOrEqual(120);
+      expect(Math.abs(p.bearingDeg)).toBeLessThanOrEqual(180);
+      // side must agree with the bearing it was derived from
+      if (p.side === "right") expect(p.bearingDeg).toBeGreaterThan(0);
+      if (p.side === "left") expect(p.bearingDeg).toBeLessThan(0);
+      expect(p.sizeM.length).toBe(3);
+      if (i) expect(p.distM).toBeGreaterThanOrEqual(s.props[i - 1].distM);
+    }
+  });
+
+  test("a bigger radius can only find more, never fewer", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => ({
+      near: window.__apex.scene({ radius: 50 }).counts.inRadius,
+      far: window.__apex.scene({ radius: 400 }).counts.inRadius,
+    }));
+    expect(r.far).toBeGreaterThan(r.near);
+  });
+
+  test("the kinds filter narrows results without changing lap totals", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => {
+      const all = window.__apex.scene({ radius: 300, limit: 200 });
+      const trees = window.__apex.scene({ radius: 300, limit: 200, kinds: ["tree"] });
+      return { allN: all.counts.inRadius, treeN: trees.counts.inRadius,
+               kinds: [...new Set(trees.props.map((p) => p.kind))],
+               lapTotalSame: all.counts.lapTotal === trees.counts.lapTotal };
+    });
+    expect(r.kinds).toEqual(["tree"]);
+    expect(r.treeN).toBeLessThan(r.allN);
+    expect(r.lapTotalSame).toBe(true);
+  });
+
+  test("truncation is reported rather than hidden", async ({ page }) => {
+    await load(page);
+    const s = await page.evaluate(() => window.__apex.scene({ radius: 300, limit: 3 }));
+    expect(s.props.length).toBe(3);
+    expect(s.truncated).toBeGreaterThan(0);
+    expect(s.truncated).toBe(s.counts.inRadius - 3);
+  });
+
+  test("a street circuit has buildings and no trees", async ({ page }) => {
+    await load(page, "monaco");
+    const by = await page.evaluate(() =>
+      window.__apex.scene({ radius: 200 }).counts.byKindLapTotal);
+    expect(by.building).toBeGreaterThan(0);
+    expect(by.tree || 0).toBe(0);
+  });
+
+  test("floodlight masts come through with their fixture kind", async ({ page }) => {
+    await load(page, "monza");
+    const lamps = await page.evaluate(() => window.__apex.scene({ radius: 300 }).lamps);
+    expect(lamps.length).toBeGreaterThan(0);
+    for (const l of lamps) {
+      expect(typeof l.kind).toBe("string");
+      expect(l.distM).toBeLessThanOrEqual(300);
+    }
+  });
+
+  test("errors before a track is loaded, never returns null", async ({ page }) => {
+    await boot(page);
+    const s = await page.evaluate(() => window.__apex.scene());
+    expect(s).toBeTruthy();
+    if (s.ok === false) expect(s.fix).toBeTruthy();
+    else expect(s.registry).toBeTruthy();
+  });
+});
+
 // ── visible() ───────────────────────────────────────────────────────────────
 // visible() reads the LAST RENDERED frame, so every test here has to let frames
 // draw first. Skipping that was the first bug found while building it: the

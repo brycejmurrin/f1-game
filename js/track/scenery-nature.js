@@ -115,6 +115,9 @@ const SceneryNature = (function () {
         console.warn(`[scenery] tree SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
+      // Past the on-track guard — this tree ships. Canopy radius scales with
+      // height, so w/d are an estimate rather than a measured bound.
+      ctx.note("tree", a.c, [h * 0.5, h, h * 0.5], { k, side });
       const vr = hash(k * 8.3 + side * 5.1 + dist + 4.7);
       if (vr > 0.91) {   // dead/storm tree: bare trunk + a few angled branch stubs.
         // addCyl extends along basis[1] ("up"), so each branch needs its OWN
@@ -269,6 +272,7 @@ const SceneryNature = (function () {
         return;
       }
       opts = opts || {};
+      ctx.note("mountain", [x, baseY + h / 2, z], [w, h, w]);
       addFrustum(out, [x, baseY - 2, z], w * 0.62, w * 0.42, h * 0.18,
                  opts.forest || [0.20, 0.34, 0.20], 9, null);   // skirt
       addMountain(out, [x, baseY, z], w * 0.5, h, opts);
@@ -352,6 +356,10 @@ const SceneryNature = (function () {
         console.warn(`[scenery] grandstand SUPPRESSED at s=${s} side=${side}: gap=${gap} (inner face on track)`);
         return;
       }
+      // Past the inner-face guard — this stand ships. Size is the back shell
+      // (10 wide, 12 tall) run out to the stand's full length.
+      ctx.note("grandstand", [px[k] + r[0] * oInner, groundYAt(k, gap) + 6, pz[k] + r[2] * oInner],
+               [10, 12, len], { k, side });
       // Back shell — center at gap+7.5 beyond road edge
       const oShell = side * (hw[k] + gap + 7.5);
       const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + 7.5) + 6 - 0.8, pz[k] + r[2] * oShell];

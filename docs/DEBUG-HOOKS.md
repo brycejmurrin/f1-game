@@ -938,6 +938,41 @@ things happen to make the table trustworthy on OSM-derived centrelines:
 Sanity check: Monaco's Grand Hotel hairpin resolves to ~10 m, and integrated
 heading over a lap closes to exactly ±360°.
 
+### `scene({radius, kinds, limit}?) → payload | typedError`
+
+**Named** scenery near the car. `visible()` locates scenery mass; this says what
+it is.
+
+```js
+__apex.scene({ radius: 120, limit: 5 })
+// { origin:{from:"player", x, z, headingDeg, note},
+//   radiusM, counts:{lapTotal, byKindLapTotal:{tree:985, …}, inRadius},
+//   props:[{kind, distM, bearingDeg, side, sizeM:[w,h,d], at:[x,y,z]}],
+//   truncated, lamps:[{kind, distM, bearingDeg, side}],
+//   registry:{recorded, dropped, cap, complete, note} }
+```
+
+Egocentric: `distM` / `bearingDeg` are from the **player** (or the camera when
+there is no player — `origin.from` says which), `+bearing` = to its right,
+0 = straight ahead. Sorted by distance.
+
+Kinds: `tree` · `building` · `house` · `motorhome` · `tower` · `grandstand` ·
+`billboard` · `mountain` · `prop` (the generic `place()` box). Filter with
+`kinds: ["tree"]`.
+
+Backed by `track.props`, filled by `note()` in `js/track/tracks.js` at each
+semantic emitter, **after** that emitter's on-track and mass-collision guards —
+so a suppressed prop never enters the registry and the list describes what
+actually stands there. It records semantic placements, **not primitives**: Vegas
+emits ~94k primitives but only ~450 placements, because one tree is a trunk plus
+several canopy tiers. Measured totals run 169 (Monaco) to 1,887 (Suzuka) against
+a 40,000 cap, so `dropped` is 0 everywhere and `registry.complete` is true — but
+check it rather than assume, because the registry is emission-ordered and a
+truncated one would under-report late-built areas non-uniformly.
+
+Not covered: kerbs, barriers, guardrails and other road furniture — those live
+in `track.barL`/`barR` as a driving limit, and `wallStats()` reports on them.
+
 ### `visible({limit}?) → payload | typedError`
 
 What is actually on screen. The renderer answers this every frame — it extracts

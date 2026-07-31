@@ -392,6 +392,36 @@ const Tracks = (function () {
     const diagnostics = track.modelDiagnostics = {
       emitted: [], suppressed: [], invalid: [], unsafe: [],
     };
+
+    // ---------- semantic prop registry ----------
+    // Everything buildProps places goes straight into vertex buffers and is then
+    // anonymous: the footprint list and spatial hash below are function-local and
+    // die with this call, so after a build nothing can answer "is there a
+    // grandstand on my left". The renderer's 72 m chunk AABBs locate scenery MASS
+    // but cannot name it.
+    //
+    // note() records the semantic placements only — a tree, a building, a
+    // grandstand — NOT every primitive. Vegas emits ~94k primitives; a tree alone
+    // is a trunk plus several canopy tiers, so recording primitives would cost far
+    // more and say far less. Consumed by __apex.scene() (js/game/agentview.js).
+    //
+    // Recording happens at the point of emission, AFTER each emitter's on-track
+    // and mass-collision guards, so a suppressed prop never enters the registry —
+    // the list describes what actually stands there.
+    const PROP_CAP = 40000;
+    const propList = [];
+    let propDropped = 0;
+    const note = (kind, c, size, extra) => {
+      if (propList.length >= PROP_CAP) { propDropped++; return; }
+      const r1 = (v) => Math.round(v * 10) / 10;
+      const rec = { kind, x: r1(c[0]), y: r1(c[1]), z: r1(c[2]),
+                    w: r1(size[0]), h: r1(size[1]), d: r1(size[2]) };
+      if (extra) { for (const key in extra) rec[key] = extra[key]; }
+      propList.push(rec);
+    };
+    track.props = { list: propList, cap: PROP_CAP,
+                    get count() { return propList.length; },
+                    get dropped() { return propDropped; } };
     const finiteVec = (v, len, positive) =>
       Array.isArray(v) && v.length === len && v.every((x) => Number.isFinite(x) && (!positive || x > 0));
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
@@ -1090,6 +1120,7 @@ const Tracks = (function () {
       // the ground on elevated/embanked sections.
       const c = [cx, groundYAt(k, dist) + sz[1] / 2 - 0.8, cz];
       if (addBox(out, c, sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
+      note("prop", c, sz, { k, side });
       // solid box → the car must stop before its inner face (sz[0] across, sz[2] long)
       blockAt(k, side, dist - sz[0] / 2, sz[2] / 2);
       // …and the scenery engine must know a solid body physically stands here,
@@ -1230,6 +1261,9 @@ const Tracks = (function () {
       // placement primitives + math helpers
       place, prop, backdrop, groundPlane, every,
       hash, upOf, cross, norm, lerp, vadd,
+      // semantic prop registry (see note() above) — scenery modules call this
+      // after their own guards so only props that actually ship are recorded
+      note,
     };
     Object.assign(ctx, SceneryNature.create(ctx));
     Object.assign(ctx, SceneryStructures.create(ctx));

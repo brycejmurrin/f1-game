@@ -1447,6 +1447,13 @@ const api = {
   // "profile" | "all". Constant for a session — fetch once, never per tick.
   trackInfo(opts) { return agentView.trackInfo(opts); },
 
+  // scene({radius, kinds, limit}?) — NAMED scenery near the car: trees,
+  // buildings, grandstands, billboards, mountains, generic props, plus
+  // floodlight masts. Egocentric (distance + bearing from the player, or the
+  // camera when there is no player). visible() locates scenery mass; this
+  // names it.
+  scene(opts) { return agentView.scene(opts); },
+
   // visible({limit}?) — what is actually on screen right now: scenery chunks in
   // the camera frustum (72 m cells, anonymous mixed geometry), every car with
   // distance/bearing/screen position, and corners in view. Runs the renderer's

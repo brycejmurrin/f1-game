@@ -1,6 +1,12 @@
 # Agent World API — showing the game to an LLM agent as JSON
 
-**Status: design. Nothing here is implemented yet.**
+**Status: implemented.** `world()`, `trackInfo()`, `terminal()`, `visible()` and
+`scene()` ship in `js/game/agentview.js`; the prop registry ships in
+`js/track/tracks.js` + the scenery modules. Reference docs live in
+`docs/DEBUG-HOOKS.md`; tests in `tests/agent-view.spec.js` (`npm run test:agent`).
+This document keeps the research and the reasoning — §2's audit describes the
+state of the codebase **before** the work, and is retained because it explains
+why the design is shaped the way it is.
 
 The goal: let a text-only agent perceive and reason about the running game
 without screenshots. Not as a fallback for lacking eyes — as the *better*
@@ -286,6 +292,35 @@ against it. Vertex-budget sensitive.
 
 Phase 1 is worth doing on its own and is independently shippable. Phase 3 is
 the only one with real risk.
+
+## 5b. What building it actually taught us
+
+Three things the design got wrong, all found by testing rather than reading:
+
+**Point curvature cannot describe a corner on this data.** `Tracks.curvature`
+differentiates over 12 m. Through one Monza right it reads `+0.024, +0.022,
+−0.039` across 50 m — literally "22 m hairpin, then a left". It is zigzag noise
+in the OSM-derived centreline. Corners needed a 30 m smoothing window, radius
+from heading swept across the whole corner, and apex snapping, before the table
+was usable. Monaco's hairpin at 10.2 m (real ~10 m) is the check that it works;
+integrated lap heading closing to exactly ±360° is the invariant that guards it.
+
+**Curated apexes don't sit on the geometry.** `CircuitMarkings` documents itself
+as best-effort against this centreline, and it means it — apexes land tens of
+metres off the real bend, and some circuits number a double-apex as two turns so
+after snapping both land in the same corner. Hence snap-then-merge, with merged
+corners keeping both numbers (`T9-T10`).
+
+**`visible()` reads the last rendered frame, and nothing says so.** Called
+straight after `jump()`, it reported a camera 380 m from the car — and the
+output looked entirely plausible. `framePending` and a `warning` now surface it.
+The general lesson for this kind of API: a stale answer that looks well-formed
+is worse than an error.
+
+The registry, by contrast, was cheaper than feared: 169–1,887 placements per
+circuit against a 40,000 cap, so the spatial-bias worry about truncation is
+moot in practice. It is still reported, because a future circuit could change
+that and silent truncation would read as complete coverage.
 
 ## 6. Open questions
 

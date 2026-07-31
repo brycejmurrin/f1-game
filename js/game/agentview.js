@@ -586,6 +586,96 @@ const AgentView = (function () {
       return { done: reason != null, reason };
     }
 
+    // ── scene() — named scenery near you ────────────────────────────────────
+    // visible() locates scenery MASS (72 m anonymous cells). This names it. The
+    // data comes from track.props, the registry buildProps now fills at each
+    // semantic emitter (js/track/tracks.js note()); before that existed the only
+    // thing surviving a build with a label on it was track.lampPosts.
+    function scene(opts) {
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      const reg = G.track.props;
+      if (!reg) {
+        return fail("NoRegistryError",
+                    "this track was built without a prop registry "
+                    + "(centreline-only build, or props were never generated)",
+                    'reload the track with __apex.race("<id>")');
+      }
+      const o = opts || {};
+      const radius = Math.max(5, Math.min(o.radius || 150, 2000));
+      const cap = Math.max(1, Math.min(o.limit | 0 || 24, 200));
+      const kinds = Array.isArray(o.kinds) && o.kinds.length ? o.kinds : null;
+
+      // Egocentric on the car when there is one, else on the camera — and say
+      // which, because "40 m ahead" means nothing without knowing ahead of what.
+      let ox, oz, head, from;
+      if (G.player && G.player.px != null) {
+        ox = G.player.px; oz = G.player.pz; head = G.player.head; from = "player";
+      } else {
+        const eye = (G.frame && G.frame.eye) || G.camEye;
+        ox = eye[0]; oz = eye[2]; from = "camera";
+        head = Math.atan2(G.camTgt[0] - ox, G.camTgt[2] - oz);
+      }
+      const rel = (x, z) => {
+        const d = Math.hypot(x - ox, z - oz);
+        const b = angDiff(Math.atan2(x - ox, z - oz), head) * 180 / Math.PI;
+        return { distM: r1(d), bearingDeg: r1(b) };
+      };
+
+      const byKind = {};
+      const near = [];
+      for (const p of reg.list) {
+        byKind[p.kind] = (byKind[p.kind] || 0) + 1;
+        if (kinds && kinds.indexOf(p.kind) < 0) continue;
+        const dx = p.x - ox, dz = p.z - oz;
+        if (dx * dx + dz * dz > radius * radius) continue;      // cheap reject
+        const rr = rel(p.x, p.z);
+        near.push({ kind: p.kind, distM: rr.distM, bearingDeg: rr.bearingDeg,
+                    side: rr.bearingDeg > 8 ? "right" : rr.bearingDeg < -8 ? "left" : "ahead",
+                    sizeM: [p.w, p.h, p.d], at: [p.x, p.y, p.z] });
+      }
+      near.sort((a, b) => a.distM - b.distM);
+
+      // Floodlight masts kept their own registry long before this one existed
+      // and carry a fixture kind, so they are worth surfacing alongside.
+      const lamps = [];
+      for (const l of (G.track.lampPosts || [])) {
+        const dx = l.x - ox, dz = l.z - oz;
+        if (dx * dx + dz * dz > radius * radius) continue;
+        const rr = rel(l.x, l.z);
+        lamps.push({ kind: l.kind, distM: rr.distM, bearingDeg: rr.bearingDeg,
+                     side: rr.bearingDeg > 0 ? "right" : "left" });
+      }
+      lamps.sort((a, b) => a.distM - b.distM);
+
+      return {
+        apiVersion: API_VERSION, seq: ++seq, conventions: CONVENTIONS,
+        origin: { from, x: r1(ox), z: r1(oz),
+                  headingDeg: r1(head * 180 / Math.PI),
+                  note: "distM and bearingDeg are from " + from
+                        + "; +bearing = to its right, 0 = straight ahead" },
+        radiusM: radius,
+        counts: { lapTotal: reg.count, byKindLapTotal: byKind, inRadius: near.length },
+        props: near.slice(0, cap),
+        truncated: near.length > cap ? near.length - cap : 0,
+        lamps: lamps.slice(0, cap),
+        registry: {
+          recorded: reg.count, dropped: reg.dropped, cap: reg.cap,
+          complete: reg.dropped === 0,
+          note: reg.dropped
+            ? reg.dropped + " placements past the " + reg.cap + " cap were not "
+              + "recorded — the registry is emission-ordered, so the omissions "
+              + "are NOT spatially uniform and this list under-reports late-built areas"
+            : "every semantic placement on this track is recorded",
+        },
+        note: "semantic placements only (trees, buildings, grandstands, billboards, "
+              + "mountains, generic props) — not every primitive, and not kerbs, "
+              + "barriers or road furniture",
+      };
+    }
+
     // ── visible() — what is actually on screen ──────────────────────────────
     // The renderer already answers this every frame: it extracts frustum planes
     // from frame.viewProj and tests them against per-chunk AABBs. Nothing was
@@ -801,7 +891,7 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, trackInfo, visible, corners, terminal,
+    return { world, trackInfo, visible, scene, corners, terminal,
              API_VERSION, PHYSICS_VERSION };
   }
 

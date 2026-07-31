@@ -128,6 +128,9 @@ const SceneryCity = (function () {
         console.warn(`[scenery] building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (footprint over track)`);
         return;
       }
+      // Past both guards (mass collision, footprint over track) — this building
+      // ships, so record it for the agent world view.
+      ctx.note("building", p.c, [w, h, d], { k, side });
       // Lit windows follow the SESSION (NIGHT), not a baked flag — otherwise a
       // casino marked lit:true glows neon in broad daylight. opts.lit:false can
       // still force a building to stay unlit even at night.
@@ -633,6 +636,7 @@ const SceneryCity = (function () {
         console.warn(`[scenery] house SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w}`);
         return;
       }
+      ctx.note("house", p.c, [w, h, d], { k, side });
       const hh = hash(k * 6.7 + side * 3.9 + gap);
       const wall = opts.wall || HOUSE_WALLS[Math.floor(hh * HOUSE_WALLS.length) % HOUSE_WALLS.length];
       const roofCol = opts.roof || HOUSE_ROOFS[Math.floor(hash(k * 9.1 + side) * HOUSE_ROOFS.length) % HOUSE_ROOFS.length];
@@ -669,6 +673,7 @@ const SceneryCity = (function () {
         console.warn(`[scenery] motorhome SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w}`);
         return;
       }
+      ctx.note("motorhome", p.c, [w, h, d], { k, side });
       const hh = hash(k * 7.3 + side * 4.1 + gap);
       const body = opts.wall || MOTORHOME_BODY[Math.floor(hh * MOTORHOME_BODY.length) % MOTORHOME_BODY.length];
       const accent = opts.accent || [0.75, 0.10, 0.10];
@@ -712,6 +717,7 @@ const SceneryCity = (function () {
         console.warn(`[scenery] tower SUPPRESSED at k=${k} side=${side}: dist=${dist} baseW=${baseW}`);
         return;
       }
+      ctx.note("tower", p.c, [baseW, h, baseW], { k, side });
       addFrustum(out, vadd(p.c, p.u, -0.6), baseW * 0.5, baseW * 0.335, h + 0.6, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);   // base sunk 0.6
       if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
       // Mast stands on the CAP's top face. The cap box is centred at h with
@@ -727,6 +733,7 @@ const SceneryCity = (function () {
         console.warn(`[scenery] billboard SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (need gap>${(w/2+1).toFixed(1)})`);
         return;
       }
+      ctx.note("billboard", vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], { k, side });
       for (const o of [-w * 0.4, w * 0.4]) addCyl(out, vadd(vadd(p.c, p.t, o), p.u, -0.4), 0.12, h + 0.4, [0.2, 0.2, 0.22], 4, b);   // posts, base sunk
       // Backlit at night: trackside advertising is illuminated at real races —
       // the lifted albedo rides the emissive path so panels glow softly.
