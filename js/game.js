@@ -44,31 +44,36 @@ const els = {
 // handle every later renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
 try {
-  let optIn = false;
-  try { optIn = localStorage.getItem("apex26.gfxBackend") === "webgpu"; } catch (_) {}
-  if (optIn && typeof Gfx !== "undefined" && navigator.gpu) {
-    const wgx = await Gfx.create(canvas, {});
-    if (wgx) {
-      // Route EVERY renderer call site onto the WebGPU backend — not just game.js
-      // but the other modules that call the GLX global directly (tracks.js mesh
-      // build, car3d.js, liverytex.js, ghost.js). Copy WGX's methods + live
-      // getters (width/height/aspect) onto the GLX object so `GLX.foo()` anywhere
-      // delegates to WebGPU. GLX's own WebGL context is never initialised here.
-      try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(wgx)); gfx = GLX; }
+  let pref = null;
+  try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
+  // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
+  // self-falls-back to WebGL2 inside three so no capability gate here).
+  const optIn = pref === "three" || (pref === "webgpu" && navigator.gpu);
+  if (optIn && typeof Gfx !== "undefined") {
+    const backend = await Gfx.create(canvas, {});
+    if (backend) {
+      // Route EVERY renderer call site onto the selected backend — not just
+      // game.js but the modules that reach the GLX global directly (tracks.js
+      // mesh build; tests monkey-patch GLX.* too, so OBJECT IDENTITY is the
+      // compatibility contract). Copy the backend's methods + live getters
+      // (width/height/aspect) onto the GLX object so `GLX.foo()` anywhere
+      // delegates. GLX's own WebGL context is never initialised here.
+      try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend)); gfx = GLX; }
       catch (_) { gfx = null; }
     }
   }
 } catch (_) { gfx = null; }
 if (!gfx) {
   if (!GLX.init(canvas)) {
-    // A failed WebGPU opt-in may have already CLAIMED the canvas (getContext
-    // "webgpu" succeeded before init died) — then getContext("webgl2") can
-    // never attach on this load and the old path dead-ended at "needs WebGL2"
-    // forever. Clear the opt-in and reload once, the same recovery WGX's
-    // device-lost handler uses; the reset flag guarantees no reload loop.
-    let webgpuTried = false;
-    try { webgpuTried = localStorage.getItem("apex26.gfxBackend") === "webgpu"; } catch (_) {}
-    if (webgpuTried) {
+    // A failed backend opt-in (WGX or TLX) may have already CLAIMED the canvas
+    // (getContext "webgpu"/"webgl2" succeeded before init died) — then
+    // getContext("webgl2") can never attach on this load and the old path
+    // dead-ended at "needs WebGL2" forever. Clear the opt-in and reload once,
+    // the same recovery WGX's device-lost handler uses; the reset flag
+    // guarantees no reload loop.
+    let backendTried = false;
+    try { const p = localStorage.getItem("apex26.gfxBackend"); backendTried = p === "webgpu" || p === "three"; } catch (_) {}
+    if (backendTried) {
       try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) {}
       try { location.reload(); } catch (_) {}
       return;

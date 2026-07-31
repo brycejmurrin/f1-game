@@ -42,7 +42,7 @@ const RENDER_SPECS = [
   "lighting-ab", "lighting-tuner-grade",
   "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",
   "ui-audit", "ui-button-touch", "ui-desktop", "menu-survey",
-  "tracks-visual", "webgl-probes", "camera", "smoke", "season", "time-trial",
+  "tracks-visual", "webgl-probes", "tlx-probes", "camera", "smoke", "season", "time-trial",
 ].map((n) => `**/${n}.spec.js`);
 
 // Default worker cap: every worker owns a Chromium + SwiftShader process.
