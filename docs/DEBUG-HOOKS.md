@@ -861,6 +861,104 @@ await __apex.fetchTrackOutline(9149, 1);
 
 ---
 
+## Agent world view — `world()`, `trackInfo()`, `terminal()`
+
+Everything above is a dev console: flat hooks, one narrow question each, `false`
+or `null` on failure. That is right for a human at a REPL and wrong for a
+text-only agent, which wants one egocentric snapshot per decision with the
+semantics sitting next to the numbers.
+
+These three hooks are that layer (`js/game/agentview.js`). They compose the
+hooks above and change none of them. Design and the research behind it:
+`docs/AGENT-WORLD-API.md`.
+
+### `world(opts?) → payload | typedError`
+
+One egocentric JSON snapshot. **Never returns `null`** — on failure it returns
+`{ok:false, error, message, fix, state}` where `fix` names the hook to call.
+
+| opt | default | meaning |
+|---|---|---|
+| `detail` | `"drive"` | `"brief"` (~ego + next corner + summary) · `"drive"` (+ lookahead, rivals, affordances) · `"full"` (+ session, terminal, raw physics, all 21 rivals) |
+| `horizonS` | `4` | lookahead horizon in **seconds** — the distance scales with speed |
+| `points` | `5` | lookahead samples (2–12) |
+| `since` | — | a `seq` you already hold; returns only what changed |
+
+```js
+__apex.world({ detail: "brief" })
+// { apiVersion, physicsVersion, seq, t, detail, conventions, raceState,
+//   track: {id, name, lengthM},
+//   ego: { lap, pos, of, frac, s, speedKph, speed, gear, lateralM,
+//          headingErrDeg, onTrack, halfWidthM, clearLeftM, clearRightM,
+//          energy, grip:{slipFactor, longUsedPct, state, surface, gripMult} },
+//   nextCorner: { turn, dir, radiusM, severity, distM, timeS, apexSpeedKph,
+//                 suggestBrakeM, status, note },
+//   brief: "Lap 3, P4, 218 km/h in 6, T7 L in 84 m — BRAKE NOW for T7, …" }
+```
+
+`detail:"drive"` adds `ahead:{horizonS, horizonM, pts:[{d,t,radiusM,dir,widthM}]}`,
+`rivals:[{id, code, team, rel, gapM, gapS, lateralM, side, speedKph, closingMps,
+threat, lap}]` (sorted by gap, capped at 4), and `affordances` / `unavailable`.
+
+**`rivals[].lateralM` is relative to the PLAYER**, not the centreline — `+` is to
+your right. Everything else is the usual convention (`+x` right of centreline,
+`+k` right-hand turn), restated in every payload's `conventions` field.
+
+`suggestBrakeM` is a **hint**, not the car's physics: it assumes ~30 m/s²
+braking and ~26 m/s² lateral grip. Treat it as a reference to check against, not
+a target.
+
+### `trackInfo({what}?) → payload | typedError`
+
+Static per-track data — **fetch once per session, never per tick**.
+`what`: `"corners"` (default) · `"sectors"` · `"profile"` · `"all"`.
+
+```js
+__apex.trackInfo({ what: "corners" }).corners
+// [{ turn:"T9-T10", frac, s, dir:"L", radiusM:134, k, sweepDeg:-168,
+//    severity:"medium", widthM, entryS, exitS, lengthM, apexSpeedKph }, …]
+```
+
+Corners come from the curated `CircuitMarkings` apex list (real FIA turn
+numbering) where a circuit has one, falling back to curvature peaks. Three
+things happen to make the table trustworthy on OSM-derived centrelines:
+
+- **Curvature is smoothed over a 30 m half-window.** Raw `Tracks.curvature`
+  differentiates over 12 m, which is right for physics and too sharp to
+  describe a corner — at Monza the point curvature through a fast right reads
+  `+0.024, +0.022, −0.039` over 50 m. Taken literally that is a 22 m hairpin
+  followed by a left. It is noise.
+- **Radius comes from heading swept across the whole corner**, not from any one
+  sample: `radius = arcLength / |Δheading|`.
+- **Curated apexes are snapped** to the nearest smoothed-curvature peak (bounded
+  by half the gap to the neighbouring turns), because `CircuitMarkings` is
+  documented as best-effort against this game's centreline. Overlapping results
+  are merged and keep both numbers (`"T9-T10"`).
+
+Sanity check: Monaco's Grand Hotel hairpin resolves to ~10 m, and integrated
+heading over a lap closes to exactly ±360°.
+
+### `terminal() → {done, reason} | null`
+
+`reason` is `"finished"` · `"wrong_way"` · `"rescued"` · `null`. `obs().done`
+conflates the last two, so an agent cannot tell "my policy spun the car" from
+"the sim teleported me".
+
+### Recommended loop
+
+An LLM cannot sustain 60 Hz decisions. Use the deterministic stepping below to
+turn this into a turn-based problem:
+
+```js
+__apex.headless(true);
+__apex.race("monza"); __apex.go(); __apex.jump(0.1, 55);
+let w = __apex.world({ detail: "drive" });
+// decide from w …
+w = (__apex.act({ steer: 0.2, throttle: true }, 1/60, 10), __apex.world({ since: w.seq }));
+```
+
+---
+
 ## Headless / RL control loop
 
 For reinforcement-learning, autopilot testing, or any high-throughput physics

@@ -19,6 +19,11 @@ const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
 const { CAM_MODES } = GameTables;
 const { TUNE_DEFS, LT } = LightTune;
 
+// The agent-facing view (js/game/agentview.js). Composed here rather than
+// bolted onto this file: __apex stays a flat dev console, world()/trackInfo()
+// are the layer an LLM agent reads. See docs/AGENT-WORLD-API.md.
+const agentView = AgentView.create(G);
+
 const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
   jump(frac, speed, lateral) {
@@ -1429,6 +1434,23 @@ const api = {
     G._testInput = null;
     return this.obs();
   },
+
+  // ── agent-facing view ─────────────────────────────────────────────────────
+  // world(opts) — one egocentric JSON snapshot per decision, with semantics
+  // beside the numbers. opts: { detail: "brief"|"drive"|"full" (def "drive"),
+  // horizonS: lookahead seconds (def 4), points: lookahead samples (def 5),
+  // since: seq of the payload you already hold, to get a delta back }.
+  // Unlike the hooks above this returns a typed error object, never null.
+  world(opts) { return agentView.world(opts); },
+
+  // trackInfo({what}) — STATIC per-track data: "corners" (def) | "sectors" |
+  // "profile" | "all". Constant for a session — fetch once, never per tick.
+  trackInfo(opts) { return agentView.trackInfo(opts); },
+
+  // terminal() — episode end split into {done, reason}, where reason is
+  // "finished" | "wrong_way" | "rescued" | null. obs().done conflates the last
+  // two, which an agent needs to tell apart.
+  terminal() { return G.player && G.track ? agentView.terminal() : null; },
 
   // f1api — raw access to the F1API module (Jolpica + OpenF1) used by the
   // data hub. Call e.g. __apex.f1api.schedule() or __apex.f1api.lastRace()
