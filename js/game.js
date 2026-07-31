@@ -1292,6 +1292,10 @@ function loadTrack(idx) {
     // null between here and the assignment below.
     track = null;
     track = Tracks.build(def, { night: sessionDark });
+    // Rapier debris side-world: register the circuit's near-apex clippable cones
+    // (A3). Cheap pure derivation from track.def.turns; stores the list even when
+    // the side-world is disabled/loading so it's ready once rapier is live.
+    DebrisWorld.registerFurniture(track);
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
     // Env probe still holds the previous circuit — fall back to the analytic
@@ -2441,6 +2445,10 @@ function updateCar(c, dt, ranked) {
     const vx = (c.speed < 0 ? -1 : 1) * Math.max(Math.abs(c.speed), 4);
     const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - delta;
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
+    // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the
+    // already-computed combined-slip signals READ-ONLY; cosmetic, never grip.
+    if (DebrisWorld.active())
+      DebrisWorld.tyreMarble(c, { lock: axFrac, slip: Math.max(Math.abs(slipF), Math.abs(slipR)), speed: c.speed });
     // Soft-saturating lateral tyre force (accel units): linear slope = stiffness
     // near centre, smoothly capped at the friction limit — how real tyres behave
     // and far more controllable on a noisy tilt signal than a hard clamp.
@@ -2494,6 +2502,16 @@ function updateCar(c, dt, ranked) {
     // actually move it sideways instead of bouncing off a rigid, on-rails line.
     const give = (c.contactT > 0) ? 0.4 : 1;
     c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * bankMu * give * dt;
+    // Debris side-world (A2): AI cars don't run the slip model, so estimate a
+    // slide from lateral-g demand (|k|·v²/g) and treat hard braking at speed as
+    // lock-up. READ-ONLY, cosmetic — matches the player marble hook.
+    if (DebrisWorld.active()) {
+      const latG = Math.abs(k) * c.speed * c.speed / 9.8;   // ~lateral g demand
+      DebrisWorld.tyreMarble(c, {
+        lock: (braking && c.speed > 30) ? 0.95 : 0,
+        slip: Math.max(0, Math.min(1, latG - 1.6)) * 0.14,   // → ~slip-angle rad at the limit
+        speed: c.speed });
+    }
   }
   // set skid intensity once per frame (used by audio and by visual marks)
   if (c.isPlayer) {
