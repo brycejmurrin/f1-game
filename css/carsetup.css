@@ -267,12 +267,18 @@
   color: rgba(255,120,110,0.85);
   background: rgba(255,60,50,0.1); border: 1px solid rgba(255,80,70,0.25);
 }
-.cs-liv-del:hover { background: rgba(255,60,50,0.22); color: #fff; }
+@media (hover: hover) {
+  .cs-liv-del:hover { background: rgba(255,60,50,0.22); color: #fff; }
+}
+.cs-liv-del:active { background: rgba(255,60,50,0.3); color: #fff; }
 .cs-liv-edit {
   color: rgba(120,200,255,0.9);
   background: rgba(60,150,255,0.1); border: 1px solid rgba(80,170,255,0.28);
 }
-.cs-liv-edit:hover { background: rgba(60,150,255,0.24); color: #fff; }
+@media (hover: hover) {
+  .cs-liv-edit:hover { background: rgba(60,150,255,0.24); color: #fff; }
+}
+.cs-liv-edit:active { background: rgba(60,150,255,0.32); color: #fff; }
 .cs-liv-custom .cs-opt-tag { background: rgba(80,210,255,0.18); color: #4df; }
 
 /* ---------- inline livery creator ---------- */

@@ -155,7 +155,8 @@ body.hud-hidden .touchbtn { display: none !important; }
   opacity: 0.5;
   display: none;            /* only visible while the HUD is hidden */
 }
-#hud-restore:hover, #hud-restore:active { opacity: 0.95; }
+@media (hover: hover) { #hud-restore:hover { opacity: 0.95; } }
+#hud-restore:active { opacity: 0.95; }
 body.hud-hidden #hud-restore { display: block; }
 /* Camera picker grid: opened by press-and-hold on the CAM button. Anchored
    under the button (top-right), thumb-reachable in landscape. */

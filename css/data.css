@@ -52,7 +52,10 @@
   border-radius: 8px; padding: 0; font-size: 16px;
   background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: #c4c4c8; cursor: pointer;
 }
-.dh-close:hover { background: rgba(255,255,255,0.14); color: #fff; }
+@media (hover: hover) {
+  .dh-close:hover { background: rgba(255,255,255,0.14); color: #fff; }
+}
+.dh-close:active { background: rgba(255,255,255,0.18); color: #fff; }
 
 .dh-tabs {
   display: flex; gap: 6px; padding: 10px 14px;
@@ -76,7 +79,10 @@
   text-align: center;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.dh-tab:hover { background: rgba(255,255,255,0.11); color: #c4c4c8; border-color: rgba(255,255,255,0.22); }
+@media (hover: hover) {
+  .dh-tab:hover { background: rgba(255,255,255,0.11); color: #c4c4c8; border-color: rgba(255,255,255,0.22); }
+}
+.dh-tab:active { background: rgba(255,255,255,0.14); color: #c4c4c8; }
 .dh-tab.dh-active {
   background: #e10600;
   border-color: #e10600;
@@ -184,7 +190,9 @@
   border-bottom: 1px solid rgba(255,255,255,0.10);
 }
 .dh-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
-.dh-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+@media (hover: hover) {
+  .dh-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+}
 .dh-table td { padding: 7px 6px; vertical-align: middle; }
 .dh-td-pos { width: 26px; text-align: right; color: #8a8a95; }
 /* chip + driver name side by side in the driver cell */
@@ -266,7 +274,10 @@
   padding: 3px 6px; margin: 0; color: inherit; font: inherit;
   letter-spacing: 0.04em; cursor: pointer; transition: opacity 0.12s;
 }
-button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
+@media (hover: hover) {
+  button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
+}
+button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-legend-item.dh-off { opacity: 0.35; }
 .dh-legend-item.dh-legend-static { cursor: default; font-style: italic; }
 /* compare-mode legend group: [LABEL][solid chip][dashed chip] — the label

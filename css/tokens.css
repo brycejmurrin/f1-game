@@ -184,6 +184,11 @@ html, body {
   -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
   -webkit-user-select: none; user-select: none;
   -webkit-tap-highlight-color: transparent;
+  /* iOS: no long-press callout sheet over the canvas/buttons, and no root
+     rubber-band / scroll chaining (Safari 26's floating tab bar collapses on
+     root scroll gestures, which reads as the whole game bouncing). */
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
   touch-action: none;
 }
 
@@ -209,13 +214,20 @@ button {
   cursor: pointer;
   transition: background 0.14s, box-shadow 0.14s;
 }
-button:hover { background: rgba(255, 255, 255, 0.12); }
+/* :hover is gated on a device that can actually hover: on iOS a tap SETS
+   :hover and it stays stuck until the next tap elsewhere, so an un-gated
+   hover reads as a button that never un-pressed. This gate applies to every
+   :hover in the split stylesheet; :active is the touch press feedback. */
+@media (hover: hover) {
+  button:hover { background: rgba(255, 255, 255, 0.12); }
+  button:disabled:hover { background: rgba(255, 255, 255, 0.07); }
+}
 button:active { background: rgba(255, 255, 255, 0.2); }
 /* Mode-dependent menu toggles (RECALIBRATE TILT, GEARS) disable instead of
    hiding: removing them reflowed the settings grid under the player's finger,
    so the next tap hit the wrong button. Dim, keep the slot. */
 button:disabled { opacity: 0.35; cursor: default; }
-button:disabled:hover { background: rgba(255, 255, 255, 0.07); }
+button:disabled:active { background: rgba(255, 255, 255, 0.07); }
 /* THE density switch. A landscape phone is ~390-430px tall and that is the
    whole constraint: the same menus, tighter. Nothing here changes layout —
    only how much room each part takes — so there is exactly one place to tune
