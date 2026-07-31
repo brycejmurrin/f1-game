@@ -960,28 +960,50 @@ __apex.world({ detail: "brief" })
 //          headingErrDeg, onTrack, halfWidthM, clearLeftM, clearRightM,
 //          energy, grip:{slipFactor, longUsedPct, state, surface, gripMult} },
 //   nextCorner: { turn, dir, radiusM, severity, distM, timeS, apexSpeedKph,
-//                 apexOffsetM, moveToApexM, suggestBrakeM, status, note },
+//                 straightAfterM, exitsOntoStraight, suggestBrakeM, status, note },
 //   brief: "Lap 3, P4, 218 km/h in 6, T7 L in 84 m — BRAKE NOW for T7, …" }
 ```
 
 `detail:"drive"` adds `ahead:{horizonS, horizonM, pts:[{d,t,radiusM,dir,widthM}]}`,
-`nextCorners:[{turn, dir, radiusM, severity, distM, apexSpeedKph, apexOffsetM,
+`nextCorners:[{turn, dir, radiusM, severity, distM, apexSpeedKph, exitsOntoStraight,
 suggestBrakeM}]` (the next few corners as a sequence, ordered by distance),
 `rivals:[{id, code, team, rel, gapM, gapS, lateralM, side, speedKph, closingMps,
 threat, lap}]` (sorted by gap, capped at 4), and `affordances` / `unavailable`.
 
-**The ideal line.** `apexOffsetM` is where the fast line sits at the apex (`+` =
-right of centre); `moveToApexM` is the signed lateral distance the car must move
-now to reach it (`+` = to your right). A straight reads 0 for both. This is the
-one line-placement input curvature alone can't give you.
+**No prescribed racing line.** A crude `apexOffsetM`/`moveToApexM` "fast line"
+(apex = inside edge) was removed — it is confidently wrong (late apex onto a
+straight, chicanes link). Instead the agent chooses a line from honest geometry:
+`ego.lateralM` (offset from centre), `ego.headingErrDeg`, `ahead.pts` (curvature),
+plus per corner `straightAfterM` (road to the next corner) and `exitsOntoStraight`
+(true past ~120 m) — the cue to prioritise exit, without dictating the line.
 
 **`rivals[].lateralM` is relative to the PLAYER**, not the centreline — `+` is to
-your right. Everything else is the usual convention (`+x` right of centreline,
-`+k` right-hand turn), restated in every payload's `conventions` field.
+your right. `rivals[].team` is a team **id string**, not the team object — rivals
+are the saliency-capped nearest few for a driving decision (`world().rivals`);
+for the full grid call `field()`. Everything else is the usual convention (`+x`
+right of centreline, `+k` right-hand turn), restated in every `conventions` field.
 
 `suggestBrakeM` is a **hint**, not the car's physics: it assumes ~30 m/s²
 braking and ~26 m/s² lateral grip. Treat it as a reference to check against, not
 a target.
+
+### `field({detail}?) → payload | typedError`
+
+The allocentric standings mirror of `fieldState()`/`cars()` — every car by race
+position with second-gaps, compact (team is an id string, one row per car):
+
+```js
+__apex.field({ detail: "brief" })
+// { raceState, of, lapsTarget, player:{pos,lap,gapToLeaderS,intervalS},
+//   positions:[{ pos, id, code, team, isPlayer, lap, gapToLeaderS, intervalS }, …] }
+```
+
+`detail:"full"` adds `frac`, `speedKph`, `gapToLeaderM`, `finished` per row.
+`world().rivals` is the egocentric nearest-few for the driving decision; `field()`
+answers "where is everyone". Part of agent view being the **text-native mirror of
+the whole `__apex` toolkit** — see `agentHelp()`, whose `read` section names the
+raw hooks that already return JSON (`physState`, `lightState`, `timing`, …) and
+whose `control` section names the drive/stage verbs.
 
 ### `frame({cols, rows, camera, orbit, edges, depth, rangeM, cellAspect, limit}?) → render | typedError`
 
@@ -1168,7 +1190,8 @@ Static per-track data — **fetch once per session, never per tick**.
 __apex.trackInfo({ what: "corners" }).corners
 // [{ turn:"T9-T10", frac, s, dir:"L", radiusM:134, k, sweepDeg:-168,
 //    severity:"medium", widthM, entryS, exitS, lengthM, apexSpeedKph,
-//    apexOffsetM }, …]   apexOffsetM = ideal line at the apex (+ = right)
+//    straightAfterM, exitsOntoStraight }, …]
+//    straightAfterM = road to the next corner; exitsOntoStraight past ~120 m
 ```
 
 Corners come from the curated `CircuitMarkings` apex list (real FIA turn

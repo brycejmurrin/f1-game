@@ -198,6 +198,53 @@ test.describe("world() rivals", () => {
   });
 });
 
+// ── field() ──────────────────────────────────────────────────────────────────
+// The allocentric standings mirror. The load-bearing property: it is COMPACT —
+// team is an id STRING, never the team object that world().rivals used to spread.
+
+test.describe("field()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("lists every car by position with second gaps, compactly", async ({ page }) => {
+    await load(page);
+    const f = await page.evaluate(() => window.__apex.field({ detail: "full" }));
+    expect(f.ok).not.toBe(false);
+    expect(f.of).toBeGreaterThan(1);
+    expect(f.positions.length).toBe(f.of);
+    // positions are 1..N in order, leader first
+    for (let i = 0; i < f.positions.length; i++) {
+      expect(f.positions[i].pos).toBe(i + 1);
+    }
+    expect(f.positions[0].gapToLeaderS).toBe(0);
+    // exactly one player row, and the player summary agrees with it
+    const players = f.positions.filter((r) => r.isPlayer);
+    expect(players.length).toBe(1);
+    expect(f.player.pos).toBe(players[0].pos);
+    // COMPACT: team is a string id, not the team object (the dogfood bug)
+    for (const r of f.positions) {
+      expect(["string", "object"]).toContain(typeof r.team);   // string id or null
+      expect(r.team === null || typeof r.team === "string").toBe(true);
+      expect(typeof r.code === "string" || r.code === null).toBe(true);
+    }
+    // gaps grow down the order
+    for (let i = 1; i < f.positions.length; i++) {
+      expect(f.positions[i].gapToLeaderS).toBeGreaterThanOrEqual(
+        f.positions[i - 1].gapToLeaderS - 0.01);
+    }
+  });
+
+  test("world().rivals stays compact — no team object is spread per rival", async ({ page }) => {
+    await load(page);
+    const rv = await page.evaluate(() => window.__apex.world({ detail: "full" }).rivals);
+    expect(rv.length).toBeGreaterThan(0);
+    for (const r of rv) {
+      // team must be an id string or null — NOT the {id,name,color,drivers,...} object
+      expect(r.team === null || typeof r.team === "string").toBe(true);
+      expect(r).not.toHaveProperty("drivers");
+    }
+  });
+});
+
 // ── delta mode ──────────────────────────────────────────────────────────────
 
 test.describe("world() delta mode", () => {
@@ -1045,12 +1092,19 @@ test.describe("agentHelp()", () => {
     // demoted behind render({what}), so they are NOT peer entries here.
     const listed = Object.keys(h.perceive)
       .concat(Object.keys(h.know), Object.keys(h.act)).join(" ");
-    for (const k of ["world(", "scene(", "render(", "trackInfo(",
+    for (const k of ["world(", "field(", "scene(", "render(", "trackInfo(",
                      "carView(", "survey(", "rollout(", "terminal("]) {
       expect(listed, k + " missing from agentHelp()").toContain(k);
     }
     // scene() must advertise its {visible} mode so the on-screen list is findable
     expect(listed).toContain("visible");
+    // agent view is the text-native mirror of the WHOLE __apex toolkit, so the
+    // manifest must surface the already-JSON read hooks and the control verbs —
+    // otherwise "do everything the debug hooks do" is not discoverable.
+    expect(h.read, "read hooks missing").toBeTruthy();
+    expect(JSON.stringify(h.read)).toMatch(/physState|lightState|timing/);
+    expect(h.control, "control verbs missing").toBeTruthy();
+    expect(JSON.stringify(h.control)).toMatch(/act\(|weather|jump/);
     // the deprecated rasters live in notes, not as a peer perception tool
     const notes = h.notes.join(" ");
     expect(notes).toContain("DEPRECATED");
@@ -1060,8 +1114,9 @@ test.describe("agentHelp()", () => {
     expect(notes).toContain("null");
     // the static/dynamic model note replaces the old whenToUse block
     expect(Object.keys(h.model).length).toBeGreaterThan(2);
-    // it is a manifest, not documentation — keep it cheap
-    expect(JSON.stringify(h).length).toBeLessThan(4000);
+    // it is a manifest, not documentation — keep it cheap. It now maps the whole
+    // toolkit (read hooks + control verbs), so a little larger, still bounded.
+    expect(JSON.stringify(h).length).toBeLessThan(5000);
   });
 });
 

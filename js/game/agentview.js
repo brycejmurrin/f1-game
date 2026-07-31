@@ -42,7 +42,7 @@ const AgentView = (function () {
   const SEVERITY = [[30, "hairpin"], [70, "slow"], [150, "medium"], [350, "fast"]];
   const STRAIGHT_R = 800;      // above this radius, call it a straight
   const CORNER_K = 0.004;      // |k| below this is not cornering
-  const APEX_MARGIN = 1.0;     // metres the ideal apex sits off the inside edge
+  const STRAIGHT_EXIT_M = 120; // a gap this long after a corner is "onto a straight"
 
   function severityOf(r) {
     for (const [lim, name] of SEVERITY) if (r < lim) return name;
@@ -304,22 +304,26 @@ const AgentView = (function () {
         }
         out.push(c);
       }
-      for (const c of out) {
-        c.apexOffsetM = apexOffset(c.dir, c.widthM);
+      // Honest road facts, no prescribed line. The research verdict (GT Sophy
+      // was given NO ideal line and learned it from geometry) is that a crude
+      // "apex = inside edge" hint is confidently wrong — late apex is the
+      // default onto a straight, chicanes link, the apex is a position not a
+      // point. So instead of prescribing a line we report the geometry an agent
+      // needs to CHOOSE one: how much road runs before the next corner
+      // (straightAfterM) and whether that makes this a corner to prioritise
+      // exit out of (exitsOntoStraight). Everything else the line needs —
+      // curvature ahead, width, offset from centreline, heading vs tangent — is
+      // already in world().ahead / ego.
+      const n = out.length;
+      for (let i = 0; i < n; i++) {
+        const c = out[i], nx = out[(i + 1) % n];
+        let gap = nx.entryS - c.exitS;
+        if (gap < 0) gap += G.track.total;
+        c.straightAfterM = r1(gap);
+        c.exitsOntoStraight = gap >= STRAIGHT_EXIT_M;
         delete c._entry; delete c._exit; delete c._s;
       }
       return out;
-    }
-
-    // The single planning input the research (GT Sophy's ideal-line offset) says
-    // matters most and an agent cannot derive from curvature alone: WHERE on the
-    // road the fast line sits. Modelled simply — the apex kisses the inside edge,
-    // one car-margin off it. Signed like everything else: + = right of centre.
-    // A straight has no apex, so 0 (stay on line).
-    function apexOffset(dir, widthM) {
-      if (dir !== "L" && dir !== "R") return 0;
-      const hw = (widthM || 0) / 2;
-      return r1((dir === "R" ? 1 : -1) * Math.max(0, hw - APEX_MARGIN));
     }
 
     // Fallback when a circuit has no curated turn list: local curvature maxima.
@@ -374,17 +378,18 @@ const AgentView = (function () {
       else if (distM <= brakeM) status = "BRAKE NOW for " + best.turn;
       else status = "brake in ~" + r1(distM - brakeM) + " m";
 
-      const px = (G.player && G.player.x) || 0;
       return {
         turn: best.turn, dir: best.dir, radiusM: best.radiusM,
         severity: best.severity, distM, timeS: r1(distM / v),
         apexSpeedKph: best.apexSpeedKph,
-        apexOffsetM: best.apexOffsetM,
-        moveToApexM: r1(best.apexOffsetM - px),
+        straightAfterM: best.straightAfterM,
+        exitsOntoStraight: best.exitsOntoStraight,
         suggestBrakeM: r1(brakeM), status,
         note: "suggestBrakeM assumes ~" + BRAKE_DECEL + " m/s^2 braking and ~"
-              + LAT_GRIP + " m/s^2 lateral grip — a hint, not the car's physics; "
-              + "moveToApexM is + to your right to reach the fast line",
+              + LAT_GRIP + " m/s^2 lateral grip — a hint, not the car's physics. "
+              + "No racing line is prescribed: exitsOntoStraight flags a corner "
+              + "worth prioritising exit out of; read ego.lateralM (offset from "
+              + "centre), ahead.pts (curvature) and headingErrDeg to choose a line",
       };
     }
 
@@ -406,7 +411,7 @@ const AgentView = (function () {
         return {
           turn: c.turn, dir: c.dir, radiusM: c.radiusM, severity: c.severity,
           distM: Math.max(0, r1(d)), apexSpeedKph: c.apexSpeedKph,
-          apexOffsetM: c.apexOffsetM, suggestBrakeM: r1(brakeM),
+          exitsOntoStraight: c.exitsOntoStraight, suggestBrakeM: r1(brakeM),
         };
       });
     }
@@ -441,6 +446,13 @@ const AgentView = (function () {
     // gapAhead/gapBehind in metres — correct, but an agent cannot decide which
     // side to attack from a scalar. GT Sophy encodes rivals as relative
     // position + velocity; the GT7 follow-up found orientation mattered too.
+    // Rivals are a SALIENCY-CAPPED, COMPACT list — the driving loop wants the
+    // nearest few framed relative to the car, not the whole grid (that is
+    // field()). The rule the research is loudest on: emit an IDENTIFIER, never
+    // the record. An earlier revision spread `team: c.team` — the entire team
+    // object (colour float-arrays, both drivers, stats, _cssColor) — across
+    // every rival, ~45 lines of noise each. A rival needs a name, a gap, a side
+    // and a closing rate; nothing else is actionable at 200 km/h.
     function rivals(limit) {
       const p = G.player, out = [];
       for (const c of G.cars) {
@@ -453,22 +465,82 @@ const AgentView = (function () {
         const closing = ahead ? (p.speed - c.speed) : (c.speed - p.speed);
         out.push({
           id: c.id != null ? c.id : G.cars.indexOf(c),
-          code: c.code || null, team: c.team || null,
+          code: c.code || null,
+          team: teamIdOf(c),                     // a string id, NOT the object
           rel: ahead ? "ahead" : "behind",
           gapM: r1(gapM),
           gapS: r2(gapM / Math.max(p.speed, 5)),
           lateralM: r1(lateralM),
           side: lateralM > 0.5 ? "right" : lateralM < -0.5 ? "left" : "same line",
-          speedKph: r1(c.speed * 3.6),
           closingMps: r1(closing),
           threat: !ahead && gapM < 25 && closing > 0.5 ? "under attack"
                 : ahead && gapM < 25 && closing > 0.5 ? "closing"
                 : gapM < 25 ? "in range" : "clear",
-          lap: c.lap,
         });
       }
       out.sort((a, b) => a.gapM - b.gapM);
       return limit ? out.slice(0, limit) : out;
+    }
+
+    // A car's team as a stable string id, never the team OBJECT. Cars carry
+    // team as either an id string or the resolved Teams record (js/game.js
+    // makeCars), so normalise both to the id.
+    function teamIdOf(c) {
+      const t = c && c.team;
+      if (!t) return null;
+      return (typeof t === "object" ? (t.id || t.short || null) : t);
+    }
+
+    // ── field() — the whole grid, compact ────────────────────────────────────
+    // The text-native mirror of __apex.fieldState()/cars(): race order with
+    // gaps. world().rivals is the SALIENCY-CAPPED egocentric few for the driving
+    // decision; this is the ALLOCENTRIC standings table — every car, by
+    // position, with gap-to-leader and interval to the car ahead. Still compact:
+    // team is an id string, one row per car, no nested records.
+    function field(opts) {
+      const bad = notReady();
+      if (bad) return bad;
+      const o = opts || {};
+      const detail = o.detail || "brief";
+      const total = G.track.total;
+      const sorted = G.cars.slice().sort((a, b) => b.prog - a.prog);
+      const leader = sorted[0];
+      const rows = sorted.map((c, i) => {
+        const ahead = sorted[i - 1];
+        const gapLeadM = leader.prog - c.prog;
+        const intervalM = ahead ? ahead.prog - c.prog : 0;
+        const v = Math.max(c.speed || 0, 5);
+        const row = {
+          pos: i + 1,
+          id: c.id != null ? c.id : G.cars.indexOf(c),
+          code: c.code || null,
+          team: teamIdOf(c),
+          isPlayer: !!c.isPlayer,
+          lap: c.lap || 0,
+          gapToLeaderS: i === 0 ? 0 : r2(gapLeadM / Math.max(leader.speed || v, 5)),
+          intervalS: i === 0 ? 0 : r2(intervalM / v),
+        };
+        if (detail !== "brief") {
+          row.frac = +(c.s / total).toFixed(4);
+          row.speedKph = r1((c.speed || 0) * 3.6);
+          row.gapToLeaderM = r1(gapLeadM);
+          row.finished = !!c.finished;
+        }
+        return row;
+      });
+      const playerRow = rows.find((r) => r.isPlayer);
+      return {
+        apiVersion: API_VERSION, seq: ++seq, t: r2(G.raceT || 0),
+        raceState: G.state,
+        of: G.cars.length,
+        lapsTarget: G.lapsTarget || null,
+        player: playerRow ? { pos: playerRow.pos, lap: playerRow.lap,
+                              gapToLeaderS: playerRow.gapToLeaderS,
+                              intervalS: playerRow.intervalS } : null,
+        positions: rows,
+        note: "allocentric race order; gaps in seconds. world().rivals is the "
+              + "egocentric nearest-few for a driving decision",
+      };
     }
 
     // ── affordances ─────────────────────────────────────────────────────────
@@ -2197,34 +2269,37 @@ const AgentView = (function () {
         // is what an agent reads to DECIDE; render() is the one optional raster,
         // demoted to a coarse composition aid because character grids read worse
         // than the structured numbers they are drawn from.
+        // Agent view is the TEXT-NATIVE mirror of the __apex debug toolkit:
+        // everything a developer inspects with the hooks + screenshots, in text.
+        // The curated calls below COMPOSE and render the spatial/visual things a
+        // dev would screenshot; the raw read hooks under `read` already return
+        // clean JSON, so call those directly; `control` is the verbs.
         perceive: {
           "world({detail,horizonS,points,corners,since})":
             "WHERE AM I — dynamic egocentric snapshot; the spine, read per tick. "
-            + "detail brief|drive|full; drive adds the ideal line "
-            + "(nextCorner.moveToApexM) + the corner sequence; `since` returns "
-            + "only what changed",
+            + "detail brief|drive|full; drive adds the corner sequence + honest "
+            + "geometry (lateralM, headingErrDeg, curvature ahead) to choose a "
+            + "line from; `since` returns only what changed",
+          "field({detail})":
+            "THE GRID — allocentric race order: every car by position with gap-to-"
+            + "leader and interval (seconds). world().rivals is the egocentric few",
           "scene({radius,kinds,limit} | {visible:true})":
             "WHAT IS AROUND ME — named scenery by distance and bearing. Default "
-            + "is a radius around the CAR; {visible:true} switches to the "
-            + "CAMERA's on-screen list (the old visible())",
+            + "is a radius around the CAR; {visible:true} = the CAMERA's on-screen list",
           "render({what,...})":
-            "SHOW IT — the one optional raster, APPROXIMATE. what: 'view' (the "
-            + "camera view, any of 13 modes, edges/depth), 'map' (top-down, "
-            + "car-up, metric index), 'circuit' (the whole track as a document), "
-            + "'car' (measured elevations). For intuition/debugging, not "
-            + "measurement — read geometry from world()/scene()/trackInfo()",
+            "SHOW IT — the one optional raster, APPROXIMATE. what: 'view'|'map'|"
+            + "'circuit'|'car'. For intuition/debugging, not measurement",
         },
         know: {
           "trackInfo({what})":
-            "STATIC substrate — corners|sectors|profile|all. Constant for a "
-            + "session: fetch ONCE, never per tick. Corners carry apexOffsetM "
-            + "(the ideal line at each apex)",
+            "STATIC substrate — corners|sectors|profile|all. Fetch ONCE. Corners "
+            + "carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no line)",
           "carView({team,parts,detail})":
-            "WHAT AM I DRIVING — team, parts spec and effects, chassis "
-            + 'silhouette, measured geometry; detail:"parts" adds per-part boxes',
+            "WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, "
+            + 'measured geometry; detail:"parts" adds per-part boxes',
           "survey({at,lats,reachM,limit,profile})":
-            "IS ANYTHING BROKEN — floating/buried props, props over the racing "
-            + "line, terrain through the road, holes and cliffs in the ground",
+            "IS ANYTHING BROKEN — floating/buried props, props over the line, "
+            + "terrain through the road, holes and cliffs",
         },
         act: {
           "rollout({seconds,dt,input,policy,policyHz,samples})":
@@ -2232,16 +2307,30 @@ const AgentView = (function () {
           "terminal()": "{done, reason} — finished|wrong_way|rescued|null",
           "agentHelp()": "this manifest",
         },
+        // These __apex hooks ALREADY return clean JSON — call them directly, no
+        // agent-view wrapper needed. Grouped by what you inspect.
+        read: {
+          telemetry: "probe() physState() obs() scan() inputState() cars() carAt(i)",
+          timing: "timing() sectorState() lapHistory() fieldState()",
+          rendering: "camState() viewState() lightState() gpuTimer() lightTune()",
+          geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l)",
+          catalog: "tracks() teams() info()",
+        },
+        // The control verbs — call on __apex to stage/drive the sim; read the
+        // result back with world()/field()/the hooks above.
+        control: {
+          stage: 'race(id) go() jump(frac,speed,x) park(f) reset(f,v,x) finishRace()',
+          drive: "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()",
+          world: "weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool)",
+          field: "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)",
+        },
         model: {
-          "static vs dynamic": "trackInfo() + carView() are constant for the "
-            + "session — fetch once. world() + scene() are the live frame — read "
-            + "per decision. Never poll trackInfo per tick",
-          "decide vs show": "read world()/scene()/trackInfo() to DECIDE; call "
-            + "render() only to SEE — its glyphs are approximate and read worse "
-            + "than the numbers they came from",
+          "static vs dynamic": "trackInfo()+carView() are constant — fetch once. "
+            + "world()+field()+scene() are the live frame — read per decision",
+          "decide vs show": "read world()/scene()/trackInfo()/the read hooks to "
+            + "DECIDE; call render() only to SEE — its glyphs are approximate",
           "per tick": 'world({detail:"brief", since:<seq>}) — ~355 bytes/step, '
-            + "34x cheaper than full. detail is the big lever; `since` only pays "
-            + "on brief or a static scene (measured: 1.2x on drive while moving)",
+            + "34x cheaper than full. detail is the big lever",
         },
         setup: ['__apex.race("monza")', "__apex.go()", "__apex.jump(0.1, 55)"],
         loop: "world() -> decide -> rollout({seconds, policy}) -> read the digest",
@@ -2251,13 +2340,10 @@ const AgentView = (function () {
           "no agent hook returns null — failures are {ok:false, error, message, fix}",
           "an LLM cannot decide at 60 Hz: rollout runs your policy at policyHz "
             + "(default 10) while physics runs every tick",
-          "render({what:'view'|...}) and scene({visible:true}) reflect the LAST "
-            + "RENDERED frame and are stale under headless(true) — flagged when so",
-          "render rasterises axis-aligned boxes, so tree canopies (really cones) "
-            + "over-cover and sky is under-reported in wooded scenes",
+          "render({what}) and scene({visible:true}) reflect the LAST RENDERED "
+            + "frame and are stale under headless(true) — flagged when so",
           "frame()/plan()/worldModel()/visible() remain as DEPRECATED aliases — "
-            + "prefer render({what}) and scene({visible}); the ~89 __apex hooks "
-            + "are the underlying dev console and still work",
+            + "prefer render({what}) and scene({visible})",
         ],
       };
     }
@@ -2579,8 +2665,8 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, trackInfo, scene, carView, render, survey, rollout, agentHelp,
-             corners, terminal,
+    return { world, field, trackInfo, scene, carView, render, survey, rollout,
+             agentHelp, corners, terminal,
              // deprecated aliases — prefer render({what}) and scene({visible})
              visible, worldModel, frame, plan,
              API_VERSION, PHYSICS_VERSION };

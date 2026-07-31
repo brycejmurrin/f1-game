@@ -1443,6 +1443,13 @@ const api = {
   // Unlike the hooks above this returns a typed error object, never null.
   world(opts) { return agentView.world(opts); },
 
+  // field({detail}?) — the whole grid as text: race order, gap-to-leader and
+  // interval (seconds), lap, per car — the allocentric standings mirror of
+  // fieldState()/cars(). world().rivals is the egocentric nearest-few for a
+  // driving decision; this is every car by position. Compact: team is an id
+  // string, one row per car, no nested records.
+  field(opts) { return agentView.field(opts); },
+
   // trackInfo({what}) — STATIC per-track data: "corners" (def) | "sectors" |
   // "profile" | "all". Constant for a session — fetch once, never per tick.
   trackInfo(opts) { return agentView.trackInfo(opts); },

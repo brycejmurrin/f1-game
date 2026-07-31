@@ -8,9 +8,9 @@
 //
 //   • a NAIVE baseline (full throttle, no steering) — sees nothing, drives off
 //     at the first corner;
-//   • a RELATIONAL policy that consumes ONLY world({detail:"drive"}) fields —
-//     headingErrDeg to follow the road, nextCorner.moveToApexM for the racing
-//     line, nextCorner.status to know when to brake.
+//   • a RELATIONAL policy that consumes ONLY honest world({detail:"drive"})
+//     geometry — headingErrDeg to follow the road, lateralM to stay centred,
+//     nextCorner.status to know when to brake. No prescribed racing line.
 //
 // If the relational fields carry actionable signal, the second policy travels
 // materially farther. This is the regression guard the redesign hangs on: if a
@@ -46,10 +46,12 @@ async function episode(page, policy) {
         const w = A.world({ detail: "drive" });
         const he = w.ego.headingErrDeg || 0;
         const nc = w.nextCorner;
-        const toLine = nc ? (nc.moveToApexM || 0) : 0;
-        // Correct heading back to the tangent, and bias toward the fast line.
-        // + steer = right; + headingErrDeg = nose points right, so subtract it.
-        const steer = clamp(-he / 12 + toLine / 12, -1, 1);
+        const lat = w.ego.lateralM || 0;
+        // Honest geometry only — no prescribed line. Follow the road (cancel the
+        // heading error against the tangent) and stay roughly centred (pull back
+        // toward the centreline). + steer = right; + headingErrDeg = nose points
+        // right, so subtract it; + lateralM = car is right of centre, so subtract.
+        const steer = clamp(-he / 12 - lat / 14, -1, 1);
         const braking = !!(nc && /^BRAKE NOW/.test(nc.status));
         input = { steer, throttle: !braking, brake: braking };
       }
@@ -86,35 +88,39 @@ test.describe("agent drive bench — the fields are actionable", () => {
   }
 });
 
-test.describe("agent drive bench — the ideal line is coherent", () => {
+test.describe("agent drive bench — the geometry is honest, not a prescribed line", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("apexOffsetM points to the inside of the corner", async ({ page }) => {
+  test("no racing line is prescribed — apexOffsetM/moveToApexM are gone", async ({ page }) => {
+    await boot(page, "monza");
+    const r = await page.evaluate(() => {
+      const corners = window.__apex.trackInfo({ what: "corners" }).corners;
+      window.__apex.go();
+      window.__apex.jump(0.05, 60, 0);
+      const w = window.__apex.world({ detail: "drive" });
+      return { corner: corners[0], nc: w.nextCorner };
+    });
+    // The confidently-wrong "apex = inside edge" hint must not be back.
+    expect(r.corner).not.toHaveProperty("apexOffsetM");
+    expect(r.nc).not.toHaveProperty("apexOffsetM");
+    expect(r.nc).not.toHaveProperty("moveToApexM");
+  });
+
+  test("corners carry honest road facts: straightAfterM and exitsOntoStraight", async ({ page }) => {
     await boot(page, "monza");
     const corners = await page.evaluate(() =>
       window.__apex.trackInfo({ what: "corners" }).corners);
-    const turns = corners.filter((c) => c.dir === "L" || c.dir === "R");
-    expect(turns.length).toBeGreaterThan(4);
-    for (const c of turns) {
-      // Right corners apex to the right (+), left corners to the left (−).
-      if (c.dir === "R") expect(c.apexOffsetM).toBeGreaterThan(0);
-      else expect(c.apexOffsetM).toBeLessThan(0);
-      // and never asks the car past its own half of the road
-      expect(Math.abs(c.apexOffsetM)).toBeLessThanOrEqual(c.widthM / 2);
+    let flaggedStraight = 0;
+    for (const c of corners) {
+      expect(typeof c.straightAfterM).toBe("number");
+      expect(c.straightAfterM).toBeGreaterThanOrEqual(0);
+      expect(typeof c.exitsOntoStraight).toBe("boolean");
+      // the flag must agree with the metric it is derived from
+      expect(c.exitsOntoStraight).toBe(c.straightAfterM >= 120);
+      if (c.exitsOntoStraight) flaggedStraight++;
     }
-  });
-
-  test("moveToApexM is the signed gap from the car to the fast line", async ({ page }) => {
-    await boot(page, "monza");
-    const r = await page.evaluate(() => {
-      window.__apex.go();
-      window.__apex.jump(0.05, 60, 3);            // sit 3 m right of centre
-      const w = window.__apex.world({ detail: "drive" });
-      return { nc: w.nextCorner, x: w.ego.lateralM };
-    });
-    expect(r.nc).toBeTruthy();
-    // moveToApexM = apexOffsetM − lateralM, to within rounding
-    expect(r.nc.moveToApexM).toBeCloseTo(r.nc.apexOffsetM - r.x, 0);
+    // Monza is straights-and-chicanes — several corners must open onto a straight
+    expect(flaggedStraight).toBeGreaterThan(2);
   });
 
   test("nextCorners previews the sequence, ordered by distance", async ({ page }) => {
@@ -132,7 +138,8 @@ test.describe("agent drive bench — the ideal line is coherent", () => {
     for (const c of seq) {
       expect(c).toHaveProperty("turn");
       expect(c).toHaveProperty("apexSpeedKph");
-      expect(c).toHaveProperty("apexOffsetM");
+      expect(c).toHaveProperty("exitsOntoStraight");
+      expect(c).not.toHaveProperty("apexOffsetM");
     }
   });
 });

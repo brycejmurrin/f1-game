@@ -197,12 +197,12 @@ The egocentric snapshot. `brief` is what a control loop reads each tick.
                      "state": "62% of lateral grip used, trail-braking" } },
   "nextCorner": { "turn": "T7", "name": "Ascari", "dir": "L", "radiusM": 52,
                   "severity": "medium", "distM": 84, "timeS": 1.7,
-                  "apexSpeedKph": 148, "apexOffsetM": -4.2, "moveToApexM": -2.8,
+                  "apexSpeedKph": 148, "straightAfterM": 190, "exitsOntoStraight": true,
                   "suggestBrakeM": 62, "status": "brake in ~22 m" },
   "nextCorners": [ { "turn": "T7", "dir": "L", "distM": 84, "apexSpeedKph": 148,
-                     "apexOffsetM": -4.2, "suggestBrakeM": 62 },
+                     "exitsOntoStraight": true, "suggestBrakeM": 62 },
                    { "turn": "T8-T9", "dir": "R", "distM": 260, "apexSpeedKph": 96,
-                     "apexOffsetM": 4.0, "suggestBrakeM": 110 } ],
+                     "exitsOntoStraight": false, "suggestBrakeM": 110 } ],
   "ahead": { "horizonS": 4.0, "pts": [ {"d":20,"r":"straight"},
                                        {"d":84,"r":52,"dir":"L","turn":"T7"} ] },
   "rivals": [ { "id": 3, "rel": "ahead", "gapM": 22.4, "gapS": 0.46,
@@ -281,20 +281,28 @@ driving code executes at 60 Hz.
 
 `__apex` itself stays exactly as it is. This is a layer, not a replacement.
 
-### The ideal line (`apexOffsetM` / `moveToApexM`)
+### No prescribed racing line — honest geometry instead
 
-The one planning input the machine-observation research (GT Sophy's ideal-line
-offset) singles out as decisive and an agent *cannot* derive from curvature
-alone: **where on the road the fast line sits.** Modelled simply — the apex
-kisses the inside edge, one car-margin off it — and signed like everything else
-(`+` = right of centre). `nextCorner.apexOffsetM` is the target lateral position
-at the apex; `moveToApexM` is the signed distance the car must move *now* to
-reach it (`+` = to your right). A straight has no apex, so both read 0 — stay on
-line. `nextCorners` previews the same fields for the next few corners, so an
-agent can plan a braking/line phase over a horizon rather than reacting to one
-corner. The `agent-drive-bench` spec proves these fields are actionable: a fixed
-policy reading only `headingErrDeg` + `moveToApexM` + `status` drives well past
-1.5× the distance of a blind baseline before leaving the road.
+An earlier revision shipped `apexOffsetM` / `moveToApexM`, a prescribed "fast
+line" modelled as *the apex kisses the inside edge*. The machine-observation
+research is clear that this is **confidently wrong**: the correct apex is a
+*position along the arc* (late apex is the default onto a straight — slower
+entry, earlier throttle), chicanes and double-apexes are *linked sequences* you
+compromise across, and tellingly GT Sophy was given **no** ideal line at all —
+just honest geometry — and learned the line. A prescribed line that is wrong is
+worse than none, so it was removed.
+
+Instead the agent gets the geometry to **choose** a line, which is already most
+of what it needs: `ego.lateralM` (offset from centre), `ego.headingErrDeg`
+(heading vs the tangent), `world().ahead.pts` (curvature/width over a
+velocity-scaled horizon), and per corner `radiusM` + `apexSpeedKph`. Added to
+that, two honest road facts an agent would otherwise have to integrate for
+itself: `nextCorner.straightAfterM` (metres of road from this corner's exit to
+the next corner) and `exitsOntoStraight` (true past ~120 m) — the cue that a
+corner is worth prioritising exit out of, without dictating how. `nextCorners`
+previews the same over the next few corners. The `agent-drive-bench` spec drives
+a fixed policy on *honest geometry only* (`headingErrDeg` + `lateralM` +
+`status`) well past 1.5× a blind baseline.
 
 ## 5. Phasing
 
@@ -530,6 +538,39 @@ And the one photometric idea worth keeping is the one that is *measured* rather
 than modelled: a depth channel. The raster already builds a depth buffer to
 solve occlusion, so reading it out costs nothing, it is a genuine render target,
 and interpreting "3" as seven metres needs no shape recognition at all.
+
+## 5h. Agent view as the text-native debug mirror
+
+The clarifying frame, arrived at late: agent view is not "a driving observation"
+— it is the **text-native mirror of the whole `__apex` debug toolkit**.
+Everything a developer inspects with the ~90 hooks and screenshots, an agent
+should do in text. That reframes the surface into three kinds of thing:
+
+1. **Curated calls that COMPOSE and render** the spatial/visual questions a dev
+   would otherwise screenshot: `world()`, `field()`, `scene()`, `trackInfo()`,
+   `carView()`, `render()`, `survey()`.
+2. **Raw read hooks that already return clean JSON** — `physState()`,
+   `lightState()`, `camState()`, `viewState()`, `timing()`, `cars()`, … — which
+   need no wrapper; the agent calls them directly. `agentHelp().read` names them.
+3. **Control verbs** — `act()`, `jump()`, `weather()`, `setTimeOfDay()`, … —
+   surfaced in `agentHelp().control` so they are discoverable, not guessed.
+
+Two concrete products of the reframe:
+
+- **`field({detail})`** — the allocentric standings mirror of `fieldState()`:
+  every car by position with gap-to-leader and interval in seconds.
+  `world().rivals` stays the *egocentric*, saliency-capped nearest-few for a
+  driving decision; `field()` answers "where is everyone".
+- **Compact rivals.** Dogfooding the live `world()` caught the accreted
+  anti-pattern every research stream warns against: each rival was spreading the
+  entire team **object** (colour float-arrays, both drivers, stats, `_cssColor`)
+  — ~180 lines of noise around ~5 useful fields. Rivals (and `field()` rows) now
+  carry a team **id string**. The `world({drive})` payload dropped from ~5 KB to
+  ~2.7 KB, and it reads.
+
+The rule the whole redesign enforces: **emit an identifier, never the record**;
+compact, egocentric, saliency-capped; render what you *read*, expose what you
+*do*.
 
 ## 6. Open questions
 

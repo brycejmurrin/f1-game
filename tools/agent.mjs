@@ -33,6 +33,7 @@ const COMMANDS = {
   help: "the agent surface manifest — no track needed",
   world: "egocentric snapshot   --detail brief|drive|full  --horizon <s>  --points <n>",
   track: "static track data     --what corners|sectors|profile|all",
+  field: "the grid / standings  --detail brief|full",
   scene: "named scenery nearby  --radius <m>  --kinds a,b  --limit <n>  (--visible = on-screen)",
   render: "the ONE raster aid  --what view|map|circuit|car  --cols <n>  --camera <mode>  (APPROXIMATE)",
   rollout: "drive an interval   --seconds <s>  --steer <-1..1>  --throttle  --brake  --samples <n>",
@@ -148,6 +149,8 @@ const opts = {
           return a.world({ detail: o.detail, horizonS: o.horizonS, points: o.points });
         case "track":
           return a.trackInfo({ what: o.what });
+        case "field":
+          return a.field({ detail: o.modelDetail === "full" ? "full" : "brief" });
         case "scene":
           if (o.visibleFlag) return a.scene({ visible: true, limit: o.limit || undefined });
           return a.scene({ radius: o.radius, limit: o.limit || undefined,
