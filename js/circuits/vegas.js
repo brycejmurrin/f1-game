@@ -445,7 +445,7 @@
       // lake, and the jet run (was one 40 m-deep building, a 110x44 m patch and
       // 8 jets bunched into 20 m) to actually span it.
       building(K(0.68), 1, 40, 60, 55, 62, { wall: [0.58, 0.55, 0.50], window: [1.0, 0.85, 0.40], floor: 7 });
-      place(K(0.68), 1, 22, [95, 2.0, 12], [1.0, 0.75, 0.20]);
+      place(K(0.68), 1, 52, [95, 2.0, 12], [1.0, 0.75, 0.20]);   // dist cleared past sz[0]/2 — was silently suppressed
       // Jets spread and height-varied across the full frontage (was 8 jets in a
       // tight 20 m cluster) — a real Bellagio show has jets of very different
       // reach, not a uniform picket line.

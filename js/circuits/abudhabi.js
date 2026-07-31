@@ -238,6 +238,38 @@
       gantry(0.0, 9, DARK);
 
       // ===================================================================
+      // s 0.03-0.06 R — PIT-EXIT TUNNEL: Yas Marina's pit lane surfaces via a
+      // tunnel UNDER the main straight — an F1 first, and this circuit's
+      // single most distinctive "spot the reference" feature. Was entirely
+      // absent. Modelled as a dark portal mouth set back behind the pit
+      // garage row, plus a shallow sunken apron leading into it; guarded as
+      // one atomic model (modelGroup) so its footprint never reaches the
+      // racing line.
+      // ===================================================================
+      {
+        const tk = K(0.045);
+        const a = anchor(tk, 1, 40);
+        const b = [a.r, a.u, a.t];
+        modelGroup("abudhabi:pit-exit-tunnel-portal", {
+          center: vadd(a.c, a.u, 3.5), size: [14, 7, 8], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          // Portal headwall — the pit lane road disappears into this mass
+          addBox(stage, vadd(a.c, a.u, 3.5), [14, 7, 8], [0.30, 0.30, 0.32], b);
+          stage._mat = 0;
+          // Near-black recessed mouth so the opening reads as a hole, not a
+          // painted panel
+          addBox(stage, vadd(vadd(a.c, a.u, 2.6), a.t, 1.2), [10, 5.5, 5.6],
+            [0.02, 0.02, 0.03], b);
+        }, { required: true });
+        // Shallow sunken apron between the track edge and the portal — sells
+        // the grade change of the road dipping to meet the tunnel without a
+        // real drivable underpass mesh.
+        groundPatch(tk, 1, 6, [20, 0.5, 16], [0.16, 0.16, 0.18],
+          { id: "abudhabi:pit-exit-trench", samples: 6 });
+      }
+
+      // ===================================================================
       // s 0.05 L — Turn 1 + esses: WEST GRANDSTAND begins — sandstone
       // livery, flat roof (reads distinctly from Main's cantilever + suites)
       // ===================================================================
