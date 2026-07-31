@@ -1,8 +1,121 @@
 @layer components {
-/* Apex 26 — shared components: .bigbtn/.panel, pause menu, settings sub-menu, advanced shell.
-   Split from css/style.css (lines 63-131 of the original); the <link>
-   order in index.html preserves the original source order, so the cascade
-   is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
+/* Apex 26 — THE MENU SYSTEM.
+   Three primitives that every menu is built from. Screens used to each invent
+   their own box model and then get patched per viewport, which is how content
+   ended up under the Dynamic Island and how primary buttons ended up below the
+   fold. Now:
+
+     .screen   a full-viewport overlay, inset by the OS safe area, that centres
+     .sheet    a card with a fixed head, ONE scrolling body and a pinned foot
+     .pane     a scroll region that says so (fade at the edge that has more)
+
+   Two rules keep it honest:
+     * DENSITY (padding, tap size, label size) comes from tokens and is the only
+       thing a viewport media query may change — see css/tokens.css.
+     * LAYOUT (column counts, what moves into the header) comes from container
+       queries on the sheet, so a panel reacts to the room it actually has
+       rather than to a guess about the device. */
+
+/* ---------- screen: full-viewport overlay ---------- */
+.screen {
+  position: fixed; inset: 0;
+  display: grid;
+  place-items: center;
+  /* The safe-area padding is the point of this class. viewport-fit=cover means
+     the viewport includes the notch and the home indicator; anything centred
+     without this padding is centred under hardware. */
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  overscroll-behavior: contain;
+}
+
+/* ---------- sheet: head / body / foot ---------- */
+.sheet {
+  display: grid;
+  /* body is the only flexible row, and minmax(0,…) lets it actually shrink —
+     without the 0 floor a long list forces the sheet past the screen instead
+     of scrolling inside it */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(100%, var(--sheet-w, 520px));
+  max-height: 100%;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--r-lg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  /* the query container for every layout decision inside this sheet */
+  container: sheet / inline-size;
+}
+/* Head and foot are CHROME: every pixel they take is a pixel the list below
+   does not get, and on a 393px-tall screen that is the difference between four
+   circuits visible and two. Both are deliberately thin. */
+.sheet-head {
+  padding: calc(var(--pad) * 0.55) var(--pad) calc(var(--pad) * 0.25);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--gap); flex-wrap: wrap;
+}
+/* Title scales with the viewport HEIGHT, which is the axis that is scarce on a
+   phone held sideways — a fixed 24px title costs the same as a row of the list
+   it is sitting above. */
+.sheet-head h2 { color: var(--red); margin: 0; font-size: clamp(15px, 3.6vh, 24px); }
+.sheet-body {
+  min-height: 0;
+  padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5);
+}
+.sheet-foot {
+  display: flex; align-items: center; gap: var(--gap);
+  padding: calc(var(--pad) * 0.35) var(--pad);
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(10, 10, 16, 0.96);
+}
+.sheet-foot .bigbtn {
+  width: auto; min-width: 110px; margin: 0; flex: 0 1 auto;
+  /* same reasoning as the title: on a 393px-tall screen a 20px/14px button is
+     ~54px of the ~230px the content has to live in */
+  font-size: clamp(13px, 3.6vh, 20px);
+  padding: clamp(7px, 1.8vh, 14px) 16px;
+}
+/* Secondary actions sit at the far end of the bar, away from the primary. */
+.sheet-foot .foot-end { margin-left: auto; display: flex; gap: var(--gap); }
+
+/* ---------- pane: a scroll region ---------- */
+.pane {
+  overflow-y: auto;
+  /* overflow-x is pinned to hidden ON PURPOSE. Setting only overflow-y computes
+     the other axis from `visible` to `auto`, which quietly makes the region
+     horizontally scrollable — one over-wide child then drags the whole column
+     sideways and content disappears behind the edge. */
+  overflow-x: hidden;
+  /* stop a flick at the end of a list from chaining into whatever is behind it */
+  overscroll-behavior-y: contain;
+  /* reserve the desktop scrollbar so content does not jump sideways the moment
+     a list grows past its box */
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+/* .sf-t / .sf-b are set by js/game/scrollfade.js on exactly the panes that
+   currently have content hidden above / below. No class = no mask, so a pane
+   whose content fits is never faded: the fade always means something. */
+.sf-t, .sf-b {
+  --sfade-t: 0px; --sfade-b: 0px;
+  mask-image: linear-gradient(to bottom,
+    transparent 0, #000 var(--sfade-t),
+    #000 calc(100% - var(--sfade-b)), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom,
+    transparent 0, #000 var(--sfade-t),
+    #000 calc(100% - var(--sfade-b)), transparent 100%);
+}
+.sf-t { --sfade-t: 20px; }
+.sf-b { --sfade-b: 20px; }
+
+/* ---------- section label ---------- */
+.sel-label {
+  color: var(--dim);
+  font-size: var(--label); font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: 0 0 calc(var(--gap) * 0.5);
+}
+
+/* ---------- buttons ---------- */
 .bigbtn {
   display: block;
   width: min(78vw, 340px);
@@ -15,60 +128,91 @@
   transform: skewX(-6deg);
   box-shadow: 0 4px 18px rgba(225, 6, 0, 0.4);
 }
-.bigbtn:hover { background: linear-gradient(135deg, #ff2010 0%, #c50000 100%); box-shadow: 0 6px 24px rgba(225,6,0,0.6); }
-.bigbtn.alt { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.14); color: rgba(242,242,245,0.72); box-shadow: none; border: 1px solid rgba(255,255,255,0.14); }
-.bigbtn.alt:hover { background: rgba(255, 255, 255, 0.16); box-shadow: none; }
-
-.panel {
-  position: fixed;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  background: var(--panel);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
-  padding: 22px 26px;
-  z-index: 30;
-  max-width: min(92vw, 520px);
-  max-height: 86vh;
-  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+/* Hover gated on a hover-capable pointer (see css/tokens.css); :active is the
+   press state — this layer outranks the base button:active, so without these
+   the big menu buttons had NO press feedback on touch. */
+@media (hover: hover) {
+  .bigbtn:hover { background: linear-gradient(135deg, #ff2010 0%, #c50000 100%); box-shadow: 0 6px 24px rgba(225,6,0,0.6); }
 }
-.panel h2 { color: var(--red); margin-bottom: 14px; }
-.panel button { display: block; width: 100%; margin: 8px 0; }
+.bigbtn:active { background: linear-gradient(135deg, #ff2010 0%, #c50000 100%); box-shadow: 0 2px 10px rgba(225,6,0,0.5); transform: skewX(-6deg) scale(0.97); }
+.bigbtn.alt { background: rgba(255,255,255,0.06); color: rgba(242,242,245,0.72); box-shadow: none; border: 1px solid rgba(255,255,255,0.14); }
+@media (hover: hover) {
+  .bigbtn.alt:hover { background: rgba(255, 255, 255, 0.16); box-shadow: none; }
+}
+.bigbtn.alt:active { background: rgba(255, 255, 255, 0.2); box-shadow: none; }
+
+/* Tap targets. Listed by control class rather than a blanket `.panel button`
+   so the deliberately dense LIGHTING TUNER rows keep their own sizing. */
+.bigbtn, .sel-edit,
+.sheet-body > button, .pm-group button,
+#advanced-inner :is(.opt-btn, .preset-btn),
+.cs-tab, .cs-opt, #campicker button, .cs-unlimited-btn, .adv-more-btn {
+  min-height: var(--tap);
+}
+/* Chips are text-sized boxes: they need the centring, and a one-character
+   label ("3", "5" laps) still needs a thumb-sized box. */
+.sel-chip, .sel-edit {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--chip-h); min-width: var(--chip-h);
+}
+
+/* ---------- dialog sheets (pause menu, settings, results, …) ---------- */
+/* Every one of these is `.screen > .sheet`; only the width differs. */
+#pausemenu   { --sheet-w: 420px; }
+#pmsettings  { --sheet-w: 760px; }
+#results     { --sheet-w: 600px; }
+#standings   { --sheet-w: 560px; }
+#howtoplay   { --sheet-w: 700px; }
+#advanced    { --sheet-w: 820px; }
+#race-settings { --sheet-w: 560px; }
+#customize   { --sheet-w: 560px; }
+
+/* Dialogs stack over a full screen (the team picker sits on the select screen),
+   so the scrim has to actually separate them — 0.6 left the sheet looking
+   washed with the menu behind it reading through. */
+.screen.dim { background: rgba(0, 0, 0, 0.72); }
+#pausemenu { z-index: 30; }
+#pmsettings { z-index: 35; }
+#results, #standings, #race-settings, #customize { z-index: 30; }
+#howtoplay { z-index: 40; }
+#advanced { z-index: 41; }
+
+/* One-per-line stacks (pause menu, settings groups, results actions). */
+.stack { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
+.stack button { width: 100%; margin: 0; }
+
 #pm-resume { background: var(--red); color: #fff !important; border-color: var(--red); font-weight: 700; font-size: 15px; }
 #pm-standings { border-color: #f6d200; color: #f6d200; }
 #pm-settings { border-color: var(--red); color: var(--red); }
 
-/* ---------- settings sub-menu (opened from the pause menu) ---------- */
-/* Full-screen overlay like #advanced; sits above the pause menu but below the
-   advanced-steering / lighting-tuner panels that open on top of it. */
-#pmsettings { position: fixed; inset: 0; z-index: 35; background: rgba(0, 0, 0, 0.6); }
-#pmsettings-inner { width: min(94vw, 520px); }
-/* Grouped controls: DRIVING / AUDIO / DISPLAY, so 11 toggles read as three
-   short scannable lists instead of one long undifferentiated stack. The groups
-   are the panel's scroll region — SETTINGS title and BACK stay fixed, so the
-   way out never scrolls off screen. */
-#pmsettings-inner { display: flex; flex-direction: column; overflow: hidden; }
-#pmsettings-inner h2,
-#pm-settings-close { flex-shrink: 0; }
-.pm-groups {
-  display: flex; flex-direction: column; gap: 15px; margin: 6px 0 2px;
-  overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch;
-}
+/* ---------- settings sub-menu ----------
+   DRIVING / AUDIO / DISPLAY read as three short lists instead of one
+   undifferentiated stack of eleven toggles. The column count is a property of
+   how wide the sheet is, not of the device: one column when narrow, three the
+   moment there is room — which is what stops the landscape phone from hiding
+   MUSIC behind the BACK button. */
+.pm-groups { display: grid; grid-template-columns: 1fr; gap: var(--gap); align-items: start; }
 .pm-group { display: flex; flex-direction: column; }
 .pm-group-h {
   color: var(--red); font-size: 11px; font-weight: 700; letter-spacing: 0.11em;
-  margin: 0 0 7px; padding-bottom: 4px;
+  margin: 0 0 6px; padding-bottom: 4px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
-.pm-group button { margin: 4px 0; }
-#pm-settings-close { margin-top: 16px; border-color: var(--red); color: var(--red); }
+.pm-group button { margin: 3px 0; width: 100%; }
+@container sheet (min-width: 420px) {
+  .pm-groups { grid-template-columns: 1fr 1fr; }
+}
+@container sheet (min-width: 620px) {
+  .pm-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #pmsettings-inner button { font-size: 12px; padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+#pm-settings-close { border-color: var(--red); color: var(--red); }
 
-/* ---------- advanced steering panel ---------- */
-#advanced { position: fixed; inset: 0; z-index: 41; background: rgba(0, 0, 0, 0.6); }
-#advanced-inner { width: min(94vw, 600px); }
+/* ---------- advanced steering ---------- */
+@container sheet (min-width: 620px) {
+  #advanced-inner .adv-item {
+    display: inline-block; width: calc(50% - 8px); vertical-align: top;
+    margin: 8px 0; padding-right: 12px; box-sizing: border-box;
+  }
+}
 } /* @layer components */

@@ -409,6 +409,145 @@ const Tracks = (function () {
     const diagnostics = track.modelDiagnostics = {
       emitted: [], suppressed: [], invalid: [], unsafe: [],
     };
+
+    // ---------- semantic prop registry ----------
+    // Everything buildProps places goes straight into vertex buffers and is then
+    // anonymous: the footprint list and spatial hash below are function-local and
+    // die with this call, so after a build nothing can answer "is there a
+    // grandstand on my left". The renderer's 72 m chunk AABBs locate scenery MASS
+    // but cannot name it.
+    //
+    // note() records the semantic placements only — a tree, a building, a
+    // grandstand — NOT every primitive. Vegas emits ~94k primitives; a tree alone
+    // is a trunk plus several canopy tiers, so recording primitives would cost far
+    // more and say far less. Consumed by __apex.scene() (js/game/agentview.js).
+    //
+    // Recording happens at the point of emission, AFTER each emitter's on-track
+    // and mass-collision guards, so a suppressed prop never enters the registry —
+    // the list describes what actually stands there.
+    const PROP_CAP = 40000;
+    const propList = [];
+    let propDropped = 0;
+    // The placement currently claiming emitted primitives, and where it stands.
+    // A composite model is many primitives (a tree is a trunk plus four cones),
+    // so ownership runs until the next note() or until emission moves away.
+    let curRec = null, curAnchor = null;
+    const OWN_R = 20;
+    const note = (kind, c, size, extra) => {
+      if (propList.length >= PROP_CAP) { propDropped++; return; }
+      const r1 = (v) => Math.round(v * 10) / 10;
+      const rec = { kind, x: r1(c[0]), y: r1(c[1]), z: r1(c[2]),
+                    w: r1(size[0]), h: r1(size[1]), d: r1(size[2]) };
+      if (extra) { for (const key in extra) rec[key] = extra[key]; }
+      propList.push(rec);
+      // Own the primitives that follow, so the record ends up with MEASURED
+      // bounds instead of the nominal envelope the call site guessed. Those
+      // guesses were consistently wrong in the same direction: a 20 m pine was
+      // recorded 9 m wide against a real ~5.4 m canopy, which closed up the sky
+      // in frame()'s raster and over-stated every proximity query.
+      curRec = rec; curAnchor = [c[0], c[1], c[2]];
+    };
+    // Linear features — armco, catch fencing, tyre walls, boundary walls — are
+    // emitted by along() in 3–6 m steps. Recording each step would bury the
+    // registry in thousands of near-identical records and describe the world
+    // worse: "armco on the left from 1.20 to 1.55 km" IS the object. They carry
+    // an arc-length span instead of a world point.
+    const spanList = [];
+    const noteSpan = (kind, s0, s1, side, gap, extra) => {
+      if (spanList.length >= PROP_CAP) { propDropped++; return; }
+      const r3 = (v) => Math.round(v * 1000) / 1000;
+      const rec = { kind, s0: r3(s0), s1: r3(s1), side, gap: Math.round(gap * 10) / 10 };
+      if (extra) { for (const key in extra) rec[key] = extra[key]; }
+      spanList.push(rec);
+    };
+
+    // ---------- unnamed geometry ----------
+    // The named emitters above cover the shared toolkit, but each circuit's
+    // bespoke scenery() also calls the raw guarded emitters directly, and on a
+    // street circuit that is most of the world: measured against the shipped
+    // primitives, the named registry alone describes 85% of Monza and only 21%
+    // of Vegas. Those 68k unnamed boxes are the casino frontages, the pit
+    // complex, the grandstand backs — the things an agent most needs to know are
+    // there.
+    //
+    // Recording each primitive is not an option (that IS the vertex buffer, just
+    // more expensive). Instead, consecutive primitives that stay within
+    // ASSEMBLY_R of the running centroid are accumulated into one anonymous
+    // structure with a combined box, and flushed when the emission jumps
+    // somewhere else. Primitives are emitted assembly-by-assembly, so spatial
+    // adjacency in emission order is a good proxy for "one thing".
+    const ASSEMBLY_R = 30;
+    const ASSEMBLY_MAX = 4000;      // primitives before a run is cut regardless
+    // ...and a hard cap on the BOX. The centroid is a running mean, so a long
+    // facade or treeline drifts it a little at a time and never trips the 30 m
+    // test — the box then grows to hundreds of metres and stops describing a
+    // thing. A loose hull that big is worse than useless downstream: frame()
+    // paints it solid and one "structure" swallows the whole view.
+    const ASSEMBLY_EXTENT = 70;
+    let asm = null;
+    const flushAsm = () => {
+      if (!asm || asm.count < 4) { asm = null; return; }
+      if (propList.length < PROP_CAP) {
+        const r1 = (v) => Math.round(v * 10) / 10;
+        const hull = Math.max(asm.x1 - asm.x0, 0.1) * Math.max(asm.y1 - asm.y0, 0.1)
+                   * Math.max(asm.z1 - asm.z0, 0.1);
+        propList.push({
+          kind: "structure", parts: asm.count,
+          fill: Math.round(Math.min(1, asm.vol / hull) * 100) / 100,
+          x: r1((asm.x0 + asm.x1) / 2), y: r1((asm.y0 + asm.y1) / 2),
+          z: r1((asm.z0 + asm.z1) / 2),
+          w: r1(asm.x1 - asm.x0), h: r1(asm.y1 - asm.y0), d: r1(asm.z1 - asm.z0),
+        });
+      } else propDropped++;
+      asm = null;
+    };
+    // Called by the guarded emitters with the primitive's axis-aligned extent.
+    // Rotation is ignored — a conservative box is enough to say "something this
+    // big stands here", and computing the true oriented hull per primitive would
+    // cost more than the answer is worth.
+    const absorb = (x0, y0, z0, x1, y1, z1) => {
+      if (!(x0 <= x1) || !Number.isFinite(x0) || !Number.isFinite(y1)) return;
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      // Attribute to the named placement that is still in range.
+      if (curRec && Math.abs(cx - curAnchor[0]) <= OWN_R
+                 && Math.abs(cz - curAnchor[2]) <= OWN_R) {
+        const m = curRec._m || (curRec._m = { x0, y0, z0, x1, y1, z1 });
+        if (x0 < m.x0) m.x0 = x0; if (x1 > m.x1) m.x1 = x1;
+        if (y0 < m.y0) m.y0 = y0; if (y1 > m.y1) m.y1 = y1;
+        if (z0 < m.z0) m.z0 = z0; if (z1 > m.z1) m.z1 = z1;
+        return;
+      }
+      curRec = null;
+      if (asm && (Math.abs(cx - asm.cx) > ASSEMBLY_R
+                  || Math.abs(cz - asm.cz) > ASSEMBLY_R
+                  || asm.count >= ASSEMBLY_MAX
+                  || Math.max(x1, asm.x1) - Math.min(x0, asm.x0) > ASSEMBLY_EXTENT
+                  || Math.max(z1, asm.z1) - Math.min(z0, asm.z0) > ASSEMBLY_EXTENT)) flushAsm();
+      if (!asm) { asm = { x0, y0, z0, x1, y1, z1, cx, cz, count: 0, vol: 0 }; }
+      // Summed primitive volume vs the hull's. A real building fills its box; a
+      // scatter of lamp bases and fence posts spread over 30 m fills almost none
+      // of it. Consumers that treat the box as solid — frame()'s occlusion
+      // raster above all — need to know which they are holding.
+      asm.vol += Math.max(x1 - x0, 0.05) * Math.max(y1 - y0, 0.05) * Math.max(z1 - z0, 0.05);
+      if (x0 < asm.x0) asm.x0 = x0; if (x1 > asm.x1) asm.x1 = x1;
+      if (y0 < asm.y0) asm.y0 = y0; if (y1 > asm.y1) asm.y1 = y1;
+      if (z0 < asm.z0) asm.z0 = z0; if (z1 > asm.z1) asm.z1 = z1;
+      asm.count++;
+      // running centroid keeps a long facade run from anchoring on its first box
+      asm.cx += (cx - asm.cx) / asm.count;
+      asm.cz += (cz - asm.cz) / asm.count;
+    };
+    // A named placement ends whatever anonymous run was in progress, so its own
+    // primitives are not folded into the neighbouring structure.
+    const absorbBox = (c, sz) => absorb(c[0] - sz[0] / 2, c[1] - sz[1] / 2, c[2] - sz[2] / 2,
+                                        c[0] + sz[0] / 2, c[1] + sz[1] / 2, c[2] + sz[2] / 2);
+    const absorbUp = (c, r, h) => absorb(c[0] - r, c[1], c[2] - r,
+                                         c[0] + r, c[1] + h, c[2] + r);
+
+    track.props = { list: propList, spans: spanList, cap: PROP_CAP,
+                    get count() { return propList.length; },
+                    get spanCount() { return spanList.length; },
+                    get dropped() { return propDropped; } };
     const finiteVec = (v, len, positive) =>
       Array.isArray(v) && v.length === len && v.every((x) => Number.isFinite(x) && (!positive || x > 0));
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
@@ -479,31 +618,39 @@ const Tracks = (function () {
     };
     const addBox = (o, c, sz, col, basis) => {
       if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("box", c, sz);
-      if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addBox(o, c, sz, col, basis); return true;
+      if (rejBox(c, sz, basis)) { _culled++; return false; }
+      RAW.addBox(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addCyl = (o, c, rad, h, col, seg, basis) => {
       if (!finiteVec(c, 3, false) || !Number.isFinite(rad) || rad <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("cylinder", c, [rad, h]);
-      if (rejRad(c, rad, h, basis)) { _culled++; return false; } RAW.addCyl(o, c, rad, h, col, seg, basis); return true;
+      if (rejRad(c, rad, h, basis)) { _culled++; return false; }
+      RAW.addCyl(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addCone = (o, c, rad, h, col, seg, basis) => {
       if (!finiteVec(c, 3, false) || !Number.isFinite(rad) || rad <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("cone", c, [rad, h]);
-      if (rejRad(c, rad, h, basis)) { _culled++; return false; } RAW.addCone(o, c, rad, h, col, seg, basis); return true;
+      if (rejRad(c, rad, h, basis)) { _culled++; return false; }
+      RAW.addCone(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addFrustum = (o, c, rB, rT, h, col, seg, basis) => {
       if (!finiteVec(c, 3, false) || !Number.isFinite(rB) || rB <= 0 || !Number.isFinite(rT) || rT <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("frustum", c, [rB, rT, h]);
-      if (rejRad(c, Math.max(rB, rT), h, basis)) { _culled++; return false; } RAW.addFrustum(o, c, rB, rT, h, col, seg, basis); return true;
+      if (rejRad(c, Math.max(rB, rT), h, basis)) { _culled++; return false; }
+      RAW.addFrustum(o, c, rB, rT, h, col, seg, basis);
+      absorbUp(c, Math.max(rB, rT), h); return true;
     };
     const addPrism = (o, c, sz, col, basis) => {
       if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("prism", c, sz);
-      if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addPrism(o, c, sz, col, basis); return true;
+      if (rejBox(c, sz, basis)) { _culled++; return false; }
+      RAW.addPrism(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addPyramid = (o, c, sz, col, basis) => {
       if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("pyramid", c, sz);
-      if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addPyramid(o, c, sz, col, basis); return true;
+      if (rejBox(c, sz, basis)) { _culled++; return false; }
+      RAW.addPyramid(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addMountain = (o, c, baseR, h, opts) => {
       if (!finiteVec(c, 3, false) || !Number.isFinite(baseR) || baseR <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("mountain", c, [baseR, h]);
-      if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; } RAW.addMountain(o, c, baseR, h, opts); return true;
+      if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; }
+      RAW.addMountain(o, c, baseR, h, opts); absorbUp(c, baseR, h); return true;
     };
     // Per-segment driving boundary (lateral limit from the centreline on each
     // side). Initialised to the default runoff, then TIGHTENED wherever a solid
@@ -1107,6 +1254,7 @@ const Tracks = (function () {
       // the ground on elevated/embanked sections.
       const c = [cx, groundYAt(k, dist) + sz[1] / 2 - 0.8, cz];
       if (addBox(out, c, sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
+      note("prop", c, sz, { k, side });
       // solid box → the car must stop before its inner face (sz[0] across, sz[2] long)
       blockAt(k, side, dist - sz[0] / 2, sz[2] / 2);
       // …and the scenery engine must know a solid body physically stands here,
@@ -1247,6 +1395,9 @@ const Tracks = (function () {
       // placement primitives + math helpers
       place, prop, backdrop, groundPlane, every,
       hash, upOf, cross, norm, lerp, vadd,
+      // semantic prop registry (see note() above) — scenery modules call this
+      // after their own guards so only props that actually ship are recorded
+      note, noteSpan,
     };
     Object.assign(ctx, SceneryNature.create(ctx));
     Object.assign(ctx, SceneryStructures.create(ctx));
@@ -1747,6 +1898,18 @@ const Tracks = (function () {
     }
     if (out.pos.length === 0) addBox(out, [px[0] + 30, 1, pz[0]], [2, 2, 2], [0.4, 0.4, 0.4]);
     if (_culled) console.info(`[scenery] ${def.id}: culled ${_culled} on-track primitive(s)`);
+    flushAsm();          // the last anonymous run has no successor to close it
+    // Swap every named record's guessed envelope for what it actually emitted.
+    for (const rec of propList) {
+      const m = rec._m;
+      if (!m) continue;
+      const r1 = (v) => Math.round(v * 10) / 10;
+      rec.x = r1((m.x0 + m.x1) / 2); rec.y = r1((m.y0 + m.y1) / 2);
+      rec.z = r1((m.z0 + m.z1) / 2);
+      rec.w = r1(m.x1 - m.x0); rec.h = r1(m.y1 - m.y0); rec.d = r1(m.z1 - m.z0);
+      rec.measured = true;
+      delete rec._m;
+    }
     return { out, glass: glassBuf, water: waterBuf };
   }
 
@@ -2002,22 +2165,82 @@ const Tracks = (function () {
   // covering that point (vertical ray-cast against the stashed terrain geometry).
   // Returns null if no terrain covers the point. Debug aid — finds where the
   // carved terrain ends up so props can be checked for floating / gaps.
+  // Uniform XZ bucket grid over the terrain triangles, built once per track and
+  // keyed on the geometry object so a rebuild invalidates it. Every triangle is
+  // inserted into every cell its XZ bounding box touches, so querying one cell
+  // sees exactly the triangles the linear scan would have found containing the
+  // point — the answer is identical, not approximate.
+  function terrainGrid(track) {
+    const g = track.terrainGeo;
+    if (!g || !g.pos || !g.idx) return null;
+    if (track._terrGrid && track._terrGrid.geo === g) return track._terrGrid;
+    const pos = g.pos, idx = g.idx, CELL = 24;
+    let mnx = Infinity, mnz = Infinity, mxx = -Infinity, mxz = -Infinity;
+    for (let i = 0; i < pos.length; i += 3) {
+      if (pos[i] < mnx) mnx = pos[i]; if (pos[i] > mxx) mxx = pos[i];
+      if (pos[i + 2] < mnz) mnz = pos[i + 2]; if (pos[i + 2] > mxz) mxz = pos[i + 2];
+    }
+    if (!isFinite(mnx)) return null;
+    const nx = Math.max(1, Math.ceil((mxx - mnx) / CELL));
+    const nz = Math.max(1, Math.ceil((mxz - mnz) / CELL));
+    const cells = new Array(nx * nz);
+    for (let t = 0; t < idx.length; t += 3) {
+      const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
+      const x0 = Math.min(pos[a], pos[b], pos[c]), x1 = Math.max(pos[a], pos[b], pos[c]);
+      const z0 = Math.min(pos[a + 2], pos[b + 2], pos[c + 2]);
+      const z1 = Math.max(pos[a + 2], pos[b + 2], pos[c + 2]);
+      const i0 = Math.max(0, Math.floor((x0 - mnx) / CELL));
+      const i1 = Math.min(nx - 1, Math.floor((x1 - mnx) / CELL));
+      const j0 = Math.max(0, Math.floor((z0 - mnz) / CELL));
+      const j1 = Math.min(nz - 1, Math.floor((z1 - mnz) / CELL));
+      for (let i = i0; i <= i1; i++) {
+        for (let j = j0; j <= j1; j++) {
+          const k = j * nx + i;
+          (cells[k] || (cells[k] = [])).push(t);
+        }
+      }
+    }
+    track._terrGrid = { geo: g, mnx, mnz, nx, nz, cell: CELL, cells };
+    return track._terrGrid;
+  }
+
+  // Rendered-terrain height at a world XZ, or null where the ribbon doesn't
+  // cover. Was a linear scan of EVERY terrain triangle — ~58k on Monza — and
+  // buildProps anchors every prop through it, so the cost landed on track build
+  // as well as on callers. The grid keeps the same answer 23-177x faster.
   function terrainY(track, x, z) {
     const g = track.terrainGeo; if (!g) return null;
     const pos = g.pos, idx = g.idx; let best = null;
+    const G = terrainGrid(track);
+    if (G) {
+      const i = Math.floor((x - G.mnx) / G.cell), j = Math.floor((z - G.mnz) / G.cell);
+      if (i < 0 || j < 0 || i >= G.nx || j >= G.nz) return null;
+      const list = G.cells[j * G.nx + i];
+      if (!list) return null;
+      for (let n = 0; n < list.length; n++) {
+        const t = list[n];
+        best = _triY(pos, idx[t] * 3, idx[t + 1] * 3, idx[t + 2] * 3, x, z, best);
+      }
+      return best;
+    }
     for (let t = 0; t < idx.length; t += 3) {
-      const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
-      const ax = pos[a], az = pos[a + 2], bx = pos[b], bz = pos[b + 2], cx = pos[c], cz = pos[c + 2];
-      // barycentric in XZ
-      const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = x - ax, v2z = z - az;
-      const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z;
-      const den = d00 * d11 - d01 * d01; if (Math.abs(den) < 1e-9) continue;
-      const u = (d11 * d20 - d01 * d21) / den, vv = (d00 * d21 - d01 * d20) / den;
-      if (u < -0.01 || vv < -0.01 || u + vv > 1.01) continue;
-      const y = pos[a + 1] + u * (pos[c + 1] - pos[a + 1]) + vv * (pos[b + 1] - pos[a + 1]);
-      if (best === null || y > best) best = y;
+      best = _triY(pos, idx[t] * 3, idx[t + 1] * 3, idx[t + 2] * 3, x, z, best);
     }
     return best;
+  }
+
+  // Barycentric containment in XZ, returning the higher of `best` and this
+  // triangle's interpolated height. Shared by both terrainY paths so the grid
+  // cannot drift from the scan.
+  function _triY(pos, a, b, c, x, z, best) {
+    const ax = pos[a], az = pos[a + 2], bx = pos[b], bz = pos[b + 2], cx = pos[c], cz = pos[c + 2];
+    const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = x - ax, v2z = z - az;
+    const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z;
+    const den = d00 * d11 - d01 * d01; if (Math.abs(den) < 1e-9) return best;
+    const u = (d11 * d20 - d01 * d21) / den, vv = (d00 * d21 - d01 * d20) / den;
+    if (u < -0.01 || vv < -0.01 || u + vv > 1.01) return best;
+    const y = pos[a + 1] + u * (pos[c + 1] - pos[a + 1]) + vv * (pos[b + 1] - pos[a + 1]);
+    return best === null || y > best ? y : best;
   }
 
   function setKeepGeometry(value) {

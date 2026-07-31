@@ -1,8 +1,9 @@
 @layer components {
-/* Apex 26 — main menu, select screen + track picker, race settings, customize my team.
-   Split from css/style.css (lines 257-470 of the original). Wrapped in the
-   `components` cascade layer (declared in css/tokens.css), matching its former
-   load position. See tools/manifest.cjs CSS. */
+/* Apex 26 — the main menu and the SELECT screen, written on top of the
+   .screen / .sheet / .pane primitives in css/components.css.
+   Everything here is either identity (colour, type) or a layout decision keyed
+   on how wide the SHEET is (@container sheet), never on the device. */
+
 /* ---------- inline icon glyphs (Lucide, ISC) ---------- */
 /* Sized in `em` so an icon tracks its button's font-size; currentColor makes it
    inherit the button text colour (and thus any team accent applied there). */
@@ -17,46 +18,153 @@
 /* ---------- main menu ---------- */
 #overlay {
   position: fixed; inset: 0;
-  height: 100vh; height: 100dvh;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  background: radial-gradient(120% 90% at 50% 10%, rgba(225, 6, 0, 0.18), transparent 60%), rgba(6, 6, 10, 0.55);
   z-index: 20;
-  padding: var(--sat) var(--sar) var(--sab) var(--sal);
-  overflow-y: auto;
+  display: grid;
+  align-content: center; justify-items: center;
+  gap: 2px;
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  background: radial-gradient(120% 90% at 50% 10%, rgba(225, 6, 0, 0.18), transparent 60%), rgba(6, 6, 10, 0.55);
+  overflow: hidden;
 }
 #title {
-  font-size: clamp(44px, 11vw, 92px);
+  font-size: clamp(34px, 9vw, 92px);
   color: var(--text);
   text-shadow: 0 0 36px rgba(225, 6, 0, 0.75), 0 2px 12px rgba(0, 0, 0, 0.8);
 }
 #title::after { content: ""; display: block; height: 5px; width: 70%; margin: 4px auto 0; background: var(--red); transform: skewX(-30deg); box-shadow: 0 0 14px rgba(225,6,0,0.6); }
-#subtitle { color: rgba(242, 242, 245, 0.72); margin: 6px 0 18px; font-size: 14px; letter-spacing: 0.04em; }
-#audiostate { color: var(--dim); font-size: 12px; margin-top: 14px; min-height: 16px; }
-#disclaimer {
-  position: absolute;
-  bottom: calc(10px + var(--sab));
-  color: var(--dim); font-size: 11px;
+#subtitle { color: rgba(242, 242, 245, 0.72); margin: 6px 0 14px; font-size: 14px; letter-spacing: 0.04em; }
+#menu-buttons { display: grid; gap: var(--gap); justify-items: center; width: 100%; }
+#menu-buttons .bigbtn { margin: 0; width: min(78vw, 340px); }
+#audiostate { color: var(--dim); font-size: 12px; margin-top: 10px; min-height: 16px; }
+#disclaimer { color: var(--dim); font-size: 11px; margin-top: 8px; }
+
+/* Landscape: branding left, buttons right — a phone held sideways has width to
+   spend and no height at all. Two columns, everything vertically centred, and
+   the whole screen still inside the safe area. */
+@media (orientation: landscape) and (max-height: 560px) {
+  #overlay {
+    grid-template-columns: 1fr 1fr;
+    justify-items: start;
+    column-gap: 32px;
+    align-content: center;
+  }
+  #title { grid-column: 1; font-size: clamp(26px, 7.5vw, 48px); }
+  #subtitle { grid-column: 1; margin: 4px 0 0; font-size: 12px; }
+  #audiostate { grid-column: 1; font-size: 10px; margin-top: 2px; min-height: 0; }
+  #disclaimer { grid-column: 1; font-size: 10px; margin-top: 6px; }
+  #menu-buttons { grid-column: 2; grid-row: 1 / -1; align-self: center; width: auto; }
+  #menu-buttons .bigbtn { width: min(42vw, 260px); padding: 9px 14px; font-size: 14px; }
 }
 
 /* ---------- select screen ---------- */
-#select {
-  position: fixed; inset: 0;
-  height: 100vh; height: 100dvh;
-  z-index: 25;
-  background: rgba(6, 6, 10, 0.92);
-  padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal));
-  overflow-y: auto;
-  touch-action: pan-y;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+#select { z-index: 25; background: rgba(6, 6, 10, 0.92); }
+#sel-inner { --sheet-w: 1020px; }
+/* Portrait / narrow: ONE column that scrolls as a single body. #sel-left must
+   give up being its own scroll region here — a .pane nested in a flex column
+   with nothing to size it collapses to a sliver (DRIVER and everything under it
+   simply vanished). The body is the scroller; the track list keeps its own cap
+   below so the two never fight. */
+#sel-body { display: flex; flex-direction: column; gap: var(--gap); }
+.sel-section { min-width: 0; }
+@container sheet (max-width: 619px) {
+  #sel-body {
+    overflow-y: auto; overflow-x: hidden;
+    overscroll-behavior-y: contain; scrollbar-gutter: stable; touch-action: pan-y;
+  }
+  #sel-left { overflow: visible; flex: 0 0 auto; }
 }
-#sel-inner { width: 100%; }
-#select h2 { color: var(--red); margin-bottom: 10px; }
-.sel-label { color: var(--dim); font-size: 12px; letter-spacing: 0.12em; margin: 12px 0 6px; }
-#sel-teams, #sel-diff { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Card-ish stat block under the driver chips: the four numbers that change when
+   you swap team or fit parts. Compact numbers, not the CAR SETUP screen's bar
+   chart — the bars belong on the screen where you change them. */
+#sel-stats {
+  margin-top: calc(var(--gap) * 0.7);
+  padding-top: calc(var(--gap) * 0.6);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  display: grid; grid-template-columns: auto auto; gap: 1px 16px;
+  font-variant-numeric: tabular-nums;
+}
+#sel-stats .cs-stat-row { margin: 0; gap: 6px; font-size: 10px; }
+#sel-stats .cs-stat-label { width: auto; letter-spacing: 0.06em; }
+#sel-stats .cs-stat-bar-wrap { display: none; }
+#sel-stats .cs-stat-val { width: auto; font-size: 12px; }
+.sel-edit-row { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.7); margin-top: calc(var(--gap) * 0.7); }
+#sel-diff-section { margin-top: calc(var(--gap) * 0.8); }
+
+/* Two panes once there is room: identity | circuit. */
+@container sheet (min-width: 620px) {
+  #sel-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    column-gap: calc(var(--pad) * 0.9);
+    align-items: stretch;
+    overflow: hidden;              /* each pane scrolls on its own */
+    padding-bottom: calc(var(--pad) * 0.5);
+  }
+  #sel-left {
+    overflow-y: auto;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    padding-right: calc(var(--pad) * 0.6);
+  }
+  #sel-track-section { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+  #sel-tracks { flex: 1 1 auto; min-height: 0; }
+}
+/* A wide sheet is also a short one in practice (landscape phone), so the sheet
+   body must not scroll as a whole — only the two panes inside it do. */
+@container sheet (min-width: 620px) {
+  #sel-inner > .sheet-body { overflow: hidden; }
+}
+
+/* ---------- team card + team picker ----------
+   The card is the whole TEAM control on the select screen; the twelve-way
+   choice lives in its own sheet (#teampicker). One large target instead of a
+   four-row grid of 60px chips. */
+#teampicker { --sheet-w: 760px; z-index: 26; }
+.team-card, .team-tile {
+  display: flex; align-items: center; gap: var(--gap);
+  width: 100%; text-align: left; cursor: pointer;
+  padding: calc(var(--gap) * 0.7) var(--gap);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.team-card { border-color: rgba(225, 6, 0, 0.55); background: rgba(225, 6, 0, 0.10); }
+@media (hover: hover) {
+  .team-card:hover, .team-tile:hover { background: rgba(255, 255, 255, 0.10); }
+}
+.team-card:active, .team-tile:active { background: rgba(255, 255, 255, 0.14); }
+.team-tile.active {
+  border-color: var(--red); background: rgba(225, 6, 0, 0.18);
+  box-shadow: 0 0 14px rgba(225, 6, 0, 0.25);
+}
+/* Two-tone block: several 2026 liveries are near-black, so the accent stripe is
+   what actually tells them apart at a glance. */
+.tm-colour { flex: none; width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.28); }
+.tm-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.tm-name {
+  font-size: 13px; font-weight: 800; font-style: italic; letter-spacing: 0.02em;
+  color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tm-sub {
+  font-size: 10px; letter-spacing: 0.04em; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tm-chev { flex: none; color: var(--red); font-size: 12px; }
+.team-tile.active .tm-name { color: #fff; }
+/* Tiles fill the picker in as many columns as fit; each stays a big target. */
+#sel-teams {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: calc(var(--gap) * 0.7);
+  align-content: start;
+}
+.team-tile { min-height: var(--tap); }
+
+/* ---------- chips ---------- */
+.chip-row { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.7); }
 .sel-chip {
-  padding: 8px 12px;
+  padding: 6px 10px;
   font-size: 13px;
   border-radius: 7px;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -64,82 +172,87 @@
   transition: background 0.12s, box-shadow 0.12s;
   cursor: pointer;
 }
-.sel-chip:hover { background: rgba(255,255,255,0.10); }
+@media (hover: hover) {
+  .sel-chip:hover { background: rgba(255,255,255,0.10); }
+}
+.sel-chip:active { background: rgba(255,255,255,0.14); }
 .sel-chip.active { outline: 2px solid var(--red); background: rgba(225, 6, 0, 0.18); box-shadow: 0 0 12px rgba(225, 6, 0, 0.28); }
-.sel-chip .swatch { display: inline-block; width: 13px; height: 13px; border-radius: 2px; margin-right: 6px; }
+.sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; flex: none; }
+.sel-edit {
+  font-size: 12px; padding: 6px 12px;
+  border: 1px solid var(--red); background: rgba(225, 6, 0, 0.12); border-radius: 7px;
+  transition: background 0.12s, box-shadow 0.12s; cursor: pointer;
+}
+@media (hover: hover) {
+  .sel-edit:hover { background: rgba(225,6,0,0.22); box-shadow: 0 0 10px rgba(225,6,0,0.25); }
+}
+.sel-edit:active { background: rgba(225,6,0,0.3); }
+#sel-driver { color: var(--dim); font-size: 13px; }
+h3.sel-label { font-size: var(--label); font-weight: 700; }
+#sel-left .sel-label + * { margin-bottom: var(--gap); }
+#sel-stats { font-variant-numeric: tabular-nums; }
 
-/* ---------- track picker: large preview of selected circuit ---------- */
+/* ---------- circuit preview ---------- */
 #sel-track-preview {
-  display: flex; gap: 14px; align-items: center;
-  margin-bottom: 12px; padding: 12px;
+  display: flex; gap: var(--gap); align-items: flex-start;
+  margin-bottom: calc(var(--gap) * 0.6); padding: calc(var(--gap) * 0.8);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  flex-shrink: 0;
 }
 #sel-preview-map {
-  flex: 1 1 0; min-width: 0; width: 100%; height: auto;
-  max-width: 360px; aspect-ratio: 520 / 300;
+  /* The map is the reason this panel exists — let it take about half the
+     preview's width instead of sitting as a thumbnail with dead space beside
+     it. clamp keeps it legible on a phone and stops it dwarfing the facts on a
+     desktop. */
+  flex: none; width: clamp(140px, 50%, 260px); height: auto;
+  aspect-ratio: 520 / 300;
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.25);
 }
-#sel-preview-info { flex: 1 1 120px; min-width: 110px; max-width: 240px; overflow: hidden; }
-#sel-preview-name { font-size: 18px; font-weight: 800; font-style: italic; color: #fff; letter-spacing: 0.02em; }
-#sel-preview-gp { font-size: 12px; color: var(--red); font-weight: 700; margin-top: 2px; }
-#sel-preview-meta { font-size: 12px; color: var(--dim); margin-top: 8px; line-height: 1.5; }
-#sel-preview-rec { font-size: 13px; color: #f6d200; font-weight: 700; margin-top: 8px; font-variant-numeric: tabular-nums; }
-#sel-preview-facts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-#sel-preview-elev { display: block; width: 100%; height: 36px; margin-top: 8px; border-radius: 4px; opacity: 0.85; }
-.spf-fact { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px; letter-spacing: 0.03em; }
+#sel-preview-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+#sel-preview-name { font-size: 15px; font-weight: 800; font-style: italic; color: #fff; letter-spacing: 0.02em; }
+#sel-preview-gp { font-size: 11px; color: var(--red); font-weight: 700; margin-top: 2px; }
+#sel-preview-meta { font-size: 12px; color: var(--dim); margin-top: 6px; line-height: 1.5; }
+#sel-preview-rec { font-size: 12px; color: #f6d200; font-weight: 700; margin-top: 5px; font-variant-numeric: tabular-nums; }
+#sel-preview-facts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+#sel-preview-elev { display: block; width: 100%; height: 30px; margin-top: 6px; border-radius: 4px; opacity: 0.85; }
+.spf-fact { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; letter-spacing: 0.03em; }
 .spf-dir { background: rgba(255,255,255,0.1); color: #e0e0e8; }
 .spf-elev { background: rgba(56,183,240,0.18); color: #39b7f0; }
 .spf-drs { background: rgba(0,220,180,0.15); color: #00dcb4; }
 .spf-corner { background: rgba(225,6,0,0.18); color: #e10600; }
+/* Roomier preview once the sheet is wide enough that it does not steal list rows */
+@container sheet (min-width: 820px) {
+  #sel-preview-map { width: clamp(180px, 52%, 300px); }
+  #sel-preview-name { font-size: 18px; }
+}
+/* Short landscape: the map and the facts are the useful part; prose is not. */
+@media (orientation: landscape) and (max-height: 560px) {
+  #sel-preview-meta, #sel-preview-elev { display: none; }
+}
+
 /* Season upcoming rounds list */
 .season-upcoming-head { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
 .season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.10); margin-bottom: 4px; background: rgba(255,255,255,0.04); transition: border-color 0.15s, background 0.15s; cursor: default; }
-.season-upcoming-row:hover { border-color: rgba(255,255,255,0.20); background: rgba(255,255,255,0.07); }
+@media (hover: hover) {
+  .season-upcoming-row:hover { border-color: rgba(255,255,255,0.20); background: rgba(255,255,255,0.07); }
+}
 .sur-rnd { font-size: 10px; font-weight: 700; color: #e10600; letter-spacing: 0.06em; min-width: 24px; }
 .sur-name { font-size: 13px; font-weight: 700; color: #e0e0e0; flex: 1; font-style: italic; letter-spacing: 0.02em; }
 .sur-country { font-size: 10px; color: var(--dim); }
-@media (max-width: 520px) {
-  /* Compact thumbnail + info side-by-side so the track list is always visible */
-  #sel-track-preview { flex-direction: row; align-items: center; gap: 10px; }
-  #sel-preview-map { flex: none; width: 110px; height: 64px; max-width: none; }
-  #sel-preview-info { flex: 1; min-width: 0; text-align: left; max-width: none; }
-  #sel-preview-name { font-size: 14px; }
-  #sel-preview-elev { height: 22px; margin-top: 4px; }
-  #sel-preview-facts { justify-content: flex-start; }
-  /* Track list scrolls independently so it's visible without scrolling the whole panel */
-  #sel-tracks {
-    max-height: 220px;
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
-    touch-action: pan-y;
-    -webkit-overflow-scrolling: touch;
-  }
-}
 
-/* ---------- track picker: compact text rows (no per-item mini-maps) ---------- */
+/* ---------- track picker rows ---------- */
 #sel-tracks {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  /* overflow-X only: the portrait media query above sets overflow-y:auto at
-     EQUAL specificity, and this later base rule was clobbering it with the
-     `overflow` shorthand — leaving the portrait track list clipped to its
-     220px max-height and unscrollable. Same idiom as the dialog base rule. */
   overflow-x: hidden;
-  margin-top: 4px;
 }
-/* Portrait tablets sit between the phone and 900px desktop layouts. Without a
-   height constraint their 24-row list expands in full, so only #select scrolls. */
-@media (orientation: portrait) and (min-width: 521px) and (max-width: 899px) {
-  #sel-tracks {
-    max-height: min(32dvh, 320px);
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
-    touch-action: pan-y;
-    -webkit-overflow-scrolling: touch;
-  }
+/* In the single-column layout the list is capped so it cannot push the sheet's
+   own body into a long scroll — the list scrolls, the screen does not. */
+@container sheet (max-width: 619px) {
+  #sel-tracks { max-height: min(40svh, 300px); overflow-y: auto; }
 }
 .track-row {
   display: flex; align-items: baseline; gap: 8px;
@@ -151,7 +264,10 @@
   transition: background 0.1s;
 }
 .track-row:last-child { border-bottom: none; }
-.track-row:hover { background: rgba(255, 255, 255, 0.06); }
+@media (hover: hover) {
+  .track-row:hover { background: rgba(255, 255, 255, 0.06); }
+}
+.track-row:active { background: rgba(255, 255, 255, 0.09); }
 .track-row.active { background: rgba(225, 6, 0, 0.12); border-left: 3px solid var(--red); padding-left: 9px; }
 .track-row-name {
   flex: 1;
@@ -164,67 +280,64 @@
 .trb { display: inline-block; font-size: 8px; letter-spacing: 0.08em; padding: 1px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; font-weight: 700; }
 .trb-night { background: rgba(129,140,248,0.15); color: #818cf8; border: 1px solid rgba(129,140,248,0.3); }
 .trb-street { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
-#sel-driver { color: var(--dim); font-size: 13px; margin-top: 8px; min-height: 18px; }
-#sel-stats { border-top: 1px solid rgba(255,255,255,0.07); padding-top: 10px; margin-top: 4px; }
-.sel-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
-.sel-actions .bigbtn { width: auto; min-width: 150px; margin: 0; }
-#select .sel-actions {
-  position: sticky;
-  bottom: 0;
-  background: rgba(6, 6, 10, 0.96);
-  padding: 10px 0 6px;
-  z-index: 1;
-  border-top: 1px solid rgba(255,255,255,0.10);
-}
-.sel-edit {
-  margin-top: 10px; font-size: 12px; padding: 7px 12px;
-  border: 1px solid var(--red); background: rgba(225, 6, 0, 0.12); border-radius: 7px;
-  transition: background 0.12s, box-shadow 0.12s; cursor: pointer;
-}
-.sel-edit:hover { background: rgba(225,6,0,0.22); box-shadow: 0 0 10px rgba(225,6,0,0.25); }
 
 /* ---------- race settings ---------- */
-#race-settings { width: min(92vw, 420px); }
-.rs-row { margin: 14px 0; }
-.rs-label { color: var(--dim); font-size: 12px; letter-spacing: 0.12em; margin-bottom: 8px; }
-#rs-laps, #rs-weather, #rs-time { display: flex; flex-wrap: wrap; gap: 8px; }
-/* chips inside race settings must NOT stretch full-width (unlike .panel button default) */
-#race-settings .sel-chip { display: inline-block; width: auto; margin: 0; font-size: 14px; padding: 9px 16px; }
+.rs-row { margin-bottom: var(--gap); }
+#race-settings .sel-chip { font-size: 13px; padding: 8px 14px; }
 #race-settings .sel-chip.active { background: rgba(225,6,0,0.20); border-color: var(--red); color: #fff; font-weight: 700; }
+/* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
+@container sheet (min-width: 440px) {
+  #rs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
+  #rs-body #rs-time-section { grid-column: 1 / -1; }
+}
 
 /* ---------- customize my team ---------- */
 #customize .cz-row {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; margin: 9px 0; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: rgba(255,255,255,0.5);
+  gap: var(--gap); margin: 6px 0;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: rgba(255,255,255,0.5);
 }
+#customize .cz-row label { flex: 1 1 auto; min-width: 0; }
 #customize input[type="text"], #customize input[type="number"] {
-  flex: 0 0 56%; font: inherit; font-size: 14px;
+  /* flex-basis, not a fixed 56% width: the panel is sized by the sheet now, and
+     a percentage width fought the shrink-to-fit box it used to live in — the
+     rows overflowed the dialog and were clipped. */
+  flex: 1 1 56%; min-width: 0; max-width: 60%;
+  /* 16px floor: iOS Safari auto-zooms the whole page when a focused input's
+     font-size is under 16px, and the zoom sticks after the keyboard closes. */
+  font: inherit; font-size: 16px;
   background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 7px 10px;
 }
 #customize input[type="color"] {
-  width: 64px; height: 40px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 6px; background: none; cursor: pointer;
+  width: 56px; height: 34px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px; background: none; cursor: pointer; flex: none;
 }
 #cz-preview {
-  display: flex; align-items: center; gap: 8px; margin-top: 14px;
+  display: flex; align-items: center; gap: 8px; margin-top: var(--gap);
   padding: 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.05);
 }
-#cz-swatch1, #cz-swatch2 { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); }
+#cz-swatch1, #cz-swatch2 { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); }
 #cz-pvtext { font-weight: 800; font-style: italic; letter-spacing: 0.04em; }
-/* optional extra-paint rows in MY TEAM */
 #customize .cz-sep {
-  margin: 16px 0 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.14em;
+  margin: var(--gap) 0 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.14em;
   color: rgba(255,255,255,0.4); text-transform: uppercase;
-  border-top: 1px solid rgba(255,255,255,0.12); padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.12); padding-top: var(--gap);
 }
-#customize .cz-liv-row { gap: 8px; }
-#customize .cz-liv-row input[type="color"] { flex: 0 0 auto; }
-#customize .cz-liv-row input[type="color"].cz-off { opacity: 0.28; }
+#customize .cz-liv-row input[type="color"] { width: 48px; }
 .cz-liv-none {
-  flex: 0 0 auto; font: inherit; font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+  /* width:auto is stated with the id prefix in the container query below too —
+     a bare class loses to any `... button { width: 100% }` rule. */
+  flex: none; width: auto; min-width: 56px; min-height: 32px;
+  font: inherit; font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
   padding: 6px 9px; border-radius: 6px; cursor: pointer; color: rgba(255,255,255,0.55);
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2);
 }
 .cz-liv-none.active { background: rgba(80,170,255,0.22); color: #cfe8ff; border-color: rgba(90,180,255,0.45); }
+/* Two columns of rows once the sheet is wide, so all fifteen fit without the
+   dialog becoming a long scroll. */
+@container sheet (min-width: 460px) {
+  #cz-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
+  #cz-body .cz-sep, #cz-body #cz-preview { grid-column: 1 / -1; }
+}
 } /* @layer components */

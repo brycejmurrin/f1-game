@@ -199,7 +199,22 @@ const GLXChunked = (function () {
       if (mesh.vao) gl.deleteVertexArray(mesh.vao);
     }
 
-    return { createChunkedMesh, drawChunked, castShadowChunked, freeChunkedMesh };
+    // Allocate a fresh plane set from a column-major view-proj. The draw path
+    // uses the module-static _fcPlanes scratch and must keep doing so (it runs
+    // per frame); this is for occasional callers — the agent world view asking
+    // "which scenery chunks are actually on screen" — where one allocation is
+    // free and sharing the scratch with an in-flight draw would be a bug.
+    function makeFrustumPlanes(viewProj) {
+      const p = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
+                 new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+      _extractPlanes(viewProj, p);
+      return p;
+    }
+
+    return { createChunkedMesh, drawChunked, castShadowChunked, freeChunkedMesh,
+             // exported so callers outside the draw path can run the SAME cull
+             // test the GPU path runs, rather than reimplementing it and drifting
+             makeFrustumPlanes, aabbInFrustum: _aabbInFrustum, aabbDist2: _aabbDist2 };
   }
 
   return { init };

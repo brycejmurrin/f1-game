@@ -19,6 +19,11 @@ const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
 const { CAM_MODES } = GameTables;
 const { TUNE_DEFS, LT } = LightTune;
 
+// The agent-facing view (js/game/agentview.js). Composed here rather than
+// bolted onto this file: __apex stays a flat dev console, world()/trackInfo()
+// are the layer an LLM agent reads. See docs/AGENT-WORLD-API.md.
+const agentView = AgentView.create(G);
+
 const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
   jump(frac, speed, lateral) {
@@ -1526,6 +1531,107 @@ const api = {
     G._testInput = null;
     return this.obs();
   },
+
+  // ── agent-facing view ─────────────────────────────────────────────────────
+  // world(opts) — one egocentric JSON snapshot per decision, with semantics
+  // beside the numbers. opts: { detail: "brief"|"drive"|"full" (def "drive"),
+  // horizonS: lookahead seconds (def 4), points: lookahead samples (def 5),
+  // since: seq of the payload you already hold, to get a delta back }.
+  // Unlike the hooks above this returns a typed error object, never null.
+  world(opts) { return agentView.world(opts); },
+
+  // field({detail}?) — the whole grid as text: race order, gap-to-leader and
+  // interval (seconds), lap, per car — the allocentric standings mirror of
+  // fieldState()/cars(). world().rivals is the egocentric nearest-few for a
+  // driving decision; this is every car by position. Compact: team is an id
+  // string, one row per car, no nested records.
+  field(opts) { return agentView.field(opts); },
+
+  // trackInfo({what}) — STATIC per-track data: "corners" (def) | "sectors" |
+  // "profile" | "all". Constant for a session — fetch once, never per tick.
+  trackInfo(opts) { return agentView.trackInfo(opts); },
+
+  // render({what, ...})? — the ONE optional composition aid, demoted from four
+  // peer rasters to a single call because character grids read worse than the
+  // structured numbers they are drawn from. what: "view" (the camera view, any
+  // of 13 modes, {edges}/{depth}), "map" (top-down, car-up, metric index),
+  // "circuit" (the whole track as a document), "car" (measured elevations).
+  // APPROXIMATE — for intuition and debugging; read geometry from world()/
+  // scene()/trackInfo(). The result carries an `aid` note saying so.
+  render(opts) { return agentView.render(opts); },
+
+  // frame/plan — DEPRECATED aliases, kept for the dev console and older callers.
+  // Prefer render({what:"view"}) and render({what:"map"}).
+  frame(opts) { return agentView.frame(opts); },
+  plan(opts) { return agentView.plan(opts); },
+
+  // carView({team, parts}?) — the car as JSON: team identity, livery colours,
+  // the full parts spec and its stat effects, the per-team chassis silhouette
+  // knobs, and measured geometry from a real Car3D build. Replaces the car
+  // viewer for everything except appearance itself.
+  carView(opts) { return agentView.carView(opts); },
+
+  // survey({at, lats, reachM, limit, profile}?) — geometry DEFECT report:
+  // floating/buried props, props over the racing line, terrain poking through
+  // the road, holes and cliffs in the ground ribbon, plus rejected models.
+  // Replaces the screenshot-driven survey pass with coordinates you can act on.
+  survey(opts) { return agentView.survey(opts); },
+
+  // worldModel({detail, offset, limit}?) — the WHOLE circuit as one structured
+  // document: layout, totals by kind, clustered scenery features, linear
+  // furniture spans, landmarks, and (detail:"sections") a corner-by-corner walk.
+  // detail:"full" adds the raw object list, paginated via offset/limit.
+  // DEPRECATED alias — prefer render({what:"circuit"}).
+  worldModel(opts) { return agentView.worldModel(opts); },
+
+  // rollout({seconds, dt, input, policy, policyHz, samples}?) — drive an
+  // interval and return a DIGEST instead of every frame: speed min/max/mean,
+  // off-track events, minimum barrier clearance, per-corner minimum speed, lap
+  // times, terminal reason, and a handful of waypoint samples. `policy` is a
+  // function (world) => {steer,throttle,brake} run at policyHz (default 10 Hz)
+  // while physics steps every tick; pass `input` instead for an open-loop probe.
+  rollout(opts) { return agentView.rollout(opts); },
+
+  // agentHelp() — a compact manifest of the agent-facing surface and the
+  // observe/decide/rollout loop, so an agent can discover it without the docs.
+  agentHelp() { return agentView.agentHelp(); },
+
+  // scene({radius, kinds, limit} | {visible:true})? — NAMED scenery around the
+  // car: trees, buildings, grandstands, billboards, mountains, generic props,
+  // plus floodlight masts. Default is a RADIUS around the car (egocentric
+  // distance + bearing). {visible:true} switches the frame of reference to what
+  // the CAMERA can see — the on-screen frustum list that used to be visible().
+  scene(opts) { return agentView.scene(opts); },
+
+  // describe(id) — EVERYTHING known about one entity, by stable id:
+  // "prop:12" | "corner:T3" | "car:4" | "span:2". The drill-down half of the
+  // detail model — unbounded detail about ONE thing is cheap; the ids come back
+  // from scene()/query()/trackInfo()/field().
+  describe(id) { return agentView.describe(id); },
+
+  // atmosphere() — the LIGHT as text. lightState() is rich but raw (RGB triples,
+  // a sun vector, a fog density); an agent can't act on [0.31,0.44,0.68]. This
+  // narrates it: sun elevation and where it sits relative to the car, brightness,
+  // whether floodlights carry the scene, visibility range through fog, wet road.
+  // Raw numbers kept alongside for anything that measures rather than reads.
+  atmosphere() { return agentView.atmosphere(); },
+
+  // query({kind, near, fromS, toS, limit}?) — a bounded SLICE of the world.
+  // Filters compose (kind, radius around the car, arc-position window); the
+  // answer is capped, id-bearing, and returned as prototype + instances so
+  // hundreds of near-identical props cost a shape plus a position each.
+  query(opts) { return agentView.query(opts); },
+
+  // visible({limit}?) — DEPRECATED alias for scene({visible:true}): scenery
+  // chunks in the camera frustum, every car with distance/bearing/screen
+  // position, and corners in view. Needs a rendered frame — typed NoFrameError
+  // under headless(true).
+  visible(opts) { return agentView.visible(opts); },
+
+  // terminal() — episode end split into {done, reason}, where reason is
+  // "finished" | "wrong_way" | "rescued" | null. obs().done conflates the last
+  // two, which an agent needs to tell apart.
+  terminal() { return G.player && G.track ? agentView.terminal() : null; },
 
   // f1api — raw access to the F1API module (Jolpica + OpenF1) used by the
   // data hub. Call e.g. __apex.f1api.schedule() or __apex.f1api.lastRace()

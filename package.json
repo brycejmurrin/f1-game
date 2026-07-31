@@ -28,6 +28,7 @@
     "test:audio":     "node tools/run-playwright.mjs tests/audio-smoke.spec.js",
     "test:modes":     "node tools/run-playwright.mjs tests/season.spec.js tests/time-trial.spec.js",
     "test:circuit":   "node tools/run-playwright.mjs tests/tracks-walls.spec.js tests/autopilot.spec.js tests/elevation-tracks.spec.js tests/audit.spec.js",
+    "test:agent": "node tools/run-playwright.mjs tests/agent-view.spec.js tests/agent-drive-bench.spec.js",
     "test:map":       "node tools/run-playwright.mjs tests/map-hooks.spec.js",
     "test:paths":     "node tools/run-playwright.mjs tests/output-paths.spec.js",
     "test:service-worker": "node --test tests/service-worker.test.mjs",

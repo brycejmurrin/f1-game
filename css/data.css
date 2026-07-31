@@ -3,23 +3,28 @@
 
 .dh-overlay {
   position: fixed; inset: 0; z-index: 50;
-  height: 100vh; height: 100dvh;
+  height: 100vh; height: 100svh;
   display: flex; align-items: center; justify-content: center;
   background: rgba(4, 4, 8, 0.82);
-  padding: calc(12px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px));
+  /* Shared safe-area tokens, same as every other full-screen overlay — so the
+     card clears the notch and home indicator identically (and the menu-fit
+     notch simulation, which overrides --sa*, actually reaches this screen).
+     Was raw env(), which the sim could not touch and which drifted from the
+     rest of the app. */
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
   font-variant-numeric: tabular-nums;
 }
 
 /* In short landscape, stretch to fill full height (phone rotated) */
-@media (orientation: landscape) and (max-height: 520px) {
-  .dh-overlay { align-items: stretch; padding-top: 6px; padding-bottom: 6px; }
+@media (orientation: landscape) and (max-height: 560px) {
+  .dh-overlay { align-items: stretch; }
 }
 
 .dh-card {
-  width: min(760px, 96vw);
+  width: min(760px, 100%);
   /* Always fill most of the viewport — content scrolls inside */
-  min-height: clamp(300px, calc(100dvh - 60px), 900px);
-  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
+  min-height: clamp(300px, calc(100svh - 60px), 900px);
+  max-height: calc(100svh - var(--sat) - var(--sab) - 2 * var(--gut));
   display: flex; flex-direction: column;
   background: #0d0d14;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -28,7 +33,7 @@
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
 }
 /* Short landscape: card fills full height, no extra radius on top (flush with safe area) */
-@media (orientation: landscape) and (max-height: 520px) {
+@media (orientation: landscape) and (max-height: 560px) {
   .dh-card { min-height: 0; height: 100%; max-height: none; border-radius: 10px; }
 }
 
@@ -41,24 +46,29 @@
 }
 .dh-title { font-size: 18px; font-weight: 800; font-style: italic; letter-spacing: 0.05em; color: #fff; flex: 1; }
 .dh-close {
-  width: 34px; height: 34px; flex: 0 0 auto;
+  /* Primary control — a thumb target, not a 34px glyph. */
+  width: var(--tap); height: var(--tap); flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
   border-radius: 8px; padding: 0; font-size: 16px;
   background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: #c4c4c8; cursor: pointer;
 }
-.dh-close:hover { background: rgba(255,255,255,0.14); color: #fff; }
+@media (hover: hover) {
+  .dh-close:hover { background: rgba(255,255,255,0.14); color: #fff; }
+}
+.dh-close:active { background: rgba(255,255,255,0.18); color: #fff; }
 
 .dh-tabs {
   display: flex; gap: 6px; padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex: 0 0 auto;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   flex-wrap: nowrap;
 }
 .dh-tabs::-webkit-scrollbar { display: none; }
 .dh-tab {
   flex: 0 0 auto;
+  min-height: var(--tap);         /* primary nav — full thumb height */
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
@@ -69,7 +79,10 @@
   text-align: center;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.dh-tab:hover { background: rgba(255,255,255,0.11); color: #c4c4c8; border-color: rgba(255,255,255,0.22); }
+@media (hover: hover) {
+  .dh-tab:hover { background: rgba(255,255,255,0.11); color: #c4c4c8; border-color: rgba(255,255,255,0.22); }
+}
+.dh-tab:active { background: rgba(255,255,255,0.14); color: #c4c4c8; }
 .dh-tab.dh-active {
   background: #e10600;
   border-color: #e10600;
@@ -79,9 +92,11 @@
 
 .dh-content {
   flex: 1 1 auto;
-  overflow-y: auto;
+  overflow-y: auto; overflow-x: hidden;
+  /* a flick at the end of a long standings table shouldn't rubber-band the page
+     behind the hub */
+  overscroll-behavior-y: contain;
   padding: 16px 18px;
-  -webkit-overflow-scrolling: touch;
   display: flex; flex-direction: column;  /* so flex:1 children (loading/error) expand */
 }
 /* Tighter padding on small phones */
@@ -175,7 +190,9 @@
   border-bottom: 1px solid rgba(255,255,255,0.10);
 }
 .dh-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
-.dh-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+@media (hover: hover) {
+  .dh-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+}
 .dh-table td { padding: 7px 6px; vertical-align: middle; }
 .dh-td-pos { width: 26px; text-align: right; color: #8a8a95; }
 /* chip + driver name side by side in the driver cell */
@@ -257,7 +274,10 @@
   padding: 3px 6px; margin: 0; color: inherit; font: inherit;
   letter-spacing: 0.04em; cursor: pointer; transition: opacity 0.12s;
 }
-button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
+@media (hover: hover) {
+  button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
+}
+button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-legend-item.dh-off { opacity: 0.35; }
 .dh-legend-item.dh-legend-static { cursor: default; font-style: italic; }
 /* compare-mode legend group: [LABEL][solid chip][dashed chip] — the label
@@ -413,7 +433,7 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 }
 
 /* Standings: in landscape phone the two columns appear side-by-side with tighter rows */
-@media (orientation: landscape) and (max-height: 520px) {
+@media (orientation: landscape) and (max-height: 560px) {
   .dh-row { padding: 4px 4px; font-size: 12px; }
   .dh-pts { min-width: 36px; }
   .dh-gap { min-width: 30px; }
@@ -421,8 +441,11 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 
 /* ── Schedule 2-column grid in landscape ──────────────── */
 .dh-race-grid { display: flex; flex-direction: column; }
-@media (orientation: landscape) and (max-height: 520px) {
-  .dh-race-grid { display: grid; grid-template-columns: 1fr 1fr; }
+@media (orientation: landscape) and (max-height: 560px) {
+  /* minmax(0, …), not 1fr: a bare 1fr floors each column at its longest race
+     name's min-content width, so a wide GP title pushed the grid ~10px past the
+     card edge. The 0 floor lets the cell shrink and the name ellipsize. */
+  .dh-race-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 12px; }
 }
 
 /* ── Session picker: GP + session selects side-by-side ── */
@@ -516,14 +539,14 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   position: fixed; inset: 0; z-index: 60;
   background: rgba(4, 4, 8, 0.88);
   display: flex; align-items: center; justify-content: center;
-  padding: calc(10px + env(safe-area-inset-top, 0px))
-           calc(10px + env(safe-area-inset-right, 0px))
-           calc(10px + env(safe-area-inset-bottom, 0px))
-           calc(10px + env(safe-area-inset-left, 0px));
+  /* Shared safe tokens, same as the hub and every other overlay — the raw
+     env() here could not be reached by the notch simulation and, paired with a
+     98vw card, left the trace panel poking under a landscape notch. */
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
 }
 .dh-tpopup-card {
-  width: min(860px, 98vw);
-  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 20px);
+  width: min(860px, 100%);
+  max-height: calc(100svh - var(--sat) - var(--sab) - 2 * var(--gut));
   background: #0d0d14;
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 14px;
@@ -550,7 +573,6 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   flex: 1; min-height: 0;
   display: flex; flex-direction: column;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 /* Content areas */
@@ -589,10 +611,13 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
 }
 
 /* Landscape: chart in left column, gauges + map in right sidebar */
-@media (orientation: landscape) and (max-height: 520px) {
-  .dh-tpopup { padding: 5px; }
+@media (orientation: landscape) and (max-height: 560px) {
+  /* Keep the safe-area inset (this rule used to flatten it to 5px, putting the
+     trace panel back under a landscape notch); just trim the extra breathing
+     room a short screen can't spare. */
+  .dh-tpopup { padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
   .dh-tpopup-card {
-    max-height: calc(100dvh - 10px);
+    max-height: calc(100svh - var(--sat) - var(--sab));
     border-radius: 10px;
     width: 100%;
   }
@@ -603,7 +628,7 @@ button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
   }
   .dh-tpopup-title > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dh-tpopup-sub { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dh-tpopup .dh-close { width: 26px; height: 26px; font-size: 13px; border-radius: 6px; }
+  .dh-tpopup .dh-close { width: 34px; height: 34px; font-size: 14px; border-radius: 6px; }
   .dh-tpopup-body {
     flex-direction: row;
     overflow: hidden;

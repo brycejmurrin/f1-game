@@ -155,7 +155,8 @@ body.hud-hidden .touchbtn { display: none !important; }
   opacity: 0.5;
   display: none;            /* only visible while the HUD is hidden */
 }
-#hud-restore:hover, #hud-restore:active { opacity: 0.95; }
+@media (hover: hover) { #hud-restore:hover { opacity: 0.95; } }
+#hud-restore:active { opacity: 0.95; }
 body.hud-hidden #hud-restore { display: block; }
 /* Camera picker grid: opened by press-and-hold on the CAM button. Anchored
    under the button (top-right), thumb-reachable in landscape. */
@@ -196,21 +197,9 @@ body.hud-hidden #hud-restore { display: block; }
   z-index: 22;
 }
 
-/* ---------- results ---------- */
-/* Header + scrolling table + fixed action bar. The bar was position:sticky over
-   the scrolling panel — rows ghosted through its translucent backing and bled
-   into the panel's bottom padding strip. Scrolling only the table keeps
-   MENU / RACE AGAIN solid and always tappable. */
-#results, #standings { display: flex; flex-direction: column; overflow: hidden; }
-#results-table, #standings-body { overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
-#results .sel-actions,
-#standings .sel-actions {
-  flex-shrink: 0;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.10);
-  justify-content: center;
-}
+/* ---------- results / standings rows ----------
+   The shell (header + scrolling body + pinned action bar) is the shared .sheet
+   in css/components.css now; only the row styling lives here. */
 #results-table { font-size: 14px; font-variant-numeric: tabular-nums; }
 #results-table .res-row { display: flex; gap: 10px; padding: 8px 6px; align-items: center; border-radius: 5px; }
 #results-table .res-row:nth-child(even) { background: rgba(255,255,255,0.03); }
@@ -226,24 +215,9 @@ body.hud-hidden #hud-restore { display: block; }
 #results-table .res-swatch { width: 4px; height: 20px; border-radius: 2px; flex-shrink: 0; }
 #results-table .res-name { flex: 1; }
 #results-table .res-pts { width: 62px; text-align: right; white-space: nowrap; }
+#results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot, #advanced .sheet-foot { justify-content: center; }
 
 /* ---------- how to play ---------- */
-#howtoplay { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); }
-#howtoplay-inner { width: min(92vw, 560px); }
-/* Same fixed-footer pattern as #results: title + scrollable body (.panel-scroll
-   / dl) + solid DONE bar, replacing the sticky bar that floated over content. */
-#howtoplay-inner,
-#advanced-inner { display: flex; flex-direction: column; overflow: hidden; }
-#howtoplay-inner dl,
-#advanced-inner .panel-scroll { overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
-#howtoplay-inner .sel-actions,
-#advanced-inner .sel-actions {
-  flex-shrink: 0;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.10);
-  justify-content: center;
-}
 #howtoplay dl {
   display: grid;
   grid-template-columns: max-content 1fr;

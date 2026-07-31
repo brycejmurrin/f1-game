@@ -16,10 +16,89 @@ const renderStatBars = (...a) => G.renderStatBars(...a);
 // for a free crossfade, else run it plainly. Zero dependency, purely visual —
 // the swap always happens; only the animation is enhanced. Reduced-motion is
 // honoured by the ::view-transition CSS in css/tokens.css.
+//
+// The `applied` guard + timeout are not decoration: a fire-and-forget
+// startViewTransition can DROP its update callback when the page is not actively
+// compositing (reproduced opening the track-detail modal from the static select
+// screen, where no game-loop frames are running — the modal simply never
+// appeared). The safety net applies the DOM change directly if the transition
+// has not run it within a couple of frames; the guard makes a double-fire a
+// no-op if the transition callback later runs after all.
 const vt = (fn) => {
-  if (document.startViewTransition) document.startViewTransition(fn);
-  else fn();
+  if (!document.startViewTransition) { fn(); return; }
+  let applied = false;
+  const run = () => { if (applied) return; applied = true; fn(); };
+  try {
+    const t = document.startViewTransition(run);
+    if (t && t.updateCallbackDone) t.updateCallbackDone.catch(() => {});
+  } catch (_) { run(); return; }
+  setTimeout(run, 60);
 };
+
+// ---- team card + full-screen team picker ----------------------------------
+// The select screen shows ONE big card for the current team; the twelve-way
+// choice lives in its own sheet. That keeps the identity column short enough
+// that DRIVER, the car stats and DIFFICULTY all stay on screen on a phone.
+const teamPicker = () => $("teampicker");
+
+function teamSwatch(t) {
+  const sw = document.createElement("span");
+  sw.className = "tm-colour";
+  // Two-tone: the livery's primary with its accent as a stripe, which is what
+  // makes teams distinguishable at a glance (several 2026 cars are near-black).
+  sw.style.background = "linear-gradient(135deg," + cssCol(t.color) + " 62%," + cssCol(t.color2 || t.color) + " 62%)";
+  sw.setAttribute("aria-hidden", "true");
+  return sw;
+}
+
+function buildTeamCard(t) {
+  const card = $("sel-team-card");
+  if (!card) return;
+  card.textContent = "";
+  card.className = "team-card";
+  const body = document.createElement("span");
+  body.className = "tm-body";
+  const name = document.createElement("span");
+  name.className = "tm-name"; name.textContent = t.name;
+  const sub = document.createElement("span");
+  sub.className = "tm-sub"; sub.textContent = t.short + " · " + (t.engine || "") + " engine";
+  body.append(name, sub);
+  const chev = document.createElement("span");
+  chev.className = "tm-chev"; chev.textContent = "\u25BE"; chev.setAttribute("aria-hidden", "true");
+  card.append(teamSwatch(t), body, chev);
+  card.onclick = () => { teamPicker().hidden = false; ScrollFadeRefresh(); };
+}
+
+function buildTeamPicker() {
+  els.selTeams.textContent = "";
+  Teams.LIST.forEach((t, i) => {
+    const b = document.createElement("button");
+    b.className = "team-tile" + (i === G.teamIdx ? " active" : "");
+    // A visual outline is not a state a screen reader can see; role=option +
+    // aria-selected is what makes the current team announce as current.
+    b.setAttribute("role", "option");
+    b.setAttribute("aria-selected", i === G.teamIdx ? "true" : "false");
+    const body = document.createElement("span");
+    body.className = "tm-body";
+    const name = document.createElement("span");
+    name.className = "tm-name"; name.textContent = t.name;
+    const sub = document.createElement("span");
+    sub.className = "tm-sub";
+    sub.textContent = t.drivers.map((d) => "#" + d.num + " " + d.name.split(" ").pop()).join("  ·  ");
+    body.append(name, sub);
+    b.append(teamSwatch(t), body);
+    b.onclick = () => {
+      G.teamIdx = i; G.driverIdx = 0; store.set("team", i);
+      teamPicker().hidden = true;
+      vt(() => { buildSelect(); tickUi(); });
+    };
+    els.selTeams.appendChild(b);
+  });
+}
+
+// Panes only measure themselves when something tells them to; opening a sheet
+// is exactly such a moment (see js/game/scrollfade.js).
+const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refresh(); };
 
 function buildSelect() {
   els.selTitle.textContent = G.seasonMode ? "SEASON — ROUND " + ((G.season && G.season.round || 0) + 1)
@@ -28,20 +107,14 @@ function buildSelect() {
   els.selTrackSection.hidden = false;
   if (els.selCircuitLabel) els.selCircuitLabel.textContent = G.seasonMode ? "NEXT RACE" : "CIRCUIT";
   els.selDiffSection.hidden = G.timeTrial;       // no AI in a time trial
-  els.selTeams.textContent = "";
-  Teams.LIST.forEach((t, i) => {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (i === G.teamIdx ? " active" : "");
-    const sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = cssCol(t.color);
-    b.append(sw, document.createTextNode(t.short));
-    b.onclick = () => { G.teamIdx = i; G.driverIdx = 0; store.set("team", i); vt(() => { buildSelect(); tickUi(); }); };
-    els.selTeams.appendChild(b);
-  });
+  buildTeamPicker();
   const team = Teams.LIST[G.teamIdx];
+  buildTeamCard(team);
   els.selDriver.textContent = "";
   team.drivers.forEach((d, i) => {
     const b = document.createElement("button");
     b.className = "sel-chip" + (i === G.driverIdx ? " active" : "");
+    b.setAttribute("aria-pressed", i === G.driverIdx ? "true" : "false");
     b.textContent = "#" + d.num + " " + d.name;
     b.onclick = () => { G.driverIdx = i; store.set("driver", i); vt(() => { buildSelect(); tickUi(); }); };
     els.selDriver.appendChild(b);
@@ -77,6 +150,8 @@ function buildSelect() {
       const row = document.createElement("button");
       row.className = "track-row" + (i === G.trackIdx ? " active" : "");
       row.setAttribute("aria-label", t.name);
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", i === G.trackIdx ? "true" : "false");
 
       const nm = document.createElement("span");
       nm.className = "track-row-name";
@@ -108,6 +183,7 @@ function buildSelect() {
   ["easy", "normal", "hard"].forEach((d) => {
     const b = document.createElement("button");
     b.className = "sel-chip" + (d === G.difficulty ? " active" : "");
+    b.setAttribute("aria-pressed", d === G.difficulty ? "true" : "false");
     b.textContent = d.toUpperCase();
     b.onclick = () => { G.difficulty = d; store.set("difficulty", d); vt(() => { buildSelect(); tickUi(); }); };
     els.selDiff.appendChild(b);

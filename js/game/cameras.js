@@ -200,7 +200,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
       eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
       tgt = aheadPt(far ? 9 : 6, far ? 1.0 : 0.7, x * 0.4);
     }
-    fov = lerp(52, 66, spN) + (far ? 4 : 0) + dep * 3;
+    // Gentle speed→FOV (was 52..66, a 14° zoom that read as the camera
+    // "shifting" with speed): halve the swing so the world doesn't breathe as
+    // you accelerate. Still a subtle widen for speed feel.
+    fov = lerp(57, 63, spN) + (far ? 4 : 0) + dep * 3;
   }
   // ---- ground floor -------------------------------------------------------
   // The broadcast framings (heli, cinematic, roadside, low, drift) place the eye

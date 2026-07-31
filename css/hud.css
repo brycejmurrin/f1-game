@@ -254,7 +254,8 @@ body.pc-uihidden #lighting-inner { display: none !important; }
   opacity: 0.5;
   display: none;            /* only visible while the photo UI is hidden */
 }
-#pc-restore:hover, #pc-restore:active { opacity: 0.95; }
+@media (hover: hover) { #pc-restore:hover { opacity: 0.95; } }
+#pc-restore:active { opacity: 0.95; }
 body.pc-uihidden #pc-restore { display: block; }
 /* touch: hide the desktop key hint (no keyboard); narrow screens too */
 @media (pointer: coarse), (max-width: 720px) { .pc-hint { display: none; } }
