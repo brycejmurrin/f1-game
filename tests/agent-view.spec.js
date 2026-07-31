@@ -245,6 +245,67 @@ test.describe("field()", () => {
   });
 });
 
+// ── road shape: banking, gradient, kerbs ─────────────────────────────────────
+// Three things the track always knew and never told the agent. Both bugs here
+// were found by reading real output, not by a failing assertion: banking has TWO
+// sources and the usually-populated one is not the obvious one, and its sign is
+// inverted relative to the naive reading.
+
+test.describe("corner road shape", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("Spa's corners carry gradient and kerbs", async ({ page }) => {
+    await load(page, "spa", 0.03, 60);
+    const cs = await page.evaluate(() =>
+      window.__apex.trackInfo({ what: "corners" }).corners);
+    for (const c of cs) {
+      expect(typeof c.gradientPct).toBe("number");
+      expect(["uphill", "downhill", "level"]).toContain(c.elevation);
+      expect(["flat", "banked into the turn", "off-camber"]).toContain(c.camber);
+      if (c.kerbs) for (const k of c.kerbs) expect(["left", "right"]).toContain(k);
+    }
+    // Spa climbs hard through Eau Rouge/Raidillon — at least one steep ascent
+    expect(cs.some((c) => c.gradientPct > 5)).toBe(true);
+    expect(cs.some((c) => c.gradientPct < -5)).toBe(true);
+    // and it is kerbed
+    expect(cs.some((c) => c.kerbs && c.kerbs.length)).toBe(true);
+  });
+
+  test("authored bank zones read as banked INTO the turn, not off-camber", async ({ page }) => {
+    // Abu Dhabi authors bankZones; they raise the OUTER edge, so every one of
+    // them must help its corner. This is the test that catches an inverted sign.
+    await load(page, "abudhabi", 0.03, 60);
+    const banked = await page.evaluate(() =>
+      window.__apex.trackInfo({ what: "corners" }).corners
+        .filter((c) => Math.abs(c.bankingDeg) > 0.5));
+    expect(banked.length).toBeGreaterThan(0);
+    for (const c of banked) {
+      expect(c.camber, c.turn + " " + c.dir + " @" + c.bankingDeg + "deg")
+        .toBe("banked into the turn");
+      // and the sign must follow the documented convention
+      if (c.dir === "L") expect(c.bankingDeg).toBeGreaterThan(0);
+      if (c.dir === "R") expect(c.bankingDeg).toBeLessThan(0);
+    }
+  });
+
+  test("pacenotes pick up elevation and camber mutators", async ({ page }) => {
+    await load(page, "spa", 0.03, 60);
+    const pn = await page.evaluate(() =>
+      window.__apex.world({ detail: "drive" }).pacenotes);
+    // Spa is the elevation circuit — the callout must say so
+    expect(pn).toMatch(/uphill|downhill/);
+    expect(pn).toMatch(/[LR][1-6] @\d+m/);
+  });
+
+  test("the added detail does not blow the world() budget", async ({ page }) => {
+    await load(page);
+    const n = await page.evaluate(() =>
+      JSON.stringify(window.__apex.world({ detail: "drive" })).length);
+    // the whole point of drill-down: the per-tick payload stays lean
+    expect(n).toBeLessThan(4500);
+  });
+});
+
 // ── atmosphere() — the light, narrated ───────────────────────────────────────
 // lightState() is rich but raw; an agent cannot act on an RGB triple. These pin
 // that the narration is CORRECT, which is where the bugs were: at night the

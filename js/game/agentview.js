@@ -321,7 +321,74 @@ const AgentView = (function () {
         if (gap < 0) gap += G.track.total;
         c.straightAfterM = r1(gap);
         c.exitsOntoStraight = gap >= STRAIGHT_EXIT_M;
+        // Three things the track has always known and never told the agent:
+        // how the road is TILTED, whether it climbs or falls, and where the
+        // kerbs are. All three change how a corner is driven.
+        Object.assign(c, roadShapeAt(c.s, c.entryS, c.exitS, c.dir));
         delete c._entry; delete c._exit; delete c._s;
+      }
+      return out;
+    }
+
+    // Banking, gradient and kerbs at a point on the road. `Tracks.bankAngle`,
+    // `track.kerbL/kerbR` and the elevation samples all existed and were never
+    // surfaced. Signs follow the usual convention: + bank = the road tilts down
+    // to the RIGHT, + gradient = climbing.
+    function roadShapeAt(s, entryS, exitS, dir) {
+      const track = G.track, out = {};
+
+      // Banking has TWO sources and only one of them is usually populated.
+      // `track.bank[]` (via Tracks.bankAngle) is a per-node authored tilt that
+      // almost no circuit sets; the banking a driver actually feels comes from
+      // `def.bankZones` -> `track.bankP`, which Tracks.banking() turns into the
+      // real road-plane roll. Reading only bankAngle reported 0 deg on Abu
+      // Dhabi's banked corners. Prefer the real roll, fall back to the node
+      // array.
+      //
+      // Sign: bankingProfile raises the OUTER edge, and marks it with bsign
+      // (+1 = right edge). roll = atan2(lift*bsign, 2*hw), so a RIGHT-hander —
+      // whose outer edge is the left one — yields a NEGATIVE roll. Hence
+      // + bankingDeg = right edge raised = the road holds a LEFT-hander.
+      let bankRad = 0;
+      const bk = Tracks.banking ? Tracks.banking(track, wrapS(s), 0) : null;
+      if (bk && bk.roll) bankRad = bk.roll;
+      else if (Tracks.bankAngle) bankRad = Tracks.bankAngle(track, wrapS(s)) || 0;
+      const bankDeg = r1(bankRad * 180 / Math.PI);
+      out.bankingDeg = bankDeg;
+      // Banked into the turn = the road holds the car; adverse camber throws it
+      // out. Which one it is depends on the corner's direction, so say it.
+      if (Math.abs(bankDeg) < 1.5 || (dir !== "L" && dir !== "R")) {
+        out.camber = "flat";
+      } else {
+        // + = right edge raised, which holds a LEFT-hander (see the sign note).
+        out.camber = ((dir === "L") === (bankDeg > 0)) ? "banked into the turn"
+                                                       : "off-camber";
+      }
+
+      // Gradient across the corner (or +/-40 m when no span is given), as a
+      // percentage — the form a driver reads.
+      const a = entryS != null ? entryS : s - 40, b = exitS != null ? exitS : s + 40;
+      Tracks.sample(track, wrapS(a), scr); const y0 = scr.p[1];
+      Tracks.sample(track, wrapS(b), scr); const y1 = scr.p[1];
+      const run = Math.max(Math.abs(b - a), 1);
+      const grade = (y1 - y0) / run * 100;
+      out.gradientPct = r1(grade);
+      out.elevation = grade > 1.5 ? "uphill" : grade < -1.5 ? "downhill" : "level";
+
+      // Kerbs are per-node flags; report which sides carry one through the corner.
+      if (track.kerbL && track.kerbR) {
+        const nn = track.n, L = track.total;
+        let kl = 0, kr = 0, samples = 0;
+        for (let d = a; d <= b; d += 5) {
+          const k = Math.floor((((d % L) + L) % L) / L * nn) % nn;
+          if (track.kerbL[k]) kl++;
+          if (track.kerbR[k]) kr++;
+          samples++;
+        }
+        const sides = [];
+        if (samples && kl / samples > 0.2) sides.push("left");
+        if (samples && kr / samples > 0.2) sides.push("right");
+        out.kerbs = sides.length ? sides : null;
       }
       return out;
     }
@@ -384,6 +451,9 @@ const AgentView = (function () {
         apexSpeedKph: best.apexSpeedKph,
         straightAfterM: best.straightAfterM,
         exitsOntoStraight: best.exitsOntoStraight,
+        bankingDeg: best.bankingDeg, camber: best.camber,
+        gradientPct: best.gradientPct, elevation: best.elevation,
+        kerbs: best.kerbs,
         suggestBrakeM: r1(brakeM), status,
         note: "suggestBrakeM assumes ~" + BRAKE_DECEL + " m/s^2 braking and ~"
               + LAT_GRIP + " m/s^2 lateral grip — a hint, not the car's physics. "
@@ -412,6 +482,7 @@ const AgentView = (function () {
           turn: c.turn, dir: c.dir, radiusM: c.radiusM, severity: c.severity,
           distM: Math.max(0, r1(d)), apexSpeedKph: c.apexSpeedKph,
           exitsOntoStraight: c.exitsOntoStraight, suggestBrakeM: r1(brakeM),
+          camber: c.camber, elevation: c.elevation, kerbs: c.kerbs,
         };
       });
     }
@@ -442,7 +513,12 @@ const AgentView = (function () {
       if (!seq.length) return "clear road ahead";
       return seq.map((c) => {
         const sev = paceSev(c.radiusM);
+        // Rally pacenotes carry exactly these mutators — crest, off-camber,
+        // don't-cut — because they are what changes the call.
         const tags = [];
+        if (c.elevation === "uphill") tags.push("uphill");
+        else if (c.elevation === "downhill") tags.push("downhill");
+        if (c.camber === "off-camber") tags.push("off-camber");
         if (c.exitsOntoStraight) tags.push("into-str");
         if (sev <= 2) tags.push("don't-cut");
         return c.dir + sev + " @" + Math.round(c.distM) + "m"
