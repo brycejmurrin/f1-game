@@ -476,6 +476,41 @@ larger share of a small payload — a combination never tested until the numbers
 forced the question. The feature earns its place, but not for the reason it was
 built, and not where it was expected to.
 
+## 5g. Why frame() is not ASCII art
+
+The obvious reading of "render the game to text" is a luminance ramp: shade the
+scene, map brightness to `.:-=+*#%@`, done. That is how every ASCII renderer
+works and it is the wrong target here, because the reader is a model rather than
+an eye.
+
+[ASCIIEval](https://arxiv.org/abs/2410.01733) benchmarks exactly this and finds
+LLMs "remain far behind human performance in shape recognition" from character
+art. A luminance ramp asks the reader to reconstruct a shape from shading — the
+documented weak spot. Semantic glyphs skip the step entirely: the character
+already says what it is, so nothing has to be recognised.
+
+Three further findings from the same work, each of which changed a default:
+
+- **Accuracy is sensitive to the LENGTH of the art**, and a *low-resolution*
+  prompting strategy improves perception. More cells is not more legible. The
+  default grid is small deliberately and the docs say so, against the natural
+  instinct to raise resolution when something reads poorly.
+- **Text-and-image together scores below image alone**, which retires the idea
+  of shipping the raster next to a screenshot as belt-and-braces.
+- **Text input beats image input** for this content, which is the same direction
+  BALROG found for game observations generally.
+
+What the renderer literature *did* contribute is the geometry. A character cell
+is about twice as tall as it is wide, so a grid whose ratio matches the
+viewport renders squashed — the fixed 48x18 default was an effective 1.33
+against a 2.16 viewport, stretching a square object 1.6x vertically. Rows are
+now derived from the real aspect unless pinned.
+
+And the one photometric idea worth keeping is the one that is *measured* rather
+than modelled: a depth channel. The raster already builds a depth buffer to
+solve occlusion, so reading it out costs nothing, it is a genuine render target,
+and interpreting "3" as seven metres needs no shape recognition at all.
+
 ## 6. Open questions
 
 - **Prop registry granularity.** Per composite model, or per emitted

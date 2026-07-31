@@ -418,6 +418,54 @@ test.describe("frame()", () => {
     }
   });
 
+  test("rows are derived so the image is not squashed", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    // A character cell is ~2x taller than wide, so a grid whose ratio equals the
+    // viewport renders squashed. The old 48x18 default was an effective 1.33
+    // against a 2.16 viewport — a square object came out 1.6x too tall.
+    const f = await page.evaluate(() => window.__apex.frame({ cols: 48 }));
+    expect(f.grid.aspect.corrected).toBe(true);
+    expect(Math.abs(f.grid.aspect.renderedAspect - f.grid.aspect.viewport))
+      .toBeLessThan(0.15);
+    expect(f.grid.rows).toBe(f.grid.lines.length);
+  });
+
+  test("pinned rows are honoured and flagged as uncorrected", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    const f = await page.evaluate(() => window.__apex.frame({ cols: 48, rows: 24 }));
+    expect(f.grid.rows).toBe(24);
+    expect(f.grid.aspect.corrected).toBe(false);
+    expect(f.grid.aspect.note).toContain("pinned");
+  });
+
+  test("the depth channel is a real, monotonic depth buffer", async ({ page }) => {
+    await load(page, "monza", 0.05, 60);
+    await renderFrames(page);
+    const f = await page.evaluate(() => window.__apex.frame({ cols: 40, depth: true }));
+    expect(f.depth.lines.length).toBe(f.grid.rows);
+    expect(f.depth.scaleM.length).toBe(10);
+    // the scale is logarithmic and increasing, so the near field gets resolution
+    for (let i = 1; i < f.depth.scaleM.length; i++) {
+      expect(f.depth.scaleM[i]).toBeGreaterThan(f.depth.scaleM[i - 1]);
+    }
+    // the road runs away from the camera: the bottom row must read nearer than
+    // a row up by the horizon
+    const digits = (line) => line.split("").filter((c) => c !== " ").map(Number);
+    const bottom = digits(f.depth.lines[f.depth.lines.length - 1]);
+    const mid = digits(f.depth.lines[Math.max(0, f.grid.horizonRow)]);
+    const avg = (a) => a.reduce((x, y) => x + y, 0) / Math.max(a.length, 1);
+    expect(avg(bottom)).toBeLessThan(avg(mid));
+  });
+
+  test("depth is omitted unless asked for", async ({ page }) => {
+    await load(page);
+    await renderFrames(page);
+    const f = await page.evaluate(() => window.__apex.frame({ cols: 32 }));
+    expect(f.depth).toBeUndefined();
+  });
+
   test("never returns null — a render or an actionable error", async ({ page }) => {
     await boot(page);
     const f = await page.evaluate(() => window.__apex.frame());

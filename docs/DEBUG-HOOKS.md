@@ -976,7 +976,7 @@ your right. Everything else is the usual convention (`+x` right of centreline,
 braking and ~26 m/s² lateral grip. Treat it as a reference to check against, not
 a target.
 
-### `frame({cols, rows, rangeM, limit}?) → render | typedError`
+### `frame({cols, rows, cellAspect, rangeM, depth, limit}?) → render | typedError`
 
 **The screenshot replacement.** `visible()` lists what is on screen; this shows
 *where*, by rasterising the scene into a character grid with per-cell depth
@@ -998,6 +998,40 @@ Returned as `grid.lines` plus a `legend` (only glyphs actually drawn),
 Why a grid rather than a picture: [BALROG](https://arxiv.org/abs/2411.13543)
 found VLMs score *lower* with the image than with text alone, and a few hundred
 tokens of raster carries the composition and occlusion a screenshot carries.
+
+**Why it is not ASCII art.** The obvious "render to text" is a luminance ramp —
+map brightness to `.:-=+*#%@`. That is the wrong target for a model reader.
+[ASCIIEval](https://arxiv.org/abs/2410.01733) measures LLMs on exactly this and
+finds they "remain far behind human performance in shape recognition"; a ramp
+demands the model reconstruct a shape from shading, which is the documented
+weak spot. Semantic glyphs skip that step — each character already says what it
+is. Two further findings from the same work shape the defaults:
+
+- **Accuracy is sensitive to the LENGTH of the art**, and a low-resolution
+  prompting strategy *improves* perception. More cells is not more legible, so
+  the default grid is small on purpose. Ask for 160 columns and you will likely
+  read it worse.
+- **Text-and-image together scores below image alone.** Don't pair this with a
+  screenshot and expect the best of both.
+
+**Aspect.** A character cell is about twice as tall as it is wide, so a grid
+whose ratio matches the viewport renders *squashed*. `rows` is therefore derived
+from `gfx.aspect` and `cellAspect` (default 2) unless you pin it — the old fixed
+48x18 default was an effective 1.33 against a 2.16 viewport, stretching a square
+object 1.6x vertically. `grid.aspect` reports what was used and whether it was
+corrected.
+
+**Depth.** `{depth:true}` adds a second channel: per-cell distance as digits
+0 (near) to 9 (far), logarithmic so the near field where driving decisions live
+gets the resolution, with `scaleM` giving the metres for each digit. This is a
+real render target read out of the depth buffer the raster already builds — not
+a synthesised shading model — and reading it needs no shape recognition.
+
+```
+t##t#####ttt######t:====@@@@@@@@@===:######tttttttttt###     35551111155555555554444433333333344445555555555555555555
+t##t#####ttt:===========@@@@@@@@@==========:ttttttttt###     35551111155533333333333333333333333333333333555555555555
+t:=====================================================:    22222222222222222222222222222222222222222222222222222222
+```
 
 Known approximations, all in the same direction — read them before trusting a
 close call:

@@ -714,8 +714,17 @@ const AgentView = (function () {
                     "call __apex.headless(false) and let one frame draw");
       }
       const o = opts || {};
+      // ── raster geometry ──
+      // A character cell is about twice as tall as it is wide, so a grid whose
+      // ratio equals the viewport's renders SQUASHED. The default was 48x18:
+      // ratio 2.67, halved by the cell aspect to an effective 1.33 against a
+      // 2.16 viewport — a square object came out 1.6x too tall. Derive rows from
+      // the real aspect unless the caller pins them.
+      const cellAspect = clamp(o.cellAspect || 2, 1, 4);
+      const viewAspect = (G.gfx && G.gfx.aspect) || 2.16;
       const cols = clamp(o.cols | 0 || 48, 8, 160);
-      const rows = clamp(o.rows | 0 || 18, 4, 60);
+      const autoRows = Math.round(cols / (viewAspect * cellAspect));
+      const rows = clamp(o.rows | 0 || autoRows, 4, 60);
       const range = clamp(o.rangeM || 500, 50, 3000);
       const eye = fr.eye || G.camEye;
 
@@ -867,6 +876,31 @@ const AgentView = (function () {
         lines.push(line);
       }
 
+      // Optional DEPTH channel. A depth buffer is a real render target — this
+      // is measured, not a synthesised shading model, and reading it needs no
+      // shape recognition, which is the thing models are documented to be poor
+      // at in character art. Digits are near (0) to far (9), logarithmic so the
+      // near field where driving decisions live gets the resolution.
+      let depthLines, depthScale;
+      if (o.depth) {
+        const near = 2, far = range;
+        depthScale = [];
+        for (let d = 0; d <= 9; d++) {
+          depthScale.push(r1(near * Math.pow(far / near, d / 9)));
+        }
+        depthLines = [];
+        for (let y = 0; y < rows; y++) {
+          let line = "";
+          for (let x = 0; x < cols; x++) {
+            const w = depth[y * cols + x];
+            if (!isFinite(w)) { line += " "; continue; }
+            const t = Math.log(Math.max(w, near) / near) / Math.log(far / near);
+            line += String(clamp(Math.round(t * 9), 0, 9));
+          }
+          depthLines.push(line);
+        }
+      }
+
       // legend covers only what actually appears, so it stays small
       const used = {};
       for (let i = 0; i < N; i++) used[kind[i]] = (used[kind[i]] || 0) + 1;
@@ -887,8 +921,27 @@ const AgentView = (function () {
         framePending: !!G.headlessMode,
         warning: G.headlessMode
           ? "headless(true) skips render(), so the camera may be stale" : undefined,
-        grid: { cols, rows, rangeM: range, horizonRow, lines },
+        grid: {
+          cols, rows, rangeM: range, horizonRow, lines,
+          // Keep it small on purpose. ASCIIEval finds model accuracy is
+          // sensitive to the LENGTH of the art and that a low-resolution
+          // prompting strategy improves perception — more cells is not more
+          // legible. https://arxiv.org/abs/2410.01733
+          aspect: {
+            viewport: r2(viewAspect), cellAspect,
+            renderedAspect: r2(cols / rows / cellAspect),
+            corrected: !o.rows,
+            note: o.rows
+              ? "rows pinned by the caller; if renderedAspect differs from "
+                + "viewport the image is stretched"
+              : "rows derived from viewport and cell aspect so the image is "
+                + "not squashed",
+          },
+        },
         legend,
+        depth: depthLines ? { lines: depthLines, scaleM: depthScale,
+                              note: "digit -> metres via scaleM; blank = sky or "
+                                    + "ground with no geometry" } : undefined,
         coveragePct: cover,
         objects: objects.slice(0, clamp(o.limit | 0 || 20, 1, 100)),
         lighting: {
@@ -1612,9 +1665,11 @@ const AgentView = (function () {
           "world({detail,horizonS,points,since})":
             "WHERE AM I — egocentric snapshot; detail brief|drive|full; "
             + "`since` returns only what changed",
-          "frame({cols,rows,rangeM,limit})":
+          "frame({cols,rows,cellAspect,rangeM,depth,limit})":
             "WHAT DOES IT LOOK LIKE — the view as a depth-sorted character "
-            + "raster. Use instead of a screenshot. Needs a rendered frame",
+            + "raster, semantic glyphs not shading; {depth:true} adds a depth "
+            + "channel. Keep the grid SMALL — accuracy falls as the art grows. "
+            + "Use instead of a screenshot. Needs a rendered frame",
           "scene({radius,kinds,limit})":
             "WHAT IS AROUND ME — named scenery by distance and bearing",
           "visible({limit})":
