@@ -1,3 +1,4 @@
+@layer overlays {
 /* Apex 26 — trailing cross-section responsive passes: short-landscape compaction, pointer:fine, large screens, focus ring + rotate overlay.
    Split from css/style.css (lines 1312-1560 of the original); the <link>
    order in index.html preserves the original source order, so the cascade
@@ -250,3 +251,4 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--red); outli
   body.in-race #rotate-device { display: flex; }
 }
 
+} /* @layer overlays */

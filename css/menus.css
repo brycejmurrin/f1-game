@@ -1,7 +1,19 @@
+@layer components {
 /* Apex 26 — main menu, select screen + track picker, race settings, customize my team.
-   Split from css/style.css (lines 257-470 of the original); the <link>
-   order in index.html preserves the original source order, so the cascade
-   is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
+   Split from css/style.css (lines 257-470 of the original). Wrapped in the
+   `components` cascade layer (declared in css/tokens.css), matching its former
+   load position. See tools/manifest.cjs CSS. */
+/* ---------- inline icon glyphs (Lucide, ISC) ---------- */
+/* Sized in `em` so an icon tracks its button's font-size; currentColor makes it
+   inherit the button text colour (and thus any team accent applied there). */
+.btn-ico {
+  width: 1em; height: 1em;
+  vertical-align: -0.13em;
+  margin-right: 0.5em;
+  flex: none;
+  overflow: visible;
+}
+
 /* ---------- main menu ---------- */
 #overlay {
   position: fixed; inset: 0;
@@ -215,3 +227,4 @@
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2);
 }
 .cz-liv-none.active { background: rgba(80,170,255,0.22); color: #cfe8ff; border-color: rgba(90,180,255,0.45); }
+} /* @layer components */

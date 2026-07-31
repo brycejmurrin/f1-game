@@ -11,6 +11,16 @@ function create(G) {
 const { $, els, store, cssCol, fmtTime, ttBoard, tickUi, scheduleFlybyTrack } = G;
 const renderStatBars = (...a) => G.renderStatBars(...a);
 
+// Progressive-enhancement screen swap: run a DOM change inside a native
+// same-document View Transition when the browser supports it (Baseline 2025)
+// for a free crossfade, else run it plainly. Zero dependency, purely visual —
+// the swap always happens; only the animation is enhanced. Reduced-motion is
+// honoured by the ::view-transition CSS in css/tokens.css.
+const vt = (fn) => {
+  if (document.startViewTransition) document.startViewTransition(fn);
+  else fn();
+};
+
 function buildSelect() {
   els.selTitle.textContent = G.seasonMode ? "SEASON — ROUND " + ((G.season && G.season.round || 0) + 1)
     : G.timeTrial ? "TIME TRIAL" : "GRAND PRIX";
@@ -24,7 +34,7 @@ function buildSelect() {
     b.className = "sel-chip" + (i === G.teamIdx ? " active" : "");
     const sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = cssCol(t.color);
     b.append(sw, document.createTextNode(t.short));
-    b.onclick = () => { G.teamIdx = i; G.driverIdx = 0; store.set("team", i); buildSelect(); tickUi(); };
+    b.onclick = () => { G.teamIdx = i; G.driverIdx = 0; store.set("team", i); vt(() => { buildSelect(); tickUi(); }); };
     els.selTeams.appendChild(b);
   });
   const team = Teams.LIST[G.teamIdx];
@@ -33,7 +43,7 @@ function buildSelect() {
     const b = document.createElement("button");
     b.className = "sel-chip" + (i === G.driverIdx ? " active" : "");
     b.textContent = "#" + d.num + " " + d.name;
-    b.onclick = () => { G.driverIdx = i; store.set("driver", i); buildSelect(); tickUi(); };
+    b.onclick = () => { G.driverIdx = i; store.set("driver", i); vt(() => { buildSelect(); tickUi(); }); };
     els.selDriver.appendChild(b);
   });
   renderStatBars($("sel-stats"), team);
@@ -89,7 +99,7 @@ function buildSelect() {
         row.appendChild(recEl);
       }
 
-      row.onclick = () => { G.trackIdx = i; store.set("track", i); buildSelect(); tickUi(); scheduleFlybyTrack(); };
+      row.onclick = () => { G.trackIdx = i; store.set("track", i); vt(() => { buildSelect(); tickUi(); }); scheduleFlybyTrack(); };
       els.selTracks.appendChild(row);
     });
     updateTrackPreview();
@@ -99,7 +109,7 @@ function buildSelect() {
     const b = document.createElement("button");
     b.className = "sel-chip" + (d === G.difficulty ? " active" : "");
     b.textContent = d.toUpperCase();
-    b.onclick = () => { G.difficulty = d; store.set("difficulty", d); buildSelect(); tickUi(); };
+    b.onclick = () => { G.difficulty = d; store.set("difficulty", d); vt(() => { buildSelect(); tickUi(); }); };
     els.selDiff.appendChild(b);
   });
 }
@@ -278,7 +288,9 @@ function openTrackDetail() {
     return '<div class="tdc-corner"><span class="tdc-num">T' + c.n + '</span><span class="' + cls + '">' + lbl + '</span></div>';
   }).join("");
 
-  modal.hidden = false;
+  // Crossfade into the full-screen circuit-detail modal (progressive
+  // enhancement; the content above is already populated while hidden).
+  vt(() => { modal.hidden = false; });
   const cv = document.getElementById("track-detail-canvas");
   requestAnimationFrame(function () {
     // Compute the track's natural aspect ratio from its outline points so the

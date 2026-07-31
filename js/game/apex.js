@@ -1064,9 +1064,15 @@ const api = {
   //                             helper, deterministic) → status
   //   debris({marble:true})   → force one seeded tyre-marble emission at the
   //                             player (test helper) → status
-  //   debris({positions:true})→ status + flat positions[] for debris, marbles
-  //                             and furniture (element order = live debris, then
-  //                             live marbles, then furniture)
+  //   debris({positions:true})→ status + flat positions[] for debris, marbles,
+  //                             furniture, then B2 panels (element order = live
+  //                             debris, marbles, furniture, panels)
+  //   status now also carries the Group B fields: panels (live B2 panels),
+  //   panelsBroken (cumulative snapped panels), breakBarriers, marbleGrip.
+  //   debris({hazards:true})  → status + hazards() {sectors[3], total, worst}
+  //                             (B1: settled bodies ON the racing surface)
+  //   debris({marbleGrip:true})→ status + marbleGrip factor for the player (B3)
+  //   debris({flags:{breakBarriers?,marbleGrip?}}) → set Group B disable flags
   debris(arg) {
     if (arg === undefined) return DebrisWorld.status();
     if (typeof arg === "boolean") return DebrisWorld.setEnabled(arg);
@@ -1078,9 +1084,25 @@ const api = {
         DebrisWorld.tyreMarble(G.player, { lock: 1, slip: 0.5, speed: Math.max(12, Math.abs(G.player.speed || 0)) });
         return DebrisWorld.status();
       }
+      if (arg.flags) return DebrisWorld.groupBFlags(arg.flags);
+      if (arg.hazards) return Object.assign(DebrisWorld.status(), { hazards: DebrisWorld.hazards() });
+      if (arg.marbleGrip) return Object.assign(DebrisWorld.status(), { marbleGripFactor: DebrisWorld.marbleGrip(G.player) });
       if (arg.positions) return Object.assign(DebrisWorld.status(), { positions: DebrisWorld.positions() });
     }
     return DebrisWorld.status();
+  },
+
+  // caution(arg?) — the B1 debris caution state (local yellow / VSC / safety car),
+  // a READ-ONLY race-logic layer over DebrisWorld.hazards() (see js/game.js). It
+  // never slows or moves a car. No arg: current state
+  //   { level (0 GREEN·1 YELLOW·2 VSC·3 SC), label, sector, frac, total,
+  //     sectors[3], sinceT, cause, enabled }.
+  //   caution({hazards:true}) → the same state plus the live DebrisWorld.hazards().
+  caution(arg) {
+    const st = G.cautionInfo ? G.cautionInfo() : { level: 0, label: "GREEN", enabled: false };
+    if (arg && typeof arg === "object" && arg.hazards)
+      return Object.assign(st, { hazards: DebrisWorld.hazards() });
+    return st;
   },
 
   // bodyAttitude(arg?) — the C2 visual-suspension springs (js/game/bodyattitude.js).

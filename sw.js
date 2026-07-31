@@ -42,7 +42,18 @@ async function precacheAssetLists() {
     "vendor/three-0.184.0/three.webgpu.min.js",
     "vendor/three-0.184.0/three.core.min.js",
     "vendor/three-0.184.0/three.tsl.min.js",
-    "vendor/three-0.184.0/addons/tsl/display/BloomNode.js"]);
+    "vendor/three-0.184.0/addons/tsl/display/BloomNode.js",
+    // Self-hosted fonts (referenced from css/tokens.css @font-face, so the tag
+    // parser below never sees them). Immutable vendored assets — no ?v=. Seeded
+    // as OPTIONAL: font-display:swap means a missed precache just falls back to
+    // the system stack, so an install must not fail if one is unreachable.
+    "assets/fonts/titillium-web-latin-400-normal.woff2",
+    "assets/fonts/titillium-web-latin-600-normal.woff2",
+    "assets/fonts/titillium-web-latin-700-normal.woff2",
+    "assets/fonts/titillium-web-latin-700-italic.woff2",
+    "assets/fonts/rajdhani-latin-500-normal.woff2",
+    "assets/fonts/rajdhani-latin-600-normal.woff2",
+    "assets/fonts/rajdhani-latin-700-normal.woff2"]);
   const shell = await fetch("index.html", { cache: "no-store" });
   if (!shell || !shell.ok) throw new Error("Unable to fetch the application shell");
   const html = await shell.text();

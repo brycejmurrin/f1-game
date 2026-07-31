@@ -1,3 +1,4 @@
+@layer components {
 /* Apex 26 — the CAR SETUP screen (tabs, options, livery swatches + creator).
    Split from css/style.css (lines 471-787 of the original); the <link>
    order in index.html preserves the original source order, so the cascade
@@ -318,3 +319,4 @@
   .cs-opt { padding: 8px 11px; }
   #carsetup .sel-actions { grid-area: done; margin: 0; padding-top: 2px; }
 }
+} /* @layer components */
