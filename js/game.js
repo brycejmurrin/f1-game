@@ -1656,6 +1656,9 @@ const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomod
 const { buildLightTunePanel, refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 // Steering-tuning sliders + presets (js/game/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
+// Rapier debris side-world (js/game/debrisworld.js) — render-only, opt-in,
+// inert (a single boolean check) unless enabled via apex26.debris/__apex.debris.
+DebrisWorld.create(G);
 
 function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
 function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
@@ -1793,6 +1796,10 @@ function update(dt) {
 
   resolveCollisions(ranked, dt);
 
+  // Rapier debris side-world: reads car poses (kinematic mirrors), owns only
+  // its own shards, writes NOTHING back to gameplay. Inert unless enabled.
+  if (DebrisWorld.active()) DebrisWorld.step(dt);
+
   // race ends when the player finishes, or shortly after the winner does, or
   // at a hard time cap so it can never hang
   if (resultT === 0) {
@@ -1919,6 +1926,8 @@ function resolveCollisions(ranked, dt) {
             }
             a.contactT = b.contactT = 0.22;
             if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
+            // Debris hook (render-only side-world): closing speed = severity.
+            if (last && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
           }
         }
       }
@@ -2555,6 +2564,10 @@ function updateCar(c, dt, ranked) {
   let xPinned = false;   // did the barrier clamp c.x? (see the writeback below)
   if (c.x > wallR || c.x < -wallL) {
     const into = c.x > wallR ? 1 : -1;          // +1 = hit right wall, -1 = left
+    // Debris hook (render-only side-world): the pre-clamp overshoot is the
+    // lateral speed into the wall × dt — the impact severity. First frame only.
+    if (!c.wasOnWall && DebrisWorld.active())
+      DebrisWorld.wallImpact(c, into, into > 0 ? c.x - wallR : -wallL - c.x);
     c.x = into > 0 ? wallR : -wallL;
     xPinned = true;
     if (c.isPlayer) {
@@ -4295,6 +4308,9 @@ function render(dt) {
       }
     }
   }
+
+  // Rapier debris shards (render-only side-world; poses stepped in update()).
+  if (DebrisWorld.active()) DebrisWorld.draw();
 
   // Transient FX particles (tyre smoke / sparks / kickup / spray): advanced
   // with the RENDER dt and drawn into the HDR scene before present, so smoke

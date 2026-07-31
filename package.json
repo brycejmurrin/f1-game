@@ -15,6 +15,7 @@
     "test:hooks":     "node tools/run-playwright.mjs tests/camera-hooks.spec.js tests/camera-driving-hooks.spec.js tests/map-hooks.spec.js tests/new-hooks.spec.js",
     "test:physics":   "node tools/run-playwright.mjs tests/physics-*.spec.js tests/world-physics.spec.js tests/longitudinal.spec.js tests/elevation-tracks.spec.js tests/projection.spec.js",
     "test:collision": "node tools/run-playwright.mjs tests/collision*.spec.js tests/drift.spec.js tests/offtrack.spec.js",
+    "test:debris":    "node tools/run-playwright.mjs tests/debris.spec.js",
     "test:behaviour": "node tools/run-playwright.mjs tests/collision*.spec.js tests/drift.spec.js tests/offtrack.spec.js tests/world-physics.spec.js tests/physics-fixes.spec.js",
     "test:barriers":  "node tools/run-playwright.mjs tests/tracks-walls.spec.js tests/collision-ai-fixes.spec.js",
     "test:parts":     "node tools/run-playwright.mjs tests/parts-*.spec.js tests/car-effects.spec.js tests/carview-parts.spec.js tests/custom-team.spec.js",

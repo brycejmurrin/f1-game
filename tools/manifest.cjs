@@ -115,6 +115,7 @@ const FULL = [
   "js/game/cameras.js",
   "js/game/hud.js",
   "js/game/results.js",
+  "js/game/debrisworld.js",
   "js/game/apex.js",
   "js/game.js",
 ];
