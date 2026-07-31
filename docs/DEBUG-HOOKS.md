@@ -960,13 +960,20 @@ __apex.world({ detail: "brief" })
 //          headingErrDeg, onTrack, halfWidthM, clearLeftM, clearRightM,
 //          energy, grip:{slipFactor, longUsedPct, state, surface, gripMult} },
 //   nextCorner: { turn, dir, radiusM, severity, distM, timeS, apexSpeedKph,
-//                 suggestBrakeM, status, note },
+//                 apexOffsetM, moveToApexM, suggestBrakeM, status, note },
 //   brief: "Lap 3, P4, 218 km/h in 6, T7 L in 84 m — BRAKE NOW for T7, …" }
 ```
 
 `detail:"drive"` adds `ahead:{horizonS, horizonM, pts:[{d,t,radiusM,dir,widthM}]}`,
+`nextCorners:[{turn, dir, radiusM, severity, distM, apexSpeedKph, apexOffsetM,
+suggestBrakeM}]` (the next few corners as a sequence, ordered by distance),
 `rivals:[{id, code, team, rel, gapM, gapS, lateralM, side, speedKph, closingMps,
 threat, lap}]` (sorted by gap, capped at 4), and `affordances` / `unavailable`.
+
+**The ideal line.** `apexOffsetM` is where the fast line sits at the apex (`+` =
+right of centre); `moveToApexM` is the signed lateral distance the car must move
+now to reach it (`+` = to your right). A straight reads 0 for both. This is the
+one line-placement input curvature alone can't give you.
 
 **`rivals[].lateralM` is relative to the PLAYER**, not the centreline — `+` is to
 your right. Everything else is the usual convention (`+x` right of centreline,
@@ -1160,7 +1167,8 @@ Static per-track data — **fetch once per session, never per tick**.
 ```js
 __apex.trackInfo({ what: "corners" }).corners
 // [{ turn:"T9-T10", frac, s, dir:"L", radiusM:134, k, sweepDeg:-168,
-//    severity:"medium", widthM, entryS, exitS, lengthM, apexSpeedKph }, …]
+//    severity:"medium", widthM, entryS, exitS, lengthM, apexSpeedKph,
+//    apexOffsetM }, …]   apexOffsetM = ideal line at the apex (+ = right)
 ```
 
 Corners come from the curated `CircuitMarkings` apex list (real FIA turn

@@ -366,16 +366,24 @@ test.describe("frame() cameras and edges", () => {
     const r = await page.evaluate(() => {
       const cock = window.__apex.frame({ cols: 32, camera: "cockpit" });
       const heli = window.__apex.frame({ cols: 32, camera: "heli" });
+      // A chase camera sits behind the car at road level and reliably frames it;
+      // an overhead heli can be occluded by tall trackside structures, and the
+      // cockpit is inside the car, so neither is a robust "car in shot" probe.
+      const chase = window.__apex.frame({ cols: 64, camera: "chase" });
       return { cockMode: cock.camera.mode, cockSyn: cock.camera.synthetic,
-               heliMode: heli.camera.mode, cockRows: cock.grid.lines.length,
-               heliHasPlayer: (heli.coveragePct.player || 0) > 0 };
+               heliMode: heli.camera.mode, heliSyn: heli.camera.synthetic,
+               cockRows: cock.grid.lines.length,
+               chaseHasPlayer: (chase.coveragePct.player || 0) > 0,
+               cockHasPlayer: (cock.coveragePct.player || 0) > 0 };
     });
     expect(r.cockMode).toBe("cockpit");
     expect(r.cockSyn).toBe(true);
     expect(r.heliMode).toBe("heli");
+    expect(r.heliSyn).toBe(true);
     expect(r.cockRows).toBeGreaterThan(4);
-    // from a helicopter the player car is in shot; from the cockpit it is not
-    expect(r.heliHasPlayer).toBe(true);
+    // an external chase camera frames the car; from the cockpit it is not in shot
+    expect(r.chaseHasPlayer).toBe(true);
+    expect(r.cockHasPlayer).toBe(false);
   });
 
   test("an unknown camera errors with the valid set", async ({ page }) => {

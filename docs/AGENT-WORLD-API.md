@@ -197,7 +197,12 @@ The egocentric snapshot. `brief` is what a control loop reads each tick.
                      "state": "62% of lateral grip used, trail-braking" } },
   "nextCorner": { "turn": "T7", "name": "Ascari", "dir": "L", "radiusM": 52,
                   "severity": "medium", "distM": 84, "timeS": 1.7,
-                  "status": "brake in ~22 m" },
+                  "apexSpeedKph": 148, "apexOffsetM": -4.2, "moveToApexM": -2.8,
+                  "suggestBrakeM": 62, "status": "brake in ~22 m" },
+  "nextCorners": [ { "turn": "T7", "dir": "L", "distM": 84, "apexSpeedKph": 148,
+                     "apexOffsetM": -4.2, "suggestBrakeM": 62 },
+                   { "turn": "T8-T9", "dir": "R", "distM": 260, "apexSpeedKph": 96,
+                     "apexOffsetM": 4.0, "suggestBrakeM": 110 } ],
   "ahead": { "horizonS": 4.0, "pts": [ {"d":20,"r":"straight"},
                                        {"d":84,"r":52,"dir":"L","turn":"T7"} ] },
   "rivals": [ { "id": 3, "rel": "ahead", "gapM": 22.4, "gapS": 0.46,
@@ -275,6 +280,21 @@ driving code executes at 60 Hz.
 | `apex_eval({js})` | escape hatch over the full ~89 hooks |
 
 `__apex` itself stays exactly as it is. This is a layer, not a replacement.
+
+### The ideal line (`apexOffsetM` / `moveToApexM`)
+
+The one planning input the machine-observation research (GT Sophy's ideal-line
+offset) singles out as decisive and an agent *cannot* derive from curvature
+alone: **where on the road the fast line sits.** Modelled simply — the apex
+kisses the inside edge, one car-margin off it — and signed like everything else
+(`+` = right of centre). `nextCorner.apexOffsetM` is the target lateral position
+at the apex; `moveToApexM` is the signed distance the car must move *now* to
+reach it (`+` = to your right). A straight has no apex, so both read 0 — stay on
+line. `nextCorners` previews the same fields for the next few corners, so an
+agent can plan a braking/line phase over a horizon rather than reacting to one
+corner. The `agent-drive-bench` spec proves these fields are actionable: a fixed
+policy reading only `headingErrDeg` + `moveToApexM` + `status` drives well past
+1.5× the distance of a blind baseline before leaving the road.
 
 ## 5. Phasing
 

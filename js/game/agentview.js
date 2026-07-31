@@ -42,6 +42,7 @@ const AgentView = (function () {
   const SEVERITY = [[30, "hairpin"], [70, "slow"], [150, "medium"], [350, "fast"]];
   const STRAIGHT_R = 800;      // above this radius, call it a straight
   const CORNER_K = 0.004;      // |k| below this is not cornering
+  const APEX_MARGIN = 1.0;     // metres the ideal apex sits off the inside edge
 
   function severityOf(r) {
     for (const [lim, name] of SEVERITY) if (r < lim) return name;
@@ -303,8 +304,22 @@ const AgentView = (function () {
         }
         out.push(c);
       }
-      for (const c of out) { delete c._entry; delete c._exit; delete c._s; }
+      for (const c of out) {
+        c.apexOffsetM = apexOffset(c.dir, c.widthM);
+        delete c._entry; delete c._exit; delete c._s;
+      }
       return out;
+    }
+
+    // The single planning input the research (GT Sophy's ideal-line offset) says
+    // matters most and an agent cannot derive from curvature alone: WHERE on the
+    // road the fast line sits. Modelled simply — the apex kisses the inside edge,
+    // one car-margin off it. Signed like everything else: + = right of centre.
+    // A straight has no apex, so 0 (stay on line).
+    function apexOffset(dir, widthM) {
+      if (dir !== "L" && dir !== "R") return 0;
+      const hw = (widthM || 0) / 2;
+      return r1((dir === "R" ? 1 : -1) * Math.max(0, hw - APEX_MARGIN));
     }
 
     // Fallback when a circuit has no curated turn list: local curvature maxima.
@@ -359,14 +374,41 @@ const AgentView = (function () {
       else if (distM <= brakeM) status = "BRAKE NOW for " + best.turn;
       else status = "brake in ~" + r1(distM - brakeM) + " m";
 
+      const px = (G.player && G.player.x) || 0;
       return {
         turn: best.turn, dir: best.dir, radiusM: best.radiusM,
         severity: best.severity, distM, timeS: r1(distM / v),
         apexSpeedKph: best.apexSpeedKph,
+        apexOffsetM: best.apexOffsetM,
+        moveToApexM: r1(best.apexOffsetM - px),
         suggestBrakeM: r1(brakeM), status,
         note: "suggestBrakeM assumes ~" + BRAKE_DECEL + " m/s^2 braking and ~"
-              + LAT_GRIP + " m/s^2 lateral grip — a hint, not the car's physics",
+              + LAT_GRIP + " m/s^2 lateral grip — a hint, not the car's physics; "
+              + "moveToApexM is + to your right to reach the fast line",
       };
+    }
+
+    // The next few corners as a sequence, not just the imminent one — the agent
+    // plans a braking/line phase over a horizon, which one corner cannot express.
+    function upcomingCorners(s, speed, n) {
+      const list = corners();
+      if (!list.length) return [];
+      const total = G.track.total;
+      const rows = list.map((c) => {
+        let d = c.entryS - s;
+        if (d < -20) d += total;
+        return { c, d };
+      }).sort((a, b) => a.d - b.d).slice(0, Math.max(1, n | 0));
+      return rows.map(({ c, d }) => {
+        const vApex = Math.sqrt(LAT_GRIP * Math.min(c.radiusM, 2000));
+        const brakeM = speed > vApex
+          ? (speed * speed - vApex * vApex) / (2 * BRAKE_DECEL) : 0;
+        return {
+          turn: c.turn, dir: c.dir, radiusM: c.radiusM, severity: c.severity,
+          distM: Math.max(0, r1(d)), apexSpeedKph: c.apexSpeedKph,
+          apexOffsetM: c.apexOffsetM, suggestBrakeM: r1(brakeM),
+        };
+      });
     }
 
     // ── look-ahead ──────────────────────────────────────────────────────────
@@ -633,6 +675,7 @@ const AgentView = (function () {
 
       if (detail !== "brief") {
         payload.ahead = lookahead(p.s, p.speed, o.horizonS || 4, o.points || 5);
+        payload.nextCorners = upcomingCorners(p.s, p.speed, o.corners || 3);
         payload.rivals = rv;
         const aff = affordances(nc, rv);
         payload.affordances = aff.affordances;
@@ -1424,7 +1467,9 @@ const AgentView = (function () {
 
       // Build the real mesh and measure it — the dimensions an agent would
       // otherwise read off a screenshot with a ruler.
-      let geom = null, parts = null, render = null, meshRef = null;
+      // render stays undefined (not null) unless asked for, so the key is
+      // absent from the payload rather than a null the caller must filter.
+      let geom = null, parts = null, render, meshRef = null;
       try {
         const mesh = Car3D.build(team.color, team.color2,
                                  { parts: res.visual, teamId: team.id });
