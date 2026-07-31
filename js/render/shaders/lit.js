@@ -228,6 +228,10 @@ float matBumpHeight(int mid, vec2 uv) {
     return smoothstep(0.0, 0.16, d) * 0.55 + vnoise(uv * 5.0) * 0.15;
   } else if (mid == 14) {  // RUST / CORRUGATED METAL: real sinusoidal corrugation
     return sin(hc * 7.5) * 0.55 + vnoise(uv * 6.0) * 0.10;
+  } else if (mid == 16) {  // ASPHALT: fine aggregate only — no macro relief
+    // Two tight octaves and nothing below ~0.1 m. A low-frequency term here
+    // would read as a rippled/bumpy road under the car and crawl at speed.
+    return vnoise(uv * 9.0) * 0.34 + vnoise(uv * 26.0) * 0.16;
   }
   return 0.0;
 }
@@ -267,12 +271,23 @@ void applyMaterialNormal(int mid, inout vec3 N, float vd) {
     N = normalize(N + (T * (h0 - hx) + vec3(0.0, 1.0, 0.0) * (h0 - hy)) * (amt * bumpFade * aaFade / e));
   } else {
     vec2 p = vWorldPos.xz;
+    // Same grazing-angle guard the wallLike branch uses. Ground materials were
+    // exempt because you normally look DOWN at them — but the road is the one
+    // horizontal surface viewed almost edge-on at 80 m/s, where foreshortening
+    // makes a pixel span many times the probe epsilon and the 3-tap gradient
+    // aliases into crawling moiré. Fading relief by the per-pixel world
+    // footprint is the normal-map analog of mip-fading, and it only ever
+    // REDUCES bump, so head-on grass/sand/rock keep their existing look.
+    float fpG = max(fwidth(p.x), fwidth(p.y));
+    float aaG = clamp(1.0 - (fpG - 0.10) / 0.55, 0.0, 1.0);
+    if (aaG <= 0.005) return;
     float e = 0.22;
     float h0 = matBumpHeight(mid, p);
     float hx = matBumpHeight(mid, p + vec2(e, 0.0));
     float hz = matBumpHeight(mid, p + vec2(0.0, e));
-    float amt = mid == 8 ? 0.16 : mid == 10 ? 0.14 : 0.07;
-    N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade / e));
+    // ASPHALT (16) is deliberately the weakest relief in the table.
+    float amt = mid == 8 ? 0.16 : mid == 10 ? 0.14 : mid == 16 ? 0.025 : 0.07;
+    N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade * aaG / e));
   }
 }
 // Albedo + roughness modulation (unchanged call site: after rough is resolved).
@@ -385,6 +400,17 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     float rust = smoothstep(0.55, 0.9, vnoise(vec2(hc * 0.8, y * 0.35) + 5.0));
     albedo = mix(albedo, albedo * vec3(0.62, 0.42, 0.28), rust * 0.5 * far);
     rough = min(1.0, rough + 0.14 * far);
+  } else if (mid == 16) {    // ASPHALT — aggregate speckle + broad laying/wear patches
+    // Deliberately understated: this is the surface under the car for the whole
+    // race, so it gets tone variation rather than pattern. No fract()/sin()
+    // term at all — nothing here can strobe, only soften.
+    // Broad patches read as laying joints / differential wear (mid range).
+    albedo *= 1.0 + (vnoise(wp.xz * 0.035) - 0.5) * 0.10 * far;
+    // Fine aggregate grain, near field only — replaces the per-vertex hash
+    // tint that buildRoad currently bakes in at 4 m node resolution.
+    albedo *= 1.0 + (vnoise(wp.xz * 7.0) - 0.5) * 0.13 * near;
+    // Tarmac is rough; the wet path (which runs after this) still overrides it.
+    rough = min(1.0, rough + 0.10 * far);
   }
 }
 // Cloud cover at a world point: project the point up the sun direction to the

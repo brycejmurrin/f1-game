@@ -19,7 +19,15 @@ const TrackGeom = (function () {
                 // id (15.0..15.4) encodes the per-vertex wave weight (0 = hoist
                 // edge pinned to the pole → 0.4 = free edge, weight 1). Emitted
                 // per-vertex by tracks.js flagQuad, not via out._mat.
-                FLAG: 15 };
+                FLAG: 15,
+                // ASPHALT (16): the racing surface. Must stay ABOVE the flag's
+                // 15.0..16.0 fractional window (the vertex shader keys the cloth
+                // wave off that range). Deliberately the most restrained material
+                // in the table — tarmac is nearly flat, and the road is the one
+                // surface viewed at a grazing angle at 80 m/s, so anything with
+                // real relief crawls. See applyMaterial()/matBumpHeight() in
+                // js/render/shaders/lit.js.
+                ASPHALT: 16 };
 
   // ---------- small vec math (self-contained; doesn't depend on M4/V3) ----------
   function cross(a, b) {
