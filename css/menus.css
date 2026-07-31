@@ -382,10 +382,17 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2);
 }
 .cz-liv-none.active { background: rgba(80,170,255,0.22); color: #cfe8ff; border-color: rgba(90,180,255,0.45); }
-/* Two columns of rows once the sheet is wide, so all fifteen fit without the
-   dialog becoming a long scroll. */
+/* Columns of rows once the sheet is wide, so all fifteen fit without the dialog
+   becoming a long scroll. auto-fill rather than a hard two, so the count follows
+   the room the sheet was given — on a landscape phone the sheet is now wide
+   enough for three, which is what finally gets the whole form above the fold
+   (it was 442px of rows in a 271px window). */
 @container sheet (min-width: 460px) {
-  #cz-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
+  #cz-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(205px, 1fr));
+    column-gap: var(--pad); align-content: start;
+  }
   #cz-body .cz-sep, #cz-body #cz-preview { grid-column: 1 / -1; }
 }
 } /* @layer components */

@@ -107,6 +107,46 @@
 .sf-t { --sfade-t: 20px; }
 .sf-b { --sfade-b: 20px; }
 
+/* ---------- scroll POSITION INDICATOR ----------
+   A scrollbar thumb down the right edge, like a web page has. The fade above
+   only ever says "there is more"; this says how much and where you are, and it
+   stays put instead of appearing for half a second mid-flick the way the
+   platform's own overlay scrollbar does on a phone.
+
+   ScrollFade sets --sf-h (thumb height) and --sf-y (its offset down the track)
+   on every scrollable region; everything here is just drawing.
+
+   Mechanics that matter:
+   * `position: sticky` — a pseudo-element is the first IN-FLOW child, so sticky
+     is what pins it to the scrollPORT rather than letting it scroll away with
+     the content. `top: var(--sf-y)` is then the thumb's travel: JS moves it
+     down the track as scrollTop grows. Absolute positioning could not do this
+     without adding a wrapper element around every panel.
+   * `margin-bottom: calc(-1 * var(--sf-h))` cancels the thumb's own height, so
+     it never grows scrollHeight — which ScrollFade measures, and which would
+     otherwise let a panel conclude it was scrollable because of its own
+     indicator.
+   * `grid-column: 1 / -1` because several of these regions are grids
+     (#sel-teams, #cz-body, #cs-tabs, the HOW TO PLAY <dl>); without it the
+     pseudo-element takes a cell and shoves a real item out of place. Inert in
+     flex and block containers. */
+.sf-scroll::before {
+  content: "";
+  position: sticky;
+  top: var(--sf-y, 0px);
+  z-index: 3;
+  display: block;
+  grid-column: 1 / -1;
+  width: 4px;
+  height: var(--sf-h, 24px);
+  margin-left: auto; margin-right: 2px;
+  margin-bottom: calc(-1 * var(--sf-h, 24px));
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 /* ---------- section label ---------- */
 .sel-label {
   color: var(--dim);
@@ -165,7 +205,10 @@
 #howtoplay   { --sheet-w: 700px; }
 #advanced    { --sheet-w: 820px; }
 #race-settings { --sheet-w: 560px; }
-#customize   { --sheet-w: 560px; }
+/* Wide enough for three columns of rows on a landscape phone. At 560px the form
+   was two narrow columns and still ran 171px past the fold; the sheet is capped
+   by the safe-area width anyway, so this only ever spends room that exists. */
+#customize   { --sheet-w: 760px; }
 
 /* Dialogs stack over a full screen (the team picker sits on the select screen),
    so the scrim has to actually separate them — 0.6 left the sheet looking
@@ -208,11 +251,33 @@
 }
 #pm-settings-close { border-color: var(--red); color: var(--red); }
 
-/* ---------- advanced steering ---------- */
+/* ---------- advanced steering ----------
+   A real grid, not the `inline-block; width: calc(50% - 8px)` this used to be.
+   Inline-block items flow on LINE BOXES, so one tall control (a two-line
+   explanation) dragged the next item down to clear it and the second column
+   came out ragged, with holes. auto-fill also means the column COUNT follows
+   the room: two on a landscape phone, three on a tablet or desktop, without
+   naming either width here.
+   The section headings inside the ADVANCED disclosure span the full width so
+   the list still reads as grouped rather than as one undifferentiated field. */
 @container sheet (min-width: 620px) {
-  #advanced-inner .adv-item {
-    display: inline-block; width: calc(50% - 8px); vertical-align: top;
-    margin: 8px 0; padding-right: 12px; box-sizing: border-box;
+  /* the body itself is the grid, and so is the ADVANCED disclosure that holds
+     the second batch of items */
+  #advanced-inner .sheet-body,
+  #advanced-inner #adv-extra {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+    column-gap: var(--pad); row-gap: calc(var(--gap) * 0.5);
+    align-content: start;
   }
+  #advanced-inner .adv-item { margin: 0; min-width: 0; }
+  /* full-width rows: the intro, the preset picker, the disclosure button, the
+     disclosure itself, and every section heading inside it */
+  #advanced-inner .adv-intro,
+  #advanced-inner .preset-row,
+  #advanced-inner .adv-more-btn,
+  #advanced-inner #adv-extra,
+  #advanced-inner .adv-sec { grid-column: 1 / -1; }
+  #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
 }
 } /* @layer components */
