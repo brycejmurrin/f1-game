@@ -72,7 +72,7 @@
       { frac: 0.9417, angleDeg: 2.5, widthM: 100 },   // Rascasse
     ],
     scenery: function (api) {
-      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
+      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
       const KR = (s) => TrackSpace.sourceNodeToRacing(def, K(s), n);
       const racingSide = (side) => def.reverse ? -side : side;
@@ -262,41 +262,11 @@
                  [0.22 + hv * 0.04, 0.40 + hv * 0.05, 0.24]);
       }
 
-      // ── PRINCE'S PALACE / ROCK OF MONACO ────────────────────────────────
-      // Iconic cream fortress at s≈0.17, inland dist=110m. Inner face of each
-      // wing sits beyond the previous box so no interpenetration.
-      {
-        const k = K(0.17), a = anchor(k, -1, 110);
-        if (!onTrack(a.c[0], a.c[2], 20)) {
-          const b = [a.r, a.u, a.t];
-          addFrustum(out, vadd(a.c, a.u, 32), 28, 20, 56, CREAM, 10, b);
-          // Flanking ramparts (set beside tower, not inside it)
-          addBox(out, vadd(vadd(a.c, a.r, -20), a.u, 24), [10, 44, 42], [0.92, 0.88, 0.82], b);
-          addBox(out, vadd(vadd(a.c, a.r, 20),  a.u, 24), [10, 44, 42], [0.92, 0.88, 0.82], b);
-          // Corner bastions at ±24m (outside rampart outer face of ±20+5=±25m)
-          for (const sd of [-1, 1]) {
-            addCyl(out, vadd(vadd(a.c, a.r, sd * 28), a.u, 52), 3.2, 16, [0.72, 0.70, 0.66], 7, b);
-          }
-          addBox(out, vadd(a.c, a.u, 4), [44, 1.6, 48], [0.86, 0.85, 0.82], b);
-          // lit palace windows
-          addBox(out, vadd(a.c, a.u, 22), [44.4, 5.0, 30.4], WINLIT, b);
-        }
-      }
-
-      // Palace rock terraced gardens — dist stepped by 14m, well clear of palace
-      for (let i = 0; i < 3; i++) {
-        const k = K(0.18 + i * 0.015);
-        const distT = 52 + i * 14;
-        const a = anchor(k, -1, distT);
-        if (!onTrack(a.c[0], a.c[2], 8)) {
-          const b = [a.r, a.u, a.t];
-          addBox(out, vadd(a.c, a.u, 2.4), [18 + i * 4, 3.6 + i * 0.6, 10], [0.86, 0.82, 0.74], b);
-          for (let j = 0; j < 3; j++) {
-            const pc = vadd(vadd(a.c, a.r, (j - 1) * 5), a.u, 0);
-            addCone(out, vadd(pc, a.u, 4 + i * 0.5), 0.55, 1.6, [0.50, 0.62, 0.38], 4, b);
-          }
-        }
-      }
+      // NOTE: the Prince's Palace / Rock of Monaco used to sit here (s≈0.17,
+      // inland, behind Casino Square) — that's the wrong headland. Casino sits
+      // on the Monte-Carlo hill; Le Rocher (with the Palace) is the promontory
+      // across the harbour, seen from the harbour-front straight. Moved to
+      // SECTOR 5 below as a harbour backdrop.
 
       // ── FAIRMONT HAIRPIN HOTEL (s=0.40, R) ──────────────────────────────
       {
@@ -357,12 +327,52 @@
       //   palette: [CREAM, DUSTY, OCHRE, TERRA, STONE, SAGE],
       //   lit: true, windowCol: WINLIT,
       // });
+      // ── POST-TUNNEL HARBOUR INFILL (s=0.585→0.65, R) ─────────────────────
+      // The stretch right out of the tunnel read empty on the inland side —
+      // the facade wall didn't resume until the harbour-balcony blocks at
+      // s≈0.66, and no circuit in the game modelled a broadcast compound.
+      pastelStreetRow(0.595, 0.655, 1, 4, {
+        palette: [CREAM, DUSTY, OCHRE, STONE],
+        minH: 12, maxH: 20, depth: 8, step: 20,
+        window: WIN, windowCol: WINLIT, lit: true,
+      });
+      broadcastCompound(K(0.615), 1, 24, { vans: 3, dishes: 2, mastH: 12 });
+      cameraTower(K(0.625), -1, 14, { h: 16, boom: 1.4 });
+
       // Distant landmark towers behind harbour apartments.
       for (let i = 0; i < 5; i++) {
         const k = K(0.61 + i * 0.076);
         const hv = hash(k * 2.9 + i);
         const h = 40 + hv * 30;
         backdrop(k, 1, 48 + hv * 20, [22 + hv * 12, h, 18], PASTELS[(i * 3) % PASTELS.length]);
+      }
+
+      // ── PRINCE'S PALACE / ROCK OF MONACO — harbour backdrop ─────────────
+      // Le Rocher is the promontory across Port Hercule from this stretch —
+      // the real broadcast establishing shot. Previously modelled behind
+      // Casino Square (wrong headland, wrong side of the harbour entirely);
+      // it now rises on the far shore, well beyond the yacht ranks and
+      // breakwater (which top out around dist 135m), so nothing in front
+      // occludes the base of the rock.
+      {
+        const k = K(0.665), a = anchor(k, -1, 150);
+        if (!onTrack(a.c[0], a.c[2], 30)) {
+          const b = [a.r, a.u, a.t];
+          const ROCK = [0.48, 0.46, 0.40], ROCK2 = [0.54, 0.52, 0.44];
+          // Rock cliff climbing from the waterline (organic frustum tiers).
+          addFrustum(out, vadd(a.c, a.u, 21), 46, 32, 42, ROCK, 8, b);
+          addFrustum(out, vadd(a.c, a.u, 42), 32, 22, 16, ROCK2, 8, b);
+          // Palace fortress crowning the rock.
+          const py0 = 50;
+          addFrustum(out, vadd(a.c, a.u, py0 + 10), 20, 14, 20, CREAM, 8, b);
+          for (const sd of [-1, 1]) {
+            addBox(out, vadd(vadd(a.c, a.r, sd * 15), a.u, py0 + 8), [8, 16, 20], [0.92, 0.88, 0.82], b);
+            addCyl(out, vadd(vadd(a.c, a.r, sd * 20), a.u, py0 + 18), 2.4, 10, [0.72, 0.70, 0.66], 7, b);
+          }
+          addBox(out, vadd(a.c, a.u, py0 + 3), [32, 1.2, 34], [0.86, 0.85, 0.82], b);
+          // lit palace windows (reads at any time of day as a warm accent)
+          addBox(out, vadd(a.c, a.u, py0 + 16), [32.4, 3.6, 22], WINLIT, b);
+        }
       }
 
       // ── HARBOUR WATER & QUAY ─────────────────────────────────────────────
@@ -474,6 +484,62 @@
       });
       guardrail(0.88, 0.95, 1, 1.0, ARMCO);
 
+      // ── LA RASCASSE — corner-apex clubhouse (s≈0.905, quay side) ────────
+      // The real Rascasse bar/restaurant sits right on the harbour side at
+      // the hairpin apex — the balcony where post-race celebrations happen.
+      // Small and close, distinct from the general paddock cityFront wall.
+      {
+        const k = K(0.905);
+        const RASCASSE_WALL = [0.86, 0.80, 0.62];
+        const aBldg = anchor(k, -1, 9);
+        if (!onTrack(aBldg.c[0], aBldg.c[2], 9)) {
+          const b = [aBldg.r, aBldg.u, aBldg.t];
+          addBox(out, vadd(aBldg.c, aBldg.u, 4.0), [11, 8.0, 9], RASCASSE_WALL, b);
+          addBox(out, vadd(aBldg.c, aBldg.u, 8.4), [11.4, 0.8, 9.4], [0.30, 0.28, 0.26], b);
+          addBox(out, vadd(aBldg.c, aBldg.u, 5.6), [11.2, 1.8, 9.2], WIN, b);
+          addBox(out, vadd(aBldg.c, aBldg.u, 6.1), [11.4, 0.9, 9.4], WINLIT, b);
+        }
+        // Cantilevered balcony overhanging the apex, closer to the road than
+        // the building mass above — the famous champagne-spray vantage point.
+        const aBalc = anchor(k, -1, 4.5);
+        if (!onTrack(aBalc.c[0], aBalc.c[2], 4)) {
+          const bb = [aBalc.r, aBalc.u, aBalc.t];
+          addBox(out, vadd(aBalc.c, aBalc.u, 4.4), [7, 0.3, 7], [0.72, 0.70, 0.66], bb);
+          addBox(out, vadd(aBalc.c, aBalc.u, 4.9), [7.1, 0.7, 0.15], [0.65, 0.20, 0.18], bb);
+          for (const o of [-3.2, 3.2])
+            addCyl(out, vadd(vadd(aBalc.c, aBalc.t, o), aBalc.u, 2.2), 0.14, 4.4, [0.55, 0.55, 0.55], 5, bb);
+          addBox(out, vadd(aBalc.c, aBalc.u, 5.6), [7.4, 1.4, 7.4], [0.85, 0.20, 0.18], bb);
+        }
+      }
+
+      // ── YACHT CLUB DE MONACO — Rascasse-side quay hero ──────────────────
+      // Foster + Partners' wave-roofed clubhouse: white stepped terraces
+      // toward the water, topped by an undulating overhang of tilted slabs.
+      // Placed just beyond Rascasse toward Anthony Noghès, clear of the
+      // marina yacht ranks and the corner-apex clubhouse above.
+      {
+        const k = K(0.955), a = anchor(k, -1, 34);
+        if (!onTrack(a.c[0], a.c[2], 28)) {
+          const b = [a.r, a.u, a.t];
+          const YWHITE = [0.94, 0.95, 0.97], YDECK = [0.86, 0.88, 0.90], YNAVY = [0.10, 0.22, 0.34];
+          let up = 1.2, w = 34, d = 16;
+          for (let i = 0; i < 4; i++) {
+            addBox(out, vadd(a.c, a.u, up), [w, 3.4, d], i % 2 ? YDECK : YWHITE, b);
+            // glazed band facing the water
+            addBox(out, vadd(a.c, a.u, up + 1.9), [w * 0.98, 1.1, d * 1.01], [0.30, 0.42, 0.52], b);
+            up += 3.6; w -= 4; d -= 1.2;
+          }
+          // Undulating wave roof — five overlapping slabs stepping toward the sea.
+          for (let i = 0; i < 5; i++) {
+            const rc = vadd(vadd(a.c, a.r, (i - 2) * 6.4), a.u, up + Math.sin(i * 1.1) * 1.6 + i * 0.6);
+            addPrism(out, rc, [7.2, 1.0, 20 - i * 1.4], YWHITE, b);
+          }
+          // Navy waterline trim + a single flagmast.
+          addBox(out, vadd(a.c, a.u, 0.4), [36, 0.8, 18], YNAVY, b);
+          addCyl(out, vadd(a.c, a.u, 1.2), 0.14, 9, [0.80, 0.82, 0.85], 4, b);
+        }
+      }
+
       // ── SECTOR 6 — RETURN / ANTONY NOGHES (s=0.95→1.00) ─────────────────
       // cityFront disabled: intrusions persist even at depth=5m.
       // cityFront(0.95, 1.00, -1, 9, {
@@ -575,10 +641,16 @@
       gantry(0.0, 8.2, [0.20, 0.22, 0.26]);
       gantry(0.235, 8.0, [0.22, 0.24, 0.28]);
 
-      grandstand(0.64, -1, 9, 60, [0.55, 0.56, 0.60], [0.85, 0.30, 0.28]);
-      grandstand(0.78, -1, 9, 48, [0.54, 0.55, 0.58], [0.30, 0.45, 0.80]);
-      grandstand(0.25,  1, 7, 40, [0.56, 0.57, 0.60], [0.90, 0.80, 0.30]);
-      grandstand(0.72,  1, 9, 36, [0.55, 0.55, 0.58], [0.85, 0.85, 0.88]);
+      // Liveries rotate through STAND_SETS.monaco ("scaffold", "pastel", "alu")
+      // so the four stands read as distinct temporary structures, not one
+      // grey box repeated. Grandstand K (harbour side, Tabac→Piscine) is the
+      // real long stand along the quay — extended from 48 m to its proper
+      // span and recentred off the swimming-pool footprint at s≈0.80.
+      grandstandEx(0.64, -1, 9, 60, null, null, { livery: "pastel", tiers: 1, roof: "cantilever" });
+      grandstandEx(0.76, -1, 9, 180, null, null,
+        { livery: "scaffold", tiers: 2, roof: "truss", endWalls: true, pylons: true }); // Grandstand K
+      grandstandEx(0.25,  1, 7, 40, null, null, { livery: "alu", tiers: 1, roof: "flat" });
+      grandstandEx(0.72,  1, 9, 36, null, null, { livery: "pastel", tiers: 1, roof: "cantilever", suites: true });
 
       for (const [s, sd] of [[0.07, 1], [0.18, -1], [0.33, 1], [0.62, -1], [0.74, 1], [0.84, -1], [0.93, 1]]) {
         const col = [[0.85, 0.20, 0.20], [0.10, 0.30, 0.70], [0.95, 0.80, 0.10], [0.10, 0.55, 0.45]][K(s) % 4];

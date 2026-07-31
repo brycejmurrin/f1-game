@@ -401,6 +401,27 @@
         }, { required: true });
       }
 
+      // ── Jeddah Tower — under-construction distant skyline silhouette ────
+      // The city's single defining real landmark, previously unrepresented:
+      // a tapered, flat-topped unfinished shaft still wearing its tower
+      // crane. Placed as a far backdrop layer well behind the s 0.27–0.31
+      // landmark-tower cluster (gap 260 vs. that group's 55–140) so it reads
+      // as background depth, not a trackside competitor, and clearly taller
+      // than every other tower on this skyline.
+      {
+        const a = anchor(K(0.29), -1, 260), b = [a.r, a.u, a.t];
+        modelGroup("jeddah-tower-construction", {
+          center: vadd(a.c, a.u, 134), size: [56, 272, 56], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addFrustum(stage, a.c, 26, 9, 250, [0.40, 0.41, 0.45], 8, b);       // tapered unfinished shaft
+          stage._mat = 0;
+          addBox(stage, vadd(a.c, a.u, 254), [7, 8, 7], [0.28, 0.28, 0.32], b);         // crane cab
+          addBox(stage, vadd(a.c, a.u, 262), [0.6, 0.9, 34], [0.24, 0.24, 0.28], b);    // crane jib
+          addBox(stage, vadd(vadd(a.c, a.u, 258), a.t, -14), [0.6, 0.6, 0.6], SPANGLE, b); // hazard beacon
+        }, { required: false });
+      }
+
       // ── Dhow — traditional lateen-sail boat moored at the waterfront ─────
       const dhow = (k, gap, sc) => {
         const a = anchor(k, 1, gap), b = [a.r, a.u, a.t];

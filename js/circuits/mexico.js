@@ -60,7 +60,8 @@
               building, motorhome, grandstand, billboard, tree, hedge, fence, palm, pine,
               guardrail, tyreWall, marshalPost, tower, gantry, mountain, wall,
               modelGroup, groundPatch, groundedSegments,
-              cityFront, forestEdge, bush } = api;
+              cityFront, forestEdge, bush,
+              cameraTower, sponsorHoarding, broadcastCompound, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
       // Lap sectors where dressingExclusions leaves the generic city generator
       // running — see the def's `dressingExclusions` above.
@@ -128,8 +129,15 @@
       };
 
       // ════════════ BESPOKE FORO SOL CROWD-BOWL MODELS ════════════
-      const crowdCols = [PINK, ORANGE, GREEN, [0.98, 0.82, 0.10],
-                         [0.94, 0.94, 0.92], [0.22, 0.42, 0.78], [0.90, 0.30, 0.24]];
+      // Real Estadio GNP Seguros bleachers: grey precast concrete decks with
+      // plain navy-blue bucket seats — not the rainbow "fiesta block" this used
+      // to render as. Only sparse marigold-orange pops survive, standing in for
+      // the Day-of-the-Dead crowd colour real broadcasts occasionally catch.
+      const BOWL_BLUE = [0.25, 0.35, 0.62];
+      const BOWL_GREY = [0.55, 0.56, 0.60];
+      const BOWL_POP  = [0.92, 0.55, 0.16];   // sparse marigold-orange pop only
+      const crowdCols = [BOWL_BLUE, BOWL_GREY, BOWL_BLUE, BOWL_GREY,
+                         BOWL_BLUE, BOWL_GREY, BOWL_POP];
       const bowlSeatWall = (s0, s1, side, gap, opts) =>
         api.bowlSeatWall(s0, s1, side, gap, Object.assign({ crowdCols }, opts || {}));
       // Bounded crowd terrace. The old single-point guard let the long tangent
@@ -238,6 +246,10 @@
           window: [0.56, 0.62, 0.68], floor: 2,
         });
       }
+      // Broadcast compound tucked behind the paddock row — OB trucks + uplink
+      // dishes, the infrastructure every real venue keeps out of shot. Sat
+      // well beyond the hospitality row's 40-52 m footprint.
+      broadcastCompound(K(0.03), -1, 58, { vans: 3, dishes: 2, mastH: 10 });
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.06  PARK TREE-LINE — DRS straight Mixhuca green (park-first)
@@ -254,6 +266,9 @@
       forestEdge(0.14, 0.30, 1, 22, { density: 0.78, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
       forestEdge(0.14, 0.28, -1, 22, { density: 0.50, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
       forestEdge(0.30, 0.48, 1, 22, { density: 0.62, hMin: 7, hMax: 12, col: TREEGRN, col2: PARKGRN, pineFrac: 0.20 });
+      // L side had nothing from 0.28→0.50 (forestEdge above only ran R) — the
+      // flattest, emptiest stretch of the lap. Mirror the same treeline.
+      forestEdge(0.28, 0.50, -1, 22, { density: 0.62, hMin: 7, hMax: 12, col: PARKGRN, col2: TREEGRN, pineFrac: 0.20 });
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.12  TURN 1 GRANDSTAND
@@ -269,6 +284,9 @@
         grandstand(0.20, side, 8, 48, [0.50, 0.50, 0.54], side < 0 ? ORANGE : PINK);
       }
       kerb(0.20, -1, 7); kerb(0.205, 1, 7);
+      // Broadcast vantage — the Esses are a real TV camera position and had
+      // nothing marking them. Set back beyond the grandstands' 12.5 m depth.
+      cameraTower(K(0.20), 1, 30, { h: 18 });
 
       // ════════════════════════════════════════════════════════════════════════
       // MEXICO CITY URBAN SKYLINE — PUSHED BACK (park-first composition)
@@ -316,6 +334,10 @@
         }
       });
 
+      // Sponsor hoarding on the run down to Horquilla — a straight stretch that
+      // read empty (only a hedge/guardrail/fence line, no advertising at all).
+      sponsorHoarding(0.31, 0.39, -1, 9, { palette: fiesta });
+
       // ════════════════════════════════════════════════════════════════════════
       // s=0.42  HORQUILLA HAIRPIN
       // ════════════════════════════════════════════════════════════════════════
@@ -323,6 +345,15 @@
       kerb(0.42, 1, 10);
       grandstand(0.42, 1, 7, 40, [0.50, 0.50, 0.54], ORANGE);
       banners(0.42, 1, 6);
+      // Broadcast vantage on the outside of the hairpin, and braking boards on
+      // the approach — both completely unmarked before this pass.
+      cameraTower(K(0.42), -1, 20, { h: 16 });
+      if (circuitKit) {
+        circuitKit.trackSigns({
+          id: "kit:mexico:horquilla-signs", frac: 0.405,
+          side: -1, gap: 8, size: [2.4, 2.6, 24], count: 3,
+        });
+      }
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.55  PARK / SPORTS FACILITY (Parque Deportivo)
@@ -413,10 +444,10 @@
       // The route bends sharply inside Foro Sol. Short bounded tiers follow that
       // shape; the old 70 m tangent stands chorded across the road at 3.92 m.
       for (const s of [0.75, 0.78, 0.81, 0.84]) {
-        boundedStand(s, -1, 30, 24, [0.66, 0.64, 0.62], fiesta[0], s === 0.78);
-        boundedStand(s, -1, 50, 26, [0.58, 0.56, 0.54], fiesta[2], false);
-        if (s !== 0.75) boundedStand(s, 1, 30, 24, [0.66, 0.64, 0.62], fiesta[1], s === 0.78);
-        if (s === 0.78 || s === 0.84) boundedStand(s, 1, 36, 26, [0.58, 0.56, 0.54], fiesta[3], false);
+        boundedStand(s, -1, 30, 24, [0.66, 0.64, 0.62], BOWL_BLUE, s === 0.78);
+        boundedStand(s, -1, 50, 26, [0.58, 0.56, 0.54], BOWL_GREY, false);
+        if (s !== 0.75) boundedStand(s, 1, 30, 24, [0.66, 0.64, 0.62], BOWL_GREY, s === 0.78);
+        if (s === 0.78 || s === 0.84) boundedStand(s, 1, 36, 26, [0.58, 0.56, 0.54], BOWL_BLUE, false);
       }
 
       // Packed upper terraces cresting the rim (both sides)
@@ -425,13 +456,13 @@
         if (s === 0.845) crowdBank(s, 1, 34, 28, 6);
       }
       // Entry/exit end caps stay behind the bright apertures.
-      boundedStand(0.715, -1, 36, 20, [0.58, 0.56, 0.54], fiesta[2], false);
-      boundedStand(0.875, -1, 36, 20, [0.58, 0.56, 0.54], fiesta[0], false);
-      boundedStand(0.875,  1, 36, 20, [0.58, 0.56, 0.54], fiesta[1], false);
+      boundedStand(0.715, -1, 36, 20, [0.58, 0.56, 0.54], BOWL_GREY, false);
+      boundedStand(0.875, -1, 36, 20, [0.58, 0.56, 0.54], BOWL_BLUE, false);
+      boundedStand(0.875,  1, 36, 20, [0.58, 0.56, 0.54], BOWL_GREY, false);
 
       // Sparse outer upper decks complete the bowl silhouette without filling
       // the bright entry/exit apertures or tightening the driver's sightline.
-      boundedStand(0.835, -1, 44, 20, [0.56, 0.55, 0.54], fiesta[2], false);
+      boundedStand(0.835, -1, 44, 20, [0.56, 0.55, 0.54], BOWL_BLUE, false);
 
       // Foro Sol floodlight masts — ring the outer rim
       for (const s of [0.74, 0.77, 0.80, 0.83, 0.85]) {
@@ -457,13 +488,15 @@
         banners(s, -1, 9); banners(s, 1, 9);
       }
 
-      // Large festive crowd mosaics on the outer tier fronts. Short panels keep
-      // each footprint local to the winding stadium and safely behind the shell.
+      // Crowd-block accents on the outer tier fronts — grey/blue like the rest
+      // of the bowl, with one sparse marigold pop rather than a rainbow cycle.
+      // Short panels keep each footprint local to the winding stadium and
+      // safely behind the shell.
       for (const [s, side, ci] of [
-        [0.748, -1, 0], [0.772, 1, 1], [0.798, -1, 2],
-        [0.822, 1, 3], [0.846, -1, 1],
+        [0.748, -1, 0], [0.772, 1, 1], [0.798, -1, 0],
+        [0.822, 1, 1], [0.846, -1, 6],   // ci=6 → BOWL_POP, the one marigold pop
       ]) {
-        place(K(s), side, 33, [0.8, 4.5, 12], fiesta[ci]);
+        place(K(s), side, 33, [0.8, 4.5, 12], crowdCols[ci]);
       }
 
       // Interior fencing at trackside (safety fence inside stadium) — bowl only
@@ -500,7 +533,9 @@
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.92  PERALTADA / ESTADIO STAND
-      // The banked Peraltada corner passes the old Estadio Azteca-style grandstand.
+      // The banked Peraltada corner passes the Estadio (GNP Seguros) grandstand
+      // — NOT Estadio Azteca, which sits ~9 km away in Coyoacán and is not
+      // visible from here. This is simply the Peraltada/Estadio grandstand.
       // ════════════════════════════════════════════════════════════════════════
       for (const s of [0.90, 0.92, 0.94]) {
         boundedStand(s, 1, 14, 24, SEATS, PINK, false);
@@ -515,6 +550,10 @@
       lampPost(K(0.91), -1, 14);
       lampPost(K(0.93), -1, 14);
       banners(0.92, 1, 9);
+      // Broadcast vantage on the outside of the Peraltada — the classic
+      // banked-corner TV shot, and previously completely unmarked.
+      cameraTower(K(0.92), -1, 18, { h: 20 });
+      sponsorHoarding(0.895, 0.935, -1, 9, { palette: fiesta });
 
       // Banked kerb edges through the Peraltada/Estadio corners
       for (const s of [0.89, 0.92, 0.95]) {
@@ -757,6 +796,29 @@
           rock: [0.48, 0.51, 0.57], forest: [0.37, 0.42, 0.42],
           snow: [0.89, 0.91, 0.94],
         });
+      }
+
+      // ════════════════════════════════════════════════════════════════════════
+      // HERO (OPTIONAL): AIRLINER ON APPROACH TO BENITO JUÁREZ INTERNATIONAL
+      // Hermanos Rodríguez sits directly under Mexico City's main landing
+      // corridor — no other circuit on the calendar can use this. One low-poly
+      // silhouette, gear down, set far beyond the Esses/back straight so it
+      // reads as a distant hazed shape crossing the sky, never as a trackside
+      // prop. Flat-shaded fuselage + wing + tail — cheap, placed once.
+      // ════════════════════════════════════════════════════════════════════════
+      {
+        const a = anchor(K(0.20), 1, 820);           // ~700 m beyond the Esses
+        const c = [a.c[0], a.c[1] + 210, a.c[2]];     // low final-approach altitude
+        const bn = [a.r, a.u, a.t];                   // normal box basis
+        const bf = [a.r, a.t, a.u];                   // cylinder axis along fuselage
+        const FUSE = [0.60, 0.62, 0.66], DARK = [0.28, 0.29, 0.32];
+        addCyl(out, vadd(c, a.t, -15), 1.6, 30, FUSE, 8, bf);        // fuselage
+        addBox(out, c, [28, 0.6, 4.2], DARK, bn);                    // wings
+        addBox(out, vadd(c, a.t, 13.5), [0.5, 4.4, 3.4], DARK, bn);  // tail fin
+        addBox(out, vadd(c, a.t, 12.5), [9, 0.5, 2.4], DARK, bn);    // tailplane
+        for (const off of [-4, 3]) {                                // gear down
+          addCyl(out, vadd(vadd(c, a.t, off), a.u, -3.6), 0.16, 2.4, DARK, 4, bn);
+        }
       }
 
       // Mid/far city tower ring — thinned + pushed so mountains win the horizon
