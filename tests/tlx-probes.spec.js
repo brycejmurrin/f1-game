@@ -68,6 +68,34 @@ test.describe("TLX — boot", () => {
     expect(errors).toEqual([]);
   });
 
+  test("M4 shadow subsystem arms on a day race (car map per-frame, lamp idle)", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.evaluate(() => window.__apex.park(0.1));
+    await page.waitForTimeout(600);
+    const st = await page.evaluate(() => ({
+      car: GLX.carShadowState(),
+      lamp: GLX.lampShadowState(),
+      pcss: GLX.pcss(),
+      hdr: GLX.hdrMode(),
+    }));
+    // Desktop headless = full tier: all three maps exist; the per-frame car
+    // pass has armed at least once by now. Monza day never opens the lamp
+    // pass (night-gated in game.js), so its arms stay 0 / idx -1.
+    expect(st.car.enabled).toBe(true);
+    expect(st.car.arms).toBeGreaterThan(0);
+    expect(st.lamp.enabled).toBe(true);
+    expect(st.lamp.arms).toBe(0);
+    expect(st.lamp.idx).toBe(-1);
+    expect(st.pcss).toBe(false);   // TODO M4-PCSS: blocker map not ported
+    expect(st.hdr).toBe(false);    // truthful until M8's HDR post chain
+    expect(errors).toEqual([]);
+  });
+
   test("menu is reachable and canvas is sized (no-track begin/present path)", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });

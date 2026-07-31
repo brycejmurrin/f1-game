@@ -48,8 +48,15 @@
  * animated scalar, e.g. dusk floodEmit, would otherwise mint variants per
  * frame — revisit in M8 if that path shows up hot).
  * Debug: __tlx.shader(idx) dumps generated GLSL/WGSL; ?viz=mat|normal|lamp
- * (or localStorage apex26.tlxViz) paints bisect views. No shadow maps / sky /
- * post yet (M4/M5/M8).
+ * (or localStorage apex26.tlxViz) paints bisect views.
+ *
+ * M4 STATUS: the three-map shadow subsystem is live (tlx-shadow.js,
+ * TLXShaders.shadowSys): static sun map (2048²/1024² mobile, snap-cached by
+ * game.js), per-frame car map (1024², desktop) and nearest-floodlight spot
+ * map (512², desktop), sampled in tsl-lit via hardware-compare depth taps.
+ * Armed flags clear in present() like GLX's post present. PCSS blocker map
+ * skipped (pcss() = false — TODO M4-PCSS in tlx-shadow.js). No sky / post
+ * yet (M5/M8).
  */
 "use strict";
 
@@ -112,6 +119,21 @@ const TLX = (function () {
       unlitMat.colorNode = TSL.attribute("color", "vec3");
       unlitMat.side = THREE.FrontSide;
 
+      // ── M4: the three-map shadow subsystem (tlx-shadow.js factory) ───────
+      // Created BEFORE the lit core: tsl-lit builds its shadow sampling
+      // around the subsystem's depth textures at factory time. Guarded like
+      // the lit factory — missing/broken keeps the no-op shadow members and
+      // the lit core simply compiles without shadow taps.
+      let shadowSys = null;
+      try {
+        if (window.TLXShaders && TLXShaders.shadowSys) {
+          shadowSys = TLXShaders.shadowSys(THREE, TSL, { renderer, mobileTier });
+        }
+      } catch (e) {
+        try { console.warn("TLX: shadow factory failed, shadows off —", e); } catch (_) {}
+        shadowSys = null;
+      }
+
       // ── M3: the TSL lit core (tsl-chunks.js + tsl-lit.js factories) ──────
       // Guarded: a missing/broken factory keeps the unlit material — the
       // backend must still boot (Gfx.create's never-throw contract).
@@ -119,7 +141,7 @@ const TLX = (function () {
       try {
         if (window.TLXShaders && TLXShaders.chunks && TLXShaders.lit) {
           const chunks = TLXShaders.chunks(THREE, TSL);
-          lit = TLXShaders.lit(THREE, TSL, { chunks });
+          lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys });
         }
       } catch (e) {
         try { console.warn("TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
@@ -227,11 +249,6 @@ const TLX = (function () {
         }
       }
 
-      // Shadow-map arming introspection (real lifecycle lands in M4; the
-      // shape must exist now — webgl-probes-style tests read it).
-      const carShadow = { enabled: false, arms: 0 };
-      const lampShadow = { enabled: false, arms: 0, idx: -1 };
-
       const noopMesh = () => ({ __tlx: true, count: 0 });
 
       // ── the backend object (the ~40-member seam contract) ────────────────
@@ -251,15 +268,22 @@ const TLX = (function () {
         get width() { return W; },
         get height() { return H; },
         get aspect() { return H ? W / H : 1; },
-        hdrMode() { return true; },          // scene targets are RGBA16F from M2 on
+        hdrMode() { return false; },         // truthful: direct-to-canvas 8-bit until M8's HDR post chain
         msaa() { return 1; },
-        pcss() { return false; },            // real PCSS lands in M4
+        pcss() { return false; },            // truthful: blocker map skipped (TODO M4-PCSS, tlx-shadow.js)
         isMobile,
         mobileTier,
         gpuTimer() { return { supported: false, on: false }; },
         gpuMs() { return -1; },
-        carShadowState() { return { enabled: carShadow.enabled, arms: carShadow.arms }; },
-        lampShadowState() { return { enabled: lampShadow.enabled, arms: lampShadow.arms, idx: lampShadow.idx }; },
+        carShadowState() {
+          const s = shadowSys && shadowSys.S;
+          return s ? { enabled: s.carEnabled, arms: s.carArms } : { enabled: false, arms: 0 };
+        },
+        lampShadowState() {
+          const s = shadowSys && shadowSys.S;
+          return s ? { enabled: s.lampEnabled, arms: s.lampArms, idx: s.lampIdx }
+                   : { enabled: false, arms: 0, idx: -1 };
+        },
 
         // resources
         createMesh(data) {
@@ -294,10 +318,16 @@ const TLX = (function () {
         freeChunkedMesh(m) { if (m && m.geo) { m.geo.dispose(); m.geo = null; } },
         freeTexture(t) { if (t && t.tex) { t.tex.dispose(); t.tex = null; } },
 
-        // frame protocol — M1: clear-only; every draw is a safe no-op
-        shadowBegin() {}, castShadow() {}, castShadowChunked() {}, shadowEnd() {},
-        carShadowBegin() {}, carShadowEnd() {},
-        lampShadowBegin() {}, lampShadowEnd() {},
+        // frame protocol — shadow passes delegate to the M4 subsystem
+        // (tlx-shadow.js); a missing factory keeps them as safe no-ops.
+        shadowBegin(vp) { if (shadowSys) shadowSys.shadowBegin(vp); },
+        castShadow(mesh, model) { if (shadowSys) shadowSys.castShadow(mesh, model); },
+        castShadowChunked(mesh, model) { if (shadowSys) shadowSys.castShadowChunked(mesh, model); },
+        shadowEnd() { if (shadowSys) shadowSys.shadowEnd(); },
+        carShadowBegin(vp) { if (shadowSys) shadowSys.carShadowBegin(vp); },
+        carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
+        lampShadowBegin(vp, idx) { if (shadowSys) shadowSys.lampShadowBegin(vp, idx); },
+        lampShadowEnd() { if (shadowSys) shadowSys.lampShadowEnd(); },
         envFaceBegin() { return null; },     // game.js skips the probe on null
         envFaceEnd() {},
         envProbeReady() { return false; },
@@ -347,6 +377,11 @@ const TLX = (function () {
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
           renderer.render(scene, camera);
           drawList.length = 0;
+          // Armed shadow flags clear AFTER the main render (GLX clears them
+          // in the post-chain present; game.js re-arms every frame it runs
+          // the car/lamp passes). The lit uniforms latched the armed state at
+          // begin(), so this never races the frame that armed them.
+          if (shadowSys) shadowSys.clearArmed();
         },
 
         // debug — the __tlx tooling (mirrors the spike's __spike hooks):
@@ -355,6 +390,7 @@ const TLX = (function () {
         __tlx: {
           renderer, THREE, TSL,
           get lit() { return lit; },
+          get shadow() { return shadowSys; },
           viz: vizMode,
           materialCacheSize() { return matCache.size; },
           async shader(idx = 0) {
