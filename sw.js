@@ -34,7 +34,15 @@ function currentCacheName() {
 // essential; metadata and icons improve the install but are best-effort.
 async function precacheAssetLists() {
   const essential = new Set(["./", "index.html", "version.json"]);
-  const optional = new Set(["manifest.json"]);
+  // Vendored three.js (TLX backend) is fetched by DYNAMIC import() through the
+  // inline importmap, so the tag parser below never sees it. Seed it as
+  // OPTIONAL: TLX is opt-in — install success for GLX users must not depend on
+  // ~1 MB of vendor they never run (promote to essential at the Phase D flip).
+  const optional = new Set(["manifest.json",
+    "vendor/three-0.184.0/three.webgpu.min.js",
+    "vendor/three-0.184.0/three.core.min.js",
+    "vendor/three-0.184.0/three.tsl.min.js",
+    "vendor/three-0.184.0/addons/tsl/display/BloomNode.js"]);
   const shell = await fetch("index.html", { cache: "no-store" });
   if (!shell || !shell.ok) throw new Error("Unable to fetch the application shell");
   const html = await shell.text();

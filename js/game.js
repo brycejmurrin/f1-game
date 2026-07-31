@@ -44,31 +44,36 @@ const els = {
 // handle every later renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
 try {
-  let optIn = false;
-  try { optIn = localStorage.getItem("apex26.gfxBackend") === "webgpu"; } catch (_) {}
-  if (optIn && typeof Gfx !== "undefined" && navigator.gpu) {
-    const wgx = await Gfx.create(canvas, {});
-    if (wgx) {
-      // Route EVERY renderer call site onto the WebGPU backend — not just game.js
-      // but the other modules that call the GLX global directly (tracks.js mesh
-      // build, car3d.js, liverytex.js, ghost.js). Copy WGX's methods + live
-      // getters (width/height/aspect) onto the GLX object so `GLX.foo()` anywhere
-      // delegates to WebGPU. GLX's own WebGL context is never initialised here.
-      try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(wgx)); gfx = GLX; }
+  let pref = null;
+  try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
+  // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
+  // self-falls-back to WebGL2 inside three so no capability gate here).
+  const optIn = pref === "three" || (pref === "webgpu" && navigator.gpu);
+  if (optIn && typeof Gfx !== "undefined") {
+    const backend = await Gfx.create(canvas, {});
+    if (backend) {
+      // Route EVERY renderer call site onto the selected backend — not just
+      // game.js but the modules that reach the GLX global directly (tracks.js
+      // mesh build; tests monkey-patch GLX.* too, so OBJECT IDENTITY is the
+      // compatibility contract). Copy the backend's methods + live getters
+      // (width/height/aspect) onto the GLX object so `GLX.foo()` anywhere
+      // delegates. GLX's own WebGL context is never initialised here.
+      try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend)); gfx = GLX; }
       catch (_) { gfx = null; }
     }
   }
 } catch (_) { gfx = null; }
 if (!gfx) {
   if (!GLX.init(canvas)) {
-    // A failed WebGPU opt-in may have already CLAIMED the canvas (getContext
-    // "webgpu" succeeded before init died) — then getContext("webgl2") can
-    // never attach on this load and the old path dead-ended at "needs WebGL2"
-    // forever. Clear the opt-in and reload once, the same recovery WGX's
-    // device-lost handler uses; the reset flag guarantees no reload loop.
-    let webgpuTried = false;
-    try { webgpuTried = localStorage.getItem("apex26.gfxBackend") === "webgpu"; } catch (_) {}
-    if (webgpuTried) {
+    // A failed backend opt-in (WGX or TLX) may have already CLAIMED the canvas
+    // (getContext "webgpu"/"webgl2" succeeded before init died) — then
+    // getContext("webgl2") can never attach on this load and the old path
+    // dead-ended at "needs WebGL2" forever. Clear the opt-in and reload once,
+    // the same recovery WGX's device-lost handler uses; the reset flag
+    // guarantees no reload loop.
+    let backendTried = false;
+    try { const p = localStorage.getItem("apex26.gfxBackend"); backendTried = p === "webgpu" || p === "three"; } catch (_) {}
+    if (backendTried) {
       try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) {}
       try { location.reload(); } catch (_) {}
       return;
@@ -4641,21 +4646,34 @@ $("pm-res").onclick = () => {
 };
 applyResMode();
 
-// RENDERER toggle (WebGL2 / WebGPU) — shown only when the browser exposes
-// WebGPU. WebGPU is opt-in and browser-untested, so the default stays WebGL2;
-// flipping writes apex26.gfxBackend (the raw key gfx.js reads) and reloads so
-// Gfx.create() re-runs the backend selection at boot.
+// RENDERER cycle (WEBGL2 → THREE → WEBGPU-if-available) — shown always now:
+// TLX ("THREE", the three.js/TSL backend, in-progress migration) needs no
+// WebGPU, so the toggle no longer hides without navigator.gpu; the WGX
+// "WEBGPU" stop is skipped on browsers that can't run it. Both alternates
+// are opt-in and the default stays WebGL2; flipping writes apex26.gfxBackend
+// (the raw key gfx.js reads) and reloads so Gfx.create() re-runs backend
+// selection at boot.
 {
   const rb = $("pm-renderer");
-  if (rb && typeof navigator !== "undefined" && navigator.gpu) {
-    const read = () => { try { return localStorage.getItem("apex26.gfxBackend") === "webgpu" ? "webgpu" : "webgl2"; } catch (_) { return "webgl2"; } };
+  if (rb) {
+    const read = () => {
+      try {
+        const v = localStorage.getItem("apex26.gfxBackend");
+        return v === "webgpu" || v === "three" ? v : "webgl2";
+      } catch (_) { return "webgl2"; }
+    };
+    const label = (v) => v === "three" ? "THREE" : v.toUpperCase();
     rb.hidden = false;
-    rb.textContent = "RENDERER: " + read().toUpperCase();
+    rb.textContent = "RENDERER: " + label(read());
     rb.onclick = () => {
       if (soundOn) GameAudio.uiSelect();
-      const next = read() === "webgpu" ? "webgl2" : "webgpu";
+      const cur = read();
+      const hasGpu = typeof navigator !== "undefined" && !!navigator.gpu;
+      const next = cur === "webgl2" ? "three"
+                 : cur === "three" ? (hasGpu ? "webgpu" : "webgl2")
+                 : "webgl2";
       try { localStorage.setItem("apex26.gfxBackend", next); } catch (_) {}
-      rb.textContent = "RENDERER: " + next.toUpperCase() + " — RELOADING…";
+      rb.textContent = "RENDERER: " + label(next) + " — RELOADING…";
       setTimeout(() => location.reload(), 350);
     };
   }
