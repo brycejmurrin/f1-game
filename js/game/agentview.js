@@ -2751,14 +2751,30 @@ const AgentView = (function () {
           "scene({radius,kinds,limit} | {visible:true})":
             "WHAT IS AROUND ME — named scenery by distance and bearing. Default "
             + "is a radius around the CAR; {visible:true} = the CAMERA's on-screen list",
+          "atmosphere()":
+            "WHAT DOES IT LOOK LIKE OUT THERE — the light narrated: day/night, "
+            + "brightness, sun or moon and where it sits, floodlights, fog "
+            + "visibility range, wet road. Raw RGB kept for measurement",
           "render({what,...})":
             "SHOW IT — the one optional raster, APPROXIMATE. what: 'view'|'map'|"
             + "'circuit'|'car'. For intuition/debugging, not measurement",
         },
+        // DRILL-DOWN: the world is stored in full and PULLED by id. Dumping it
+        // would be both huge and less accurate — ask for one thing, or a slice.
+        detail: {
+          "describe(id)":
+            "EVERYTHING ABOUT ONE THING — 'prop:12' | 'corner:T3' | 'car:4' | "
+            + "'span:2'. ids come back from scene()/query()/trackInfo()/field()",
+          "query({kind,near,fromS,toS,limit})":
+            "A BOUNDED SLICE — filters compose; returns prototype + instances so "
+            + "repeated dressing costs one shape plus a position each. Narrow the "
+            + "filter rather than raising limit",
+        },
         know: {
           "trackInfo({what})":
             "STATIC substrate — corners|sectors|profile|all. Fetch ONCE. Corners "
-            + "carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no line)",
+            + "carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no "
+            + "line), plus bankingDeg/camber, gradientPct/elevation and kerbs",
           "carView({team,parts,detail})":
             "WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, "
             + 'measured geometry; detail:"parts" adds per-part boxes',
@@ -2794,13 +2810,17 @@ const AgentView = (function () {
             + "world()+field()+scene() are the live frame — read per decision",
           "decide vs show": "read world()/scene()/trackInfo()/the read hooks to "
             + "DECIDE; call render() only to SEE — its glyphs are approximate",
+          "lean default, pull detail": "the world is stored in FULL but never "
+            + "dumped — a flat serialisation is huge and reads worse. Keep the "
+            + "default lean and pull with describe(id)/query() where a decision "
+            + "needs it",
           "per tick": 'world({detail:"brief", since:<seq>}) — ~355 bytes/step, '
             + "34x cheaper than full. detail is the big lever",
         },
         setup: ['__apex.race("monza")', "__apex.go()", "__apex.jump(0.1, 55)"],
         loop: "world() -> decide -> rollout({seconds, policy}) -> read the digest",
-        cli: "node tools/agent.mjs <track> <help|world|scene|render|track|"
-             + "car|survey|rollout> [flags]",
+        cli: "node tools/agent.mjs <track> <help|world|field|scene|atmosphere|"
+             + "describe|query|render|track|car|survey|rollout> [flags]",
         notes: [
           "no agent hook returns null — failures are {ok:false, error, message, fix}",
           "an LLM cannot decide at 60 Hz: rollout runs your policy at policyHz "

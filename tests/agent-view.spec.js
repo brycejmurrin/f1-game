@@ -1359,11 +1359,16 @@ test.describe("agentHelp()", () => {
     // surface is the consolidated six + the utilities — the four rasters are
     // demoted behind render({what}), so they are NOT peer entries here.
     const listed = Object.keys(h.perceive)
-      .concat(Object.keys(h.know), Object.keys(h.act)).join(" ");
-    for (const k of ["world(", "field(", "scene(", "render(", "trackInfo(",
-                     "carView(", "survey(", "rollout(", "terminal("]) {
+      .concat(Object.keys(h.know), Object.keys(h.act),
+              Object.keys(h.detail || {})).join(" ");
+    for (const k of ["world(", "field(", "scene(", "atmosphere(", "render(",
+                     "trackInfo(", "carView(", "survey(", "rollout(", "terminal(",
+                     "describe(", "query("]) {
       expect(listed, k + " missing from agentHelp()").toContain(k);
     }
+    // the drill-down layer must be advertised as its own thing, or an agent
+    // will never learn it can pull detail instead of asking for everything
+    expect(h.detail, "drill-down section missing").toBeTruthy();
     // scene() must advertise its {visible} mode so the on-screen list is findable
     expect(listed).toContain("visible");
     // agent view is the text-native mirror of the WHOLE __apex toolkit, so the
@@ -1384,7 +1389,7 @@ test.describe("agentHelp()", () => {
     expect(Object.keys(h.model).length).toBeGreaterThan(2);
     // it is a manifest, not documentation — keep it cheap. It now maps the whole
     // toolkit (read hooks + control verbs), so a little larger, still bounded.
-    expect(JSON.stringify(h).length).toBeLessThan(5000);
+    expect(JSON.stringify(h).length).toBeLessThan(5500);
   });
 });
 

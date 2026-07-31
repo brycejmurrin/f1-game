@@ -572,6 +572,52 @@ The rule the whole redesign enforces: **emit an identifier, never the record**;
 compact, egocentric, saliency-capped; render what you *read*, expose what you
 *do*.
 
+## 5i. High detail without the dump — the drill-down layer
+
+"Make it a full, highly detailed text renderer" and "keep it readable" are only
+compatible one way. The evidence is unambiguous: flat-serialising a rich scene
+graph is *both* infeasible (a small robotics scene graph runs ~7M tokens) *and
+less accurate* than exposing it queryably — and thousands of near-identical
+objects are the worst case, because semantic similarity is what drives context
+rot. Monza registers **2835 props**. So the answer is not a bigger payload:
+
+**The world is stored in full and never dumped. Detail is pulled.**
+
+- **Stable ids** — `prop:<n>`, `corner:<turn>`, `car:<n>`, `span:<n>` — derived,
+  not stored, so they survive a rebuild. Every list row carries one, and they
+  cross-reference (a prop names its `nearestCorner` as an id).
+- **`describe(id)`** returns everything about exactly one entity (~314 bytes for
+  a prop). Unbounded detail about *one* thing is cheap; unbounded detail about
+  everything is the failure mode.
+- **`query({kind, near, fromS, toS, limit})`** returns a bounded slice as
+  **prototype + instances** — one shape per kind, then a position each, with a
+  size repeated only when it differs >25%. Six pines cost ~1.1 KB instead of six
+  full records, and the response says what it withheld.
+
+Meanwhile the per-tick `world({detail:"drive"})` stays ~3.2 KB *with* the new
+banking/gradient/kerb fields, guarded by a test. Detail belongs in the
+drill-down, not the hot path.
+
+### What dogfooding caught that the tests did not
+
+Every bug in this phase was found by *reading the output as its consumer*, while
+the shape assertions were green:
+
+- Rivals were spreading the **entire team object** — ~180 lines of colour arrays,
+  driver lists and `_cssColor` around ~5 useful fields.
+- `atmosphere()` reported **"sun to your right" over a floodlit midnight**: at
+  night the renderer keeps the sun direction and dims it to moonlight, so sun
+  elevation still reads +43°. The same bad signal suppressed the floodlight
+  phrase entirely.
+- Banking read **0° on every banked corner**, because the populated source is
+  `def.bankZones → track.bankP → Tracks.banking()`, not `Tracks.bankAngle()`.
+  Once fixed, the sign was inverted and all six read "off-camber" — the opposite
+  of what an authored bank zone means.
+- The CLI's `--kind` filter **silently didn't bind**, so `query` returned all
+  2835 props and looked like it was working.
+
+Tests prove a thing is correct; dogfooding proves it is good.
+
 ## 6. Open questions
 
 - **Prop registry granularity.** Per composite model, or per emitted

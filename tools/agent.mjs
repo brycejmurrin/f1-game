@@ -34,6 +34,9 @@ const COMMANDS = {
   world: "egocentric snapshot   --detail brief|drive|full  --horizon <s>  --points <n>",
   track: "static track data     --what corners|sectors|profile|all",
   field: "the grid / standings  --detail brief|full",
+  atmosphere: "the light as text  (day/night, sun, fog, wet road)",
+  describe: "ONE thing in full   --id prop:12|corner:T3|car:4|span:2",
+  query: "a bounded slice     --kind pine --near <m> --from <m> --to <m> --limit <n>",
   scene: "named scenery nearby  --radius <m>  --kinds a,b  --limit <n>  (--visible = on-screen)",
   render: "the ONE raster aid  --what view|map|circuit|car  --cols <n>  --camera <mode>  (APPROXIMATE)",
   rollout: "drive an interval   --seconds <s>  --steer <-1..1>  --throttle  --brake  --samples <n>",
@@ -84,7 +87,9 @@ const opts = {
   points: num("points", 5),
   what: flag("what", "corners"),
   radius: num("radius", 150),
-  kinds: flag("kinds", null),
+  // accept --kind and --kinds; a silently-unbound filter returned the whole
+  // registry and looked like a working query
+  kinds: flag("kinds", null) || flag("kind", null),
   limit: num("limit", 0),
   seconds: num("seconds", 5),
   steer: num("steer", 0),
@@ -106,6 +111,10 @@ const opts = {
   visibleFlag: has("visible"),
   cam: flag("camera", null),
   out: flag("out", null),
+  id: flag("id", null),                 // describe: prop:12 | corner:T3 | car:4
+  nearM: has("near") ? num("near", 150) : null,   // query: radius around the car
+  fromS: has("from") ? num("from", 0) : null,     // query: arc window start (m)
+  toS: has("to") ? num("to", 0) : null,           // query: arc window end (m)
 };
 
 (async () => {
@@ -151,6 +160,16 @@ const opts = {
           return a.trackInfo({ what: o.what });
         case "field":
           return a.field({ detail: o.modelDetail === "full" ? "full" : "brief" });
+        case "atmosphere":
+          return a.atmosphere();
+        case "describe":
+          return a.describe(o.id);
+        case "query":
+          return a.query({ kind: o.kinds ? o.kinds.split(",") : undefined,
+                           near: o.nearM != null ? o.nearM : undefined,
+                           fromS: o.fromS != null ? o.fromS : undefined,
+                           toS: o.toS != null ? o.toS : undefined,
+                           limit: o.limit || undefined });
         case "scene":
           if (o.visibleFlag) return a.scene({ visible: true, limit: o.limit || undefined });
           return a.scene({ radius: o.radius, limit: o.limit || undefined,

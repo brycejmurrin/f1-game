@@ -964,11 +964,26 @@ __apex.world({ detail: "brief" })
 //   brief: "Lap 3, P4, 218 km/h in 6, T7 L in 84 m — BRAKE NOW for T7, …" }
 ```
 
-`detail:"drive"` adds `ahead:{horizonS, horizonM, pts:[{d,t,radiusM,dir,widthM}]}`,
+`detail:"drive"` adds **`pacenotes`** — the road ahead as one rally co-driver's
+line, e.g. `"L1 @244m uphill don't-cut, L6 @398m uphill into-str, L4 @979m
+downhill"`. Direction + rally severity 1–6 (1 = tightest, from the radius) at a
+distance in metres, with the mutators that change the call: `uphill`/`downhill`,
+`off-camber`, `into-str` (opens onto a straight — prioritise exit), `don't-cut`
+(tight enough that an early apex throws the exit away). Three corners in ~60
+characters. It also adds
 `nextCorners:[{turn, dir, radiusM, severity, distM, apexSpeedKph, exitsOntoStraight,
 suggestBrakeM}]` (the next few corners as a sequence, ordered by distance),
 `rivals:[{id, code, team, rel, gapM, gapS, lateralM, side, speedKph, closingMps,
 threat, lap}]` (sorted by gap, capped at 4), and `affordances` / `unavailable`.
+
+**Road shape.** `bankingDeg` is the real road-plane roll (`+` = the right edge is
+raised, which holds a **left**-hander), and `camber` says what that means for
+*this* corner: `banked into the turn` / `off-camber` / `flat`. Note the source:
+authored `def.bankZones` → `track.bankP` → `Tracks.banking()`, **not**
+`Tracks.bankAngle()`/`track.bank[]`, which is a per-node tilt almost no circuit
+sets. `gradientPct`/`elevation` measure the climb across the corner, and `kerbs`
+lists the sides that carry one. The same facts appear as rally mutators in
+`world().pacenotes` (`uphill`, `downhill`, `off-camber`).
 
 **No prescribed racing line.** A crude `apexOffsetM`/`moveToApexM` "fast line"
 (apex = inside edge) was removed — it is confidently wrong (late apex onto a
@@ -986,6 +1001,71 @@ right of centreline, `+k` right-hand turn), restated in every `conventions` fiel
 `suggestBrakeM` is a **hint**, not the car's physics: it assumes ~30 m/s²
 braking and ~26 m/s² lateral grip. Treat it as a reference to check against, not
 a target.
+
+### `describe(id) → payload | typedError`
+
+Everything known about **one** entity, by stable id. Ids are derived from the
+registry/corner table, so they survive a rebuild and cost nothing to mint:
+
+| id | resolves to |
+|---|---|
+| `prop:<n>` | a registered prop — measured box, arc position, side, fill/parts, board text, egocentric distance/bearing, and the corner it stands by |
+| `corner:<turn>` | the full corner record + a census of scenery within 80 m |
+| `car:<n>` | one car: code, team id, lap, position, speed, gap to the player |
+| `span:<n>` | a barrier/fence run: kind, side, from/to, length, height |
+
+```js
+__apex.describe("prop:1980")   // ~314 bytes
+__apex.describe("corner:T3")   // corner + sceneryWithin80m
+```
+
+Ids come back from `scene()`, `query()`, `trackInfo()` and `field()`, and
+cross-reference each other (a prop names its `nearestCorner` as an id). An
+unknown id is a typed error that says how to find a real one.
+
+### `query({kind, near, fromS, toS, limit}?) → payload | typedError`
+
+A **bounded slice** of the world. Filters compose: `kind` (string or array),
+`near` (metres around the car), `fromS`/`toS` (an arc-position window), `limit`
+(capped, default 40).
+
+```js
+__apex.query({ kind: "pine", near: 250, limit: 8 })
+// { matched: 52, returned: 8, truncated: 44,
+//   prototypes: { pine: { sizeM: [5, 32.1, 5], count: 8 } },
+//   instances: [ { id:"prop:149", kind:"pine", s:288.1, side:"left",
+//                  distM:19.1, bearingDeg:92.4 }, … ] }
+```
+
+Repeated dressing comes back as **prototype + instances**: one shape per kind,
+then a position per instance, with `sizeM` repeated only when it differs by more
+than 25%. Never a silent truncation — `truncated` says what was withheld.
+Narrow the filter rather than raising `limit`.
+
+**Why these two exist.** The world is stored in full but never dumped: a flat
+serialisation of a rich scene is both enormous and *read worse* than a query,
+and thousands of near-identical props are the worst case. Monza registers 2835.
+So the default views stay lean and detail is **pulled** where a decision needs it.
+
+### `atmosphere() → payload | typedError`
+
+The light, narrated. `lightState()` is rich but raw — an agent can't act on an
+RGB triple — so this describes the scene and keeps the numbers alongside:
+
+```js
+__apex.atmosphere().brief
+// "night, dark, floodlit (29 lights active), moon to your right,
+//  visibility ~433 m, stars out, moon up."
+```
+
+Carries `timeOfDay`, `weather`, `wetRoad`, `dark`, `brightness`,
+`sun:{body,elevationDeg,relBearingDeg,where}`, `lights:{active,floodEmit}`,
+`visibility:{fogDensity,approxRangeM}`, `exposure`, and `raw` RGB.
+
+**`sun.body` is `"sun"` or `"moon"`** — at night the renderer keeps the sun
+direction and dims it to moonlight, so elevation alone would report a high sun
+over a floodlit midnight. Darkness comes from the session, not the sun vector.
+Fog is reported as a **visibility distance**, the actionable form.
 
 ### `field({detail}?) → payload | typedError`
 
@@ -1190,7 +1270,8 @@ Static per-track data — **fetch once per session, never per tick**.
 __apex.trackInfo({ what: "corners" }).corners
 // [{ turn:"T9-T10", frac, s, dir:"L", radiusM:134, k, sweepDeg:-168,
 //    severity:"medium", widthM, entryS, exitS, lengthM, apexSpeedKph,
-//    straightAfterM, exitsOntoStraight }, …]
+//    straightAfterM, exitsOntoStraight,
+//    bankingDeg, camber, gradientPct, elevation, kerbs }, …]
 //    straightAfterM = road to the next corner; exitsOntoStraight past ~120 m
 ```
 
