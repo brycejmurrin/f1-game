@@ -60,7 +60,7 @@ const AgentView = (function () {
   }
 
   function create(G) {
-    const { wrapS, gripMult, LONG_GRIP } = G;
+    const { wrapS, gripMult, LONG_GRIP, update, els } = G;
 
     // Own scratch. apex.js shares `smp`/`smp2` with game.js and has to re-sample
     // to restore them after a lookahead loop (see obs()); borrowing that here
@@ -586,6 +586,180 @@ const AgentView = (function () {
       return { done: reason != null, reason };
     }
 
+    // ── rollout() — drive, then summarise ───────────────────────────────────
+    // The single biggest token win available. A 5 s experiment at 60 Hz is 300
+    // observations; reading them back frame by frame costs tens of thousands of
+    // tokens to answer a question ("did that setup carry more speed through T4?")
+    // that a digest answers in a few hundred.
+    //
+    // It also encodes the loop the real-time agent literature converges on: an
+    // LLM cannot decide at 60 Hz, so the policy runs at policyHz (default 10)
+    // while physics runs every tick. Pass a constant `input` instead and it is
+    // a pure open-loop probe.
+
+    // Which corner, if any, contains this arc position. entryS > exitS means the
+    // corner wraps the start/finish line.
+    function cornerAt(s, list) {
+      for (const c of list) {
+        if (c.entryS <= c.exitS) { if (s >= c.entryS && s <= c.exitS) return c; }
+        else if (s >= c.entryS || s <= c.exitS) return c;
+      }
+      return null;
+    }
+
+    function rollout(opts) {
+      const bad = notReady();
+      if (bad) return bad;
+      const o = opts || {};
+      const dt = clamp(o.dt || 1 / 60, 1 / 240, 1 / 10);
+      const seconds = clamp(o.seconds != null ? o.seconds : 5, 0.05, 120);
+      const ticks = Math.max(1, Math.round(seconds / dt));
+      const policy = typeof o.policy === "function" ? o.policy : null;
+      const policyEvery = Math.max(1, Math.round(1 / ((o.policyHz || 10) * dt)));
+      const nSamples = clamp(o.samples | 0 || 12, 2, 60);
+      const sampleEvery = Math.max(1, Math.floor(ticks / nSamples));
+
+      // Promote out of the countdown, exactly as act() does, so physics advances.
+      if (G.state === "count") {
+        G.state = "race"; G.raceT = 0;
+        if (els && els.lights) {
+          els.lights.hidden = true;
+          for (const l of els.lights.children) l.classList.remove("on");
+        }
+      }
+      if (o.input !== undefined) G._testInput = o.input || null;
+
+      // A rollout calls world() internally when a policy is supplied, which would
+      // otherwise advance seq and clobber the delta baseline of the caller's own
+      // observation chain. Snapshot and restore it.
+      const savedPayload = lastPayload, savedSeq = lastSeq, savedCounter = seq;
+
+      const p = G.player;
+      const list = corners();
+      const startProg = p.prog || 0, startT = G.raceT || 0, startLap = p.lap || 0;
+      const startFrac = p.s / G.track.total;
+      let minSpeed = Infinity, maxSpeed = -Infinity, sumSpeed = 0;
+      let offTicks = 0, offEvents = 0, wasOff = false;
+      let minClear = Infinity, contacts = 0, wasContact = false;
+      let terminalReason = null, terminalAtT = null;
+      const cornerMin = {};
+      const samples = [];
+
+      for (let i = 0; i < ticks; i++) {
+        if (policy && i % policyEvery === 0) {
+          let inp = null;
+          try { inp = policy(world({ detail: "brief" })); }
+          catch (e) {
+            lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter;
+            return fail("PolicyError", "the policy function threw: " + (e && e.message),
+                        "fix the policy; it receives world({detail:'brief'}) and "
+                        + "must return {steer,throttle,brake} or null");
+          }
+          G._testInput = inp || null;
+        }
+        for (let j = 0; j < G.cars.length; j++) {
+          const c = G.cars[j]; c.rPrevS = c.s; c.rPrevX = c.x;
+        }
+        update(dt);
+
+        const sp = p.speed || 0;
+        if (sp < minSpeed) minSpeed = sp;
+        if (sp > maxSpeed) maxSpeed = sp;
+        sumSpeed += sp;
+
+        Tracks.sample(G.track, p.s, scr);
+        const off = Math.abs(p.x) > scr.hw;
+        if (off) { offTicks++; if (!wasOff) offEvents++; }
+        wasOff = off;
+
+        const cl = Math.min(Tracks.wallAt(G.track, p.s, 1) - p.x,
+                            p.x + Tracks.wallAt(G.track, p.s, -1));
+        if (cl < minClear) minClear = cl;
+        const inContact = (p.contactT || 0) > 0;
+        if (inContact && !wasContact) contacts++;
+        wasContact = inContact;
+
+        const cAt = cornerAt(p.s, list);
+        if (cAt) {
+          const prev = cornerMin[cAt.turn];
+          if (prev === undefined || sp < prev) cornerMin[cAt.turn] = sp;
+        }
+
+        if (!terminalReason) {
+          const t = terminal();
+          if (t.done) { terminalReason = t.reason; terminalAtT = r2(G.raceT - startT); }
+        }
+
+        if (i % sampleEvery === 0 || i === ticks - 1) {
+          samples.push({ t: r2(G.raceT - startT), frac: +(p.s / G.track.total).toFixed(4),
+                         speedKph: r1(sp * 3.6), lateralM: r1(p.x), gear: p.gear || 1 });
+        }
+      }
+
+      lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter;
+
+      const elapsed = (G.raceT || 0) - startT;
+      const lapsDone = (p.lap || 0) - startLap;
+      return {
+        apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
+        conventions: CONVENTIONS,
+        ran: { ticks, dt: +dt.toFixed(5), seconds: r2(elapsed),
+               policy: policy ? "closed-loop at " + (o.policyHz || 10) + " Hz"
+                              : "open-loop constant input" },
+        from: { frac: +startFrac.toFixed(4), lap: startLap },
+        to: { frac: +(p.s / G.track.total).toFixed(4), lap: p.lap || 0 },
+        distanceM: r1((p.prog || 0) - startProg),
+        speedKph: { min: r1(minSpeed * 3.6), max: r1(maxSpeed * 3.6),
+                    mean: r1(sumSpeed / ticks * 3.6), final: r1((p.speed || 0) * 3.6) },
+        offTrack: { events: offEvents, seconds: r2(offTicks * dt),
+                    pct: r1(offTicks / ticks * 100) },
+        minClearanceM: r1(minClear),
+        wallContacts: contacts,
+        lapsCompleted: lapsDone,
+        lastLapS: lapsDone > 0 && p.lastLap ? r2(p.lastLap) : null,
+        // The point of the whole exercise for tuning work: minimum speed through
+        // each corner actually driven, which is what a setup change moves.
+        cornerMinSpeedKph: Object.keys(cornerMin).map((t) =>
+          ({ turn: t, minSpeedKph: r1(cornerMin[t] * 3.6) })),
+        terminal: { done: !!terminalReason, reason: terminalReason, atS: terminalAtT },
+        samples,
+        note: "a digest of " + ticks + " physics ticks — call world() for the "
+              + "current state, this describes the interval",
+      };
+    }
+
+    // ── agentHelp() — discovery ─────────────────────────────────────────────
+    // Progressive disclosure: ~200 tokens naming the surface and the loop, so an
+    // agent can find its way without loading docs/DEBUG-HOOKS.md.
+    function agentHelp() {
+      return {
+        apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
+        conventions: CONVENTIONS,
+        tools: {
+          "world({detail,horizonS,points,since})":
+            "egocentric snapshot; detail brief|drive|full; `since` returns a delta",
+          "trackInfo({what})":
+            "STATIC per-track data — corners|sectors|profile|all. Fetch once, never per tick",
+          "scene({radius,kinds,limit})":
+            "named scenery near you — trees, buildings, grandstands, billboards, masts",
+          "visible({limit})":
+            "what is on screen: scenery cells in frustum, cars, corners. Needs a rendered frame",
+          "rollout({seconds,dt,input,policy,policyHz,samples})":
+            "drive an interval, return a digest instead of every frame",
+          "terminal()": "{done, reason} — finished|wrong_way|rescued|null",
+        },
+        setup: ['__apex.race("monza")', "__apex.go()", "__apex.jump(0.1, 55)"],
+        loop: "world() -> decide -> rollout({seconds, policy}) -> read the digest",
+        notes: [
+          "no agent hook returns null — failures are {ok:false, error, message, fix}",
+          "an LLM cannot decide at 60 Hz: rollout runs your policy at policyHz "
+            + "(default 10) while physics runs every tick",
+          "visible() reflects the LAST RENDERED frame and is stale under headless(true)",
+          "the ~89 hooks on __apex are the underlying dev console and still work",
+        ],
+      };
+    }
+
     // ── scene() — named scenery near you ────────────────────────────────────
     // visible() locates scenery MASS (72 m anonymous cells). This names it. The
     // data comes from track.props, the registry buildProps now fills at each
@@ -891,7 +1065,7 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, trackInfo, visible, scene, corners, terminal,
+    return { world, trackInfo, visible, scene, rollout, agentHelp, corners, terminal,
              API_VERSION, PHYSICS_VERSION };
   }
 

@@ -938,6 +938,42 @@ things happen to make the table trustworthy on OSM-derived centrelines:
 Sanity check: Monaco's Grand Hotel hairpin resolves to ~10 m, and integrated
 heading over a lap closes to exactly ±360°.
 
+### `rollout(opts?) → digest | typedError`
+
+Drive an interval and get a **digest**, not frames. A 5 s experiment at 60 Hz is
+300 observations; reading them back costs tens of thousands of tokens to answer
+a question a few hundred can ("did that change carry more speed through T4?").
+
+| opt | default | meaning |
+|---|---|---|
+| `seconds` | `5` | wall-clock sim seconds (0.05–120) |
+| `dt` | `1/60` | tick size |
+| `input` | — | constant `{steer,throttle,brake}` — open-loop probe |
+| `policy` | — | `(world) => {steer,throttle,brake}` — closed-loop |
+| `policyHz` | `10` | how often the policy is consulted |
+| `samples` | `12` | waypoints in the returned trace (2–60) |
+
+```js
+__apex.rollout({ seconds: 6, input: { steer: 0, throttle: true } })
+// { ran:{ticks,dt,seconds,policy}, from:{frac,lap}, to:{frac,lap}, distanceM,
+//   speedKph:{min,max,mean,final}, offTrack:{events,seconds,pct},
+//   minClearanceM, wallContacts, lapsCompleted, lastLapS,
+//   cornerMinSpeedKph:[{turn,minSpeedKph}], terminal:{done,reason,atS},
+//   samples:[{t,frac,speedKph,lateralM,gear}] }
+```
+
+`policy` implements the loop the real-time agent literature converges on: an LLM
+cannot decide at 60 Hz, so the policy is consulted at `policyHz` while physics
+steps every tick. A policy that throws returns a typed `PolicyError` rather than
+tearing down the run.
+
+`cornerMinSpeedKph` is the field to watch for setup and physics work — minimum
+speed through each corner *actually driven* is what a change moves.
+
+`rollout` calls `world()` internally when given a policy, and restores the
+`seq`/delta baseline afterwards, so it cannot silently break a caller's
+`since=` chain.
+
 ### `scene({radius, kinds, limit}?) → payload | typedError`
 
 **Named** scenery near the car. `visible()` locates scenery mass; this says what
@@ -1013,6 +1049,32 @@ Three things to know:
 `reason` is `"finished"` · `"wrong_way"` · `"rescued"` · `null`. `obs().done`
 conflates the last two, so an agent cannot tell "my policy spun the car" from
 "the sim teleported me".
+
+### `agentHelp() → manifest`
+
+~200 tokens naming the surface, the staging sequence and the loop, so an agent
+can find its way without loading this file. `node tools/agent.mjs help`.
+
+### From a shell — `tools/agent.mjs`
+
+The same surface as a CLI, so an agent driving from a terminal doesn't hand-roll
+Playwright boot + `race`/`go`/`jump` staging + `page.evaluate` for every
+question. That boilerplate is where the sharp edges are (a stale camera because
+no frame rendered; a null `obs()` because `player.px` was never initialised) —
+this does the staging correctly once.
+
+```sh
+node tools/agent.mjs help
+node tools/agent.mjs monza  world   --detail brief --at 0.25 --speed 70
+node tools/agent.mjs monaco track   --what corners
+node tools/agent.mjs monza  scene   --radius 120 --kinds tree,building --limit 8
+node tools/agent.mjs spa    visible --limit 6
+node tools/agent.mjs monza  rollout --seconds 6 --steer 0.1 --throttle
+```
+
+Staging flags apply to every command: `--at <frac>` `--speed <m/s>`
+`--lateral <m>` `--weather` `--tod`. Use `apex-eval.mjs` for an arbitrary
+`__apex` expression when you need the escape hatch.
 
 ### Recommended loop
 

@@ -38,6 +38,7 @@ npm run test:webgl      # webgl-probes + lighting-ab
 npm run test:audio      # engine/sfx audio smoke
 npm run test:modes      # season + time-trial game modes
 npm run test:map        # minimap hooks
+npm run test:agent      # agent world view (world/trackInfo/scene/visible/rollout)
 npm run test:circuit    # walls + autopilot + elevation + audit (all circuit-level)
 npm run test:fast       # curated fast subset: smoke + api + collision + offtrack +
                         #   parts-physics + steering (~3 min)
@@ -214,6 +215,11 @@ js/game/         — game modules (each created with the G ctx façade from game
   hud.js         GameHud        in-race DOM HUD
   results.js     GameResults    results / season-end screens
   apex.js        ApexApi        the whole window.__apex dev API
+  agentview.js   AgentView      the agent-facing JSON world view — world()/
+                                  trackInfo()/scene()/visible()/rollout()/
+                                  agentHelp(); composes the __apex hooks into one
+                                  egocentric snapshot with typed errors
+                                  (docs/AGENT-WORLD-API.md)
   atmosphere.js  Atmosphere     applyRaceSettings — time-of-day/weather scene state
   setup-ui.js    SetupUI        CAR SETUP screen
   menus.js       Menus          menu/select/pause DOM flows
@@ -424,7 +430,26 @@ __apex.headless(true)         // skip render() — physics runs uncapped
 __apex.obs()                  // full debug observation (pos, slip, clearances, scan, reward, gear)
 __apex.act({steer,throttle,brake}, dt, n) // set input + step n ticks → obs (1 round-trip)
 __apex.reset(frac, speed, x)  // fast episode reset without reloading assets → obs
+// ── Agent world view (js/game/agentview.js) — never returns null; failures are
+//    {ok:false, error, message, fix}. See docs/AGENT-WORLD-API.md ──
+__apex.agentHelp()            // manifest of this surface (~200 tokens)
+__apex.world({detail:"brief"})// egocentric snapshot; brief|drive|full; since= → delta
+__apex.trackInfo({what:"corners"}) // STATIC per-track: corners/sectors/profile
+__apex.scene({radius:120})    // NAMED scenery nearby (trees, buildings, stands…)
+__apex.visible()              // what is on screen (needs a rendered frame)
+__apex.rollout({seconds:5, policy})  // drive an interval → digest, not frames
+__apex.terminal()             // {done, reason} — finished|wrong_way|rescued
 ```
+
+Corner data in `world().nextCorner` / `trackInfo({what:"corners"})` is smoothed
+over a 30 m window with radius taken from heading swept across the corner —
+`Tracks.curvature`'s 12 m window is right for physics but reads centreline zigzag
+as a hairpin. Curated `CircuitMarkings` apexes are snapped onto the real
+curvature peak and overlapping results merged (`T9-T10`).
+
+`node tools/agent.mjs <track> <world|track|scene|visible|rollout|help> [flags]`
+is the same surface from a shell, with the staging (race/go/jump + let frames
+render) done correctly.
 
 **Note:** `obs()` / `physState()` require `player.px` initialised (`jump()` or one
 tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` first.

@@ -1447,6 +1447,18 @@ const api = {
   // "profile" | "all". Constant for a session — fetch once, never per tick.
   trackInfo(opts) { return agentView.trackInfo(opts); },
 
+  // rollout({seconds, dt, input, policy, policyHz, samples}?) — drive an
+  // interval and return a DIGEST instead of every frame: speed min/max/mean,
+  // off-track events, minimum barrier clearance, per-corner minimum speed, lap
+  // times, terminal reason, and a handful of waypoint samples. `policy` is a
+  // function (world) => {steer,throttle,brake} run at policyHz (default 10 Hz)
+  // while physics steps every tick; pass `input` instead for an open-loop probe.
+  rollout(opts) { return agentView.rollout(opts); },
+
+  // agentHelp() — a compact manifest of the agent-facing surface and the
+  // observe/decide/rollout loop, so an agent can discover it without the docs.
+  agentHelp() { return agentView.agentHelp(); },
+
   // scene({radius, kinds, limit}?) — NAMED scenery near the car: trees,
   // buildings, grandstands, billboards, mountains, generic props, plus
   // floodlight masts. Egocentric (distance + bearing from the player, or the

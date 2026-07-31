@@ -351,6 +351,113 @@ test.describe("world() nextCorner", () => {
   });
 });
 
+// ── rollout() ───────────────────────────────────────────────────────────────
+
+test.describe("rollout()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("summarises an interval instead of returning frames", async ({ page }) => {
+    await load(page, "monza", 0.0, 55);
+    const r = await page.evaluate(() => window.__apex.rollout({
+      seconds: 4, samples: 5, input: { steer: 0, throttle: true },
+    }));
+    expect(r.ran.ticks).toBe(240);
+    expect(r.ran.policy).toContain("open-loop");
+    expect(r.distanceM).toBeGreaterThan(0);
+    expect(r.speedKph.max).toBeGreaterThanOrEqual(r.speedKph.min);
+    expect(r.samples.length).toBeLessThanOrEqual(6);
+    expect(typeof r.minClearanceM).toBe("number");
+    expect(r.terminal).toBeTruthy();
+    // The whole point: the digest is far cheaper than the frames it replaces.
+    expect(JSON.stringify(r).length).toBeLessThan(4000);
+  });
+
+  test("full throttle into Monza's first chicane goes off track", async ({ page }) => {
+    await load(page, "monza", 0.0, 55);
+    // Not a physics assertion so much as a sanity check that the digest actually
+    // reflects what happened: drive straight at a chicane and you leave the road.
+    const r = await page.evaluate(() => window.__apex.rollout({
+      seconds: 6, input: { steer: 0, throttle: true },
+    }));
+    expect(r.offTrack.events).toBeGreaterThan(0);
+    expect(r.offTrack.seconds).toBeGreaterThan(1);
+    expect(r.speedKph.final).toBeLessThan(r.speedKph.max);
+  });
+
+  test("runs a closed-loop policy at policyHz", async ({ page }) => {
+    await load(page, "monza", 0.0, 45);
+    const r = await page.evaluate(() => {
+      let calls = 0;
+      const out = window.__apex.rollout({
+        seconds: 2, policyHz: 10,
+        policy: (w) => { calls++; return { steer: -w.ego.lateralM * 0.05, throttle: true }; },
+      });
+      return { out, calls };
+    });
+    expect(r.out.ran.policy).toContain("closed-loop");
+    // 2 s at 10 Hz — allow a tick of slop either side
+    expect(r.calls).toBeGreaterThanOrEqual(19);
+    expect(r.calls).toBeLessThanOrEqual(21);
+  });
+
+  test("a throwing policy returns a typed error, not a crash", async ({ page }) => {
+    await load(page, "monza", 0.0, 45);
+    const r = await page.evaluate(() => window.__apex.rollout({
+      seconds: 1, policy: () => { throw new Error("boom"); },
+    }));
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe("PolicyError");
+    expect(r.message).toContain("boom");
+    expect(r.fix).toBeTruthy();
+  });
+
+  test("does not disturb the caller's delta chain", async ({ page }) => {
+    await load(page);
+    // rollout calls world() internally for the policy; if it advanced the shared
+    // seq/baseline, the caller's next since= would silently fall back to a full
+    // payload and the agent would never know.
+    const r = await page.evaluate(() => {
+      const a = window.__apex.world({ detail: "brief" });
+      window.__apex.rollout({ seconds: 1, policy: () => ({ throttle: true }) });
+      const d = window.__apex.world({ detail: "brief", since: a.seq });
+      return { base: a.seq, deltaBase: d.deltaBase, note: d.note || null };
+    });
+    expect(r.deltaBase).toBe(r.base);
+    expect(r.note).toBeNull();
+  });
+
+  test("records minimum speed through corners actually driven", async ({ page }) => {
+    await load(page, "monza", 0.0, 45);
+    const cs = await page.evaluate(() => window.__apex.rollout({
+      seconds: 10, input: { steer: 0.15, throttle: true },
+    }).cornerMinSpeedKph);
+    expect(Array.isArray(cs)).toBe(true);
+    for (const c of cs) {
+      expect(c.turn).toMatch(/^T\d+/);
+      expect(c.minSpeedKph).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
+
+// ── agentHelp() ─────────────────────────────────────────────────────────────
+
+test.describe("agentHelp()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("describes the surface without needing a track", async ({ page }) => {
+    await boot(page);
+    const h = await page.evaluate(() => window.__apex.agentHelp());
+    expect(h.apiVersion).toBe(1);
+    for (const k of ["world", "trackInfo", "scene", "visible", "rollout", "terminal"]) {
+      expect(Object.keys(h.tools).some((t) => t.startsWith(k))).toBe(true);
+    }
+    expect(h.loop).toContain("world()");
+    expect(h.notes.join(" ")).toContain("null");
+    // it is a manifest, not documentation — keep it cheap
+    expect(JSON.stringify(h).length).toBeLessThan(2500);
+  });
+});
+
 // ── scene() ─────────────────────────────────────────────────────────────────
 // Before the registry existed, nothing that survived a build carried a label
 // except track.lampPosts — buildProps emitted straight into vertex buffers and
