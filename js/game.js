@@ -4616,21 +4616,34 @@ $("pm-res").onclick = () => {
 };
 applyResMode();
 
-// RENDERER toggle (WebGL2 / WebGPU) — shown only when the browser exposes
-// WebGPU. WebGPU is opt-in and browser-untested, so the default stays WebGL2;
-// flipping writes apex26.gfxBackend (the raw key gfx.js reads) and reloads so
-// Gfx.create() re-runs the backend selection at boot.
+// RENDERER cycle (WEBGL2 → THREE → WEBGPU-if-available) — shown always now:
+// TLX ("THREE", the three.js/TSL backend, in-progress migration) needs no
+// WebGPU, so the toggle no longer hides without navigator.gpu; the WGX
+// "WEBGPU" stop is skipped on browsers that can't run it. Both alternates
+// are opt-in and the default stays WebGL2; flipping writes apex26.gfxBackend
+// (the raw key gfx.js reads) and reloads so Gfx.create() re-runs backend
+// selection at boot.
 {
   const rb = $("pm-renderer");
-  if (rb && typeof navigator !== "undefined" && navigator.gpu) {
-    const read = () => { try { return localStorage.getItem("apex26.gfxBackend") === "webgpu" ? "webgpu" : "webgl2"; } catch (_) { return "webgl2"; } };
+  if (rb) {
+    const read = () => {
+      try {
+        const v = localStorage.getItem("apex26.gfxBackend");
+        return v === "webgpu" || v === "three" ? v : "webgl2";
+      } catch (_) { return "webgl2"; }
+    };
+    const label = (v) => v === "three" ? "THREE" : v.toUpperCase();
     rb.hidden = false;
-    rb.textContent = "RENDERER: " + read().toUpperCase();
+    rb.textContent = "RENDERER: " + label(read());
     rb.onclick = () => {
       if (soundOn) GameAudio.uiSelect();
-      const next = read() === "webgpu" ? "webgl2" : "webgpu";
+      const cur = read();
+      const hasGpu = typeof navigator !== "undefined" && !!navigator.gpu;
+      const next = cur === "webgl2" ? "three"
+                 : cur === "three" ? (hasGpu ? "webgpu" : "webgl2")
+                 : "webgl2";
       try { localStorage.setItem("apex26.gfxBackend", next); } catch (_) {}
-      rb.textContent = "RENDERER: " + next.toUpperCase() + " — RELOADING…";
+      rb.textContent = "RENDERER: " + label(next) + " — RELOADING…";
       setTimeout(() => location.reload(), 350);
     };
   }
