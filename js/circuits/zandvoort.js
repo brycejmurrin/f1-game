@@ -55,9 +55,10 @@
               addBox, addCyl, addPrism, addPyramid, addCone, addFrustum, anchor, vadd, onTrack, hash, every,
               along, runoffApron, bowlSeatWall,
               modelGroup, waterSurface, waterBand, groundPatch,
-              mountain, peak, bush, hedge, grandstand, tower,
+              mountain, peak, bush, hedge, grandstand, grandstandEx, tower,
               pine, tree, forestEdge,
-              fence, guardrail, tyreWall, billboard, gantry, marshalPost, recordBarrier } = api;
+              fence, guardrail, tyreWall, billboard, gantry, marshalPost, recordBarrier,
+              circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // -----------------------------------------------------------------------
@@ -71,8 +72,9 @@
       const seaCol    = [0.18, 0.40, 0.56];   // North Sea blue-grey
       const beachCol  = [0.89, 0.83, 0.66];   // wet-sand beach
       const orange    = [0.96, 0.42, 0.02];   // Verstappen-orange crowd
-      const shell     = [0.36, 0.38, 0.42];
-      const shellLt   = [0.40, 0.41, 0.46];
+      // shell/shellLt (two near-identical greys) retired: grandstandEx() now
+      // sources each stand's shell colour from a STAND_SETS.zandvoort livery
+      // instead (see the GRANDSTANDS block below).
       const fenceCol  = [0.74, 0.76, 0.80];
       const railRW    = [0.86, 0.20, 0.18];   // red/white armco
       const kerbRed   = [0.80, 0.14, 0.14];
@@ -254,18 +256,42 @@
       // -----------------------------------------------------------------------
       // GRANDSTANDS — Orange Army Verstappen fans; Dutch GP sells out every year.
       // Positions chosen to not cluster (different s fractions, no duplicates).
+      // Upgraded from the legacy grandstand() (one grey template, varying only
+      // len + shell/shellLt — two near-identical greys) to grandstandEx(), which
+      // rotates through STAND_SETS.zandvoort ("orange"/"alu"/"steel") so the
+      // permanent main stands, bare-aluminium temporary bleachers and Oranje-
+      // liveried decks read as different structures. `crowd` is passed
+      // explicitly as `orange` throughout — every seat in the ground is packed
+      // with Verstappen fans regardless of the stand's own material, so only
+      // the structure varies, never the crowd tint.
       // -----------------------------------------------------------------------
-      grandstand(0.01,  1,  16, 36, shellLt, orange); // main pit straight R (largest)
-      grandstand(0.05,  1,  14, 28, shell,   orange); // Tarzan hairpin R
-      grandstand(0.09, -1,  14, 26, shell,   orange); // Tarzan exit L
-      grandstand(0.135,-1,  28, 40, shell,   orange); // Hugenholtz banked L (gap 22→28: steeply banked, roof must clear)
-      grandstand(0.18,  1,  16, 32, shellLt, orange); // Hugenholtz exit R
-      grandstand(0.48, -1,  28, 34, shell,   orange); // Scheivlak approach L (gap was 28 in previous pass)
-      grandstand(0.53,  1,  18, 28, shell,   orange); // Scheivlak R
-      grandstand(0.865, 1,  42, 36, shell,   orange); // Luyendyk approach R (gap 36→42: banked corner clearance)
-      grandstand(0.915, 1,  28, 80, shell,   orange); // Arie Luyendyk banked R (massive) (gap 22→28: VERY banked, roof overhang)
-      grandstand(0.96,  1,  28, 32, shellLt, orange); // Luyendyk exit R (gap 22→28: post-banked transition)
-      grandstand(0.97, -1,  22, 34, shellLt, orange); // pit straight L
+      grandstandEx(0.01,  1,  16, 36, null, orange,
+        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true }); // main pit straight R (largest, permanent grandstand)
+      grandstandEx(0.05,  1,  14, 28, null, orange,
+        { livery: "alu", roof: "truss" }); // Tarzan hairpin R — bare scaffold deck
+      grandstandEx(0.09, -1,  14, 26, null, orange,
+        { livery: "orange", roof: "flat" }); // Tarzan exit L
+      grandstandEx(0.135,-1,  28, 40, null, orange,
+        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true }); // Hugenholtz banked L (gap 22→28: steeply banked, roof must clear)
+      grandstandEx(0.18,  1,  16, 32, null, orange,
+        { livery: "alu", roof: "flat" }); // Hugenholtz exit R
+      grandstandEx(0.48, -1,  28, 34, null, orange,
+        { livery: "orange", roof: "truss" }); // Scheivlak approach L (gap was 28 in previous pass)
+      grandstandEx(0.53,  1,  18, 28, null, orange,
+        { livery: "steel" }); // Scheivlak R
+      // Masterbocht — previously the emptiest stretch of the lap (no stand of
+      // any kind between Scheivlak and the Hans Ernst arena). A modern two-tier
+      // stand fills the gap and gives the mid-lap sweep a spectator presence.
+      grandstandEx(0.60, -1,  16, 44, null, orange,
+        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true, pylons: true }); // Masterbocht L
+      grandstandEx(0.865, 1,  42, 36, null, orange,
+        { livery: "alu", roof: "none" }); // Luyendyk approach R (gap 36→42: banked corner clearance) — uncovered temporary bleacher
+      grandstandEx(0.915, 1,  28, 80, null, orange,
+        { livery: "orange", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true }); // Arie Luyendyk banked R (massive) (gap 22→28: VERY banked, roof overhang)
+      grandstandEx(0.96,  1,  28, 32, null, orange,
+        { livery: "steel" }); // Luyendyk exit R (gap 22→28: post-banked transition)
+      grandstandEx(0.97, -1,  22, 34, null, orange,
+        { livery: "alu", roof: "flat" }); // pit straight L
 
       // -----------------------------------------------------------------------
       // HERO-SECTOR COASTAL SPECTACLE — five bounded, track-specific layers.
@@ -280,7 +306,18 @@
         h: 5.5, thick: 2.2, shell: sandDk, step: 9,
         crowdCols: [orange, [1.00, 0.58, 0.08], [0.88, 0.24, 0.02]],
       });
+      // THE ARENA — Hans Ernst chicane (racing frac ~0.735-0.78). In reality
+      // this is a facing bowl: continuous stands enclosing BOTH sides of the
+      // chicane (the Dutch GP's signature broadcast shot). Only the L wall
+      // existed here previously, so the section read as one open grandstand
+      // rather than an enclosed arena — the single highest-value fix in this
+      // pass. Mirror the same wall onto the R side, same span/height/step, so
+      // the two read as one facing bowl instead of a stand on an empty apron.
       bowlSeatWall(0.735, 0.775, -1, 24, {
+        h: 5.0, thick: 2.0, shell: sand, step: 9,
+        crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
+      });
+      bowlSeatWall(0.735, 0.775, 1, 24, {
         h: 5.0, thick: 2.0, shell: sand, step: 9,
         crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
       });
@@ -389,6 +426,20 @@
           addBox(stage, vadd(a.c, a.u, 6.3), [8.5, 0.5, 66], [0.80, 0.81, 0.84], b);
         }, { required: true });
       })();
+
+      // -----------------------------------------------------------------------
+      // PADDOCK CLUB — 2020-21 rebuild. Zandvoort's return to the calendar
+      // rebuilt the pit complex with a full paddock-club/hospitality block
+      // behind the garages; the hand-built pit-building box above alone was
+      // under-scaled against the real venue. Set well back beyond the garage
+      // roofline so the two read as one enlarged complex, not a single slab.
+      // -----------------------------------------------------------------------
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:zandvoort:paddock-club", frac: 0.005, side: -1, gap: 30,
+          size: [16, 9, 56], modules: 6, required: true,
+        });
+      }
 
       // -----------------------------------------------------------------------
       // WIND TURBINES — seaward horizon landmark (North Sea wind farm silhouette).
@@ -645,6 +696,13 @@
       // --- Red-and-white banded coastal lighthouse: tapered banded tower, black
       //     gallery ring, glazed lantern room with an emissive lamp, dome cap and
       //     a little keeper's cottage. The Zandvoort seaside icon.
+      //     NOTE: this is invented — the real Zandvoort lighthouse was
+      //     decommissioned in 1907, decades before the circuit existed, so it
+      //     is not a genuine period landmark. Kept anyway as generic coastal
+      //     atmosphere (a banded lighthouse silhouette reads as "seaside" even
+      //     if this exact one predates the track); the real inland landmark —
+      //     the 1912 watertoren — is added below as its own separate model
+      //     rather than replacing this one.
       function lighthouse(k, side, dist) {
         const a = anchor(k, side, dist);
         const b = [a.r, a.u, a.t], H = 34, bands = 6;
@@ -680,11 +738,14 @@
       //     Fixed: anchor to pyMin (horizon baseline) like other distant backdrop
       //     elements (sea/beach bands), not to anchor() terrain which floats over
       //     banked sections. Towns are 280-330m out — far backdrop, not trackside.
-      function seasideTown(k, side, dist, width) {
+      //     `tint` (optional) overrides the default sandy-stone palette — three
+      //     calls at this width/distance otherwise read as the same silhouette
+      //     three times; one is shifted toward brick-red below.
+      function seasideTown(k, side, dist, width, tint) {
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], width * 0.5)) return;
         const b = [a.r, a.u, a.t];
-        const cols = [[0.86, 0.80, 0.70], [0.80, 0.74, 0.64], [0.72, 0.66, 0.58],
+        const cols = tint || [[0.86, 0.80, 0.70], [0.80, 0.74, 0.64], [0.72, 0.66, 0.58],
                       [0.88, 0.84, 0.78], [0.68, 0.58, 0.50]];
         const rows = Math.floor(width / 8);
         for (let i = 0; i < rows; i++) {
@@ -738,10 +799,48 @@
         }
       }
 
+      // --- Zandvoort watertoren (1912): the genuine local landmark — a brick
+      //     shaft, a wider cantilevered tank drum, and a steep conical red cap.
+      //     Real water towers of this design carry two darker brick banding
+      //     courses on the shaft and a flared cornice under the tank; both are
+      //     modelled as extra flat-shaded cylinders rather than texture.
+      function watertoren(k, side, dist) {
+        const a = anchor(k, side, dist);
+        const b = [a.r, a.u, a.t];
+        const shaftH = 20, drumH = 6, capH = 5, shaftR = 3.0;
+        const brick = [0.58, 0.34, 0.26], brickDk = [0.48, 0.27, 0.20];
+        const capCol = [0.62, 0.16, 0.12];
+        modelGroup("zandvoort-watertoren", {
+          center: vadd(a.c, a.u, (shaftH + drumH + capH) / 2),
+          size: [10, shaftH + drumH + capH + 2, 10],
+          basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addCyl(stage, vadd(a.c, a.u, shaftH / 2), shaftR, shaftH, brick, 12, b);
+          // Darker brick banding courses break up the shaft's silhouette.
+          addCyl(stage, vadd(a.c, a.u, shaftH * 0.35), shaftR + 0.05, 1.0, brickDk, 12, b);
+          addCyl(stage, vadd(a.c, a.u, shaftH * 0.70), shaftR + 0.05, 1.0, brickDk, 12, b);
+          // Tank drum — wider cylinder cantilevered over the shaft, with a
+          // flared cornice course closing the step where it overhangs.
+          addCyl(stage, vadd(a.c, a.u, shaftH + 0.5), shaftR + 1.3, 1.0, brickDk, 12, b);
+          addCyl(stage, vadd(a.c, a.u, shaftH + 1 + drumH / 2), 4.4, drumH, brick, 12, b);
+          addCyl(stage, vadd(a.c, a.u, shaftH + 1 + drumH - 0.4), 4.5, 0.8, brickDk, 12, b);
+          // Conical red cap.
+          stage._mat = MAT.ROOF;
+          addCone(stage, vadd(a.c, a.u, shaftH + 1 + drumH), 4.7, capH, capCol, 12, b);
+        }, { required: true });
+      }
+
       lighthouse(K(0.45), 1, 300);                 // hero on the seaward dune horizon
+      watertoren(K(0.325), -1, 48);                 // hero: the genuine 1912 landmark, inland side
       seasideTown(K(0.30), -1, 280, 70);           // Zandvoort village toward the inland arc
       seasideTown(K(0.62), -1, 300, 60);
-      seasideTown(K(0.72),  1, 330, 55);
+      seasideTown(K(0.72),  1, 330, 55, [
+        // Brick-red variant — the three town silhouettes otherwise share one
+        // sandy-stone palette; this one leans toward terracotta/brick facades.
+        [0.62, 0.30, 0.22], [0.56, 0.26, 0.19], [0.68, 0.36, 0.26],
+        [0.50, 0.22, 0.17], [0.60, 0.28, 0.20],
+      ]);
       beachPavilion(K(0.40), 1, 250);              // beach clubs near the shore (165→200→250: clear banked Scheivlak approach)
       beachPavilion(K(0.55), 1, 250);              // (175→200→250: safety margin)
     },
