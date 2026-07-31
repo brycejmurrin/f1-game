@@ -39,6 +39,9 @@ npm run test:audio      # engine/sfx audio smoke
 npm run test:modes      # season + time-trial game modes
 npm run test:map        # minimap hooks
 npm run test:circuit    # walls + autopilot + elevation + audit (all circuit-level)
+npm run test:tiny       # START HERE: page loads, __apex present, dev hooks respond
+                        #   (~40 s, headless project only). If this is red nothing
+                        #   else is worth running.
 npm run test:fast       # curated fast subset: smoke + api + collision + offtrack +
                         #   parts-physics + steering (~3 min)
 npm run test:ab         # lighting A/B pixel comparison (tests/lighting-ab.spec.js)
