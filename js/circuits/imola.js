@@ -52,7 +52,7 @@
               groundYAt, onTrack, addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
               seat, foundation,
               along, mountain, tree, pine, hedge, bush,
-              grandstand, building, motorhome, tower, billboard, marshalPost, gantry,
+              grandstand, spectatorHill, building, motorhome, tower, billboard, marshalPost, gantry,
               fence, guardrail, tyreWall, wall,
               forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;

@@ -284,8 +284,9 @@
       // floors, lit roof deck — replaces what used to be six identical 10x7x24
       // garage boxes with a fascia strip.
       const grandPrixPlaza = (k, side, gap) => {
-        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
         const W = 42, LEN = 118, H = 38;             // overall lateral / along-track / height envelope
+        const dist = gap + W / 2;                    // podium CENTRE clearance (matches building()'s convention)
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         const GLASS = [0.14, 0.30, 0.46];             // cool glazed curtain wall — a landmark, not a casino
         const GLASS_LIT = [0.55, 0.85, 1.10];         // HDR-bright lit tier band / roof accents
         const FRAME = [0.22, 0.23, 0.27];
