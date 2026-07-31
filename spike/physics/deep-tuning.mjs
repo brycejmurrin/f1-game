@@ -404,8 +404,15 @@ function trailBrake(tune, brakeVal, label) {
     car.step();
     const lv = car.body.linvel(), w = Math.abs(car.body.angvel().y);
     const v = Math.hypot(lv.x, lv.z);
+    // drift angle = |velocity direction - heading| (deg), spin detector
+    const f = fwdOf(car.body.rotation());
+    let drift = 0;
+    if (v > 0.5) {
+      const dot = (lv.x * f.x + lv.z * f.z) / (v * Math.hypot(f.x, f.z));
+      drift = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+    }
     if (i >= SETTLE + STRAIGHT + CORNER - 60 && !braking) { base.w.push(w); base.v.push(v); }
-    if (braking) brk.push({ t: (i - (SETTLE + STRAIGHT + CORNER) + 1) * DT, w, v });
+    if (braking) brk.push({ t: (i - (SETTLE + STRAIGHT + CORNER) + 1) * DT, w, v, drift });
   }
   world.free();
   const mean = (a) => a.reduce((s, x) => s + x, 0) / a.length;
@@ -416,10 +423,17 @@ function trailBrake(tune, brakeVal, label) {
   const wB = mean(mid.map((s) => s.w)), vB = mean(mid.map((s) => s.v));
   const rB = wB > 1e-4 ? vB / wB : Infinity;
   const wPeak = Math.max(...brk.map((s) => s.w));
+  const driftEnd = brk[brk.length - 1].drift;
+  const yawTotal = brk.reduce((s, x) => s + x.w * DT, 0) * 180 / Math.PI;
+  const wAt = (t) => brk.reduce((a, s) => (Math.abs(s.t - t) < Math.abs(a.t - t) ? s : a)).w;
   console.log(`    ${label.padEnd(26)} baseline w=${w0.toFixed(3)} r=${r0.toFixed(1)} m |` +
     ` during brake: w=${wB.toFixed(3)} (${(100 * wB / w0 - 100).toFixed(0)}%)` +
     ` peak w=${wPeak.toFixed(3)} v=${(vB * 3.6).toFixed(1)} km/h r=${rB === Infinity ? "inf" : rB.toFixed(1)} m`);
-  return { w0, r0, wB, rB, wPeak, decel: (v0 - brk[brk.length - 1].v) / (BRAKE_STEPS * DT) };
+  console.log(`    ${"".padEnd(26)} w(t)=[${[0.25, 0.5, 0.75, 1.0].map((t) => wAt(t).toFixed(2)).join(", ")}]` +
+    `  yaw swept ${yawTotal.toFixed(0)} deg  drift@end ${driftEnd.toFixed(0)} deg${
+      driftEnd > 45 ? "  << SPIN" : ""}`);
+  return { w0, r0, wB, rB, wPeak, driftEnd, yawTotal,
+           decel: (v0 - brk[brk.length - 1].v) / (BRAKE_STEPS * DT) };
 }
 
 console.log("\n[b] trail-braking probe (best tune, steady 0.2 rad corner @ 60 km/h,");
