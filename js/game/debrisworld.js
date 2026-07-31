@@ -357,6 +357,17 @@ function draw() {
 
 // ── status (for __apex.debris and tests) ────────────────────────────────────
 function liveCount() { let n = 0; for (const s of _slots) if (s.live) n++; return n; }
+// Flat [x,y,z,qx,qy,qz,qw] per live slot, in slot order — the determinism
+// spec compares two seeded episodes' arrays element-for-element.
+function positions() {
+  const out = [];
+  for (const s of _slots) {
+    if (!s.live) continue;
+    const t = s.body.translation(), q = s.body.rotation();
+    out.push(t.x, t.y, t.z, q.x, q.y, q.z, q.w);
+  }
+  return out;
+}
 function status() {
   return {
     enabled: _enabled,
@@ -372,5 +383,5 @@ function status() {
   };
 }
 
-return { create, active, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst };
+return { create, active, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions };
 })();

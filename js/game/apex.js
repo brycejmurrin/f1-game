@@ -1063,6 +1063,7 @@ const api = {
     if (arg && typeof arg === "object") {
       if (arg.reset) return DebrisWorld.reset();
       if (arg.burst) { DebrisWorld.burst(arg.burst, arg.sev); return DebrisWorld.status(); }
+      if (arg.positions) return Object.assign(DebrisWorld.status(), { positions: DebrisWorld.positions() });
     }
     return DebrisWorld.status();
   },
