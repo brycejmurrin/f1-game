@@ -411,6 +411,10 @@ const Tracks = (function () {
     const PROP_CAP = 40000;
     const propList = [];
     let propDropped = 0;
+    // >0 while the primitives being emitted belong to a placement note() already
+    // recorded. Decremented per emitter call rather than reset by the next note,
+    // because composite models (a tree is a trunk plus four cones) emit several.
+    let named = 0;
     const note = (kind, c, size, extra) => {
       if (propList.length >= PROP_CAP) { propDropped++; return; }
       const r1 = (v) => Math.round(v * 10) / 10;
@@ -418,6 +422,7 @@ const Tracks = (function () {
                     w: r1(size[0]), h: r1(size[1]), d: r1(size[2]) };
       if (extra) { for (const key in extra) rec[key] = extra[key]; }
       propList.push(rec);
+      named = 2;      // this placement's own primitives are already described
     };
     // Linear features — armco, catch fencing, tyre walls, boundary walls — are
     // emitted by along() in 3–6 m steps. Recording each step would bury the
@@ -432,6 +437,63 @@ const Tracks = (function () {
       if (extra) { for (const key in extra) rec[key] = extra[key]; }
       spanList.push(rec);
     };
+
+    // ---------- unnamed geometry ----------
+    // The named emitters above cover the shared toolkit, but each circuit's
+    // bespoke scenery() also calls the raw guarded emitters directly, and on a
+    // street circuit that is most of the world: measured against the shipped
+    // primitives, the named registry alone describes 85% of Monza and only 21%
+    // of Vegas. Those 68k unnamed boxes are the casino frontages, the pit
+    // complex, the grandstand backs — the things an agent most needs to know are
+    // there.
+    //
+    // Recording each primitive is not an option (that IS the vertex buffer, just
+    // more expensive). Instead, consecutive primitives that stay within
+    // ASSEMBLY_R of the running centroid are accumulated into one anonymous
+    // structure with a combined box, and flushed when the emission jumps
+    // somewhere else. Primitives are emitted assembly-by-assembly, so spatial
+    // adjacency in emission order is a good proxy for "one thing".
+    const ASSEMBLY_R = 30;
+    const ASSEMBLY_MAX = 4000;      // primitives before a run is cut regardless
+    let asm = null;
+    const flushAsm = () => {
+      if (!asm || asm.count < 4) { asm = null; return; }
+      if (propList.length < PROP_CAP) {
+        const r1 = (v) => Math.round(v * 10) / 10;
+        propList.push({
+          kind: "structure", parts: asm.count,
+          x: r1((asm.x0 + asm.x1) / 2), y: r1((asm.y0 + asm.y1) / 2),
+          z: r1((asm.z0 + asm.z1) / 2),
+          w: r1(asm.x1 - asm.x0), h: r1(asm.y1 - asm.y0), d: r1(asm.z1 - asm.z0),
+        });
+      } else propDropped++;
+      asm = null;
+    };
+    // Called by the guarded emitters with the primitive's axis-aligned extent.
+    // Rotation is ignored — a conservative box is enough to say "something this
+    // big stands here", and computing the true oriented hull per primitive would
+    // cost more than the answer is worth.
+    const absorb = (x0, y0, z0, x1, y1, z1) => {
+      if (!(x0 <= x1) || !Number.isFinite(x0) || !Number.isFinite(y1)) return;
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      if (asm && (Math.abs(cx - asm.cx) > ASSEMBLY_R
+                  || Math.abs(cz - asm.cz) > ASSEMBLY_R
+                  || asm.count >= ASSEMBLY_MAX)) flushAsm();
+      if (!asm) { asm = { x0, y0, z0, x1, y1, z1, cx, cz, count: 0 }; }
+      if (x0 < asm.x0) asm.x0 = x0; if (x1 > asm.x1) asm.x1 = x1;
+      if (y0 < asm.y0) asm.y0 = y0; if (y1 > asm.y1) asm.y1 = y1;
+      if (z0 < asm.z0) asm.z0 = z0; if (z1 > asm.z1) asm.z1 = z1;
+      asm.count++;
+      // running centroid keeps a long facade run from anchoring on its first box
+      asm.cx += (cx - asm.cx) / asm.count;
+      asm.cz += (cz - asm.cz) / asm.count;
+    };
+    // A named placement ends whatever anonymous run was in progress, so its own
+    // primitives are not folded into the neighbouring structure.
+    const absorbBox = (c, sz) => absorb(c[0] - sz[0] / 2, c[1] - sz[1] / 2, c[2] - sz[2] / 2,
+                                        c[0] + sz[0] / 2, c[1] + sz[1] / 2, c[2] + sz[2] / 2);
+    const absorbUp = (c, r, h) => absorb(c[0] - r, c[1], c[2] - r,
+                                         c[0] + r, c[1] + h, c[2] + r);
 
     track.props = { list: propList, spans: spanList, cap: PROP_CAP,
                     get count() { return propList.length; },
@@ -507,31 +569,39 @@ const Tracks = (function () {
     };
     const addBox = (o, c, sz, col, basis) => {
       if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("box", c, sz);
-      if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addBox(o, c, sz, col, basis); return true;
+      if (rejBox(c, sz, basis)) { _culled++; return false; }
+      RAW.addBox(o, c, sz, col, basis); if (named) named--; else absorbBox(c, sz); return true;
     };
     const addCyl = (o, c, rad, h, col, seg, basis) => {
       if (!finiteVec(c, 3, false) || !Number.isFinite(rad) || rad <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("cylinder", c, [rad, h]);
-      if (rejRad(c, rad, h, basis)) { _culled++; return false; } RAW.addCyl(o, c, rad, h, col, seg, basis); return true;
+      if (rejRad(c, rad, h, basis)) { _culled++; return false; }
+      RAW.addCyl(o, c, rad, h, col, seg, basis); if (named) named--; else absorbUp(c, rad, h); return true;
     };
     const addCone = (o, c, rad, h, col, seg, basis) => {
       if (!finiteVec(c, 3, false) || !Number.isFinite(rad) || rad <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("cone", c, [rad, h]);
-      if (rejRad(c, rad, h, basis)) { _culled++; return false; } RAW.addCone(o, c, rad, h, col, seg, basis); return true;
+      if (rejRad(c, rad, h, basis)) { _culled++; return false; }
+      RAW.addCone(o, c, rad, h, col, seg, basis); if (named) named--; else absorbUp(c, rad, h); return true;
     };
     const addFrustum = (o, c, rB, rT, h, col, seg, basis) => {
       if (!finiteVec(c, 3, false) || !Number.isFinite(rB) || rB <= 0 || !Number.isFinite(rT) || rT <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("frustum", c, [rB, rT, h]);
-      if (rejRad(c, Math.max(rB, rT), h, basis)) { _culled++; return false; } RAW.addFrustum(o, c, rB, rT, h, col, seg, basis); return true;
+      if (rejRad(c, Math.max(rB, rT), h, basis)) { _culled++; return false; }
+      RAW.addFrustum(o, c, rB, rT, h, col, seg, basis);
+      if (named) named--; else absorbUp(c, Math.max(rB, rT), h); return true;
     };
     const addPrism = (o, c, sz, col, basis) => {
       if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("prism", c, sz);
-      if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addPrism(o, c, sz, col, basis); return true;
+      if (rejBox(c, sz, basis)) { _culled++; return false; }
+      RAW.addPrism(o, c, sz, col, basis); if (named) named--; else absorbBox(c, sz); return true;
     };
     const addPyramid = (o, c, sz, col, basis) => {
       if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("pyramid", c, sz);
-      if (rejBox(c, sz, basis)) { _culled++; return false; } RAW.addPyramid(o, c, sz, col, basis); return true;
+      if (rejBox(c, sz, basis)) { _culled++; return false; }
+      RAW.addPyramid(o, c, sz, col, basis); if (named) named--; else absorbBox(c, sz); return true;
     };
     const addMountain = (o, c, baseR, h, opts) => {
       if (!finiteVec(c, 3, false) || !Number.isFinite(baseR) || baseR <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("mountain", c, [baseR, h]);
-      if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; } RAW.addMountain(o, c, baseR, h, opts); return true;
+      if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; }
+      RAW.addMountain(o, c, baseR, h, opts); if (named) named--; else absorbUp(c, baseR, h); return true;
     };
     // Per-segment driving boundary (lateral limit from the centreline on each
     // side). Initialised to the default runoff, then TIGHTENED wherever a solid
@@ -1769,6 +1839,7 @@ const Tracks = (function () {
     }
     if (out.pos.length === 0) addBox(out, [px[0] + 30, 1, pz[0]], [2, 2, 2], [0.4, 0.4, 0.4]);
     if (_culled) console.info(`[scenery] ${def.id}: culled ${_culled} on-track primitive(s)`);
+    flushAsm();          // the last anonymous run has no successor to close it
     return { out, glass: glassBuf, water: waterBuf };
   }
 

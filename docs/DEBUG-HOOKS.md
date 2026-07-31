@@ -962,7 +962,24 @@ aggregates:
   walls) as arc-length spans. These are emitted in 3–6 m steps by `along()`;
   recorded per step they'd be thousands of records saying less. "Guardrail on
   the right from 0.93 to 0.07, 809 m" *is* the object.
+- **`structure`** — an ANONYMOUS assembly. Each circuit's bespoke `scenery()`
+  also calls the raw guarded emitters directly, and on a street circuit that is
+  most of the world. Consecutive primitives that stay within 30 m of the running
+  centroid are accumulated into one structure with real measured bounds and a
+  `parts` count. Big ones (>6,000 m³ — casino frontages, pit complexes) are
+  promoted to landmarks; the rest cluster.
 - **`totals`** — counts by kind, plus `registryComplete`.
+
+**How complete is it?** Measured by asking, for every shipped primitive, whether
+its centroid falls inside some recorded placement's box: **99.5–99.8%** of
+primitives across Monza, Monaco, Vegas and Suzuka, at 1,078–3,944 records per
+circuit. Before the anonymous-assembly catch-all it was 85% on Monza and 21% on
+Vegas — the named emitters alone miss almost everything on a street circuit.
+
+**It is not vertex data.** `worldModel()` describes objects and bounds. For raw
+geometry use `__apex.trackGeometry()`, which needs `Tracks.setKeepGeometry(true)`
+before the build and returns megabytes of floats — a file to analyse with code,
+never something to read into context.
 
 `detail: "sections"` adds a corner-by-corner walk of the lap:
 

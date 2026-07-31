@@ -608,7 +608,12 @@ const AgentView = (function () {
     // the actual landmarks.
     const CLUSTER_KINDS = ["pine", "tree", "palm", "conifer", "bush", "hedge",
                            "prop", "signBoard", "marshalPost", "billboard",
-                           "ridge", "peak"];
+                           "ridge", "peak", "structure"];
+    // An anonymous assembly this big is a building-scale mass — a casino
+    // frontage, a pit complex — and belongs with the landmarks even though the
+    // emitters never named it. Below it, structures are street furniture and
+    // cluster like everything else repeated.
+    const BIG_STRUCTURE_M3 = 6000;
     // Individually notable structures — a driver would point at these.
     const LANDMARK_KINDS = ["grandstand", "building", "house", "motorhome",
                             "tower", "mountain", "gantry"];
@@ -634,19 +639,36 @@ const AgentView = (function () {
       return v > 0 ? "right" : v < 0 ? "left" : "across";
     }
 
-    function propS(p) {
-      if (p.k != null) return (((p.k % G.track.n) + G.track.n) % G.track.n)
-                              / G.track.n * G.track.total;
-      const pr = Tracks.project(G.track, p.x, p.z, 0);
-      return pr ? pr.s : 0;
+    // Arc position and signed lateral offset of a recorded prop. Most carry the
+    // node index they were placed from, which is exact and free.
+    //
+    // The rest need projecting — and the hint argument must be OMITTED, not
+    // passed as 0. Tracks.project treats a hint as "search +/-16 nodes around
+    // here", so hinting 0 snapped every anonymous structure on the circuit to
+    // s = 0 and reported them all sitting on the start line.
+    function propPos(p) {
+      if (p.k != null) {
+        const k = ((p.k % G.track.n) + G.track.n) % G.track.n;
+        return { s: k / G.track.n * G.track.total,
+                 lat: p.side != null ? p.side : null };
+      }
+      const pr = Tracks.project(G.track, p.x, p.z);
+      return pr ? { s: pr.s, lat: pr.lat } : { s: 0, lat: null };
     }
+    function propS(p) { return propPos(p).s; }
 
     function buildModel() {
       const track = G.track, total = track.total;
       const reg = track.props;
       const pts = reg.list.map((p) => {
-        const s = propS(p);
-        return { p, s, frac: s / total, side: sideOf(p.side) };
+        const pos = propPos(p);
+        // An anonymous structure has no side recorded, but its projected lateral
+        // offset says which side of the road it stands on — far more useful than
+        // calling every one of them "off-course".
+        const side = p.side != null ? sideOf(p.side)
+                   : pos.lat == null ? "off-course"
+                   : pos.lat > 0 ? "right" : "left";
+        return { p, s: pos.s, frac: pos.s / total, side, lat: pos.lat };
       });
       pts.sort((a, b) => (a.p.kind === b.p.kind
         ? (a.side === b.side ? a.s - b.s : a.side < b.side ? -1 : 1)
@@ -656,6 +678,9 @@ const AgentView = (function () {
       let i = 0;
       while (i < pts.length) {
         const cur = pts[i];
+        const bigStructure = cur.p.kind === "structure"
+          && cur.p.w * cur.p.h * cur.p.d >= BIG_STRUCTURE_M3;
+        if (bigStructure) { landmarks.push(cur); i++; continue; }
         if (CLUSTER_KINDS.indexOf(cur.p.kind) < 0) {
           (LANDMARK_KINDS.indexOf(cur.p.kind) >= 0 ? landmarks : singles).push(cur);
           i++; continue;
@@ -772,8 +797,12 @@ const AgentView = (function () {
         landmarks: m.landmarks.map((L) => ({
           kind: L.p.kind, frac: +L.frac.toFixed(4), s: r1(L.s), side: L.side,
           sizeM: [L.p.w, L.p.h, L.p.d], at: [L.p.x, L.p.y, L.p.z],
+          parts: L.p.parts,
+          offsetM: L.lat != null && L.p.side == null ? r1(Math.abs(L.lat)) : undefined,
         })),
-        note: "features are CLUSTERED runs of one kind on one side; landmarks "
+        note: "kind 'structure' is an ANONYMOUS assembly of primitives the "
+              + "circuit's own scenery() emitted without a named helper — real "
+              + "measured bounds, no label. features are CLUSTERED runs of one kind on one side; landmarks "
               + "are individually notable structures; spans are linear furniture. "
               + 'Use detail:"full" for the unaggregated object list.',
       };

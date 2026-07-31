@@ -322,6 +322,50 @@ circuit against a 40,000 cap, so the spatial-bias worry about truncation is
 moot in practice. It is still reported, because a future circuit could change
 that and silent truncation would read as complete coverage.
 
+## 5c. Coverage — measured, not asserted
+
+"Can the agent see the whole world?" deserves a number, not an adjective. The
+measurement: build a circuit in the VM harness, then for every shipped primitive
+ask whether its centroid falls inside some recorded placement's (padded) box.
+
+| Circuit | named emitters only | with anonymous assemblies |
+|---|---|---|
+| Monza (park) | 85.5% | 99.6% |
+| Monaco (street) | 31.3% | 99.5% |
+| Vegas (street/city) | 20.9% | 99.8% |
+
+The first column is what the registry achieved covering the shared scenery
+toolkit — and it is a bad answer on street circuits, because each circuit's
+bespoke `scenery()` calls the raw guarded emitters directly and that is where
+most of a city goes. Vegas alone had 68k undescribed `addBox` calls: the casino
+frontages, the pit complex, the grandstand backs.
+
+Recording each primitive was never an option — that IS the vertex buffer, only
+more expensive. The fix accumulates consecutive primitives that stay within 30 m
+of a running centroid into one anonymous `structure` with measured bounds and a
+part count, flushed when emission jumps elsewhere. Primitives are emitted
+assembly-by-assembly, so adjacency in emission order is a good proxy for "one
+thing". Vegas's 68k boxes become 1,847 structures — a 37x compression that
+describes 99.8% of the geometry.
+
+Two bugs surfaced only because the measurement was taken:
+
+- **Anchor-based emitters return GROUND level.** `building`, `tree`, `pine`,
+  `palm`, `bush`, `tower`, `house`, `motorhome`, `billboard`, `marshalPost` and
+  `signBoard` all anchor at the pavement, and the registry stored that as the
+  object's centre. A 40 m building's box therefore ran from −20 m to +20 m about
+  the ground: half of it underground, and its upper floors outside their own
+  bounds. `at:[x,y,z]` was wrong by `h/2` for every one of those kinds.
+- **`Tracks.project`'s hint is a search window, not a seed.** Passing `0` means
+  "search ±16 nodes around the start line", so every anonymous structure on the
+  circuit projected to `s ≈ 0` and reported itself sitting on the start/finish
+  straight. The hint must be omitted for a global search.
+
+What is still NOT covered: vertex data (by design — see `trackGeometry()`),
+kerbs and the road surface itself, and materials/colours. Sizes for a few
+vegetation kinds are nominal envelopes rather than measured bounds, noted at the
+call sites.
+
 ## 6. Open questions
 
 - **Prop registry granularity.** Per composite model, or per emitted

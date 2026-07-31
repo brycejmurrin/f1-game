@@ -81,7 +81,7 @@ const SceneryNature = (function () {
         console.warn(`[scenery] pine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
-      ctx.note("pine", a.c, [h * 0.45, h, h * 0.45], { k, side });
+      ctx.note("pine", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.45, h, h * 0.45], { k, side });
       // per-instance size jitter so a treeline doesn't read as identical clones
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
       const c2 = [col[0] * 0.86, col[1] * 0.86, col[2] * 0.82];   // shaded lower needles
@@ -118,7 +118,7 @@ const SceneryNature = (function () {
       }
       // Past the on-track guard — this tree ships. Canopy radius scales with
       // height, so w/d are an estimate rather than a measured bound.
-      ctx.note("tree", a.c, [h * 0.5, h, h * 0.5], { k, side });
+      ctx.note("tree", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.5, h, h * 0.5], { k, side });
       const vr = hash(k * 8.3 + side * 5.1 + dist + 4.7);
       if (vr > 0.91) {   // dead/storm tree: bare trunk + a few angled branch stubs.
         // addCyl extends along basis[1] ("up"), so each branch needs its OWN
@@ -183,7 +183,7 @@ const SceneryNature = (function () {
         console.warn(`[scenery] palm SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
-      ctx.note("palm", a.c, [h * 0.6, h, h * 0.6], { k, side });
+      ctx.note("palm", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.6, h, h * 0.6], { k, side });
       // Gently curved trunk: three tapering segments each leaning a touch further
       // (palms arc toward the light) instead of one dead-straight pole.
       const lean = (hash(k * 3.3 + side * 2.1 + dist) - 0.5) * 0.5;
@@ -487,7 +487,7 @@ const SceneryNature = (function () {
       // Nominal envelope: lobes are radius ~1.1-2.0 spread over a ~0.6-1.1 m
       // offset, standing 2.2-3.2 m tall. A bush takes no size argument, so this
       // is the clump's typical extent rather than a measured bound.
-      ctx.note("bush", p.c, [3, 2.8, 3], { k, side });
+      ctx.note("bush", [p.c[0], p.c[1] + 1.4, p.c[2]], [3, 2.8, 3], { k, side });
       const bc = col || [0.20, 0.38, 0.18];
       const c2 = [bc[0] * 0.90, bc[1] * 0.94, bc[2] * 0.88];
       const jh = hash(k * 4.3 + side * 2.1 + dist);
