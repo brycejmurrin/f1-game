@@ -37,7 +37,41 @@ async function enableDebris(page) {
 
 test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
 
-  test("disabled by default: no rapier fetch, zero side-world cost", async ({ page }) => {
+  test("enabled by default: rapier loads and the side-world runs", async ({ page }) => {
+    await boot(page);
+    await startRace(page, "monza");
+    // Default-on: create() enables at boot; the lazy rapier import resolves
+    // shortly after. Wait for it (or a load failure) rather than a fixed sleep.
+    await page.waitForFunction(() => {
+      const st = window.__apex.debris();
+      return st.ready || st.loadState === -1;
+    }, { timeout: 30000 });
+    const r = await page.evaluate(() => {
+      window.__apex.jump(0.1, 40, 0);
+      window.__apex.step(1 / 60, 30);   // pump real physics ticks
+      const st = window.__apex.debris();
+      return {
+        active: DebrisWorld.active(),
+        enabled: st.enabled,
+        ready: st.ready,
+        error: st.error,
+        stepped: st.stepped,
+        rapierFetches: performance.getEntriesByType("resource")
+          .filter((e) => e.name.includes("rapier")).length,
+      };
+    });
+    if (!r.ready) throw new Error("rapier load failed: " + r.error);
+    expect(r.active).toBe(true);        // the one boolean game.js reads — on by default
+    expect(r.enabled).toBe(true);
+    expect(r.ready).toBe(true);
+    expect(r.stepped).toBeGreaterThan(0);   // the side-world stepped in lockstep
+    expect(r.rapierFetches).toBeGreaterThan(0);
+  });
+
+  test("can be disabled via apex26.debris='0': inert, no rapier fetch", async ({ page }) => {
+    await page.addInitScript(() => {
+      try { localStorage.setItem("apex26.debris", "0"); } catch (e) {}
+    });
     await boot(page);
     await startRace(page, "monza");
     const r = await page.evaluate(() => {
@@ -59,7 +93,7 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
     expect(r.ready).toBe(false);
     expect(r.stepped).toBe(0);          // step() never ran — zero cost when off
     expect(r.live).toBe(0);
-    expect(r.rapierFetches).toBe(0);    // non-users fetch nothing
+    expect(r.rapierFetches).toBe(0);    // opted-out users fetch nothing
   });
 
   test("enable + wall hit spawns debris (lastImpact fires, live > 0)", async ({ page }) => {
