@@ -1092,6 +1092,26 @@ const api = {
     return DebrisWorld.status();
   },
 
+  // incident(arg?) — the R2/R3/C1 bounded-takeover incident sim
+  //   (js/game/incidentsim.js). The ONE additive-Rapier layer that moves a car,
+  //   and only inside a bounded, flagged, fallback-guarded window.
+  //   incident()                → status { r2Airborne, r3Contact, c1Pileup,
+  //                               active, owned, incidents:[{kind,cars,ticks,seq}],
+  //                               count, lastKind, promoted, handbacks, fallbacks }
+  //   incident({launch:true})   → force-launch the player into an R2 airborne
+  //                               takeover next tick (deterministic; test/playtest)
+  //   incident({flags:{r2Airborne?,r3Contact?,c1Pileup?}}) → toggle features
+  //                               (turning one off hands its takeovers back safely)
+  //   incident({reset:true})    → abort every takeover back to bespoke, zero counters
+  incident(arg) {
+    if (arg && typeof arg === "object") {
+      if (arg.reset) return IncidentSim.reset();
+      if (arg.launch) return IncidentSim.forceLaunch();
+      if (arg.flags) return IncidentSim.setFlags(arg.flags);
+    }
+    return IncidentSim.status();
+  },
+
   // caution(arg?) — the B1 debris caution state (local yellow / VSC / safety car),
   // a READ-ONLY race-logic layer over DebrisWorld.hazards() (see js/game.js). It
   // never slows or moves a car. No arg: current state
