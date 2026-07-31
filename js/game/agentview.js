@@ -447,10 +447,36 @@ const AgentView = (function () {
     // diff history (ICML 2024) reports ~4x more usable interaction history at
     // fixed context by diffing consecutive observations. Arrays are replaced
     // wholesale — element-wise diffing costs more to describe than it saves.
+    // Exact diffing is worthless here, and measuring said so: across a 20-step
+    // driving loop it saved 1.17x, because in a moving car every number changes
+    // every tick. The diff-history result this was modelled on came from
+    // NetHack, where the world is discrete and mostly static between actions —
+    // a racing sim is the opposite.
+    //
+    // So a change smaller than the agent could act on is not a change. This is
+    // the round-hard principle applied to time: 0.3 km/h and 4 cm of lateral
+    // drift are noise, and reporting them costs the same as reporting a corner
+    // arriving.
+    const DEAD_ABS = 0.25;      // absolute deadband
+    const DEAD_REL = 0.02;      // ...or 2% of the value, whichever is larger
+
+    function sameEnough(a, b) {
+      if (typeof a !== "number" || typeof b !== "number") return a === b;
+      return Math.abs(a - b) <= Math.max(DEAD_ABS, Math.abs(a) * DEAD_REL);
+    }
+
     function deltaOf(prev, next) {
       if (prev === undefined) return next;
       if (Array.isArray(next) || Array.isArray(prev)) {
-        return JSON.stringify(prev) === JSON.stringify(next) ? undefined : next;
+        // Arrays are all-or-nothing, but compare them through the deadband too
+        // so a lookahead whose distances moved 10 cm doesn't resend the lot.
+        if (Array.isArray(prev) && Array.isArray(next) && prev.length === next.length) {
+          for (let i = 0; i < next.length; i++) {
+            if (deltaOf(prev[i], next[i]) !== undefined) return next;
+          }
+          return undefined;
+        }
+        return next;
       }
       if (next && typeof next === "object" && prev && typeof prev === "object") {
         const out = {};
@@ -461,7 +487,21 @@ const AgentView = (function () {
         }
         return changed ? out : undefined;
       }
-      return prev === next ? undefined : next;
+      return sameEnough(prev, next) ? undefined : next;
+    }
+
+    // Merge only what was actually reported into the caller's believed state.
+    // Without this a deadband leaks: each tick's change is individually too
+    // small to send, the baseline advances anyway, and the caller's value drifts
+    // arbitrarily far from the truth. Holding the baseline at the last REPORTED
+    // value bounds the error at one deadband instead.
+    function applyDelta(base, d) {
+      if (d === undefined) return base;
+      if (d === null || typeof d !== "object" || Array.isArray(d)) return d;
+      const out = Array.isArray(base) ? base.slice()
+                : (base && typeof base === "object") ? Object.assign({}, base) : {};
+      for (const k of Object.keys(d)) out[k] = applyDelta(out[k], d[k]);
+      return out;
     }
 
     // ── world() ─────────────────────────────────────────────────────────────
@@ -564,7 +604,12 @@ const AgentView = (function () {
           payload.note = "no delta available for seq " + o.since + " — full payload returned";
         } else {
           const d = deltaOf(lastPayload, payload) || {};
-          lastPayload = payload; lastSeq = payload.seq;
+          // Advance the baseline by what was REPORTED, not by the freshly
+          // computed payload — otherwise the deadband silently drifts (see
+          // applyDelta).
+          lastPayload = applyDelta(lastPayload, d);
+          lastPayload.seq = payload.seq;
+          lastSeq = payload.seq;
           d.apiVersion = API_VERSION; d.seq = payload.seq;
           d.deltaBase = o.since;
           return d;
