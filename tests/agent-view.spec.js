@@ -396,6 +396,23 @@ test.describe("world() nextCorner", () => {
     expect(r.slow).toBeGreaterThan(0);
     expect(r.fast).toBeGreaterThan(r.slow);
   });
+
+  // The road ahead as a rally co-driver's callout — the dense, LLM-familiar
+  // serialisation the research (Columbia RAD + rally pacenotes) singles out.
+  test("pacenotes render the road ahead as a rally-style callout", async ({ page }) => {
+    await load(page);
+    const pn = await page.evaluate(() => {
+      window.__apex.jump(0.001, 60, 0);
+      return window.__apex.world({ detail: "drive" }).pacenotes;
+    });
+    expect(typeof pn).toBe("string");
+    // e.g. "R2 @90m don't-cut, L5 @260m into-str, R4 @1150m" — dir+severity(1-6)
+    // at a distance in metres, comma-separated. Assert the shape, not the exact
+    // circuit-dependent corners.
+    expect(pn).toMatch(/[LR][1-6] @\d+m/);
+    // it is dense — a few corners in well under a screenful
+    expect(pn.length).toBeLessThan(160);
+  });
 });
 
 // ── frame() ─────────────────────────────────────────────────────────────────

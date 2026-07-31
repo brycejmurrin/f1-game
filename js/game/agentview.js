@@ -416,6 +416,40 @@ const AgentView = (function () {
       });
     }
 
+    // ── pacenotes — the road ahead as a co-driver's callout ──────────────────
+    // The research's most on-domain finding: Columbia's Racing Auditory Display
+    // gave blind drivers full control from two channels — ego trajectory + the
+    // next few turns as {direction, sharpness, length, timing}. And rally
+    // pacenotes are a battle-tested, LLM-familiar, ~10-token serialisation of
+    // exactly that, denser than the nested nextCorners object and parseable by a
+    // rally-literate model. Severity is the rally 1-6 scale (1 = tightest), from
+    // the corner radius; the corner's own turn id keeps a stable reference.
+    function paceSev(radiusM) {
+      if (radiusM == null || radiusM >= STRAIGHT_R) return 6;
+      if (radiusM < 30) return 1;
+      if (radiusM < 60) return 2;
+      if (radiusM < 120) return 3;
+      if (radiusM < 250) return 4;
+      if (radiusM < 500) return 5;
+      return 6;
+    }
+
+    // One dense line, e.g. "R2 @90m don't-cut, L5 @260m into-str, R4 @1150m".
+    // "into-str" = the corner opens onto a straight (prioritise exit); "don't-cut"
+    // flags the tightest corners where an early apex throws the exit away.
+    function pacenotes(s, speed) {
+      const seq = upcomingCorners(s, speed, 3);
+      if (!seq.length) return "clear road ahead";
+      return seq.map((c) => {
+        const sev = paceSev(c.radiusM);
+        const tags = [];
+        if (c.exitsOntoStraight) tags.push("into-str");
+        if (sev <= 2) tags.push("don't-cut");
+        return c.dir + sev + " @" + Math.round(c.distM) + "m"
+             + (tags.length ? " " + tags.join(" ") : "");
+      }).join(", ");
+    }
+
     // ── look-ahead ──────────────────────────────────────────────────────────
     // Time-scaled, not distance-scaled. obs().scan is fixed at [10,30,60] m,
     // which is 1.2 s of warning at 50 m/s and 6 s at 10 m/s — backwards. GT
@@ -746,6 +780,7 @@ const AgentView = (function () {
       };
 
       if (detail !== "brief") {
+        payload.pacenotes = pacenotes(p.s, p.speed);
         payload.ahead = lookahead(p.s, p.speed, o.horizonS || 4, o.points || 5);
         payload.nextCorners = upcomingCorners(p.s, p.speed, o.corners || 3);
         payload.rivals = rv;
