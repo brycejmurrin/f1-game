@@ -29,7 +29,12 @@ const SceneryNature = (function () {
       // empty one, and the circuit ships with NO PROPS AT ALL. Silverstone did
       // exactly that — 783 066 vertices discarded because one roadside tree
       // resolved to node -1.
-      const k = ((kRaw % n) + n) % n;
+      // ROUND, don't just wrap. A caller passing a lap FRACTION where a node
+      // index belongs (billboard(0.01, …) instead of billboard(K(0.01), …))
+      // survived the modulo as 0.01, indexed the typed arrays fractionally,
+      // read undefined and turned the whole model into NaN — the primitive
+      // guard then dropped it silently. That is how Baku lost a billboard.
+      const k = Math.round(((kRaw % n) + n) % n) % n;
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
