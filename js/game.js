@@ -358,6 +358,12 @@ const LONG_GRIP = 34;
 const WHEEL_R = 0.34;         // wheel radius (m) — matches Car3D geometry, for spin rate
 const WHEEL_STEER_VIS = 0.5;  // rad of visible front-wheel steer at full lock
 const GRASS_V = 18;         // crawl speed on grass
+const KERB_SHAKE = 0.22;    // sustained kerb rumble trauma (was inline 0.3): amt =
+                            //   shake²·0.9 drops 0.081 → 0.044 m of random eye jitter;
+                            //   crash-shake writers are untouched.
+const KERB_CUE_HOLD = 0.10; // s — bridges the ~20 Hz per-node flicker of the raw
+                            //   onKerb flag (~2 node periods at 300 km/h) so the
+                            //   rumble/shake/haptic cue can't machine-gun on/off.
 const DEPLOY_A = 3.0;       // extra accel from electric deploy
 const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed band
 function isErsDeploying(c) {
@@ -899,6 +905,7 @@ function gridUp() {
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0;
+    c.kerbGripSm = 1; c.kerbCueT = 0;
   });
 }
 function smpHw(s) { Tracks.sample(track, s, smp); return smp.hw; }
@@ -2292,13 +2299,19 @@ function updateCar(c, dt, ranked) {
   // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
   // grip + speed, but you can stay on it. Distinct from going off into grass.
   if (c.onKerb) {
-    c.speed -= 6 * dt;                       // slight scrub
-    if (c.isPlayer) {
-      shake = Math.max(shake, 0.3);          // continuous light rumble via shake
-      c.kerbSndT = (c.kerbSndT || 0) - dt;
-      if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-      if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
-    }
+    c.speed -= 6 * dt;                       // slight scrub (raw contact only)
+    if (c.isPlayer) c.kerbCueT = KERB_CUE_HOLD;
+  }
+  // The raw onKerb flag is a floor-indexed per-node lookup (TrackMesh.onKerb)
+  // and flickers at the ~4 m node rate at speed (≈20 Hz at 300 km/h) when the
+  // car straddles the kerb line. Run the CUES on a short sticky hold so
+  // rumble/shake/haptics read as one continuous kerb strike instead of a
+  // machine-gun re-arm of the trauma shake every node.
+  if (c.isPlayer && (c.kerbCueT = Math.max(0, (c.kerbCueT || 0) - dt)) > 0) {
+    shake = Math.max(shake, KERB_SHAKE);     // continuous light rumble via shake
+    c.kerbSndT = (c.kerbSndT || 0) - dt;
+    if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
+    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
   }
 
   // --- lateral ---
@@ -2381,7 +2394,13 @@ function updateCar(c, dt, ranked) {
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(Math.abs(c.speed) / 18, 0, 1);
   const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
-  const kerbGrip = c.onKerb ? 0.7 : 1;   // riding a kerb loses a little grip
+  // Riding a kerb loses a little grip — damped continuous instead of a binary
+  // 1↔0.7 flip: the raw flag flickers at the ~4 m node rate at speed, and a
+  // 30% lateral-grip square wave at ~20 Hz was genuine yaw dither in the
+  // physics. λ=12 (τ≈83 ms): a solid kerb ride reaches the full 0.7 penalty in
+  // ~0.25 s (handling penalty preserved); a one-tick flicker moves grip <2%.
+  // Deterministic (damp is exp-based, dt here is the fixed PHYS_DT).
+  const kerbGrip = (c.kerbGripSm = damp(c.kerbGripSm ?? 1, c.onKerb ? 0.7 : 1, 12, dt));
   // Banking: computed once, shared between player and AI so both get grip boost.
   const bankPhys = Tracks.banking(track, c.s, 0, _bankScratchP);
   const bankRoll = Math.max(bankPhys ? Math.abs(bankPhys.roll) : 0,
