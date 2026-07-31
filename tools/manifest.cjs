@@ -53,6 +53,8 @@ const FULL = [
   "js/render/webgpu/wgsl-post.js",
   "js/render/webgpu/wgsl-fx.js",
   "js/render/webgpu/wgx.js",
+  "js/render/three/tsl-chunks.js",
+  "js/render/three/tsl-lit.js",
   "js/render/three/tlx.js",
   "js/render/gfx.js",
   "js/render/gltf.js",
@@ -189,6 +191,10 @@ const HARD_EDGES = [
   ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx.js", "js/render/gfx.js"],
+  // TSL shader factories before tlx.js (TLX.create invokes TLXShaders.chunks/
+  // .lit — call-time, but keep the ordering explicit like the glx/ modules)
+  ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
+  ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
   ["js/render/three/tlx.js", "js/render/gfx.js"],      // gfx.create branches on the TLX global
   ["js/track/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval

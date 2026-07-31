@@ -35,6 +35,21 @@
  * no-track menu path at game.js:3105 works); every other contract member is
  * present as a SAFE no-op so game.js can issue the full frame protocol without
  * crashing. M2+ replace the no-ops subsystem by subsystem.
+ *
+ * M3 STATUS: the TSL lit core is live — TLXShaders.chunks + TLXShaders.lit
+ * (tsl-chunks.js / tsl-lit.js) supply the full lit fragment (15 procedural
+ * materials, car ids 20-26, FLAG wave, sun+hemi+32-lamp lighting, fog stack,
+ * wetness, cloud shadows). GLX's per-draw material scalars land through a
+ * MATERIAL CACHE: three can't read per-object uniforms off one shared
+ * material, so each distinct opts signature (9 scalars + flags, the game's
+ * ~20 hoisted opts objects) gets its own material variant whose scalars are
+ * uniform nodes — every variant emits identical program text, so the GL
+ * program is compiled once. Cap 64 entries, oldest evicted (a continuously
+ * animated scalar, e.g. dusk floodEmit, would otherwise mint variants per
+ * frame — revisit in M8 if that path shows up hot).
+ * Debug: __tlx.shader(idx) dumps generated GLSL/WGSL; ?viz=mat|normal|lamp
+ * (or localStorage apex26.tlxViz) paints bisect views. No shadow maps / sky /
+ * post yet (M4/M5/M8).
  */
 "use strict";
 
@@ -90,20 +105,88 @@ const TLX = (function () {
       const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 4000);
       camera.matrixAutoUpdate = false;
 
-      // M2 material: unlit vertex colour (albedo passthrough — lighting M3).
+      // Fallback material: unlit vertex colour (the M2 look). Kept as the
+      // never-fail path — if the lit factory is missing or throws, the
+      // backend still boots and renders geometry.
       const unlitMat = new THREE.MeshBasicNodeMaterial();
       unlitMat.colorNode = TSL.attribute("color", "vec3");
       unlitMat.side = THREE.FrontSide;
 
-      const drawList = [];          // {geo, matrix} in submission order
+      // ── M3: the TSL lit core (tsl-chunks.js + tsl-lit.js factories) ──────
+      // Guarded: a missing/broken factory keeps the unlit material — the
+      // backend must still boot (Gfx.create's never-throw contract).
+      let lit = null;
+      try {
+        if (window.TLXShaders && TLXShaders.chunks && TLXShaders.lit) {
+          const chunks = TLXShaders.chunks(THREE, TSL);
+          lit = TLXShaders.lit(THREE, TSL, { chunks });
+        }
+      } catch (e) {
+        try { console.warn("TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
+        lit = null;
+      }
+
+      // Debug viz mode (?viz=mat|normal|lamp or localStorage apex26.tlxViz):
+      // paints the mat attribute / world normal / raw lamp-loop output — the
+      // bisect views that cracked the spike's black-lamp defect.
+      const vizMode = (function () {
+        try {
+          return new URL(location.href).searchParams.get("viz")
+            || localStorage.getItem("apex26.tlxViz") || null;
+        } catch (_) { return null; }
+      })();
+      const vizMat = (lit && vizMode) ? lit.makeViz(vizMode) : null;
+
+      // ── material cache: GLX per-draw opts -> material variant ────────────
+      // (see the M3 STATUS note in the header for why a cache, not per-draw
+      // uniforms). Key = the 9 material scalars + render-state flags.
+      const defaultMat = lit ? lit.makeMaterial({}) : null;
+      const defaultMatChunked = lit ? lit.makeMaterial({ chunked: true }) : null;
+      const matCache = new Map();
+      const MAT_CACHE_CAP = 64;
+      function materialFor(opts, chunked) {
+        if (!lit) return unlitMat;
+        if (vizMat) return vizMat;
+        if (!opts) return chunked ? defaultMatChunked : defaultMat;
+        const o = opts;
+        const key =
+          (o.emissive !== undefined ? o.emissive : 0) + "," +
+          (o.alpha !== undefined ? o.alpha : 1) + "," +
+          (o.roughness !== undefined ? o.roughness : 0.7) + "," +
+          (o.metalness !== undefined ? o.metalness : 0) + "," +
+          (o.specular !== undefined ? o.specular : 0.5) + "," +
+          (o.detail !== undefined ? o.detail : 0) + "," +
+          (o.clearcoat !== undefined ? o.clearcoat : 0) + "," +
+          (o.carPaint !== undefined ? o.carPaint : 0) + "," +
+          (o.sparkle !== undefined ? o.sparkle : 1) +
+          (o.doubleSided ? "|ds" : "") +
+          (o.noAlphaWrite ? "|na" : "") +
+          (o.depthBias ? "|db" + o.depthBias[0] + "," + o.depthBias[1] : "") +
+          (chunked ? "|ch" : "");
+        let m = matCache.get(key);
+        if (!m) {
+          if (matCache.size >= MAT_CACHE_CAP) {
+            const oldest = matCache.keys().next().value;
+            const old = matCache.get(oldest);
+            matCache.delete(oldest);
+            if (old) old.dispose();
+          }
+          m = lit.makeMaterial(chunked ? Object.assign({ chunked: true }, o) : o);
+          matCache.set(key, m);
+        }
+        return m;
+      }
+
+      const drawList = [];          // {geo, matrix, material} in submission order
       const meshPool = [];          // recycled THREE.Mesh wrappers
       let poolUsed = 0;
       const _tmpMat4 = new THREE.Matrix4();
 
-      function acquireMesh(geo, matrixArr) {
+      function acquireMesh(geo, matrixArr, material) {
         let m = meshPool[poolUsed];
         if (!m) { m = new THREE.Mesh(geo, unlitMat); m.matrixAutoUpdate = false; m.frustumCulled = false; meshPool[poolUsed] = m; }
         m.geometry = geo;
+        m.material = material || unlitMat;
         if (matrixArr) m.matrix.fromArray(matrixArr); else m.matrix.identity();
         m.visible = true;
         poolUsed++;
@@ -121,10 +204,11 @@ const TLX = (function () {
           new Float32Array(data.nrm && data.nrm.length === pos.length ? data.nrm : verts * 3), 3));
         g.setAttribute("color", new THREE.BufferAttribute(
           new Float32Array(data.col && data.col.length === pos.length ? data.col : verts * 3), 3));
-        // per-vertex procedural material id (0 = FLAT); consumed by tsl-lit (M3)
-        if (data.mat && data.mat.length === verts) {
-          g.setAttribute("mat", new THREE.BufferAttribute(new Float32Array(data.mat), 1));
-        }
+        // per-vertex procedural material id (0 = FLAT), consumed by tsl-lit.
+        // ALWAYS present: the lit material reads attribute('mat') — a missing
+        // attribute is undefined-read territory on strict GL drivers.
+        g.setAttribute("mat", new THREE.BufferAttribute(
+          new Float32Array(data.mat && data.mat.length === verts ? data.mat : verts), 1));
         if (data.idx && data.idx.length) {
           g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
         }
@@ -241,29 +325,46 @@ const TLX = (function () {
           }
           camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
           if (frame && frame.eye) camera.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
+          // M3: push the frame + tune uniforms (sun/ambient/fog/wetness/knobs
+          // + the stride-15 lamp arrays, capped 32) into the shared lit set.
+          if (lit && frame) lit.updateFrame(frame);
           drawList.length = 0;
           return true;
         },
         drawSky() {},
-        draw(mesh, model) {
-          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model });
+        draw(mesh, model, opts) {
+          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model, mat: materialFor(opts, false) });
         },
-        drawChunked(mesh, model) {
-          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model });
+        drawChunked(mesh, model, opts) {
+          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model, mat: materialFor(opts, true) });
         },
         drawShadow() {}, drawMark() {},
         drawSkidBatch() { return true; },    // true: swallow the batch (no per-mark fallback spam)
         drawGlow() {}, drawParticles() {}, drawDecal() {},
         present() {
           poolUsed = 0;
-          for (let i = 0; i < drawList.length; i++) acquireMesh(drawList[i].geo, drawList[i].m);
+          for (let i = 0; i < drawList.length; i++) acquireMesh(drawList[i].geo, drawList[i].m, drawList[i].mat);
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
           renderer.render(scene, camera);
           drawList.length = 0;
         },
 
-        // debug (grows into the __tlx shader-dump/?viz= tooling from M3 on)
-        __tlx: { renderer, THREE, TSL },
+        // debug — the __tlx tooling (mirrors the spike's __spike hooks):
+        //   shader(idx)  generated GLSL/WGSL for scene mesh #idx (async)
+        //   viz          the active ?viz= / apex26.tlxViz mode (null = off)
+        __tlx: {
+          renderer, THREE, TSL,
+          get lit() { return lit; },
+          viz: vizMode,
+          materialCacheSize() { return matCache.size; },
+          async shader(idx = 0) {
+            const meshes = scene.children.filter((o) => o.isMesh && o.visible);
+            const target = meshes[idx];
+            if (!target) return null;
+            const out = await renderer.debug.getShaderAsync(scene, camera, target);
+            return { vertex: out.vertexShader, fragment: out.fragmentShader };
+          },
+        },
       };
 
       return backend;
