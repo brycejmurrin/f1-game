@@ -1,205 +1,36 @@
 @layer overlays {
-/* Apex 26 — trailing cross-section responsive passes: short-landscape compaction, pointer:fine, large screens, focus ring + rotate overlay.
-   Split from css/style.css (lines 1312-1560 of the original); the <link>
-   order in index.html preserves the original source order, so the cascade
-   is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
-/* ---------- SHORT LANDSCAPE (phones): compact menus/panels so titles aren't
-   clipped and primary actions (START / SAVE / QUIT) never fall below the fold.
-   Gated on a short height so tablets and desktop keep the roomy layout. ---- */
-@media (orientation: landscape) and (max-height: 520px) {
-  /* main menu: branding left — buttons right (single column, vertically centred) */
-  #overlay {
-    display: grid; grid-template-columns: 1fr 1.2fr;
-    align-items: center; align-content: center; justify-items: start;
-    gap: 4px 32px; padding: 10px 28px; overflow: hidden;
-  }
-  #title { grid-column: 1; font-size: clamp(26px, 7.5vw, 48px); margin: 0; margin-left: clamp(12px, 3vw, 36px); }
-  #title::after { height: 3px; }
-  #subtitle { grid-column: 1; margin: 5px 0 0; font-size: 12px; margin-left: clamp(12px, 3vw, 36px); }
-  #audiostate { grid-column: 1; font-size: 10px; margin-top: 3px; min-height: 0; margin-left: clamp(12px, 3vw, 36px); }
-  #disclaimer { grid-column: 1 / -1; position: static; font-size: 10px; justify-self: center; margin-top: 4px; }
-  #menu-buttons {
-    grid-column: 2; grid-row: 1 / 5; align-self: center; justify-self: start;
-    display: grid; grid-template-columns: 1fr; gap: 6px;
-    width: 100%; margin: 0;
-  }
-  #menu-buttons .bigbtn { width: 100%; min-width: 130px; margin: 0; padding: 9px 14px; font-size: 14px; grid-column: 1; }
-  #menu-buttons .bigbtn.alt { grid-column: 1; }
-
-  /* dialog panels: tighter padding + buttons */
-  .panel { padding: 12px 18px; }
-  .panel h2 { margin-bottom: 8px; }
-  .panel button { margin: 5px 0; padding: 6px 14px; }
-  .sel-actions { margin-top: 10px; }
-
-  /* pause menu: 2 columns so its buttons fit without scrolling */
-  #pausemenu {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 10px;
-  }
-  #pausemenu h2 { grid-column: 1 / -1; }
-  #pausemenu button { margin: 4px 0; font-size: 11.5px; padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #pm-resume { grid-column: 1 / -1; }
-  #pm-standings { grid-column: 1 / -1; }
-
-  /* settings sub-menu: two columns — DRIVING + AUDIO stacked left, DISPLAY
-     right — placed explicitly on a grid. (CSS `columns` balanced nicely in
-     Chromium but WebKit carries the previous group's bottom margin to the top
-     of column 2, so the DISPLAY header sat visibly lower than DRIVING on
-     iPhone. Grid rows pin both column tops level in every engine.) */
-  #pmsettings-inner { max-height: calc(100dvh - var(--sat) - var(--sab) - 16px); }
-  .pm-groups {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 14px; row-gap: 8px;
-    align-items: start;
-    margin: 4px 0 0;
-  }
-  .pm-group:nth-child(1) { grid-column: 1; grid-row: 1; }   /* DRIVING */
-  .pm-group:nth-child(2) { grid-column: 1; grid-row: 2; }   /* AUDIO   */
-  .pm-group:nth-child(3) { grid-column: 2; grid-row: 1 / span 2; }   /* DISPLAY */
-  .pm-group-h { margin-bottom: 4px; }
-  /* margin 2px (not 4): the tallest column is 6 buttons + 2 headers — every
-     vertical px ×6 decides whether BACK fits a 390px-high phone unscrolled */
-  #pmsettings-inner button { margin: 2px 0; font-size: 11.5px; padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #pm-settings-close { margin-top: 8px; }
-  #results { max-width: 600px; }
-  /* race settings: 2-column grid so LAPS+WEATHER share one row, TIME+actions share another */
-  #race-settings {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 14px;
-    align-items: start;
-  }
-  #race-settings h2 { grid-column: 1 / -1; }
-  /* TIME OF DAY spans the full width so it sits on its own row directly above
-     the action buttons. grid-row:auto resets the `grid-row:3` that the bare
-     `.sel-actions` rule (meant for #select) below leaks in, which otherwise
-     pins BACK/RACE! above the TIME row. */
-  #race-settings #rs-time-section { grid-column: 1 / -1; }
-  #race-settings .sel-actions { grid-column: 1 / -1; grid-row: auto; margin-top: 6px; }
-  .rs-row { margin: 6px 0; }
-  #race-settings .sel-chip { font-size: 12px; padding: 7px 12px; }
-
-  /* howtoplay: use full landscape height so content doesn't get clipped by DONE button */
-  #howtoplay-inner {
-    max-height: calc(100dvh - var(--sat) - var(--sab) - 16px);
-    width: min(96vw, 700px);
-  }
-
-  /* sectors: smaller in landscape short screens to avoid overlapping cam/pause buttons */
-  #hud-sectors { top: calc(52px + var(--sat)); font-size: 10px; padding: 3px 6px; }
-
-  /* advanced panel: two columns of settings so it fits a sideways phone */
-  #advanced-inner { width: min(96vw, 820px); }
-  #advanced-inner .adv-item {
-    display: inline-block; width: calc(50% - 8px); vertical-align: top;
-    margin: 8px 0; padding-right: 12px; box-sizing: border-box;
-  }
-  .adv-sec { margin-top: 10px; }
-
-  /* customize form: compact rows so SAVE/CANCEL stay visible */
-  #customize .cz-row { margin: 4px 0; font-size: 12px; }
-  #customize input[type="text"], #customize input[type="number"] { padding: 5px 8px; }
-  #customize input[type="color"] { height: 28px; }
-  #cz-preview { margin-top: 8px; padding: 7px; }
-
-  /* select screen: floating panel, left col = team/diff/actions, right col = circuit */
-  #select { overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 0; }
-  #sel-inner {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto 1fr auto;
-    width: min(98vw, 860px);
-    height: calc(100dvh - var(--sat) - var(--sab) - 16px);
-    background: var(--panel);
-    border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 14px;
-    box-shadow: 0 16px 48px rgba(0,0,0,0.7);
-    overflow: hidden;
-    column-gap: 0;
-    align-content: unset;
-  }
-  #sel-inner > h2 { grid-column: 1 / -1; padding: 10px 18px 4px; margin: 0; font-size: 16px; }
-  #sel-left { grid-column: 1; grid-row: 2; overflow-y: auto; padding: 0 12px 8px 18px; border-right: 1px solid rgba(255,255,255,0.07); }
-  #sel-track-section { grid-column: 2; grid-row: 2 / 4; display: flex; flex-direction: column; overflow: hidden; padding: 0 18px 0 12px; }
-  #sel-tracks { flex: 1; overflow-y: auto; min-height: 0; }
-  .sel-actions { grid-column: 1; grid-row: 3; padding: 6px 18px; margin: 0; position: static; border-top: 1px solid rgba(255,255,255,0.07); background: rgba(12,12,20,0.95); justify-content: flex-start; }
-  .sel-label { margin: 5px 0 3px; }
-  .sel-chip { padding: 6px 10px; font-size: 12px; }
-  #sel-driver { margin-top: 4px; }
-  .sel-actions .bigbtn { width: auto; min-width: 110px; padding: 8px 14px; font-size: 14px; }
-  /* compact stats: 2-column number grid instead of 4 tall bar rows */
-  #sel-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 6px; margin: 2px 0; }
-  #sel-stats .cs-stat-row { margin: 1px 0; gap: 5px; font-size: 10px; }
-  #sel-stats .cs-stat-label { width: auto; letter-spacing: 0.04em; }
-  #sel-stats .cs-stat-bar-wrap { display: none; }
-  #sel-stats .cs-stat-val { font-size: 12px; width: auto; }
-  /* track preview: compact map beside info (pinned), list scrolls below */
-  #sel-track-preview { flex-direction: row; gap: 10px; padding: 8px 4px; flex-shrink: 0; margin-bottom: 4px; align-items: flex-start; }
-  #sel-preview-map { flex: none; height: 90px; width: auto; max-width: none; }
-  #sel-preview-info { flex: 1; min-width: 0; max-width: none; }
-  #sel-preview-name { font-size: 14px; }
-  #sel-preview-gp   { display: inline; margin: 0; font-size: 11px; }
-  #sel-preview-meta, #sel-preview-elev { display: none; }
-  #sel-preview-rec { font-size: 10px; margin-top: 3px; }
-  #sel-preview-facts { margin-top: 0; gap: 4px; }
-  .spf-fact { font-size: 10px; padding: 1px 5px; }
-}
+/* Apex 26 — the few things that genuinely belong to the VIEWPORT rather than to
+   a component.
+   This file used to be ~250 lines of per-screen landscape overrides. It is short
+   now because the menus decide their own layout from the room they have:
+     * density (padding / tap size / label size)  → tokens in css/tokens.css
+     * layout  (columns, what is pinned)          → @container queries on .sheet
+   Anything that reads "on a phone, move THIS control" belongs in one of those
+   two places, not here. */
 
 /* ---------- DESKTOP / MOUSE (pointer: fine) ---------- */
 /* Hide phone-only controls that make no sense with a keyboard */
 body.desktop #pm-steer,
 body.desktop #pm-calib { display: none !important; }
 
-/* ---------- LARGE SCREENS (iPad, desktop, 900px+) ---------- */
+/* ---------- LARGE SCREENS (iPad, desktop) ---------- */
 @media (min-width: 900px) and (min-height: 600px) {
-  /* Select screen: centered floating panel with left/right columns. */
-  #select { overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 0; }
-  #sel-inner {
-    display: grid;
-    grid-template-columns: 360px 1fr;
-    grid-template-rows: auto 1fr auto;
-    width: min(96vw, 1020px);
-    height: min(88dvh, 720px);
-    background: var(--panel);
-    border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 14px;
-    box-shadow: 0 16px 48px rgba(0,0,0,0.75);
-    overflow: hidden;
-    margin: 0;
-    max-width: unset;
-    column-gap: 0;
-    align-content: unset;
-  }
-  #sel-inner > h2 { grid-column: 1 / -1; padding: 20px 28px 8px; margin: 0; }
-  #sel-left { grid-column: 1; grid-row: 2; overflow-y: auto; padding: 0 16px 12px 28px; border-right: 1px solid rgba(255,255,255,0.07); }
-  #sel-track-section { grid-column: 2; grid-row: 2 / 4; display: flex; flex-direction: column; overflow: hidden; padding: 0 28px 0 16px; }
-  #sel-tracks { flex: 1; overflow-y: auto; min-height: 0; }
-  .sel-actions { grid-column: 1; grid-row: 3; padding: 12px 28px; margin: 0; position: static; border-top: 1px solid rgba(255,255,255,0.07); background: rgba(12,12,20,0.95); justify-content: flex-start; }
-  .sel-actions .bigbtn { width: auto; min-width: 130px; }
-  /* track preview: larger map beside info (pinned), track list scrolls below */
-  #sel-track-preview { flex-direction: row; gap: 14px; padding: 10px 4px; flex-shrink: 0; margin-bottom: 6px; align-items: flex-start; }
-  #sel-preview-map { flex: none; height: 160px; width: auto; max-width: none; }
-  #sel-preview-info { flex: 1; min-width: 0; max-width: none; }
-
-  /* Main menu: branding left, red buttons | grey buttons right */
+  /* The select sheet is the one screen that wants to fill the space it is
+     given rather than shrink to content — it is the game's "home". */
+  #sel-inner { height: min(100%, 720px); }
+  /* Main menu: branding left, buttons right in two columns */
   #overlay {
-    display: grid; grid-template-columns: 1fr 1fr;
-    align-items: center; align-content: center; justify-items: start;
-    gap: 14px 80px; padding: 60px 100px; overflow: hidden;
+    grid-template-columns: 1fr 1fr;
+    justify-items: start;
+    column-gap: 80px; row-gap: 14px;
     background: radial-gradient(70% 80% at 28% 50%, rgba(225,6,0,0.18), transparent 60%), rgba(6,6,10,0.55);
   }
-  #title { grid-column: 1; }
-  #subtitle { grid-column: 1; }
-  #audiostate { grid-column: 1; }
-  #disclaimer { grid-column: 1 / -1; position: static; justify-self: center; }
+  #title, #subtitle, #audiostate, #disclaimer { grid-column: 1; }
   #menu-buttons {
-    grid-column: 2; grid-row: 1 / 4; align-self: center; justify-self: start; margin: 0;
-    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; width: auto;
+    grid-column: 2; grid-row: 1 / -1; align-self: center; justify-self: start;
+    grid-template-columns: 1fr 1fr; gap: 10px 16px; width: auto;
   }
-  #menu-buttons .bigbtn { width: 190px; margin: 0; }
+  #menu-buttons .bigbtn { width: 190px; }
   #menu-buttons .bigbtn:not(.alt) { grid-column: 1; }
   #menu-buttons .bigbtn.alt { grid-column: 2; }
 }
@@ -215,6 +46,11 @@ body.desktop #pm-calib { display: none !important; }
   #hud-tach  { width: 150px; height: 18px; }
   #hud-energy { width: 150px; height: 16px; }
   #minimap { width: 140px; height: 140px; }
+}
+
+/* sectors: smaller on short landscape screens so they clear the cam/pause buttons */
+@media (orientation: landscape) and (max-height: 560px) {
+  #hud-sectors { top: calc(52px + var(--sat)); font-size: 10px; padding: 3px 6px; }
 }
 
 /* Keyboard focus ring — required for WCAG 2.4.7 Focus Visible (AA). */

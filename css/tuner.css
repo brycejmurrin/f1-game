@@ -8,11 +8,15 @@
    panel is open, so the left of the screen is the live preview. */
 #lighting { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
 #lighting-inner {
+  /* Docked, not centred: .sheet gives the head/body/foot shape and the query
+     container, and these override the sheet's centred sizing. */
   pointer-events: auto;
-  left: auto; top: 8px; right: 8px; bottom: 8px;
+  position: fixed;
+  left: auto; top: calc(var(--sat) + 8px); right: calc(var(--sar) + 8px); bottom: calc(var(--sab) + 8px);
   transform: none;
   width: min(88vw, 380px);
   max-height: none;
+  z-index: 42;
   background: rgba(12, 14, 20, 0.86);
   padding: 14px 18px;
   /* Fixed head (title / preview chips / tabs) + scrolling #lt-rows + fixed
@@ -31,7 +35,7 @@
    (12 wrapped tab chips = 146px on their own) plus the footer ate all 374px of
    the panel and the rows collapsed to 0px high: 80+ sliders still in the DOM,
    nothing left to scroll. */
-#lt-rows { flex: 1 1 auto; overflow-y: auto; min-height: 84px; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+#lt-rows { flex: 1 1 auto; overflow-y: auto; min-height: 84px; touch-action: pan-y; }
 #lt-json { flex-shrink: 0; }
 #lighting-inner .adv-item { margin: 7px 0; }
 #lighting-inner .adv-help { display: none; }        /* hidden unless "Show explanations" is on… */
@@ -81,12 +85,12 @@
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
 .lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; margin: 0; padding: 4px 3px; font-size: 10px; }
 .lt-preview-row .opt-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
-#lighting-inner .sel-actions {
+#lighting-inner .sheet-foot {
   display: flex; gap: 8px; flex-shrink: 0;
   margin-top: 10px; padding-top: 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.10);
 }
-#lighting-inner .sel-actions button { margin: 0; }
+#lighting-inner .sheet-foot button { margin: 0; }
 #lt-json {
   width: 100%; height: 72px; margin-top: 10px; resize: none;
   font: 10px/1.5 ui-monospace, monospace; color: #cfe0ff;
@@ -131,7 +135,11 @@
 /* segmented option groups (STEERING / DRIVING HELP / RACING LINE) */
 .opt-row { display: flex; gap: 6px; margin-top: 4px; }
 .opt-row .opt-btn {
-  flex: 1; width: auto; margin: 0; padding: 8px 4px;
+  /* min-width:0 defeats the flex default of min-width:auto, which floors an
+     item at its longest word. The 4-way STEERING row (SUPER EASY / ASSISTED /
+     NORMAL / SIM) could not shrink below that sum and pushed SIM past the
+     panel's right edge on a landscape phone. */
+  flex: 1; min-width: 0; width: auto; margin: 0; padding: 8px 4px;
   font-size: 12px; letter-spacing: 0.03em; text-align: center;
 }
 .opt-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
@@ -152,13 +160,13 @@
   .lt-help-toggle { margin: 4px 0 2px; font-size: 10px; }
   .lt-tabs {
     flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
-    touch-action: pan-x; -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
     margin: 0 -14px 4px; padding: 5px 14px 6px;
     scrollbar-width: none;
   }
   .lt-tabs::-webkit-scrollbar { display: none; }
-  #lighting-inner .sel-actions { margin-top: 6px; padding-top: 6px; }
-  #lighting-inner .sel-actions button { padding: 6px 10px; font-size: 12px; }
+  #lighting-inner .sheet-foot { margin-top: 6px; padding-top: 6px; }
+  #lighting-inner .sheet-foot button { padding: 6px 10px; font-size: 12px; }
   #lighting-inner .adv-item { margin: 5px 0; }
   #lt-json { height: 54px; }
 }
