@@ -61,7 +61,10 @@
   background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.72);
   cursor: pointer; white-space: nowrap; transition: background 0.12s, color 0.12s;
 }
-#lt-tabs .lt-tab:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+@media (hover: hover) {
+  #lt-tabs .lt-tab:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+}
+#lt-tabs .lt-tab:active { background: rgba(255, 255, 255, 0.16); color: #fff; }
 #lt-tabs .lt-tab.on { background: var(--red); border-color: var(--red); color: #fff; }
 .lt-group { display: none; }
 .lt-group.active { display: block; }
