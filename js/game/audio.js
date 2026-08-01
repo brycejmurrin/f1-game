@@ -96,6 +96,33 @@ const GameAudio = (function () {
     return v < 0 ? 0 : v > 1 ? 1 : v;
   }
 
+  /* ---------------- iOS audio session ----------------
+     "playback" plays through the ring/silent switch like a game should — but on
+     iOS it is EXCLUSIVE: the first sound this game makes interrupts whatever
+     else is playing. That is correct when we own the soundtrack and wrong when
+     something else does: with Spotify driving the music from another device,
+     switching to the game paused it.
+     "ambient" MIXES with other apps (at the cost of obeying the silent switch),
+     which is the right trade exactly when another app owns the music. The Audio
+     Session API wants this set before the context exists, so it is applied at
+     creation and, best-effort, live — a mode change mid-session should not need
+     a reload. */
+  let sessionType = "playback";
+  function applySessionType() {
+    try {
+      if (typeof navigator !== "undefined" && navigator.audioSession) {
+        navigator.audioSession.type = sessionType;
+      }
+    } catch (e) { /* older iOS */ }
+  }
+  function setSessionType(t) {
+    const v = (t === "ambient" || t === "playback") ? t : "playback";
+    if (v === sessionType) return v;
+    sessionType = v;
+    applySessionType();
+    return v;
+  }
+
   // Find the most pitch-STABLE ~2s window of a decoded clip, so the engine loop
   // sits on a steady-RPM stretch instead of a dynamic (revving/shifting) part.
   // Uses zero-crossing rate per 0.1s as a cheap pitch proxy and picks the window
@@ -126,13 +153,7 @@ const GameAudio = (function () {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
 
-    // iOS 17+: play through the ring/silent switch like a game should.
-    // The Audio Session API must be set BEFORE the context is created.
-    try {
-      if (typeof navigator !== "undefined" && navigator.audioSession) {
-        navigator.audioSession.type = "playback";
-      }
-    } catch (e) { /* older iOS */ }
+    applySessionType();
 
     ctx = new AC();
     master = ctx.createGain();
@@ -1013,6 +1034,8 @@ const GameAudio = (function () {
     currentTrackId,
     setMusicBackend,
     musicBackend,
+    setSessionType,
+    sessionType() { return sessionType; },
     setSfxVolume,
     setSfxEnabled,
     setMusicVolume,

@@ -593,6 +593,16 @@ window.SpotifyMusic = (function () {
       if (!ds.length) {
         setStatus("connected", "No Spotify device found. Open Spotify on your phone or " +
           "computer (play anything for a second), then press REFRESH.");
+      } else if (/No Spotify device found|Looking for your Spotify devices|Waking your Spotify device/.test(message)) {
+        // CLEAR THE STALE COMPLAINT. The no-device line is written the moment
+        // the list comes back empty — which it often is for a second before the
+        // phone reports in — and nothing ever replaced it, so the panel sat
+        // there insisting there was no device directly above a device picker
+        // showing an active one, while music played.
+        const cur = ds.filter((d) => d.id === deviceId2())[0] || ds[0];
+        setStatus("connected", cur
+          ? (cur.name + " is ready. Pick a playlist and press PLAY.")
+          : "Connected. Pick a device and a playlist, then press PLAY.");
       }
       render();
       return ds;
@@ -718,8 +728,17 @@ window.SpotifyMusic = (function () {
     if (typeof GameAudio === "undefined" || !GameAudio.setMusicBackend) return;
     try { GameAudio.setMusicBackend(b); } catch (e) {}
   }
-  function installBackend() { setBackend(BACKEND); }
-  function removeBackend() { setBackend(null); }
+  // While ANOTHER app owns the music, the game's own audio has to mix rather
+  // than interrupt — on iOS the default "playback" session is exclusive, so the
+  // first engine sound or UI tick paused Spotify the moment you switched to the
+  // game. Only remote mode needs this: in browser mode the SDK's audio is ours.
+  function syncSession() {
+    if (typeof GameAudio === "undefined" || !GameAudio.setSessionType) return;
+    try { GameAudio.setSessionType(mode() === "remote" && GameAudio.musicBackend() ? "ambient" : "playback"); }
+    catch (e) {}
+  }
+  function installBackend() { setBackend(BACKEND); syncSession(); }
+  function removeBackend() { setBackend(null); syncSession(); }
 
   /* ---------------- public control ---------------- */
 
