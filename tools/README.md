@@ -37,6 +37,28 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **test-coverage-audit.mjs** | Coverage guard (`npm run test:audit`) — every `tests/*.spec.js` must be reachable from at least one `test:<group>` npm script, so a pre-push group run can't silently skip a spec. Exit 1 if any spec is orphaned. |
 | **test-shards.sh** | Runs whole npm test groups concurrently, one port + log per group, with a pass/fail summary. `tools/test-shards.sh smoke api collision`; `WORKERS=N` sets workers per group. |
 
+| **agent.mjs** | The agent toolbelt as a CLI — boots the game headless and calls one agent-view surface (`world`/`track`/`scene`/`rollout`/`help`) with the staging done correctly. `agent.mjs <track> <cmd> [flags]`. | agent-view |
+| **import-models.mjs** | Batch glTF → AX26 model importer. Separate from `assets.mjs bake-model`, which takes one local `.glb` through the game's own `js/render/gltf.js`: real CC0 model PACKS are directories of `.gltf` + sidecar `.bin` + textures, so this repacks them. Gated by `tests/import-models.test.mjs`. | — |
+| **assets.mjs** | Asset bake CLI (AUTHOR-TIME ONLY — never loaded by the game). `bake-synthetic` rebuilds `assets/pack` with no network or deps; `verify` checks the licence allow-list, md5s and size budget. | — |
+| **float-audit.cjs** | Exhaustive FLOATING-scenery detector — wraps `TrackGeom`'s emitters to record every primitive, then reports props hanging above (or buried under) the ground. `--all` sweeps the fleet. | survey-track |
+| **clip-audit.cjs** | PROP-VS-PROP interpenetration detector — the third axis after road (`rejBox`) and ground (float-audit). Uses emission-order adjacency to tell "one assembly" from "two models fighting". Gated by `tests/prop-clipping.test.mjs` against `clip-baseline.json`. | scenery-dress |
+| **clip-baseline.json** | The per-circuit interpenetration caps clip-audit's `--gate` and `tests/prop-clipping.test.mjs` both read, so the tool and the test can never disagree. | — |
+| **graph-parity.cjs** | The gate for the scenery scene-graph migration — builds every circuit TWICE (a baseline git ref via `git archive`, and the working tree) and diffs the prop geometry vertex for vertex, then reports per-emitter instancing reuse. `BASE=<ref> graph-parity.cjs --all` / `npm run test:graph-parity`. | scenery-dress |
+| **track-build-vm.cjs** | The shared "run the REAL track build headless in a Node VM" harness, extracted from float-audit so the audits and VM tests load the engine one way. | — |
+| **harness.mjs** | Shared process harness for the headless `__apex` tools — in-process static server + Chromium launch, so each tool doesn't reinvent port/browser handling. | playwright-probe |
+| **track-sweep.mjs** | Parallel DATA sweep across circuits (JSON, no screenshots) — the numbers counterpart to `apex-capture.mjs`. | debug-tracks |
+| **shot-sweep.mjs** | Parallel, LOGGED screenshot sweep. | playwright-probe |
+| **chase-shots.mjs** | N chase-camera screenshots evenly spaced around a lap. | playwright-probe |
+| **profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | perf-profile |
+| **fit-audit.mjs** | Does every menu FIT, and is everything on it big enough to hit — tap targets, type size and fit across nine viewports. | — |
+| **menu-fit.mjs** | Audits every menu screen for cramped/clipped layout at a given viewport. | — |
+| **track-accuracy-validator.mjs** | Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests. | new-track |
+| **refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data. Tests never call it and never touch the network. | new-track |
+| **fixture-consumer-audit.mjs** | Asserts every spec that needs the shared fixtures actually imports them (so nothing silently bypasses the API mocks). | — |
+| **output-paths.mjs** | Path-containment helpers enforcing the `artifacts/` vs `scratch/` output contract; `tests/output-paths.spec.js` gates it. | — |
+| **lighting-campaign/** | Batch lighting-sweep runner + its captures, driven by `tests/lighting-campaign.test.mjs`. | lighting-tuner |
+| **migrate-output-layout.mjs** | One-shot migration that moved generated output into the standard `artifacts/`/`scratch/` layout. | — |
+
 ## Conventions
 
 - **Surveying a track:** `survey-track.mjs <id>` is the one-stop pass (shots +

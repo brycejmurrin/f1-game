@@ -20,8 +20,8 @@ git status --short && git diff --stat
 | `js/circuits/<id>.js` (geometry/metadata) | `node tools/verify-track.cjs <id>` → `npm run test:circuit` → `npm run test:barriers` |
 | a track's `scenery(...)` | `node tools/verify-track.cjs <id>` → (full suite's `terrain-over-road.spec.js` for terrain) |
 | `js/track/*` (engine) or many tracks | `node tools/verify-track.cjs --all` (all 24 circuits, ~30 s) → `npm run test:circuit` |
-| `js/track/scenery-*.js` (buildProps split) | `node tools/verify-track.cjs --all` → `npm run test:tooling` (scenery-api contract) → `npm run test:scenery` |
-| added/renamed a JS file, or touched `<script>` order | update `tools/manifest.cjs` too, then `npm run test:tooling` (load-order) + `npm run test:smoke` |
+| `js/track/scenery-*.js` (buildProps split) | `node tools/verify-track.cjs --all` → `npm run test:tooling-fast` (scenery-api contract, ~4 s) → `npm run test:sweeps` (prop-clipping) → `npm run test:scenery` |
+| added/renamed a JS file, or touched `<script>` order | update `tools/manifest.cjs` too, then `npm run test:tooling-fast` (load-order) + `npm run test:smoke` |
 | collision / drift / off-track only | `npm run test:collision` (narrower than `test:behaviour`) |
 | `js/game.js` physics/AI | `npm run test:physics` + `npm run test:behaviour` (+ `test:steering` if steering) |
 | `js/game/apex.js` (`__apex` API) | `npm run test:api` (dev-tools + headless + obs/act edge + new-hooks) |
@@ -53,6 +53,8 @@ git status --short && git diff --stat
    module (`index.html` script tags must match `tools/manifest.cjs`):
    ```sh
    npm run test:tooling && npm run test:smoke
+   # docs/skills/tools edits: `npm run test:tooling-fast` covers docs-integrity
+   # (dead paths, stale counts, unindexed skills/tools/docs)
    ```
 
 ## Reading failures (house rule)

@@ -1062,7 +1062,7 @@ or
 
 ### Primary Sources
 
-1. **Apex 26 Source Code** — `/home/user/f1-game/js/input.js`
+1. **Apex 26 Source Code** — `/home/user/f1-game/js/game/input.js`
    - Tilt filtering, calibration, dead zone implementation
    - Orientation remapping to avoid gimbal lock
 

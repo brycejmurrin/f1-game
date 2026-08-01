@@ -843,7 +843,7 @@ const profile = __apex.trackProfile(100);  // 100 data points
   ```
 
 **Data Source:**
-- Pre-defined per track (stored in `js/tracks.js` or data file)
+- Pre-defined per track (stored in `js/track/tracks.js` or data file)
 - Use `__apex.scan([200, 400, 600])` to simulate DRS zone look-ahead
 
 ### Priority 7: Telemetry Baseline Comparison (Low Priority - Sim Only)
@@ -883,14 +883,14 @@ const profile = __apex.trackProfile(100);  // 100 data points
 - [ ] Add "Skip Briefing" button with confirmation
 
 **Data Dependencies:**
-- Requires: Circuit name, length, turn count (already in `js/tracks.js`)
+- Requires: Circuit name, length, turn count (already in `js/track/tracks.js`)
 - Requires: DRS zone definitions per track (can be manually added)
 - Requires: Track limits visualization (use existing wall data from `__apex.wallStats()`)
 
 ### Phase 2: Interactive Circuit Map (2-3 hours)
 
 - [ ] Make circuit map interactive (click to expand corner details)
-- [ ] Store corner callouts in `js/tracks.js` or separate data file
+- [ ] Store corner callouts in `js/track/tracks.js` or separate data file
 - [ ] Implement popup/modal for corner detail view
 - [ ] Add elevation change annotations (⬆️⬇️ icons)
 - [ ] Color-code corners by difficulty (green/yellow/red)
