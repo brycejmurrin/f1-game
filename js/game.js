@@ -5111,6 +5111,11 @@ $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = fa
 $("standings-close").onclick = () => { $("standings").hidden = true; };
 $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
+// Same sheet from the pause menu's SETTINGS page — the controls reference is
+// most wanted mid-session, not on the title screen. #howtoplay outranks
+// #pmsettings in z-index, so it lays over the settings menu and DONE returns
+// there with nothing else to restore.
+$("pm-howto").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
 // Team picker: opened by the team card on the select screen (js/game/menus.js).
 // Closing without choosing leaves the current team as-is.
@@ -5354,7 +5359,7 @@ function setPaused(p) {
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(seasonMode && season && season.round > 0);
-  if (!p) $("advanced").hidden = true;   // never leave an overlay up after resume
+  if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; }   // never leave an overlay up after resume
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
   else if (soundOn) GameAudio.startEngine();
   lastFrame = performance.now();
@@ -5521,6 +5526,12 @@ if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx 
 // Pause key: when the settings sub-menu is open it acts as a BACK to the pause
 // menu; otherwise it toggles pause as usual.
 Input.init(canvas, { onPause: () => {
+  // Innermost sheet first: HOW TO PLAY lays OVER the settings menu, so a pause
+  // press there has to close the help sheet, not the menu underneath it (which
+  // would leave the help sheet floating over the race with no way back). Reached
+  // via the pause BUTTON / gamepad Start — a keyboard Esc never gets here while a
+  // menu sheet is up (onKey returns early on menuOverlayOpen(), js/game/input.js).
+  if (paused && els.howtoplay && !els.howtoplay.hidden) { els.howtoplay.hidden = true; return; }
   if (paused && els.pmsettings && !els.pmsettings.hidden) { closeSettings(); return; }
   setPaused(!paused);
 } });

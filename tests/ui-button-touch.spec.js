@@ -191,6 +191,50 @@ test.describe("Pause settings — stable layout", () => {
   });
 });
 
+test.describe("Pause settings — HOW TO PLAY", () => {
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
+
+  test("opens the help sheet over the settings menu and DONE returns to it", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openPauseSettings(page);
+
+    await page.locator("#pm-howto").click();
+    await expect(page.locator("#howtoplay")).toBeVisible();
+    // It lays OVER the settings menu (z-index 40 vs 35) rather than replacing it.
+    expect(await page.evaluate(() => document.getElementById("pmsettings").hidden)).toBe(false);
+
+    await page.locator("#htp-close").click();
+    await expect(page.locator("#howtoplay")).toBeHidden();
+    await expect(page.locator("#pmsettings")).toBeVisible();
+
+    // A pause press closes the innermost sheet first — the help sheet, not the
+    // menu under it (which would strand the help sheet over the race). Gamepad
+    // Start is the path that reaches the pause callback here: the on-screen
+    // pause button only ever pauses, and a keyboard Esc is swallowed while a
+    // menu sheet is open (input.js's menuOverlayOpen gate).
+    await page.locator("#pm-howto").click();
+    await expect(page.locator("#howtoplay")).toBeVisible();
+    await page.evaluate(() => {
+      const buttons = Array.from({ length: 17 }, () => ({ pressed: false, value: 0, touched: false }));
+      const pad = { connected: true, mapping: "standard", axes: [0, 0, 0, 0], buttons };
+      navigator.getGamepads = () => [pad, null, null, null];
+      window.dispatchEvent(new Event("gamepadconnected"));
+      Input.poll();
+      buttons[9] = { pressed: true, value: 1, touched: true };   // Start
+      Input.poll();
+    });
+    await expect(page.locator("#howtoplay")).toBeHidden();
+    await expect(page.locator("#pmsettings")).toBeVisible();
+
+    // Resuming never leaves it up.
+    await page.locator("#pm-howto").click();
+    await expect(page.locator("#howtoplay")).toBeVisible();
+    await page.evaluate(() => document.getElementById("pm-resume").click());
+    await expect(page.locator("#howtoplay")).toBeHidden();
+  });
+});
+
 test.describe("Auto-throttle in button/touch mode", () => {
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
