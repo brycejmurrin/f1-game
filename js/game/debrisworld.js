@@ -731,7 +731,22 @@ function step(dt) {
 
   // A1: step WITH the event queue — this does NOT change the simulation, so
   // debris positions stay bit-identical (determinism preserved).
-  world.step(_events);
+  //
+  // Guarded because this is the one raw wasm call in the frame path: a Rapier
+  // trap here ("unreachable") is not catchable by the caller and takes the whole
+  // PAGE down, not just the frame — a hard wall hit driven from rollout()/act()
+  // was observed killing an entire headless session. Every other Rapier call in
+  // this file is already defensive. On a trap, stand the debris world down for
+  // the session rather than re-entering it 60 times a second; the race keeps
+  // running without debris.
+  try {
+    world.step(_events);
+  } catch (e) {
+    try { console.warn("[debris] rapier step trapped — debris disabled", e); } catch (_e) {}
+    _active = false;
+    try { destroyWorld(); } catch (_e) {}
+    return;
+  }
 
   // bookkeeping: rest + distance despawn back into the pool
   const p = G.player;
