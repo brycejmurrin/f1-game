@@ -24,11 +24,20 @@ an image than with structured text (BALROG, VideoGameBench), and every serious
 LLM-plays-a-game system converts the world to text. So reach for these, not
 screenshots.
 
-Two ways in — same surface:
-- `window.__apex.<tool>(...)` inside the page (Playwright `page.evaluate`, the
-  console, `tools/apex-eval.mjs`).
+Two ways in — same surface, different cost:
 - `node tools/agent.mjs <track> <tool> [flags]` from a shell — it does the
   `race`/`go`/`jump` + render-frames staging correctly so you don't hand-roll it.
+  **Each call boots its own browser (~30–40 s)**, so it is one read per boot:
+  great for a single question, wasteful for many. Don't chain several in one
+  shell command — they run serially and blow your timeout; if you must, launch
+  them as parallel background jobs.
+- `node tools/apex-eval.mjs <track> "<expr>"` — boots once and evaluates one
+  expression where `a` = `window.__apex`. This is the door for **anything past a
+  single read**: a multi-call sequence, a custom driving policy, a seeded A/B.
+  Batch your reads into one expression (`JSON.stringify({x:a.world(), y:a.field()})`)
+  and pay one boot instead of N. Note it stages only `race()` — see Staging.
+- `window.__apex.<tool>(...)` inside a live page (Playwright `page.evaluate`, the
+  browser console) when you already have one open.
 
 **Start every session with `agentHelp()` and `objective()`.** The first names
 the whole surface and a `fields` glossary (what each number means in terms of
@@ -106,7 +115,7 @@ In-page you must stage before reading, or you get plausible-but-wrong answers:
 
 ```js
 __apex.race("monza"); __apex.go(); __apex.jump(0.1, 55);  // load, start, place
-// obs()/physState() need player.px — jump() or one step() first
+// obs()/physState()/world()/describe() need player.px — jump() or one step() first
 // visible()/render({what:"view"}) read the LAST RENDERED frame — let frames draw
 // scene() reads placed props — a heavy street circuit (Singapore, Monaco, Baku)
 //   finishes its prop build a few frames after race(); an empty scene() means
@@ -114,6 +123,16 @@ __apex.race("monza"); __apex.go(); __apex.jump(0.1, 55);  // load, start, place
 ```
 
 `node tools/agent.mjs monza world --detail drive` does all of this for you.
+**`apex-eval` does not** — it boots and calls `race()` only, so a player-placed
+tool returns a not-placed error until you stage inside the expression:
+`node tools/apex-eval.mjs monza "(a.go(), a.jump(0.1,55), a.world())"`.
+
+You rarely need to memorise this, because **the errors tell you the fix.** Every
+agent-view failure is `{ok:false, error, message, fix, state}` — `fix` names the
+exact call to make (`"call __apex.jump(frac, speed) first"`,
+`"props are indexed 0..2834; call scene()/query()"`) and `state.playerReady`
+says whether you are staged. Read `fix` and do what it says; the surface is
+built to be driven by its own error messages.
 
 ## Reference
 
