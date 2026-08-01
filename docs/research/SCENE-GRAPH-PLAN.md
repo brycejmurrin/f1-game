@@ -1,13 +1,13 @@
 # Scene graph + detailed models — staged plan
 
 > **Status: S0–S2 infrastructure has LANDED** (`js/track/graph.js`,
-> `tools/graph-parity.cjs`, `tests/track-graph.test.mjs`), with ten emitters
+> `tools/graph-parity.cjs`, `tests/track-graph.test.mjs`), with twelve emitters
 > migrated: `windowPane`, `crowd`, `fence`, `guardrail`, `tyreWall`, `wall`,
-> `streetBarrier`, `crowdRiser`, `marshalPost`, `pine`. All 24 circuits are at
-> exact geometry parity — nothing renders differently, by design. §6 has the
-> measured per-emitter reuse: **48% of the fleet's entire scenery mass (8.60 M
-> vertices) collapses to 13,829**, while `pine` sits at 1.00× for a structural
-> reason that changes the S4 plan.
+> `streetLamp`, `streetBarrier`, `crowdRiser`, `billboard`, `marshalPost`,
+> `pine`. All 24 circuits are at exact geometry parity — nothing renders
+> differently, by design. §6 has the measured per-emitter reuse: **50% of the
+> fleet's entire scenery mass (8.93 M vertices) collapses to 24,249**, while
+> `pine` sits at 1.00× for a structural reason that changes the S4 plan.
 
 Companion to `EXTERNAL-MODEL-SOURCES.md`, which asked "where do models come
 from". This asks the prior question: **why can't we afford detailed models
@@ -256,12 +256,14 @@ have. Across all 24 circuits, for the six emitters migrated so far:
 | `fence` | 54,277 | 77 | 1,601,375 | 2,266 | **706.70×** |
 | `guardrail` | 30,465 | 50 | 792,104 | 1,288 | **614.99×** |
 | `tyreWall` | 8,156 | 85 | 297,819 | 2,615 | **113.89×** |
+| `streetLamp` | 3,368 | 66 | 297,792 | 6,468 | **46.04×** |
 | `wall` | 7,492 | 28 | 179,808 | 672 | **267.57×** |
 | `streetBarrier` | 6,404 | 7 | 153,696 | 168 | **914.86×** |
 | `crowdRiser` | 2,792 | 109 | 67,008 | 2,616 | **25.61×** |
+| `billboard` | 1,188 | 152 | 31,680 | 3,952 | **8.02×** |
 | `marshalPost` | 343 | 43 | 26,068 | 3,268 | **7.98×** |
 | `pine` | 9,486 | 9,474 | 1,159,599 | 1,158,108 | **1.00×** |
-| **total** | **347,771** | **9,912** | **9,758,021** | **1,171,937** | **8.33×** |
+| **total** | **352,327** | **10,130** | **10,087,493** | **1,182,357** | **8.53×** |
 
 **`windowPane` is the headline: every glazed pane in the game — 143,083 of them
 across seven city circuits, 3,433,992 fused vertices — is the same unit box.**
@@ -273,14 +275,14 @@ is the second block: 3,024,802 vertices down to 7,009.
 standing on a grass bank — is one unit box, with per-person height on the node
 scale and shirt colour on the node colour. 85,273 of them cost 768 vertices.
 
-For scale: all 24 circuits together build **17,978,812** prop vertices. The ten
-migrated emitters account for 9,758,021 of them (**54.3%**), and the nine
-non-`pine` ones for 8,598,422 (**47.8%**) — which an instanced renderer would
-draw from **13,829 vertices** of models plus one `mat4` per node. Nearly half the
-game's entire scenery mass, currently paid for in full VBO bytes, is a handful of
-shapes repeated.
+For scale: all 24 circuits together build **17,978,812** prop vertices. The twelve
+migrated emitters account for 10,087,493 of them (**56.1%**), and the eleven
+non-`pine` ones for 8,927,894 (**49.7%**) — which an instanced renderer would
+draw from **24,249 vertices** of models plus one `mat4` per node. Half the game's
+entire scenery mass, currently paid for in full VBO bytes, is a handful of shapes
+repeated.
 
-Four structural properties made that possible, and they generalise:
+Five structural properties made that possible, and they generalise:
 
 1. **Split fixed geometry from length-scaled geometry.** `guardrail` was one
    emitter writing a fixed post plus a rail whose length follows the node
@@ -300,7 +302,13 @@ Four structural properties made that possible, and they generalise:
    rides the placement, which is precisely what a per-instance colour attribute
    does on the GPU. `instance()` also takes a target buffer, so a pane's unlit
    half still routes to `glassBuf` for the reflective material.
-4. **Replay unguarded where the emitter already was.** Crowd spectators are
+4. **Promote a repeated offset to a node.** A billboard's two posts sit at
+   ±0.4·width along the track. Folding that into one model mints a model per
+   width (252 models for 792 placements, 2.71×); a z-scale would instead stretch
+   the post radius. Emitting each post as its OWN node leaves one model per
+   height — 8.02×, and exactly, since the offset is computed by the same `vadd`
+   the original used.
+5. **Replay unguarded where the emitter already was.** Crowd spectators are
    thousands of tiny boxes behind a stand's shell and deliberately skip the
    on-road test for speed (`RAW.addBox`). `instance(..., { unguarded: true })`
    replays through the raw set, so migrating them culls nothing that ships
@@ -333,14 +341,11 @@ is that it turned an estimate into a per-emitter measurement, and the same
 
 - **S0/S1/S2 — done for the migrated subset.** Model library, node graph, guarded
   replay, `bake()` reconstruction, parity gate, unit tests, six emitters.
-- **Remaining S1 work is mechanical**: `tree`/`palm`/`conifer`/`bush`,
-  `streetLamp`, `billboard`, building masses and the facade rails/mullions —
-  one at a time, each gated by `npm run test:graph-parity`. Apply the four rules
-  above: split fixed geometry from size-following geometry, keep radial
-  primitives out from under non-uniform scale, push tint-only variation onto the
-  node, and replay unguarded wherever the emitter already was. The broadleaf
-  vegetation will likely hit `pine`'s affine-parameter wall; the city masses and
-  facade furniture should not.
+- **Remaining S1 work is mechanical**: `tree`/`palm`/`conifer`/`bush`, building
+  masses, the facade rails/mullions and the baked models the asset pack now
+  places — one at a time, each gated by `npm run test:graph-parity`. Apply the
+  five rules above. The broadleaf vegetation will likely hit `pine`'s
+  affine-parameter wall; the city masses and facade furniture should not.
 - **S3 is unblocked but not started.** `graph.models` already holds the canonical
   origin-space mesh per model (`model.geo`) that an instanced draw would upload.
 - **S4 gains a prerequisite it did not have**: re-parameterise affine emitters to
