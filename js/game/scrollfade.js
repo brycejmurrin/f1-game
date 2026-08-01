@@ -40,34 +40,65 @@ window.ScrollFade = (function () {
   let timer = 0;
 
   const MIN_THUMB = 24;        // px: a 2px sliver would be unreadable as a position
+  const last = new WeakMap();  // last thumb written per element — see write()
 
-  function paint(el) {
-    const max = el.scrollHeight - el.clientHeight;
+  // READ ONLY. Never touch the DOM from here: measure() runs over every region
+  // in one batch so the reads share a single layout, and write() applies the
+  // results afterwards. Interleaved, each write invalidates layout and the next
+  // scrollHeight read forces a fresh reflow — one per region rather than one for
+  // the batch, and this now runs over every .pane on every menu mutation.
+  function measure(el) {
+    const scrollH = el.scrollHeight, track = el.clientHeight;
+    const max = scrollH - track;
     const scrollable = max > EDGE;
-    el.classList.toggle("sf-t", scrollable && el.scrollTop > EDGE);
-    el.classList.toggle("sf-b", scrollable && el.scrollTop < max - EDGE);
+    return {
+      el, max, scrollable, top: el.scrollTop,
+      // proportional height, floored so a very long list still has a visible grip
+      thumb: scrollable ? Math.max(MIN_THUMB, Math.round(track * track / scrollH)) : 0,
+      track,
+    };
+  }
+
+  // WRITE ONLY, from values measure() already read.
+  function write(m) {
+    const el = m.el;
+    el.classList.toggle("sf-t", m.scrollable && m.top > EDGE);
+    el.classList.toggle("sf-b", m.scrollable && m.top < m.max - EDGE);
     // THE SCROLL POSITION INDICATOR. Touch platforms only show their own
     // scrollbar mid-gesture, so a panel gives no standing answer to "how much
     // is there, and where am I?" — the fade says there IS more, never how much.
     // These two custom properties are the whole geometry of a scrollbar thumb;
     // CSS draws it (see .sf-scroll in css/components.css).
-    el.classList.toggle("sf-scroll", scrollable);
-    if (scrollable) {
-      const track = el.clientHeight;
-      // proportional height, floored so a very long list still has a visible grip
-      const thumb = Math.max(MIN_THUMB, Math.round(track * track / el.scrollHeight));
-      const y = Math.round((el.scrollTop / max) * (track - thumb));
-      el.style.setProperty("--sf-h", thumb + "px");
-      el.style.setProperty("--sf-y", y + "px");
-    } else {
-      el.style.removeProperty("--sf-h");
-      el.style.removeProperty("--sf-y");
+    el.classList.toggle("sf-scroll", m.scrollable);
+    if (!m.scrollable) {
+      if (last.has(el)) {
+        el.style.removeProperty("--sf-h");
+        el.style.removeProperty("--sf-y");
+        last.delete(el);
+      }
+      return;
     }
+    const y = Math.round((m.top / m.max) * (m.track - m.thumb));
+    // Only write when the thumb actually moved: a redundant custom-property set
+    // still invalidates style for the whole subtree, and paintAll runs on every
+    // mutation of every menu.
+    const prev = last.get(el);
+    if (prev && prev.h === m.thumb && prev.y === y) return;
+    el.style.setProperty("--sf-h", m.thumb + "px");
+    el.style.setProperty("--sf-y", y + "px");
+    last.set(el, { h: m.thumb, y });
   }
+
+  function paint(el) { write(measure(el)); }
 
   function paintAll() {
     timer = 0;
-    document.querySelectorAll(SEL).forEach((el) => { watch(el); paint(el); });
+    // Measure everything, THEN write everything: one layout for the whole batch
+    // instead of one per region.
+    const els = document.querySelectorAll(SEL);
+    const measured = [];
+    els.forEach((el) => { watch(el); measured.push(measure(el)); });
+    for (const m of measured) write(m);
   }
 
   // Coalesce with a TIMER, not requestAnimationFrame: menus.js swaps screens
