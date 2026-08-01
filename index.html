@@ -233,6 +233,7 @@
     <button id="mb-season" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2"/><path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2"/><path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3"/><path d="M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/><path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/></svg>SEASON</button>
     <button id="mb-standings" class="bigbtn alt" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/></svg>STANDINGS</button>
     <button id="mb-data" class="bigbtn alt"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>F1 DATA HUB</button>
+    <button id="mb-settings" class="bigbtn alt"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>SETTINGS</button>
     <button id="mb-help" class="bigbtn alt">HOW TO PLAY</button>
   </div>
   <div id="menu-meta">
@@ -611,33 +612,36 @@
   <div id="audioset-inner" class="sheet">
     <div class="sheet-head"><h2>MUSIC &amp; SOUND</h2></div>
     <div class="sheet-body pane">
-      <h3 class="adv-sec">MUSIC</h3>
-      <div class="adv-item">
-        <div class="opt-row" role="group" aria-label="Music on or off">
-          <button id="as-music-on" class="opt-btn" type="button">ON</button>
-          <button id="as-music-off" class="opt-btn" type="button">OFF</button>
+      <!-- Each section is a header row with its switch on the right, then its
+           slider. The two are independent: music with no effects is a normal way
+           to play, so neither switch touches the other. -->
+      <section class="as-sec">
+        <div class="as-head">
+          <h3 class="adv-sec">MUSIC</h3>
+          <div class="opt-row as-toggle" role="group" aria-label="Music on or off">
+            <button id="as-music-on" class="opt-btn" type="button">ON</button>
+            <button id="as-music-off" class="opt-btn" type="button">OFF</button>
+          </div>
         </div>
-      </div>
-      <div class="adv-item">
-        <label class="tune-row"><span class="tune-label">MUSIC VOLUME <b id="as-mvol-v">5</b></span>
+        <label class="tune-row"><span class="tune-label">VOLUME <b id="as-mvol-v">5</b></span>
           <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
-      </div>
-      <div class="adv-item">
-        <button id="as-skip" class="adv-more-btn" type="button">&#9197; SKIP TRACK</button>
-        <p class="adv-help">Now playing: <b id="as-now">&mdash;</b></p>
-      </div>
-      <h3 class="adv-sec">SOUND EFFECTS <span>engine, tyres, rain, UI</span></h3>
-      <div class="adv-item">
-        <div class="opt-row" role="group" aria-label="Sound on or off">
-          <button id="as-sound-on" class="opt-btn" type="button">ON</button>
-          <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
+        <div class="as-track">
+          <button id="as-skip" class="opt-btn as-skip" type="button">&#9197; SKIP</button>
+          <span class="as-now-lbl">Now playing <b id="as-now">&mdash;</b></span>
         </div>
-      </div>
-      <div class="adv-item">
-        <label class="tune-row"><span class="tune-label">SFX VOLUME <b id="as-svol-v">10</b></span>
+      </section>
+      <section class="as-sec">
+        <div class="as-head">
+          <h3 class="adv-sec">SOUND EFFECTS</h3>
+          <div class="opt-row as-toggle" role="group" aria-label="Sound effects on or off">
+            <button id="as-sound-on" class="opt-btn" type="button">ON</button>
+            <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
+          </div>
+        </div>
+        <label class="tune-row"><span class="tune-label">VOLUME <b id="as-svol-v">10</b></span>
           <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
-        <p class="adv-help">SOUND is the master switch &mdash; with it off nothing plays, music included. The two sliders set the balance between the music and the rest of the mix.</p>
-      </div>
+        <p class="as-note">Engine, tyres, rain and menu clicks. Independent of the music.</p>
+      </section>
     </div>
     <div class="sheet-foot"><button id="as-close" class="bigbtn">DONE</button></div>
   </div>

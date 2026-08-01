@@ -142,6 +142,30 @@
 .tune-row input[type="range"] {
   width: 100%; margin: 0; accent-color: var(--red); height: 24px; cursor: pointer;
 }
+/* ---------- MUSIC & SOUND panel ----------
+   Two sections, each a header row with a small ON/OFF beside it and one slider
+   under it. The switches are deliberately small: they are two-state, so they do
+   not need the thumb-sized target a primary action does, and full-width halves
+   made a four-control panel scroll on a landscape phone. */
+.as-sec { margin-bottom: calc(var(--gap) * 0.9); }
+.as-sec + .as-sec { border-top: 1px solid rgba(255,255,255,0.08); padding-top: calc(var(--gap) * 0.8); }
+.as-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); }
+.as-head .adv-sec { margin: 0; }
+/* Qualified with .opt-row on purpose: the generic `.opt-row .opt-btn` rule below
+   has the same specificity and comes later in the file, so an unqualified
+   `.as-toggle .opt-btn` loses and the buttons collapse to their flex basis. */
+.opt-row.as-toggle { flex: 0 0 auto; width: auto; gap: 4px; margin-top: 0; }
+.opt-row.as-toggle .opt-btn {
+  flex: 0 0 auto; width: auto;
+  min-width: 52px; min-height: 28px;
+  padding: 4px 12px; font-size: 11px; letter-spacing: 0.06em;
+}
+.as-track { display: flex; align-items: center; gap: var(--gap); margin-top: calc(var(--gap) * 0.5); }
+.as-skip { flex: 0 0 auto; width: auto; min-height: 28px; padding: 4px 12px; font-size: 11px; }
+.as-now-lbl { font-size: 11px; color: var(--dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-now-lbl b { color: var(--text); font-weight: 700; }
+.as-note { font-size: 11px; color: var(--dim); margin: calc(var(--gap) * 0.4) 0 0; line-height: 1.35; }
+
 /* A slider follows its switch: RED while the thing it controls is on, GREY when
    it is off. Grey via accent-color rather than a low opacity — a ghosted control
    reads as "still loading", a grey one reads as "off". It keeps its row either
