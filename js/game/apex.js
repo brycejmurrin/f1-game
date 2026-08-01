@@ -900,6 +900,10 @@ const api = {
       setLightTune("matTexMix", Math.max(0, Math.min(1, +v || 0)));
       persistLightTune();
       if (typeof refreshLightTunePanel === "function") refreshLightTunePanel();
+      // The pack is fetched lazily, so turning the knob up is what triggers the
+      // download. Kick it here rather than waiting for the frame loop to notice,
+      // so matTex(1) starts fetching immediately instead of a frame later.
+      if (LT.matTexMix > 0 && typeof Assets !== "undefined") Assets.load();
     }
     return LT.matTexMix;
   },

@@ -10,6 +10,15 @@
 const SceneryCity = (function () {
   "use strict";
 
+  // The one model every axis-aligned facade box shares: a unit cube with its
+  // size on the node scale and its colour on the node. Window panes, floor rails
+  // and mullions are all dim()-shaped boxes on the same building basis, so the
+  // whole city's facade furniture is ONE 24-vertex model plus a transform each.
+  // No rec.mat(): out._mat is set by the caller (METAL for frames, GLASS/0 for
+  // panes) and the ops inherit it, exactly as the inline addBox calls did.
+  const UNIT_BOX = "unit-box";
+  const unitBox = (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR);
+
   function create(ctx) {
     const { out, glassBuf, def, theme, NIGHT, MAT, lod,
             seat, cantilever,
@@ -56,7 +65,12 @@ const SceneryCity = (function () {
         const gBase = vadd(mid, nVec, nSign * (nHalf + 0.04));
         const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
         out._mat = MAT.METAL;
-        if (!simple) for (let i = 0; i <= rowN; i += 2) addBox(out, vadd(fBase, u, (i / rowN - 0.5) * sh), dim(frameT, railH, faceW * 1.005), frameCol, bb);   // perf: every other rail
+        // perf: every other rail
+        if (!simple) for (let i = 0; i <= rowN; i += 2)
+          ctx.instance(UNIT_BOX,
+            { o: vadd(fBase, u, (i / rowN - 0.5) * sh), r: bb[0], u: bb[1], t: bb[2],
+              s: dim(frameT, railH, faceW * 1.005), col: frameCol },
+            unitBox, { kind: "facadeRail" });
         for (let c = 0; c < cols; c++) {
           const cx = (-0.5 + (c + 0.5) / cols) * faceW;
           for (let ri = 0; ri < rowN; ri++) {
@@ -82,12 +96,12 @@ const SceneryCity = (function () {
             // street circuits (Vegas ~1.8 M prop verts), and the per-pane hash
             // tint is precisely what a per-instance colour attribute exists for:
             // without TrackGraph.NODE_COLOR each lit pane would mint its own model.
-            ctx.instance("window-pane",
+            ctx.instance(UNIT_BOX,
               { o: vadd(vadd(gBase, wVec, cx), u, ry),
                 r: bb[0], u: bb[1], t: bb[2],
                 s: dim(0.08, winHH, (faceW / cols) * 0.82),
                 col },
-              (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR),
+              unitBox,
               { kind: "windowPane" },
               { buf: toGlass ? glassBuf : out });
             if (toGlass) glassBuf._mat = 0;
@@ -96,11 +110,22 @@ const SceneryCity = (function () {
         out._mat = MAT.METAL;
         if (simple) { out._mat = 0; return; }
         const nm = Math.max(1, Math.min(3, cols - 1));   // perf: fewer mullions (was 5)
-        for (let c = 1; c <= nm; c++) addBox(out, vadd(fBase, wVec, (-0.5 + c / (nm + 1)) * faceW), dim(frameT, sh, 0.4), frameCol, bb);
+        for (let c = 1; c <= nm; c++)
+          ctx.instance(UNIT_BOX,
+            { o: vadd(fBase, wVec, (-0.5 + c / (nm + 1)) * faceW), r: bb[0], u: bb[1], t: bb[2],
+              s: dim(frameT, sh, 0.4), col: frameCol },
+            unitBox, { kind: "facadeMullion" });
         if (neonAmt > 0.3) {
           const ST = Math.min(0.4, faceW * 0.04);
-          for (const dr of [-1, 1]) addBox(out, vadd(fBase, wVec, dr * faceW * 0.5), dim(frameT * 1.05, sh * 0.96, ST), nc, bb);
-          addBox(out, vadd(vadd(mid, nVec, nSign * (nHalf + 0.36)), u, sh * 0.48), dim(frameT * 1.1, Math.min(0.5, sh * 0.018), faceW), nc, bb);
+          for (const dr of [-1, 1])
+            ctx.instance(UNIT_BOX,
+              { o: vadd(fBase, wVec, dr * faceW * 0.5), r: bb[0], u: bb[1], t: bb[2],
+                s: dim(frameT * 1.05, sh * 0.96, ST), col: nc },
+              unitBox, { kind: "facadeNeon" });
+          ctx.instance(UNIT_BOX,
+            { o: vadd(vadd(mid, nVec, nSign * (nHalf + 0.36)), u, sh * 0.48), r: bb[0], u: bb[1], t: bb[2],
+              s: dim(frameT * 1.1, Math.min(0.5, sh * 0.018), faceW), col: nc },
+            unitBox, { kind: "facadeNeon" });
         }
         out._mat = 0;
       };
@@ -586,21 +611,31 @@ const SceneryCity = (function () {
       // dimmed (the head geometry glow is independent of the light scale).
       const lit = NIGHT ? [head[0] * 1.4, head[1] * 1.4, head[2] * 1.4]
                         : [head[0] * 0.72, head[1] * 0.72, head[2] * 0.70];
-      addCyl(out, vadd(a.c, a.u, -0.4), 0.18, h + 0.4, pole, 6, b);                          // column, sunk base
-      if (lstyle === "globe") {                                                              // heritage twin-globe
-        const top = vadd(a.c, a.u, h);
-        for (const e of [-1, 1]) {
-          const gp = vadd(vadd(top, b[2], e * 1.1), a.u, -0.1);
-          addBox(out, vadd(top, b[2], e * 0.55), [0.16, 0.16, 1.1], pole, b);                // bracket
-          addBox(out, gp, [0.7, 0.8, 0.7], lit, b);                                          // glowing globe
-        }
-      } else if (lstyle === "post") {                                                        // simple modern cap
-        addBox(out, vadd(a.c, a.u, h), [0.5, 0.5, 0.5], lit, b);
-      } else {                                                                               // cantilever arm
-        const top = vadd(a.c, a.u, h);
-        // arm + head as one cantilever: the member is never optional
-        cantilever(out, vadd(top, a.u, -0.2), 1.7, -side, [0.85, 0.35, 0.55], lit, pole, b);
-      }
+      // Graph form: a lamp's silhouette depends only on (style, height, side, lit
+      // colour) — the per-placement `dist` jitter moves the ANCHOR, not the shape.
+      // Height is 7 or 8 and style is one of three, so a whole circuit's lamp line
+      // is a handful of models. The cantilever arm is inlined here rather than
+      // routed through ctx.cantilever: it is two boxes, and recording them keeps
+      // the arm in the same model as its own head and column.
+      ctx.instance(
+        `lamp|${lstyle || "arm"}|${h}|${side}|${lit.join(",")}`,
+        { o: a.c, r: a.r, u: a.u, t: a.t },
+        (rec) => {
+          rec.cyl([0, -0.4, 0], 0.18, h + 0.4, pole, 6);                              // column, sunk base
+          if (lstyle === "globe") {                                                   // heritage twin-globe
+            for (const e of [-1, 1]) {
+              rec.box([0, h, e * 0.55], [0.16, 0.16, 1.1], pole);                     // bracket
+              rec.box([0, h - 0.1, e * 1.1], [0.7, 0.8, 0.7], lit);                   // glowing globe
+            }
+          } else if (lstyle === "post") {                                             // simple modern cap
+            rec.box([0, h, 0], [0.5, 0.5, 0.5], lit);
+          } else {                                                                    // cantilever arm
+            // arm + head as one cantilever: the member is never optional
+            rec.box([-side * 1.7 / 2, h - 0.2, 0], [1.7 + 0.5, 0.18, 0.22], pole);    // arm
+            rec.box([-side * 1.7, h - 0.2, 0], [0.85, 0.35, 0.55], lit);              // head
+          }
+        },
+        { kind: "streetLamp", k, side });
     };
     // cityFront(): a CONTINUOUS, ALIGNED street wall of buildings from lap-fraction
     // s0→s1 on `side` at clearance `gap`. Steps along the track (~18–26 m) and emits
@@ -754,14 +789,29 @@ const SceneryCity = (function () {
         return;
       }
       ctx.note("billboard", vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], { k, side });
-      for (const o of [-w * 0.4, w * 0.4]) addCyl(out, vadd(vadd(p.c, p.t, o), p.u, -0.4), 0.12, h + 0.4, [0.2, 0.2, 0.22], 4, b);   // posts, base sunk
+      const place = { o: p.c, r: p.r, u: p.u, t: p.t };
+      // Each post is its OWN node. Keeping the pair in one model would fold the
+      // +/-0.4w spacing into the geometry and mint a model per width; a z-scale
+      // would instead stretch the post RADIUS (radScale takes max(|sx|,|sz|)).
+      // Promoting the offset to the placement leaves one model per height.
+      for (const o of [-w * 0.4, w * 0.4])
+        ctx.instance(`billboard-post|${h}`,
+          { o: vadd(p.c, p.t, o), r: p.r, u: p.u, t: p.t },
+          (rec) => rec.cyl([0, -0.4, 0], 0.12, h + 0.4, [0.2, 0.2, 0.22], 4),   // posts, base sunk
+          { kind: "billboard", k, side });
       // Backlit at night: trackside advertising is illuminated at real races —
       // the lifted albedo rides the emissive path so panels glow softly.
       let face = col || [0.9, 0.85, 0.2];
       if (NIGHT) face = [Math.min(1.45, face[0] * 1.30 + 0.10),
                          Math.min(1.45, face[1] * 1.30 + 0.10),
                          Math.min(1.45, face[2] * 1.30 + 0.10)];
-      addBox(out, vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], face, b);
+      // The panel is a plain box: width on the node scale and the advert colour on
+      // the node, so every hoarding of a given height shares ONE model however
+      // wide it is and whatever it advertises.
+      ctx.instance(`billboard-face|${h}`,
+        Object.assign({ s: [1, 1, w], col: face }, place),
+        (rec) => rec.box([0, h + 1.6, 0], [0.3, 3.2, 1], TrackGraph.NODE_COLOR),
+        { kind: "billboard", k, side });
       blockAt(k, side, gap, w * 0.4);   // posts + panel face → stop before it
     };
 

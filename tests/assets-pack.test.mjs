@@ -100,13 +100,22 @@ test("shader sources parse as JS (no stray backticks in GLSL comments)", () => {
   }
 });
 
-test("the baked-material knob ships OFF", () => {
+test("the baked-material knob is wired, and ON now that real scans ship", () => {
+  // This asserted def: 0 while the pack was my own procedural noise — there was
+  // no reason to change anyone's render for that. With real CC0 photoscans in
+  // the pack the deliberate default flipped, so the invariant flipped with it.
+  // What still holds is the safety property, and it is now carried by
+  // js/render/assets.js rather than by the knob: no pack, a malformed pack, or
+  // a backend without createTextureArray all fall back to the procedural look.
   const lighting = fs.readFileSync(path.join(ROOT, "js", "game", "lighting.js"), "utf8");
   const def = lighting.match(/\{ id: "matTexMix",[^}]*\}/);
   assert.ok(def, "matTexMix must exist in TUNE_DEFS");
-  assert.match(def[0], /def: 0(\.0)?\s*,/,
-    "matTexMix must ship at 0 — a pack must never change the render until asked");
   assert.match(def[0], /u: "uMatTexMix"/, "matTexMix must be wired to the uMatTexMix uniform");
+  const d = def[0].match(/def:\s*([\d.]+)/);
+  assert.ok(d, "matTexMix must declare a default");
+  const v = parseFloat(d[1]);
+  assert.ok(v > 0 && v <= 1, `matTexMix default ${v} must be in (0, 1]`);
+  assert.match(def[0], /min: 0,/, "0 must stay reachable — it is the revert path if tarmac crawls");
 });
 
 test("pack manifest is well-formed", { skip: !hasPack && "no pack installed" }, () => {

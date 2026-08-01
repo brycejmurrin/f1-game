@@ -1,11 +1,13 @@
 // assets-api.spec.js — the baked asset pack's RUNTIME path: js/render/assets.js,
 // the GLX texture-array upload, and the __apex hooks that drive them.
 //
-// The contract under test is "a pack must never change the render until asked":
-// installing an asset pack uploads the arrays but leaves matTexMix at 0, so the
-// game looks byte-for-byte like the procedural build until the knob moves.
-// Everything else here is failure-mode coverage — no pack, no backend support,
-// a tier switch — because all three are states real users boot into.
+// The contract under test WAS "a pack must never change the render until asked"
+// — correct while the pack was procedural noise, but it meant shipping ~5 MB
+// that nothing sampled. With real CC0 photoscans in the pack the default is ON,
+// and the safety property moved to js/render/assets.js: no pack, a malformed
+// pack, or a backend without createTextureArray all fall back to the procedural
+// look. Most of what follows is that failure-mode coverage, because all three
+// are states real users boot into.
 //
 // Run: npx playwright test tests/assets-api.spec.js   (npm run test:assets)
 
@@ -49,12 +51,16 @@ test("the committed pack loads and uploads its material layers", async ({ page }
   expect(s.scales[0]).toBe(0);
 });
 
-test("a loaded pack does NOT change the render until the knob moves", async ({ page }) => {
-  const mix = await page.evaluate(async () => {
+test("the baked materials are ON by default", async ({ page }) => {
+  // Inverted deliberately when real CC0 photoscans replaced the procedural
+  // pack: shipping 5 MB of scans that nothing sampled was pure cost.
+  const r = await page.evaluate(async () => {
     await window.Assets.load();
-    return window.__apex.matTex();
+    return { mix: window.__apex.matTex(), state: window.__apex.assets() };
   });
-  expect(mix).toBe(0);
+  expect(r.mix).toBeGreaterThan(0);
+  expect(r.state.uploaded).toBe(true);
+  expect(r.state.layers).toBeGreaterThanOrEqual(10);
 });
 
 test("matTex() round-trips and clamps", async ({ page }) => {
@@ -75,13 +81,17 @@ test("matTex() round-trips and clamps", async ({ page }) => {
   expect(r.reset).toBe(0);
 });
 
-test("matTexMix is a real lighting-tuner knob shipped at 0", async ({ page }) => {
+test("matTexMix is a real lighting-tuner knob, and 0 stays reachable", async ({ page }) => {
+  // 0 is the revert path: if scanned tarmac ever crawls at speed, this slider is
+  // the fix, and at 0 the pack is not even downloaded.
   const r = await page.evaluate(() => {
     const all = window.__apex.lightTune();
-    return { present: "matTexMix" in all, value: all.matTexMix };
+    const off = window.__apex.matTex(0);
+    return { present: "matTexMix" in all, value: all.matTexMix, off };
   });
   expect(r.present).toBe(true);
-  expect(r.value).toBe(0);
+  expect(r.value).toBeGreaterThan(0);
+  expect(r.off).toBe(0);
 });
 
 test("unload returns to the procedural state without erroring", async ({ page }) => {
