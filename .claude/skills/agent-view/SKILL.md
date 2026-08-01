@@ -9,20 +9,16 @@ description: The text-native way to perceive and DRIVE the Apex 26 F1 game as an
 `node tools/agent.mjs <track> <tool> [flags]` (it stages `race`/`go`/`jump` +
 frames for you). In-page: `window.__apex.<tool>(...)`. Read `agentHelp()` +
 `objective()` once, then loop `world({detail:"drive"})` → decide →
-`act(...)`/`rollout({policy})` → `terminal()`. Pin `seed(n)` before any A/B.
-Failures are typed (`{ok:false, error, message, fix}`), never `null`.
+`act(...)`/`rollout({policy})` → `terminal()`. Pin `seed(n)` for a **field** A/B
+(`go()` races; it's a no-op for a solo `reset()`). Failures are typed
+(`{ok:false, error, message, fix}`), never `null`.
 
-An LLM cannot read a screenshot well enough to drive, and it does not need to:
-this game exposes a **text-native** view of itself. `window.__apex` composes the
-~90 raw debug hooks into one small surface that is **egocentric** (framed around
-the car, not the world), **typed** (failures are `{ok:false, error, message,
-fix}`, never `null`), **compact** (an identifier, never a whole record), and
-**self-describing** (`agentHelp()` is the manifest, `objective()` is the game).
-
-The evidence this is the right channel, not a fallback: LLMs drive *worse* with
-an image than with structured text (BALROG, VideoGameBench), and every serious
-LLM-plays-a-game system converts the world to text. So reach for these, not
-screenshots.
+`window.__apex` composes the ~90 raw debug hooks into one small surface that is
+**egocentric** (framed around the car), **typed** (failures are `{ok:false,
+error, message, fix}`, never `null`), **compact** (returns an identifier, not a
+whole record), and **self-describing** (`agentHelp()` is the manifest,
+`objective()` is the game). LLMs drive *worse* from an image than from structured
+text (BALROG, VideoGameBench) — so use these, not screenshots.
 
 Two ways in — same surface, different cost:
 - `node tools/agent.mjs <track> <tool> [flags]` from a shell — it does the
@@ -70,12 +66,16 @@ Read both once; do not re-fetch per tick.
 **What is this place / thing? (static — fetch once)**
 - `worldModel({detail})` (CLI `model`) — the WHOLE circuit as ONE document:
   repeated dressing clustered into features, named landmarks with sizes, barrier
-  spans, and a corner-by-corner walk. `summary|sections|full`. The first call for
-  "understand a place I can't see."
-- `trackInfo({what})` (CLI `track`) — corners / sectors / elevation profile;
-  grounded in the real circuit (`gp`, `realLengthKm`, `lengthErrorPct`).
-- `carView({detail})` (CLI `car`) — the car as JSON: team, parts spec + effects,
-  measured geometry; `detail:"parts"` adds per-part boxes.
+  spans, and a corner-by-corner walk (`dir`/`radiusM`/`severity` — but NOT banking
+  or signed `k`; for those pull `trackInfo`). `summary|sections|full`. The first
+  call for "understand a place I can't see."
+- `trackInfo({what})` (CLI `track`) — corners (with signed `k` and `bankingDeg`) /
+  sectors / elevation profile; grounded in the real circuit (`gp`, `realLengthKm`,
+  `lengthErrorPct`).
+- `carView({detail})` (CLI `car`) — the car as JSON: team, the CHOSEN parts spec +
+  net `mods` multipliers, measured geometry. `detail:"parts"` adds per-part boxes —
+  the ~19 MESH components (wheels, wings, halo…), NOT the 8 upgrade categories; it
+  reads the current loadout, not the catalog of options.
 - `objective()` — what the game is (see above).
 
 **Drill down (pull, never dump)**
@@ -91,9 +91,11 @@ Read both once; do not re-fetch per tick.
   `worldModel`/`carView` payloads. Prefer the numeric tools to measure anything.
 
 **Act & check**
-- `rollout({seconds, policy|input})` — drive an interval, get a DIGEST (speed
-  min/max/mean, off-track events, min clearance, per-corner min speed, terminal
-  reason), not every frame. `policy` is `world => {steer,throttle,brake}`.
+- `rollout({seconds, policy|input})` — drive an interval at `policyHz` (default 10,
+  physics still steps every tick), get a DIGEST (speed min/max/mean, off-track
+  events, min clearance, per-corner min speed, terminal reason), not every frame.
+  `policy` is `world => {steer,throttle,brake}`; use `world()`+`act()` for a single
+  decision instead.
 - `terminal()` — `{done, reason}`: finished | wrong_way | rescued.
 - `survey()` — geometry DEFECTS (floating/buried props, terrain through the
   road) — for track authoring, not driving.
@@ -121,18 +123,23 @@ policy = w => {
   const e = w.ego, nc = w.nextCorner;
   let steer = -e.headingErrDeg*0.045 - e.lateralM*0.045;   // null heading + recentre
   steer = Math.max(-1, Math.min(1, steer));
-  const tgt = nc ? nc.apexSpeedKph/3.6*0.9 : 60;           // hints are OPTIMISTIC
-  const braking = nc && e.speed > tgt && nc.distM < nc.suggestBrakeM*2.0;
-  return { steer, throttle: !braking, brake: braking };    // brake EARLIER than the hint
+  const off = Math.abs(e.lateralM) > (e.halfWidthM || 6);  // in the grass?
+  const tgt = nc ? nc.apexSpeedKph/3.6*0.75 : 55;          // aim WELL under — hints are optimistic
+  const braking = nc && e.speed > tgt && nc.distM < nc.suggestBrakeM*3.0;
+  return { steer,
+           throttle: off ? e.speed < 15 : !braking,        // off-track: crawl, don't spin in the grass
+           brake: braking && !off };                       // brake WELL before the hint
 };
 ```
 
-`apexSpeedKph`/`suggestBrakeM` assume more grip than default parts have — target
-below them and brake early, then tune from the digest's `offTrack.pct` and
-`cornerMinSpeedKph`. Note this baseline only nulls heading + recentres, so it
-UNDERSTEERS into slow corners; add a small feed-forward toward `nc.dir` (∝
-`1/nc.radiusM`) for turn-in once braking is under control. Two gotchas the loop
-above hides:
+`apexSpeedKph`/`suggestBrakeM` assume more grip than default parts have — brake
+well before the hint and aim under the apex speed, then tune from the digest's
+`offTrack.pct` and `cornerMinSpeedKph`. **Fix braking FIRST:** on a too-hot entry
+the car washes wide and beaches (the baseline would then hold throttle in the
+grass and stall for the rest of the interval — hence the off-track crawl above),
+and turn-in does nothing until entry speed is right. Once it is, add a small
+feed-forward toward `nc.dir` (∝ `1/nc.radiusM`) to sharpen turn-in. Two gotchas
+the loop above hides:
 - **`rollout`'s policy receives `world({detail:"brief"})`** — which carries `ego`
   and a single `nextCorner` but NOT `pacenotes`/`rivals`/`nextCorners`. Reading
   those inside a rollout policy returns `undefined`; call `world({detail:"drive"})`
@@ -142,9 +149,8 @@ above hides:
   keeps being simulated, often stalled). Shorten `seconds`, or gate in the policy,
   to end on the event.
 
-An LLM cannot decide at 60 Hz — that is what `rollout({policy})` is for: it runs
-your policy at `policyHz` (default 10) while physics steps every tick, and hands
-back a digest. Use it for a lap; use `world()`+`act()` for a single decision.
+An LLM can't decide at 60 Hz — that is what `rollout({policy})` is for: a lap from
+one call. Use `world()`+`act()` only for a single decision.
 
 ## Determinism — pin the seed before any comparison
 
@@ -156,10 +162,12 @@ unseeded so it can never perturb the sim.
 
 **What the seed actually controls: the AI field, not a lone car.** A `reset()`
 episode is *solo* — no live field — so with fixed inputs it is already
-deterministic and the seed is a **no-op** there; matching seeds only matters once
-the 22-car AI field is in play, which exists via `go()`, not `reset()`. So: A/B
-the player's own dynamics with a solo `reset()`+`rollout` (seed irrelevant); A/B
-anything field-dependent by comparing `go()` races.
+deterministic and the seed there is a **no-op** (verified: seed 1 vs 2 → identical
+digests). `reset()` re-solos **even after a `go()`**, so its seed arg is inert in
+ANY reset()-based path; the seed only bites when you drive the live field directly
+— `go()` then `act()`/`rollout` with **no `reset()` between**. So: A/B the player's
+own dynamics with a solo `reset()`+`rollout` (seed irrelevant); A/B field-dependent
+behaviour from a `go()` race, no reset.
 
 **A physics A/B uses `setPhysics({...})`** — whose keys are lowercase camelCase
 (`pace, drift, frontGrip, playerGrip, roadFollow, wheelbase, expo, maxSlip,
@@ -178,8 +186,10 @@ __apex.race("monza"); __apex.go(); __apex.jump(0.1, 55);  // load, start, place
 // obs()/physState()/world()/describe() need player.px — jump() or one step() first
 // jump() moves ONLY the player — it DESYNCS you from the AI field (a forward
 //   jump lands you P1 with the pack seconds behind). To race/overtake, drive
-//   from the grid after go() without jumping ahead, or seat the player in the
-//   pack with aiPlace(idx, frac, speed?, x?).
+//   from the grid after go() without jumping ahead (you start ~P12, mid-pack).
+//   aiPlace(idx, frac, speed?, x?) moves an AI car by cars[] index and REFUSES
+//   the player index; to sit up-to-speed in a pack, jump() yourself, THEN
+//   aiPlace the RIVALS around your frac.
 // visible()/render({what:"view"}) read the LAST RENDERED frame — let frames draw
 // scene() reads placed props — a heavy street circuit (Singapore, Monaco, Baku)
 //   finishes its prop build a few frames after race(); an empty scene() means
