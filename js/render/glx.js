@@ -47,6 +47,9 @@ const GLX = (function () {
   let _anisoExt = null, _anisoMax = 0;   // EXT_texture_filter_anisotropic (capped 4×)
   let _gpuQActive = null;   // query open between begin() and present() this frame
   let litProg = null, litU = null;
+  // Identity model matrix for instanced draws: the transform lives in the
+  // per-instance columns, so uModel is unused on that path.
+  const IDENT4 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
   // Baked PBR material arrays (js/render/assets.js). Layer index == MAT id, so
   // the shader indexes them with the per-vertex material id it already carries.
   // Null until a pack is loaded — the game ships without one and renders the
@@ -282,7 +285,14 @@ const GLX = (function () {
     SHD = GLXShadow.init(core); core.shadow = SHD;  // sun/car/lamp shadow maps + PCSS blocker
     CHK = GLXChunked.init(core);                    // frustum-culled chunked city/props meshes
 
-    litU = locs(litProg, ["uModel", "uViewProj", "uEye", "uSunDir", "uSunColor",
+    // The per-instance colour attribute is multiplied into vCol on EVERY lit
+    // draw, so its generic value must be the identity or ordinary meshes — which
+    // never bind attribute 9 — render black. WebGL's default generic value is
+    // (0,0,0,1), which is exactly that failure: it crushed ~25% of the frame to
+    // black and only the sky survived. Generic attribute values are CONTEXT
+    // state, not VAO state, so setting it once here covers every mesh.
+    gl.vertexAttrib3f(9, 1, 1, 1);
+    litU = locs(litProg, ["uModel", "uInstanced", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
@@ -1025,6 +1035,10 @@ const GLX = (function () {
   function litMaterial(modelMat, opts) {
     useProg(litProg);
     gl.uniformMatrix4fv(litU.uModel, false, modelMat);
+    // Default the instancing gate OFF on every lit draw. drawInstanced() turns it
+    // on for the duration of its own call and back off after, so no ordinary draw
+    // can ever inherit it — the shader falls back to uModel exactly as before.
+    if (litU.uInstanced) gl.uniform1f(litU.uInstanced, opts && opts._instanced ? 1 : 0);
     const emissive = opts && opts.emissive !== undefined ? opts.emissive : 0;
     const alpha = opts && opts.alpha !== undefined ? opts.alpha : 1;
     // Material (set every draw so values never leak from the previous mesh).
@@ -1047,6 +1061,74 @@ const GLX = (function () {
     if (carPaint  !== _matCP)       { gl.uniform1f(litU.uCarPaint,  carPaint);  _matCP       = carPaint; }
     if (sparkle   !== _matSpark)    { gl.uniform1f(litU.uSparkle,   sparkle);   _matSpark    = sparkle; }
     return alpha;
+  }
+
+  // ---------- instanced draw (the TrackGraph.batches() consumer) ----------
+  // One canonical mesh + a per-instance transform, instead of the same geometry
+  // fused into the world N times. See js/track/graph.js and
+  // docs/research/SCENE-GRAPH-PLAN.md; the producer is graph.batches().
+  //
+  // Layout: the mesh's own vertex VBO keeps attributes 0-4 with divisor 0, and a
+  // SECOND buffer carries the instance columns at 5-8 (+ colour at 9) with
+  // divisor 1. Nothing about the vertex format changes, so the same {pos,nrm,
+  // col,idx,mat} geometry works in both paths.
+  function createInstancedBatch(data, matrices, colors) {
+    const mesh = createMesh(data);
+    const vao = mesh.vao;
+    gl.bindVertexArray(vao);
+
+    const ibo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ARRAY_BUFFER, matrices, gl.STATIC_DRAW);
+    // A mat4 attribute is four consecutive vec4 slots — WebGL2 has no mat4
+    // attribute type, the four columns must be declared individually.
+    for (let c = 0; c < 4; c++) {
+      const loc = 5 + c;
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, 64, c * 16);
+      gl.vertexAttribDivisor(loc, 1);
+    }
+
+    let cbo = null;
+    if (colors && colors.length) {
+      cbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, cbo);
+      gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(9);
+      gl.vertexAttribPointer(9, 3, gl.FLOAT, false, 12, 0);
+      gl.vertexAttribDivisor(9, 1);
+    }
+    gl.bindVertexArray(null);
+
+    mesh.instances = matrices.length / 16;
+    mesh.ibo = ibo;
+    mesh.cbo = cbo;
+    // A batch with no per-instance colour falls back to the context-wide generic
+    // value for attribute 9, which init() pins at (1,1,1).
+    return mesh;
+  }
+
+  function drawInstanced(batch, opts) {
+    if (!batch || !batch.instances) return;
+    const o = opts ? Object.assign({}, opts, { _instanced: 1 }) : { _instanced: 1 };
+    // IDENTITY model matrix: the transform lives entirely in the instance
+    // columns. Passing anything else would be silently ignored by the shader and
+    // mislead the next reader.
+    const alpha = litMaterial(IDENT4, o);
+    setDepthMask(alpha >= 1);
+    setBlend(alpha < 1);
+    bindVAO(batch.vao);
+    const dbl = opts && opts.doubleSided;
+    if (dbl) gl.disable(gl.CULL_FACE);
+    gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, batch.instances);
+    if (dbl) gl.enable(gl.CULL_FACE);
+  }
+
+  function freeInstancedBatch(batch) {
+    if (!batch) return;
+    if (batch.ibo) gl.deleteBuffer(batch.ibo);
+    if (batch.cbo) gl.deleteBuffer(batch.cbo);
+    if (freeMesh) freeMesh(batch);
   }
 
   function draw(mesh, modelMat, opts) {
@@ -1286,6 +1368,10 @@ const GLX = (function () {
     init,
     resize,
     createMesh,
+    // TrackGraph.batches() consumer — see js/track/graph.js.
+    createInstancedBatch,
+    drawInstanced,
+    freeInstancedBatch,
     createTexMesh,
     createTexture,
     createTextureArray,

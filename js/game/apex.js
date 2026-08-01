@@ -1035,6 +1035,11 @@ const api = {
   },
 
   // List all available circuit IDs and names (for iterating in test harnesses).
+  // The built track's scenery SCENE GRAPH (js/track/graph.js): the model library
+  // + one node per placement, plus batches() — the backend-neutral instanced-draw
+  // handoff. Returns null before a track is built. Live object, not a copy: read
+  // it, do not mutate it.
+  trackGraph: () => (G.track && G.track.graph) || null,
   tracks: () => Tracks.LIST.map((t, i) => ({ id: t.id, name: t.name, i })),
 
   // List all teams with engine supplier (for factory-parts and setup tests).

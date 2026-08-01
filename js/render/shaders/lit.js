@@ -17,6 +17,19 @@ layout(location=1) in vec3 aNrm;
 layout(location=2) in vec3 aCol;
 layout(location=3) in float aMat;   // per-vertex material id (0 = FLAT/untextured)
 layout(location=4) in vec3 aTrk;    // road only: (arc-length s, signed lateral x, half-width). (0,0,0) elsewhere.
+// INSTANCING (opt-in). Locations 5-8 are the four COLUMNS of a per-instance
+// model matrix and 9 a per-instance colour, all with vertexAttribDivisor(1).
+// They are only bound by drawInstanced(); every other draw leaves them disabled,
+// which is why uInstanced gates the matrix rather than relying on the generic
+// attribute value (a disabled vec4 reads (0,0,0,1), i.e. a degenerate mat4).
+// aICol needs no gate: GLX sets the generic value to (1,1,1) once at init, so
+// the multiply below is the identity on every non-instanced draw.
+layout(location=5) in vec4 aInst0;
+layout(location=6) in vec4 aInst1;
+layout(location=7) in vec4 aInst2;
+layout(location=8) in vec4 aInst3;
+layout(location=9) in vec3 aInstCol;
+uniform float uInstanced;   // 0 = use uModel (default), 1 = use the instance columns
 uniform mat4 uModel;
 uniform mat4 uViewProj;
 uniform vec3 uEye;
@@ -40,11 +53,16 @@ void main() {
     float ph = uTime * 5.5 + aPos.x * 1.9 + aPos.z * 1.9;
     pos += aNrm * ((sin(ph) * 0.085 + sin(ph * 2.17 + 1.3) * 0.045) * fw);
   }
-  vec4 wp = uModel * vec4(pos, 1.0);
+  mat4 M = uInstanced > 0.5 ? mat4(aInst0, aInst1, aInst2, aInst3) : uModel;
+  vec4 wp = M * vec4(pos, 1.0);
   vWorldPos = wp.xyz;
   vObjPos = aPos;                 // object space: paint flake/orange-peel pattern
-  vNrm = mat3(uModel) * aNrm;     // is glued to the panels, not streaming in world.
-  vCol = aCol;
+  // NOTE mat3(M), not an inverse-transpose: an instance matrix here is a scaled
+  // ORTHONORMAL basis (TrackGraph builds columns r*sx, u*sy, t*sz), so this is
+  // correct up to a length the shader normalises anyway — the same assumption
+  // uModel already relied on.
+  vNrm = mat3(M) * aNrm;          // is glued to the panels, not streaming in world.
+  vCol = aCol * aInstCol;
   vMat = aMat;                    // constant across the face (flat) — procedural material key
   vTrk = aTrk;                    // road track-space coords; interpolated across the ribbon
   vDist = length(wp.xyz - uEye);

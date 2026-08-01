@@ -24,7 +24,7 @@
     "test:ui":        "node tools/run-playwright.mjs tests/ui-audit.spec.js tests/ui-button-touch.spec.js tests/ui-desktop.spec.js tests/hud-audit.spec.js tests/menu-survey.spec.js tests/menu-keyboard.spec.js",
     "test:visual":    "node tools/run-playwright.mjs tests/tracks-visual.spec.js",
     "test:scenery":   "node tools/run-playwright.mjs tests/props-over-road.spec.js tests/terrain-over-road.spec.js tests/f1-track-accuracy.spec.js tests/scenery-kits.spec.js",
-    "test:webgl":     "node tools/run-playwright.mjs tests/webgl-probes.spec.js tests/lighting-ab.spec.js tests/image-grade-visual.spec.js tests/lighting-tuner-grade.spec.js",
+    "test:webgl":     "node tools/run-playwright.mjs tests/instanced-draw.spec.js tests/webgl-probes.spec.js tests/lighting-ab.spec.js tests/image-grade-visual.spec.js tests/lighting-tuner-grade.spec.js",
     "test:audio":     "node tools/run-playwright.mjs tests/audio-smoke.spec.js tests/music-library.spec.js",
     "test:modes":     "node tools/run-playwright.mjs tests/season.spec.js tests/time-trial.spec.js",
     "test:circuit":   "node tools/run-playwright.mjs tests/tracks-walls.spec.js tests/autopilot.spec.js tests/elevation-tracks.spec.js tests/audit.spec.js",

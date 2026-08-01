@@ -305,7 +305,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (82) + tests/*.test.mjs unit suites (22)
+tests/*.spec.js                 Playwright specs (83) + tests/*.test.mjs unit suites (22)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -549,6 +549,9 @@ __apex.physState()            // full state (slip, wrongWay, lap, rescueT)
 __apex.cars()                 // all car telemetry sorted by prog
 __apex.scan([10,30,60])       // look-ahead curvature/width at distances
 __apex.corners()              // apex fractions for the loaded track
+__apex.trackGraph()           // the built scenery SCENE GRAPH (js/track/graph.js):
+                              //   models + nodes, stats(), and batches() — the
+                              //   backend-neutral instanced-draw handoff
 __apex.wallStats()            // barrier geometry audit
 __apex.setInput({steer:1,throttle:true}) // override input
 __apex.step(1/60, 10)         // pump physics deterministically
@@ -627,7 +630,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-82 Playwright specs + 22 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+83 Playwright specs + 22 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for
