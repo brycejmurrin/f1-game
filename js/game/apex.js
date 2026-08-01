@@ -1502,12 +1502,23 @@ const api = {
     };
   },
 
-  // reset(frac, speed, x) — fast episode reset reusing the loaded track.
+  // seed(n?) — get or set the SIMULATION random seed. Setting it also rewinds
+  // the stream, so `seed(42)` then `reset(...)` reproduces an episode exactly:
+  // same seed + same inputs => same result. Only simulation randomness is
+  // seeded (AI grid order/lane/skill, the start-lights hold, AI overtake
+  // decisions); cosmetic randomness — camera shake, lightning, particles —
+  // deliberately stays on Math.random() so it cannot perturb the sim.
+  seed(n) { if (n !== undefined) G.seed = n; return G.seed; },
+
+  // reset(frac, speed, x, seed?) — fast episode reset reusing the loaded track.
   // Reinitialises the grid, repositions the player at lap-fraction frac (0..1),
   // sets state="race" and raceT=0 without reloading assets. Returns initial obs().
+  // Pass `seed` to make the episode reproducible (it is applied BEFORE the grid
+  // is rebuilt, since grid order/lane/skill are drawn from the seeded stream).
   // Call __apex.race() first to load the desired track.
-  reset(frac, speed, x) {
+  reset(frac, speed, x, seed) {
     if (!G.track || !G.player) return false;
+    if (seed !== undefined) G.seed = seed;
     gridUp();
     G.state = "race"; G.raceT = 0;
     els.lights.hidden = true;
@@ -1527,6 +1538,24 @@ const api = {
       G.player.pz   = smp.p[2] + smp.r[2] / rl * G.player.x; }
     G.player.head = Math.atan2(smp.t[0], smp.t[2]);
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;   // sync render anchors (see jump)
+    // Per-episode DRIVETRAIN + smoothing state. gridUp() clears the race-level
+    // fields (energy, cuts, penalty, wallT, vLat…) but not these, so without
+    // this block the engine and smoothed inputs leak across episodes: the first
+    // reset after load starts in gear 1 at idle, every later one inherits
+    // whatever gear/rpm/steering the previous run ended in. Measured as ~1 m of
+    // divergence over a 4 s rollout at identical seed and inputs — small, but it
+    // is exactly the uncontrolled variable seeding is meant to remove.
+    for (const c of G.cars) {
+      c.gear = 1; c.rpm = GameTables.IDLE_RPM; c.shiftT = 0;
+      c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
+      c.stuckT = 0; c.deploying = false; c.boostOn = false; c.otArmed = false;
+      c.wasOnThrottle = false; c.vertLoad = 1;
+      // `prog` accumulates via `ds = s - (c._prevS ?? c.s)` (js/game.js:2705).
+      // Leaving _prevS at the PREVIOUS episode's final s makes the very first
+      // tick bank one bogus delta, so an identically-seeded, identically-driven
+      // episode reported a different distanceM depending on what ran before it.
+      c._prevS = c.s;
+    }
     BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
     G._testInput = null;
     return this.obs();
@@ -1546,6 +1575,14 @@ const api = {
   // driving decision; this is every car by position. Compact: team is an id
   // string, one row per car, no nested records.
   field(opts) { return agentView.field(opts); },
+
+  // objective() — what the GAME is: the win condition, the irreducible
+  // trade-offs (track limits, ERS, overtake window, parts budget) and the
+  // hard constraints. Static facts only; how the car BEHAVES is deliberately
+  // left out, because a fixed dynamics description cannot be corrected when
+  // it is wrong — learn that from rollout()/act(). agentHelp() is the API,
+  // this is the game.
+  objective() { return agentView.objective(); },
 
   // trackInfo({what}) — STATIC per-track data: "corners" (def) | "sectors" |
   // "profile" | "all". Constant for a session — fetch once, never per tick.

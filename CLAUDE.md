@@ -473,6 +473,12 @@ __apex.reset(frac, speed, x)  // fast episode reset without reloading assets →
 // ── Agent world view (js/game/agentview.js) — never returns null; failures are
 //    {ok:false, error, message, fix}. See docs/AGENT-WORLD-API.md ──
 __apex.agentHelp()            // manifest of this surface (~200 tokens)
+__apex.objective()            // what the GAME is: win condition, trade-offs,
+                              //   constraints. Static; does NOT describe car
+                              //   dynamics (learn those from rollout()/act())
+__apex.seed(42)               // get/set the SIM seed; same seed + same inputs
+                              //   => same result. reset(f,v,x,seed) does both.
+                              //   Cosmetic randomness stays unseeded by design.
 __apex.world({detail:"brief"})// egocentric snapshot; brief|drive|full; since= → delta
 __apex.trackInfo({what:"corners"}) // STATIC per-track: corners/sectors/profile
 __apex.scene({radius:120})    // NAMED scenery nearby (trees, buildings, stands…)
