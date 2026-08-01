@@ -60,6 +60,7 @@ const GameAudio = (function () {
   const PLAYLIST = [
     MENU_TRACK,
     "assets/music/song2.mp3",
+    "assets/music/song3.mp3",
   ];
   let musicIndex = 0;
   // Kept for the old startMusic(trackIdx) callers; the playlist is shared now so
