@@ -184,6 +184,37 @@ __apex.previewCam("drift", 0.21, 65);   // how DRIFT frames the corner at 21%
 __apex.previewCam("heli", 0.5);          // HELI's broadcast angle at half-distance
 ```
 
+### `camTune(mode?, obj?) → {…} | false`
+The **CAMERA TUNER**'s per-camera-mode framing offsets (`js/game/cam-tune.js`) —
+the camera counterpart of `lightTune()`. Six knobs per mode, all defaulting to
+`0` = the framing `js/game/cameras.js` ships:
+
+| knob | unit | effect |
+|---|---|---|
+| `height` | m | raise/lower the **eye** (aim stays on the car, so raising looks further down) |
+| `dist` | m | pull the eye back (+) / push it in (−) along the view axis |
+| `side` | m | offset the eye right (+) / left (−) |
+| `pitch` | ° | tilt the aim up (+) / down (−) |
+| `yaw` | ° | pan the aim right (+) / left (−) |
+| `fov` | ° | widen (+) / tighten (−) on top of the mode's own speed-scaled FOV |
+
+Translation knobs move the eye only, then `pitch`/`yaw` rotate the aim about it,
+so the car can't fall out of frame. Values are stored **per mode** (a tuned
+CHASE never moves HOOD), persist to `localStorage` (`apex26.camTune`), clamp to
+the slider range, and are applied inside `vantage()` — so the live camera,
+`snapCam()` and `previewCam()` all agree. The eye is still caught by the terrain
+ground clamp after tuning.
+
+```js
+__apex.camTune();                                  // → {defs:[…], tuned:{chase:{…}}}
+__apex.camTune("chase");                           // → {height:0, dist:0, side:0, pitch:0, yaw:0, fov:0}
+__apex.camTune("chase", { height: 0.6, dist: 2, fov: -4 });   // apply + persist + re-snap
+__apex.camTune("chase", null);                     // reset this camera to shipped framing
+```
+In-game the same values live behind PAUSE → SETTINGS → **CAMERA TUNER**: a chip
+per camera mode (which also switches the live camera) plus a slider per knob,
+with RESET CAM / RESET ALL.
+
 ### `view(opts) → {eye, target, …} | {mode:"chase"} | false`
 Debug **free camera** that overrides the chase cam entirely — instant (no
 damping), uncapped FOV, far plane and fog pushed out — for inspecting whole-track

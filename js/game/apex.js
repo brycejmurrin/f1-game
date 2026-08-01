@@ -123,6 +123,30 @@ const api = {
     G.dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
     return { eye: v.eye, target: v.tgt, fov: +v.fov.toFixed(1), mode: m };
   },
+  // camTune(mode?, obj?) — the CAMERA TUNER's per-camera-mode framing offsets
+  // (js/game/cam-tune.js), the camera counterpart of lightTune(). With no args
+  // it reports every tuned mode plus the knob registry; with a mode id it
+  // returns that mode's six resolved values; with a mode id + an object of
+  // {height,dist,side,pitch,yaw,fov} it applies and persists them and re-snaps
+  // the live camera. Pass null as the object to reset that mode.
+  //   __apex.camTune("chase", { height: 0.6, dist: 2, fov: -4 })
+  camTune(mode, obj) {
+    if (mode == null) {
+      const out = { defs: CamTune.defs().map((d) => ({ id: d.id, min: d.min, max: d.max, unit: d.unit })), tuned: {} };
+      for (const m of CamTune.tunedModes()) out.tuned[m] = CamTune.values(m);
+      return out;
+    }
+    const m = String(mode).toLowerCase();
+    if (!CAM_MODES.some((c) => c.id === m)) return false;
+    if (obj === undefined) return CamTune.values(m);
+    if (obj === null) CamTune.reset(m);
+    else if (typeof obj === "object") for (const k of Object.keys(obj)) CamTune.set(m, k, +obj[k]);
+    else return false;
+    CamTune.persist();
+    if (G.player && G.track) snapGameCam();
+    CamTunerPanel.refresh();
+    return CamTune.values(m);
+  },
   // track reflects the ACTIVE race track — null at the menu/select even though a
   // track is loaded for the background flyby (matches the documented contract).
   // sectors: [s1End, s2End] racing-lap fractions; turns: curated FIA turn count.

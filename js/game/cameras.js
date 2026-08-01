@@ -91,28 +91,30 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const aimUp = mode === "cockpit" ? eyeUp - 0.15 : eyeUp + 1.2;
       tgt = [extra.carPos[0] + hx * 30, p[1] + aimUp + t[1] * 30, extra.carPos[1] + hz * 30];
       fov = lerp(64, 78, spN) + dep * 3;
-      return { eye, tgt, fov };   // cockpit/hood skip the ground clamp anyway
-    }
-    eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
-    if (mode === "cockpit") {
-      // Face straight FORWARD down the car's own heading (the tangent at the
-      // car, not the curved centreline ahead) — the driver looks where the
-      // NOSE points, so the view doesn't swing toward the apex on corner
-      // entry. A tiny fraction of the curved look-ahead is kept so it still
-      // gently leads into a bend rather than staring rigidly at a fixed point.
-      // Follow the road's gradient: aim 30 m along the FULL 3D tangent — t[1] is
-      // the slope (+uphill / −downhill), so the look point rises on a climb and
-      // drops on a descent; the cockpit pitches with the road like a camera
-      // bolted to the chassis. Flat road (t[1]=0) is unchanged.
-      const straight = [p[0] + t[0] * 30, p[1] + eyeUp - 0.15 + t[1] * 30, p[2] + t[2] * 30];
-      const lead = aheadPt(30, eyeUp - 0.15, x * 0.4);
-      tgt = [straight[0] * 0.85 + lead[0] * 0.15,
-             straight[1] * 0.85 + lead[1] * 0.15,
-             straight[2] * 0.85 + lead[2] * 0.15];
+      // Falls through to the CAMERA TUNER offsets below (it used to return here);
+      // cockpit/hood skip the ground clamp either way — see its guard.
     } else {
-      tgt = aheadPt(30, eyeUp + 1.2, x * 0.6);
+      eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
+      if (mode === "cockpit") {
+        // Face straight FORWARD down the car's own heading (the tangent at the
+        // car, not the curved centreline ahead) — the driver looks where the
+        // NOSE points, so the view doesn't swing toward the apex on corner
+        // entry. A tiny fraction of the curved look-ahead is kept so it still
+        // gently leads into a bend rather than staring rigidly at a fixed point.
+        // Follow the road's gradient: aim 30 m along the FULL 3D tangent — t[1] is
+        // the slope (+uphill / −downhill), so the look point rises on a climb and
+        // drops on a descent; the cockpit pitches with the road like a camera
+        // bolted to the chassis. Flat road (t[1]=0) is unchanged.
+        const straight = [p[0] + t[0] * 30, p[1] + eyeUp - 0.15 + t[1] * 30, p[2] + t[2] * 30];
+        const lead = aheadPt(30, eyeUp - 0.15, x * 0.4);
+        tgt = [straight[0] * 0.85 + lead[0] * 0.15,
+               straight[1] * 0.85 + lead[1] * 0.15,
+               straight[2] * 0.85 + lead[2] * 0.15];
+      } else {
+        tgt = aheadPt(30, eyeUp + 1.2, x * 0.6);
+      }
+      fov = lerp(64, 78, spN) + dep * 3;             // wider = faster feel
     }
-    fov = lerp(64, 78, spN) + dep * 3;               // wider = faster feel
   } else if (mode === "overhead") {
     eye = [p[0] - t[0] * 9, p[1] + 42, p[2] - t[2] * 9];
     tgt = [p[0] + t[0] * 12, p[1], p[2] + t[2] * 12];
@@ -219,6 +221,15 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // you accelerate. Still a subtle widen for speed feel.
     fov = lerp(57, 63, spN) + (far ? 4 : 0) + dep * 3;
   }
+  // ---- player framing offsets (CAMERA TUNER) ------------------------------
+  // Per-mode HEIGHT/DISTANCE/SIDE/PITCH/YAW/FOV nudges from js/game/cam-tune.js,
+  // applied to the solved rig rather than baked into each branch — one place to
+  // reason about, and every mode gets the same six knobs for free. A no-op (and
+  // an early return inside apply()) until the player actually tunes something,
+  // so an untuned install frames exactly as it did before this existed.
+  // Deliberately BEFORE the ground clamp: a lowered eye must still be caught by
+  // the terrain floor, or a −3 m HEIGHT would render the world from inside a hill.
+  if (typeof CamTune !== "undefined") fov = CamTune.apply(mode, eye, tgt, fov);
   // ---- ground floor -------------------------------------------------------
   // The broadcast framings (heli, cinematic, roadside, low, drift) place the eye
   // by arc offset and lateral distance with no idea what the ground does out

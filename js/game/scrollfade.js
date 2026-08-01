@@ -32,7 +32,7 @@ window.ScrollFade = (function () {
   // data hub (#datahub) and track detail (#track-detail) are toggled by the
   // hidden attribute like the rest.
   const SCREENS = "#select,#teampicker,#carsetup,#howtoplay,#advanced,#pmsettings," +
-    "#lighting,#results,#standings,#race-settings,#customize,#pausemenu," +
+    "#lighting,#camtune,#results,#standings,#race-settings,#customize,#pausemenu," +
     "#datahub,#track-detail";
 
   const EDGE = 2;              // px of slack: sub-pixel layout must not flicker
