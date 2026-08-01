@@ -72,6 +72,7 @@ const FULL = [
   "js/track/space.js",
   "js/track/surface.js",
   "js/track/models.js",
+  "js/track/graph.js",
   "js/track/themes.js",
   "js/track/landmark-kit.js",
   "js/track/circuit-kit.js",
@@ -171,6 +172,7 @@ const TRACK_VM = [
   "js/track/space.js",
   "js/track/surface.js",
   "js/track/models.js",
+  "js/track/graph.js",
   "js/track/themes.js",
   "js/track/landmark-kit.js",
   "js/track/circuit-kit.js",
@@ -228,6 +230,7 @@ const HARD_EDGES = [
   ["js/track/geom.js", "js/track/mesh.js"],                 // mesh destructures TrackGeom at eval
   ["js/track/spline.js", "js/track/mesh.js"],               // mesh destructures TrackSpline at eval
   ["js/track/mesh.js", "js/track/tracks.js"],               // tracks destructures TrackMesh at eval
+  ["js/track/graph.js", "js/track/tracks.js"],               // buildProps calls TrackGraph.create at build
   ["js/track/scenery-nature.js", "js/track/tracks.js"],     // buildProps calls Scenery*.create (build time, keep ordered)
   ["js/track/scenery-structures.js", "js/track/tracks.js"],
   ["js/track/scenery-city.js", "js/track/tracks.js"],

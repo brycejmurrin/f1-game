@@ -161,6 +161,18 @@ js/track/        — track ENGINE (shared code) —
   spline.js      TrackSpline    Catmull-Rom sampling / curvature
   mesh.js        TrackMesh      road/terrain mesh extrusion
   geom.js        TrackGeom      pure geometry emitters (addBox/emit/addCyl/…) + MAT ids
+  graph.js       TrackGraph     scenery MODEL LIBRARY + NODE GRAPH. A model is a list
+                                  of primitive OPS in canonical space (origin, identity
+                                  basis); each placement is a node {model, o, r,u,t, s?}.
+                                  Migrated emitters call ctx.instance(key, place, build,
+                                  meta) instead of emitting inline — replay runs through
+                                  the same GUARDED emitters, so geometry and on-track
+                                  suppression are unchanged. Gate any migration with
+                                  `node tools/graph-parity.cjs --all` (builds each track
+                                  from a baseline ref AND the working tree and diffs the
+                                  prop geometry vertex for vertex). `graph.stats().byKind`
+                                  reports per-emitter instancing reuse.
+                                  See docs/research/SCENE-GRAPH-PLAN.md.
   space.js       TrackSpace     world↔track (Frenet) projection
   surface.js     TrackSurface   road surface build / tarmac-verge tinting
   markings.js    CircuitMarkings  curated FIA sector splits + turn apexes
