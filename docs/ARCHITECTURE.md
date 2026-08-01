@@ -82,7 +82,7 @@ coherent after the split:
   must track the registry by hand; replace with a checked mapping.
 - **WebGPU lazy-load** — `js/render/webgpu/*` is parsed by every visitor but
   activated by almost none; load it on opt-in only.
-- **`css/style.css` split** — pending committed visual baselines (the visual
+- **`css/*.css` split** — pending committed visual baselines (the visual
   suite has no tracked golden images yet, so a CSS split can't be gated).
 
 ---
@@ -113,7 +113,7 @@ interpolation — pure data. `chunks.js` (`GLXChunks`) holds the shared leaves
 `fx.js`, and `post.js` compose them into the program sources
 (LIT/SKY/SHADOW/MARK/DECAL/GLOW, the post chain, SSAO/GODRAY/COMPOSITE/FXAA/
 DEPTH) on the shared `GLXShaders` global. Replaces the old monolithic
-`js/shaders/glx-shaders.js`. `glx.js` destructures `GLXShaders` at the top of
+`js/render/shaders/lit.js`. `glx.js` destructures `GLXShaders` at the top of
 its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
 
 ## js/render/glx.js (+ js/render/glx/) / js/render/webgpu/wgx.js / js/render/three/* / js/render/gfx.js — renderers
@@ -271,7 +271,7 @@ modules — nature (trees/terrain furniture), city (the `STYLES` building
 generator, neon, glass), structures (grandstands, gantries, barriers,
 floodmasts), identity (per-circuit landmark passes) — each instantiated with a
 ctx of the placement helpers and accumulators. Together they serve the
-**84-member `scenery(api)` contract**, frozen by
+**96-member `scenery(api)` contract**, frozen by
 `tests/scenery-api-contract.test.mjs`: a circuit's `scenery(api)` callback can
 destructure any of those 84 names, so removing/renaming one is a breaking
 change the test catches. See [SCENERY-API.md](SCENERY-API.md).
@@ -579,7 +579,7 @@ Per-circuit scenery design briefs live in [docs/tracks/](tracks/).
 `index.html` owns ALL static DOM: canvas `#game`, HUD, overlay menus, select
 screen, pause menu, data hub root, touch buttons, help modal. Script tags must
 match `tools/manifest.cjs` (asserted by `tests/load-order.test.mjs`).
-`css/style.css` = layout/HUD/menus (F1 style: black `#0a0a0f`, red `#e10600`
+`css/*.css` = layout/HUD/menus (F1 style: black `#0a0a0f`, red `#e10600`
 accents, bold italic headings); `css/data.css` = data hub only. Cache-bust
 every script/style URL with `?v=N`, where `N` is a monotonic per-build integer
 (check `index.html` for the current value). `version.json` `{ "build": N }`

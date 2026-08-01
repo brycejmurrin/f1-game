@@ -57,10 +57,12 @@ node tools/verify-track.cjs --all
 | `map` | minimap hooks |
 | `circuit` | walls + autopilot + elevation + audit (all circuit-level) |
 | `tooling` | Node tooling/foundation contracts, including scenery themes and kits |
+| `tooling-fast` | the structural half of `tooling` — everything except the two full-fleet audits. ~4 s, so it fits the edit loop; run `tooling` (or `sweeps`) before pushing. |
+| `sweeps` | the two full-fleet geometry audits pulled out of `tooling` because they dominate it: `prop-clipping.test.mjs` (~92 s) and `road-under-floor.test.mjs` (~83 s), each rebuilding all 24 circuits. |
 | `fast` | curated fast subset: smoke + api + collision + offtrack + parts-physics + steering (~3 min) |
 | `ab` | lighting A/B pixel comparison (`lighting-ab.spec.js`) |
 | `audit` | coverage guard: every spec must belong to ≥1 group (`tools/test-coverage-audit.mjs`) |
-| `tooling` | `node --test` unit suites (no browser): coverage-audit, fixture-consumer-audit, quick-validate, track-accuracy-validator, **`load-order.test.mjs`** (the `<script>` tags in `index.html` must match `tools/manifest.cjs` — the load-order single source of truth), **`scenery-api-contract.test.mjs`** (the 84-member `scenery(api)` surface served by the `js/track/scenery-*.js` modules is frozen) |
+| `tooling` | `node --test` unit suites (no browser): coverage-audit, fixture-consumer-audit, quick-validate, track-accuracy-validator, **`load-order.test.mjs`** (the `<script>` tags in `index.html` must match `tools/manifest.cjs` — the load-order single source of truth), **`scenery-api-contract.test.mjs`** (the 96-member `scenery(api)` surface served by the `js/track/scenery-*.js` modules is frozen) |
 
 ---
 
@@ -210,7 +212,7 @@ hook values.
 | `inspect/*.spec.js` | 24 per-circuit inspection/screenshot specs (**excluded from default discovery** via `testIgnore`; run explicitly) |
 | `galleries/*.spec.js` | explicit-path gallery emitters such as track traces and all-tracks building surveys (**excluded from default discovery** via `testIgnore`; run explicitly) |
 | `load-order.test.mjs` (`node --test`, `test:tooling`) | `index.html` `<script>` tag order matches `tools/manifest.cjs` exactly — adding a JS file requires both a tag and a manifest entry; this catches divergence (incl. `HARD_EDGES` eval-time dependencies) |
-| `scenery-api-contract.test.mjs` (`node --test`, `test:tooling`) | freezes the 84-member `scenery(api)` contract across the buildProps split (`js/track/scenery-nature/city/structures/identity.js`) — a circuit callback can destructure any of the 84 names; renames/removals fail here first |
+| `scenery-api-contract.test.mjs` (`node --test`, `test:tooling`) | freezes the 96-member `scenery(api)` contract across the buildProps split (`js/track/scenery-nature.js`, `-city.js`, `-structures.js`, `-identity.js`) — a circuit callback can destructure any of the 84 names; renames/removals fail here first |
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain (or verge-shoulder) triangle renders above the racing line — the green-wedge / elevation-mound-over-road class. Point-in-triangle face test vs the asphalt; large road-over-road overs are ignored as intentional crossovers (Suzuka figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line (roofs, canopies, buildings, crowds). Same point-in-triangle method against the props mesh, in 3D (0.2–5 m band above the road). Per-track `BASELINE` caps document justified overheads (Miami beach canopy, Mexico Foro Sol pass-through, gantries) and small tracked residuals; any new/worsened intrusion on a clean track fails. Measure one track: `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots` |
 | `track-foundation.test.mjs` | pure Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, and mesh validation |
