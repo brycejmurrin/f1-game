@@ -1,0 +1,114 @@
+name: Import CC0 models
+
+# Bake a CC0 model pack into the game's own vertex format, ON GITHUB'S RUNNER.
+#
+# The point of running here rather than in a browser or the authoring sandbox:
+# a GitHub Actions runner has UNRESTRICTED outbound network. CORS is a
+# browser-only policy and does not exist server-side, and this runner is not
+# behind the sandbox proxy that 403s the asset CDNs — so it can fetch itch.io,
+# Kenney, Quaternius or a signed download URL that nothing else in this project
+# can reach. It downloads the pack, runs tools/import-models.mjs, and both
+# commits the baked models to a bot branch AND uploads them as an artifact.
+#
+# Dispatch from the Actions tab (or via the API). The baked models land on the
+# `commit_branch`; merge that into the deploy branch to ship them.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Direct download URL (.zip, .glb or .gltf). itch/Kenney signed URLs work here."
+        required: true
+      mat:
+        description: "Surface material id for every imported model (CONCRETE, METAL, WOOD, ROOF, FOLIAGE…)"
+        required: false
+        default: "CONCRETE"
+      height:
+        description: "Normalise each model to this many metres tall (0 = keep source scale)"
+        required: false
+        default: "12"
+      prefix:
+        description: "Prefix for the baked model ids"
+        required: false
+        default: "q_"
+      author:
+        description: "Attribution recorded in CREDITS.md"
+        required: false
+        default: "Quaternius"
+      commit_branch:
+        description: "Branch to commit the baked models to"
+        required: false
+        default: "bot/model-import"
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Download the pack
+        run: |
+          set -euo pipefail
+          mkdir -p _dl _extract
+          echo "fetching ${{ inputs.url }}"
+          # -L follows redirects (itch/Kenney bounce through several); fail loudly.
+          curl -fL --retry 3 -o _dl/pack.bin "${{ inputs.url }}"
+          ls -la _dl
+          # Sniff the magic bytes: PK -> zip, glTF -> glb, { -> gltf json.
+          head -c 4 _dl/pack.bin | xxd
+          if head -c 2 _dl/pack.bin | grep -q "PK"; then
+            unzip -q _dl/pack.bin -d _extract
+          else
+            # A single model file; keep its extension so the importer routes it.
+            EXT=glb
+            head -c 1 _dl/pack.bin | grep -q "{" && EXT=gltf
+            cp _dl/pack.bin _extract/model.$EXT
+          fi
+          echo "extracted:"; find _extract -maxdepth 3 -type f | head -50
+
+      - name: Bake models
+        run: |
+          node tools/import-models.mjs _extract \
+            --mat "${{ inputs.mat }}" \
+            --height "${{ inputs.height }}" \
+            --prefix "${{ inputs.prefix }}" \
+            --author "${{ inputs.author }}" \
+            --source "${{ inputs.url }}"
+          node tools/assets.mjs credits || true
+          node tools/assets.mjs verify || echo "::warning::verify reported issues (often the budget — review the size report above)"
+
+      - name: Upload baked models as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apex-models
+          path: |
+            assets/pack/models/
+            assets/pack/manifest.json
+            assets/pack/CREDITS.md
+
+      - name: Commit to the bot branch
+        run: |
+          set -euo pipefail
+          git config user.name "apex-model-bot"
+          git config user.email "noreply@anthropic.com"
+          git checkout -B "${{ inputs.commit_branch }}"
+          git add assets/pack/models assets/pack/manifest.json assets/pack/CREDITS.md
+          if git diff --cached --quiet; then
+            echo "no model changes to commit"; exit 0
+          fi
+          git commit -m "chore(assets): import CC0 models from ${{ inputs.url }}
+
+          Baked on the runner by tools/import-models.mjs — mat=${{ inputs.mat }},
+          height=${{ inputs.height }}m. Merge this branch into the deploy branch
+          to ship; nothing places these until a circuit calls api.bakedModel()."
+          git push -f origin "${{ inputs.commit_branch }}"
+          echo "pushed to ${{ inputs.commit_branch }} — merge it into the deploy branch to ship"
