@@ -731,7 +731,19 @@ void main() {
     float ssrGate  = max(roadTerm, carTerm);
     if (ssrGate > 0.001) {
       vec3 V = normalize(-P);
-      vec3 R = reflect(-V, Nv);                    // points up toward the city
+      // The ROAD reflects off a near-FLAT plane, not its bumpy per-pixel normal.
+      // Nv is reconstructed from depth derivatives, so it picks up the road's
+      // facets / undulation / micro-relief — and reflecting off that bumpy normal
+      // scatters the reflected ray, so the march hits on-screen scenery in some
+      // pixels and shoots off-screen (miss) in others. That is the "patchy, shifts
+      // as I drive" wet road: the reflective/matte split wanders with the bumps and
+      // the camera. Reflecting off the smooth road plane (world-up in view space)
+      // keeps every road pixel's ray coherent → one continuous, stable reflection
+      // that still mirrors the real scene. Car paint keeps its true normal (curved
+      // bodywork needs it). 0.85 toward flat: kills the bump scatter while retaining
+      // a little real slope/bank response.
+      vec3 Nr = (carTerm > roadTerm) ? Nv : normalize(mix(Nv, upVSn, 0.85));
+      vec3 R = reflect(-V, Nr);                    // points up toward the city
       // Finer refined march: small fixed steps (dense near/mid) so small/distant
       // emissive lamp heads + neon aren't stepped over (was a coarse 12×1.42 march).
       // JITTERED: an un-jittered march quantizes the hit at identical step
