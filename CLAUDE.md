@@ -543,7 +543,8 @@ __apex.reset(frac, speed, x)  // fast episode reset without reloading assets →
 //    RENDERED frame — stage and let frames draw before trusting either.
 //    seed() below lives in apex.js, not agentview.js, and just returns a
 //    number. See docs/AGENT-WORLD-API.md ──
-__apex.agentHelp()            // manifest of this surface (~200 tokens)
+__apex.agentHelp()            // manifest of this surface (~5.7 KB, ~1.4k tokens —
+                              //   read it ONCE per session, never per tick)
 __apex.objective()            // what the GAME is: win condition, trade-offs,
                               //   constraints. Static; does NOT describe car
                               //   dynamics (learn those from rollout()/act())

@@ -28,7 +28,7 @@ const AgentView = (function () {
 
   const CONVENTIONS =
     "metres, m/s, seconds, radians unless the key says otherwise; " +
-    "+x = right of centreline; +k = right-hand turn; " +
+    "+x = right of centreline; +k = LEFT-hand turn (measured: zero-steer runs you wide to the outside, and +k pushes you right); " +
     "side is centreline-relative (which side of the road) EXCEPT scene()'s side, " +
     "which is egocentric (which side of your nose — see its bearingDeg; its " +
     "trackSide is the centreline side for cross-referencing); " +
@@ -119,7 +119,17 @@ const AgentView = (function () {
                       'unknown camera "' + o.camera + '"',
                       "one of: " + GameTables.CAM_MODES.map((c) => c.id || c).join(", "));
         }
-        const v = camVantage(m, p.s, p.x, p.speed || 0, 0, {});
+        // Pass the car's real world pose, exactly as the live frame loop does.
+        // With an empty `extra`, camVantage falls back to re-deriving the eye by
+        // sampling the road at (s, x) — and on a circuit that runs close to
+        // itself that reprojection can land on the wrong leg, putting the
+        // synthetic eye hundreds of metres away while the raster still comes
+        // back fully populated and plausible-looking. The player is a
+        // world-space rigid body; ask it where it is rather than re-deriving it.
+        const v = camVantage(m, p.s, p.x, p.speed || 0, 0, {
+          carPos: (p.px != null && p.pz != null) ? [p.px, p.pz] : null,
+          carHead: p.head,
+        });
         return { vp: buildVP(v.eye, v.tgt, v.fov), eye: v.eye.slice(),
                  tgt: v.tgt.slice(), mode: m, fovDeg: v.fov, synthetic: true };
       }
@@ -281,13 +291,24 @@ const AgentView = (function () {
           turn: "T" + (i + 1),
           frac: +(wrapS(s) / total).toFixed(4),
           s: r1(wrapS(s)),
-          dir: radius >= STRAIGHT_R ? "straight" : psi > 0 ? "R" : "L",
+          // POSITIVE CURVATURE IS A LEFT-HAND TURN. The comment on
+          // spline.js's curvatureRaw says "+ = right" and this table used to
+          // agree with it; both were wrong, and every corner on every circuit
+          // came back with the opposite hand. Measured, not derived: park on
+          // the centreline before a corner, drive with ZERO steer, and watch
+          // which way you run wide — you always run wide to the OUTSIDE, so a
+          // right-hander pushes you to negative lateral. Monza T1 (k = +0.037)
+          // drifts to +9.2 m and T5 (k = −0.015) to −12.2 m, i.e. +k bends the
+          // road LEFT. game.js agrees and always did: its racing line is
+          // -sign(k) with the comment "k>0 curves toward screen-left", which is
+          // why the AI drives correct apexes while this label read backwards.
+          dir: radius >= STRAIGHT_R ? "straight" : psi > 0 ? "L" : "R",
           radiusM: r1(radius),
           // Signed mean curvature over the whole corner (psi/arc = sign(psi)/radius),
           // NOT the point sample kA: kA is a lone 30 m reading that can flip sign at
-          // an OSM-noisy apex, so dir (from psi) and k (from kA) could disagree and
-          // k could contradict the "+k = right" convention. Deriving k from the same
-          // swept psi keeps k, dir, radiusM and sweepDeg one consistent story.
+          // an OSM-noisy apex, so dir (from psi) and k (from kA) could disagree.
+          // Deriving k from the same swept psi keeps k, dir, radiusM and sweepDeg
+          // one consistent story.
           k: +(psi / arc).toFixed(5),
           sweepDeg: r1(psi * 180 / Math.PI),
           severity: severityOf(radius),
@@ -576,7 +597,7 @@ const AgentView = (function () {
         out.push({
           d: r1(d), t: r1(d / v),
           radiusM: radius >= STRAIGHT_R ? null : r1(radius),
-          dir: Math.abs(k) < CORNER_K ? "straight" : k > 0 ? "R" : "L",
+          dir: Math.abs(k) < CORNER_K ? "straight" : k > 0 ? "L" : "R",  // +k = LEFT
           widthM: r1(scr.hw * 2),
         });
       }
@@ -2018,11 +2039,16 @@ const AgentView = (function () {
                     "policy is world => ({steer,throttle,brake}); use `input` for "
                     + "a constant input instead");
       }
-      const dt = clamp(o.dt || 1 / 60, 1 / 240, 1 / 10);
-      const seconds = clamp(o.seconds != null ? o.seconds : 5, 0.05, 120);
+      // numOr, not `||`: isNum accepts a numeric STRING, and clamp returns its
+      // argument untouched when it is already in range — so a stringified dt
+      // survived validation as a string, then `raceT += dt` concatenated instead
+      // of adding (corrupting session state for every later call) and the digest
+      // threw on dt.toFixed. Coerce before clamping.
+      const dt = clamp(numOr(o.dt, 1 / 60), 1 / 240, 1 / 10);
+      const seconds = clamp(numOr(o.seconds, 5), 0.05, 120);
       const ticks = Math.max(1, Math.round(seconds / dt));
       const policy = typeof o.policy === "function" ? o.policy : null;
-      const policyEvery = Math.max(1, Math.round(1 / ((o.policyHz || 10) * dt)));
+      const policyEvery = Math.max(1, Math.round(1 / (numOr(o.policyHz, 10) * dt)));
       const nSamples = clamp(o.samples | 0 || 12, 2, 60);
       const sampleEvery = Math.max(1, Math.floor(ticks / nSamples));
 
@@ -2049,6 +2075,7 @@ const AgentView = (function () {
       let offTicks = 0, offEvents = 0, wasOff = false;
       let minClear = Infinity, contacts = 0, wasContact = false;
       let terminalReason = null, terminalAtT = null;
+      const terminalEvents = []; let lastSeenReason = null;
       const cornerMin = {};
       const samples = [];
 
@@ -2097,9 +2124,23 @@ const AgentView = (function () {
           if (prev === undefined || sp < prev) cornerMin[cAt.turn] = sp;
         }
 
-        if (!terminalReason) {
+        // Record EVERY terminal event, not just the first. Freezing on the first
+        // one hid a later, more important state: a run that was rescued early and
+        // then went on to FINISH reported only "rescued", so an agent scoring the
+        // interval off digest.terminal never learned the race was completed.
+        // Repeat rescues were invisible the same way.
+        {
           const t = terminal();
-          if (t.done) { terminalReason = t.reason; terminalAtT = r2(G.raceT - startT); }
+          if (t.done && t.reason) {
+            const atS = r2(G.raceT - startT);
+            if (t.reason !== lastSeenReason) {
+              terminalEvents.push({ reason: t.reason, atS });
+              lastSeenReason = t.reason;
+            }
+            if (!terminalReason) { terminalReason = t.reason; terminalAtT = atS; }
+          } else if (!t.done) {
+            lastSeenReason = null;   // re-arm, so a second rescue is its own event
+          }
         }
 
         if (i % sampleEvery === 0 || i === ticks - 1) {
@@ -2133,7 +2174,12 @@ const AgentView = (function () {
         // each corner actually driven, which is what a setup change moves.
         cornerMinSpeedKph: Object.keys(cornerMin).map((t) =>
           ({ turn: t, minSpeedKph: r1(cornerMin[t] * 3.6) })),
-        terminal: { done: !!terminalReason, reason: terminalReason, atS: terminalAtT },
+        // `reason`/`atS` are the FIRST event (unchanged); `events` is every one,
+        // and `last` is the state the interval actually ended in.
+        terminal: { done: !!terminalReason, reason: terminalReason, atS: terminalAtT,
+                    events: terminalEvents,
+                    last: terminalEvents.length
+                      ? terminalEvents[terminalEvents.length - 1] : null },
         samples,
         note: "a digest of " + ticks + " physics ticks — call world() for the "
               + "current state, this describes the interval",
@@ -2150,7 +2196,7 @@ const AgentView = (function () {
     // world()/scene()/trackInfo(); render() is for coarse spatial intuition and
     // human-readable debugging, not for reading geometry off the pixels.
     //
-    // frame()/plan()/worldModel() stay exported as deprecated aliases so the
+    // frame()/plan()/worldModel()/visible() stay exported as deprecated aliases so the
     // dev console and older callers keep working; the agent-facing surface is
     // this one call.
     function render(opts) {

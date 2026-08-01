@@ -1,8 +1,11 @@
 # Agent World API — showing the game to an LLM agent as JSON
 
-**Status: implemented.** Ten hooks ship in `js/game/agentview.js` —
-`world()`, `frame()`, `scene()`, `visible()`, `trackInfo()`, `worldModel()`,
-`carView()`, `rollout()`, `terminal()`, `agentHelp()` — plus the prop registry in
+**Status: implemented.** The surface ships in `js/game/agentview.js` (+ the
+rasters in `js/game/agentview-raster.js`) — `world()`, `field()`, `trackInfo()`,
+`scene()`, `describe()`, `query()`, `atmosphere()`, `objective()`, `carView()`,
+`render()`, `survey()`, `rollout()`, `terminal()`, `agentHelp()`, with
+`frame()`/`plan()`/`worldModel()`/`visible()` kept as deprecated aliases of
+`render({what})`/`scene({visible})` — plus the prop registry in
 `js/track/tracks.js` and the scenery modules, and a CLI at `tools/agent.mjs`.
 **Reference documentation is `docs/DEBUG-HOOKS.md` → "Agent world view"**; the
 API also describes itself via `__apex.agentHelp()`. Tests:

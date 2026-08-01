@@ -1439,6 +1439,18 @@ const api = {
     c.vLat = 0; c.yawRateCur = 0;
     Tracks.sample(G.track, c.s, smp2);
     c.head = Math.atan2(smp2.t[0], smp2.t[2]);
+    // Rebuild the WORLD pose too. AI cars render from px/pz, which the frame loop
+    // forward-integrates from velocity and only ever seeds once — so setting (s,x)
+    // alone moved the car for every query but left it drawn where it used to be,
+    // which quietly invalidates any screenshot-based check of a placement.
+    { const rl = Math.hypot(smp2.r[0], smp2.r[2]) || 1;   // see worldFromTrack in game.js
+      c.px = smp2.p[0] + smp2.r[0] / rl * c.x;
+      c.pz = smp2.p[2] + smp2.r[2] / rl * c.x; }
+    // ...and the render-interpolation anchors, the same ones jump() syncs for the
+    // player. Without these the frame lerps from wherever the car used to be, so
+    // a teleported AI car is DRAWN somewhere else entirely even though every query
+    // reports the new position.
+    c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz;
     return { id: idx, frac: +(c.s / G.track.total).toFixed(4), speed: +c.speed.toFixed(2), x: +c.x.toFixed(3) };
   },
 

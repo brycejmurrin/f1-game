@@ -24,7 +24,7 @@ error, message, fix}`, never `null` — with the two quiet exceptions above),
 `objective()` is the game). LLMs drive *worse* from an image than from structured
 text (BALROG, VideoGameBench) — so use these, not screenshots.
 
-Two ways in — same surface, different cost:
+Three ways in — same surface, different cost:
 - `node tools/agent.mjs <track> <tool> [flags]` from a shell — it does the
   `race`/`go`/`jump` + render-frames staging correctly so you don't hand-roll it.
   **Each call boots its own browser (~30–40 s)**, so it is one read per boot:
@@ -80,7 +80,9 @@ Read both once; do not re-fetch per tick.
   visibility, wet road.
 
 **What is this place / thing? (static — fetch once)**
-- `worldModel({detail})` (CLI `model`) — the WHOLE circuit as ONE document:
+- `worldModel({detail})` (CLI `model`) — a DEPRECATED alias of
+  `render({what:"circuit"})`, kept because the name is clearer; both return the
+  same payload. The WHOLE circuit as ONE document:
   repeated dressing clustered into features, named landmarks with sizes, barrier
   spans, and a corner-by-corner walk (`dir`/`radiusM`/`severity` only — for
   banking, signed `k`, gradient/elevation, kerbs and apex speed, pull
@@ -136,7 +138,8 @@ Read both once; do not re-fetch per tick.
 ## The driving loop
 
 Action space: `{steer, throttle, brake}`. `steer` ∈ [−1,1], **+1 = full right
-lock** (matches `+k`); `throttle`/`brake` are **booleans** (any truthy = full, so
+lock**; note `+k` is a **LEFT**-hand turn, so full right lock is toward `-k`.
+`throttle`/`brake` are **booleans** (any truthy = full, so
 `throttle:0.5` is full throttle, not half). `act(input, dt, n)` applies it for `n`
 ticks; `rollout({policy})` calls your policy repeatedly.
 
@@ -157,7 +160,7 @@ A runnable starter policy — nulls heading error, recentres, brakes for the cor
 const CAP = 33;                    // m/s — a FLAT cap, everywhere, not just in corners.
                                    //   This is the lever that makes the rest work; raise it
                                    //   once you finish laps, don't remove it.
-policy = w => {
+const policy = w => {
   const e = w.ego, nc = w.nextCorner;
   const off = Math.abs(e.lateralM) > (e.halfWidthM || 6);  // in the grass?
   let steer = -e.headingErrDeg*0.045 - e.lateralM*(off ? 0.12 : 0.045);  // recentre HARDER off-track
@@ -185,7 +188,7 @@ Once laps complete, raise `CAP`, then add a small feed-forward toward `nc.dir`
 Tune from the digest's `offTrack.pct` and `cornerMinSpeedKph`. This is a starting
 point, not a steady-state-stable controller — a short interval can legitimately
 end with the car off-line mid-recovery — so judge it by the digest *trend*, not
-by wherever the last sample lands. Two gotchas the loop above hides:
+by wherever the last sample lands. Three gotchas the loop above hides:
 - **`rollout`'s policy receives `world({detail:"brief"})`** — which carries `ego`
   and a single `nextCorner` but NOT `pacenotes`/`rivals`/`nextCorners`. Reading
   those inside a rollout policy returns `undefined`; call `world({detail:"drive"})`
@@ -208,14 +211,19 @@ intervals from one call. Use `world()`+`act()` only for a single decision.
 reads as "my policy stalled" when it merely ran out of interval. One lap of Monza
 at the pace above takes ~200 s, so a lap is 2-3 chained `rollout()` calls, not
 one; carry your own distance/lap total across them and check `terminal()` between
-each. Measured with the policy above: 10.5 km over three 120 s calls, frac
-wrapping 0.61 → 0.23 → 0.84, no rescue, 7.1 % off-track.
+each. Measured with the policy above: ~10.5 km over three 120 s calls, no rescue,
+~7 % off-track. Those figures are illustrative, not reproducible to the digit —
+the recipe drives a live AI field and pins no seed, so your run will differ.
+Pin `seed(n)` before `race()` if you need to compare two runs.
+**Reaching `finished` takes a real race.** The default is 3 laps, so ~600 s —
+five-plus chained calls. `setLap(n)` only moves the counter: `finished` is set
+by the line-crossing handler, so you must still drive across the line after it.
 
 ## Determinism — pin the seed before any comparison
 
 The simulation is seeded. `seed(n)` sets it; `reset(frac, speed, x, seed)`
 reproduces an episode exactly — **same seed + same inputs ⇒ same result**, and
-`world({full}).session.seed` makes a snapshot self-describing (replay it with
+`world({detail:"full"}).session.seed` makes a snapshot self-describing (replay it with
 `reset(...,seed)`). Cosmetic randomness (particles, camera shake) is deliberately
 unseeded so it can never perturb the sim.
 
