@@ -4774,7 +4774,16 @@ function render(dt) {
   // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
-  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  // Wet-road SSR march is disabled for ONBOARD cams (cockpit/hood/tcam). It is a
+  // screen-space, camera-dependent effect: from the low onboard eye its reflected
+  // rays hit on-screen content in some screen regions and miss in others, and that
+  // hit/miss pattern shifts every frame as the camera moves (worse with the
+  // onboard speed-buzz) — which reads as the wet reflection FLICKERING in patches
+  // while driving. The boosted analytic wet reflection (lit.js) is geometry-based
+  // and temporally stable, so onboard cams rely on it alone: a smooth, coherent,
+  // non-flickering wet road. Chase/external cams (higher eye, no buzz) keep the
+  // full SSR march, where it's stable and adds crisp on-screen reflections.
+  po.contact = _cs; po.reflect = (PerfGov.tier() >= 2 || onboard) ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
