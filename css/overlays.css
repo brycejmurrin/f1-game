@@ -172,8 +172,12 @@ body.hud-hidden #hud-restore { display: block; }
   background: rgba(8, 8, 14, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  /* No backdrop-filter, for the same reason .hud-box has none: this panel sits
+     over the LIVE 3D canvas, so a blur here re-composites the frame behind it
+     every single frame while the picker is open — and on iOS a blurred
+     position:fixed layer is the documented cause of severe compositing jank.
+     At rgba(8,8,14,0.92) only 8 % of the backdrop came through anyway, so the
+     blur cost a per-frame readback to tint an almost-opaque panel. */
 }
 #campicker button {
   height: 38px;
