@@ -142,6 +142,14 @@
 .tune-row input[type="range"] {
   width: 100%; margin: 0; accent-color: var(--red); height: 24px; cursor: pointer;
 }
+/* A slider follows its switch: RED while the thing it controls is on, GREY when
+   it is off. Grey via accent-color rather than a low opacity — a ghosted control
+   reads as "still loading", a grey one reads as "off". It keeps its row either
+   way, so flipping the switch back never reflows the panel. */
+.tune-row input[type="range"]:disabled { accent-color: #6a6a75; cursor: default; }
+.tune-row.tune-off { opacity: 0.75; }
+.tune-row.tune-off .tune-label { color: var(--dim); }
+.tune-row.tune-off .tune-label b { color: var(--dim); }
 .preset-row { display: flex; gap: 8px; margin: 4px 0 6px; }
 .preset-row .preset-btn {
   display: flex; flex-direction: column; align-items: center; gap: 3px;

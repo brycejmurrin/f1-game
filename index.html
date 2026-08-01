@@ -192,8 +192,7 @@
       <section class="pm-group">
         <h3 class="pm-group-h">AUDIO</h3>
         <button id="pm-sound">SOUND: ON</button>
-        <button id="pm-music">MUSIC: ON</button>
-        <button id="pm-skip">&#9197; SKIP TRACK</button>
+        <button id="pm-audio">MUSIC &amp; SOUND&hellip;</button>
       </section>
       <section class="pm-group">
         <h3 class="pm-group-h">DISPLAY</h3>
@@ -602,6 +601,45 @@
     </div>
     </div><!-- /.sheet-body -->
     <div class="sheet-foot"><button id="adv-close" class="bigbtn">DONE</button></div>
+  </div>
+</div>
+
+<!-- music & sound: the audio mixer. Its own screen rather than more buttons in
+     the settings grid, because two sliders and a now-playing readout do not fit
+     a one-line-per-control column. -->
+<div id="audioset" class="screen dim" hidden>
+  <div id="audioset-inner" class="sheet">
+    <div class="sheet-head"><h2>MUSIC &amp; SOUND</h2></div>
+    <div class="sheet-body pane">
+      <h3 class="adv-sec">MUSIC</h3>
+      <div class="adv-item">
+        <div class="opt-row" role="group" aria-label="Music on or off">
+          <button id="as-music-on" class="opt-btn" type="button">ON</button>
+          <button id="as-music-off" class="opt-btn" type="button">OFF</button>
+        </div>
+      </div>
+      <div class="adv-item">
+        <label class="tune-row"><span class="tune-label">MUSIC VOLUME <b id="as-mvol-v">5</b></span>
+          <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
+      </div>
+      <div class="adv-item">
+        <button id="as-skip" class="adv-more-btn" type="button">&#9197; SKIP TRACK</button>
+        <p class="adv-help">Now playing: <b id="as-now">&mdash;</b></p>
+      </div>
+      <h3 class="adv-sec">SOUND EFFECTS <span>engine, tyres, rain, UI</span></h3>
+      <div class="adv-item">
+        <div class="opt-row" role="group" aria-label="Sound on or off">
+          <button id="as-sound-on" class="opt-btn" type="button">ON</button>
+          <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
+        </div>
+      </div>
+      <div class="adv-item">
+        <label class="tune-row"><span class="tune-label">SFX VOLUME <b id="as-svol-v">10</b></span>
+          <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
+        <p class="adv-help">SOUND is the master switch &mdash; with it off nothing plays, music included. The two sliders set the balance between the music and the rest of the mix.</p>
+      </div>
+    </div>
+    <div class="sheet-foot"><button id="as-close" class="bigbtn">DONE</button></div>
   </div>
 </div>
 

@@ -204,6 +204,7 @@
 #standings   { --sheet-w: 560px; }
 #howtoplay   { --sheet-w: 700px; }
 #advanced    { --sheet-w: 820px; }
+#audioset    { --sheet-w: 460px; }
 #race-settings { --sheet-w: 560px; }
 /* Wide enough for three columns of rows on a landscape phone. At 560px the form
    was two narrow columns and still ran 171px past the fold; the sheet is capped
@@ -219,6 +220,7 @@
 #results, #standings, #race-settings, #customize { z-index: 30; }
 #howtoplay { z-index: 40; }
 #advanced { z-index: 41; }
+#audioset { z-index: 41; }
 
 /* One-per-line stacks (pause menu, settings groups, results actions). */
 .stack { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
