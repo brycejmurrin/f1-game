@@ -212,6 +212,19 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const lead = far ? 9 : 6;
       eye = [extra.carPos[0] - hx * back + rx * side, cvB.p[1] + eyeUp + bankDy, extra.carPos[1] - hz * back + rz * side];
       tgt = [extra.carPos[0] + hx * lead, p[1] + (far ? 1.0 : 0.7), extra.carPos[1] + hz * lead];
+      // CORNER LEAD (CAMERA TUNER, opt-in, default 0). Blend the whole rig toward
+      // the road-frame chase below — eye an arc-distance back along the ROAD, aim
+      // at the curved centreline ahead — so the camera leads and swings INTO the
+      // bend, the classic chase feel. This is the one place the arc is allowed to
+      // reach the chase view, and only because the player asked for it on a slider:
+      // it moves where the camera looks, never the car (px/pz/(s,x) are untouched).
+      const lead2 = (typeof CamTune !== "undefined") ? clamp(CamTune.get(mode, "cornerLead") || 0, 0, 1) : 0;
+      if (lead2 > 0) {
+        const eyeR0 = cvB.p[0] + cvB.r[0] * cx, eyeR1 = cvB.p[1] + eyeUp + bankDy, eyeR2 = cvB.p[2] + cvB.r[2] * cx;
+        const tgtR = aheadPt(far ? 9 : 6, far ? 1.0 : 0.7, x * 0.4);
+        eye = [lerp(eye[0], eyeR0, lead2), lerp(eye[1], eyeR1, lead2), lerp(eye[2], eyeR2, lead2)];
+        tgt = [lerp(tgt[0], tgtR[0], lead2), lerp(tgt[1], tgtR[1], lead2), lerp(tgt[2], tgtR[2], lead2)];
+      }
     } else {
       eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
       tgt = aheadPt(far ? 9 : 6, far ? 1.0 : 0.7, x * 0.4);

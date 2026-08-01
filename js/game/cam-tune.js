@@ -46,6 +46,15 @@ const CAM_TUNE_DEFS = [
     help: "Pan the aim right (+) or left (−) without moving the eye." },
   { id: "fov",    label: "FOV",      min: -25, max: 25, step: 0.5,  def: 0, unit: "°",
     help: "Widen (+) or tighten (−) the field of view on top of the mode's own speed-scaled FOV." },
+  // CORNER LEAD is not a geometric offset like the six above — CamTune.apply()
+  // never touches it. js/game/cameras.js reads it directly in the chase/far
+  // branch and blends the rig toward the classic road-frame chase (eye back
+  // along the road, aim at the curved centreline ahead), so the camera leads
+  // and swings INTO turns. 0 = locked to the car (the shipped free-world rig);
+  // 1 = the old corner-following chase. Only chase/far read it — `modes` gates
+  // which cameras show the slider.
+  { id: "cornerLead", label: "CORNER LEAD", min: 0, max: 1, step: 0.05, def: 0, unit: "", modes: ["chase", "far"],
+    help: "Let the chase camera lead and swing INTO corners like the classic chase. 0 stays locked behind the car; higher follows the bend. Purely visual — never affects the car." },
 ];
 const DEF_BY_ID = {};
 for (const d of CAM_TUNE_DEFS) DEF_BY_ID[d.id] = d;
