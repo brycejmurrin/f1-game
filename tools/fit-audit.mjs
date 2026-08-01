@@ -162,8 +162,21 @@ const MEASURE = function (rootSel) {
     if (el.scrollHeight - el.clientHeight > 2 && (oy === "hidden" || oy === "clip")) {
       out.overflow.push({ el: idOf(el), axis: "y", over: el.scrollHeight - el.clientHeight });
     }
+    // `scrollWidth - clientWidth` is NOT a reliable "content is clipped" test.
+    // With `scrollbar-gutter: stable` (which every .pane sets) Chromium counts
+    // the reserved gutter into scrollWidth, so a pane whose children all fit
+    // reports exactly one scrollbar-width of phantom overflow — 14px on
+    // #sel-body and #cz-body, on three portrait viewports, with no child
+    // overhanging the content box by a single pixel. Ask instead whether the
+    // box can actually be scrolled: if the widest child fits, it cannot.
     if (el.scrollWidth - el.clientWidth > 2 && (ox === "hidden" || ox === "clip") && cs.textOverflow !== "ellipsis") {
-      out.overflow.push({ el: idOf(el), axis: "x", over: el.scrollWidth - el.clientWidth });
+      let overhang = 0;
+      const right = el.getBoundingClientRect().right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight);
+      for (const c of el.children) {
+        const cr = c.getBoundingClientRect();
+        if (cr.width) overhang = Math.max(overhang, cr.right - right);
+      }
+      if (overhang > 2) out.overflow.push({ el: idOf(el), axis: "x", over: +overhang.toFixed(0) });
     }
     // A region that CAN scroll must say so: the edge fade and the thumb.
     if ((oy === "auto" || oy === "scroll") && el.scrollHeight - el.clientHeight > 4) {

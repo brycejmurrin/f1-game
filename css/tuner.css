@@ -78,7 +78,7 @@
   display: inline-flex; align-items: center; justify-content: center;
   width: auto; margin: 0; min-width: 0;
   padding: 5px 9px; font-size: 10px; letter-spacing: 0.04em;
-  border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16); border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.72);
   cursor: pointer; transition: background 0.12s, color 0.12s;
   /* wraps rather than truncates: at rail width a column is ~100px and the
@@ -109,7 +109,7 @@
 #lt-head h2, #ct-head h2 { margin: 0; }
 /* preview time/weather: one compact line each — small inline label + tight chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
-.lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
+.lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
 .lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; margin: 0; padding: 4px 3px; font-size: 10px; }
 .lt-preview-row .opt-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
@@ -140,7 +140,7 @@
   width: 100%; height: 72px; margin-top: 10px; resize: none;
   font: 10px/1.5 ui-monospace, monospace; color: #cfe0ff;
   background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 6px; padding: 6px;
+  border-radius: var(--r-sm); padding: 6px;
 }
 .adv-intro { font-size: 12px; opacity: 0.7; margin: 0 0 6px; line-height: 1.45; }
 .adv-sec {
@@ -178,11 +178,11 @@
 .opt-row.as-toggle { flex: 0 0 auto; width: auto; gap: 4px; margin-top: 0; }
 .opt-row.as-toggle .opt-btn {
   flex: 0 0 auto; width: auto;
-  min-width: 52px; min-height: 28px;
+  min-width: 52px; min-height: var(--tap-sm);
   padding: 4px 12px; font-size: 11px; letter-spacing: 0.06em;
 }
 .as-track { display: flex; align-items: center; gap: var(--gap); margin-top: calc(var(--gap) * 0.5); }
-.as-skip { flex: 0 0 auto; width: auto; min-height: 28px; padding: 4px 12px; font-size: 11px; }
+.as-skip { flex: 0 0 auto; width: auto; min-height: var(--tap-sm); padding: 4px 12px; font-size: 11px; }
 .as-now-lbl { font-size: 11px; color: var(--dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .as-now-lbl b { color: var(--text); font-weight: 700; }
 .as-note { font-size: 11px; color: var(--dim); margin: calc(var(--gap) * 0.4) 0 0; line-height: 1.35; }
@@ -202,7 +202,7 @@
   letter-spacing: 0.06em; font-size: 13px;
 }
 .preset-btn small {
-  font-size: 9.5px; letter-spacing: 0.01em; opacity: 0.6; font-weight: normal;
+  font-size: var(--fs-micro); letter-spacing: 0.01em; opacity: 0.6; font-weight: normal;
   text-transform: none; line-height: 1.2;
 }
 .preset-btn.active {
@@ -217,6 +217,10 @@
      NORMAL / SIM) could not shrink below that sum and pushed SIM past the
      panel's right edge on a landscape phone. */
   flex: 1; min-width: 0; width: auto; margin: 0; padding: 8px 4px;
+  /* on the ladder (css/tokens.css): these measured 37px, one of ten different
+     heights for controls of the same rank */
+  min-height: var(--chip-h);
+  display: inline-flex; align-items: center; justify-content: center;
   font-size: 12px; letter-spacing: 0.03em; text-align: center;
 }
 .opt-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
@@ -232,8 +236,8 @@
   #pc-toggle { padding: 6px 10px; font-size: 10.5px; }
   #lt-profile, #ct-profile { font-size: 10px; }
   .lt-preview-row { gap: 3px; margin: 2px 0; }
-  .lt-preview-lbl { width: 46px; font-size: 9px; }
-  .lt-preview-row .opt-btn { padding: 3px 2px; font-size: 9.5px; min-width: 34px; }
+  .lt-preview-lbl { width: 46px; font-size: var(--fs-micro); }
+  .lt-preview-row .opt-btn { padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; }
   .lt-help-toggle { margin: 4px 0 2px; font-size: 10px; }
   /* Short panel: one scrolling STRIP, so back to flex — a single row that pans
      sideways can never orphan anything, and the grid above is for the layouts
@@ -344,7 +348,7 @@
 .music-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
 .music-row {
   display: flex; align-items: center; gap: 8px;
-  padding: 6px 8px; border-radius: 6px;
+  padding: 6px 8px; border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 12px;
@@ -356,7 +360,7 @@
   /* 30px keeps these inside the 44px touch target the rest of the panel uses
      once the row's own padding is counted. */
   flex: 0 0 auto; width: 30px; height: 30px; margin: 0; padding: 0;
-  font-size: 13px; line-height: 1; border-radius: 6px;
+  font-size: 13px; line-height: 1; border-radius: var(--r-sm);
 }
 .music-del { opacity: 0.7; }
 .music-del:hover, .music-del:focus-visible { opacity: 1; border-color: var(--red); color: var(--red); }
@@ -367,11 +371,12 @@
      a pasted 32-character id and a field that shows a third of it makes a
      mistyped character impossible to spot. */
   flex: 1 1 100%; min-width: 0; width: 100%;
+  min-height: var(--chip-h);   /* on the ladder, like every other field */
   /* 16px floor: iOS Safari zooms the page on focus under that, and the zoom
      sticks after the keyboard closes. */
   font: inherit; font-size: 16px;
   background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
 }
 /* The redirect URI exists to be COPIED — and tokens.css sets user-select:none on
    the whole app, so without this the one string the setup depends on cannot be
@@ -380,7 +385,7 @@
 /* ---------- SPOTIFY player panel ---------- */
 .sp-now { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .sp-art {
-  flex: 0 0 auto; width: 56px; height: 56px; border-radius: 6px; object-fit: cover;
+  flex: 0 0 auto; width: 56px; height: 56px; border-radius: var(--r-sm); object-fit: cover;
   background: rgba(255, 255, 255, 0.06);
 }
 .sp-now-txt { min-width: 0; }              /* lets the ellipsis below actually engage */
@@ -388,18 +393,18 @@
 .sp-title { font-size: 14px; font-weight: 700; }
 .sp-artist { font-size: 12px; opacity: 0.75; }
 .sp-on { font-size: 10px; opacity: 0.5; letter-spacing: 0.04em; margin-top: 2px; }
-.sp-bar { height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.14); overflow: hidden; margin: 2px 0 8px; }
+.sp-bar { height: 3px; border-radius: var(--r-xs); background: rgba(255, 255, 255, 0.14); overflow: hidden; margin: 2px 0 8px; }
 .sp-bar-fill { height: 100%; background: var(--red); width: 0; transition: width 0.4s linear; }
 #sp-search {
   width: 100%; margin-top: 6px; font: inherit; font-size: 16px;   /* 16px: iOS zoom floor */
   background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
 }
 #sp-results:empty { display: none; }
 #as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {
   width: 100%; font: inherit; font-size: 16px;   /* 16px: iOS zooms a focused control under it */
   background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
 }
 #as-sp-playlist:disabled, #as-sp-device:disabled,
 #sp-playlist2:disabled, #sp-device2:disabled { opacity: 0.45; }

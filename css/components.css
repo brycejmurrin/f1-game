@@ -183,7 +183,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   height: var(--sf-h, 24px);
   margin-left: auto; margin-right: 2px;
   margin-bottom: calc(-1 * var(--sf-h, 24px));
-  border-radius: 2px;
+  border-radius: var(--r-xs);
   background: var(--accent);
   opacity: 0.55;
   pointer-events: none;
@@ -241,7 +241,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   margin-right: 7px; vertical-align: -0.04em;
   background: var(--accent);
   transform: skewX(-12deg);
-  border-radius: 1px;
+  border-radius: var(--r-xs);
 }
 
 /* ---------- buttons ---------- */
@@ -249,11 +249,16 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   display: block;
   width: min(78vw, 340px);
   margin: 10px auto;
+  /* on the height ladder (css/tokens.css). The padding alone happened to land
+     these on --tap at most sizes and a pixel or two off at others; stating the
+     floor means a font-size override can never quietly shrink a primary
+     button below the rest of its row. */
+  min-height: var(--tap);
   padding: 14px 20px;
   font-size: 20px;
   background: linear-gradient(135deg, #f01000 0%, #b30000 100%);
   border: none;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   transform: skewX(-6deg);
   box-shadow: 0 4px 18px rgba(225, 6, 0, 0.4);
 }
