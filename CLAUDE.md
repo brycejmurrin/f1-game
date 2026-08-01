@@ -231,6 +231,12 @@ js/game/         — game modules (each created with the G ctx façade from game
   atmosphere.js  Atmosphere     applyRaceSettings — time-of-day/weather scene state
   setup-ui.js    SetupUI        CAR SETUP screen
   menus.js       Menus          menu/select/pause DOM flows
+  scrollfade.js  ScrollFade     "there is more below" edge fade + position indicator
+                                  for every menu scroll region (self-initialising)
+  menunav.js     MenuNav        desktop menu input (self-initialising): redirects a
+                                  wheel/trackpad gesture that lands outside a pane
+                                  into the open menu's nearest pane, and moves focus
+                                  with the arrow keys / Home / End / PageUp / PageDown
   photomode.js   Photomode      photo mode
   tuner.js       TunerPanel     LIGHTING TUNER pause-menu panel
   cam-tuner.js   CamTunerPanel  CAMERA TUNER pause-menu panel

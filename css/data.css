@@ -36,6 +36,19 @@
 @media (orientation: landscape) and (max-height: 560px) {
   .dh-card { min-height: 0; height: 100%; max-height: none; border-radius: 10px; }
 }
+/* DESKTOP: size to the content instead of to the screen.
+   "Always fill most of the viewport" is right on a phone, where the hub IS the
+   screen. On a desktop it forced every tab to 900px tall no matter how little it
+   had to show — EXPORT ended after ~460px and left 525px of empty card below it,
+   TELEMETRY about 450px before a driver is picked. A floor keeps the card from
+   collapsing to a sliver (and from jumping around as you switch tabs); the cap
+   is unchanged, so the long tabs still scroll inside. */
+@media (min-width: 900px) and (min-height: 700px) {
+  .dh-card {
+    min-height: 420px;
+    max-height: min(880px, calc(100svh - 2 * var(--gut) - var(--sat) - var(--sab)));
+  }
+}
 
 .dh-header {
   display: flex; align-items: center; gap: 12px;
@@ -659,5 +672,36 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   .dh-telem-side .dh-glabel { font-size: 8px; }
   /* Track map fits the sidebar */
   .dh-telem-side .dh-canvas.dh-map { max-width: 176px; }
+}
+
+/* DESKTOP: the same chart-left / gauges-and-map-right split.
+   It was scoped to short landscape only, so on a desktop everything stacked in
+   one column and the track map — a fixed 320px canvas — sat at the bottom of an
+   858px-wide area with ~270px of empty space on either side of it, below a chart
+   that had already stopped. The window is wide here, so use it; the sidebar is
+   roomier than the phone's 200px because there is no reason not to be. */
+@media (min-width: 1000px) and (min-height: 640px) {
+  .dh-tpopup-body { flex-direction: row; overflow: hidden; }
+  .dh-telem-main {
+    flex: 1; min-width: 0;
+    overflow-y: auto; overflow-x: hidden;
+    padding: 12px 14px;
+  }
+  .dh-telem-side {
+    width: 340px; flex-shrink: 0;
+    overflow-y: auto; overflow-x: hidden;
+    padding: 12px 14px;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  /* the map is the sidebar's centrepiece — let it use the full column */
+  .dh-telem-side .dh-canvas.dh-map { max-width: min(100%, 42dvh); }
+  /* The trace chart is drawn at the column's real width but every .dh-canvas is
+     displayed through a 600px cap, so on a wide column it was rendered at ~900px
+     and then scaled back down to 600 — sharp, but sitting in a half-empty
+     column. Uncap it here and the chart fills the space it was already drawn for
+     (the canvas keeps its own aspect, so it grows in height to match). */
+  .dh-telem-main .dh-canvas { max-width: none; }
+  /* wider card so the split has something to split */
+  .dh-tpopup-card { width: min(1280px, 96vw); max-width: none; }
 }
 } /* @layer overlays */

@@ -298,6 +298,25 @@ const Input = (function () {
     return keySteerVal;
   }
 
+  // A menu overlay being open is what hands the arrow keys to js/game/menunav.js:
+  // while the pause menu, the select screen or any sheet is up, Up/Down/Left/Right
+  // move through the menu and must not also be steering and braking the car
+  // underneath it. Asked per key event, never per tick — keys are rare and the
+  // set of open overlays changes without notice.
+  function menuOverlayOpen() {
+    // #overlay (the main menu) is deliberately NOT here. Nothing is driving while
+    // it is up, so a latched key is harmless, and several input tests dispatch
+    // keys straight at a freshly-loaded page — gating those on the title screen
+    // being closed would make the guard the thing under test.
+    const el = document.querySelector(
+      "#pausemenu:not([hidden]),#pmsettings:not([hidden]),#select:not([hidden])," +
+      "#teampicker:not([hidden]),#race-settings:not([hidden]),#standings:not([hidden])," +
+      "#results:not([hidden]),#customize:not([hidden]),#carsetup:not([hidden])," +
+      "#howtoplay:not([hidden]),#advanced:not([hidden]),#track-detail:not([hidden])," +
+      "#datahub:not([hidden])");
+    return !!(el && el.getClientRects().length);
+  }
+
   function onKey(e, down) {
     const active = document.activeElement;
     const tag = (active && active.tagName) || (e.target && e.target.tagName) || "";
@@ -319,7 +338,11 @@ const Input = (function () {
     // calls preventDefault unconditionally, and preventDefault on Space KEYUP
     // cancels the focused button's activation click (buttons activate on Space
     // keyup), which broke every Space/keyboard press of a menu button.
-    if (interactive && !hudControl) {
+    // The menu check is deliberately OUTSIDE the hudControl escape hatch: #pausebtn
+    // keeps focus after it opens the pause menu, and letting that focus fall
+    // through to the switch below is exactly how an arrow key ended up steering a
+    // paused car.
+    if (menuOverlayOpen() || (interactive && !hudControl)) {
       if (down) return;
       switch (e.code) {
         case "ArrowLeft": case "KeyA": keyLeft = false; break;

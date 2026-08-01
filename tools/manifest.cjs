@@ -111,6 +111,7 @@ const FULL = [
   "js/game/setup-ui.js",
   "js/game/menus.js",
   "js/game/scrollfade.js",
+  "js/game/menunav.js",
   "js/game/photomode.js",
   "js/game/tuner.js",
   "js/game/cam-tuner.js",

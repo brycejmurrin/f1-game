@@ -819,9 +819,20 @@ const DataTelemetry = (function () {
 
   // nearest location sample to lap time t (matched on car-data timestamp)
   function locAt(view, tel, t) {
+    const own = !!(tel.loc && tel.loc.length);
+    const loc = own ? tel.loc : (view.primary.loc || []);
+    if (!loc.length) return null;
+    if (!own) {
+      // This driver has no GPS of their own, so they ride the primary's path.
+      // Place them by how far through their OWN lap they are — matching on the
+      // absolute timestamp (as this used to) looks a different lap's clock up in
+      // this array, lands at whichever end is nearest in time, and parks the dot
+      // there for the whole replay.
+      const frac = clamp(t / (view.tMax || 1), 0, 1);
+      return loc[Math.round(frac * (loc.length - 1))];
+    }
     const cs = sampleAt(tel.car, t);
-    const loc = (tel.loc && tel.loc.length) ? tel.loc : view.primary.loc;
-    if (!cs || !loc || !loc.length) return loc && loc[0];
+    if (!cs) return loc[0];
     let best = loc[0], bd = Infinity;
     for (let i = 0; i < loc.length; i++) {
       const dd = Math.abs(loc[i].date - cs.date);
@@ -1129,6 +1140,27 @@ const DataTelemetry = (function () {
     return [m.ox + (p.x - m.minx) * m.sc, m.H - (m.oy + (p.y - m.miny) * m.sc)];
   }
 
+  // Would joining the last sample back to the first close a lap, or cut a chord
+  // across the map? A fastest-lap window starts and ends at the line, so the two
+  // ends sit within a few metres of each other; anything further apart is a
+  // partial trace and must stay open rather than gain a fake straight.
+  function closesLoop(view, loc) {
+    if (!loc || loc.length < 8) return false;
+    const a = mapPoint(view, loc[0]), b = mapPoint(view, loc[loc.length - 1]);
+    const gap = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    return gap < view.mapT.H * 0.18;
+  }
+  // one lap as a single polyline (used for the compare driver's flat-colour line)
+  function strokeLap(g, view, loc) {
+    g.beginPath();
+    for (let i = 0; i < loc.length; i++) {
+      const p = mapPoint(view, loc[i]);
+      if (i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]);
+    }
+    if (closesLoop(view, loc)) g.closePath();
+    g.stroke();
+  }
+
   // track map from x/y, coloured by speed (slow = blue, fast = red)
   function renderMap(g, W, H, view) {
     const loc = view.primary.loc, car = view.primary.car;
@@ -1141,15 +1173,29 @@ const DataTelemetry = (function () {
       while (ci < car.length - 1 && car[ci].date < date) ci++;
       return car[ci].speed;
     }
+    // The COMPARE driver's line first, underneath, in their own colour — the
+    // map is the one place you can see where the two laps actually diverge, and
+    // it used to draw the primary only however many drivers were loaded.
+    if (view.compare && view.compare.loc && view.compare.loc.length > 1) {
+      g.lineWidth = 5; g.lineCap = "round"; g.lineJoin = "round";
+      g.strokeStyle = cssColor(view.colC);
+      strokeLap(g, view, view.compare.loc);
+    }
     g.lineWidth = 3; g.lineCap = "round"; g.lineJoin = "round";
-    for (let i = 1; i < loc.length; i++) {
-      const v = speedAtDate(loc[i].date);
+    // A LAP IS A LOOP, so the trace has to close. Drawing only i=1..n-1 left the
+    // start/finish junction open — a visible notch in the outline where the
+    // sampled lap window began and ended a few metres apart.
+    const N = loc.length;
+    for (let i = 1; i <= N; i++) {
+      const a = loc[i - 1], b2 = loc[i % N];
+      if (i === N && !closesLoop(view, loc)) break;   // partial lap: leave it open
+      const v = speedAtDate(b2.date);
       const f = v === null ? 0.5 : clamp(v / vMax, 0, 1);
       const r = Math.round(255 * Math.min(1, f * 1.6));
       const b = Math.round(255 * Math.min(1, (1 - f) * 1.6));
       const gr = Math.round(180 * (1 - Math.abs(f - 0.5) * 2));
       g.strokeStyle = "rgb(" + r + "," + gr + "," + b + ")";
-      const p0 = mapPoint(view, loc[i - 1]), p1 = mapPoint(view, loc[i]);
+      const p0 = mapPoint(view, a), p1 = mapPoint(view, b2);
       g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.stroke();
     }
     // sector-boundary ticks
