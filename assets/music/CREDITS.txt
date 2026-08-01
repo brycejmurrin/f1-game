@@ -1,6 +1,12 @@
 Music tracks in this folder
 
-menu.mp3  — provided by the project owner for this game.
+menu.mp3   — provided by the project owner for this game.
+song2.mp3  — provided by the project owner for this game.
+song3.mp3  — provided by the project owner for this game.
+
+These three are the in-game playlist: they play in sequence in the menu and on
+through the race, and SKIP TRACK in the pause menu jumps to the next one. Add
+more by dropping files here and listing them in PLAYLIST in js/game/audio.js.
 
 Race loops (CC0 1.0 / public domain), from "Homebrew Free Jingle and Fanfare
 Music Assets" by Beatscribe (https://github.com/Beatscribe/homebrew_vgm,

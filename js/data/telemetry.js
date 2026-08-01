@@ -229,7 +229,27 @@ const DataTelemetry = (function () {
         jobs.push(F1API.pits(sessionKey, d.num).catch(function () { return []; }));
       }
       return Promise.all(jobs).then(function (res) {
-        return { d: d, lap: lap, car: res[0], loc: res[1], stints: res[2] || [], pits: res[3] || [] };
+        // CLIP BACK TO THE LAP. The window above overshoots by 1.5s so the last
+        // samples of the lap are certainly returned, but that tail must not be
+        // drawn: it is ~100m of extra track past the line, and how much of it
+        // there is depends on what the driver did NEXT. In a race they stay flat
+        // out down the straight; in qualifying they lift for an in-lap and can
+        // reach the pit entry, which spurs off the circuit, stretches the map's
+        // x/y bounds and rescales everything — the same track, drawn as a
+        // different shape in one session than the other.
+        const endMs = isFinite(ms) ? ms + dur * 1000 : null;
+        function clipToLap(list) {
+          if (!endMs || !list || !list.length) return list || [];
+          const kept = list.filter(function (s) {
+            const at = +s.date;
+            return !isFinite(at) || at <= endMs;
+          });
+          // never clip away the lap itself — if the timestamps don't line up the
+          // way we assume, the unclipped series is still the better answer
+          return kept.length > 8 ? kept : list;
+        }
+        return { d: d, lap: lap, car: clipToLap(res[0]), loc: clipToLap(res[1]),
+                 stints: res[2] || [], pits: res[3] || [] };
       });
     });
   }
@@ -843,6 +863,21 @@ const DataTelemetry = (function () {
     const f = span > 0 ? (t - car[lo].t) / span : 0;
     return +car[lo].date + f * (+car[hi].date - +car[lo].date);
   }
+  // inverse of dateAtT: lap-time for a wall-clock date
+  function tAtDate(car, date) {
+    if (!car || !car.length) return 0;
+    const n = car.length;
+    if (date <= +car[0].date) return car[0].t;
+    if (date >= +car[n - 1].date) return car[n - 1].t;
+    let lo = 0, hi = n - 1;
+    while (lo < hi - 1) {
+      const mid = (lo + hi) >> 1;
+      if (+car[mid].date <= date) lo = mid; else hi = mid;
+    }
+    const span = +car[hi].date - +car[lo].date;
+    const f = span > 0 ? (date - +car[lo].date) / span : 0;
+    return car[lo].t + f * (car[hi].t - car[lo].t);
+  }
 
   function locAt(view, tel, t) {
     const own = !!(tel.loc && tel.loc.length);
@@ -871,7 +906,21 @@ const DataTelemetry = (function () {
       if (+loc[mid].date <= target) lo = mid; else hi = mid;
     }
     const span = +loc[hi].date - +loc[lo].date;
-    return lerpLoc(loc[lo], loc[hi], span > 0 ? (target - +loc[lo].date) / span : 0);
+    let f = span > 0 ? (target - +loc[lo].date) / span : 0;
+    // WHERE BETWEEN THE TWO FIXES? The fixes themselves are ground truth — the
+    // car really was there, at those instants — so the dot stays anchored to
+    // them and never drifts. What is NOT true is that it crossed the ~20m gap at
+    // a constant rate: braking from 300 into a hairpin it covers most of that
+    // gap in the first third of the interval. So take the fraction from the
+    // car's own DISTANCE TRAVELLED (its speed trace integrated, the same series
+    // the delta chart runs on) rather than from elapsed time.
+    const cum = tel._cum || (tel._cum = cumDist(tel.car || []));
+    if (cum.t.length > 1) {
+      const dA = distAtT(cum, tAtDate(tel.car, +loc[lo].date));
+      const dB = distAtT(cum, tAtDate(tel.car, +loc[hi].date));
+      if (dB > dA) f = clamp((distAtT(cum, t) - dA) / (dB - dA), 0, 1);
+    }
+    return lerpLoc(loc[lo], loc[hi], f);
   }
 
   // composite one frame: cached bases + moving cursor, car dots, delta, gauges
