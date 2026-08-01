@@ -971,6 +971,29 @@ function gridUp() {
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
   });
+  // Seed the PLAYER's world pose HERE rather than leaving it to the first
+  // physics tick (the `c.px == null` init in update()). The chase rig has two
+  // branches — car-anchored when px/pz exist, road-frame when they don't — and
+  // startRace() calls snapGameCam() right after this. With a null world pose the
+  // grid was framed by the ROAD-frame fallback (no 3/4 side offset, half the
+  // car's lateral offset), then the very first tick initialised px and the live
+  // rig switched to the car-anchored framing: the eye damped ~1.2 m sideways
+  // over the opening frames — the camera "snapping to the side" at the start.
+  // These are exactly the values update() would have written a tick later, so
+  // nothing downstream changes; it just happens before the first frame is shot.
+  if (player) {
+    const w0 = worldFromTrack(player.s, player.x, smp);
+    player.px = w0.x; player.pz = w0.z;
+    // Match the render-interpolation snapshot too, or the first frame blends
+    // from whatever world point the PREVIOUS session left in rPrevPx.
+    player.rPrevPx = player.px; player.rPrevPz = player.pz;
+    // Along the track, not world +Z: `head = 0` above is the AI/heading-model
+    // placeholder and is only correct where the start straight happens to point
+    // down +Z. update() derives it from the tangent — do the same here.
+    player.head = Math.atan2(smp.t[0], smp.t[2]);
+    player.rPrevHead = player.head;
+    player.vLat = 0; player.yawRateCur = 0;
+  }
 }
 function smpHw(s) { Tracks.sample(track, s, smp); return smp.hw; }
 

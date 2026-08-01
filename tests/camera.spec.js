@@ -105,6 +105,27 @@ test.describe("Apex 26 — player camera modes", () => {
     expect(Object.values(shots)[0].length).toBeGreaterThan(1000);
   });
 
+  // The chase rig has two branches: car-anchored when the player has a world
+  // pose (px/pz), road-frame when it doesn't — and they place the eye over a
+  // metre apart laterally. update() returns early during the countdown, so if
+  // gridUp() doesn't seed the pose, the grid is framed by the road-frame branch
+  // and the camera slides sideways the instant lights-out runs the first tick.
+  test("the player has a world pose on the grid, so the chase rig doesn't switch at lights-out", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
+    const r = await page.evaluate(() => {
+      window.__apex.freeze(true);        // hold the countdown: state must stay "count"
+      // physState() returns null while player.px is unset, and no car physics has
+      // run yet (update() early-returns in "count") — so a non-null read here can
+      // only come from gridUp having seeded the pose.
+      return { state: window.__apex.info().state, hasWorldPose: window.__apex.physState() != null };
+    });
+    expect(r.state).toBe("count");
+    expect(r.hasWorldPose).toBe(true);
+  });
+
   test("the C key cycles the camera during a race", async ({ page }) => {
     await startRace(page);
     const r = await page.evaluate(async () => {
