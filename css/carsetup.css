@@ -161,6 +161,12 @@
 }
 .cs-tab-lbl, .cs-tab-cur {
   max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* Must NOT shrink — the same trap as the option rows below. As flex children
+     they default to flex-shrink:1, so once the rail was shorter than its tabs
+     each line was squeezed a few px and its text clipped inside .cs-tab's
+     overflow:hidden (15px of line box in a 12px slot). A stated line-height
+     keeps the box the size the glyphs actually need. */
+  flex: 0 0 auto; line-height: 1.35;
 }
 .cs-tab-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; color: var(--dim); }
 .cs-tab-cur { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.4); }
@@ -383,6 +389,13 @@
     max-height: none; min-height: 0;
     grid-template-columns: minmax(0, 1fr);
     padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
+    /* Rows exactly as tall as a tab, packed from the top. Left to stretch, the
+       nine categories divided up whatever height the rail had and each tab came
+       out a couple of px shorter than its own two lines of text. The rail is a
+       .pane, so when they no longer fit it scrolls — which is the honest answer,
+       and it now has an indicator saying so. */
+    grid-auto-rows: min-content;
+    align-content: start;
   }
   #cs-options {
     grid-column: 2; grid-row: 2 / 4;

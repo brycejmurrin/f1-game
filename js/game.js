@@ -5346,12 +5346,18 @@ CZ_LIV_FIELDS.forEach(([domId]) => {
   $(domId + "-none").onclick = () => { $(domId).classList.add("cz-off"); $(domId + "-none").classList.add("active"); if (soundOn) GameAudio.uiTick(); };
 });
 els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustomize(); };
-$("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); openSetup(); };
+// CAR SETUP is reachable from the select screen AND from the title, so DONE has
+// to go back where it came from. It used to unhide #select unconditionally,
+// which dropped you on the track picker after opening the garage from the menu.
+let garageReturn = "select";
+$("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); garageReturn = "select"; openSetup(); };
+$("mb-garage").onclick = () => { GameAudio.init(); garageReturn = "menu"; openSetup(); };
 $("cs-done").onclick = () => {
   $("carsetup").hidden = true;
-  els.select.hidden = false;
   setupPreviewOn = false;
   recomputePlayerMods(); buildSelect();
+  if (garageReturn === "menu") els.overlay.hidden = false;
+  else els.select.hidden = false;
 };
 $("cs-unlimited").onclick = () => {
   unlimitedBudget = !unlimitedBudget;

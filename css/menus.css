@@ -33,8 +33,27 @@
 }
 #title::after { content: ""; display: block; height: 5px; width: 70%; margin: 4px auto 0; background: var(--red); transform: skewX(-30deg); box-shadow: 0 0 14px rgba(225,6,0,0.6); }
 #subtitle { color: rgba(242, 242, 245, 0.72); margin: 6px 0 14px; font-size: 14px; letter-spacing: 0.04em; }
-#menu-buttons { display: grid; gap: var(--gap); justify-items: center; width: 100%; }
-#menu-buttons .bigbtn { margin: 0; width: min(78vw, 340px); }
+/* TWO TIERS, not one list of seven.
+   Three ways to PLAY, full size and red; everything else half-height and two
+   across underneath. Seven identical buttons gave the garage the same weight as
+   RACE and made the column tall enough to crowd a landscape phone; this reads
+   as "pick a mode, and here are the other rooms" and is ~90px shorter. */
+#menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
+#menu-primary, #menu-secondary { display: grid; width: min(78vw, 340px); }
+#menu-primary { gap: var(--gap); }
+#menu-secondary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.55);
+}
+#menu-buttons .bigbtn { margin: 0; width: 100%; }
+/* Secondary: same skewed family, dialled down — smaller type, thinner box, and
+   no red glow, so the eye still lands on the modes first. */
+.minibtn {
+  font-size: 13px; letter-spacing: 0.02em;
+  padding: 9px 10px;
+  box-shadow: none;
+}
+.minibtn .btn-ico { margin-right: 0.35em; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
 #menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: center; }
@@ -67,7 +86,10 @@
   #subtitle { margin: 4px 0 0; font-size: 12px; }
   #audiostate { font-size: 10px; margin-top: 2px; min-height: 0; }
   #disclaimer { font-size: 10px; margin-top: 6px; }
-  #menu-buttons .bigbtn { width: min(42vw, 260px); padding: 9px 14px; font-size: 14px; }
+  /* the group is what gets the width now; the buttons fill their cell */
+  #menu-primary, #menu-secondary { width: min(42vw, 260px); }
+  #menu-buttons .bigbtn { width: 100%; padding: 9px 14px; font-size: 14px; }
+  #menu-buttons .minibtn { padding: 6px 8px; font-size: 11px; }
 }
 
 /* ---------- select screen ---------- */
@@ -390,7 +412,9 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 .cz-liv-none {
   /* width:auto is stated with the id prefix in the container query below too —
      a bare class loses to any `... button { width: 100% }` rule. */
-  flex: none; width: auto; min-width: 56px; min-height: 32px;
+  /* --chip-h, not a bare 32: these sit beside the colour wells in a row of
+     fifteen and were the one control in the form under the chip height. */
+  flex: none; width: auto; min-width: 56px; min-height: var(--chip-h);
   font: inherit; font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
   padding: 6px 9px; border-radius: 6px; cursor: pointer; color: rgba(255,255,255,0.55);
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2);
