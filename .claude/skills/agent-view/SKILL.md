@@ -5,6 +5,13 @@ description: The text-native way to perceive and DRIVE the Apex 26 F1 game as an
 
 # Agent view — perceive and drive the game as text
 
+**TL;DR** — Perceive and drive Apex 26 as text, no screenshots. From a shell:
+`node tools/agent.mjs <track> <tool> [flags]` (it stages `race`/`go`/`jump` +
+frames for you). In-page: `window.__apex.<tool>(...)`. Read `agentHelp()` +
+`objective()` once, then loop `world({detail:"drive"})` → decide →
+`act(...)`/`rollout({policy})` → `terminal()`. Pin `seed(n)` before any A/B.
+Failures are typed (`{ok:false, error, message, fix}`), never `null`.
+
 An LLM cannot read a screenshot well enough to drive, and it does not need to:
 this game exposes a **text-native** view of itself. `window.__apex` composes the
 ~90 raw debug hooks into one small surface that is **egocentric** (framed around
@@ -101,6 +108,9 @@ In-page you must stage before reading, or you get plausible-but-wrong answers:
 __apex.race("monza"); __apex.go(); __apex.jump(0.1, 55);  // load, start, place
 // obs()/physState() need player.px — jump() or one step() first
 // visible()/render({what:"view"}) read the LAST RENDERED frame — let frames draw
+// scene() reads placed props — a heavy street circuit (Singapore, Monaco, Baku)
+//   finishes its prop build a few frames after race(); an empty scene() means
+//   "not built yet", not "nothing there" — let frames draw, or just re-call it
 ```
 
 `node tools/agent.mjs monza world --detail drive` does all of this for you.
