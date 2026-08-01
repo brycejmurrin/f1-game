@@ -34,7 +34,7 @@ Two ways in — same surface, different cost:
   browsers starve the box and reads stall for minutes. A few CLI subcommands are
   **renamed** from the in-page tool — `trackInfo`→`track`, `carView`→`car`,
   `worldModel`→`model`, `agentHelp`→`help`; `terminal`/`seed` are in-page only.
-  Run `agent.mjs <track>` with no command for the exact list.
+  Run `agent.mjs` with no args (or `-h`) for the exact list.
 - `node tools/apex-eval.mjs <track> "<expr>"` — boots once and evaluates one
   expression where `a` = `window.__apex`. The door for **anything past a single
   read**: a multi-call sequence, a custom driving policy, a seeded A/B. Batch
@@ -60,7 +60,10 @@ Read both once; do not re-fetch per tick.
   `world({since:seq})` returns only what *changed* since a prior payload.
 - `field({detail})` — the whole grid: race order, gaps, interval, AI pace.
 - `scene({radius|visible})` — named scenery by distance + bearing (radius around
-  the car), or `{visible:true}` for the camera's on-screen list.
+  the car), or `{visible:true}` for the camera's on-screen list. A row's `side` is
+  EGOCENTRIC (which side of your nose, from `bearingDeg`); its `trackSide` is the
+  CENTRELINE side — the one `worldModel()`/`describe()` report — so cross-reference
+  the same prop between tools by `trackSide`, not `side`.
 - `atmosphere()` — the light as prose: day/night, sun/moon, floodlights, fog
   visibility, wet road.
 
