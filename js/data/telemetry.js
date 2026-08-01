@@ -428,7 +428,9 @@ const DataTelemetry = (function () {
       compare: (compare && compare.car && compare.car.length) ? compare : null,
       visible: {}, cursorT: 0,
       tMax: 0, speedMax: 1, rpmMax: 1,
-      playing: false, rate: 2, _raf: 0, _last: 0, onboard: false,
+      // Default to REAL TIME (1x): the dot goes round at the speed the driver
+      // actually did the lap. 2x/4x are there to skim; you opt into them.
+      playing: false, rate: 1, _raf: 0, _last: 0, onboard: false,
       chart: null, map: null, delta: null,
       chartBase: null, mapBase: null, deltaBase: null, mapT: null,
       sectors: null, g: null, playBtn: null
