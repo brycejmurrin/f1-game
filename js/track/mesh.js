@@ -82,8 +82,14 @@ const TrackMesh = (function () {
         const kc = Math.round(frac * n) % n;
         const tanA = Math.tan((z.angleDeg || 18) * Math.PI / 180);
         const half = Math.max(1, Math.round((z.widthM || 40) / ds / 2));
-        // outer edge is opposite the turn centre at the zone apex (curv + = right)
-        const outer = curvature(track, kc * ds) >= 0 ? -1 : 1;
+        // Outer edge is opposite the turn centre. +curv is a LEFT-hand turn
+        // (measured: a zero-steer run through a +k corner drifts to POSITIVE
+        // lateral, i.e. wide to the right), so its centre is left and its OUTER
+        // edge is the right one. This read "+ = right" and picked the inner edge,
+        // so every authored bank zone banked AGAINST its corner; the agent-facing
+        // corner label was inverted the same way, so the two cancelled and the
+        // camber check passed while the road actually threw the car out.
+        const outer = curvature(track, kc * ds) >= 0 ? 1 : -1;
         for (let i = -half; i <= half; i++) {
           const k = (kc + i + n) % n;
           // cosine window: 1 at apex, 0 at the span edges
@@ -105,7 +111,8 @@ const TrackMesh = (function () {
     const TAN18 = Math.tan(18 * Math.PI / 180);
     const RUN = 6;                       // extra run-in/out nodes each side
     for (const c of picks) {
-      const outer = -c.sign;             // outer edge is opposite the turn centre
+      const outer = c.sign;              // outer edge is opposite the turn centre;
+                                         // +curv = LEFT turn, so outer = right (see above)
       const peak = 2 * track.hw[c.k] * TAN18;
       const lo = c.lo + RUN, hi = c.hi + RUN;
       for (let i = -lo; i <= hi; i++) {
