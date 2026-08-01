@@ -53,12 +53,18 @@ const GameAudio = (function () {
   let musicToken = 0;
   const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
   const MENU_TRACK = "assets/music/menu.mp3";
-  // Race currently shares the menu track (race_a/b + night kept on disk for later).
-  const RACE_TRACKS = [
+  // THE PLAYLIST. One list shared by the menu and the race, so the soundtrack
+  // carries across the transition instead of restarting, and each track hands
+  // over to the next when it ends (see playMusicBuffer's onended). skipTrack()
+  // jumps to the next one — that is what the pause menu's SKIP TRACK does.
+  const PLAYLIST = [
     MENU_TRACK,
-    MENU_TRACK,
-    MENU_TRACK,
+    "assets/music/song2.mp3",
   ];
+  let musicIndex = 0;
+  // Kept for the old startMusic(trackIdx) callers; the playlist is shared now so
+  // the index only decides where a FRESH start begins, never an interruption.
+  const RACE_TRACKS = PLAYLIST;
 
   let listenersAttached = false;
   let rebuildTries = 0;
@@ -732,13 +738,61 @@ const GameAudio = (function () {
   function playMusicBuffer(buf, token) {
     if (!ctx || !musicOn || token !== musicToken) return;  // superseded
     ensureMusicGain();
-    try { if (musicSrc) { musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
+    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    src.loop = true;
+    // A PLAYLIST, so no per-source loop: each track hands over to the next when
+    // it ends, and the list wraps. (A single looping source could never reach
+    // the second song.)
+    src.loop = PLAYLIST.length < 2;
     src.connect(musicGain);
+    src.onended = function () {
+      // only the source that is still current may advance the playlist — a
+      // stopped/superseded one fires onended too
+      if (src !== musicSrc || token !== musicToken || !musicOn) return;
+      nextTrack(1);
+    };
     src.start();
     musicSrc = src;
+  }
+
+  // Move `step` places along the playlist and start playing there. Used both by
+  // the end-of-track handover and by SKIP TRACK in the pause menu.
+  function nextTrack(step) {
+    if (!PLAYLIST.length) return;
+    musicIndex = ((musicIndex + (step || 1)) % PLAYLIST.length + PLAYLIST.length) % PLAYLIST.length;
+    playIndex(musicIndex);
+  }
+
+  // Start (or restart) at a given playlist slot, regardless of what is playing.
+  function playIndex(i) {
+    if (!ctx || !musicEnabled) return;
+    const url = PLAYLIST[((i % PLAYLIST.length) + PLAYLIST.length) % PLAYLIST.length];
+    musicIndex = PLAYLIST.indexOf(url);
+    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
+    musicSrc = null;
+    musicOn = true;
+    currentUrl = url;
+    const token = ++musicToken;
+    if (ctx.state !== "running") { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
+    if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
+    fetch(url)
+      .then(r => r.arrayBuffer())
+      .then(ab => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
+      .then(buf => { musicBuffers[url] = buf; playMusicBuffer(buf, token); })
+      .catch(() => { /* music is optional — ignore load/decode errors */ });
+  }
+
+  // Skip to the next track on demand. Returns the new track's file name so the
+  // caller can say what is playing.
+  function skipTrack() {
+    if (!ctx || !musicEnabled) return null;
+    nextTrack(1);
+    return trackName();
+  }
+  function trackName() {
+    const url = PLAYLIST[musicIndex] || "";
+    return url.split("/").pop().replace(/\.[a-z0-9]+$/i, "");
   }
 
   // trackIdx >= 0 -> one of the race loops; trackIdx < 0 -> menu loop.
@@ -753,31 +807,20 @@ const GameAudio = (function () {
 
   function startMusic(trackIdx) {
     const idx = (typeof trackIdx === "number") ? trackIdx : 0;
-    const url = idx < 0 ? MENU_TRACK
-      : RACE_TRACKS[((idx % RACE_TRACKS.length) + RACE_TRACKS.length) % RACE_TRACKS.length];
     lastTrackIdx = idx;
     if (!ctx || !musicEnabled) return;   // remember the track but stay silent if music is off
-    if (musicOn && currentUrl === url) return;   // already playing this track
-    stopMusic();
-    musicOn = true;
-    currentUrl = url;
-    const token = ++musicToken;
-    if (ctx.state !== "running") { var _p = ctx.resume(); if (_p && _p.catch) _p.catch(() => {}); }
-    if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
-    fetch(url)
-      .then(r => r.arrayBuffer())
-      .then(ab => new Promise((res, rej) => {
-        ctx.decodeAudioData(ab, res, rej);     // callback form: older Safari
-      }))
-      .then(buf => { musicBuffers[url] = buf; playMusicBuffer(buf, token); })
-      .catch(() => { /* music is optional — ignore load/decode errors */ });
+    // The menu and the race share one playlist, so a state change must NOT
+    // interrupt it — going to the grid used to restart the track from zero.
+    // Whatever is playing keeps playing; we only start something if silent.
+    if (musicOn && musicSrc) return;
+    playIndex(idx < 0 ? musicIndex : idx);
   }
 
   function stopMusic() {
     musicOn = false;
     currentUrl = null;
     musicToken++;                                // cancel any in-flight load
-    try { if (musicSrc) { musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
+    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
     musicSrc = null;
   }
 
@@ -808,6 +851,8 @@ const GameAudio = (function () {
     startMusic,
     stopMusic,
     setMusicEnabled,
+    skipTrack,
+    trackName,
     // debug audio-test hooks. rate() is the exact pitch multiplier the engine is
     // playing at (ground truth — output pitch scales linearly with it).
     // centroidHz() is the spectral centroid of the live output (a stable

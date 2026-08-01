@@ -4997,8 +4997,21 @@ function setMusic(b) {
   musicEnabled = b; store.set("music", b);
   GameAudio.setMusicEnabled(b);
   $("pm-music").textContent = "MUSIC: " + (b ? "ON" : "OFF");
+  $("pm-skip").disabled = !b;
 }
 $("pm-music").onclick = () => setMusic(!musicEnabled);
+// SKIP TRACK — jump to the next song in the playlist. Disabled rather than
+// hidden when music is off, so the settings grid keeps its shape (the same
+// reason RECALIBRATE TILT and GEARS disable in place).
+$("pm-skip").onclick = () => {
+  const name = GameAudio.skipTrack();
+  if (name) {
+    $("pm-skip").textContent = "⏭ " + name.toUpperCase();
+    clearTimeout($("pm-skip")._t);
+    $("pm-skip")._t = setTimeout(() => { $("pm-skip").textContent = "⏭ SKIP TRACK"; }, 1800);
+  }
+  if (soundOn) GameAudio.uiTick();
+};
 
 // Render resolution setting: AUTO = the frame-time governor adapts the scale;
 // LOW/MED/HIGH pin a fixed scale (and disable the governor so it can't fight
