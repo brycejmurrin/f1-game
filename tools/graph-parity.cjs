@@ -105,6 +105,7 @@ function main() {
   // on two circuits mints two model sets — summing them is the honest total
   // (each track uploads its own library).
   const kindTotals = {};
+  let totInst = 0, totBake = 0, totBatch = 0, totModelVerts = 0, totInstBytes = 0;
 
   for (const id of ids) {
     let base, head;
@@ -129,6 +130,18 @@ function main() {
       problems.push(`props.count ${head.props.count} vs baseline ${base.props.count}`);
 
     const g = head.graph ? head.graph.stats() : null;
+    // Exercise the instanced-draw handoff on every real track: it must cover the
+    // nodes, and the un-instanceable remainder is the number worth watching.
+    if (head.graph) {
+      const b = head.graph.batches();
+      let inst = 0, mverts = 0, bytes = 0;
+      for (const batch of b.batches) {
+        inst += batch.count; mverts += batch.verts;
+        bytes += batch.matrices.byteLength + (batch.colors ? batch.colors.byteLength : 0);
+      }
+      totInst += inst; totBake += b.bakeOnly.length; totBatch += b.batches.length;
+      totModelVerts += mverts; totInstBytes += bytes;
+    }
     if (g) {
       totUnique += g.uniqueVerts; totFused += g.fusedVerts;
       totNodes += g.nodes; totModels += g.models;
@@ -158,6 +171,13 @@ function main() {
   if (totModels) {
     console.log(`graph totals: ${totNodes} nodes across ${totModels} models — ` +
       `${totFused} fused verts would be ${totUnique} instanced (reuse ${(totFused / totUnique).toFixed(2)}x)`);
+    if (totInst || totBake) {
+      const VB = 40;   // interleaved bytes/vertex in the shipped VBO (pos+nrm+col+mat)
+      console.log(`instanced handoff: ${totBatch} batches, ${totInst} instances ` +
+        `(+${totBake} un-instanceable -> bake), ` +
+        `${(totModelVerts * VB / 1048576).toFixed(2)} MB of models + ` +
+        `${(totInstBytes / 1048576).toFixed(2)} MB of transforms`);
+    }
     const kinds = Object.keys(kindTotals).sort((a, b) => kindTotals[b].fusedVerts - kindTotals[a].fusedVerts);
     if (kinds.length) {
       console.log("\nby emitter (reuse 1.00x = continuous parameters, needs re-parameterising before it instances):");

@@ -27,6 +27,7 @@
  *   const graph = TrackGraph.create({ raw });        // raw = UNGUARDED emitters
  *   graph.instance(key, place, build, meta)          // define-once + place
  *   graph.bake(emit)                                 // replay every node
+ *   graph.batches()                                  // instanced-draw handoff
  *   graph.stats()                                    // reuse / vertex accounting
  *
  * `place` is { o:[x,y,z], r, u, t, s?:[sx,sy,sz] } — origin plus the track basis
@@ -167,6 +168,15 @@ const TrackGraph = (function () {
       const meshOf = () => (geo === undefined ? (geo = bakeCanonical(ops)) : geo);
       m = {
         key, ops, uses: 0,
+        // A radial op (cyl/cone/frustum) is round in the local XZ plane. Replay
+        // sizes it with radScale() = max(|sx|,|sz|) because the primitive
+        // emitters cannot make an ellipse — but an INSTANCE matrix scales x and z
+        // independently, so under a non-uniform XZ scale the two paths disagree.
+        // Flagged here so batches() can route those placements back to the bake.
+        hasRadial: ops.some((o) => o.op === "cyl" || o.op === "cone" || o.op === "frustum"),
+        // Whether the model's colour comes from the node (a per-instance colour
+        // attribute) rather than the shared mesh.
+        nodeColored: ops.some((o) => o.col === NODE_COLOR),
         get geo() { return meshOf(); },
         get aabb() { return aabb === undefined ? (aabb = aabbOf(meshOf())) : aabb; },
         get verts() { const g = meshOf(); return g ? g.pos.length / 3 : 0; },
@@ -227,7 +237,12 @@ const TrackGraph = (function () {
           model: key,
           o: place.o, r: place.r, u: place.u, t: place.t,
           s: place.s || null,
+          col: place.col || null,
           landed,
+          // A placement whose ops were only PARTLY suppressed does not equal its
+          // model: drawing the whole mesh at this transform would put back the
+          // primitives the guard removed. batches() keeps these out.
+          full: landed === m.ops.length,
           meta: meta || null,
         });
       }
@@ -245,6 +260,66 @@ const TrackGraph = (function () {
         landed += replay(m, node, emit, out);
       }
       return landed;
+    }
+
+    // ---- the instanced-draw handoff ----
+    // One producer, any number of backend consumers. GLX wants a per-instance
+    // mat4 in attributes 5-8 via vertexAttribDivisor; three.js wants the same
+    // matrices in an InstancedMesh; neither should have to know how a node is
+    // stored. So this emits plain typed arrays and nothing else.
+    //
+    // Matrices are COLUMN-MAJOR, the layout both GLX's M4 and THREE.Matrix4 use:
+    // columns 0-2 are the (scaled) basis vectors r/u/t, column 3 the origin.
+    // That is exactly xform()'s world = o + R*(local*s), so an instanced draw of
+    // `geo` under this matrix reproduces what replay() emitted.
+    //
+    // Two classes of node CANNOT be instanced and are returned separately rather
+    // than silently mis-drawn:
+    //   * partially suppressed placements (see node.full), and
+    //   * radial geometry under a non-uniform XZ scale (see model.hasRadial) —
+    //     replay makes those round via max(|sx|,|sz|), an instance matrix would
+    //     make them elliptical.
+    // The caller bakes that remainder. `bake()` already does exactly that.
+    function batches() {
+      const byModel = new Map();
+      const bakeOnly = [];
+      for (const node of nodes) {
+        const m = models.get(node.model);
+        if (!m) continue;
+        const s = node.s;
+        const nonUniformXZ = !!s && Math.abs(Math.abs(s[0]) - Math.abs(s[2])) > 1e-9;
+        if (!node.full || (m.hasRadial && nonUniformXZ)) { bakeOnly.push(node); continue; }
+        let list = byModel.get(node.model);
+        if (!list) byModel.set(node.model, (list = []));
+        list.push(node);
+      }
+
+      const out = [];
+      for (const [key, list] of byModel) {
+        const m = models.get(key);
+        const count = list.length;
+        const matrices = new Float32Array(count * 16);
+        const colors = m.nodeColored ? new Float32Array(count * 3) : null;
+        for (let i = 0; i < count; i++) {
+          const n = list[i], o = n.o, r = n.r, u = n.u, t = n.t, s = n.s;
+          const sx = s ? s[0] : 1, sy = s ? s[1] : 1, sz = s ? s[2] : 1;
+          const b = i * 16;
+          matrices[b]      = r[0] * sx; matrices[b + 1]  = r[1] * sx; matrices[b + 2]  = r[2] * sx;
+          matrices[b + 4]  = u[0] * sy; matrices[b + 5]  = u[1] * sy; matrices[b + 6]  = u[2] * sy;
+          matrices[b + 8]  = t[0] * sz; matrices[b + 9]  = t[1] * sz; matrices[b + 10] = t[2] * sz;
+          matrices[b + 12] = o[0];      matrices[b + 13] = o[1];      matrices[b + 14] = o[2];
+          matrices[b + 15] = 1;
+          if (colors) {
+            const c = n.col || WHITE;
+            colors[i * 3] = c[0]; colors[i * 3 + 1] = c[1]; colors[i * 3 + 2] = c[2];
+          }
+        }
+        out.push({ model: key, geo: m.geo, verts: m.verts, count, matrices, colors });
+      }
+      // Deterministic order: a backend uploading these must not have its draw
+      // list reshuffle between builds of the same track.
+      out.sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
+      return { batches: out, bakeOnly };
     }
 
     // The number this whole exercise turns on: instanced cost vs fused cost.
@@ -286,7 +361,7 @@ const TrackGraph = (function () {
       };
     }
 
-    return { models, nodes, model, instance, replay, bake, stats };
+    return { models, nodes, model, instance, replay, bake, batches, stats };
   }
 
   return { create, xform, NODE_COLOR };

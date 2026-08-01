@@ -215,6 +215,116 @@ test("a node without a colour falls back to white rather than emitting NaN", () 
   assert.ok(out.pos.every(Number.isFinite));
 });
 
+// --- batches(): the instanced-draw handoff -------------------------------
+// The contract that matters is EQUIVALENCE: transforming a model's canonical
+// mesh by its instance matrix must land where replay() put the geometry. If
+// that ever drifts, an instanced backend renders a different world from the
+// baked one and no parity gate would catch it.
+const applyMat4 = (m, i, p) => {
+  const b = i * 16;
+  return [
+    m[b] * p[0] + m[b + 4] * p[1] + m[b + 8] * p[2] + m[b + 12],
+    m[b + 1] * p[0] + m[b + 5] * p[1] + m[b + 9] * p[2] + m[b + 13],
+    m[b + 2] * p[0] + m[b + 6] * p[1] + m[b + 10] * p[2] + m[b + 14],
+  ];
+};
+
+test("an instance matrix reproduces exactly what replay() emitted", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const live = buf();
+  const build = (rec) => { rec.box([0, 1, 0], [2, 3, 2], [0.4, 0.5, 0.6]); };
+  // A rotated, translated, non-uniformly scaled basis — nothing axis-aligned.
+  const r = [0.6, 0, 0.8], u = [0, 1, 0], t = [-0.8, 0, 0.6];
+  const places = [
+    { o: [10, 2, -4], r, u, t },
+    { o: [-30, 0, 12], r, u, t, s: [1, 2.5, 1] },
+  ];
+  for (const p of places) g.instance("kit", p, build, { kind: "kit" }, emitter(), live);
+
+  const { batches, bakeOnly } = g.batches();
+  assert.equal(bakeOnly.length, 0, "nothing here should be un-instanceable");
+  assert.equal(batches.length, 1);
+  const [batch] = batches;
+  assert.equal(batch.count, 2);
+
+  // Transform the canonical mesh by each instance matrix and compare against
+  // the vertices replay() actually wrote, in emission order.
+  const canon = batch.geo.pos;
+  for (let i = 0; i < batch.count; i++) {
+    for (let v = 0; v < canon.length / 3; v++) {
+      const p = applyMat4(batch.matrices, i, [canon[v * 3], canon[v * 3 + 1], canon[v * 3 + 2]]);
+      const base = (i * canon.length / 3 + v) * 3;
+      for (let a = 0; a < 3; a++)
+        assert.ok(Math.abs(p[a] - live.pos[base + a]) < 1e-6,
+          `instance ${i} vertex ${v} axis ${a}: ${p[a]} vs replayed ${live.pos[base + a]}`);
+    }
+  }
+});
+
+test("a partially suppressed placement is NOT instanced", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const out = buf();
+  // Reject only the second primitive: the placement ships half a model, so the
+  // whole-mesh instance would put the dropped half back.
+  let seen = 0;
+  const half = Object.assign({}, emitter(), {
+    addBox: (o, ...a) => { seen++; if (seen === 2) return false; RAW.addBox(o, ...a); return true; },
+  });
+  g.instance("two", AT([0, 0, 0]), (rec) => {
+    rec.box([0, 0, 0], [1, 1, 1], [1, 1, 1]);
+    rec.box([5, 0, 0], [1, 1, 1], [1, 1, 1]);
+  }, { kind: "two" }, half, out);
+
+  const { batches, bakeOnly } = g.batches();
+  assert.equal(batches.length, 0, "a partial placement must not become an instance");
+  assert.equal(bakeOnly.length, 1, "it must be handed back for baking instead");
+});
+
+test("radial geometry under a non-uniform XZ scale is NOT instanced", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const out = buf();
+  const mast = (rec) => rec.cyl([0, 0, 0], 1, 4, [1, 1, 1], 6);
+  // sx !== sz: replay makes this round via max(|sx|,|sz|); an instance matrix
+  // would make it elliptical, so the two paths would disagree.
+  g.instance("mast", Object.assign(AT([0, 0, 0]), { s: [1, 1, 3] }), mast, { kind: "m" }, emitter(), out);
+  // sx === sz is fine — uniform in the round plane.
+  g.instance("mast", Object.assign(AT([9, 0, 0]), { s: [2, 5, 2] }), mast, { kind: "m" }, emitter(), out);
+
+  const { batches, bakeOnly } = g.batches();
+  assert.equal(bakeOnly.length, 1, "the elliptical case must fall back to baking");
+  assert.equal(batches.length, 1);
+  assert.equal(batches[0].count, 1, "only the uniformly-scaled placement instances");
+});
+
+test("per-instance colours ride the batch, and only when the model needs them", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const out = buf();
+  const tints = [[1, 0, 0], [0, 0.5, 1]];
+  tints.forEach((col, i) => g.instance("pane", Object.assign(AT([i * 4, 0, 0]), { col }),
+    (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR), null, emitter(), out));
+  g.instance("solid", AT([0, 0, 9]), (rec) => rec.box([0, 0, 0], [1, 1, 1], [0.2, 0.2, 0.2]),
+    null, emitter(), out);
+
+  const { batches } = g.batches();
+  const pane = batches.find((b) => b.model === "pane");
+  const solid = batches.find((b) => b.model === "solid");
+  assert.deepEqual(Array.from(pane.colors), [1, 0, 0, 0, 0.5, 1]);
+  assert.equal(solid.colors, null, "a model with its own colours needs no per-instance array");
+});
+
+test("batch order is deterministic", () => {
+  const mk = () => {
+    const g = TrackGraph.create({ raw: RAW });
+    const out = buf();
+    for (const key of ["zebra", "alpha", "mid"])
+      g.instance(key, AT([0, 0, 0]), (rec) => rec.box([0, 0, 0], [1, 1, 1], [1, 1, 1]),
+        null, emitter(), out);
+    return g.batches().batches.map((b) => b.model);
+  };
+  assert.deepEqual(plain(mk()), plain(mk()));
+  assert.deepEqual(plain(mk()), ["alpha", "mid", "zebra"]);
+});
+
 test("a malformed placement is dropped, not emitted as NaN geometry", () => {
   const g = TrackGraph.create({ raw: RAW });
   const out = buf();
