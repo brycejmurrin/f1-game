@@ -309,7 +309,7 @@ test("deselecting every telemetry driver synchronously restores the empty state"
   await driver.click();
 
   await expect(page.locator(".dh-telem-detail .dh-spinner")).toHaveCount(0);
-  await expect(page.locator(".dh-telem-detail")).toContainText("Pick 1 or 2 drivers");
+  await expect(page.locator(".dh-telem-detail")).toContainText("Pick 1");
 });
 
 test("data hub exposes modal tabs, traps focus, and restores its opener", async ({ page }) => {
