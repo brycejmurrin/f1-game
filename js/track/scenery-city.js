@@ -10,6 +10,15 @@
 const SceneryCity = (function () {
   "use strict";
 
+  // The one model every axis-aligned facade box shares: a unit cube with its
+  // size on the node scale and its colour on the node. Window panes, floor rails
+  // and mullions are all dim()-shaped boxes on the same building basis, so the
+  // whole city's facade furniture is ONE 24-vertex model plus a transform each.
+  // No rec.mat(): out._mat is set by the caller (METAL for frames, GLASS/0 for
+  // panes) and the ops inherit it, exactly as the inline addBox calls did.
+  const UNIT_BOX = "unit-box";
+  const unitBox = (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR);
+
   function create(ctx) {
     const { out, glassBuf, def, theme, NIGHT, MAT, lod,
             seat, cantilever,
@@ -56,7 +65,12 @@ const SceneryCity = (function () {
         const gBase = vadd(mid, nVec, nSign * (nHalf + 0.04));
         const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
         out._mat = MAT.METAL;
-        if (!simple) for (let i = 0; i <= rowN; i += 2) addBox(out, vadd(fBase, u, (i / rowN - 0.5) * sh), dim(frameT, railH, faceW * 1.005), frameCol, bb);   // perf: every other rail
+        // perf: every other rail
+        if (!simple) for (let i = 0; i <= rowN; i += 2)
+          ctx.instance(UNIT_BOX,
+            { o: vadd(fBase, u, (i / rowN - 0.5) * sh), r: bb[0], u: bb[1], t: bb[2],
+              s: dim(frameT, railH, faceW * 1.005), col: frameCol },
+            unitBox, { kind: "facadeRail" });
         for (let c = 0; c < cols; c++) {
           const cx = (-0.5 + (c + 0.5) / cols) * faceW;
           for (let ri = 0; ri < rowN; ri++) {
@@ -82,12 +96,12 @@ const SceneryCity = (function () {
             // street circuits (Vegas ~1.8 M prop verts), and the per-pane hash
             // tint is precisely what a per-instance colour attribute exists for:
             // without TrackGraph.NODE_COLOR each lit pane would mint its own model.
-            ctx.instance("window-pane",
+            ctx.instance(UNIT_BOX,
               { o: vadd(vadd(gBase, wVec, cx), u, ry),
                 r: bb[0], u: bb[1], t: bb[2],
                 s: dim(0.08, winHH, (faceW / cols) * 0.82),
                 col },
-              (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR),
+              unitBox,
               { kind: "windowPane" },
               { buf: toGlass ? glassBuf : out });
             if (toGlass) glassBuf._mat = 0;
@@ -96,11 +110,22 @@ const SceneryCity = (function () {
         out._mat = MAT.METAL;
         if (simple) { out._mat = 0; return; }
         const nm = Math.max(1, Math.min(3, cols - 1));   // perf: fewer mullions (was 5)
-        for (let c = 1; c <= nm; c++) addBox(out, vadd(fBase, wVec, (-0.5 + c / (nm + 1)) * faceW), dim(frameT, sh, 0.4), frameCol, bb);
+        for (let c = 1; c <= nm; c++)
+          ctx.instance(UNIT_BOX,
+            { o: vadd(fBase, wVec, (-0.5 + c / (nm + 1)) * faceW), r: bb[0], u: bb[1], t: bb[2],
+              s: dim(frameT, sh, 0.4), col: frameCol },
+            unitBox, { kind: "facadeMullion" });
         if (neonAmt > 0.3) {
           const ST = Math.min(0.4, faceW * 0.04);
-          for (const dr of [-1, 1]) addBox(out, vadd(fBase, wVec, dr * faceW * 0.5), dim(frameT * 1.05, sh * 0.96, ST), nc, bb);
-          addBox(out, vadd(vadd(mid, nVec, nSign * (nHalf + 0.36)), u, sh * 0.48), dim(frameT * 1.1, Math.min(0.5, sh * 0.018), faceW), nc, bb);
+          for (const dr of [-1, 1])
+            ctx.instance(UNIT_BOX,
+              { o: vadd(fBase, wVec, dr * faceW * 0.5), r: bb[0], u: bb[1], t: bb[2],
+                s: dim(frameT * 1.05, sh * 0.96, ST), col: nc },
+              unitBox, { kind: "facadeNeon" });
+          ctx.instance(UNIT_BOX,
+            { o: vadd(vadd(mid, nVec, nSign * (nHalf + 0.36)), u, sh * 0.48), r: bb[0], u: bb[1], t: bb[2],
+              s: dim(frameT * 1.1, Math.min(0.5, sh * 0.018), faceW), col: nc },
+            unitBox, { kind: "facadeNeon" });
         }
         out._mat = 0;
       };
