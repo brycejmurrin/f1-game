@@ -128,10 +128,30 @@ test("pack manifest is well-formed", { skip: !hasPack && "no pack installed" }, 
   }
 });
 
+test("the pack carries a mobile LOW variant", { skip: !hasPack && "no pack installed" }, () => {
+  // js/render/assets.js picks materials.low on a phone and SILENTLY falls back
+  // to the full-size strips when it is absent — no error, no warning, mobile
+  // just quietly pays the desktop cost. That failure is invisible from the
+  // desktop the pack was baked on, so it needs a test rather than a comment.
+  const mats = manifest.materials;
+  assert.ok(mats.low, "materials.low missing — mobile would load the full-size pack");
+  assert.ok(mats.low.size < mats.size,
+    `low size ${mats.low.size} must be smaller than ${mats.size}`);
+  assert.ok(mats.low.albedo && mats.low.albedo !== mats.albedo, "low.albedo must be its own file");
+  assert.deepEqual(
+    (mats.low.layers || []).map((l) => l.mat).sort((a, b) => a - b),
+    mats.layers.map((l) => l.mat).sort((a, b) => a - b),
+    "low variant must cover the same MAT slots as the full one");
+  const big = fs.statSync(path.join(PACK, mats.albedo)).size;
+  const small = fs.statSync(path.join(PACK, mats.low.albedo)).size;
+  assert.ok(small < big, `low albedo (${small}) should be smaller than full (${big})`);
+});
+
 test("every referenced file exists and the strip is the right height",
   { skip: !hasPack && "no pack installed" }, () => {
   const mats = manifest.materials;
-  for (const f of [mats.albedo, mats.normal].filter(Boolean)) {
+  for (const f of [mats.albedo, mats.normal,
+                   mats.low && mats.low.albedo, mats.low && mats.low.normal].filter(Boolean)) {
     const p = path.join(PACK, f);
     assert.ok(fs.existsSync(p), `missing ${f}`);
     // PNG signature + IHDR width/height, so a truncated or wrong-shaped
@@ -139,9 +159,12 @@ test("every referenced file exists and the strip is the right height",
     const b = fs.readFileSync(p);
     assert.deepEqual([...b.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47], `${f} is not a PNG`);
     const w = b.readUInt32BE(16), h = b.readUInt32BE(20);
-    assert.equal(w, mats.size, `${f} width ${w} != manifest size ${mats.size}`);
-    assert.equal(h, mats.size * 17,
-      `${f} height ${h} != size*17 (${mats.size * 17}) — the filmstrip must have one slot per MAT id`);
+    // Each variant declares its own size; a strip must be square-per-layer and
+    // exactly 17 layers tall whichever tier it belongs to.
+    const expect = (mats.low && (f === mats.low.albedo || f === mats.low.normal)) ? mats.low.size : mats.size;
+    assert.equal(w, expect, `${f} width ${w} != declared size ${expect}`);
+    assert.equal(h, expect * 17,
+      `${f} height ${h} != size*17 (${expect * 17}) — the filmstrip must have one slot per MAT id`);
   }
   for (const [id, rec] of Object.entries(manifest.models || {}))
     assert.ok(fs.existsSync(path.join(PACK, rec.file)), `model ${id}: missing ${rec.file}`);
@@ -285,6 +308,110 @@ test("TrackGeom.addMesh transforms a baked model correctly", () => {
   assert.equal(G.addMesh(out3, mesh, { x: NaN }), false);
   assert.equal(G.addMesh(out3, null, {}), false);
   assert.equal(out3.pos.length, 0, "a rejected placement must emit no vertices");
+});
+
+test("webbake toGLB re-packs .gltf + .bin into something gltf.js accepts", () => {
+  // The browser baker's one genuinely novel piece. js/render/gltf.js is GLB-only
+  // and refuses external .bin URIs, while Poly Haven ships .gltf with a sidecar
+  // .bin — so toGLB() bridges them. A bug here surfaces at runtime as an opaque
+  // "malformed GLB", far from its cause, so it is pinned by round-tripping a
+  // real pair through the game's OWN loader.
+  const vm = require("node:vm");
+  const load = (rel, sandbox) => {
+    const src = fs.readFileSync(path.join(ROOT, rel), "utf8").replace(/^const\b/gm, "var");
+    vm.runInContext(src, sandbox, { filename: rel });
+  };
+  const sandbox = {
+    Math, Array, Object, JSON, Uint8Array, Uint16Array, Uint32Array, Int16Array,
+    Float32Array, DataView, ArrayBuffer, TextEncoder, TextDecoder, Promise, Error, console,
+  };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  load("js/render/gltf.js", sandbox);
+  load("assets/pack/webbake.js", sandbox);
+  assert.equal(typeof sandbox.WebBake.toGLB, "function");
+
+  // A .gltf + sidecar .bin in Poly Haven's shape: external buffer uri, a
+  // texture reference that cannot survive, and a baseColorFactor that must.
+  const pos = new Float32Array([0, 0, 0, 2, 0, 0, 0, 3, 0]);
+  const idx = new Uint16Array([0, 1, 2, 0]);            // padded to 4 bytes
+  const bin = Buffer.concat([Buffer.from(pos.buffer), Buffer.from(idx.buffer)]);
+  const gltf = {
+    asset: { version: "2.0" }, scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
+    images: [{ uri: "textures/diff.jpg" }],
+    textures: [{ source: 0 }],
+    materials: [{ pbrMetallicRoughness: {
+      baseColorFactor: [0.25, 0.5, 0.75, 1], baseColorTexture: { index: 0 } } }],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 3, type: "VEC3", min: [0, 0, 0], max: [2, 3, 0] },
+      { bufferView: 1, componentType: 5123, count: 3, type: "SCALAR" },
+    ],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: 36 },
+      { buffer: 0, byteOffset: 36, byteLength: 6 },
+    ],
+    buffers: [{ uri: "model.bin", byteLength: bin.length }],
+  };
+
+  const glb = sandbox.WebBake.toGLB(gltf, bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength));
+  const dv = new DataView(glb);
+  assert.equal(dv.getUint32(0, true), 0x46546c67, "GLB magic");
+  assert.equal(dv.getUint32(4, true), 2, "GLB version");
+  assert.equal(dv.getUint32(8, true), glb.byteLength, "declared length matches actual");
+  assert.equal(glb.byteLength % 4, 0, "GLB must stay 4-byte aligned");
+
+  // The real proof: the game's own loader accepts it and produces usable geometry.
+  const mesh = sandbox.GLTF.toMesh(glb, { scale: 1 });
+  assert.equal(mesh.pos.length / 3, 3, "three vertices survived");
+  assert.deepEqual([...mesh.idx], [0, 1, 2]);
+  assert.deepEqual([...mesh.pos].slice(0, 6), [0, 0, 0, 2, 0, 0]);
+  // baseColorFactor must survive the texture strip — it is all the colour an
+  // imported model has once its textures are dropped.
+  assert.ok(Math.abs(mesh.col[0] - 0.25) < 0.01 && Math.abs(mesh.col[1] - 0.5) < 0.01,
+    `baseColorFactor lost: ${[...mesh.col].slice(0, 3)}`);
+});
+
+test("webbake writes a ZIP that real unzip accepts", () => {
+  // The browser baker hands its output back as a single archive, written by a
+  // ~40-line STORE-method ZIP encoder with no library behind it. A wrong CRC or
+  // a bad central-directory offset produces a file that *looks* fine and fails
+  // only when someone tries to open it — so this checks it against the system
+  // unzip rather than against my own reader.
+  const os = require("node:os"), cp = require("node:child_process"), vm = require("node:vm");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-zip-"));
+  try {
+    const sandbox = {
+      Math, Array, Object, JSON, Uint8Array, Uint16Array, Uint32Array, Int32Array,
+      Float32Array, DataView, ArrayBuffer, TextEncoder, TextDecoder, Promise, Error, console, Blob,
+    };
+    sandbox.window = sandbox;
+    vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "assets", "pack", "webbake.js"), "utf8")
+      .replace(/^const\b/gm, "var"), sandbox, { filename: "webbake.js" });
+
+    const enc = new TextEncoder();
+    const payload = '{"version":1,"materials":{"size":512}}\n';
+    const blob = sandbox.WebBake.zip([
+      { name: "manifest.json", data: enc.encode(payload) },
+      { name: "CREDITS.md", data: enc.encode("# Asset credits\n\nPowered by Poly Haven.\n") },
+      { name: "mat-albedo-512.png", data: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 1, 2, 3]) },
+    ]);
+    const zipPath = path.join(dir, "pack.zip");
+    return blob.arrayBuffer().then((ab) => {
+      fs.writeFileSync(zipPath, Buffer.from(ab));
+      const t = cp.spawnSync("unzip", ["-t", zipPath], { encoding: "utf8" });
+      if (t.error && t.error.code === "ENOENT") return;          // no unzip on this box
+      assert.equal(t.status, 0, `unzip -t rejected the archive:\n${t.stdout}${t.stderr}`);
+      const got = cp.spawnSync("unzip", ["-p", zipPath, "manifest.json"], { encoding: "utf8" });
+      assert.equal(got.status, 0, "could not extract manifest.json");
+      assert.equal(got.stdout, payload, "extracted content does not match what went in");
+    });
+  } finally {
+    // rmSync is safe to schedule now: the promise above only reads from `dir`
+    // via a spawned process that has already exited by the time it resolves.
+    process.on("exit", () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {} });
+  }
 });
 
 test("credits cover every asset in the pack", { skip: !hasPack && "no pack installed" }, () => {

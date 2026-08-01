@@ -104,18 +104,43 @@ function pngChunk(type, data) {
 }
 
 function encodePNG(w, h, rgba) {
-  // Per-scanline filter 1 (Sub) — noise textures compress meaningfully better
-  // under Sub than under None, and it costs one pass.
+  // ADAPTIVE per-scanline filtering: try all five and keep the one with the
+  // smallest sum of absolute signed deviations — the standard heuristic, and
+  // the one libpng uses. Sub-only (the original) is fine for synthetic noise
+  // but poor on photographic scans, where Paeth usually wins by a wide margin;
+  // on the 512² browser bake this is the difference between a pack that fits
+  // the commit budget and one that does not.
   const stride = w * 4;
   const raw = Buffer.alloc((stride + 1) * h);
+  const cand = [Buffer.alloc(stride), Buffer.alloc(stride), Buffer.alloc(stride),
+                Buffer.alloc(stride), Buffer.alloc(stride)];
+  let prev = Buffer.alloc(stride);
   for (let y = 0; y < h; y++) {
-    const o = y * (stride + 1);
-    raw[o] = 1;
-    for (let x = 0; x < stride; x++) {
-      const cur = rgba[y * stride + x];
-      const left = x >= 4 ? rgba[y * stride + x - 4] : 0;
-      raw[o + 1 + x] = (cur - left) & 0xff;
+    const line = rgba.subarray(y * stride, (y + 1) * stride);
+    let best = 0, bestScore = Infinity;
+    for (let f = 0; f < 5; f++) {
+      const c = cand[f];
+      let score = 0;
+      for (let i = 0; i < stride; i++) {
+        const a = i >= 4 ? line[i - 4] : 0, b = prev[i], cc = i >= 4 ? prev[i - 4] : 0;
+        let v;
+        if (f === 0) v = line[i];
+        else if (f === 1) v = line[i] - a;
+        else if (f === 2) v = line[i] - b;
+        else if (f === 3) v = line[i] - ((a + b) >> 1);
+        else {
+          const p = a + b - cc, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - cc);
+          v = line[i] - ((pa <= pb && pa <= pc) ? a : (pb <= pc ? b : cc));
+        }
+        c[i] = v & 0xff;
+        score += c[i] < 128 ? c[i] : 256 - c[i];
+      }
+      if (score < bestScore) { bestScore = score; best = f; }
     }
+    const o = y * (stride + 1);
+    raw[o] = best;
+    cand[best].copy(raw, o + 1);
+    prev = line;
   }
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
@@ -126,6 +151,85 @@ function encodePNG(w, h, rgba) {
     pngChunk("IDAT", zlib.deflateSync(raw, { level: 9 })),
     pngChunk("IEND", Buffer.alloc(0)),
   ]);
+}
+
+// ───────────────────────────── PNG decoder ───────────────────────────────────
+// Needed to re-encode what the BROWSER baker produces: canvas.toBlob writes a
+// conservatively-filtered PNG, and a 512² 17-layer pair lands around 19 MB —
+// well over the commit budget. This decodes it so `import-pack` can downsample
+// and re-encode. Only what canvas emits: 8-bit RGB/RGBA, non-interlaced.
+
+function decodePNG(buf) {
+  if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error("not a PNG");
+  let off = 8, w = 0, h = 0, depth = 0, colour = 0;
+  const idat = [];
+  while (off < buf.length) {
+    const len = buf.readUInt32BE(off);
+    const type = buf.toString("ascii", off + 4, off + 8);
+    const data = buf.subarray(off + 8, off + 8 + len);
+    if (type === "IHDR") {
+      w = data.readUInt32BE(0); h = data.readUInt32BE(4);
+      depth = data[8]; colour = data[9];
+      if (depth !== 8) throw new Error(`unsupported bit depth ${depth}`);
+      if (colour !== 2 && colour !== 6) throw new Error(`unsupported colour type ${colour}`);
+      if (data[12] !== 0) throw new Error("interlaced PNG unsupported");
+    } else if (type === "IDAT") idat.push(data);
+    else if (type === "IEND") break;
+    off += 12 + len;
+  }
+  const ch = colour === 6 ? 4 : 3;
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = w * ch;
+  const out = Buffer.alloc(w * h * 4);
+  let prev = Buffer.alloc(stride);
+  for (let y = 0; y < h; y++) {
+    const f = raw[y * (stride + 1)];
+    const line = Buffer.from(raw.subarray(y * (stride + 1) + 1, y * (stride + 1) + 1 + stride));
+    // Undo the per-scanline filter. a = left, b = up, c = up-left.
+    for (let i = 0; i < stride; i++) {
+      const a = i >= ch ? line[i - ch] : 0, b = prev[i], c = i >= ch ? prev[i - ch] : 0;
+      let v = line[i];
+      if (f === 1) v += a;
+      else if (f === 2) v += b;
+      else if (f === 3) v += (a + b) >> 1;
+      else if (f === 4) {
+        const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+        v += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+      }
+      line[i] = v & 0xff;
+    }
+    for (let x = 0; x < w; x++) {
+      const s = x * ch, d = (y * w + x) * 4;
+      out[d] = line[s]; out[d + 1] = line[s + 1]; out[d + 2] = line[s + 2];
+      out[d + 3] = ch === 4 ? line[s + 3] : 255;
+    }
+    prev = line;
+  }
+  return { w, h, rgba: out };
+}
+
+// Box-filter downsample by an integer factor. A box filter rather than anything
+// fancier on purpose: these are tiling detail maps whose mip chain the GPU will
+// build with a box filter anyway, so matching it keeps level 0 consistent with
+// what the hardware derives from it.
+function downsample(rgba, w, h, f) {
+  const nw = Math.floor(w / f), nh = Math.floor(h / f);
+  const out = Buffer.alloc(nw * nh * 4);
+  for (let y = 0; y < nh; y++) {
+    for (let x = 0; x < nw; x++) {
+      let r = 0, g = 0, b = 0, a = 0;
+      for (let j = 0; j < f; j++) {
+        for (let i = 0; i < f; i++) {
+          const s = ((y * f + j) * w + (x * f + i)) * 4;
+          r += rgba[s]; g += rgba[s + 1]; b += rgba[s + 2]; a += rgba[s + 3];
+        }
+      }
+      const n = f * f, d = (y * nw + x) * 4;
+      out[d] = Math.round(r / n); out[d + 1] = Math.round(g / n);
+      out[d + 2] = Math.round(b / n); out[d + 3] = Math.round(a / n);
+    }
+  }
+  return { w: nw, h: nh, rgba: out };
 }
 
 // ───────────────────────── tiling value noise ────────────────────────────────
@@ -426,6 +530,75 @@ async function bakeModel(args) {
   report(m);
 }
 
+// ───────────────────── import a browser bake (webbake.js) ────────────────────
+
+// Take the ZIP contents produced by assets/pack/webbake.js — real CC0 scans
+// composited in a browser, because neither the authoring sandbox nor a
+// shell-less setup can reach the CDNs — and install them as the committed pack,
+// downsampling and re-encoding to fit the budget.
+//
+//   node tools/assets.mjs import-pack <dir> [--size 256]
+//
+// <dir> holds mat-albedo-N.png, mat-normal-N.png and manifest.json.
+function importPack(args) {
+  const [dir] = args.filter((a) => !a.startsWith("--"));
+  if (!dir) fail("usage: import-pack <dir-with-the-unzipped-bake> [--size 256]");
+  const src = path.resolve(dir);
+  const inMan = JSON.parse(fs.readFileSync(path.join(src, "manifest.json"), "utf8"));
+  const srcSize = inMan.materials.size | 0;
+  const target = intArg(args, "--size", 256);
+  // A second, smaller variant for the mobile tier. js/render/assets.js looks for
+  // materials.low on a phone and SILENTLY falls back to the full-size strips
+  // when it is absent — so without this, mobile pays the desktop download and
+  // roughly 12 MB of VRAM across both arrays, which is the opposite of what the
+  // tiering was for. 0 disables it.
+  const lowTarget = intArg(args, "--low", 128);
+  if (target > srcSize || srcSize % target !== 0)
+    fail(`--size ${target} must divide the source size ${srcSize} and not exceed it`);
+  if (lowTarget && (lowTarget >= target || srcSize % lowTarget !== 0))
+    fail(`--low ${lowTarget} must divide ${srcSize} and be smaller than --size ${target}`);
+
+  fs.mkdirSync(PACK, { recursive: true });
+  const out = { version: 1, materials: { size: target, layers: inMan.materials.layers },
+                models: {}, env: {}, credits: [] };
+  const keep = new Set();
+  let bytes = 0;
+  for (const which of ["albedo", "normal"]) {
+    const inFile = inMan.materials[which];
+    if (!inFile) continue;
+    const png = decodePNG(fs.readFileSync(path.join(src, inFile)));
+    if (png.h !== srcSize * MAT_LAYERS)
+      fail(`${inFile}: height ${png.h} != size*${MAT_LAYERS} (${srcSize * MAT_LAYERS})`);
+    for (const size of lowTarget ? [target, lowTarget] : [target]) {
+      const f = srcSize / size;
+      const small = f === 1 ? png : downsample(png.rgba, png.w, png.h, f);
+      const name = `mat-${which}-${size}.png`;
+      const buf = encodePNG(small.w, small.h, small.rgba);
+      fs.writeFileSync(path.join(PACK, name), buf);
+      keep.add(name);
+      bytes += buf.length;
+      if (size === target) out.materials[which] = name;
+      else {
+        out.materials.low = out.materials.low || { size: lowTarget, layers: inMan.materials.layers };
+        out.materials.low[which] = name;
+      }
+      console.log(`${inFile} ${png.w}x${png.h} -> ${name} ${small.w}x${small.h}  ${(buf.length / 1024).toFixed(0)} KB`);
+    }
+  }
+  // Drop any previous strips at a different size so the pack never carries two.
+  for (const f of fs.readdirSync(PACK)) {
+    if (/^mat-(albedo|normal)-\d+\.png$/.test(f) && !keep.has(f)) {
+      fs.unlinkSync(path.join(PACK, f));
+      console.log(`removed stale ${f}`);
+    }
+  }
+  out.credits = buildCredits(out);
+  writeManifest(out);
+  console.log(`pack: ${(bytes / 1024).toFixed(0)} KB / ${(BUDGET_BYTES / 1048576).toFixed(0)} MB budget` +
+              (bytes > BUDGET_BYTES ? "  ** OVER **" : "  (ok)"));
+  if (bytes > BUDGET_BYTES) process.exitCode = 1;
+}
+
 // ─────────────────────────── environment bake ────────────────────────────────
 
 // Hemisphere ambient for a (track, time-of-day) pair.  These feed the values
@@ -696,6 +869,7 @@ const USAGE = `Apex 26 asset bake CLI
   search <type> <query>            list CC0 candidates on Poly Haven + ambientCG
   fetch <MAT> <host:id> [--res 1k] download a CC0 source material's file list
   bake-material <MAT> <dir>        composite source maps into a layer (needs sharp)
+  import-pack <dir> [--size N]     install a browser bake (assets/pack/webbake.js)
   bake-model <id> <file.glb>       bake glTF -> the game's own vertex format
   bake-env "<track>|<tod>" --sky r,g,b --ground r,g,b
   verify                           licences, hashes, budget
@@ -709,6 +883,7 @@ async function main() {
     case "search": await search(args); break;
     case "fetch": await fetchSource(args); break;
     case "bake-material": await bakeMaterial(args); break;
+    case "import-pack": importPack(args); break;
     case "bake-model": await bakeModel(args); break;
     case "bake-env": bakeEnv(args); break;
     case "verify": process.exit(verify()); break;
