@@ -19,8 +19,8 @@ frame. Stage first (see Staging) — an empty scene means "not built yet", not
 
 `window.__apex` composes the ~90 raw debug hooks into one small surface that is
 **egocentric** (framed around the car), **typed** (failures are `{ok:false,
-error, message, fix}`, never `null`), **compact** (returns an identifier, not a
-whole record), and **self-describing** (`agentHelp()` is the manifest,
+error, message, fix}`, never `null` — with the two quiet exceptions above),
+**compact** (returns an identifier, not a whole record), and **self-describing** (`agentHelp()` is the manifest,
 `objective()` is the game). LLMs drive *worse* from an image than from structured
 text (BALROG, VideoGameBench) — so use these, not screenshots.
 
@@ -70,16 +70,12 @@ Read both once; do not re-fetch per tick.
   bearing (radius around the car), or `{visible:true}` for the camera's on-screen
   list. Rows land in `props` (plus `lamps`); `counts.inRadius` is how many were in
   range and `truncated` flags that `limit` clipped the list — check it before
-  concluding something isn't there. A row's `side` is
-  EGOCENTRIC (which side of your nose, from `bearingDeg`, **+ = your right**);
-  its `trackSide` is the CENTRELINE side — the one `worldModel()`/`describe()`
-  report — so cross-reference the same prop between tools by `trackSide`, not
-  `side`. The two agree when you are on the centreline pointing down the road
-  and legitimately diverge when you are not: a prop can be left of the road's
-  middle and still right of *your nose*. If they disagree everywhere, including
-  where you are centred and straight, something is wrong — that was a real sign
-  bug, caught by parking a rival at a known offset and looking at which half of
-  the screen it rendered on.
+  concluding something isn't there. **Cross-reference a prop between tools by
+  `trackSide`, not `side`.** `trackSide` is the CENTRELINE side, the one
+  `worldModel()`/`describe()` also report; `side` is EGOCENTRIC — which side of
+  your nose, from `bearingDeg`, where **+ = your right**. They agree when you sit
+  on the centreline pointing down the road and diverge legitimately when you do
+  not: a prop can be left of the road's middle and still right of your nose.
 - `atmosphere()` — the light as prose: day/night, sun/moon, floodlights, fog
   visibility, wet road.
 
@@ -145,6 +141,8 @@ lock** (matches `+k`); `throttle`/`brake` are **booleans** (any truthy = full, s
 ticks; `rollout({policy})` calls your policy repeatedly.
 
 ```
+race("monza"); go(); jump(0.05, 30)   // STAGE FIRST — without this every read
+                                      //   below returns PlayerNotPlacedError
 objective()                       // once — what winning is
 trackInfo({what:"corners"})       // once — the static map
 loop:
@@ -156,37 +154,38 @@ loop:
 A runnable starter policy — nulls heading error, recentres, brakes for the corner:
 
 ```js
+const CAP = 33;                    // m/s — a FLAT cap, everywhere, not just in corners.
+                                   //   This is the lever that makes the rest work; raise it
+                                   //   once you finish laps, don't remove it.
 policy = w => {
   const e = w.ego, nc = w.nextCorner;
   const off = Math.abs(e.lateralM) > (e.halfWidthM || 6);  // in the grass?
   let steer = -e.headingErrDeg*0.045 - e.lateralM*(off ? 0.12 : 0.045);  // recentre HARDER off-track
   steer = Math.max(-1, Math.min(1, steer));
-  const tgt = nc ? nc.apexSpeedKph/3.6*0.75 : 55;          // aim WELL under — hints are optimistic
-  const braking = nc && e.speed > tgt && nc.distM < nc.suggestBrakeM*3.0;
+  const tgt = nc ? nc.apexSpeedKph/3.6*0.5 : 40;           // aim WELL under — hints are optimistic
+  const hot  = nc && e.speed > tgt && nc.distM < nc.suggestBrakeM*6.0;  // brake EARLY
+  const fast = e.speed > CAP;                              // over the governor anywhere
+  const braking = hot || fast;
   return { steer,
            throttle: off ? e.speed < 15 : !braking,        // off-track: crawl, don't spin in the grass
-           brake: braking && !off };                       // brake WELL before the hint
+           brake: braking && !off && e.speed > 3 };        // >3: below that, brake REVERSES
 };
 ```
 
-`apexSpeedKph`/`suggestBrakeM` assume more grip than default parts have — brake
-well before the hint and aim under the apex speed, then tune from the digest's
-`offTrack.pct` and `cornerMinSpeedKph`. It is a starting point, not a
-steady-state-stable controller: a short interval can legitimately end with the
-car off-line mid-recovery, so judge it by the digest *trend* — `offTrack.pct`
-plus the per-sample `speedKph`/`lateralM` trail — and not by wherever the last
-sample happens to land. **The single biggest lever is not in the snippet above:
-add a flat speed cap** (never exceed some fixed m/s *anywhere*, not just inside a
-corner's brake window). Corner-relative braking alone, however early, cannot save
-an entry the straight already over-fed — a measured Monza lap needed a ~33 m/s
-governor plus much harder braking than the constants above (which get rescued
-within 5-40 s on the fast corners). Slow and finishing beats quick and beached.
-**Fix braking FIRST:** on a too-hot entry
-the car washes wide and beaches (the baseline would then hold throttle in the
-grass and stall for the rest of the interval — hence the off-track crawl above),
-and turn-in does nothing until entry speed is right. Once it is, add a small
-feed-forward toward `nc.dir` (∝ `1/nc.radiusM`) to sharpen turn-in. Two gotchas
-the loop above hides:
+**Why `CAP` carries the policy.** `apexSpeedKph`/`suggestBrakeM` assume more grip
+than default parts have, and corner-relative braking — however early — cannot
+rescue an entry the preceding straight already over-fed. Without the governor the
+same policy gets rescued within 5-40 s on Monza's fast corners; with it, a
+measured lap completes. So **fix entry speed before anything else**: until it is
+right, turn-in does nothing, the car washes wide and beaches, and the off-track
+crawl above is all that stops it stalling there for the rest of the interval.
+Once laps complete, raise `CAP`, then add a small feed-forward toward `nc.dir`
+(∝ `1/nc.radiusM`) to sharpen turn-in.
+
+Tune from the digest's `offTrack.pct` and `cornerMinSpeedKph`. This is a starting
+point, not a steady-state-stable controller — a short interval can legitimately
+end with the car off-line mid-recovery — so judge it by the digest *trend*, not
+by wherever the last sample lands. Two gotchas the loop above hides:
 - **`rollout`'s policy receives `world({detail:"brief"})`** — which carries `ego`
   and a single `nextCorner` but NOT `pacenotes`/`rivals`/`nextCorners`. Reading
   those inside a rollout policy returns `undefined`; call `world({detail:"drive"})`
@@ -203,8 +202,14 @@ the loop above hides:
   barrier: speed oscillates roughly +60/−18 kph for a minute while lap distance
   barely moves. Gate it — `brake: braking && e.speed > 3`.
 
-An LLM can't decide at 60 Hz — that is what `rollout({policy})` is for: a lap from
-one call. Use `world()`+`act()` only for a single decision.
+An LLM can't decide at 60 Hz — that is what `rollout({policy})` is for: long
+intervals from one call. Use `world()`+`act()` only for a single decision.
+**`seconds` is clamped to 120**, silently — ask for 300 and you get 120, which
+reads as "my policy stalled" when it merely ran out of interval. One lap of Monza
+at the pace above takes ~200 s, so a lap is 2-3 chained `rollout()` calls, not
+one; carry your own distance/lap total across them and check `terminal()` between
+each. Measured with the policy above: 10.5 km over three 120 s calls, frac
+wrapping 0.61 → 0.23 → 0.84, no rescue, 7.1 % off-track.
 
 ## Determinism — pin the seed before any comparison
 
@@ -216,7 +221,8 @@ unseeded so it can never perturb the sim.
 
 **`seed(n)` must come before `race()`, not just before `go()`.** The AI grid —
 start order, lane jitter, driver skill — is drawn from the seeded stream inside
-`race()`/`tt()`, and `go()` only drops the lights. Seeding between `race()` and
+`race()`/`tt()` (`tt` is the time-trial entry point — it stands in for
+`race()`+`go()`), and `go()` only drops the lights. Seeding between `race()` and
 `go()` (the natural spot, given the staging order below) applies one race too
 late and silently does nothing: measured across isolated processes, seeds 777 and
 888 set *after* `race()` produced a byte-identical grid, while the same seeds set
