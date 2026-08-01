@@ -920,7 +920,7 @@ or `null` on failure. That is right for a human at a REPL and wrong for a
 text-only agent, which wants one egocentric snapshot per decision with the
 semantics sitting next to the numbers.
 
-These ten hooks are that layer (`js/game/agentview.js`). They compose the hooks
+These hooks are that layer (`js/game/agentview.js`). They compose the hooks
 above and change none of them — `__apex` is unchanged underneath. Design,
 measurements and the research behind each decision: `docs/AGENT-WORLD-API.md`.
 
@@ -1053,7 +1053,10 @@ plus per corner `straightAfterM` (road to the next corner) and `exitsOntoStraigh
 your right. `rivals[].team` is a team **id string**, not the team object — rivals
 are the saliency-capped nearest few for a driving decision (`world().rivals`);
 for the full grid call `field()`. Everything else is the usual convention (`+x`
-right of centreline, `+k` right-hand turn), restated in every `conventions` field.
+right of centreline, `+k` **LEFT**-hand turn), restated in every `conventions`
+field. (`+k` reads backwards from its old comment in `spline.js`: a zero-steer
+run through a `+k` corner drifts to POSITIVE lateral, i.e. wide to the right,
+so the road bends left. `game.js`'s racing line has always used `-sign(k)`.)
 
 `suggestBrakeM` is a **hint**, not the car's physics: it assumes ~30 m/s²
 braking and ~26 m/s² lateral grip. Treat it as a reference to check against, not
@@ -1652,7 +1655,7 @@ speed through each corner *actually driven* is what a change moves.
 `seq`/delta baseline afterwards, so it cannot silently break a caller's
 `since=` chain.
 
-### `terminal() → {done, reason} | null`
+### `terminal() → {done, reason} | typedError`
 
 `reason` is `"finished"` · `"wrong_way"` · `"rescued"` · `null`. `obs().done`
 conflates the last two, so an agent cannot tell "my policy spun the car" from

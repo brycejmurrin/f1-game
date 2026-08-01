@@ -105,7 +105,10 @@ const TrackSpline = (function () {
     let d = h1 - h2;
     while (d > Math.PI) d -= 2 * Math.PI;
     while (d < -Math.PI) d += 2 * Math.PI;
-    return d / (2 * w);   // rad per meter, + = right
+    // rad per metre. + = LEFT-hand turn: game.js's racing line is -sign(k)
+    // ("k>0 curves toward screen-left"), and a zero-steer run through a +k
+    // corner drifts to POSITIVE lateral, i.e. wide to the right.
+    return d / (2 * w);
   }
 
   // Hot path: the AI calls this ~500× per physics substep. Curvature is static,

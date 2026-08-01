@@ -570,18 +570,32 @@ const AgentRaster = (function () {
       else {
         const b = Tracks; Tracks.sample(G.track, 0, scr); ox = scr.p[0]; oz = scr.p[2];
       }
+      let bodyUp = false;
       if (carUp && p && p.head != null) {
-        rot = -p.head; frame = "car-up (up = the way the car faces)";
+        rot = p.head; bodyUp = true; frame = "car-up (up = the way the car faces)";
       } else {
         rot = 0; frame = "north-up (up = -z / north, right = +x / east)";
       }
       const cosR = Math.cos(rot), sinR = Math.sin(rot);
-      // world (x,z) -> cell. Rotate about origin, then scale. Up (-row) is the
-      // rotated -z (forward) in car-up, or world -z in north-up.
+      // world (x,z) -> cell. Up (-row) is forward in car-up, world -z in north-up.
+      //
+      // This used to apply the textbook math rotation matrix to (dx,dz), which is
+      // the wrong basis: heading here is a COMPASS angle, so forward is
+      // (sin h, cos h), not (cos h, sin h), and the car's right is (-cos h, sin h)
+      // — the same right vector the pixel-verified "+lateral = screen right" fact
+      // rests on. With the old matrix, rz for a point dead ahead swung as
+      // cos(2h): correct near h = 0/180 degrees, dead centre at 45/135, inverted
+      // between. The map was therefore only accidentally oriented for a minority
+      // of headings, which defeats the whole point of a car-up view.
       const toCell = (x, z) => {
         const dx = x - ox, dz = z - oz;
-        const rx = dx * cosR - dz * sinR;      // rotated east
-        const rz = dx * sinR + dz * cosR;      // rotated north(-ish): forward = -rz
+        let rx, rz;
+        if (bodyUp) {
+          rx = dz * sinR - dx * cosR;          // + = the car's right
+          rz = -(dx * sinR + dz * cosR);       // forward = -rz, for any heading
+        } else {
+          rx = dx; rz = dz;                    // north-up: +x east, -z up
+        }
         const cx = Math.round(cols / 2 + rx / mPerCol);
         const cy = Math.round(rows / 2 + rz / mPerRow);   // +rz downward
         return { cx, cy, rx, rz };
