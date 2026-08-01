@@ -202,6 +202,28 @@ window.SpotifyMusic = (function () {
     } catch (e) { /* no history API — harmless */ }
   }
 
+  // COMING BACK FROM SPOTIFY LANDS ON THE TITLE SCREEN. The PKCE flow is a full
+  // page navigation, so the game has restarted by the time we get here: the
+  // player pressed CONNECT inside MUSIC & SOUND, went to accounts.spotify.com,
+  // and returned to a fresh boot with the panel closed and no sign that
+  // anything happened. Re-open the panel they left from so the sign-in ends
+  // where it started, showing whether it worked.
+  //
+  // Deferred a tick: the synchronous error branches below run during
+  // DOMContentLoaded, and game.js's own boot may still be settling the screens.
+  function reopenPanel() {
+    setTimeout(function () {
+      try {
+        const el = document.getElementById("audioset");
+        if (!el) return;
+        if (typeof syncAudioPanel === "function") syncAudioPanel();
+        el.hidden = false;
+        const wrap = document.getElementById("as-sp-wrap");
+        if (wrap && wrap.scrollIntoView) wrap.scrollIntoView({ block: "center" });
+      } catch (e) { /* the sign-in still succeeded — this is only the landing */ }
+    }, 0);
+  }
+
   // Safe to call on EVERY load, including when nothing Spotify-related is
   // configured: with no pending verifier in sessionStorage this returns without
   // touching storage, the network or the URL.
@@ -215,6 +237,7 @@ window.SpotifyMusic = (function () {
     ssDel(S_VERIFY);
     ssDel(S_STATE);
     cleanUrl();
+    reopenPanel();          // every branch below ends in the panel, success or not
     if (err) {
       setStatus("error", err === "access_denied"
         ? "Sign-in cancelled."
@@ -243,6 +266,16 @@ window.SpotifyMusic = (function () {
         refresh_token: j.refresh_token || null,
         expires_at: Date.now() + (j.expires_in || 3600) * 1000,
       });
+      // A token WITHOUT the streaming scope reaches the player and comes back as
+      // a bare "authentication_error", which reads as a login problem when the
+      // login was fine. Spotify returns the scopes it actually granted, so say
+      // the real thing instead: the app is not enabled for the Web Playback SDK.
+      if (j.scope && j.scope.indexOf("streaming") < 0) {
+        setStatus("error", "Signed in, but Spotify did not grant playback " +
+          "permission. In your app's settings tick \"Web Playback SDK\", then " +
+          "remove the app at spotify.com/account/apps and press CONNECT again.");
+        return;
+      }
       // The user pressed CONNECT one navigation ago, so finishing the job is
       // what they asked for — the only path that boots the SDK without a click.
       return bootPlayer();
@@ -284,7 +317,15 @@ window.SpotifyMusic = (function () {
         // Called by the SDK whenever it needs a token — including after ours
         // expires, which is why it must go through validToken() and not a
         // captured string.
-        getOAuthToken: (cb) => { validToken().then((t) => { if (t) cb(t); }); },
+        // Never calling cb() leaves the SDK waiting and it eventually reports a
+        // generic auth failure, so a dead token has to be said out loud here.
+        getOAuthToken: (cb) => {
+          validToken().then((t) => {
+            if (t) { cb(t); return; }
+            teardown();
+            setStatus("configured", "The Spotify session could not be renewed. Press CONNECT to sign in again.");
+          });
+        },
         volume: vol,
       });
       player.addListener("ready", ({ device_id }) => {
@@ -305,7 +346,9 @@ window.SpotifyMusic = (function () {
       // by far the most common — it is what a non-Premium account looks like.
       player.addListener("authentication_error", () => {
         clearToken(); teardown();
-        setStatus("configured", "Spotify rejected the session. Press CONNECT to sign in again.");
+        setStatus("configured", "Spotify rejected the session. Usually: the account " +
+          "is not full Premium, or the app is not enabled for the Web Playback SDK. " +
+          "Check both, then press CONNECT to sign in again.");
       });
       player.addListener("account_error", () => {
         teardown();
@@ -418,6 +461,13 @@ window.SpotifyMusic = (function () {
     // Clearing the ID must also drop the session: a token minted by an app we
     // no longer know the ID of can never be refreshed.
     if (!v) { lsDel(K_ID); disconnect(); return null; }
+    // CHANGING the ID must drop it too. A token belongs to the app that minted
+    // it — hand app A's token to app B's player and Spotify rejects the session,
+    // and the refresh that would normally recover fails as invalid_client. The
+    // stored token outlives its app by an hour, so without this a corrected
+    // Client ID (a typo, or the secret pasted by mistake) stays broken until
+    // DISCONNECT is pressed, with nothing on screen saying why.
+    if (v !== clientId()) { clearToken(); teardown(); }
     lsSet(K_ID, v);
     setStatus("configured", "Client ID saved. Press CONNECT to sign in to Spotify.");
     return v;

@@ -122,14 +122,17 @@ policy = w => {
   let steer = -e.headingErrDeg*0.045 - e.lateralM*0.045;   // null heading + recentre
   steer = Math.max(-1, Math.min(1, steer));
   const tgt = nc ? nc.apexSpeedKph/3.6*0.9 : 60;           // hints are OPTIMISTIC
-  const braking = nc && e.speed > tgt && nc.distM < nc.suggestBrakeM*1.5;
+  const braking = nc && e.speed > tgt && nc.distM < nc.suggestBrakeM*2.0;
   return { steer, throttle: !braking, brake: braking };    // brake EARLIER than the hint
 };
 ```
 
 `apexSpeedKph`/`suggestBrakeM` assume more grip than default parts have — target
 below them and brake early, then tune from the digest's `offTrack.pct` and
-`cornerMinSpeedKph`. Two gotchas the loop above hides:
+`cornerMinSpeedKph`. Note this baseline only nulls heading + recentres, so it
+UNDERSTEERS into slow corners; add a small feed-forward toward `nc.dir` (∝
+`1/nc.radiusM`) for turn-in once braking is under control. Two gotchas the loop
+above hides:
 - **`rollout`'s policy receives `world({detail:"brief"})`** — which carries `ego`
   and a single `nextCorner` but NOT `pacenotes`/`rivals`/`nextCorners`. Reading
   those inside a rollout policy returns `undefined`; call `world({detail:"drive"})`
@@ -173,6 +176,10 @@ In-page you must stage before reading, or you get plausible-but-wrong answers:
 ```js
 __apex.race("monza"); __apex.go(); __apex.jump(0.1, 55);  // load, start, place
 // obs()/physState()/world()/describe() need player.px — jump() or one step() first
+// jump() moves ONLY the player — it DESYNCS you from the AI field (a forward
+//   jump lands you P1 with the pack seconds behind). To race/overtake, drive
+//   from the grid after go() without jumping ahead, or seat the player in the
+//   pack with aiPlace(idx, frac, speed?, x?).
 // visible()/render({what:"view"}) read the LAST RENDERED frame — let frames draw
 // scene() reads placed props — a heavy street circuit (Singapore, Monaco, Baku)
 //   finishes its prop build a few frames after race(); an empty scene() means
