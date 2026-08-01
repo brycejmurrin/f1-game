@@ -227,6 +227,15 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   grid-column: 1 / -1;
   width: 4px;
   height: var(--sf-h, 24px);
+  /* NEVER SHRINK. In a flex-column scroll region (#cs-options, .dh-content) the
+     thumb is a flex ITEM, and flex-shrink defaults to 1 — so with 891px of
+     options in a 231px box the algorithm squeezed the 60px thumb down while its
+     -60px cancelling margin stayed put. The item's OUTER height went negative
+     and dragged every sibling up with it: CAR SETUP's first part option sat
+     16.8px above the top of its own scrollport, clipped, at scrollTop 0.
+     (Measured, then confirmed by disabling this pseudo-element: the option
+     snapped back to exactly padding-top.) */
+  flex: 0 0 auto;
   margin-left: auto; margin-right: 2px;
   margin-bottom: calc(-1 * var(--sf-h, 24px));
   border-radius: var(--r-xs);
@@ -244,6 +253,39 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    (the bare track/team lists) would push the thumb past its own scrollport and
    have it clipped away. */
 .sheet-body.sf-scroll::before { margin-right: calc(4px - var(--pad)); }
+
+/* ---------- STATE HAS DURATION ----------
+   Selection used to be instant everywhere: tap a chip and the ring simply
+   existed, with nothing connecting the tap to the result. Instant is not the
+   same as responsive — a state that arrives over ~140ms reads as the interface
+   answering you, where a state that teleports reads as a repaint.
+
+   Colour and shadow only. The press NUDGE is a separate rule below because it
+   is the one part of this that is movement, and movement is what
+   prefers-reduced-motion is actually about. */
+.sel-chip, .opt-btn, .preset-btn, .cz-liv-none,
+.track-row, .team-tile, .season-upcoming-row,
+.cs-tab, .cs-opt, .lt-tab,
+.dh-tab, .dh-pill, .dh-dchip, .dh-sortbtn, .dh-row {
+  transition:
+    background-color 0.14s ease, background 0.14s ease,
+    border-color 0.14s ease, box-shadow 0.14s ease, color 0.14s ease;
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* 1px of travel under the finger. Enough to feel; not enough to reflow. */
+  .sel-chip:active, .opt-btn:active, .preset-btn:active,
+  .cz-liv-none:active, .cs-opt:active, .lt-tab:active,
+  .dh-tab:active, .dh-pill:active, .dh-dchip:active {
+    transform: translateY(1px);
+  }
+  .sel-chip, .opt-btn, .preset-btn, .cz-liv-none,
+  .cs-opt, .lt-tab, .dh-tab, .dh-pill, .dh-dchip {
+    transition:
+      background-color 0.14s ease, background 0.14s ease,
+      border-color 0.14s ease, box-shadow 0.14s ease, color 0.14s ease,
+      transform 0.08s ease;
+  }
+}
 
 /* ---------- NO LONELY LAST CHIP ----------
    A wrapped row of buttons that ends with ONE item on its own line reads as a
@@ -319,6 +361,47 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
     0 2px 4px rgba(0, 0, 0, 0.45),
     0 6px 20px rgba(225, 6, 0, 0.38);
   transition: background 0.14s, box-shadow 0.14s, transform 0.1s;
+  /* the sweep below is clipped to the button's own rounded box */
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* ---------- specular sweep ----------
+   A narrow band of light crossing the face. It is what a moulded, glossy object
+   does when it or the light moves, and on the one button that says RACE it is
+   worth the four lines.
+   The band is painted as a gradient positioned by --sheen, and --sheen is a
+   REGISTERED <percentage> (css/tokens.css) — that registration is the whole
+   trick, because a gradient is not animatable but a typed custom property
+   inside one is. */
+.bigbtn::after {
+  content: "";
+  position: absolute; inset: 0; z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(105deg in oklab,
+    transparent calc(var(--sheen) - 14%),
+    rgba(255, 255, 255, 0.30) var(--sheen),
+    transparent calc(var(--sheen) + 14%));
+}
+@media (prefers-reduced-motion: no-preference) {
+  @media (hover: hover) {
+    .bigbtn:hover::after { animation: sheen 0.62s cubic-bezier(0.3, 0, 0.2, 1); }
+  }
+  /* The single primary call to action catches the light ONCE, as the menu
+     arrives — scoped to one button because a menu where everything shimmers has
+     no focal point. #overlay is toggled with the hidden attribute, so coming
+     back from display:none restarts this by itself, exactly like the dialog
+     entry animations.
+     Once, NOT on a loop. An infinite sweep animates a registered custom
+     property inside a gradient, which means repainting the button every frame
+     for as long as the menu is open — a permanent 60fps cost on a phone for a
+     decoration, and it never lets the compositor reach a stable frame (it hung
+     the screenshot tooling, which is how it was caught). */
+  #mb-race::after { animation: sheen 0.85s 0.28s cubic-bezier(0.3, 0, 0.2, 1) both; }
+}
+@keyframes sheen {
+  from { --sheen: -30%; }
+  to   { --sheen: 130%; }
 }
 /* Hover gated on a hover-capable pointer (see css/tokens.css); :active is the
    press state — this layer outranks the base button:active, so without these

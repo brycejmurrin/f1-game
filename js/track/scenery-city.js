@@ -75,7 +75,21 @@ const SceneryCity = (function () {
             // their panes on props so the unchunked glass draw stays bounded.
             const toGlass = !lit && !simple;
             if (toGlass) glassBuf._mat = MAT.GLASS; else out._mat = 0;   // lit panes stay untextured (pure emissive read)
-            addBox(toGlass ? glassBuf : out, vadd(vadd(gBase, wVec, cx), u, ry), dim(0.08, winHH, (faceW / cols) * 0.82), col, bb);
+            // Every pane in the game is the same UNIT box: its dimensions ride
+            // the node scale and its tint the node colour, so the whole city —
+            // every face of every building on every circuit — shares ONE model
+            // per buffer. Panes are the largest single block of geometry on the
+            // street circuits (Vegas ~1.8 M prop verts), and the per-pane hash
+            // tint is precisely what a per-instance colour attribute exists for:
+            // without TrackGraph.NODE_COLOR each lit pane would mint its own model.
+            ctx.instance("window-pane",
+              { o: vadd(vadd(gBase, wVec, cx), u, ry),
+                r: bb[0], u: bb[1], t: bb[2],
+                s: dim(0.08, winHH, (faceW / cols) * 0.82),
+                col },
+              (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR),
+              { kind: "windowPane" },
+              { buf: toGlass ? glassBuf : out });
             if (toGlass) glassBuf._mat = 0;
           }
         }

@@ -160,6 +160,12 @@
   touch-action: none;
   font-family: inherit;
 }
+/* ...but NOT above a modal. z-index 44 clears the docked panel on purpose, and
+   that also put the thumbsticks and the climb/dive column on top of the PAUSED
+   dialog, where the up/down buttons landed across QUIT TO MENU. Nothing here is
+   usable while a dialog is open anyway — you cannot fly a paused game — so the
+   whole fly-cam overlay stands down until it closes. */
+body:has(.screen.dim:not([hidden])) #photo-controls { display: none; }
 #photo-controls > * { pointer-events: auto; }
 .pc-stickwrap {
   position: fixed; bottom: calc(20px + var(--sab));
@@ -177,15 +183,15 @@
    out to clear 380px landed on top of it.
    The controls also shrink: at 852x393 the strip left of a 560px panel is
    ~276px, which will not hold two 118px sticks and a 64px column at full size. */
-body.lt-open:not(.pc-nopanel) .pc-stick { width: 92px; height: 92px; }
-body.lt-open:not(.pc-nopanel) .pc-nub { width: 38px; height: 38px; margin: -19px 0 0 -19px; }
-body.lt-open:not(.pc-nopanel) .pc-btn { width: 52px; height: 46px; font-size: 15px; }
-body.lt-open:not(.pc-nopanel) .pc-move-wrap { left: calc(14px + var(--sal)); }
+body.lt-open:not(.pc-nopanel) .pc-stick { width: 84px; height: 84px; }
+body.lt-open:not(.pc-nopanel) .pc-nub { width: 34px; height: 34px; margin: -17px 0 0 -17px; }
+body.lt-open:not(.pc-nopanel) .pc-btn { width: 46px; height: 42px; font-size: 14px; }
+body.lt-open:not(.pc-nopanel) .pc-move-wrap { left: calc(10px + var(--sal)); }
 body.lt-open:not(.pc-nopanel) .pc-altcol {
-  left: auto; right: calc(var(--dock-w) + 22px + var(--sar));
+  left: auto; right: calc(var(--dock-w) + 14px + var(--sar));
 }
 body.lt-open:not(.pc-nopanel) .pc-look-wrap {
-  left: auto; right: calc(var(--dock-w) + 88px + var(--sar));
+  left: auto; right: calc(var(--dock-w) + 66px + var(--sar));
 }
 .pc-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
 .pc-stick {

@@ -364,6 +364,47 @@ __apex.lightTune({ wetness: 0.8 });    // pin road wetness instantly
 __apex.lightTune({ wetness: -0.05 });  // back to the weather-driven ramp
 ```
 
+## Baked asset pack
+
+The pack (`assets/pack/`, built by `node tools/assets.mjs`) supplies PBR
+**material arrays** — one `TEXTURE_2D_ARRAY` whose *layer index is the `MAT` id*
+(`js/track/geom.js`), so every surface in the game can be textured from the
+per-vertex material id it already carries. No UV channel exists anywhere on the
+lit path and none is needed: the sample reuses the procedural materials' own
+triplanar convention. See
+[research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md).
+
+**Loading a pack does not change the render.** The blend knob (`matTexMix`)
+ships at 0, so a pack is inert until you ask for it.
+
+### `assets() → {supported, pack, uploaded, tier, layers, normal, scales, bytes, models, error}`
+State of the pack. `supported:false` means the active renderer has no
+texture-array path — true on WGX (WebGPU), which has not ported the procedural
+material system either. `pack:false` means no pack is installed. **Both are
+normal states** in which the game renders its pure-procedural look; neither is
+an error. `scales` is the per-`MAT`-id world tile size in metres (`0` = that
+material has no baked layer — `FLAT`, `GLASS` and `FLAG` never do).
+
+### `assetLoad(tier?) → Promise<state>`
+Force a (re)load. `"low"`/`"high"` pick the pack variant explicitly instead of
+following `gfx.isMobile`; `false` unloads the arrays and frees the GPU memory.
+
+### `matTex(v?) → number`
+Get/set the **BAKED MATERIALS** blend — the A/B control for the whole feature,
+and the same value as `lightTune({matTexMix})`. `0` is the shipped procedural
+render, `1` is full baked detail. Multiplicative, so the per-track tarmac tint
+and racing-line wear survive at any setting.
+```js
+await __apex.assetLoad();      // upload the arrays
+__apex.matTex(1);              // full baked materials
+__apex.matTex(0);              // back to the shipped look
+```
+
+### `credits() → [{kind, id, author, licence, source}, …]`
+Attribution roll for every baked asset. CC0 imposes no attribution duty, but
+every entry must carry a `source` — that is what `node tools/assets.mjs verify`
+audits.
+
 ### `gpuTimer(on?) → {supported, on, ms}`
 Opt-in GPU frame timer (`EXT_disjoint_timer_query_webgl2`). `gpuTimer(true)`
 starts timing, `gpuTimer(false)` stops, `gpuTimer()` reads the latest sample.

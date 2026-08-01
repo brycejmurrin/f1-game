@@ -340,7 +340,7 @@ const DataHub = (function () {
   const { loadSchedule } = DataSchedule.create({ el, emptyMsg, fmtDate, fmtDateTime, todayISO });
 
   /* ================= STANDINGS ================= */
-  const { loadStandings } = DataStandings.create({ el, emptyMsg, teamChip, findTeam });
+  const { loadStandings } = DataStandings.create({ el, emptyMsg, teamChip, findTeam, cssColor });
 
   /* ================= LAST RACE ================= */
   const { loadLastRace } = DataLastRace.create({ el, emptyMsg, teamChip, fmtDate });

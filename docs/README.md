@@ -47,6 +47,8 @@ describe paths not taken or plans only partly implemented.
 | [research/TILT-STEERING-RESEARCH.md](research/TILT-STEERING-RESEARCH.md) | Tilt-steering (device orientation) investigation. |
 | [research/CIRCUIT-BRIEFING-DESIGN.md](research/CIRCUIT-BRIEFING-DESIGN.md) | Circuit-briefing feature design. |
 | [research/CIRCUIT-BRIEFING-UI-RESEARCH.md](research/CIRCUIT-BRIEFING-UI-RESEARCH.md) | Circuit-briefing UI research. |
+| [research/RENDERING-IMPROVEMENTS.md](research/RENDERING-IMPROVEMENTS.md) | Renderer/geometry audit, measured budgets, ranked opportunities. |
+| [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md) | External model/texture/normal-map ingestion: CC0 asset APIs, a `MAT`-indexed texture array, offline bake tool. |
 
 For day-to-day workflows, see the **skills** in `.claude/skills/` (`.claude/skills/README.md`)
 and the **tools** in `tools/` (`tools/README.md`).

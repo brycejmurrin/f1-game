@@ -663,10 +663,25 @@ const Tracks = (function () {
     const graph = TrackGraph.create({ raw: RAW });
     track.graph = graph;
     const GUARDED = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid };
-    // instance(key, place, build, meta) — returns the number of primitives that
-    // survived the guards (0 = wholly suppressed, so the caller skips its note()).
-    const instance = (key, place, build, meta) =>
-      graph.instance(key, place, build, meta, GUARDED, out);
+    // Unguarded replay set, for emitters that already bypass the on-road test on
+    // purpose — crowd spectators are thousands of tiny boxes sitting safely
+    // behind a stand's shell, and testing each one is pure cost. RAW.* returns
+    // nothing, so wrap to report the primitive as landed; routing these through
+    // GUARDED instead would silently start culling geometry that ships today.
+    const rawOk = (fn) => (...args) => { fn(...args); return true; };
+    const UNGUARDED = {
+      addBox: rawOk(RAW.addBox), addCyl: rawOk(RAW.addCyl), addCone: rawOk(RAW.addCone),
+      addFrustum: rawOk(RAW.addFrustum), addPrism: rawOk(RAW.addPrism), addPyramid: rawOk(RAW.addPyramid),
+    };
+    // instance(key, place, build, meta, opts?) — returns the number of primitives
+    // that survived the guards (0 = wholly suppressed, so the caller skips its
+    // note()). opts.buf targets a different accumulator than the props soup:
+    // window panes route their unlit half to glassBuf so it draws with the
+    // reflective material. opts.unguarded picks the RAW set above.
+    const instance = (key, place, build, meta, opts) =>
+      graph.instance(key, place, build, meta,
+                     opts && opts.unguarded ? UNGUARDED : GUARDED,
+                     (opts && opts.buf) || out);
 
     // Per-segment driving boundary (lateral limit from the centreline on each
     // side). Initialised to the default runoff, then TIGHTENED wherever a solid
@@ -1463,7 +1478,13 @@ const Tracks = (function () {
           const f = norm([bx - ax, by - ay, bz - az]);
           const rr = norm(cross(f, u0));
           const col = NIGHT ? bt.night : btSeq[Math.floor(k / (STEP * 3)) % 3];
-          addBox(out, [cx, cy + WH / 2, cz], [WT, WH, len], col, [rr, [0, 1, 0], f]);
+          // Every panel is the same 0.4 x 1.1 m cross-section; only its length
+          // and livery colour vary. One model per colour (three by day, one at
+          // night) covers a whole street lap, with length on the node scale.
+          instance(`street-barrier|${col.join(",")}`,
+            { o: [cx, cy + WH / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
+            (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),
+            { kind: "streetBarrier", k, side });
         }
       }
       // Record the boundary for EVERY node (the geometry loop steps by 2, which
@@ -1743,6 +1764,38 @@ const Tracks = (function () {
     // js/track/scenery-identity.js (SceneryIdentity) — created above. ──
 
 
+    // Place a BAKED MODEL from the asset pack (assets/pack, built by
+    // `node tools/assets.mjs bake-model`) at a trackside anchor. This is the one
+    // scenery helper whose geometry is not generated here — it is a real modelled
+    // asset baked down to the game's own vertex format, MAT id included.
+    //
+    // Returns FALSE and emits nothing when the pack has no such model, which is
+    // the default state of a fresh checkout. Circuits must therefore treat it as
+    // an ENHANCEMENT and keep their procedural fallback:
+    //
+    //     if (!bakedModel("grandstand_tifosi", K(0.12), -1, 14))
+    //       grandstand(K(0.12), -1, 14, 40);
+    //
+    // Never async: Assets prefetches every model at boot precisely so that prop
+    // placement cannot vary with network timing (js/render/assets.js modelSync).
+    function bakedModel(id, k, side, dist, opts) {
+      if (typeof Assets === "undefined" || !Assets.modelSync) return false;
+      const mesh = Assets.modelSync(id);
+      if (!mesh) return false;
+      const o = opts || {};
+      const a = anchor(k, side, dist);
+      if (!a || !isFinite(a.c[0]) || !isFinite(a.c[1]) || !isFinite(a.c[2])) return false;
+      // Face the track by default: yaw from the track tangent, flipped on the
+      // right-hand side so a model authored facing +Z always looks at the road.
+      const yaw = o.rotY != null ? o.rotY
+                : Math.atan2(a.t[0], a.t[2]) + (side < 0 ? Math.PI / 2 : -Math.PI / 2);
+      return TrackGeom.addMesh(out, mesh, {
+        x: a.c[0], y: a.c[1] + (o.lift || 0), z: a.c[2],
+        rotY: yaw, scale: o.scale != null ? o.scale : 1,
+        tint: o.tint || null, mat: o.mat,
+      });
+    }
+
     // Per-circuit bespoke scenery lives in js/tracks/<id>.js (def.scenery).
     if (def.scenery) {
       let sceneryApi = {
@@ -1783,6 +1836,8 @@ const Tracks = (function () {
         signBoard, sponsorHoarding,
         // barriers / track furniture
         wall, fence, guardrail, tyreWall, recordBarrier,
+        // baked asset pack — returns false (and emits nothing) with no pack
+        bakedModel, bakedModels: () => (typeof Assets !== "undefined" ? Assets.models() : []),
       };
       // Reversed lap: flip the s-fraction (s → 1-s), node index (k → n-k) and
       // side (±1 → ∓1) of every placement helper so bespoke scenery authored for

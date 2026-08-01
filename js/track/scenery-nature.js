@@ -366,7 +366,13 @@ const SceneryNature = (function () {
         // without this they stayed behind as a row of people sitting on thin
         // air where the stand had been dropped.
         if (rejBox(riserC, [1.3, 1.5, len], b)) continue;
-        RAW.addBox(out, riserC, [1.3, 1.5, len], riser, b);
+        // The rejBox above stays explicit — it also decides whether this row's
+        // spectators are emitted at all — so the replay below is UNGUARDED, which
+        // is what this emitter already did via RAW.
+        ctx.instance(`crowd-riser|${riser.join(",")}`,
+          { o: riserC, r: a.r, u: a.u, t: a.t, s: [1, 1, len] },
+          (rec) => { rec.mat(MAT.CONCRETE); rec.box([0, 0, 0], [1.3, 1.5, 1], riser); },
+          { kind: "crowdRiser", k, side }, { unguarded: true });
         out._mat = MAT.FABRIC;
         for (let s2 = 0; s2 < perRow; s2++) {
           if (s2 % 10 === 9) continue;                       // aisle / vomitory gap
@@ -383,7 +389,15 @@ const SceneryNature = (function () {
           } else {
             col = CROWD_DAY[Math.floor(h1 * CROWD_DAY.length) % CROWD_DAY.length];
           }
-          RAW.addBox(out, c, [0.55, 0.72 + h2 * 0.2, 0.5], col, b);   // torso + head lump
+          // torso + head lump. One model for every spectator in the game: the
+          // per-person height jitter rides the node scale and the shirt colour
+          // the node colour, so a full grandstand costs one 24-vertex box plus a
+          // transform each. Crowds are the densest geometry the game emits —
+          // spectatorHill alone runs ~70 verts/metre.
+          ctx.instance("crowd-body",
+            { o: c, r: a.r, u: a.u, t: a.t, s: [1, 0.72 + h2 * 0.2, 1], col },
+            (rec) => { rec.mat(MAT.FABRIC); rec.box([0, 0, 0], [0.55, 1, 0.5], TrackGraph.NODE_COLOR); },
+            { kind: "crowd", k, side }, { unguarded: true });
         }
       }
       out._mat = 0;
@@ -593,7 +607,13 @@ const SceneryNature = (function () {
             const col = NIGHT
               ? (h2 > 0.95 ? [2.4, 2.2, 1.9] : [0.12, 0.13, 0.17])
               : (opts.crowd || CROWD_DAY)[Math.floor(h2 * (opts.crowd || CROWD_DAY).length) % (opts.crowd || CROWD_DAY).length];
-            RAW.addBox(out, c, [0.5, 0.86 + h1 * 0.2, 0.46], col, b);
+            // Standing bodies share one model the same way the seated ones do —
+            // height on the node scale, shirt on the node colour. Unguarded, as
+            // this emitter already was.
+            ctx.instance("crowd-standing",
+              { o: c, r: a.r, u: a.u, t: a.t, s: [1, 0.86 + h1 * 0.2, 1], col },
+              (rec) => { rec.mat(MAT.FABRIC); rec.box([0, 0, 0], [0.5, 1, 0.46], TrackGraph.NODE_COLOR); },
+              { kind: "crowd", k, side }, { unguarded: true });
           }
           out._mat = 0;
         }

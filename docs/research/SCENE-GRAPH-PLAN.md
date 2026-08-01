@@ -1,11 +1,13 @@
 # Scene graph + detailed models — staged plan
 
 > **Status: S0–S2 infrastructure has LANDED** (`js/track/graph.js`,
-> `tools/graph-parity.cjs`, `tests/track-graph.test.mjs`). Two emitters are
-> migrated as the pilot — `pine` and `marshalPost` — chosen because they sit at
-> opposite ends of the instancing question. All 24 circuits are at exact geometry
-> parity. §6 records what the migration measured, including the finding that
-> changes the S4 plan. Nothing renders differently yet, by design.
+> `tools/graph-parity.cjs`, `tests/track-graph.test.mjs`), with ten emitters
+> migrated: `windowPane`, `crowd`, `fence`, `guardrail`, `tyreWall`, `wall`,
+> `streetBarrier`, `crowdRiser`, `marshalPost`, `pine`. All 24 circuits are at
+> exact geometry parity — nothing renders differently, by design. §6 has the
+> measured per-emitter reuse: **48% of the fleet's entire scenery mass (8.60 M
+> vertices) collapses to 13,829**, while `pine` sits at 1.00× for a structural
+> reason that changes the S4 plan.
 
 Companion to `EXTERNAL-MODEL-SOURCES.md`, which asked "where do models come
 from". This asks the prior question: **why can't we afford detailed models
@@ -245,18 +247,71 @@ match exactly everywhere.
 ### The finding: instanceable vs. continuous
 
 `graph.stats().byKind` splits migrated emitters by how much reuse they actually
-have. Across all 24 circuits:
+have. Across all 24 circuits, for the six emitters migrated so far:
 
 | emitter | nodes | models | fused verts | instanced | reuse |
 |---|---|---|---|---|---|
+| `windowPane` | 143,083 | 7 | 3,433,992 | 168 | **20,440×** |
+| `crowd` | 85,273 | 32 | 2,046,552 | 768 | **2,664.78×** |
+| `fence` | 54,277 | 77 | 1,601,375 | 2,266 | **706.70×** |
+| `guardrail` | 30,465 | 50 | 792,104 | 1,288 | **614.99×** |
+| `tyreWall` | 8,156 | 85 | 297,819 | 2,615 | **113.89×** |
+| `wall` | 7,492 | 28 | 179,808 | 672 | **267.57×** |
+| `streetBarrier` | 6,404 | 7 | 153,696 | 168 | **914.86×** |
+| `crowdRiser` | 2,792 | 109 | 67,008 | 2,616 | **25.61×** |
 | `marshalPost` | 343 | 43 | 26,068 | 3,268 | **7.98×** |
 | `pine` | 9,486 | 9,474 | 1,159,599 | 1,158,108 | **1.00×** |
+| **total** | **347,771** | **9,912** | **9,758,021** | **1,171,937** | **8.33×** |
 
-`marshalPost` instances beautifully — every dimension is a constant and the only
-per-placement variable is which side of the track the pole stands on, so a whole
-circuit's marshal line collapses to two models. (Its flag and night beacon stay
-inline: the flag is animated `MAT.FLAG` cloth, not a rigid primitive, and both
-are separate node kinds in a full graph.)
+**`windowPane` is the headline: every glazed pane in the game — 143,083 of them
+across seven city circuits, 3,433,992 fused vertices — is the same unit box.**
+It collapses to seven models (one per build) totalling 168 vertices. The
+trackside barrier family (`fence`/`guardrail`/`wall`/`tyreWall`/`streetBarrier`)
+is the second block: 3,024,802 vertices down to 7,009.
+
+`crowd` is the second: every spectator in the game — seated in a grandstand or
+standing on a grass bank — is one unit box, with per-person height on the node
+scale and shirt colour on the node colour. 85,273 of them cost 768 vertices.
+
+For scale: all 24 circuits together build **17,978,812** prop vertices. The ten
+migrated emitters account for 9,758,021 of them (**54.3%**), and the nine
+non-`pine` ones for 8,598,422 (**47.8%**) — which an instanced renderer would
+draw from **13,829 vertices** of models plus one `mat4` per node. Nearly half the
+game's entire scenery mass, currently paid for in full VBO bytes, is a handful of
+shapes repeated.
+
+Four structural properties made that possible, and they generalise:
+
+1. **Split fixed geometry from length-scaled geometry.** `guardrail` was one
+   emitter writing a fixed post plus a rail whose length follows the node
+   spacing. Fused, that forces a model per distinct spacing. Split into
+   `guardrail-post` (no scale) and `guardrail-rail` (scaled on Z), the post
+   collapses to ONE model per circuit and the rail to one per colour. Same for
+   `fence`, `tyreWall` and `wall`.
+2. **Don't put a radial primitive under a non-uniform scale.** `radScale()` takes
+   `max(|sx|,|sz|)` because a cylinder cannot be elliptical, so a fused
+   post-plus-rail model would have stretched the post's radius with the rail's
+   length. The split avoids the question entirely.
+
+3. **Give the node a colour when only the tint varies.** Every lit window pane
+   carries a hash-jittered warm/neon tint, which would have minted a model per
+   pane and instanced at 1.00×. `TrackGraph.NODE_COLOR` marks a primitive's
+   colour as "supplied by the node" — the shared model bakes white and the tint
+   rides the placement, which is precisely what a per-instance colour attribute
+   does on the GPU. `instance()` also takes a target buffer, so a pane's unlit
+   half still routes to `glassBuf` for the reflective material.
+4. **Replay unguarded where the emitter already was.** Crowd spectators are
+   thousands of tiny boxes behind a stand's shell and deliberately skip the
+   on-road test for speed (`RAW.addBox`). `instance(..., { unguarded: true })`
+   replays through the raw set, so migrating them culls nothing that ships
+   today. Routing them through the guarded set instead would have quietly
+   started dropping geometry.
+
+`marshalPost` instances for the simpler reason that every dimension is a
+constant and the only per-placement variable is which side of the track the pole
+stands on. (Its flag and night beacon stay inline: the flag is animated
+`MAT.FLAG` cloth, not a rigid primitive, and both are separate node kinds in a
+full graph.)
 
 `pine` does not instance at all — and **that is a structural property, not a
 tuning problem.** §1 assumed 1,788 pines would collapse to three silhouette
@@ -277,13 +332,15 @@ is that it turned an estimate into a per-emitter measurement, and the same
 ### Where this leaves the stages
 
 - **S0/S1/S2 — done for the migrated subset.** Model library, node graph, guarded
-  replay, `bake()` reconstruction, parity gate, unit tests.
-- **Remaining S1 work is mechanical**: migrate the other emitter families
-  (`tree`/`palm`/`conifer`/`bush`, street-circuit barrier panels, `tyreWall`,
-  `streetLamp`, crowd bodies, window panes) one at a time, each gated by
-  `npm run test:graph-parity`. The barrier panels and window panes are the ones
-  to expect real reuse from — both are fixed-dimension boxes emitted in the
-  thousands on street circuits.
+  replay, `bake()` reconstruction, parity gate, unit tests, six emitters.
+- **Remaining S1 work is mechanical**: `tree`/`palm`/`conifer`/`bush`,
+  `streetLamp`, `billboard`, building masses and the facade rails/mullions —
+  one at a time, each gated by `npm run test:graph-parity`. Apply the four rules
+  above: split fixed geometry from size-following geometry, keep radial
+  primitives out from under non-uniform scale, push tint-only variation onto the
+  node, and replay unguarded wherever the emitter already was. The broadleaf
+  vegetation will likely hit `pine`'s affine-parameter wall; the city masses and
+  facade furniture should not.
 - **S3 is unblocked but not started.** `graph.models` already holds the canonical
   origin-space mesh per model (`model.geo`) that an instanced draw would upload.
 - **S4 gains a prerequisite it did not have**: re-parameterise affine emitters to

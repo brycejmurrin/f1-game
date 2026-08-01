@@ -138,6 +138,13 @@ treatment at all.** And `buildRoad`/`buildTerrain` never create a `mat` array
 surface on screen 100% of the time is the one surface the material system never
 touches.
 
+> **Superseded (2026-08).** The road/terrain half of the paragraph above is no
+> longer true: `buildRoad` now stamps `MAT.ASPHALT` / `MAT.GRASS` per
+> cross-section column (`mesh.js:412-424`) and `buildTerrain` stamps
+> `MAT.ROCK` / `MAT.GRASS` (`mesh.js:713`), so the racing surface *is* in the
+> material system. The Tier 1 item "give road and terrain `MAT` ids" below is
+> **done**. The props histogram (66.9 % `MAT.FLAT`) has not been re-measured.
+
 Procedural detail also fades with distance: bump dies at ~80 m (`lit.js:242`),
 albedo at ~260 m (`lit.js:281`). The mid- and far-field city is flat vertex
 colour by construction.
@@ -188,12 +195,10 @@ Recorded so future work doesn't re-derive these.
 
 ### Tier 1 — shader/table work, no new assets
 
-**1. Give road and terrain `MAT` ids.** `mesh.js:302, 468` never allocate a `mat`
-array, so the entire existing procedural material path is unavailable to the
-racing surface — which is why tarmac grain is currently faked with per-vertex
-hash tints. Emitting `MAT.CONCRETE`/`SAND`/`GRASS`/`ROCK` per cross-section
-column costs one array and unlocks bump + roughness variation that is already
-written and shipping for props. Cheapest real win in the codebase.
+**1. ~~Give road and terrain `MAT` ids.~~ DONE.** `buildRoad` emits
+`MAT.ASPHALT`/`MAT.GRASS` (`mesh.js:412-424`), `buildTerrain` emits
+`MAT.ROCK`/`MAT.GRASS` (`mesh.js:713`), and `lit.js` gained a dedicated
+`MAT.ASPHALT` (16) branch. Left here because the entry is referenced elsewhere.
 
 **2. Move road markings from geometry to a shader SDF.** Road vertices already
 carry `(s, x)`. Passing them as varyings and evaluating dashes / kerb stripes /

@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "materials": {
+    "size": 128,
+    "albedo": "mat-albedo-128.png",
+    "normal": "mat-normal-128.png",
+    "layers": [
+      {
+        "mat": 1,
+        "id": "concrete",
+        "scale": 4,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 2,
+        "id": "brick",
+        "scale": 2.4,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 4,
+        "id": "metal",
+        "scale": 2,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 5,
+        "id": "wood",
+        "scale": 2.2,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 6,
+        "id": "foliage",
+        "scale": 3,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 7,
+        "id": "fabric",
+        "scale": 1.5,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 8,
+        "id": "sand",
+        "scale": 6,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 9,
+        "id": "grass",
+        "scale": 3,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 10,
+        "id": "rock",
+        "scale": 5,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 11,
+        "id": "snow",
+        "scale": 6,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 12,
+        "id": "roof",
+        "scale": 2,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 13,
+        "id": "stone",
+        "scale": 3,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 14,
+        "id": "rust",
+        "scale": 2,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      },
+      {
+        "mat": 16,
+        "id": "asphalt",
+        "scale": 4,
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
+      }
+    ]
+  },
+  "models": {},
+  "env": {},
+  "credits": [
+    {
+      "kind": "material",
+      "id": "concrete",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "brick",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "metal",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "wood",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "foliage",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "fabric",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "sand",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "grass",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "rock",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "snow",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "roof",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "stone",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "rust",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    },
+    {
+      "kind": "material",
+      "id": "asphalt",
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
+    }
+  ]
+}

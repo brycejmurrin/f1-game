@@ -87,6 +87,20 @@ if (!gfx) {
   }
   gfx = GLX;
 }
+// Baked asset pack (js/render/assets.js). Bind the resolved backend, then kick
+// the material-array load WITHOUT awaiting it: a pack is optional, the load is
+// feature-detected per backend, and every failure path inside leaves the game
+// on its procedural materials. Boot must never wait on, or fail for, assets.
+if (typeof Assets !== "undefined") {
+  Assets.init(gfx);
+  Assets.load();
+  // Models are prefetched too, because prop placement is SYNCHRONOUS (buildProps
+  // -> the circuit's scenery() callback) and must not depend on network timing.
+  // Started here, at boot, so they are resident long before the menu reaches a
+  // track build; a circuit that asks for one that hasn't landed simply gets
+  // nothing placed rather than a differently-built track.
+  Assets.loadModels();
+}
 
 // ---------- rain overlay ----------
 // The 2D falling-streak overlay lives in js/game/particles.js (Particles.rain*).

@@ -157,6 +157,11 @@
     const lampDir = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3(0, -1, 0));
     const lampGeo = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(1, 0.8, 0.5, 0));
     U.lampPos = uniformArray(lampPos);
+    // BAKED MATERIALS (TUNE_DEFS matTexMix, shipped 0) + per-layer world tile
+    // size. 17 entries so the array is indexable by MAT id directly; 0 means
+    // "this material has no baked layer" and every sample site tests it first.
+    U.matTexMix = uniform(0.0);
+    U.matTexScale = uniformArray(new Array(17).fill(0));
     U.lampCol = uniformArray(lampCol);
     U.lampDir = uniformArray(lampDir);
     U.lampGeo = uniformArray(lampGeo);
@@ -195,6 +200,7 @@
       U.mistHeight.value = k("mistHeight", 0.30);
       U.shadowTintAmt.value = k("shadowTintAmt", 0.0);
       U.wetDark.value = k("wetDark", 1.0);
+      U.matTexMix.value = k("matTexMix", 0.0);
       U.cloudShadowDim.value = k("cloudShadowDim", 0.80);
       U.carSunGlint.value = k("carSunGlint", 12.0);
       U.carSparkle.value = k("carSparkle", 1.6);
@@ -432,9 +438,20 @@
         h.assign(smoothstep(0.0, 0.16, d).mul(0.55).add(vnoise(uv.mul(5.0)).mul(0.15)));
       }).ElseIf(mid.equal(14.0), () => {  // RUST/CORRUGATED: sinusoidal ridges
         h.assign(sin(hc.mul(7.5)).mul(0.55).add(vnoise(uv.mul(6.0)).mul(0.10)));
+      }).ElseIf(mid.equal(16.0), () => {  // ASPHALT: fine aggregate only (lit.js:235-238)
+        // Two tight octaves and nothing below ~0.1 m. A low-frequency term here
+        // would read as a rippled road under the car and crawl at speed.
+        h.assign(vnoise(uv.mul(9.0)).mul(0.34).add(vnoise(uv.mul(26.0)).mul(0.16)));
       });
       return h;
     });
+
+    // Per-MATERIAL coordinate classification, shared by the procedural bump and
+    // the baked texture sample below (GLX: matWallLike in lit.js). Declared here
+    // rather than next to the baked-texture block so it precedes its first use.
+    const matWallLike = (mid) => mid.equal(1.0).or(mid.equal(2.0)).or(mid.equal(4.0))
+      .or(mid.equal(5.0)).or(mid.equal(7.0)).or(mid.equal(12.0))
+      .or(mid.equal(13.0)).or(mid.equal(14.0));
 
     /* ── applyMaterialNormal (lit.js:239-277): REAL bump — perturbs the shading
      *    normal before the lighting terms consume it. Wall-like materials key
@@ -444,12 +461,14 @@
       const N = vec3(Nin).toVar();
       const wp = vec3(wpIn).toVar();
       const bumpFade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
-      const inRange = mid.greaterThan(0.5).and(mid.lessThan(14.5)).and(mid.notEqual(3.0));
+      // 1..14 plus ASPHALT(16); GLASS(3) and FLAG(15) are excluded, matching
+      // GLX's `mid == 0 || mid == 3 || mid == 15` early-out. ASPHALT was
+      // outside the old < 14.5 bound, so the road — the surface on screen for
+      // the whole race — got NO procedural relief on this backend at all.
+      const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5))
+        .and(mid.notEqual(3.0)).and(mid.notEqual(15.0));
       If(inRange.and(bumpFade.greaterThan(0.005)), () => {
-        const wallLike = mid.equal(1.0).or(mid.equal(2.0)).or(mid.equal(4.0))
-          .or(mid.equal(5.0)).or(mid.equal(7.0)).or(mid.equal(12.0))
-          .or(mid.equal(13.0)).or(mid.equal(14.0));
-        If(wallLike, () => {
+        If(matWallLike(mid), () => {
           const an = abs(N);
           const hc = select(an.x.greaterThan(an.z), wp.z, wp.x).toVar();
           const y = wp.y.toVar();
@@ -476,13 +495,88 @@
           const hx = matBumpHeight(mid, p.add(vec2(e, 0.0)));
           const hz = matBumpHeight(mid, p.add(vec2(0.0, e)));
           const amt = select(mid.equal(8.0), float(0.16),
-                      select(mid.equal(10.0), float(0.14), float(0.07)));
+                      select(mid.equal(10.0), float(0.14),
+                      select(mid.equal(16.0), float(0.025), float(0.07))));
           N.assign(normalize(N.add(
             vec3(h0.sub(hx), 0.0, h0.sub(hz)).mul(amt.mul(bumpFade).div(e)))));
         });
       });
       return N;
     });
+
+    /* ── Baked PBR material arrays (js/render/assets.js) ─────────────────────
+     * GLX counterpart: applyMaterialTexNormal() + the texture block at the end
+     * of applyMaterial() in js/render/shaders/lit.js. The array's LAYER INDEX
+     * IS THE MAT ID, sampled on the SAME triplanar convention the procedural
+     * noise above uses — so a baked scan lands exactly where the noise it
+     * augments lands, with no UV channel anywhere in the pipeline.
+     *
+     * The nodes bind DUMMY 1×1×17 arrays at factory time and tlx.js swaps
+     * `.value` when a pack finishes loading. That is the same shared-node trick
+     * ENV_CUBE uses above, and it is required here for the same reason: the
+     * material variants are compiled once at init, the pack arrives
+     * asynchronously, and a rebuild after init is not possible. U.matTexMix
+     * (TUNE_DEFS `matTexMix`, shipped at 0) gates the whole thing.
+     *
+     * ctx.matMaps absent (an older tlx.js, or a boot where the arrays could not
+     * be created) means NONE of this is compiled in and TLX renders exactly the
+     * pre-existing procedural look. */
+    const MAT_MAPS = ctx.matMaps || null;
+    const matAlbedoNode = MAT_MAPS && MAT_MAPS.albedo ? texture(MAT_MAPS.albedo) : null;
+    const matNormalNode = MAT_MAPS && MAT_MAPS.normal ? texture(MAT_MAPS.normal) : null;
+
+    // Tile coordinate + this layer's world scale. Scale 0 = "no baked layer for
+    // this material", which the callers test before sampling (GLASS and FLAG
+    // are deliberately never baked — see tools/assets.mjs SCALES).
+    const matTexScaleOf = (mid) => U.matTexScale.element(int(mid));
+    const matTexUV = (mid, N, wp) => select(matWallLike(mid),
+      vec2(select(abs(N).x.greaterThan(abs(N).z), wp.z, wp.x), wp.y),
+      wp.xz).div(max(matTexScaleOf(mid), float(0.0001)));
+
+    const applyMaterialTexNormal = matNormalNode ? Fn(([mid, Nin, wpIn, vd]) => {
+      const N = vec3(Nin).toVar();
+      const wp = vec3(wpIn).toVar();
+      const fade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
+      const live = U.matTexMix.greaterThan(0.001).and(matTexScaleOf(mid).greaterThan(0.0));
+      If(live.and(fade.greaterThan(0.005)), () => {
+        const uv = matTexUV(mid, N, wp).toVar();
+        // Same grazing-angle minification guard as the procedural bump: at a
+        // shallow angle a pixel spans many texels, the mip chain flattens the
+        // tangent normal, and the remainder aliases into crawling moiré.
+        const fp = max(fwidth(uv.x), fwidth(uv.y));
+        const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
+        If(aa.greaterThan(0.005), () => {
+          const nt = matNormalNode.sample(uv).depth(int(mid));
+          const dxy = nt.xy.sub(0.5).mul(2.0).toVar();
+          const T = normalize(cross(vec3(0.0, 1.0, 0.0), N).add(vec3(1e-5)));
+          const B = cross(N, T);
+          // ASPHALT stays the weakest — the road is viewed edge-on all race.
+          const amt = select(mid.equal(16.0), float(0.10), float(0.55))
+            .mul(U.matTexMix).mul(fade).mul(aa);
+          N.assign(normalize(N.add(T.mul(dxy.x).add(B.mul(dxy.y)).mul(amt))));
+        });
+      });
+      return N;
+    }) : null;
+
+    // Returns vec4(albedo, rough), matching applyMaterial's packing.
+    const applyMaterialTex = matAlbedoNode ? Fn(([mid, albedoIn, roughIn, wpIn, nrmIn, vd]) => {
+      const albedo = vec3(albedoIn).toVar();
+      const rough = float(roughIn).toVar();
+      const wp = vec3(wpIn).toVar();
+      const far = clamp(vd.sub(90.0).div(170.0).oneMinus(), 0.0, 1.0).toVar();
+      const live = U.matTexMix.greaterThan(0.001).and(matTexScaleOf(mid).greaterThan(0.0));
+      If(live.and(far.greaterThan(0.001)), () => {
+        const uv = matTexUV(mid, normalize(vec3(nrmIn)), wp);
+        const t = matAlbedoNode.sample(uv).depth(int(mid));
+        // Multiplicative, exactly as GLX: the per-track tarmac tint, the
+        // racing-line rubber wear and the per-vertex grain all have to survive.
+        const k = U.matTexMix.mul(far).toVar();
+        albedo.assign(mix(albedo, albedo.mul(t.xyz).mul(2.0), k));
+        rough.assign(clamp(mix(rough, t.w, k.mul(0.8)), 0.04, 1.0));
+      });
+      return vec4(albedo, rough);
+    }) : null;
 
     /* ── applyMaterial (lit.js:279-389): albedo + roughness modulation for the
      *    15 track materials. nrmIn = the RAW varying normal (vNrm), matching
@@ -494,7 +588,8 @@
       const nrm = vec3(nrmIn).toVar();
       const far = clamp(vd.sub(90.0).div(170.0).oneMinus(), 0.0, 1.0).toVar();   // coarse: mid range
       const near = clamp(vd.sub(26.0).div(64.0).oneMinus(), 0.0, 1.0).toVar();   // fine: near field
-      const inRange = mid.greaterThan(0.5).and(mid.lessThan(14.5));
+      // Includes ASPHALT(16) — see the applyMaterialNormal note above.
+      const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5)).and(mid.notEqual(15.0));
       If(inRange.and(far.greaterThan(0.001)), () => {
         const an = abs(normalize(nrm)).toVar();
         const wall = an.y.lessThan(0.6);
@@ -596,6 +691,13 @@
           const rust = smoothstep(0.55, 0.9, vnoise(vec2(hc.mul(0.8), y.mul(0.35)).add(5.0)));
           albedo.assign(mix(albedo, albedo.mul(vec3(0.62, 0.42, 0.28)), rust.mul(0.5).mul(far)));
           rough.assign(min(1.0, rough.add(far.mul(0.14))));
+        }).ElseIf(mid.equal(16.0), () => {  // ASPHALT — aggregate speckle + wear patches (lit.js:407-417)
+          // Deliberately understated: this is the surface under the car for the
+          // whole race, so it gets tone variation rather than pattern. No
+          // fract()/sin() term at all — nothing here can strobe, only soften.
+          albedo.mulAssign(vnoise(wp.xz.mul(0.035)).sub(0.5).mul(0.10).mul(far).add(1.0));
+          albedo.mulAssign(vnoise(wp.xz.mul(7.0)).sub(0.5).mul(0.13).mul(near).add(1.0));
+          rough.assign(min(1.0, rough.add(far.mul(0.10))));
         });
       });
       return vec4(albedo, rough);
@@ -700,6 +802,8 @@
 
         // ── per-material procedural bump (before V/L/H/NoL — lit.js:637) ────
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
+        // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
+        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd));
 
         const L = vec3(U.sunDir).toVar();
         const H = normalize(L.add(V).add(vec3(1e-5))).toVar();   // +eps: V==-L NaN guard
@@ -748,6 +852,11 @@
         const packedMat = applyMaterial(surfaceId, albedo, rough, wp, Nvary, vd);
         albedo.assign(packedMat.xyz);
         rough.assign(packedMat.w);
+        if (applyMaterialTex) {
+          const packedTex = applyMaterialTex(surfaceId, albedo, rough, wp, Nvary, vd);
+          albedo.assign(packedTex.xyz);
+          rough.assign(packedTex.w);
+        }
 
         // ── specular AA: widen roughness by the normal's screen-space
         //    variance (lit.js:708-712). Drop with a comment if TSL fights it —
@@ -1182,7 +1291,29 @@
     // live cube for the main pass. No-op when there's no cube node.
     function setEnvCube(tex) { if (envCubeNode && tex) envCubeNode.value = tex; }
 
-    return { makeMaterial, makeViz, uniforms: U, updateFrame, setEnvStr, setEnvCube, MAX_LIGHTS };
+    // Adopt a loaded asset pack (js/render/assets.js). The texture nodes were
+    // bound to the placeholders at factory time, so — exactly like setEnvCube
+    // above — the swap is a `.value` assignment on the shared node, NOT a
+    // rebuild. The scales are what the shader actually tests to decide whether
+    // a material has a baked layer, so clearing them is what turns the feature
+    // back off; passing a falsy `maps` does precisely that.
+    function setMaterialMaps(maps) {
+      if (matAlbedoNode && maps && maps.albedo) matAlbedoNode.value = maps.albedo;
+      if (matNormalNode && maps && maps.normal) matNormalNode.value = maps.normal;
+      // uniformArray exposes its backing store as .array; .value is the
+      // fallback name on older three builds. Guard both — a wrong guess here
+      // would silently leave every scale at 0, i.e. the feature would look
+      // "loaded" and do nothing.
+      const store = U.matTexScale.array || U.matTexScale.value;
+      if (store) {
+        for (let i = 0; i < 17; i++)
+          store[i] = maps && maps.scales && maps.scales[i] > 0 ? maps.scales[i] : 0;
+      }
+      if (U.matTexScale.needsUpdate !== undefined) U.matTexScale.needsUpdate = true;
+    }
+
+    return { makeMaterial, makeViz, uniforms: U, updateFrame, setEnvStr, setEnvCube,
+             setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { lit });

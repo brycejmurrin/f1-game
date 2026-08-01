@@ -874,6 +874,37 @@ const api = {
   // Load an optional .glb car model at runtime (team meshes rebuild from it,
   // tinted per livery); resolves false and keeps the procedural car on failure.
   loadCarModel: (url) => loadCarModel(url),
+  // ── Baked asset pack (js/render/assets.js, built by tools/assets.mjs) ──────
+  // assets() — {supported, pack, uploaded, tier, layers, normal, bytes, models,
+  //   error}. `supported:false` means the active renderer has no texture-array
+  //   path (WGX/WebGPU); `pack:false` means no pack is installed. Both are
+  //   normal states in which the game renders its pure-procedural look.
+  assets: () => (typeof Assets === "undefined" ? { supported: false, pack: false, error: "no-module" }
+                                               : Assets.state()),
+  // assetLoad(tier?) — force a (re)load of the material arrays. "low"/"high"
+  // pick the pack variant explicitly instead of following the mobile tier;
+  // false unloads them. Resolves to the resulting state().
+  async assetLoad(tier) {
+    if (typeof Assets === "undefined") return { supported: false, pack: false, error: "no-module" };
+    if (tier === false) { Assets.unload(); return Assets.state(); }
+    Assets.unload();                                   // clear the memoised promise so a tier switch re-uploads
+    await Assets.load(tier ? { tier } : {});
+    return Assets.state();
+  },
+  // matTex(v?) — get/set the BAKED MATERIALS blend (the uMatTexMix knob). Same
+  // value as lightTune({matTexMix}), exposed on its own because it is the A/B
+  // control for the whole baked-material feature: matTex(0) is the shipped
+  // procedural render, matTex(1) is full baked detail.
+  matTex(v) {
+    if (v !== undefined) {
+      setLightTune("matTexMix", Math.max(0, Math.min(1, +v || 0)));
+      persistLightTune();
+      if (typeof refreshLightTunePanel === "function") refreshLightTunePanel();
+    }
+    return LT.matTexMix;
+  },
+  // credits() — attribution roll for every baked asset in the pack.
+  credits: () => (typeof Assets === "undefined" ? [] : Assets.credits()),
   // Test helpers: override Input and pump physics at fixed dt.
   // setInput({ steer, throttle, brake }) — values held until clearInput().
   // step(dt, n) — run n physics ticks of dt seconds each (default 1 tick, 1/60 s).
