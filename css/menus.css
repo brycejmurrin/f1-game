@@ -45,6 +45,12 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: calc(var(--gap) * 0.55);
 }
+/* STANDINGS only appears mid-season, so this row is four buttons or five — and
+   at five the last one is stranded alone on row three. The generic
+   .no-orphan-2 rule cannot be used here: :nth-child counts HIDDEN elements, so
+   it would widen HOW TO PLAY in the four-button case too. :has() asks the only
+   question that actually matters — is the fifth button showing? */
+#menu-secondary:has(#mb-standings:not([hidden])) > :last-child { grid-column: 1 / -1; }
 #menu-buttons .bigbtn { margin: 0; width: 100%; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
@@ -56,8 +62,10 @@
 .minibtn .btn-ico { margin-right: 0.35em; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
-#menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: center; }
-#audiostate { color: var(--dim); font-size: 12px; margin-top: 10px; min-height: 16px; }
+#menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: inherit; }
+#menu-brand { align-items: center; }
+#menu-meta { margin-top: 14px; }
+#audiostate { color: var(--dim); font-size: 12px; min-height: 16px; }
 #disclaimer { color: var(--dim); font-size: 11px; margin-top: 8px; }
 
 /* Landscape: branding left, buttons right — a phone held sideways has width to
@@ -80,11 +88,11 @@
     column-gap: 32px;
   }
   #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
-  #menu-meta  { grid-column: 1; grid-row: 2; align-items: flex-start; }
   #menu-buttons { grid-column: 2; grid-row: 1; align-self: center; width: auto; }
   #title { font-size: clamp(26px, 7.5vw, 48px); }
   #subtitle { margin: 4px 0 0; font-size: 12px; }
-  #audiostate { font-size: 10px; margin-top: 2px; min-height: 0; }
+  #menu-meta { margin-top: 8px; }
+  #audiostate { font-size: 10px; min-height: 0; }
   #disclaimer { font-size: 10px; margin-top: 6px; }
   /* the group is what gets the width now; the buttons fill their cell */
   #menu-primary, #menu-secondary { width: min(42vw, 260px); }
@@ -373,6 +381,21 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      the full width so they don't leave a dead half-row beside them. */
   #rs-body #rs-time-section, #rs-body #rs-diff-section { grid-column: 1 / -1; }
 }
+/* Chips on a MODULE, not on flex wrap — at every width, which is why this sits
+   outside the container query above. Every one of these groups has a chip count
+   that does not divide into the row it sits in, so `flex-wrap` left a different
+   ragged hole in each: "57 (FULL)" alone on line two of LAPS, FOG alone under
+   WEATHER, and DIFFICULTY's three chips using a third of a full-width row with
+   the rest empty. Equal columns make every row deliberately full, minmax(0,1fr)
+   keeps them honest at any sheet width, and the chips get bigger tap targets
+   out of it. */
+#rs-laps, #rs-weather, #rs-diff { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#rs-time { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+#race-settings .sel-chip {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  padding-inline: 6px; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* ---------- customize my team ---------- */
 #customize .cz-row {
@@ -392,8 +415,12 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   background: rgba(255, 255, 255, 0.08); color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 7px 10px;
 }
+/* ONE well size for all eleven. PRIMARY/ACCENT were 56px and the seven paint
+   layers 48px, so in the multi-column form the right edge of every row landed
+   in a different place and the columns read as misaligned rather than as a
+   grid. */
 #customize input[type="color"] {
-  width: 56px; height: 34px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
+  width: 48px; height: 34px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 6px; background: none; cursor: pointer; flex: none;
 }
 #cz-preview {
@@ -407,7 +434,6 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   color: rgba(255,255,255,0.4); text-transform: uppercase;
   border-top: 1px solid rgba(255,255,255,0.12); padding-top: var(--gap);
 }
-#customize .cz-liv-row input[type="color"] { width: 48px; }
 .cz-liv-none {
   /* width:auto is stated with the id prefix in the container query below too —
      a bare class loses to any `... button { width: 100% }` rule. */
@@ -418,7 +444,16 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   padding: 6px 9px; border-radius: 6px; cursor: pointer; color: rgba(255,255,255,0.55);
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2);
 }
-.cz-liv-none.active { background: rgba(80,170,255,0.22); color: #cfe8ff; border-color: rgba(90,180,255,0.45); }
+/* Engaged = a lighter SURFACE, not a colour. This was a blue fill, and blue
+   already means "stat gain" in this UI (the ▲ACCEL badges on CAR SETUP), so
+   seven blue NONE buttons read as seven upgrades. Nothing here is a gain and
+   nothing here is a selection in the red sense either — it is a pressed
+   toggle, so it steps up the elevation ladder and brightens its label. */
+.cz-liv-none.active {
+  background: var(--surf-3);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.42);
+}
 /* Columns of rows once the sheet is wide, so all fifteen fit without the dialog
    becoming a long scroll. auto-fill rather than a hard two, so the count follows
    the room the sheet was given — on a landscape phone the sheet is now wide

@@ -5191,7 +5191,11 @@ $("pm-howto").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameA
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
 // Team picker: opened by the team card on the select screen (js/game/menus.js).
 // Closing without choosing leaves the current team as-is.
-$("tp-close").onclick = () => { $("teampicker").hidden = true; };
+$("tp-close").onclick = () => {
+  $("teampicker").hidden = true;
+  // the card that opened it advertises aria-haspopup, so it owns aria-expanded
+  const card = $("sel-team-card"); if (card) card.setAttribute("aria-expanded", "false");
+};
 // BACK + the tappable circuit preview. Both lookups existed in `els` but no
 // handler was ever attached on this branch — the select screen's BACK button
 // was simply dead (surfaced by the button-walk audit; the wiring lived on an
@@ -5511,6 +5515,9 @@ const camPicker = (() => {
   const build = () => {
     el = document.createElement("div");
     el.id = "campicker";
+    // 13 modes in a 3-wide grid leaves REAR CAM alone on the last line; the
+    // no-orphan rule (css/components.css) widens it across the row instead.
+    el.className = "no-orphan-3";
     el.hidden = true;
     for (let i = 0; i < CAM_MODES.length; i++) {
       const b = document.createElement("button");

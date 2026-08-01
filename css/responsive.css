@@ -18,6 +18,20 @@ body.desktop #pm-calib { display: none !important; }
   /* The select sheet is the one screen that wants to fill the space it is
      given rather than shrink to content — it is the game's "home". */
   #sel-inner { height: min(100%, 720px); }
+  /* The spec strip gets its BARS back on a big screen. They are hidden on a
+     landscape phone on purpose — four bars cost ~60px of a ~230px pane and the
+     numbers alone carry the comparison. A desktop has the opposite problem:
+     that column ran out of content two thirds of the way down and left a
+     330x470 hole beside the circuit list, so the one piece of content that
+     wanted more room was the obvious thing to give it to. */
+  #sel-stats {
+    display: grid; grid-template-columns: minmax(0, 1fr);
+    row-gap: 5px; justify-content: stretch;
+  }
+  #sel-stats .cs-stat-row { font-size: 10px; gap: 10px; }
+  #sel-stats .cs-stat-label { width: 84px; }
+  #sel-stats .cs-stat-bar-wrap { display: block; }
+  #sel-stats .cs-stat-val { width: 30px; text-align: right; font-size: 12px; }
   /* Main menu: branding left, buttons right — as ONE centred composition.
      Content-sized columns, centred as a pair. `1fr 1fr` split the whole screen
      between them, so the wider the display the further apart they drifted: on
@@ -30,22 +44,20 @@ body.desktop #pm-calib { display: none !important; }
     background: radial-gradient(70% 80% at 38% 50%, rgba(225,6,0,0.18), transparent 60%), rgba(6,6,10,0.55);
   }
   #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
-  #menu-meta  { grid-column: 1; grid-row: 2; align-items: flex-start; }
-  /* The two tiers sit SIDE BY SIDE here — the three modes in one column, the
-     four utility screens in a 2x2 beside them — so the block stays wide and
-     short next to the branding instead of running down the screen. (The old
-     auto-flow-column rule flowed one flat list of buttons; the tiers are
-     containers now, so the flow lives on this element and each tier keeps its
-     own internal shape.) */
+  /* ONE column of buttons, tiers stacked — the same shape the phone gets, just
+     bigger. Side by side (modes in one column, a 2x2 of utilities beside them)
+     made three visual columns across the screen, and the 2x2 read as a detached
+     island floating to the right of the real menu: it is centred against the
+     mode column, so it lines up with nothing, and its buttons are half the
+     size. Stacked, the tiers share one edge and one width, and the whole
+     composition is two blocks instead of three. */
   #menu-buttons {
     grid-column: 2; grid-row: 1; align-self: center;
-    grid-auto-flow: column; align-items: center;
-    gap: 16px; width: auto;
+    gap: 12px; width: auto; justify-items: stretch;
   }
-  #menu-primary { width: auto; gap: 10px; }
-  #menu-secondary { width: auto; gap: 10px; grid-template-columns: repeat(2, 150px); }
-  #menu-buttons .bigbtn { width: 190px; }
-  #menu-buttons .minibtn { width: 150px; font-size: 12px; padding: 8px 8px; }
+  #menu-primary, #menu-secondary { width: 320px; gap: 10px; }
+  #menu-buttons .bigbtn { width: 100%; }
+  #menu-buttons .minibtn { font-size: 12px; padding: 9px 8px; }
 }
 
 /* Scale up HUD readouts on large screens so they're legible at arm's length. */

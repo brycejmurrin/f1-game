@@ -644,9 +644,15 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-tpopup .dh-live-sub { font-size: 10px; }
 .dh-thead { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .dh-thead .dh-swatch { width: 10px; height: 10px; }
+/* The lane's NAME wins the squeeze. Both of these ellipsise, so the only
+   question is which one loses characters first — and "George Russel" is a
+   worse thing to show than a clipped sector string the numbers below already
+   repeat. `flex: 1 1 0` on the sector strip gives it a basis of ZERO, so it
+   claims only leftover space instead of joining the initial distribution and
+   dragging the name down with it. */
 .dh-tname { flex: 0 1 auto; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dh-tsect {
-  flex: 1 1 auto; min-width: 0; margin-left: auto;
+  flex: 1 1 0; min-width: 0; margin-left: auto;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   text-align: right;
   font-size: 10px; font-weight: 600; font-style: normal;
