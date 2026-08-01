@@ -828,13 +828,16 @@ void main() {
       // itself at a sane peak while keeping its colour (unlike a post multiply).
       reflCol = reflCol / (1.0 + reflCol * 0.35);
       bool carDom = carTerm > roadTerm;
-      // Car paint: a march MISS means "nothing on-screen mirrors here" — fall
-      // through to the lit shader's analytic env mirror instead of substituting
-      // the fallback sky over the livery. Up-facing panels miss constantly (the
-      // reflected ray exits the screen), so the old full-cover fallback replaced
-      // whole decks with flat sky — the "translucent car" read. The road keeps
-      // its fallback: a wet road always mirrors SOMETHING, never a black hole.
-      float cover  = found ? hit : (carDom ? 0.0 : 1.0);
+      // A march MISS means "nothing on-screen mirrors here". Car paint falls all
+      // the way through to the lit shader's analytic env mirror (cover 0). The
+      // ROAD used to substitute the dim skyRefl at FULL cover on every miss —
+      // but from a low grazing cockpit eye the march hits in some screen regions
+      // and misses in others, so the bright-hit / dim-miss substitution broke the
+      // wet road into reflective-vs-matte PATCHES. Drop the road's miss cover to
+      // a light tint (0.30): a miss now mostly reveals the lit shader's (boosted)
+      // smooth analytic wet reflection instead of a dim sky patch, so a miss
+      // reads as continuous wet road, not a hole. Still never black.
+      float cover  = found ? hit : (carDom ? 0.0 : 0.30);
       // Clean DARKER MIRROR: substitute the reflected scene into a darkened base
       // (a real wet mirror shows the scene it reflects, not a wash added on top).
       // Mirror-like: a high base reflectance (so mid/near tarmac mirrors too, not
@@ -863,7 +866,7 @@ void main() {
       // base scene shows as a visible seam slicing across the frame. Fade the last
       // few percent out instead of cutting it off.
       strength *= 1.0 - smoothstep(uSsrTopUV - 0.06, uSsrTopUV, vUV.y);
-      float mixAmt = clamp(strength * cover, 0.0, carDom ? 0.85 : 0.94);   // near-mirror, keeps a hint of pigment/asphalt
+      float mixAmt = clamp(strength * cover, 0.0, carDom ? 0.85 : 0.80);   // road cap 0.94→0.80: keep more of the reflective lit base under a HIT so hit vs miss regions share the same wet look (less patchy), car unchanged
       // Near-full darker-mirror substitution — the car mirrors the scene it
       // reflects (bright on-screen lights punch through), keeping a whisper of
       // pigment so the livery still tints the reflection.

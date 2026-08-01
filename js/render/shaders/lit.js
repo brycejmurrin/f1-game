@@ -1127,7 +1127,7 @@ void main() {
   // Wetness forces the surface glossy, so this kicks in hard on rainy roads —
   // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
   float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
-  envBlend = max(envBlend, wetSheen * 0.15);   // wet-road reflection is owned by SSR now; keep only a faint env tint
+  envBlend = max(envBlend, wetSheen * 0.55);   // smooth analytic wet mirror: this is the COHERENT reflective base the road shows wherever the screen-space SSR march misses (grazing cockpit views miss a lot). Was 0.15 (a whisper, "SSR owns it") — but SSR is patchy at grazing angles, so the analytic sky mirror carries the wet look and SSR just adds crisp on-screen detail on top.
   if (envBlend > 0.001) {
     // reflect() computed here, not at the top: envBlend is ~0 for the matte
     // majority of the scene (road/terrain/walls), where Rv was pure waste.
@@ -1154,8 +1154,8 @@ void main() {
     // Also dim the reflected sky a touch when wet (a wet road is never as bright
     // as the sky it mirrors).
     float envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), 1.0).x;
-    envFresnel = mix(envFresnel, envFresnel * envFresnel, wetSheen);
-    vec3 envWet = envColor * (1.0 - wetSheen * 0.90);   // whisper only on wet; SSR owns the reflection
+    envFresnel = mix(envFresnel, envFresnel * envFresnel, wetSheen * 0.35);   // was full square when wet, which shoved the sky sheen into the far grazing band only and left near/mid road dark (SSR was meant to cover it). Soften the squaring so the smooth analytic reflection spreads across the whole wet road — a coherent mirror everywhere, not a thin far strip.
+    vec3 envWet = envColor * (1.0 - wetSheen * 0.45);   // keep ~55% of the sky colour on a wet road (was 10%): the analytic mirror now has to read as a real reflection, since it's the smooth base under the patchy SSR. Soft-clip below still stops it blowing to white.
     // Soft-clip the reflection so a wet road can never blow out to a white sheet
     // (a low dusk/dawn sun + bright twilight sky otherwise push this past 1). A
     // Reinhard shoulder on the brightest channel keeps it bright where the scene
