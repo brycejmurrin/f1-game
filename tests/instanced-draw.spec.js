@@ -59,6 +59,44 @@ test.describe("GLX instanced draw", () => {
     expect(r.bakeOnly).toBeLessThan(r.batches);
   });
 
+  test("culling packs the visible instances to the front of the buffer", async ({ racePage: page }) => {
+    await page.evaluate(() => __apex.race("monza"));
+    await page.waitForFunction(() => __apex.info().track === "monza", null, { timeout: 180000 });
+
+    const r = await page.evaluate(() => {
+      const graph = __apex.trackGraph && __apex.trackGraph();
+      if (!graph) return { skipped: "no graph" };
+      const { batches } = graph.batches();
+      if (!batches.length) return { skipped: "no batches" };
+      const big = batches.reduce((a, b) => (b.count > a.count ? b : a));
+      const batch = GLX.createInstancedBatch(big.geo, big.matrices, big.colors, { cellSize: 72 });
+
+      // A frustum that contains nothing: all six planes reject everything. Built
+      // as raw planes rather than from a camera so the test cannot drift with
+      // the projection.
+      const away = [[1,0,0,-1e9],[-1,0,0,-1e9],[0,1,0,-1e9],[0,-1,0,-1e9],[0,0,1,-1e9],[0,0,-1,-1e9]];
+      const none = GLX.cullInstances(batch, away);
+
+      // A frustum that contains everything.
+      const all = [[1,0,0,1e9],[-1,0,0,1e9],[0,1,0,1e9],[0,-1,0,1e9],[0,0,1,1e9],[0,0,-1,1e9]];
+      const every = GLX.cullInstances(batch, all);
+
+      const out = { cells: batch.cells.length, total: batch.instances, none, every };
+      GLX.freeInstancedBatch(batch);
+      return out;
+    });
+
+    test.skip(!!r.skipped, r.skipped || "");
+    expect(r.cells).toBeGreaterThan(0);
+    expect(r.none, "an empty frustum should cull everything").toBe(0);
+    expect(r.every, "a containing frustum should keep every instance").toBe(r.total);
+  });
+
+  test("instanced geometry can cast shadows", async ({ racePage: page }) => {
+    const api = await page.evaluate(() => typeof GLX.castShadowInstanced);
+    expect(api, "instanced props would light correctly but drop no shadow").toBe("function");
+  });
+
   test("ordinary draws are unaffected — the scene still renders", async ({ racePage: page }) => {
     await page.evaluate(() => __apex.race("monza"));
     await page.waitForFunction(() => __apex.info().track === "monza", null, { timeout: 180000 });

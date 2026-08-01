@@ -1102,11 +1102,24 @@ void main() {
 }`;
 
   // Depth-only pass for shadow map — renders world position into depth buffer.
+  // Sun/lamp shadow depth pass. Mirrors LIT_VS's instancing gate so instanced
+  // scenery CASTS shadows: without it an instanced prop would light correctly and
+  // then drop no shadow, which reads as a floating object rather than a bug.
+  // Locations 5-8 are the same four instance-matrix columns LIT_VS declares, and
+  // uInstanced defaults to 0 so every existing caller is byte-identical.
   const DEPTH_VS = `#version 300 es
 layout(location=0) in vec3 aPos;
+layout(location=5) in vec4 aInst0;
+layout(location=6) in vec4 aInst1;
+layout(location=7) in vec4 aInst2;
+layout(location=8) in vec4 aInst3;
+uniform float uInstanced;
 uniform mat4 uModel;
 uniform mat4 uLightVP;
-void main() { gl_Position = uLightVP * uModel * vec4(aPos, 1.0); }`;
+void main() {
+  mat4 M = uInstanced > 0.5 ? mat4(aInst0, aInst1, aInst2, aInst3) : uModel;
+  gl_Position = uLightVP * M * vec4(aPos, 1.0);
+}`;
 
   const DEPTH_FS = `#version 300 es
 void main() {}`;

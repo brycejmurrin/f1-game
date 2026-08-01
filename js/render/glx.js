@@ -1072,7 +1072,7 @@ const GLX = (function () {
   // SECOND buffer carries the instance columns at 5-8 (+ colour at 9) with
   // divisor 1. Nothing about the vertex format changes, so the same {pos,nrm,
   // col,idx,mat} geometry works in both paths.
-  function createInstancedBatch(data, matrices, colors) {
+  function createInstancedBatch(data, matrices, colors, opts) {
     const mesh = createMesh(data);
     const vao = mesh.vao;
     gl.bindVertexArray(vao);
@@ -1101,11 +1101,83 @@ const GLX = (function () {
     gl.bindVertexArray(null);
 
     mesh.instances = matrices.length / 16;
+    mesh.visible = mesh.instances;    // culling narrows this; see cullInstances()
     mesh.ibo = ibo;
     mesh.cbo = cbo;
+
+    // Optional spatial buckets for per-frame frustum culling. WebGL2 has NO
+    // baseInstance, so an instanced draw always starts at instance 0 — a visible
+    // subset cannot be expressed as an offset. The only way to draw part of a
+    // batch is to PACK the visible instances to the front of the buffer and
+    // re-upload, which is what cullInstances() does; these buckets are what keep
+    // that repack proportional to what is on screen rather than to the whole
+    // batch. Same 72 m grid the chunked meshes use, so the two agree about what
+    // "nearby" means.
+    if (opts && opts.cellSize > 0) {
+      const cell = opts.cellSize;
+      // Conservative per-instance reach: the model's own extent, scaled by the
+      // largest scale any instance applies. Cheap and never under-estimates.
+      let reach = opts.radius || 0;
+      if (!reach) {
+        // Largest |component| in the canonical mesh: the model sits at the origin
+        // (TrackGraph guarantees it), so this is its radius in every direction.
+        const p0 = data.pos;
+        for (let i = 0; i < p0.length; i++) { const a = Math.abs(p0[i]); if (a > reach) reach = a; }
+      }
+      const buckets = new Map();
+      for (let i = 0; i < mesh.instances; i++) {
+        const b = i * 16, x = matrices[b + 12], y = matrices[b + 13], z = matrices[b + 14];
+        // Column lengths ARE the per-instance scale (orthonormal basis * scale).
+        const sx = Math.hypot(matrices[b], matrices[b + 1], matrices[b + 2]);
+        const sy = Math.hypot(matrices[b + 4], matrices[b + 5], matrices[b + 6]);
+        const sz = Math.hypot(matrices[b + 8], matrices[b + 9], matrices[b + 10]);
+        const r = reach * Math.max(sx, sy, sz);
+        const key = (Math.floor(x / cell) + 1024) * 4096 + (Math.floor(z / cell) + 1024);
+        let bk = buckets.get(key);
+        if (!bk) buckets.set(key, (bk = { idx: [], mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity] }));
+        bk.idx.push(i);
+        const mn = bk.mn, mx = bk.mx;
+        if (x - r < mn[0]) mn[0] = x - r; if (x + r > mx[0]) mx[0] = x + r;
+        if (y - r < mn[1]) mn[1] = y - r; if (y + r > mx[1]) mx[1] = y + r;
+        if (z - r < mn[2]) mn[2] = z - r; if (z + r > mx[2]) mx[2] = z + r;
+      }
+      mesh.cells = [...buckets.values()];
+      mesh.srcMatrices = matrices;      // CPU copies the repack reads from
+      mesh.srcColors = colors && colors.length ? colors : null;
+      mesh.packMatrices = new Float32Array(matrices.length);
+      mesh.packColors = mesh.srcColors ? new Float32Array(mesh.srcColors.length) : null;
+    }
     // A batch with no per-instance colour falls back to the context-wide generic
     // value for attribute 9, which init() pins at (1,1,1).
     return mesh;
+  }
+
+  // Repack the instances whose cell survives the frustum to the front of the GPU
+  // buffer and record how many. Returns the visible count. A batch created
+  // without cellSize has no cells and is left whole (always drawn in full).
+  function cullInstances(batch, planes) {
+    if (!batch || !batch.cells) return batch ? batch.instances : 0;
+    const src = batch.srcMatrices, dst = batch.packMatrices;
+    const sc = batch.srcColors, dc = batch.packColors;
+    let n = 0;
+    for (const c of batch.cells) {
+      if (!CHK.aabbInFrustum(planes, c.mn, c.mx)) continue;
+      for (const i of c.idx) {
+        dst.set(src.subarray(i * 16, i * 16 + 16), n * 16);
+        if (dc) dc.set(sc.subarray(i * 3, i * 3 + 3), n * 3);
+        n++;
+      }
+    }
+    batch.visible = n;
+    if (n) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, dst.subarray(0, n * 16));
+      if (dc) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, batch.cbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, dc.subarray(0, n * 3));
+      }
+    }
+    return n;
   }
 
   function drawInstanced(batch, opts) {
@@ -1120,7 +1192,8 @@ const GLX = (function () {
     bindVAO(batch.vao);
     const dbl = opts && opts.doubleSided;
     if (dbl) gl.disable(gl.CULL_FACE);
-    gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, batch.instances);
+    const n = batch.visible === undefined ? batch.instances : batch.visible;
+    if (n > 0) gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
     if (dbl) gl.enable(gl.CULL_FACE);
   }
 
@@ -1370,6 +1443,7 @@ const GLX = (function () {
     createMesh,
     // TrackGraph.batches() consumer — see js/track/graph.js.
     createInstancedBatch,
+    cullInstances,
     drawInstanced,
     freeInstancedBatch,
     createTexMesh,
@@ -1409,6 +1483,7 @@ const GLX = (function () {
     envProbeReset() { envFacesMask = 0; envReady = false; },
     shadowBegin: (lightVP) => SHD.shadowBegin(lightVP),
     castShadow: (mesh, model) => SHD.castShadow(mesh, model),
+    castShadowInstanced: (batch, count) => SHD.castShadowInstanced(batch, count),
     shadowEnd: () => SHD.shadowEnd(),
     carShadowBegin: (lightVP) => SHD.carShadowBegin(lightVP),
     carShadowEnd: () => SHD.carShadowEnd(),

@@ -68,7 +68,7 @@ const GLXShadow = (function () {
       lampArmed: false,        // set by lampShadowBegin, cleared each present()
       lampIdx: -1,             // frame.lights record index of the mapped lamp
       lampArms: 0,             // lifetime lampShadowBegin count (debug introspection)
-      shadowBegin, castShadow, shadowEnd,
+      shadowBegin, castShadow, castShadowInstanced, shadowEnd,
       carShadowBegin, carShadowEnd,
       lampShadowBegin, lampShadowEnd,
     };
@@ -76,7 +76,7 @@ const GLXShadow = (function () {
     function setup() {
       depthProg = link(DEPTH_VS, DEPTH_FS);
       if (!depthProg) return false;
-      S.depthU = locs(depthProg, ["uModel", "uLightVP"]);
+      S.depthU = locs(depthProg, ["uModel", "uInstanced", "uLightVP"]);
 
       S.mapTex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, S.mapTex);
@@ -201,8 +201,22 @@ const GLXShadow = (function () {
     function castShadow(mesh, model) {
       if (!S.depthPassOn || !mesh) return;
       bindVAO(mesh.vao);
+      if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
       gl.uniformMatrix4fv(S.depthU.uModel, false, model);
       gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    }
+
+    // Instanced counterpart: one canonical mesh, N transforms, one draw. `count`
+    // optionally limits it to the first N instances, which is how a culled
+    // upload draws only the visible slice without reallocating the buffer.
+    function castShadowInstanced(batch, count) {
+      if (!S.depthPassOn || !batch || !batch.instances) return;
+      const n = count === undefined ? batch.instances : Math.min(count, batch.instances);
+      if (n <= 0) return;
+      bindVAO(batch.vao);
+      if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 1);
+      gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
+      if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
     }
 
     function shadowEnd() {
