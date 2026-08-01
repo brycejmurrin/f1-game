@@ -843,6 +843,21 @@ const DataTelemetry = (function () {
     const f = span > 0 ? (t - car[lo].t) / span : 0;
     return +car[lo].date + f * (+car[hi].date - +car[lo].date);
   }
+  // inverse of dateAtT: lap-time for a wall-clock date
+  function tAtDate(car, date) {
+    if (!car || !car.length) return 0;
+    const n = car.length;
+    if (date <= +car[0].date) return car[0].t;
+    if (date >= +car[n - 1].date) return car[n - 1].t;
+    let lo = 0, hi = n - 1;
+    while (lo < hi - 1) {
+      const mid = (lo + hi) >> 1;
+      if (+car[mid].date <= date) lo = mid; else hi = mid;
+    }
+    const span = +car[hi].date - +car[lo].date;
+    const f = span > 0 ? (date - +car[lo].date) / span : 0;
+    return car[lo].t + f * (car[hi].t - car[lo].t);
+  }
 
   function locAt(view, tel, t) {
     const own = !!(tel.loc && tel.loc.length);
@@ -871,7 +886,21 @@ const DataTelemetry = (function () {
       if (+loc[mid].date <= target) lo = mid; else hi = mid;
     }
     const span = +loc[hi].date - +loc[lo].date;
-    return lerpLoc(loc[lo], loc[hi], span > 0 ? (target - +loc[lo].date) / span : 0);
+    let f = span > 0 ? (target - +loc[lo].date) / span : 0;
+    // WHERE BETWEEN THE TWO FIXES? The fixes themselves are ground truth — the
+    // car really was there, at those instants — so the dot stays anchored to
+    // them and never drifts. What is NOT true is that it crossed the ~20m gap at
+    // a constant rate: braking from 300 into a hairpin it covers most of that
+    // gap in the first third of the interval. So take the fraction from the
+    // car's own DISTANCE TRAVELLED (its speed trace integrated, the same series
+    // the delta chart runs on) rather than from elapsed time.
+    const cum = tel._cum || (tel._cum = cumDist(tel.car || []));
+    if (cum.t.length > 1) {
+      const dA = distAtT(cum, tAtDate(tel.car, +loc[lo].date));
+      const dB = distAtT(cum, tAtDate(tel.car, +loc[hi].date));
+      if (dB > dA) f = clamp((distAtT(cum, t) - dA) / (dB - dA), 0, 1);
+    }
+    return lerpLoc(loc[lo], loc[hi], f);
   }
 
   // composite one frame: cached bases + moving cursor, car dots, delta, gauges
