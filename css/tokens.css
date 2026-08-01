@@ -230,11 +230,57 @@
   --surf-1: color-mix(in oklab, #fff 4%, var(--bg));   /* sheets, panels */
   --surf-2: color-mix(in oklab, #fff 7%, var(--bg));   /* a card ON a sheet */
   --surf-3: color-mix(in oklab, #fff 11%, var(--bg));  /* popovers, raised rows */
-  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  /* still cast a shadow — it does nothing on black but separates a sheet from
-     the bright 3D scene behind it, which is where this game actually shows one */
-  --lift-1: 0 10px 30px rgba(0, 0, 0, 0.55);
-  --lift-2: 0 18px 44px rgba(0, 0, 0, 0.6);
+  /* A lit lip along the top AND the far edge falling into shade. The lip on
+     its own reads as a sticker laid on the page; the pair reads as a slab with
+     thickness, which is the whole point of an elevation system. */
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+  /* Shadows come in LAYERS, not one blur. A single 44px shadow is a smudge:
+     real light gives a small tight core right under the object and a wide soft
+     ambient falloff, and it is the tight one that says "this is lifted" while
+     the wide one says "by how much". One stop can only do one of those jobs.
+     (Still cast at all because this game shows its sheets against a bright 3D
+     scene, where a shadow does read.) */
+  --lift-1:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 6px 16px rgba(0, 0, 0, 0.45);
+  --lift-2:
+    0 2px 4px rgba(0, 0, 0, 0.45),
+    0 12px 30px rgba(0, 0, 0, 0.5),
+    0 26px 56px rgba(0, 0, 0, 0.35);
+
+  /* ---- GRADIENTS ----------------------------------------------------
+     Every one of these interpolates `in oklab`. sRGB interpolation walks a
+     straight line through a colour cube that is not perceptually uniform, so a
+     saturated ramp sags through a muddy, desaturated middle — most visible on
+     exactly the long red ramps this UI is made of. oklab is perceptually
+     uniform, so the midpoint stays as red as the ends, and the ramp needs
+     fewer stops to look smooth.
+
+     They are TOKENS because there were seventeen hand-written gradients across
+     the stylesheets and no two primary surfaces used the same one. */
+  --grad-primary:     linear-gradient(135deg in oklab, #ff1608 0%, #a90300 100%);
+  --grad-primary-hot: linear-gradient(135deg in oklab, #ff3a26 0%, #c40500 100%);
+  /* The wash every sheet head carries: a brand bleed from the leading edge over
+     a light-from-above sheen. It is what makes a dialog look like part of this
+     game rather than a generic card. */
+  --grad-head:
+    linear-gradient(90deg in oklab, rgba(225, 6, 0, 0.16), transparent 52%),
+    linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.06), transparent 72%);
+  /* A rule that FADES instead of stopping dead — used as a background-image on
+     the bottom 1px, so it needs no extra element. */
+  --grad-rule: linear-gradient(90deg in oklab, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.02) 78%, transparent);
+  /* Team identity, wherever a surface should carry it. Resolves through
+     --accent, so it re-skins itself the moment the player changes team. */
+  --grad-accent: linear-gradient(150deg in oklab,
+    color-mix(in oklab, var(--accent) 18%, transparent), transparent 62%);
+
+  /* Dither. A large, slow, dark gradient is the worst case for an 8-bit
+     display: too few distinct values across too many pixels, so it renders as
+     visible stripes — and this app's backdrop is a 120%-wide radial red wash
+     over near-black, which is that case exactly. A few percent of noise breaks
+     the bands into grain the eye reads as texture. feTurbulence in a data URI
+     keeps it to one tiled 160px tile and no network request. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* Per-team accents (ids + colours from js/car/teams.js — vivid brand colour of

@@ -65,7 +65,7 @@
 }
 #hud-rpm-fill {
   height: 100%; width: 0%; position: relative; z-index: 1;
-  background: linear-gradient(90deg, #2ad1ff, #aeea00 65%, #ffd600 88%);
+  background: linear-gradient(90deg in oklab, #2ad1ff, #aeea00 65%, #ffd600 88%);
 }
 #hud-tach.redline #hud-rpm-fill { background: var(--red); animation: pulse 0.4s infinite; }
 #hud-energy {
@@ -75,7 +75,7 @@
   position: relative; overflow: hidden;
   margin-bottom: 8px;
 }
-#hud-energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #00c853, #aeea00); }
+#hud-energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg in oklab, #00c853, #aeea00); }
 .hud-energy-label { position: absolute; inset: 0; font-size: 8px; letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: rgba(0,0,0,0.55); }
 #hud-ot {
   font-size: 13px; font-weight: 800; font-style: italic;

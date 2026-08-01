@@ -98,7 +98,7 @@
   margin: 16px 0 7px;
   padding: 0 0 4px;
   color: rgba(255,255,255,.72);
-  border-bottom: 1px solid rgba(255,255,255,.12);
+  background: var(--grad-rule) bottom left / 100% 1px no-repeat;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: .12em;
