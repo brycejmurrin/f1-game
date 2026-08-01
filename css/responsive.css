@@ -31,17 +31,21 @@ body.desktop #pm-calib { display: none !important; }
   }
   #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
   #menu-meta  { grid-column: 1; grid-row: 2; align-items: flex-start; }
+  /* The two tiers sit SIDE BY SIDE here — the three modes in one column, the
+     four utility screens in a 2x2 beside them — so the block stays wide and
+     short next to the branding instead of running down the screen. (The old
+     auto-flow-column rule flowed one flat list of buttons; the tiers are
+     containers now, so the flow lives on this element and each tier keeps its
+     own internal shape.) */
   #menu-buttons {
     grid-column: 2; grid-row: 1; align-self: center;
-    /* auto-flow COLUMN with three rows: the primaries fill the first column top
-       to bottom and the secondaries start again at the top of the second. Row
-       placement alone let auto-placement carry the secondaries down to rows 3-4,
-       so DATA HUB and HOW TO PLAY hung off the bottom of the block. */
-    grid-template-rows: repeat(3, auto);
-    grid-auto-flow: column;
-    gap: 10px 16px; width: auto;
+    grid-auto-flow: column; align-items: center;
+    gap: 16px; width: auto;
   }
+  #menu-primary { width: auto; gap: 10px; }
+  #menu-secondary { width: auto; gap: 10px; grid-template-columns: repeat(2, 150px); }
   #menu-buttons .bigbtn { width: 190px; }
+  #menu-buttons .minibtn { width: 150px; font-size: 12px; padding: 8px 8px; }
 }
 
 /* Scale up HUD readouts on large screens so they're legible at arm's length. */

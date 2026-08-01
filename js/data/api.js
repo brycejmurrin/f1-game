@@ -434,8 +434,20 @@ const F1API = (function () {
     return windowed("/location", sessionKey, driverNumber, startISO, endISO).then(function (list) {
       return arr(list).map(function (p) {
         p = p || {};
-        return { x: num(p.x), y: num(p.y), date: Date.parse(p.date) || 0 };
-      }).filter(function (p) { return p.x !== null && p.y !== null; });
+        return { x: num(p.x), y: num(p.y), date: Date.parse(p.date) };
+      }).filter(function (p) {
+        // DROPOUT ROWS. The feed emits x:0, y:0, z:0 when positioning is lost
+        // (and while a car sits in the garage). num(0) is 0, not null, so the
+        // old `!== null` test passed them straight through — and every consumer
+        // fits its bounds to the samples, so ONE origin row rescales and
+        // re-centres a whole track map: the same circuit drawn at a different
+        // size in one session than another. A real sample sitting exactly on
+        // the track-local origin is not a thing worth preserving over that.
+        // A row whose timestamp doesn't parse goes too: it can't be ordered
+        // against the car-data clock, and as a 0 it sorted before the lap and
+        // never got clipped with it.
+        return p.x !== null && p.y !== null && !(p.x === 0 && p.y === 0) && isFinite(p.date);
+      });
     });
   }
 

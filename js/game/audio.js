@@ -21,6 +21,7 @@ const GameAudio = (function () {
   let sfxBus = null;
   // 0..1 mixer levels, restored by the caller from storage on boot.
   let sfxVol = 1;
+  let sfxEnabled = true;      // the SOUND EFFECTS switch — music is unaffected
   let musicVol = 0.5;
   // musicVol 0.5 lands on 0.26 — the level music has always sat at under the
   // engine — so the default slider position keeps the balance the game shipped.
@@ -142,7 +143,7 @@ const GameAudio = (function () {
     // which has its own gain on the same master. Without the split there was one
     // volume for the whole mix and the only music control was on/off.
     sfxBus = ctx.createGain();
-    sfxBus.gain.value = sfxVol;
+    sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
     sfxBus.connect(master);
 
     // iOS Safari starts contexts suspended; resume inside the gesture.
@@ -822,8 +823,19 @@ const GameAudio = (function () {
      slider moves the level while it is being dragged. */
   function setSfxVolume(v) {
     sfxVol = clamp01(typeof v === "number" ? v : 1);
-    if (sfxBus) sfxBus.gain.value = sfxVol;
+    if (sfxBus) sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
     return sfxVol;
+  }
+  // Mute the effects WITHOUT touching the music: the engine, tyres, rain and UI
+  // all sit on the sfx bus, so zeroing it leaves the soundtrack playing. That is
+  // the whole point of the switch — music with no sound effects is a legitimate
+  // way to play, and routing this through the master would kill both.
+  // The sources keep running (silently) rather than being torn down, so nothing
+  // has to be rebuilt when the switch comes back on.
+  function setSfxEnabled(b) {
+    sfxEnabled = !!b;
+    if (sfxBus) sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
+    return sfxEnabled;
   }
   function setMusicVolume(v) {
     musicVol = clamp01(typeof v === "number" ? v : 0.5);
@@ -1002,6 +1014,7 @@ const GameAudio = (function () {
     setMusicBackend,
     musicBackend,
     setSfxVolume,
+    setSfxEnabled,
     setMusicVolume,
     volumes,
     // debug audio-test hooks. rate() is the exact pitch multiplier the engine is
