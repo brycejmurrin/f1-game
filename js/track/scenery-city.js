@@ -89,7 +89,7 @@ const SceneryCity = (function () {
                 col },
               (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR),
               { kind: "windowPane" },
-              toGlass ? glassBuf : out);
+              { buf: toGlass ? glassBuf : out });
             if (toGlass) glassBuf._mat = 0;
           }
         }

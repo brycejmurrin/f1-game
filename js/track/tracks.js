@@ -663,13 +663,25 @@ const Tracks = (function () {
     const graph = TrackGraph.create({ raw: RAW });
     track.graph = graph;
     const GUARDED = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid };
-    // instance(key, place, build, meta, buf?) — returns the number of primitives
+    // Unguarded replay set, for emitters that already bypass the on-road test on
+    // purpose — crowd spectators are thousands of tiny boxes sitting safely
+    // behind a stand's shell, and testing each one is pure cost. RAW.* returns
+    // nothing, so wrap to report the primitive as landed; routing these through
+    // GUARDED instead would silently start culling geometry that ships today.
+    const rawOk = (fn) => (...args) => { fn(...args); return true; };
+    const UNGUARDED = {
+      addBox: rawOk(RAW.addBox), addCyl: rawOk(RAW.addCyl), addCone: rawOk(RAW.addCone),
+      addFrustum: rawOk(RAW.addFrustum), addPrism: rawOk(RAW.addPrism), addPyramid: rawOk(RAW.addPyramid),
+    };
+    // instance(key, place, build, meta, opts?) — returns the number of primitives
     // that survived the guards (0 = wholly suppressed, so the caller skips its
-    // note()). `buf` targets a different accumulator than the props soup: window
-    // panes route their unlit half to glassBuf so it draws with the reflective
-    // material, and water surfaces go to waterBuf.
-    const instance = (key, place, build, meta, buf) =>
-      graph.instance(key, place, build, meta, GUARDED, buf || out);
+    // note()). opts.buf targets a different accumulator than the props soup:
+    // window panes route their unlit half to glassBuf so it draws with the
+    // reflective material. opts.unguarded picks the RAW set above.
+    const instance = (key, place, build, meta, opts) =>
+      graph.instance(key, place, build, meta,
+                     opts && opts.unguarded ? UNGUARDED : GUARDED,
+                     (opts && opts.buf) || out);
 
     // Per-segment driving boundary (lateral limit from the centreline on each
     // side). Initialised to the default runoff, then TIGHTENED wherever a solid
