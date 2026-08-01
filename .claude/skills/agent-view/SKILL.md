@@ -55,8 +55,11 @@ Read both once; do not re-fetch per tick.
   penalty state, the ideal-line-free honest geometry to choose a line from.
   `world({since:seq})` returns only what *changed* since a prior payload.
 - `field({detail})` — the whole grid: race order, gaps, interval, AI pace.
-- `scene({radius|visible})` — named scenery by distance + bearing (radius around
-  the car), or `{visible:true}` for the camera's on-screen list. A row's `side` is
+- `scene({radius, kinds, limit} | {visible})` — named scenery by distance +
+  bearing (radius around the car), or `{visible:true}` for the camera's on-screen
+  list. Rows land in `props` (plus `lamps`); `counts.inRadius` is how many were in
+  range and `truncated` flags that `limit` clipped the list — check it before
+  concluding something isn't there. A row's `side` is
   EGOCENTRIC (which side of your nose, from `bearingDeg`); its `trackSide` is the
   CENTRELINE side — the one `worldModel()`/`describe()` report — so cross-reference
   the same prop between tools by `trackSide`, not `side`.
@@ -99,12 +102,27 @@ Read both once; do not re-fetch per tick.
   events, min clearance, per-corner min speed, terminal reason), not every frame.
   `policy` is `world => {steer,throttle,brake}`; use `world()`+`act()` for a single
   decision instead.
-- `terminal()` — `{done, reason}`: finished | wrong_way | rescued.
-- `survey()` — geometry DEFECTS for track authoring, not driving: 8 buckets
-  (floating/buried props, `overVoid`, terrain holes/cliffs, terrain-through-road,
-  props over the line). Its `propsOverRoadCandidates` are BROAD-PHASE — a large
-  `lateralM` is a bounding-box false positive, not a prop on the line. The payload
-  self-documents (read `thresholds.note` and `authoritative`).
+- `terminal()` — `{done, reason}`: finished | wrong_way | rescued. Check it
+  between rollouts: `rescued`/`wrong_way` means the car was picked up and put
+  back, so lap timing and any distance you were accumulating are no longer
+  comparable. Start a fresh episode with `reset(frac, speed, x, seed)` rather
+  than driving on from a rescued state — `__apex.resetPlayer()` forces the
+  rescue immediately if you want to stop fighting a beached car.
+- `survey({stations, lats, reachM, limit, profile})` — geometry DEFECTS for track
+  authoring, not driving: 8 buckets (floating/buried props, `overVoid`, terrain
+  holes/cliffs, terrain-through-road, props over the line). Its
+  `propsOverRoadCandidates` are BROAD-PHASE — a large `lateralM` is a bounding-box
+  false positive, not a prop on the line. The payload self-documents (read
+  `thresholds.note` and `authoritative`).
+  **It always scans the WHOLE lap and cannot be aimed at one corner.** `stations`
+  (default 24, alias `at`) is a sample *count* around the full circuit, not a
+  position; `reachM` is the *lateral* half-width at each station. There is no
+  `fromS`/`toS` window like `query()` has — to study one stretch, raise `stations`
+  and filter the returned rows by `frac` yourself. On the CLI the flag is
+  `--stations <n>` (`--at` is the staging fraction 0-1 for every other command).
+  Confirming a hit with `groundY()` checks survey's arithmetic, not the ground
+  beneath it: both read the same `Tracks.terrainY()` sampler, so a bug in that
+  sampler makes the two agree while both are wrong. Look at the spot to be sure.
 
 ## The driving loop
 
@@ -140,7 +158,11 @@ policy = w => {
 
 `apexSpeedKph`/`suggestBrakeM` assume more grip than default parts have — brake
 well before the hint and aim under the apex speed, then tune from the digest's
-`offTrack.pct` and `cornerMinSpeedKph`. **Fix braking FIRST:** on a too-hot entry
+`offTrack.pct` and `cornerMinSpeedKph`. It is a starting point, not a
+steady-state-stable controller: a short interval can legitimately end with the
+car off-line mid-recovery, so judge it by the digest *trend* — `offTrack.pct`
+plus the per-sample `speedKph`/`lateralM` trail — and not by wherever the last
+sample happens to land. **Fix braking FIRST:** on a too-hot entry
 the car washes wide and beaches (the baseline would then hold throttle in the
 grass and stall for the rest of the interval — hence the off-track crawl above),
 and turn-in does nothing until entry speed is right. Once it is, add a small

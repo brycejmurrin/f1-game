@@ -1850,7 +1850,12 @@ const AgentView = (function () {
       }
       const o = opts || {};
       const track = G.track, total = track.total;
-      const nAt = clamp(o.at | 0 || 24, 2, 200);
+      // `at` is a COUNT of evenly-spaced stations across the WHOLE lap, not a
+      // position — survey always scans the full circuit and cannot be aimed at
+      // one section. `stations` is the honest name; `at` stays for callers that
+      // already use it. To look at one stretch, filter the returned rows by
+      // `frac` — there is no fromS/toS window here the way query() has one.
+      const nAt = clamp((o.stations | 0) || (o.at | 0) || 24, 2, 200);
       const reach = clamp(o.reachM || 60, 10, 400);
       const nLat = clamp(o.lats | 0 || 13, 3, 41);
       const cap = clamp(o.limit | 0 || 20, 1, 200);
