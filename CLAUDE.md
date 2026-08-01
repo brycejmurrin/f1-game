@@ -49,6 +49,12 @@ npm run test:fast       # curated fast subset: smoke + api + collision + offtrac
                         #   parts-physics + steering (~3 min)
 npm run test:ab         # lighting A/B pixel comparison (tests/lighting-ab.spec.js)
 npm run test:audit      # coverage guard: every spec must belong to ≥1 group
+npm run test:tooling-fast  # the STRUCTURAL half of test:tooling in ~4 s (load order,
+                        #   docs integrity, api contract, graph, validators). Two
+                        #   full-fleet audits dominate test:tooling's ~3 min —
+                        #   this is everything else, for the edit loop.
+npm run test:sweeps     # those two: prop-clipping + road-under-floor (~3 min,
+                        #   rebuilds all 24 circuits). test:tooling still runs both.
 ```
 
 ### Running tests without stalls (background + logs, parallel ports)
@@ -149,8 +155,9 @@ js/render/       — renderers —
   gfx.js         Gfx            renderer façade — selects GLX (WebGL2) or WGX (WebGPU),
                                   both expose the same surface to game.js
   glx.js         GLX            WebGL2 renderer core
-  glx/           GLXPost, GLXShadow, GLXChunked   post chain / shadow passes /
-                                  chunked-mesh path, wired via the GLXCore ctx
+  glx/           GLXPost, GLXShadow, GLXChunked   post chain (post.js) / shadow
+                                  passes (shadow.js) / chunked-mesh path
+                                  (chunked.js), wired via the GLXCore ctx
   shaders/       GLXChunks, GLXShaders   chunks.js = shared GLSL leaves;
                                   lit.js / sky.js / fx.js / post.js assemble GLXShaders
                                   (pure data; loads before glx.js)
@@ -161,6 +168,13 @@ js/render/       — renderers —
                                   createTextureArray) falls back to the procedural look
   webgpu/        WGX            WebGPU backend (wgx.js) + WGSL sources
                                   (wgsl-chunks/-post/-fx.js); feature-detected, GLX fallback
+  three/         TLX            three.js r184 / TSL backend — the THIRD renderer behind
+                                  the Gfx seam (tlx.js core, tlx-chunked/-post/-shadow.js;
+                                  tsl-lit/-sky/-fx/-post/-chunks.js are the TSL shader
+                                  graphs). Opt-in via localStorage apex26.gfxBackend =
+                                  "three"; installed by descriptor-copy onto GLX so every
+                                  GLX.* call site keeps working. Vendored three lives in
+                                  vendor/three-0.184.0 (the only ES-module island)
 
 js/track/        — track ENGINE (shared code) —
   tracks.js      Tracks         engine shell: spline resolve, build orchestration
@@ -191,7 +205,7 @@ js/track/        — track ENGINE (shared code) —
                                   city palettes/styles) — data only, no placement logic
   scenery-nature.js / scenery-city.js / scenery-structures.js / scenery-identity.js
                  Scenery*.create(ctx)   the buildProps split; together they serve the
-                                  84-member scenery(api) contract frozen by
+                                  96-member scenery(api) contract frozen by
                                   tests/scenery-api-contract.test.mjs
 
 js/circuits/     — circuit DATA —
@@ -233,6 +247,18 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   (renderer handle injected via CarMesh.init(gfx))
   particles.js   Particles      transient particle pool (smoke/sparks/spray) + the
                                   rain overlay (Particles.rain*)
+  bodyattitude.js  BodyAttitude the chassis pitch/squat/roll/bob read — visual only,
+                                  never feeds the driving model
+  debrisworld.js   DebrisWorld  Rapier side-world (vendor/rapier-0.19.3): debris and
+                                  kinematic car mirrors. NEVER moves a game car
+  incidentsim.js   IncidentSim  bounded incident window that MAY move a car — the
+                                  high-risk layer; safety contract in its header
+  agentview-raster.js  AgentRaster  the character-grid rasters behind
+                                  __apex.render({what}) (view/map/circuit/car)
+  ariastate.js   AriaState      mirrors each option group's visual selection onto
+                                  aria-pressed for screen readers
+  music-lib.js   MusicLib       bring-your-own-music library (IndexedDB), fed to GameAudio
+  spotify.js     SpotifyMusic   optional personal-use Spotify Premium soundtrack
   input.js       Input          keyboard / gamepad / touch / tilt
   audio.js       GameAudio      WebAudio synth: engine, sfx, music
   store.js       GameStore      localStorage persistence
@@ -270,10 +296,11 @@ js/game/         — game modules (each created with the G ctx façade from game
   cam-tuner.js   CamTunerPanel  CAMERA TUNER pause-menu panel
   steer-tuning.js  SteerTuning  ADVANCED STEERING panel
 
-css/style.css                   all styles
+css/                            tokens.css (design tokens) + components/menus/hud/
+                                  overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright test suite (46 specs)
+tests/*.spec.js                 Playwright specs (81) + tests/*.test.mjs unit suites (21)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -595,7 +622,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-46 Playwright specs. Run groups with `npm run test:<group>` (see Key
+81 Playwright specs + 21 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

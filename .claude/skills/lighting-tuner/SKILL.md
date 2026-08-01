@@ -103,8 +103,8 @@ __apex.orbit(0.15, 45, 20, 60);  // frame turn 1
 ## Writing a lightstate contract test
 
 ```js
-// tests/lightstate.spec.js (already created)
-// Run with: npx playwright test tests/lightstate.spec.js
+// tests/lighting-tuner-grade.spec.js
+// Run with: npx playwright test tests/lighting-tuner-grade.spec.js
 ```
 
 The spec asserts: day → `numLights === 0`, night → `numLights > 0` with darker

@@ -500,7 +500,7 @@ Monaco is a tight street circuit:
 
 ### Data Sources Already Available
 
-From the codebase (`CLAUDE.md`, `js/tracks.js`):
+From the codebase (`CLAUDE.md`, `js/track/tracks.js`):
 - `__apex.trackProfile(n)` — Returns elevation + curvature profile for any circuit
 - `__apex.corners()` — Lists apex fractions for all corners
 - `Tracks` module has sector definitions (S1, S2, S3 boundaries in `track.total` arc length)

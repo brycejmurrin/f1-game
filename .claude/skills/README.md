@@ -17,6 +17,7 @@ groups.
 | **debug-cameras** | The 13 camera modes + free debug-camera framing hooks (`view/eyeAt/orbit/cinematic/...`). |
 | **debug-tracks** | Track geometry/surface/barrier query hooks + the parallel multi-track sweep. |
 | **debug-state** | Live race/physics/lighting telemetry hooks + the headless `act/obs/reset` loop. |
+| **agent-view** | Perceive and DRIVE the game as TEXT, no screenshots — the `__apex` agent-view surface (`world`/`field`/`trackInfo`/`scene`/`atmosphere`/`describe`/`query`/`carView`/`render`/`survey`/`rollout`/`objective`/`terminal`/`seed`) and the `tools/agent.mjs` CLI. |
 | **playwright-probe** | Drive the game headless — single deterministic screenshots (`shot.mjs`) through parallel multi-server sweeps; `tools/apex-eval.mjs` & `tools/apex-capture.mjs`. |
 | **motion-capture** | Capture RENDERED MOTION headless to catch temporal artifacts screenshots can't — z-fighting/clipping flicker, shadow crawl, geometry pop-in, texture shimmer "while driving" — and A/B-verify a renderer fix reduces flicker (`tools/motion-capture.mjs`). |
 | **audio-debug** | Inspect and tune the WebAudio synth engine (`js/game/audio.js`) — engine pitch curve, sfx triggers, music layers, mute/volume state. |

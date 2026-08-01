@@ -280,10 +280,10 @@ Each entry: **what**, **why it helps maintenance today**, **effort (S/M/L)**,
 > wired through a shared `GLXCore` context object), with the shader strings split
 > separately under `js/render/shaders/` (see C.1).
 
-- **What:** Physically split the 3,770-line file into `js/glx/shaders.js`
-  (all the VS/FS template strings + chunk composition), `js/glx/targets.js`
+- **What:** Physically split the 3,770-line file into `js/render/shaders/lit.js`
+  (all the VS/FS template strings + chunk composition), `js/render/glx/chunked.js`
   (`createTargets`, `initPost`, the render-target set, `js/render/glx.js:2200-2453`),
-  `js/glx/passes.js` (shadow/env/post pass orchestration), and keep
+  `js/render/glx/shadow.js` (shadow/env/post pass orchestration), and keep
   `js/render/glx.js` as the thin IIFE that wires them and **returns the identical ~35-
   method object** (`js/render/glx.js:3693-3769`). No public surface change.
 - **Why (today):** the file is too big to hold in one head; shaders, target
