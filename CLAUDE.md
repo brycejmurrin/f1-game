@@ -193,7 +193,12 @@ js/data/         — data hub —
   hub.js         DataHub        data hub DOM overlay shell + shared session plumbing
                                   (was data.js)
   telemetry.js   DataTelemetry  TELEMETRY tab (trace viewer/map/playback), created by
-                                  hub.js via DataTelemetry.create(ctx)
+                                  hub.js via DataTelemetry.create(ctx). N-lane
+                                  compare (up to 4) via a module-scoped tray that
+                                  survives a SESSION switch → same driver's race
+                                  vs quali lap side by side; laps[0] is the delta
+                                  reference. Pure playback/GPS-sanity helpers are
+                                  exported (_locAt/_dropStrays/…) for the tests.
   export.js      DataExport     EXPORT dev tool (GPS traces → ZIP)
   schedule.js / standings.js / lastrace.js / live.js   the other tabs, same
                                   Data*.create(ctx) pattern
