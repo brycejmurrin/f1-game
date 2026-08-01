@@ -36,9 +36,15 @@ window.SpotifyMusic = (function () {
   const K_TOKEN = "apex26.spotify.token";
   const S_VERIFY = "apex26.spotify.verifier";   // sessionStorage: one auth round-trip
   const S_STATE = "apex26.spotify.state";
+  const K_CTX = "apex26.spotify.context";       // chosen playlist uri, or "liked"
 
+  // playlist-read-private / user-library-read are what let the panel OFFER
+  // something to play. Without a chosen context, "play" on a freshly
+  // transferred device resumes nothing: a browser that has never played has no
+  // context to resume, so the device connects and stays silent.
   const SCOPES = "streaming user-read-playback-state " +
-    "user-modify-playback-state user-read-currently-playing";
+    "user-modify-playback-state user-read-currently-playing " +
+    "playlist-read-private user-library-read";
   const AUTH_URL = "https://accounts.spotify.com/authorize";
   const TOKEN_URL = "https://accounts.spotify.com/api/token";
   const SDK_URL = "https://sdk.scdn.co/spotify-player.js";
@@ -71,6 +77,9 @@ window.SpotifyMusic = (function () {
   function ssDel(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
 
   function clientId() { return (ls(K_ID) || "").trim(); }
+  function contextUri() { return ls(K_CTX) || ""; }
+  function setContext(v) { if (v) lsSet(K_CTX, v); else lsDel(K_CTX); render(); return v || ""; }
+  let lists = [];                                // [{name, uri}] for the picker
 
   function readToken() {
     try { const t = JSON.parse(ls(K_TOKEN) || "null"); return t && t.access_token ? t : null; }
@@ -351,6 +360,7 @@ window.SpotifyMusic = (function () {
         // start() synchronously, and a play request aimed at a device Spotify
         // has not made active yet comes back "device not found".
         transfer(device_id).then(installBackend, installBackend);
+        loadPlaylists();
       });
       player.addListener("not_ready", () => {
         ready = false;
@@ -433,6 +443,58 @@ window.SpotifyMusic = (function () {
       { method: "PUT", body: JSON.stringify({ device_ids: [id], play: false }) });
   }
 
+  // The picker's contents. Liked Songs is not a context uri — it is a set of
+  // track uris — so it is offered as a sentinel and resolved at play time.
+  function loadPlaylists() {
+    return api("/me/playlists?limit=50").then((r) => {
+      if (!r) return [];
+      if (r.status === 403) {
+        setStatus(state, "Your Spotify session predates the playlist permission. " +
+          "Press DISCONNECT then CONNECT to grant it.");
+        return [];
+      }
+      if (!r.ok) return [];
+      return r.json().then((j) => (j.items || []).map((p) => ({ name: p.name, uri: p.uri })), () => []);
+    }).then((ls_) => { lists = ls_ || []; render(); return lists; });
+  }
+
+  // PUT /me/player/play, aimed at THIS device, with whatever the player chose.
+  // Reports the refusals that otherwise look like "connected but silent".
+  function playChosen() {
+    const q = deviceId ? "?device_id=" + encodeURIComponent(deviceId) : "";
+    const ctx = contextUri();
+    let body;
+    if (ctx === "liked") {
+      // .catch on the parse, not just on r.ok: a 204 or an empty body is "ok"
+      // and json() then throws, which escapes as an unhandled rejection — the
+      // game shows those as a full-screen crash overlay.
+      return api("/me/tracks?limit=50")
+        .then((r) => (r && r.ok ? r.json().catch(() => null) : null)).then((j) => {
+        const uris = j && j.items ? j.items.map((i) => i.track && i.track.uri).filter(Boolean) : [];
+        if (!uris.length) { setStatus("connected", "No liked songs found to play."); return; }
+        return sendPlay(q, JSON.stringify({ uris: uris }));
+      });
+    }
+    body = ctx ? JSON.stringify({ context_uri: ctx }) : "{}";
+    return sendPlay(q, body);
+  }
+
+  function sendPlay(q, body) {
+    return api("/me/player/play" + q, { method: "PUT", body: body }).then((r) => {
+      if (!r) return;
+      if (r.status === 404) {
+        setStatus("connected", "Spotify could not find this device to play on. " +
+          "Press DISCONNECT then CONNECT, or start a track in the Spotify app once.");
+      } else if (r.status === 403) {
+        setStatus("connected", "Spotify refused playback (403) — full Premium is required to play here.");
+      } else if (r.status === 502 || r.status === 500) {
+        setStatus("connected", "Spotify hiccuped starting playback. Press PLAY again.");
+      } else if (r.ok || r.status === 204) {
+        setStatus("connected", "Playing.");
+      }
+    });
+  }
+
   /* ---------------- GameAudio backend ----------------
      GameAudio delegates ALL music here while this is installed. Stopping and
      resuming the built-in MP3 playlist is GameAudio's job, not ours. */
@@ -440,12 +502,10 @@ window.SpotifyMusic = (function () {
     start() {
       if (!BACKEND.active()) return;
       if (!paused) return;                     // already playing: no-op
-      // resume() needs a context on this device. A freshly transferred device
-      // has none, so ask the Web API to resume whatever the account last played
-      // — otherwise CONNECT then PLAY does nothing and looks broken.
+      // Something is already loaded on this device — just un-pause it.
       if (track) { try { player.resume(); } catch (e) {} return; }
-      api("/me/player/play" + (deviceId ? "?device_id=" + encodeURIComponent(deviceId) : ""),
-        { method: "PUT", body: "{}" });
+      // Otherwise there is nothing to resume, so play what the player picked.
+      playChosen();
     },
     stop() { if (player) { try { player.pause(); } catch (e) {} } },
     skip() {
@@ -628,6 +688,30 @@ window.SpotifyMusic = (function () {
       ? (track ? (paused ? "Paused — " + track : track) : "Nothing playing yet.")
       : "—");
 
+    // The picker: Liked Songs plus whatever playlists the account has. Rebuilt
+    // only when the contents actually changed, so an open <select> on a phone
+    // is not torn out from under a thumb mid-scroll.
+    const sel = el("as-sp-playlist");
+    if (sel) {
+      const want = JSON.stringify(lists.map((p) => p.uri));
+      if (sel.dataset.built !== want) {
+        sel.dataset.built = want;
+        sel.textContent = "";
+        const add = (label, uri) => {
+          const o = document.createElement("option");
+          o.value = uri; o.textContent = label; sel.appendChild(o);
+        };
+        add(lists.length ? "— pick a playlist —" : "— connect to load playlists —", "");
+        add("♥ Liked Songs", "liked");
+        for (const p of lists) add(p.name, p.uri);
+      }
+      if (sel.value !== contextUri()) sel.value = contextUri();
+      sel.disabled = state !== "connected";
+    }
+    const live = state === "connected" && ready;
+    dis("as-sp-play", !live);
+    dis("as-sp-pause", !live);
+    dis("as-sp-next", !live);
     dis("as-sp-check", !available() || !readToken());
     dis("as-sp-connect", !available() || state === "connecting" || state === "connected");
     dis("as-sp-disconnect", !available() || (state !== "connected" && !readToken()));
@@ -643,6 +727,15 @@ window.SpotifyMusic = (function () {
     });
     on("as-sp-connect", "click", () => { connect(); });
     on("as-sp-check", "click", () => { check(); });
+    on("as-sp-playlist", "change", (e) => {
+      setContext(e.target.value);
+      // Picking one is the instruction to play it — otherwise the choice sits
+      // there doing nothing until something else happens to call start().
+      if (e.target.value && BACKEND.active()) playChosen();
+    });
+    on("as-sp-play", "click", () => { if (BACKEND.active()) { if (track) { try { player.resume(); } catch (e) {} } else playChosen(); } });
+    on("as-sp-pause", "click", () => BACKEND.stop());
+    on("as-sp-next", "click", () => BACKEND.skip());
     on("as-sp-disconnect", "click", () => { disconnect(); });
   }
 
@@ -667,6 +760,8 @@ window.SpotifyMusic = (function () {
   return {
     available, configured, setClientId,
     connect, disconnect, status, onChange, debug, check,
+    playlists() { return lists.slice(); },
+    context: contextUri, setContext, play() { return playChosen(); },
     backend() { return BACKEND; },
     redirectUri, handleRedirect,
   };
