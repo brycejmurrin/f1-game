@@ -248,7 +248,7 @@ const DataTelemetry = (function () {
           // way we assume, the unclipped series is still the better answer
           return kept.length > 8 ? kept : list;
         }
-        return { d: d, lap: lap, car: clipToLap(res[0]), loc: clipToLap(res[1]),
+        return { d: d, lap: lap, car: clipToLap(res[0]), loc: dropStrays(clipToLap(res[1])),
                  stints: res[2] || [], pits: res[3] || [] };
       });
     });
@@ -1207,15 +1207,12 @@ const DataTelemetry = (function () {
 
   // screen transform for the track map (from the primary lap's x/y bounds)
   function computeMapTransform(view) {
-    const loc = view.primary.loc, W = view.mapBase.width, H = view.mapBase.height, pad = 14;
-    let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
-    for (let i = 0; i < loc.length; i++) {
-      if (loc[i].x < minx) minx = loc[i].x; if (loc[i].x > maxx) maxx = loc[i].x;
-      if (loc[i].y < miny) miny = loc[i].y; if (loc[i].y > maxy) maxy = loc[i].y;
-    }
-    const spanx = (maxx - minx) || 1, spany = (maxy - miny) || 1;
+    const b = locBounds(view.primary.loc);
+    const W = view.mapBase.width, H = view.mapBase.height, pad = 14;
+    const spanx = b.spanx, spany = b.spany;
     const sc = Math.min((W - 2 * pad) / spanx, (H - 2 * pad) / spany);
-    view.mapT = { minx: minx, miny: miny, sc: sc, ox: (W - spanx * sc) / 2, oy: (H - spany * sc) / 2, W: W, H: H };
+    view.mapT = { minx: b.minx, miny: b.miny, sc: sc, ox: (W - spanx * sc) / 2, oy: (H - spany * sc) / 2,
+                  W: W, H: H, spanx: spanx, spany: spany };
   }
   function mapPoint(view, p) {
     const m = view.mapT;
@@ -1228,16 +1225,24 @@ const DataTelemetry = (function () {
   // partial trace and must stay open rather than gain a fake straight.
   function closesLoop(view, loc) {
     if (!loc || loc.length < 8) return false;
-    const a = mapPoint(view, loc[0]), b = mapPoint(view, loc[loc.length - 1]);
-    const gap = Math.hypot(a[0] - b[0], a[1] - b[1]);
-    return gap < view.mapT.H * 0.18;
+    // Measured in TRACK units against the track's own span, not in canvas
+    // pixels against the canvas height. The pixel scale is derived from the
+    // bounds, so a pixel threshold moves whenever the bounds do — the same
+    // physical gap passed in one session and failed in another, which is how a
+    // fake closing straight appeared on one map and not the other.
+    const dx = loc[0].x - loc[loc.length - 1].x, dy = loc[0].y - loc[loc.length - 1].y;
+    const m = view.mapT;
+    return Math.hypot(dx, dy) < Math.max(m.spanx, m.spany) * 0.18;
   }
   // one lap as a single polyline (used for the compare driver's flat-colour line)
   function strokeLap(g, view, loc) {
+    const limit = gapLimitMs(loc);
+    let open = false;
     g.beginPath();
     for (let i = 0; i < loc.length; i++) {
       const p = mapPoint(view, loc[i]);
-      if (i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]);
+      if (!open || (i > 0 && isGap(loc, i, limit))) { g.moveTo(p[0], p[1]); open = true; }
+      else g.lineTo(p[0], p[1]);
     }
     if (closesLoop(view, loc)) g.closePath();
     g.stroke();
@@ -1268,9 +1273,11 @@ const DataTelemetry = (function () {
     // start/finish junction open — a visible notch in the outline where the
     // sampled lap window began and ended a few metres apart.
     const N = loc.length;
+    const limit = gapLimitMs(loc);
     for (let i = 1; i <= N; i++) {
       const a = loc[i - 1], b2 = loc[i % N];
       if (i === N && !closesLoop(view, loc)) break;   // partial lap: leave it open
+      if (i < N && isGap(loc, i, limit)) continue;    // coverage gap: no invented straight
       const v = speedAtDate(b2.date);
       const f = v === null ? 0.5 : clamp(v / vMax, 0, 1);
       const r = Math.round(255 * Math.min(1, f * 1.6));
@@ -1302,5 +1309,77 @@ const DataTelemetry = (function () {
     return { loadTelemetry, closeTelemPopup };
   }
 
-  return { create };
+  // ---- GPS sanity: strays, bounds, and gaps -------------------------------
+  // Everything the map draws is fitted to the samples, so a single bad sample
+  // is not a local blemish — it rescales and re-centres the whole circuit, and
+  // the same track then reads as a different shape in one session than another.
+  // The feed's own origin rows are dropped upstream (F1API.locationData); what
+  // is left to defend against here is a sample that is finite, non-zero and
+  // still nowhere near the track.
+  function quantile(sorted, q) {
+    if (!sorted.length) return 0;
+    const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
+    return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+  }
+  // A lap's genuine extremes (the outermost corner, the end of the longest
+  // straight) are represented by only a handful of samples, so a plain
+  // percentile clip would cut real track off. Take the 2..98 % band as the
+  // CORE of the circuit, then accept anything within a generous margin of it —
+  // wide enough to keep every real extremity, far tighter than the distance a
+  // stray sample lands at.
+  const STRAY_MARGIN = 0.35;
+  function dropStrays(loc) {
+    if (!loc || loc.length < 24) return loc || [];   // too few to judge a distribution
+    const xs = loc.map(function (p) { return p.x; }).sort(function (a, b) { return a - b; });
+    const ys = loc.map(function (p) { return p.y; }).sort(function (a, b) { return a - b; });
+    const x0 = quantile(xs, 0.02), x1 = quantile(xs, 0.98);
+    const y0 = quantile(ys, 0.02), y1 = quantile(ys, 0.98);
+    const mx = ((x1 - x0) || 1) * STRAY_MARGIN, my = ((y1 - y0) || 1) * STRAY_MARGIN;
+    const kept = loc.filter(function (p) {
+      return p.x >= x0 - mx && p.x <= x1 + mx && p.y >= y0 - my && p.y <= y1 + my;
+    });
+    // If this would throw away a meaningful share of the lap the assumption is
+    // wrong (not a stray — a real excursion, or a track this shape). Keep the
+    // original: a slightly odd map beats a truncated one.
+    return kept.length >= loc.length * 0.9 ? kept : loc;
+  }
+  function locBounds(loc) {
+    let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+    for (let i = 0; i < (loc ? loc.length : 0); i++) {
+      if (loc[i].x < minx) minx = loc[i].x; if (loc[i].x > maxx) maxx = loc[i].x;
+      if (loc[i].y < miny) miny = loc[i].y; if (loc[i].y > maxy) maxy = loc[i].y;
+    }
+    if (!isFinite(minx)) { minx = 0; maxx = 1; miny = 0; maxy = 1; }
+    return { minx: minx, miny: miny, spanx: (maxx - minx) || 1, spany: (maxy - miny) || 1 };
+  }
+  // Positioning drops out for seconds at a time. Consecutive samples either side
+  // of a gap are metres apart on the clock but a corner apart on the map, and
+  // joining them draws a straight line across the infield — a section of circuit
+  // that simply isn't there, in whichever session happened to lose coverage.
+  // Threshold is relative to the lap's OWN sample rate, so it survives a feed
+  // that runs at a different cadence.
+  function gapLimitMs(loc) {
+    if (!loc || loc.length < 8) return Infinity;
+    const dts = [];
+    for (let i = 1; i < loc.length; i++) {
+      const dt = loc[i].date - loc[i - 1].date;
+      if (isFinite(dt) && dt > 0) dts.push(dt);
+    }
+    if (dts.length < 4) return Infinity;
+    dts.sort(function (a, b) { return a - b; });
+    return Math.max(quantile(dts, 0.5) * 8, 1500);   // 8x the median cadence, min 1.5 s
+  }
+  function isGap(loc, i, limit) {
+    if (!isFinite(limit)) return false;
+    const dt = loc[i].date - loc[i - 1].date;
+    return isFinite(dt) && dt > limit;
+  }
+
+  // The GPS-sanity helpers are pure functions of a sample list, so they are
+  // exported for tests/telemetry-trace.test.mjs — the rest of this module needs
+  // a DOM, a canvas and the network before it will do anything at all, and the
+  // bugs these fix (a stray sample rescaling the whole map, a coverage gap
+  // drawn as a straight) are exactly what wants asserting without one.
+  return { create, _dropStrays: dropStrays, _locBounds: locBounds,
+           _gapLimitMs: gapLimitMs, _isGap: isGap };
 })();
