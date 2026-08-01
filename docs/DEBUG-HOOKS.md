@@ -405,6 +405,20 @@ Attribution roll for every baked asset. CC0 imposes no attribution duty, but
 every entry must carry a `source` — that is what `node tools/assets.mjs verify`
 audits.
 
+### `diag(opts?) → object`
+One call that snapshots everything worth having in a bug report — build, UA,
+device pixel ratio, **GPU vendor/renderer** (real silicon vs SwiftShader),
+backend, HDR/MSAA/render scale, plus `info`, `assets`, `lightTune`,
+`lightState`, `viewState`, `physState`, `timing`, `gpuTimer` and collected
+errors — and downloads it as `apex-diag.json`. `diag({download:false})` logs
+without downloading. See [CONSOLE-RECIPES.md](CONSOLE-RECIPES.md).
+
+### `save(data, filename) → bytes`
+Hand a file out of the browser. Objects are JSON-stringified; strings and Blobs
+pass through. This is the reliable way to get state out of a real device —
+`copy()` only resolves at top-level console scope and the clipboard API needs
+document focus.
+
 ### `gpuTimer(on?) → {supported, on, ms}`
 Opt-in GPU frame timer (`EXT_disjoint_timer_query_webgl2`). `gpuTimer(true)`
 starts timing, `gpuTimer(false)` stops, `gpuTimer()` reads the latest sample.

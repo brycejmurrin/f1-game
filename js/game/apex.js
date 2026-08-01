@@ -1765,6 +1765,96 @@ const api = {
   // fetchTrackOutline(sessionKey, driverNumber?) — fetches OpenF1 location data
   // for a session and returns normalised {x,z}[] track outline points (≤400 pts).
   // Find sessionKey via: __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")
+  // ── Console diagnostics ────────────────────────────────────────────────────
+  // save(data, filename) — hand a file back out of the browser.
+  //
+  // Exists because the reverse direction is the hard one: reading state OUT of
+  // a real browser session is how anything gets diagnosed on a device the test
+  // suite cannot reach (a real GPU rather than SwiftShader, Safari/iOS, a phone).
+  // The Blob-and-click dance had been hand-written from scratch every time it
+  // was needed, slightly differently each time. Objects are JSON-stringified;
+  // strings and Blobs pass through. Returns the byte count.
+  save(data, filename) {
+    try {
+      const blob = data instanceof Blob ? data
+        : new Blob([typeof data === "string" ? data : JSON.stringify(data, null, 1)],
+                   { type: typeof data === "string" ? "text/plain" : "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename || "apex-" + Date.now() + ".json";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      return blob.size;
+    } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+  },
+
+  // diag(opts?) — ONE call that snapshots everything worth having in a bug
+  // report, and (by default) downloads it as JSON.
+  //
+  // Every field here is something that had to be gathered by hand-written
+  // one-liners during the asset work, a slightly different set each time. The
+  // point is a single stable shape: paste one line, get one file, and the file
+  // always contains the same things — including the environment facts
+  // (renderer, GPU, backend, device pixel ratio) that decide whether a report
+  // is even comparable to a headless run.
+  //
+  //   __apex.diag()                 // log + download apex-diag.json
+  //   __apex.diag({download:false}) // log only
+  diag(opts) {
+    const o = opts || {};
+    const safe = (fn, fallback) => { try { return fn(); } catch (e) { return fallback !== undefined ? fallback : { error: String((e && e.message) || e) }; } };
+    let glInfo = { error: "no canvas" };
+    safe(() => {
+      const cv = document.querySelector("canvas");
+      const gl = cv && (cv.getContext("webgl2") || cv.getContext("webgl"));
+      if (!gl) return;
+      // WEBGL_debug_renderer_info is the only way to tell an Apple GPU from a
+      // SwiftShader software rasteriser, which changes how every timing and
+      // shimmer report should be read.
+      const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+      glInfo = {
+        vendor: dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+        renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+        version: gl.getParameter(gl.VERSION),
+        maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+        maxLayers: gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS || 0x88ff),
+      };
+    });
+    const d = {
+      when: new Date().toISOString(),
+      build: safe(() => window.__APEX_BUILD, null),
+      env: {
+        ua: safe(() => navigator.userAgent, ""),
+        dpr: safe(() => window.devicePixelRatio, 0),
+        viewport: safe(() => [innerWidth, innerHeight], []),
+        backend: safe(() => localStorage.getItem("apex26.gfxBackend") || "webgl2", "?"),
+        mobile: safe(() => !!(gfx && gfx.isMobile), null),
+        mobileTier: safe(() => !!(gfx && gfx.mobileTier), null),
+        hdr: safe(() => !!(gfx && gfx.hdrMode && gfx.hdrMode()), null),
+        msaa: safe(() => gfx && gfx.msaa && gfx.msaa(), null),
+        renderScale: safe(() => gfx && gfx.getRenderScale && gfx.getRenderScale(), null),
+      },
+      gl: glInfo,
+      info: safe(() => this.info()),
+      assets: safe(() => this.assets()),
+      lightTune: safe(() => this.lightTune()),
+      lightState: safe(() => this.lightState()),
+      viewState: safe(() => this.viewState()),
+      physState: safe(() => this.physState()),
+      timing: safe(() => this.timing()),
+      gpuTimer: safe(() => this.gpuTimer()),
+      // Console errors are not captured retroactively — see docs/CONSOLE-RECIPES.md
+      // for the one-liner that installs a collector BEFORE reproducing a bug.
+      errors: safe(() => (window.__apexErrors || []).slice(-40), []),
+    };
+    try { console.log(d); } catch (_) {}
+    if (o.download !== false) {
+      const bytes = this.save(d, o.filename || "apex-diag.json");
+      try { console.log("[diag] downloaded apex-diag.json (" + bytes + " bytes)"); } catch (_) {}
+    }
+    return d;
+  },
+
   async fetchTrackOutline(sessionKey, driverNumber) {
     const drv = driverNumber || 1;
     const rows = await fetch(

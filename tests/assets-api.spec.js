@@ -142,3 +142,29 @@ test("credits cover every baked asset", async ({ page }) => {
     expect(e.source).toBeTruthy();
   }
 });
+
+test("diag() returns a stable, complete snapshot and can save files", async ({ page }) => {
+  // The value of a diagnostic bundle is that it is the SAME shape every time —
+  // a bug report gathered by hand was a slightly different set of fields on each
+  // occasion. If a key silently disappears the bundle quietly stops answering
+  // the question it exists for, so the shape is pinned here.
+  const d = await page.evaluate(() => window.__apex.diag({ download: false }));
+  for (const k of ["when", "env", "gl", "info", "assets", "lightTune", "lightState",
+                   "viewState", "physState", "timing", "gpuTimer", "errors"]) {
+    expect(d, `diag() missing "${k}"`).toHaveProperty(k);
+  }
+  // The environment fields are the ones that decide whether a report is even
+  // comparable to a headless run — SwiftShader vs real silicon reads completely
+  // differently for timing and shimmer.
+  expect(d.env.ua).toBeTruthy();
+  expect(d.env.backend).toBeTruthy();
+  expect(typeof d.env.dpr).toBe("number");
+  expect(d.gl.renderer, "GPU renderer string must resolve").toBeTruthy();
+  // It must survive being called before a race, when most state is null.
+  expect(Array.isArray(d.errors)).toBe(true);
+
+  // save() returns a byte count and must not throw for objects or strings.
+  const bytes = await page.evaluate(() => window.__apex.save({ a: 1 }, "t.json"));
+  expect(typeof bytes).toBe("number");
+  expect(bytes).toBeGreaterThan(0);
+});
