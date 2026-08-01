@@ -23,18 +23,38 @@ const DataTelemetry = (function () {
     return t ? t.color : [0.6, 0.6, 0.6];
   }
 
-  // Dot/trace colours for the two drivers on the map. Team-mates share a team
-  // colour, so if the two picks are near-identical the compare one is lightened
-  // toward white to stay tellable-apart.
-  function pairColors(dP, dC) {
-    const a = driverColor(dP);
-    if (!dC) return { p: a, c: null };
-    let b = driverColor(dC);
-    const dist = Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
-    if (dist < 0.3) b = [b[0] * 0.4 + 0.6, b[1] * 0.4 + 0.6, b[2] * 0.4 + 0.6];
-    return { p: a, c: b };
+  // One distinct colour per lap on screen. Base is the driver's team colour, so
+  // team-mates — and, crucially, the SAME driver compared across sessions (race
+  // vs quali) — collide. Each successive lap that lands on an already-used base
+  // is ramped toward white so every lane stays tellable-apart. Returns a colour
+  // per entry, in order.
+  function laneColors(entries) {
+    const seen = {};
+    return entries.map(function (e) {
+      let base = driverColor(e.d || e);
+      const key = base.map(function (v) { return Math.round(v * 16); }).join(",");
+      const n = seen[key] || 0; seen[key] = n + 1;
+      if (n > 0) {
+        const f = Math.min(0.66, n * 0.30);   // lighten each repeat of a colour
+        base = [base[0] * (1 - f) + f, base[1] * (1 - f) + f, base[2] * (1 - f) + f];
+      }
+      return base;
+    });
   }
   function dcode(d) { return d.code || ("#" + d.num); }
+  // Short session tag for a lane badge: Race->R, Qualifying->Q, Sprint->SPR,
+  // Practice 2->P2. Only shown when a lane needs disambiguating by session.
+  function sessionShort(meta) {
+    if (!meta) return "";
+    const name = String(meta.name || meta.type || "");
+    const type = String(meta.type || meta.name || "").toLowerCase();
+    if (type.indexOf("sprint") !== -1) return type.indexOf("qual") !== -1 ? "SQ" : "SPR";
+    if (type.indexOf("qual") !== -1) return "Q";
+    if (type.indexOf("race") !== -1) return "R";
+    const m = name.match(/(\d+)/);
+    if (type.indexOf("practice") !== -1) return "P" + (m ? m[1] : "");
+    return name.slice(0, 3).toUpperCase();
+  }
   // OpenF1 DRS codes: 10/12/14 = wing open, everything else closed/eligible.
   function drsOpen(v) { return v === 10 || v === 12 || v === 14; }
 
@@ -119,10 +139,42 @@ const DataTelemetry = (function () {
   }
 
   let driverGen = 0;
+  const MAX_LANES = 4;
+  // The COMPARE TRAY. Module-scoped so it SURVIVES a session change in the
+  // picker — that is the whole mechanism behind cross-session comparison: pick a
+  // driver in the Race session, switch the SESSION dropdown to Qualifying, pick
+  // the same driver again, and both laps sit in the tray waiting to load. Each
+  // entry remembers its own session. Keyed by driver number + session key so the
+  // same driver from two sessions is two distinct lanes.
+  let tray = [];
+  function trayHas(num, sk) { return tray.some(function (e) { return e.d.num === num && e.sessionKey === sk; }); }
+  function trayToggle(d, meta) {
+    const sk = meta.sessionKey;
+    const i = tray.findIndex(function (e) { return e.d.num === d.num && e.sessionKey === sk; });
+    if (i !== -1) { tray.splice(i, 1); return; }
+    tray.push({ d: d, sessionKey: sk, meetingKey: meta.meetingKey, sessionLabel: sessionShort(meta),
+                sessionName: meta.name || meta.type || "Session" });
+    if (tray.length > MAX_LANES) tray.shift();   // oldest lane drops off
+  }
+  // The lanes overlay on ONE track map, so they must be the same circuit. A
+  // session switch WITHIN a meeting is the cross-session flow (race vs quali);
+  // switching to a different Grand Prix drops the now-mismatched lanes.
+  function pruneTrayToMeeting(meta) {
+    if (!meta || meta.meetingKey == null) return;
+    tray = tray.filter(function (e) { return e.meetingKey == null || e.meetingKey === meta.meetingKey; });
+  }
+  // Same driver appears from more than one session? then lanes need the session
+  // badge to be told apart; otherwise the driver code alone is unambiguous.
+  function trayNeedsBadges() {
+    const byNum = {};
+    for (const e of tray) byNum[e.d.num] = (byNum[e.d.num] || 0) + 1;
+    return tray.some(function (e) { return byNum[e.d.num] > 1; });
+  }
 
   function renderTelemetryBody(meta, leftPane, rightPane) {
     const myDriverGen = ++driverGen;
     ++telGen;
+    if (meta) pruneTrayToMeeting(meta);   // drop lanes from a different circuit
     // Keep the picker (first child of leftPane); remove everything appended after it
     while (leftPane.children.length > 1) leftPane.removeChild(leftPane.lastChild);
     clear(rightPane);
@@ -138,7 +190,8 @@ const DataTelemetry = (function () {
       info.appendChild(title);
       const place = [meta.circuit, meta.country].filter(Boolean).join(" · ");
       if (place) info.appendChild(el("div", "dh-live-sub", place));
-      info.appendChild(el("div", "dh-live-sub", "Tap up to 2 drivers · drag chart to scrub"));
+      info.appendChild(el("div", "dh-live-sub",
+        "Tap up to " + MAX_LANES + " lanes · switch SESSION above to add a race-vs-quali lane · drag chart to scrub"));
       leftPane.appendChild(info);
 
       clear(rightPane);
@@ -146,45 +199,65 @@ const DataTelemetry = (function () {
       drivers = (drivers || []).filter(function (d) { return d && d.num !== null && d.num !== undefined; });
       if (!drivers.length) { rightPane.appendChild(emptyMsg(NO_TELEM_MSG)); return; }
 
-      const picked = [];
       const chipByNum = {};
       const pick = el("div", "dh-driverpick");
       const detail = el("div", "dh-telem-detail");
+      const driverByNum = {};
+      drivers.forEach(function (d) { driverByNum[d.num] = d; });
 
       function syncChips() {
         drivers.forEach(function (d) {
-          chipByNum[d.num].classList.toggle("dh-active", picked.indexOf(d) !== -1);
+          chipByNum[d.num].classList.toggle("dh-active", trayHas(d.num, meta.sessionKey));
         });
         clear(detail);
-        if (picked.length === 0) {
-          detail.appendChild(emptyMsg("← Pick 1 or 2 drivers to view their fastest lap."));
-        } else {
-          const summary = el("div", "dh-livecard");
-          summary.appendChild(el("h3", "dh-section", "SELECTED DRIVERS"));
-          picked.forEach(function (d) {
-            const row = el("div", "dh-row");
-            const chip = el("span", "dh-codechip", dcode(d));
-            const col = driverColor(d);
-            chip.style.background = cssColor(col);
-            chip.style.color = textColorOn(col);
-            row.appendChild(chip);
-            row.appendChild(el("span", "dh-name", d.name || "—"));
-            summary.appendChild(row);
-          });
-          const loadBtn = el("button", "dh-livebtn");
-          loadBtn.textContent = picked.length === 1 ? "LOAD LAP" : "COMPARE LAPS";
-          loadBtn.style.marginTop = "12px";
-          loadBtn.style.width = "100%";
-          loadBtn.type = "button";
-          loadBtn.addEventListener("click", function () {
-            // Return focus to the primary driver's chip when the popup closes —
-            // the LOAD button itself is destroyed while the popup is open.
-            loadTelemetrySet(meta.sessionKey, picked.slice(), detail, syncChips,
-              chipByNum[picked[0].num]);
-          });
-          summary.appendChild(loadBtn);
-          detail.appendChild(summary);
+        if (tray.length === 0) {
+          detail.appendChild(emptyMsg("← Pick 1–" + MAX_LANES + " lanes to view a lap. Switch the SESSION above and pick again to line a driver's race lap up against their qualifying lap."));
+          return;
         }
+        const badges = trayNeedsBadges();
+        const summary = el("div", "dh-livecard");
+        summary.appendChild(el("h3", "dh-section", tray.length === 1 ? "SELECTED LANE" : "COMPARE LANES (" + tray.length + ")"));
+        const laneCols = laneColors(tray);
+        tray.forEach(function (e, i) {
+          const row = el("div", "dh-row");
+          const chip = el("span", "dh-codechip", dcode(e.d));
+          const col = laneCols[i];
+          chip.style.background = cssColor(col);
+          chip.style.color = textColorOn(col);
+          row.appendChild(chip);
+          row.appendChild(el("span", "dh-name", e.d.name || "—"));
+          // session badge — always shown once any driver is doubled up, so a
+          // race-vs-quali pair reads at a glance
+          if (badges || tray.some(function (o) { return o.sessionKey !== e.sessionKey; })) {
+            row.appendChild(el("span", "dh-lane-ses", e.sessionLabel || e.sessionName));
+          }
+          const rm = el("button", "dh-lane-x", "×");
+          rm.type = "button"; rm.title = "Remove lane";
+          rm.addEventListener("click", function () {
+            const idx = tray.findIndex(function (o) { return o.d.num === e.d.num && o.sessionKey === e.sessionKey; });
+            if (idx !== -1) tray.splice(idx, 1);
+            syncChips();
+          });
+          row.appendChild(rm);
+          summary.appendChild(row);
+        });
+        const loadBtn = el("button", "dh-livebtn");
+        loadBtn.textContent = tray.length === 1 ? "LOAD LAP" : "COMPARE " + tray.length + " LANES";
+        loadBtn.style.marginTop = "12px";
+        loadBtn.style.width = "100%";
+        loadBtn.type = "button";
+        loadBtn.addEventListener("click", function () {
+          const focus = chipByNum[tray[0].d.num] || loadBtn;
+          loadTelemetrySet(tray.slice(), detail, syncChips, focus);
+        });
+        summary.appendChild(loadBtn);
+        if (tray.length > 1) {
+          const clr = el("button", "dh-livebtn dh-lane-clear", "CLEAR LANES");
+          clr.type = "button"; clr.style.width = "100%"; clr.style.marginTop = "6px";
+          clr.addEventListener("click", function () { tray = []; syncChips(); });
+          summary.appendChild(clr);
+        }
+        detail.appendChild(summary);
       }
 
       drivers.forEach(function (d) {
@@ -192,9 +265,7 @@ const DataTelemetry = (function () {
         b.type = "button";
         b.style.borderColor = cssColor(driverColor(d));
         b.addEventListener("click", function () {
-          const idx = picked.indexOf(d);
-          if (idx !== -1) picked.splice(idx, 1);
-          else { picked.push(d); if (picked.length > 2) picked.shift(); }
+          trayToggle(d, meta);
           syncChips();
         });
         chipByNum[d.num] = b;
@@ -299,10 +370,24 @@ const DataTelemetry = (function () {
     const hdr = el("div", "dh-tpopup-hdr");
     const titleEl = el("div", "dh-tpopup-title");
     titleEl.id = "dh-tpopup-title";
-    titleEl.appendChild(el("span", null, tels.map(function (t) { return t.d.name || dcode(t.d); }).join(" vs ")));
-    if (sel.meta) {
+    // If one driver appears in more than one lane (race vs quali), tag each name
+    // with its session so "NORRIS vs NORRIS" reads as "NORRIS R vs NORRIS Q".
+    const dupName = {};
+    tels.forEach(function (t) { const k = t.d.num; dupName[k] = (dupName[k] || 0) + 1; });
+    const label = tels.map(function (t) {
+      const nm = t.d.name || dcode(t.d);
+      return (dupName[t.d.num] > 1 && t.sessionLabel) ? nm + " " + t.sessionLabel : nm;
+    }).join(" vs ");
+    titleEl.appendChild(el("span", null, label));
+    // Cross-session comparison spans sessions, so a single session subtitle would
+    // be misleading — only show it when every lane came from the loaded session.
+    const oneSession = tels.every(function (t) { return !t.sessionLabel || t.sessionLabel === tels[0].sessionLabel; });
+    if (sel.meta && oneSession) {
       const sub = [sel.meta.name || sel.meta.type, sel.meta.circuit || sel.meta.country].filter(Boolean).join(" · ");
       if (sub) titleEl.appendChild(el("span", "dh-tpopup-sub", sub));
+    } else if (sel.meta) {
+      const sub = [sel.meta.circuit || sel.meta.country].filter(Boolean).join(" · ");
+      if (sub) titleEl.appendChild(el("span", "dh-tpopup-sub", sub + " · cross-session"));
     }
     hdr.appendChild(titleEl);
     const closeBtn = el("button", "dh-close", "✕");
@@ -354,16 +439,24 @@ const DataTelemetry = (function () {
     }, 0);
   }
 
-  function loadTelemetrySet(sessionKey, picked, detail, syncChips, returnFocus) {
+  // Each lane fetches from its OWN session key — that is what makes a race lap
+  // and a qualifying lap loadable side by side. The lane's session label rides
+  // along on the returned tel for the header badge.
+  function loadTelemetrySet(lanes, detail, syncChips, returnFocus) {
     const myGen = ++telGen;
     stopTelAnim();
-    if (!picked.length) {
+    if (!lanes.length) {
       if (syncChips) syncChips();
       return;
     }
     clear(detail);
     detail.appendChild(spinner());
-    Promise.all(picked.map(function (d, i) { return fetchDriverTel(sessionKey, d, i === 0); }))
+    Promise.all(lanes.map(function (e, i) {
+      return fetchDriverTel(e.sessionKey, e.d, i === 0).then(function (tel) {
+        tel.sessionLabel = e.sessionLabel; tel.sessionName = e.sessionName;
+        return tel;
+      });
+    }))
       .then(function (tels) {
         if (myGen !== telGen) return;
         if (syncChips) syncChips();
@@ -383,9 +476,21 @@ const DataTelemetry = (function () {
 
   function buildTelemetryView(detail, tels) {
     stopTelAnim();
+    // N-LANE MODEL. The renderer used to hold a fixed primary + optional
+    // compare; it now holds a list of lanes (view.laps), with laps[0] as the
+    // REFERENCE that deltas and gauges read against. primary/compare stay as
+    // aliases so the dense 1- and 2-lane paths render exactly as before; lanes
+    // 3-4 add a speed line, a map dot and a delta line each.
     const primary = tels[0];
     const compare = tels[1] || null;
-    const pcols = pairColors(primary.d, compare && compare.d);
+    const laneCols = laneColors(tels);
+    const pcols = { p: laneCols[0], c: laneCols[1] || null };
+    // Session badge on each lane header once a driver is doubled up across
+    // sessions (race vs quali), so the headers disambiguate too.
+    const dupNum = {};
+    tels.forEach(function (t) { dupNum[t.d.num] = (dupNum[t.d.num] || 0) + 1; });
+    // stash for the gauge lane board (built later, out of this scope)
+    const _dupForView = dupNum;
 
     // Main column: driver headers, transport, chart, legend, stints
     const mainArea = el("div", "dh-telem-main");
@@ -393,14 +498,12 @@ const DataTelemetry = (function () {
     const sideArea = el("div", "dh-telem-side");
 
     tels.forEach(function (t, i) {
-      // one-line header per driver: swatch · name · sectors · fastest lap.
-      // The popup title bar already names the drivers, so this row only needs
-      // to key the colour and carry the lap numbers — keep it short so the
-      // chart gets the vertical space.
+      // one-line header per lane: swatch · name (· session) · sectors · lap.
       const ht = el("div", "dh-live-title dh-thead");
-      const sw = el("span", "dh-swatch"); sw.style.background = cssColor(i === 0 ? pcols.p : pcols.c);
+      const sw = el("span", "dh-swatch"); sw.style.background = cssColor(laneCols[i]);
       ht.appendChild(sw);
       ht.appendChild(el("span", "dh-tname", (t.d.name || dcode(t.d))));
+      if (dupNum[t.d.num] > 1 && t.sessionLabel) ht.appendChild(el("span", "dh-lane-ses", t.sessionLabel));
       if (!t.lap) {
         ht.appendChild(el("span", "dh-tsect", "No timed lap found in this session."));
       } else {
@@ -423,9 +526,15 @@ const DataTelemetry = (function () {
       return;
     }
 
+    // Every lane that actually has car telemetry, reference first. The extra
+    // lanes (index >= 2) are "multi" lanes: speed line + map dot + delta line.
+    const laps = tels.filter(function (t) { return t.car && t.car.length; });
     const view = {
+      laps: laps,
+      laneCols: laneCols,
       primary: primary,
       compare: (compare && compare.car && compare.car.length) ? compare : null,
+      multi: laps.length > 2,
       visible: {}, cursorT: 0,
       tMax: 0, speedMax: 1, rpmMax: 1,
       // Default to REAL TIME (1x): the dot goes round at the speed the driver
@@ -439,6 +548,7 @@ const DataTelemetry = (function () {
     view.visibleC = {};
     CHANNELS.forEach(function (ch) { view.visible[ch.id] = view.visibleC[ch.id] = !ch.off; });
     view.colP = pcols.p; view.colC = pcols.c;
+    view._dup = _dupForView;
     function scan(car) {
       for (let i = 0; i < car.length; i++) {
         if (car[i].t > view.tMax) view.tMax = car[i].t;
@@ -446,11 +556,13 @@ const DataTelemetry = (function () {
         if ((car[i].rpm || 0) > view.rpmMax) view.rpmMax = car[i].rpm;
       }
     }
-    scan(primary.car);
-    if (view.compare) scan(view.compare.car);
+    // tMax must span the LONGEST lane, or a slower lane's dot/line would be cut
+    // off before the lap ended.
+    laps.forEach(function (t) { scan(t.car); });
     view.tMax = view.tMax || 1;
-    primary.cum = cumDist(primary.car);
-    if (view.compare) view.compare.cum = cumDist(view.compare.car);
+    // cumulative distance for every lane — the delta and the distance-based dot
+    // interpolation both read it.
+    laps.forEach(function (t) { t.cum = cumDist(t.car); });
     if (primary.lap && primary.lap.s1 !== null && primary.lap.s2 !== null) {
       view.sectors = [primary.lap.s1, primary.lap.s1 + primary.lap.s2];
     }
@@ -485,10 +597,11 @@ const DataTelemetry = (function () {
 
     const legend = el("div", "dh-legend");
     if (view.compare) {
-      // driver key: each code chip in that driver's trace/dot colour
-      tels.forEach(function (t, i) {
-        const chip = el("span", "dh-codechip", dcode(t.d));
-        const col = i === 0 ? view.colP : view.colC;
+      // driver key: each lane's code chip in its own trace/dot colour
+      view.laps.forEach(function (t, i) {
+        const badge = (dupNum[t.d.num] > 1 && t.sessionLabel) ? " " + t.sessionLabel : "";
+        const chip = el("span", "dh-codechip", dcode(t.d) + badge);
+        const col = view.laneCols[i];
         chip.style.background = cssColor(col);
         chip.style.color = textColorOn(col);
         legend.appendChild(chip);
@@ -570,8 +683,11 @@ const DataTelemetry = (function () {
         item.appendChild(dot); item.appendChild(document.createTextNode(code));
         return item;
       }
-      mkey.appendChild(mchip(view.colP, dcode(primary.d)));
-      if (view.compare) mkey.appendChild(mchip(view.colC, dcode(view.compare.d)));
+      // one map-legend chip per lane, in that lane's colour
+      view.laps.forEach(function (t, i) {
+        const badge = (dupNum[t.d.num] > 1 && t.sessionLabel) ? " " + t.sessionLabel : "";
+        mkey.appendChild(mchip(view.laneCols[i], dcode(t.d) + badge));
+      });
       // track colouring key: slow (blue) -> fast (red), sectors marked S2/S3
       const gi = el("span", "dh-legend-item dh-legend-static");
       gi.appendChild(document.createTextNode("SLOW"));
@@ -741,6 +857,26 @@ const DataTelemetry = (function () {
       g.delta = el("div", "dh-gval dh-gdelta", "—");
       dcell.appendChild(g.delta); card.appendChild(dcell);
     }
+    // LANE BOARD (3-4 lanes): the dual gauge only holds two, so list every lane
+    // with its live speed and gap to the reference — the at-a-glance answer to
+    // "who's fastest here?" across all the lanes at once.
+    if (view.multi) {
+      const board = el("div", "dh-laneboard");
+      g.board = [];
+      view.laps.forEach(function (t, i) {
+        const row = el("div", "dh-laneboard-row");
+        const dot = el("span", "dh-legend-dot dh-mapdot"); dot.style.background = cssColor(view.laneCols[i]);
+        row.appendChild(dot);
+        const badge = (view._dup && view._dup[t.d.num] > 1 && t.sessionLabel) ? " " + t.sessionLabel : "";
+        row.appendChild(el("span", "dh-laneboard-code", dcode(t.d) + badge));
+        const spd = el("span", "dh-laneboard-spd", "—");
+        const dl = el("span", "dh-laneboard-dl", i === 0 ? "REF" : "—");
+        row.appendChild(spd); row.appendChild(dl);
+        board.appendChild(row);
+        g.board.push({ spd: spd, dl: dl, ref: i === 0 });
+      });
+      card.appendChild(board);
+    }
     view.g = g;
     return card;
   }
@@ -767,6 +903,20 @@ const DataTelemetry = (function () {
       g.delta.textContent = (delta >= 0 ? "+" : "") + delta.toFixed(2) + "s";
       g.delta.classList.toggle("dh-pos", delta > 0.02);
       g.delta.classList.toggle("dh-neg", delta < -0.02);
+    }
+    // lane board (3-4 lanes): live speed + gap to the reference for every lane
+    if (g.board) {
+      const dRef = distAtT(view.primary.cum, t);
+      view.laps.forEach(function (lane, i) {
+        const cell = g.board[i]; if (!cell) return;
+        const cc = sampleAt(lane.car, t);
+        cell.spd.textContent = (cc && cc.speed !== null) ? Math.round(cc.speed) : "—";
+        if (cell.ref) return;
+        const dl = timeAtDist(lane.cum, dRef) - t;   // >0: this lane is behind the ref
+        cell.dl.textContent = (dl >= 0 ? "+" : "") + dl.toFixed(2);
+        cell.dl.classList.toggle("dh-pos", dl > 0.02);
+        cell.dl.classList.toggle("dh-neg", dl < -0.02);
+      });
     }
   }
 
@@ -822,6 +972,16 @@ const DataTelemetry = (function () {
     const X = chartX(view, T, W);
     cg.strokeStyle = "rgba(255,255,255,0.55)"; cg.lineWidth = 1;
     cg.beginPath(); cg.moveTo(X, PADY); cg.lineTo(X, H - PADY); cg.stroke();
+    // a speed dot per lane at the cursor (extra lanes 3-4 too), reference last
+    if (view.multi && view.visible.speed) {
+      for (let i = 2; i < view.laps.length; i++) {
+        const cm = sampleAt(view.laps[i].car, T);
+        const fm = chanNorm(CHANNELS[0], cm, view);
+        if (fm === null) continue;
+        cg.fillStyle = cssColor(view.laneCols[i]);
+        cg.beginPath(); cg.arc(X, H - PADY - fm * (H - 2 * PADY), 3, 0, Math.PI * 2); cg.fill();
+      }
+    }
     if (view.compare && view.visibleC.speed) {
       const c2 = sampleAt(view.compare.car, T);
       const f2 = chanNorm(CHANNELS[0], c2, view);
@@ -865,13 +1025,14 @@ const DataTelemetry = (function () {
         mg.rotate(-ang - Math.PI / 2);     // heading -> up
         mg.translate(-p0[0], -p0[1]);
         mg.drawImage(view.mapBase, 0, 0);
-        if (view.compare) drawCarDot(mg, view, view.compare, T, cssColor(view.colC), 1 / ZOOM);
-        drawCarDot(mg, view, view.primary, T, cssColor(view.colP), 1 / ZOOM);
+        // extra lanes first, reference last so it stays on top
+        for (let i = view.laps.length - 1; i >= 0; i--)
+          drawCarDot(mg, view, view.laps[i], T, cssColor(view.laneCols[i]), 1 / ZOOM);
         mg.restore();
       } else {
         mg.drawImage(view.mapBase, 0, 0);
-        if (view.compare) drawCarDot(mg, view, view.compare, T, cssColor(view.colC), 1);
-        drawCarDot(mg, view, view.primary, T, cssColor(view.colP), 1);
+        for (let i = view.laps.length - 1; i >= 0; i--)
+          drawCarDot(mg, view, view.laps[i], T, cssColor(view.laneCols[i]), 1);
       }
     }
     updateGauges(view);
@@ -1041,6 +1202,14 @@ const DataTelemetry = (function () {
       if (view.visibleC.speed) line(view.compare.car, CHANNELS[0], cssColor(view.colC), 1.8);
       g.setLineDash([]);
     }
+    // Extra lanes (3-4): SPEED only, dashed, in the lane colour — the reference
+    // and compare keep their full multi-channel detail, the rest just show where
+    // the lap was faster or slower so the chart doesn't become a hairball.
+    if (view.multi && view.visible.speed) {
+      g.setLineDash([2, 3]);
+      for (let i = 2; i < view.laps.length; i++) line(view.laps[i].car, CHANNELS[0], cssColor(view.laneCols[i]), 1.6);
+      g.setLineDash([]);
+    }
     for (let k = CHANNELS.length - 1; k >= 0; k--) {
       const ch = CHANNELS[k];
       if (!view.visible[ch.id]) continue;
@@ -1051,46 +1220,61 @@ const DataTelemetry = (function () {
 
   // gap-to-compare across the lap: delta(t) = time for compare to reach the
   // same track distance, minus t. Filled green where the primary is ahead.
-  function deltaSamples(view) {
+  // gap of `lane` to the REFERENCE across the lap: at each reference time t,
+  // how long the lane took to reach the same track distance, minus t. >0 = the
+  // lane is behind the reference there.
+  function deltaSamplesFor(view, lane) {
     const car = view.primary.car, out = [];
     let mn = 0, mx = 0;
     for (let i = 0; i < car.length; i++) {
       const t = car[i].t;
       const dP = distAtT(view.primary.cum, t);
-      const dl = timeAtDist(view.compare.cum, dP) - t;
+      const dl = timeAtDist(lane.cum, dP) - t;
       out.push(dl);
       if (dl < mn) mn = dl; if (dl > mx) mx = dl;
     }
     return { d: out, mn: mn, mx: mx };
   }
+  function deltaSamples(view) { return deltaSamplesFor(view, view.compare); }
   function renderDelta(g, W, H, view) {
     const pad = 6, car = view.primary.car;
     g.clearRect(0, 0, W, H);
-    const ds = deltaSamples(view);
-    view._delta = ds;
-    const span = Math.max(0.15, ds.mx - ds.mn);
+    // one delta series per extra lane, all against the reference; the y-axis
+    // spans the widest of them so every line fits.
+    const others = view.laps.slice(1);
+    const series = others.map(function (lane) { return deltaSamplesFor(view, lane); });
+    let mn = 0, mx = 0;
+    series.forEach(function (s) { if (s.mn < mn) mn = s.mn; if (s.mx > mx) mx = s.mx; });
+    view._delta = series[0];    // gauge scrub uses the primary compare series
+    const span = Math.max(0.15, mx - mn);
     const X = function (t) { return chartX(view, t, W); };
-    const Y = function (v) { return pad + (ds.mx - v) / span * (H - 2 * pad); };
+    const Y = function (v) { return pad + (mx - v) / span * (H - 2 * pad); };
     const y0 = Y(0);
     // zero line
     g.strokeStyle = "rgba(255,255,255,0.25)"; g.lineWidth = 1;
     g.beginPath(); g.moveTo(PADL, y0); g.lineTo(W - PADR, y0); g.stroke();
-    // filled gap area, split at the zero crossing colour-wise
-    const col = cssColor(view.colP);
-    g.beginPath();
-    g.moveTo(X(0), y0);
-    for (let i = 0; i < car.length; i++) g.lineTo(X(car[i].t), Y(ds.d[i]));
-    g.lineTo(X(view.tMax), y0); g.closePath();
-    g.fillStyle = "rgba(63,185,80,0.18)"; g.fill();
-    g.beginPath();
-    let started = false;
-    for (let i = 0; i < car.length; i++) {
-      const x = X(car[i].t), y = Y(ds.d[i]);
-      if (!started) { g.moveTo(x, y); started = true; } else g.lineTo(x, y);
-    }
-    g.strokeStyle = col; g.lineWidth = 1.5; g.lineJoin = "round"; g.stroke();
+    // Two lanes: keep the familiar filled gap area under the single delta line.
+    // Three+: fills would overlap into mud, so each lane is a bare line.
+    const fill = series.length === 1;
+    series.forEach(function (ds, si) {
+      const laneCol = cssColor(view.laneCols[si + 1]);
+      if (fill) {
+        g.beginPath(); g.moveTo(X(0), y0);
+        for (let i = 0; i < car.length; i++) g.lineTo(X(car[i].t), Y(ds.d[i]));
+        g.lineTo(X(view.tMax), y0); g.closePath();
+        g.fillStyle = "rgba(63,185,80,0.18)"; g.fill();
+      }
+      g.beginPath();
+      let started = false;
+      for (let i = 0; i < car.length; i++) {
+        const x = X(car[i].t), y = Y(ds.d[i]);
+        if (!started) { g.moveTo(x, y); started = true; } else g.lineTo(x, y);
+      }
+      g.strokeStyle = laneCol; g.lineWidth = 1.5; g.lineJoin = "round"; g.stroke();
+    });
     g.fillStyle = "rgba(255,255,255,0.45)"; g.font = "9px system-ui, sans-serif";
-    g.textBaseline = "top"; g.fillText("GAP TO " + dcode(view.compare.d) + " (s)", PADL + 2, 2);
+    g.textBaseline = "top";
+    g.fillText(series.length === 1 ? "GAP TO " + dcode(view.compare.d) + " (s)" : "GAP TO " + dcode(view.primary.d) + " (s) · +behind", PADL + 2, 2);
   }
 
   // screen transform for the track map (from the primary lap's x/y bounds)

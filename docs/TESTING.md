@@ -194,6 +194,8 @@ hook values.
 | `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |
 | `custom-team.spec.js` | custom-team livery editor: colour save frees/rebuilds the decal texture |
 | `data-lifecycle.spec.js` | data hub session plumbing: meeting/year/session/driver responses own their option lists (no stale races) |
+| `telemetry-compare.spec.js` | TELEMETRY multi-lane compare (3+ drivers) + cross-session (one driver's race vs quali via the session-surviving tray), lane removal |
+| `telemetry-trace.test.mjs` | GPS-trace sanity + the playback dot's motion (stray rejection, coverage-gap detection, one forward lap per lane, cross-session own-lap timing) |
 | `ui-button-touch.spec.js` | touch controls, calibrate button, race settings layout |
 | `ui-desktop.spec.js` | desktop-mode layout (`body.desktop`), keyboard controls, non-touch UI |
 | `camera.spec.js`, `camera-hooks.spec.js`, `camera-driving-hooks.spec.js` | all 13 camera modes, `camera()`/`previewCam()`/`view()`/`orbit()`/`eyeAt()` framing, driving-camera behaviour |

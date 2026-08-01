@@ -368,6 +368,33 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   color: #f2f2f5;
 }
 .dh-livebtn.dh-active { background: #e10600; border-color: #e10600; color: #fff; }
+/* ---------- compare lanes (multi-driver + cross-session telemetry) ---------- */
+/* session badge on a lane row / header / legend chip (R, Q, P2, …) */
+.dh-lane-ses {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
+  padding: 1px 5px; border-radius: 999px; margin-left: 4px;
+  background: rgba(255, 255, 255, 0.12); color: #cfe0ff; flex: 0 0 auto;
+}
+/* remove-lane button on a tray row */
+.dh-lane-x {
+  margin-left: auto; flex: 0 0 auto;
+  width: 20px; height: 20px; line-height: 1; padding: 0;
+  border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06); color: #f2f2f5; font-size: 14px;
+}
+.dh-lane-x:hover { background: rgba(225, 6, 0, 0.8); border-color: #e10600; }
+.dh-lane-clear { background: rgba(255, 255, 255, 0.04); }
+/* the 3-4 lane readout board in the gauge column */
+.dh-laneboard { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; grid-column: 1 / -1; }
+.dh-laneboard-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.dh-laneboard-code { font-weight: 800; letter-spacing: 0.04em; min-width: 34px; }
+.dh-laneboard-spd { margin-left: auto; font-variant-numeric: tabular-nums; opacity: 0.9; }
+.dh-laneboard-dl {
+  min-width: 46px; text-align: right; font-variant-numeric: tabular-nums;
+  color: #9aa0aa;
+}
+.dh-laneboard-dl.dh-pos { color: #ff6b6b; }   /* behind the reference */
+.dh-laneboard-dl.dh-neg { color: #3fd06b; }   /* ahead of the reference */
 .dh-live-updated { font-size: 11px; color: #7a7a85; margin-left: auto; }
 .dh-class-head { display: flex; align-items: center; gap: 10px; }
 .dh-class-head .dh-section { margin: 6px 0 8px; flex: 1; }
