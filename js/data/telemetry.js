@@ -229,7 +229,27 @@ const DataTelemetry = (function () {
         jobs.push(F1API.pits(sessionKey, d.num).catch(function () { return []; }));
       }
       return Promise.all(jobs).then(function (res) {
-        return { d: d, lap: lap, car: res[0], loc: res[1], stints: res[2] || [], pits: res[3] || [] };
+        // CLIP BACK TO THE LAP. The window above overshoots by 1.5s so the last
+        // samples of the lap are certainly returned, but that tail must not be
+        // drawn: it is ~100m of extra track past the line, and how much of it
+        // there is depends on what the driver did NEXT. In a race they stay flat
+        // out down the straight; in qualifying they lift for an in-lap and can
+        // reach the pit entry, which spurs off the circuit, stretches the map's
+        // x/y bounds and rescales everything — the same track, drawn as a
+        // different shape in one session than the other.
+        const endMs = isFinite(ms) ? ms + dur * 1000 : null;
+        function clipToLap(list) {
+          if (!endMs || !list || !list.length) return list || [];
+          const kept = list.filter(function (s) {
+            const at = +s.date;
+            return !isFinite(at) || at <= endMs;
+          });
+          // never clip away the lap itself — if the timestamps don't line up the
+          // way we assume, the unclipped series is still the better answer
+          return kept.length > 8 ? kept : list;
+        }
+        return { d: d, lap: lap, car: clipToLap(res[0]), loc: clipToLap(res[1]),
+                 stints: res[2] || [], pits: res[3] || [] };
       });
     });
   }
