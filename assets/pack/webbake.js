@@ -62,6 +62,76 @@ const WebBake = (function () {
   const NAMES_TO_MAT = Object.fromEntries(Object.entries(NAMES).map(([k, v]) => [v, +k]));
   const log = (...a) => console.log("[webbake]", ...a);
 
+  // Keyword to fall back on when a slot's preferred asset id does not exist.
+  // The ids in DEFAULTS were picked by hand and a wrong guess simply 404s, so
+  // rather than leaving that slot procedural the baker searches the live
+  // catalogue for the keyword and tries the first few hits. That is what turns
+  // a hand-written table into something self-healing.
+  const FALLBACK = {
+    1: "concrete_floor", 2: "red_brick", 4: "metal_plate", 5: "wood_planks",
+    6: "leafy", 7: "fabric", 8: "sand", 9: "grass", 10: "rock_ground",
+    11: "snow", 12: "roof_tiles", 13: "castle_brick", 14: "rusty_metal",
+    16: "asphalt",
+  };
+
+  let _catalogue = null;
+  async function catalogue() {
+    if (_catalogue) return _catalogue;
+    const r = await fetch(`${API}/assets?type=textures`);
+    _catalogue = Object.keys(await r.json());
+    return _catalogue;
+  }
+
+  // ── ZIP (STORE, no compression) ────────────────────────────────────────────
+  // PNGs are already deflated, so storing them costs nothing and this needs no
+  // library. One file back beats three.
+  const CRC_T = (() => {
+    const t = new Int32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c; }
+    return t;
+  })();
+  function crc32(u8) {
+    let c = -1;
+    for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ -1) >>> 0;
+  }
+  function zip(files) {                    // files: [{name, data:Uint8Array}]
+    const enc = new TextEncoder();
+    const parts = [], central = [];
+    let offset = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name), crc = crc32(f.data), len = f.data.length;
+      const lh = new Uint8Array(30 + name.length);
+      const dv = new DataView(lh.buffer);
+      dv.setUint32(0, 0x04034b50, true); dv.setUint16(4, 20, true); dv.setUint16(6, 0, true);
+      dv.setUint16(8, 0, true);                                   // method 0 = store
+      dv.setUint16(10, 0, true); dv.setUint16(12, 0x21, true);    // fixed DOS time/date
+      dv.setUint32(14, crc, true); dv.setUint32(18, len, true); dv.setUint32(22, len, true);
+      dv.setUint16(26, name.length, true); dv.setUint16(28, 0, true);
+      lh.set(name, 30);
+      parts.push(lh, f.data);
+
+      const ch = new Uint8Array(46 + name.length);
+      const cv = new DataView(ch.buffer);
+      cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0, true); cv.setUint16(10, 0, true);
+      cv.setUint16(12, 0, true); cv.setUint16(14, 0x21, true);
+      cv.setUint32(16, crc, true); cv.setUint32(20, len, true); cv.setUint32(24, len, true);
+      cv.setUint16(28, name.length, true);
+      cv.setUint32(42, offset, true);
+      ch.set(name, 46);
+      central.push(ch);
+      offset += lh.length + len;
+    }
+    let cdSize = 0; for (const c of central) cdSize += c.length;
+    const end = new Uint8Array(22);
+    const ev = new DataView(end.buffer);
+    ev.setUint32(0, 0x06054b50, true);
+    ev.setUint16(8, files.length, true); ev.setUint16(10, files.length, true);
+    ev.setUint32(12, cdSize, true); ev.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, end], { type: "application/zip" });
+  }
+
   // ── Poly Haven file resolution ─────────────────────────────────────────────
   // Verified shape: body[MAP][RES][FORMAT] = {size, md5, url}.
   // nor_gl NOT nor_dx — DirectX has an inverted green channel and would invert
@@ -170,10 +240,26 @@ const WebBake = (function () {
       if (!id) continue;
       try {
         log(`${NAMES[mat]} (${mat}) <- ${id} …`);
-        const L = await layer(id, size, s);
+        let L = null;
+        try {
+          L = await layer(id, size, s);
+        } catch (first) {
+          // The preferred id does not exist (they are hand-picked, so a wrong
+          // guess just 404s). Search the live catalogue and try the best hits
+          // rather than dropping the slot to procedural.
+          const q = FALLBACK[mat];
+          if (!q) throw first;
+          const hits = (await catalogue()).filter((k) => k.toLowerCase().includes(q));
+          log(`  ${id} unavailable — trying ${hits.slice(0, 3).join(", ") || "(no match)"}`);
+          for (const alt of hits.slice(0, 3)) {
+            try { L = await layer(alt, size, s); want[key] = alt; break; } catch (_) { /* next */ }
+          }
+          if (!L) throw first;
+        }
         aX.putImageData(L.albedo, 0, mat * size);
         nX.putImageData(L.normal, 0, mat * size);
         albImgs[mat] = L.albedo; norImgs[mat] = L.normal;
+        L.source = `polyhaven:${want[key]}`;
         scales[mat] = SCALES[mat] || 4;
         credits.push({ kind: "material", id: NAMES[mat].toLowerCase(), mat,
                        author: "Poly Haven contributors", licence: "CC0", source: L.source });
@@ -215,13 +301,30 @@ const WebBake = (function () {
       models: {}, env: {}, credits,
     };
 
+    const blobs = {
+      albedo: await toBlob(albStrip.c),
+      normal: await toBlob(norStrip.c),
+    };
     if (o.download !== false) {
-      await save(albStrip.c, `mat-albedo-${size}.png`);
-      await save(norStrip.c, `mat-normal-${size}.png`);
-      dl(new Blob([JSON.stringify(manifest, null, 2) + "\n"], { type: "application/json" }), "manifest.json");
-      log("downloaded 3 files — hand them over to be committed into assets/pack/");
+      // One ZIP rather than three loose downloads — Safari prompts per file.
+      const enc = new TextEncoder();
+      const files = [
+        { name: manifest.materials.albedo, data: new Uint8Array(await blobs.albedo.arrayBuffer()) },
+        { name: manifest.materials.normal, data: new Uint8Array(await blobs.normal.arrayBuffer()) },
+        { name: "manifest.json", data: enc.encode(JSON.stringify(manifest, null, 2) + "\n") },
+        { name: "CREDITS.md", data: enc.encode(creditsMd(manifest)) },
+      ];
+      const bundle = zip(files);
+      dl(bundle, `apex-pack-${size}.zip`);
+      const kb = (n) => (n / 1024).toFixed(0) + " KB";
+      log("SIZES —", files.map((f) => `${f.name} ${kb(f.data.length)}`).join(" | "));
+      // The offline gate caps a committed pack at 8 MB; say so here rather than
+      // let it fail after the hand-off.
+      const total = files.reduce((n, f) => n + f.data.length, 0);
+      log(`TOTAL ${kb(total)} — budget 8192 KB` + (total > 8 * 1024 * 1024 ? "  ** OVER **" : "  (ok)"));
+      log(`downloaded apex-pack-${size}.zip`);
     }
-    return { manifest, state, failed };
+    return { manifest, state, failed, blobs };
   }
 
   function dl(blob, name) {
@@ -232,11 +335,21 @@ const WebBake = (function () {
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   }
 
-  async function save(canvas, name) {
-    const blob = canvas.convertToBlob
-      ? await canvas.convertToBlob({ type: "image/png" })                       // OffscreenCanvas
-      : await new Promise((r) => canvas.toBlob(r, "image/png"));
-    dl(blob, name);
+  function toBlob(canvas) {
+    return canvas.convertToBlob
+      ? canvas.convertToBlob({ type: "image/png" })                            // OffscreenCanvas
+      : new Promise((r) => canvas.toBlob(r, "image/png"));
+  }
+
+  // Attribution roll. CC0 imposes no duty, but crediting the people whose scans
+  // are in the game is right, and Poly Haven's API terms ask for the credit line
+  // when you build on the live API — which this file does.
+  function creditsMd(manifest) {
+    const rows = manifest.credits.map((c) =>
+      `| ${c.kind} | ${c.id} | ${c.author} | ${c.licence} | ${c.source} |`).join("\n");
+    return `# Asset credits\n\nGenerated by assets/pack/webbake.js — do not hand-edit.\n\n` +
+           `Powered by Poly Haven.\n\n` +
+           `| kind | id | author | licence | source |\n|---|---|---|---|---|\n${rows}\n`;
   }
 
   // ── 3D models ──────────────────────────────────────────────────────────────
@@ -395,7 +508,7 @@ const WebBake = (function () {
     return hit;
   }
 
-  return { run, list, search, layer,
+  return { run, list, search, layer, zip, crc32,
            models, modelReport, model, toGLB,
            DEFAULTS, SCALES, NAMES };
 })();

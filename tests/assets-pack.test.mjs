@@ -349,6 +349,48 @@ test("webbake toGLB re-packs .gltf + .bin into something gltf.js accepts", () =>
     `baseColorFactor lost: ${[...mesh.col].slice(0, 3)}`);
 });
 
+test("webbake writes a ZIP that real unzip accepts", () => {
+  // The browser baker hands its output back as a single archive, written by a
+  // ~40-line STORE-method ZIP encoder with no library behind it. A wrong CRC or
+  // a bad central-directory offset produces a file that *looks* fine and fails
+  // only when someone tries to open it — so this checks it against the system
+  // unzip rather than against my own reader.
+  const os = require("node:os"), cp = require("node:child_process"), vm = require("node:vm");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-zip-"));
+  try {
+    const sandbox = {
+      Math, Array, Object, JSON, Uint8Array, Uint16Array, Uint32Array, Int32Array,
+      Float32Array, DataView, ArrayBuffer, TextEncoder, TextDecoder, Promise, Error, console, Blob,
+    };
+    sandbox.window = sandbox;
+    vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "assets", "pack", "webbake.js"), "utf8")
+      .replace(/^const\b/gm, "var"), sandbox, { filename: "webbake.js" });
+
+    const enc = new TextEncoder();
+    const payload = '{"version":1,"materials":{"size":512}}\n';
+    const blob = sandbox.WebBake.zip([
+      { name: "manifest.json", data: enc.encode(payload) },
+      { name: "CREDITS.md", data: enc.encode("# Asset credits\n\nPowered by Poly Haven.\n") },
+      { name: "mat-albedo-512.png", data: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 1, 2, 3]) },
+    ]);
+    const zipPath = path.join(dir, "pack.zip");
+    return blob.arrayBuffer().then((ab) => {
+      fs.writeFileSync(zipPath, Buffer.from(ab));
+      const t = cp.spawnSync("unzip", ["-t", zipPath], { encoding: "utf8" });
+      if (t.error && t.error.code === "ENOENT") return;          // no unzip on this box
+      assert.equal(t.status, 0, `unzip -t rejected the archive:\n${t.stdout}${t.stderr}`);
+      const got = cp.spawnSync("unzip", ["-p", zipPath, "manifest.json"], { encoding: "utf8" });
+      assert.equal(got.status, 0, "could not extract manifest.json");
+      assert.equal(got.stdout, payload, "extracted content does not match what went in");
+    });
+  } finally {
+    // rmSync is safe to schedule now: the promise above only reads from `dir`
+    // via a spawned process that has already exited by the time it resolves.
+    process.on("exit", () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {} });
+  }
+});
+
 test("credits cover every asset in the pack", { skip: !hasPack && "no pack installed" }, () => {
   const credits = manifest.credits || [];
   const ids = new Set(credits.map((c) => `${c.kind}:${c.id}`));
