@@ -148,13 +148,29 @@ const TrackGraph = (function () {
     }
 
     // Define a model once. `build(rec)` records ops in canonical space.
+    //
+    // The canonical mesh is built LAZILY. A shipping build never needs it — the
+    // ops are replayed straight into the world — so the work only happens when
+    // something actually asks: stats(), or an instanced renderer uploading one
+    // mesh per model. It also keeps a plain build emitting EXACTLY the primitives
+    // it ships, which matters because tools/float-audit.cjs wraps TrackGeom's
+    // emitters and indexes them in emission order; a reference mesh baked through
+    // those same wrappers is geometry that exists nowhere in the world.
+    // Closure-scoped rather than `this`-relative so a destructured or spread model
+    // record still resolves.
     function model(key, build) {
       let m = models.get(key);
       if (m) return m;
       const ops = [];
       build(recorder(ops));
-      const geo = bakeCanonical(ops);
-      m = { key, ops, geo, verts: geo ? geo.pos.length / 3 : 0, aabb: aabbOf(geo), uses: 0 };
+      let geo, aabb;
+      const meshOf = () => (geo === undefined ? (geo = bakeCanonical(ops)) : geo);
+      m = {
+        key, ops, uses: 0,
+        get geo() { return meshOf(); },
+        get aabb() { return aabb === undefined ? (aabb = aabbOf(meshOf())) : aabb; },
+        get verts() { const g = meshOf(); return g ? g.pos.length / 3 : 0; },
+      };
       models.set(key, m);
       return m;
     }

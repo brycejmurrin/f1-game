@@ -56,8 +56,18 @@ async function episode(page, policy) {
         // toward the centreline). + steer = right; + headingErrDeg = nose points
         // right, so subtract it; + lateralM = car is right of centre, so subtract.
         const steer = clamp(-he / 12 - lat / 14, -1, 1);
-        const braking = !!(nc && /^BRAKE NOW/.test(nc.status));
-        input = { steer, throttle: !braking, brake: braking };
+        // Regulate ENTRY SPEED, don't just wait for the BRAKE NOW flag. The flag
+        // is a late, binary hint — on Interlagos it fired 6 times in 78 steps
+        // while the car built to 213 kph and was rescued at 248 m. apexSpeedKph
+        // assumes more grip than the default parts have, so aim well under it,
+        // start braking well before suggestBrakeM, and keep a flat cap for the
+        // straights no corner window covers. Still honest road geometry — an
+        // apex speed is a fact about the corner, not a prescribed line.
+        const sp = w.ego.speed || 0;
+        const tgt = nc ? nc.apexSpeedKph / 3.6 * 0.5 : 40;
+        const hot = nc && sp > tgt && nc.distM < (nc.suggestBrakeM || 60) * 6;
+        const braking = /^BRAKE NOW/.test((nc && nc.status) || "") || hot || sp > 33;
+        input = { steer, throttle: !braking, brake: braking && sp > 3 };
       }
       A.act(input, 1 / 60, 6);
       steps++;

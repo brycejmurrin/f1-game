@@ -10,6 +10,15 @@
 const SceneryCity = (function () {
   "use strict";
 
+  // The one model every axis-aligned facade box shares: a unit cube with its
+  // size on the node scale and its colour on the node. Window panes, floor rails
+  // and mullions are all dim()-shaped boxes on the same building basis, so the
+  // whole city's facade furniture is ONE 24-vertex model plus a transform each.
+  // No rec.mat(): out._mat is set by the caller (METAL for frames, GLASS/0 for
+  // panes) and the ops inherit it, exactly as the inline addBox calls did.
+  const UNIT_BOX = "unit-box";
+  const unitBox = (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR);
+
   function create(ctx) {
     const { out, glassBuf, def, theme, NIGHT, MAT, lod,
             seat, cantilever,
@@ -56,7 +65,12 @@ const SceneryCity = (function () {
         const gBase = vadd(mid, nVec, nSign * (nHalf + 0.04));
         const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
         out._mat = MAT.METAL;
-        if (!simple) for (let i = 0; i <= rowN; i += 2) addBox(out, vadd(fBase, u, (i / rowN - 0.5) * sh), dim(frameT, railH, faceW * 1.005), frameCol, bb);   // perf: every other rail
+        // perf: every other rail
+        if (!simple) for (let i = 0; i <= rowN; i += 2)
+          ctx.instance(UNIT_BOX,
+            { o: vadd(fBase, u, (i / rowN - 0.5) * sh), r: bb[0], u: bb[1], t: bb[2],
+              s: dim(frameT, railH, faceW * 1.005), col: frameCol },
+            unitBox, { kind: "facadeRail" });
         for (let c = 0; c < cols; c++) {
           const cx = (-0.5 + (c + 0.5) / cols) * faceW;
           for (let ri = 0; ri < rowN; ri++) {
@@ -82,12 +96,12 @@ const SceneryCity = (function () {
             // street circuits (Vegas ~1.8 M prop verts), and the per-pane hash
             // tint is precisely what a per-instance colour attribute exists for:
             // without TrackGraph.NODE_COLOR each lit pane would mint its own model.
-            ctx.instance("window-pane",
+            ctx.instance(UNIT_BOX,
               { o: vadd(vadd(gBase, wVec, cx), u, ry),
                 r: bb[0], u: bb[1], t: bb[2],
                 s: dim(0.08, winHH, (faceW / cols) * 0.82),
                 col },
-              (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR),
+              unitBox,
               { kind: "windowPane" },
               { buf: toGlass ? glassBuf : out });
             if (toGlass) glassBuf._mat = 0;
@@ -96,11 +110,22 @@ const SceneryCity = (function () {
         out._mat = MAT.METAL;
         if (simple) { out._mat = 0; return; }
         const nm = Math.max(1, Math.min(3, cols - 1));   // perf: fewer mullions (was 5)
-        for (let c = 1; c <= nm; c++) addBox(out, vadd(fBase, wVec, (-0.5 + c / (nm + 1)) * faceW), dim(frameT, sh, 0.4), frameCol, bb);
+        for (let c = 1; c <= nm; c++)
+          ctx.instance(UNIT_BOX,
+            { o: vadd(fBase, wVec, (-0.5 + c / (nm + 1)) * faceW), r: bb[0], u: bb[1], t: bb[2],
+              s: dim(frameT, sh, 0.4), col: frameCol },
+            unitBox, { kind: "facadeMullion" });
         if (neonAmt > 0.3) {
           const ST = Math.min(0.4, faceW * 0.04);
-          for (const dr of [-1, 1]) addBox(out, vadd(fBase, wVec, dr * faceW * 0.5), dim(frameT * 1.05, sh * 0.96, ST), nc, bb);
-          addBox(out, vadd(vadd(mid, nVec, nSign * (nHalf + 0.36)), u, sh * 0.48), dim(frameT * 1.1, Math.min(0.5, sh * 0.018), faceW), nc, bb);
+          for (const dr of [-1, 1])
+            ctx.instance(UNIT_BOX,
+              { o: vadd(fBase, wVec, dr * faceW * 0.5), r: bb[0], u: bb[1], t: bb[2],
+                s: dim(frameT * 1.05, sh * 0.96, ST), col: nc },
+              unitBox, { kind: "facadeNeon" });
+          ctx.instance(UNIT_BOX,
+            { o: vadd(vadd(mid, nVec, nSign * (nHalf + 0.36)), u, sh * 0.48), r: bb[0], u: bb[1], t: bb[2],
+              s: dim(frameT * 1.1, Math.min(0.5, sh * 0.018), faceW), col: nc },
+            unitBox, { kind: "facadeNeon" });
         }
         out._mat = 0;
       };
@@ -183,7 +208,9 @@ const SceneryCity = (function () {
           const lum = (body[0] + body[1] + body[2]) / 3;
           const bv = lum > 0.4 ? 0.22 : 0.15;
           const bodyTint = [bv, bv, bv * 1.12];
-          const ok = addBox(out, vadd(p.c, p.u, yBase + sh / 2), [sw, sh, sd], bodyTint, b);
+          const ok = ctx.instance(UNIT_BOX,
+            { o: vadd(p.c, p.u, yBase + sh / 2), r: p.r, u: p.u, t: p.t, s: [sw, sh, sd], col: bodyTint },
+            unitBox, { kind: "buildingMass", k, side }) > 0;
           if (ok === false) return false;
           // Landmark buildings: full neon on neon-city tracks, a lighter touch on
           // any other night circuit so every night track gets some neon.
@@ -206,7 +233,9 @@ const SceneryCity = (function () {
         // reflective window bands carry the GLASS mullion-grid material.
         const wmat = (dayWall[0] > 0.5 && dayWall[0] > dayWall[2] + 0.03) ? MAT.BRICK : MAT.CONCRETE;
         out._mat = wmat; glassBuf._mat = MAT.GLASS;
-        const ok = addBox(out, vadd(p.c, p.u, yBase + sh / 2), [sw, sh, sd], dayWall, b);   // solid wall mass
+        const ok = ctx.instance(UNIT_BOX,                                                   // solid wall mass
+          { o: vadd(p.c, p.u, yBase + sh / 2), r: p.r, u: p.u, t: p.t, s: [sw, sh, sd], col: dayWall },
+          unitBox, { kind: "buildingMass", k, side }) > 0;
         const rows = Math.max(2, Math.min(8, Math.round(sh / floorH)));
         const fh = sh / rows;
         // Inset-window facade: a proud structural frame surrounds glass set back
@@ -223,7 +252,9 @@ const SceneryCity = (function () {
         const gBase = vadd(p.c, p.r, gR);
         const railH = Math.max(0.45, fh * 0.28);
         for (let r = 0; r <= rows; r++) {
-          addBox(out, vadd(fBase, p.u, yBase + r * fh), [frameT, railH, sd], dayMull, b);
+          ctx.instance(UNIT_BOX,
+            { o: vadd(fBase, p.u, yBase + r * fh), r: p.r, u: p.u, t: p.t, s: [frameT, railH, sd], col: dayMull },
+            unitBox, { kind: "facadeRail", k, side });
         }
         const winH = Math.max(0.6, fh - railH);
         // Reflective glass bands routed to the glass mesh (real sky reflection);
@@ -233,24 +264,37 @@ const SceneryCity = (function () {
           const ry01 = (r + 0.5) / rows;
           if (dMed) {
             out._mat = MAT.GLASS;
-            addBox(out, vadd(gBase, p.u, yBase + (r + 0.5) * fh), [glassT, winH, sd * 0.94], [dayWall[0] * 0.34, dayWall[1] * 0.30, dayWall[2] * 0.26], b);
+            ctx.instance(UNIT_BOX,
+              { o: vadd(gBase, p.u, yBase + (r + 0.5) * fh), r: p.r, u: p.u, t: p.t,
+                s: [glassT, winH, sd * 0.94],
+                col: [dayWall[0] * 0.34, dayWall[1] * 0.30, dayWall[2] * 0.26] },
+              unitBox, { kind: "windowPane", k, side });
             out._mat = wmat;
           } else {
             const t01 = 0.42 + ry01 * 0.16;
             // Darker glass base → the reflected sky/sun has real contrast to read
             // against (a bright window albedo washes the reflection flat).
-            addBox(glassBuf, vadd(gBase, p.u, yBase + (r + 0.5) * fh), [glassT, winH, sd * 0.94], [t01 * 0.40, t01 * 0.47, t01 * 0.62], b);
+            ctx.instance(UNIT_BOX,
+              { o: vadd(gBase, p.u, yBase + (r + 0.5) * fh), r: p.r, u: p.u, t: p.t,
+                s: [glassT, winH, sd * 0.94], col: [t01 * 0.40, t01 * 0.47, t01 * 0.62] },
+              unitBox, { kind: "windowPane", k, side }, { buf: glassBuf });
           }
         }
         const nm = Math.max(2, Math.min(4, Math.round(sd / 6)));
         for (let c = 1; c <= nm; c++) {
           const off = -sd / 2 + (c / (nm + 1)) * sd;
-          addBox(out, vadd(vadd(fBase, p.u, yBase + sh / 2), p.t, off), [frameT, sh, 0.5], dayMull, b);
+          ctx.instance(UNIT_BOX,
+            { o: vadd(vadd(fBase, p.u, yBase + sh / 2), p.t, off), r: p.r, u: p.u, t: p.t,
+              s: [frameT, sh, 0.5], col: dayMull },
+            unitBox, { kind: "facadeMullion", k, side });
         }
         const nmR = sw > 18 ? 2 : 1;
         for (let c = 1; c <= nmR; c++) {
           const off = -sw / 2 + (c / (nmR + 1)) * sw;
-          addBox(out, vadd(vadd(p.c, p.u, yBase + sh / 2), p.r, off), [0.5, sh, sd * 1.02], dayMull, b);
+          ctx.instance(UNIT_BOX,
+            { o: vadd(vadd(p.c, p.u, yBase + sh / 2), p.r, off), r: p.r, u: p.u, t: p.t,
+              s: [0.5, sh, sd * 1.02], col: dayMull },
+            unitBox, { kind: "facadeMullion", k, side });
         }
         out._mat = 0; glassBuf._mat = 0;
         return ok;
