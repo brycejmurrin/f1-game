@@ -44,7 +44,14 @@ const SceneryStructures = (function () {
           console.warn(`[scenery] wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addBox(out, vadd(p.c, p.u, (h - 0.4) / 2), [a, h + 0.4, spacing], col || [0.78, 0.78, 0.80], [p.r, p.u, p.t]);   // base sunk 0.4 — no slope float
+        // One model per (thickness, height, colour) — i.e. per wall SPAN, however
+        // long — with the along-track length carried by the node scale. base sunk
+        // 0.4 — no slope float
+        const wallCol = col || [0.78, 0.78, 0.80];
+        ctx.instance(`wall|${a}|${h}|${wallCol.join(",")}`,
+          { o: p.c, r: p.r, u: p.u, t: p.t, s: [1, 1, spacing] },
+          (rec) => rec.box([0, (h - 0.4) / 2, 0], [a, h + 0.4, 1], wallCol),
+          { kind: "wall", k, side });
       });
     };
     // Catch / debris fence: posts + a pale mesh panel (reads as see-through wire).
@@ -61,8 +68,17 @@ const SceneryStructures = (function () {
           console.warn(`[scenery] fence SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addCyl(out, vadd(p.c, p.u, -0.4), 0.13, h + 0.4, [0.28, 0.28, 0.30], 5, [p.r, p.u, p.t]);   // post, base sunk
-        addBox(out, vadd(p.c, p.u, h * 0.55), [0.05, h * 0.9, spacing], col || [0.72, 0.74, 0.78], [p.r, p.u, p.t]);  // mesh
+        // Post is fixed for a given fence height; the mesh panel spans to the
+        // next post, so only it takes the along-track scale.
+        const place = { o: p.c, r: p.r, u: p.u, t: p.t };
+        ctx.instance(`fence-post|${h}`, place,                                  // post, base sunk
+          (rec) => rec.cyl([0, -0.4, 0], 0.13, h + 0.4, [0.28, 0.28, 0.30], 5),
+          { kind: "fence", k, side });
+        const meshCol = col || [0.72, 0.74, 0.78];
+        ctx.instance(`fence-mesh|${h}|${meshCol.join(",")}`,
+          Object.assign({ s: [1, 1, spacing] }, place),
+          (rec) => rec.box([0, h * 0.55, 0], [0.05, h * 0.9, 1], meshCol),      // mesh
+          { kind: "fence", k, side });
       });
     };
     // Armco guardrail: a waist-high steel rail on posts (open-circuit edge).
@@ -75,8 +91,21 @@ const SceneryStructures = (function () {
           console.warn(`[scenery] guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addCyl(out, vadd(p.c, p.u, -0.35), 0.09, 1.05, [0.5, 0.5, 0.52], 4, [p.r, p.u, p.t]);   // post, base sunk
-        addBox(out, vadd(p.c, p.u, 0.7), [0.18, 0.45, spacing], col || [0.82, 0.82, 0.85], [p.r, p.u, p.t]);
+        // Two models, not one: the post is fully fixed, while the rail's length
+        // follows `spacing`. Splitting them lets the post collapse to a SINGLE
+        // model for the whole circuit and the rail to one model per colour,
+        // scaled along the track. Fusing them would force a model per distinct
+        // spacing — and a node scale on a combined model would stretch the
+        // post's radius with the rail's length (radScale takes max(|sx|,|sz|)).
+        const place = { o: p.c, r: p.r, u: p.u, t: p.t };
+        ctx.instance("guardrail-post", place,                                   // post, base sunk
+          (rec) => rec.cyl([0, -0.35, 0], 0.09, 1.05, [0.5, 0.5, 0.52], 4),
+          { kind: "guardrail", k, side });
+        const railCol = col || [0.82, 0.82, 0.85];
+        ctx.instance(`guardrail-rail|${railCol.join(",")}`,
+          Object.assign({ s: [1, 1, spacing] }, place),
+          (rec) => rec.box([0, 0.7, 0], [0.18, 0.45, 1], railCol),
+          { kind: "guardrail", k, side });
       });
     };
     // Stacked-tyre barrier with a coloured conveyor-belt cap.
@@ -89,8 +118,16 @@ const SceneryStructures = (function () {
           console.warn(`[scenery] tyreWall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addCyl(out, vadd(p.c, p.u, -0.35), 1.0, 1.25, [0.10, 0.10, 0.11], 7, [p.r, p.u, p.t]);   // base sunk
-        addBox(out, vadd(p.c, p.u, 0.95), [2.0, 0.3, spacing], capCol || [0.9, 0.9, 0.92], [p.r, p.u, p.t]);
+        // Same split as guardrail: fixed tyre stack, length-scaled conveyor cap.
+        const place = { o: p.c, r: p.r, u: p.u, t: p.t };
+        ctx.instance("tyre-stack", place,                                       // base sunk
+          (rec) => rec.cyl([0, -0.35, 0], 1.0, 1.25, [0.10, 0.10, 0.11], 7),
+          { kind: "tyreWall", k, side });
+        const cap = capCol || [0.9, 0.9, 0.92];
+        ctx.instance(`tyre-cap|${cap.join(",")}`,
+          Object.assign({ s: [1, 1, spacing] }, place),
+          (rec) => rec.box([0, 0.95, 0], [2.0, 0.3, 1], cap),
+          { kind: "tyreWall", k, side });
       });
     };
     // Overhead gantry spanning the track (start/scoring/DRS): two legs + a beam.
