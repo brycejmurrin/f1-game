@@ -278,6 +278,31 @@ const TLX = (function () {
         envRT = null; envDummy = null;
       }
 
+      // ── Baked PBR material arrays (js/render/assets.js) ──────────────────
+      // Created as 1×1×17 mid-grey PLACEHOLDERS before the lit factory runs,
+      // because tsl-lit.js binds its texture nodes once at factory time and the
+      // asset pack loads asynchronously long after. setMaterialMaps() below
+      // swaps the real DataArrayTextures onto those same nodes — the identical
+      // shared-node .value trick the env cube uses. Guarded: if the placeholder
+      // cannot be built, ctx.matMaps stays null and tsl-lit compiles the baked
+      // path out entirely, leaving TLX exactly as it renders today.
+      let matMaps = null;
+      try {
+        const grey = (v) => {
+          const d = new Uint8Array(17 * 4);
+          for (let i = 0; i < 17; i++) { d[i * 4] = v[0]; d[i * 4 + 1] = v[1]; d[i * 4 + 2] = v[2]; d[i * 4 + 3] = 255; }
+          const t = new THREE.DataArrayTexture(d, 1, 1, 17);
+          t.format = THREE.RGBAFormat; t.type = THREE.UnsignedByteType;
+          t.colorSpace = THREE.NoColorSpace;   // no-sRGB calibration invariant
+          t.needsUpdate = true;
+          return t;
+        };
+        // Mid-grey albedo (the shader's ×2.0 makes it a no-op) and a flat
+        // tangent normal (0.5, 0.5) — a placeholder that changes nothing even
+        // if it were sampled with the knob up before a pack lands.
+        matMaps = { albedo: grey([128, 128, 128]), normal: grey([128, 128, 255]) };
+      } catch (_) { matMaps = null; }
+
       // ── M3: the TSL lit core (tsl-chunks.js + tsl-lit.js factories) ──────
       // Guarded: a missing/broken factory keeps the unlit material — the
       // backend must still boot (Gfx.create's never-throw contract).
@@ -285,7 +310,7 @@ const TLX = (function () {
       try {
         if (window.TLXShaders && chunks && TLXShaders.lit) {
           lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!post,
-            envCube: envRT ? envRT.texture : null });
+            envCube: envRT ? envRT.texture : null, matMaps });
         }
       } catch (e) {
         try { console.warn("TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
@@ -655,7 +680,77 @@ const TLX = (function () {
           if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
           if (m && m.geo) { m.geo.dispose(); m.geo = null; }
         },
-        freeTexture(t) { if (t && t.tex) { t.tex.dispose(); t.tex = null; } },
+        freeTexture(t) {
+          if (t && t.tex) { t.tex.dispose(); t.tex = null; return; }
+          if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
+        },
+
+        // ── Baked material arrays — the GLX.createTextureArray counterpart ──
+        // `images` is sparse, indexed by MAT id. three needs RAW pixels for a
+        // DataArrayTexture, so each ImageBitmap is drawn once into a scratch
+        // canvas and read back; GLX can hand the bitmap straight to
+        // texSubImage3D, which is why this readback lives here and not in
+        // js/render/assets.js. Returns null on any failure — the caller then
+        // keeps the procedural look.
+        createTextureArray(size, images, layers) {
+          if (!size || !images) return null;
+          try {
+            const n = layers || 17;
+            const data = new Uint8Array(size * size * 4 * n);
+            // Neutral fill so a layer with no image is a no-op if sampled:
+            // mid-grey albedo (×2.0 in the shader) / flat tangent normal.
+            data.fill(128);
+            for (let i = 3; i < data.length; i += 4) data[i] = 255;
+            const cv = (typeof OffscreenCanvas !== "undefined")
+              ? new OffscreenCanvas(size, size)
+              : Object.assign(document.createElement("canvas"), { width: size, height: size });
+            const c2d = cv.getContext("2d", { willReadFrequently: true });
+            if (!c2d) return null;
+            let filled = 0;
+            for (let i = 0; i < n; i++) {
+              const img = images[i];
+              if (!img) continue;
+              c2d.clearRect(0, 0, size, size);
+              c2d.drawImage(img, 0, 0, size, size);
+              data.set(c2d.getImageData(0, 0, size, size).data, i * size * size * 4);
+              filled++;
+            }
+            if (!filled) return null;
+            const t = new THREE.DataArrayTexture(data, size, size, n);
+            t.format = THREE.RGBAFormat; t.type = THREE.UnsignedByteType;
+            t.colorSpace = THREE.NoColorSpace;
+            t.wrapS = t.wrapT = THREE.RepeatWrapping;   // these tile across a circuit
+            t.minFilter = THREE.LinearMipmapLinearFilter;
+            t.magFilter = THREE.LinearFilter;
+            t.generateMipmaps = true;
+            t.anisotropy = 4;                            // the road is the grazing surface
+            t.needsUpdate = true;
+            return t;
+          } catch (_) { return null; }
+        },
+        // Swap the loaded arrays onto tsl-lit's shared texture nodes (a .value
+        // assignment, never a material rebuild) and push the per-layer world
+        // scales. A falsy `maps` zeroes the scales, which is what actually
+        // turns the feature back off — the placeholder textures stay bound.
+        setMaterialMaps(maps) {
+          if (!lit || !lit.setMaterialMaps) return;
+          const prevA = matMaps && matMaps.albedo, prevN = matMaps && matMaps.normal;
+          lit.setMaterialMaps(maps || null);
+          if (maps && matMaps) {
+            // Track what the nodes now point at, and drop the textures we
+            // displaced — a tier switch would otherwise leak a full pack.
+            if (maps.albedo) { matMaps.albedo = maps.albedo; if (prevA && prevA !== maps.albedo) prevA.dispose(); }
+            if (maps.normal) { matMaps.normal = maps.normal; if (prevN && prevN !== maps.normal) prevN.dispose(); }
+          }
+        },
+        materialMapState() {
+          const sc = (lit && lit.uniforms && lit.uniforms.matTexScale && lit.uniforms.matTexScale.array) || [];
+          return {
+            albedo: !!(matMaps && matMaps.albedo), normal: !!(matMaps && matMaps.normal),
+            layers: Array.from(sc).reduce((n, s) => n + (s > 0 ? 1 : 0), 0),
+            scales: Array.from(sc),
+          };
+        },
 
         // frame protocol — shadow passes delegate to the M4 subsystem
         // (tlx-shadow.js); a missing factory keeps them as safe no-ops.

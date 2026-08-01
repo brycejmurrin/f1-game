@@ -83,6 +83,17 @@ uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specu
 uniform float uCarPaint;    // 0..1 car-paint model: duotone pigment + bounded silhouette rim
 uniform float uSparkle;     // 0..1 metallic-flake glitter strength (1 in-race; low in the setup turntable to kill the "twinkle")
 uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
+// ── Baked PBR material maps (js/render/assets.js) ────────────────────────────
+// TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID (js/track/geom.js MAT). No
+// UV channel exists anywhere on the lit path and none is needed: the sample
+// reuses the procedural materials' own triplanar convention below, so a scanned
+// map lands on exactly the coordinate the noise it augments already uses.
+// uMatTexMix is a LIGHTING TUNER knob shipped at 0 — at 0 nothing here executes
+// and the render is byte-identical to the pure-procedural game.
+uniform lowp sampler2DArray uMatAlbedoTex;  // rgb = albedo reflectance, a = roughness
+uniform lowp sampler2DArray uMatNormalTex;  // rg = tangent normal xy, b = AO
+uniform float uMatTexMix;                   // 0 = pure procedural (default)
+uniform float uMatTexScale[17];             // world metres per tile per layer; 0 = layer absent
 uniform samplerCube uEnvCube;  // live 64px env probe around the player car (one face/frame)
 uniform float uEnvStr;         // 0 until the probe's first full 6-face cycle; then the CAR tuner's envCube strength
 uniform sampler2DShadow uShadowMap;
@@ -239,6 +250,56 @@ float matBumpHeight(int mid, vec2 uv) {
   }
   return 0.0;
 }
+// Is this material coursed/planked/panelled (keys off the wall coord (hc, y))
+// rather than organic/horizontal (keys off world (x, z))? Shared by the
+// procedural bump below and the baked texture sample, so the two can never
+// disagree about which way a material's pattern runs — a scan landing rotated
+// 90 degrees against the noise it augments would read as a smeared mess.
+// NOTE this is a per-MATERIAL classification. applyMaterial()'s "wall" local is
+// a different thing: a per-FRAGMENT orientation test (an.y < 0.6).
+// (No backticks anywhere below this line — the GLSL is a JS template literal.)
+bool matWallLike(int mid) {
+  return mid == 1 || mid == 2 || mid == 4 || mid == 5 || mid == 7 || mid == 12 || mid == 13 || mid == 14;
+}
+// Triplanar tile coordinate for a baked material layer. Returns false when the
+// feature is off (uMatTexMix 0), the id is out of range, or this MAT simply has
+// no baked layer in the pack (scale 0) — in every one of those cases the caller
+// leaves the procedural result alone, which is the shipping look.
+bool matTexUV(int mid, out vec2 uv) {
+  if (uMatTexMix <= 0.001 || mid <= 0 || mid > 16) { uv = vec2(0.0); return false; }
+  float sc = uMatTexScale[mid];
+  if (sc <= 0.0) { uv = vec2(0.0); return false; }
+  vec3 an = abs(normalize(vNrm));
+  uv = (matWallLike(mid) ? vec2(an.x > an.z ? vWorldPos.z : vWorldPos.x, vWorldPos.y)
+                         : vWorldPos.xz) / sc;
+  return true;
+}
+// Baked NORMAL map, applied right after the procedural bump and composing with
+// it: the scan carries fine detail the noise cannot express, the noise carries
+// the macro relief that would cost a much larger texture. Both perturb N BEFORE
+// the lighting terms consume it, so a baked groove genuinely catches light.
+void applyMaterialTexNormal(int mid, inout vec3 N, float vd) {
+  vec2 uv;
+  if (!matTexUV(mid, uv)) return;
+  float fade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);   // same reach as the procedural bump
+  if (fade <= 0.005) return;
+  // The SAME grazing-angle guard applyMaterialNormal uses, and for the same
+  // reason: at a shallow angle a pixel spans many texels, the mip chain averages
+  // the tangent normal toward flat, and what is left aliases into crawling
+  // moire on a surface moving past at 80 m/s. Fade relief by the per-pixel
+  // footprint of the tile coordinate — the normal-map analog of mip-fading.
+  float fp = max(fwidth(uv.x), fwidth(uv.y));
+  float aa = clamp(1.0 - (fp - 0.02) / 0.30, 0.0, 1.0);
+  if (aa <= 0.005) return;
+  vec2 dxy = (texture(uMatNormalTex, vec3(uv, float(mid))).xy - 0.5) * 2.0;
+  vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N) + vec3(1e-5));
+  vec3 B = cross(N, T);
+  // ASPHALT stays deliberately the weakest in the table — see the MAT.ASPHALT
+  // note in js/track/geom.js: the road is viewed edge-on for the whole race and
+  // anything with real relief crawls.
+  float amt = (mid == 16 ? 0.10 : 0.55) * uMatTexMix * fade * aa;
+  N = normalize(N + (T * dxy.x + B * dxy.y) * amt);
+}
 // Wall-like materials (coursed/planked/panelled) key off (hc, y): hc runs along
 // the wall's horizontal span, y is world-up. Organic/horizontal materials
 // (foliage, sand, grass, rock, snow) key off world (x, z), matching the
@@ -248,8 +309,7 @@ void applyMaterialNormal(int mid, inout vec3 N, float vd) {
   if (mid == 0 || mid == 3 || mid == 15) return;   // FLAT/GLASS/FLAG: no procedural bump
   float bumpFade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
   if (bumpFade <= 0.005) return;
-  bool wallLike = mid == 1 || mid == 2 || mid == 4 || mid == 5 || mid == 7 || mid == 12 || mid == 13 || mid == 14;
-  if (wallLike) {
+  if (matWallLike(mid)) {
     vec3 an = abs(N);
     float hc = an.x > an.z ? vWorldPos.z : vWorldPos.x;
     float y = vWorldPos.y;
@@ -415,6 +475,19 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     albedo *= 1.0 + (vnoise(wp.xz * 7.0) - 0.5) * 0.13 * near;
     // Tarmac is rough; the wet path (which runs after this) still overrides it.
     rough = min(1.0, rough + 0.10 * far);
+  }
+  // ── Baked albedo/roughness, blended OVER the procedural result ─────────────
+  // Deliberately MULTIPLICATIVE, not a replacement: the per-track palette tint,
+  // the racing-line rubber wear and the per-vertex aggregate grain that
+  // buildRoad/buildProps bake into the vertex colour all have to survive, and
+  // a scan that replaced albedo outright would flatten 24 circuits into one.
+  // The 2.0 recentres a mid-grey (0.5) scan on "changes nothing".
+  vec2 tuv;
+  if (matTexUV(mid, tuv)) {
+    vec4 t = texture(uMatAlbedoTex, vec3(tuv, float(mid)));
+    float k = uMatTexMix * far;                 // reuse the existing distance fade
+    albedo = mix(albedo, albedo * t.rgb * 2.0, k);
+    rough  = clamp(mix(rough, t.a, k * 0.8), 0.04, 1.0);
   }
 }
 // Road markings, evaluated analytically in TRACK space (s, lateral x, half-width)
@@ -708,6 +781,7 @@ void main() {
   // mortar/plank seams/corrugation ridges etc. actually affect the lighting
   // response, not just an albedo tint applied after the fact.
   applyMaterialNormal(int(vMat + 0.5), N, vDist);
+  applyMaterialTexNormal(int(vMat + 0.5), N, vDist);   // baked map composes on top (no-op at uMatTexMix 0)
   vec3 V = normalize(uEye - vWorldPos);
   vec3 L = uSunDir;
   vec3 H = normalize(L + V + vec3(1e-5));   // +eps: normalize(0) NaNs when V==-L

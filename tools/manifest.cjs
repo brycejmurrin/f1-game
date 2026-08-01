@@ -64,6 +64,7 @@ const FULL = [
   "js/render/three/tlx.js",
   "js/render/gfx.js",
   "js/render/gltf.js",
+  "js/render/assets.js",
   "js/car/teams.js",
   "js/track/geo-paths.js",
   "js/track/geom.js",
@@ -218,6 +219,7 @@ const HARD_EDGES = [
   ["js/render/three/tsl-post.js", "js/render/three/tlx-post.js"], // postChain invokes TLXShaders.post
   ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],   // TLX.create invokes TLXShaders.postChain
   ["js/render/three/tlx.js", "js/render/gfx.js"],      // gfx.create branches on the TLX global
+  ["js/render/glx.js", "js/render/assets.js"],         // Assets feature-detects the backend's createTextureArray
   ["js/track/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
   ["js/track/geom.js", "js/track/mesh.js"],                 // mesh destructures TrackGeom at eval
@@ -255,6 +257,7 @@ const PATHS = {
   WGSL_POST: "js/render/webgpu/wgsl-post.js",
   WGX: "js/render/webgpu/wgx.js",
   GLTF: "js/render/gltf.js",
+  ASSETS: "js/render/assets.js",
   TRACK_SPACE: "js/track/space.js",
   TRACK_SURFACE: "js/track/surface.js",
   TRACK_MODELS: "js/track/models.js",

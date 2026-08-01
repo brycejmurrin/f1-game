@@ -47,6 +47,13 @@ const GLX = (function () {
   let _anisoExt = null, _anisoMax = 0;   // EXT_texture_filter_anisotropic (capped 4×)
   let _gpuQActive = null;   // query open between begin() and present() this frame
   let litProg = null, litU = null;
+  // Baked PBR material arrays (js/render/assets.js). Layer index == MAT id, so
+  // the shader indexes them with the per-vertex material id it already carries.
+  // Null until a pack is loaded — the game ships without one and renders the
+  // pure-procedural look, so every path below has to survive them staying null.
+  let matAlbedoTex = null, matNormalTex = null, matDummyArrTex = null;
+  const MAT_TEX_LAYERS = 17;                                 // MAT.FLAT(0) … MAT.ASPHALT(16)
+  const matTexScales = new Float32Array(MAT_TEX_LAYERS);     // world metres per tile; 0 = absent
   // Scratch vec3s for the tuner's ambient multiplier (no per-frame allocation).
   const _ambScratchG = [0, 0, 0], _ambScratchS = [0, 0, 0];
   let skyProg = null, skyU = null;
@@ -286,6 +293,7 @@ const GLX = (function () {
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
       "uLampNearClamp", "uWindowSunFlash", "uSkyRimGlow", "uAmbContactDark", "uLampWallSpill",
+      "uMatAlbedoTex", "uMatNormalTex", "uMatTexMix", "uMatTexScale[0]",
       "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef", "uLightning"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
@@ -508,6 +516,100 @@ const GLX = (function () {
     return tex;
   }
   function freeTexture(t) { if (t) gl.deleteTexture(t); }
+
+  // ── Baked PBR material texture arrays ──────────────────────────────────────
+  // One TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID, so the lit shader can
+  // texture every surface in the game from the per-vertex material id it already
+  // carries — no UV channel, no new vertex attribute, no per-material draw call.
+  //
+  // `images` is a sparse array indexed by MAT id (holes = that material has no
+  // baked map and keeps its procedural look). Every image must already be
+  // size×size; the caller (js/render/assets.js) guarantees that from the pack
+  // manifest. Returns null rather than throwing on any failure — a missing or
+  // malformed pack must degrade to the shipping look, never break the render.
+  function createTextureArray(size, images, layers) {
+    if (!size || !images) return null;
+    const n = layers || MAT_TEX_LAYERS;
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
+    // texStorage3D allocates the whole mip chain immutably up front — required
+    // for an array texture whose layers arrive one at a time, and it means a
+    // layer we never fill is well-defined (zero) rather than undefined memory.
+    const mips = Math.floor(Math.log2(size)) + 1;
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, mips, gl.RGBA8, size, size, n);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    let filled = 0;
+    for (let i = 0; i < n; i++) {
+      const img = images[i];
+      if (!img) continue;
+      try {
+        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, size, size, 1, gl.RGBA, gl.UNSIGNED_BYTE, img);
+        filled++;
+      } catch (_) { /* one bad layer must not sink the pack */ }
+    }
+    if (!filled) { gl.deleteTexture(tex); gl.bindTexture(gl.TEXTURE_2D_ARRAY, null); return null; }
+    gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    // REPEAT, unlike createTexture's CLAMP_TO_EDGE: these tile across a whole
+    // circuit's worth of world-space triplanar coordinate.
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    // The road is the grazing-angle surface these exist for — trilinear alone
+    // smears tarmac aggregate into mip mush ~20 m ahead of the car.
+    if (_anisoMax > 1) gl.texParameterf(gl.TEXTURE_2D_ARRAY, _anisoExt.TEXTURE_MAX_ANISOTROPY_EXT, _anisoMax);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
+    return tex;
+  }
+
+  // Adopt (or clear, with a falsy argument) the baked material maps. Frees any
+  // previously-bound arrays so a pack swap — tier change, test teardown — can't
+  // leak GPU memory.
+  function setMaterialMaps(maps) {
+    if (matAlbedoTex) { gl.deleteTexture(matAlbedoTex); matAlbedoTex = null; }
+    if (matNormalTex) { gl.deleteTexture(matNormalTex); matNormalTex = null; }
+    matTexScales.fill(0);
+    if (!maps) return;
+    matAlbedoTex = maps.albedo || null;
+    matNormalTex = maps.normal || null;
+    const sc = maps.scales;
+    if (sc) for (let i = 0; i < MAT_TEX_LAYERS; i++) matTexScales[i] = +sc[i] > 0 ? +sc[i] : 0;
+    // No albedo array means no baked material at all: zero every scale so the
+    // shader's per-layer `scale <= 0` test short-circuits before it samples.
+    if (!matAlbedoTex) matTexScales.fill(0);
+  }
+
+  // 1×1×1 dummy array — a COMPLETE sampler2DArray target for both material
+  // units whenever no pack is loaded. Same reasoning as ensureEnvDummy(): a
+  // sampler pointing at an incomplete texture unit is undefined behaviour and
+  // renders black on strict drivers (SwiftShader) even when the shader branch
+  // that would sample it is never taken.
+  function ensureMatDummy() {
+    if (matDummyArrTex) return;
+    matDummyArrTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, matDummyArrTex);
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, 1, 1, 1);
+    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, 0, 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE,
+                     new Uint8Array([128, 128, 128, 255]));
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
+  }
+
+  // Per-frame material-map binding. Units 10/11 are free — the lit pass holds 0
+  // (shadow), 5 (decal), 6, 7 (PCSS blocker), 8 (car shadow), 9 (lamp shadow).
+  function bindMaterialMaps(mix) {
+    ensureMatDummy();
+    gl.activeTexture(gl.TEXTURE10);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, matAlbedoTex || matDummyArrTex);
+    gl.uniform1i(litU.uMatAlbedoTex, 10);
+    gl.activeTexture(gl.TEXTURE11);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, matNormalTex || matAlbedoTex || matDummyArrTex);
+    gl.uniform1i(litU.uMatNormalTex, 11);
+    gl.activeTexture(gl.TEXTURE0);      // leave unit 0 active + bound to the shadow map
+    gl.uniform1f(litU.uMatTexMix, matAlbedoTex ? mix : 0);
+    if (litU["uMatTexScale[0]"]) gl.uniform1fv(litU["uMatTexScale[0]"], matTexScales);
+  }
   // Draw textured decals over the just-drawn car body: depth test ON, depth write
   // OFF (decals are proud of the panel so they never z-fight), alpha-blended, and
   // the alpha channel is NOT written (the car's SSR paint tag underneath survives).
@@ -760,6 +862,10 @@ const GLX = (function () {
     gl.uniform1f(litU.uMistHeight,  T && T.mistHeight  != null ? T.mistHeight  : 0.30);
     gl.uniform1f(litU.uShadowTintAmt, T && T.shadowTintAmt != null ? T.shadowTintAmt : 0.0);
     gl.uniform1f(litU.uWetDark,     T && T.wetDark     != null ? T.wetDark     : 1.0);
+    // BAKED MATERIALS knob. Default 0 = pure procedural, which is the shipped
+    // look AND the look when no asset pack is installed, so a missing pack and
+    // a slider at zero are the same render by construction.
+    bindMaterialMaps(T && T.matTexMix != null ? T.matTexMix : 0.0);
     gl.uniform3fv(litU.uFogColor, frame.fogColor);
     // FOG DENSITY knob: scale the per-condition haze depth (multiplier, def 1).
     gl.uniform1f(litU.uFogDensity, frame.fogDensity * (T && T.fogDensityMul != null ? T.fogDensityMul : 1));
@@ -1182,6 +1288,13 @@ const GLX = (function () {
     createMesh,
     createTexMesh,
     createTexture,
+    createTextureArray,
+    setMaterialMaps,
+    materialMapState: () => ({
+      albedo: !!matAlbedoTex, normal: !!matNormalTex,
+      layers: Array.from(matTexScales).reduce((n, s) => n + (s > 0 ? 1 : 0), 0),
+      scales: Array.from(matTexScales),
+    }),
     freeTexture,
     drawDecal,
     createChunkedMesh: (data, cellSize) => CHK.createChunkedMesh(data, cellSize),
