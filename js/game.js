@@ -20,8 +20,8 @@ const els = {
   selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
   selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"),
   selPreviewRec: $("sel-preview-rec"),
-  selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"), selDiff: $("sel-diff"),
-  selDiffSection: $("sel-diff-section"), selCustomize: $("sel-customize"),
+  selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"),
+  selCustomize: $("sel-customize"),
   selBack: $("sel-back"), selGo: $("sel-go"),
   customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
@@ -735,6 +735,22 @@ function yawVisInterp(c) {
   const y1 = c.yawVis || 0;
   return c.rPrevYawVis === undefined ? y1 : c.rPrevYawVis + (y1 - c.rPrevYawVis) * renderAlpha;
 }
+// c.head is the player's real WORLD heading (full wrapping angle, unlike the
+// small clamped yawVis residual) — read raw by the free-world chase/onboard
+// camera rig (extra.carHead) to look "down the car's nose". Read raw at
+// render time it snaps a full physics step (16.7 ms) every frame instead of
+// gliding with renderAlpha like the position does: at speed that is a
+// held-then-jump stutter whose size scales with speed × dt — "vibrates more
+// as I speed up". Interpolate it exactly like position, with a wrap-safe
+// shortest-path delta since head crosses ±π every lap.
+function headInterp(c) {
+  const h1 = c.head || 0;
+  if (c.rPrevHead === undefined) return h1;
+  let dh = h1 - c.rPrevHead;
+  while (dh > Math.PI) dh -= 2 * Math.PI;
+  while (dh < -Math.PI) dh += 2 * Math.PI;
+  return c.rPrevHead + dh * renderAlpha;
+}
 function basisMat(r, u, f, p, out) {
   out[0] = r[0]; out[1] = r[1]; out[2] = r[2]; out[3] = 0;
   out[4] = u[0]; out[5] = u[1]; out[6] = u[2]; out[7] = 0;
@@ -922,6 +938,7 @@ function gridUp() {
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0;
+    c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
   });
 }
@@ -3500,11 +3517,21 @@ function render(dt) {
     roadCamRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
     // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
     // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
+    // The free-world chase/onboard rig needs the car's world pose too — but
+    // INTERPOLATED like everything else here, not raw. Raw px/pz/head only
+    // update once per 60 Hz physics tick, so reading them straight in a
+    // per-frame render loop snaps a full tick every frame instead of gliding
+    // by renderAlpha: on a display whose refresh doesn't line up 1:1 with the
+    // physics rate (common — 90/120 Hz, or ordinary vsync jitter at 60), that
+    // reads as a held-then-jump stutter whose size scales with speed × dt —
+    // "vibrates, worse the faster I go". renderPosOf/headInterp are the same
+    // interpolation the car body and playerAnchor already use.
+    const rpCam = renderPosOf(player, pS, px);
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), {
       bankDy, deploy: player.deploying, slipLat: player.vLat || 0,
       // the car's real world pose, so the chase rig can follow the CAR
-      carPos: player.px != null ? [player.px, player.pz] : null,
-      carHead: player.head || 0,
+      carPos: rpCam.world ? [rpCam.x, rpCam.z] : null,
+      carHead: headInterp(player),
     });
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov;
     if (shake > 0) {
@@ -4714,6 +4741,19 @@ function render(dt) {
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
   po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
+  // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
+  // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
+  // hides behind the car. A low ONBOARD eye (cockpit/hood/tcam) sits on the car
+  // and looks along the road, so that near dead-zone IS the driver's main view
+  // and the road climbs above the top cutoff — half the wet surface got no
+  // reflection, and the onboard speed-buzz kept nudging that band edge, reading
+  // as reflective patches flickering on and off. Raise the top cutoff and pull
+  // the near fade in for those cams so the reflective region covers the visible
+  // road with no live edge in frame; external cams keep the shipped values.
+  const _ssrLow = onboard;
+  po.ssrTopUV = _ssrLow ? 0.82 : 0.62;
+  po.ssrNear  = _ssrLow ? -1.0 : -2.5;
   po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
   // EXHAUST HEAT HAZE: project the recorded tailpipe position through the
   // frame's view-proj to a screen UV for the composite warp. Near-field only —
@@ -4811,6 +4851,7 @@ function tickBody(now) {
         const c = cars[i]; c.rPrevS = c.s; c.rPrevX = c.x;
         c.rPrevPx = c.px; c.rPrevPz = c.pz;   // player renders from WORLD space
         c.rPrevYawVis = c.yawVis;             // orientation interpolates like position
+        c.rPrevHead = c.head;                 // world heading interpolates like position too
       }
       update(PHYS_DT); physAcc -= PHYS_DT; steps++;
     }
@@ -5067,6 +5108,20 @@ function buildRaceSettings() {
     b.textContent = label;
     b.onclick = () => { raceTimeOfDay = id; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
     timeEl.appendChild(b);
+  }
+  // DIFFICULTY — a race setting like the rest, so it is built here rather than
+  // on the select screen. Unlike laps/weather/time it PERSISTS (store), because
+  // it is a standing preference rather than a per-race choice.
+  $("rs-diff-section").hidden = timeTrial;      // no AI to rate in a time trial
+  const diffEl = $("rs-diff");
+  diffEl.innerHTML = "";
+  for (const d of ["easy", "normal", "hard"]) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (difficulty === d ? " active" : "");
+    b.setAttribute("aria-pressed", difficulty === d ? "true" : "false");
+    b.textContent = d.toUpperCase();
+    b.onclick = () => { difficulty = d; store.set("difficulty", d); buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
+    diffEl.appendChild(b);
   }
 }
 

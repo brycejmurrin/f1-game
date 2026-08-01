@@ -74,14 +74,20 @@
   #sel-left { overflow: visible; flex: 0 0 auto; }
 }
 
-/* Card-ish stat block under the driver chips: the four numbers that change when
-   you swap team or fit parts. Compact numbers, not the CAR SETUP screen's bar
-   chart — the bars belong on the screen where you change them. */
+/* The car's spec strip: the four numbers that change when you swap team or fit
+   parts. Numbers only — the bar chart belongs on CAR SETUP, the screen where
+   you actually change them.
+   ONE row, not the 2x2 grid this used to be. A single line reads better (all
+   four comparable in one glance) and costs ~20px less, which is most of what
+   DIFFICULTY needed to clear the fold on a landscape phone. Columns size to
+   their content and share the slack, so CORNERING gets the width it needs; if
+   the pane is ever too narrow the row just wraps back to two lines. */
 #sel-stats {
   margin-top: calc(var(--gap) * 0.7);
   padding-top: calc(var(--gap) * 0.6);
   border-top: 1px solid rgba(255,255,255,0.08);
-  display: grid; grid-template-columns: auto auto; gap: 1px 16px;
+  display: flex; flex-wrap: wrap;
+  justify-content: space-between; column-gap: var(--gap); row-gap: 2px;
   font-variant-numeric: tabular-nums;
 }
 #sel-stats .cs-stat-row { margin: 0; gap: 6px; font-size: 10px; }
@@ -89,30 +95,56 @@
 #sel-stats .cs-stat-bar-wrap { display: none; }
 #sel-stats .cs-stat-val { width: auto; font-size: 12px; }
 .sel-edit-row { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.7); margin-top: calc(var(--gap) * 0.7); }
-#sel-diff-section { margin-top: calc(var(--gap) * 0.8); }
 
-/* Two panes once there is room: identity | circuit. */
-@container sheet (min-width: 620px) {
-  #sel-body {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-    column-gap: calc(var(--pad) * 0.9);
-    align-items: stretch;
-    overflow: hidden;              /* each pane scrolls on its own */
-    padding-bottom: calc(var(--pad) * 0.5);
-  }
-  #sel-left {
-    overflow-y: auto;
-    border-right: 1px solid rgba(255, 255, 255, 0.07);
-    padding-right: calc(var(--pad) * 0.6);
-  }
-  #sel-track-section { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
-  #sel-tracks { flex: 1 1 auto; min-height: 0; }
+/* Two columns once there is room: identity | circuit — and the FOOT belongs to
+   the left column only.
+   The sheet's default three rows (head / body / foot) run the full width, so a
+   full-width action bar cut the circuit list off ~50px above the sheet floor for
+   no reason: BACK and START only ever sit under the left column. Here #sel-body
+   goes `display: contents` so its two children become grid items of the sheet
+   itself, which lets the circuit column span BOTH the body row and the foot row
+   and use every pixel of the sheet's height for scrolling.
+   Consequence of display:contents: #sel-body's own padding disappears, so each
+   column now carries its own — which is also what gives the left pane the inset
+   its focus rings need (children are no longer flush with the clip edge). */
+/* The columns are declared on the sheet UNCONDITIONALLY, because a @container
+   rule cannot style the element that establishes the container — `#sel-inner`
+   is the `sheet` container, so a `@container sheet` block targeting it resolves
+   against an outer container that does not exist and silently never applies.
+   Instead every direct child spans both columns by default, which lays out
+   exactly like the one-column sheet; the split only comes alive below, when
+   #sel-body dissolves and its two panes become the real grid items. */
+#sel-inner {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  column-gap: calc(var(--pad) * 0.9);
 }
-/* A wide sheet is also a short one in practice (landscape phone), so the sheet
-   body must not scroll as a whole — only the two panes inside it do. */
+#sel-inner > .sheet-head,
+#sel-inner > .sheet-body,
+#sel-inner > .sheet-foot { grid-column: 1 / -1; }
+
 @container sheet (min-width: 620px) {
-  #sel-inner > .sheet-body { overflow: hidden; }
+  #sel-body { display: contents; }
+  #sel-inner > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
+  #sel-left {
+    grid-column: 1; grid-row: 2;
+    overflow-y: auto; min-height: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    padding: calc(var(--pad) * 0.25) calc(var(--pad) * 0.6) 0 var(--pad);
+  }
+  /* rows 2→4: the body row AND the foot row, i.e. down to the sheet floor */
+  #sel-track-section {
+    grid-column: 2; grid-row: 2 / 4;
+    display: flex; flex-direction: column; overflow: hidden; min-height: 0;
+    padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5) 0;
+  }
+  #sel-tracks { flex: 1 1 auto; min-height: 0; }
+  /* The action bar sits under the left column; its border-top separates the
+     actions from that column's content, and border-right continues the column
+     divider to the sheet floor so the two columns read as one clean split. */
+  #sel-inner > .sheet-foot {
+    grid-column: 1; grid-row: 3;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+  }
 }
 
 /* ---------- team card + team picker ----------
@@ -176,7 +208,17 @@
   .sel-chip:hover { background: rgba(255,255,255,0.10); }
 }
 .sel-chip:active { background: rgba(255,255,255,0.14); }
-.sel-chip.active { outline: 2px solid var(--red); background: rgba(225, 6, 0, 0.18); box-shadow: 0 0 12px rgba(225, 6, 0, 0.28); }
+/* The selection ring is drawn INSIDE the box (inset shadow), never as an
+   `outline`. An outline paints outside the border box, and these chips sit
+   flush against the inline-start edge of #sel-left — a scroll container whose
+   overflow-x is hidden — so the leftmost chip (the selected driver, and the
+   selected difficulty) had the left side of its red ring sliced clean off.
+   An inset ring cannot be clipped by any ancestor, in any layout. */
+.sel-chip.active {
+  border-color: var(--red);
+  background: rgba(225, 6, 0, 0.18);
+  box-shadow: inset 0 0 0 2px var(--red), 0 0 12px rgba(225, 6, 0, 0.28);
+}
 .sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; flex: none; }
 .sel-edit {
   font-size: 12px; padding: 6px 12px;
@@ -264,6 +306,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   transition: background 0.1s;
 }
 .track-row:last-child { border-bottom: none; }
+/* Full-bleed rows fill their scroll container edge to edge, so a focus ring
+   drawn 2px OUTSIDE them lands outside the clip box and gets sliced. Negative
+   offset draws it just inside the row instead — same ring, always whole. */
+.track-row:focus-visible, .team-tile:focus-visible, .season-upcoming-row:focus-visible { outline-offset: -3px; }
 @media (hover: hover) {
   .track-row:hover { background: rgba(255, 255, 255, 0.06); }
 }
@@ -288,7 +334,9 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
 @container sheet (min-width: 440px) {
   #rs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
-  #rs-body #rs-time-section { grid-column: 1 / -1; }
+  /* LAPS and WEATHER pair up in the two columns; the wide-chip rows below span
+     the full width so they don't leave a dead half-row beside them. */
+  #rs-body #rs-time-section, #rs-body #rs-diff-section { grid-column: 1 / -1; }
 }
 
 /* ---------- customize my team ---------- */
@@ -334,10 +382,17 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2);
 }
 .cz-liv-none.active { background: rgba(80,170,255,0.22); color: #cfe8ff; border-color: rgba(90,180,255,0.45); }
-/* Two columns of rows once the sheet is wide, so all fifteen fit without the
-   dialog becoming a long scroll. */
+/* Columns of rows once the sheet is wide, so all fifteen fit without the dialog
+   becoming a long scroll. auto-fill rather than a hard two, so the count follows
+   the room the sheet was given — on a landscape phone the sheet is now wide
+   enough for three, which is what finally gets the whole form above the fold
+   (it was 442px of rows in a 271px window). */
 @container sheet (min-width: 460px) {
-  #cz-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
+  #cz-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(205px, 1fr));
+    column-gap: var(--pad); align-content: start;
+  }
   #cz-body .cz-sep, #cz-body #cz-preview { grid-column: 1 / -1; }
 }
 } /* @layer components */

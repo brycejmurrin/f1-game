@@ -106,7 +106,6 @@ function buildSelect() {
   // Track section: interactive circuit picker in GP/TT; read-only NEXT RACE preview in season
   els.selTrackSection.hidden = false;
   if (els.selCircuitLabel) els.selCircuitLabel.textContent = G.seasonMode ? "NEXT RACE" : "CIRCUIT";
-  els.selDiffSection.hidden = G.timeTrial;       // no AI in a time trial
   buildTeamPicker();
   const team = Teams.LIST[G.teamIdx];
   buildTeamCard(team);
@@ -179,15 +178,6 @@ function buildSelect() {
     });
     updateTrackPreview();
   }
-  els.selDiff.textContent = "";
-  ["easy", "normal", "hard"].forEach((d) => {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (d === G.difficulty ? " active" : "");
-    b.setAttribute("aria-pressed", d === G.difficulty ? "true" : "false");
-    b.textContent = d.toUpperCase();
-    b.onclick = () => { G.difficulty = d; store.set("difficulty", d); vt(() => { buildSelect(); tickUi(); }); };
-    els.selDiff.appendChild(b);
-  });
 }
 
 // large preview of the currently-selected circuit: sector-coloured outline,
