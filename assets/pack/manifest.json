@@ -238,7 +238,23 @@
     },
     "normal": "mat-normal-256.png"
   },
-  "models": {},
+  "models": {
+    "probe_model": {
+      "file": "models/probe_model.bin",
+      "verts": 24,
+      "tris": 12,
+      "mat": "METAL",
+      "sizeM": [
+        6,
+        6,
+        6
+      ],
+      "source": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Box/glTF-Binary/Box.glb",
+      "licence": "CC0",
+      "author": "Khronos (pipeline probe)",
+      "md5": "4f68845eec5182b2371c67bcfe85c87f"
+    }
+  },
   "env": {},
   "credits": [
     {
@@ -338,6 +354,13 @@
       "author": "Poly Haven contributors",
       "licence": "CC0",
       "source": "polyhaven:asphalt_track"
+    },
+    {
+      "kind": "model",
+      "id": "probe_model",
+      "author": "Khronos (pipeline probe)",
+      "licence": "CC0",
+      "source": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Box/glTF-Binary/Box.glb"
     }
   ]
 }

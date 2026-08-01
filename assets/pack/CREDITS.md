@@ -20,3 +20,4 @@ Powered by Poly Haven.
 | material | stone | Poly Haven contributors | CC0 | polyhaven:castle_brick_02_red |
 | material | rust | Poly Haven contributors | CC0 | polyhaven:rusty_metal |
 | material | asphalt | Poly Haven contributors | CC0 | polyhaven:asphalt_track |
+| model | probe_model | Khronos (pipeline probe) | CC0 | https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Box/glTF-Binary/Box.glb |
