@@ -128,10 +128,30 @@ test("pack manifest is well-formed", { skip: !hasPack && "no pack installed" }, 
   }
 });
 
+test("the pack carries a mobile LOW variant", { skip: !hasPack && "no pack installed" }, () => {
+  // js/render/assets.js picks materials.low on a phone and SILENTLY falls back
+  // to the full-size strips when it is absent — no error, no warning, mobile
+  // just quietly pays the desktop cost. That failure is invisible from the
+  // desktop the pack was baked on, so it needs a test rather than a comment.
+  const mats = manifest.materials;
+  assert.ok(mats.low, "materials.low missing — mobile would load the full-size pack");
+  assert.ok(mats.low.size < mats.size,
+    `low size ${mats.low.size} must be smaller than ${mats.size}`);
+  assert.ok(mats.low.albedo && mats.low.albedo !== mats.albedo, "low.albedo must be its own file");
+  assert.deepEqual(
+    (mats.low.layers || []).map((l) => l.mat).sort((a, b) => a - b),
+    mats.layers.map((l) => l.mat).sort((a, b) => a - b),
+    "low variant must cover the same MAT slots as the full one");
+  const big = fs.statSync(path.join(PACK, mats.albedo)).size;
+  const small = fs.statSync(path.join(PACK, mats.low.albedo)).size;
+  assert.ok(small < big, `low albedo (${small}) should be smaller than full (${big})`);
+});
+
 test("every referenced file exists and the strip is the right height",
   { skip: !hasPack && "no pack installed" }, () => {
   const mats = manifest.materials;
-  for (const f of [mats.albedo, mats.normal].filter(Boolean)) {
+  for (const f of [mats.albedo, mats.normal,
+                   mats.low && mats.low.albedo, mats.low && mats.low.normal].filter(Boolean)) {
     const p = path.join(PACK, f);
     assert.ok(fs.existsSync(p), `missing ${f}`);
     // PNG signature + IHDR width/height, so a truncated or wrong-shaped
@@ -139,9 +159,12 @@ test("every referenced file exists and the strip is the right height",
     const b = fs.readFileSync(p);
     assert.deepEqual([...b.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47], `${f} is not a PNG`);
     const w = b.readUInt32BE(16), h = b.readUInt32BE(20);
-    assert.equal(w, mats.size, `${f} width ${w} != manifest size ${mats.size}`);
-    assert.equal(h, mats.size * 17,
-      `${f} height ${h} != size*17 (${mats.size * 17}) — the filmstrip must have one slot per MAT id`);
+    // Each variant declares its own size; a strip must be square-per-layer and
+    // exactly 17 layers tall whichever tier it belongs to.
+    const expect = (mats.low && (f === mats.low.albedo || f === mats.low.normal)) ? mats.low.size : mats.size;
+    assert.equal(w, expect, `${f} width ${w} != declared size ${expect}`);
+    assert.equal(h, expect * 17,
+      `${f} height ${h} != size*17 (${expect * 17}) — the filmstrip must have one slot per MAT id`);
   }
   for (const [id, rec] of Object.entries(manifest.models || {}))
     assert.ok(fs.existsSync(path.join(PACK, rec.file)), `model ${id}: missing ${rec.file}`);

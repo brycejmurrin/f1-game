@@ -547,13 +547,21 @@ function importPack(args) {
   const inMan = JSON.parse(fs.readFileSync(path.join(src, "manifest.json"), "utf8"));
   const srcSize = inMan.materials.size | 0;
   const target = intArg(args, "--size", 256);
+  // A second, smaller variant for the mobile tier. js/render/assets.js looks for
+  // materials.low on a phone and SILENTLY falls back to the full-size strips
+  // when it is absent — so without this, mobile pays the desktop download and
+  // roughly 12 MB of VRAM across both arrays, which is the opposite of what the
+  // tiering was for. 0 disables it.
+  const lowTarget = intArg(args, "--low", 128);
   if (target > srcSize || srcSize % target !== 0)
     fail(`--size ${target} must divide the source size ${srcSize} and not exceed it`);
-  const factor = srcSize / target;
+  if (lowTarget && (lowTarget >= target || srcSize % lowTarget !== 0))
+    fail(`--low ${lowTarget} must divide ${srcSize} and be smaller than --size ${target}`);
 
   fs.mkdirSync(PACK, { recursive: true });
   const out = { version: 1, materials: { size: target, layers: inMan.materials.layers },
                 models: {}, env: {}, credits: [] };
+  const keep = new Set();
   let bytes = 0;
   for (const which of ["albedo", "normal"]) {
     const inFile = inMan.materials[which];
@@ -561,17 +569,25 @@ function importPack(args) {
     const png = decodePNG(fs.readFileSync(path.join(src, inFile)));
     if (png.h !== srcSize * MAT_LAYERS)
       fail(`${inFile}: height ${png.h} != size*${MAT_LAYERS} (${srcSize * MAT_LAYERS})`);
-    const small = factor === 1 ? png : downsample(png.rgba, png.w, png.h, factor);
-    const name = `mat-${which}-${target}.png`;
-    const buf = encodePNG(small.w, small.h, small.rgba);
-    fs.writeFileSync(path.join(PACK, name), buf);
-    out.materials[which] = name;
-    bytes += buf.length;
-    console.log(`${inFile} ${png.w}x${png.h} -> ${name} ${small.w}x${small.h}  ${(buf.length / 1024).toFixed(0)} KB`);
+    for (const size of lowTarget ? [target, lowTarget] : [target]) {
+      const f = srcSize / size;
+      const small = f === 1 ? png : downsample(png.rgba, png.w, png.h, f);
+      const name = `mat-${which}-${size}.png`;
+      const buf = encodePNG(small.w, small.h, small.rgba);
+      fs.writeFileSync(path.join(PACK, name), buf);
+      keep.add(name);
+      bytes += buf.length;
+      if (size === target) out.materials[which] = name;
+      else {
+        out.materials.low = out.materials.low || { size: lowTarget, layers: inMan.materials.layers };
+        out.materials.low[which] = name;
+      }
+      console.log(`${inFile} ${png.w}x${png.h} -> ${name} ${small.w}x${small.h}  ${(buf.length / 1024).toFixed(0)} KB`);
+    }
   }
   // Drop any previous strips at a different size so the pack never carries two.
   for (const f of fs.readdirSync(PACK)) {
-    if (/^mat-(albedo|normal)-\d+\.png$/.test(f) && f !== out.materials.albedo && f !== out.materials.normal) {
+    if (/^mat-(albedo|normal)-\d+\.png$/.test(f) && !keep.has(f)) {
       fs.unlinkSync(path.join(PACK, f));
       console.log(`removed stale ${f}`);
     }
