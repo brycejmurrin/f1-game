@@ -481,12 +481,52 @@ const WebBake = (function () {
   }
 
 
+  // Survey the whole model library WITHOUT downloading any geometry. The .bin
+  // size is listed in the gltf entry's `include` map, and for a static mesh it
+  // is essentially all vertex data — so it estimates complexity from one JSON
+  // call per asset instead of tens of megabytes of buffers.
+  //
+  // ~44 bytes/vertex is the usual glTF static-mesh footprint (position 12 +
+  // normal 12 + uv 8 + indices ~12 amortised). Rough on purpose: the decision
+  // it feeds is "plausible or hopeless", not a budget to two significant
+  // figures — modelReport() downloads and measures exactly, for the shortlist.
+  async function modelScan(q) {
+    const ids = await models(q, true);
+    const rows = [];
+    for (const id of ids) {
+      try {
+        const body = await (await fetch(`${API}/files/${encodeURIComponent(id)}`)).json();
+        const g = body.gltf;
+        if (!g) { rows.push({ id, note: "no gltf" }); continue; }
+        const resKey = Object.keys(g)[0];
+        const inc = (g[resKey] && g[resKey].gltf && g[resKey].gltf.include) || {};
+        const binKey = Object.keys(inc).find((k) => k.endsWith(".bin"));
+        const binBytes = binKey ? inc[binKey].size : 0;
+        const texBytes = Object.keys(inc).filter((k) => !k.endsWith(".bin"))
+          .reduce((n, k) => n + inc[k].size, 0);
+        const est = Math.round(binBytes / 44);
+        rows.push({
+          id, res: resKey, binKB: Math.round(binBytes / 1024),
+          estVerts: est, estVertsIf20x: est * 20,
+          texturedKB: Math.round(texBytes / 1024),
+          verdict: est * 20 > 300000 ? "TOO HEAVY" : est * 20 > 80000 ? "heavy" : "fine",
+        });
+      } catch (e) { rows.push({ id, note: e.message }); }
+    }
+    rows.sort((a, b) => (a.estVerts || 1e9) - (b.estVerts || 1e9));
+    console.table(rows);
+    // Textured bytes matter as a WARNING, not a cost: we drop them, so a model
+    // carrying a lot of texture is one whose look lives where we cannot follow.
+    log("textured models lose all texture detail — the lit path is vertex-colour only");
+    return rows;
+  }
+
   // What models does Poly Haven actually publish?
-  async function models(q) {
+  async function models(q, quiet) {
     const r = await fetch(`${API}/assets?type=models`);
     const j = await r.json();
     const hit = Object.keys(j).filter((k) => !q || k.toLowerCase().includes(String(q).toLowerCase()));
-    console.log(`${hit.length} model(s):\n` + hit.join("\n"));
+    if (!quiet) console.log(`${hit.length} model(s):\n` + hit.join("\n"));
     return hit;
   }
 
@@ -509,7 +549,7 @@ const WebBake = (function () {
   }
 
   return { run, list, search, layer, zip, crc32,
-           models, modelReport, model, toGLB,
+           models, modelScan, modelReport, model, toGLB,
            DEFAULTS, SCALES, NAMES };
 })();
 
