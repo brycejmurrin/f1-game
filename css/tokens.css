@@ -88,6 +88,12 @@
    only the element and the ::before that draws the thumb. */
 @property --sf-h { syntax: "<length>"; inherits: false; initial-value: 24px; }
 @property --sf-y { syntax: "<length>"; inherits: false; initial-value: 0px; }
+/* Where the specular band sits across a primary button, 0% = off the leading
+   edge, 100% = off the trailing one. REGISTERED because an unregistered custom
+   property animates DISCRETELY — it would jump rather than sweep, which is the
+   whole effect. This is the only way to animate a gradient at all: the gradient
+   itself is not an animatable value, but a typed custom property inside it is. */
+@property --sheen { syntax: "<percentage>"; inherits: false; initial-value: -30%; }
 
 @layer base {
 /* Apex 26 — layout, HUD, menus. Data hub styles live in css/data.css */
@@ -258,8 +264,22 @@
 
      They are TOKENS because there were seventeen hand-written gradients across
      the stylesheets and no two primary surfaces used the same one. */
-  --grad-primary:     linear-gradient(135deg in oklab, #ff1608 0%, #a90300 100%);
-  --grad-primary-hot: linear-gradient(135deg in oklab, #ff3a26 0%, #c40500 100%);
+  /* LARGE FILLS ARE DARKER THAN THE INK. #e10600 is the brand, and it stays the
+     brand for text, rules, ticks and 1px rings — small marks need every bit of
+     that luminance to read. Spread across a 340px button it is a different
+     thing: a big saturated red field on near-black glares, blooms on an OLED,
+     and drags the eye off whatever the button is sitting next to. Knocking ~14%
+     of the lightness out for FILLS ONLY keeps the hue exactly and calms the
+     area, and white on it still measures over 5:1.
+     Derived with color-mix rather than a second hex so there is still one red:
+     change --red and the fills follow. */
+  --red-fill: color-mix(in oklab, var(--red) 86%, #14000c);
+  --grad-primary:     linear-gradient(135deg in oklab,
+                        color-mix(in oklab, var(--red-fill) 82%, #fff) 0%,
+                        color-mix(in oklab, var(--red-fill) 72%, #000) 100%);
+  --grad-primary-hot: linear-gradient(135deg in oklab,
+                        color-mix(in oklab, var(--red-fill) 66%, #fff) 0%,
+                        color-mix(in oklab, var(--red-fill) 86%, #000) 100%);
   /* The wash every sheet head carries: a brand bleed from the leading edge over
      a light-from-above sheen. It is what makes a dialog look like part of this
      game rather than a generic card. */

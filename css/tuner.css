@@ -19,6 +19,43 @@
 :root { --dock-w: 0px; }
 body:has(#lighting:not([hidden])),
 body:has(#camtune:not([hidden])) { --dock-w: min(88vw, 380px); }
+/* FLYING: the dock gives width back to the controls, at every size.
+   `:has()` takes the specificity of its argument, so `body:has(#lighting…)` is
+   ID-level — a plain `body.photo-mode` override loses to it no matter how many
+   classes it carries. Repeating the :has() is what makes this win.
+   The number matters as much as the selector: at 667x375 with 59px of notch on
+   each side there are 549 usable pixels, and a 380px panel leaves 151 — not one
+   thumbstick, never mind two and a climb/dive column. */
+body.photo-mode:not(.pc-nopanel):has(#lighting:not([hidden])),
+body.photo-mode:not(.pc-nopanel):has(#camtune:not([hidden])) { --dock-w: min(46vw, 300px); }
+/* …and the panel sheds the furniture it does not need while flying. A 300px
+   panel on a 393px-tall phone has ~370px of height, and the fixed head — title,
+   FREE CAMERA, the session line, two rows of TIME chips, two of WEATHER, the
+   help toggle, the category strip — plus the action bar came to ~300px of it.
+   That is the failure the rail layout was built to avoid, reintroduced by
+   forcing the tall layout: KEY LIGHT (SUN) rendered clipped behind DONE with
+   nothing left to scroll.
+   TIME and WEATHER are session SETUP — you pick dusk-and-wet before you go
+   flying, not while framing a shot — so they and the conditions readout stand
+   down and give their ~155px to the sliders, which are the reason the panel is
+   still on screen at all. */
+body.photo-mode:not(.pc-nopanel) #lt-preview,
+body.photo-mode:not(.pc-nopanel) #lt-profile,
+body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
+/* …and the panel sheds the furniture it does not need while flying. A 300px
+   panel on a 393px-tall phone has ~370px of height, and the fixed head — title,
+   FREE CAMERA, the session line, two rows of TIME chips, two of WEATHER, the
+   help toggle, the category strip — plus the action bar came to ~300px of it.
+   That is the failure the rail layout was built to avoid, reintroduced by
+   forcing the tall layout: KEY LIGHT (SUN) rendered clipped behind DONE with
+   nothing left to scroll.
+   TIME and WEATHER are session SETUP — you pick dusk-and-wet before you go
+   flying, not while framing a shot — so they and the conditions readout stand
+   down and give their ~155px to the sliders, which are the reason the panel is
+   still on screen at all. */
+body.photo-mode:not(.pc-nopanel) #lt-preview,
+body.photo-mode:not(.pc-nopanel) #lt-profile,
+body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 
 /* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
    panel is open, so the left of the screen is the live preview. */
@@ -289,6 +326,23 @@ body:has(#camtune:not([hidden])) { --dock-w: min(88vw, 380px); }
 @media (min-width: 720px) and (max-height: 620px) {
   /* the rail layout is wider — and --dock-w is how everything else finds out */
   body:has(#lighting:not([hidden])) { --dock-w: min(70vw, 560px); }
+  /* ...EXCEPT while flying, where --dock-w is overridden above. The rail exists
+     to show twelve categories and their sliders side by side, which is worth
+     560px when the panel IS the screen; in FREE CAMERA the screen is the scene.
+     At the narrower flying width the two-column rail no longer fits, so put the
+     panel back into its tall single-column form. */
+  body.photo-mode:not(.pc-nopanel) #lighting-inner {
+    display: flex; flex-direction: column;
+  }
+  body.photo-mode:not(.pc-nopanel) #lt-rail { display: contents; }
+  body.photo-mode:not(.pc-nopanel) #lt-rows { max-height: none; }
+  body.photo-mode:not(.pc-nopanel) #lighting-inner > .sheet-foot {
+    display: flex; flex-wrap: wrap; margin-top: 6px; padding-top: 6px;
+  }
+  body.photo-mode:not(.pc-nopanel) #lighting-inner .lt-tabs {
+    display: flex; flex-wrap: nowrap; overflow-x: auto; touch-action: pan-x;
+  }
+  body.photo-mode:not(.pc-nopanel) #lt-tabs .lt-tab { white-space: nowrap; flex: 0 0 auto; }
   #lighting-inner {
     display: grid;
     grid-template-columns: 210px minmax(0, 1fr);

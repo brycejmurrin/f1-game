@@ -1,7 +1,24 @@
 const DataStandings = (function () {
   "use strict";
 
-  function create({ el, emptyMsg, teamChip, findTeam }) {
+  function create({ el, emptyMsg, teamChip, findTeam, cssColor }) {
+    /* Publish a row's team colour as --row-team so CSS can draw the edge bar
+       and the leader wash from it. A custom property rather than a direct
+       border-color write: the stylesheet then owns HOW the colour is used (the
+       leader row mixes it down to 16%), and a row with no matching team simply
+       falls back to `transparent` without any JS branch. */
+    function rowTeam(row, teamName) {
+      const t = findTeam(teamName);
+      if (!t || !t.color) return;
+      // Mercedes' primary is near-black and Racing Bulls' is close behind, so a
+      // bar painted with the livery colour would be an invisible bar on a black
+      // page for exactly the teams whose identity is the secondary. Same rule
+      // the [data-team] accents use in css/tokens.css: below a luminance floor,
+      // take color2.
+      const lum = 0.2126 * t.color[0] + 0.7152 * t.color[1] + 0.0722 * t.color[2];
+      row.style.setProperty("--row-team", cssColor(lum < 0.10 && t.color2 ? t.color2 : t.color));
+    }
+
     function loadStandings() {
       return Promise.all([F1API.driverStandings(), F1API.constructorStandings()]).then(res => {
         const drivers = res[0] || [];
@@ -16,6 +33,11 @@ const DataStandings = (function () {
           const leaderPts = drivers.length > 0 && drivers[0].pos === 1 ? drivers[0].points : null;
           drivers.forEach(s => {
             const row = el("div", "dh-row");
+            // The team colour becomes a 3px edge down the row (see .dh-row in
+            // css/data.css): twenty rows of text turn into a chart you can read
+            // down the side, and team-mates pair up without reading a word.
+            rowTeam(row, s.team);
+            if (s.pos === 1) row.classList.add("dh-row-lead");
             row.appendChild(el("span", "dh-pos", s.pos !== null && s.pos !== undefined ? s.pos : "—"));
             row.appendChild(teamChip(s.code, s.team));
             row.appendChild(el("span", "dh-name", s.name || "—"));
@@ -44,6 +66,8 @@ const DataStandings = (function () {
           const cLeaderPts = cons.length > 0 && cons[0].pos === 1 ? cons[0].points : null;
           cons.forEach(s => {
             const row = el("div", "dh-row dh-row-cons");
+            rowTeam(row, s.name);
+            if (s.pos === 1) row.classList.add("dh-row-lead");
             
             const mainInfo = el("div", "dh-cons-main");
             mainInfo.appendChild(el("span", "dh-pos", s.pos !== null && s.pos !== undefined ? s.pos : "—"));

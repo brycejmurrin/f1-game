@@ -51,6 +51,17 @@ const TrackGraph = (function () {
 
   const isVec3 = (v) => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
 
+  // Sentinel colour: "take this vertex colour from the NODE, not the model".
+  // Emitters that vary only by tint — a city's window panes, each with its own
+  // hash-jittered warm/neon colour — would otherwise mint a model per pane and
+  // instance at 1.00x. With this they share one model and carry colour per
+  // placement, which is exactly what a per-instance colour attribute is for.
+  // The canonical mesh bakes these as white; the colour lives on the node.
+  const NODE_COLOR = "@node";
+  const WHITE = [1, 1, 1];
+  const colourOf = (op, place) =>
+    op.col === NODE_COLOR ? (place.col || WHITE) : op.col;
+
   // world = o + R * (local * scale), R the column basis [r,u,t].
   function xform(place, lc) {
     const s = place.s;
@@ -108,13 +119,14 @@ const TrackGraph = (function () {
       const buf = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
       for (const op of ops) {
         buf._mat = op.mat || 0;
+        const col = op.col === NODE_COLOR ? WHITE : op.col;
         switch (op.op) {
-          case "box": raw.addBox(buf, op.c, op.sz, op.col, null); break;
-          case "prism": raw.addPrism(buf, op.c, op.sz, op.col, null); break;
-          case "pyramid": raw.addPyramid(buf, op.c, op.sz, op.col, null); break;
-          case "cyl": raw.addCyl(buf, op.c, op.rad, op.h, op.col, op.seg, null); break;
-          case "cone": raw.addCone(buf, op.c, op.rad, op.h, op.col, op.seg, null); break;
-          case "frustum": raw.addFrustum(buf, op.c, op.rB, op.rT, op.h, op.col, op.seg, null); break;
+          case "box": raw.addBox(buf, op.c, op.sz, col, null); break;
+          case "prism": raw.addPrism(buf, op.c, op.sz, col, null); break;
+          case "pyramid": raw.addPyramid(buf, op.c, op.sz, col, null); break;
+          case "cyl": raw.addCyl(buf, op.c, op.rad, op.h, col, op.seg, null); break;
+          case "cone": raw.addCone(buf, op.c, op.rad, op.h, col, op.seg, null); break;
+          case "frustum": raw.addFrustum(buf, op.c, op.rB, op.rT, op.h, col, op.seg, null); break;
         }
       }
       buf._mat = 0;
@@ -162,20 +174,21 @@ const TrackGraph = (function () {
       for (const op of m.ops) {
         const c = xform(place, op.c);
         if (op.mat !== undefined) out._mat = op.mat;
+        const col = colourOf(op, place);
         let ok = false;
         switch (op.op) {
           case "box":
           case "prism":
           case "pyramid": {
             const sz = s ? [op.sz[0] * Math.abs(s[0]), op.sz[1] * Math.abs(s[1]), op.sz[2] * Math.abs(s[2])] : op.sz;
-            ok = op.op === "box" ? emit.addBox(out, c, sz, op.col, basis)
-              : op.op === "prism" ? emit.addPrism(out, c, sz, op.col, basis)
-                : emit.addPyramid(out, c, sz, op.col, basis);
+            ok = op.op === "box" ? emit.addBox(out, c, sz, col, basis)
+              : op.op === "prism" ? emit.addPrism(out, c, sz, col, basis)
+                : emit.addPyramid(out, c, sz, col, basis);
             break;
           }
-          case "cyl": ok = emit.addCyl(out, c, op.rad * rs, op.h * us, op.col, op.seg, basis); break;
-          case "cone": ok = emit.addCone(out, c, op.rad * rs, op.h * us, op.col, op.seg, basis); break;
-          case "frustum": ok = emit.addFrustum(out, c, op.rB * rs, op.rT * rs, op.h * us, op.col, op.seg, basis); break;
+          case "cyl": ok = emit.addCyl(out, c, op.rad * rs, op.h * us, col, op.seg, basis); break;
+          case "cone": ok = emit.addCone(out, c, op.rad * rs, op.h * us, col, op.seg, basis); break;
+          case "frustum": ok = emit.addFrustum(out, c, op.rB * rs, op.rT * rs, op.h * us, col, op.seg, basis); break;
         }
         if (ok) landed++;
       }
@@ -260,5 +273,5 @@ const TrackGraph = (function () {
     return { models, nodes, model, instance, replay, bake, stats };
   }
 
-  return { create, xform };
+  return { create, xform, NODE_COLOR };
 })();
