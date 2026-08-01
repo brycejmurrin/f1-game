@@ -77,6 +77,12 @@ const GameAudio = (function () {
     { id: "builtin:song3", name: "song3", url: "assets/music/song3.mp3", builtin: true },
   ];
   let musicIndex = 0;
+  // WHICH TRACKS ARE ELIGIBLE. The shipped songs and the player's uploads live
+  // in one list so a single SKIP walks through both, but a player who added
+  // their own music usually wants only that — or only the originals. This
+  // filters the list without rebuilding it, so ids and indices stay stable.
+  //   "all" (default) | "builtin" | "user"
+  let source = "all";
   // An installed backend (Spotify — js/game/spotify.js) TAKES OVER the music
   // role entirely: every startMusic/stopMusic/skipTrack/setMusicVolume call
   // site in game.js is left untouched and simply delegates here, and the
@@ -805,12 +811,58 @@ const GameAudio = (function () {
     musicSrc = src;
   }
 
+  function eligible(i) {
+    const e = PLAYLIST[i];
+    if (!e) return false;
+    return source === "all" || (source === "builtin" ? !!e.builtin : !e.builtin);
+  }
+  function anyEligible() {
+    for (let i = 0; i < PLAYLIST.length; i++) if (eligible(i)) return true;
+    return false;
+  }
+  // Walk `step` at a time until an eligible slot turns up, giving up after one
+  // full lap so an empty selection cannot spin forever.
+  function seekEligible(from, step) {
+    const n = PLAYLIST.length;
+    if (!n) return -1;
+    const d = step < 0 ? -1 : 1;
+    for (let k = 1; k <= n; k++) {
+      const i = ((from + d * k) % n + n) % n;
+      if (eligible(i)) return i;
+    }
+    return eligible(from) ? from : -1;
+  }
+
   // Move `step` places along the playlist and start playing there. Used both by
   // the end-of-track handover and by SKIP TRACK in the pause menu.
   function nextTrack(step) {
     if (!PLAYLIST.length) return;
-    musicIndex = ((musicIndex + (step || 1)) % PLAYLIST.length + PLAYLIST.length) % PLAYLIST.length;
+    const i = seekEligible(musicIndex, step || 1);
+    if (i < 0) { stopInternal(); return; }
+    musicIndex = i;
     playIndex(musicIndex);
+  }
+
+  /* Pick which part of the library plays. Returns the source actually applied —
+     a selection with nothing in it (MY TRACKS before anything is uploaded)
+     is refused rather than leaving the game silent with no explanation. */
+  function setMusicSource(s) {
+    const want = (s === "builtin" || s === "user") ? s : "all";
+    const prev = source;
+    source = want;
+    if (!anyEligible()) { source = prev; return prev; }
+    if (backend) return source;
+    if (!eligible(musicIndex)) {
+      const i = seekEligible(musicIndex, 1);
+      if (i >= 0) { musicIndex = i; if (musicOn) playIndex(i); }
+    }
+    return source;
+  }
+  function musicSource() { return source; }
+  function sourceCounts() {
+    let builtin = 0, user = 0;
+    for (const e of PLAYLIST) { if (e.builtin) builtin++; else user++; }
+    return { builtin, user, total: PLAYLIST.length };
   }
 
   // Start (or restart) at a given playlist slot, regardless of what is playing.
@@ -1036,6 +1088,9 @@ const GameAudio = (function () {
     musicBackend,
     setSessionType,
     sessionType() { return sessionType; },
+    setMusicSource,
+    musicSource,
+    sourceCounts,
     setSfxVolume,
     setSfxEnabled,
     setMusicVolume,

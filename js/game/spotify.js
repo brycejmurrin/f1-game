@@ -815,6 +815,22 @@ window.SpotifyMusic = (function () {
     catch (e) {}
   }
   function installBackend() { setBackend(BACKEND); syncSession(); }
+  // Take or release the music role WITHOUT signing out. That distinction is the
+  // whole point of the source toggle: switching back to the game's own music
+  // should not cost a re-authorisation to switch away again.
+  function useAsMusic(on) {
+    if (on) {
+      if (!BACKEND.active()) return false;
+      installBackend();
+      return true;
+    }
+    removeBackend();
+    return false;
+  }
+  function inUse() {
+    return typeof GameAudio !== "undefined" && GameAudio.musicBackend
+      ? GameAudio.musicBackend() === BACKEND : false;
+  }
   function removeBackend() { setBackend(null); syncSession(); }
 
   /* ---------------- public control ---------------- */
@@ -1014,6 +1030,13 @@ window.SpotifyMusic = (function () {
     if (vol && devVol !== null && document.activeElement !== vol) vol.value = String(devVol);
     txt("sp-vol-v", devVol === null ? "—" : String(devVol));
     if (vol) vol.disabled = !live || !devSupportsVol;
+    // supports_volume is a per-device fact and it is FALSE for most phones —
+    // the Spotify mobile app leaves volume to the hardware buttons. A slider
+    // that is simply greyed out reads as broken, so say which it is.
+    txt("sp-vol-note", !live ? ""
+      : devSupportsVol ? "Sets the volume on " + (devName || "the device") + " itself."
+      : "This device does not accept remote volume — use its own volume buttons. " +
+        "(Spotify reports supports_volume: false, usually a phone.)");
     ["sp-prev", "sp-toggle", "sp-fwd", "sp-shuffle", "sp-repeat", "sp-refresh2"].forEach((i) => dis(i, !live));
     fillSelect("sp-playlist2", playlistOpts(), contextUri(), !live);
     fillSelect("sp-device2", deviceOpts(), deviceId2(), !live);
@@ -1183,6 +1206,7 @@ window.SpotifyMusic = (function () {
       if (BACKEND.active()) { pollNowPlaying(); loadDevices(); }
     },
     prev, toggle, setShuffle, cycleRepeat, setDeviceVolume, searchPlaylists, playUri,
+    useAsMusic, inUse,
     nowPlaying() {
       return { title, artist, art, paused, progressMs, durationMs,
         shuffle: shuffleOn, repeat: repeatMode, device: devName,
