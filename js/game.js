@@ -3576,12 +3576,17 @@ function render(dt) {
     }
     // Onboard speed vibration: a subtle high-frequency buzz on the rigid-mounted
     // cams (cockpit/hood/tcam) that grows with speed² — the visceral
-    // "the car is alive under you" cue every onboard broadcast has. Two mixed
-    // sine bands (not random) so it reads as vibration, not noise; tiny target
-    // jitter so the whole frame trembles slightly rather than swimming.
-    if (state === "race" && (mode === "cockpit" || mode === "hood" || mode === "tcam")) {
+    // "the car is alive under you" cue. DISABLED on a wet road: it jitters the
+    // eye/target ~10-18 Hz every frame, and the wet-road SSR is a screen-space,
+    // camera-dependent reflection — so the buzz flipped the reflection's
+    // hit/miss pattern each frame and the wet road FLICKERED in patches from
+    // the cockpit. On a dry road there's no such reflection, so the buzz stays
+    // for feel; on a wet road we drop it to keep the reflection stable. Also
+    // fades in with speed so it never jitters a slow/standing car.
+    const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
+    if (state === "race" && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "tcam")) {
       const spV = clamp(player.speed / VMAX, 0, 1);
-      const vAmp = spV * spV * 0.022 + (player.deploying ? 0.008 : 0);
+      const vAmp = (spV * spV * 0.022 + (player.deploying ? 0.008 : 0)) * _buzzWet;
       if (vAmp > 0.001) {
         const tv = performance.now() * 0.001;
         const j1 = Math.sin(tv * 61.0) * 0.6 + Math.sin(tv * 97.0 + 1.7) * 0.4;
@@ -4774,16 +4779,7 @@ function render(dt) {
   // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
-  // Wet-road SSR march is disabled for ONBOARD cams (cockpit/hood/tcam). It is a
-  // screen-space, camera-dependent effect: from the low onboard eye its reflected
-  // rays hit on-screen content in some screen regions and miss in others, and that
-  // hit/miss pattern shifts every frame as the camera moves (worse with the
-  // onboard speed-buzz) — which reads as the wet reflection FLICKERING in patches
-  // while driving. The boosted analytic wet reflection (lit.js) is geometry-based
-  // and temporally stable, so onboard cams rely on it alone: a smooth, coherent,
-  // non-flickering wet road. Chase/external cams (higher eye, no buzz) keep the
-  // full SSR march, where it's stable and adds crisp on-screen reflections.
-  po.contact = _cs; po.reflect = (PerfGov.tier() >= 2 || onboard) ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
