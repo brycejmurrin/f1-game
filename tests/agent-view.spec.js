@@ -1499,6 +1499,17 @@ test.describe("agentHelp()", () => {
     // otherwise "do everything the debug hooks do" is not discoverable.
     expect(h.read, "read hooks missing").toBeTruthy();
     expect(JSON.stringify(h.read)).toMatch(/physState|lightState|timing/);
+    // The field glossary is the highest-value part of the manifest: attaching
+    // meaning to the identifiers an agent already reads is the best-measured
+    // context intervention there is. Assert it exists AND that every line
+    // stays short — the same augmentation done verbosely measurably costs
+    // execution steps, and a glossary that rots into prose is bloat.
+    expect(h.fields, "field glossary missing").toBeTruthy();
+    expect(Object.keys(h.fields).length).toBeGreaterThan(8);
+    for (const [k, v] of Object.entries(h.fields)) {
+      expect(v.split(" ").length, k + " is too wordy for a glossary line")
+        .toBeLessThanOrEqual(16);
+    }
     expect(h.control, "control verbs missing").toBeTruthy();
     expect(JSON.stringify(h.control)).toMatch(/act\(|weather|jump/);
     // the deprecated rasters live in notes, not as a peer perception tool
