@@ -153,6 +153,9 @@ window.SpotifyMusic = (function () {
         access_token: j.access_token,
         refresh_token: j.refresh_token || refreshToken,
         expires_at: Date.now() + (j.expires_in || 3600) * 1000,
+        // A refresh does not always echo the scope; keep what was granted at
+        // sign-in so debug()/check() can still say what this token may do.
+        scope: j.scope || (readToken() || {}).scope || "",
       });
       return j.access_token;
     });
@@ -265,6 +268,7 @@ window.SpotifyMusic = (function () {
         access_token: j.access_token,
         refresh_token: j.refresh_token || null,
         expires_at: Date.now() + (j.expires_in || 3600) * 1000,
+        scope: j.scope || "",
       });
       // A token WITHOUT the streaming scope reaches the player and comes back as
       // a bare "authentication_error", which reads as a login problem when the
@@ -456,6 +460,85 @@ window.SpotifyMusic = (function () {
   function available() { return !!clientId(); }
   function configured() { const c = clientId(); return c ? { clientId: c } : null; }
 
+  /* ---------------- diagnostics ----------------
+     "Spotify rejected the session" is the SDK refusing a token that auth already
+     issued, and from inside the game the two causes look identical: an account
+     that is not Premium, and an app not enabled for the Web Playback SDK. Both
+     are answerable — the Web API says which — so ask it rather than guess.
+     debug() is the console snapshot; check() is the one the panel button runs. */
+  function debug() {
+    const t = readToken() || {};
+    const cid = clientId();
+    return {
+      state, message,
+      // masked: a console snapshot gets pasted into bug reports
+      clientId: cid ? cid.slice(0, 6) + "…" + cid.slice(-4) : null,
+      redirectUri: redirectUri(),
+      onLocalhost: onLocalhost(),
+      secureContext: cryptoOk(),
+      hasToken: !!t.access_token,
+      hasRefresh: !!t.refresh_token,
+      expiresInSec: t.expires_at ? Math.round((t.expires_at - Date.now()) / 1000) : null,
+      grantedScopes: t.scope || null,
+      streamingGranted: !!(t.scope && t.scope.indexOf("streaming") >= 0),
+      sdkLoaded: !!(window.Spotify && window.Spotify.Player),
+      playerReady: ready,
+      deviceId, track,
+    };
+  }
+
+  // GET /v1/me answers both questions at once: `product` is the plan, and a 401
+  // means the token itself is dead. Returns a verdict object AND writes the
+  // conclusion to the status line, so it works with or without a console.
+  function check() {
+    const d = debug();
+    if (!available()) { setStatus("off", copyOff()); return Promise.resolve({ ok: false, reason: "no-client-id" }); }
+    return validToken().then((t) => {
+      if (!t) {
+        setStatus("configured", "No Spotify session on this device. Press CONNECT to sign in.");
+        return { ok: false, reason: "no-token", debug: d };
+      }
+      return fetch(API + "/me", { headers: { Authorization: "Bearer " + t } })
+        .then((r) => r.json().then((j) => ({ code: r.status, j }), () => ({ code: r.status, j: {} })))
+        .then(({ code, j }) => {
+          const out = { ok: false, httpStatus: code, product: j.product || null,
+            account: j.display_name || j.id || null, debug: debug() };
+          if (code === 401) {
+            setStatus("configured", "Spotify rejected the token itself (401). Press CONNECT to sign in again.");
+            out.reason = "token-rejected";
+          } else if (code === 403) {
+            setStatus("error", "Spotify returned 403 — your account is probably not on this app's " +
+              "user allowlist. Add it in the dashboard under User Management.");
+            out.reason = "not-allowlisted";
+          } else if (code !== 200) {
+            setStatus("error", "Spotify's API answered " + code + ". Try again in a moment.");
+            out.reason = "api-" + code;
+          } else if (j.product !== "premium") {
+            setStatus("error", "Signed in as " + (out.account || "?") + ", but this account is \"" +
+              (j.product || "unknown") + "\" — the web player needs full Premium. " +
+              "Free, Mini and Lite cannot play here.");
+            out.reason = "not-premium";
+          } else if (!out.debug.streamingGranted) {
+            setStatus("error", "Premium account confirmed, but this token has no playback " +
+              "permission. Tick \"Web Playback SDK\" in your app's settings, remove the app at " +
+              "spotify.com/account/apps, then press CONNECT again.");
+            out.reason = "no-streaming-scope";
+          } else {
+            out.ok = true;
+            out.reason = "ok";
+            setStatus(state === "connected" ? "connected" : "configured",
+              "Account OK: Premium, playback permission granted" +
+              (state === "connected" ? " — connected." : ". Press CONNECT."));
+          }
+          return out;
+        })
+        .catch(() => {
+          setStatus("error", "Could not reach Spotify's API — offline, or blocked.");
+          return { ok: false, reason: "network", debug: d };
+        });
+    });
+  }
+
   function setClientId(s) {
     const v = (s || "").trim();
     // Clearing the ID must also drop the session: a token minted by an app we
@@ -527,6 +610,7 @@ window.SpotifyMusic = (function () {
       ? (track ? (paused ? "Paused — " + track : track) : "Nothing playing yet.")
       : "—");
 
+    dis("as-sp-check", !available() || !readToken());
     dis("as-sp-connect", !available() || state === "connecting" || state === "connected");
     dis("as-sp-disconnect", !available() || (state !== "connected" && !readToken()));
   }
@@ -540,6 +624,7 @@ window.SpotifyMusic = (function () {
       if (e.key === "Enter") { e.preventDefault(); setClientId(idEl.value); }
     });
     on("as-sp-connect", "click", () => { connect(); });
+    on("as-sp-check", "click", () => { check(); });
     on("as-sp-disconnect", "click", () => { disconnect(); });
   }
 
@@ -563,7 +648,7 @@ window.SpotifyMusic = (function () {
 
   return {
     available, configured, setClientId,
-    connect, disconnect, status, onChange,
+    connect, disconnect, status, onChange, debug, check,
     backend() { return BACKEND; },
     redirectUri, handleRedirect,
   };
