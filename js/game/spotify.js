@@ -62,6 +62,7 @@ window.SpotifyMusic = (function () {
   // Set by any listener that has already named a failure, so the SDK's next
   // token request cannot paper over it with a generic line.
   let explained = false;
+  let lastPlayError = null;    // {status, reason} from the last refused play
   const subs = [];
 
   /* ---------------- storage (raw, not GameStore) ----------------
@@ -482,22 +483,41 @@ window.SpotifyMusic = (function () {
   function sendPlay(q, body) {
     return api("/me/player/play" + q, { method: "PUT", body: body }).then((r) => {
       if (!r) return;
-      if (r.status === 404) {
-        setStatus("connected", "Spotify could not find this device to play on. " +
-          "Press DISCONNECT then CONNECT, or start a track in the Spotify app once.");
-      } else if (r.status === 403) {
-        setStatus("connected", "Spotify refused playback (403) — full Premium is required to play here.");
-      } else if (r.status === 502 || r.status === 500) {
-        setStatus("connected", "Spotify hiccuped starting playback. Press PLAY again.");
-      } else if (r.ok || r.status === 204) {
-        setStatus("connected", "Playing.");
-      }
+      if (r.ok || r.status === 204) { setStatus("connected", "Playing."); lastPlayError = null; return; }
+      // Spotify says WHY in the body ("Device not found", PREMIUM_REQUIRED,
+      // "Player command failed: No active device"...). Mapping the status code
+      // alone threw that away and left every refusal looking the same.
+      return r.text().then((txt) => {
+        let reason = "";
+        try { const j = JSON.parse(txt); reason = (j.error && (j.error.reason || j.error.message)) || ""; }
+        catch (e) { reason = (txt || "").slice(0, 120); }
+        lastPlayError = { status: r.status, reason: reason };
+        const hint = r.status === 404
+            ? " Press DISCONNECT then CONNECT, or start a track in the Spotify app once."
+          : r.status === 403 ? " Full Premium is required to play here."
+          : r.status === 401 ? " Press CONNECT to sign in again."
+          : "";
+        setStatus("connected", "Spotify refused playback (" + r.status +
+          (reason ? ": " + reason : "") + ")." + hint);
+      }, () => { lastPlayError = { status: r.status, reason: "" };
+        setStatus("connected", "Spotify refused playback (" + r.status + ")."); });
     });
   }
 
   /* ---------------- GameAudio backend ----------------
      GameAudio delegates ALL music here while this is installed. Stopping and
      resuming the built-in MP3 playlist is GameAudio's job, not ours. */
+  // MOBILE BROWSERS REQUIRE THIS. Spotify's SDK creates its own <audio>, and on
+  // mobile it can only be unmuted from inside a user gesture — activateElement()
+  // is that handshake. Without it the device connects, the API accepts the play
+  // call, and no sound ever comes out. Harmless on desktop, and safe to call
+  // more than once.
+  function activate() {
+    if (player && typeof player.activateElement === "function") {
+      try { const p = player.activateElement(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    }
+  }
+
   const BACKEND = {
     start() {
       if (!BACKEND.active()) return;
@@ -728,12 +748,17 @@ window.SpotifyMusic = (function () {
     on("as-sp-connect", "click", () => { connect(); });
     on("as-sp-check", "click", () => { check(); });
     on("as-sp-playlist", "change", (e) => {
+      activate();
       setContext(e.target.value);
       // Picking one is the instruction to play it — otherwise the choice sits
       // there doing nothing until something else happens to call start().
       if (e.target.value && BACKEND.active()) playChosen();
     });
-    on("as-sp-play", "click", () => { if (BACKEND.active()) { if (track) { try { player.resume(); } catch (e) {} } else playChosen(); } });
+    on("as-sp-play", "click", () => {
+      activate();                       // must happen inside the click itself
+      if (!BACKEND.active()) return;
+      if (track) { try { player.resume(); } catch (e) {} } else playChosen();
+    });
     on("as-sp-pause", "click", () => BACKEND.stop());
     on("as-sp-next", "click", () => BACKEND.skip());
     on("as-sp-disconnect", "click", () => { disconnect(); });
@@ -761,6 +786,18 @@ window.SpotifyMusic = (function () {
     available, configured, setClientId,
     connect, disconnect, status, onChange, debug, check,
     playlists() { return lists.slice(); },
+    // What Spotify thinks is going on, for the console: the devices it can see,
+    // the SDK's own player state, and why the last play call was refused.
+    devices() {
+      return api("/me/player/devices")
+        .then((r) => (r && r.ok ? r.json().catch(() => null) : { httpStatus: r && r.status }));
+    },
+    sdkState() {
+      if (!player || !player.getCurrentState) return Promise.resolve(null);
+      return player.getCurrentState().catch(() => null);
+    },
+    lastPlayError() { return lastPlayError; },
+    activate,
     context: contextUri, setContext, play() { return playChosen(); },
     backend() { return BACKEND; },
     redirectUri, handleRedirect,
