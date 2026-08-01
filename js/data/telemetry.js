@@ -818,6 +818,32 @@ const DataTelemetry = (function () {
   }
 
   // nearest location sample to lap time t (matched on car-data timestamp)
+  // Point between two samples. GPS arrives at ~4 Hz but the player runs on a
+  // rAF clock, so anything that SNAPS to a sample steps ~15 times a second
+  // instead of moving.
+  function lerpLoc(a, b, f) {
+    if (!b) return a;
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+  }
+  // The exact wall-clock date for lap-time t, interpolated across car samples —
+  // the bridge between the chart's lap-relative clock and the GPS trace's
+  // absolute one. Snapping to the nearest car sample here was the first of the
+  // two quantisations that made the dots judder.
+  function dateAtT(car, t) {
+    if (!car || !car.length) return null;
+    const n = car.length;
+    if (t <= car[0].t) return +car[0].date;
+    if (t >= car[n - 1].t) return +car[n - 1].date;
+    let lo = 0, hi = n - 1;
+    while (lo < hi - 1) {
+      const mid = (lo + hi) >> 1;
+      if (car[mid].t <= t) lo = mid; else hi = mid;
+    }
+    const span = car[hi].t - car[lo].t;
+    const f = span > 0 ? (t - car[lo].t) / span : 0;
+    return +car[lo].date + f * (+car[hi].date - +car[lo].date);
+  }
+
   function locAt(view, tel, t) {
     const own = !!(tel.loc && tel.loc.length);
     const loc = own ? tel.loc : (view.primary.loc || []);
@@ -828,17 +854,24 @@ const DataTelemetry = (function () {
       // absolute timestamp (as this used to) looks a different lap's clock up in
       // this array, lands at whichever end is nearest in time, and parks the dot
       // there for the whole replay.
-      const frac = clamp(t / (view.tMax || 1), 0, 1);
-      return loc[Math.round(frac * (loc.length - 1))];
+      const f = clamp(t / (view.tMax || 1), 0, 1) * (loc.length - 1);
+      const i = Math.floor(f);
+      return lerpLoc(loc[i], loc[i + 1], f - i);
     }
-    const cs = sampleAt(tel.car, t);
-    if (!cs) return loc[0];
-    let best = loc[0], bd = Infinity;
-    for (let i = 0; i < loc.length; i++) {
-      const dd = Math.abs(loc[i].date - cs.date);
-      if (dd < bd) { bd = dd; best = loc[i]; }
+    const target = dateAtT(tel.car, t);
+    if (target === null) return loc[0];
+    const n = loc.length;
+    if (target <= +loc[0].date) return loc[0];
+    if (target >= +loc[n - 1].date) return loc[n - 1];
+    // bracketing GPS samples, then interpolate between them: continuous motion
+    // at the rAF clock instead of a ~4 Hz staircase
+    let lo = 0, hi = n - 1;
+    while (lo < hi - 1) {
+      const mid = (lo + hi) >> 1;
+      if (+loc[mid].date <= target) lo = mid; else hi = mid;
     }
-    return best;
+    const span = +loc[hi].date - +loc[lo].date;
+    return lerpLoc(loc[lo], loc[hi], span > 0 ? (target - +loc[lo].date) / span : 0);
   }
 
   // composite one frame: cached bases + moving cursor, car dots, delta, gauges
