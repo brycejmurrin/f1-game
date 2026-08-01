@@ -1,5 +1,12 @@
 # Scene graph + detailed models — staged plan
 
+> **Status: S0–S2 infrastructure has LANDED** (`js/track/graph.js`,
+> `tools/graph-parity.cjs`, `tests/track-graph.test.mjs`). Two emitters are
+> migrated as the pilot — `pine` and `marshalPost` — chosen because they sit at
+> opposite ends of the instancing question. All 24 circuits are at exact geometry
+> parity. §6 records what the migration measured, including the finding that
+> changes the S4 plan. Nothing renders differently yet, by design.
+
 Companion to `EXTERNAL-MODEL-SOURCES.md`, which asked "where do models come
 from". This asks the prior question: **why can't we afford detailed models
 today, and what has to change first.**
@@ -43,6 +50,12 @@ trees**. The same geometry as instances: three silhouette variants
 (FULL/LEAN/SPARSE, already in `pine()`) × 126 verts ≈ 15 KB of models, plus
 1,788 × 64 B of `mat4` ≈ 114 KB of transforms. **~130 KB — a 69× reduction**, for
 identical pixels.
+
+> **Corrected by measurement — see §6.** Those 1,788 pines do *not* reduce to
+> three models: `pine`'s dimensions are affine in `h` (`0.35 + h*0.02`, a fixed
+> 0.5 m trunk sink), and a per-node scale expresses `k·h` but not `a + b·h`. The
+> reduction is real but has a prerequisite the estimate missed — re-parameterising
+> the emitter to be scale-linear, which moves vertices and so belongs in S4.
 
 Whole-track totals (`node tools/verify-track.cjs <id>`):
 
@@ -202,7 +215,82 @@ second.**
 
 ---
 
-## 6. Risks
+## 6. What landed, and what it measured
+
+### The shape that made it safe
+
+The migration records **primitive ops in canonical space**, not baked vertices.
+A model is `[{op:"cyl", c:[0,-0.5,0], rad, h, col, seg, mat}, …]` at origin in an
+identity basis; a placement is a node `{model, o, r, u, t, s?}`. Replaying a
+model runs its ops back through **buildProps's own guarded emitters**, so the
+on-track `rejBox`/`rejRad` decisions, the `absorb*` occupancy writes and the
+emitted geometry are the same as when the helper emitted inline. Recording
+triangles instead would have bypassed all of that.
+
+`tools/graph-parity.cjs` is the gate: it materialises a baseline git ref with
+`git archive`, builds every track twice in one process — baseline tree and
+working tree — and diffs `propsGeo`/`glassGeo`/`waterGeo`/`roadGeo`/`terrainGeo`
+vertex for vertex, plus the `note()` registry count.
+
+```
+24/24 tracks at parity with HEAD
+```
+
+Positions are exact on 15 circuits and differ by at most **5.7e-14 m** on the
+rest. That residue is entirely the leaning-pine case: the original composed the
+cone centre as `(c + u·y) + r·lean`, the replay as `c + r·lean + u·y + t·0`, and
+IEEE-754 addition is not associative. Normals, colours, material ids and indices
+match exactly everywhere.
+
+### The finding: instanceable vs. continuous
+
+`graph.stats().byKind` splits migrated emitters by how much reuse they actually
+have. Across all 24 circuits:
+
+| emitter | nodes | models | fused verts | instanced | reuse |
+|---|---|---|---|---|---|
+| `marshalPost` | 343 | 43 | 26,068 | 3,268 | **7.98×** |
+| `pine` | 9,486 | 9,474 | 1,159,599 | 1,158,108 | **1.00×** |
+
+`marshalPost` instances beautifully — every dimension is a constant and the only
+per-placement variable is which side of the track the pole stands on, so a whole
+circuit's marshal line collapses to two models. (Its flag and night beacon stay
+inline: the flag is animated `MAT.FLAG` cloth, not a rigid primitive, and both
+are separate node kinds in a full graph.)
+
+`pine` does not instance at all — and **that is a structural property, not a
+tuning problem.** §1 assumed 1,788 pines would collapse to three silhouette
+variants. They do not, because pine's dimensions are **affine in `h`, not
+linear**: the trunk radius is `0.35 + h*0.02`, the trunk sinks a fixed 0.5 m
+below the anchor, and the tier heights carry absolute constants. A per-node
+scale can express `k·h`; it cannot express `a + b·h`. With `h` and the jitter `j`
+both continuous, every tree is its own model.
+
+**So §1's headline "69× reduction for the tree layer" is not available for
+free.** It requires re-parameterising `pine` so its geometry is purely linear in
+its scale parameters — which moves vertices, i.e. it is a deliberate look change
+that belongs in S4 with the detail pass, behind regenerated visual baselines. It
+is not a bug and not a blocker; it is the actual worklist. The graph's value here
+is that it turned an estimate into a per-emitter measurement, and the same
+`byKind` table will score every emitter migrated after this.
+
+### Where this leaves the stages
+
+- **S0/S1/S2 — done for the migrated subset.** Model library, node graph, guarded
+  replay, `bake()` reconstruction, parity gate, unit tests.
+- **Remaining S1 work is mechanical**: migrate the other emitter families
+  (`tree`/`palm`/`conifer`/`bush`, street-circuit barrier panels, `tyreWall`,
+  `streetLamp`, crowd bodies, window panes) one at a time, each gated by
+  `npm run test:graph-parity`. The barrier panels and window panes are the ones
+  to expect real reuse from — both are fixed-dimension boxes emitted in the
+  thousands on street circuits.
+- **S3 is unblocked but not started.** `graph.models` already holds the canonical
+  origin-space mesh per model (`model.geo`) that an instanced draw would upload.
+- **S4 gains a prerequisite it did not have**: re-parameterise affine emitters to
+  be scale-linear *before* raising their detail, or the detail will not instance
+  either.
+
+## 7. Risks
 
 - **Big refactor of shared code.** `js/track/scenery-*.js` is ~2,500 lines
   serving a frozen 84-member contract consumed by 24 circuit files. S0's

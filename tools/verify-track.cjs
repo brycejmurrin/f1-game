@@ -70,7 +70,16 @@ if (process.argv[2] === "--all") {
 // ---------------------------------------------------------------------------
 
 // Build a fresh VM context with GLX stubbed, load circuits + tracks, return Tracks
-function buildContext() {
+// `rootOverride` loads the same manifest file list from a DIFFERENT checkout —
+// tools/graph-parity.cjs points it at a baseline worktree so two builds can be
+// compared vertex-for-vertex in one process.
+function buildContext(rootOverride) {
+  const ROOT = rootOverride || module.exports._ROOT;
+  // A baseline checkout carries its OWN load order — reading the working tree's
+  // manifest against an older tree asks it for files that do not exist there.
+  const MANIFEST = rootOverride
+    ? require(path.join(rootOverride, "tools/manifest.cjs"))
+    : module.exports._MANIFEST;
   const GLX = {
     createMesh: function (buf) {
       const verts    = buf && buf.pos ? buf.pos.length / 3 : 0;
@@ -181,4 +190,4 @@ function verifyTrack(id) {
 }
 
 // Reusable VM harness — consumed by tests (scenery-api-contract, foundation).
-module.exports = { buildContext, loadTrackIds, verifyTrack };
+module.exports = { buildContext, loadTrackIds, verifyTrack, _ROOT: ROOT, _MANIFEST: MANIFEST };

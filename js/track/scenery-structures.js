@@ -165,10 +165,21 @@ const SceneryStructures = (function () {
         return;
       }
       ctx.note("marshalPost", [p.c[0], p.c[1] + 1.2, p.c[2]], [1.2, 2.4, 1.2], { k, side });
-      addBox(out, vadd(p.c, p.u, 1.1), [2.2, 3.0, 2.2], [0.85, 0.86, 0.88], b);   // base sunk 0.4
-      addBox(out, vadd(p.c, p.u, 2.7), [2.5, 0.4, 2.5], [0.95, 0.55, 0.08], b);
+      // Graph form: unlike pine, every dimension here is a CONSTANT — the only
+      // thing that varies between placements is which side of the track the pole
+      // stands on. So one model serves every marshal post on that side, and the
+      // whole circuit's marshal line collapses to two models. This is what an
+      // emitter looks like when it is already instanceable.
+      // The flag and the night beacon stay inline below: the flag is animated
+      // cloth (MAT.FLAG vertex wave, not a rigid primitive) and the beacon is
+      // emissive — both are their own node kinds in a full graph, and keeping
+      // them out here also preserves the original emission ORDER exactly.
+      ctx.instance(`marshalPost|${side}`, { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
+        rec.box([0, 1.1, 0], [2.2, 3.0, 2.2], [0.85, 0.86, 0.88]);   // base sunk 0.4
+        rec.box([0, 2.7, 0], [2.5, 0.4, 2.5], [0.95, 0.55, 0.08]);
+        rec.cyl([side * 1.4, -0.35, 0], 0.08, 4.35, [0.4, 0.4, 0.42], 4);   // base sunk
+      }, { kind: "marshalPost", k, side });
       const polePos = vadd(p.c, p.r, side * 1.4);
-      addCyl(out, vadd(polePos, p.u, -0.35), 0.08, 4.35, [0.4, 0.4, 0.42], 4, b);   // base sunk
       // Marshal flag on the pole — waving cloth (see flagQuad above). Mostly
       // yellow (the flag a marshal post actually flies), occasionally blue.
       flagQuad(vadd(polePos, p.u, 3.3), p.t, p.u,
