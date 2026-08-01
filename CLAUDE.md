@@ -191,7 +191,12 @@ js/track/        — track ENGINE (shared code) —
                                   `node tools/graph-parity.cjs --all` (builds each track
                                   from a baseline ref AND the working tree and diffs the
                                   prop geometry vertex for vertex). `graph.stats().byKind`
-                                  reports per-emitter instancing reuse.
+                                  reports per-emitter instancing reuse;
+                                  `graph.batches()` is the backend-neutral
+                                  instanced-draw handoff (canonical mesh +
+                                  column-major mat4 per instance + optional
+                                  per-instance colour), returning the nodes that
+                                  CANNOT be instanced as `bakeOnly`.
                                   See docs/research/SCENE-GRAPH-PLAN.md.
   space.js       TrackSpace     world↔track (Frenet) projection
   surface.js     TrackSurface   road surface build / tarmac-verge tinting

@@ -353,6 +353,57 @@ is not a bug and not a blocker; it is the actual worklist. The graph's value her
 is that it turned an estimate into a per-emitter measurement, and the same
 `byKind` table will score every emitter migrated after this.
 
+### S3 is now unblocked from the data side: `graph.batches()`
+
+Neither candidate backend can instance yet — GLX has no `drawElementsInstanced`
+anywhere, and TLX's own header says *"InstancedMesh batching of repeated
+geometries lands with the lit material (M3+)"*. Rather than pick one and write
+the same thing twice, the graph now emits the handoff **both** need:
+
+```js
+const { batches, bakeOnly } = track.graph.batches();
+// batches[i] = { model, geo, verts, count, matrices: Float32Array(16n),
+//                colors: Float32Array(3n) | null }
+```
+
+Matrices are **column-major** — the layout `M4` and `THREE.Matrix4` share —
+with columns 0–2 the scaled basis vectors `r`/`u`/`t` and column 3 the origin.
+That is exactly `xform()`'s `world = o + R·(local·s)`, so an instanced draw of
+`geo` under the matrix lands where `replay()` put the geometry;
+`tests/track-graph.test.mjs` asserts that vertex-for-vertex against a rotated,
+translated, non-uniformly scaled placement rather than trusting the derivation.
+
+Two classes of node **cannot** be instanced, and are returned in `bakeOnly`
+instead of being silently mis-drawn:
+
+- **partially suppressed placements** — if the on-track guard dropped some of a
+  model's primitives but not all, drawing the whole mesh at that transform puts
+  the dropped ones back;
+- **radial geometry under a non-uniform XZ scale** — `replay()` keeps a cylinder
+  round via `max(|sx|,|sz|)` because the primitive emitters cannot make an
+  ellipse, but an instance matrix scales x and z independently.
+
+Measured across all 24 circuits: **383,402 of 383,403 nodes instance; exactly
+one falls back to the bake.** That is the split rules (§6) holding empirically —
+they were derived to keep radial primitives out from under non-uniform scale,
+and the count says they do.
+
+What it is worth, at 40 interleaved bytes/vertex, summed over the fleet:
+
+| | fused (today) | instanced |
+|---|---|---|
+| all migrated emitters | 413 MB | 45 MB models + 26 MB transforms = **71 MB** (5.8×) |
+| excluding `pine` | 369 MB | 0.9 MB models + 26 MB transforms = **27 MB** (13.9×) |
+
+Once geometry collapses, the **transforms dominate** — 64 B per instance against
+~2.8 KB of fused geometry for a 70-vertex prop. A `mat4` is more than the data
+needs (the transform is an orthonormal basis plus scale and origin), so packing
+it to 3×4 or quaternion+scale+position is worth doing if that 26 MB ever
+matters; it is a pure encoding change on both sides of this API.
+
+`bake()` remains the fallback path, so adopting this is additive: a backend
+instances what it can and bakes `bakeOnly`, and nothing is a flag day.
+
 ### Where this leaves the stages
 
 - **S0/S1/S2 — done for the migrated subset.** Model library, node graph, guarded
@@ -361,8 +412,10 @@ is that it turned an estimate into a per-emitter measurement, and the same
   masses and the baked models the asset pack now places — one at a time, each gated by `npm run test:graph-parity`. Apply the
   five rules above. The broadleaf vegetation will likely hit `pine`'s
   affine-parameter wall; the city masses and facade furniture should not.
-- **S3 is unblocked but not started.** `graph.models` already holds the canonical
-  origin-space mesh per model (`model.geo`) that an instanced draw would upload.
+- **S3's data side is DONE** — `graph.batches()` above. What remains is one
+  consumer per backend: GLX via `drawElementsInstanced` (attributes 5–8 are free;
+  WebGL2 core, no extension) plus the same treatment in the three shadow passes,
+  and TLX via `InstancedMesh` when its lit material lands at M3.
 - **S4 gains a prerequisite it did not have**: re-parameterise affine emitters to
   be scale-linear *before* raising their detail, or the detail will not instance
   either.
