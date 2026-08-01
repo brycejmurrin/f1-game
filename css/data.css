@@ -26,11 +26,12 @@
   min-height: clamp(300px, calc(100svh - 60px), 900px);
   max-height: calc(100svh - var(--sat) - var(--sab) - 2 * var(--gut));
   display: flex; flex-direction: column;
-  background: #0d0d14;
+  /* same elevation ladder as the menu sheets (see css/tokens.css) */
+  background: var(--surf-1);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--edge), var(--lift-2);
 }
 /* Short landscape: card fills full height, no extra radius on top (flush with safe area) */
 @media (orientation: landscape) and (max-height: 560px) {

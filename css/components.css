@@ -38,9 +38,11 @@
   width: min(100%, var(--sheet-w, 520px));
   max-height: 100%;
   background: var(--panel);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--r-lg);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  /* lightness + a top lip do the lifting here; the cast shadow only matters
+     against the 3D scene (see the elevation notes in css/tokens.css) */
+  box-shadow: var(--edge), var(--lift-2);
   overflow: hidden;
   /* the query container for every layout decision inside this sheet */
   container: sheet / inline-size;
@@ -49,9 +51,14 @@
    does not get, and on a 393px-tall screen that is the difference between four
    circuits visible and two. Both are deliberately thin. */
 .sheet-head {
-  padding: calc(var(--pad) * 0.55) var(--pad) calc(var(--pad) * 0.25);
+  padding: calc(var(--pad) * 0.55) var(--pad) calc(var(--pad) * 0.4);
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--gap); flex-wrap: wrap;
+  /* The title band is the top of the stack, so it catches the most light and
+     ends on a hairline — the head used to dissolve into the body with nothing
+     marking where the chrome stopped and the content began. */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 /* Title scales with the viewport HEIGHT, which is the axis that is scarce on a
    phone held sideways — a fixed 24px title costs the same as a row of the list
@@ -154,6 +161,18 @@
   letter-spacing: 0.12em;
   margin: 0 0 calc(var(--gap) * 0.5);
 }
+/* A short accent tick before every section label. Dim uppercase text at 10-12px
+   is easy to skim past; the tick gives each section a fixed left edge for the
+   eye to run down, and it is the same skewed red mark the title and the primary
+   buttons use, so the sheets read as one family. */
+.sel-label::before {
+  content: ""; display: inline-block;
+  width: 3px; height: 0.82em;
+  margin-right: 7px; vertical-align: -0.04em;
+  background: var(--accent);
+  transform: skewX(-12deg);
+  border-radius: 1px;
+}
 
 /* ---------- buttons ---------- */
 .bigbtn {
@@ -175,7 +194,13 @@
   .bigbtn:hover { background: linear-gradient(135deg, #ff2010 0%, #c50000 100%); box-shadow: 0 6px 24px rgba(225,6,0,0.6); }
 }
 .bigbtn:active { background: linear-gradient(135deg, #ff2010 0%, #c50000 100%); box-shadow: 0 2px 10px rgba(225,6,0,0.5); transform: skewX(-6deg) scale(0.97); }
-.bigbtn.alt { background: rgba(255,255,255,0.06); color: rgba(242,242,245,0.72); box-shadow: none; border: 1px solid rgba(255,255,255,0.14); }
+/* Secondary buttons are raised surfaces, not outlines: a lightness step off the
+   sheet plus the top lip, which is what makes a control look pressable on a
+   dark background (an unfilled border alone reads as a disabled field). */
+.bigbtn.alt {
+  background: var(--surf-3); color: rgba(242,242,245,0.82);
+  box-shadow: var(--edge); border: 1px solid rgba(255,255,255,0.10);
+}
 @media (hover: hover) {
   .bigbtn.alt:hover { background: rgba(255, 255, 255, 0.16); box-shadow: none; }
 }

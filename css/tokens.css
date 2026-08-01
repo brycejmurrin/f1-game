@@ -95,7 +95,9 @@
 :root {
   --red: #e10600;
   --bg: #0a0a0f;
-  --panel: rgba(12, 12, 20, 0.92);
+  /* Kept translucent — a sheet often sits over the live 3D scene — but lifted
+     to the first elevation step so it reads as a surface above the page. */
+  --panel: color-mix(in oklab, #fff 4.5%, rgba(11, 11, 18, 0.94));
   --text: #f2f2f5;
   --dim: #9a9aa5;
   --sal: env(safe-area-inset-left, 0px);
@@ -161,6 +163,26 @@
      tracks whatever --accent resolves to (custom props resolve at use-time). */
   --accent: var(--red);
   --accent-dim: color-mix(in oklab, var(--accent) 40%, var(--bg));
+
+  /* ---- ELEVATION, for a dark UI ----------------------------------------
+     A drop shadow is how you raise something off a LIGHT page; on a near-black
+     one it is invisible — there is nothing darker to cast. This panel was
+     #0c0c14 on a #0a0a0f page, two points apart, and leaned on a
+     0 16px 48px rgba(0,0,0,0.75) shadow nobody could see, so every layer read
+     as one flat plane.
+     Dark UIs signal height with SURFACE LIGHTNESS instead: the closer a
+     surface is, the lighter it gets. The ladder follows Material's dark-theme
+     overlay steps (~4 / 7 / 10% white).
+     --edge is the companion trick: a 1px lighter inset along the top edge,
+     reading as light falling from above and giving each layer a defined lip. */
+  --surf-1: color-mix(in oklab, #fff 4%, var(--bg));   /* sheets, panels */
+  --surf-2: color-mix(in oklab, #fff 7%, var(--bg));   /* a card ON a sheet */
+  --surf-3: color-mix(in oklab, #fff 11%, var(--bg));  /* popovers, raised rows */
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  /* still cast a shadow — it does nothing on black but separates a sheet from
+     the bright 3D scene behind it, which is where this game actually shows one */
+  --lift-1: 0 10px 30px rgba(0, 0, 0, 0.55);
+  --lift-2: 0 18px 44px rgba(0, 0, 0, 0.6);
 }
 
 /* Per-team accents (ids + colours from js/car/teams.js — vivid brand colour of
