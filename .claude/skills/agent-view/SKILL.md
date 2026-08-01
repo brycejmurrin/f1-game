@@ -66,16 +66,19 @@ Read both once; do not re-fetch per tick.
 **What is this place / thing? (static — fetch once)**
 - `worldModel({detail})` (CLI `model`) — the WHOLE circuit as ONE document:
   repeated dressing clustered into features, named landmarks with sizes, barrier
-  spans, and a corner-by-corner walk (`dir`/`radiusM`/`severity` — but NOT banking
-  or signed `k`; for those pull `trackInfo`). `summary|sections|full`. The first
-  call for "understand a place I can't see."
+  spans, and a corner-by-corner walk (`dir`/`radiusM`/`severity` only — for
+  banking, signed `k`, gradient/elevation, kerbs and apex speed, pull
+  `trackInfo({what:"corners"})` and join by turn id). `summary|sections|full`.
+  The first call for "understand a place I can't see."
 - `trackInfo({what})` (CLI `track`) — corners (with signed `k` and `bankingDeg`) /
   sectors / elevation profile; grounded in the real circuit (`gp`, `realLengthKm`,
   `lengthErrorPct`).
 - `carView({detail})` (CLI `car`) — the car as JSON: team, the CHOSEN parts spec +
   net `mods` multipliers, measured geometry. `detail:"parts"` adds per-part boxes —
   the ~19 MESH components (wheels, wings, halo…), NOT the 8 upgrade categories; it
-  reads the current loadout, not the catalog of options.
+  reads the current loadout, not the catalog of options — to CHOOSE a build, read
+  `Parts.CATALOG` (cost + stat multipliers per option) from `js/car/parts.js`, and
+  verify a candidate in-page with `Parts.getMods(setup, teamEngine)`/`Parts.getCost`.
 - `objective()` — what the game is (see above).
 
 **Drill down (pull, never dump)**
@@ -97,8 +100,11 @@ Read both once; do not re-fetch per tick.
   `policy` is `world => {steer,throttle,brake}`; use `world()`+`act()` for a single
   decision instead.
 - `terminal()` — `{done, reason}`: finished | wrong_way | rescued.
-- `survey()` — geometry DEFECTS (floating/buried props, terrain through the
-  road) — for track authoring, not driving.
+- `survey()` — geometry DEFECTS for track authoring, not driving: 8 buckets
+  (floating/buried props, `overVoid`, terrain holes/cliffs, terrain-through-road,
+  props over the line). Its `propsOverRoadCandidates` are BROAD-PHASE — a large
+  `lateralM` is a bounding-box false positive, not a prop on the line. The payload
+  self-documents (read `thresholds.note` and `authoritative`).
 
 ## The driving loop
 
@@ -121,9 +127,9 @@ A runnable starter policy — nulls heading error, recentres, brakes for the cor
 ```js
 policy = w => {
   const e = w.ego, nc = w.nextCorner;
-  let steer = -e.headingErrDeg*0.045 - e.lateralM*0.045;   // null heading + recentre
-  steer = Math.max(-1, Math.min(1, steer));
   const off = Math.abs(e.lateralM) > (e.halfWidthM || 6);  // in the grass?
+  let steer = -e.headingErrDeg*0.045 - e.lateralM*(off ? 0.12 : 0.045);  // recentre HARDER off-track
+  steer = Math.max(-1, Math.min(1, steer));
   const tgt = nc ? nc.apexSpeedKph/3.6*0.75 : 55;          // aim WELL under — hints are optimistic
   const braking = nc && e.speed > tgt && nc.distM < nc.suggestBrakeM*3.0;
   return { steer,
