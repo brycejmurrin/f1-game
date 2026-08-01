@@ -22,7 +22,8 @@ const { buildContext } = require("../tools/verify-track.cjs");
 const CONTRACT = [
   "ATM", "COL", "MAT",
   "addBox", "addCone", "addCyl", "addFrustum", "addMountain", "addPrism", "addPyramid",
-  "along", "anchor", "backdrop", "bankedKerbStrip", "billboard", "bowlSeatWall",
+  "along", "anchor", "backdrop", "bakedModel", "bakedModels", "bankedKerbStrip",
+  "billboard", "bowlSeatWall",
   "broadcastCompound", "building", "bush", "cameraTower", "cantilever", "circuitKit",
   "cityFront", "concreteCanyon", "conifer",
   "cross", "def", "ds", "every", "fence", "ferrisWheel", "floodMast",

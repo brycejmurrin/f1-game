@@ -94,6 +94,12 @@ if (!gfx) {
 if (typeof Assets !== "undefined") {
   Assets.init(gfx);
   Assets.load();
+  // Models are prefetched too, because prop placement is SYNCHRONOUS (buildProps
+  // -> the circuit's scenery() callback) and must not depend on network timing.
+  // Started here, at boot, so they are resident long before the menu reaches a
+  // track build; a circuit that asks for one that hasn't landed simply gets
+  // nothing placed rather than a differently-built track.
+  Assets.loadModels();
 }
 
 // ---------- rain overlay ----------

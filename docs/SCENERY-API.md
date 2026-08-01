@@ -294,6 +294,36 @@ Lower `density`/`rows` or raise `step` on long runs.
 | `guardrail(s0, s1, side, gap, col)` | waist-high armco rail on posts |
 | `tyreWall(s0, s1, side, gap, capCol)` | stacked tyres + coloured conveyor cap |
 
+### Baked models from the asset pack (`api.bakedModel`)
+
+`bakedModel(id, k, side, dist, opts?) → boolean`
+
+Places a real modelled asset from `assets/pack/` — baked offline by
+`node tools/assets.mjs bake-model <id> <file.glb>` down to the game's own vertex
+format, `MAT` id included. It is the one scenery helper whose geometry is not
+generated procedurally here.
+
+`opts`: `{ scale, rotY, lift, tint:[r,g,b], mat }`. Without `rotY` the model is
+yawed to face the track (a model authored facing **+Z** looks at the road from
+either side). `tint` multiplies the baked vertex colour; `mat` overrides the
+baked per-vertex material id, so one mesh can be dressed as concrete on one
+circuit and rusted metal on another.
+
+**It returns `false` and emits nothing when the pack has no such model** — which
+is the state of a fresh checkout, since no models ship by default. Treat it as an
+enhancement and always keep the procedural fallback:
+
+```js
+if (!bakedModel("grandstand_tifosi", K(0.12), -1, 14, { scale: 1.2 }))
+  grandstand(K(0.12), -1, 14, 40);          // procedural fallback
+```
+
+`bakedModels()` lists the ids the installed pack actually has.
+
+Never async: `js/render/assets.js` prefetches every model at boot precisely so
+prop placement cannot vary with network timing — the same circuit must build
+identically every time.
+
 ### Atmosphere / colour packs (`api.ATM` / `api.COL`)
 
 Exported from `js/track/scenery-data.js` and exposed on the scenery `api`.

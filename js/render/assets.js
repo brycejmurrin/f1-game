@@ -269,6 +269,26 @@ const Assets = (function () {
     return _manifest && _manifest.models ? Object.keys(_manifest.models) : [];
   }
 
+  // SYNCHRONOUS lookup — null until loadModels() has resolved.
+  //
+  // This exists because the track build is synchronous all the way down:
+  // Tracks.build -> buildProps -> the circuit's own scenery(api) callback. An
+  // async fetch inside that call chain would make prop placement depend on
+  // network timing, so the same circuit could build differently twice. Models
+  // are therefore ALL prefetched before a track builds, and placement is a
+  // plain cache read that either has the geometry or definitively does not.
+  function modelSync(id) { return _models[id] || null; }
+
+  // Prefetch every model in the pack. Resolves to the number now resident.
+  // Cheap by construction: `tools/assets.mjs verify` caps the whole pack at
+  // 8 MB, so this is never a large download.
+  async function loadModels() {
+    const m = await manifest();
+    if (!m || !m.models) return 0;
+    await Promise.all(Object.keys(m.models).map((id) => model(id)));
+    return Object.keys(_models).reduce((n, k) => n + (_models[k] ? 1 : 0), 0);
+  }
+
   // ── baked environment (HDRI-derived ambient) ───────────────────────────────
 
   // Returns {ambientSky, ambientGround, skyZenith?, skyHorizon?} for a
@@ -306,7 +326,8 @@ const Assets = (function () {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
-  return { init, supported, manifest, load, unload, state, model, models, env, credits };
+  return { init, supported, manifest, load, unload, state,
+           model, modelSync, models, loadModels, env, credits };
 })();
 
 // No-build global export.

@@ -438,6 +438,10 @@
         h.assign(smoothstep(0.0, 0.16, d).mul(0.55).add(vnoise(uv.mul(5.0)).mul(0.15)));
       }).ElseIf(mid.equal(14.0), () => {  // RUST/CORRUGATED: sinusoidal ridges
         h.assign(sin(hc.mul(7.5)).mul(0.55).add(vnoise(uv.mul(6.0)).mul(0.10)));
+      }).ElseIf(mid.equal(16.0), () => {  // ASPHALT: fine aggregate only (lit.js:235-238)
+        // Two tight octaves and nothing below ~0.1 m. A low-frequency term here
+        // would read as a rippled road under the car and crawl at speed.
+        h.assign(vnoise(uv.mul(9.0)).mul(0.34).add(vnoise(uv.mul(26.0)).mul(0.16)));
       });
       return h;
     });
@@ -457,7 +461,12 @@
       const N = vec3(Nin).toVar();
       const wp = vec3(wpIn).toVar();
       const bumpFade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
-      const inRange = mid.greaterThan(0.5).and(mid.lessThan(14.5)).and(mid.notEqual(3.0));
+      // 1..14 plus ASPHALT(16); GLASS(3) and FLAG(15) are excluded, matching
+      // GLX's `mid == 0 || mid == 3 || mid == 15` early-out. ASPHALT was
+      // outside the old < 14.5 bound, so the road — the surface on screen for
+      // the whole race — got NO procedural relief on this backend at all.
+      const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5))
+        .and(mid.notEqual(3.0)).and(mid.notEqual(15.0));
       If(inRange.and(bumpFade.greaterThan(0.005)), () => {
         If(matWallLike(mid), () => {
           const an = abs(N);
@@ -486,7 +495,8 @@
           const hx = matBumpHeight(mid, p.add(vec2(e, 0.0)));
           const hz = matBumpHeight(mid, p.add(vec2(0.0, e)));
           const amt = select(mid.equal(8.0), float(0.16),
-                      select(mid.equal(10.0), float(0.14), float(0.07)));
+                      select(mid.equal(10.0), float(0.14),
+                      select(mid.equal(16.0), float(0.025), float(0.07))));
           N.assign(normalize(N.add(
             vec3(h0.sub(hx), 0.0, h0.sub(hz)).mul(amt.mul(bumpFade).div(e)))));
         });
@@ -578,7 +588,8 @@
       const nrm = vec3(nrmIn).toVar();
       const far = clamp(vd.sub(90.0).div(170.0).oneMinus(), 0.0, 1.0).toVar();   // coarse: mid range
       const near = clamp(vd.sub(26.0).div(64.0).oneMinus(), 0.0, 1.0).toVar();   // fine: near field
-      const inRange = mid.greaterThan(0.5).and(mid.lessThan(14.5));
+      // Includes ASPHALT(16) — see the applyMaterialNormal note above.
+      const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5)).and(mid.notEqual(15.0));
       If(inRange.and(far.greaterThan(0.001)), () => {
         const an = abs(normalize(nrm)).toVar();
         const wall = an.y.lessThan(0.6);
@@ -680,6 +691,13 @@
           const rust = smoothstep(0.55, 0.9, vnoise(vec2(hc.mul(0.8), y.mul(0.35)).add(5.0)));
           albedo.assign(mix(albedo, albedo.mul(vec3(0.62, 0.42, 0.28)), rust.mul(0.5).mul(far)));
           rough.assign(min(1.0, rough.add(far.mul(0.14))));
+        }).ElseIf(mid.equal(16.0), () => {  // ASPHALT — aggregate speckle + wear patches (lit.js:407-417)
+          // Deliberately understated: this is the surface under the car for the
+          // whole race, so it gets tone variation rather than pattern. No
+          // fract()/sin() term at all — nothing here can strobe, only soften.
+          albedo.mulAssign(vnoise(wp.xz.mul(0.035)).sub(0.5).mul(0.10).mul(far).add(1.0));
+          albedo.mulAssign(vnoise(wp.xz.mul(7.0)).sub(0.5).mul(0.13).mul(near).add(1.0));
+          rough.assign(min(1.0, rough.add(far.mul(0.10))));
         });
       });
       return vec4(albedo, rough);

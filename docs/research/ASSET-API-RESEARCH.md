@@ -480,7 +480,32 @@ the pack lands asynchronously. That is the same trick `setEnvCube` already used.
   never reaches the *procedural* branch on TLX. Pre-existing, unrelated to this
   work, but it means TLX and GLX already differ on tarmac. The baked path added
   here covers the full 1..16 range on both.
-- Nothing consumes `Assets.model()` or `Assets.env()` yet. The plumbing is
-  tested; the circuit-side and `applyRaceSettings`-side adoption is the next
-  piece of work, and is where the grandstand-monoculture win in
-  SCENERY-UPGRADE-PLAN.md actually gets collected.
+### Adoption (second pass)
+
+Both consumers now exist:
+
+- **`Assets.env()` is wired into `applyRaceSettings`** (`js/game/atmosphere.js`),
+  applied straight after the palette base and before the weather branches — so a
+  measured sky replaces the hand-picked hemisphere colours while overcast/rain/fog
+  still scale it. No shader change, as predicted in §3.4.
+- **`api.bakedModel(id, k, side, dist, opts)`** is on the scenery surface
+  (`js/track/tracks.js`, geometry in `TrackGeom.addMesh`). It returns `false` and
+  emits nothing without a pack, so circuits keep their procedural fallback and
+  `verify-track` passes on a checkout with no models. Models are prefetched at
+  boot because prop placement is synchronous — a circuit must build identically
+  every time, not differently depending on network timing.
+
+No circuit calls `bakedModel` yet: that needs actual CC0 grandstand/pit-building
+meshes, which needs the network-capable `bake-material`/`fetch` path. The
+SCENERY-UPGRADE-PLAN win is now one asset-sourcing session away rather than one
+engine change away.
+
+### Also fixed on the way
+
+The TSL port bounded its material branches at `mid < 14.5`, so **`MAT.ASPHALT`
+(16) reached neither `matBumpHeight` nor `applyMaterial` on the three backend** —
+the road, the surface on screen for the entire race, had no procedural treatment
+at all there while GLX gave it aggregate grain, wear patches and roughness
+variation. Both branches are ported and the range widened to `1..16` minus
+`GLASS`/`FLAG`. Pre-existing, unrelated to the asset work, found by reading the
+port while adding the baked path beside it.

@@ -250,6 +250,22 @@ function applyRaceSettings() {
       if (_bp.fog) G.frame.fogColor = _bp.fog.slice();
       G.frame.fogDensity = _bp.fogDensity != null ? _bp.fogDensity : (isNightSession ? 0.004 : 0.0012);
     }
+    // Baked HDRI ambient (assets/pack, js/render/assets.js), applied straight
+    // AFTER the palette base and BEFORE the weather branches — so a measured sky
+    // replaces the hand-picked hemisphere colours while overcast/rain/fog still
+    // scale it exactly as they scale the palette's. Keys "<track>|<tod>" then
+    // "*|<tod>"; absent (the normal case — no HDRI is baked by default) leaves
+    // the palette untouched. This is why an HDRI bake needs NO shader change:
+    // ambientSky/ambientGround are values the renderer already consumes.
+    if (typeof Assets !== "undefined" && G.track && G.track.def) {
+      const _env = Assets.env(G.track.def.id, G.raceTimeOfDay || "default");
+      if (_env) {
+        if (_env.ambientSky)    G.frame.ambientSky = _env.ambientSky.slice();
+        if (_env.ambientGround) G.frame.ambientGround = _env.ambientGround.slice();
+        if (_env.skyZenith)  G.frameSky.zenith  = _env.skyZenith.slice();
+        if (_env.skyHorizon) G.frameSky.horizon = _env.skyHorizon.slice();
+      }
+    }
     // Keep the REFLECTED sky (frame.skyZenith/Horizon → LIT env/rim/SSR fallback)
     // in sync with the sky dome so glass/wet-road/clearcoat mirror the sky the
     // player actually sees (the weather post-modifiers below re-sync on their side).

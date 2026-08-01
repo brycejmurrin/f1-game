@@ -250,6 +250,54 @@ const TrackGeom = (function () {
     out._mat = 0;
   }
 
-  return { MAT, cross, norm, vadd, emit,
+  // Stamp a BAKED MODEL's geometry into the accumulator: uniform scale, a yaw
+  // about world +Y, then a translation. `mesh` is the {pos,nrm,col,mat,idx}
+  // shape js/render/assets.js parses out of the pack — but this function never
+  // touches Assets or any renderer, so geom.js keeps loading under the bare VM
+  // sandbox (tools/verify-track.cjs) with no stubbing.
+  //
+  // Uniform scale only, deliberately: a non-uniform scale would need the
+  // inverse-transpose for normals, and every prop here is a real-world object
+  // that should not be squashed anyway.
+  function addMesh(out, mesh, opts) {
+    if (!mesh || !mesh.pos || !mesh.idx || !mesh.pos.length) return false;
+    const o = opts || {};
+    // Validate the SUPPLIED values before defaulting. `o.x || 0` would coerce a
+    // NaN to 0, silently relocating the model to the world origin instead of
+    // rejecting the placement — the same class of failure as the NaN anchor that
+    // once cost Silverstone every one of its 783 066 prop vertices, except this
+    // one leaves a building sitting at (0,0,0) rather than dropping the buffer.
+    const bad = (v) => v != null && !isFinite(v);
+    if (bad(o.x) || bad(o.y) || bad(o.z) || bad(o.scale) || bad(o.rotY)) return false;
+    const s = o.scale != null ? o.scale : 1;
+    const x = o.x || 0, y = o.y || 0, z = o.z || 0;
+    const ry = o.rotY || 0, cs = Math.cos(ry), sn = Math.sin(ry);
+    const tint = o.tint || null;              // [r,g,b] multiplier over the baked colour
+    const nv = mesh.pos.length / 3;
+    const base = out.pos.length / 3;
+    const mm = out.mat;
+    // opts.mat overrides the baked per-vertex id — lets one model be dressed as
+    // concrete on one circuit and rusted metal on another.
+    const forced = o.mat != null ? o.mat : null;
+    const fallback = out._mat || 0;
+    for (let i = 0; i < nv; i++) {
+      const px = mesh.pos[i * 3] * s, py = mesh.pos[i * 3 + 1] * s, pz = mesh.pos[i * 3 + 2] * s;
+      out.pos.push(px * cs + pz * sn + x, py + y, -px * sn + pz * cs + z);
+      const nx = mesh.nrm ? mesh.nrm[i * 3] : 0;
+      const ny = mesh.nrm ? mesh.nrm[i * 3 + 1] : 1;
+      const nz = mesh.nrm ? mesh.nrm[i * 3 + 2] : 0;
+      out.nrm.push(nx * cs + nz * sn, ny, -nx * sn + nz * cs);
+      const cr = mesh.col ? mesh.col[i * 3] : 0.7;
+      const cg = mesh.col ? mesh.col[i * 3 + 1] : 0.7;
+      const cb = mesh.col ? mesh.col[i * 3 + 2] : 0.7;
+      if (tint) out.col.push(cr * tint[0], cg * tint[1], cb * tint[2]);
+      else out.col.push(cr, cg, cb);
+      if (mm) mm.push(forced != null ? forced : (mesh.mat ? mesh.mat[i] : fallback));
+    }
+    for (let i = 0; i < mesh.idx.length; i++) out.idx.push(base + mesh.idx[i]);
+    return true;
+  }
+
+  return { MAT, cross, norm, vadd, emit, addMesh,
            addBox, addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain };
 })();

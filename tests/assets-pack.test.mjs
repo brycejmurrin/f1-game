@@ -235,6 +235,58 @@ test("bake-model round-trips glTF into the game's own vertex format", () => {
   }
 });
 
+test("TrackGeom.addMesh transforms a baked model correctly", () => {
+  // The placement maths for baked props. Getting the yaw sign or the normal
+  // rotation wrong produces geometry that is *present and finite* — so
+  // verify-track passes and nothing complains — while every model faces the
+  // wrong way. Pin it with an exact 90 degree case.
+  const vm = require("node:vm");
+  const sandbox = { Math, Array, Float32Array, Object, JSON, console };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js", "track", "geom.js"), "utf8")
+    .replace(/^const\b/gm, "var"), sandbox, { filename: "geom.js" });
+  const G = sandbox.TrackGeom;
+  assert.equal(typeof G.addMesh, "function");
+
+  const mesh = {
+    pos: [1, 0, 0, 0, 0, 1, 0, 2, 0],
+    nrm: [1, 0, 0, 0, 0, 1, 0, 1, 0],
+    col: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
+    mat: [16, 16, 16],
+    idx: [0, 1, 2],
+  };
+  const out = { pos: [], nrm: [], col: [], mat: [], idx: [], _mat: 0 };
+  // Seed one existing vertex so the index rebase is actually exercised.
+  out.pos.push(0, 0, 0); out.nrm.push(0, 1, 0); out.col.push(1, 1, 1); out.mat.push(0);
+
+  assert.equal(G.addMesh(out, mesh, { x: 10, y: 5, z: -2, rotY: Math.PI / 2, scale: 2 }), true);
+  // rotY = +90 deg maps local +X to world -Z (x*cos + z*sin, -x*sin + z*cos).
+  const p0 = out.pos.slice(3, 6);
+  assert.ok(Math.abs(p0[0] - 10) < 1e-6, `x: ${p0[0]}`);
+  assert.ok(Math.abs(p0[1] - 5) < 1e-6, `y: ${p0[1]}`);
+  assert.ok(Math.abs(p0[2] - (-4)) < 1e-6, `z: ${p0[2]} (local +X*2 should land at -2 relative)`);
+  // Normals rotate but must NOT pick up the scale or the translation.
+  const n0 = out.nrm.slice(3, 6);
+  assert.ok(Math.abs(Math.hypot(n0[0], n0[1], n0[2]) - 1) < 1e-6, "normal must stay unit length");
+  // Indices rebased past the pre-existing vertex.
+  assert.deepEqual(out.idx, [1, 2, 3]);
+  // Baked per-vertex MAT ids survive.
+  assert.deepEqual(out.mat.slice(1), [16, 16, 16]);
+
+  // opts.mat overrides the baked ids; opts.tint multiplies the baked colour.
+  const out2 = { pos: [], nrm: [], col: [], mat: [], idx: [], _mat: 0 };
+  G.addMesh(out2, mesh, { mat: 1, tint: [2, 1, 0] });
+  assert.deepEqual(out2.mat, [1, 1, 1]);
+  assert.deepEqual(out2.col.slice(0, 3), [1, 0.5, 0]);
+
+  // Junk in, nothing out — never a partially-written accumulator.
+  const out3 = { pos: [], nrm: [], col: [], mat: [], idx: [], _mat: 0 };
+  assert.equal(G.addMesh(out3, mesh, { x: NaN }), false);
+  assert.equal(G.addMesh(out3, null, {}), false);
+  assert.equal(out3.pos.length, 0, "a rejected placement must emit no vertices");
+});
+
 test("credits cover every asset in the pack", { skip: !hasPack && "no pack installed" }, () => {
   const credits = manifest.credits || [];
   const ids = new Set(credits.map((c) => `${c.kind}:${c.id}`));

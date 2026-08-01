@@ -1722,6 +1722,38 @@ const Tracks = (function () {
     // js/track/scenery-identity.js (SceneryIdentity) — created above. ──
 
 
+    // Place a BAKED MODEL from the asset pack (assets/pack, built by
+    // `node tools/assets.mjs bake-model`) at a trackside anchor. This is the one
+    // scenery helper whose geometry is not generated here — it is a real modelled
+    // asset baked down to the game's own vertex format, MAT id included.
+    //
+    // Returns FALSE and emits nothing when the pack has no such model, which is
+    // the default state of a fresh checkout. Circuits must therefore treat it as
+    // an ENHANCEMENT and keep their procedural fallback:
+    //
+    //     if (!bakedModel("grandstand_tifosi", K(0.12), -1, 14))
+    //       grandstand(K(0.12), -1, 14, 40);
+    //
+    // Never async: Assets prefetches every model at boot precisely so that prop
+    // placement cannot vary with network timing (js/render/assets.js modelSync).
+    function bakedModel(id, k, side, dist, opts) {
+      if (typeof Assets === "undefined" || !Assets.modelSync) return false;
+      const mesh = Assets.modelSync(id);
+      if (!mesh) return false;
+      const o = opts || {};
+      const a = anchor(k, side, dist);
+      if (!a || !isFinite(a.c[0]) || !isFinite(a.c[1]) || !isFinite(a.c[2])) return false;
+      // Face the track by default: yaw from the track tangent, flipped on the
+      // right-hand side so a model authored facing +Z always looks at the road.
+      const yaw = o.rotY != null ? o.rotY
+                : Math.atan2(a.t[0], a.t[2]) + (side < 0 ? Math.PI / 2 : -Math.PI / 2);
+      return TrackGeom.addMesh(out, mesh, {
+        x: a.c[0], y: a.c[1] + (o.lift || 0), z: a.c[2],
+        rotY: yaw, scale: o.scale != null ? o.scale : 1,
+        tint: o.tint || null, mat: o.mat,
+      });
+    }
+
     // Per-circuit bespoke scenery lives in js/tracks/<id>.js (def.scenery).
     if (def.scenery) {
       let sceneryApi = {
@@ -1762,6 +1794,8 @@ const Tracks = (function () {
         signBoard, sponsorHoarding,
         // barriers / track furniture
         wall, fence, guardrail, tyreWall, recordBarrier,
+        // baked asset pack — returns false (and emits nothing) with no pack
+        bakedModel, bakedModels: () => (typeof Assets !== "undefined" ? Assets.models() : []),
       };
       // Reversed lap: flip the s-fraction (s → 1-s), node index (k → n-k) and
       // side (±1 → ∓1) of every placement helper so bespoke scenery authored for
