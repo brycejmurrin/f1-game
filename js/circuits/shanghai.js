@@ -61,11 +61,28 @@
       const { out, track, n, px, pz, py, hw, pyMin, hash, vadd,
         place, prop, backdrop, groundYAt, anchor, addBox, addCyl, addCone, seat,
         addFrustum, addPrism, addPyramid, along, every,
-        building, motorhome, tower, cityFront, grandstand, billboard, gantry, marshalPost,
+        building, motorhome, tower, cityFront, grandstand, grandstandEx, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm,
         forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan,
-        waterSurface, groundPatch, sailCanopy } = api;
+        waterSurface, groundPatch, sailCanopy,
+        cameraTower, broadcastCompound, sponsorHoarding } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      // Places `count` evenly-spaced lotus-petal sails along a stand run —
+      // extends the venue's signature canopy (hand-authored at the T1 bowl
+      // and T14 hairpin as one-off anchor()+sailCanopy() triples) across the
+      // mid-sector and back-straight stand runs so it reads as recurring
+      // venue architecture instead of two isolated clusters.
+      const sailRow = (s0, s1, side, dist, count, opts) => {
+        opts = opts || {};
+        const rx = opts.rx || 15, rz = opts.rz || 9, h = opts.h || 15;
+        const col = opts.col || [0.90, 0.91, 0.92];
+        for (let i = 0; i < count; i++) {
+          const s = s0 + (i + 0.5) / count * (s1 - s0);
+          const a = anchor(K(s), side, dist);
+          sailCanopy(a.c, [a.r, a.u, a.t], { rx, rz, h, col, ribs: 8, thick: 0.65 });
+        }
+      };
 
       // ---- Palette: hazy modern Tilke — concrete greys, white steel, marsh green ----
       const CONC  = [0.70, 0.72, 0.74];
@@ -174,6 +191,12 @@
       place(K(0.99), 1, 10, [5, 2.4, 12], CONC);
       place(K(0.99), 1, 10, [5, 0.6, 12], RED);
 
+      // ---- Broadcast compound behind the paddock (OB vans + uplink dishes) ----
+      // Every real F1 venue runs one of these; the game had zero anywhere.
+      // Sits well beyond the garage boxes so it reads as background paddock
+      // infrastructure rather than crowding the pit-wall furniture.
+      broadcastCompound(K(0.975), 1, 30, { vans: 3, dishes: 2, mastH: 10 });
+
       // ---- Lamp posts down the pit straight — warm sodium heads ----
       along(0.00, 0.04, 18, (k) => {
         for (const side of [-1, 1]) {
@@ -221,8 +244,12 @@
       // ================= START GRANDSTAND TIERS (s 0.04, L) =================
       // Short, locally oriented modules follow the flat terrain without their
       // unguarded crowd risers chord-cutting the nearby start/finish foldback.
-      grandstand(0.032, -1, 20, 28, [0.44, 0.45, 0.50], SEAT);
-      grandstand(0.052, -1, 24, 28, [0.42, 0.43, 0.48], SEAT);
+      // Steel/concrete liveries + a truss roof break the pair apart without
+      // introducing a third colour family this close to the twin-wing stand.
+      grandstandEx(0.032, -1, 20, 28, null, null,
+        { livery: "steel", roof: "cantilever", endWalls: true });
+      grandstandEx(0.052, -1, 24, 28, null, null,
+        { livery: "concrete", roof: "flat", pylons: true });
       billboard(K(0.045), -1, 14, 16, 4.5, YELLOW);
 
       // ================= SNAIL T1–3 — coiling pale runoff (cockpit-readable) =================
@@ -251,15 +278,24 @@
           place(k, 1, 3.8, [1.2, 0.35, 2.2], CONC);
         });
       })();
-      // Snail grandstands wrapping the coiling Turn 1–3 spiral.
-      grandstand(0.05,  1, 95, 30, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.085, 1, 85, 28, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.10,  -1, 45, 28, [0.42, 0.43, 0.48], SEAT);
-      grandstand(0.115, -1, 42, 26, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.13,  1, 72, 26, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.064, 1, 112, 28, [0.41, 0.42, 0.47], CROWD);
-      grandstand(0.098, 1, 104, 30, [0.42, 0.43, 0.48], CROWD);
-      grandstand(0.142, -1, 50, 28, [0.42, 0.43, 0.48], SEAT);
+      // Snail grandstands wrapping the coiling Turn 1–3 spiral — the venue's
+      // biggest single stand cluster (8 of the file's 28 grandstand() calls).
+      // Rotate STAND_SETS.shanghai (steel/crimson/concrete) with mixed
+      // tiers/roofs/suites instead of one grey box repeated eight times.
+      grandstandEx(0.05,  1, 95, 30, null, null,
+        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+      grandstandEx(0.085, 1, 85, 28, null, null,
+        { livery: "crimson", roof: "flat" });
+      grandstandEx(0.10,  -1, 45, 28, null, null,
+        { livery: "concrete", roof: "truss", pylons: true });
+      grandstandEx(0.115, -1, 42, 26, null, null,
+        { livery: "steel", tiers: 2 });
+      grandstandEx(0.13,  1, 72, 26, null, null,
+        { livery: "crimson", roof: "cantilever", endWalls: true });
+      grandstandEx(0.064, 1, 112, 28, null, null, { livery: "concrete" });
+      grandstandEx(0.098, 1, 104, 30, null, null, { livery: "steel" });
+      grandstandEx(0.142, -1, 50, 28, null, null,
+        { livery: "crimson", roof: "truss", pylons: true });
       billboard(K(0.07),  1, 56, 16, 5, YELLOW);
       billboard(K(0.095), 1, 44, 16, 5, RED);
       marshalPost(K(0.08), -1, 14);
@@ -277,13 +313,14 @@
         });
       }
 
-      // Dense but bounded fan terraces behind the snail stands. These low
-      // colour blocks sit beyond the guarded grandstand shells.
-      (function snailFanTerraces() {
-        for (const [s, side, dist] of [
-          [0.060, 1, 120],
-          [0.098, 1, 110],
-        ]) {
+      // Fan-terrace colour-block variation. Previously only the two snail
+      // spots below had this treatment — everywhere else crowd colour was
+      // flat. Promoted to a local helper and spread to the mid-sector,
+      // back-straight and T14 stand runs: five spots across the lap instead
+      // of two. These low colour blocks sit beyond the guarded grandstand
+      // shells, tucked into the crowd mass.
+      const fanTerraces = (spots) => {
+        for (const [s, side, dist] of spots) {
           const a = anchor(K(s), side, dist), b = [a.r, a.u, a.t];
           for (let i = 0; i < 6; i++) {
             const c = vadd(vadd(a.c, a.t, (i - 2.5) * 7), a.u, 1.4);
@@ -291,7 +328,14 @@
               i % 3 === 0 ? RED : (i % 3 === 1 ? YELLOW : CROWD), b);
           }
         }
-      })();
+      };
+      fanTerraces([
+        [0.060, 1, 120],   // snail (existing)
+        [0.098, 1, 110],   // snail (existing)
+        [0.470, 1,  58],   // mid-sector run
+        [0.800, 1,  74],   // back-straight run
+        [0.905, -1, 60],   // T14 hairpin
+      ]);
 
       // ================= ONE HAZY PUDONG CLUSTER (s 0.30, L far) =================
       // Wraparound skyline rings culled — Jiading is marsh campus, not a megacity
@@ -391,16 +435,45 @@
         }, { required: true });
       })();
 
-      // ================= MID-SECTOR GRANDSTAND (s 0.45, R) =================
-      grandstand(0.42, 1, 22, 30, [0.44, 0.45, 0.50], SEAT);
-      grandstand(0.45, 1, 20, 34, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.48, 1, 22, 30, [0.42, 0.43, 0.48], SEAT);
-      grandstand(0.50, 1, 20, 28, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.435, 1, 46, 30, [0.40, 0.42, 0.47], CROWD);
-      grandstand(0.475, 1, 48, 30, [0.41, 0.43, 0.48], CROWD);
-      grandstand(0.515, 1, 46, 28, [0.42, 0.44, 0.49], SEAT);
+      // Optional honesty layer: Anting's real backdrop beside the (deliberately
+      // fictitious, per this file's own comments) Pudong cue is auto-plant
+      // sheds and country park, not skyline. A low industrial shed row sits
+      // well in front of the Pudong cluster (closer dist) so it reads as
+      // foreground without undercutting the recognisability cue behind it.
+      (function industrialSheds() {
+        for (let i = 0; i < 6; i++) {
+          const k = K(0.335 + i * 0.007);
+          const w = 26 + hash(i * 9) * 12;
+          const h = 7 + hash(i * 5) * 3;
+          backdrop(k, -1, 150 + hash(i * 7) * 25, [w, h, 16], [0.60, 0.60, 0.58]);
+        }
+      })();
+
+      // ================= MID-SECTOR GRANDSTAND (s 0.42–0.52, R) =================
+      // Six of the file's 28 grandstand() calls sat here varying only ±0.02
+      // RGB (SCENERY-UPGRADE-PLAN §3, one of the two flagged near-identical
+      // runs). Rotate the shanghai STAND_SETS livery family with tier/roof/
+      // suite variety so the run reads as a proper stadium build-up.
+      grandstandEx(0.42, 1, 22, 30, null, null,
+        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+      grandstandEx(0.45, 1, 20, 34, null, null,
+        { livery: "crimson", roof: "flat" });
+      grandstandEx(0.48, 1, 22, 30, null, null,
+        { livery: "concrete", roof: "truss", pylons: true });
+      grandstandEx(0.50, 1, 20, 28, null, null,
+        { livery: "steel", roof: "cantilever", endWalls: true });
+      grandstandEx(0.435, 1, 46, 30, null, null, { livery: "crimson" });
+      grandstandEx(0.475, 1, 48, 30, null, null, { livery: "concrete" });
+      grandstandEx(0.515, 1, 46, 28, null, null,
+        { livery: "steel", roof: "flat" });
       billboard(K(0.46), 1, 12, 16, 4.5, RED);
       marshalPost(K(0.45), 1, 12);
+
+      // Lotus-petal sail motif extended from the T1/T14 clusters across this
+      // run — sits ~11 m beyond the front-row stands, matching the T1 offset,
+      // so the canopy now reads as recurring venue architecture, not a
+      // two-cluster one-off.
+      sailRow(0.415, 0.520, 1, 33, 4, { rx: 15, rz: 9, h: 15, col: WHITE });
 
       // Modern spectator footbridge at the mid-sector arena. High clearance
       // preserves braking references and gives the clustered stands a gateway.
@@ -432,6 +505,30 @@
           [70 + hash(i * 3) * 40, 5 + hash(i * 5) * 6, 20], MARSH);
       }
 
+      // ================= MID-GROUND FILL — s 0.58–0.78 (emptiest fifth) =================
+      // Before this pass the only dressing between the mid-sector stands and
+      // the back-straight grandstands was a distant marsh backdrop + hedge —
+      // near-zero near/mid-ground furniture across ~20% of the lap
+      // (SCENERY-UPGRADE-PLAN §3). Add a continuous signage run, marshal
+      // cover, a camera tower on each side, and reed/scrub clumps between the
+      // fence line and the far marsh backdrop.
+      sponsorHoarding(0.58, 0.72, 1, 9, {
+        step: 14, palette: [RED, WHITE, YELLOW, STEEL], postCol: DARK,
+      });
+      fence(0.58, 0.72, 1, 8, 3.0, [0.70, 0.72, 0.76]);
+      cameraTower(K(0.615), 1, 22, { h: 16, col: STEEL });
+      cameraTower(K(0.695), -1, 30, { h: 14, col: SEAT });
+      marshalPost(K(0.605), -1, 22);
+      marshalPost(K(0.705),  1, 17);
+      billboard(K(0.65), 1, 14, 14, 4.5, RED);
+      for (let i = 0; i < 6; i++) {
+        const s = 0.585 + i * 0.026;
+        const side = (i % 2) ? -1 : 1;
+        const d = 26 + hash(i * 9) * 34;
+        bush(K(s), side, d, MARSH);
+        bush(K(s), side, d + 6, MARSH_N);
+      }
+
       // ================= LONG BACK STRAIGHT — open verges (s 0.78, R) =================
       fence(0.72, 0.88, 1, 8, 3.0, [0.70, 0.72, 0.76]);
       billboard(K(0.76), 1, 10, 18, 5, RED);
@@ -439,13 +536,22 @@
       billboard(K(0.79), 1, 10, 18, 5, RED);
       marshalPost(K(0.80), 1, 14);
       marshalPost(K(0.74), 1, 12);
-      // small grandstand banks lining the long back straight
-      grandstand(0.755, 1, 38, 34, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.775, 1, 62, 30, [0.40, 0.42, 0.47], CROWD);
-      grandstand(0.80,  1, 38, 34, [0.42, 0.43, 0.48], SEAT);
-      grandstand(0.823, 1, 62, 30, [0.41, 0.43, 0.48], CROWD);
-      grandstand(0.845, 1, 38, 32, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.865, 1, 58, 28, [0.42, 0.44, 0.49], SEAT);
+      // Grandstand banks lining the long back straight — the second of the
+      // two six-stand near-identical runs flagged in SCENERY-UPGRADE-PLAN §3.
+      // Same livery/tier/roof rotation as the mid-sector run.
+      grandstandEx(0.755, 1, 38, 34, null, null,
+        { livery: "crimson", tiers: 2, roof: "cantilever", endWalls: true });
+      grandstandEx(0.775, 1, 62, 30, null, null, { livery: "steel" });
+      grandstandEx(0.80,  1, 38, 34, null, null,
+        { livery: "concrete", roof: "truss", pylons: true });
+      grandstandEx(0.823, 1, 62, 30, null, null, { livery: "crimson" });
+      grandstandEx(0.845, 1, 38, 32, null, null,
+        { livery: "steel", roof: "flat", endWalls: true });
+      grandstandEx(0.865, 1, 58, 28, null, null,
+        { livery: "concrete", roof: "cantilever" });
+
+      // Sail canopy motif carried onto the back straight's stand run.
+      sailRow(0.750, 0.870, 1, 50, 4, { rx: 15, rz: 9, h: 15, col: [0.88, 0.89, 0.91] });
       // sparse low shrub clumps on the verge (were 0.9 m green box slabs)
       for (let i = 0; i < 4; i++) {
         bush((K(0.74) + i * Math.round(n * 0.014)) % n, 1, 36 + i * 8, MARSH);
@@ -459,11 +565,14 @@
       });
 
       // ================= T14 HAIRPIN GRANDSTAND (s 0.90, L) =================
-      grandstand(0.88,  -1, 24, 30, [0.44, 0.45, 0.50], SEAT);
-      grandstand(0.892, -1, 48, 28, [0.42, 0.43, 0.48], CROWD);
-      grandstand(0.905, -1, 28, 32, [0.43, 0.44, 0.49], SEAT);
-      grandstand(0.918, -1, 52, 28, [0.41, 0.43, 0.48], CROWD);
-      grandstand(0.93,  -1, 30, 28, [0.42, 0.43, 0.48], SEAT);
+      grandstandEx(0.88,  -1, 24, 30, null, null,
+        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+      grandstandEx(0.892, -1, 48, 28, null, null, { livery: "crimson" });
+      grandstandEx(0.905, -1, 28, 32, null, null,
+        { livery: "concrete", roof: "truss", pylons: true });
+      grandstandEx(0.918, -1, 52, 28, null, null, { livery: "steel" });
+      grandstandEx(0.93,  -1, 30, 28, null, null,
+        { livery: "crimson", roof: "flat", endWalls: true });
       // A second lotus-roof family makes the T14 hairpin the visual counterpoint
       // to the T1 bowl while leaving the corner exit and pit-entry sightline open.
       for (const [s, dist, rx] of [

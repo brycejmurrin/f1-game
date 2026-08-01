@@ -61,15 +61,15 @@
     ],
     scenery: function (api) {
       const { out, track, n, px, py, pz, hw, pyMin, place, every, ferrisWheel,
-              hash, mountain, pine, tree, bush, grandstand, building, tower, billboard,
+              hash, mountain, pine, tree, bush, grandstandEx, spectatorHill,
+              building, tower, billboard,
               marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
               addBox, addCyl, addCone, addFrustum, groundYAt, onTrack, forestEdge, backdrop,
-              MAT, modelGroup, overheadSpan, circuitKit } = api;
+              MAT, modelGroup, overheadSpan, circuitKit, cameraTower, broadcastCompound } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Suzuka palette ──────────────────────────────────────────────────────
       const navy      = [0.18, 0.26, 0.46];
-      const crowdMix  = [0.78, 0.45, 0.40];   // warm packed-crowd colour
       const concrete  = [0.62, 0.63, 0.67];
       const steel     = [0.40, 0.42, 0.48];
       // Motopia theme-park accent palette — primaries pop against forested hills
@@ -84,9 +84,12 @@
       const sakuraPink  = [0.96, 0.72, 0.80];
       const sakuraLight = [0.98, 0.80, 0.88];
 
-      // ── Grandstand helper: terrain-seated raked crowd + back shell ───────────
-      const stand = (s, side, gap, len, shell) => {
-        grandstand(s, side, gap, len, shell || steel, crowdMix);
+      // ── Grandstand helper: terrain-seated raked crowd + back shell, varied per
+      //    call via grandstandEx opts — liveries rotate through STAND_SETS.suzuka
+      //    (steel/navy/concrete) so the ten stands read as one venue that still
+      //    differs stand-to-stand, instead of one grey box repeated ten times. ──
+      const stand = (s, side, gap, len, opts) => {
+        grandstandEx(s, side, gap, len, null, null, opts || {});
       };
 
       // ── Forested Mie-prefecture hills: three depth-haze rings of wooded summits
@@ -270,8 +273,44 @@
       }
 
       // ── Pit & paddock complex (right side of main straight) ───────────────────
-      building(Math.round(n * 0.985) % n, 1, 9, 14, 9, 60, { wall: concrete, window: litWin, floor: 3, roof: false });
-      building(Math.round(n * 0.990) % n, 1, 30, 22, 16, 28, { wall: [0.80, 0.80, 0.84], window: litWin, floor: 4, setback: true, roof: true });
+      // Garage-bay rhythm via circuitKit — replaces two raw building() slabs
+      // that gave the whole pit complex zero bay rhythm (just a windowed wall).
+      if (circuitKit) {
+        circuitKit.pitBuilding({
+          id: "kit:suzuka:pit-building", frac: 0.985, side: 1, gap: 9,
+          size: [14, 9, 60], garages: 15, required: true,
+        });
+        // Suzuka's Race Control tower — the clock-face silhouette in every
+        // pit-straight broadcast shot. Was a generic scenic tower() with no
+        // clock and no relationship to the garage block it sits beside.
+        circuitKit.raceControl({
+          id: "kit:suzuka:race-control", frac: 0.995, side: 1, gap: 22,
+          size: [9, 30, 9], required: true,
+        });
+      }
+      // Analogue clock face on the tower's pit-straight-facing side. The kit's
+      // raceControl has no clock option, so this is a small bespoke addition
+      // flush with the tower's front face (same k/side/gap as the call above).
+      {
+        const rk = Math.round(n * 0.995) % n;
+        const rc = anchor(rk, 1, 22), rb = [rc.r, rc.u, rc.t];
+        const faceC = vadd(rc.c, rc.u, 24);
+        modelGroup("kit:suzuka:race-control-clock", {
+          center: faceC, size: [1.2, 6.6, 6.6], basis: rb,
+        }, (stage) => {
+          addBox(stage, vadd(faceC, rc.r, 0.05), [0.3, 6.2, 6.2], navy, rb);            // housing surround
+          addCyl(stage, vadd(faceC, rc.r, 0.22), 2.9, 0.22, [0.96, 0.96, 0.94], 16, [rc.u, rc.r, rc.t]);  // white face
+          addCyl(stage, vadd(faceC, rc.r, 0.45), 3.05, 0.14, navy, 16, [rc.u, rc.r, rc.t]);               // rim
+          addBox(stage, vadd(faceC, rc.r, 0.32), [0.14, 0.32, 1.9], navy, rb);          // hour hand
+          addBox(stage, vadd(faceC, rc.r, 0.32), [0.14, 2.3, 0.14], navy, rb);          // minute hand
+        }, { required: true });
+      }
+      // Broadcast compound behind the pit roof — OB trucks + satellite uplink
+      // dishes. No circuit modelled this before; the plan's top requested
+      // new landmark. Set back at gap 32 (clear of the pit building's 9-23 m
+      // footprint) and offset to frac 0.992 (clear of both the pit building's
+      // and race control's tangential extents).
+      broadcastCompound(Math.round(n * 0.992) % n, 1, 32, { vans: 3, dishes: 2, mastH: 9 });
       // Japanese GP hospitality village: low, modular event suites behind the
       // paddock preserve the pit-straight sightline while deepening race-weekend scale.
       if (circuitKit) {
@@ -285,7 +324,6 @@
         });
       }
       guardrail(0.965, 0.04, 1, 2.5, [0.88, 0.88, 0.90]);
-      tower(Math.round(n * 0.995) % n, 1, 22, 9, 30, { col: [0.86, 0.87, 0.90], seg: 6, cap: true, capCol: navy, mast: 7 });
       overheadSpan({ id: "suzuka-start-gantry", frac: 0.0, clearance: 7.2,
         thickness: 0.9, depth: 1.8, supportGap: 2.5, supportWidth: 1.0,
         color: [0.14, 0.14, 0.18], required: true });
@@ -408,6 +446,30 @@
         tree(Math.round(n * 0.62) % n, -1, 22, 6.5, sakuraLight);
       }
 
+      // ── Dunlop Curve branded arch ─────────────────────────────────────────────
+      // The corner is named for a Dunlop tyre-company arch that once spanned it;
+      // nothing in the scene marked it. A branded overhead span (Dunlop blue)
+      // plus two branded pylons — the same safe overhead-span mechanism already
+      // used for the start/scoring gantries, with trackside posts standing in
+      // for the arch's legs instead of relying on unguarded beam-mounted signage.
+      {
+        const dunlopBlue = [0.05, 0.28, 0.62], dunlopYellow = [0.96, 0.80, 0.10];
+        const dk = K(0.205);
+        overheadSpan({ id: "suzuka-dunlop-arch", frac: 0.205, clearance: 7.4,
+          thickness: 1.1, depth: 2.6, span: hw[dk] * 2 + 9,
+          color: dunlopBlue, required: true });
+        for (const side of [-1, 1]) {
+          const da = anchor(dk, side, 3.2), db = [da.r, da.u, da.t];
+          const postC = vadd(da.c, da.u, 4.1);
+          modelGroup(`suzuka-dunlop-arch-post-${side < 0 ? "left" : "right"}`, {
+            center: postC, size: [1.4, 8.2, 1.4], basis: db,
+          }, (stage) => {
+            addBox(stage, postC, [1.4, 8.2, 1.4], dunlopBlue, db);
+            addBox(stage, vadd(da.c, da.u, 6.4), [1.6, 1.4, 1.6], dunlopYellow, db); // brand cap band
+          }, { required: true });
+        }
+      }
+
       // ── Low shrub clusters at road margin (replaces over-close bush loops) ────
       every(40, (k) => {
         const s = hash(k * 61);
@@ -438,6 +500,20 @@
       for (const [s, sd] of [[0.12, 1], [0.28, -1], [0.43, 1], [0.58, -1], [0.72, 1], [0.85, 1], [0.95, -1]]) {
         marshalPost(Math.round(n * s) % n, sd, 5);
       }
+      // ── Degner→Hairpin corridor (s≈0.30–0.45) — was bare but for a fence and a
+      //    marshal post: braking/corner signage close to the road plus a
+      //    broadcast camera tower rising above the treeline. ───────────────────
+      if (circuitKit) {
+        circuitKit.trackSigns({
+          id: "kit:suzuka:degner-signs", frac: 0.335, side: -1, gap: 6,
+          size: [3, 3, 30], count: 8, required: true,
+        });
+        circuitKit.trackSigns({
+          id: "kit:suzuka:hairpin-approach-signs", frac: 0.42, side: 1, gap: 6,
+          size: [3, 3, 26], count: 7, required: true,
+        });
+      }
+      cameraTower(K(0.37), -1, 20, { h: 18 });
       // Trackside billboards
       for (const [s, sd] of [[0.20, 1], [0.46, 1], [0.63, -1], [0.88, 1]]) {
         const gap = s === 0.88 ? 14 : 7;
@@ -502,21 +578,32 @@
         addBox(out, vadd(lp4.c, lp4.u, 9.4), [1.6, 0.4, 1.0], lampWarm, lb4);
       });
 
-      // ── Grandstands at all signature corners ─────────────────────────────────
-      stand(0.00, -1, 15, 52, navy); // Main grandstand — clear of the curved pit approach
-      stand(0.15,  1, 15, 28);       // Esses — compact bank on the rising outside
-      stand(0.28, -1, 9, 28);        // Degner entry
-      stand(0.45,  1, 9, 38);        // Hairpin
-      stand(0.62, -1, 9, 38);        // Spoon
-      stand(0.75,  1, 8, 26);        // 200R approach
-      stand(0.84,  1, 8, 34);        // 130R
-      stand(0.94,  1, 9, 35);        // Casio Triangle right
-      stand(0.94, -1, 9, 35);        // Casio Triangle left
-      stand(0.50,  1, 8, 24);        // Mid-circuit flex stand
+      // ── Grandstands at all signature corners — ten stands, liveries rotated
+      //    through STAND_SETS.suzuka (steel/navy/concrete) via grandstandEx opts
+      //    so no two neighbours read as the same grey box. ─────────────────────
+      stand(0.00, -1, 15, 52, { livery: "navy", tiers: 2, roof: "cantilever",
+        suites: true, endWalls: true, pylons: true }); // Main grandstand — clear of the curved pit approach; navy base under the Honda crown accent
+      stand(0.15,  1, 15, 28, { livery: "steel", roof: "truss" });         // Esses — compact bank on the rising outside
+      stand(0.28, -1, 9, 28,  { livery: "concrete", roof: "flat" });      // Degner entry
+      stand(0.45,  1, 9, 38,  { livery: "navy", tiers: 2, endWalls: true }); // Hairpin
+      stand(0.75,  1, 8, 26,  { livery: "steel", roof: "none" });         // 200R approach — uncovered bleacher
+      stand(0.94,  1, 9, 35,  { livery: "steel", roof: "truss", endWalls: true });  // Casio Triangle right
+      stand(0.94, -1, 9, 35,  { livery: "navy", roof: "truss", endWalls: true });   // Casio Triangle left
+      stand(0.50,  1, 8, 24,  { livery: "concrete" });                    // Mid-circuit flex stand
       // Compact packed fan terraces at the two strongest driver-eye hero beats.
       // Grandstand shells guard the crowd geometry and keep it behind catch fencing.
-      stand(0.205, 1, 20, 22, [0.82, 0.84, 0.86]); // Esses crest crowd
-      stand(0.875, 1, 18, 24, navy);                  // 130R exit crowd
+      stand(0.205, 1, 20, 22, { livery: "steel", roof: "none" }); // Esses crest crowd
+      stand(0.875, 1, 18, 24, { livery: "concrete", endWalls: true }); // 130R exit crowd
+
+      // ── Spoon and 130R: grass-bank terracing, not roofed stands ──────────────
+      // Real spectator viewing here is informal earth terracing on the hillside,
+      // not a built stand — spectatorHill replaces the roofed grandstand() calls
+      // that used to stand in for both.
+      const hillHalf = (lenM) => (lenM / 2) / track.total;
+      spectatorHill(0.62 - hillHalf(40), 0.62 + hillHalf(40), -1, 9,
+        { rows: 4, density: 0.55 }); // Spoon
+      spectatorHill(0.84 - hillHalf(36), 0.84 + hillHalf(36), 1, 8,
+        { rows: 4, density: 0.5 });  // 130R
     },
   }
   );

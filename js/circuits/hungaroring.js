@@ -51,7 +51,8 @@
     ],
     scenery: function (api) {
       const { out, MAT, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
-              mountain, peak, ridge, tree, pine, bush, hedge, grandstand, building, motorhome, tower,
+              mountain, peak, ridge, tree, pine, bush, hedge, grandstand, grandstandEx, spectatorHill,
+              broadcastCompound, cameraTower, building, motorhome, tower,
               billboard, marshalPost, fence, guardrail, tyreWall,
               anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
               seat, foundation, cantilever,
@@ -143,18 +144,40 @@
       // STADIUM SECTION — Turns 1–4 + mid-lap stands (s=0 main tribune is bespoke below)
       // ====================================================================
       billboard(K(0.00), 1, 38, 22, 6, RED);
-      // T1 grandstand group: outside of Turn 1 braking zone
-      grandstand(0.06,  1, 11,  70, SHELL,  CROWD[0]);
+      // T1 grandstand group: outside of Turn 1 braking zone. grandstandEx with
+      // STAND_SETS.hungaroring liveries (steel/concrete/alu) so the ring varies
+      // circuit-to-circuit AND stand-to-stand instead of the old flat SHELL grey.
+      grandstandEx(0.06,  1, 11,  70, SHELL, CROWD[0],
+                   { livery: "steel", tiers: 2, roof: "cantilever", suites: true, pylons: true });
       // Stadium inside: Apex 1/2 banked stands inside Turn 1-2
-      grandstand(0.10, -1, 10,  56, SHELL,  CROWD[2]);
+      grandstandEx(0.10, -1, 10,  56, SHELL, CROWD[2],
+                   { livery: "concrete", tiers: 2, roof: "flat" });
       // Sector grandstands across the back of the circuit
-      grandstand(0.12, -1, 10, 44, SHELL,  CROWD[2]);
-      grandstand(0.35, -1, 12, 48, SHELL,  CROWD[1]);
-      grandstand(0.40,  1, 13, 46, SHELL,  CROWD[0]);
-      grandstand(0.55, -1, 10, 50, SHELL,  CROWD[1]);
-      grandstand(0.68, -1, 10, 44, SHELL,  CROWD[2]);
-      grandstand(0.80,  1, 10, 40, SHELL,  CROWD[3]);
-      grandstand(0.90,  1, 10, 62, SHELL,  CROWD[0]);   // Club stand — final corner
+      grandstandEx(0.12, -1, 10, 44, SHELL, CROWD[2],
+                   { livery: "alu", tiers: 1, roof: "truss" });
+      // ---- Turn 5 (Mogyoród) → Turn 6/7 chicane ("Driving Centre") ----
+      // s 0.12-0.30 was the clearest hole on the lap: no stand of any kind
+      // across ~800 m of a documented, heavily tree-lined grandstand location.
+      // Both new stands sit at generous `gap` so the deferred forestEdge() pass
+      // (it reads the barrier/solid index built by grandstandEx's recordBarrier
+      // + indexSolid AFTER this runs) frames them INSIDE the treeline rather
+      // than growing trees through them.
+      grandstandEx(0.155, 1, 24, 58, SHELL, CROWD[1],
+                   { livery: "alu", tiers: 1, roof: "truss", endWalls: true });     // Turn 5 Mogyoród
+      grandstandEx(0.255, -1, 22, 54, SHELL, CROWD[3],
+                   { livery: "steel", tiers: 1, roof: "cantilever", suites: true }); // T6/7 Driving Centre chicane
+      grandstandEx(0.35, -1, 12, 48, SHELL, CROWD[1],
+                   { livery: "concrete", tiers: 1, roof: "cantilever" });
+      grandstandEx(0.40,  1, 13, 46, SHELL, CROWD[0],
+                   { livery: "steel", tiers: 2, roof: "flat" });
+      grandstandEx(0.55, -1, 10, 50, SHELL, CROWD[1],
+                   { livery: "alu", tiers: 1, roof: "truss" });
+      grandstandEx(0.68, -1, 10, 44, SHELL, CROWD[2],
+                   { livery: "concrete", tiers: 1, roof: "cantilever" });
+      grandstandEx(0.80,  1, 10, 40, SHELL, CROWD[3],
+                   { livery: "steel", tiers: 1, roof: "flat" });
+      grandstandEx(0.90,  1, 10, 62, SHELL, CROWD[0],   // Club stand — final corner
+                   { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
 
       // ====================================================================
       // GRANDSTAND ACCENT STRIPS — lit fascia + concourse window bands
@@ -171,6 +194,8 @@
       standAccent(0.06, 1, 11,   70);
       standAccent(0.10, -1, 10, 56);
       standAccent(0.12, -1, 10, 44);
+      standAccent(0.155, 1, 24, 58);
+      standAccent(0.255, -1, 22, 54);
       standAccent(0.35, -1, 12, 48);
       standAccent(0.40,  1, 13, 46);
       standAccent(0.55, -1, 10, 50);
@@ -182,6 +207,8 @@
       const gsLit = [
         { s: 0.06, side: 1, gap: 18, len: 66 },
         { s: 0.10, side: -1, gap: 15, len: 52 },
+        { s: 0.155, side: 1, gap: 26, len: 54 },
+        { s: 0.255, side: -1, gap: 24, len: 50 },
         { s: 0.35, side: -1, gap: 17, len: 44 },
         { s: 0.55, side: -1, gap: 15, len: 46 },
         { s: 0.90, side: 1, gap: 15, len: 58 },
@@ -230,9 +257,10 @@
         for (const side of [-1, 1]) {
           const hh = hash(kk * 31 + side * 7);
           if (hh < 0.15) continue;
-          // Skip problematic zone at frac ~0.432 (intrudes 1.05m at road level)
-          const frac = kk / n;
-          if (Math.abs(frac - 0.432) < 0.01 && side === -1) continue;
+          // frac~0.432 used to be skipped here for a reported terrain intrusion.
+          // Diagnosed (see the crowd-blanket note below): with terrainOuter:90
+          // already dialed in, neither the terrain raycast nor the on-track
+          // Minkowski test trips anywhere in this window — the skip was stale.
           const a = anchor(kk, side, 8);
           if (onTrack(a.c[0], a.c[2], 1.5)) continue;
           const b = [a.r, a.u, a.t];
@@ -249,9 +277,6 @@
         const kEnd = K(s1), step = Math.max(1, Math.round(50 / ds));
         for (let iter = 0; iter < n; iter++, kk = (kk + step) % n) {
           if (kk === kEnd) break;
-          // Skip problematic zone at frac ~0.432 (intrudes 1.05m)
-          const frac = kk / n;
-          if (Math.abs(frac - 0.432) < 0.01) continue;
           const a = anchor(kk, side, 8);
           if (onTrack(a.c[0], a.c[2], 1.5)) continue;
           const b = [a.r, a.u, a.t];
@@ -300,9 +325,20 @@
           stage._mat = MAT.CONCRETE;
           // Garage body — long low slab
           addBox(stage, vadd(a.c, a.u, 3.4), [11, 6.8, 78], WHITE, b);
-          // Garage-door rhythm (dark bays)
-          for (let i = -4; i <= 4; i++)
-            addBox(stage, vadd(vadd(a.c, a.u, 2.6), a.t, i * 8.2), [11.4, 4.0, 1.1], [0.28, 0.30, 0.34], b);
+          // Garage-door rhythm — the real 2025 rebuild runs 40 garages (36 race +
+          // 4 technical) across this frontage; the old 9-bay loop (one door every
+          // 8.2 m) read as a generic warehouse. Tighten the pitch so 36 doors span
+          // the same 78 m slab, with the last 4 slots (the technical garages)
+          // picked out in a slightly darker tone so the rhythm still reads as
+          // "36 + 4", not just "40 identical doors".
+          const DOOR_N = 36, DOOR_PITCH = 78 / DOOR_N;
+          for (let i = 0; i < DOOR_N; i++) {
+            const off = (i - (DOOR_N - 1) / 2) * DOOR_PITCH;
+            const technical = i >= DOOR_N - 4;
+            addBox(stage, vadd(vadd(a.c, a.u, 2.6), a.t, off),
+                   [11.4, 4.0, DOOR_PITCH * 0.55],
+                   technical ? [0.20, 0.21, 0.25] : [0.28, 0.30, 0.34], b);
+          }
           // Mid cladding band
           addBox(stage, vadd(a.c, a.u, 6.0), [11.6, 0.45, 78], GREY, b);
           // VIP terrace stacked on top
@@ -315,6 +351,15 @@
           // Warm VIP glass strip facing the straight
           addBox(stage, vadd(vadd(a.c, a.r, 4.6), a.u, 9.0), [0.2, 1.8, 60], WIN_WARM, b);
           addBox(stage, vadd(vadd(a.c, a.r, 4.6), a.u, 4.2), [0.2, 1.4, 64], WIN_COOL, b);
+          // Rooftop terrace — the 2025 rebuild's signature open-air roof deck
+          // above the VIP tier, with a glazed wind-rail around the perimeter.
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 11.15), [9.0, 0.3, 66], [0.86, 0.87, 0.90], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.r, 4.2), a.u, 12.0), [0.15, 1.5, 66], [0.40, 0.60, 0.70], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -4.2), a.u, 12.0), [0.15, 1.5, 66], STEEL, b);
+          for (const sgn of [-1, 1])
+            addBox(stage, vadd(vadd(a.c, a.t, sgn * 33), a.u, 12.0), [8.4, 1.5, 0.15], STEEL, b);
         }, { required: true });
       })();
       groundPatch(K(0.00), -1, 65, [120, 1.0, 130], PADDOCK,
@@ -322,6 +367,11 @@
       // Rear hospitality — motorhome row behind the pit slab
       motorhome(K(0.03), -1, 34, 16, 8, 34, { wall: WHITE, window: WIN_WARM });
       tower(K(0.02), -1, 46, 8, 32, { col: [0.74, 0.76, 0.80], cap: [0.6, 0.62, 0.66], mast: 8 });
+      // Broadcast/OB compound — every real venue keeps satellite trucks behind
+      // the paddock; this circuit had none. Tucked at a clearance no other
+      // paddock facility uses (motorhome sits at 34, hospitality kit at 92,
+      // service compound at 112) so it reads as its own yard, not a collision.
+      broadcastCompound(K(0.045), -1, 68, { vans: 4, dishes: 2, mastH: 10 });
       // Pit wall + kerb trim
       const pitWallPoints = [];
       for (let i = 0; i <= 28; i++) {
@@ -379,6 +429,30 @@
         }, { required: true });
       })();
 
+      // ── Pedestrian-tunnel stair-heads — the 2025 rebuild's two tunnels under
+      //    the start/finish straight are its other signature new feature.
+      //    Modelling the tunnels themselves is out of scope (they run under the
+      //    road mesh), but a stair-head kiosk at each end reads the same on the
+      //    surface: a low concrete block with a dark sunken stairwell mouth,
+      //    a flat canopy, and handrails. One at each end of the straight. ──
+      function tunnelStairhead(s, side) {
+        const a = anchor(K(s), side, 16);
+        if (onTrack(a.c[0], a.c[2], 6)) return;
+        const b = [a.r, a.u, a.t];
+        out._mat = MAT.CONCRETE;
+        addBox(out, vadd(a.c, a.u, 1.1), [4.5, 2.2, 5.5], PADDOCK, b);        // kiosk block
+        out._mat = 0;
+        // Sunken stairwell mouth — dark opening set into the block's inner face.
+        addBox(out, vadd(vadd(a.c, a.u, 1.0), a.r, -side * 2.1), [0.4, 1.9, 3.6], [0.06, 0.06, 0.08], b);
+        out._mat = MAT.METAL;
+        addBox(out, vadd(a.c, a.u, 2.35), [4.8, 0.15, 5.8], GREY, b);         // flat canopy
+        for (const sgn of [-1, 1])
+          addBox(out, vadd(vadd(a.c, a.u, 1.9), a.t, sgn * 2.6), [4.6, 0.9, 0.15], STEEL, b);  // handrails
+        out._mat = 0;
+      }
+      tunnelStairhead(0.975, -1);   // start/finish straight, pit-exit end
+      tunnelStairhead(0.028,  1);   // start/finish straight, Turn 1 end
+
       // ====================================================================
       // ACCENT FEATURES — water pond, hedge, Hungarian flags
       // ====================================================================
@@ -411,10 +485,30 @@
       every(26, (kk) => {
         const sf = kk / n;
         // Stadium bowl (T1-4, s0-0.10) + the lake/amphitheatre back sweeps.
+        // frac~0.42-0.44 used to be excluded here for a reported terrain
+        // intrusion at road level. DIAGNOSED: rebuilt this circuit headlessly
+        // (tools/verify-track.cjs harness) with the skip removed and instrumented
+        // every [scenery] SUPPRESSED warning — none fire anywhere near frac 0.43
+        // for any gap this file actually uses (8m lamps, 40-58m crowd blanket).
+        // A raycast against the built terrain mesh (mirroring the anchor()
+        // terrainYAt lookup) also shows a normal monotonic downhill slope away
+        // from the road there, no spike. The circuit already carries
+        // `terrainOuter: 90` (see top of file) specifically to stop this
+        // twisty-middle-sector terrain ribbon from chording across a nearby
+        // fold-back — that fix was applied circuit-wide and evidently also
+        // resolved this narrower band, leaving these three skips stale. Root
+        // mechanism (terrain ribbons from geometrically-close-but-lap-distant
+        // sections overlapping when a node's own outerW reaches far enough to
+        // touch a taller nearby section — confirmed: the s≈0.56 crest, py≈13.7m,
+        // sits only ~75-90m from this stretch in world space) lives in
+        // js/track/mesh.js buildTerrain + js/track/tracks.js terrainYAt, both
+        // engine files this task may not edit. No further js/track/ mitigation
+        // needed here since the symptom no longer reproduces at this circuit's
+        // gaps; if it resurfaces at a different gap, tightening `terrainOuter`
+        // further (currently 90) is the circuit-data lever, at the cost of
+        // thinning the ribbon on the wide, legitimate stretches too.
         const inBowl = sf < 0.12 || (sf > 0.32 && sf < 0.62) || sf > 0.88;
         if (!inBowl) return;
-        // Skip problematic zone at frac ~0.42-0.44 (intrudes 1.05m at ground level)
-        if (sf >= 0.42 && sf <= 0.44) return;
         for (const side of [-1, 1]) {
           const hh = hash(kk * 23 + side * 5);
           if (hh < 0.5) continue;
@@ -425,60 +519,63 @@
         }
       });
 
+      // The every(26) pass above explicitly excludes s 0.12-0.32 and 0.62-0.88 —
+      // real crowds at Hungaroring thin out on the quiet hillside bands away
+      // from the main viewing stretches, but they do not vanish outright the
+      // way the hard exclusion makes them. A second, much sparser pass fills
+      // just the two bands the brief calls out (0.12→0.30 and 0.62→0.78) with
+      // occasional patches — roughly a fifth of the density of the main bowl —
+      // so the furniture rhythm along the fence line doesn't go dead silent.
+      every(38, (kk) => {
+        const sf = kk / n;
+        const inSparseBand = (sf > 0.12 && sf < 0.30) || (sf > 0.62 && sf < 0.78);
+        if (!inSparseBand) return;
+        for (const side of [-1, 1]) {
+          const hh = hash(kk * 29 + side * 13 + 500);
+          if (hh < 0.80) continue;   // sparse: ~1 in 5 nodes gets a patch
+          const base = 30 + hh * 16;
+          const col = CROWD[((kk + (side > 0 ? 1 : 0)) | 0) % CROWD.length];
+          prop(kk, side, base, [7 + hh * 5, 0.3 + hh * 0.2, 8 + hh * 4], col);
+        }
+      });
+
       // ====================================================================
       // BESPOKE ENRICHMENT — terraced hillside stands packing the amphitheatre,
       // a trackside jumbotron, and the Budapest countryside beyond the bowl.
       // All models are LOCAL to this closure.
       // ====================================================================
 
-      // ── Terraced hillside stand — the Hungaroring signature: stepped tiers of
-      //    crowd rising up the natural banking, wrapping the bowl. Cheap slabs +
-      //    a sparse speckle so it reads as a packed grandstand, not a block. ──
-      const HG_SHELL_A = [0.48, 0.49, 0.52], HG_SHELL_B = [0.42, 0.43, 0.47];
-      function terracedHillStand(s, side, gap, len, tiers) {
-        const k = K(s);
-        const g0 = anchor(k, side, gap);
-        if (onTrack(g0.c[0], g0.c[2], len * 0.4)) return;
-        for (let t = 0; t < tiers; t++) {
-          const a = anchor(k, side, gap + t * 5.0);
-          const b = [a.r, a.u, a.t];
-          const h = 2.6 + t * 2.9;
-          out._mat = MAT.CONCRETE;
-          addBox(out, vadd(a.c, a.u, h * 0.5), [4.8, h, len], t % 2 ? HG_SHELL_A : HG_SHELL_B, b);
-          out._mat = MAT.FABRIC;
-          addBox(out, vadd(a.c, a.u, h + 0.75), [4.1, 1.4, len], CROWD[t % 4], b);
-          out._mat = 0;
-          addBox(out, vadd(a.c, a.u, h + 1.6), [4.4, 0.28, len + 1], [0.92, 0.90, 0.82], b);
-          const cnt = Math.min(16, Math.floor(len / 6));
-          out._mat = MAT.FABRIC;
-          for (let c = 0; c < cnt; c++) {
-            if (hash(k * 3 + t * 23 + c) < 0.45) continue;
-            const off = (c / (cnt - 1) - 0.5) * (len - 4);
-            addBox(out, vadd(vadd(a.c, a.t, off), a.u, h + 1.2), [1.7, 0.55, 1.1], CROWD[(c + t) % 4], b);
-          }
-          out._mat = 0;
-        }
-        // Slim roof canopy shading the top tier.
-        const aR = anchor(k, side, gap + (tiers - 0.5) * 5.0);
-        out._mat = MAT.METAL;
-        addBox(out, vadd(aR.c, aR.u, 2.6 + tiers * 2.9 + 1.4), [6.4, 0.42, len + 2],
-               [0.22, 0.23, 0.26], [aR.r, aR.u, aR.t]);
-        out._mat = 0;
+      // ── Grass-bank hillside crowd terracing behind each grandstand — the
+      //    Hungaroring signature: informal stepped earth risers rising up the
+      //    natural banking, wrapping the bowl. This used to be a hand-rolled
+      //    local terracedHillStand() (a mini shell+roof stand duplicating what
+      //    spectatorHill() now provides as a shared model — see
+      //    docs/SCENERY-UPGRADE-PLAN.md §1.4/§2). Deleted in favour of
+      //    spectatorHill(): real stepped risers + standing crowd, no shell/roof,
+      //    the correct silhouette for "general-admission hillside", set well
+      //    below its ~70 verts/m default (rows/density cut) since this rings
+      //    most of the lap and is repeated-furniture budget, not one hero bank.
+      const HG_RISER = [0.42, 0.43, 0.47];
+      const hillHalf = (len) => (len / 2) / (n * ds);   // metres → lap-fraction half-span
+      for (const [s, side, gap, len, rows] of [
+        [0.06,  1, 32, 64, 3],   // Turn 1 downhill hillside
+        [0.12, -1, 26, 48, 3],   // inside the slow complex
+        [0.145, 1, 36, 40, 2],   // grass shoulder around the Turn 5 (Mogyoród) stand
+        [0.19, -1, 30, 40, 2],   // inside hillside threading T5 into the chicane
+        [0.225, 1, 34, 38, 2],   // grass shoulder around the T6/7 "Driving Centre" stand
+        [0.27, -1, 28, 36, 2],   // trailing off toward T4
+        [0.30, -1, 30, 40, 2],
+        [0.40,  1, 34, 42, 2],
+        [0.48, -1, 30, 40, 2],
+        [0.58,  1, 30, 46, 2],
+        [0.68, -1, 28, 42, 2],
+        [0.78,  1, 30, 44, 2],
+        [0.90,  1, 28, 54, 3],   // Club-corner hillside back to the line
+      ]) {
+        const half = hillHalf(len);
+        spectatorHill(s - half, s + half, side, gap,
+                      { rows, density: 0.35, step: 8, crowd: CROWD, grass: AMPH2, riser: HG_RISER });
       }
-      // A near-continuous wall of thin terraced stands ringing the amphitheatre —
-      // packed tiers on the main bowl sweeps (vert-light; main tribune owns s=0).
-      for (const [s, side, gap, len, tiers] of [
-        [0.06, 1, 26, 64, 4],   // Turn 1 downhill hillside
-        [0.12, -1, 22, 48, 3],  // inside the slow complex
-        [0.20, 1, 26, 42, 3],
-        [0.30, -1, 26, 40, 3],
-        [0.40, 1, 28, 42, 3],
-        [0.48, -1, 24, 40, 3],
-        [0.58, 1, 24, 46, 3],
-        [0.68, -1, 22, 42, 3],
-        [0.78, 1, 24, 44, 3],
-        [0.90, 1, 22, 54, 4],   // Club-corner hillside back to the line
-      ]) terracedHillStand(s, side, gap, len, tiers);
 
       // ── Trackside jumbotron — a big screen on a truss frame facing the bowl. ──
       (function jumbotron() {
@@ -492,6 +589,13 @@
         out._mat = 0;
         addBox(out, vadd(vadd(c, a.r, -0.7), a.u, 12.5), [0.4, 5, 9.5], [0.05, 0.07, 0.12], b); // screen — stays FLAT (video screen)
       })();
+
+      // ── Camera towers — lattice masts at the circuit's classic broadcast
+      //    vantage points: the Turn 1 downhill braking zone, the newly-dressed
+      //    Turn 5/T6-7 chicane, and the final-corner run to the line. ──
+      cameraTower(K(0.065), -1, 42, { h: 16 });
+      cameraTower(K(0.20),  -1, 44, { h: 14 });
+      cameraTower(K(0.905),  -1, 40, { h: 14 });
 
       // ── Budapest countryside — a distant rural cluster (farmhouses + a white
       //    village church with a spire) on a hill beyond the far bank, plus

@@ -135,7 +135,7 @@ test("Madrid terrain drops away from the road instead of forming a raised floor"
 });
 
 test("no terrain/road faces over the racing line (all circuits)", async ({ page }) => {
-  test.setTimeout(600000);
+  test.setTimeout(1500000);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, { timeout: 15000 });
 

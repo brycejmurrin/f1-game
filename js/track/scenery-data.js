@@ -262,5 +262,62 @@ const TrackSceneryData = (function () {
     desertSand:  [0.72, 0.58, 0.38],   // warm tan runoff sandwich
   };
 
-  return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF, STYLES, THEME_DEF, ATM, COL };
+  // GRANDSTAND LIVERIES — named shell/roof/fascia colour sets for grandstandEx().
+  // A single grey template used at every circuit is the main reason stands blur
+  // together (248 grandstand() call sites all rendered the same box). Each entry
+  // is one recognisable stand FAMILY: `shell` is the back mass, `roof` the
+  // cantilever slab, `fascia` the band closing shell-top to roof-underside.
+  // `crowd` tints the dark step risers (the spectators themselves come from
+  // CROWD_DAY / the night mix in crowdBank).
+  const STAND_LIVERIES = {
+    // Permanent-circuit steel and concrete
+    steel:     { shell: [0.40, 0.41, 0.46], roof: [0.86, 0.88, 0.92], fascia: [0.44, 0.45, 0.50], crowd: [0.72, 0.40, 0.32] },
+    darkSteel: { shell: [0.24, 0.26, 0.31], roof: [0.52, 0.55, 0.60], fascia: [0.28, 0.30, 0.35], crowd: [0.68, 0.36, 0.30] },
+    concrete:  { shell: [0.58, 0.58, 0.56], roof: [0.78, 0.78, 0.76], fascia: [0.62, 0.62, 0.60], crowd: [0.66, 0.42, 0.34] },
+    // Bare aluminium bleachers — uncovered temporary seating
+    alu:       { shell: [0.74, 0.75, 0.78], roof: [0.88, 0.89, 0.92], fascia: [0.70, 0.71, 0.74], crowd: [0.62, 0.44, 0.38] },
+    scaffold:  { shell: [0.50, 0.52, 0.56], roof: [0.68, 0.70, 0.74], fascia: [0.46, 0.48, 0.52], crowd: [0.60, 0.40, 0.36] },
+    // Warm/regional families
+    sandstone: { shell: [0.72, 0.64, 0.50], roof: [0.88, 0.84, 0.74], fascia: [0.68, 0.60, 0.47], crowd: [0.70, 0.46, 0.28] },
+    terracotta:{ shell: [0.62, 0.40, 0.32], roof: [0.84, 0.78, 0.70], fascia: [0.58, 0.37, 0.30], crowd: [0.74, 0.38, 0.26] },
+    pastel:    { shell: [0.80, 0.78, 0.82], roof: [0.92, 0.90, 0.94], fascia: [0.76, 0.74, 0.78], crowd: [0.58, 0.48, 0.62] },
+    // Saturated / branded
+    crimson:   { shell: [0.52, 0.12, 0.16], roof: [0.86, 0.86, 0.88], fascia: [0.46, 0.11, 0.14], crowd: [0.80, 0.24, 0.20] },
+    navy:      { shell: [0.16, 0.22, 0.38], roof: [0.80, 0.83, 0.90], fascia: [0.15, 0.20, 0.34], crowd: [0.36, 0.44, 0.72] },
+    teal:      { shell: [0.16, 0.38, 0.40], roof: [0.82, 0.88, 0.88], fascia: [0.15, 0.34, 0.36], crowd: [0.30, 0.62, 0.60] },
+    orange:    { shell: [0.68, 0.34, 0.08], roof: [0.90, 0.88, 0.84], fascia: [0.62, 0.31, 0.07], crowd: [0.92, 0.52, 0.10] },
+  };
+
+  // Per-circuit stand FAMILIES — grandstandEx() rotates through the list so a
+  // circuit's stands vary from each other while staying recognisably one venue.
+  // Unlisted circuits fall back to STAND_SET_DEF.
+  const STAND_SET_DEF = ["steel", "darkSteel", "concrete"];
+  const STAND_SETS = {
+    monza:       ["crimson", "concrete", "steel"],          // tifosi red + old park concrete
+    imola:       ["crimson", "concrete", "steel"],
+    silverstone: ["navy", "steel", "alu"],                  // Silverstone blue
+    spa:         ["darkSteel", "steel", "concrete"],
+    suzuka:      ["steel", "navy", "concrete"],
+    zandvoort:   ["orange", "alu", "steel"],                // Oranje army
+    redbull:     ["crimson", "steel", "alu"],
+    hungaroring: ["steel", "concrete", "alu"],
+    montreal:    ["steel", "navy", "alu"],
+    interlagos:  ["concrete", "steel", "darkSteel"],
+    mexico:      ["navy", "concrete", "steel"],             // Foro Sol blue buckets
+    cota:        ["alu", "darkSteel", "sandstone"],         // bare T1 bleachers
+    miami:       ["pastel", "teal", "alu"],
+    vegas:       ["darkSteel", "scaffold", "alu"],
+    baku:        ["scaffold", "sandstone", "steel"],
+    jeddah:      ["scaffold", "alu", "darkSteel"],
+    singapore:   ["scaffold", "teal", "darkSteel"],
+    monaco:      ["scaffold", "pastel", "alu"],
+    bahrain:     ["sandstone", "steel", "alu"],
+    qatar:       ["sandstone", "steel", "concrete"],
+    abudhabi:    ["darkSteel", "teal", "sandstone"],
+    shanghai:    ["steel", "crimson", "concrete"],
+    albert_park: ["steel", "navy", "alu"],
+    madrid:      ["terracotta", "concrete", "steel"],
+  };
+
+  return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF, STYLES, THEME_DEF, ATM, COL, STAND_LIVERIES, STAND_SETS, STAND_SET_DEF };
 })();

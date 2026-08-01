@@ -60,8 +60,8 @@
     scenery: function (api) {
       const { out, MAT, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
         addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,
-        grandstand, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
-        cityFront, modelGroup, overheadSpan, waterSurface, circuitKit } = api;
+        grandstand, grandstandEx, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
+        cityFront, modelGroup, overheadSpan, waterSurface, circuitKit, broadcastCompound, cameraTower } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // High Roller: one atomic, fully-grounded vertical wheel. The old model
@@ -276,42 +276,107 @@
         stripNeon(0.83, 0.96, 0.028, 3.2);   // Harmon / final straight verge
       }
 
-      // --- s 0.00 R near: pit/paddock — pit garages + grandstand + crew structures + neon accents ---
-      // Garage blocks: was a flat box + a solid neon "sign" box; building()
-      // gives real floors + lit windows tinted by each team's neon colour.
-      for (let i = 0; i < 6; i++) {
-        building(K(0.0 + i * 0.011), 1, 13, 10, 7, 24, {
-          wall: [0.32, 0.33, 0.38], window: NEON[i % NEON.length], windowCol: NEON[i % NEON.length],
-          floor: 3, lit: true,
-        });
-        place(K(0.0 + i * 0.011), 1, 13, [10.6, 1.0, 25], LED);   // bright fascia rim band
-      }
-      grandstand(0.035, 1, 20, 82, [0.28, 0.29, 0.34], [0.42, 0.44, 0.58]); // paddock stand (brighter)
-      grandstand(0.07, -1, 18, 72, [0.26, 0.27, 0.32], [0.45, 0.40, 0.52]); // opposite stand
+      // --- s 0.00 R near: pit/paddock — Grand Prix Plaza + grandstands + facility kit ---
+      // Grand Prix Plaza: the one headline structure this circuit was missing —
+      // a permanent, 300,000 sq ft four-level glass landmark at start/finish
+      // (the Sphere, High Roller, Bellagio and Eiffel are all already modelled;
+      // this was the gap). One atomic hero — glass podium, two setback upper
+      // floors, lit roof deck — replaces what used to be six identical 10x7x24
+      // garage boxes with a fascia strip.
+      const grandPrixPlaza = (k, side, gap) => {
+        const W = 42, LEN = 118, H = 38;             // overall lateral / along-track / height envelope
+        const dist = gap + W / 2;                    // podium CENTRE clearance (matches building()'s convention)
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        const GLASS = [0.14, 0.30, 0.46];             // cool glazed curtain wall — a landmark, not a casino
+        const GLASS_LIT = [0.55, 0.85, 1.10];         // HDR-bright lit tier band / roof accents
+        const FRAME = [0.22, 0.23, 0.27];
+        modelGroup("vegas-grand-prix-plaza", {
+          center: vadd(a.c, a.u, H / 2),
+          size: [W + 4, H + 2, LEN + 4],
+          basis: b,
+        }, (stage) => {
+          // Level 1-2: wide glass podium (the "300,000 sq ft" base).
+          addBox(stage, vadd(a.c, a.u, 9), [W, 18, LEN], GLASS, b);
+          addBox(stage, vadd(a.c, a.u, 18.4), [W + 0.6, 0.8, LEN + 0.6], FRAME, b);
+          // Level 3: setback upper floor (recedes from the street-facing edge).
+          const l3 = LEN * 0.74;
+          const c3 = vadd(vadd(a.c, a.r, side * 3), a.u, 24);
+          addBox(stage, c3, [W * 0.82, 10, l3], GLASS, b);
+          addBox(stage, vadd(vadd(a.c, a.r, side * 3), a.u, 29.2), [W * 0.82 + 0.5, 0.6, l3 + 0.5], FRAME, b);
+          // Level 4: further-setback penthouse.
+          const l4 = LEN * 0.5;
+          const c4 = vadd(vadd(a.c, a.r, side * 6), a.u, 32.5);
+          addBox(stage, c4, [W * 0.6, 6, l4], GLASS_LIT, b);
+          // Roof deck: flat slab + lit rooftop-terrace accents.
+          addBox(stage, vadd(vadd(a.c, a.r, side * 6), a.u, 36), [W * 0.62, 0.5, l4 + 1], FRAME, b);
+          for (const off of [-l4 * 0.42, 0, l4 * 0.42])
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, side * 6), a.u, 37), a.t, off), [1.4, 1.6, 1.4], GLASS_LIT, b);
+          // Bright fascia rim down both long edges — reads as one lit landmark
+          // at broadcast distance instead of six dark boxes with LED trim.
+          for (const rs of [-1, 1])
+            addBox(stage, vadd(vadd(a.c, a.r, rs * (W / 2 + 0.2)), a.u, 3), [0.6, 1.4, LEN], GLASS_LIT, b);
+        }, { required: true });
+      };
+      grandPrixPlaza(K(0.012), 1, 15);
+      // Paddock grandstands: temporary multi-tier scaffold decks, not one grey
+      // template — livery + tiers from STAND_SETS.vegas (darkSteel/scaffold/alu).
+      grandstandEx(0.05, 1, 20, 82, null, null,
+        { livery: "darkSteel", tiers: 2, roof: "truss", suites: true, endWalls: true, pylons: true });
+      grandstandEx(0.075, -1, 18, 72, null, null,
+        { livery: "scaffold", tiers: 2, roof: "truss", endWalls: true });
       // pit-lane light masts — bright LED headlights (supplement engine's generic posts)
       for (let i = 0; i < 4; i++) {
         const a = anchor(K(0.01 + i * 0.012), 1, 9);
         addCyl(out, a.c, 0.28, 15, [0.35, 0.35, 0.38], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 15), [3.5, 1.2, 1.2], LED, [a.r, a.u, a.t]); // bright light head
       }
+      // Densify the paddock/fan-zone sector — this 10% of the lap is the real
+      // event's densest zone but was the sparsest in-game. Facility kit fills
+      // in behind the plaza/grandstands: hospitality suites, service compound,
+      // broadcast compound and a camera tower.
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:vegas:paddock-hospitality", frac: 0.045,
+          side: -1, gap: 30, size: [18, 9, 46], modules: 5,
+        });
+        circuitKit.serviceCompound({
+          id: "kit:vegas:paddock-service", frac: 0.022,
+          side: -1, gap: 15, size: [22, 5, 34], vehicles: 8,
+        });
+      }
+      broadcastCompound(K(0.09), 1, 44, { vans: 4, dishes: 3, mastH: 11 });
+      cameraTower(K(0.002), -1, 15, { h: 20, boom: 1.4 });
 
-      // --- s 0.05–0.28: paddock approach + T1-T5 sector casino facades ---
-      // Billboard towers at the entrance to T1
-      billboard(K(0.05), -1, 16, 22, 13, MAGENTA);
-      billboard(K(0.05), -1, 40, 18, 11, CYAN);
+      // --- s 0.02–0.08 L: Fontainebleau + Resorts World (real, both absent) ---
+      // These stand across Koval from the paddock — background landmarks, not
+      // Strip-canyon foreground — so they replace what used to be two generic
+      // ad billboards at the T1 approach.
+      // Fontainebleau: a dark blue-glass mega-tower (the real one is ~68 storeys).
+      building(K(0.03), -1, 52, 34, 128, 30, { wall: [0.07, 0.08, 0.13], window: [0.10, 0.22, 0.42], floor: 11, lit: true });
+      place(K(0.03), -1, 20, [10, 1.0, 26], [0.15, 0.30, 0.55]);   // cool blue base uplight
+      // Resorts World: the huge LED marquee facade is the real landmark here,
+      // not another neon ad board — a bright emissive screen on the tower face.
+      building(K(0.062), -1, 60, 30, 90, 26, { wall: [0.14, 0.14, 0.18], window: LED, floor: 15, lit: true });
+      place(K(0.062), -1, 44, [2.5, 16, 30], LED);                // giant LED megascreen
+
+      // --- s 0.05–0.28: T1-T5 (Koval Ln / Sands Ave back-of-house) ---
+      // This is convention-centre service road, not Strip glitz — a cooler, dimmer,
+      // lower palette so the Strip payoff at s≈0.49 actually lands as a step up.
+      const BOH_WALL = [0.16, 0.17, 0.20];   // flat concrete-grey, no warm cast
+      const BOH_WIN  = [0.30, 0.38, 0.48];   // cool dim office glass, not neon
       // Prominent hotel towers either side of the start/finish straight approach
-      building(K(0.10), -1, 22, 30, 78, 30, { wall: [0.20, 0.19, 0.22], window: ROSE, floor: 8, lit: true });
-      building(K(0.14), 1, 20, 26, 64, 26, { wall: [0.22, 0.20, 0.20], window: CYAN, floor: 8, lit: true });
-      // cityFront fills the T3-T8 sector with a continuous lit casino street-wall.
+      building(K(0.10), -1, 22, 30, 46, 30, { wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      building(K(0.14), 1, 20, 26, 40, 26, { wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      // cityFront fills the T3-T8 sector with a continuous but LOW, dim street-wall.
       // Start at 0.12 (after the two explicit buildings at s 0.10/0.14) to avoid
       // duplicate geometry on the same nodes. Gap 52 safely clears T3 apex.
-      cityFront(0.12, 0.20, -1, 20, { minH: 28, maxH: 72, depth: 22, step: 30,
-        palette: [[0.20, 0.18, 0.24], [0.22, 0.20, 0.22]], lit: true, windowCol: ROSE });
-      cityFront(0.12, 0.20,  1, 20, { minH: 24, maxH: 68, depth: 20, step: 30,
-        palette: [[0.20, 0.20, 0.22], [0.18, 0.19, 0.24]], lit: true, windowCol: BLUE });
-      // Mid-sector buildings around T3-T5 corner
-      building(K(0.22), 1, 26, 30, 72, 28, { wall: [0.20, 0.19, 0.22], window: VIOLET, floor: 8, lit: true });
-      building(K(0.28), -1, 30, 34, 84, 30, { wall: [0.22, 0.20, 0.22], window: BLUE, floor: 8, lit: true });
+      cityFront(0.12, 0.20, -1, 20, { minH: 20, maxH: 42, depth: 22, step: 30,
+        palette: [[0.18, 0.18, 0.20], [0.19, 0.19, 0.20]], lit: true, windowCol: BOH_WIN });
+      cityFront(0.12, 0.20,  1, 20, { minH: 18, maxH: 38, depth: 20, step: 30,
+        palette: [[0.18, 0.18, 0.20], [0.17, 0.18, 0.21]], lit: true, windowCol: BOH_WIN });
+      // Mid-sector buildings around T3-T5 corner — still low/dim, service-road massing
+      building(K(0.22), 1, 26, 30, 40, 28, { wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      building(K(0.28), -1, 30, 34, 46, 30, { wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
 
       // --- s 0.30 L near: MSG Sphere — single-hue LED orb hero ---
       // Open technical sector: one giant silhouette, not a rainbow onion. Venetian
@@ -375,17 +440,30 @@
       place(K(0.62), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
       place(K(0.62), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
 
-      // --- s ~0.68 R: Bellagio + fountains + reflective lake ---
-      building(K(0.68), 1, 40, 60, 55, 40, { wall: [0.58, 0.55, 0.50], window: [1.0, 0.85, 0.40], floor: 7 });
-      place(K(0.68), 1, 22, [80, 2.0, 10], [1.0, 0.75, 0.20]);
-      for (let i = 0; i < 8; i++) {
-        const a = anchor(K(0.68 + i * 0.003), 1, 30);
-        const jetCols = [CYAN, [0.15, 0.50, 1.00], LED, [0.30, 0.85, 1.00], BLUE, MAGENTA, [0.20, 0.90, 0.95], ROSE];
-        const jetCol = jetCols[i % jetCols.length];
-        addBox(out, vadd(a.c, a.u, 9), [0.8, 18, 0.8], jetCol, [a.r, a.u, a.t]);
+      // --- s ~0.66–0.71 R: Bellagio + fountains + reflective lake ---
+      // The real frontage is ~300 m; widen the hotel's along-track depth, the
+      // lake, and the jet run (was one 40 m-deep building, a 110x44 m patch and
+      // 8 jets bunched into 20 m) to actually span it.
+      building(K(0.68), 1, 40, 60, 55, 62, { wall: [0.58, 0.55, 0.50], window: [1.0, 0.85, 0.40], floor: 7 });
+      place(K(0.68), 1, 52, [95, 2.0, 12], [1.0, 0.75, 0.20]);   // dist cleared past sz[0]/2 — was silently suppressed
+      // Jets spread and height-varied across the full frontage (was 8 jets in a
+      // tight 20 m cluster) — a real Bellagio show has jets of very different
+      // reach, not a uniform picket line.
+      const bellagioJets = 18;
+      const jetCols = [CYAN, [0.15, 0.50, 1.00], LED, [0.30, 0.85, 1.00], BLUE, MAGENTA, [0.20, 0.90, 0.95], ROSE];
+      for (let i = 0; i < bellagioJets; i++) {
+        const s = 0.663 + (i / (bellagioJets - 1)) * 0.046;
+        const a = anchor(K(s), 1, 26 + hash(i * 4.7) * 10);
+        const jetH = 8 + hash(i * 9.3 + 2) * 16;   // 8-24 m: varied reach, not one height
+        addBox(out, vadd(a.c, a.u, jetH / 2), [0.8, jetH, 0.8], jetCols[i % jetCols.length], [a.r, a.u, a.t]);
       }
-      waterSurface(K(0.685), 1, 20, [110, 1.2, 44], [0.05, 0.10, 0.18],
-        { id: "vegas-bellagio-lake", required: true });
+      // Two overlapping basins follow the lakeshore across the widened frontage
+      // instead of one 44 m patch — a long single box this size would risk
+      // clipping the T13 apex the road carries through this stretch.
+      waterSurface(K(0.672), 1, 20, [110, 1.2, 150], [0.05, 0.10, 0.18],
+        { id: "vegas-bellagio-lake-east", required: true });
+      waterSurface(K(0.702), 1, 20, [105, 1.2, 135], [0.05, 0.10, 0.18],
+        { id: "vegas-bellagio-lake-west" });
 
       // --- s ~0.74 L: Paris Las Vegas — Eiffel replica ---
       tower(K(0.74), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
@@ -403,9 +481,13 @@
       }
 
       // --- s 0.90–0.97: Harmon Ave chicane grandstands + casino backdrop ---
-      grandstand(0.965, 1, 16, 70, [0.18, 0.18, 0.22], [0.50, 0.40, 0.58]);
-      grandstand(0.90, -1, 16, 60, [0.18, 0.18, 0.22], [0.45, 0.40, 0.58]);
-      grandstand(0.945, 1, 20, 40, [0.16, 0.16, 0.22], [0.42, 0.38, 0.52]);
+      // Temporary multi-tier decks — livery + tiers from STAND_SETS.vegas.
+      grandstandEx(0.965, 1, 16, 70, null, null,
+        { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+      grandstandEx(0.90, -1, 16, 60, null, null,
+        { livery: "alu", tiers: 2, roof: "truss", endWalls: true });
+      grandstandEx(0.945, 1, 20, 40, null, null,
+        { livery: "scaffold", tiers: 1, roof: "flat" });
       building(K(0.93), 1, 22, 28, 52, 26, { wall: [0.22, 0.18, 0.24], window: VIOLET, floor: 7, lit: true });
       building(K(0.97), -1, 20, 26, 46, 24, { wall: [0.20, 0.18, 0.22], window: ROSE, floor: 7, lit: true });
       billboard(K(0.94), -1, 18, 18, 11, CYAN);
@@ -418,9 +500,11 @@
         const s0 = 0.485, s1 = 0.815;
         const span = s1 - s0;
 
-        // FAR distant skyline backdrop — tall gapless bands, one per ~40 m step.
+        // FAR distant skyline backdrop — tall gapless bands, one per ~48 m step.
         // These stay as backdrop() because they are truly far scenery (dist 170–190).
-        const STEP = 0.0075;
+        // (was a 0.0075 step / ~44 bands per side — thinned to pay for the Grand
+        // Prix Plaza hero and the widened Bellagio lake without net vertex growth)
+        const STEP = 0.009;
         const backdropCols = [[0.20, 0.18, 0.24], [0.18, 0.16, 0.22], [0.22, 0.20, 0.20]];
         let idx = 0;
         for (let s = s0; s <= s1; s += STEP, idx++) {
@@ -467,24 +551,33 @@
           billboard(K(s), side, 16, 16 + hash(j * 3) * 6, 10, NEON[(j + 2) % NEON.length]);
         }
         // Palm rows flanking the Strip edge (Vegas Boulevard is lined with palms)
-        for (let j = 0; j < 44; j++) {
-          const s = s0 + (j + 0.2) / 44 * span, side = (j % 2) ? 1 : -1;
+        // (thinned 44→34 pairs — plenty dense at Strip speed, frees verts for
+        // the new heroes elsewhere on the lap)
+        for (let j = 0; j < 34; j++) {
+          const s = s0 + (j + 0.2) / 34 * span, side = (j % 2) ? 1 : -1;
           palm(K(s), side, 15, 11 + hash(j * 23) * 4, LIME);
           palm(K(s + 0.004), -side, 15, 10 + hash(j * 29) * 3, LIME);
         }
         // Continuous hoarding line on the barrier verge — the Strip is wall to
         // wall signage, and the lap only carried eight boards down its longest
-        // straight.
-        for (let j = 0; j < 54; j++) {
-          const s = s0 + (j + 0.6) / 54 * span, side = (j % 2) ? -1 : 1;
+        // straight. (thinned 54→40 — still reads continuous at speed)
+        for (let j = 0; j < 40; j++) {
+          const s = s0 + (j + 0.6) / 40 * span, side = (j % 2) ? -1 : 1;
           billboard(K(s), side, 9, 11 + hash(j * 7.3) * 5, 4.6, NEON[j % NEON.length]);
         }
         // Grandstand ring down the Boulevard: the real event seats ~40 000 in
-        // temporary stands along the Strip and at the Sphere.
-        for (let j = 0; j < 14; j++) {
-          const s = s0 + (j + 0.35) / 14 * span, side = (j % 2) ? 1 : -1;
-          grandstand(s, side, 15, 56, [0.20, 0.20, 0.26],
-                     [0.44 + hash(j * 5.1) * 0.14, 0.34, 0.50]);
+        // temporary multi-tier stands along the Strip and at the Sphere — livery
+        // + tiers from STAND_SETS.vegas instead of one grey template. Thinned
+        // 14→10 stands (some now two-tier) to keep the vertex cost in check.
+        const vegasStandLiveries = ["darkSteel", "scaffold", "alu"];
+        for (let j = 0; j < 10; j++) {
+          const s = s0 + (j + 0.35) / 10 * span, side = (j % 2) ? 1 : -1;
+          grandstandEx(s, side, 15, 56, null, null, {
+            livery: vegasStandLiveries[j % vegasStandLiveries.length],
+            tiers: (j % 3 === 0) ? 2 : 1,
+            roof: (j % 2) ? "truss" : "cantilever",
+            pylons: true,
+          });
         }
       }
 

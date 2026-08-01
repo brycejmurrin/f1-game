@@ -618,6 +618,129 @@ test.describe("trackInfo() corner table", () => {
 
 // ── nextCorner ──────────────────────────────────────────────────────────────
 
+// ── state that used to be invisible ─────────────────────────────────────────
+// Mapping every car field against agentview.js AND apex.js found state that no
+// hook exposed at all. `penalty`/`cuts` was the worst: an agent could be
+// accruing track-limit penalties, be scored on them, and have no way to perceive
+// them — it cannot learn to stop doing the thing it is being punished for.
+
+test.describe("world() previously-invisible state", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("penalties are visible, with the rule that governs them", async ({ page }) => {
+    await load(page);
+    const p = await page.evaluate(() => window.__apex.world({ detail: "drive" }).ego.penalties);
+    expect(p).toBeTruthy();
+    expect(typeof p.cuts).toBe("number");
+    expect(typeof p.timePenaltyS).toBe("number");
+    // the agent must know how many cuts are free, not just the count so far
+    expect(p.freeCutsLeft).toBe(3 - p.cuts);
+    expect(p.note).toMatch(/\+5/);
+  });
+
+  test("ERS reports deployment and the overtake window, not just charge", async ({ page }) => {
+    await load(page);
+    const e = await page.evaluate(() => window.__apex.world({ detail: "drive" }).ego.ers);
+    expect(e).toBeTruthy();
+    // charge alone never said whether the energy was going anywhere
+    for (const k of ["charge", "deploying", "overtakeArmed", "boostRemainingS", "cooldownS"]) {
+      expect(e, k + " missing from ers").toHaveProperty(k);
+    }
+    expect(e.charge).toBeGreaterThanOrEqual(0);
+    expect(e.charge).toBeLessThanOrEqual(1);
+  });
+
+  test("rivals carry pace, so one AI is distinguishable from another", async ({ page }) => {
+    await load(page);
+    const rv = await page.evaluate(() => window.__apex.world({ detail: "full" }).rivals);
+    expect(rv.length).toBeGreaterThan(1);
+    for (const r of rv) {
+      expect(typeof r.pace).toBe("number");
+      expect(r.pace).toBeGreaterThan(0.5);
+      expect(r.pace).toBeLessThanOrEqual(1.05);
+    }
+    // the field is only useful if it actually varies across the grid
+    expect(new Set(rv.map((r) => r.pace)).size).toBeGreaterThan(1);
+  });
+
+  test("full detail exposes engine, recovery and the live tunables", async ({ page }) => {
+    await load(page);
+    const w = await page.evaluate(() => {
+      window.__apex.jump(0.05, 60, 0);
+      return window.__apex.world({ detail: "full" });
+    });
+    expect(w.physics.rpm).toBeGreaterThan(0);
+    for (const k of ["offroad", "stuckS", "wallContactS", "vertLoad"]) {
+      expect(w.physics, k + " missing").toHaveProperty(k);
+    }
+    // setPhysics() can retune the car under the agent; it must be able to see that
+    expect(w.tunables).toBeTruthy();
+    expect(typeof w.tunables.PACE).toBe("number");
+    expect(typeof w.tunables.ROAD_FOLLOW).toBe("number");
+  });
+});
+
+test.describe("static grounding + session self-description", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("trackInfo grounds the circuit in the real world", async ({ page }) => {
+    await load(page);
+    const t = await page.evaluate(() => window.__apex.trackInfo({ what: "corners" }).track);
+    expect(t.gp).toBeTruthy();                 // "Italian GP" — which race this is
+    expect(t.realLengthKm).toBeGreaterThan(1);
+    // built geometry vs the real circuit — an agent can now check its own world
+    expect(Math.abs(t.lengthErrorPct)).toBeLessThan(15);
+    expect(typeof t.startFrac).toBe("number");
+    expect(typeof t.reverse).toBe("boolean");
+  });
+
+  test("a full snapshot carries the seed that reproduces it", async ({ page }) => {
+    await load(page);
+    const s = await page.evaluate(() => {
+      window.__apex.go();
+      window.__apex.reset(0.05, 60, 0, 4242);
+      return window.__apex.world({ detail: "full" }).session;
+    });
+    // the payload is self-describing: reset(frac, speed, x, seed) replays it
+    expect(s.seed).toBe(4242);
+    // mode flags silently change the rules, so they belong beside the state
+    for (const k of ["seasonMode", "raceLineAssist", "unlimitedBudget"]) {
+      expect(s, k + " missing from session").toHaveProperty(k);
+    }
+  });
+});
+
+// ── objective() ─────────────────────────────────────────────────────────────
+
+test.describe("objective()", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("states the goal, the trade-offs and the constraints, compactly", async ({ page }) => {
+    await boot(page);
+    const o = await page.evaluate(() => window.__apex.objective());
+    expect(o.goal).toMatch(/race|finish/i);
+    expect(o.winCondition).toBeTruthy();
+    expect(o.tradeoffs.length).toBeGreaterThanOrEqual(3);
+    expect(o.constraints.length).toBeGreaterThan(0);
+    expect(o.units).toMatch(/metres/);
+    // the trade-offs must name the mechanics an agent actually operates
+    const t = o.tradeoffs.join(" ");
+    expect(t).toMatch(/TRACK LIMITS/);
+    expect(t).toMatch(/ERS/);
+    // deliberately NOT a dynamics description — that would go stale on a retune
+    expect(o.note).toMatch(/rollout|act/);
+    // it is a briefing, not a manual
+    expect(JSON.stringify(o).length).toBeLessThan(2000);
+  });
+
+  test("needs no track loaded — it is static", async ({ page }) => {
+    await boot(page);
+    const o = await page.evaluate(() => window.__apex.objective());
+    expect(o.ok).not.toBe(false);
+    expect(o.goal).toBeTruthy();
+  });
+});
+
 test.describe("world() nextCorner", () => {
   test.use({ viewport: LANDSCAPE });
 

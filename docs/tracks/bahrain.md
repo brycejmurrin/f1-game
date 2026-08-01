@@ -3,7 +3,7 @@
 **Location:** Sakhir, Bahrain · **Setting:** NIGHT race, desert theme · 5.412 km, 15 corners, clockwise.
 
 ## 1. Setting
-The circuit sits in the open Sakhir desert south of Manama — flat, exposed sand and scrub, no city skyline. The complex is an isolated island of asphalt and concrete ringed by gravel run-offs, with sculpted artificial dunes and sparse desert planting separating the track from the bare sand beyond. The defining built feature is the **Sakhir Tower**, a tall curved "sail/wind-tower" structure rising over the paddock.
+The circuit sits in the open Sakhir desert south of Manama — flat, exposed sand and scrub, no city skyline. The complex is an isolated island of asphalt and concrete ringed by gravel run-offs, with sculpted artificial dunes and sparse desert planting separating the track from the bare sand beyond. The defining built feature is the **Sakhir Tower**, a ~10-storey building wrapped full-height in video LEDs, standing over the Turn 1 braking zone — not the paddock.
 
 ## 2. Atmosphere & palette
 Black night sky lit by banks of white floodlights; the track reads as bright grey asphalt against warm sand under cool artificial light. Palette suggestions:
@@ -22,7 +22,7 @@ Near-flat overall (only a few metres). Notable: a gentle **downhill braking zone
 |--------|------|------|------------------------|
 | 0.00 | L | close | Pit/control building: long low white box, ~12 m, glass-grey top stripe |
 | 0.00 | R | close | Main Grandstand: stepped grey slab, ~20 m, dark seating face |
-| 0.00 | L | far | **Sakhir Tower**: tall cream cylinder ~60 m, bright LED façade bands, **sail canopy** crown |
+| 0.05 | L | far | **Sakhir Tower**: ~10-storey shaft over the Turn 1 braking zone, wrapped full-height in bright LED video bands, flat capped roofline (no sail canopy) |
 | 0.05 | R | mid | Turn 1 Grandstand: angled stepped box, ~18 m, blue trim |
 | 0.18 | R | mid | University Grandstand (triple): three stacked grey slabs, ~16 m |
 | 0.20 | both | mid | Floodlight masts: tall dual-arm cool-white poles + lens banks, **~36–42 m** |
@@ -38,7 +38,7 @@ No banking — flat throughout. Signature corners: **Turn 1** right-hand hairpin
 
 ## 6. Modelling notes
 - Light from above: bake bright top faces / floodlit pools so night track reads against black sky.
-- **Sakhir Tower** = cream cylinder + bright LED rings + sail canopy crown — single hero near start/finish.
+- **Sakhir Tower** = ~10-storey shaft wrapped full-height in bright LED video bands, flat capped roofline (no sail canopy) — single hero over the Turn 1 braking zone, not the start/finish straight.
 - Surround with warm tan sand and rounded dune wedges; keep desert **sparse** (dry scrub/rocks only — no green palm oasis or gateway clutter).
 - Repeat tall cool-white floodlight masts (~36–42 m) around the lap for night-race drama.
 - Grandstands = stepped cream slabs with darker/blue seating faces; vary height to distinguish main vs minor stands.

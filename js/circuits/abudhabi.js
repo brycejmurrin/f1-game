@@ -52,10 +52,10 @@
     ],
     scenery: function (api) {
       const { out, MAT, n, px, py, pz, pyMin, place, prop, groundPlane, addBox, seat,
-        anchor, onTrack, hash, vadd, building, motorhome, tower, grandstand, billboard,
+        anchor, onTrack, hash, vadd, building, motorhome, tower, grandstand, grandstandEx, billboard,
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
-        cityFront, forestEdge, backdrop, mountain, ferrisWheel,
+        cityFront, forestEdge, backdrop, mountain, ferrisWheel, landmarkKit,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -226,14 +226,55 @@
         place(K(0.0 + i * 0.012), 1, 12, [9, 6, 30], [0.30, 0.31, 0.36]);   // pit garages
         place(K(0.0 + i * 0.012), 1, 12, [9.4, 1.0, 30.4], FLOOD);          // lit fascia band
       }
-      grandstand(0.0, -1, 18, 90, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
-      grandstand(0.02, -1, 9, 70, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
+      // MAIN GRANDSTAND — the premium pit-straight stand: five distinct named
+      // stands (Main/West/North/South/Marina) now replace the old two nearly
+      // identical dark palettes that covered 40%+ of the lap. Main gets the
+      // darkSteel livery (STAND_SETS.abudhabi), two raked tiers, glazed
+      // suites and closed end walls — the biggest, most finished stand here.
+      grandstandEx(0.0, -1, 18, 90, null, null,
+        { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      grandstandEx(0.02, -1, 9, 70, null, null,
+        { livery: "darkSteel", tiers: 2, roof: "cantilever", endWalls: true });
       gantry(0.0, 9, DARK);
 
       // ===================================================================
-      // s 0.05 L — Turn 1 + esses: marshal-light spectator banks
+      // s 0.03-0.06 R — PIT-EXIT TUNNEL: Yas Marina's pit lane surfaces via a
+      // tunnel UNDER the main straight — an F1 first, and this circuit's
+      // single most distinctive "spot the reference" feature. Was entirely
+      // absent. Modelled as a dark portal mouth set back behind the pit
+      // garage row, plus a shallow sunken apron leading into it; guarded as
+      // one atomic model (modelGroup) so its footprint never reaches the
+      // racing line.
       // ===================================================================
-      grandstand(0.05, -1, 8, 70, [0.20, 0.21, 0.27], [0.28, 0.32, 0.44]);
+      {
+        const tk = K(0.045);
+        const a = anchor(tk, 1, 40);
+        const b = [a.r, a.u, a.t];
+        modelGroup("abudhabi:pit-exit-tunnel-portal", {
+          center: vadd(a.c, a.u, 3.5), size: [14, 7, 8], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          // Portal headwall — the pit lane road disappears into this mass
+          addBox(stage, vadd(a.c, a.u, 3.5), [14, 7, 8], [0.30, 0.30, 0.32], b);
+          stage._mat = 0;
+          // Near-black recessed mouth so the opening reads as a hole, not a
+          // painted panel
+          addBox(stage, vadd(vadd(a.c, a.u, 2.6), a.t, 1.2), [10, 5.5, 5.6],
+            [0.02, 0.02, 0.03], b);
+        }, { required: true });
+        // Shallow sunken apron between the track edge and the portal — sells
+        // the grade change of the road dipping to meet the tunnel without a
+        // real drivable underpass mesh.
+        groundPatch(tk, 1, 6, [20, 0.5, 16], [0.16, 0.16, 0.18],
+          { id: "abudhabi:pit-exit-trench", samples: 6 });
+      }
+
+      // ===================================================================
+      // s 0.05 L — Turn 1 + esses: WEST GRANDSTAND begins — sandstone
+      // livery, flat roof (reads distinctly from Main's cantilever + suites)
+      // ===================================================================
+      grandstandEx(0.05, -1, 8, 70, null, null,
+        { livery: "sandstone", tiers: 1, roof: "flat", endWalls: true });
       billboard(K(0.05), -1, 10, 18, 11, LED_TEAL);
 
       // ===================================================================
@@ -243,7 +284,30 @@
       {
         const k = K(0.18);
         place(k, 1, 100, [180, 26, 150], FERRARI);               // vast red roof mass
-        place(k, 1, 103, [184, 5, 154], [0.55, 0.05, 0.06]);     // shaded eave band
+        // The real building's signature is a scalloped/finned aero roofline,
+        // not a flat lid. landmarkKit.roof({kind:"sawtooth"}) emits a ridged
+        // prism instead of a flat box; tiling 6 of them across the same
+        // 180 m width (footprint unchanged) reads as raked aero fins running
+        // the 150 m length of the roof. Falls back to the old flat eave band
+        // if the theme/kit failed to resolve for this build.
+        if (landmarkKit) {
+          const ra = anchor(k, 1, 100);
+          const rb = [ra.r, ra.u, ra.t];
+          const fins = 6, finW = 180 / fins, finH = 4.5;
+          modelGroup("abudhabi:ferrari-world-fins", {
+            center: vadd(ra.c, ra.u, 25.5 + finH / 2), size: [180, finH, 150], basis: rb,
+          }, (stage) => {
+            for (let i = 0; i < fins; i++) {
+              const off = (i + 0.5) / fins * 180 - 90;
+              landmarkKit.roof(stage, {
+                center: vadd(vadd(ra.c, ra.r, off), ra.u, 25.5 + finH / 2),
+                size: [finW - 1.4, finH, 148], color: [0.62, 0.06, 0.08], basis: rb, kind: "sawtooth",
+              });
+            }
+          }, { required: true });
+        } else {
+          place(k, 1, 103, [184, 5, 154], [0.55, 0.05, 0.06]);   // fallback: flat eave band
+        }
         const a = anchor(k, 1, 70);
         // Logo lies ON the red roof. place() sinks its base 0.8 m and anchor()
         // another 0.3, so the roof's top face is at 26 - 0.8 + 0.3 = 25.5 above
@@ -253,11 +317,15 @@
       }
 
       // ===================================================================
-      // s 0.28 both — NORTH HAIRPIN: curved sun-tower grandstand bowl
+      // s 0.28 both — NORTH HAIRPIN: NORTH GRANDSTAND curved bowl — teal
+      // livery, two raked tiers + roof pylons (the circuit's other big bowl,
+      // deliberately built up to rival Main rather than repeating its look)
       // ===================================================================
       for (const side of [-1, 1]) {
-        grandstand(0.28, side, 7, 90, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
-        grandstand(0.30, side, 7, 70, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
+        grandstandEx(0.28, side, 7, 90, null, null,
+          { livery: "teal", tiers: 2, roof: "cantilever", pylons: true });
+        grandstandEx(0.30, side, 7, 70, null, null,
+          { livery: "teal", tiers: 2, roof: "cantilever", pylons: true });
       }
 
       // ===================================================================
@@ -292,9 +360,11 @@
         }
 
       // ===================================================================
-      // s 0.42 L — banked Turn 9: runoff + grandstand boxes
+      // s 0.42 L — banked Turn 9: SOUTH GRANDSTAND — darkSteel livery with an
+      // open truss roof (same family as Main, different silhouette) + runoff
       // ===================================================================
-      grandstand(0.42, -1, 9, 80, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
+      grandstandEx(0.42, -1, 9, 80, null, null,
+        { livery: "darkSteel", tiers: 1, roof: "truss", endWalls: true });
       groundPatch(K(0.42), -1, 2, [42, 0.35, 34], [0.20, 0.21, 0.22],
         { id: "turn-9-runoff", samples: 7 });
 
@@ -354,10 +424,12 @@
       place(K(0.64), 1, 50, [32, 3.2, 7], [0.98, 0.78, 0.44]);
 
       // ===================================================================
-      // s 0.70 R near — marina-side grandstand + amber dock-lamp row
+      // s 0.70 R near — MARINA GRANDSTAND begins: sandstone livery, uncovered
+      // bleachers (waterside viewing needs no shade this close to the docks)
+      // + amber dock-lamp row
       // ===================================================================
-      grandstand(0.69, 1, 14, 35, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
-      grandstand(0.72, 1, 14, 35, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
+      grandstandEx(0.69, 1, 14, 35, null, null, { livery: "sandstone", roof: "none" });
+      grandstandEx(0.72, 1, 14, 35, null, null, { livery: "sandstone", roof: "none" });
       for (let i = 0; i < 12; i++) {
         const lampK = K(0.68 + i * 0.004);
         const a = anchor(lampK, 1, 11);
@@ -374,10 +446,11 @@
       }
 
       // ===================================================================
-      // s 0.78 L — MARSA swept curve: long gentle grandstand chain, cool kerbs
+      // s 0.78 L — MARSA swept curve: MARINA GRANDSTAND chain continues
+      // (sandstone livery, truss roof) — long gentle chain, cool kerbs
       // ===================================================================
-      grandstand(0.78, -1, 8, 100, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
-      grandstand(0.80, -1, 8, 70, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
+      grandstandEx(0.78, -1, 8, 100, null, null, { livery: "sandstone", roof: "truss", endWalls: true });
+      grandstandEx(0.80, -1, 8, 70, null, null, { livery: "sandstone", roof: "truss" });
 
       // ===================================================================
       // s 0.88 OVER — W YAS HOTEL (hero): twin towers + continuous LED gridshell
@@ -508,17 +581,21 @@
       // ===================================================================
       billboard(K(0.95), 1, 9, 16, 10, LED_MAG);
       billboard(K(0.95), -1, 9, 16, 10, LED_TEAL);
-      grandstand(0.96, -1, 8, 80, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
+      // MAIN GRANDSTAND flank, closing the bowl back toward the line
+      grandstandEx(0.96, -1, 8, 80, null, null, { livery: "darkSteel", roof: "cantilever", endWalls: true });
 
-      // extra grandstands ringing T1/T5/T9/T11 (makes the seating bowl complete)
-      grandstand(0.08, -1, 8, 70, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
-      grandstand(0.10, -1, 8, 60, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
-      grandstand(0.22, -1, 8, 80, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
-      grandstand(0.36, 1, 8, 60, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
-      grandstand(0.48, -1, 8, 60, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
-      grandstand(0.56, 1, 8, 70, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
-      grandstand(0.83, -1, 8, 60, [0.20, 0.21, 0.28], [0.30, 0.34, 0.46]);
-      grandstand(0.92, -1, 8, 60, [0.22, 0.23, 0.30], [0.30, 0.34, 0.46]);
+      // Extra grandstands ringing T1/T5/T9/T11 (completes the seating bowl),
+      // assigned to the same five named stands as the primary blocks above —
+      // Main/West/North/South/Marina — so the venue reads as five distinct
+      // stands rather than nineteen call sites of the same two grey boxes.
+      grandstandEx(0.08, -1, 8, 70, null, null, { livery: "sandstone", roof: "flat" });          // WEST
+      grandstandEx(0.10, -1, 8, 60, null, null, { livery: "sandstone", roof: "flat" });           // WEST
+      grandstandEx(0.22, -1, 8, 80, null, null, { livery: "teal", roof: "cantilever" });          // NORTH
+      grandstandEx(0.36, 1, 8, 60, null, null, { livery: "teal", roof: "cantilever" });           // NORTH
+      grandstandEx(0.48, -1, 8, 60, null, null, { livery: "darkSteel", roof: "truss" });          // SOUTH
+      grandstandEx(0.56, 1, 8, 70, null, null, { livery: "sandstone", roof: "none" });            // MARINA
+      grandstandEx(0.83, -1, 8, 60, null, null, { livery: "sandstone", roof: "truss" });          // MARINA
+      grandstandEx(0.92, -1, 8, 60, null, null, { livery: "darkSteel", roof: "cantilever" });     // MAIN
 
       // Second hotel group at s 0.44 R (Radisson / Abu Dhabi circuit area)
       // Using lit:true for proper night window glow
@@ -559,6 +636,44 @@
         // Deck (centred hull at 1.0, height 1.8) is at 1.9 — not 6.5.
         seat.cyl(out, vadd(hc, a.u, 1.9), 0.14, 9, [0.84, 0.85, 0.88], 4, [a.r, a.u, a.t]);
         addBox(out, vadd(hc, a.u, 0.3), [3.6, 0.25, 8.5], LED_AMBER, [a.r, a.u, a.t]);
+      }
+
+      // ===================================================================
+      // s 0.53-0.76 R — MARINA FINGER-DOCK TIER + more small hulls. ~22
+      // modelled hulls stand in for a 222-berth marina; a second floating-dock
+      // tier plus extra small craft thickens the basin across its full
+      // frontage instead of clustering near the 0.60-0.70 hotel sightline.
+      // ===================================================================
+      {
+        // Finger piers reaching out from the promenade into the basin
+        // (perpendicular to shore, along the lateral/r axis) with small
+        // dinghies berthed either side of each one.
+        const fingers = 8;
+        for (let i = 0; i < fingers; i++) {
+          const s = 0.53 + i * ((0.76 - 0.53) / (fingers - 1));
+          const a = anchor(K(s), 1, 24);
+          const b = [a.r, a.u, a.t];
+          const len = 16 + hash(i * 5 + 900) * 8;
+          addBox(out, vadd(vadd(a.c, a.r, len / 2), a.u, 0.35), [len, 0.5, 2.0],
+            [0.30, 0.28, 0.24], b);
+          for (const fs of [-1, 1]) {
+            const alongF = 5 + hash(i * 11 + (fs > 0 ? 40 : 80)) * (len - 8);
+            const hc = vadd(vadd(a.c, a.r, alongF), a.t, fs * 2.6);
+            addBox(out, vadd(hc, a.u, 0.55), [1.4, 0.8, 3.8], [0.88, 0.90, 0.93], b);
+          }
+        }
+        // Extra small hulls filling the outer basin toward 0.76, where the
+        // yacht-hierarchy and slim-yacht loops above (which stop near
+        // 0.70-0.74) leave open water.
+        for (let i = 0; i < 9; i++) {
+          const s = 0.60 + (i / 8) * 0.16;      // 0.60 .. 0.76
+          const a = anchor(K(s), 1, 56 + (i % 3) * 14);
+          const b = [a.r, a.u, a.t];
+          const off = ((i % 5) - 2) * 7;
+          const hc = vadd(a.c, a.t, off);
+          addBox(out, vadd(hc, a.u, 0.8), [2.4, 1.3, 6], [0.92, 0.93, 0.95], b);
+          seat.cyl(out, vadd(hc, a.u, 1.45), 0.10, 6, [0.86, 0.87, 0.90], 4, b);
+        }
       }
 
       // ===================================================================
@@ -883,7 +998,10 @@
         out._mat = 0;
         addBox(out, vadd(a.c, a.u, 30), [3, 3, 3], LED_TEAL, b);                         // beacon
       };
-      arena(K(0.50), -1, 110);
+      // Real Etihad Arena sits on the Yas Bay waterfront, on the marina side —
+      // was authored at s=0.50 side L (opposite the water); moved to the R
+      // (marina) side alongside the basin it actually overlooks.
+      arena(K(0.52), 1, 110);
 
       // ── Observation wheel — Yas leisure-district landmark (one only; second
       // wheel at marina cluttered the hotel sightline)

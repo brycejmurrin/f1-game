@@ -35,6 +35,7 @@ const COMMANDS = {
   track: "static track data     --what corners|sectors|profile|all",
   field: "the grid / standings  --detail brief|full",
   atmosphere: "the light as text  (day/night, sun, fog, wet road)",
+  objective: "what the GAME is  (win condition, trade-offs, constraints)",
   describe: "ONE thing in full   --id prop:12|corner:T3|car:4|span:2",
   query: "a bounded slice     --kind pine --near <m> --from <m> --to <m> --limit <n>",
   scene: "named scenery nearby  --radius <m>  --kinds a,b  --limit <n>  (--visible = on-screen)",
@@ -163,6 +164,8 @@ const opts = {
           return a.field({ detail: o.modelDetail === "full" ? "full" : "brief" });
         case "atmosphere":
           return a.atmosphere();
+        case "objective":
+          return a.objective();
         case "describe":
           return a.describe(o.id);
         case "query":

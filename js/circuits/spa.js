@@ -56,9 +56,11 @@
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, hash, every, place, backdrop, pal,
               addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
-              mountain, pine, tree, forestEdge, grandstand, building, motorhome,
+              mountain, pine, tree, forestEdge, building, motorhome,
               marshalPost, gantry, billboard, fence, guardrail, tyreWall, wall,
-              modelGroup, overheadSpan, groundPatch, circuitKit, ATM } = api;
+              modelGroup, overheadSpan, groundPatch, circuitKit, ATM,
+              grandstandEx, spectatorHill, broadcastCompound, sponsorHoarding,
+              waterSurface } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
@@ -147,8 +149,26 @@
         }
       });
 
-      // --- Modern pit/paddock building: long low white-grey mass on the pit straight.
-      building(0, -1, 9, 14, 11, 64, { wall: [0.90, 0.91, 0.93], window: [0.40, 0.46, 0.50], floor: 5 });
+      // --- Modern pit/paddock complex: garage-bay rhythm + roof via the shared
+      // facility kit. Spa previously used NO facility kit at all — the whole
+      // complex was one undifferentiated 64 m building() slab with no bay
+      // rhythm — and no race-control tower closed it off.
+      // frac 0.006/0.014 (not 0.0): the last corner folds back close enough to
+      // the pit straight's LEFT edge that a facility centred exactly on the
+      // line clips it once its footprint is checked properly — building()'s
+      // own inline guard tests only half its true height and missed this; the
+      // kit's modelGroup preflight does not. A few metres downtrack of the
+      // line clears it with the same footprint.
+      if (circuitKit) {
+        circuitKit.pitBuilding({
+          id: "kit:spa:pit-building", frac: 0.006, side: -1, gap: 9,
+          size: [14, 11, 64], garages: 16, required: true,
+        });
+        circuitKit.raceControl({
+          id: "kit:spa:race-control", frac: 0.014, side: -1, gap: 45,
+          size: [12, 24, 14], required: true,
+        });
+      }
       // Paddock hospitality row set back behind the pit building — Spa's
       // paddock was missing a team-motorhome row entirely (just the pit slab
       // + one old building); motorhome() adds the two-tier body + awning.
@@ -157,27 +177,53 @@
       motorhome(Math.round(n * 0.994) % n, -1, 24, 15, 7, 18, { wall: [0.86, 0.87, 0.90], window: [0.30, 0.38, 0.46] });
       // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).
       building(Math.round(n * 0.10) % n, -1, 40, 12, 9, 40, { wall: [0.74, 0.72, 0.66], window: [0.34, 0.34, 0.32], floor: 4 });
+      // Broadcast compound near Stavelot: OB trucks + satellite uplink dishes.
+      // This was the single most-requested missing model across the whole
+      // scenery review (14 of 24 circuits) and no track — Spa included — had
+      // any of it.
+      broadcastCompound(K(0.755), -1, 45, { vans: 3, dishes: 2, mastH: 9 });
 
-      // --- Grandstands: La Source, Raidillon Gold-3 amphitheatre, Les Combes, Bus Stop, pit.
-      const shell = [0.42, 0.43, 0.47];
-      const GOLD3 = [0.46, 0.47, 0.50];   // darker concrete — Raidillon Gold 3 mass
-      grandstand(0.00, 1, 8, 40, shell, [0.50, 0.52, 0.56]);   // main grandstand, pit straight
-      grandstand(0.02, 1, 8, 26, shell, [0.62, 0.16, 0.16]);   // La Source hairpin
-      // 2. Raidillon amphitheatre (Gold 3) — stepped SHORT bays climbing the crest
+      // --- Grandstands: pit, La Source, Raidillon Gold-4 amphitheatre, Les
+      // Combes, Bus Stop, Blanchimont. Six named stands now rotate through
+      // STAND_SETS.spa ("darkSteel","steel","concrete") via grandstandEx so
+      // each reads as a distinct structure instead of the same grey box.
+      const GOLD4 = [0.46, 0.47, 0.50];   // darker concrete — Raidillon Gold 4 mass
+      // Main grandstand, pit straight: the hero stand gets a two-tier deck,
+      // hospitality suites and end walls — the full 2022-era treatment.
+      grandstandEx(0.00, 1, 8, 46, null, null,
+        { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      // La Source hairpin: compact single-tier stand, open truss roof.
+      grandstandEx(0.02, 1, 8, 26, null, null, { livery: "steel", roof: "truss", endWalls: true });
+      // 2. Raidillon amphitheatre (Gold 4) — stepped SHORT bays climbing the crest
       // at s≈0.07–0.10 R. Kept short + individually re-anchored: a single long
       // stand lays its crowd along ONE node's flat tangent, so on this steep,
       // curved climb the far rows flung up into the air / over the track. Short
       // bays each seat on their own local slope, so the crowd stays grounded.
+      // Lengthened 18→26 m and given a second deck: the real Gold 4 was rebuilt
+      // in 2022 into a much larger dual-bay stand and the old single-tier bays
+      // read as undersized against it.
       for (const [s, gp] of [[0.070, 8], [0.088, 9], [0.097, 9]]) {
-        grandstand(s, 1, gp, 18, GOLD3, [0.20, 0.36, 0.62]);
+        grandstandEx(s, 1, gp, 26, GOLD4, [0.20, 0.36, 0.62],
+          { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD4 });
       }
       billboard(Math.round(n * 0.085) % n, 1, 14, 18, 10, [0.05, 0.06, 0.09]);
       // Stepped banking slabs climbing the R hillside behind/beside the stands.
-      place(K(0.072), 1, 22, [10, 2.4, 16], GOLD3);
+      place(K(0.072), 1, 22, [10, 2.4, 16], GOLD4);
       place(K(0.080), 1, 26, [11, 3.6, 18], [0.44, 0.45, 0.48]);
       place(K(0.090), 1, 30, [12, 4.8, 20], [0.42, 0.43, 0.46]);
-      grandstand(0.16, 1, 8, 30, shell, [0.50, 0.52, 0.56]);   // Les Combes
-      grandstand(0.92, 1, 8, 28, shell, [0.46, 0.48, 0.52]);   // Bus Stop chicane
+      // Kemmel straight signage: ~560 m of the climb to Les Combes previously
+      // carried no trackside advertising at all — the inside (L) verge, clear
+      // of the Gold 4/Les Combes stands on the R, gets a continuous board run.
+      sponsorHoarding(0.10, 0.18, -1, 3, { h: 1.2 });
+      // Les Combes: open tiered box, forest wall directly behind.
+      grandstandEx(0.16, 1, 8, 30, null, null, { livery: "darkSteel", roof: "flat", endWalls: true });
+      // Bus Stop chicane: braking-zone stand facing the final complex.
+      grandstandEx(0.92, 1, 8, 28, null, null, { livery: "steel", roof: "cantilever", pylons: true, endWalls: true });
+      // Blanchimont grandstand — missing from the original file entirely
+      // despite the corner carrying real camber and a marshal shelter already
+      // dressed here; set back beyond the guardrail and catch fence.
+      grandstandEx(0.848, 1, 12, 36, null, null,
+        { livery: "concrete", tiers: 2, roof: "truss", endWalls: true });
 
       // --- Yellow-capped marshal posts dotted around the lap.
       every(120, (k) => {
@@ -197,6 +243,15 @@
       wall(0.055, 0.075, -1, 3.6, 1.8, [0.55, 0.55, 0.52], 1.2);
       place(K(0.060), -1, 5.2, [1.6, 1.6, 28], [0.52, 0.52, 0.50]);
       place(K(0.068), -1, 4.8, [1.4, 1.5, 24], [0.54, 0.54, 0.51]);
+      // The corner's namesake: a thin brook along the valley floor beyond the
+      // runoff wall. Eau Rouge ("red water") is named for this iron-stained
+      // Ardennes stream, and the circuit previously modelled none of it.
+      {
+        const BROOK = [0.18, 0.28, 0.22];
+        waterSurface(K(0.059), -1, 8, [2.6, 0.14, 22], BROOK, { id: "spa-eau-rouge-brook-a" });
+        waterSurface(K(0.067), -1, 8, [2.3, 0.14, 20], BROOK, { id: "spa-eau-rouge-brook-b" });
+        waterSurface(K(0.074), -1, 8, [2.0, 0.14, 18], BROOK, { id: "spa-eau-rouge-brook-c" });
+      }
 
       // 3b. Stavelot runoff + barriers against the treeline (s≈0.75–0.80 R).
       groundPatch(K(0.775), 1, 3.2, [16, 0.35, 42], [0.42, 0.42, 0.40],
@@ -335,7 +390,7 @@
       // amphitheatres while leaving Kemmel and Blanchimont's road-level views open.
 
       // 4. Raidillon elevation theatre — two distant, staggered woodland ranks
-      // rise behind the Gold 3 stands and camps. The large gaps keep the crest
+      // rise behind the Gold 4 stands and camps. The large gaps keep the crest
       // and braking sightline clear while making the climb read through tree depth.
       forestEdge(0.050, 0.112, -1, 30, { density: 0.64, hMin: 14, hMax: 25,
         col: [0.07, 0.24, 0.11], col2: [0.13, 0.34, 0.15], pineFrac: 0.94 });
@@ -347,12 +402,13 @@
       forestEdge(0.088, 0.108,  1, 38, { density: 0.58, hMin: 15, hMax: 26,
         col: [0.08, 0.25, 0.12], col2: [0.14, 0.35, 0.16], pineFrac: 0.92 });
 
-      // 5. Pouhon's grassy bowl gets short individually grounded crowd bays.
-      // They sit beyond the marshal rail on the outside hillside; short spans
-      // follow the slope and avoid forming a wall across the fast double-left.
-      for (const [s, gap] of [[0.532, 11], [0.543, 13], [0.555, 15]]) {
-        grandstand(s, -1, gap, 16, [0.36, 0.38, 0.39], [0.74, 0.28, 0.20]);
-      }
+      // 5. Pouhon and Fagnes are natural grass-bank terracing in reality, not
+      // built stands — real viewing here is informal terraced hillside, so
+      // spectatorHill replaces the old hand-placed grandstand bays. They sit
+      // beyond the marshal rail on the outside hillside; short spans follow
+      // the slope and avoid forming a wall across the fast double-left.
+      spectatorHill(0.525, 0.560, -1, 11, { rows: 4, density: 0.55, step: 6 });
+      spectatorHill(0.658, 0.672, -1, 10, { rows: 3, density: 0.42, step: 6 });
 
       // 6. Small cabin hamlets on the Les Combes and Stavelot high ground.
       // Paired buildings, rather than a continuous row, retain the rural Ardennes
@@ -399,7 +455,7 @@
       // --- Barriers: catch fence at the packed stands, armco on the fast forest
       //     sweepers, tyre stacks at the heavy braking zones.
       fence(0.0, 0.03, 1, 6, 4.2, [0.74, 0.76, 0.80]);        // main straight stand
-      fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Raidillon Gold-3 amphitheatre
+      fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Raidillon Gold-4 amphitheatre
       fence(0.15, 0.18, 1, 7, 4.2, [0.74, 0.76, 0.80]);       // Les Combes
       fence(0.90, 0.94, 1, 6, 4.2, [0.74, 0.76, 0.80]);       // Bus Stop
       guardrail(0.42, 0.58, -1, 3.4, [0.84, 0.85, 0.88]);     // Pouhon sweep

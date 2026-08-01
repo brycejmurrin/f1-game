@@ -49,10 +49,11 @@
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
               addBox, every, onTrack, hash, vadd, anchor, along, building, motorhome, tower,
-              grandstand, billboard, gantry, marshalPost, fence, guardrail, wall,
+              grandstand, grandstandEx, billboard, gantry, marshalPost, fence, guardrail, wall,
               tyreWall, pine, tree, palm, bush, hedge, peak, ridge, mountain,
               addCyl, addCone, addPrism, addPyramid, forestEdge, cityFront,
-              modelGroup, waterSurface, groundPatch } = api;
+              modelGroup, waterSurface, groundPatch, broadcastCompound, cameraTower,
+              sponsorHoarding } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ======================= BESPOKE INTERLAGOS MODELS =======================
@@ -204,8 +205,18 @@
       // Pit wall: solid low concrete barrier on the R of the pit straight
       wall(0.96, 0.06, 1, 2.4, 1.1, [0.82, 0.82, 0.84], 0.45);
 
-      // Pit-straight grandstand — Brazilian yellow/green crowd bias
-      grandstand(0.94, 1, 9, 80, [0.48, 0.49, 0.54], [0.94, 0.84, 0.22]);
+      // Pit-straight grandstand — hero two-tier stand facing the pits,
+      // Brazilian yellow/green crowd bias. One of the six grandstands now
+      // varied via grandstandEx liveries/tiers/roof instead of the single
+      // grey template every stand used to share.
+      grandstandEx(0.94, 1, 9, 80, null, [0.94, 0.84, 0.22],
+                   { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+
+      // Broadcast compound behind the pit tower/paddock — OB trucks + uplink
+      // dishes. No circuit had one; set well back of the second hospitality
+      // row (gap 58, extends to ~72) so it reads as the facility behind the
+      // facility rather than stacked on top of it.
+      broadcastCompound(K(0.015), 1, 92, { vans: 4, dishes: 2, mastH: 10 });
 
       // Start/finish gantry. The former low gantry on the steep Subida approach
       // lost clearance against the rising road and is intentionally omitted.
@@ -237,9 +248,14 @@
       // The iconic Arquibancada Curva 1 (large bowl stand at Turn 1)
       // Crowd colour: Brazilian yellow/green bias for the Senna S TV beat
       // ===================================================================
-      grandstand(0.01, -1, 10, 120, [0.42, 0.43, 0.48], [0.94, 0.84, 0.22]);
-      grandstand(0.05, -1, 11,  85, [0.44, 0.45, 0.50], [0.18, 0.58, 0.32]);
-      grandstand(0.09, -1, 12,  90, [0.40, 0.41, 0.46], [0.92, 0.82, 0.20]);
+      // Arquibancada Curva 1 bowl — hero two-tier stand, hospitality suites
+      grandstandEx(0.01, -1, 10, 120, null, [0.94, 0.84, 0.22],
+                   { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+      // Open steel truss roof for a different silhouette along the same tier
+      grandstandEx(0.05, -1, 11,  85, null, [0.18, 0.58, 0.32],
+                   { livery: "darkSteel", roof: "truss", pylons: true });
+      grandstandEx(0.09, -1, 12,  90, null, [0.92, 0.82, 0.20],
+                   { livery: "concrete", roof: "flat" });
       // Steep PACKED upper terraces rising behind the Curva 1 bowl stands
       crowdBank(0.02, -1, 30, 130, 8);
       for (const s of [0.00, 0.04, 0.08]) billboard(K(s), -1, 26, 16, 7, [0.94, 0.92, 0.88]);
@@ -331,6 +347,10 @@
       // Dress-pass improvement 2: continue the hillside community toward the
       // Reta Oposta reveal, but with a smaller patch so the straight remains open.
       favelaPatch(0.265, -1, 82, 6, 6, 2.3);
+      // Fifth, smaller patch bridging to the dressingExclusions reservoir
+      // sightline that opens at s=0.30 — smooths the favela→lake transition
+      // instead of the community ending abruptly at 0.265.
+      favelaPatch(0.29, -1, 90, 4, 5, 2.0);
       // A couple of taller finished landmark blocks poking above the shanties
       for (let i = 0; i < 3; i++) {
         const s = 0.14 + (i / 3) * 0.10;
@@ -343,7 +363,8 @@
       // ===================================================================
       for (const s of [0.22, 0.25, 0.28]) billboard(K(s), 1, 10, 13, 5, [0.92, 0.92, 0.90]);
       hedge(0.20, 0.32, 1, 15, 2.4, GREEN);
-      grandstand(0.27, -1, 12, 72, [0.43, 0.44, 0.49], [0.32, 0.52, 0.36]);
+      // Uncovered bleacher variant — a bare stand at the straight, no roof mass
+      grandstandEx(0.27, -1, 12, 72, null, [0.32, 0.52, 0.36], { livery: "steel", roof: "none" });
       // Dress-pass improvement 3: a packed upper terrace behind the Reta Oposta
       // stand, biased to Brazil's yellow/green event colour.
       crowdBank(0.275, -1, 31, 78, 6);
@@ -370,13 +391,26 @@
       }
 
       // ===================================================================
-      // DESCIDA DO LAGO (s=0.45, both mid): gravel trap + hedge + tyre wall
+      // DESCIDA DO LAGO / FERRADURA (bankZones frac 0.4547, both mid): the
+      // downhill run into the horseshoe. Ferradura's own dressing used to be
+      // chorded onto s=0.70/0.71 — a leftover from before bankZones carried
+      // GPS-referenced apex fractions — displaced by ~0.25 of a lap from its
+      // real apex. Moved here to match; see also Bico de Pato/Mergulho/
+      // Junção/Arquibancadas below, which had the same problem.
       // ===================================================================
       groundPatch(K(0.45), 1, 6, [40, 1.2, 30], [0.62, 0.56, 0.40],
                   { id: "interlagos-descida-gravel", samples: 6 });
       hedge(0.42, 0.50, -1, 14, 2.0, GREEN);
       tyreWall(0.44, 0.48, 1, 5, [0.85, 0.30, 0.30]);
+      // Ferradura's own yellow-capped tyre wall, opposite side from the
+      // Descida gravel/tyre-wall pair above
+      tyreWall(0.435, 0.475, -1, 4, [0.92, 0.80, 0.22]);
       marshalPost(K(0.46), -1, 8);
+      // Ferradura grandstand — the horseshoe's braking-zone stand, relocated
+      // from the old (wrong) 0.71 chord onto the real apex. One of the six
+      // grandstands now varied via grandstandEx.
+      grandstandEx(0.4547, 1, 12, 64, null, [0.32, 0.52, 0.36],
+                   { livery: "darkSteel", endWalls: true });
 
       // ===================================================================
       // SÃO PAULO HIGH-RISE SKYLINE (s=0.48–0.78, R far)
@@ -432,42 +466,89 @@
       });
 
       // ===================================================================
-      // FERRADURA / INFIELD ESSES (s=0.70, L mid): tyre walls + grandstand + trees
+      // BICO DE PATO / MERGULHO (bankZones frac 0.6265 / 0.6629, mid): this
+      // was the emptiest stretch of the lap — the corner dressing that
+      // should live here was chorded onto s=0.70/0.71 instead (see note at
+      // Ferradura above). Sponsor hoarding fills the approach; kerbs, a tyre
+      // wall and marshal posts mark both apexes.
       // ===================================================================
-      tyreWall(0.67, 0.73, -1, 4, [0.92, 0.80, 0.22]);
-      grandstand(0.71, 1, 12, 64, [0.40, 0.41, 0.46], [0.32, 0.52, 0.36]);
-      // Dress-pass improvement 5: dense event-colour ribbon through the
-      // Ferradura/Juncão amphitheatre, with a second packed terrace at the
-      // braking-zone hero view. All pieces remain behind guarded stand shells.
-      crowdBank(0.805, 1, 30, 72, 6);
-      for (const [s, side, col] of [
-        [0.675, 1, [0.96, 0.82, 0.16]], [0.705, 1, [0.12, 0.58, 0.30]],
-        [0.735, 1, [0.16, 0.38, 0.72]], [0.795, 1, [0.96, 0.82, 0.16]],
-        [0.825, 1, [0.12, 0.58, 0.30]],
-      ]) billboard(K(s), side, 20, 12, 4.5, col);
-      marshalPost(K(0.70), -1, 9);
-      // Use forestEdge for clean treeline (no poke-through)
-      forestEdge(0.64, 0.76, -1, 18, { density: 0.55, hMin: 9, hMax: 14,
-                                        col: [0.18, 0.40, 0.18], col2: [0.20, 0.44, 0.20], pineFrac: 0.5 });
-      for (const s of [0.66, 0.70, 0.74]) {
+      sponsorHoarding(0.55, 0.615, 1, 10, {
+        palette: [[0.96, 0.82, 0.16], [0.12, 0.58, 0.30], [0.16, 0.38, 0.72], [0.90, 0.90, 0.90]],
+      });
+      for (const [s, side] of [[0.6265, -1], [0.6629, 1]]) {
         const k = K(s);
-        tree(k, 1, 22 + hash(k * 5) * 16, 10 + hash(k * 7) * 6, [0.20, 0.44, 0.20]);
+        place(k, side, 1.8, [0.5, 0.18, 8], [0.80, 0.18, 0.18]);
+        place(k, side, 3.0, [3.0, 0.18, 8], [0.92, 0.92, 0.92]);
+      }
+      tyreWall(0.615, 0.67, -1, 4, [0.92, 0.80, 0.22]);
+      marshalPost(K(0.625), 1, 8);
+      marshalPost(K(0.665), -1, 8);
+      // Treeline framing Bico de Pato through Junção — one continuous run
+      // over the corrected corner cluster (this span used to be labelled
+      // "Ferradura/infield esses" while actually dressing the wrong apexes)
+      // gap 7, not 18: this run is on the INSIDE of the Bico de Pato/Mergulho
+      // loop and the lap folds back on itself, so a canopy pushed 18 m into the
+      // infield reaches the frac~0.85 leg on the far side. forestEdge clears
+      // barriers and tree() clears its own trunk point, but neither sees a
+      // canopy overhanging a DIFFERENT part of the circuit — props-over-road
+      // measured 2.88 m of intrusion at f=84.5 from trees authored at f~70.
+      forestEdge(0.61, 0.76, -1, 7, { density: 0.55, hMin: 9, hMax: 14,
+                                        col: [0.18, 0.40, 0.18], col2: [0.20, 0.44, 0.18], pineFrac: 0.5 });
+      // Accent trees go on the OUTSIDE (-1) only. Side +1 through here is the
+      // inside of the Bico de Pato / Mergulho loop, and the lap folds back on
+      // itself tightly enough that a canopy 22-38 m into the infield hangs over
+      // the frac~0.62 leg — tree() guards a single anchor point, not the 5 m
+      // canopy, so nothing catches it. props-over-road measured 4.43 m of
+      // intrusion from exactly this cluster.
+      for (const s of [0.63, 0.66, 0.70, 0.735]) {
+        const k = K(s);
+        tree(k, -1, 24 + hash(k * 5) * 14, 10 + hash(k * 7) * 6, [0.20, 0.44, 0.20]);
       }
 
       // ===================================================================
-      // JUNÇÃO (s=0.82, L close): tight uphill left, kerbs + grandstand
+      // JUNÇÃO (bankZones frac 0.7414, L close): tight uphill left onto the
+      // climb, kerbs + marshal post. Relocated from the old s=0.82 chord.
       // ===================================================================
-      const kj = K(0.82);
+      const kj = K(0.7414);
       place(kj, -1, 2,   [0.5, 0.18, 9], [0.80, 0.18, 0.18]);
       place(kj, -1, 4.2, [3.0, 0.18, 9], [0.92, 0.92, 0.92]);
-      marshalPost(K(0.82), 1, 9);
+      marshalPost(K(0.7414), 1, 9);
+
+      // ===================================================================
+      // ARQUIBANCADAS (bankZones frac 0.8375, L mid) — "the grandstands",
+      // literally, and a hero TV beat feeding onto Subida dos Boxes. Had NO
+      // grandstand at all despite the name. A short curved chain of
+      // grandstandEx segments (not one long chord) follows the bend, backed
+      // by a continuous upper terrace, a camera tower and event billboards —
+      // the crowd-bank/billboard budget that used to sit mislabelled at the
+      // old 0.805/0.675-0.825 chord is spent here instead.
+      // ===================================================================
+      grandstandEx(0.826,  -1, 11, 46, null, [0.96, 0.82, 0.16], { livery: "concrete",  endWalls: true });
+      grandstandEx(0.8375, -1, 12, 52, null, [0.12, 0.58, 0.30], { livery: "steel" });
+      grandstandEx(0.849,  -1, 11, 46, null, [0.96, 0.82, 0.16], { livery: "darkSteel", endWalls: true });
+      // Upper terrace behind the three bays. crowdBank takes a NODE INDEX, not a
+      // lap fraction, and needs an explicit `depth` — called with (0.8375, …, 6)
+      // it indexed the node arrays at a fractional index (undefined -> NaN) and
+      // ran with depth undefined, so every row's setback was NaN. Split into two
+      // short banks on real nodes: a single 150 m bank is a rigid box laid on one
+      // node's tangent and chords straight across this bend.
+      crowdBank(K(0.830), -1, 30, 56, 6, 4.2);
+      crowdBank(K(0.845), -1, 30, 56, 6, 4.2);
+      cameraTower(K(0.8375), 1, 10, { h: 16 });
+      for (const [s, col] of [[0.822, [0.96, 0.82, 0.16]], [0.853, [0.12, 0.58, 0.30]]]) {
+        billboard(K(s), 1, 20, 12, 4.5, col);
+      }
 
       // ===================================================================
       // CLIMB TO S/F — Subida dos Boxes (s=0.88–0.98, both mid)
       // Keep this steep, folded sector visually open: the elevation and pit
       // tower carry the identity without long legacy slabs chord-cutting the road.
+      // A retaining wall up the R side (opposite the billboard) reads as the
+      // hillside cut holding back the climb — one billboard alone left 430 m
+      // of the final approach with no structure at all.
       // ===================================================================
       billboard(K(0.92), -1, 18, 13, 5, [0.92, 0.90, 0.86]);
+      wall(0.88, 0.96, 1, 3, 4.5, [0.58, 0.57, 0.54], 0.6);
 
       // ===================================================================
       // CONTINUOUS TRACK FURNITURE — fences, armco, guardrails

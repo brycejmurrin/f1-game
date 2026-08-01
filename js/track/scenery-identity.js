@@ -322,6 +322,61 @@ const SceneryIdentity = (function () {
       });
     };
 
+    // broadcastCompound(): the OB/TV compound every real circuit keeps behind
+    // its paddock — a row of outside-broadcast trucks, satellite uplink dishes
+    // and a short mast. No circuit modelled this and there was no dish primitive
+    // at all; a dish here is a shallow frustum bowl on a tilted pedestal.
+    //   opts: { vans, dishes, mastH, vanCol, dishCol, spacing }
+    const broadcastCompound = (k, side, gap, opts) => {
+      opts = opts || {};
+      const vans = Math.max(1, Math.min(8, Math.round(opts.vans != null ? opts.vans : 3)));
+      const dishes = Math.max(0, Math.min(6, Math.round(opts.dishes != null ? opts.dishes : 2)));
+      const spacing = opts.spacing != null ? opts.spacing : 4.6;
+      const vanCol = opts.vanCol || [0.82, 0.83, 0.86];
+      const dishCol = opts.dishCol || [0.90, 0.90, 0.92];
+      const dark = [0.20, 0.21, 0.24];
+      const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
+      // Whole-compound footprint guard, up front — a long shallow mass swinging
+      // over a curving stretch is exactly what a single onTrack() point misses.
+      const span = vans * spacing + dishes * 3.4 + 2;
+      const mastH = opts.mastH != null ? opts.mastH : 9;
+      if (rejBox(vadd(p.c, p.u, mastH / 2), [9, mastH, span], b)) {
+        console.warn(`[scenery] broadcastCompound SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        return;
+      }
+      // OB truck row — box body on a darker chassis band, parked nose-in.
+      for (let i = 0; i < vans; i++) {
+        const off = (i - (vans - 1) / 2) * spacing;
+        const c = vadd(p.c, p.t, off);
+        addBox(out, vadd(c, p.u, 1.95), [7.2, 3.1, 2.5], vanCol, b);
+        addBox(out, vadd(c, p.u, 0.42), [7.0, 0.7, 2.6], dark, b);
+        // roof AC/cable box, so the row is not four identical bricks
+        if (hash(k * 3.1 + i * 5.7 + side) > 0.45)
+          addBox(out, vadd(vadd(c, p.u, 3.7), p.r, side * 1.2), [1.6, 0.5, 1.0], dark, b);
+      }
+      // Uplink dishes, set behind the trucks.
+      for (let i = 0; i < dishes; i++) {
+        const off = (i - (dishes - 1) / 2) * 3.4 + (vans * spacing) / 2 + 2.2;
+        const base = vadd(vadd(p.c, p.t, off), p.r, side * 3.4);
+        addBox(out, vadd(base, p.u, 0.5), [2.0, 1.0, 2.0], dark, b);          // skid
+        addCyl(out, vadd(base, p.u, 1.5), 0.18, 1.2, [0.42, 0.43, 0.46], 6, b); // pedestal
+        // Bowl: a shallow frustum tipped back toward the sky. Basis swapped so
+        // the frustum axis leans off vertical instead of standing straight up.
+        const dc = vadd(base, p.u, 2.5);
+        const tilt = [p.u[0] * 0.72 + p.r[0] * side * 0.69,
+                      p.u[1] * 0.72,
+                      p.u[2] * 0.72 + p.r[2] * side * 0.69];
+        addFrustum(out, dc, 1.45, 0.5, 0.55, dishCol, 9, [p.r, tilt, p.t]);
+        addCyl(out, vadd(dc, tilt, 0.9), 0.12, 0.5, dark, 5, [p.r, tilt, p.t]);  // feed horn
+      }
+      // Link mast with a warning lamp — the compound's vertical accent.
+      const mast = vadd(vadd(p.c, p.t, -(vans * spacing) / 2 - 1.6), p.r, side * 2.6);
+      addCyl(out, vadd(mast, p.u, mastH / 2 - 0.4), 0.16, mastH + 0.8, [0.46, 0.47, 0.50], 5, b);
+      addBox(out, vadd(mast, p.u, mastH), [0.9, 0.35, 0.7], dark, b);
+      addBox(out, vadd(mast, p.u, mastH + 0.4), [0.26, 0.26, 0.26],
+             NIGHT ? [1.60, 0.28, 0.20] : [0.72, 0.16, 0.12], b);
+    };
+
     // Sparse cream/ochre Med apartment boxes (Monaco canyon).
     // opts: { palette, minH, maxH, depth, step, lit, windowCol, window, floor }
     const pastelStreetRow = (s0, s1, side, gap, opts) => {
@@ -346,7 +401,7 @@ const SceneryIdentity = (function () {
 
     return { underpassPortal, floodMast, floodMastRing, ledFacadeBands,
              concreteCanyon, sailCanopy, gridshellCanopy, runoffApron,
-             bankedKerbStrip, bowlSeatWall, pastelStreetRow };
+             bankedKerbStrip, bowlSeatWall, pastelStreetRow, broadcastCompound };
   }
 
   return { create };
