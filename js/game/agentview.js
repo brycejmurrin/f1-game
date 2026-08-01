@@ -583,6 +583,10 @@ const AgentView = (function () {
           lateralM: r1(lateralM),
           side: lateralM > 0.5 ? "right" : lateralM < -0.5 ? "left" : "same line",
           closingMps: r1(closing),
+          // AI pace, 0.92-1.02. Without it every rival looks equally fast and
+          // an agent cannot tell a car it should hold off from one it will
+          // never keep behind. Rounded to 2dp — it is a comparison, not a dial.
+          pace: r2(c.skill != null ? c.skill : 1),
           threat: !ahead && gapM < 25 && closing > 0.5 ? "under attack"
                 : ahead && gapM < 25 && closing > 0.5 ? "closing"
                 : gapM < 25 ? "in range" : "clear",
@@ -635,6 +639,11 @@ const AgentView = (function () {
           row.speedKph = r1((c.speed || 0) * 3.6);
           row.gapToLeaderM = r1(gapLeadM);
           row.finished = !!c.finished;
+          // race classification counts penalties, so a standings table that
+          // hides them is not the classification the agent is being scored on
+          row.pace = r2(c.skill != null ? c.skill : 1);
+          row.cuts = c.cuts || 0;
+          row.timePenaltyS = c.penalty || 0;
         }
         return row;
       });
@@ -828,6 +837,27 @@ const AgentView = (function () {
         halfWidthM: r1(hw),
         clearLeftM: r1(p.x - wallL), clearRightM: r1(wallR - p.x),
         energy: r2(p.energy || 0),
+        // Being punished and unable to perceive it is the worst kind of blind
+        // spot: an agent that cannot see `cuts`/`penalty` cannot learn to stop
+        // doing the thing being penalised. Three cuts are free; from the fourth
+        // on, every cut costs +5 s (js/game.js ~2178).
+        penalties: {
+          cuts: p.cuts || 0,
+          freeCutsLeft: Math.max(0, 3 - (p.cuts || 0)),
+          timePenaltyS: p.penalty || 0,
+          note: "cuts 1-3 warn; each cut from the 4th adds +5 s to your race time",
+        },
+        // energy alone says how much charge is left, not whether it is going
+        // anywhere. Deployment, the overtake window and its cooldown are all
+        // separately actionable.
+        ers: {
+          charge: r2(p.energy || 0),
+          deploying: !!p.deploying,
+          overtakeArmed: !!p.otArmed,
+          boostRemainingS: r1(p.otT || 0),
+          cooldownS: r1(p.otCool || 0),
+          note: "overtake arms within ~1 s of the car ahead; 4 s boost, then 16 s cooldown",
+        },
         grip: {
           slipFactor: r2(slipFactor),
           longUsedPct: Math.round(axFrac * 100),
@@ -872,6 +902,17 @@ const AgentView = (function () {
           sector: (G.sectorIdx || 0) + 1,
           sectorBests: (G.sectorBests || []).map((v) => (isFinite(v) ? r2(v) : null)),
           sectorLast: (G.sectorLast || []).map((v) => (v == null ? null : r2(v))),
+          // The seed makes a payload self-describing: an agent (or a bug report)
+          // can reproduce the exact episode this snapshot came from with
+          // reset(frac, speed, x, seed). Mode flags matter because they silently
+          // change the rules — raceLineAssist steers for you, seasonMode changes
+          // what a result means, unlimitedBudget removes the parts constraint
+          // objective() describes.
+          seed: G.seed,
+          seasonMode: !!G.seasonMode,
+          difficulty: G.difficulty != null ? G.difficulty : null,
+          raceLineAssist: G.raceLineAssist != null ? G.raceLineAssist : null,
+          unlimitedBudget: !!G.unlimitedBudget,
         };
         payload.terminal = terminal();
         payload.physics = {
@@ -881,6 +922,24 @@ const AgentView = (function () {
           vLat: r2(p.vLat || 0), axEstSm: r2(p.axEstSm || 0),
           offTrackS: r2(p.offT || 0), onKerb: !!p.onKerb,
           brakeHeat: r2(p.brakeHeat || 0),
+          // gear was exposed but engine state was not; and "am I off the road /
+          // stuck / about to be rescued" was invisible despite driving the
+          // rescue logic the agent has to react to.
+          rpm: Math.round(p.rpm || 0),
+          offroad: !!p.offroad,
+          stuckS: r2(p.stuckT || 0),
+          wallContactS: r2(p.wallT || 0),
+          vertLoad: r2(p.vertLoad != null ? p.vertLoad : 1),
+        };
+        // setPhysics() can retune the car underneath an agent mid-session. If
+        // it cannot see the tunables it will attribute the change to its own
+        // driving. PHYSICS_VERSION only moves on shipped retunes, not overrides.
+        payload.tunables = {
+          WHEELBASE: G.WHEELBASE, PACE: G.PACE, DRIFT: G.DRIFT,
+          ROAD_FOLLOW: G.ROAD_FOLLOW, PLAYER_GRIP: G.PLAYER_GRIP,
+          FRONT_GRIP: G.FRONT_GRIP, YAW_DAMP: G.YAW_DAMP,
+          YAW_INERTIA: G.YAW_INERTIA, LONG_GRIP: LONG_GRIP,
+          note: "live values — __apex.setPhysics() mutates these at runtime",
         };
       }
 
@@ -2738,6 +2797,57 @@ const AgentView = (function () {
     // ── agentHelp() — discovery ─────────────────────────────────────────────
     // Progressive disclosure: ~200 tokens naming the surface and the loop, so an
     // agent can find its way without loading docs/DEBUG-HOOKS.md.
+    // ── objective() — what the game IS, not how the API works ───────────────
+    // agentHelp() documents the surface; nothing said what the agent is trying
+    // to DO. The evidence for adding exactly this, and no more: attaching domain
+    // meaning to the identifiers an agent already reads is the single best token
+    // spend measured (BIRD text-to-SQL, 34.9% -> 54.9% from one "evidence"
+    // sentence per question), and reading a game's rules can beat a lot of
+    // experience (SPRING, NeurIPS 2023: GPT-4 given the Crafter paper outscored
+    // RL baselines trained for 1M steps).
+    //
+    // Deliberately STATIC facts only — the win condition, the trade-offs, the
+    // hard limits. It does NOT try to describe how the car behaves: one-shot
+    // dynamics rules are shown to improve then DEGRADE an agent (Cogito Ergo
+    // Ludo ablation), because a fixed description cannot be revised when it is
+    // wrong. Dynamics are for the agent to learn by calling rollout()/act().
+    //
+    // And it is one small call, not a doc: repository context files measurably
+    // fail to help while costing >20% more tokens (ETH Zurich, arXiv 2602.11988).
+    function objective() {
+      return {
+        apiVersion: API_VERSION,
+        goal: "Finish the race ahead of the other 21 cars. Race position is by "
+            + "distance covered (prog), so completing laps fastest wins.",
+        winCondition: {
+          race: "lowest total time over lapsTarget laps; time penalties are added",
+          timeTrial: "lowest single lap time; no rivals to pass",
+        },
+        tradeoffs: [
+          "TRACK LIMITS: running wide is faster but cuts 1-3 warn and every cut "
+          + "from the 4th adds +5 s. Free speed until it suddenly is not.",
+          "ERS: charge drains ~0.20/s deploying and regenerates ~0.115/s, so "
+          + "deployment costs roughly 2 s of recharge per 1 s spent. Spend it "
+          + "where speed converts to distance — long straights, not corners.",
+          "OVERTAKE BOOST: arms only within ~1 s of the car ahead; 4 s of boost "
+          + "then 16 s of cooldown, so firing it early wastes the window.",
+          "PARTS: a 600-credit budget across 8 categories. Every credit in "
+          + "engine/aero is a credit not in brakes/tyres — see carView().",
+        ],
+        constraints: [
+          "Driving backwards flags wrongWay; staying stuck ~3 s triggers an "
+          + "automatic rescue that costs far more time than recovering yourself.",
+          "Barriers are hard: the car is clamped, not stopped. Contact scrubs "
+          + "speed and you keep the position loss.",
+        ],
+        units: "metres, m/s, seconds, degrees where a key says Deg. +x is right "
+             + "of the centreline; +k is a right-hand turn.",
+        note: "STATIC facts about the game. How the CAR behaves is not described "
+            + "here on purpose — learn it by calling rollout()/act() and reading "
+            + "world(), which stays true when the physics is retuned.",
+      };
+    }
+
     function agentHelp() {
       return {
         apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
@@ -2801,6 +2911,7 @@ const AgentView = (function () {
           "rollout({seconds,dt,input,policy,policyHz,samples})":
             "drive an interval, return a digest instead of every frame",
           "terminal()": "{done, reason} — finished|wrong_way|rescued|null",
+          "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once",
           "agentHelp()": "this manifest",
         },
         // These __apex hooks ALREADY return clean JSON — call them directly, no
@@ -3137,9 +3248,22 @@ const AgentView = (function () {
       const def = G.track.def;
       const base = {
         apiVersion: API_VERSION, conventions: CONVENTIONS,
+        // Static circuit identity. `gp` and `realLengthKm` come straight off the
+        // circuit def and were never surfaced: they ground the model in the real
+        // world (this is Monza, the Italian GP, really 5.79 km) and let an agent
+        // sanity-check the built geometry against the circuit it claims to be —
+        // lengthM is what we built, realLengthKm is what it should be.
         track: { id: def.id, name: def.name, country: def.country || null,
-                 lengthM: r1(G.track.total), street: !!def.street,
-                 laps: def.laps || null },
+                 gp: def.gp || null,
+                 lengthM: r1(G.track.total),
+                 realLengthKm: def.lengthKm || null,
+                 lengthErrorPct: def.lengthKm
+                   ? r1((G.track.total / 1000 - def.lengthKm) / def.lengthKm * 100)
+                   : null,
+                 street: !!def.street,
+                 laps: def.laps || null,
+                 startFrac: def.startFrac != null ? def.startFrac : null,
+                 reverse: !!def.reverse },
       };
       if (what === "corners" || what === "all") {
         base.corners = corners();
@@ -3169,7 +3293,7 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, field, trackInfo, scene, describe, query, atmosphere,
+    return { world, field, trackInfo, scene, describe, query, atmosphere, objective,
              carView, render, survey, rollout, agentHelp, corners, terminal,
              // deprecated aliases — prefer render({what}) and scene({visible})
              visible, worldModel, frame, plan,

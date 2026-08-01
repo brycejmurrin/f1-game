@@ -641,6 +641,61 @@ still 48 columns), `agentHelp()` still points decisions at `world()`/`scene()`/
 `trackInfo()`, and the `aid: "APPROXIMATE…"` flag stays on every raster
 response. The honest framing: this is for looking at, not measuring from.
 
+## 5k. Determinism, and the state that was invisible
+
+Two production artefacts from Luden.io (the article *AI Agents in Game
+Development*, Jun 2026, and their `WebGameTemplateForAgents` repo) validated this
+architecture and exposed two gaps it had.
+
+Their central finding — "the most game-changing thing is any state management
+architecture that lets you inspect the current world state *and its changes* in a
+text format, **even better if it's deterministic**" — describes `world()` +
+`since=` deltas exactly. Their March-2026 scenario-testing breakthrough, a "fake
+input layer between real player input and game logic", is `setInput()`/`act()`.
+So the shape was right. What was missing:
+
+**1. The sim was not deterministic.** Their rule is absolute: *"`Math.random()`
+forbidden."* Here, `js/track/`, `js/car/` and `js/circuits/` were already clean
+(the track build is hash-seeded), but five sites in `js/game.js` fed the
+simulation from `Math.random()` — AI lane jitter, AI skill, grid order, the
+start-lights hold, and **the AI overtake decision, which fires every tick for
+every AI car**. That last one made two runs of one scenario diverge immediately,
+so `rollout()` and `agent-drive-bench` were comparing runs that were never
+comparable.
+
+Seeding those five (a ten-line LCG, `simSeed`/`simRnd`) then made two further
+leaks *visible* — both only findable once a run could actually be repeated:
+
+- `gridUp()` clears the race-level fields but not the drivetrain, so gear, rpm
+  and smoothed steering leaked between episodes.
+- `prog` accumulates from `c._prevS` (`js/game.js:2705`), which `reset()` never
+  cleared — so the first tick of a fresh episode banked one delta measured
+  against the *previous* episode's final position. Measured as ~1 m of drift over
+  a 4 s rollout at identical seed and inputs.
+
+Cosmetic randomness (camera shake, lightning, particles, audio) deliberately
+stays on `Math.random()`: if it drew from the seeded stream, whether a spark
+spawned would change where a car ended up. A test asserts exactly that.
+
+**2. Some state was invisible everywhere.** Mapping all 79 car fields against
+both `agentview.js` and `apex.js` found state no hook exposed. The worst was
+`penalty`/`cuts`: an agent could accrue track-limit penalties, be scored on them,
+and have no way to perceive them — it could not learn to stop doing the thing it
+was being punished for. Also missing: ERS deployment and the overtake window
+(only `energy` was exposed), AI `skill` (every rival looked equally fast), engine
+`rpm`, and recovery state (`offroad`, `stuckT`, `wallT`).
+
+**3. The game was undocumented as a game.** `agentHelp()` described the API;
+nothing said what ERS is *for* or what winning is. The fix is one small call,
+`objective()`, not a document — and it states static facts only. The evidence:
+attaching domain meaning to identifiers an agent already reads is the best
+measured token spend (BIRD text-to-SQL, **+20pp** from one evidence sentence),
+and reading a game's rules can beat a lot of experience (SPRING, NeurIPS 2023).
+But *fixed dynamics* rules improve then **degrade** an agent (Cogito Ergo Ludo
+ablation), and standing context files measurably fail to help while costing
+>20% more tokens (ETH Zurich, arXiv 2602.11988). So `objective()` says what the
+game is and refuses to say how the car behaves.
+
 ## 6. Open questions
 
 - **Prop registry granularity.** Per composite model, or per emitted

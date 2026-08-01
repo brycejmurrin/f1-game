@@ -998,6 +998,18 @@ sets. `gradientPct`/`elevation` measure the climb across the corner, and `kerbs`
 lists the sides that carry one. The same facts appear as rally mutators in
 `world().pacenotes` (`uphill`, `downhill`, `off-camber`).
 
+**Previously-invisible state, now exposed.** `ego.penalties` gives `{cuts,
+freeCutsLeft, timePenaltyS}` — cuts 1-3 warn, every cut from the 4th adds +5 s.
+An agent that cannot see this is scored on a rule it cannot perceive.
+`ego.ers` gives `{charge, deploying, overtakeArmed, boostRemainingS, cooldownS}`
+— charge alone never said whether the energy was going anywhere, or whether the
+overtake window (~1 s behind, 4 s boost, 16 s cooldown) was open.
+`rivals[].pace` (and `field()` rows at `full`) expose AI skill, so one rival is
+distinguishable from another. `detail:"full"` adds `physics.{rpm, offroad,
+stuckS, wallContactS, vertLoad}` and a `tunables` block — `setPhysics()` can
+retune the car underneath an agent, and without it the agent would attribute the
+change to its own driving.
+
 **No prescribed racing line.** A crude `apexOffsetM`/`moveToApexM` "fast line"
 (apex = inside edge) was removed — it is confidently wrong (late apex onto a
 straight, chicanes link). Instead the agent chooses a line from honest geometry:
@@ -1079,6 +1091,35 @@ Carries `timeOfDay`, `weather`, `wetRoad`, `dark`, `brightness`,
 direction and dims it to moonlight, so elevation alone would report a high sun
 over a floodlit midnight. Darkness comes from the session, not the sun vector.
 Fog is reported as a **visibility distance**, the actionable form.
+
+### `objective() → payload`
+
+**What the GAME is**, as opposed to what the API is (`agentHelp()`). Static —
+read once, needs no track loaded. Carries the win condition, the irreducible
+trade-offs (track limits, ERS, the overtake window, the 600-credit parts
+budget), the hard constraints (wrong-way, rescue, barriers) and the units
+convention.
+
+It deliberately does **not** describe how the car behaves. A fixed dynamics
+description cannot be corrected when it is wrong and goes stale the moment
+physics is retuned; the agent should learn dynamics by calling
+`rollout()`/`act()` and reading `world()`.
+
+### `seed(n?) → number`
+
+Get or set the **simulation** random seed; setting it also rewinds the stream.
+`seed(42)` then `reset(frac, speed, x)` reproduces an episode exactly — same
+seed + same inputs ⇒ same result. `reset(frac, speed, x, seed)` does both, in
+the right order (the seed is applied *before* the grid is rebuilt, since grid
+order, lane and AI skill are drawn from the stream).
+
+Only simulation randomness is seeded: AI grid order/lane/skill, the start-lights
+hold, and the per-tick AI overtake decision. **Cosmetic randomness — camera
+shake, lightning, particles, audio noise — deliberately stays on
+`Math.random()`** so it can never perturb the sim; if it drew from the seeded
+stream, whether a spark spawned would change where a car ended up.
+
+Guarded by `tests/agent-determinism.spec.js`.
 
 ### `field({detail}?) → payload | typedError`
 
