@@ -65,6 +65,13 @@ window.SpotifyMusic = (function () {
   // token request cannot paper over it with a generic line.
   let explained = false;
   let lastPlayError = null;    // {status, reason} from the last refused play
+  // Polled playback detail for the in-game player panel. There is no push
+  // channel in remote mode, so everything here arrives on the 10s tick.
+  let art = null, progressMs = 0, durationMs = 0;
+  let shuffleOn = false, repeatMode = "off";
+  let devVol = null, devSupportsVol = true, devName = "";
+  let results = [];            // playlist search hits
+  let title = "", artist = "";
   const subs = [];
 
   /* ---------------- storage (raw, not GameStore) ----------------
@@ -593,6 +600,16 @@ window.SpotifyMusic = (function () {
       if (!ds.length) {
         setStatus("connected", "No Spotify device found. Open Spotify on your phone or " +
           "computer (play anything for a second), then press REFRESH.");
+      } else if (/No Spotify device found|Looking for your Spotify devices|Waking your Spotify device/.test(message)) {
+        // CLEAR THE STALE COMPLAINT. The no-device line is written the moment
+        // the list comes back empty — which it often is for a second before the
+        // phone reports in — and nothing ever replaced it, so the panel sat
+        // there insisting there was no device directly above a device picker
+        // showing an active one, while music played.
+        const cur = ds.filter((d) => d.id === deviceId2())[0] || ds[0];
+        setStatus("connected", cur
+          ? (cur.name + " is ready. Pick a playlist and press PLAY.")
+          : "Connected. Pick a device and a playlist, then press PLAY.");
       }
       render();
       return ds;
@@ -608,8 +625,23 @@ window.SpotifyMusic = (function () {
       return r.json().then((j) => {
         const it = j && j.item;
         track = it ? (it.name + " — " + (it.artists || []).map((a) => a.name).join(", ")) : null;
+        title = it ? it.name : "";
+        artist = it ? (it.artists || []).map((a) => a.name).join(", ") : "";
+        // Smallest image that is still sharp on a phone row — the 640px master
+        // is a needless download every poll.
+        const imgs = (it && it.album && it.album.images) || [];
+        art = imgs.length ? (imgs[imgs.length - 1] || imgs[0]).url : null;
+        progressMs = (j && j.progress_ms) || 0;
+        durationMs = (it && it.duration_ms) || 0;
+        shuffleOn = !!(j && j.shuffle_state);
+        repeatMode = (j && j.repeat_state) || "off";
         paused = !(j && j.is_playing);
-        if (j && j.device && j.device.id && !deviceId2()) lsSet(K_DEV, j.device.id);
+        if (j && j.device) {
+          devName = j.device.name || "";
+          devVol = typeof j.device.volume_percent === "number" ? j.device.volume_percent : null;
+          devSupportsVol = j.device.supports_volume !== false;
+          if (j.device.id && !deviceId2()) lsSet(K_DEV, j.device.id);
+        }
         emit();
       }, () => {});
     });
@@ -639,6 +671,61 @@ window.SpotifyMusic = (function () {
   function remoteQuery() {
     const d = deviceId2();
     return d ? "?device_id=" + encodeURIComponent(d) : "";
+  }
+
+  /* ---------------- player controls (remote) ----------------
+     Each one fires and then re-polls shortly after: Spotify applies these
+     asynchronously on the target device, so reading back immediately returns
+     the previous state and the panel would show the opposite of what happened. */
+  function afterCommand() { setTimeout(pollNowPlaying, 600); }
+
+  function prev() {
+    if (!BACKEND.active()) return;
+    if (mode() === "remote") { api("/me/player/previous" + remoteQuery(), { method: "POST" }).then(afterCommand); return; }
+    if (player) { try { player.previousTrack(); } catch (e) {} }
+  }
+  function toggle() {
+    if (!BACKEND.active()) return;
+    if (paused) BACKEND.start(); else BACKEND.stop();
+    afterCommand();
+  }
+  function setShuffle(on) {
+    if (!BACKEND.active() || mode() !== "remote") return;
+    api("/me/player/shuffle?state=" + (on ? "true" : "false") +
+        (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(afterCommand);
+  }
+  // off -> context -> track -> off. "context" is repeat-the-playlist, which is
+  // the one a racing soundtrack actually wants.
+  function cycleRepeat() {
+    if (!BACKEND.active() || mode() !== "remote") return;
+    const next = repeatMode === "off" ? "context" : repeatMode === "context" ? "track" : "off";
+    api("/me/player/repeat?state=" + next +
+        (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(afterCommand);
+  }
+  function setDeviceVolume(pct) {
+    if (!BACKEND.active() || mode() !== "remote") return;
+    const v = Math.max(0, Math.min(100, Math.round(pct)));
+    devVol = v;
+    api("/me/player/volume?volume_percent=" + v +
+        (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" });
+  }
+  function searchPlaylists(q) {
+    const term = (q || "").trim();
+    if (!term) { results = []; render(); return Promise.resolve([]); }
+    return api("/search?type=playlist&limit=10&q=" + encodeURIComponent(term)).then((r) => {
+      if (!r || !r.ok) return [];
+      return r.json().then((j) => {
+        // Spotify has been known to return null entries in this array.
+        const items = ((j.playlists && j.playlists.items) || []).filter(Boolean);
+        return items.map((p) => ({ name: p.name, uri: p.uri,
+          by: (p.owner && p.owner.display_name) || "" }));
+      }, () => []);
+    }).then((rs) => { results = rs || []; render(); return results; });
+  }
+  function playUri(uri) {
+    if (!uri) return;
+    setContext(uri);
+    playChosen();
   }
 
   /* ---------------- GameAudio backend ----------------
@@ -718,8 +805,33 @@ window.SpotifyMusic = (function () {
     if (typeof GameAudio === "undefined" || !GameAudio.setMusicBackend) return;
     try { GameAudio.setMusicBackend(b); } catch (e) {}
   }
-  function installBackend() { setBackend(BACKEND); }
-  function removeBackend() { setBackend(null); }
+  // While ANOTHER app owns the music, the game's own audio has to mix rather
+  // than interrupt — on iOS the default "playback" session is exclusive, so the
+  // first engine sound or UI tick paused Spotify the moment you switched to the
+  // game. Only remote mode needs this: in browser mode the SDK's audio is ours.
+  function syncSession() {
+    if (typeof GameAudio === "undefined" || !GameAudio.setSessionType) return;
+    try { GameAudio.setSessionType(mode() === "remote" && GameAudio.musicBackend() ? "ambient" : "playback"); }
+    catch (e) {}
+  }
+  function installBackend() { setBackend(BACKEND); syncSession(); }
+  // Take or release the music role WITHOUT signing out. That distinction is the
+  // whole point of the source toggle: switching back to the game's own music
+  // should not cost a re-authorisation to switch away again.
+  function useAsMusic(on) {
+    if (on) {
+      if (!BACKEND.active()) return false;
+      installBackend();
+      return true;
+    }
+    removeBackend();
+    return false;
+  }
+  function inUse() {
+    return typeof GameAudio !== "undefined" && GameAudio.musicBackend
+      ? GameAudio.musicBackend() === BACKEND : false;
+  }
+  function removeBackend() { setBackend(null); syncSession(); }
 
   /* ---------------- public control ---------------- */
 
@@ -854,7 +966,106 @@ window.SpotifyMusic = (function () {
   function txt(id, s) { const e = el(id); if (e) e.textContent = s; }
   function dis(id, b) { const e = el(id); if (e) e.disabled = !!b; }
 
+  // Both panels show the same two lists, so build them through one helper —
+  // and only when the contents actually changed, so an open <select> on a phone
+  // is not torn out from under a thumb mid-scroll.
+  function fillSelect(id, opts, value, disabled) {
+    const sel = el(id);
+    if (!sel) return;
+    const want = JSON.stringify(opts);
+    if (sel.dataset.built !== want) {
+      sel.dataset.built = want;
+      sel.textContent = "";
+      for (const o of opts) {
+        const e = document.createElement("option");
+        e.value = o[1]; e.textContent = o[0]; sel.appendChild(e);
+      }
+    }
+    if (sel.value !== value) sel.value = value;
+    sel.disabled = !!disabled;
+  }
+  function playlistOpts() {
+    const o = [[lists.length ? "— pick a playlist —" : "— connect to load playlists —", ""], ["♥ Liked Songs", "liked"]];
+    for (const p of lists) o.push([p.name, p.uri]);
+    return o;
+  }
+  function deviceOpts() {
+    if (!devices.length) return [["— no devices found —", ""]];
+    return devices.map((d) => [d.name + (d.type ? " (" + d.type + ")" : "") +
+      (d.is_active ? " • active" : "") + (d.is_restricted ? " • restricted" : ""), d.id]);
+  }
+
+  function fmt(ms) {
+    if (!ms || ms < 0) return "0:00";
+    const t = Math.floor(ms / 1000);
+    return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
+  }
+
+  // The in-game player panel (#spotifypanel). Setup lives in MUSIC & SOUND;
+  // this is what you open mid-session.
+  function renderPlayer() {
+    if (!el("spotifypanel")) return;
+    const live = BACKEND.active();
+    const img = el("sp-art");
+    if (img) {
+      if (art && img.getAttribute("src") !== art) img.setAttribute("src", art);
+      img.hidden = !art;
+    }
+    txt("sp-title", title || (live ? "Nothing playing" : "Not connected"));
+    txt("sp-artist", artist || "");
+    txt("sp-on", devName ? (paused ? "Paused on " + devName : "Playing on " + devName) : "");
+    const fill = el("sp-bar-fill");
+    if (fill) fill.style.width = (durationMs ? Math.max(0, Math.min(100, (progressMs / durationMs) * 100)) : 0) + "%";
+    const tog = el("sp-toggle");
+    if (tog) {
+      tog.textContent = paused ? "▶" : "❚❚";
+      tog.setAttribute("aria-label", paused ? "Play" : "Pause");
+    }
+    const sh = el("sp-shuffle");
+    if (sh) sh.classList.toggle("active", shuffleOn);
+    txt("sp-repeat", "REPEAT: " + (repeatMode === "context" ? "ALL" : repeatMode === "track" ? "ONE" : "OFF"));
+    const rp = el("sp-repeat");
+    if (rp) rp.classList.toggle("active", repeatMode !== "off");
+    const vol = el("sp-vol");
+    if (vol && devVol !== null && document.activeElement !== vol) vol.value = String(devVol);
+    txt("sp-vol-v", devVol === null ? "—" : String(devVol));
+    if (vol) vol.disabled = !live || !devSupportsVol;
+    // supports_volume is a per-device fact and it is FALSE for most phones —
+    // the Spotify mobile app leaves volume to the hardware buttons. A slider
+    // that is simply greyed out reads as broken, so say which it is.
+    txt("sp-vol-note", !live ? ""
+      : devSupportsVol ? "Sets the volume on " + (devName || "the device") + " itself."
+      : "This device does not accept remote volume — use its own volume buttons. " +
+        "(Spotify reports supports_volume: false, usually a phone.)");
+    ["sp-prev", "sp-toggle", "sp-fwd", "sp-shuffle", "sp-repeat", "sp-refresh2"].forEach((i) => dis(i, !live));
+    fillSelect("sp-playlist2", playlistOpts(), contextUri(), !live);
+    fillSelect("sp-device2", deviceOpts(), deviceId2(), !live);
+    txt("sp-status2", message || (live ? "" : "Not connected — open MUSIC & SOUND to set Spotify up."));
+
+    const box = el("sp-results");
+    if (box) {
+      box.textContent = "";
+      for (const r of results) {
+        const row = document.createElement("div");
+        row.className = "music-row";
+        const n = document.createElement("span");
+        n.className = "music-name";
+        n.textContent = r.name + (r.by ? "  ·  " + r.by : "");
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "music-play"; b.textContent = "▶";
+        b.setAttribute("aria-label", "Play " + r.name);
+        b.onclick = () => playUri(r.uri);
+        row.append(n, b);
+        box.appendChild(row);
+      }
+    }
+    // The pause-menu entry is only useful once there is something to control.
+    const pm = el("pm-spotify");
+    if (pm) pm.disabled = !available() || state !== "connected";
+  }
+
   function render() {
+    renderPlayer();
     const wrap = el("as-sp-wrap");
     if (!wrap) return;
     // The state goes on a DATA ATTRIBUTE, not a class, so CSS can style the
@@ -879,48 +1090,14 @@ window.SpotifyMusic = (function () {
       ? (track ? (paused ? "Paused — " + track : track) : "Nothing playing yet.")
       : "—");
 
-    // The picker: Liked Songs plus whatever playlists the account has. Rebuilt
-    // only when the contents actually changed, so an open <select> on a phone
-    // is not torn out from under a thumb mid-scroll.
-    const sel = el("as-sp-playlist");
-    if (sel) {
-      const want = JSON.stringify(lists.map((p) => p.uri));
-      if (sel.dataset.built !== want) {
-        sel.dataset.built = want;
-        sel.textContent = "";
-        const add = (label, uri) => {
-          const o = document.createElement("option");
-          o.value = uri; o.textContent = label; sel.appendChild(o);
-        };
-        add(lists.length ? "— pick a playlist —" : "— connect to load playlists —", "");
-        add("♥ Liked Songs", "liked");
-        for (const p of lists) add(p.name, p.uri);
-      }
-      if (sel.value !== contextUri()) sel.value = contextUri();
-      sel.disabled = state !== "connected";
-    }
+    fillSelect("as-sp-playlist", playlistOpts(), contextUri(), state !== "connected");
     // MODE + DEVICE. The device row only means anything in remote mode, so it
     // is disabled (never hidden) elsewhere — hiding reflows the sheet.
     const remote = mode() === "remote";
     const b1 = el("as-sp-mode-remote"), b2 = el("as-sp-mode-browser");
     if (b1) b1.classList.toggle("active", remote);
     if (b2) b2.classList.toggle("active", !remote);
-    const dsel = el("as-sp-device");
-    if (dsel) {
-      const want = JSON.stringify(devices.map((d) => d.id + d.name + d.is_active));
-      if (dsel.dataset.built !== want) {
-        dsel.dataset.built = want;
-        dsel.textContent = "";
-        const add = (label, id) => { const o = document.createElement("option");
-          o.value = id; o.textContent = label; dsel.appendChild(o); };
-        if (!devices.length) add("— no devices found —", "");
-        for (const d of devices) {
-          add(d.name + (d.type ? " (" + d.type + ")" : "") + (d.is_active ? " • active" : ""), d.id);
-        }
-      }
-      if (dsel.value !== deviceId2()) dsel.value = deviceId2();
-      dsel.disabled = !remote || state !== "connected";
-    }
+    fillSelect("as-sp-device", deviceOpts(), deviceId2(), !remote || state !== "connected");
     dis("as-sp-refresh", !remote || state !== "connected");
     const live = state === "connected" && (remote ? !!readToken() : ready);
     dis("as-sp-play", !live);
@@ -945,6 +1122,28 @@ window.SpotifyMusic = (function () {
     on("as-sp-mode-browser", "click", () => setMode("browser"));
     on("as-sp-device", "change", (e) => setDevice(e.target.value));
     on("as-sp-refresh", "click", () => loadDevices());
+
+    // ---- the in-game player panel ----
+    on("sp-prev", "click", prev);
+    on("sp-toggle", "click", () => { activate(); toggle(); });
+    on("sp-fwd", "click", () => BACKEND.skip());
+    on("sp-shuffle", "click", () => setShuffle(!shuffleOn));
+    on("sp-repeat", "click", cycleRepeat);
+    on("sp-vol", "input", (e) => { txt("sp-vol-v", e.target.value); });
+    // Commit on release, not on every pixel of the drag: each one is an API
+    // call, and a dragged slider would spend the whole rate-limit budget.
+    on("sp-vol", "change", (e) => setDeviceVolume(+e.target.value || 0));
+    on("sp-playlist2", "change", (e) => { activate(); setContext(e.target.value); if (e.target.value) playChosen(); });
+    on("sp-device2", "change", (e) => setDevice(e.target.value));
+    on("sp-refresh2", "click", () => loadDevices());
+    on("sp-close", "click", () => { const p = el("spotifypanel"); if (p) p.hidden = true; });
+    let searchT = null;
+    on("sp-search", "input", (e) => {
+      const q = e.target.value;
+      if (searchT) clearTimeout(searchT);
+      // Debounced: one request per pause in typing, not per keystroke.
+      searchT = setTimeout(() => searchPlaylists(q), 350);
+    });
     on("as-sp-playlist", "change", (e) => {
       activate();
       setContext(e.target.value);
@@ -998,6 +1197,21 @@ window.SpotifyMusic = (function () {
     activate,
     context: contextUri, setContext, play() { return playChosen(); },
     mode, setMode, setDevice, deviceList() { return devices.slice(); },
+    // Called by game.js when the panel opens: poll immediately rather than
+    // showing whatever the last 10s tick left behind.
+    openPanel() {
+      const p = el("spotifypanel");
+      if (p) p.hidden = false;
+      render();
+      if (BACKEND.active()) { pollNowPlaying(); loadDevices(); }
+    },
+    prev, toggle, setShuffle, cycleRepeat, setDeviceVolume, searchPlaylists, playUri,
+    useAsMusic, inUse,
+    nowPlaying() {
+      return { title, artist, art, paused, progressMs, durationMs,
+        shuffle: shuffleOn, repeat: repeatMode, device: devName,
+        volume: devVol, supportsVolume: devSupportsVol };
+    },
     refreshDevices() { return loadDevices(); },
     backend() { return BACKEND; },
     redirectUri, handleRedirect,

@@ -33,7 +33,10 @@ window.MusicLib = (function () {
 
   const MAX_BYTES = 25 * 1024 * 1024;   // ~25 MB: a long MP3, not someone's FLAC album
   const NAME_MAX = 48;                  // display only — a 200-char file name wrecks the row
-  const OPEN_MS = 4000;                 // see openDb(): a hung open must not hang the panel
+  // See openDb(). Generous on purpose: the request competes with this game's
+  // boot — track build plus WebGL compilation — and a 4s budget was expiring on
+  // a perfectly healthy store, which then stayed "unavailable" all session.
+  const OPEN_MS = 12000;
   // Some browsers report an empty `type` for a perfectly good MP3 (notably older
   // Android WebViews and files dragged in from odd file systems), so the
   // extension is a legitimate second opinion — not a shortcut.
@@ -76,7 +79,15 @@ window.MusicLib = (function () {
       // menu must not wait on it — resolve null and degrade.
       r.onblocked = () => res(null);
       setTimeout(() => res(null), OPEN_MS);
-    }).then((db) => { if (!db) usable = false; return db; });
+    }).then((db) => {
+      usable = !!db;
+      // NEVER CACHE A FAILURE. The likeliest cause is a slow open, not absent
+      // storage, and caching the null meant one unlucky boot disabled uploads
+      // until the page was reloaded — with the panel insisting the browser
+      // could not store files while it perfectly well could.
+      if (!db) dbPromise = null;
+      return db;
+    });
     return dbPromise;
   }
 
@@ -209,7 +220,10 @@ window.MusicLib = (function () {
       });
       if (entries.length) call("addTracks", entries);
       render();
-    }).catch(() => { usable = false; cache = []; render(); });
+    }).catch(() => { usable = false; cache = []; readyPromise = null; render(); });
+    // A run that found no usable store is not a result worth remembering
+    // either — the next add() should get a fresh attempt.
+    readyPromise = readyPromise.then((v) => { if (!usable) readyPromise = null; return v; });
     return readyPromise;
   }
 

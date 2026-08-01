@@ -316,6 +316,10 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #howtoplay { z-index: 40; }
 #advanced { z-index: 41; }
 #audioset { z-index: 41; }
+/* Above #audioset (41): the Spotify player is opened FROM the audio panel as
+   well as from the pause menu, and without this it rendered under the main
+   menu, which carries z-index 20. */
+#spotifypanel { z-index: 42; }
 
 /* One-per-line stacks (pause menu, settings groups, results actions). */
 .stack { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
