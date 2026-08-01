@@ -23,7 +23,11 @@
   align-content: center; justify-items: center;
   gap: 2px;
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
-  background: radial-gradient(120% 90% at 50% 10%, rgba(225, 6, 0, 0.18), transparent 60%), rgba(6, 6, 10, 0.55);
+  /* in oklab so the red wash stays red through its falloff instead of
+     sagging grey, and .grain (css/components.css) dithers what is left */
+  background:
+    radial-gradient(120% 90% at 50% 10% in oklab, rgba(225, 6, 0, 0.20), transparent 62%),
+    rgba(6, 6, 10, 0.55);
   overflow: hidden;
 }
 #title {
@@ -45,6 +49,12 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: calc(var(--gap) * 0.55);
 }
+/* STANDINGS only appears mid-season, so this row is four buttons or five — and
+   at five the last one is stranded alone on row three. The generic
+   .no-orphan-2 rule cannot be used here: :nth-child counts HIDDEN elements, so
+   it would widen HOW TO PLAY in the four-button case too. :has() asks the only
+   question that actually matters — is the fifth button showing? */
+#menu-secondary:has(#mb-standings:not([hidden])) > :last-child { grid-column: 1 / -1; }
 #menu-buttons .bigbtn { margin: 0; width: 100%; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
@@ -56,8 +66,10 @@
 .minibtn .btn-ico { margin-right: 0.35em; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
-#menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: center; }
-#audiostate { color: var(--dim); font-size: 12px; margin-top: 10px; min-height: 16px; }
+#menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: inherit; }
+#menu-brand { align-items: center; }
+#menu-meta { margin-top: 14px; }
+#audiostate { color: var(--dim); font-size: 12px; min-height: 16px; }
 #disclaimer { color: var(--dim); font-size: 11px; margin-top: 8px; }
 
 /* Landscape: branding left, buttons right — a phone held sideways has width to
@@ -80,11 +92,11 @@
     column-gap: 32px;
   }
   #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
-  #menu-meta  { grid-column: 1; grid-row: 2; align-items: flex-start; }
   #menu-buttons { grid-column: 2; grid-row: 1; align-self: center; width: auto; }
   #title { font-size: clamp(26px, 7.5vw, 48px); }
   #subtitle { margin: 4px 0 0; font-size: 12px; }
-  #audiostate { font-size: 10px; margin-top: 2px; min-height: 0; }
+  #menu-meta { margin-top: 8px; }
+  #audiostate { font-size: 10px; min-height: 0; }
   #disclaimer { font-size: 10px; margin-top: 6px; }
   /* the group is what gets the width now; the buttons fill their cell */
   #menu-primary, #menu-secondary { width: min(42vw, 260px); }
@@ -192,7 +204,7 @@
   display: flex; align-items: center; gap: var(--gap);
   width: 100%; text-align: left; cursor: pointer;
   padding: calc(var(--gap) * 0.7) var(--gap);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.05);
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
@@ -208,7 +220,7 @@
 }
 /* Two-tone block: several 2026 liveries are near-black, so the accent stripe is
    what actually tells them apart at a glance. */
-.tm-colour { flex: none; width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.28); }
+.tm-colour { flex: none; width: 26px; height: 26px; border-radius: var(--r-sm); border: 1px solid rgba(255,255,255,0.28); }
 .tm-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .tm-name {
   font-size: 13px; font-weight: 800; font-style: italic; letter-spacing: 0.02em;
@@ -232,11 +244,18 @@
 /* ---------- chips ---------- */
 .chip-row { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.7); }
 .sel-chip {
+  /* on the height ladder (css/tokens.css) rather than sized by padding alone */
+  min-height: var(--chip-h);
+  display: inline-flex; align-items: center;
   padding: 6px 10px;
   font-size: 13px;
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.05);
+  /* a shallow top-lit fill rather than one flat tint: the same physical
+     language as the buttons, one step quieter, so a row of chips reads as a
+     row of keys instead of a row of rectangles */
+  background: linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
   transition: background 0.12s, box-shadow 0.12s;
   cursor: pointer;
 }
@@ -255,10 +274,12 @@
   background: rgba(225, 6, 0, 0.18);
   box-shadow: inset 0 0 0 2px var(--red), 0 0 12px rgba(225, 6, 0, 0.28);
 }
-.sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; flex: none; }
+.sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-xs); margin-right: 6px; flex: none; }
 .sel-edit {
+  min-height: var(--chip-h);
+  display: inline-flex; align-items: center; justify-content: center;
   font-size: 12px; padding: 6px 12px;
-  border: 1px solid var(--red); background: rgba(225, 6, 0, 0.12); border-radius: 7px;
+  border: 1px solid var(--red); background: rgba(225, 6, 0, 0.12); border-radius: var(--r-sm);
   transition: background 0.12s, box-shadow 0.12s; cursor: pointer;
 }
 @media (hover: hover) {
@@ -274,9 +295,13 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #sel-track-preview {
   display: flex; gap: var(--gap); align-items: flex-start;
   margin-bottom: calc(var(--gap) * 0.6); padding: calc(var(--gap) * 0.8);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  /* The card that says WHICH TEAM YOU ARE now shows it: --grad-accent is a
+     wash of the live --accent, so picking McLaren turns this papaya and Alpine
+     turns it blue, without a single per-team rule here. */
+  background: var(--grad-accent),
+    linear-gradient(150deg in oklab, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
   flex-shrink: 0;
 }
 #sel-preview-map {
@@ -286,7 +311,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      desktop. */
   flex: none; width: clamp(140px, 50%, 260px); height: auto;
   aspect-ratio: 520 / 300;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   background: rgba(0, 0, 0, 0.25);
 }
 #sel-preview-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
@@ -295,8 +320,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #sel-preview-meta { font-size: 12px; color: var(--dim); margin-top: 6px; line-height: 1.5; }
 #sel-preview-rec { font-size: 12px; color: #f6d200; font-weight: 700; margin-top: 5px; font-variant-numeric: tabular-nums; }
 #sel-preview-facts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-#sel-preview-elev { display: block; width: 100%; height: 30px; margin-top: 6px; border-radius: 4px; opacity: 0.85; }
-.spf-fact { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; letter-spacing: 0.03em; }
+#sel-preview-elev { display: block; width: 100%; height: 30px; margin-top: 6px; border-radius: var(--r-sm); opacity: 0.85; }
+.spf-fact { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: var(--r-lg); letter-spacing: 0.03em; }
 .spf-dir { background: rgba(255,255,255,0.1); color: #e0e0e8; }
 .spf-elev { background: rgba(56,183,240,0.18); color: #39b7f0; }
 .spf-drs { background: rgba(0,220,180,0.15); color: #00dcb4; }
@@ -313,7 +338,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 
 /* Season upcoming rounds list */
 .season-upcoming-head { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
-.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.10); margin-bottom: 4px; background: rgba(255,255,255,0.04); transition: border-color 0.15s, background 0.15s; cursor: default; }
+.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid rgba(255,255,255,0.10); margin-bottom: 4px; background: rgba(255,255,255,0.04); transition: border-color 0.15s, background 0.15s; cursor: default; }
 @media (hover: hover) {
   .season-upcoming-row:hover { border-color: rgba(255,255,255,0.20); background: rgba(255,255,255,0.07); }
 }
@@ -324,7 +349,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* ---------- track picker rows ---------- */
 #sel-tracks {
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   overflow-x: hidden;
 }
 /* In the single-column layout the list is capped so it cannot push the sheet's
@@ -358,7 +383,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 .track-row.active .track-row-name { color: var(--red); }
 .track-row-meta { font-size: 11px; color: var(--dim); }
 .track-row-rec { font-size: 11px; color: #f6d200; font-variant-numeric: tabular-nums; font-weight: 700; }
-.trb { display: inline-block; font-size: 8px; letter-spacing: 0.08em; padding: 1px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; font-weight: 700; }
+.trb { display: inline-block; font-size: var(--fs-micro); letter-spacing: 0.08em; padding: 1px 5px; border-radius: var(--r-xs); margin-left: 5px; vertical-align: middle; font-weight: 700; }
 .trb-night { background: rgba(129,140,248,0.15); color: #818cf8; border: 1px solid rgba(129,140,248,0.3); }
 .trb-street { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
 
@@ -373,6 +398,21 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      the full width so they don't leave a dead half-row beside them. */
   #rs-body #rs-time-section, #rs-body #rs-diff-section { grid-column: 1 / -1; }
 }
+/* Chips on a MODULE, not on flex wrap — at every width, which is why this sits
+   outside the container query above. Every one of these groups has a chip count
+   that does not divide into the row it sits in, so `flex-wrap` left a different
+   ragged hole in each: "57 (FULL)" alone on line two of LAPS, FOG alone under
+   WEATHER, and DIFFICULTY's three chips using a third of a full-width row with
+   the rest empty. Equal columns make every row deliberately full, minmax(0,1fr)
+   keeps them honest at any sheet width, and the chips get bigger tap targets
+   out of it. */
+#rs-laps, #rs-weather, #rs-diff { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#rs-time { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+#race-settings .sel-chip {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  padding-inline: 6px; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* ---------- customize my team ---------- */
 #customize .cz-row {
@@ -386,28 +426,32 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      a percentage width fought the shrink-to-fit box it used to live in — the
      rows overflowed the dialog and were clipped. */
   flex: 1 1 56%; min-width: 0; max-width: 60%;
+  min-height: var(--chip-h);
   /* 16px floor: iOS Safari auto-zooms the whole page when a focused input's
      font-size is under 16px, and the zoom sticks after the keyboard closes. */
   font: inherit; font-size: 16px;
   background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 7px 10px;
 }
+/* ONE well size for all eleven. PRIMARY/ACCENT were 56px and the seven paint
+   layers 48px, so in the multi-column form the right edge of every row landed
+   in a different place and the columns read as misaligned rather than as a
+   grid. */
 #customize input[type="color"] {
-  width: 56px; height: 34px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 6px; background: none; cursor: pointer; flex: none;
+  width: 48px; height: var(--chip-h); padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--r-sm); background: none; cursor: pointer; flex: none;
 }
 #cz-preview {
   display: flex; align-items: center; gap: 8px; margin-top: var(--gap);
-  padding: 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.05);
+  padding: 10px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.05);
 }
-#cz-swatch1, #cz-swatch2 { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); }
+#cz-swatch1, #cz-swatch2 { width: 26px; height: 26px; border-radius: var(--r-sm); border: 1px solid rgba(255,255,255,0.3); }
 #cz-pvtext { font-weight: 800; font-style: italic; letter-spacing: 0.04em; }
 #customize .cz-sep {
   margin: var(--gap) 0 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.14em;
   color: rgba(255,255,255,0.4); text-transform: uppercase;
   border-top: 1px solid rgba(255,255,255,0.12); padding-top: var(--gap);
 }
-#customize .cz-liv-row input[type="color"] { width: 48px; }
 .cz-liv-none {
   /* width:auto is stated with the id prefix in the container query below too —
      a bare class loses to any `... button { width: 100% }` rule. */
@@ -415,10 +459,19 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      fifteen and were the one control in the form under the chip height. */
   flex: none; width: auto; min-width: 56px; min-height: var(--chip-h);
   font: inherit; font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
-  padding: 6px 9px; border-radius: 6px; cursor: pointer; color: rgba(255,255,255,0.55);
+  padding: 6px 9px; border-radius: var(--r-sm); cursor: pointer; color: rgba(255,255,255,0.55);
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2);
 }
-.cz-liv-none.active { background: rgba(80,170,255,0.22); color: #cfe8ff; border-color: rgba(90,180,255,0.45); }
+/* Engaged = a lighter SURFACE, not a colour. This was a blue fill, and blue
+   already means "stat gain" in this UI (the ▲ACCEL badges on CAR SETUP), so
+   seven blue NONE buttons read as seven upgrades. Nothing here is a gain and
+   nothing here is a selection in the red sense either — it is a pressed
+   toggle, so it steps up the elevation ladder and brightens its label. */
+.cz-liv-none.active {
+  background: var(--surf-3);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.42);
+}
 /* Columns of rows once the sheet is wide, so all fifteen fit without the dialog
    becoming a long scroll. auto-fill rather than a hard two, so the count follows
    the room the sheet was given — on a landscape phone the sheet is now wide

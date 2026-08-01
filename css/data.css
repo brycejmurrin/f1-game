@@ -29,13 +29,13 @@
   /* same elevation ladder as the menu sheets (see css/tokens.css) */
   background: var(--surf-1);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   overflow: hidden;
   box-shadow: var(--edge), var(--lift-2);
 }
 /* Short landscape: card fills full height, no extra radius on top (flush with safe area) */
 @media (orientation: landscape) and (max-height: 560px) {
-  .dh-card { min-height: 0; height: 100%; max-height: none; border-radius: 10px; }
+  .dh-card { min-height: 0; height: 100%; max-height: none; border-radius: var(--r-md); }
 }
 /* DESKTOP: size to the content instead of to the screen.
    "Always fill most of the viewport" is right on a phone, where the hub IS the
@@ -55,7 +55,7 @@
   display: flex; align-items: center; gap: 12px;
   padding: 14px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(90deg, rgba(225, 6, 0, 0.22), transparent);
+  background: linear-gradient(90deg in oklab, rgba(225, 6, 0, 0.24), transparent 62%);
   flex: 0 0 auto;
 }
 .dh-title { font-size: 18px; font-weight: 800; font-style: italic; letter-spacing: 0.05em; color: #fff; flex: 1; }
@@ -63,7 +63,7 @@
   /* Primary control — a thumb target, not a 34px glyph. */
   width: var(--tap); height: var(--tap); flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 8px; padding: 0; font-size: 16px;
+  border-radius: var(--r-md); padding: 0; font-size: 16px;
   background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: #c4c4c8; cursor: pointer;
 }
 @media (hover: hover) {
@@ -85,7 +85,7 @@
   min-height: var(--tap);         /* primary nav — full thumb height */
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
+  border-radius: var(--r-md);
   padding: 7px 14px;
   font-size: 11px; font-weight: 700; letter-spacing: 0.07em;
   color: #8a8a95;
@@ -161,9 +161,9 @@
 .dh-race-date { font-size: 12px; color: #c4c4c8; flex: 0 0 auto; text-align: right; min-width: 50px; white-space: nowrap; }
 /* Hide local time on very narrow phones to save vertical space */
 @media (max-width: 400px) { .dh-race-time { display: none; } }
-.dh-race-next { background: rgba(225, 6, 0, 0.1); border-radius: 8px; }
-.dh-chip-next { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; background: #e10600; color: #fff; padding: 2px 6px; border-radius: 4px; }
-.dh-chip-sprint { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; background: #4a4a9a; color: #fff; padding: 2px 6px; border-radius: 4px; }
+.dh-race-next { background: rgba(225, 6, 0, 0.1); border-radius: var(--r-md); }
+.dh-chip-next { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; background: #e10600; color: #fff; padding: 2px 6px; border-radius: var(--r-sm); }
+.dh-chip-sprint { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; background: #4a4a9a; color: #fff; padding: 2px 6px; border-radius: var(--r-sm); }
 
 /* standings */
 .dh-standings { gap: 18px; }
@@ -173,21 +173,21 @@
 .dh-row-cons { flex-wrap: wrap; }
 .dh-cons-main { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
 .dh-h2h-wrap { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 140px; align-items: flex-end; }
-.dh-h2h-bar { display: flex; width: 100%; max-width: 160px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; margin-top: 4px; }
+.dh-h2h-bar { display: flex; width: 100%; max-width: 160px; height: 6px; border-radius: var(--r-xs); background: rgba(255, 255, 255, 0.1); overflow: hidden; margin-top: 4px; }
 .dh-h2h-fill { height: 100%; background: #fff; transition: width 0.3s; }
 .dh-h2h-alt { background: rgba(255, 255, 255, 0.3); }
-.dh-h2h-labels { display: flex; width: 100%; max-width: 160px; justify-content: space-between; font-size: 9px; color: #8a8a95; font-weight: 700; letter-spacing: 0.05em; }
+.dh-h2h-labels { display: flex; width: 100%; max-width: 160px; justify-content: space-between; font-size: var(--fs-micro); color: #8a8a95; font-weight: 700; letter-spacing: 0.05em; }
 
 .dh-pos { width: 24px; text-align: right; color: #8a8a95; flex: 0 0 auto; }
 .dh-codechip {
   flex: 0 0 auto;
   font-size: 11px; font-weight: 800;
-  padding: 2px 6px; border-radius: 4px;
+  padding: 2px 6px; border-radius: var(--r-sm);
   color: #fff; min-width: 38px; text-align: center;
   border-left: 3px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.07);
 }
-.dh-swatch { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 auto; }
+.dh-swatch { width: 12px; height: 12px; border-radius: var(--r-xs); flex: 0 0 auto; }
 .dh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dh-wins { font-size: 11px; color: #f6d200; font-weight: 700; flex: 0 0 auto; }
 .dh-pts { min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: #fff; }
@@ -228,13 +228,13 @@
 .dh-live-team { color: #8a8a95; font-size: 12px; }
 .dh-live-row-main { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 150px; }
 .dh-live-gapwrap { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 100px; justify-content: flex-end; }
-.dh-live-gapbar { height: 4px; border-radius: 2px; max-width: 80px; }
+.dh-live-gapbar { height: 4px; border-radius: var(--r-xs); max-width: 80px; }
 .dh-live-gaplbl { font-size: 10px; color: #8a8a95; font-variant-numeric: tabular-nums; width: 45px; text-align: right; }
 
 /* weather */
 .dh-weather { margin: 6px 0 12px; }
 .dh-wx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }
-.dh-wx-cell { background: rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 8px 10px; }
+.dh-wx-cell { background: rgba(255, 255, 255, 0.05); border-radius: var(--r-md); padding: 8px 10px; }
 .dh-wx-label { font-size: 10px; letter-spacing: 0.1em; color: #8a8a95; }
 .dh-wx-value { font-size: 16px; font-weight: 700; color: #f2f2f5; margin-top: 2px; }
 
@@ -242,7 +242,7 @@
 .dh-driverpick { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 10px; }
 .dh-dchip {
   font-size: 12px; font-weight: 800;
-  padding: 5px 9px; border-radius: 6px;
+  padding: 5px 9px; border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-left-width: 3px;
@@ -253,7 +253,7 @@
 .dh-canvas {
   width: 100%; max-width: 600px; height: auto;
   background: #07070c; border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px; display: block;
+  border-radius: var(--r-md); display: block;
   cursor: ew-resize;
 }
 .dh-canvas.dh-map { cursor: default; max-width: 320px; max-width: min(320px, 42dvh); margin: 0 auto; aspect-ratio: 1 / 1; }
@@ -269,8 +269,8 @@
 }
 /* slow->fast swatch matching the map's speed colouring */
 .dh-gradbar {
-  display: inline-block; width: 44px; height: 6px; border-radius: 3px;
-  background: linear-gradient(90deg, #2222ff, #ccb4cc, #ff2222);
+  display: inline-block; width: 44px; height: 6px; border-radius: var(--r-xs);
+  background: linear-gradient(90deg in oklab, #2222ff, #ccb4cc, #ff2222);
 }
 /* On landscape phone, cap the track map smaller so content doesn't overflow */
 @media (orientation: landscape) and (max-height: 520px) {
@@ -284,7 +284,7 @@
 .dh-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 11px; color: #9a9aa5; margin-top: -2px; }
 .dh-legend-item {
   display: inline-flex; align-items: center; gap: 5px;
-  background: transparent; border: none; border-radius: 5px;
+  background: transparent; border: none; border-radius: var(--r-sm);
   padding: 3px 6px; margin: 0; color: inherit; font: inherit;
   letter-spacing: 0.04em; cursor: pointer; transition: opacity 0.12s;
 }
@@ -298,20 +298,20 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
    toggles both lines, each chip toggles that driver's line */
 .dh-leg-group {
   display: inline-flex; align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.09); border-radius: var(--r-sm);
   overflow: hidden;
 }
 .dh-leg-group .dh-legend-item { padding: 3px 6px; border-radius: 0; }
 .dh-leg-lbl { font-weight: 700; }
 .dh-leg-line { border-left: 1px solid rgba(255, 255, 255, 0.09); }
 .dh-leg-line .dh-legend-dot { width: 14px; }
-.dh-legend-dot { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.dh-legend-dot { width: 10px; height: 3px; border-radius: var(--r-xs); display: inline-block; }
 
 /* ---------- lap-replay transport + gauge dashboard ---------- */
 .dh-transport { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; row-gap: 6px; }
 .dh-tbtn {
   font-size: 12px; font-weight: 800; letter-spacing: 0.05em;
-  padding: 7px 14px; border-radius: 999px;
+  padding: 7px 14px; border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: #f2f2f5;
@@ -321,7 +321,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-trates { display: flex; gap: 4px; }
 .dh-ratebtn {
   font-size: 11px; font-weight: 800;
-  padding: 6px 10px; border-radius: 999px;
+  padding: 6px 10px; border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: #9a9aa5;
@@ -339,14 +339,14 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   margin: 6px 0 8px; padding: 10px 12px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border-radius: var(--r-md);
 }
 .dh-gcell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.dh-glabel { font-size: 9px; letter-spacing: 0.1em; color: #8a8a95; white-space: nowrap; }
+.dh-glabel { font-size: var(--fs-micro); letter-spacing: 0.1em; color: #8a8a95; white-space: nowrap; }
 .dh-gval { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; line-height: 1; }
 .dh-gspeed .dh-gval { color: #39d0ff; }
-.dh-gbar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
-.dh-gfill { height: 100%; width: 0%; border-radius: 4px; transition: width 0.05s linear; }
+.dh-gbar { height: 8px; border-radius: var(--r-sm); background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
+.dh-gfill { height: 100%; width: 0%; border-radius: var(--r-sm); transition: width 0.05s linear; }
 .dh-gdrs-pill { font-size: 14px; font-weight: 800; letter-spacing: 0.05em; color: #5a5a65; line-height: 1; margin-top: 2px; display: inline-block; margin-right: 8px; }
 .dh-gdrs-pill.dh-on { color: #00e0c0; text-shadow: 0 0 8px rgba(0, 224, 192, 0.6); }
 /* compare-mode dual gauges: primary value/bar first, compare second */
@@ -362,7 +362,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-livecontrols { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .dh-livebtn {
   font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
-  padding: 6px 12px; border-radius: 999px;
+  padding: 6px 12px; border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: #f2f2f5;
@@ -371,15 +371,15 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 /* ---------- compare lanes (multi-driver + cross-session telemetry) ---------- */
 /* session badge on a lane row / header / legend chip (R, Q, P2, …) */
 .dh-lane-ses {
-  font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
-  padding: 1px 5px; border-radius: 999px; margin-left: 4px;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.08em;
+  padding: 1px 5px; border-radius: var(--r-pill); margin-left: 4px;
   background: rgba(255, 255, 255, 0.12); color: #cfe0ff; flex: 0 0 auto;
 }
 /* remove-lane button on a tray row */
 .dh-lane-x {
   margin-left: auto; flex: 0 0 auto;
   width: 20px; height: 20px; line-height: 1; padding: 0;
-  border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--r-pill); border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.06); color: #f2f2f5; font-size: 14px;
 }
 .dh-lane-x:hover { background: rgba(225, 6, 0, 0.8); border-color: #e10600; }
@@ -401,7 +401,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-sorts { display: flex; gap: 4px; flex: 0 0 auto; }
 .dh-sortbtn {
   font-size: 10px; font-weight: 800; letter-spacing: 0.06em;
-  padding: 4px 9px; border-radius: 999px;
+  padding: 4px 9px; border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: #9a9aa5;
@@ -417,7 +417,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-pick-years { display: flex; gap: 4px; }
 .dh-pill {
   font-size: 12px; font-weight: 700;
-  padding: 5px 11px; border-radius: 999px;
+  padding: 5px 11px; border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: #f2f2f5;
@@ -445,17 +445,17 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-export-note { font-size: 12px; line-height: 1.5; color: #b6b6c0; }
 .dh-export-row { display: flex; gap: 6px; }
 .dh-export-status {
-  margin: 0; padding: 8px 10px; border-radius: 6px;
+  margin: 0; padding: 8px 10px; border-radius: var(--r-sm);
   background: #0d0d13; border: 1px solid rgba(255, 255, 255, 0.12);
   color: #cfcfd6; font-size: 11px; line-height: 1.45;
   white-space: pre-wrap; word-break: break-word;
   max-height: 320px; overflow: auto;
 }
 .dh-pick-field { display: flex; flex-direction: column; gap: 3px; }
-.dh-pick-label { font-size: 9px; letter-spacing: 0.12em; color: #8a8a95; }
+.dh-pick-label { font-size: var(--fs-micro); letter-spacing: 0.12em; color: #8a8a95; }
 .dh-pick-select {
   background: #15151d; color: #f2f2f5;
-  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: var(--r-sm);
   padding: 6px 8px; font: inherit; font-size: 13px;
   max-width: 220px; min-width: 0;
 }
@@ -559,19 +559,19 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   .dh-split-L .dh-pick-years { gap: 3px; }
   .dh-split-L .dh-pill { padding: 3px 7px; font-size: 11px; }
   .dh-split-L .dh-pick-fields { flex-direction: column; gap: 5px; }
-  .dh-split-L .dh-pick-label { font-size: 8px; }
+  .dh-split-L .dh-pick-label { font-size: var(--fs-micro); }
   .dh-split-L .dh-pick-select { padding: 4px 6px; font-size: 11px; }
 
   /* Compact session info card in left pane */
   .dh-split-L .dh-livecard { gap: 2px; }
   .dh-split-L .dh-live-title { font-size: 13px; gap: 5px; }
   .dh-split-L .dh-live-sub { font-size: 10px; line-height: 1.3; }
-  .dh-split-L .dh-live-type { font-size: 9px; }
+  .dh-split-L .dh-live-type { font-size: var(--fs-micro); }
 
   /* Compact control bar in left pane */
   .dh-split-L .dh-livecontrols { gap: 5px; flex-wrap: nowrap; margin-bottom: 0; }
   .dh-split-L .dh-livebtn { padding: 4px 8px; font-size: 10px; }
-  .dh-split-L .dh-live-updated { font-size: 9px; }
+  .dh-split-L .dh-live-updated { font-size: var(--fs-micro); }
 
   /* Driver chips compact in left pane */
   .dh-split-L .dh-driverpick { gap: 3px; margin: 0; }
@@ -606,7 +606,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   max-height: calc(100svh - var(--sat) - var(--sab) - 2 * var(--gut));
   background: #0d0d14;
   border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   overflow: hidden;
   display: flex; flex-direction: column;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
@@ -615,7 +615,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   display: flex; align-items: center; gap: 10px;
   padding: 11px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-  background: linear-gradient(90deg, rgba(225, 6, 0, 0.18), transparent);
+  background: linear-gradient(90deg in oklab, rgba(225, 6, 0, 0.20), transparent 62%);
   flex: 0 0 auto;
 }
 .dh-tpopup-title {
@@ -644,9 +644,15 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-tpopup .dh-live-sub { font-size: 10px; }
 .dh-thead { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .dh-thead .dh-swatch { width: 10px; height: 10px; }
+/* The lane's NAME wins the squeeze. Both of these ellipsise, so the only
+   question is which one loses characters first — and "George Russel" is a
+   worse thing to show than a clipped sector string the numbers below already
+   repeat. `flex: 1 1 0` on the sector strip gives it a basis of ZERO, so it
+   claims only leftover space instead of joining the initial distribution and
+   dragging the name down with it. */
 .dh-tname { flex: 0 1 auto; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dh-tsect {
-  flex: 1 1 auto; min-width: 0; margin-left: auto;
+  flex: 1 1 0; min-width: 0; margin-left: auto;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   text-align: right;
   font-size: 10px; font-weight: 600; font-style: normal;
@@ -675,7 +681,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   .dh-tpopup { padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
   .dh-tpopup-card {
     max-height: calc(100svh - var(--sat) - var(--sab));
-    border-radius: 10px;
+    border-radius: var(--r-md);
     width: 100%;
   }
   /* Ultra-slim one-line header so the chart column gets the height */
@@ -685,7 +691,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   }
   .dh-tpopup-title > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dh-tpopup-sub { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dh-tpopup .dh-close { width: 34px; height: 34px; font-size: 14px; border-radius: 6px; }
+  .dh-tpopup .dh-close { width: 34px; height: 34px; font-size: 14px; border-radius: var(--r-sm); }
   .dh-tpopup-body {
     flex-direction: row;
     overflow: hidden;
@@ -713,7 +719,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   /* Compact gauges in side panel */
   .dh-telem-side .dh-dash { gap: 5px; padding: 8px 10px; }
   .dh-telem-side .dh-gval { font-size: 15px; }
-  .dh-telem-side .dh-glabel { font-size: 8px; }
+  .dh-telem-side .dh-glabel { font-size: var(--fs-micro); }
   /* Track map fits the sidebar */
   .dh-telem-side .dh-canvas.dh-map { max-width: 176px; }
 }

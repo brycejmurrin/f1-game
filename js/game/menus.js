@@ -66,7 +66,18 @@ function buildTeamCard(t) {
   const chev = document.createElement("span");
   chev.className = "tm-chev"; chev.textContent = "\u25BE"; chev.setAttribute("aria-hidden", "true");
   card.append(teamSwatch(t), body, chev);
-  card.onclick = () => { teamPicker().hidden = false; ScrollFadeRefresh(); };
+  // aria-haspopup says a dialog EXISTS; aria-expanded is the half that says
+  // whether it is open right now, and without it the card announces the same
+  // either way.
+  card.setAttribute("aria-expanded", teamPicker().hidden ? "false" : "true");
+  card.onclick = () => { setTeamPicker(true); ScrollFadeRefresh(); };
+}
+
+/* Open/close the team picker and keep the card's aria-expanded honest. */
+function setTeamPicker(open) {
+  teamPicker().hidden = !open;
+  const card = $("sel-team-card");
+  if (card) card.setAttribute("aria-expanded", open ? "true" : "false");
 }
 
 function buildTeamPicker() {
@@ -89,7 +100,7 @@ function buildTeamPicker() {
     b.append(teamSwatch(t), body);
     b.onclick = () => {
       G.teamIdx = i; G.driverIdx = 0; store.set("team", i);
-      teamPicker().hidden = true;
+      setTeamPicker(false);
       vt(() => { buildSelect(); tickUi(); });
     };
     els.selTeams.appendChild(b);

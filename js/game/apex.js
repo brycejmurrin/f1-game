@@ -1663,7 +1663,9 @@ const api = {
   // viewer for everything except appearance itself.
   carView(opts) { return agentView.carView(opts); },
 
-  // survey({at, lats, reachM, limit, profile}?) — geometry DEFECT report:
+  // survey({stations, lats, reachM, limit, profile}?) — geometry DEFECT report:
+  // `stations` (alias `at`) is a sample COUNT across the whole lap, not a
+  // position — survey cannot be aimed at one corner.
   // floating/buried props, props over the racing line, terrain poking through
   // the road, holes and cliffs in the ground ribbon, plus rejected models.
   // Replaces the screenshot-driven survey pass with coordinates you can act on.
@@ -1723,7 +1725,7 @@ const api = {
   // terminal() — episode end split into {done, reason}, where reason is
   // "finished" | "wrong_way" | "rescued" | null. obs().done conflates the last
   // two, which an agent needs to tell apart.
-  terminal() { return G.player && G.track ? agentView.terminal() : null; },
+  terminal() { return agentView.terminal(); },
 
   // f1api — raw access to the F1API module (Jolpica + OpenF1) used by the
   // data hub. Call e.g. __apex.f1api.schedule() or __apex.f1api.lastRace()

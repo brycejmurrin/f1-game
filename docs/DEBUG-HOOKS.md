@@ -1212,7 +1212,7 @@ the whole `__apex` toolkit** — see `agentHelp()`, whose `read` section names t
 raw hooks that already return JSON (`physState`, `lightState`, `timing`, …) and
 whose `control` section names the drive/stage verbs.
 
-### `render({what, ...})` — and its four aliases `frame`/`plan`/`worldModel`/`carView(render)`
+### `render({what, ...})` — and its four deprecated aliases `frame`/`plan`/`worldModel`/`visible`
 
 `render({what})` is the **one** entry point for every raster; `what` selects
 `"view"` (the camera, → `frame` below), `"map"` (top-down, → `plan`), `"circuit"`
@@ -1513,11 +1513,23 @@ node tools/agent.mjs suzuka model --detail sections
 node tools/agent.mjs vegas  model --detail full --out artifacts/tmp/vegas.json
 ```
 
-### `survey({at, lats, reachM, limit, profile}?) → report | typedError`
+### `survey({stations, lats, reachM, limit, profile}?) → report | typedError`
 
 **Geometry defects as JSON** — the screenshot-driven survey pass, made
 queryable. The `survey-track` workflow hunts these classes by eye; measured
 prop bounds make them coordinates you can act on.
+
+**`survey()` always scans the whole lap — you cannot aim it at one corner.**
+`stations` (default 24, alias `at`) is the *number* of evenly-spaced sample
+points around the entire circuit, not a position; `reachM` is the *lateral*
+half-width scanned at each one. There is no `fromS`/`toS` window the way
+`query()` has one — to inspect one stretch, raise `stations` and filter the
+returned rows by `frac` yourself.
+
+Cross-checking a hit with `__apex.groundY()` confirms the report's arithmetic
+but not the ground underneath it: both read the same `Tracks.terrainY()`
+sampler, so a bug in that sampler would make survey and groundY agree while
+both being wrong. For genuinely independent confirmation, look at the spot.
 
 ```js
 __apex.survey().summary
@@ -1727,7 +1739,7 @@ node tools/agent.mjs monza  query   --kind pine --near 80  # a bounded slice
 node tools/agent.mjs monaco track   --what corners
 node tools/agent.mjs vegas  model   --detail sections
 node tools/agent.mjs monza  car     --team ferrari --detail parts
-node tools/agent.mjs vegas  survey  --at 32 --reach 80
+node tools/agent.mjs vegas  survey  --stations 32 --reach 80
 node tools/agent.mjs monza  rollout --seconds 6 --steer 0.1 --throttle
 ```
 

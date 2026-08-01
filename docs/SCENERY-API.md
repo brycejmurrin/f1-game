@@ -88,6 +88,21 @@ Use `required: true` only for a hero model whose absence must fail
 `verify-track`. Invalid or suppressed groups are skipped instead of uploading
 malformed buffers and appear in `__apex.modelDiagnostics()`.
 
+### Scene graph (`ctx.instance`) — engine-internal, not part of the `api` contract
+
+Engine emitters are being migrated off "push primitives into the soup" and onto
+`ctx.instance(key, place, build, meta)` (`js/track/graph.js`): `build(rec)`
+records the model's primitives ONCE in canonical space (origin, identity basis),
+and each placement becomes a node carrying `{o, r, u, t, s?}`. Replay runs
+through the same guarded emitters, so geometry and on-track suppression are
+unchanged — the build simply also leaves behind `track.graph`, a description of
+what stands where.
+
+This is internal to `js/track/`: the 84-member `scenery(api)` surface a circuit
+destructures is untouched, and circuit files need no changes. Gate any migration
+with `node tools/graph-parity.cjs --all`. See
+[research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md).
+
 ### Scenery themes and reusable kits
 
 Every `scenery(api)` receives `sceneryTheme`, `landmarkKit`, and `circuitKit`.

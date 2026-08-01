@@ -502,7 +502,10 @@ const DataTelemetry = (function () {
       const ht = el("div", "dh-live-title dh-thead");
       const sw = el("span", "dh-swatch"); sw.style.background = cssColor(laneCols[i]);
       ht.appendChild(sw);
-      ht.appendChild(el("span", "dh-tname", (t.d.name || dcode(t.d))));
+      // title= so a name that still ellipsises at a narrow width is recoverable
+      const nameEl = el("span", "dh-tname", (t.d.name || dcode(t.d)));
+      nameEl.title = t.d.name || dcode(t.d);
+      ht.appendChild(nameEl);
       if (dupNum[t.d.num] > 1 && t.sessionLabel) ht.appendChild(el("span", "dh-lane-ses", t.sessionLabel));
       if (!t.lap) {
         ht.appendChild(el("span", "dh-tsect", "No timed lap found in this session."));

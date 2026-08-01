@@ -35,7 +35,12 @@ const DataSchedule = (function () {
           if (r.circuit) subParts.push(r.circuit);
           const place = [r.locality, r.country].filter(Boolean).join(", ");
           if (place) subParts.push(place);
-          main.appendChild(el("div", "dh-race-sub", subParts.join(" · ") || "—"));
+          // "Bahrain International Circuit · Sakhir, Bahrain" ellipsises at a
+          // phone width; title= is how the rest of it stays reachable.
+          const subText = subParts.join(" · ") || "—";
+          const subEl = el("div", "dh-race-sub", subText);
+          subEl.title = subText;
+          main.appendChild(subEl);
           if (r.time) {
             const t = new Date((r.date ? r.date : "1970-01-01") + "T" + r.time);
             if (!isNaN(t.getTime())) {

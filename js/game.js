@@ -5034,6 +5034,60 @@ function setSfx(b) {
   syncAudioPanel();
 }
 
+/* ---------------- MUSIC SOURCE ----------------
+   ALL / DEFAULT / MY TRACKS pick which part of the local library plays;
+   SPOTIFY hands the music role to js/game/spotify.js. It is a four-way choice
+   rather than a Spotify on/off switch because "my uploads only" and "the
+   shipped songs only" are both things people actually want. */
+let musicSrc = store.get("musicSource", "all");
+
+function spotifyReady() {
+  return typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse &&
+    SpotifyMusic.status().state === "connected";
+}
+
+function setMusicSrc(v) {
+  if (v === "spotify") {
+    if (!spotifyReady()) { syncAudioPanel(); return; }   // not connected: ignore, the note says why
+    musicSrc = "spotify";
+    store.set("musicSource", musicSrc);
+    SpotifyMusic.useAsMusic(true);
+    syncAudioPanel();
+    return;
+  }
+  // Leaving Spotify releases the music role but keeps the session, so coming
+  // back does not cost another sign-in.
+  if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.useAsMusic) SpotifyMusic.useAsMusic(false);
+  const applied = GameAudio.setMusicSource(v);
+  musicSrc = applied;                        // refused (nothing in that set) -> keep the old one
+  store.set("musicSource", musicSrc);
+  syncAudioPanel();
+}
+
+function syncMusicSrcRow() {
+  const counts = GameAudio.sourceCounts ? GameAudio.sourceCounts() : { builtin: 0, user: 0 };
+  const spot = spotifyReady();
+  const on = (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
+    ? "spotify" : GameAudio.musicSource();
+  [["as-src-all", "all"], ["as-src-builtin", "builtin"],
+   ["as-src-user", "user"], ["as-src-spotify", "spotify"]].forEach(([id, v]) => {
+    const b = $(id);
+    if (!b) return;
+    b.classList.toggle("active", on === v);
+    b.disabled = v === "user" ? counts.user === 0 : v === "spotify" ? !spot : false;
+  });
+  const note = $("as-src-note");
+  if (note) {
+    note.textContent = on === "spotify"
+        ? "Spotify is driving the music. The controls above drive it too."
+      : counts.user === 0
+        ? "Add your own files under YOUR TRACKS to use MY TRACKS."
+      : on === "user" ? "Playing your " + counts.user + " uploaded track" + (counts.user === 1 ? "" : "s") + " only."
+      : on === "builtin" ? "Playing the " + counts.builtin + " shipped tracks only."
+      : "Playing everything: " + counts.builtin + " shipped + " + counts.user + " of yours.";
+  }
+}
+
 function syncAudioPanel() {
   // The two switches are INDEPENDENT — music with no sound effects is a normal
   // way to play. Each only follows its own switch and the master (the ♪ button /
@@ -5060,11 +5114,21 @@ function syncAudioPanel() {
   // re-rendered whenever the panel is opened or the track changes — MusicLib
   // owns the list, we only tell it the picture is stale.
   if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
+  syncMusicSrcRow();
 }
 
 $("pm-audio").onclick = () => { syncAudioPanel(); $("audioset").hidden = false; };
 // The SPOTIFY entry is owned by js/game/spotify.js — it knows whether there is
 // anything to control, and keeps its own button's disabled state in sync.
+// Spotify's state changes on its own schedule (a redirect completing, a device
+// dropping); the source row has to follow it, not just panel-open events.
+if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.onChange) {
+  SpotifyMusic.onChange(() => { if (!$("audioset").hidden) syncMusicSrcRow(); });
+}
+$("as-src-all").onclick = () => { setMusicSrc("all"); if (soundOn) GameAudio.uiTick(); };
+$("as-src-builtin").onclick = () => { setMusicSrc("builtin"); if (soundOn) GameAudio.uiTick(); };
+$("as-src-user").onclick = () => { setMusicSrc("user"); if (soundOn) GameAudio.uiTick(); };
+$("as-src-spotify").onclick = () => { setMusicSrc("spotify"); if (soundOn) GameAudio.uiTick(); };
 $("pm-spotify").onclick = () => {
   if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.openPanel) SpotifyMusic.openPanel();
 };
@@ -5210,7 +5274,11 @@ $("pm-howto").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameA
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
 // Team picker: opened by the team card on the select screen (js/game/menus.js).
 // Closing without choosing leaves the current team as-is.
-$("tp-close").onclick = () => { $("teampicker").hidden = true; };
+$("tp-close").onclick = () => {
+  $("teampicker").hidden = true;
+  // the card that opened it advertises aria-haspopup, so it owns aria-expanded
+  const card = $("sel-team-card"); if (card) card.setAttribute("aria-expanded", "false");
+};
 // BACK + the tappable circuit preview. Both lookups existed in `els` but no
 // handler was ever attached on this branch — the select screen's BACK button
 // was simply dead (surfaced by the button-walk audit; the wiring lived on an
@@ -5530,6 +5598,9 @@ const camPicker = (() => {
   const build = () => {
     el = document.createElement("div");
     el.id = "campicker";
+    // 13 modes in a 3-wide grid leaves REAR CAM alone on the last line; the
+    // no-orphan rule (css/components.css) widens it across the row instead.
+    el.className = "no-orphan-3";
     el.hidden = true;
     for (let i = 0; i < CAM_MODES.length; i++) {
       const b = document.createElement("button");
@@ -5661,6 +5732,14 @@ $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
 setSound(soundOn);
 setMusic(musicEnabled);
+// Restore the saved source once the uploaded tracks are in the playlist —
+// "MY TRACKS" is refused while the library looks empty, which it does until
+// MusicLib's IndexedDB read lands.
+if (musicSrc && musicSrc !== "spotify") {
+  const applySrc = () => { musicSrc = GameAudio.setMusicSource(musicSrc); syncMusicSrcRow(); };
+  if (typeof MusicLib !== "undefined" && MusicLib.init) MusicLib.init().then(applySrc, applySrc);
+  else applySrc();
+}
 loadTrack(trackIdx);
 window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();

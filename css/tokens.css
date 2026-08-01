@@ -143,15 +143,57 @@
      would push the primary action off a 393px-tall screen. */
   --pad: 22px;      /* sheet padding */
   --gap: 12px;      /* gap between sibling controls */
+  /* ---- THE CONTROL HEIGHT LADDER — three steps, and nothing off it ----
+     A nine-viewport sweep measured TEN distinct control heights for controls of
+     equal rank: 28, 34, 36, 37, 38, 40, 41, 42, 43, 44. Every one came from a
+     component inventing its own padding instead of reaching for these tokens,
+     which is why nothing on a row ever quite lined up with anything else.
+
+       --tap      primary: buttons, list rows, tabs, the things you aim at
+       --chip-h   secondary: chips, inputs, colour wells, option buttons
+       --tap-sm   the paired micro-toggles ONLY (MUSIC ON/OFF, SKIP), which are
+                  deliberately small so a settings row reads as one control
+
+     44 is Apple's HIG size and WCAG 2.5.5 (AAA). The landscape values below are
+     smaller on purpose: that viewport is ~393px tall and four steps of 4px is a
+     whole list row. Everything stays well clear of the WCAG 2.5.8 AA floor
+     (24px), which is the number that is actually a requirement. */
   --tap: 44px;      /* minimum interactive box */
   --chip-h: 40px;   /* chips are secondary — one step below --tap */
+  --tap-sm: 30px;   /* paired micro-toggles only — never a lone control */
   --label: 12px;    /* section label type size */
+  /* THE TYPE FLOOR. No menu text may be smaller than this.
+     A sweep across nine viewports found twenty-four hard-coded sizes below it —
+     8px NIGHT/STREET badges on the circuit list, 9px UNIVERSAL and ▲ACCEL tags
+     on CAR SETUP, 9px column labels through the data hub, 9.5px chips in the
+     tuner — every one of them a separate decision nobody could keep in step.
+     One token instead: uppercase micro-labels are the smallest type this UI
+     has, and this is how big they are. The in-race HUD is deliberately NOT on
+     this scale (see css/hud.css) — its labels are glanced at, not read, and
+     they are sized to boxes that have to clear the driving controls. */
+  --fs-micro: 10px;
   --chip-w: 78px;   /* team-chip grid column floor */
   --gold:   #f6d200;
   --boost:  #aeea00;
-  --r-sm:   4px;
+  /* ---- CORNER RADIUS — four steps, plus a pill ----
+     These tokens existed and had three users. Everything else hard-coded its
+     own: fourteen distinct radii across the stylesheets (1, 2, 3, 4, 5, 6, 7,
+     8, 9, 10, 12, 14, 20 and 999), which is why a chip, the input beside it and
+     the button under it could each round differently. The steps below are set
+     to whichever value was already the most common in each band, so adopting
+     them moves most corners by a pixel or none at all.
+       --r-xs  hairline bars, meters, tiny swatches      (was 1/2/3)
+       --r-sm  chips, colour wells, small controls       (was 4/5/6/7)
+       --r-md  buttons, rows, cards                      (was 8/9/10)
+       --r-lg  sheets, panels, the data-hub card         (was 12/14/20)
+       --r-pill  fully round ends — tabs, badges         (999px)
+     `border-radius: 50%` is NOT on this scale: a circle is a shape, not a
+     corner, and the touch pads have to stay circular at any size. */
+  --r-xs:   3px;
+  --r-sm:   6px;
   --r-md:   8px;
   --r-lg:   14px;
+  --r-pill: 999px;
   /* Type: menus/body use Titillium Web; the numeric HUD/timing uses the
      condensed Rajdhani. Both fall back to the previous system stack so a
      failed font load is invisible. */
@@ -188,11 +230,57 @@
   --surf-1: color-mix(in oklab, #fff 4%, var(--bg));   /* sheets, panels */
   --surf-2: color-mix(in oklab, #fff 7%, var(--bg));   /* a card ON a sheet */
   --surf-3: color-mix(in oklab, #fff 11%, var(--bg));  /* popovers, raised rows */
-  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  /* still cast a shadow — it does nothing on black but separates a sheet from
-     the bright 3D scene behind it, which is where this game actually shows one */
-  --lift-1: 0 10px 30px rgba(0, 0, 0, 0.55);
-  --lift-2: 0 18px 44px rgba(0, 0, 0, 0.6);
+  /* A lit lip along the top AND the far edge falling into shade. The lip on
+     its own reads as a sticker laid on the page; the pair reads as a slab with
+     thickness, which is the whole point of an elevation system. */
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+  /* Shadows come in LAYERS, not one blur. A single 44px shadow is a smudge:
+     real light gives a small tight core right under the object and a wide soft
+     ambient falloff, and it is the tight one that says "this is lifted" while
+     the wide one says "by how much". One stop can only do one of those jobs.
+     (Still cast at all because this game shows its sheets against a bright 3D
+     scene, where a shadow does read.) */
+  --lift-1:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 6px 16px rgba(0, 0, 0, 0.45);
+  --lift-2:
+    0 2px 4px rgba(0, 0, 0, 0.45),
+    0 12px 30px rgba(0, 0, 0, 0.5),
+    0 26px 56px rgba(0, 0, 0, 0.35);
+
+  /* ---- GRADIENTS ----------------------------------------------------
+     Every one of these interpolates `in oklab`. sRGB interpolation walks a
+     straight line through a colour cube that is not perceptually uniform, so a
+     saturated ramp sags through a muddy, desaturated middle — most visible on
+     exactly the long red ramps this UI is made of. oklab is perceptually
+     uniform, so the midpoint stays as red as the ends, and the ramp needs
+     fewer stops to look smooth.
+
+     They are TOKENS because there were seventeen hand-written gradients across
+     the stylesheets and no two primary surfaces used the same one. */
+  --grad-primary:     linear-gradient(135deg in oklab, #ff1608 0%, #a90300 100%);
+  --grad-primary-hot: linear-gradient(135deg in oklab, #ff3a26 0%, #c40500 100%);
+  /* The wash every sheet head carries: a brand bleed from the leading edge over
+     a light-from-above sheen. It is what makes a dialog look like part of this
+     game rather than a generic card. */
+  --grad-head:
+    linear-gradient(90deg in oklab, rgba(225, 6, 0, 0.16), transparent 52%),
+    linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.06), transparent 72%);
+  /* A rule that FADES instead of stopping dead — used as a background-image on
+     the bottom 1px, so it needs no extra element. */
+  --grad-rule: linear-gradient(90deg in oklab, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.02) 78%, transparent);
+  /* Team identity, wherever a surface should carry it. Resolves through
+     --accent, so it re-skins itself the moment the player changes team. */
+  --grad-accent: linear-gradient(150deg in oklab,
+    color-mix(in oklab, var(--accent) 18%, transparent), transparent 62%);
+
+  /* Dither. A large, slow, dark gradient is the worst case for an 8-bit
+     display: too few distinct values across too many pixels, so it renders as
+     visible stripes — and this app's backdrop is a 120%-wide radial red wash
+     over near-black, which is that case exactly. A few percent of noise breaks
+     the bands into grain the eye reads as texture. feTurbulence in a data URI
+     keeps it to one tiled 160px tile and no network request. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* Per-team accents (ids + colours from js/car/teams.js — vivid brand colour of
@@ -303,6 +391,7 @@ button:disabled:active { background: rgba(255, 255, 255, 0.07); }
     --gap: 8px;
     --tap: 40px;
     --chip-h: 36px;
+    --tap-sm: 28px;
     --label: 10px;
     --chip-w: 62px;
     --gut: 8px;

@@ -90,23 +90,39 @@ const SceneryNature = (function () {
       // per-instance size jitter so a treeline doesn't read as identical clones
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
       const c2 = [col[0] * 0.86, col[1] * 0.86, col[2] * 0.82];   // shaded lower needles
-      out._mat = MAT.WOOD;
-      // Trunk starts 0.5 m BELOW the anchor: anchor() samples the terrain at one
-      // point, so on a slope a flat-based trunk floats on the downhill side.
-      addCyl(out, vadd(a.c, a.u, -0.5), 0.35 + h * 0.02, h * 0.4 + 0.5, [0.30, 0.22, 0.13], 6, b);
       const vr = hash(k * 6.1 + side * 4.4 + dist + 9.3);
       const sparse = vr > 0.82;                          // ~18% thinner 3-tier trees
       const lean = !sparse && vr > 0.55 ? (vr - 0.55) * 2.2 : 0;   // ~27% windswept lean
       const tiers = sparse ? 3 : 4;
-      let y = h * 0.3;
-      out._mat = MAT.FOLIAGE;
-      for (let i = 0; i < tiers; i++) {
-        const w = (sparse ? 2.3 : 2.7) * j * (1 - i * (sparse ? 0.24 : 0.21));
-        let c = vadd(a.c, a.u, y);
-        if (lean) c = vadd(c, a.r, lean * (y / h) * 1.6 * side);   // tilt away from the road
-        addCone(out, c, w, h * 0.32, i === 0 ? c2 : col, 7, b);
-        y += h * (sparse ? 0.24 : 0.18) * j;
-      }
+      // Graph form: the silhouette is recorded ONCE per distinct parameter set in
+      // canonical space (origin = the anchor, axes = the track basis) and replayed
+      // through the guarded emitters. Geometry and guard decisions are unchanged;
+      // what is new is that the build now knows this is a pine and where it stands.
+      // The key carries every value that changes the shape — h and j are continuous,
+      // so reuse here is whatever genuinely repeats. See docs/research/
+      // SCENE-GRAPH-PLAN.md §S4: pine's dimensions are AFFINE in h (the trunk's
+      // 0.35 + h*0.02 radius, its +0.5 m sink), not linear, so it cannot yet
+      // collapse to one model plus a per-node scale. Re-parameterising it is a
+      // deliberate look change and belongs with the detail pass, not here.
+      ctx.instance(
+        `pine|${h}|${j}|${lean}|${sparse ? 1 : 0}|${side}|${col.join(",")}`,
+        { o: a.c, r: a.r, u: a.u, t: a.t },
+        (rec) => {
+          rec.mat(MAT.WOOD);
+          // Trunk starts 0.5 m BELOW the anchor: anchor() samples the terrain at one
+          // point, so on a slope a flat-based trunk floats on the downhill side.
+          rec.cyl([0, -0.5, 0], 0.35 + h * 0.02, h * 0.4 + 0.5, [0.30, 0.22, 0.13], 6);
+          rec.mat(MAT.FOLIAGE);
+          let y = h * 0.3;
+          for (let i = 0; i < tiers; i++) {
+            const w = (sparse ? 2.3 : 2.7) * j * (1 - i * (sparse ? 0.24 : 0.21));
+            // tilt away from the road
+            rec.cone([lean ? lean * (y / h) * 1.6 * side : 0, y, 0],
+                     w, h * 0.32, i === 0 ? c2 : col, 7);
+            y += h * (sparse ? 0.24 : 0.18) * j;
+          }
+        },
+        { kind: "pine", k, side, h });
       out._mat = 0;
     };
     // Broadleaf tree: short trunk + a rounded canopy (squat wide cone + cap cone).
