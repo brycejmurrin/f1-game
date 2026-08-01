@@ -312,7 +312,7 @@ const Input = (function () {
       "#pausemenu:not([hidden]),#pmsettings:not([hidden]),#select:not([hidden])," +
       "#teampicker:not([hidden]),#race-settings:not([hidden]),#standings:not([hidden])," +
       "#results:not([hidden]),#customize:not([hidden]),#carsetup:not([hidden])," +
-      "#howtoplay:not([hidden]),#advanced:not([hidden]),#track-detail:not([hidden])," +
+      "#howtoplay:not([hidden]),#advanced:not([hidden]),#audioset:not([hidden]),#track-detail:not([hidden])," +
       "#datahub:not([hidden])");
     return !!(el && el.getClientRects().length);
   }

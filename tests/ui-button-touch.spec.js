@@ -168,7 +168,7 @@ test.describe("Pause settings — stable layout", () => {
     await page.waitForTimeout(200);
 
     const ids = ["pm-steer", "pm-calib", "pm-advanced", "pm-lighting", "pm-gears",
-      "pm-sound", "pm-music", "pm-hidehud", "pm-res", "pm-settings-close"];
+      "pm-sound", "pm-audio", "pm-hidehud", "pm-res", "pm-settings-close"];
     const grab = () => page.evaluate((ids) => {
       const out = {};
       for (const id of ids) {

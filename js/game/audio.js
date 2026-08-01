@@ -18,6 +18,13 @@
 const GameAudio = (function () {
   let ctx = null;
   let master = null;
+  let sfxBus = null;
+  // 0..1 mixer levels, restored by the caller from storage on boot.
+  let sfxVol = 1;
+  let musicVol = 0.5;
+  // musicVol 0.5 lands on 0.26 — the level music has always sat at under the
+  // engine — so the default slider position keeps the balance the game shipped.
+  const MUSIC_FULL = 0.52;
   let isEnabled = true;
 
   // Engine voice (persistent while racing)
@@ -119,6 +126,13 @@ const GameAudio = (function () {
     master = ctx.createGain();
     master.gain.value = isEnabled ? 0.8 : 0;
     master.connect(ctx.destination);
+    // THE SFX BUS. Everything that is not music — engine, skids, rain, UI ticks
+    // — runs through here so it can be levelled independently of the music,
+    // which has its own gain on the same master. Without the split there was one
+    // volume for the whole mix and the only music control was on/off.
+    sfxBus = ctx.createGain();
+    sfxBus.gain.value = sfxVol;
+    sfxBus.connect(master);
 
     // iOS Safari starts contexts suspended; resume inside the gesture.
     // Guard the promise: resume() rejects (NotAllowed/InvalidState) on mobile at
@@ -202,6 +216,7 @@ const GameAudio = (function () {
     try { ctx.close(); } catch (e) { /* already closed */ }
     ctx = null;
     master = null;
+    sfxBus = null;
     musicGain = null;
     currentUrl = null;
     for (const k in musicBuffers) delete musicBuffers[k];  // buffers are ctx-bound
@@ -259,7 +274,7 @@ const GameAudio = (function () {
     osc.frequency.setValueAtTime(freq, t0);
     if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + attack + decay);
     env(g, t0, peak, attack, decay);
-    osc.connect(g).connect(master);
+    osc.connect(g).connect(sfxBus);
     osc.start(t0);
     osc.stop(t0 + attack + decay + 0.05);
     osc.onended = () => { osc.disconnect(); g.disconnect(); };
@@ -283,7 +298,7 @@ const GameAudio = (function () {
     f.frequency.value = filterFreq;
     const g = ctx.createGain();
     env(g, t0, peak, 0.005, decay);
-    src.connect(f).connect(g).connect(master);
+    src.connect(f).connect(g).connect(sfxBus);
     src.start(t0);
     src.stop(t0 + decay + 0.1);
     src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
@@ -300,7 +315,7 @@ const GameAudio = (function () {
     engFilter.type = "lowpass";
     engFilter.frequency.value = 600;
     engGain.gain.value = 0;
-    engFilter.connect(engGain).connect(master);
+    engFilter.connect(engGain).connect(sfxBus);
     // debug tap: lets tests read the engine's dominant output frequency (pitch)
     dbgAnalyser = ctx.createAnalyser();
     dbgAnalyser.fftSize = 16384;
@@ -347,7 +362,7 @@ const GameAudio = (function () {
     whineOsc.type = "sine";
     whineOsc.frequency.value = 1500;
     whineGain.gain.value = 0;
-    whineOsc.connect(whineGain).connect(master);
+    whineOsc.connect(whineGain).connect(sfxBus);
 
     // MGU-K harvest whirr: resonant noise, gated in by deceleration
     harvSrc = ctx.createBufferSource();
@@ -359,7 +374,7 @@ const GameAudio = (function () {
     harvFilter.Q.value = 6;
     harvGain = ctx.createGain();
     harvGain.gain.value = 0;
-    harvSrc.connect(harvFilter).connect(harvGain).connect(master);
+    harvSrc.connect(harvFilter).connect(harvGain).connect(sfxBus);
 
     // offroad wobble: 8 Hz LFO into oscillator detune (cents)
     lfo = ctx.createOscillator();
@@ -387,7 +402,7 @@ const GameAudio = (function () {
     skidFilter.Q.value = 1.4;
     skidGain = ctx.createGain();
     skidGain.gain.value = 0;
-    skidSrc.connect(skidFilter).connect(skidGain).connect(master);
+    skidSrc.connect(skidFilter).connect(skidGain).connect(sfxBus);
 
     if (usingSamples) { engSrcIdle.start(0, engSrcIdle.loopStart); engSrcAcc.start(0, engSrcAcc.loopStart); }
     else { engA.start(); engB.start(); engC.start(); }
@@ -565,7 +580,7 @@ const GameAudio = (function () {
     rainLp.frequency.value = 8000;
     rainGain = ctx.createGain();
     rainGain.gain.value = 0;
-    rainSrc.connect(rainHp).connect(rainLp).connect(rainGain).connect(master);
+    rainSrc.connect(rainHp).connect(rainLp).connect(rainGain).connect(sfxBus);
     rainSrc.start();
     rainGain.gain.setTargetAtTime(g, now(), 1.2);
   }
@@ -626,7 +641,7 @@ const GameAudio = (function () {
     f.frequency.setValueAtTime(isUp ? 1400 : 900, t0);
     f.frequency.exponentialRampToValueAtTime(isUp ? 600 : 700, t0 + dur);
     env(g, t0, isUp ? 0.12 : 0.1, 0.004, dur);
-    osc.connect(f).connect(g).connect(master);
+    osc.connect(f).connect(g).connect(sfxBus);
     osc.start(t0);
     osc.stop(t0 + dur + 0.05);
     osc.onended = () => { osc.disconnect(); f.disconnect(); g.disconnect(); };
@@ -666,7 +681,7 @@ const GameAudio = (function () {
     f.frequency.exponentialRampToValueAtTime(4800, t0 + 0.45);
     const g = ctx.createGain();
     env(g, t0, 0.3, 0.03, 0.45);
-    src.connect(f).connect(g).connect(master);
+    src.connect(f).connect(g).connect(sfxBus);
     src.start(t0);
     src.stop(t0 + 0.6);
     src.onended = () => { try { src.disconnect(); f.disconnect(); g.disconnect(); } catch (e) {} };
@@ -731,7 +746,7 @@ const GameAudio = (function () {
   function ensureMusicGain() {
     if (!musicGain && ctx && master) {
       musicGain = ctx.createGain();
-      musicGain.gain.value = 0.26;            // music sits well under the engine
+      musicGain.gain.value = musicVol * MUSIC_FULL;   // music sits under the engine
       musicGain.connect(master);
     }
   }
@@ -783,6 +798,22 @@ const GameAudio = (function () {
       .then(buf => { musicBuffers[url] = buf; playMusicBuffer(buf, token); })
       .catch(() => { /* music is optional — ignore load/decode errors */ });
   }
+
+  /* ---------------- mixer ----------------
+     Two independent levels under the master mute: the SFX bus (engine, skids,
+     rain, UI) and the music gain. Both take 0..1 and apply immediately, so a
+     slider moves the level while it is being dragged. */
+  function setSfxVolume(v) {
+    sfxVol = clamp01(typeof v === "number" ? v : 1);
+    if (sfxBus) sfxBus.gain.value = sfxVol;
+    return sfxVol;
+  }
+  function setMusicVolume(v) {
+    musicVol = clamp01(typeof v === "number" ? v : 0.5);
+    if (musicGain) musicGain.gain.value = musicVol * MUSIC_FULL;
+    return musicVol;
+  }
+  function volumes() { return { sfx: sfxVol, music: musicVol }; }
 
   // Skip to the next track on demand. Returns the new track's file name so the
   // caller can say what is playing.
@@ -854,6 +885,9 @@ const GameAudio = (function () {
     setMusicEnabled,
     skipTrack,
     trackName,
+    setSfxVolume,
+    setMusicVolume,
+    volumes,
     // debug audio-test hooks. rate() is the exact pitch multiplier the engine is
     // playing at (ground truth — output pitch scales linearly with it).
     // centroidHz() is the spectral centroid of the live output (a stable

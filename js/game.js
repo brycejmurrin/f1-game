@@ -1839,7 +1839,7 @@ function quitToMenu() {
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
-  $("advanced").hidden = true; $("lighting").hidden = true;
+  $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
   Particles.rainShow(false);
@@ -4988,6 +4988,8 @@ function setSound(b) {
     if (state === "menu") GameAudio.startMusic(-1);
     else if (state === "race") GameAudio.startMusic(trackIdx);
   }
+  // SOUND is the master, so the MUSIC & SOUND panel's music controls follow it
+  if (typeof syncAudioPanel === "function") syncAudioPanel();
 }
 els.soundbtn.onclick = () => setSound(!soundOn);
 
@@ -4996,20 +4998,60 @@ els.soundbtn.onclick = () => setSound(!soundOn);
 function setMusic(b) {
   musicEnabled = b; store.set("music", b);
   GameAudio.setMusicEnabled(b);
-  $("pm-music").textContent = "MUSIC: " + (b ? "ON" : "OFF");
-  $("pm-skip").disabled = !b;
+  syncAudioPanel();
 }
-$("pm-music").onclick = () => setMusic(!musicEnabled);
-// SKIP TRACK — jump to the next song in the playlist. Disabled rather than
-// hidden when music is off, so the settings grid keeps its shape (the same
-// reason RECALIBRATE TILT and GEARS disable in place).
-$("pm-skip").onclick = () => {
+
+/* ---------------- MUSIC & SOUND panel ----------------
+   The mixer lives on its own screen: two sliders and a now-playing readout do
+   not fit the settings grid, which is one control per line. Levels persist. */
+let musicVol = store.get("volMusic", 0.5);
+let sfxVol = store.get("volSfx", 1);
+GameAudio.setMusicVolume(musicVol);
+GameAudio.setSfxVolume(sfxVol);
+
+function syncAudioPanel() {
+  // MUSIC is off either on its own switch or because SOUND — the master — is
+  // off; a music slider that still looked live under a dead master would be
+  // lying about what it controls.
+  const musicLive = musicEnabled && soundOn;
+  $("as-music-on").classList.toggle("active", musicEnabled);
+  $("as-music-off").classList.toggle("active", !musicEnabled);
+  $("as-sound-on").classList.toggle("active", soundOn);
+  $("as-sound-off").classList.toggle("active", !soundOn);
+  // Disabled, not hidden: the row keeps its slot so nothing reflows under a
+  // thumb mid-tap, and .tune-row dims to say the control is inert.
+  $("as-mvol").disabled = !musicLive;
+  $("as-skip").disabled = !musicLive;
+  $("as-svol").disabled = !soundOn;
+  $("as-mvol").closest(".tune-row").classList.toggle("tune-off", !musicLive);
+  $("as-svol").closest(".tune-row").classList.toggle("tune-off", !soundOn);
+  $("as-mvol").value = String(Math.round(musicVol * 10));
+  $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
+  $("as-svol").value = String(Math.round(sfxVol * 10));
+  $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
+  $("as-now").textContent = musicLive ? (GameAudio.trackName() || "—") : "off";
+}
+
+$("pm-audio").onclick = () => { syncAudioPanel(); $("audioset").hidden = false; };
+$("as-close").onclick = () => { $("audioset").hidden = true; };
+$("as-music-on").onclick = () => { setMusic(true); if (soundOn) GameAudio.uiTick(); };
+$("as-music-off").onclick = () => { setMusic(false); if (soundOn) GameAudio.uiTick(); };
+$("as-sound-on").onclick = () => { setSound(true); GameAudio.uiTick(); };
+$("as-sound-off").onclick = () => { if (soundOn) GameAudio.uiTick(); setSound(false); };
+// `input` not `change`: the level should follow the thumb while it is dragged.
+$("as-mvol").oninput = (e) => {
+  musicVol = GameAudio.setMusicVolume((+e.target.value || 0) / 10);
+  store.set("volMusic", musicVol);
+  $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
+};
+$("as-svol").oninput = (e) => {
+  sfxVol = GameAudio.setSfxVolume((+e.target.value || 0) / 10);
+  store.set("volSfx", sfxVol);
+  $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
+};
+$("as-skip").onclick = () => {
   const name = GameAudio.skipTrack();
-  if (name) {
-    $("pm-skip").textContent = "⏭ " + name.toUpperCase();
-    clearTimeout($("pm-skip")._t);
-    $("pm-skip")._t = setTimeout(() => { $("pm-skip").textContent = "⏭ SKIP TRACK"; }, 1800);
-  }
+  if (name) $("as-now").textContent = name;
   if (soundOn) GameAudio.uiTick();
 };
 
@@ -5372,7 +5414,8 @@ function setPaused(p) {
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(seasonMode && season && season.round > 0);
-  if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; }   // never leave an overlay up after resume
+  // never leave an overlay up after resume
+  if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; }
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
   else if (soundOn) GameAudio.startEngine();
   lastFrame = performance.now();

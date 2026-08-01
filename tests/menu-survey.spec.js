@@ -87,7 +87,13 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page);
     await cycleTo(page, "pm-sound", "OFF");
-    await cycleTo(page, "pm-music", "OFF");
+    // Music moved into the MUSIC & SOUND panel (with the volume sliders), so
+    // turning it off is a trip through that screen rather than a grid toggle.
+    await page.evaluate(() => document.getElementById("pm-audio").click());
+    await page.waitForTimeout(120);
+    await page.evaluate(() => document.getElementById("as-music-off").click());
+    await page.evaluate(() => document.getElementById("as-close").click());
+    await page.waitForTimeout(120);
     await shot(page, "portrait-34-settings-sound-music-off");
   });
 
