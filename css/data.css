@@ -169,7 +169,34 @@
 .dh-standings { gap: 18px; }
 @media (min-width: 620px) { .dh-standings { flex-direction: row; align-items: flex-start; } }
 .dh-standings-col { flex: 1; min-width: 0; }
-.dh-row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 13px; }
+/* A standings row is a RANKING, and it was rendering as a list of text. Three
+   changes, all cheap:
+   * a 3px team-colour edge (--row-team, set per row from the same team colour
+     the code chip already uses) turns twenty rows into a chart you can read
+     down the side of — team-mates pair up visually without reading a word;
+   * the hairline is inset from the edge so it stops before the colour bar
+     instead of cutting across it;
+   * the row lifts on hover/press like every other interactive surface, which
+     it always looked like it should and never did. */
+.dh-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 4px 5px 0;
+  position: relative;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+  border-left: 3px solid var(--row-team, transparent);
+  padding-left: 7px;
+  border-radius: 0 var(--r-xs) var(--r-xs) 0;
+}
+@media (hover: hover) {
+  .dh-row:hover { background: rgba(255, 255, 255, 0.045); }
+}
+/* The leader gets the faintest possible wash — enough that the top of the table
+   reads as the top without needing a badge. */
+.dh-row.dh-row-lead {
+  background: linear-gradient(90deg in oklab,
+    color-mix(in oklab, var(--row-team, var(--red)) 16%, transparent), transparent 58%);
+}
 .dh-row-cons { flex-wrap: wrap; }
 .dh-cons-main { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
 .dh-h2h-wrap { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 140px; align-items: flex-end; }
@@ -178,7 +205,7 @@
 .dh-h2h-alt { background: rgba(255, 255, 255, 0.3); }
 .dh-h2h-labels { display: flex; width: 100%; max-width: 160px; justify-content: space-between; font-size: var(--fs-micro); color: #8a8a95; font-weight: 700; letter-spacing: 0.05em; }
 
-.dh-pos { width: 24px; text-align: right; color: #8a8a95; flex: 0 0 auto; }
+.dh-pos { width: 24px; text-align: right; color: #8a8a95; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .dh-codechip {
   flex: 0 0 auto;
   font-size: 11px; font-weight: 800;
@@ -190,8 +217,8 @@
 .dh-swatch { width: 12px; height: 12px; border-radius: var(--r-xs); flex: 0 0 auto; }
 .dh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dh-wins { font-size: 11px; color: #f6d200; font-weight: 700; flex: 0 0 auto; }
-.dh-pts { min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: #fff; }
-.dh-gap { font-size: 11px; color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; }
+.dh-pts { min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: #fff; font-variant-numeric: tabular-nums; }
+.dh-gap { font-size: 11px; color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* last race */
 .dh-lr-head { margin-bottom: 12px; }
