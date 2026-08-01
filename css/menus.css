@@ -342,10 +342,9 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   transition: background 0.1s;
 }
 .track-row:last-child { border-bottom: none; }
-/* Full-bleed rows fill their scroll container edge to edge, so a focus ring
-   drawn 2px OUTSIDE them lands outside the clip box and gets sliced. Negative
-   offset draws it just inside the row instead — same ring, always whole. */
-.track-row:focus-visible, .team-tile:focus-visible, .season-upcoming-row:focus-visible { outline-offset: -3px; }
+/* (Full-bleed rows used to need their own negative outline-offset so the ring
+   was not sliced by #sel-tracks. The base ring is inset for every control now,
+   so that override is redundant — see :focus-visible in css/tokens.css.) */
 @media (hover: hover) {
   .track-row:hover { background: rgba(255, 255, 255, 0.06); }
 }
