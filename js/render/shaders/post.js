@@ -696,16 +696,27 @@ void main() {
     // NaN the normalize and sparkle the far field.
     vec3 crv = cross(dpx, dpy);
     float crvL = length(crv);
-    vec3 Nv = crvL > 1e-6 ? crv / crvL : vec3(0.0, 0.0, 1.0);
+    // Degenerate fallback = the ROAD's up direction, NOT view-forward (0,0,1).
+    // At grazing distance (a low cockpit eye looking down a straight) the road's
+    // screen footprint flattens, the depth derivatives go near-parallel and this
+    // fallback fires over a narrow distance band. Defaulting to view-forward
+    // zeroed upDot there → the whole roadMask collapsed in one step → the wet
+    // mirror ended in a HARSH horizontal line, with matte road beyond. The road
+    // IS up-facing, so assume uUpVS: SSR then fades out on the smooth distance
+    // taper below instead of snapping off.
+    vec3 upVSn = normalize(uUpVS);
+    vec3 Nv = crvL > 1e-6 ? crv / crvL : upVSn;
     if (Nv.z < 0.0) Nv = -Nv;                     // face the eye (view space looks down -z)
-    float upDot = dot(Nv, normalize(uUpVS));
+    float upDot = dot(Nv, upVSn);
     // Up-facing AND not the very-near cockpit (z near 0). P.z is negative ahead.
     // Fade out the far field: depth precision + coarse march steps there breed
     // speckle, and reflections compress to nothing near the horizon anyway — so
-    // keep the clean, high-impact foreground and taper the distance out.
+    // keep the clean, high-impact foreground and taper the distance out. The
+    // fade end is pushed out (-55 → -78) so the taper spreads across more screen
+    // rows near the cockpit horizon instead of compressing into a visible band.
     float roadMask = smoothstep(0.40, 0.75, upDot)
                    * smoothstep(uSsrNear, uSsrNear * 2.8, P.z)
-                   * (1.0 - smoothstep(-22.0, -55.0, P.z));
+                   * (1.0 - smoothstep(-22.0, -78.0, P.z));
     // Car bodywork: up-facing-ish panels, allowed much nearer than the road
     // (the chase camera sits ~5-8 m behind the car).
     float carMask = carPx * smoothstep(0.30, 0.65, upDot)
