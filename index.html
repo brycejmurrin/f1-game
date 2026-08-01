@@ -676,6 +676,19 @@
           <button id="as-sp-connect" class="opt-btn" type="button">CONNECT</button>
           <button id="as-sp-disconnect" class="opt-btn" type="button">DISCONNECT</button>
         </div>
+        <!-- HOW TO PLAY. REMOTE drives Spotify on a device you already have
+             (phone, laptop) over the Web API — no DRM, no SDK, works on iOS.
+             IN BROWSER makes this tab the player via the Web Playback SDK,
+             which iOS Safari cannot run at all. -->
+        <div class="opt-row" role="group" aria-label="Spotify playback mode">
+          <button id="as-sp-mode-remote" class="opt-btn" type="button">REMOTE</button>
+          <button id="as-sp-mode-browser" class="opt-btn" type="button">IN BROWSER</button>
+        </div>
+        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so it shows up below. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
+        <label class="tune-row"><span class="tune-label">DEVICE</span>
+          <select id="as-sp-device" aria-label="Spotify device"></select></label>
+        <button id="as-sp-refresh" class="adv-more-btn" type="button">&#8635; REFRESH DEVICES</button>
+
         <!-- WHAT TO PLAY. Connecting only makes this browser a Spotify device;
              it does not queue anything, and a browser that has never played has
              no context to resume — which is why "connected" could be silent. -->

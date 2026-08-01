@@ -37,6 +37,8 @@ window.SpotifyMusic = (function () {
   const S_VERIFY = "apex26.spotify.verifier";   // sessionStorage: one auth round-trip
   const S_STATE = "apex26.spotify.state";
   const K_CTX = "apex26.spotify.context";       // chosen playlist uri, or "liked"
+  const K_MODE = "apex26.spotify.mode";         // "remote" (Connect) | "browser" (SDK)
+  const K_DEV = "apex26.spotify.device";        // remote mode: which device to play on
 
   // playlist-read-private / user-library-read are what let the panel OFFER
   // something to play. Without a chosen context, "play" on a freshly
@@ -78,9 +80,32 @@ window.SpotifyMusic = (function () {
   function ssDel(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
 
   function clientId() { return (ls(K_ID) || "").trim(); }
+  // TWO WAYS TO PLAY, and remote is the default because it works everywhere.
+  //   "browser" — this tab becomes a Spotify device via the Web Playback SDK.
+  //               Needs EME/DRM, needs a user gesture to unmute its own <audio>,
+  //               and cannot work at all on iOS Safari (no FairPlay in the SDK).
+  //   "remote"  — plain Web API: the game drives Spotify running on a phone or
+  //               desktop the account already has. No DRM, no SDK, no gesture
+  //               rules, works on every browser. The music comes out of that
+  //               device instead of the game tab, which is the whole trade.
+  function mode() { return ls(K_MODE) === "browser" ? "browser" : "remote"; }
+  function setMode(m) {
+    const v = m === "browser" ? "browser" : "remote";
+    if (v === mode()) return v;
+    lsSet(K_MODE, v);
+    teardown();                       // the old transport is meaningless now
+    setStatus(readToken() ? "configured" : (available() ? "configured" : "off"),
+      v === "browser"
+        ? "Switched to playing in this browser. Press CONNECT."
+        : "Switched to controlling Spotify on another device. Press CONNECT.");
+    return v;
+  }
+  function deviceId2() { return ls(K_DEV) || ""; }
+  function setDevice(id) { if (id) lsSet(K_DEV, id); else lsDel(K_DEV); render(); return id || ""; }
   function contextUri() { return ls(K_CTX) || ""; }
   function setContext(v) { if (v) lsSet(K_CTX, v); else lsDel(K_CTX); render(); return v || ""; }
   let lists = [];                                // [{name, uri}] for the picker
+  let devices = [];                              // remote mode: the account's devices
 
   function readToken() {
     try { const t = JSON.parse(ls(K_TOKEN) || "null"); return t && t.access_token ? t : null; }
@@ -295,8 +320,8 @@ window.SpotifyMusic = (function () {
         return;
       }
       // The user pressed CONNECT one navigation ago, so finishing the job is
-      // what they asked for — the only path that boots the SDK without a click.
-      return bootPlayer();
+      // what they asked for — the only path that starts playback without a click.
+      return mode() === "remote" ? connectRemote() : bootPlayer();
     });
   }
 
@@ -416,6 +441,7 @@ window.SpotifyMusic = (function () {
   }
 
   function teardown() {
+    stopPolling();
     ready = false;
     deviceId = null;
     track = null;
@@ -462,7 +488,8 @@ window.SpotifyMusic = (function () {
   // PUT /me/player/play, aimed at THIS device, with whatever the player chose.
   // Reports the refusals that otherwise look like "connected but silent".
   function playChosen() {
-    const q = deviceId ? "?device_id=" + encodeURIComponent(deviceId) : "";
+    const q = mode() === "remote" ? remoteQuery()
+      : (deviceId ? "?device_id=" + encodeURIComponent(deviceId) : "");
     const ctx = contextUri();
     let body;
     if (ctx === "liked") {
@@ -472,7 +499,7 @@ window.SpotifyMusic = (function () {
       return api("/me/tracks?limit=50")
         .then((r) => (r && r.ok ? r.json().catch(() => null) : null)).then((j) => {
         const uris = j && j.items ? j.items.map((i) => i.track && i.track.uri).filter(Boolean) : [];
-        if (!uris.length) { setStatus("connected", "No liked songs found to play."); return; }
+        if (!uris.length) { releaseToBuiltIn("No liked songs found to play."); return; }
         return sendPlay(q, JSON.stringify({ uris: uris }));
       });
     }
@@ -480,10 +507,23 @@ window.SpotifyMusic = (function () {
     return sendPlay(q, body);
   }
 
-  function sendPlay(q, body) {
+  // Handing the music back is better than silence: while a backend is installed
+  // GameAudio stays quiet, so a Spotify that cannot play leaves the player with
+  // no music at all. On a failure we cannot fix, give the soundtrack back.
+  function releaseToBuiltIn(msg) {
+    removeBackend();
+    setStatus("connected", msg + " The game's own music is playing instead — fix that and press PLAY to retry.");
+  }
+
+  function sendPlay(q, body, retried) {
     return api("/me/player/play" + q, { method: "PUT", body: body }).then((r) => {
       if (!r) return;
-      if (r.ok || r.status === 204) { setStatus("connected", "Playing."); lastPlayError = null; return; }
+      if (r.ok || r.status === 204) {
+        setStatus("connected", "Playing.");
+        lastPlayError = null;
+        installBackend();                 // it works — Spotify may own the music
+        return;
+      }
       // Spotify says WHY in the body ("Device not found", PREMIUM_REQUIRED,
       // "Player command failed: No active device"...). Mapping the status code
       // alone threw that away and left every refusal looking the same.
@@ -492,16 +532,113 @@ window.SpotifyMusic = (function () {
         try { const j = JSON.parse(txt); reason = (j.error && (j.error.reason || j.error.message)) || ""; }
         catch (e) { reason = (txt || "").slice(0, 120); }
         lastPlayError = { status: r.status, reason: reason };
+        // 404 = "Device not found" / "No active device". Almost always a device
+        // that has gone idle or been re-minted, so re-list, TRANSFER to it (the
+        // step that actually wakes a sleeping device — a bare play at an
+        // inactive device just 404s), and try once more.
+        if (r.status === 404 && !retried && mode() === "remote") {
+          setStatus("connected", "Waking your Spotify device…");
+          return loadDevices().then((ds) => {
+            const d = deviceId2();
+            if (!d || !ds.length) {
+              releaseToBuiltIn("No Spotify device is available. Open Spotify on your phone or " +
+                "computer and play anything for a second.");
+              return;
+            }
+            return api("/me/player", { method: "PUT", body: JSON.stringify({ device_ids: [d], play: true }) })
+              .then(() => sendPlay(remoteQuery(), body, true));
+          });
+        }
         const hint = r.status === 404
-            ? " Press DISCONNECT then CONNECT, or start a track in the Spotify app once."
+            ? " Open Spotify on a device and play something for a second, then press REFRESH DEVICES."
           : r.status === 403 ? " Full Premium is required to play here."
           : r.status === 401 ? " Press CONNECT to sign in again."
           : "";
-        setStatus("connected", "Spotify refused playback (" + r.status +
-          (reason ? ": " + reason : "") + ")." + hint);
+        releaseToBuiltIn("Spotify refused playback (" + r.status + (reason ? ": " + reason : "") + ")." + hint);
       }, () => { lastPlayError = { status: r.status, reason: "" };
         setStatus("connected", "Spotify refused playback (" + r.status + ")."); });
     });
+  }
+
+  /* ---------------- remote control (Web API / Spotify Connect) ----------------
+     Everything here is plain REST against a device the account already has, so
+     it needs no SDK, no DRM and no gesture. The cost is that we cannot be told
+     when the track changes — there is no event — so the now-playing line is
+     polled. 10 s is a deliberate floor: this runs for the whole session and a
+     Development Mode app shares one modest quota across everything it does. */
+  let pollTimer = null;
+
+  function devicesList() {
+    return api("/me/player/devices").then((r) => {
+      if (!r) return [];
+      if (!r.ok) return [];
+      return r.json().then((j) => j.devices || [], () => []);
+    });
+  }
+
+  function loadDevices() {
+    return devicesList().then((ds) => {
+      devices = ds;
+      // A DEVICE ID IS NOT STABLE. Spotify mints a new one each time the app
+      // restarts, so a stored id from yesterday names a device that no longer
+      // exists — and playing at it returns 404 "Device not found". Drop it
+      // whenever the live list disagrees.
+      const known = deviceId2();
+      if (known && !ds.some((d) => d.id === known)) lsDel(K_DEV);
+      // Adopt whatever is already active, so the common case needs no choosing.
+      if (!deviceId2()) {
+        const act = ds.filter((d) => d.is_active)[0] || ds[0];
+        if (act) lsSet(K_DEV, act.id);
+      }
+      if (!ds.length) {
+        setStatus("connected", "No Spotify device found. Open Spotify on your phone or " +
+          "computer (play anything for a second), then press REFRESH.");
+      }
+      render();
+      return ds;
+    });
+  }
+
+  function pollNowPlaying() {
+    if (mode() !== "remote" || state !== "connected") return Promise.resolve();
+    return api("/me/player").then((r) => {
+      if (!r) return;
+      if (r.status === 204) { track = null; paused = true; emit(); return; }   // nothing playing
+      if (!r.ok) return;
+      return r.json().then((j) => {
+        const it = j && j.item;
+        track = it ? (it.name + " — " + (it.artists || []).map((a) => a.name).join(", ")) : null;
+        paused = !(j && j.is_playing);
+        if (j && j.device && j.device.id && !deviceId2()) lsSet(K_DEV, j.device.id);
+        emit();
+      }, () => {});
+    });
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollNowPlaying();
+    pollTimer = setInterval(pollNowPlaying, 10000);
+  }
+  function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+  // Connect, remote flavour: there is nothing to boot. A valid token plus a
+  // device the account owns IS the connection.
+  function connectRemote() {
+    setStatus("connecting", "Looking for your Spotify devices…");
+    return validToken().then((t) => {
+      if (!t) { setStatus("configured", "No Spotify session. Press CONNECT to sign in."); return; }
+      state = "connected";
+      setStatus("connected", "Connected. Pick a device and a playlist, then press PLAY.");
+      installBackend();
+      startPolling();
+      return Promise.all([loadDevices(), loadPlaylists()]);
+    });
+  }
+
+  function remoteQuery() {
+    const d = deviceId2();
+    return d ? "?device_id=" + encodeURIComponent(d) : "";
   }
 
   /* ---------------- GameAudio backend ----------------
@@ -522,14 +659,32 @@ window.SpotifyMusic = (function () {
     start() {
       if (!BACKEND.active()) return;
       if (!paused) return;                     // already playing: no-op
+      if (mode() === "remote") {
+        // Resuming beats re-starting the context: it keeps the listener's place
+        // in the album/playlist they were already on.
+        if (track) { api("/me/player/play" + remoteQuery(), { method: "PUT", body: "{}" }).then(pollNowPlaying); return; }
+        playChosen();
+        return;
+      }
       // Something is already loaded on this device — just un-pause it.
       if (track) { try { player.resume(); } catch (e) {} return; }
       // Otherwise there is nothing to resume, so play what the player picked.
       playChosen();
     },
-    stop() { if (player) { try { player.pause(); } catch (e) {} } },
+    stop() {
+      if (mode() === "remote") {
+        if (BACKEND.active()) api("/me/player/pause" + remoteQuery(), { method: "PUT" }).then(pollNowPlaying);
+        return;
+      }
+      if (player) { try { player.pause(); } catch (e) {} }
+    },
     skip() {
       if (!BACKEND.active()) return null;
+      if (mode() === "remote") {
+        api("/me/player/next" + remoteQuery(), { method: "POST" })
+          .then(() => setTimeout(pollNowPlaying, 600));   // Spotify needs a beat to settle
+        return track;
+      }
       try { player.nextTrack(); } catch (e) {}
       // nextTrack() is async — the real title lands on player_state_changed
       // (which re-renders), so return what is known now.
@@ -537,11 +692,24 @@ window.SpotifyMusic = (function () {
     },
     setVolume(v01) {
       vol = Math.max(0, Math.min(1, typeof v01 === "number" ? v01 : 0.5));
+      if (mode() === "remote") {
+        // Not every device accepts remote volume (some phones refuse); a failure
+        // here is not worth a message — the device's own control still works.
+        if (BACKEND.active()) {
+          api("/me/player/volume?volume_percent=" + Math.round(vol * 100) +
+              (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" });
+        }
+        return vol;
+      }
       if (player) { try { player.setVolume(vol); } catch (e) {} }
       return vol;
     },
     name() { return track; },
-    active() { return state === "connected" && ready && !!player; },
+    active() {
+      return mode() === "remote"
+        ? (state === "connected" && !!readToken())
+        : (state === "connected" && ready && !!player);
+    },
   };
 
   // Guarded on the global AND the method: this file must survive being loaded
@@ -657,6 +825,9 @@ window.SpotifyMusic = (function () {
   function connect() {
     if (!available()) { setStatus("off", copyOff()); return Promise.resolve(); }
     if (state === "connected") return Promise.resolve();
+    if (mode() === "remote") {
+      return validToken().then((t) => (t ? connectRemote() : beginAuth()));
+    }
     return validToken().then((t) => (t ? bootPlayer() : beginAuth()));
   }
 
@@ -728,7 +899,30 @@ window.SpotifyMusic = (function () {
       if (sel.value !== contextUri()) sel.value = contextUri();
       sel.disabled = state !== "connected";
     }
-    const live = state === "connected" && ready;
+    // MODE + DEVICE. The device row only means anything in remote mode, so it
+    // is disabled (never hidden) elsewhere — hiding reflows the sheet.
+    const remote = mode() === "remote";
+    const b1 = el("as-sp-mode-remote"), b2 = el("as-sp-mode-browser");
+    if (b1) b1.classList.toggle("active", remote);
+    if (b2) b2.classList.toggle("active", !remote);
+    const dsel = el("as-sp-device");
+    if (dsel) {
+      const want = JSON.stringify(devices.map((d) => d.id + d.name + d.is_active));
+      if (dsel.dataset.built !== want) {
+        dsel.dataset.built = want;
+        dsel.textContent = "";
+        const add = (label, id) => { const o = document.createElement("option");
+          o.value = id; o.textContent = label; dsel.appendChild(o); };
+        if (!devices.length) add("— no devices found —", "");
+        for (const d of devices) {
+          add(d.name + (d.type ? " (" + d.type + ")" : "") + (d.is_active ? " • active" : ""), d.id);
+        }
+      }
+      if (dsel.value !== deviceId2()) dsel.value = deviceId2();
+      dsel.disabled = !remote || state !== "connected";
+    }
+    dis("as-sp-refresh", !remote || state !== "connected");
+    const live = state === "connected" && (remote ? !!readToken() : ready);
     dis("as-sp-play", !live);
     dis("as-sp-pause", !live);
     dis("as-sp-next", !live);
@@ -747,6 +941,10 @@ window.SpotifyMusic = (function () {
     });
     on("as-sp-connect", "click", () => { connect(); });
     on("as-sp-check", "click", () => { check(); });
+    on("as-sp-mode-remote", "click", () => setMode("remote"));
+    on("as-sp-mode-browser", "click", () => setMode("browser"));
+    on("as-sp-device", "change", (e) => setDevice(e.target.value));
+    on("as-sp-refresh", "click", () => loadDevices());
     on("as-sp-playlist", "change", (e) => {
       activate();
       setContext(e.target.value);
@@ -799,6 +997,8 @@ window.SpotifyMusic = (function () {
     lastPlayError() { return lastPlayError; },
     activate,
     context: contextUri, setContext, play() { return playChosen(); },
+    mode, setMode, setDevice, deviceList() { return devices.slice(); },
+    refreshDevices() { return loadDevices(); },
     backend() { return BACKEND; },
     redirectUri, handleRedirect,
   };

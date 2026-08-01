@@ -341,12 +341,12 @@
    the whole app, so without this the one string the setup depends on cannot be
    selected. It has to match the Spotify dashboard byte for byte, which is why
    it is monospace and wraps rather than being ellipsised. */
-#as-sp-playlist {
+#as-sp-playlist, #as-sp-device {
   width: 100%; font: inherit; font-size: 16px;   /* 16px: iOS zooms a focused control under it */
   background: rgba(255, 255, 255, 0.08); color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 6px 8px;
 }
-#as-sp-playlist:disabled { opacity: 0.45; }
+#as-sp-playlist:disabled, #as-sp-device:disabled { opacity: 0.45; }
 .sp-uri {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px;
   word-break: break-all; opacity: 0.9;
