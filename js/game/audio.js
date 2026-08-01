@@ -77,6 +77,12 @@ const GameAudio = (function () {
     { id: "builtin:song3", name: "song3", url: "assets/music/song3.mp3", builtin: true },
   ];
   let musicIndex = 0;
+  // WHICH TRACKS ARE ELIGIBLE. The shipped songs and the player's uploads live
+  // in one list so a single SKIP walks through both, but a player who added
+  // their own music usually wants only that — or only the originals. This
+  // filters the list without rebuilding it, so ids and indices stay stable.
+  //   "all" (default) | "builtin" | "user"
+  let source = "all";
   // An installed backend (Spotify — js/game/spotify.js) TAKES OVER the music
   // role entirely: every startMusic/stopMusic/skipTrack/setMusicVolume call
   // site in game.js is left untouched and simply delegates here, and the
@@ -94,6 +100,33 @@ const GameAudio = (function () {
 
   function clamp01(v) {
     return v < 0 ? 0 : v > 1 ? 1 : v;
+  }
+
+  /* ---------------- iOS audio session ----------------
+     "playback" plays through the ring/silent switch like a game should — but on
+     iOS it is EXCLUSIVE: the first sound this game makes interrupts whatever
+     else is playing. That is correct when we own the soundtrack and wrong when
+     something else does: with Spotify driving the music from another device,
+     switching to the game paused it.
+     "ambient" MIXES with other apps (at the cost of obeying the silent switch),
+     which is the right trade exactly when another app owns the music. The Audio
+     Session API wants this set before the context exists, so it is applied at
+     creation and, best-effort, live — a mode change mid-session should not need
+     a reload. */
+  let sessionType = "playback";
+  function applySessionType() {
+    try {
+      if (typeof navigator !== "undefined" && navigator.audioSession) {
+        navigator.audioSession.type = sessionType;
+      }
+    } catch (e) { /* older iOS */ }
+  }
+  function setSessionType(t) {
+    const v = (t === "ambient" || t === "playback") ? t : "playback";
+    if (v === sessionType) return v;
+    sessionType = v;
+    applySessionType();
+    return v;
   }
 
   // Find the most pitch-STABLE ~2s window of a decoded clip, so the engine loop
@@ -126,13 +159,7 @@ const GameAudio = (function () {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
 
-    // iOS 17+: play through the ring/silent switch like a game should.
-    // The Audio Session API must be set BEFORE the context is created.
-    try {
-      if (typeof navigator !== "undefined" && navigator.audioSession) {
-        navigator.audioSession.type = "playback";
-      }
-    } catch (e) { /* older iOS */ }
+    applySessionType();
 
     ctx = new AC();
     master = ctx.createGain();
@@ -784,12 +811,58 @@ const GameAudio = (function () {
     musicSrc = src;
   }
 
+  function eligible(i) {
+    const e = PLAYLIST[i];
+    if (!e) return false;
+    return source === "all" || (source === "builtin" ? !!e.builtin : !e.builtin);
+  }
+  function anyEligible() {
+    for (let i = 0; i < PLAYLIST.length; i++) if (eligible(i)) return true;
+    return false;
+  }
+  // Walk `step` at a time until an eligible slot turns up, giving up after one
+  // full lap so an empty selection cannot spin forever.
+  function seekEligible(from, step) {
+    const n = PLAYLIST.length;
+    if (!n) return -1;
+    const d = step < 0 ? -1 : 1;
+    for (let k = 1; k <= n; k++) {
+      const i = ((from + d * k) % n + n) % n;
+      if (eligible(i)) return i;
+    }
+    return eligible(from) ? from : -1;
+  }
+
   // Move `step` places along the playlist and start playing there. Used both by
   // the end-of-track handover and by SKIP TRACK in the pause menu.
   function nextTrack(step) {
     if (!PLAYLIST.length) return;
-    musicIndex = ((musicIndex + (step || 1)) % PLAYLIST.length + PLAYLIST.length) % PLAYLIST.length;
+    const i = seekEligible(musicIndex, step || 1);
+    if (i < 0) { stopInternal(); return; }
+    musicIndex = i;
     playIndex(musicIndex);
+  }
+
+  /* Pick which part of the library plays. Returns the source actually applied —
+     a selection with nothing in it (MY TRACKS before anything is uploaded)
+     is refused rather than leaving the game silent with no explanation. */
+  function setMusicSource(s) {
+    const want = (s === "builtin" || s === "user") ? s : "all";
+    const prev = source;
+    source = want;
+    if (!anyEligible()) { source = prev; return prev; }
+    if (backend) return source;
+    if (!eligible(musicIndex)) {
+      const i = seekEligible(musicIndex, 1);
+      if (i >= 0) { musicIndex = i; if (musicOn) playIndex(i); }
+    }
+    return source;
+  }
+  function musicSource() { return source; }
+  function sourceCounts() {
+    let builtin = 0, user = 0;
+    for (const e of PLAYLIST) { if (e.builtin) builtin++; else user++; }
+    return { builtin, user, total: PLAYLIST.length };
   }
 
   // Start (or restart) at a given playlist slot, regardless of what is playing.
@@ -1013,6 +1086,11 @@ const GameAudio = (function () {
     currentTrackId,
     setMusicBackend,
     musicBackend,
+    setSessionType,
+    sessionType() { return sessionType; },
+    setMusicSource,
+    musicSource,
+    sourceCounts,
     setSfxVolume,
     setSfxEnabled,
     setMusicVolume,

@@ -62,11 +62,11 @@
 #cs-budget-wrap { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.4); min-width: 0; }
 #cs-budget-bar {
   height: 6px; background: rgba(255,255,255,0.1);
-  border-radius: 3px; overflow: hidden;
+  border-radius: var(--r-xs); overflow: hidden;
 }
 #cs-budget-fill {
   height: 100%; width: 100%; background: linear-gradient(90deg, #e10600, #ff5a3c);
-  border-radius: 3px; transform-origin: left;
+  border-radius: var(--r-xs); transform-origin: left;
   transition: transform 0.22s ease;
 }
 #cs-budget-row { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--gap) * 0.8); }
@@ -79,7 +79,7 @@
 .cs-unlimited-btn {
   flex: 0 0 auto; width: auto; margin: 0;
   font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
-  padding: 4px 10px; border-radius: 6px;
+  padding: 4px 10px; border-radius: var(--r-sm);
   background: rgba(255,255,255,0.06); color: var(--dim);
   border: 1px solid rgba(255,255,255,0.14);
 }
@@ -106,11 +106,11 @@
 .cs-stat-label { width: 84px; flex-shrink: 0; }
 .cs-stat-bar-wrap {
   flex: 1 1 auto; min-width: 0; height: 10px; background: rgba(255,255,255,0.08);
-  border-radius: 5px; overflow: hidden; position: relative;
+  border-radius: var(--r-sm); overflow: hidden; position: relative;
 }
 .cs-stat-base {
   position: absolute; left: 0; top: 0; height: 100%;
-  background: rgba(255,255,255,0.32); border-radius: 5px;
+  background: rgba(255,255,255,0.32); border-radius: var(--r-sm);
 }
 .cs-stat-boost {
   position: absolute; top: 0; height: 100%; background: var(--red); opacity: 0.92;
@@ -155,7 +155,7 @@
 /* ---------- category tabs ---------- */
 .cs-tab {
   display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
-  padding: 6px 10px; border-radius: 9px; min-width: 0; overflow: hidden;
+  padding: 6px 10px; border-radius: var(--r-md); min-width: 0; overflow: hidden;
   background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
   cursor: pointer; text-align: left;
 }
@@ -179,7 +179,7 @@
 /* ---------- option rows ---------- */
 .cs-opt {
   display: flex; align-items: flex-start; gap: calc(var(--gap) * 0.8); text-align: left; width: 100%;
-  padding: 8px 11px; border-radius: 10px;
+  padding: 8px 11px; border-radius: var(--r-md);
   background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08);
   cursor: pointer;
 }
@@ -194,8 +194,8 @@
 .cs-opt-name { font-size: 13px; font-weight: 700; color: var(--text); }
 .cs-opt-deltas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
 .cs-delta {
-  font-size: 9px; font-weight: 800; letter-spacing: 0.04em;
-  padding: 1px 5px; border-radius: 3px;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.04em;
+  padding: 1px 5px; border-radius: var(--r-xs);
 }
 .cs-delta.up { background: rgba(80,210,255,0.16); color: #4df; }
 .cs-delta.down { background: rgba(255,150,0,0.16); color: #f90; }
@@ -225,9 +225,9 @@
 }
 .cs-opt-tag {
   display: inline-block; margin-left: 7px; vertical-align: middle;
-  font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.08em;
   background: rgba(255,200,40,0.18); color: #f5c842;
-  border-radius: 3px; padding: 1px 5px;
+  border-radius: var(--r-xs); padding: 1px 5px;
 }
 .cs-opt.exclusive { border-color: rgba(255,200,60,0.4); }
 .cs-opt.exclusive.active {
@@ -239,7 +239,7 @@
 /* ---------- livery rows ---------- */
 /* paint-job swatch (two-tone, optional centre racing stripe) in the LIVERY tab */
 .cs-liv-swatch {
-  flex: 0 0 auto; width: 38px; height: 24px; border-radius: 6px; align-self: center;
+  flex: 0 0 auto; width: 38px; height: 24px; border-radius: var(--r-sm); align-self: center;
   border: 1px solid rgba(255,255,255,0.25);
   box-shadow: inset 0 0 6px rgba(0,0,0,0.35);
   position: relative; overflow: hidden;
@@ -247,7 +247,7 @@
 .cs-liv .cs-opt-main { align-self: center; }
 .cs-liv-stripe {
   position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
-  width: 7px; border-radius: 1px; box-shadow: 0 0 2px rgba(0,0,0,0.5);
+  width: 7px; border-radius: var(--r-xs); box-shadow: 0 0 2px rgba(0,0,0,0.5);
 }
 /* ＋ CREATE row: dashed "add" affordance */
 .cs-liv-plus {
@@ -293,14 +293,14 @@
   font-size: var(--label); font-weight: 800; letter-spacing: 0.14em; color: var(--dim);
 }
 .cs-liv-ed-prev {
-  width: 100%; height: 44px; border-radius: 8px; align-self: stretch;
+  width: 100%; height: 44px; border-radius: var(--r-md); align-self: stretch;
 }
 .cs-liv-ed-row { display: flex; align-items: center; gap: calc(var(--gap) * 0.8); min-width: 0; }
 .cs-liv-ed-lbl {
   flex: 0 0 68px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim);
 }
 .cs-liv-ed-row input[type="color"] {
-  flex: 0 0 auto; width: 52px; height: var(--chip-h); padding: 0; border-radius: 6px;
+  flex: 0 0 auto; width: 52px; height: var(--chip-h); padding: 0; border-radius: var(--r-sm);
   border: 1px solid rgba(255,255,255,0.2); background: none; cursor: pointer;
 }
 .cs-liv-ed-row input[type="color"].cs-liv-off { opacity: 0.35; }
@@ -308,22 +308,22 @@
   flex: 0 0 auto; width: auto; margin: 0;
   min-height: var(--chip-h); min-width: var(--chip-h);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
-  padding: 4px 10px; border-radius: 5px;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.08em;
+  padding: 4px 10px; border-radius: var(--r-sm);
   background: rgba(255,255,255,0.06); color: var(--dim);
   border: 1px solid rgba(255,255,255,0.14);
 }
 .cs-liv-ed-name {
   flex: 1 1 auto; min-width: 0; min-height: var(--chip-h);
   font-size: 13px; font-weight: 600; color: var(--text);
-  padding: 6px 9px; border-radius: 6px;
+  padding: 6px 9px; border-radius: var(--r-sm);
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14);
 }
 .cs-liv-ed-btns { display: flex; gap: calc(var(--gap) * 0.7); margin-top: 2px; }
 .cs-liv-ed-cancel, .cs-liv-ed-save {
   flex: 1 1 0; width: auto; margin: 0; min-height: var(--tap);
   font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
-  padding: 9px 0; border-radius: 8px; cursor: pointer;
+  padding: 9px 0; border-radius: var(--r-md); cursor: pointer;
 }
 .cs-liv-ed-cancel { background: rgba(255,255,255,0.06); color: var(--dim); border: 1px solid rgba(255,255,255,0.14); }
 .cs-liv-ed-save { background: var(--red); color: #fff; border: 1px solid var(--red); }
