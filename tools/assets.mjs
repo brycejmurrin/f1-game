@@ -452,12 +452,28 @@ function bakeEnv(args) {
 
 // ────────────────────────────── CC0 sources ──────────────────────────────────
 
+// VERIFIED against the live APIs from a browser on 2026-08-01 (this sandbox has
+// no egress to either host; the shapes below are from a real response, not the
+// published docs).
+//
+//   Poly Haven  — CORS OPEN. /assets returns an object keyed by asset id;
+//                 /files/{id} returns body[MAP][RES][FORMAT] = {size, md5, url}.
+//   ambientCG   — CORS BLOCKED from a browser ("Load failed"). Still usable from
+//                 node (no CORS there), but it cannot be reached from an
+//                 in-browser importer, so Poly Haven is the primary source.
 const SOURCES = {
   polyhaven: {
     api: "https://api.polyhaven.com",
     list: (type, q) => `https://api.polyhaven.com/assets?type=${encodeURIComponent(type)}`,
     files: (id) => `https://api.polyhaven.com/files/${encodeURIComponent(id)}`,
     licence: "CC0",
+    cors: true,
+    // The map names in a real /files response. `arm` is the prize: ambient
+    // occlusion + roughness + metalness already packed into RGB, and at 1k JPG
+    // it is ~296 KB against 544 KB for the standalone rough map.
+    // `nor_gl` (NOT `nor_dx`) is the OpenGL green-channel convention, which is
+    // what applyMaterialTexNormal expects — nor_dx would invert every bump.
+    maps: { albedo: "Diffuse", normal: "nor_gl", arm: "arm", rough: "Rough", ao: "AO", disp: "Displacement" },
     // Assets are CC0 and need no attribution, but building on the LIVE API
     // asks for a "Powered by Poly Haven" credit.  That is why credits() emits
     // one whenever a polyhaven-sourced layer is in the pack.
@@ -468,8 +484,25 @@ const SOURCES = {
     list: (type, q) => `https://ambientcg.com/api/v2/full_json?q=${encodeURIComponent(q || "")}&type=Material&limit=40`,
     files: (id) => `https://ambientcg.com/api/v2/full_json?id=${encodeURIComponent(id)}&include=downloadData`,
     licence: "CC0",
+    cors: false,
   },
 };
+
+// Pick one file out of a Poly Haven /files/{id} body: pickFile(body, "Diffuse",
+// "1k", "jpg") -> {size, md5, url}. Falls back through the resolution ladder so
+// an asset that only publishes 2k+ still resolves.
+function pickFile(body, map, res, fmt) {
+  const m = body && body[map];
+  if (!m) return null;
+  for (const r of [res, "1k", "2k", "4k"]) {
+    const slot = m[r];
+    if (!slot) continue;
+    for (const f of [fmt, "jpg", "png"]) {
+      if (slot[f] && slot[f].url) return { ...slot[f], res: r, fmt: f, map };
+    }
+  }
+  return null;
+}
 
 async function search(args) {
   const [type, ...q] = args.filter((a) => !a.startsWith("--"));

@@ -99,10 +99,26 @@ walked through it because there is no asset acquisition story.
 
 ## 2. The asset APIs — what is actually usable
 
-I could not live-probe these endpoints: the session's egress proxy returned 403
-on `CONNECT api.polyhaven.com:443` and `ambientcg.com:443`. Shapes below come
-from the published specs; **the bake tool must verify them on first run** and
-CORS claims in particular are unverified.
+> **VERIFIED 2026-08-01, from a real browser.** The sandbox this was written in
+> has no egress to either host (403 on `CONNECT`), so the shapes below were
+> originally taken from the published specs. They have since been probed live.
+> Three corrections, recorded here because two of them change the design:
+>
+> 1. **Poly Haven CORS is OPEN** (`/assets` and `/files/{id}` both 200 from a
+>    browser). **ambientCG is BLOCKED** cross-origin ("Load failed"). §2.2's
+>    recommendation of ambientCG as the first choice for tarmac only holds from
+>    node; it cannot be reached from an in-browser importer.
+> 2. **The `/files/{id}` shape is `body[MAP][RES][FORMAT] = {size, md5, url}`.**
+>    The maps are `Diffuse`, `nor_gl`, `nor_dx`, `arm`, `AO`, `Rough`,
+>    `Displacement`, `rough_ao`, plus `blend`/`gltf`/`mtlx` bundles carrying an
+>    `include` map. **`arm`** (AO+roughness+metalness packed into RGB) is the
+>    one to take — 296 KB at 1k JPG against 544 KB for `Rough` alone. And it
+>    must be **`nor_gl`, not `nor_dx`**: the DirectX convention has an inverted
+>    green channel and would invert every bump in the game.
+> 3. Poly Haven carries motorsport-specific surfaces the original survey missed:
+>    `asphalt_track`, `asphalt_pit_lane`, `worn_asphalt`, `clean_asphalt`,
+>    `asphalt_01`–`07`, `gravel`, `tarred_gravel` — plus a match for all 14
+>    baked `MAT` slots.
 
 ### 2.1 Poly Haven — the best fit for materials and HDRIs
 
