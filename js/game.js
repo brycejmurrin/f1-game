@@ -5006,25 +5006,37 @@ function setMusic(b) {
    not fit the settings grid, which is one control per line. Levels persist. */
 let musicVol = store.get("volMusic", 0.5);
 let sfxVol = store.get("volSfx", 1);
+let sfxOn = store.get("sfx", true);
 GameAudio.setMusicVolume(musicVol);
 GameAudio.setSfxVolume(sfxVol);
+GameAudio.setSfxEnabled(sfxOn);
+
+// SOUND EFFECTS on/off. Only the sfx bus is muted, so the soundtrack keeps
+// playing — the sources stay alive at zero gain rather than being torn down, so
+// there is nothing to rebuild when it comes back on.
+function setSfx(b) {
+  sfxOn = b; store.set("sfx", b);
+  GameAudio.setSfxEnabled(b);
+  syncAudioPanel();
+}
 
 function syncAudioPanel() {
-  // MUSIC is off either on its own switch or because SOUND — the master — is
-  // off; a music slider that still looked live under a dead master would be
-  // lying about what it controls.
+  // The two switches are INDEPENDENT — music with no sound effects is a normal
+  // way to play. Each only follows its own switch and the master (the ♪ button /
+  // SOUND in the settings grid), which mutes everything.
   const musicLive = musicEnabled && soundOn;
+  const sfxLive = sfxOn && soundOn;
   $("as-music-on").classList.toggle("active", musicEnabled);
   $("as-music-off").classList.toggle("active", !musicEnabled);
-  $("as-sound-on").classList.toggle("active", soundOn);
-  $("as-sound-off").classList.toggle("active", !soundOn);
+  $("as-sound-on").classList.toggle("active", sfxOn);
+  $("as-sound-off").classList.toggle("active", !sfxOn);
   // Disabled, not hidden: the row keeps its slot so nothing reflows under a
-  // thumb mid-tap, and .tune-row dims to say the control is inert.
+  // thumb mid-tap, and .tune-row greys to say the control is inert.
   $("as-mvol").disabled = !musicLive;
   $("as-skip").disabled = !musicLive;
-  $("as-svol").disabled = !soundOn;
+  $("as-svol").disabled = !sfxLive;
   $("as-mvol").closest(".tune-row").classList.toggle("tune-off", !musicLive);
-  $("as-svol").closest(".tune-row").classList.toggle("tune-off", !soundOn);
+  $("as-svol").closest(".tune-row").classList.toggle("tune-off", !sfxLive);
   $("as-mvol").value = String(Math.round(musicVol * 10));
   $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
   $("as-svol").value = String(Math.round(sfxVol * 10));
@@ -5036,8 +5048,8 @@ $("pm-audio").onclick = () => { syncAudioPanel(); $("audioset").hidden = false; 
 $("as-close").onclick = () => { $("audioset").hidden = true; };
 $("as-music-on").onclick = () => { setMusic(true); if (soundOn) GameAudio.uiTick(); };
 $("as-music-off").onclick = () => { setMusic(false); if (soundOn) GameAudio.uiTick(); };
-$("as-sound-on").onclick = () => { setSound(true); GameAudio.uiTick(); };
-$("as-sound-off").onclick = () => { if (soundOn) GameAudio.uiTick(); setSound(false); };
+$("as-sound-on").onclick = () => { setSfx(true); GameAudio.uiTick(); };
+$("as-sound-off").onclick = () => { GameAudio.uiTick(); setSfx(false); };
 // `input` not `change`: the level should follow the thumb while it is dragged.
 $("as-mvol").oninput = (e) => {
   musicVol = GameAudio.setMusicVolume((+e.target.value || 0) / 10);
@@ -5185,10 +5197,30 @@ $("track-detail-close").onclick = () => { $("track-detail").hidden = true; };
 // ── SETTINGS sub-menu ── keeps the pause screen down to RESUME/RESTART/QUIT;
 // every tuning + toggle control lives on this page. Opening it hides the pause
 // menu (one panel at a time); BACK (or resume) returns to it.
-function openSettings() { els.pmsettings.hidden = false; els.pausemenu.hidden = true; }
+// Some settings only mean anything with a race on screen: HIDE HUD toggles a
+// HUD that does not exist yet (and the state would carry into the next race,
+// which starts with no HUD and no clue why), and both tuners preview a scene
+// that is not being rendered. Disabled rather than hidden — the same rule the
+// mode-dependent driving controls follow, so the grid never reflows under a
+// thumb mid-tap.
+function syncSettingsAvailability() {
+  const inRace = state === "race";
+  $("pm-hidehud").disabled = !inRace;
+  $("pm-lighting").disabled = !inRace;
+  $("pm-camtune").disabled = !inRace;
+}
+function openSettings() {
+  syncSettingsAvailability();
+  els.pmsettings.hidden = false; els.pausemenu.hidden = true;
+}
 function closeSettings() { els.pmsettings.hidden = true; if (paused) els.pausemenu.hidden = false; }
 $("pm-settings").onclick = openSettings;
 $("pm-settings-close").onclick = closeSettings;
+// The same settings screen from the TITLE menu, so steering, audio and the
+// tuners are reachable without starting a race first. closeSettings() already
+// only returns to the pause menu when actually paused, so from here it just
+// closes back to the title.
+$("mb-settings").onclick = () => { GameAudio.init(); openSettings(); };
 // Advanced steering: opened from the settings menu, closes back to it.
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
 $("adv-close").onclick = () => { $("advanced").hidden = true; };
