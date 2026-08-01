@@ -5030,6 +5030,10 @@ function syncAudioPanel() {
   $("as-svol").value = String(Math.round(sfxVol * 10));
   $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
   $("as-now").textContent = musicLive ? (GameAudio.trackName() || "—") : "off";
+  // The uploaded-track rows carry a "playing" marker, so they have to be
+  // re-rendered whenever the panel is opened or the track changes — MusicLib
+  // owns the list, we only tell it the picture is stale.
+  if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
 }
 
 $("pm-audio").onclick = () => { syncAudioPanel(); $("audioset").hidden = false; };
@@ -5052,6 +5056,7 @@ $("as-svol").oninput = (e) => {
 $("as-skip").onclick = () => {
   const name = GameAudio.skipTrack();
   if (name) $("as-now").textContent = name;
+  if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
   if (soundOn) GameAudio.uiTick();
 };
 

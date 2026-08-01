@@ -112,6 +112,12 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+  // blob: URLs (the player's uploaded music, js/game/music-lib.js) report the
+  // PAGE's origin, so the same-origin test below would wave them through — and
+  // cache.put() throws on any non-HTTP scheme, which would fail the request
+  // instead of just declining to cache it. Spec says a SW never sees these;
+  // the guard is here so that stays true if it ever does.
+  if (url.protocol !== "http:" && url.protocol !== "https:") return;
   if (url.origin !== self.location.origin) return;   // never touch cross-origin (Jolpica/OpenF1 data hub)
 
   // Network-first for the HTML shell + version.json: the existing "SHELL

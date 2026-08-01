@@ -272,4 +272,40 @@
 /* advanced disclosure */
 .adv-more-btn { width: 100%; margin: 14px 0 2px; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85; }
 #adv-extra { margin-top: 4px; }
+
+/* ---------- MUSIC & SOUND: the player's own uploaded tracks ----------
+   One row per stored file. The name is the only elastic column so a long
+   filename truncates instead of pushing the play/delete buttons off the sheet —
+   they are the two things a thumb is aiming for. */
+.music-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.music-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+}
+.music-row.playing { border-color: var(--red); background: rgba(225, 6, 0, 0.14); }
+.music-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.music-size { flex: 0 0 auto; font-size: 10px; opacity: 0.5; font-variant-numeric: tabular-nums; }
+.music-row button {
+  /* 30px keeps these inside the 44px touch target the rest of the panel uses
+     once the row's own padding is counted. */
+  flex: 0 0 auto; width: 30px; height: 30px; margin: 0; padding: 0;
+  font-size: 13px; line-height: 1; border-radius: 6px;
+}
+.music-del { opacity: 0.7; }
+.music-del:hover, .music-del:focus-visible { opacity: 1; border-color: var(--red); color: var(--red); }
+
+/* ---------- MUSIC & SOUND: Spotify (personal use) ---------- */
+#as-sp-id {
+  flex: 1 1 60%; min-width: 0;
+  /* 16px floor: iOS Safari zooms the page on focus under that, and the zoom
+     sticks after the keyboard closes. */
+  font: inherit; font-size: 16px;
+  background: rgba(255, 255, 255, 0.08); color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 6px 8px;
+}
+.sp-uri { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; word-break: break-all; opacity: 0.9; }
+#as-sp-wrap .opt-row { margin-top: 8px; }
 } /* @layer components */

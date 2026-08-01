@@ -64,12 +64,23 @@ const GameAudio = (function () {
   // carries across the transition instead of restarting, and each track hands
   // over to the next when it ends (see playMusicBuffer's onended). skipTrack()
   // jumps to the next one — that is what the pause menu's SKIP TRACK does.
+  //
+  // Entries are OBJECTS, not bare urls, because the list is no longer fixed:
+  // MusicLib appends the player's own uploaded files (js/game/music-lib.js) as
+  // object URLs, whose href is an opaque uuid — so the display name has to
+  // travel with the entry instead of being recovered from the file path, and a
+  // stable `id` is needed to remove one track without disturbing the rest.
   const PLAYLIST = [
-    MENU_TRACK,
-    "assets/music/song2.mp3",
-    "assets/music/song3.mp3",
+    { id: "builtin:menu", name: "menu", url: MENU_TRACK, builtin: true },
+    { id: "builtin:song2", name: "song2", url: "assets/music/song2.mp3", builtin: true },
+    { id: "builtin:song3", name: "song3", url: "assets/music/song3.mp3", builtin: true },
   ];
   let musicIndex = 0;
+  // An installed backend (Spotify — js/game/spotify.js) TAKES OVER the music
+  // role entirely: every startMusic/stopMusic/skipTrack/setMusicVolume call
+  // site in game.js is left untouched and simply delegates here, and the
+  // built-in playlist goes quiet until the backend is removed again.
+  let backend = null;
   // Kept for the old startMusic(trackIdx) callers; the playlist is shared now so
   // the index only decides where a FRESH start begins, never an interruption.
   const RACE_TRACKS = PLAYLIST;
@@ -782,20 +793,26 @@ const GameAudio = (function () {
 
   // Start (or restart) at a given playlist slot, regardless of what is playing.
   function playIndex(i) {
-    if (!ctx || !musicEnabled) return;
-    const url = PLAYLIST[((i % PLAYLIST.length) + PLAYLIST.length) % PLAYLIST.length];
-    musicIndex = PLAYLIST.indexOf(url);
+    if (!ctx || !musicEnabled || backend || !PLAYLIST.length) return;
+    musicIndex = ((i % PLAYLIST.length) + PLAYLIST.length) % PLAYLIST.length;
+    const url = PLAYLIST[musicIndex].url;
     try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
     musicSrc = null;
     musicOn = true;
     currentUrl = url;
     const token = ++musicToken;
+    // ONLY THE THREE SHIPPED TRACKS ARE CACHED. decodeAudioData yields raw PCM
+    // — a 4-minute stereo 48 kHz song is ~45-90 MB — so keeping every uploaded
+    // file the player has ever selected would be an out-of-memory on a phone
+    // after a handful of them. Built-ins are a bounded three; user tracks pay a
+    // re-decode each time they come round instead.
+    const cacheable = !!PLAYLIST[musicIndex].builtin;
     if (ctx.state !== "running") { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
     if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
     fetch(url)
       .then(r => r.arrayBuffer())
       .then(ab => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
-      .then(buf => { musicBuffers[url] = buf; playMusicBuffer(buf, token); })
+      .then(buf => { if (cacheable) musicBuffers[url] = buf; playMusicBuffer(buf, token); })
       .catch(() => { /* music is optional — ignore load/decode errors */ });
   }
 
@@ -811,6 +828,9 @@ const GameAudio = (function () {
   function setMusicVolume(v) {
     musicVol = clamp01(typeof v === "number" ? v : 0.5);
     if (musicGain) musicGain.gain.value = musicVol * MUSIC_FULL;
+    // A backend's audio is its own media element, outside this AudioContext —
+    // musicGain cannot reach it, so the level has to be forwarded.
+    if (backend) { try { backend.setVolume(musicVol); } catch (e) {} }
     return musicVol;
   }
   function volumes() { return { sfx: sfxVol, music: musicVol }; }
@@ -818,14 +838,86 @@ const GameAudio = (function () {
   // Skip to the next track on demand. Returns the new track's file name so the
   // caller can say what is playing.
   function skipTrack() {
-    if (!ctx || !musicEnabled) return null;
+    if (!musicEnabled) return null;
+    if (backend) { try { return backend.skip(); } catch (e) { return null; } }
+    if (!ctx) return null;
     nextTrack(1);
     return trackName();
   }
   function trackName() {
-    const url = PLAYLIST[musicIndex] || "";
-    return url.split("/").pop().replace(/\.[a-z0-9]+$/i, "");
+    if (backend) { try { return backend.name(); } catch (e) { return null; } }
+    const e = PLAYLIST[musicIndex];
+    return e ? e.name : "";
   }
+
+  /* ------- playlist management (used by MusicLib for uploaded files) -------
+     Uploaded tracks arrive as { id, name, url } with url an object URL owned by
+     the caller — WE NEVER REVOKE IT, because the same blob may be re-added and
+     the owner needs to decide when it dies. */
+  function tracks() {
+    return PLAYLIST.map(e => ({ id: e.id, name: e.name, builtin: !!e.builtin }));
+  }
+  function indexOfId(id) {
+    for (let i = 0; i < PLAYLIST.length; i++) if (PLAYLIST[i].id === id) return i;
+    return -1;
+  }
+  function addTracks(list) {
+    if (!list || !list.length) return 0;
+    let n = 0;
+    for (const t of list) {
+      if (!t || !t.id || !t.url || indexOfId(t.id) >= 0) continue;
+      PLAYLIST.push({ id: t.id, name: t.name || "track", url: t.url, builtin: false });
+      n++;
+    }
+    return n;
+  }
+  function removeTrack(id) {
+    const i = indexOfId(id);
+    if (i < 0) return false;
+    const wasPlaying = musicOn && i === musicIndex;
+    delete musicBuffers[PLAYLIST[i].url];
+    PLAYLIST.splice(i, 1);
+    // Keep musicIndex pointing at the SAME track it was on: removing an earlier
+    // entry shifts everything down, and getting this wrong makes an unrelated
+    // song restart every time the player deletes a file.
+    if (i < musicIndex) musicIndex--;
+    if (!PLAYLIST.length) { stopInternal(); musicIndex = 0; return true; }
+    musicIndex = ((musicIndex % PLAYLIST.length) + PLAYLIST.length) % PLAYLIST.length;
+    if (wasPlaying) playIndex(musicIndex);
+    return true;
+  }
+  function playTrackId(id) {
+    const i = indexOfId(id);
+    // playIndex owns musicOn — setting it here would leave the mixer believing
+    // music is playing when the call is refused (music off, backend installed).
+    if (i < 0 || backend || !musicEnabled) return false;
+    playIndex(i);
+    return musicOn;
+  }
+  function currentTrackId() {
+    if (!musicOn || backend) return null;
+    const e = PLAYLIST[musicIndex];
+    return e ? e.id : null;
+  }
+
+  /* ------- external music backend (Spotify) -------
+     Installing one silences the built-in playlist and routes every music call
+     to the backend; removing it hands the soundtrack back, resuming where the
+     built-in playlist left off rather than restarting from track one. */
+  function setMusicBackend(b) {
+    if (b === backend) return;
+    backend = b || null;
+    if (backend) {
+      stopInternal();
+      try {
+        backend.setVolume(musicVol);
+        if (musicEnabled && isEnabled) backend.start();
+      } catch (e) { /* a broken backend must not take the audio down */ }
+    } else if (musicEnabled && isEnabled && ctx) {
+      playIndex(musicIndex);
+    }
+  }
+  function musicBackend() { return backend; }
 
   // trackIdx >= 0 -> one of the race loops; trackIdx < 0 -> menu loop.
   // Streams a real CC0 track (lazy-loaded, then cached). No-op before init().
@@ -834,26 +926,43 @@ const GameAudio = (function () {
   function setMusicEnabled(b) {
     musicEnabled = !!b;
     if (!musicEnabled) stopMusic();
-    else if (ctx) startMusic(lastTrackIdx);
+    else if (ctx || backend) startMusic(lastTrackIdx);
   }
 
   function startMusic(trackIdx) {
     const idx = (typeof trackIdx === "number") ? trackIdx : 0;
     lastTrackIdx = idx;
-    if (!ctx || !musicEnabled) return;   // remember the track but stay silent if music is off
+    if (!musicEnabled) return;
+    // Delegated: the backend owns play/pause, and needs no AudioContext.
+    if (backend) { try { backend.start(); } catch (e) {} return; }
+    if (!ctx) return;                    // remember the track but stay silent if music is off
     // The menu and the race share one playlist, so a state change must NOT
     // interrupt it — going to the grid used to restart the track from zero.
     // Whatever is playing keeps playing; we only start something if silent.
     if (musicOn && musicSrc) return;
-    playIndex(idx < 0 ? musicIndex : idx);
+    // ALWAYS RESUME AT THE CURRENT SLOT. trackIdx is the CIRCUIT index at the
+    // race call sites, which was only ever harmless while the playlist was a
+    // fixed three: with uploads in the list, "race at Monza" would have started
+    // playlist entry 4. The index is kept for API compatibility and is no
+    // longer a position in this list.
+    playIndex(musicIndex);
   }
 
-  function stopMusic() {
+  // stopInternal() silences OUR playlist only; stopMusic() is the public one and
+  // also pauses a backend. Keeping them apart is what lets setMusicBackend()
+  // mute the built-in tracks without telling Spotify to pause the moment it
+  // connects.
+  function stopInternal() {
     musicOn = false;
     currentUrl = null;
     musicToken++;                                // cancel any in-flight load
     try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
     musicSrc = null;
+  }
+
+  function stopMusic() {
+    stopInternal();
+    if (backend) { try { backend.stop(); } catch (e) {} }
   }
 
   return {
@@ -885,6 +994,13 @@ const GameAudio = (function () {
     setMusicEnabled,
     skipTrack,
     trackName,
+    tracks,
+    addTracks,
+    removeTrack,
+    playTrackId,
+    currentTrackId,
+    setMusicBackend,
+    musicBackend,
     setSfxVolume,
     setMusicVolume,
     volumes,

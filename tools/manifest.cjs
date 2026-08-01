@@ -87,6 +87,8 @@ const FULL = [
   "js/car/car3d.js",
   "js/game/input.js",
   "js/game/audio.js",
+  "js/game/music-lib.js",
+  "js/game/spotify.js",
   "js/data/api.js",
   "js/data/telemetry.js",
   "js/data/export.js",
