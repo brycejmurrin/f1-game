@@ -3579,12 +3579,17 @@ function render(dt) {
     }
     // Onboard speed vibration: a subtle high-frequency buzz on the rigid-mounted
     // cams (cockpit/hood/tcam) that grows with speed² — the visceral
-    // "the car is alive under you" cue every onboard broadcast has. Two mixed
-    // sine bands (not random) so it reads as vibration, not noise; tiny target
-    // jitter so the whole frame trembles slightly rather than swimming.
-    if (state === "race" && (mode === "cockpit" || mode === "hood" || mode === "tcam")) {
+    // "the car is alive under you" cue. DISABLED on a wet road: it jitters the
+    // eye/target ~10-18 Hz every frame, and the wet-road SSR is a screen-space,
+    // camera-dependent reflection — so the buzz flipped the reflection's
+    // hit/miss pattern each frame and the wet road FLICKERED in patches from
+    // the cockpit. On a dry road there's no such reflection, so the buzz stays
+    // for feel; on a wet road we drop it to keep the reflection stable. Also
+    // fades in with speed so it never jitters a slow/standing car.
+    const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
+    if (state === "race" && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "tcam")) {
       const spV = clamp(player.speed / VMAX, 0, 1);
-      const vAmp = spV * spV * 0.022 + (player.deploying ? 0.008 : 0);
+      const vAmp = (spV * spV * 0.022 + (player.deploying ? 0.008 : 0)) * _buzzWet;
       if (vAmp > 0.001) {
         const tv = performance.now() * 0.001;
         const j1 = Math.sin(tv * 61.0) * 0.6 + Math.sin(tv * 97.0 + 1.7) * 0.4;

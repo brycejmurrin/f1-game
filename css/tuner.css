@@ -29,6 +29,12 @@
      clipping its own footer off the bottom with no way to reach it. */
   overflow-x: hidden; overflow-y: auto;
 }
+/* The rail is a grouping element for ONE layout (the wide-and-short block at
+   the end of this file). Everywhere else it must not exist as a box at all, or
+   it would become the flex item and the panel would size its head/tabs/rows as
+   one block instead of letting #lt-rows be the only thing that gives. */
+#lt-rail { display: contents; }
+
 /* min-height must be a real floor, not 0. Every other child is intrinsically
    sized (flex-shrink can't take a flex item below its content height), so
    #lt-rows was the ONLY item that could give — on a landscape phone the head
@@ -188,6 +194,72 @@
   #camtune-inner .sheet-foot button { padding: 6px 10px; font-size: 12px; }
   #lighting-inner .adv-item, #camtune-inner .adv-item { margin: 5px 0; }
   #lt-json { height: 54px; }
+}
+
+/* ---------- short AND wide: put the chrome in a rail ----------
+   Compacting the head was not enough. Measured on a 852x393 phone the panel is
+   356px tall and its fixed furniture — title 39 + profile 15 + time/weather 52 +
+   help toggle 15 + category chips 39, then a 52px action bar — came to 212px of
+   chrome, 60% of the panel. #lt-rows was left with 104px to show 1402px of
+   sliders, and not one of them fitted in it whole.
+
+   So stack the furniture DOWN THE LEFT instead of across the top, the same
+   split the select and car-setup sheets use, and give the sliders the panel's
+   full height. The panel gets wider to pay for the rail; it is still docked, so
+   the scene it exists to preview keeps the rest of the screen. The category
+   chips become a vertical list here — the horizontal strip above is a
+   short-panel compromise, and this layout has the room to show them all. */
+@media (min-width: 720px) and (max-height: 620px) {
+  #lighting-inner {
+    width: min(70vw, 560px);
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    column-gap: 14px;
+    overflow: hidden;            /* the two columns scroll, never the panel */
+  }
+  /* the furniture stands up as its own column and scrolls if it has to; the
+     action bar is pinned to its foot by the auto margin */
+  #lt-rail {
+    display: flex; flex-direction: column;
+    grid-column: 1; grid-row: 1 / -1;
+    min-height: 0; overflow-y: auto; overscroll-behavior-y: contain;
+  }
+  #lt-rows {
+    grid-column: 2; grid-row: 1;
+    min-height: 0; max-height: none;
+  }
+  #lt-json { grid-column: 2; grid-row: 2; }
+  /* The action bar is the foot of the RAIL, so its height comes out of the
+     rail's column and not out of the slider list beside it. Compact, because
+     every pixel it takes here is a pixel of row 1 — which is the sliders. */
+  #lighting-inner > .sheet-foot {
+    grid-column: 1; grid-row: 2;
+    flex-wrap: wrap; margin-top: 0;
+    gap: 5px; padding: 6px 0 0;
+  }
+  #lighting-inner > .sheet-foot button {
+    flex: 1 1 84px; margin: 0;
+    padding: 5px 6px; font-size: 11px; min-height: 0;
+  }
+  /* chips wrap as a block in the rail rather than the short-panel scroll strip */
+  #lighting-inner .lt-tabs {
+    flex-wrap: wrap; overflow: visible; touch-action: auto;
+    margin: 2px 0 4px; padding: 0;
+    background: none; border-bottom: none;
+  }
+  #lighting-inner #lt-tabs .lt-tab { flex: 1 1 auto; justify-content: center; }
+  /* Title on its own line: at 210px it was wrapping around the FREE CAMERA
+     button and costing the rail a whole extra line. */
+  #lt-head { flex-direction: column; align-items: stretch; gap: 4px; }
+  #lt-head h2 { font-size: 15px; }
+  /* Chips size to their content instead of splitting the row evenly. With
+     `flex: 1 1 0` the fifth option (TRACK / CLOUD) wrapped alone onto line two
+     and stretched the full width of the rail, which read as a different kind of
+     control rather than one more chip. */
+  #lighting-inner .lt-preview-row { justify-content: flex-start; }
+  #lighting-inner .lt-preview-row .opt-btn { flex: 0 1 auto; min-width: 38px; }
+  #lighting-inner .lt-preview-lbl { width: 100%; }
 }
 /* advanced disclosure */
 .adv-more-btn { width: 100%; margin: 14px 0 2px; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85; }

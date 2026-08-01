@@ -1170,6 +1170,17 @@ the whole `__apex` toolkit** — see `agentHelp()`, whose `read` section names t
 raw hooks that already return JSON (`physState`, `lightState`, `timing`, …) and
 whose `control` section names the drive/stage verbs.
 
+### `render({what, ...})` — and its four aliases `frame`/`plan`/`worldModel`/`carView(render)`
+
+`render({what})` is the **one** entry point for every raster; `what` selects
+`"view"` (the camera, → `frame` below), `"map"` (top-down, → `plan`), `"circuit"`
+(the whole track as a document, → `worldModel`) or `"car"` (measured elevations).
+Every raster is flagged `aid: "APPROXIMATE…"` — the evidence is that dense
+character grids read *worse* for an LLM than the structured numbers they are
+drawn from, so this is a composition aid for looking at, not a surface to read
+geometry off. The four named calls remain as deprecated aliases. The rest of
+this section documents the underlying raster via `frame`.
+
 ### `frame({cols, rows, camera, orbit, edges, depth, rangeM, cellAspect, limit}?) → render | typedError`
 
 **The screenshot replacement.** `visible()` lists what is on screen; this shows
@@ -1361,6 +1372,12 @@ Static for the session (or the car). Fetch once and keep it.
 
 Static per-track data — **fetch once per session, never per tick**.
 `what`: `"corners"` (default) · `"sectors"` · `"profile"` · `"all"`.
+
+The `track` block grounds the circuit in the real world: `gp` (the Grand Prix
+this is), `realLengthKm` and `lengthErrorPct` — the built geometry vs the actual
+circuit (Monza builds 5777.2 m against a real 5.79 km, `-0.4%`), so an agent can
+sanity-check its own world against the track it claims to be — plus `startFrac`
+and `reverse`.
 
 ```js
 __apex.trackInfo({ what: "corners" }).corners
@@ -1636,8 +1653,16 @@ conflates the last two, so an agent cannot tell "my policy spun the car" from
 
 ### `agentHelp() → manifest`
 
-~200 tokens naming the surface, the staging sequence and the loop, so an agent
-can find its way without loading this file. `node tools/agent.mjs help`.
+Names the surface, the staging sequence and the loop, so an agent can find its
+way without loading this file. `node tools/agent.mjs help`. Sections:
+`perceive`/`know`/`act` (the calls, grouped by the question they answer),
+`fields` (a **glossary** mapping the identifiers in a payload to *what to do
+about them* — `"ego.headingErrDeg": "+ = nose right of the road; steer the
+opposite sign to null it"`; the highest-value part), `read` (the raw `__apex`
+hooks that already return JSON, call them directly), `control` (the drive/stage
+verbs), `model` (static-vs-dynamic and decide-vs-show notes). Read once; it is
+under 5.6 KB and asserted so. What the *game* is — as opposed to the API — is
+`objective()`.
 
 ### From a shell — `tools/agent.mjs`
 
@@ -1649,13 +1674,16 @@ this does the staging correctly once.
 
 ```sh
 node tools/agent.mjs help                                  # the manifest
+node tools/agent.mjs monza  objective                      # what the game IS
 node tools/agent.mjs monza  world   --detail brief --at 0.25 --speed 70
-node tools/agent.mjs monza  frame   --cols 72 --rows 20    # prints the raster
+node tools/agent.mjs monza  field   --detail full          # the grid / standings
+node tools/agent.mjs monza  atmosphere                     # the light as text
+node tools/agent.mjs monza  render  --what view --cols 72  # the ONE raster aid
 node tools/agent.mjs monza  scene   --radius 120 --kinds tree,building --limit 8
-node tools/agent.mjs spa    visible --limit 6
+node tools/agent.mjs monza  describe --id corner:T3        # one thing in full
+node tools/agent.mjs monza  query   --kind pine --near 80  # a bounded slice
 node tools/agent.mjs monaco track   --what corners
-node tools/agent.mjs suzuka model   --detail sections
-node tools/agent.mjs vegas  model   --detail full --out artifacts/tmp/vegas.json
+node tools/agent.mjs vegas  model   --detail sections
 node tools/agent.mjs monza  car     --team ferrari --detail parts
 node tools/agent.mjs vegas  survey  --at 32 --reach 80
 node tools/agent.mjs monza  rollout --seconds 6 --steer 0.1 --throttle
