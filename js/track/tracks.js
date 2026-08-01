@@ -652,6 +652,22 @@ const Tracks = (function () {
       if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; }
       RAW.addMountain(o, c, baseR, h, opts); absorbUp(c, baseR, h); return true;
     };
+    // ---------- scene graph ----------
+    // The model library + node list for this build (js/track/graph.js). A
+    // migrated helper calls instance() instead of emitting primitives inline:
+    // the model's ops are recorded ONCE in canonical space, then replayed here
+    // through the guarded emitters above. Same guards, same geometry — but the
+    // build now also leaves behind a description of WHAT stands WHERE, which is
+    // what an instanced renderer and the agent view both want and neither can
+    // recover from fused triangles.
+    const graph = TrackGraph.create({ raw: RAW });
+    track.graph = graph;
+    const GUARDED = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid };
+    // instance(key, place, build, meta) — returns the number of primitives that
+    // survived the guards (0 = wholly suppressed, so the caller skips its note()).
+    const instance = (key, place, build, meta) =>
+      graph.instance(key, place, build, meta, GUARDED, out);
+
     // Per-segment driving boundary (lateral limit from the centreline on each
     // side). Initialised to the default runoff, then TIGHTENED wherever a solid
     // barrier (wall/guardrail/tyre wall/grandstand) is actually placed, so the car
@@ -1387,6 +1403,11 @@ const Tracks = (function () {
       // guarded emitters + the raw escape hatch
       addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, addMountain,
       emit, RAW, rejBox, rejRad,
+      // scene graph: model library + one node per placement. `instance()` is the
+      // migrated-emitter entry point — it defines a canonical model once and
+      // replays it through the GUARDED emitters above, so a migrated helper
+      // keeps the same suppression behaviour as its hand-written form.
+      graph, instance,
       // guard / grounding / boundary core
       markBarrier, blockAt, recordBarrier, indexBarrier, clearTreeDist,
       indexSolid, indexSolidAt, barrierClear, massBlocked, massAdd, bankOffsetAt,

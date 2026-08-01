@@ -72,6 +72,7 @@ const FULL = [
   "js/track/space.js",
   "js/track/surface.js",
   "js/track/models.js",
+  "js/track/graph.js",
   "js/track/themes.js",
   "js/track/landmark-kit.js",
   "js/track/circuit-kit.js",
@@ -125,6 +126,7 @@ const FULL = [
   "js/game/results.js",
   "js/game/debrisworld.js",
   "js/game/incidentsim.js",
+  "js/game/agentview-raster.js",
   "js/game/agentview.js",
   "js/game/apex.js",
   "js/game.js",
@@ -170,6 +172,7 @@ const TRACK_VM = [
   "js/track/space.js",
   "js/track/surface.js",
   "js/track/models.js",
+  "js/track/graph.js",
   "js/track/themes.js",
   "js/track/landmark-kit.js",
   "js/track/circuit-kit.js",
@@ -185,6 +188,9 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  // agentview.js destructures AgentRaster.create(ctx) at create() time, so
+  // the raster module must have evaluated first.
+  ["js/game/agentview-raster.js", "js/game/agentview.js"],
   ["js/mat4.js", "js/render/glx.js"],                       // glx uses M4 at init
   // chunks.js before every shader file (lit/sky/post interpolate GLXChunks at
   // eval; fx.js is chunk-free today but keeps the uniform ordering contract).
@@ -224,6 +230,7 @@ const HARD_EDGES = [
   ["js/track/geom.js", "js/track/mesh.js"],                 // mesh destructures TrackGeom at eval
   ["js/track/spline.js", "js/track/mesh.js"],               // mesh destructures TrackSpline at eval
   ["js/track/mesh.js", "js/track/tracks.js"],               // tracks destructures TrackMesh at eval
+  ["js/track/graph.js", "js/track/tracks.js"],               // buildProps calls TrackGraph.create at build
   ["js/track/scenery-nature.js", "js/track/tracks.js"],     // buildProps calls Scenery*.create (build time, keep ordered)
   ["js/track/scenery-structures.js", "js/track/tracks.js"],
   ["js/track/scenery-city.js", "js/track/tracks.js"],

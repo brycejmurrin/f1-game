@@ -161,6 +161,18 @@ js/track/        — track ENGINE (shared code) —
   spline.js      TrackSpline    Catmull-Rom sampling / curvature
   mesh.js        TrackMesh      road/terrain mesh extrusion
   geom.js        TrackGeom      pure geometry emitters (addBox/emit/addCyl/…) + MAT ids
+  graph.js       TrackGraph     scenery MODEL LIBRARY + NODE GRAPH. A model is a list
+                                  of primitive OPS in canonical space (origin, identity
+                                  basis); each placement is a node {model, o, r,u,t, s?}.
+                                  Migrated emitters call ctx.instance(key, place, build,
+                                  meta) instead of emitting inline — replay runs through
+                                  the same GUARDED emitters, so geometry and on-track
+                                  suppression are unchanged. Gate any migration with
+                                  `node tools/graph-parity.cjs --all` (builds each track
+                                  from a baseline ref AND the working tree and diffs the
+                                  prop geometry vertex for vertex). `graph.stats().byKind`
+                                  reports per-emitter instancing reuse.
+                                  See docs/research/SCENE-GRAPH-PLAN.md.
   space.js       TrackSpace     world↔track (Frenet) projection
   surface.js     TrackSurface   road surface build / tarmac-verge tinting
   markings.js    CircuitMarkings  curated FIA sector splits + turn apexes
@@ -228,12 +240,15 @@ js/game/         — game modules (each created with the G ctx façade from game
   results.js     GameResults    results / season-end screens
   apex.js        ApexApi        the whole window.__apex dev API
   agentview.js   AgentView      the agent-facing JSON world view — world()/
-                                  trackInfo()/scene()/visible()/worldModel()/
-                                  frame()/plan()/carView()/survey()/rollout()/
+                                  field()/trackInfo()/scene()/describe()/query()/
+                                  atmosphere()/objective()/carView()/render()/
+                                  survey()/rollout()/terminal()/corners()/
                                   agentHelp(); composes the __apex hooks
                                   into one egocentric snapshot with typed errors.
-                                  worldModel() renders the whole circuit as text by
-                                  clustering repeated dressing into features
+                                  render({what}) is the ONE raster (view|map|
+                                  circuit|car); visible()/worldModel()/frame()/
+                                  plan() still exist as DEPRECATED aliases —
+                                  prefer render({what}) and scene({visible})
                                   (docs/AGENT-WORLD-API.md)
   atmosphere.js  Atmosphere     applyRaceSettings — time-of-day/weather scene state
   setup-ui.js    SetupUI        CAR SETUP screen
@@ -490,7 +505,12 @@ __apex.obs()                  // full debug observation (pos, slip, clearances, 
 __apex.act({steer,throttle,brake}, dt, n) // set input + step n ticks → obs (1 round-trip)
 __apex.reset(frac, speed, x)  // fast episode reset without reloading assets → obs
 // ── Agent world view (js/game/agentview.js) — never returns null; failures are
-//    {ok:false, error, message, fix}. See docs/AGENT-WORLD-API.md ──
+//    {ok:false, error, message, fix}. Two exceptions to know: scene() on a
+//    street circuit whose props are still building returns a SUCCESSFUL empty
+//    list (not an error), and visible()/render({what:"view"}) reuse the last
+//    RENDERED frame — stage and let frames draw before trusting either.
+//    seed() below lives in apex.js, not agentview.js, and just returns a
+//    number. See docs/AGENT-WORLD-API.md ──
 __apex.agentHelp()            // manifest of this surface (~200 tokens)
 __apex.objective()            // what the GAME is: win condition, trade-offs,
                               //   constraints. Static; does NOT describe car
@@ -501,21 +521,26 @@ __apex.seed(42)               // get/set the SIM seed; same seed + same inputs
 __apex.world({detail:"brief"})// egocentric snapshot; brief|drive|full; since= → delta
 __apex.trackInfo({what:"corners"}) // STATIC per-track: corners/sectors/profile
 __apex.scene({radius:120})    // NAMED scenery nearby (trees, buildings, stands…)
-__apex.worldModel({detail:"sections"}) // the WHOLE circuit as one document:
-                              //   clustered features + landmarks + barrier spans
-                              //   + a corner-by-corner walk; "full" = raw objects
-__apex.visible()              // what is on screen (needs a rendered frame)
-__apex.frame({cols:56,rows:16}) // the VIEW AS TEXT — depth-sorted raster;
-                              //   {camera:"cockpit"} any of 13 modes, {edges:true}
-                              //   silhouette lines, {depth:true} depth channel
-__apex.plan({radiusM:200})    // top-down MAP, car-up, with a metric index
-                              //   (corners/landmarks/cars carry cell+world coords)
+__apex.field({detail:"brief"})// THE GRID — race order, gap-to-leader, interval
+__apex.atmosphere()           // the light as text — day/night, sun/moon, fog, wet
+__apex.describe("prop:12")    // EVERYTHING about one entity — also corner:T3,
+                              //   car:4, span:2; ids come back from scene()/
+                              //   query()/trackInfo()/field()
+__apex.query({kind:"pine", near:150})  // a BOUNDED slice; returns prototype +
+                              //   instances so repeated dressing costs one shape
+                              //   plus a position each. Narrow, don't raise limit
+__apex.render({what:"view"})  // the ONE raster — view|map|circuit|car. APPROXIMATE,
+                              //   for intuition, not measurement. {cols,ss,camera}
+                              //   (replaces frame()/plan()/worldModel()/visible(),
+                              //   which remain as deprecated aliases)
 __apex.carView({team:"ferrari", detail:"render"}) // the car as JSON + edge+shade
                               //   text elevations (side/top/front) from the real
                               //   mesh; detail:"parts" = per-part measured boxes
-__apex.survey()               // geometry DEFECTS: floating/buried props, props
+__apex.survey({stations:24})  // geometry DEFECTS: floating/buried props, props
                               //   over the racing line, terrain through the road,
-                              //   holes and cliffs in the ground ribbon
+                              //   holes and cliffs in the ground ribbon. ALWAYS
+                              //   scans the whole lap — `stations` is a sample
+                              //   COUNT, not a position; it cannot be aimed
 __apex.rollout({seconds:5, policy})  // drive an interval → digest, not frames
 __apex.terminal()             // {done, reason} — finished|wrong_way|rescued
 ```
