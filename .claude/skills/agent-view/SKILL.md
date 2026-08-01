@@ -71,9 +71,15 @@ Read both once; do not re-fetch per tick.
   list. Rows land in `props` (plus `lamps`); `counts.inRadius` is how many were in
   range and `truncated` flags that `limit` clipped the list — check it before
   concluding something isn't there. A row's `side` is
-  EGOCENTRIC (which side of your nose, from `bearingDeg`); its `trackSide` is the
-  CENTRELINE side — the one `worldModel()`/`describe()` report — so cross-reference
-  the same prop between tools by `trackSide`, not `side`.
+  EGOCENTRIC (which side of your nose, from `bearingDeg`, **+ = your right**);
+  its `trackSide` is the CENTRELINE side — the one `worldModel()`/`describe()`
+  report — so cross-reference the same prop between tools by `trackSide`, not
+  `side`. The two agree when you are on the centreline pointing down the road
+  and legitimately diverge when you are not: a prop can be left of the road's
+  middle and still right of *your nose*. If they disagree everywhere, including
+  where you are centred and straight, something is wrong — that was a real sign
+  bug, caught by parking a rival at a known offset and looking at which half of
+  the screen it rendered on.
 - `atmosphere()` — the light as prose: day/night, sun/moon, floodlights, fog
   visibility, wet road.
 

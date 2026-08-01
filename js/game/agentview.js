@@ -165,6 +165,19 @@ const AgentView = (function () {
       return d;
     }
 
+    // Bearing to a world point in degrees, POSITIVE TO YOUR RIGHT — which is
+    // what the payload note and every `side` mapping downstream promise.
+    //
+    // The bare angDiff(atan2(dx,dz), head) is positive to the LEFT: this world
+    // is Y-up right-handed, so the track's right vector sits at head-90°, not
+    // head+90°. Confirmed against pixels rather than algebra — a rival parked at
+    // lateralM +6 renders on the RIGHT of the cockpit view, while the unnegated
+    // bearing called it negative, and bearing disagreed with lateralM on 15 of
+    // 15 props ahead of a car sitting exactly on the centreline. Both cannot be
+    // right, and an inverted bearing silently steers an agent the wrong way.
+    const bearingDegTo = (dx, dz, head) =>
+      r1(-angDiff(Math.atan2(dx, dz), head) * 180 / Math.PI);
+
     function smoothK(s, w) {
       const W = w || SMOOTH_W;
       return angDiff(headingAt(s + W), headingAt(s - W)) / (2 * W);
@@ -1604,7 +1617,7 @@ const AgentView = (function () {
         if (G.player && G.player.px != null) {
           const dx = p.x - G.player.px, dz = p.z - G.player.pz;
           out.distM = r1(Math.hypot(dx, dz));
-          out.bearingDeg = r1(angDiff(Math.atan2(dx, dz), G.player.head) * 180 / Math.PI);
+          out.bearingDeg = bearingDegTo(dx, dz, G.player.head);
         }
         // Which corner it stands by — the anchor a driver would actually use.
         const cs = corners();
@@ -1663,7 +1676,7 @@ const AgentView = (function () {
       if (sun) {
         elevDeg = r1(Math.asin(clamp(sun[1], -1, 1)) * 180 / Math.PI);
         if (G.player && G.player.px != null) {
-          const b = angDiff(Math.atan2(sun[0], sun[2]), G.player.head) * 180 / Math.PI;
+          const b = bearingDegTo(sun[0], sun[2], G.player.head);
           relBearingDeg = r1(b);
           const a = Math.abs(b);
           where = elevDeg < 0 ? "below the horizon"
@@ -1784,7 +1797,7 @@ const AgentView = (function () {
         const d = Math.hypot(dx, dz);
         if (nearM != null && d > nearM) continue;
         hits.push({ i, p, pos, d,
-                    bearingDeg: r1(angDiff(Math.atan2(dx, dz), head) * 180 / Math.PI) });
+                    bearingDeg: bearingDegTo(dx, dz, head) });
       }
       hits.sort((a, b) => (nearM != null ? a.d - b.d : a.pos.s - b.pos.s));
       const total_ = hits.length;
@@ -2409,8 +2422,8 @@ const AgentView = (function () {
       }
       const rel = (x, z) => {
         const d = Math.hypot(x - ox, z - oz);
-        const b = angDiff(Math.atan2(x - ox, z - oz), head) * 180 / Math.PI;
-        return { distM: r1(d), bearingDeg: r1(b) };
+        const b = bearingDegTo(x - ox, z - oz, head);
+        return { distM: r1(d), bearingDeg: b };
       };
 
       const byKind = {};
@@ -2546,8 +2559,7 @@ const AgentView = (function () {
       const fl = Math.hypot(fwd[0], fwd[2]) || 1;
       const bearingTo = (wx, wz) => {
         const a = Math.atan2(fwd[0] / fl, fwd[2] / fl);
-        const b = Math.atan2(wx - eye[0], wz - eye[2]);
-        return r1(angDiff(b, a) * 180 / Math.PI);
+        return bearingDegTo(wx - eye[0], wz - eye[2], a);
       };
       const distTo = (wx, wz) => r1(Math.hypot(wx - eye[0], wz - eye[2]));
 
