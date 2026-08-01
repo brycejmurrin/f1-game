@@ -23,7 +23,6 @@ const DataTelemetry = (function () {
     return t ? t.color : [0.6, 0.6, 0.6];
   }
 
-  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
   // Dot/trace colours for the two drivers on the map. Team-mates share a team
   // colour, so if the two picks are near-identical the compare one is lightened
   // toward white to stay tellable-apart.
@@ -642,33 +641,6 @@ const DataTelemetry = (function () {
     return c;
   }
 
-  // cumulative distance (m) along the lap, sampled at each car-data time, so we
-  // can compute a real position-based time delta between two laps.
-  function cumDist(car) {
-    const t = [], d = [];
-    let acc = 0;
-    for (let i = 0; i < car.length; i++) {
-      if (i > 0) {
-        const dt = car[i].t - car[i - 1].t;
-        const v = (car[i].speed || 0) / 3.6;   // km/h -> m/s
-        acc += v * dt;
-      }
-      t.push(car[i].t); d.push(acc);
-    }
-    return { t: t, d: d };
-  }
-  function interp(xs, ys, x) {
-    if (!xs.length) return 0;
-    if (x <= xs[0]) return ys[0];
-    if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
-    let lo = 0, hi = xs.length - 1;
-    while (lo < hi) { const m = (lo + hi) >> 1; if (xs[m] < x) lo = m + 1; else hi = m; }
-    const x0 = xs[lo - 1], x1 = xs[lo], f = (x - x0) / ((x1 - x0) || 1);
-    return ys[lo - 1] + (ys[lo] - ys[lo - 1]) * f;
-  }
-  function distAtT(cum, t) { return interp(cum.t, cum.d, t); }
-  function timeAtDist(cum, dist) { return interp(cum.d, cum.t, dist); }
-
   function buildTransport(view) {
     const bar = el("div", "dh-transport");
     const play = el("button", "dh-tbtn dh-tplay", "▶ PLAY");
@@ -835,92 +807,6 @@ const DataTelemetry = (function () {
     view.playing = false;
     if (view._raf) { cancelAnimationFrame(view._raf); view._raf = 0; }
     setPlayLabel(view);
-  }
-
-  // nearest location sample to lap time t (matched on car-data timestamp)
-  // Point between two samples. GPS arrives at ~4 Hz but the player runs on a
-  // rAF clock, so anything that SNAPS to a sample steps ~15 times a second
-  // instead of moving.
-  function lerpLoc(a, b, f) {
-    if (!b) return a;
-    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
-  }
-  // The exact wall-clock date for lap-time t, interpolated across car samples —
-  // the bridge between the chart's lap-relative clock and the GPS trace's
-  // absolute one. Snapping to the nearest car sample here was the first of the
-  // two quantisations that made the dots judder.
-  function dateAtT(car, t) {
-    if (!car || !car.length) return null;
-    const n = car.length;
-    if (t <= car[0].t) return +car[0].date;
-    if (t >= car[n - 1].t) return +car[n - 1].date;
-    let lo = 0, hi = n - 1;
-    while (lo < hi - 1) {
-      const mid = (lo + hi) >> 1;
-      if (car[mid].t <= t) lo = mid; else hi = mid;
-    }
-    const span = car[hi].t - car[lo].t;
-    const f = span > 0 ? (t - car[lo].t) / span : 0;
-    return +car[lo].date + f * (+car[hi].date - +car[lo].date);
-  }
-  // inverse of dateAtT: lap-time for a wall-clock date
-  function tAtDate(car, date) {
-    if (!car || !car.length) return 0;
-    const n = car.length;
-    if (date <= +car[0].date) return car[0].t;
-    if (date >= +car[n - 1].date) return car[n - 1].t;
-    let lo = 0, hi = n - 1;
-    while (lo < hi - 1) {
-      const mid = (lo + hi) >> 1;
-      if (+car[mid].date <= date) lo = mid; else hi = mid;
-    }
-    const span = +car[hi].date - +car[lo].date;
-    const f = span > 0 ? (date - +car[lo].date) / span : 0;
-    return car[lo].t + f * (car[hi].t - car[lo].t);
-  }
-
-  function locAt(view, tel, t) {
-    const own = !!(tel.loc && tel.loc.length);
-    const loc = own ? tel.loc : (view.primary.loc || []);
-    if (!loc.length) return null;
-    if (!own) {
-      // This driver has no GPS of their own, so they ride the primary's path.
-      // Place them by how far through their OWN lap they are — matching on the
-      // absolute timestamp (as this used to) looks a different lap's clock up in
-      // this array, lands at whichever end is nearest in time, and parks the dot
-      // there for the whole replay.
-      const f = clamp(t / (view.tMax || 1), 0, 1) * (loc.length - 1);
-      const i = Math.floor(f);
-      return lerpLoc(loc[i], loc[i + 1], f - i);
-    }
-    const target = dateAtT(tel.car, t);
-    if (target === null) return loc[0];
-    const n = loc.length;
-    if (target <= +loc[0].date) return loc[0];
-    if (target >= +loc[n - 1].date) return loc[n - 1];
-    // bracketing GPS samples, then interpolate between them: continuous motion
-    // at the rAF clock instead of a ~4 Hz staircase
-    let lo = 0, hi = n - 1;
-    while (lo < hi - 1) {
-      const mid = (lo + hi) >> 1;
-      if (+loc[mid].date <= target) lo = mid; else hi = mid;
-    }
-    const span = +loc[hi].date - +loc[lo].date;
-    let f = span > 0 ? (target - +loc[lo].date) / span : 0;
-    // WHERE BETWEEN THE TWO FIXES? The fixes themselves are ground truth — the
-    // car really was there, at those instants — so the dot stays anchored to
-    // them and never drifts. What is NOT true is that it crossed the ~20m gap at
-    // a constant rate: braking from 300 into a hairpin it covers most of that
-    // gap in the first third of the interval. So take the fraction from the
-    // car's own DISTANCE TRAVELLED (its speed trace integrated, the same series
-    // the delta chart runs on) rather than from elapsed time.
-    const cum = tel._cum || (tel._cum = cumDist(tel.car || []));
-    if (cum.t.length > 1) {
-      const dA = distAtT(cum, tAtDate(tel.car, +loc[lo].date));
-      const dB = distAtT(cum, tAtDate(tel.car, +loc[hi].date));
-      if (dB > dA) f = clamp((distAtT(cum, t) - dA) / (dB - dA), 0, 1);
-    }
-    return lerpLoc(loc[lo], loc[hi], f);
   }
 
   // composite one frame: cached bases + moving cursor, car dots, delta, gauges
@@ -1309,6 +1195,132 @@ const DataTelemetry = (function () {
     return { loadTelemetry, closeTelemPopup };
   }
 
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+
+  // ---- playback position: lap clock -> point on the GPS trace ----------
+  // Pure functions of a driver's own sample arrays, so they live at module
+  // scope (and are exported below for tests/telemetry-trace.test.mjs).
+  // cumulative distance (m) along the lap, sampled at each car-data time, so we
+  // can compute a real position-based time delta between two laps.
+  function cumDist(car) {
+    const t = [], d = [];
+    let acc = 0;
+    for (let i = 0; i < car.length; i++) {
+      if (i > 0) {
+        const dt = car[i].t - car[i - 1].t;
+        const v = (car[i].speed || 0) / 3.6;   // km/h -> m/s
+        acc += v * dt;
+      }
+      t.push(car[i].t); d.push(acc);
+    }
+    return { t: t, d: d };
+  }
+  function interp(xs, ys, x) {
+    if (!xs.length) return 0;
+    if (x <= xs[0]) return ys[0];
+    if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
+    let lo = 0, hi = xs.length - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (xs[m] < x) lo = m + 1; else hi = m; }
+    const x0 = xs[lo - 1], x1 = xs[lo], f = (x - x0) / ((x1 - x0) || 1);
+    return ys[lo - 1] + (ys[lo] - ys[lo - 1]) * f;
+  }
+  function distAtT(cum, t) { return interp(cum.t, cum.d, t); }
+  function timeAtDist(cum, dist) { return interp(cum.d, cum.t, dist); }
+
+  // nearest location sample to lap time t (matched on car-data timestamp)
+  // Point between two samples. GPS arrives at ~4 Hz but the player runs on a
+  // rAF clock, so anything that SNAPS to a sample steps ~15 times a second
+  // instead of moving.
+  function lerpLoc(a, b, f) {
+    if (!b) return a;
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+  }
+  // The exact wall-clock date for lap-time t, interpolated across car samples —
+  // the bridge between the chart's lap-relative clock and the GPS trace's
+  // absolute one. Snapping to the nearest car sample here was the first of the
+  // two quantisations that made the dots judder.
+  function dateAtT(car, t) {
+    if (!car || !car.length) return null;
+    const n = car.length;
+    if (t <= car[0].t) return +car[0].date;
+    if (t >= car[n - 1].t) return +car[n - 1].date;
+    let lo = 0, hi = n - 1;
+    while (lo < hi - 1) {
+      const mid = (lo + hi) >> 1;
+      if (car[mid].t <= t) lo = mid; else hi = mid;
+    }
+    const span = car[hi].t - car[lo].t;
+    const f = span > 0 ? (t - car[lo].t) / span : 0;
+    return +car[lo].date + f * (+car[hi].date - +car[lo].date);
+  }
+  // inverse of dateAtT: lap-time for a wall-clock date
+  function tAtDate(car, date) {
+    if (!car || !car.length) return 0;
+    const n = car.length;
+    if (date <= +car[0].date) return car[0].t;
+    if (date >= +car[n - 1].date) return car[n - 1].t;
+    let lo = 0, hi = n - 1;
+    while (lo < hi - 1) {
+      const mid = (lo + hi) >> 1;
+      if (+car[mid].date <= date) lo = mid; else hi = mid;
+    }
+    const span = +car[hi].date - +car[lo].date;
+    const f = span > 0 ? (date - +car[lo].date) / span : 0;
+    return car[lo].t + f * (car[hi].t - car[lo].t);
+  }
+
+  function locAt(view, tel, t) {
+    const own = !!(tel.loc && tel.loc.length);
+    const loc = own ? tel.loc : (view.primary.loc || []);
+    if (!loc.length) return null;
+    if (!own) {
+      // This driver has no GPS of their own, so they ride the primary's path.
+      // Place them by how far through their OWN lap they are — matching on the
+      // absolute timestamp (as this used to) looks a different lap's clock up in
+      // this array, lands at whichever end is nearest in time, and parks the dot
+      // there for the whole replay.
+      //
+      // "Their own lap" means their OWN duration, not view.tMax. tMax is the
+      // longer of the two laps on screen, so scaling by it made a faster driver
+      // cover only ownLap/tMax of the circuit in the time they actually drove
+      // all of it — a dot permanently short of where the driver was, still shy
+      // of the line when their lap had already ended (4.71 of 2pi rad for a 60 s
+      // lap shown against an 80 s one).
+      const ownMax = (tel.car && tel.car.length) ? tel.car[tel.car.length - 1].t : 0;
+      const f = clamp(t / (ownMax || view.tMax || 1), 0, 1) * (loc.length - 1);
+      const i = Math.floor(f);
+      return lerpLoc(loc[i], loc[i + 1], f - i);
+    }
+    const target = dateAtT(tel.car, t);
+    if (target === null) return loc[0];
+    const n = loc.length;
+    if (target <= +loc[0].date) return loc[0];
+    if (target >= +loc[n - 1].date) return loc[n - 1];
+    // bracketing GPS samples, then interpolate between them: continuous motion
+    // at the rAF clock instead of a ~4 Hz staircase
+    let lo = 0, hi = n - 1;
+    while (lo < hi - 1) {
+      const mid = (lo + hi) >> 1;
+      if (+loc[mid].date <= target) lo = mid; else hi = mid;
+    }
+    const span = +loc[hi].date - +loc[lo].date;
+    let f = span > 0 ? (target - +loc[lo].date) / span : 0;
+    // WHERE BETWEEN THE TWO FIXES? The fixes themselves are ground truth — the
+    // car really was there, at those instants — so the dot stays anchored to
+    // them and never drifts. What is NOT true is that it crossed the ~20m gap at
+    // a constant rate: braking from 300 into a hairpin it covers most of that
+    // gap in the first third of the interval. So take the fraction from the
+    // car's own DISTANCE TRAVELLED (its speed trace integrated, the same series
+    // the delta chart runs on) rather than from elapsed time.
+    const cum = tel._cum || (tel._cum = cumDist(tel.car || []));
+    if (cum.t.length > 1) {
+      const dA = distAtT(cum, tAtDate(tel.car, +loc[lo].date));
+      const dB = distAtT(cum, tAtDate(tel.car, +loc[hi].date));
+      if (dB > dA) f = clamp((distAtT(cum, t) - dA) / (dB - dA), 0, 1);
+    }
+    return lerpLoc(loc[lo], loc[hi], f);
+  }
+
   // ---- GPS sanity: strays, bounds, and gaps -------------------------------
   // Everything the map draws is fitted to the samples, so a single bad sample
   // is not a local blemish — it rescales and re-centres the whole circuit, and
@@ -1381,5 +1393,5 @@ const DataTelemetry = (function () {
   // bugs these fix (a stray sample rescaling the whole map, a coverage gap
   // drawn as a straight) are exactly what wants asserting without one.
   return { create, _dropStrays: dropStrays, _locBounds: locBounds,
-           _gapLimitMs: gapLimitMs, _isGap: isGap };
+           _gapLimitMs: gapLimitMs, _isGap: isGap, _locAt: locAt, _cumDist: cumDist };
 })();

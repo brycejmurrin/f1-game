@@ -105,3 +105,89 @@ test("F1API.locationData drops origin rows and unparseable timestamps", async ()
   assert.deepEqual(out.map((p) => p.x), [3000, 3200]);
   assert.ok(out.every((p) => isFinite(p.date)));
 });
+
+// ---------------------------------------------------------------------------
+// The moving dot. It is placed by locAt(view, tel, t): the lap clock -> that
+// driver's own car-data timestamp -> a point interpolated between the two GPS
+// fixes that bracket it. What has to hold is that it goes ROUND: forwards, once,
+// all the way, at the lap's real pace — and that in comparison mode each dot
+// runs on its OWN lap, not on the other driver's.
+// ---------------------------------------------------------------------------
+
+// A driver: a circular lap of `dur` seconds, GPS at ~3.7 Hz, car data at 10 Hz,
+// constant speed. `phase` offsets where on the circle they start.
+function driver(dur = 80, r = 1600, speedKmh = 200) {
+  const t0 = 1e12;
+  const loc = [], car = [];
+  for (let i = 0; i * 0.27 <= dur; i++) {
+    const t = i * 0.27, a = (t / dur) * 2 * Math.PI;
+    loc.push({ x: 3000 + r * Math.cos(a), y: 4000 + r * Math.sin(a), date: t0 + t * 1000 });
+  }
+  for (let i = 0; i * 0.1 <= dur; i++) {
+    const t = i * 0.1;
+    car.push({ t, date: t0 + t * 1000, speed: speedKmh });
+  }
+  return { loc, car };
+}
+const angleOf = (p) => Math.atan2(p.y - 4000, p.x - 3000);
+// total signed angle swept by the dot over the playback, and the largest single
+// step — one full forward lap is +2π with no big jumps
+function sweep(view, tel, tEnd, steps = 600) {
+  let prev = angleOf(T._locAt(view, tel, 0)), total = 0, maxStep = 0;
+  for (let i = 1; i <= steps; i++) {
+    const p = T._locAt(view, tel, (i / steps) * tEnd);
+    let d = angleOf(p) - prev;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    total += d; maxStep = Math.max(maxStep, Math.abs(d));
+    prev = angleOf(p);
+  }
+  return { total, maxStep };
+}
+
+test("the dot completes exactly one forward lap over the lap's duration", () => {
+  const p = driver(80);
+  const view = { primary: p, tMax: 80, compare: null };
+  const s = sweep(view, p, 80);
+  assert.ok(Math.abs(s.total - 2 * Math.PI) < 0.05, `swept ${s.total.toFixed(3)} rad, want 2pi`);
+  assert.ok(s.maxStep < 0.1, `dot jumped ${s.maxStep.toFixed(3)} rad in one frame`);
+});
+
+test("the dot tracks the lap clock in real time, not just at the ends", () => {
+  const p = driver(80);
+  const view = { primary: p, tMax: 80, compare: null };
+  // at a constant 200 km/h the dot must be a quarter of the way round at t/4
+  for (const f of [0.25, 0.5, 0.75]) {
+    const a = angleOf(T._locAt(view, p, 80 * f));
+    const want = f * 2 * Math.PI;
+    const err = Math.abs(((a + 2 * Math.PI) % (2 * Math.PI)) - want);
+    assert.ok(err < 0.06, `at ${f * 100}% of the lap the dot was ${err.toFixed(3)} rad out`);
+  }
+});
+
+test("comparison mode: each dot runs on its OWN lap length", () => {
+  // The compare driver is 4 s faster. The shared playback clock runs to the
+  // SLOWER lap, so at t = 76 the compare has finished and the primary has not.
+  const slow = driver(80), fast = driver(76);
+  const view = { primary: slow, tMax: 80, compare: fast };
+  const sSlow = sweep(view, slow, 80), sFast = sweep(view, fast, 80);
+  assert.ok(Math.abs(sSlow.total - 2 * Math.PI) < 0.05, "primary lap incomplete");
+  assert.ok(Math.abs(sFast.total - 2 * Math.PI) < 0.05, "compare lap incomplete");
+  // and the faster driver is genuinely AHEAD on the road at mid-lap. Compare
+  // swept angle, not raw atan2: past the half-lap the two wrap onto opposite
+  // ends of (-pi, pi] and the faster dot reads as the smaller number.
+  const aSlow = sweep(view, slow, 40).total, aFast = sweep(view, fast, 40).total;
+  assert.ok(aFast > aSlow, `faster lap swept ${aFast.toFixed(3)}, slower ${aSlow.toFixed(3)}`);
+  assert.ok(sFast.maxStep < 0.1 && sSlow.maxStep < 0.1, "a dot jumped");
+});
+
+test("a driver with no GPS of their own rides the path on THEIR lap, not the other's", () => {
+  // Regression: this branch scaled by view.tMax (the SLOWER driver's lap), so a
+  // borrowed-path dot never reached the line — it was still short of the lap
+  // when its own lap had ended, permanently lagging where the driver was.
+  const slow = driver(80), fast = { loc: [], car: driver(60).car };
+  const view = { primary: slow, tMax: 80, compare: fast };
+  const s = sweep(view, fast, 60);   // over ITS OWN 60 s lap
+  assert.ok(Math.abs(s.total - 2 * Math.PI) < 0.12,
+    `borrowed-path dot swept ${s.total.toFixed(3)} rad over its own lap, want 2pi`);
+});
