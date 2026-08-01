@@ -447,3 +447,41 @@ test("storing a Client ID arms the feature; clearing it disarms it — with no n
   expect(spotifyRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
+
+// A token belongs to the app that minted it. Correcting a mistyped Client ID —
+// or replacing the secret someone pasted by mistake — used to leave the old
+// token in place, and connect() would hand it straight to the new app's player:
+// "Spotify rejected the session", unrecoverable until DISCONNECT was pressed.
+test("changing the Client ID drops the token minted by the previous app", async ({ page, pageErrors }) => {
+  await boot(page);
+  await openAudioPanel(page);
+
+  const after = await page.evaluate(() => {
+    SpotifyMusic.setClientId("app-one");
+    // Stand in for a completed sign-in against app-one: a live, unexpired token.
+    localStorage.setItem("apex26.spotify.token", JSON.stringify({
+      access_token: "tok-from-app-one",
+      refresh_token: "ref-from-app-one",
+      expires_at: Date.now() + 3600000,
+    }));
+    const before = localStorage.getItem("apex26.spotify.token");
+    SpotifyMusic.setClientId("app-two");
+    return { before, after: localStorage.getItem("apex26.spotify.token") };
+  });
+
+  expect(after.before).toContain("tok-from-app-one");
+  expect(after.after).toBeNull();
+  expect(await page.evaluate(() => SpotifyMusic.status().state)).toBe("configured");
+
+  // Re-saving the SAME id is not a change and must not sign the player out.
+  const resaved = await page.evaluate(() => {
+    localStorage.setItem("apex26.spotify.token", JSON.stringify({
+      access_token: "tok-two", refresh_token: "ref-two", expires_at: Date.now() + 3600000,
+    }));
+    SpotifyMusic.setClientId("app-two");
+    return localStorage.getItem("apex26.spotify.token");
+  });
+  expect(resaved).toContain("tok-two");
+
+  expect(pageErrors).toEqual([]);
+});
