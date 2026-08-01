@@ -35,24 +35,38 @@
 #subtitle { color: rgba(242, 242, 245, 0.72); margin: 6px 0 14px; font-size: 14px; letter-spacing: 0.04em; }
 #menu-buttons { display: grid; gap: var(--gap); justify-items: center; width: 100%; }
 #menu-buttons .bigbtn { margin: 0; width: min(78vw, 340px); }
+/* Branding and small print as blocks — portrait stacks them centred, exactly as
+   the loose elements did. */
+#menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: center; }
 #audiostate { color: var(--dim); font-size: 12px; margin-top: 10px; min-height: 16px; }
 #disclaimer { color: var(--dim); font-size: 11px; margin-top: 8px; }
 
 /* Landscape: branding left, buttons right — a phone held sideways has width to
    spend and no height at all. Two columns, everything vertically centred, and
    the whole screen still inside the safe area. */
+/* THE SIDE-BY-SIDE COMPOSITION, shared by a landscape phone and a desktop (the
+   large-screen block in css/responsive.css only changes the sizes).
+   Columns are sized to their CONTENT and the pair is centred as a unit. They
+   used to be `1fr 1fr` with `justify-items: start`, which on anything wide
+   pinned the title to the far-left edge and left the buttons stranded at the
+   half-way line — ~630px of dead space between them on a 1920 screen.
+   Nothing spans rows either: brand and buttons share row 1, small print takes
+   row 2. The old layout ran the button column through all four branding rows,
+   and a grid distributes a spanning item's excess height across the rows it
+   covers — which is what pushed the subtitle 230px below the title. */
 @media (orientation: landscape) and (max-height: 560px) {
   #overlay {
-    grid-template-columns: 1fr 1fr;
-    justify-items: start;
+    grid-template-columns: auto auto;
+    justify-content: center; align-content: center; justify-items: start;
     column-gap: 32px;
-    align-content: center;
   }
-  #title { grid-column: 1; font-size: clamp(26px, 7.5vw, 48px); }
-  #subtitle { grid-column: 1; margin: 4px 0 0; font-size: 12px; }
-  #audiostate { grid-column: 1; font-size: 10px; margin-top: 2px; min-height: 0; }
-  #disclaimer { grid-column: 1; font-size: 10px; margin-top: 6px; }
-  #menu-buttons { grid-column: 2; grid-row: 1 / -1; align-self: center; width: auto; }
+  #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
+  #menu-meta  { grid-column: 1; grid-row: 2; align-items: flex-start; }
+  #menu-buttons { grid-column: 2; grid-row: 1; align-self: center; width: auto; }
+  #title { font-size: clamp(26px, 7.5vw, 48px); }
+  #subtitle { margin: 4px 0 0; font-size: 12px; }
+  #audiostate { font-size: 10px; margin-top: 2px; min-height: 0; }
+  #disclaimer { font-size: 10px; margin-top: 6px; }
   #menu-buttons .bigbtn { width: min(42vw, 260px); padding: 9px 14px; font-size: 14px; }
 }
 
