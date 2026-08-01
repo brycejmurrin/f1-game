@@ -711,11 +711,23 @@ const DataTelemetry = (function () {
 
     // Resize canvases when the popup is resized (e.g. orientation change)
     if (typeof ResizeObserver !== "undefined") {
+      // Defer the resize work to the NEXT frame. The callback resizes canvases
+      // that live INSIDE the observed element, so doing it synchronously makes
+      // the observer re-fire within the same delivery cycle — the browser then
+      // emits "ResizeObserver loop completed with undelivered notifications",
+      // which the on-screen error catcher was blowing up into a full-screen
+      // overlay the moment the compare popup opened on a wide (desktop) layout.
+      // rAF moves the DOM writes out of the delivery cycle, so no loop.
+      let roPending = false;
       const ro = new ResizeObserver(() => {
+        if (roPending) return;
+        roPending = true;
+        requestAnimationFrame(() => {
+        roPending = false;
         if (!view.chart || !mainArea.isConnected) return;
         const mainW = mainArea.clientWidth - 32; // minus padding
         if (mainW <= 0) return;
-        
+
         const newCW = Math.min(800, mainW);
         const newCH = chartH(newCW, !!view.compare);
 
@@ -747,6 +759,7 @@ const DataTelemetry = (function () {
           buildBases(view);
           paintFrame(view);
         }
+        });   // requestAnimationFrame
       });
       ro.observe(detail);
       view._ro = ro;

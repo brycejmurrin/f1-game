@@ -95,7 +95,15 @@
     show("Caught @ " + where, (err && (err.message || err)) || "unknown", err && err.stack);
   };
   window.addEventListener("error", function (e) {
-    show("JS error", (e && e.message) || String(e), (e && e.error && e.error.stack) || (e && e.filename + ":" + e.lineno + ":" + e.colno));
+    // "ResizeObserver loop completed with undelivered notifications" (and the
+    // older "…loop limit exceeded") is a spec-defined BENIGN notification the
+    // browser fires when an observer callback changes layout — not a crash.
+    // Every serious app ignores it; letting it paint a full-screen error overlay
+    // (e.g. when the data-hub telemetry popup sizes its canvases) is far worse
+    // than the thing it is reporting.
+    var m = (e && e.message) || "";
+    if (m.indexOf("ResizeObserver loop") !== -1) return;
+    show("JS error", m || String(e), (e && e.error && e.error.stack) || (e && e.filename + ":" + e.lineno + ":" + e.colno));
   });
   window.addEventListener("unhandledrejection", function (e) {
     var r = e && e.reason; show("Promise rejection", (r && (r.message || r)) || "unknown", r && r.stack);
