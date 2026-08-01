@@ -2862,27 +2862,25 @@ const AgentView = (function () {
         // The curated calls below COMPOSE and render the spatial/visual things a
         // dev would screenshot; the raw read hooks under `read` already return
         // clean JSON, so call those directly; `control` is the verbs.
+        // Kept terse on purpose: what each field MEANS now lives in `fields`
+        // below, and what the GAME is lives in objective(). These say only which
+        // question each call answers.
         perceive: {
           "world({detail,horizonS,points,corners,since})":
-            "WHERE AM I — dynamic egocentric snapshot; the spine, read per tick. "
-            + "detail brief|drive|full; drive adds the corner sequence + honest "
-            + "geometry (lateralM, headingErrDeg, curvature ahead) to choose a "
-            + "line from; `since` returns only what changed",
+            "WHERE AM I — egocentric snapshot, the per-tick spine. "
+            + "detail brief|drive|full; `since` returns only what changed",
           "field({detail})":
-            "THE GRID — allocentric race order: every car by position with gap-to-"
-            + "leader and interval (seconds). world().rivals is the egocentric few",
+            "THE GRID — race order, gap-to-leader and interval. "
+            + "world().rivals is the egocentric nearest-few",
           "scene({radius,kinds,limit} | {visible:true})":
-            "WHAT IS AROUND ME — named scenery by distance and bearing. Default "
-            + "is a radius around the CAR; {visible:true} = the CAMERA's on-screen list",
+            "WHAT IS AROUND ME — named scenery by distance and bearing; "
+            + "{visible:true} switches to the camera's on-screen list",
           "atmosphere()":
-            "WHAT DOES IT LOOK LIKE OUT THERE — the light narrated: day/night, "
-            + "brightness, sun or moon and where it sits, floodlights, fog "
-            + "visibility range, wet road. Raw RGB kept for measurement",
+            "WHAT IS THE LIGHT DOING — day/night, sun or moon, floodlights, "
+            + "fog visibility, wet road. Raw values kept for measurement",
           "render({what,cols,ss,...})":
-            "SHOW IT — the one optional raster, APPROXIMATE. what: 'view'|'map'|"
-            + "'circuit'|'car'. Defaults are coarse (what an agent should read); "
-            + "cols and, for 'car', ss (supersampling 1-6) can be raised for a "
-            + "sharp human-facing render. For intuition/debugging, not measurement",
+            "SHOW IT — the one optional raster, APPROXIMATE. "
+            + "what: 'view'|'map'|'circuit'|'car'. For intuition, not measurement",
         },
         // DRILL-DOWN: the world is stored in full and PULLED by id. Dumping it
         // would be both huge and less accurate — ask for one thing, or a slice.
@@ -2914,6 +2912,35 @@ const AgentView = (function () {
           "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once",
           "agentHelp()": "this manifest",
         },
+        // What the numbers MEAN, in terms of what to do about them. The single
+        // best-measured context intervention available: BIRD text-to-SQL went
+        // 34.9% -> 54.9% purely from one sentence per question tying surface
+        // identifiers to domain meaning. The value is in "what changes if you
+        // act on it", not "what it is" — a field named headingErrDeg already
+        // says it is a heading error in degrees.
+        //
+        // It lives HERE, in the read-once manifest, and deliberately not in
+        // world(): per-tick payloads are the hot path, and the same augmentation
+        // done carelessly costs +67% execution steps (MCP description study).
+        // Static meaning belongs where it is read once. Keep every line short.
+        // Fields whose meaning the PAYLOAD already carries in a `note`
+        // (grip.state, penalties.note, ers.note, nextCorner.note) are absent
+        // on purpose — saying it in both places is the bloat this is meant
+        // to avoid, and the payload copy travels with the value.
+        fields: {
+          "ego.headingErrDeg": "+ = nose right of the road; steer the opposite sign to null it",
+          "ego.lateralM": "+ = right of centreline; the road runs out at halfWidthM",
+          "ego.clearLeftM/RightM": "metres to the barrier each side; small = no room to defend",
+          "ego.onTrack": "false means you are on grass — grip is gone, straighten first",
+          "nextCorner.status": "the braking call — BRAKE NOW means brake this instant",
+          "nextCorner.apexSpeedKph": "roughly the fastest you can be at the apex and still hold it",
+          "nextCorner.exitsOntoStraight": "true = prioritise exit speed over entry speed here",
+          "pacenotes": "the road ahead as a co-driver call: dir + severity 1-6 @ distance",
+          "rivals[].closingMps": "+ = the gap is shrinking, whichever side they are on",
+          "rivals[].pace": "AI skill ~0.92-1.02; a slower car will not hold the position",
+          "terminal.reason": "why the episode ended — finished vs wrong_way vs rescued",
+          "session.seed": "replay this exact episode with reset(frac, speed, x, seed)",
+        },
         // These __apex hooks ALREADY return clean JSON — call them directly, no
         // agent-view wrapper needed. Grouped by what you inspect.
         read: {
@@ -2926,7 +2953,9 @@ const AgentView = (function () {
         // The control verbs — call on __apex to stage/drive the sim; read the
         // result back with world()/field()/the hooks above.
         control: {
-          stage: 'race(id) go() jump(frac,speed,x) park(f) reset(f,v,x) finishRace()',
+          stage: 'race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()',
+          reproduce: "seed(n) sets the sim seed; same seed + same inputs => same "
+                   + "result. Pin it before any A/B or the comparison is noise",
           drive: "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()",
           world: "weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool)",
           field: "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)",
