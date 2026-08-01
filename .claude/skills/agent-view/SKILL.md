@@ -39,9 +39,8 @@ Three ways in — same surface, different cost:
   expression where `a` = `window.__apex`. The door for **anything past a single
   read**: a multi-call sequence, a custom driving policy, a seeded A/B. Batch
   reads into one expression (`JSON.stringify({x:a.world(), y:a.field()})`) and pay
-  one boot instead of N. Catch: it stages `race()` only, so prop-dependent reads
-  (`scene`/`query`/`describe(prop:…)`) come back empty until frames draw — stage
-  and render inside the expression, or use the CLI, which does it for you.
+  one boot instead of N. Catch: it stages `race()` only — you stage the rest
+  inside the expression (see Staging), or use the CLI, which does it for you.
 - `window.__apex.<tool>(...)` inside a live page (Playwright `page.evaluate`, the
   browser console) when you already have one open. **Nothing is readable until
   you stage** — `race(id)` → `go()` → `jump(frac, speed)`, then let two frames
@@ -205,8 +204,7 @@ by wherever the last sample lands. Three gotchas the loop above hides:
   barrier: speed oscillates roughly +60/−18 kph for a minute while lap distance
   barely moves. Gate it — `brake: braking && e.speed > 3`.
 
-An LLM can't decide at 60 Hz — that is what `rollout({policy})` is for: long
-intervals from one call. Use `world()`+`act()` only for a single decision.
+An LLM can't decide at 60 Hz — that is what `rollout({policy})` is for.
 **`seconds` is clamped to 120**, silently — ask for 300 and you get 120, which
 reads as "my policy stalled" when it merely ran out of interval. One lap of Monza
 at the pace above takes ~200 s, so a lap is 2-3 chained `rollout()` calls, not
@@ -247,9 +245,8 @@ own dynamics with a solo `reset()`+`rollout` (seed irrelevant); A/B field-depend
 behaviour from a `go()` race, no reset.
 
 **A physics A/B uses `setPhysics({...})`** — whose keys are lowercase camelCase
-(`pace, drift, frontGrip, playerGrip, roadFollow, wheelbase, expo, maxSlip,
-speedRef, yawDamp, yawInertia`), NOT the uppercase constant names (`PACE`,
-`FRONT_GRIP`) from the Physics reference. **Unknown keys are silently ignored** —
+(the full list is tabled in `docs/DEBUG-HOOKS.md` → `setPhysics`), NOT the
+uppercase constant names (`PACE`, `FRONT_GRIP`) from the Physics reference. **Unknown keys are silently ignored** —
 the one hook with no typed error — so a mistyped key looks like "the tweak did
 nothing." Confirm it took from the object `setPhysics` returns; `physState()` does
 not carry these params.
