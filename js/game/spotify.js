@@ -53,6 +53,9 @@ window.SpotifyMusic = (function () {
   let ready = false;
   let sdkPromise = null;
   let vol = 0.5;
+  // Set by any listener that has already named a failure, so the SDK's next
+  // token request cannot paper over it with a generic line.
+  let explained = false;
   const subs = [];
 
   /* ---------------- storage (raw, not GameStore) ----------------
@@ -142,6 +145,7 @@ window.SpotifyMusic = (function () {
         // Retrying would just spin; drop it and report disconnected.
         clearToken();
         teardown();
+        explained = true;
         setStatus("configured", j.error === "invalid_grant"
           ? "Spotify session expired or the app was revoked. Press CONNECT to sign in again."
           : "Could not refresh the Spotify session (" + j.error + "). Press CONNECT.");
@@ -311,6 +315,7 @@ window.SpotifyMusic = (function () {
 
   function bootPlayer() {
     if (player) { installBackend(); return Promise.resolve(); }
+    explained = false;
     setStatus("connecting", "Loading the Spotify player…");
     return loadSdk().then(() => {
       if (typeof GameAudio !== "undefined" && GameAudio.volumes) {
@@ -322,12 +327,17 @@ window.SpotifyMusic = (function () {
         // expires, which is why it must go through validToken() and not a
         // captured string.
         // Never calling cb() leaves the SDK waiting and it eventually reports a
-        // generic auth failure, so a dead token has to be said out loud here.
+        // generic auth failure, so a dead token has to be said out loud here —
+        // but only if nothing has already explained WHY. The SDK asks for a
+        // token again right after an error listener has run and cleared things
+        // up, and this generic line was overwriting the specific cause.
         getOAuthToken: (cb) => {
           validToken().then((t) => {
             if (t) { cb(t); return; }
             teardown();
-            setStatus("configured", "The Spotify session could not be renewed. Press CONNECT to sign in again.");
+            if (!explained) {
+              setStatus("configured", "The Spotify session could not be renewed. Press CONNECT to sign in again.");
+            }
           });
         },
         volume: vol,
@@ -335,6 +345,7 @@ window.SpotifyMusic = (function () {
       player.addListener("ready", ({ device_id }) => {
         deviceId = device_id;
         ready = true;
+        explained = false;
         setStatus("connected", "Connected. Apex 26 is now a Spotify device.");
         // Install AFTER the transfer settles: GameAudio.setMusicBackend() calls
         // start() synchronously, and a play request aimed at a device Spotify
@@ -348,19 +359,26 @@ window.SpotifyMusic = (function () {
       // The four SDK errors mean completely different things to a user, so each
       // gets its own sentence instead of one raw payload dump. account_error is
       // by far the most common — it is what a non-Premium account looks like.
+      // KEEP THE TOKEN. It is what check() needs: the player refusing a token
+      // says nothing about why, but that same token still answers GET /v1/me,
+      // which names the plan. Clearing it here threw away the only evidence and
+      // left the user to guess between "not Premium" and "SDK not enabled" —
+      // so instead, tear the player down and go ask.
       player.addListener("authentication_error", () => {
-        clearToken(); teardown();
-        setStatus("configured", "Spotify rejected the session. Usually: the account " +
-          "is not full Premium, or the app is not enabled for the Web Playback SDK. " +
-          "Check both, then press CONNECT to sign in again.");
+        explained = true;
+        teardown();
+        setStatus("configured", "Spotify rejected the session — checking why…");
+        check();
       });
       player.addListener("account_error", () => {
+        explained = true;
         teardown();
         setStatus("error", "This Spotify account cannot play here — full Premium is " +
           "required. Free accounts and the mobile-only plans (Premium Mini / Lite) " +
           "are not supported by Spotify's web player.");
       });
       player.addListener("initialization_error", () => {
+        explained = true;
         teardown();
         setStatus("error", "This browser can't run the Spotify player (no encrypted-" +
           "media support). iOS Safari is the usual case — try desktop Chrome, Edge or Firefox.");
