@@ -180,6 +180,41 @@ test("stats().byKind separates instanceable emitters from continuous ones", () =
   assert.equal(byKind.tree.reuse, 1);
 });
 
+test("NODE_COLOR takes the tint from the node, so tint-only variants share a model", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const out = buf();
+  const build = (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR);
+  const tints = [[1, 0, 0], [0, 1, 0], [0.25, 0.5, 0.75]];
+  tints.forEach((col, i) => g.instance("pane", Object.assign(AT([i * 3, 0, 0]), { col }),
+                                      build, { kind: "pane" }, emitter(), out));
+
+  assert.equal(g.stats().models, 1, "three tints must NOT mint three models");
+  assert.equal(g.stats().byKind.pane.reuse, 3);
+  // 24 verts per box, each carrying its own node's colour
+  tints.forEach((col, i) => {
+    const base = i * 24 * 3;
+    assert.deepEqual(plain(out.col.slice(base, base + 3)), col);
+    assert.deepEqual(plain(out.col.slice(base + 69, base + 72)), col, "…on the last vertex too");
+  });
+});
+
+test("the canonical mesh bakes NODE_COLOR as white — colour lives on the node", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  g.instance("pane", Object.assign(AT([0, 0, 0]), { col: [1, 0, 0] }),
+             (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR), null, emitter(), buf());
+  const m = g.models.get("pane");
+  assert.ok(m.geo.col.every((c) => c === 1), "the shared model carries no tint of its own");
+});
+
+test("a node without a colour falls back to white rather than emitting NaN", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const out = buf();
+  g.instance("pane", AT([0, 0, 0]),
+             (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR), null, emitter(), out);
+  assert.ok(out.col.every((c) => c === 1));
+  assert.ok(out.pos.every(Number.isFinite));
+});
+
 test("a malformed placement is dropped, not emitted as NaN geometry", () => {
   const g = TrackGraph.create({ raw: RAW });
   const out = buf();

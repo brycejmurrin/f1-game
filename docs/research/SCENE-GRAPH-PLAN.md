@@ -2,11 +2,12 @@
 
 > **Status: S0–S2 infrastructure has LANDED** (`js/track/graph.js`,
 > `tools/graph-parity.cjs`, `tests/track-graph.test.mjs`), with six emitters
-> migrated: `fence`, `guardrail`, `wall`, `tyreWall`, `marshalPost`, `pine`.
-> All 24 circuits are at exact geometry parity — nothing renders differently, by
-> design. §6 has the measured per-emitter reuse: the trackside barrier family
-> collapses **2.87 M fused vertices to 6.8 K (420×)**, while `pine` sits at
-> 1.00× for a structural reason that changes the S4 plan.
+> migrated: `windowPane`, `fence`, `guardrail`, `streetBarrier`, `wall`,
+> `tyreWall`, `marshalPost`, `pine`. All 24 circuits are at exact geometry
+> parity — nothing renders differently, by design. §6 has the measured
+> per-emitter reuse: **36% of the fleet's entire scenery mass (6.48 M vertices)
+> collapses to 10,445**, while `pine` sits at 1.00× for a structural reason that
+> changes the S4 plan.
 
 Companion to `EXTERNAL-MODEL-SOURCES.md`, which asked "where do models come
 from". This asks the prior question: **why can't we afford detailed models
@@ -250,28 +251,30 @@ have. Across all 24 circuits, for the six emitters migrated so far:
 
 | emitter | nodes | models | fused verts | instanced | reuse |
 |---|---|---|---|---|---|
+| `windowPane` | 143,083 | 7 | 3,433,992 | 168 | **20,440×** |
 | `fence` | 54,277 | 77 | 1,601,375 | 2,266 | **706.70×** |
 | `guardrail` | 30,465 | 50 | 792,104 | 1,288 | **614.99×** |
+| `streetBarrier` | 6,404 | 7 | 153,696 | 168 | **914.86×** |
 | `wall` | 7,492 | 28 | 179,808 | 672 | **267.57×** |
 | `tyreWall` | 8,156 | 85 | 297,819 | 2,615 | **113.89×** |
 | `marshalPost` | 343 | 43 | 26,068 | 3,268 | **7.98×** |
 | `pine` | 9,486 | 9,474 | 1,159,599 | 1,158,108 | **1.00×** |
-| **total** | **110,219** | **9,757** | **4,056,773** | **1,168,217** | **3.47×** |
+| **total** | **259,706** | **9,771** | **7,644,461** | **1,168,553** | **6.54×** |
 
-**The barrier family is the headline: 2,871,106 fused vertices across the fleet
-become 6,841 — a 420× reduction on its own.** Those four emitters are the
-trackside furniture every circuit runs for kilometres, and they were the single
-largest block of duplicated geometry in the game. Excluding `pine`, the migrated
-subset instances at **286×**.
+**`windowPane` is the headline: every glazed pane in the game — 143,083 of them
+across seven city circuits, 3,433,992 fused vertices — is the same unit box.**
+It collapses to seven models (one per build) totalling 168 vertices. The
+trackside barrier family (`fence`/`guardrail`/`wall`/`tyreWall`/`streetBarrier`)
+is the second block: 3,024,802 vertices down to 7,009.
 
-For scale: all 24 circuits together build **17,978,812** prop vertices. The six
-migrated emitters account for 4,056,773 of them (**22.6%**), and the five
-non-`pine` ones for 2,897,174 (**16.1%**) — which an instanced renderer would
-draw from 10,109 vertices of models plus one `mat4` per node. That is 16% of the
-game's entire scenery mass, currently paid for in full VBO bytes, that the graph
-shows is the same handful of shapes over and over.
+For scale: all 24 circuits together build **17,978,812** prop vertices. The eight
+migrated emitters account for 7,644,461 of them (**42.5%**), and the seven
+non-`pine` ones for 6,484,862 (**36.1%**) — which an instanced renderer would
+draw from **10,445 vertices** of models plus one `mat4` per node. Over a third of
+the game's entire scenery mass, currently paid for in full VBO bytes, is a
+handful of shapes repeated.
 
-Two structural properties made that possible, and they generalise:
+Three structural properties made that possible, and they generalise:
 
 1. **Split fixed geometry from length-scaled geometry.** `guardrail` was one
    emitter writing a fixed post plus a rail whose length follows the node
@@ -283,6 +286,14 @@ Two structural properties made that possible, and they generalise:
    `max(|sx|,|sz|)` because a cylinder cannot be elliptical, so a fused
    post-plus-rail model would have stretched the post's radius with the rail's
    length. The split avoids the question entirely.
+
+3. **Give the node a colour when only the tint varies.** Every lit window pane
+   carries a hash-jittered warm/neon tint, which would have minted a model per
+   pane and instanced at 1.00×. `TrackGraph.NODE_COLOR` marks a primitive's
+   colour as "supplied by the node" — the shared model bakes white and the tint
+   rides the placement, which is precisely what a per-instance colour attribute
+   does on the GPU. `instance()` also takes a target buffer, so a pane's unlit
+   half still routes to `glassBuf` for the reflective material.
 
 `marshalPost` instances for the simpler reason that every dimension is a
 constant and the only per-placement variable is which side of the track the pole
@@ -310,14 +321,12 @@ is that it turned an estimate into a per-emitter measurement, and the same
 
 - **S0/S1/S2 — done for the migrated subset.** Model library, node graph, guarded
   replay, `bake()` reconstruction, parity gate, unit tests, six emitters.
-- **Remaining S1 work is mechanical**: `tree`/`palm`/`conifer`/`bush`, the
-  street-circuit barrier panels emitted inline in `buildProps`, `streetLamp`,
-  `billboard`, crowd bodies and city window panes — one at a time, each gated by
-  `npm run test:graph-parity`. Apply the split rule from above: separate the
-  fixed part of a composite from the part whose size follows the placement.
-  Window panes and the street barrier panels are fixed-dimension boxes emitted in
-  the thousands on exactly the circuits with the worst VBO problem (Vegas, Baku),
-  so they are the next highest-value targets.
+- **Remaining S1 work is mechanical**: `tree`/`palm`/`conifer`/`bush`,
+  `streetLamp`, `billboard`, crowd bodies, building masses and the facade
+  rails/mullions — one at a time, each gated by `npm run test:graph-parity`.
+  Apply the three rules above: split fixed geometry from size-following
+  geometry, keep radial primitives out from under non-uniform scale, and push
+  tint-only variation onto the node.
 - **S3 is unblocked but not started.** `graph.models` already holds the canonical
   origin-space mesh per model (`model.geo`) that an instanced draw would upload.
 - **S4 gains a prerequisite it did not have**: re-parameterise affine emitters to

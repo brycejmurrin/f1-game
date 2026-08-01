@@ -663,10 +663,13 @@ const Tracks = (function () {
     const graph = TrackGraph.create({ raw: RAW });
     track.graph = graph;
     const GUARDED = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid };
-    // instance(key, place, build, meta) — returns the number of primitives that
-    // survived the guards (0 = wholly suppressed, so the caller skips its note()).
-    const instance = (key, place, build, meta) =>
-      graph.instance(key, place, build, meta, GUARDED, out);
+    // instance(key, place, build, meta, buf?) — returns the number of primitives
+    // that survived the guards (0 = wholly suppressed, so the caller skips its
+    // note()). `buf` targets a different accumulator than the props soup: window
+    // panes route their unlit half to glassBuf so it draws with the reflective
+    // material, and water surfaces go to waterBuf.
+    const instance = (key, place, build, meta, buf) =>
+      graph.instance(key, place, build, meta, GUARDED, buf || out);
 
     // Per-segment driving boundary (lateral limit from the centreline on each
     // side). Initialised to the default runoff, then TIGHTENED wherever a solid
@@ -1463,7 +1466,13 @@ const Tracks = (function () {
           const f = norm([bx - ax, by - ay, bz - az]);
           const rr = norm(cross(f, u0));
           const col = NIGHT ? bt.night : btSeq[Math.floor(k / (STEP * 3)) % 3];
-          addBox(out, [cx, cy + WH / 2, cz], [WT, WH, len], col, [rr, [0, 1, 0], f]);
+          // Every panel is the same 0.4 x 1.1 m cross-section; only its length
+          // and livery colour vary. One model per colour (three by day, one at
+          // night) covers a whole street lap, with length on the node scale.
+          instance(`street-barrier|${col.join(",")}`,
+            { o: [cx, cy + WH / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
+            (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),
+            { kind: "streetBarrier", k, side });
         }
       }
       // Record the boundary for EVERY node (the geometry loop steps by 2, which
