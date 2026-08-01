@@ -55,7 +55,7 @@
   display: flex; align-items: center; gap: 12px;
   padding: 14px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(90deg, rgba(225, 6, 0, 0.22), transparent);
+  background: linear-gradient(90deg in oklab, rgba(225, 6, 0, 0.24), transparent 62%);
   flex: 0 0 auto;
 }
 .dh-title { font-size: 18px; font-weight: 800; font-style: italic; letter-spacing: 0.05em; color: #fff; flex: 1; }
@@ -270,7 +270,7 @@
 /* slow->fast swatch matching the map's speed colouring */
 .dh-gradbar {
   display: inline-block; width: 44px; height: 6px; border-radius: var(--r-xs);
-  background: linear-gradient(90deg, #2222ff, #ccb4cc, #ff2222);
+  background: linear-gradient(90deg in oklab, #2222ff, #ccb4cc, #ff2222);
 }
 /* On landscape phone, cap the track map smaller so content doesn't overflow */
 @media (orientation: landscape) and (max-height: 520px) {
@@ -615,7 +615,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   display: flex; align-items: center; gap: 10px;
   padding: 11px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-  background: linear-gradient(90deg, rgba(225, 6, 0, 0.18), transparent);
+  background: linear-gradient(90deg in oklab, rgba(225, 6, 0, 0.20), transparent 62%);
   flex: 0 0 auto;
 }
 .dh-tpopup-title {

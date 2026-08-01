@@ -23,7 +23,11 @@
   align-content: center; justify-items: center;
   gap: 2px;
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
-  background: radial-gradient(120% 90% at 50% 10%, rgba(225, 6, 0, 0.18), transparent 60%), rgba(6, 6, 10, 0.55);
+  /* in oklab so the red wash stays red through its falloff instead of
+     sagging grey, and .grain (css/components.css) dithers what is left */
+  background:
+    radial-gradient(120% 90% at 50% 10% in oklab, rgba(225, 6, 0, 0.20), transparent 62%),
+    rgba(6, 6, 10, 0.55);
   overflow: hidden;
 }
 #title {
@@ -247,7 +251,11 @@
   font-size: 13px;
   border-radius: var(--r-sm);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.05);
+  /* a shallow top-lit fill rather than one flat tint: the same physical
+     language as the buttons, one step quieter, so a row of chips reads as a
+     row of keys instead of a row of rectangles */
+  background: linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
   transition: background 0.12s, box-shadow 0.12s;
   cursor: pointer;
 }
@@ -289,7 +297,11 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   margin-bottom: calc(var(--gap) * 0.6); padding: calc(var(--gap) * 0.8);
   border-radius: var(--r-lg);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  /* The card that says WHICH TEAM YOU ARE now shows it: --grad-accent is a
+     wash of the live --accent, so picking McLaren turns this papaya and Alpine
+     turns it blue, without a single per-team rule here. */
+  background: var(--grad-accent),
+    linear-gradient(150deg in oklab, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
   flex-shrink: 0;
 }
 #sel-preview-map {

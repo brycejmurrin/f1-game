@@ -16,6 +16,33 @@
        queries on the sheet, so a panel reacts to the room it actually has
        rather than to a guess about the device. */
 
+/* ---------- grain ----------
+   Opt-in dither for the surfaces that carry a big, slow, dark gradient — the
+   title screen's radial red wash and the data hub's header bleed. Those are the
+   textbook banding case: a few hundred pixels of near-black with only a handful
+   of distinct 8-bit values to spend, which renders as stripes on a phone.
+   A few percent of noise breaks the bands into grain the eye reads as texture.
+
+   z-index: -1, not a positive one. These hosts are stacking contexts, so a
+   negative index paints the grain ABOVE the element's own background and BELOW
+   every child — which is the only ordering that dithers the gradient without
+   also veiling the title sitting on it. */
+.grain { position: relative; isolation: isolate; }
+.grain::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none;
+  background-image: var(--grain);
+  background-size: 160px 160px;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+}
+/* Grain is texture, and texture is motion-adjacent for some people; it also
+   costs a composited layer. Both reasons to drop it when asked for less. */
+@media (prefers-reduced-transparency: reduce) {
+  .grain::before { display: none; }
+}
+
 /* ---------- screen: full-viewport overlay ---------- */
 .screen {
   position: fixed; inset: 0;
@@ -88,9 +115,20 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   gap: var(--gap); flex-wrap: wrap;
   /* The title band is the top of the stack, so it catches the most light and
      ends on a hairline — the head used to dissolve into the body with nothing
-     marking where the chrome stopped and the content began. */
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+     marking where the chrome stopped and the content began.
+     --grad-head adds a brand bleed off the leading edge under that sheen, and
+     the hairline is a FADING rule (--grad-rule painted into the bottom 1px)
+     rather than a flat border: a line that stops dead at both ends draws
+     attention to its own ends, and every one of these sits inside a rounded
+     card where it cannot reach the corner anyway. */
+  background: var(--grad-head);
+  border-bottom: 0;
+  position: relative;
+}
+.sheet-head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: var(--grad-rule);
+  pointer-events: none;
 }
 /* Title scales with the viewport HEIGHT, which is the axis that is scarce on a
    phone held sideways — a fixed 24px title costs the same as a row of the list
@@ -103,8 +141,16 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .sheet-foot {
   display: flex; align-items: center; gap: var(--gap);
   padding: calc(var(--pad) * 0.35) var(--pad);
-  border-top: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(10, 10, 16, 0.96);
+  border-top: 0;
+  position: relative;
+  /* Darker than the body and shaded from the top, so the action bar reads as
+     the plate the sheet stands on rather than one more band of content. */
+  background: linear-gradient(180deg in oklab, rgba(0, 0, 0, 0.30), rgba(8, 8, 13, 0.97) 60%);
+}
+.sheet-foot::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+  background: var(--grad-rule);
+  pointer-events: none;
 }
 .sheet-foot .bigbtn {
   width: auto; min-width: 110px; margin: 0; flex: 0 1 auto;
@@ -256,30 +302,71 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   min-height: var(--tap);
   padding: 14px 20px;
   font-size: 20px;
-  background: linear-gradient(135deg, #f01000 0%, #b30000 100%);
+  background: var(--grad-primary);
   border: none;
   border-radius: var(--r-md);
   transform: skewX(-6deg);
-  box-shadow: 0 4px 18px rgba(225, 6, 0, 0.4);
+  /* A button is a physical object, and one drop shadow cannot say so. Four
+     stops, each doing one job:
+       inset top     a lit lip along the leading edge — the thing that makes a
+                     flat fill read as a raised surface on a dark page
+       inset bottom  the far edge falling into its own shade
+       tight cast    a 2px core directly under it: "this is off the page"
+       wide glow     the red bloom it already had: "and it is the hot one" */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.32),
+    0 2px 4px rgba(0, 0, 0, 0.45),
+    0 6px 20px rgba(225, 6, 0, 0.38);
+  transition: background 0.14s, box-shadow 0.14s, transform 0.1s;
 }
 /* Hover gated on a hover-capable pointer (see css/tokens.css); :active is the
    press state — this layer outranks the base button:active, so without these
    the big menu buttons had NO press feedback on touch. */
 @media (hover: hover) {
-  .bigbtn:hover { background: linear-gradient(135deg, #ff2010 0%, #c50000 100%); box-shadow: 0 6px 24px rgba(225,6,0,0.6); }
+  .bigbtn:hover {
+    background: var(--grad-primary-hot);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.38),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.32),
+      0 3px 6px rgba(0, 0, 0, 0.45),
+      0 10px 30px rgba(225, 6, 0, 0.55);
+  }
 }
-.bigbtn:active { background: linear-gradient(135deg, #ff2010 0%, #c50000 100%); box-shadow: 0 2px 10px rgba(225,6,0,0.5); transform: skewX(-6deg) scale(0.97); }
+/* Pressed = the light moves. The lit lip goes out, an inner shadow drops in
+   from the top as if the face has sunk below its own edge, and the cast shadow
+   collapses because the object is closer to the page. Scale alone reads as a
+   picture shrinking; this reads as a key travelling. */
+.bigbtn:active {
+  background: var(--grad-primary-hot);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 2px 10px rgba(225, 6, 0, 0.34);
+  transform: skewX(-6deg) scale(0.97);
+}
 /* Secondary buttons are raised surfaces, not outlines: a lightness step off the
    sheet plus the top lip, which is what makes a control look pressable on a
    dark background (an unfilled border alone reads as a disabled field). */
 .bigbtn.alt {
   background: var(--surf-3); color: rgba(242,242,245,0.82);
-  box-shadow: var(--edge); border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.10);
+  /* same physical language as the primary, one stop quieter */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 1px 2px rgba(0, 0, 0, 0.4);
 }
 @media (hover: hover) {
-  .bigbtn.alt:hover { background: rgba(255, 255, 255, 0.16); box-shadow: none; }
+  .bigbtn.alt:hover {
+    background: rgba(255, 255, 255, 0.16);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 2px 6px rgba(0,0,0,0.45);
+  }
 }
-.bigbtn.alt:active { background: rgba(255, 255, 255, 0.2); box-shadow: none; }
+.bigbtn.alt:active {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.38);
+}
 
 /* Tap targets. Listed by control class rather than a blanket `.panel button`
    so the deliberately dense LIGHTING TUNER rows keep their own sizing. */
@@ -364,7 +451,8 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .pm-group-h {
   color: var(--red); font-size: 11px; font-weight: 700; letter-spacing: 0.11em;
   margin: 0 0 6px; padding-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  /* a rule that fades out rather than stopping dead — see --grad-rule */
+  background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
 .pm-group button { margin: 3px 0; width: 100%; }
 @container sheet (min-width: 420px) {
