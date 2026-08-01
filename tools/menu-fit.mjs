@@ -201,6 +201,25 @@ const AUDIT = function ([rootSel, safe]) {
   return out;
 };
 
+// Jump every running CSS animation to its end state before measuring.
+//
+// WHY. Headless Chromium does not reliably tick CSS animations — they sit at
+// `playState: "running", currentTime: 0` forever. Every `.screen.dim` dialog
+// opens with `sheet-in`/`scrim-in`, whose `from` is `opacity: 0`, so a stuck
+// animation renders the WHOLE dialog invisible: RACE SETTINGS audited as a
+// perfectly laid-out sheet and photographed as a black rectangle. That is not
+// a product bug (a real browser finishes the animation in ~0.2 s), but it made
+// the screenshots — the only part of this sweep a human reads — worthless for
+// exactly the screens most worth reviewing. Finishing the animations costs
+// nothing and captures the state a player actually sees.
+async function settle(page) {
+  try {
+    await page.evaluate(() => {
+      for (const a of document.getAnimations()) { try { a.finish(); } catch { /* infinite/CSS-only */ } }
+    });
+  } catch { /* page gone — the shot below reports it */ }
+}
+
 // A capture must never lose the sweep: screenshotting a page that still has a
 // live WebGL race behind the menu occasionally exceeds the default 30 s, and an
 // uncaught rejection there used to discard every screen measured so far.
@@ -236,6 +255,7 @@ async function shot(page, file) {
         await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
         await page.evaluate(`(async () => { ${UNTIL}\n${setup} })()`);
         await sleep(opts.wait ?? (name === "pause" ? 2500 : 400));
+        await settle(page);
         if (name === "pause") {
           await page.evaluate(() => {
             window.__apex.park(0.1);
@@ -243,6 +263,7 @@ async function shot(page, file) {
             document.getElementById("pausemenu").hidden = false;
           });
           await sleep(300);
+          await settle(page);
         }
         const res = await page.evaluate(AUDIT, [sel, SAFE]);
         report[tag][name] = res;
@@ -251,10 +272,12 @@ async function shot(page, file) {
         if (name === "pause") {
           await page.evaluate(() => document.getElementById("pm-settings").click());
           await sleep(300);
+          await settle(page);
           report[tag]["pause-settings"] = await page.evaluate(AUDIT, ["#pmsettings", SAFE]);
           await shot(page, `${tag}${SAFE_TAG}-pause-settings.png`);
           await page.evaluate(() => document.getElementById("pm-advanced").click());
           await sleep(300);
+          await settle(page);
           report[tag]["advanced"] = await page.evaluate(AUDIT, ["#advanced", SAFE]);
           await shot(page, `${tag}${SAFE_TAG}-advanced.png`);
         }
