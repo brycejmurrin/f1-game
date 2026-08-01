@@ -499,7 +499,7 @@ window.SpotifyMusic = (function () {
       return api("/me/tracks?limit=50")
         .then((r) => (r && r.ok ? r.json().catch(() => null) : null)).then((j) => {
         const uris = j && j.items ? j.items.map((i) => i.track && i.track.uri).filter(Boolean) : [];
-        if (!uris.length) { setStatus("connected", "No liked songs found to play."); return; }
+        if (!uris.length) { releaseToBuiltIn("No liked songs found to play."); return; }
         return sendPlay(q, JSON.stringify({ uris: uris }));
       });
     }
@@ -507,10 +507,23 @@ window.SpotifyMusic = (function () {
     return sendPlay(q, body);
   }
 
-  function sendPlay(q, body) {
+  // Handing the music back is better than silence: while a backend is installed
+  // GameAudio stays quiet, so a Spotify that cannot play leaves the player with
+  // no music at all. On a failure we cannot fix, give the soundtrack back.
+  function releaseToBuiltIn(msg) {
+    removeBackend();
+    setStatus("connected", msg + " The game's own music is playing instead — fix that and press PLAY to retry.");
+  }
+
+  function sendPlay(q, body, retried) {
     return api("/me/player/play" + q, { method: "PUT", body: body }).then((r) => {
       if (!r) return;
-      if (r.ok || r.status === 204) { setStatus("connected", "Playing."); lastPlayError = null; return; }
+      if (r.ok || r.status === 204) {
+        setStatus("connected", "Playing.");
+        lastPlayError = null;
+        installBackend();                 // it works — Spotify may own the music
+        return;
+      }
       // Spotify says WHY in the body ("Device not found", PREMIUM_REQUIRED,
       // "Player command failed: No active device"...). Mapping the status code
       // alone threw that away and left every refusal looking the same.
@@ -519,13 +532,29 @@ window.SpotifyMusic = (function () {
         try { const j = JSON.parse(txt); reason = (j.error && (j.error.reason || j.error.message)) || ""; }
         catch (e) { reason = (txt || "").slice(0, 120); }
         lastPlayError = { status: r.status, reason: reason };
+        // 404 = "Device not found" / "No active device". Almost always a device
+        // that has gone idle or been re-minted, so re-list, TRANSFER to it (the
+        // step that actually wakes a sleeping device — a bare play at an
+        // inactive device just 404s), and try once more.
+        if (r.status === 404 && !retried && mode() === "remote") {
+          setStatus("connected", "Waking your Spotify device…");
+          return loadDevices().then((ds) => {
+            const d = deviceId2();
+            if (!d || !ds.length) {
+              releaseToBuiltIn("No Spotify device is available. Open Spotify on your phone or " +
+                "computer and play anything for a second.");
+              return;
+            }
+            return api("/me/player", { method: "PUT", body: JSON.stringify({ device_ids: [d], play: true }) })
+              .then(() => sendPlay(remoteQuery(), body, true));
+          });
+        }
         const hint = r.status === 404
-            ? " Press DISCONNECT then CONNECT, or start a track in the Spotify app once."
+            ? " Open Spotify on a device and play something for a second, then press REFRESH DEVICES."
           : r.status === 403 ? " Full Premium is required to play here."
           : r.status === 401 ? " Press CONNECT to sign in again."
           : "";
-        setStatus("connected", "Spotify refused playback (" + r.status +
-          (reason ? ": " + reason : "") + ")." + hint);
+        releaseToBuiltIn("Spotify refused playback (" + r.status + (reason ? ": " + reason : "") + ")." + hint);
       }, () => { lastPlayError = { status: r.status, reason: "" };
         setStatus("connected", "Spotify refused playback (" + r.status + ")."); });
     });
@@ -550,6 +579,12 @@ window.SpotifyMusic = (function () {
   function loadDevices() {
     return devicesList().then((ds) => {
       devices = ds;
+      // A DEVICE ID IS NOT STABLE. Spotify mints a new one each time the app
+      // restarts, so a stored id from yesterday names a device that no longer
+      // exists — and playing at it returns 404 "Device not found". Drop it
+      // whenever the live list disagrees.
+      const known = deviceId2();
+      if (known && !ds.some((d) => d.id === known)) lsDel(K_DEV);
       // Adopt whatever is already active, so the common case needs no choosing.
       if (!deviceId2()) {
         const act = ds.filter((d) => d.is_active)[0] || ds[0];
