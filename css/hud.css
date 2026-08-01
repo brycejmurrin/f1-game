@@ -167,6 +167,26 @@
 }
 .pc-move-wrap { left: calc(20px + var(--sal)); }
 .pc-look-wrap { left: calc(168px + var(--sal)); }
+/* ---------- clear of the docked panel ----------
+   MOVE stays under the left thumb; LOOK and the up/down column are anchored to
+   the RIGHT of the free strip instead of at fixed left offsets, so they sit
+   against the panel's edge whatever width it is. --dock-w is published by the
+   panel itself (css/tuner.css) — the previous version repeated the panel's
+   `min(88vw, 380px)` formula here, which stopped being true the moment the
+   panel grew to 560px in its wide-and-short rail layout, and everything laid
+   out to clear 380px landed on top of it.
+   The controls also shrink: at 852x393 the strip left of a 560px panel is
+   ~276px, which will not hold two 118px sticks and a 64px column at full size. */
+body.lt-open:not(.pc-nopanel) .pc-stick { width: 92px; height: 92px; }
+body.lt-open:not(.pc-nopanel) .pc-nub { width: 38px; height: 38px; margin: -19px 0 0 -19px; }
+body.lt-open:not(.pc-nopanel) .pc-btn { width: 52px; height: 46px; font-size: 15px; }
+body.lt-open:not(.pc-nopanel) .pc-move-wrap { left: calc(14px + var(--sal)); }
+body.lt-open:not(.pc-nopanel) .pc-altcol {
+  left: auto; right: calc(var(--dock-w) + 22px + var(--sar));
+}
+body.lt-open:not(.pc-nopanel) .pc-look-wrap {
+  left: auto; right: calc(var(--dock-w) + 88px + var(--sar));
+}
 .pc-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
 .pc-stick {
   position: relative; width: 118px; height: 118px; border-radius: 50%;
@@ -204,7 +224,7 @@
    right:8px + min(88vw,380px) sizing) so the two never overlap. Only while the
    panel is actually showing (pc-nopanel tucks it away and frees the width). */
 body.lt-open:not(.pc-nopanel) #pc-bar {
-  max-width: max(160px, min(70vw, 720px, calc(100vw - min(88vw, 380px) - 40px - var(--sal))));
+  max-width: max(160px, min(70vw, 720px, calc(100vw - var(--dock-w) - 40px - var(--sal) - var(--sar))));
   gap: 8px; padding: 6px 10px;
 }
 /* Same context: the tuner panel already carries plenty of on-screen text, so
