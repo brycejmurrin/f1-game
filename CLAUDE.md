@@ -221,7 +221,9 @@ js/game/         — game modules (each created with the G ctx façade from game
   perf.js        PerfGov        adaptive performance governor
   cameras.js     GameCams       the 13 player camera modes + debug free-cam
   cam-tune.js    CamTune        CAMERA TUNER data: per-mode framing offsets
-                                  (height/dist/side/pitch/yaw/fov), store + apply()
+                                  (height/dist/side/pitch/yaw/fov), store + apply();
+                                  plus cornerLead (chase/far-only knob read by
+                                  cameras.js to swing the chase INTO corners)
   hud.js         GameHud        in-race DOM HUD
   results.js     GameResults    results / season-end screens
   apex.js        ApexApi        the whole window.__apex dev API

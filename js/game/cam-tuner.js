@@ -31,8 +31,14 @@ function curLabel() { return (CAM_MODES[G.camMode] || CAM_MODES[0]).label; }
 function fmtCt(d, v) {
   const dec = (String(d.step).split(".")[1] || "").length;
   const s = Math.abs(v).toFixed(Math.min(dec, 2));
-  return (v > 0 ? "+" : v < 0 ? "−" : "") + s + d.unit;
+  // A bidirectional knob (min < 0) shows its sign; a 0..N knob (CORNER LEAD)
+  // reads as a plain magnitude.
+  const sign = (v > 0 && d.min < 0) ? "+" : v < 0 ? "−" : "";
+  return sign + s + d.unit;
 }
+// A knob may be limited to certain camera modes (CORNER LEAD → chase/far). No
+// `modes` list means it applies everywhere.
+function knobApplies(d, mode) { return !d.modes || d.modes.indexOf(mode) !== -1; }
 // Re-snap rather than let the damping walk there: at λ14 a slider drag would
 // read as a lag between the thumb and the picture, which is exactly the thing
 // you cannot judge a camera angle through.
@@ -77,6 +83,7 @@ function buildCamTunePanel() {
       lab.appendChild(span); lab.appendChild(inp);
       item.appendChild(lab);
       if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }
+      item.id = "ct-row-" + d.id;   // toggled per mode in refreshCamTunePanel
       host.appendChild(item);
     }
   }
@@ -99,10 +106,13 @@ function refreshCamTunePanel() {
   if (!$("ct-rows").dataset.built) return;
   const mode = curMode();
   for (const d of DEFS) {
-    const inp = $("ct-in-" + d.id), b = $("ct-v-" + d.id);
+    const inp = $("ct-in-" + d.id), b = $("ct-v-" + d.id), row = $("ct-row-" + d.id);
     const v = CamTune.get(mode, d.id);
     if (inp) inp.value = v;
     if (b) b.textContent = fmtCt(d, v);
+    // Hide a knob that doesn't apply to the mode under edit (CORNER LEAD is only
+    // meaningful on chase/far), so the panel only ever shows live controls.
+    if (row) row.style.display = knobApplies(d, mode) ? "" : "none";
   }
   updateCtProfileLabel();
 }

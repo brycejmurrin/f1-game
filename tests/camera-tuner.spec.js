@@ -30,11 +30,53 @@ const frame = (page, mode) => page.evaluate((m) => __apex.previewCam(m, 0.2, 55)
 test("camTune() reports the knob registry and defaults to zero everywhere", async ({ page }) => {
   await loadMonza(page);
   const all = await page.evaluate(() => __apex.camTune());
-  expect(all.defs.map((d) => d.id)).toEqual(["height", "dist", "side", "pitch", "yaw", "fov"]);
+  expect(all.defs.map((d) => d.id)).toEqual(["height", "dist", "side", "pitch", "yaw", "fov", "cornerLead"]);
   expect(all.tuned).toEqual({});
   const chase = await page.evaluate(() => __apex.camTune("chase"));
   for (const v of Object.values(chase)) expect(v).toBe(0);
   expect(await page.evaluate(() => __apex.camTune("nope"))).toBe(false);
+});
+
+// CORNER LEAD lives in the free-world chase branch, which needs the car's world
+// pose — previewCam() takes the road-frame branch, so this drives the LIVE camera
+// (jump → snapCam → camState) on a real corner instead.
+const liveCam = (page, mode, frac, cornerLead) => page.evaluate(({ mode, frac, cornerLead }) => {
+  __apex.camTune("chase", null);
+  if (cornerLead) __apex.camTune("chase", { cornerLead });
+  __apex.camera(mode); __apex.jump(frac, 60); __apex.freeze(true); __apex.snapCam();
+  const c = __apex.camState();
+  return { eye: c.eye.slice(), tgt: c.tgt.slice() };
+}, { mode, frac, cornerLead });
+
+test("CORNER LEAD only applies to chase/far, and leads the chase into corners", async ({ page }) => {
+  await loadMonza(page);
+  // registry marks it chase/far-only
+  const def = (await page.evaluate(() => __apex.camTune())).defs.find((d) => d.id === "cornerLead");
+  expect(def).toBeTruthy();
+  expect(def.min).toBe(0); expect(def.max).toBe(1);
+
+  // at a mid-lap corner, cornerLead swings the aim INTO the bend, scaling with
+  // the knob; and returns to the exact default at 0.
+  const FC = 0.24;
+  const base = await liveCam(page, "chase", FC, 0);
+  const half = await liveCam(page, "chase", FC, 0.5);
+  const full = await liveCam(page, "chase", FC, 1);
+  const tgtMove = (v) => Math.hypot(v.tgt[0] - base.tgt[0], v.tgt[1] - base.tgt[1], v.tgt[2] - base.tgt[2]);
+  const mFull = tgtMove(full), mHalf = tgtMove(half);
+  expect(mFull).toBeGreaterThan(0.5);          // the aim genuinely leads into the corner
+  expect(mHalf).toBeGreaterThan(0.1);
+  expect(mHalf).toBeLessThan(mFull);           // scales with the knob
+  const reset = await liveCam(page, "chase", FC, 0);
+  expect(reset.tgt[0]).toBeCloseTo(base.tgt[0], 3);   // 0 == the shipped framing, exactly
+
+  // cockpit ignores it entirely (free-world onboard branch never reads it)
+  const cpBase = await liveCam(page, "cockpit", FC, 0);
+  await page.evaluate(() => __apex.camTune("chase", { cornerLead: 1 }));
+  const cpWithLead = await page.evaluate(() => {
+    __apex.camera("cockpit"); __apex.jump(0.24, 60); __apex.freeze(true); __apex.snapCam();
+    const c = __apex.camState(); return { tgt: c.tgt.slice() };
+  });
+  expect(cpWithLead.tgt[0]).toBeCloseTo(cpBase.tgt[0], 3);
 });
 
 test("HEIGHT / DISTANCE / FOV move the solved vantage by the tuned amount", async ({ page }) => {
@@ -102,7 +144,7 @@ test("values clamp to the slider range, persist, and reset", async ({ page }) =>
   expect(stored.cockpit.height).toBe(5);
   const base = await frame(page, "cockpit");
   await page.evaluate(() => __apex.camTune("cockpit", null));
-  expect(await page.evaluate(() => __apex.camTune("cockpit"))).toEqual({ height: 0, dist: 0, side: 0, pitch: 0, yaw: 0, fov: 0 });
+  expect(await page.evaluate(() => __apex.camTune("cockpit"))).toEqual({ height: 0, dist: 0, side: 0, pitch: 0, yaw: 0, fov: 0, cornerLead: 0 });
   expect((await frame(page, "cockpit")).eye[1]).toBeLessThan(base.eye[1] - 4);
 });
 
@@ -113,7 +155,11 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   // it is what has a box), so assert on the inner panel.
   await expect(page.locator("#camtune-inner")).toBeVisible();
   expect(await page.locator("#ct-modes .lt-tab").count()).toBe(13);
-  expect(await page.locator("#ct-rows input[type=range]").count()).toBe(6);
+  // 7 sliders exist; CORNER LEAD only applies to chase/far, so on HOOD its row
+  // is hidden and the six geometric knobs show.
+  expect(await page.locator("#ct-rows input[type=range]").count()).toBe(7);
+  await expect(page.locator("#ct-row-cornerLead")).toBeHidden();
+  await expect(page.locator("#ct-row-height")).toBeVisible();
   await expect(page.locator("#ct-profile")).toContainText("HOOD");
 
   // Dragging HEIGHT writes to the LIVE mode (hood), not to chase.
