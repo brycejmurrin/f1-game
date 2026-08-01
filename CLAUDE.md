@@ -230,7 +230,7 @@ js/game/         — game modules (each created with the G ctx façade from game
   agentview.js   AgentView      the agent-facing JSON world view — world()/
                                   field()/trackInfo()/scene()/describe()/query()/
                                   atmosphere()/objective()/carView()/render()/
-                                  survey()/rollout()/terminal()/seed()/
+                                  survey()/rollout()/terminal()/corners()/
                                   agentHelp(); composes the __apex hooks
                                   into one egocentric snapshot with typed errors.
                                   render({what}) is the ONE raster (view|map|
@@ -493,7 +493,12 @@ __apex.obs()                  // full debug observation (pos, slip, clearances, 
 __apex.act({steer,throttle,brake}, dt, n) // set input + step n ticks → obs (1 round-trip)
 __apex.reset(frac, speed, x)  // fast episode reset without reloading assets → obs
 // ── Agent world view (js/game/agentview.js) — never returns null; failures are
-//    {ok:false, error, message, fix}. See docs/AGENT-WORLD-API.md ──
+//    {ok:false, error, message, fix}. Two exceptions to know: scene() on a
+//    street circuit whose props are still building returns a SUCCESSFUL empty
+//    list (not an error), and visible()/render({what:"view"}) reuse the last
+//    RENDERED frame — stage and let frames draw before trusting either.
+//    seed() below lives in apex.js, not agentview.js, and just returns a
+//    number. See docs/AGENT-WORLD-API.md ──
 __apex.agentHelp()            // manifest of this surface (~200 tokens)
 __apex.objective()            // what the GAME is: win condition, trade-offs,
                               //   constraints. Static; does NOT describe car

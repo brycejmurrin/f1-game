@@ -1171,7 +1171,7 @@ the whole `__apex` toolkit** — see `agentHelp()`, whose `read` section names t
 raw hooks that already return JSON (`physState`, `lightState`, `timing`, …) and
 whose `control` section names the drive/stage verbs.
 
-### `render({what, ...})` — and its four aliases `frame`/`plan`/`worldModel`/`carView(render)`
+### `render({what, ...})` — and its four deprecated aliases `frame`/`plan`/`worldModel`/`visible`
 
 `render({what})` is the **one** entry point for every raster; `what` selects
 `"view"` (the camera, → `frame` below), `"map"` (top-down, → `plan`), `"circuit"`

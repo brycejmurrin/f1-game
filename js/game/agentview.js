@@ -56,6 +56,16 @@ const AgentView = (function () {
   const r2 = (v) => Math.round(v * 100) / 100;
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
+  // Every comparison against NaN is false, so a non-numeric argument does not
+  // announce itself — it silently disables whatever test it feeds. A string
+  // radius survives `o.radius || 150` (non-empty strings are truthy), turns the
+  // distance check into `> NaN`, and scene() then returns the WHOLE registry
+  // while reporting radiusM: NaN. The same NaN in query()'s window makes every
+  // row fail instead, which reads as "nothing there". Both look like answers.
+  // isNum decides whether to reject; numOr coerces with a fallback.
+  const isNum = (v) => v != null && v !== "" && Number.isFinite(+v);
+  const numOr = (v, dflt) => (isNum(v) ? +v : dflt);
+
   // Radius in metres from curvature. Clamped rather than Infinity so the value
   // stays JSON-safe and comparisons don't have to special-case a straight.
   function radiusOf(k) {
@@ -625,6 +635,12 @@ const AgentView = (function () {
       if (bad) return bad;
       const o = opts || {};
       const detail = o.detail || "brief";
+      // Every sibling validates its enum; field() silently took the detailed
+      // branch for any typo, so "drivee" looked like it worked.
+      if (["brief", "full"].indexOf(detail) < 0) {
+        return fail("BadArgumentError", 'detail must be "brief" or "full"',
+                    'call field({detail:"full"})');
+      }
       const total = G.track.total;
       const sorted = G.cars.slice().sort((a, b) => b.prog - a.prog);
       const leader = sorted[0];
@@ -976,6 +992,18 @@ const AgentView = (function () {
     // obs().done conflates "I spun" with "I was teleported" — an agent needs to
     // tell those apart to know whether its policy failed or the sim rescued it.
     function terminal() {
+      // Guarded here rather than at the apex.js wrapper, which used to return a
+      // bare null before staging — the one hole in "no agent hook returns null".
+      // px is deliberately NOT required: finished/wrongWay/rescue are meaningful
+      // as soon as the grid exists, before the car has been placed.
+      if (!G.track) {
+        return fail("NoTrackError", "no track is loaded",
+                    'call __apex.race("monza") first');
+      }
+      if (!G.player) {
+        return fail("NoPlayerError", "the car grid has not been built",
+                    "call __apex.race(id) then __apex.go()");
+      }
       const p = G.player;
       const rescued = p.rescueLastT != null && (G.raceT - p.rescueLastT) < 0.5;
       let reason = null;
@@ -2205,7 +2233,10 @@ const AgentView = (function () {
       }
 
       if (kind === "car") {
-        const idx = Number(ref);
+        // Number("") is 0, so a malformed "prop:" resolved to index 0 and
+        // returned a real object instead of an error. Require actual digits;
+        // NaN then falls through to the NotFoundError below.
+        const idx = /^\d+$/.test(ref) ? Number(ref) : NaN;
         const car = G.cars.find((c, i) => (c.id != null ? c.id : i) === idx);
         if (!car) {
           return fail("NotFoundError", "no car " + ref,
@@ -2226,7 +2257,10 @@ const AgentView = (function () {
       }
 
       if (kind === "span") {
-        const idx = Number(ref);
+        // Number("") is 0, so a malformed "prop:" resolved to index 0 and
+        // returned a real object instead of an error. Require actual digits;
+        // NaN then falls through to the NotFoundError below.
+        const idx = /^\d+$/.test(ref) ? Number(ref) : NaN;
         const sp = (track.props && track.props.spans) || [];
         if (!(idx >= 0 && idx < sp.length)) {
           return fail("NotFoundError", "no span " + ref,
@@ -2246,7 +2280,10 @@ const AgentView = (function () {
       }
 
       if (kind === "prop") {
-        const idx = Number(ref);
+        // Number("") is 0, so a malformed "prop:" resolved to index 0 and
+        // returned a real object instead of an error. Require actual digits;
+        // NaN then falls through to the NotFoundError below.
+        const idx = /^\d+$/.test(ref) ? Number(ref) : NaN;
         const list = (track.props && track.props.list) || [];
         if (!(idx >= 0 && idx < list.length)) {
           return fail("NotFoundError", "no prop " + ref,
@@ -2426,6 +2463,16 @@ const AgentView = (function () {
       const kinds = o.kind ? (Array.isArray(o.kind) ? o.kind : [o.kind]) : null;
 
       // near: metres around the car. from/to: an arc-position window in metres.
+      if (o.near != null && !isNum(o.near)) {
+        return fail("BadArgumentError", "near must be a finite number of metres",
+                    "e.g. query({kind:'pine', near:150})");
+      }
+      if ((o.fromS != null && !isNum(o.fromS)) || (o.toS != null && !isNum(o.toS))) {
+        return fail("BadArgumentError",
+                    "fromS/toS must be finite arc positions in metres",
+                    "e.g. query({fromS:0, toS:400}); a non-numeric bound used to "
+                    + "filter every row out and read as an empty result");
+      }
       const nearM = o.near != null ? Math.max(1, +o.near) : null;
       const hasWin = o.fromS != null && o.toS != null;
       const s0 = hasWin ? wrapS(+o.fromS) : 0, s1 = hasWin ? wrapS(+o.toS) : 0;
@@ -2652,6 +2699,20 @@ const AgentView = (function () {
       const bad = notReady();
       if (bad) return bad;
       const o = opts || {};
+      // A NaN here survives clamp() (every comparison is false), makes ticks NaN,
+      // and `i < NaN` never runs a single tick — so the digest came back looking
+      // successful with Infinity/-Infinity speeds and no ok:false to warn you.
+      if ((o.dt != null && !isNum(o.dt)) || (o.seconds != null && !isNum(o.seconds))
+          || (o.policyHz != null && !isNum(o.policyHz))) {
+        return fail("BadArgumentError",
+                    "dt, seconds and policyHz must be finite numbers",
+                    "omit them for the defaults (dt 1/60, seconds 5, policyHz 10)");
+      }
+      if (o.policy != null && typeof o.policy !== "function") {
+        return fail("BadArgumentError", "policy must be a function",
+                    "policy is world => ({steer,throttle,brake}); use `input` for "
+                    + "a constant input instead");
+      }
       const dt = clamp(o.dt || 1 / 60, 1 / 240, 1 / 10);
       const seconds = clamp(o.seconds != null ? o.seconds : 5, 0.05, 120);
       const ticks = Math.max(1, Math.round(seconds / dt));
@@ -2696,6 +2757,11 @@ const AgentView = (function () {
                         "fix the policy; it receives world({detail:'brief'}) and "
                         + "must return {steer,throttle,brake} or null");
           }
+          // A policy that THROWS is caught below, but one that RETURNS
+          // {steer:NaN} was not: ?? in the driver only guards null/undefined, so
+          // a NaN steer reached the physics unfiltered. Drop non-finite steer
+          // rather than integrate it.
+          if (inp && !isNum(inp.steer)) inp = Object.assign({}, inp, { steer: 0 });
           G._testInput = inp || null;
         }
         for (let j = 0; j < G.cars.length; j++) {
@@ -2915,9 +2981,12 @@ const AgentView = (function () {
           "carView({team,parts,detail})":
             "WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, "
             + 'measured geometry; detail:"parts" adds per-part boxes',
-          "survey({at,lats,reachM,limit,profile})":
+          "survey({stations,lats,reachM,limit,profile})":
             "IS ANYTHING BROKEN — floating/buried props, props over the line, "
-            + "terrain through the road, holes and cliffs",
+            + "terrain through the road, holes and cliffs. Always scans the "
+            + "WHOLE lap: stations is a sample COUNT (default 24, alias at), "
+            + "not a position, and there is no fromS/toS window — filter the "
+            + "rows by frac to study one stretch",
         },
         act: {
           "rollout({seconds,dt,input,policy,policyHz,samples})":
@@ -3026,7 +3095,13 @@ const AgentView = (function () {
                     'reload the track with __apex.race("<id>")');
       }
       const o = opts || {};
-      const radius = Math.max(5, Math.min(o.radius || 150, 2000));
+      if (o.radius != null && !isNum(o.radius)) {
+        return fail("BadArgumentError", "radius must be a finite number of metres",
+                    "pass radius as a number (5-2000), e.g. scene({radius:150}) — "
+                    + "a non-numeric radius used to disable the distance filter "
+                    + "and return the whole registry");
+      }
+      const radius = Math.max(5, Math.min(numOr(o.radius, 150), 2000));
       const cap = Math.max(1, Math.min(o.limit | 0 || 24, 200));
       const kinds = Array.isArray(o.kinds) && o.kinds.length ? o.kinds : null;
 

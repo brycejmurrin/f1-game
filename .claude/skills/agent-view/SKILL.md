@@ -11,7 +11,11 @@ frames for you). In-page: `window.__apex.<tool>(...)`. Read `agentHelp()` +
 `objective()` once, then loop `world({detail:"drive"})` → decide →
 `act(...)`/`rollout({policy})` → `terminal()`. Pin `seed(n)` for a **field** A/B
 (`go()` races; it's a no-op for a solo `reset()`). Failures are typed
-(`{ok:false, error, message, fix}`), never `null`.
+(`{ok:false, error, message, fix}`), never `null` — but two reads fail *quietly*
+instead: `scene()` on a street circuit still building props returns a SUCCESSFUL
+empty list, and `visible()`/`render({what:"view"})` reuse the last **rendered**
+frame. Stage first (see Staging) — an empty scene means "not built yet", not
+"nothing there".
 
 `window.__apex` composes the ~90 raw debug hooks into one small surface that is
 **egocentric** (framed around the car), **typed** (failures are `{ok:false,
@@ -114,15 +118,11 @@ Read both once; do not re-fetch per tick.
   `propsOverRoadCandidates` are BROAD-PHASE — a large `lateralM` is a bounding-box
   false positive, not a prop on the line. The payload self-documents (read
   `thresholds.note` and `authoritative`).
-  **It always scans the WHOLE lap and cannot be aimed at one corner.** `stations`
-  (default 24, alias `at`) is a sample *count* around the full circuit, not a
-  position; `reachM` is the *lateral* half-width at each station. There is no
-  `fromS`/`toS` window like `query()` has — to study one stretch, raise `stations`
-  and filter the returned rows by `frac` yourself. On the CLI the flag is
-  `--stations <n>` (`--at` is the staging fraction 0-1 for every other command).
-  Confirming a hit with `groundY()` checks survey's arithmetic, not the ground
-  beneath it: both read the same `Tracks.terrainY()` sampler, so a bug in that
-  sampler makes the two agree while both are wrong. Look at the spot to be sure.
+  **It always scans the WHOLE lap and cannot be aimed at one corner** — `stations`
+  is a sample *count*, not a position, so to study one stretch raise it and filter
+  the rows by `frac`. CLI flag is `--stations <n>` (`--at` stays the staging
+  fraction). Why that is, and why `groundY()` is not an independent check of a
+  hit, are in `docs/DEBUG-HOOKS.md` → `survey()`.
 
 ## The driving loop
 
