@@ -137,7 +137,12 @@ window.MusicLib = (function () {
 
   /* ---------------- rendering ---------------- */
 
-  function mb(bytes) { return (bytes / 1048576).toFixed(1) + " MB"; }
+  // KB under a megabyte: a short clip is a legitimate thing to add, and one
+  // decimal of MB renders every one of them as a uniform "0.0 MB".
+  function mb(bytes) {
+    return bytes < 1048576 ? Math.max(1, Math.round(bytes / 1024)) + " KB"
+      : (bytes / 1048576).toFixed(1) + " MB";
+  }
 
   function row(meta, playingId) {
     const el = document.createElement("div");

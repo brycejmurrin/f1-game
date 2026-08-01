@@ -299,13 +299,24 @@
 
 /* ---------- MUSIC & SOUND: Spotify (personal use) ---------- */
 #as-sp-id {
-  flex: 1 1 60%; min-width: 0;
+  /* Full width, not the 56-60% the customise-screen fields use: this one takes
+     a pasted 32-character id and a field that shows a third of it makes a
+     mistyped character impossible to spot. */
+  flex: 1 1 100%; min-width: 0; width: 100%;
   /* 16px floor: iOS Safari zooms the page on focus under that, and the zoom
      sticks after the keyboard closes. */
   font: inherit; font-size: 16px;
   background: rgba(255, 255, 255, 0.08); color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 6px 8px;
 }
-.sp-uri { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; word-break: break-all; opacity: 0.9; }
+/* The redirect URI exists to be COPIED — and tokens.css sets user-select:none on
+   the whole app, so without this the one string the setup depends on cannot be
+   selected. It has to match the Spotify dashboard byte for byte, which is why
+   it is monospace and wraps rather than being ellipsised. */
+.sp-uri {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px;
+  word-break: break-all; opacity: 0.9;
+  -webkit-user-select: text; user-select: text; cursor: text;
+}
 #as-sp-wrap .opt-row { margin-top: 8px; }
 } /* @layer components */

@@ -291,35 +291,35 @@ window.SpotifyMusic = (function () {
         deviceId = device_id;
         ready = true;
         setStatus("connected", "Connected. Apex 26 is now a Spotify device.");
-        transfer(device_id);
-        installBackend();
+        // Install AFTER the transfer settles: GameAudio.setMusicBackend() calls
+        // start() synchronously, and a play request aimed at a device Spotify
+        // has not made active yet comes back "device not found".
+        transfer(device_id).then(installBackend, installBackend);
       });
       player.addListener("not_ready", () => {
         ready = false;
         setStatus("connecting", "Playback moved to another Spotify device.");
       });
-      // The four SDK errors mean completely different things to a user, so they
-      // get four different sentences instead of one raw payload dump.
+      // The four SDK errors mean completely different things to a user, so each
+      // gets its own sentence instead of one raw payload dump. account_error is
+      // by far the most common — it is what a non-Premium account looks like.
       player.addListener("authentication_error", () => {
-        clearToken();
-        teardown();
+        clearToken(); teardown();
         setStatus("configured", "Spotify rejected the session. Press CONNECT to sign in again.");
       });
       player.addListener("account_error", () => {
         teardown();
-        setStatus("error", "This Spotify account cannot play here — full Premium " +
-          "is required. Free accounts and the mobile-only plans (Premium Mini / " +
-          "Lite) are not supported by Spotify's web player.");
+        setStatus("error", "This Spotify account cannot play here — full Premium is " +
+          "required. Free accounts and the mobile-only plans (Premium Mini / Lite) " +
+          "are not supported by Spotify's web player.");
       });
       player.addListener("initialization_error", () => {
         teardown();
-        setStatus("error", "This browser can't run the Spotify player (no " +
-          "encrypted-media support). iOS Safari is the usual case — try desktop " +
-          "Chrome, Edge or Firefox.");
+        setStatus("error", "This browser can't run the Spotify player (no encrypted-" +
+          "media support). iOS Safari is the usual case — try desktop Chrome, Edge or Firefox.");
       });
-      player.addListener("playback_error", () => {
-        setStatus("connected", "Spotify could not play that track. Try SKIP TRACK.");
-      });
+      player.addListener("playback_error", () =>
+        setStatus("connected", "Spotify could not play that track. Try SKIP TRACK."));
       player.addListener("player_state_changed", (s) => {
         if (!s) { track = null; paused = true; emit(); return; }
         const t = s.track_window && s.track_window.current_track;
@@ -364,7 +364,8 @@ window.SpotifyMusic = (function () {
   // Make this browser the active device. play:false so merely connecting never
   // blasts audio at someone who only opened the settings panel.
   function transfer(id) {
-    api("/me/player", { method: "PUT", body: JSON.stringify({ device_ids: [id], play: false }) });
+    return api("/me/player",
+      { method: "PUT", body: JSON.stringify({ device_ids: [id], play: false }) });
   }
 
   /* ---------------- GameAudio backend ----------------
@@ -440,11 +441,11 @@ window.SpotifyMusic = (function () {
 
   /* ---------------- panel ---------------- */
 
+  // Short on purpose: the Premium / own-app / allowlist requirements are static
+  // and live in the panel's own help paragraph. Repeating them in a live status
+  // line just prints the same three sentences twice.
   function copyOff() {
-    return "Spotify is off. Paste your own Spotify app Client ID above to enable it. " +
-      "Needs Spotify PREMIUM, your own app in the Spotify developer dashboard with " +
-      "the redirect URI below registered, and your account added to that app's user " +
-      "allowlist.";
+    return "off — paste a Client ID above to enable it.";
   }
 
   function el(id) { return document.getElementById(id); }
