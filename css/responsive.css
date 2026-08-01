@@ -18,21 +18,30 @@ body.desktop #pm-calib { display: none !important; }
   /* The select sheet is the one screen that wants to fill the space it is
      given rather than shrink to content — it is the game's "home". */
   #sel-inner { height: min(100%, 720px); }
-  /* Main menu: branding left, buttons right in two columns */
+  /* Main menu: branding left, buttons right — as ONE centred composition.
+     Content-sized columns, centred as a pair. `1fr 1fr` split the whole screen
+     between them, so the wider the display the further apart they drifted: on
+     1920x1080 the title sat hard against the left edge with ~630px of nothing
+     before the buttons. */
   #overlay {
-    grid-template-columns: 1fr 1fr;
-    justify-items: start;
-    column-gap: 80px; row-gap: 14px;
-    background: radial-gradient(70% 80% at 28% 50%, rgba(225,6,0,0.18), transparent 60%), rgba(6,6,10,0.55);
+    grid-template-columns: auto auto;
+    justify-content: center; align-content: center; justify-items: start;
+    column-gap: clamp(48px, 5vw, 96px); row-gap: 18px;
+    background: radial-gradient(70% 80% at 38% 50%, rgba(225,6,0,0.18), transparent 60%), rgba(6,6,10,0.55);
   }
-  #title, #subtitle, #audiostate, #disclaimer { grid-column: 1; }
+  #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
+  #menu-meta  { grid-column: 1; grid-row: 2; align-items: flex-start; }
   #menu-buttons {
-    grid-column: 2; grid-row: 1 / -1; align-self: center; justify-self: start;
-    grid-template-columns: 1fr 1fr; gap: 10px 16px; width: auto;
+    grid-column: 2; grid-row: 1; align-self: center;
+    /* auto-flow COLUMN with three rows: the primaries fill the first column top
+       to bottom and the secondaries start again at the top of the second. Row
+       placement alone let auto-placement carry the secondaries down to rows 3-4,
+       so DATA HUB and HOW TO PLAY hung off the bottom of the block. */
+    grid-template-rows: repeat(3, auto);
+    grid-auto-flow: column;
+    gap: 10px 16px; width: auto;
   }
   #menu-buttons .bigbtn { width: 190px; }
-  #menu-buttons .bigbtn:not(.alt) { grid-column: 1; }
-  #menu-buttons .bigbtn.alt { grid-column: 2; }
 }
 
 /* Scale up HUD readouts on large screens so they're legible at arm's length. */
