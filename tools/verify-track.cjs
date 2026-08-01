@@ -74,12 +74,15 @@ if (process.argv[2] === "--all") {
 // tools/graph-parity.cjs points it at a baseline worktree so two builds can be
 // compared vertex-for-vertex in one process.
 function buildContext(rootOverride) {
-  const ROOT = rootOverride || module.exports._ROOT;
+  // Locals, NOT a reassignment of the module-level consts, and NOT read back off
+  // module.exports: this file calls main() at load time when run directly, which
+  // is before the export assignment at the bottom has executed.
+  const root = rootOverride || ROOT;
   // A baseline checkout carries its OWN load order — reading the working tree's
   // manifest against an older tree asks it for files that do not exist there.
-  const MANIFEST = rootOverride
+  const manifest = rootOverride
     ? require(path.join(rootOverride, "tools/manifest.cjs"))
-    : module.exports._MANIFEST;
+    : MANIFEST;
   const GLX = {
     createMesh: function (buf) {
       const verts    = buf && buf.pos ? buf.pos.length / 3 : 0;
@@ -113,7 +116,7 @@ function buildContext(rootOverride) {
   // to `var` so they become properties on the sandbox (VM const is block-scoped
   // and NOT visible as ctx.Foo after execution).
   function runFile(relPath) {
-    const src = fs.readFileSync(path.join(ROOT, relPath), "utf8");
+    const src = fs.readFileSync(path.join(root, relPath), "utf8");
     // Replace only `const` at the very start of a line (no indent = top-level).
     const patched = src.replace(/^const\b/gm, "var");
     vm.runInContext(patched, ctx, { filename: relPath });
@@ -123,11 +126,11 @@ function buildContext(rootOverride) {
   // truth the load-order test asserts index.html against. "@circuits" expands
   // to every js/tracks/<id>.js: each pushes itself onto window.TrackDefs, and
   // tracks.js reads that list at load time, so they must run BEFORE it.
-  for (const entry of MANIFEST.TRACK_VM) {
+  for (const entry of manifest.TRACK_VM) {
     if (entry === "@circuits") {
-      for (const f of fs.readdirSync(path.join(ROOT, MANIFEST.CIRCUITS_DIR))
+      for (const f of fs.readdirSync(path.join(root, manifest.CIRCUITS_DIR))
                         .filter((f) => f.endsWith(".js")).sort()) {
-        runFile(path.join(MANIFEST.CIRCUITS_DIR, f));
+        runFile(path.join(manifest.CIRCUITS_DIR, f));
       }
     } else {
       runFile(entry);
@@ -190,4 +193,4 @@ function verifyTrack(id) {
 }
 
 // Reusable VM harness — consumed by tests (scenery-api-contract, foundation).
-module.exports = { buildContext, loadTrackIds, verifyTrack, _ROOT: ROOT, _MANIFEST: MANIFEST };
+module.exports = { buildContext, loadTrackIds, verifyTrack };
