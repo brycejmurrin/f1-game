@@ -690,8 +690,20 @@ void main() {
     vec3 P = ssrViewPos(vUV);
     // View-space normal from depth derivatives (cheap; rough at silhouettes, but
     // the road-mask + march thickness test reject the bad cases).
-    vec3 dpx = ssrViewPos(vUV + vec2(uReflTexel.x, 0.0)) - P;
-    vec3 dpy = ssrViewPos(vUV + vec2(0.0, uReflTexel.y)) - P;
+    // 3-TEXEL baseline, not 1: at phone resolution (~2500 px wide, DPR 2-3) one
+    // texel spans so little world space at a grazing road angle that the depth
+    // deltas are quantization-dominated — the reconstructed normal turns to
+    // noise, upDot dances around the road-mask threshold, and the wet mirror
+    // breaks into patches that shift every frame (and drops out entirely in the
+    // hood cam, whose slight up-aim grazes hardest). A wider baseline scales the
+    // world-space deltas up 3x, cutting the quantization noise 3x at every
+    // resolution — a 3-texel step at phone res sees the geometry the way a
+    // 1-texel step did at the low res where this demonstrably worked. The normal
+    // is only a coarse road-vs-wall classifier (the road's reflection RAY uses
+    // the flattened plane below), so the slight extra blur is free.
+    vec2 nT = uReflTexel * 3.0;
+    vec3 dpx = ssrViewPos(vUV + vec2(nT.x, 0.0)) - P;
+    vec3 dpy = ssrViewPos(vUV + vec2(0.0, nT.y)) - P;
     // Guarded like the SSAO normal: parallel/zero derivatives at silhouettes
     // NaN the normalize and sparkle the far field.
     vec3 crv = cross(dpx, dpy);
@@ -714,7 +726,13 @@ void main() {
     // keep the clean, high-impact foreground and taper the distance out. The
     // fade end is pushed out (-55 → -78) so the taper spreads across more screen
     // rows near the cockpit horizon instead of compressing into a visible band.
-    float roadMask = smoothstep(0.40, 0.75, upDot)
+    // Relaxed up-facing test (was 0.40..0.75): with the road's reflection ray
+    // now built from the flattened plane, upDot only has to separate ROAD from
+    // WALLS — and walls sit at upDot ≈ 0.0-0.1, nowhere near 0.25. The old 0.40
+    // edge (already scraped by banked corners per LIGHTING-KNOBS) meant a noisy
+    // grazing-angle normal could drop genuine road below threshold — the other
+    // half of the patchy/dropout mask failure at phone resolution.
+    float roadMask = smoothstep(0.25, 0.55, upDot)
                    * smoothstep(uSsrNear, uSsrNear * 2.8, P.z)
                    * (1.0 - smoothstep(-22.0, -78.0, P.z));
     // Car bodywork: up-facing-ish panels, allowed much nearer than the road
@@ -724,7 +742,9 @@ void main() {
                   * (1.0 - smoothstep(-22.0, -55.0, P.z));
     // Reject the noisy car silhouette rim: dpx/dpy (already computed above for Nv)
     // spike at edge pixels, which is exactly where the cheap upDot normal is worst.
-    float edgeGrad = length(dpx) + length(dpy);
+    // ÷3 compensates the 3-texel derivative baseline so the rejection threshold
+    // keeps the same per-texel meaning it was tuned at.
+    float edgeGrad = (length(dpx) + length(dpy)) * (1.0 / 3.0);
     carMask *= 1.0 - smoothstep(0.35, 0.9, edgeGrad);
     float roadTerm = roadMask * uReflect;
     float carTerm  = carMask  * uCarReflect;
