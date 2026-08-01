@@ -35,7 +35,11 @@ async function episode(page, policy) {
     const A = window.__apex;
     const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
     A.headless(true);
-    A.reset(0.02, 55, 0);
+    // Fixed seed: the two policies must face the SAME grid and the same AI
+    // overtake decisions, or the comparison measures the deal as much as the
+    // driving. Before seeding existed this bench compared runs that were never
+    // comparable — see tests/agent-determinism.spec.js.
+    A.reset(0.02, 55, 0, 1234);
     const total = A.world().track.lengthM;
     let dist = 0, steps = 0, prevS = A.world().ego.s;
     for (let i = 0; i < 500; i++) {

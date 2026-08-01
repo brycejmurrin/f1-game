@@ -358,6 +358,36 @@ function isErsDeploying(c) {
 }
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
+
+// ── seeded simulation randomness ────────────────────────────────────────────
+// Everything that FEEDS THE SIMULATION draws from here, never Math.random(), so
+// a run can be reproduced: same seed + same inputs => same result. Without this
+// two runs of one scenario diverge immediately (the AI overtake roll below is
+// per-tick, per-car), which makes any A/B — physics tuning, an agent policy
+// comparison, tests/agent-drive-bench — a comparison of runs that were never
+// comparable.
+//
+// Cosmetic randomness (camera shake, lightning, particles, audio noise) stays on
+// Math.random() DELIBERATELY. It must not consume this stream: drawing from it
+// would shift every subsequent sim value, so whether a spark spawned would
+// change where a car ends up. Visual-only code must not perturb the sim.
+//
+// LCG, same constants as glibc; matches the ten-line generator in the Luden.io
+// agent template. Cheap, seedable, and long-period enough for a race.
+let _simSeed = 1;
+let _simRngState = 1 >>> 0;
+function simSeed(v) {
+  if (v !== undefined) {
+    _simSeed = (v >>> 0) || 1;
+    _simRngState = _simSeed;
+  }
+  return _simSeed;
+}
+// uniform [0,1) — the drop-in for Math.random() on sim paths
+function simRnd() {
+  _simRngState = (Math.imul(_simRngState, 1103515245) + 12345) >>> 0;
+  return _simRngState / 0x100000000;
+}
 const { TIER_V } = GameTables;
 // 6-speed gearbox with realistic PROGRESSIVE ratios (research: real/F1 gearboxes
 // space the ratios so the steps shrink in the higher gears). So an upshift drops
@@ -808,7 +838,7 @@ function makeCars() {
       // little jitter) so the AI fan out instead of all stacking on the racing
       // line. Used as a fraction of half-width in updateCar.
       const lane = clamp(((idx / Math.max(1, total - 1)) * 2 - 1) * 0.78
-        + (Math.random() - 0.5) * 0.12, -0.85, 0.85);
+        + (simRnd() - 0.5) * 0.12, -0.85, 0.85);
       idx++;
       cars.push({
         team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num, isPlayer: isP,
@@ -822,7 +852,7 @@ function makeCars() {
         finished: false, finishT: 0, finPos: 0,
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
-        skill: Math.min(1.0, 0.92 + Math.random() * 0.1),
+        skill: Math.min(1.0, 0.92 + simRnd() * 0.1),
         aiBrakeT: 0, lane,
       });
     });
@@ -832,7 +862,7 @@ function makeCars() {
 
 function gridUp() {
   // grid order: by tier then random-ish; player at P12 for a fun climb
-  const order = cars.slice().sort((a, b) => (a.tier - b.tier) || (Math.random() - 0.5));
+  const order = cars.slice().sort((a, b) => (a.tier - b.tier) || (simRnd() - 0.5));
   const pi = order.indexOf(player);
   order.splice(pi, 1);
   order.splice(Math.min(11, order.length), 0, player);
@@ -1523,6 +1553,10 @@ const G = {
   get lapsTarget() { return lapsTarget; },
   get ranked() { return ranked; },
   get sectorLast() { return sectorLast; },
+  // Setting the seed also rewinds the stream, so seeding then rebuilding the
+  // grid reproduces a scenario exactly. See simSeed/simRnd.
+  get seed() { return simSeed(); }, set seed(v) { simSeed(v); },
+  simSeed, simRnd,
   get DRIFT() { return DRIFT; }, set DRIFT(v) { DRIFT = v; },
   get FRONT_GRIP() { return FRONT_GRIP; }, set FRONT_GRIP(v) { FRONT_GRIP = v; },
   get PACE() { return PACE; }, set PACE(v) { PACE = v; },
@@ -1744,7 +1778,7 @@ function update(dt) {
       if (lit === 1) Input.calibrate();
       // all five lit — hold for a randomised beat, as in real F1, so the
       // start can't be timed and lights-out is a genuine reaction moment.
-      if (lit === 5) startHold = 0.2 + Math.random() * 1.8;
+      if (lit === 5) startHold = 0.2 + simRnd() * 1.8;
     }
     if (lightsLit === 5 && countT > 5 + startHold) {
       state = "race"; raceT = 0;
@@ -2042,7 +2076,7 @@ function updateCar(c, dt, ranked) {
   const ahead = ranked[(c.rank || 1) - 2];
   const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
   c.otArmed = gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0 && !c.finished && c.speed > 15;
-  const fire = c.isPlayer ? Input.consumeOvertake() : (c.otArmed && Math.random() < 1 - Math.exp(-0.7 * dt));
+  const fire = c.isPlayer ? Input.consumeOvertake() : (c.otArmed && simRnd() < 1 - Math.exp(-0.7 * dt));
   if (fire && c.otArmed) {
     c.otT = OT_TIME; c.otCool = OT_COOL + OT_TIME;
     if (c.isPlayer && soundOn) GameAudio.deployBoost();
