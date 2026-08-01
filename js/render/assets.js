@@ -198,6 +198,35 @@ const Assets = (function () {
     return true;
   }
 
+  // Adopt material layers built in the BROWSER rather than fetched from a pack.
+  // `albedoImgs`/`normalImgs` are sparse arrays indexed by MAT id holding
+  // anything createTextureArray accepts (ImageBitmap / canvas / ImageData).
+  //
+  // This exists for assets/pack/webbake.js, the in-browser baker: Poly Haven's
+  // API and CDN both allow cross-origin canvas reads, so a browser can pull real
+  // CC0 scans, composite them and preview them live — which is the only route to
+  // real materials for anyone without a shell. Returns the new state(); never
+  // throws, and a failure leaves the previous arrays untouched.
+  function adopt(size, albedoImgs, normalImgs, scales) {
+    if (!supported() || !size || !albedoImgs) { _err = "adopt-unsupported"; return state(); }
+    let a = null, n = null;
+    try {
+      a = _gfx.createTextureArray(size, albedoImgs, MAT_LAYERS);
+      if (!a) throw new Error("albedo-upload");
+      if (normalImgs) n = _gfx.createTextureArray(size, normalImgs, MAT_LAYERS);
+    } catch (e) {
+      if (a && _gfx.freeTexture) _gfx.freeTexture(a);
+      if (n && _gfx.freeTexture) _gfx.freeTexture(n);
+      _err = (e && e.message) || "adopt-failed";
+      return state();
+    }
+    const sc = new Float32Array(MAT_LAYERS);
+    for (let i = 0; i < MAT_LAYERS; i++) sc[i] = scales && scales[i] > 0 ? scales[i] : 0;
+    _gfx.setMaterialMaps({ albedo: a, normal: n, scales: sc });
+    _uploaded = true; _tier = "browser-bake"; _err = null;
+    return state();
+  }
+
   // Drop the material arrays and go back to the procedural look. Used by the
   // tier switch and by tests that need a clean slate.
   function unload() {
@@ -326,8 +355,8 @@ const Assets = (function () {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
-  return { init, supported, manifest, load, unload, state,
-           model, modelSync, models, loadModels, env, credits };
+  return { init, supported, manifest, load, unload, adopt, state,
+           model, modelSync, models, loadModels, env, credits, MAT_LAYERS };
 })();
 
 // No-build global export.
