@@ -28,6 +28,38 @@
   overscroll-behavior: contain;
 }
 
+/* ---------- dialogs arrive, rather than appearing ----------
+   Scoped to `.dim` — the modal sheets. The two full-screen flows (#select,
+   #carsetup) are swapped inside a View Transition by menus.js, and animating
+   those here would run two transitions over each other.
+   A CSS animation, not @starting-style: these screens are toggled with the
+   hidden attribute, so they come back from `display: none`, which restarts an
+   animation by itself and needs no allow-discrete plumbing. */
+@media (prefers-reduced-motion: no-preference) {
+  .screen.dim { animation: scrim-in 0.16s ease-out; }
+    /* no fill-mode: nothing may hold a dialog at zero opacity if the animation
+     never runs — the sheet must be visible either way. */
+  .screen.dim > .sheet { animation: sheet-in 0.19s cubic-bezier(0.2, 0.7, 0.3, 1); }
+}
+@keyframes scrim-in { from { opacity: 0; } }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+
+/* ---------- typography ----------
+   balance keeps a heading from dropping one lonely word onto its own line —
+   these titles wrap constantly at phone widths. pretty does the same for the
+   orphan at the end of a paragraph of help text. Both are cheap and inert where
+   unsupported. */
+h1, h2, h3, .sheet-head h2, .adv-sec, .pm-group-h, .tune-label { text-wrap: balance; }
+p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
+
+/* Some people turn transparency down at the OS level, and every sheet here is
+   translucent over a moving 3D scene — the worst case for legibility. Give them
+   solid surfaces. */
+@media (prefers-reduced-transparency: reduce) {
+  .sheet, .dh-card { background: var(--surf-1); }
+  .screen.dim { background: rgba(0, 0, 0, 0.92); }
+}
+
 /* ---------- sheet: head / body / foot ---------- */
 .sheet {
   display: grid;
