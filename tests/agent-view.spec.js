@@ -556,6 +556,12 @@ test.describe("trackInfo() corner table", () => {
       // likeliest place for those to drift apart
       if (c.dir === "R") expect(c.sweepDeg).toBeGreaterThan(0);
       if (c.dir === "L") expect(c.sweepDeg).toBeLessThan(0);
+      // k must honour "+k = right" — it is the signed mean curvature, so its sign
+      // must match dir/sweepDeg. A point sample used to flip sign at noisy apexes
+      // (Monaco's hairpin read dir:"R" with a negative k), contradicting the
+      // convention every payload advertises.
+      if (c.dir === "R") expect(c.k).toBeGreaterThan(0);
+      if (c.dir === "L") expect(c.k).toBeLessThan(0);
     }
   });
 
@@ -1682,6 +1688,10 @@ test.describe("scene()", () => {
       // side must agree with the bearing it was derived from
       if (p.side === "right") expect(p.bearingDeg).toBeGreaterThan(0);
       if (p.side === "left") expect(p.bearingDeg).toBeLessThan(0);
+      // trackSide is the STABLE centreline side (which side of the road) that
+      // worldModel()/describe() also report, so the same prop cross-references
+      // between the egocentric and centreline frames instead of flipping.
+      expect(["left", "right", "across", "off-course"]).toContain(p.trackSide);
       expect(p.sizeM.length).toBe(3);
       if (i) expect(p.distM).toBeGreaterThanOrEqual(s.props[i - 1].distM);
     }

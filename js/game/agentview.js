@@ -29,6 +29,9 @@ const AgentView = (function () {
   const CONVENTIONS =
     "metres, m/s, seconds, radians unless the key says otherwise; " +
     "+x = right of centreline; +k = right-hand turn; " +
+    "side is centreline-relative (which side of the road) EXCEPT scene()'s side, " +
+    "which is egocentric (which side of your nose — see its bearingDeg; its " +
+    "trackSide is the centreline side for cross-referencing); " +
     "rival lateralM is relative to the player (+ = to your right)";
 
   // Corner-speed model for the suggested brake point. Deliberately approximate:
@@ -257,7 +260,12 @@ const AgentView = (function () {
           s: r1(wrapS(s)),
           dir: radius >= STRAIGHT_R ? "straight" : psi > 0 ? "R" : "L",
           radiusM: r1(radius),
-          k: +kA.toFixed(5),
+          // Signed mean curvature over the whole corner (psi/arc = sign(psi)/radius),
+          // NOT the point sample kA: kA is a lone 30 m reading that can flip sign at
+          // an OSM-noisy apex, so dir (from psi) and k (from kA) could disagree and
+          // k could contradict the "+k = right" convention. Deriving k from the same
+          // swept psi keeps k, dir, radiusM and sweepDeg one consistent story.
+          k: +(psi / arc).toFixed(5),
           sweepDeg: r1(psi * 180 / Math.PI),
           severity: severityOf(radius),
           widthM: r1(scr.hw * 2),
@@ -292,6 +300,7 @@ const AgentView = (function () {
                                                 : Math.min(99999, arc / Math.abs(psi));
             prev.turn = prev.turn.split("-")[0] + "-" + c.turn;
             prev.radiusM = r1(radius);
+            prev.k = +(psi / arc).toFixed(5);   // keep k swept-consistent post-merge
             prev.sweepDeg = r1(psi * 180 / Math.PI);
             prev.severity = severityOf(radius);
             prev.lengthM = r1(arc);
@@ -3041,11 +3050,18 @@ const AgentView = (function () {
         const dx = p.x - ox, dz = p.z - oz;
         if (dx * dx + dz * dz > radius * radius) continue;      // cheap reject
         const rr = rel(p.x, p.z);
+        const psd = propPos(p);
         // The stable id is the registry index — derived, not stored, so it
         // survives a rebuild and costs nothing. describe(id) expands any row.
+        // `side` here is EGOCENTRIC (which side of your nose, from bearingDeg);
+        // `trackSide` is the stable centreline side worldModel()/describe() report,
+        // so the same prop cross-references cleanly between the two frames.
         near.push({ id: propId(pi),
                     kind: p.kind, distM: rr.distM, bearingDeg: rr.bearingDeg,
                     side: rr.bearingDeg > 8 ? "right" : rr.bearingDeg < -8 ? "left" : "ahead",
+                    trackSide: p.side != null ? sideOf(p.side)
+                             : psd.lat == null ? "off-course"
+                             : psd.lat > 0 ? "right" : "left",
                     sizeM: [p.w, p.h, p.d], at: [p.x, p.y, p.z],
                     // whether sizeM came from the emitted geometry or the call
                     // site's guess, and for anonymous assemblies how much of the
@@ -3063,8 +3079,10 @@ const AgentView = (function () {
         const dx = l.x - ox, dz = l.z - oz;
         if (dx * dx + dz * dz > radius * radius) continue;
         const rr = rel(l.x, l.z);
+        const lp = Tracks.project(G.track, l.x, l.z);   // centreline side, like props
         lamps.push({ kind: l.kind, distM: rr.distM, bearingDeg: rr.bearingDeg,
-                     side: rr.bearingDeg > 0 ? "right" : "left" });
+                     side: rr.bearingDeg > 0 ? "right" : "left",
+                     trackSide: lp ? (lp.lat > 0 ? "right" : "left") : "off-course" });
       }
       lamps.sort((a, b) => a.distM - b.distM);
 
