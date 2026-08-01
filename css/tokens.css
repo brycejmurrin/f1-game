@@ -163,6 +163,16 @@
      tracks whatever --accent resolves to (custom props resolve at use-time). */
   --accent: var(--red);
   --accent-dim: color-mix(in oklab, var(--accent) 40%, var(--bg));
+  /* Keyboard focus is WHITE, not brand red, for two independent reasons.
+     (1) Contrast: #e10600 on the near-black page measures ~2.6:1, under the
+         3:1 WCAG 1.4.11 / 2.4.11 asks of a focus indicator. White is ~19:1 on
+         the page and ~7:1 on the red primary button — legible on every surface
+         this UI has.
+     (2) Meaning: red already means SELECTED here (.sel-chip.active,
+         .track-row.active, .dh-dchip.dh-active all carry a red ring or tint).
+         A red focus ring on an already-selected chip is invisible — the two
+         states rendered identically. Different colour, different meaning. */
+  --focus: #fff;
 
   /* ---- ELEVATION, for a dark UI ----------------------------------------
      A drop shadow is how you raise something off a LIGHT page; on a near-black
@@ -258,6 +268,31 @@ button:active { background: rgba(255, 255, 255, 0.2); }
    so the next tap hit the wrong button. Dim, keep the slot. */
 button:disabled { opacity: 0.35; cursor: default; }
 button:disabled:active { background: rgba(255, 255, 255, 0.07); }
+
+/* ---- KEYBOARD FOCUS RING (WCAG 2.4.7 Focus Visible) --------------------
+   Two decisions here, both learned the hard way.
+
+   INSET, not outset. Every focusable control in this UI sits inside at least
+   one clipping box — a .pane scroll region, #sel-tracks, #cs-options, .sheet,
+   .dh-card, and finally body/html, all of which are overflow:hidden. A ring
+   drawn 2px OUTSIDE the border box lands outside that clip and gets sliced:
+   an audit of every control on every menu screen found the left side of the
+   track rows' ring, the top of the team tiles', and the bottom edge of the
+   last row in half a dozen panes all cut off. Chasing that with a per-
+   container override is endless — a negative offset draws the ring just
+   inside the box instead, where nothing can ever clip it, in any layout.
+
+   BASE LAYER, not overlays. This rule used to live in css/responsive.css,
+   which is @layer overlays — a HIGHER layer than @layer components, so it
+   beat every per-component focus override in the codebase on layer order
+   alone, regardless of specificity. `.track-row:focus-visible` losing to
+   `button:focus-visible` is not a cascade you can debug by reading
+   specificity. The generic default belongs in base, where a component can
+   still override it. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
 /* THE density switch. A landscape phone is ~390-430px tall and that is the
    whole constraint: the same menus, tighter. Nothing here changes layout —
    only how much room each part takes — so there is exactly one place to tune

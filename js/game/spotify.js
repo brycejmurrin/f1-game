@@ -36,9 +36,17 @@ window.SpotifyMusic = (function () {
   const K_TOKEN = "apex26.spotify.token";
   const S_VERIFY = "apex26.spotify.verifier";   // sessionStorage: one auth round-trip
   const S_STATE = "apex26.spotify.state";
+  const K_CTX = "apex26.spotify.context";       // chosen playlist uri, or "liked"
+  const K_MODE = "apex26.spotify.mode";         // "remote" (Connect) | "browser" (SDK)
+  const K_DEV = "apex26.spotify.device";        // remote mode: which device to play on
 
+  // playlist-read-private / user-library-read are what let the panel OFFER
+  // something to play. Without a chosen context, "play" on a freshly
+  // transferred device resumes nothing: a browser that has never played has no
+  // context to resume, so the device connects and stays silent.
   const SCOPES = "streaming user-read-playback-state " +
-    "user-modify-playback-state user-read-currently-playing";
+    "user-modify-playback-state user-read-currently-playing " +
+    "playlist-read-private user-library-read";
   const AUTH_URL = "https://accounts.spotify.com/authorize";
   const TOKEN_URL = "https://accounts.spotify.com/api/token";
   const SDK_URL = "https://sdk.scdn.co/spotify-player.js";
@@ -53,6 +61,10 @@ window.SpotifyMusic = (function () {
   let ready = false;
   let sdkPromise = null;
   let vol = 0.5;
+  // Set by any listener that has already named a failure, so the SDK's next
+  // token request cannot paper over it with a generic line.
+  let explained = false;
+  let lastPlayError = null;    // {status, reason} from the last refused play
   const subs = [];
 
   /* ---------------- storage (raw, not GameStore) ----------------
@@ -68,6 +80,32 @@ window.SpotifyMusic = (function () {
   function ssDel(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
 
   function clientId() { return (ls(K_ID) || "").trim(); }
+  // TWO WAYS TO PLAY, and remote is the default because it works everywhere.
+  //   "browser" — this tab becomes a Spotify device via the Web Playback SDK.
+  //               Needs EME/DRM, needs a user gesture to unmute its own <audio>,
+  //               and cannot work at all on iOS Safari (no FairPlay in the SDK).
+  //   "remote"  — plain Web API: the game drives Spotify running on a phone or
+  //               desktop the account already has. No DRM, no SDK, no gesture
+  //               rules, works on every browser. The music comes out of that
+  //               device instead of the game tab, which is the whole trade.
+  function mode() { return ls(K_MODE) === "browser" ? "browser" : "remote"; }
+  function setMode(m) {
+    const v = m === "browser" ? "browser" : "remote";
+    if (v === mode()) return v;
+    lsSet(K_MODE, v);
+    teardown();                       // the old transport is meaningless now
+    setStatus(readToken() ? "configured" : (available() ? "configured" : "off"),
+      v === "browser"
+        ? "Switched to playing in this browser. Press CONNECT."
+        : "Switched to controlling Spotify on another device. Press CONNECT.");
+    return v;
+  }
+  function deviceId2() { return ls(K_DEV) || ""; }
+  function setDevice(id) { if (id) lsSet(K_DEV, id); else lsDel(K_DEV); render(); return id || ""; }
+  function contextUri() { return ls(K_CTX) || ""; }
+  function setContext(v) { if (v) lsSet(K_CTX, v); else lsDel(K_CTX); render(); return v || ""; }
+  let lists = [];                                // [{name, uri}] for the picker
+  let devices = [];                              // remote mode: the account's devices
 
   function readToken() {
     try { const t = JSON.parse(ls(K_TOKEN) || "null"); return t && t.access_token ? t : null; }
@@ -142,6 +180,7 @@ window.SpotifyMusic = (function () {
         // Retrying would just spin; drop it and report disconnected.
         clearToken();
         teardown();
+        explained = true;
         setStatus("configured", j.error === "invalid_grant"
           ? "Spotify session expired or the app was revoked. Press CONNECT to sign in again."
           : "Could not refresh the Spotify session (" + j.error + "). Press CONNECT.");
@@ -153,6 +192,9 @@ window.SpotifyMusic = (function () {
         access_token: j.access_token,
         refresh_token: j.refresh_token || refreshToken,
         expires_at: Date.now() + (j.expires_in || 3600) * 1000,
+        // A refresh does not always echo the scope; keep what was granted at
+        // sign-in so debug()/check() can still say what this token may do.
+        scope: j.scope || (readToken() || {}).scope || "",
       });
       return j.access_token;
     });
@@ -265,6 +307,7 @@ window.SpotifyMusic = (function () {
         access_token: j.access_token,
         refresh_token: j.refresh_token || null,
         expires_at: Date.now() + (j.expires_in || 3600) * 1000,
+        scope: j.scope || "",
       });
       // A token WITHOUT the streaming scope reaches the player and comes back as
       // a bare "authentication_error", which reads as a login problem when the
@@ -277,8 +320,8 @@ window.SpotifyMusic = (function () {
         return;
       }
       // The user pressed CONNECT one navigation ago, so finishing the job is
-      // what they asked for — the only path that boots the SDK without a click.
-      return bootPlayer();
+      // what they asked for — the only path that starts playback without a click.
+      return mode() === "remote" ? connectRemote() : bootPlayer();
     });
   }
 
@@ -307,6 +350,7 @@ window.SpotifyMusic = (function () {
 
   function bootPlayer() {
     if (player) { installBackend(); return Promise.resolve(); }
+    explained = false;
     setStatus("connecting", "Loading the Spotify player…");
     return loadSdk().then(() => {
       if (typeof GameAudio !== "undefined" && GameAudio.volumes) {
@@ -318,12 +362,17 @@ window.SpotifyMusic = (function () {
         // expires, which is why it must go through validToken() and not a
         // captured string.
         // Never calling cb() leaves the SDK waiting and it eventually reports a
-        // generic auth failure, so a dead token has to be said out loud here.
+        // generic auth failure, so a dead token has to be said out loud here —
+        // but only if nothing has already explained WHY. The SDK asks for a
+        // token again right after an error listener has run and cleared things
+        // up, and this generic line was overwriting the specific cause.
         getOAuthToken: (cb) => {
           validToken().then((t) => {
             if (t) { cb(t); return; }
             teardown();
-            setStatus("configured", "The Spotify session could not be renewed. Press CONNECT to sign in again.");
+            if (!explained) {
+              setStatus("configured", "The Spotify session could not be renewed. Press CONNECT to sign in again.");
+            }
           });
         },
         volume: vol,
@@ -331,11 +380,13 @@ window.SpotifyMusic = (function () {
       player.addListener("ready", ({ device_id }) => {
         deviceId = device_id;
         ready = true;
+        explained = false;
         setStatus("connected", "Connected. Apex 26 is now a Spotify device.");
         // Install AFTER the transfer settles: GameAudio.setMusicBackend() calls
         // start() synchronously, and a play request aimed at a device Spotify
         // has not made active yet comes back "device not found".
         transfer(device_id).then(installBackend, installBackend);
+        loadPlaylists();
       });
       player.addListener("not_ready", () => {
         ready = false;
@@ -344,19 +395,26 @@ window.SpotifyMusic = (function () {
       // The four SDK errors mean completely different things to a user, so each
       // gets its own sentence instead of one raw payload dump. account_error is
       // by far the most common — it is what a non-Premium account looks like.
+      // KEEP THE TOKEN. It is what check() needs: the player refusing a token
+      // says nothing about why, but that same token still answers GET /v1/me,
+      // which names the plan. Clearing it here threw away the only evidence and
+      // left the user to guess between "not Premium" and "SDK not enabled" —
+      // so instead, tear the player down and go ask.
       player.addListener("authentication_error", () => {
-        clearToken(); teardown();
-        setStatus("configured", "Spotify rejected the session. Usually: the account " +
-          "is not full Premium, or the app is not enabled for the Web Playback SDK. " +
-          "Check both, then press CONNECT to sign in again.");
+        explained = true;
+        teardown();
+        setStatus("configured", "Spotify rejected the session — checking why…");
+        check();
       });
       player.addListener("account_error", () => {
+        explained = true;
         teardown();
         setStatus("error", "This Spotify account cannot play here — full Premium is " +
           "required. Free accounts and the mobile-only plans (Premium Mini / Lite) " +
           "are not supported by Spotify's web player.");
       });
       player.addListener("initialization_error", () => {
+        explained = true;
         teardown();
         setStatus("error", "This browser can't run the Spotify player (no encrypted-" +
           "media support). iOS Safari is the usual case — try desktop Chrome, Edge or Firefox.");
@@ -383,6 +441,7 @@ window.SpotifyMusic = (function () {
   }
 
   function teardown() {
+    stopPolling();
     ready = false;
     deviceId = null;
     track = null;
@@ -411,23 +470,186 @@ window.SpotifyMusic = (function () {
       { method: "PUT", body: JSON.stringify({ device_ids: [id], play: false }) });
   }
 
+  // The picker's contents. Liked Songs is not a context uri — it is a set of
+  // track uris — so it is offered as a sentinel and resolved at play time.
+  function loadPlaylists() {
+    return api("/me/playlists?limit=50").then((r) => {
+      if (!r) return [];
+      if (r.status === 403) {
+        setStatus(state, "Your Spotify session predates the playlist permission. " +
+          "Press DISCONNECT then CONNECT to grant it.");
+        return [];
+      }
+      if (!r.ok) return [];
+      return r.json().then((j) => (j.items || []).map((p) => ({ name: p.name, uri: p.uri })), () => []);
+    }).then((ls_) => { lists = ls_ || []; render(); return lists; });
+  }
+
+  // PUT /me/player/play, aimed at THIS device, with whatever the player chose.
+  // Reports the refusals that otherwise look like "connected but silent".
+  function playChosen() {
+    const q = mode() === "remote" ? remoteQuery()
+      : (deviceId ? "?device_id=" + encodeURIComponent(deviceId) : "");
+    const ctx = contextUri();
+    let body;
+    if (ctx === "liked") {
+      // .catch on the parse, not just on r.ok: a 204 or an empty body is "ok"
+      // and json() then throws, which escapes as an unhandled rejection — the
+      // game shows those as a full-screen crash overlay.
+      return api("/me/tracks?limit=50")
+        .then((r) => (r && r.ok ? r.json().catch(() => null) : null)).then((j) => {
+        const uris = j && j.items ? j.items.map((i) => i.track && i.track.uri).filter(Boolean) : [];
+        if (!uris.length) { setStatus("connected", "No liked songs found to play."); return; }
+        return sendPlay(q, JSON.stringify({ uris: uris }));
+      });
+    }
+    body = ctx ? JSON.stringify({ context_uri: ctx }) : "{}";
+    return sendPlay(q, body);
+  }
+
+  function sendPlay(q, body) {
+    return api("/me/player/play" + q, { method: "PUT", body: body }).then((r) => {
+      if (!r) return;
+      if (r.ok || r.status === 204) { setStatus("connected", "Playing."); lastPlayError = null; return; }
+      // Spotify says WHY in the body ("Device not found", PREMIUM_REQUIRED,
+      // "Player command failed: No active device"...). Mapping the status code
+      // alone threw that away and left every refusal looking the same.
+      return r.text().then((txt) => {
+        let reason = "";
+        try { const j = JSON.parse(txt); reason = (j.error && (j.error.reason || j.error.message)) || ""; }
+        catch (e) { reason = (txt || "").slice(0, 120); }
+        lastPlayError = { status: r.status, reason: reason };
+        const hint = r.status === 404
+            ? " Press DISCONNECT then CONNECT, or start a track in the Spotify app once."
+          : r.status === 403 ? " Full Premium is required to play here."
+          : r.status === 401 ? " Press CONNECT to sign in again."
+          : "";
+        setStatus("connected", "Spotify refused playback (" + r.status +
+          (reason ? ": " + reason : "") + ")." + hint);
+      }, () => { lastPlayError = { status: r.status, reason: "" };
+        setStatus("connected", "Spotify refused playback (" + r.status + ")."); });
+    });
+  }
+
+  /* ---------------- remote control (Web API / Spotify Connect) ----------------
+     Everything here is plain REST against a device the account already has, so
+     it needs no SDK, no DRM and no gesture. The cost is that we cannot be told
+     when the track changes — there is no event — so the now-playing line is
+     polled. 10 s is a deliberate floor: this runs for the whole session and a
+     Development Mode app shares one modest quota across everything it does. */
+  let pollTimer = null;
+
+  function devicesList() {
+    return api("/me/player/devices").then((r) => {
+      if (!r) return [];
+      if (!r.ok) return [];
+      return r.json().then((j) => j.devices || [], () => []);
+    });
+  }
+
+  function loadDevices() {
+    return devicesList().then((ds) => {
+      devices = ds;
+      // Adopt whatever is already active, so the common case needs no choosing.
+      if (!deviceId2()) {
+        const act = ds.filter((d) => d.is_active)[0] || ds[0];
+        if (act) lsSet(K_DEV, act.id);
+      }
+      if (!ds.length) {
+        setStatus("connected", "No Spotify device found. Open Spotify on your phone or " +
+          "computer (play anything for a second), then press REFRESH.");
+      }
+      render();
+      return ds;
+    });
+  }
+
+  function pollNowPlaying() {
+    if (mode() !== "remote" || state !== "connected") return Promise.resolve();
+    return api("/me/player").then((r) => {
+      if (!r) return;
+      if (r.status === 204) { track = null; paused = true; emit(); return; }   // nothing playing
+      if (!r.ok) return;
+      return r.json().then((j) => {
+        const it = j && j.item;
+        track = it ? (it.name + " — " + (it.artists || []).map((a) => a.name).join(", ")) : null;
+        paused = !(j && j.is_playing);
+        if (j && j.device && j.device.id && !deviceId2()) lsSet(K_DEV, j.device.id);
+        emit();
+      }, () => {});
+    });
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollNowPlaying();
+    pollTimer = setInterval(pollNowPlaying, 10000);
+  }
+  function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+  // Connect, remote flavour: there is nothing to boot. A valid token plus a
+  // device the account owns IS the connection.
+  function connectRemote() {
+    setStatus("connecting", "Looking for your Spotify devices…");
+    return validToken().then((t) => {
+      if (!t) { setStatus("configured", "No Spotify session. Press CONNECT to sign in."); return; }
+      state = "connected";
+      setStatus("connected", "Connected. Pick a device and a playlist, then press PLAY.");
+      installBackend();
+      startPolling();
+      return Promise.all([loadDevices(), loadPlaylists()]);
+    });
+  }
+
+  function remoteQuery() {
+    const d = deviceId2();
+    return d ? "?device_id=" + encodeURIComponent(d) : "";
+  }
+
   /* ---------------- GameAudio backend ----------------
      GameAudio delegates ALL music here while this is installed. Stopping and
      resuming the built-in MP3 playlist is GameAudio's job, not ours. */
+  // MOBILE BROWSERS REQUIRE THIS. Spotify's SDK creates its own <audio>, and on
+  // mobile it can only be unmuted from inside a user gesture — activateElement()
+  // is that handshake. Without it the device connects, the API accepts the play
+  // call, and no sound ever comes out. Harmless on desktop, and safe to call
+  // more than once.
+  function activate() {
+    if (player && typeof player.activateElement === "function") {
+      try { const p = player.activateElement(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    }
+  }
+
   const BACKEND = {
     start() {
       if (!BACKEND.active()) return;
       if (!paused) return;                     // already playing: no-op
-      // resume() needs a context on this device. A freshly transferred device
-      // has none, so ask the Web API to resume whatever the account last played
-      // — otherwise CONNECT then PLAY does nothing and looks broken.
+      if (mode() === "remote") {
+        // Resuming beats re-starting the context: it keeps the listener's place
+        // in the album/playlist they were already on.
+        if (track) { api("/me/player/play" + remoteQuery(), { method: "PUT", body: "{}" }).then(pollNowPlaying); return; }
+        playChosen();
+        return;
+      }
+      // Something is already loaded on this device — just un-pause it.
       if (track) { try { player.resume(); } catch (e) {} return; }
-      api("/me/player/play" + (deviceId ? "?device_id=" + encodeURIComponent(deviceId) : ""),
-        { method: "PUT", body: "{}" });
+      // Otherwise there is nothing to resume, so play what the player picked.
+      playChosen();
     },
-    stop() { if (player) { try { player.pause(); } catch (e) {} } },
+    stop() {
+      if (mode() === "remote") {
+        if (BACKEND.active()) api("/me/player/pause" + remoteQuery(), { method: "PUT" }).then(pollNowPlaying);
+        return;
+      }
+      if (player) { try { player.pause(); } catch (e) {} }
+    },
     skip() {
       if (!BACKEND.active()) return null;
+      if (mode() === "remote") {
+        api("/me/player/next" + remoteQuery(), { method: "POST" })
+          .then(() => setTimeout(pollNowPlaying, 600));   // Spotify needs a beat to settle
+        return track;
+      }
       try { player.nextTrack(); } catch (e) {}
       // nextTrack() is async — the real title lands on player_state_changed
       // (which re-renders), so return what is known now.
@@ -435,11 +657,24 @@ window.SpotifyMusic = (function () {
     },
     setVolume(v01) {
       vol = Math.max(0, Math.min(1, typeof v01 === "number" ? v01 : 0.5));
+      if (mode() === "remote") {
+        // Not every device accepts remote volume (some phones refuse); a failure
+        // here is not worth a message — the device's own control still works.
+        if (BACKEND.active()) {
+          api("/me/player/volume?volume_percent=" + Math.round(vol * 100) +
+              (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" });
+        }
+        return vol;
+      }
       if (player) { try { player.setVolume(vol); } catch (e) {} }
       return vol;
     },
     name() { return track; },
-    active() { return state === "connected" && ready && !!player; },
+    active() {
+      return mode() === "remote"
+        ? (state === "connected" && !!readToken())
+        : (state === "connected" && ready && !!player);
+    },
   };
 
   // Guarded on the global AND the method: this file must survive being loaded
@@ -455,6 +690,85 @@ window.SpotifyMusic = (function () {
 
   function available() { return !!clientId(); }
   function configured() { const c = clientId(); return c ? { clientId: c } : null; }
+
+  /* ---------------- diagnostics ----------------
+     "Spotify rejected the session" is the SDK refusing a token that auth already
+     issued, and from inside the game the two causes look identical: an account
+     that is not Premium, and an app not enabled for the Web Playback SDK. Both
+     are answerable — the Web API says which — so ask it rather than guess.
+     debug() is the console snapshot; check() is the one the panel button runs. */
+  function debug() {
+    const t = readToken() || {};
+    const cid = clientId();
+    return {
+      state, message,
+      // masked: a console snapshot gets pasted into bug reports
+      clientId: cid ? cid.slice(0, 6) + "…" + cid.slice(-4) : null,
+      redirectUri: redirectUri(),
+      onLocalhost: onLocalhost(),
+      secureContext: cryptoOk(),
+      hasToken: !!t.access_token,
+      hasRefresh: !!t.refresh_token,
+      expiresInSec: t.expires_at ? Math.round((t.expires_at - Date.now()) / 1000) : null,
+      grantedScopes: t.scope || null,
+      streamingGranted: !!(t.scope && t.scope.indexOf("streaming") >= 0),
+      sdkLoaded: !!(window.Spotify && window.Spotify.Player),
+      playerReady: ready,
+      deviceId, track,
+    };
+  }
+
+  // GET /v1/me answers both questions at once: `product` is the plan, and a 401
+  // means the token itself is dead. Returns a verdict object AND writes the
+  // conclusion to the status line, so it works with or without a console.
+  function check() {
+    const d = debug();
+    if (!available()) { setStatus("off", copyOff()); return Promise.resolve({ ok: false, reason: "no-client-id" }); }
+    return validToken().then((t) => {
+      if (!t) {
+        setStatus("configured", "No Spotify session on this device. Press CONNECT to sign in.");
+        return { ok: false, reason: "no-token", debug: d };
+      }
+      return fetch(API + "/me", { headers: { Authorization: "Bearer " + t } })
+        .then((r) => r.json().then((j) => ({ code: r.status, j }), () => ({ code: r.status, j: {} })))
+        .then(({ code, j }) => {
+          const out = { ok: false, httpStatus: code, product: j.product || null,
+            account: j.display_name || j.id || null, debug: debug() };
+          if (code === 401) {
+            setStatus("configured", "Spotify rejected the token itself (401). Press CONNECT to sign in again.");
+            out.reason = "token-rejected";
+          } else if (code === 403) {
+            setStatus("error", "Spotify returned 403 — your account is probably not on this app's " +
+              "user allowlist. Add it in the dashboard under User Management.");
+            out.reason = "not-allowlisted";
+          } else if (code !== 200) {
+            setStatus("error", "Spotify's API answered " + code + ". Try again in a moment.");
+            out.reason = "api-" + code;
+          } else if (j.product !== "premium") {
+            setStatus("error", "Signed in as " + (out.account || "?") + ", but this account is \"" +
+              (j.product || "unknown") + "\" — the web player needs full Premium. " +
+              "Free, Mini and Lite cannot play here.");
+            out.reason = "not-premium";
+          } else if (!out.debug.streamingGranted) {
+            setStatus("error", "Premium account confirmed, but this token has no playback " +
+              "permission. Tick \"Web Playback SDK\" in your app's settings, remove the app at " +
+              "spotify.com/account/apps, then press CONNECT again.");
+            out.reason = "no-streaming-scope";
+          } else {
+            out.ok = true;
+            out.reason = "ok";
+            setStatus(state === "connected" ? "connected" : "configured",
+              "Account OK: Premium, playback permission granted" +
+              (state === "connected" ? " — connected." : ". Press CONNECT."));
+          }
+          return out;
+        })
+        .catch(() => {
+          setStatus("error", "Could not reach Spotify's API — offline, or blocked.");
+          return { ok: false, reason: "network", debug: d };
+        });
+    });
+  }
 
   function setClientId(s) {
     const v = (s || "").trim();
@@ -476,6 +790,9 @@ window.SpotifyMusic = (function () {
   function connect() {
     if (!available()) { setStatus("off", copyOff()); return Promise.resolve(); }
     if (state === "connected") return Promise.resolve();
+    if (mode() === "remote") {
+      return validToken().then((t) => (t ? connectRemote() : beginAuth()));
+    }
     return validToken().then((t) => (t ? bootPlayer() : beginAuth()));
   }
 
@@ -527,6 +844,54 @@ window.SpotifyMusic = (function () {
       ? (track ? (paused ? "Paused — " + track : track) : "Nothing playing yet.")
       : "—");
 
+    // The picker: Liked Songs plus whatever playlists the account has. Rebuilt
+    // only when the contents actually changed, so an open <select> on a phone
+    // is not torn out from under a thumb mid-scroll.
+    const sel = el("as-sp-playlist");
+    if (sel) {
+      const want = JSON.stringify(lists.map((p) => p.uri));
+      if (sel.dataset.built !== want) {
+        sel.dataset.built = want;
+        sel.textContent = "";
+        const add = (label, uri) => {
+          const o = document.createElement("option");
+          o.value = uri; o.textContent = label; sel.appendChild(o);
+        };
+        add(lists.length ? "— pick a playlist —" : "— connect to load playlists —", "");
+        add("♥ Liked Songs", "liked");
+        for (const p of lists) add(p.name, p.uri);
+      }
+      if (sel.value !== contextUri()) sel.value = contextUri();
+      sel.disabled = state !== "connected";
+    }
+    // MODE + DEVICE. The device row only means anything in remote mode, so it
+    // is disabled (never hidden) elsewhere — hiding reflows the sheet.
+    const remote = mode() === "remote";
+    const b1 = el("as-sp-mode-remote"), b2 = el("as-sp-mode-browser");
+    if (b1) b1.classList.toggle("active", remote);
+    if (b2) b2.classList.toggle("active", !remote);
+    const dsel = el("as-sp-device");
+    if (dsel) {
+      const want = JSON.stringify(devices.map((d) => d.id + d.name + d.is_active));
+      if (dsel.dataset.built !== want) {
+        dsel.dataset.built = want;
+        dsel.textContent = "";
+        const add = (label, id) => { const o = document.createElement("option");
+          o.value = id; o.textContent = label; dsel.appendChild(o); };
+        if (!devices.length) add("— no devices found —", "");
+        for (const d of devices) {
+          add(d.name + (d.type ? " (" + d.type + ")" : "") + (d.is_active ? " • active" : ""), d.id);
+        }
+      }
+      if (dsel.value !== deviceId2()) dsel.value = deviceId2();
+      dsel.disabled = !remote || state !== "connected";
+    }
+    dis("as-sp-refresh", !remote || state !== "connected");
+    const live = state === "connected" && (remote ? !!readToken() : ready);
+    dis("as-sp-play", !live);
+    dis("as-sp-pause", !live);
+    dis("as-sp-next", !live);
+    dis("as-sp-check", !available() || !readToken());
     dis("as-sp-connect", !available() || state === "connecting" || state === "connected");
     dis("as-sp-disconnect", !available() || (state !== "connected" && !readToken()));
   }
@@ -540,6 +905,25 @@ window.SpotifyMusic = (function () {
       if (e.key === "Enter") { e.preventDefault(); setClientId(idEl.value); }
     });
     on("as-sp-connect", "click", () => { connect(); });
+    on("as-sp-check", "click", () => { check(); });
+    on("as-sp-mode-remote", "click", () => setMode("remote"));
+    on("as-sp-mode-browser", "click", () => setMode("browser"));
+    on("as-sp-device", "change", (e) => setDevice(e.target.value));
+    on("as-sp-refresh", "click", () => loadDevices());
+    on("as-sp-playlist", "change", (e) => {
+      activate();
+      setContext(e.target.value);
+      // Picking one is the instruction to play it — otherwise the choice sits
+      // there doing nothing until something else happens to call start().
+      if (e.target.value && BACKEND.active()) playChosen();
+    });
+    on("as-sp-play", "click", () => {
+      activate();                       // must happen inside the click itself
+      if (!BACKEND.active()) return;
+      if (track) { try { player.resume(); } catch (e) {} } else playChosen();
+    });
+    on("as-sp-pause", "click", () => BACKEND.stop());
+    on("as-sp-next", "click", () => BACKEND.skip());
     on("as-sp-disconnect", "click", () => { disconnect(); });
   }
 
@@ -563,7 +947,23 @@ window.SpotifyMusic = (function () {
 
   return {
     available, configured, setClientId,
-    connect, disconnect, status, onChange,
+    connect, disconnect, status, onChange, debug, check,
+    playlists() { return lists.slice(); },
+    // What Spotify thinks is going on, for the console: the devices it can see,
+    // the SDK's own player state, and why the last play call was refused.
+    devices() {
+      return api("/me/player/devices")
+        .then((r) => (r && r.ok ? r.json().catch(() => null) : { httpStatus: r && r.status }));
+    },
+    sdkState() {
+      if (!player || !player.getCurrentState) return Promise.resolve(null);
+      return player.getCurrentState().catch(() => null);
+    },
+    lastPlayError() { return lastPlayError; },
+    activate,
+    context: contextUri, setContext, play() { return playChosen(); },
+    mode, setMode, setDevice, deviceList() { return devices.slice(); },
+    refreshDevices() { return loadDevices(); },
     backend() { return BACKEND; },
     redirectUri, handleRedirect,
   };
