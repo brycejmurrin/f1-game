@@ -202,6 +202,28 @@ window.SpotifyMusic = (function () {
     } catch (e) { /* no history API — harmless */ }
   }
 
+  // COMING BACK FROM SPOTIFY LANDS ON THE TITLE SCREEN. The PKCE flow is a full
+  // page navigation, so the game has restarted by the time we get here: the
+  // player pressed CONNECT inside MUSIC & SOUND, went to accounts.spotify.com,
+  // and returned to a fresh boot with the panel closed and no sign that
+  // anything happened. Re-open the panel they left from so the sign-in ends
+  // where it started, showing whether it worked.
+  //
+  // Deferred a tick: the synchronous error branches below run during
+  // DOMContentLoaded, and game.js's own boot may still be settling the screens.
+  function reopenPanel() {
+    setTimeout(function () {
+      try {
+        const el = document.getElementById("audioset");
+        if (!el) return;
+        if (typeof syncAudioPanel === "function") syncAudioPanel();
+        el.hidden = false;
+        const wrap = document.getElementById("as-sp-wrap");
+        if (wrap && wrap.scrollIntoView) wrap.scrollIntoView({ block: "center" });
+      } catch (e) { /* the sign-in still succeeded — this is only the landing */ }
+    }, 0);
+  }
+
   // Safe to call on EVERY load, including when nothing Spotify-related is
   // configured: with no pending verifier in sessionStorage this returns without
   // touching storage, the network or the URL.
@@ -215,6 +237,7 @@ window.SpotifyMusic = (function () {
     ssDel(S_VERIFY);
     ssDel(S_STATE);
     cleanUrl();
+    reopenPanel();          // every branch below ends in the panel, success or not
     if (err) {
       setStatus("error", err === "access_denied"
         ? "Sign-in cancelled."
