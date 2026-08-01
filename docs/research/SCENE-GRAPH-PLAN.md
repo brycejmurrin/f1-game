@@ -1,12 +1,12 @@
 # Scene graph + detailed models — staged plan
 
 > **Status: S0–S2 infrastructure has LANDED** (`js/track/graph.js`,
-> `tools/graph-parity.cjs`, `tests/track-graph.test.mjs`), with fifteen emitters
+> `tools/graph-parity.cjs`, `tests/track-graph.test.mjs`), with sixteen emitters
 > migrated: `windowPane`, `crowd`, `fence`, `guardrail`, `tyreWall`, `wall`,
 > `facadeRail`, `streetLamp`, `facadeMullion`, `streetBarrier`, `facadeNeon`,
-> `crowdRiser`, `billboard`, `marshalPost`, `pine`. All 24 circuits are at exact geometry parity — nothing renders
-> differently, by design. §6 has the measured per-emitter reuse: **53% of the
-> fleet's entire scenery mass (9.57 M vertices) collapses to 24,249**, while
+> `crowdRiser`, `billboard`, `marshalPost`, `buildingMass`, `pine`. All 24 circuits are at exact geometry parity — nothing renders
+> differently, by design. §6 has the measured per-emitter reuse: **54% of the
+> fleet's entire scenery mass (9.67 M vertices) collapses to 24,585**, while
 > `pine` sits at 1.00× for a structural reason that changes the S4 plan.
 
 Companion to `EXTERNAL-MODEL-SOURCES.md`, which asked "where do models come
@@ -251,14 +251,14 @@ have. Across all 24 circuits, for the six emitters migrated so far:
 
 | emitter | nodes | models | fused verts | instanced | reuse |
 |---|---|---|---|---|---|
-| `windowPane` | 143,083 | 7 | 3,433,992 | 168 | **20,440×** |
+| `windowPane` | 144,249 | 21* | 3,461,976 | 504 | **6,869.00×** |
 | `crowd` | 85,273 | 32 | 2,046,552 | 768 | **2,664.78×** |
 | `fence` | 54,277 | 77 | 1,601,375 | 2,266 | **706.70×** |
 | `guardrail` | 30,465 | 50 | 792,104 | 1,288 | **614.99×** |
-| `facadeRail` | 13,638 | 7* | 327,312 | 168 | **1,948.29×** |
+| `facadeRail` | 15,060 | 21* | 361,440 | 504 | **717.14×** |
 | `tyreWall` | 8,157 | 85 | 297,843 | 2,615 | **113.90×** |
 | `streetLamp` | 3,368 | 66 | 297,792 | 6,468 | **46.04×** |
-| `facadeMullion` | 7,686 | 7* | 184,464 | 168 | **1,098.00×** |
+| `facadeMullion` | 8,871 | 21* | 212,904 | 504 | **422.43×** |
 | `wall` | 7,500 | 28 | 180,000 | 672 | **267.86×** |
 | `streetBarrier` | 6,404 | 7 | 153,696 | 168 | **914.86×** |
 | `facadeNeon` | 5,430 | 7* | 130,320 | 168 | **775.71×** |
@@ -266,14 +266,16 @@ have. Across all 24 circuits, for the six emitters migrated so far:
 | `billboard` | 1,188 | 152 | 31,680 | 3,952 | **8.02×** |
 | `marshalPost` | 343 | 43 | 26,068 | 3,268 | **7.98×** |
 | `pine` | 9,486 | 9,474 | 1,159,599 | 1,158,108 | **1.00×** |
-| **total** | **379,090** | **10,130** | **10,729,805** | **1,182,357** | **9.07×** |
+| `buildingMass` | 540 | 21* | 12,960 | 504 | **25.71×** |
+| **total** | **383,403** | **10,144** | **10,833,317** | **1,182,693** | **9.16×** |
 
-\* `windowPane`, `facadeRail`, `facadeMullion` and `facadeNeon` all resolve to
-the SAME model — one unit cube per build — so the per-kind `models` column
-counts it four times while the total counts it once. All four are `dim()`-shaped
-boxes on a building's basis, differing only in size and tint, which the node
-scale and node colour already carry. The whole city's facade furniture across
-24 circuits is **one 24-vertex model**, placed 169,837 times.
+\* `windowPane`, `facadeRail`, `facadeMullion`, `facadeNeon` and `buildingMass`
+all resolve to the SAME model — one unit cube per build — so the per-kind
+`models` column counts it five times while the total counts it once. Every one of
+them is an axis-aligned box on a building's basis differing only in size and
+tint, which the node scale and node colour already carry. The whole city across
+24 circuits — glazing, floor rails, mullions, neon strips AND the building masses
+themselves — is **one 24-vertex model**, placed 173,949 times.
 
 **`windowPane` is the headline: every glazed pane in the game — 143,083 of them
 across seven city circuits, 3,433,992 fused vertices — is the same unit box.**
@@ -286,9 +288,9 @@ standing on a grass bank — is one unit box, with per-person height on the node
 scale and shirt colour on the node colour. 85,273 of them cost 768 vertices.
 
 For scale: all 24 circuits together build **17,978,812** prop vertices. The
-fifteen migrated emitters account for 10,729,805 of them (**59.7%**), and the
-fourteen non-`pine` ones for 9,570,206 (**53.2%**) — which an instanced renderer
-would draw from **24,249 vertices** of models plus one `mat4` per node. Over half
+sixteen migrated emitters account for 10,833,317 of them (**60.3%**), and the
+fifteen non-`pine` ones for 9,673,718 (**53.8%**) — which an instanced renderer
+would draw from **24,585 vertices** of models plus one `mat4` per node. Over half
 the game's entire scenery mass, currently paid for in full VBO bytes, is a
 handful of shapes repeated.
 
