@@ -28,7 +28,7 @@ const AgentView = (function () {
 
   const CONVENTIONS =
     "metres, m/s, seconds, radians unless the key says otherwise; " +
-    "+x = right of centreline; +k = LEFT-hand turn (measured: zero-steer runs you wide to the outside, and +k pushes you right); " +
+    "+x = right of centreline; +k = LEFT-hand turn; " +
     "side is centreline-relative (which side of the road) EXCEPT scene()'s side, " +
     "which is egocentric (which side of your nose — see its bearingDeg; its " +
     "trackSide is the centreline side for cross-referencing); " +
@@ -2334,10 +2334,7 @@ const AgentView = (function () {
             + 'measured geometry; detail:"parts" adds per-part boxes',
           "survey({stations,lats,reachM,limit,profile})":
             "IS ANYTHING BROKEN — floating/buried props, props over the line, "
-            + "terrain through the road, holes and cliffs. Always scans the "
-            + "WHOLE lap: stations is a sample COUNT (default 24, alias at), "
-            + "not a position, and there is no fromS/toS window — filter the "
-            + "rows by frac to study one stretch",
+            + "terrain through the road, holes and cliffs",
         },
         act: {
           "rollout({seconds,dt,input,policy,policyHz,samples})":

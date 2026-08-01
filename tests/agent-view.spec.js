@@ -554,14 +554,16 @@ test.describe("trackInfo() corner table", () => {
       expect(c.frac).toBeLessThan(1);
       // direction must agree with the swept angle — the merge pass is the
       // likeliest place for those to drift apart
-      if (c.dir === "R") expect(c.sweepDeg).toBeGreaterThan(0);
-      if (c.dir === "L") expect(c.sweepDeg).toBeLessThan(0);
-      // k must honour "+k = right" — it is the signed mean curvature, so its sign
+      // +sweep/+k is a LEFT-hander (measured by zero-steer drift; game.js's
+      // racing line is -sign(k), "k>0 curves toward screen-left")
+      if (c.dir === "L") expect(c.sweepDeg).toBeGreaterThan(0);
+      if (c.dir === "R") expect(c.sweepDeg).toBeLessThan(0);
+      // k must honour "+k = LEFT" — it is the signed mean curvature, so its sign
       // must match dir/sweepDeg. A point sample used to flip sign at noisy apexes
       // (Monaco's hairpin read dir:"R" with a negative k), contradicting the
       // convention every payload advertises.
-      if (c.dir === "R") expect(c.k).toBeGreaterThan(0);
-      if (c.dir === "L") expect(c.k).toBeLessThan(0);
+      if (c.dir === "L") expect(c.k).toBeGreaterThan(0);
+      if (c.dir === "R") expect(c.k).toBeLessThan(0);
     }
   });
 
