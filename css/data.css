@@ -36,6 +36,19 @@
 @media (orientation: landscape) and (max-height: 560px) {
   .dh-card { min-height: 0; height: 100%; max-height: none; border-radius: 10px; }
 }
+/* DESKTOP: size to the content instead of to the screen.
+   "Always fill most of the viewport" is right on a phone, where the hub IS the
+   screen. On a desktop it forced every tab to 900px tall no matter how little it
+   had to show — EXPORT ended after ~460px and left 525px of empty card below it,
+   TELEMETRY about 450px before a driver is picked. A floor keeps the card from
+   collapsing to a sliver (and from jumping around as you switch tabs); the cap
+   is unchanged, so the long tabs still scroll inside. */
+@media (min-width: 900px) and (min-height: 700px) {
+  .dh-card {
+    min-height: 420px;
+    max-height: min(880px, calc(100svh - 2 * var(--gut) - var(--sat) - var(--sab)));
+  }
+}
 
 .dh-header {
   display: flex; align-items: center; gap: 12px;
