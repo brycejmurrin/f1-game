@@ -126,6 +126,7 @@ const FULL = [
   "js/game/results.js",
   "js/game/debrisworld.js",
   "js/game/incidentsim.js",
+  "js/game/agentview-raster.js",
   "js/game/agentview.js",
   "js/game/apex.js",
   "js/game.js",
@@ -187,6 +188,9 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  // agentview.js destructures AgentRaster.create(ctx) at create() time, so
+  // the raster module must have evaluated first.
+  ["js/game/agentview-raster.js", "js/game/agentview.js"],
   ["js/mat4.js", "js/render/glx.js"],                       // glx uses M4 at init
   // chunks.js before every shader file (lit/sky/post interpolate GLXChunks at
   // eval; fx.js is chunk-free today but keeps the uniform ordering contract).

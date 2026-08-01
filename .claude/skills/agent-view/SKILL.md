@@ -11,7 +11,11 @@ frames for you). In-page: `window.__apex.<tool>(...)`. Read `agentHelp()` +
 `objective()` once, then loop `world({detail:"drive"})` → decide →
 `act(...)`/`rollout({policy})` → `terminal()`. Pin `seed(n)` for a **field** A/B
 (`go()` races; it's a no-op for a solo `reset()`). Failures are typed
-(`{ok:false, error, message, fix}`), never `null`.
+(`{ok:false, error, message, fix}`), never `null` — but two reads fail *quietly*
+instead: `scene()` on a street circuit still building props returns a SUCCESSFUL
+empty list, and `visible()`/`render({what:"view"})` reuse the last **rendered**
+frame. Stage first (see Staging) — an empty scene means "not built yet", not
+"nothing there".
 
 `window.__apex` composes the ~90 raw debug hooks into one small surface that is
 **egocentric** (framed around the car), **typed** (failures are `{ok:false,
@@ -39,7 +43,14 @@ Two ways in — same surface, different cost:
   (`scene`/`query`/`describe(prop:…)`) come back empty until frames draw — stage
   and render inside the expression, or use the CLI, which does it for you.
 - `window.__apex.<tool>(...)` inside a live page (Playwright `page.evaluate`, the
-  browser console) when you already have one open.
+  browser console) when you already have one open. **Nothing is readable until
+  you stage** — `race(id)` → `go()` → `jump(frac, speed)`, then let two frames
+  draw. Skip it and you get a `PlayerNotPlacedError` at best, a stale camera at
+  worst. Full rules in Staging, below.
+
+Two words used throughout: **`frac`** is position round the lap as 0→1, and
+**`s`** is that same position in metres along the centreline (0 → `track.total`).
+`lateralM` is metres from the centreline, + to the right.
 
 **Start every session with `agentHelp()` and `objective()`.** The first names
 the whole surface and a `fields` glossary (what each number means in terms of
@@ -55,11 +66,20 @@ Read both once; do not re-fetch per tick.
   penalty state, the ideal-line-free honest geometry to choose a line from.
   `world({since:seq})` returns only what *changed* since a prior payload.
 - `field({detail})` — the whole grid: race order, gaps, interval, AI pace.
-- `scene({radius|visible})` — named scenery by distance + bearing (radius around
-  the car), or `{visible:true}` for the camera's on-screen list. A row's `side` is
-  EGOCENTRIC (which side of your nose, from `bearingDeg`); its `trackSide` is the
-  CENTRELINE side — the one `worldModel()`/`describe()` report — so cross-reference
-  the same prop between tools by `trackSide`, not `side`.
+- `scene({radius, kinds, limit} | {visible})` — named scenery by distance +
+  bearing (radius around the car), or `{visible:true}` for the camera's on-screen
+  list. Rows land in `props` (plus `lamps`); `counts.inRadius` is how many were in
+  range and `truncated` flags that `limit` clipped the list — check it before
+  concluding something isn't there. A row's `side` is
+  EGOCENTRIC (which side of your nose, from `bearingDeg`, **+ = your right**);
+  its `trackSide` is the CENTRELINE side — the one `worldModel()`/`describe()`
+  report — so cross-reference the same prop between tools by `trackSide`, not
+  `side`. The two agree when you are on the centreline pointing down the road
+  and legitimately diverge when you are not: a prop can be left of the road's
+  middle and still right of *your nose*. If they disagree everywhere, including
+  where you are centred and straight, something is wrong — that was a real sign
+  bug, caught by parking a rival at a known offset and looking at which half of
+  the screen it rendered on.
 - `atmosphere()` — the light as prose: day/night, sun/moon, floodlights, fog
   visibility, wet road.
 
@@ -99,12 +119,23 @@ Read both once; do not re-fetch per tick.
   events, min clearance, per-corner min speed, terminal reason), not every frame.
   `policy` is `world => {steer,throttle,brake}`; use `world()`+`act()` for a single
   decision instead.
-- `terminal()` — `{done, reason}`: finished | wrong_way | rescued.
-- `survey()` — geometry DEFECTS for track authoring, not driving: 8 buckets
-  (floating/buried props, `overVoid`, terrain holes/cliffs, terrain-through-road,
-  props over the line). Its `propsOverRoadCandidates` are BROAD-PHASE — a large
-  `lateralM` is a bounding-box false positive, not a prop on the line. The payload
-  self-documents (read `thresholds.note` and `authoritative`).
+- `terminal()` — `{done, reason}`: finished | wrong_way | rescued. Check it
+  between rollouts: `rescued`/`wrong_way` means the car was picked up and put
+  back, so lap timing and any distance you were accumulating are no longer
+  comparable. Start a fresh episode with `reset(frac, speed, x, seed)` rather
+  than driving on from a rescued state — `__apex.resetPlayer()` forces the
+  rescue immediately if you want to stop fighting a beached car.
+- `survey({stations, lats, reachM, limit, profile})` — geometry DEFECTS for track
+  authoring, not driving: 8 buckets (floating/buried props, `overVoid`, terrain
+  holes/cliffs, terrain-through-road, props over the line). Its
+  `propsOverRoadCandidates` are BROAD-PHASE — a large `lateralM` is a bounding-box
+  false positive, not a prop on the line. The payload self-documents (read
+  `thresholds.note` and `authoritative`).
+  **It always scans the WHOLE lap and cannot be aimed at one corner** — `stations`
+  is a sample *count*, not a position, so to study one stretch raise it and filter
+  the rows by `frac`. CLI flag is `--stations <n>` (`--at` stays the staging
+  fraction). Why that is, and why `groundY()` is not an independent check of a
+  hit, are in `docs/DEBUG-HOOKS.md` → `survey()`.
 
 ## The driving loop
 
@@ -140,7 +171,17 @@ policy = w => {
 
 `apexSpeedKph`/`suggestBrakeM` assume more grip than default parts have — brake
 well before the hint and aim under the apex speed, then tune from the digest's
-`offTrack.pct` and `cornerMinSpeedKph`. **Fix braking FIRST:** on a too-hot entry
+`offTrack.pct` and `cornerMinSpeedKph`. It is a starting point, not a
+steady-state-stable controller: a short interval can legitimately end with the
+car off-line mid-recovery, so judge it by the digest *trend* — `offTrack.pct`
+plus the per-sample `speedKph`/`lateralM` trail — and not by wherever the last
+sample happens to land. **The single biggest lever is not in the snippet above:
+add a flat speed cap** (never exceed some fixed m/s *anywhere*, not just inside a
+corner's brake window). Corner-relative braking alone, however early, cannot save
+an entry the straight already over-fed — a measured Monza lap needed a ~33 m/s
+governor plus much harder braking than the constants above (which get rescued
+within 5-40 s on the fast corners). Slow and finishing beats quick and beached.
+**Fix braking FIRST:** on a too-hot entry
 the car washes wide and beaches (the baseline would then hold throttle in the
 grass and stall for the rest of the interval — hence the off-track crawl above),
 and turn-in does nothing until entry speed is right. Once it is, add a small
@@ -153,7 +194,14 @@ the loop above hides:
 - **`rollout` runs the full `seconds` regardless of a terminal event.** A rescue
   or wrong-way lands in `digest.terminal` but does not stop the interval (the car
   keeps being simulated, often stalled). Shorten `seconds`, or gate in the policy,
-  to end on the event.
+  to end on the event. Only the FIRST event is reported — a second rescue in the
+  same window is invisible, so scoring an interval off `digest.terminal` alone
+  undercounts incidents. Cross-check `offTrack.events`.
+- **`brake:true` at a standstill drives you BACKWARDS.** Below walking pace the
+  brake becomes reverse (deliberate — it lets a human ease off a wall). A natural
+  "brake whenever clearance is low" rule therefore reverse-loops against the
+  barrier: speed oscillates roughly +60/−18 kph for a minute while lap distance
+  barely moves. Gate it — `brake: braking && e.speed > 3`.
 
 An LLM can't decide at 60 Hz — that is what `rollout({policy})` is for: a lap from
 one call. Use `world()`+`act()` only for a single decision.
@@ -165,6 +213,15 @@ reproduces an episode exactly — **same seed + same inputs ⇒ same result**, a
 `world({full}).session.seed` makes a snapshot self-describing (replay it with
 `reset(...,seed)`). Cosmetic randomness (particles, camera shake) is deliberately
 unseeded so it can never perturb the sim.
+
+**`seed(n)` must come before `race()`, not just before `go()`.** The AI grid —
+start order, lane jitter, driver skill — is drawn from the seeded stream inside
+`race()`/`tt()`, and `go()` only drops the lights. Seeding between `race()` and
+`go()` (the natural spot, given the staging order below) applies one race too
+late and silently does nothing: measured across isolated processes, seeds 777 and
+888 set *after* `race()` produced a byte-identical grid, while the same seeds set
+*before* `race()` diverged. `reset(frac, speed, x, seed)` is the exception — it
+applies the seed before rebuilding the grid, which is why it takes an arg at all.
 
 **What the seed actually controls: the AI field, not a lone car.** A `reset()`
 episode is *solo* — no live field — so with fixed inputs it is already

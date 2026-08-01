@@ -45,7 +45,7 @@ const COMMANDS = {
   visible: "[deprecated] scene --visible",
   frame: "[deprecated] render --what view",
   plan: "[deprecated] render --what map",
-  survey: "geometry DEFECTS    --at <n>  --lats <n>  --reach <m>  --profile",
+  survey: "geometry DEFECTS    --stations <n>  --lats <n>  --reach <m>  --profile",
   model: "the WHOLE circuit    --detail summary|sections|full  --offset <n>  --limit <n>  --out <file>",
 };
 
@@ -78,7 +78,11 @@ const num = (name, def) => {
 
 const opts = {
   cmd,
-  at: num("at", 0.1),
+  // staging position as a lap fraction. A value >1 is not a fraction — it is a
+  // stale `survey --at <count>` invocation, and passing it to jump() would wrap
+  // to 0 and stage at the start line while looking deliberate. Fall back to the
+  // default instead of silently teleporting somewhere the caller didn't ask for.
+  at: num("at", 0.1) > 1 ? 0.1 : num("at", 0.1),
   speed: num("speed", 55),
   lateral: num("lateral", 0),
   weather: flag("weather", null),
@@ -104,7 +108,13 @@ const opts = {
   ss: num("ss", 0),   // render({what:"car"}) supersampling override, 1-6 (0 = default)
   range: num("range", 500),
   team: flag("team", null),
-  at2: num("at", 0) > 1 ? num("at", 0) : 0,   // survey reuses --at as a COUNT
+  // survey samples N stations across the WHOLE lap — a count, not a position.
+  // It used to read --at, which also means the staging frac 0-1, so
+  // `survey --at 32` both asked for 32 stations AND fed jump(32) — and 32 % 1
+  // is 0, silently staging at the start line. --stations is the flag; --at is
+  // still honoured when >1 so old invocations keep working, but it no longer
+  // doubles as staging (see the `at` guard below).
+  stations: num("stations", 0) || (num("at", 0) > 1 ? num("at", 0) : 0),
   lats: num("lats", 0),
   profileFlag: has("profile"),
   reach: num("reach", 60),        // survey's lateral reach — distinct from frame's --range
@@ -201,7 +211,7 @@ const opts = {
                              detail: (o.modelDetail === "parts" || o.modelDetail === "render")
                                ? o.modelDetail : undefined });
         case "survey":
-          return a.survey({ at: o.at2 || undefined, lats: o.lats || undefined,
+          return a.survey({ at: o.stations || undefined, lats: o.lats || undefined,
                             reachM: o.reach, limit: o.limit || undefined,
                             profile: o.profileFlag });
         case "model":
