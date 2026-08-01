@@ -167,3 +167,60 @@ Promise.allSettled([fetch('https://api.polyhaven.com/assets?type=textures')]).th
 
 `BLOCKED` here means the browser refused it — a server (CI, a GitHub Actions
 runner) has no CORS at all and can still reach it.
+
+---
+
+## Which renderer am I even debugging?
+
+This matters before you install anything. The game ships **`GLX`**, a
+hand-written WebGL2 renderer — there is no `THREE.Scene`, no `Object3D`, no
+scene graph. So the **Three.js DevTools extension shows an empty panel**, and
+`AxesHelper` / `BoxHelper` / `CameraHelper` do not exist to add. Three is the
+opt-in **`TLX`** backend:
+
+```js
+localStorage.setItem('apex26.gfxBackend','three'); location.reload()
+```
+
+On TLX, `window.scene`, `camera`, `renderer` and `THREE` are published on boot
+(look for the `[TLX] … exposed` console line), so the extension finds the scene
+and the usual console workflow applies:
+
+```js
+scene.children.length
+camera.position
+scene.add(new THREE.AxesHelper(20))
+scene.add(new THREE.BoxHelper(scene.children[3], 0xff0000))
+```
+
+TLX also has its own probes: `__tlx.shader(idx)` dumps the generated GLSL/WGSL,
+`__tlx.chunkState()`, `__tlx.postState()`, and `?viz=mat|normal|lamp` debug
+views.
+
+**On the default GLX backend** the equivalent of "visual helpers" is data rather
+than wireframes, and it is already there:
+
+```js
+__apex.survey()      // geometry DEFECTS: floating/buried props, terrain through the road
+__apex.wallStats()   // barrier geometry audit
+__apex.groundY(0.11, 12)  // terrain vs road height at a point (gap finder)
+__apex.camState()    // where the camera actually is
+__apex.lightState()  // ambient, sun, active light count
+__apex.scene({radius:120})   // named scenery near the car
+```
+
+### FPS / frame time — the stats.js role
+
+```js
+__apex.stats(true)    // overlay: fps, render scale + tier, GPU ms, matTex
+__apex.stats(false)
+```
+
+Works on **all three backends**, because it reads the numbers the game already
+keeps rather than hooking a renderer. Watch the **scale** line, not just fps:
+the performance governor holds 60 fps by quietly dropping render resolution, so
+a soft-looking frame at a healthy fps usually means `scale` is below 1 — which
+is invisible without this readout.
+
+Deeper: `__apex.gpuTimer(true)` for GPU-side milliseconds (Chrome/Android only),
+and the `perf-profile` skill for a CPU flame chart.

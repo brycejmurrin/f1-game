@@ -182,6 +182,24 @@ const TLX = (function () {
       const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 4000);
       camera.matrixAutoUpdate = false;
 
+      // ── Expose the three objects for the Three.js DevTools extension ────────
+      // The extension discovers a scene by scanning globals; without these its
+      // panel is simply empty and you cannot tell "nothing exposed" from
+      // "backend not running". Publishing them also enables the standard
+      // console workflow (scene.children, camera.position.set(...),
+      // new THREE.BoxHelper(obj)) and, on this backend specifically, is the
+      // only practical way to inspect the TSL material graph.
+      //
+      // Debug-only: nothing in the game reads these back, so they can be
+      // deleted at any time. THREE itself is published too because every helper
+      // (AxesHelper/BoxHelper/CameraHelper) needs the constructor, and the
+      // module is loaded through a dynamic import that the console cannot reach.
+      try {
+        window.scene = scene; window.camera = camera; window.renderer = renderer;
+        window.THREE = THREE;
+        console.log("[TLX] window.scene / camera / renderer / THREE exposed — Three.js DevTools will find the scene");
+      } catch (_) { /* non-fatal: debug convenience only */ }
+
       // Fallback material: unlit vertex colour (the M2 look). Kept as the
       // never-fail path — if the lit factory is missing or throws, the
       // backend still boots and renders geometry.

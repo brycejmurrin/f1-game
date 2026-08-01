@@ -1788,6 +1788,55 @@ const api = {
     } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
   },
 
+  // stats(on?) — a live FPS / frame-time / GPU overlay, the stats.js role.
+  //
+  // stats.js itself is a three-oriented add-on with nothing to attach to on the
+  // DEFAULT renderer (GLX is hand-written WebGL2, not three), so this reads the
+  // numbers the game already keeps — PerfGov's frame-time EMA, the adaptive
+  // render scale and its tier, and the optional GPU timer — and works
+  // identically on GLX, TLX and WGX.
+  //
+  // The render SCALE and TIER matter as much as the fps here: the performance
+  // governor holds 60 by quietly dropping resolution, so a screenshot that
+  // "looks fine at 60 fps" may be rendering at 0.6x. That is invisible without
+  // this readout, and it is a common source of "why is it blurry".
+  //
+  //   __apex.stats(true)   // show    __apex.stats(false)   // hide
+  //   __apex.stats()       // toggle, returns whether it is now on
+  stats(on) {
+    const ID = "__apexStats";
+    let el = document.getElementById(ID);
+    const want = on === undefined ? !el : !!on;
+    if (!want) {
+      if (el) { clearInterval(el._t); el.remove(); }
+      return false;
+    }
+    if (!el) {
+      el = document.createElement("div");
+      el.id = ID;
+      el.style.cssText = "position:fixed;left:6px;top:6px;z-index:99999;padding:5px 8px;" +
+        "font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;white-space:pre;" +
+        "background:rgba(0,0,0,.72);color:#7fff9f;border-radius:5px;pointer-events:none;" +
+        "text-shadow:0 1px 2px #000";
+      document.body.appendChild(el);
+      // 4 Hz, not per-frame: a per-frame DOM write is itself a frame cost, and
+      // measuring by perturbing what you measure is how you chase ghosts.
+      el._t = setInterval(() => {
+        try {
+          const r = this.renderScale();
+          const g = this.gpuTimer();
+          const a = (typeof Assets !== "undefined") ? Assets.state() : null;
+          el.textContent =
+            `fps   ${String(r.fps).padStart(5)}\n` +
+            `scale ${r.scale.toFixed(2)}${r.auto ? " auto" : "    "}  tier ${r.tier}\n` +
+            `gpu   ${g.supported ? (g.on ? g.ms.toFixed(1) + " ms" : "off") : "n/a"}\n` +
+            `matTex ${this.matTex().toFixed(2)}  layers ${a ? a.layers : "-"}`;
+        } catch (e) { el.textContent = "stats error: " + ((e && e.message) || e); }
+      }, 250);
+    }
+    return true;
+  },
+
   // diag(opts?) — ONE call that snapshots everything worth having in a bug
   // report, and (by default) downloads it as JSON.
   //

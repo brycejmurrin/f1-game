@@ -405,6 +405,13 @@ Attribution roll for every baked asset. CC0 imposes no attribution duty, but
 every entry must carry a `source` — that is what `node tools/assets.mjs verify`
 audits.
 
+### `stats(on?) → bool`
+Live overlay: fps, adaptive render **scale + tier**, GPU ms, and the baked-material
+blend. The stats.js role, but reading the game's own counters so it works on GLX
+(which stats.js cannot attach to) as well as TLX/WGX. No arg toggles. Watch the
+scale line — the governor holds fps by dropping resolution, so a soft frame at
+60 fps usually means scale < 1.
+
 ### `diag(opts?) → object`
 One call that snapshots everything worth having in a bug report — build, UA,
 device pixel ratio, **GPU vendor/renderer** (real silicon vs SwiftShader),
