@@ -93,12 +93,17 @@ if (!gfx) {
 // on its procedural materials. Boot must never wait on, or fail for, assets.
 if (typeof Assets !== "undefined") {
   Assets.init(gfx);
+  // Loaded unconditionally at boot. A lazy "only fetch when matTexMix > 0" path
+  // was tried and removed: with the knob ON by default nobody can turn it off
+  // BEFORE their first load, so the pack is always fetched at least once, and
+  // from then on sw.js serves it from cache. The guard could not save anyone
+  // anything — it was complexity with no beneficiary.
   Assets.load();
-  // Models are prefetched too, because prop placement is SYNCHRONOUS (buildProps
-  // -> the circuit's scenery() callback) and must not depend on network timing.
-  // Started here, at boot, so they are resident long before the menu reaches a
-  // track build; a circuit that asks for one that hasn't landed simply gets
-  // nothing placed rather than a differently-built track.
+  // Models also prefetch, but for a different reason: prop placement is SYNCHRONOUS
+  // (buildProps -> the circuit's scenery() callback), so it must not depend on
+  // network timing — a circuit that asks for a model that has not landed gets
+  // nothing placed rather than a differently-built track. The manifest is a
+  // single small fetch and resolves to nothing when no models are baked.
   Assets.loadModels();
 }
 
