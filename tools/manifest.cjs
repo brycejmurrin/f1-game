@@ -107,11 +107,13 @@ const FULL = [
   "js/game/particles.js",
   "js/game/atmosphere.js",
   "js/game/store.js",
+  "js/game/cam-tune.js",
   "js/game/setup-ui.js",
   "js/game/menus.js",
   "js/game/scrollfade.js",
   "js/game/photomode.js",
   "js/game/tuner.js",
+  "js/game/cam-tuner.js",
   "js/game/steer-tuning.js",
   "js/game/perf.js",
   "js/game/cameras.js",
@@ -235,6 +237,7 @@ const HARD_EDGES = [
   ["js/data/live.js", "js/data/hub.js"],
   ["js/game/tables.js", "js/game/hud.js"],      // hud destructures GameTables at eval
   ["js/car/teams.js", "js/game/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
+  ["js/game/store.js", "js/game/cam-tune.js"],  // cam-tune destructures GameStore at eval
 ];
 
 // Named paths for direct single-file consumers (tests/tools that load one

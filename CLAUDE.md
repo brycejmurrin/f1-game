@@ -30,7 +30,7 @@ npm run test:behaviour  # collision + drift + offtrack + world-physics + physics
 npm run test:barriers   # track wall geometry + AI-fixes barrier tests
 npm run test:parts      # parts catalog, budget, persistence, physics
 npm run test:steering   # presets, sliders, steering modes, gamepad
-npm run test:camera     # camera modes + camera hooks + driving hooks
+npm run test:camera     # camera modes + camera hooks + driving hooks + camera tuner
 npm run test:ui         # UI screenshots: audit + button-touch + desktop + hud (slow)
 npm run test:visual     # pixel-diff visual regression (tracks-visual, slow)
 npm run test:scenery    # props/terrain over road + f1-track-accuracy
@@ -215,6 +215,8 @@ js/game/         — game modules (each created with the G ctx façade from game
   store.js       GameStore      localStorage persistence
   perf.js        PerfGov        adaptive performance governor
   cameras.js     GameCams       the 13 player camera modes + debug free-cam
+  cam-tune.js    CamTune        CAMERA TUNER data: per-mode framing offsets
+                                  (height/dist/side/pitch/yaw/fov), store + apply()
   hud.js         GameHud        in-race DOM HUD
   results.js     GameResults    results / season-end screens
   apex.js        ApexApi        the whole window.__apex dev API
@@ -231,12 +233,13 @@ js/game/         — game modules (each created with the G ctx façade from game
   menus.js       Menus          menu/select/pause DOM flows
   photomode.js   Photomode      photo mode
   tuner.js       TunerPanel     LIGHTING TUNER pause-menu panel
+  cam-tuner.js   CamTunerPanel  CAMERA TUNER pause-menu panel
   steer-tuning.js  SteerTuning  ADVANCED STEERING panel
 
 css/style.css                   all styles
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright test suite (45 specs)
+tests/*.spec.js                 Playwright test suite (46 specs)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -435,6 +438,9 @@ __apex.carAt(idx?)            // detailed telemetry for one car
 __apex.tracks()               // list all circuit ids
 __apex.teams()                // list all teams + engine suppliers
 __apex.camera("cockpit")      // switch camera mode (clears any view() free-cam)
+__apex.camTune("chase", {height:0.6, dist:2})  // CAMERA TUNER: per-mode framing offsets
+                              //   (height/dist/side/pitch/yaw/fov, 0 = shipped framing);
+                              //   no args lists them, null resets that mode
 __apex.view({ s:0.3, side:"L" }) // free debug camera (camera()/snapCam() clear it)
 __apex.eyeAt(0.116, 0, 2.5)   // track-relative free-cam: eye at frac/lat/height, look ahead
 __apex.orbit(0.116, 45, 15, 35) // orbit a track point (az,el,dist) — inspect from all sides
@@ -518,7 +524,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-45 Playwright specs. Run groups with `npm run test:<group>` (see Key
+46 Playwright specs. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

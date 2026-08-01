@@ -20,7 +20,7 @@
     "test:barriers":  "node tools/run-playwright.mjs tests/tracks-walls.spec.js tests/collision-ai-fixes.spec.js",
     "test:parts":     "node tools/run-playwright.mjs tests/parts-*.spec.js tests/car-effects.spec.js tests/carview-parts.spec.js tests/custom-team.spec.js",
     "test:steering":  "node tools/run-playwright.mjs tests/presets.spec.js tests/sliders.spec.js tests/steering.spec.js tests/gamepad.spec.js",
-    "test:camera":    "node tools/run-playwright.mjs tests/camera.spec.js tests/camera-hooks.spec.js tests/camera-driving-hooks.spec.js",
+    "test:camera":    "node tools/run-playwright.mjs tests/camera.spec.js tests/camera-hooks.spec.js tests/camera-driving-hooks.spec.js tests/camera-tuner.spec.js",
     "test:ui":        "node tools/run-playwright.mjs tests/ui-audit.spec.js tests/ui-button-touch.spec.js tests/ui-desktop.spec.js tests/hud-audit.spec.js tests/menu-survey.spec.js",
     "test:visual":    "node tools/run-playwright.mjs tests/tracks-visual.spec.js",
     "test:scenery":   "node tools/run-playwright.mjs tests/props-over-road.spec.js tests/terrain-over-road.spec.js tests/f1-track-accuracy.spec.js tests/scenery-kits.spec.js",

@@ -1783,6 +1783,8 @@ const { buildSelect, updateTrackPreview, openTrackDetail } = Menus.create(G);
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
 const { buildLightTunePanel, refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
+// CAMERA TUNER panel UI (js/game/cam-tuner.js) — per-camera-mode framing offsets.
+const { closeCamTuner } = CamTunerPanel.create(G);
 // Steering-tuning sliders + presets (js/game/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/game/debrisworld.js) — render-only, opt-in,
@@ -1807,6 +1809,7 @@ function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1
 function quitToMenu() {
   PerfGov.sentinelArm(false);   // deliberate exit — not a crash
   closeLightTuner(false);
+  closeCamTuner(false);
   state = "menu"; paused = false;
   document.body.classList.remove("in-race");
   setHudUserHidden(false);   // clear clean-screen mode on exit
@@ -4856,9 +4859,10 @@ function tickBody(now) {
   Input.poll();   // refresh gamepad state once per frame (before the paused gate
                   // so the Start/Menu button can also un-pause)
   if (paused) {
-    // LIGHTING TUNER live preview: keep RENDERING (physics stays paused) while
-    // the panel is open so every slider change shows on the held frame.
-    if ((state === "race" || state === "count") && !$("lighting").hidden) {
+    // LIGHTING / CAMERA TUNER live preview: keep RENDERING (physics stays
+    // paused) while either panel is open so every slider change shows on the
+    // held frame — a camera angle is unjudgeable on a frozen picture.
+    if ((state === "race" || state === "count") && (!$("lighting").hidden || !$("camtune").hidden)) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
@@ -5323,7 +5327,7 @@ els.resNext.onclick = () => {
 function setPaused(p) {
   if (state !== "race" && state !== "count") return;
   paused = p;
-  if (!p) closeLightTuner(false);
+  if (!p) { closeLightTuner(false); closeCamTuner(false); }
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(seasonMode && season && season.round > 0);
@@ -5364,6 +5368,11 @@ function setCamMode(m) {
   store.set("camMode", camMode);
   if (camMode !== prev) camCutT = 0.35;   // brief eased glide into the new angle
   refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
+  // The CAMERA TUNER edits whichever mode you are looking through, so a mode
+  // change from anywhere (C key, CAM picker, __apex.camera) must re-point its
+  // sliders. Reached through the module global, not the create() const — this
+  // function also runs at boot, before that const is initialised.
+  CamTunerPanel.refresh();
   return CAM_MODES[camMode].id;
 }
 function cycleCam() { return setCamMode(camMode + 1); }

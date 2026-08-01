@@ -197,6 +197,7 @@ hook values.
 | `ui-button-touch.spec.js` | touch controls, calibrate button, race settings layout |
 | `ui-desktop.spec.js` | desktop-mode layout (`body.desktop`), keyboard controls, non-touch UI |
 | `camera.spec.js`, `camera-hooks.spec.js`, `camera-driving-hooks.spec.js` | all 13 camera modes, `camera()`/`previewCam()`/`view()`/`orbit()`/`eyeAt()` framing, driving-camera behaviour |
+| `camera-tuner.spec.js` | CAMERA TUNER: per-mode framing offsets (`camTune()`), knob→vantage geometry, mode isolation, clamp/persist/reset, the pause-menu panel |
 | `hud-audit.spec.js` | HUD layout screenshots + mode-dependent HUD elements |
 | `map-hooks.spec.js` | minimap polyline (`mapPts()`) + orientation |
 | `lighting-ab.spec.js` | lighting A/B pixel comparison (the `test:ab` group) |
