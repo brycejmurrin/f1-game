@@ -287,6 +287,68 @@ test("TrackGeom.addMesh transforms a baked model correctly", () => {
   assert.equal(out3.pos.length, 0, "a rejected placement must emit no vertices");
 });
 
+test("webbake toGLB re-packs .gltf + .bin into something gltf.js accepts", () => {
+  // The browser baker's one genuinely novel piece. js/render/gltf.js is GLB-only
+  // and refuses external .bin URIs, while Poly Haven ships .gltf with a sidecar
+  // .bin — so toGLB() bridges them. A bug here surfaces at runtime as an opaque
+  // "malformed GLB", far from its cause, so it is pinned by round-tripping a
+  // real pair through the game's OWN loader.
+  const vm = require("node:vm");
+  const load = (rel, sandbox) => {
+    const src = fs.readFileSync(path.join(ROOT, rel), "utf8").replace(/^const\b/gm, "var");
+    vm.runInContext(src, sandbox, { filename: rel });
+  };
+  const sandbox = {
+    Math, Array, Object, JSON, Uint8Array, Uint16Array, Uint32Array, Int16Array,
+    Float32Array, DataView, ArrayBuffer, TextEncoder, TextDecoder, Promise, Error, console,
+  };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  load("js/render/gltf.js", sandbox);
+  load("assets/pack/webbake.js", sandbox);
+  assert.equal(typeof sandbox.WebBake.toGLB, "function");
+
+  // A .gltf + sidecar .bin in Poly Haven's shape: external buffer uri, a
+  // texture reference that cannot survive, and a baseColorFactor that must.
+  const pos = new Float32Array([0, 0, 0, 2, 0, 0, 0, 3, 0]);
+  const idx = new Uint16Array([0, 1, 2, 0]);            // padded to 4 bytes
+  const bin = Buffer.concat([Buffer.from(pos.buffer), Buffer.from(idx.buffer)]);
+  const gltf = {
+    asset: { version: "2.0" }, scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
+    images: [{ uri: "textures/diff.jpg" }],
+    textures: [{ source: 0 }],
+    materials: [{ pbrMetallicRoughness: {
+      baseColorFactor: [0.25, 0.5, 0.75, 1], baseColorTexture: { index: 0 } } }],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 3, type: "VEC3", min: [0, 0, 0], max: [2, 3, 0] },
+      { bufferView: 1, componentType: 5123, count: 3, type: "SCALAR" },
+    ],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: 36 },
+      { buffer: 0, byteOffset: 36, byteLength: 6 },
+    ],
+    buffers: [{ uri: "model.bin", byteLength: bin.length }],
+  };
+
+  const glb = sandbox.WebBake.toGLB(gltf, bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength));
+  const dv = new DataView(glb);
+  assert.equal(dv.getUint32(0, true), 0x46546c67, "GLB magic");
+  assert.equal(dv.getUint32(4, true), 2, "GLB version");
+  assert.equal(dv.getUint32(8, true), glb.byteLength, "declared length matches actual");
+  assert.equal(glb.byteLength % 4, 0, "GLB must stay 4-byte aligned");
+
+  // The real proof: the game's own loader accepts it and produces usable geometry.
+  const mesh = sandbox.GLTF.toMesh(glb, { scale: 1 });
+  assert.equal(mesh.pos.length / 3, 3, "three vertices survived");
+  assert.deepEqual([...mesh.idx], [0, 1, 2]);
+  assert.deepEqual([...mesh.pos].slice(0, 6), [0, 0, 0, 2, 0, 0]);
+  // baseColorFactor must survive the texture strip — it is all the colour an
+  // imported model has once its textures are dropped.
+  assert.ok(Math.abs(mesh.col[0] - 0.25) < 0.01 && Math.abs(mesh.col[1] - 0.5) < 0.01,
+    `baseColorFactor lost: ${[...mesh.col].slice(0, 3)}`);
+});
+
 test("credits cover every asset in the pack", { skip: !hasPack && "no pack installed" }, () => {
   const credits = manifest.credits || [];
   const ids = new Set(credits.map((c) => `${c.kind}:${c.id}`));

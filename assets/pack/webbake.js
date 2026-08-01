@@ -59,6 +59,7 @@ const WebBake = (function () {
                   7:"FABRIC",8:"SAND",9:"GRASS",10:"ROCK",11:"SNOW",12:"ROOF",13:"STONE",
                   14:"RUST",15:"FLAG",16:"ASPHALT" };
 
+  const NAMES_TO_MAT = Object.fromEntries(Object.entries(NAMES).map(([k, v]) => [v, +k]));
   const log = (...a) => console.log("[webbake]", ...a);
 
   // ── Poly Haven file resolution ─────────────────────────────────────────────
@@ -238,6 +239,144 @@ const WebBake = (function () {
     dl(blob, name);
   }
 
+  // ── 3D models ──────────────────────────────────────────────────────────────
+  //
+  // Same transport as the materials (api.polyhaven.com + dl.polyhaven.org, both
+  // CORS-open), but one format problem in the way: js/render/gltf.js is GLB-only
+  // and explicitly refuses external .bin URIs, while Poly Haven ships .gltf with
+  // a sidecar .bin. So we re-pack the two into a GLB in memory and hand that to
+  // the game's OWN loader — if it survives GLTF.toMesh here it will survive it
+  // at runtime, and the two can never disagree about what is supported.
+  //
+  // WHAT IS LOST: textures. The lit path is vertex-colour only (no UV channel
+  // anywhere), so a photoscanned prop arrives as flat baseColorFactor and will
+  // usually look WORSE than the procedural geometry it replaces. Models whose
+  // colour lives in a flat palette rather than a texture (the low-poly CC0
+  // packs) are the ones worth importing. modelReport() below prints what you
+  // need to judge that before committing anything.
+
+  // Re-pack a .gltf + .bin pair into a GLB buffer.
+  function toGLB(json, bin) {
+    const j = JSON.parse(JSON.stringify(json));
+    // The GLB spec requires buffer 0 to have no uri — it IS the BIN chunk.
+    if (j.buffers && j.buffers[0]) { delete j.buffers[0].uri; j.buffers[0].byteLength = bin.byteLength; }
+    // Images referencing external files cannot survive; drop them rather than
+    // emit a GLB that points at nothing. Materials keep their baseColorFactor.
+    if (j.images) delete j.images;
+    if (j.textures) delete j.textures;
+    if (j.materials) for (const m of j.materials) {
+      if (m.pbrMetallicRoughness) {
+        delete m.pbrMetallicRoughness.baseColorTexture;
+        delete m.pbrMetallicRoughness.metallicRoughnessTexture;
+      }
+      delete m.normalTexture; delete m.occlusionTexture; delete m.emissiveTexture;
+    }
+    const enc = new TextEncoder();
+    let jb = enc.encode(JSON.stringify(j));
+    const jpad = (4 - (jb.length % 4)) % 4;
+    if (jpad) { const t = new Uint8Array(jb.length + jpad); t.set(jb); t.fill(0x20, jb.length); jb = t; }
+    const bb = new Uint8Array(bin);
+    const bpad = (4 - (bb.length % 4)) % 4;
+    const total = 12 + 8 + jb.length + 8 + bb.length + bpad;
+    const out = new ArrayBuffer(total);
+    const dv = new DataView(out), u8 = new Uint8Array(out);
+    dv.setUint32(0, 0x46546c67, true); dv.setUint32(4, 2, true); dv.setUint32(8, total, true);
+    dv.setUint32(12, jb.length, true); dv.setUint32(16, 0x4e4f534a, true);
+    u8.set(jb, 20);
+    const bo = 20 + jb.length;
+    dv.setUint32(bo, bb.length + bpad, true); dv.setUint32(bo + 4, 0x004e4942, true);
+    u8.set(bb, bo + 8);
+    return out;
+  }
+
+  // Fetch a Poly Haven model, re-pack it, and run it through the game's loader.
+  // Returns {mesh, report} without downloading anything — inspect first.
+  async function modelReport(phId, opts) {
+    const o = opts || {};
+    const res = await fetch(`${API}/files/${encodeURIComponent(phId)}`);
+    if (!res.ok) throw new Error(`files/${phId} -> HTTP ${res.status}`);
+    const body = await res.json();
+    const g = body.gltf;
+    if (!g) throw new Error(`${phId}: no gltf format published`);
+    const resKey = o.res || Object.keys(g)[0];
+    const entry = g[resKey] && g[resKey].gltf;
+    if (!entry || !entry.url) throw new Error(`${phId}: no gltf at ${resKey}`);
+
+    const gj = await (await fetch(entry.url)).json();
+    // The sidecar .bin is listed in `include`, keyed by its relative path.
+    const binKey = Object.keys(entry.include || {}).find((k) => k.endsWith(".bin"));
+    if (!binKey) throw new Error(`${phId}: gltf has no .bin in include`);
+    const bin = await (await fetch(entry.include[binKey].url)).arrayBuffer();
+
+    const glb = toGLB(gj, bin);
+    if (typeof GLTF === "undefined") throw new Error("GLTF loader not on the page");
+    const mesh = GLTF.toMesh(glb, { scale: o.scale != null ? o.scale : 1 });
+
+    let mnx = 1e9, mny = 1e9, mnz = 1e9, mxx = -1e9, mxy = -1e9, mxz = -1e9;
+    for (let i = 0; i < mesh.pos.length; i += 3) {
+      mnx = Math.min(mnx, mesh.pos[i]); mxx = Math.max(mxx, mesh.pos[i]);
+      mny = Math.min(mny, mesh.pos[i + 1]); mxy = Math.max(mxy, mesh.pos[i + 1]);
+      mnz = Math.min(mnz, mesh.pos[i + 2]); mxz = Math.max(mxz, mesh.pos[i + 2]);
+    }
+    const verts = mesh.pos.length / 3, tris = mesh.idx.length / 3;
+    const report = {
+      id: phId, res: resKey, verts, tris,
+      sizeMetres: [+(mxx - mnx).toFixed(2), +(mxy - mny).toFixed(2), +(mxz - mnz).toFixed(2)],
+      bytesAX26: 20 + verts * 40 + mesh.idx.length * 4,
+      // Vegas already carries ~1.8M prop verts. A prop placed 20x around a
+      // circuit multiplies by 20 — that is the number that decides whether an
+      // asset is usable, not the download size.
+      vertsIfPlaced20x: verts * 20,
+      hadTextures: !!(gj.images && gj.images.length),
+      verdict: verts * 20 > 300000 ? "TOO HEAVY for repeated placement"
+             : verts * 20 > 80000 ? "heavy — use sparingly"
+             : "fine",
+    };
+    console.table([report]);
+    if (report.hadTextures)
+      console.warn("[webbake] textures dropped — the lit path is vertex-colour only. " +
+                   "Expect this to look flatter than the source render.");
+    return { mesh, report, glb };
+  }
+
+  // Bake a model to the game's AX26 vertex format and download it, ready to be
+  // committed into assets/pack/models/ and placed with api.bakedModel().
+  // Layout mirrors js/render/assets.js _parseModel exactly.
+  async function model(phId, matName, opts) {
+    const o = opts || {};
+    const { mesh, report } = await modelReport(phId, o);
+    const mat = NAMES_TO_MAT[(matName || "CONCRETE").toUpperCase()];
+    if (mat === undefined) throw new Error(`unknown MAT "${matName}"`);
+    const nv = mesh.pos.length / 3, ni = mesh.idx.length;
+    const buf = new ArrayBuffer(20 + nv * 36 + nv * 4 + ni * 4);
+    const dv = new DataView(buf), u8 = new Uint8Array(buf);
+    u8[0] = 0x41; u8[1] = 0x58; u8[2] = 0x32; u8[3] = 0x36;      // "AX26"
+    dv.setUint32(4, 1, true); dv.setUint32(8, nv, true);
+    dv.setUint32(12, ni, true); dv.setUint32(16, 0, true);
+    let off = 20;
+    new Float32Array(buf, off, nv * 3).set(mesh.pos); off += nv * 12;
+    new Float32Array(buf, off, nv * 3).set(mesh.nrm && mesh.nrm.length === nv * 3 ? mesh.nrm : new Float32Array(nv * 3));
+    off += nv * 12;
+    new Float32Array(buf, off, nv * 3).set(mesh.col && mesh.col.length === nv * 3 ? mesh.col : new Float32Array(nv * 3).fill(0.7));
+    off += nv * 12;
+    new Float32Array(buf, off, nv).fill(mat); off += nv * 4;
+    new Uint32Array(buf, off, ni).set(mesh.idx);
+    const name = (o.name || phId) + ".bin";
+    dl(new Blob([buf], { type: "application/octet-stream" }), name);
+    log(`downloaded ${name} — ${nv} verts, MAT.${matName || "CONCRETE"}`, report.verdict);
+    return report;
+  }
+
+
+  // What models does Poly Haven actually publish?
+  async function models(q) {
+    const r = await fetch(`${API}/assets?type=models`);
+    const j = await r.json();
+    const hit = Object.keys(j).filter((k) => !q || k.toLowerCase().includes(String(q).toLowerCase()));
+    console.log(`${hit.length} model(s):\n` + hit.join("\n"));
+    return hit;
+  }
+
   function list() {
     const rows = Object.keys(DEFAULTS).map((k) => ({
       mat: +k, name: NAMES[k], polyhaven: DEFAULTS[k], tileMetres: SCALES[k],
@@ -256,7 +395,9 @@ const WebBake = (function () {
     return hit;
   }
 
-  return { run, list, search, layer, DEFAULTS, SCALES, NAMES };
+  return { run, list, search, layer,
+           models, modelReport, model, toGLB,
+           DEFAULTS, SCALES, NAMES };
 })();
 
 if (typeof window !== "undefined") window.WebBake = WebBake;
