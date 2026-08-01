@@ -29,13 +29,19 @@ Two ways in — same surface, different cost:
   `race`/`go`/`jump` + render-frames staging correctly so you don't hand-roll it.
   **Each call boots its own browser (~30–40 s)**, so it is one read per boot:
   great for a single question, wasteful for many. Don't chain several in one
-  shell command — they run serially and blow your timeout; if you must, launch
-  them as parallel background jobs.
+  shell command — they run serially and blow your timeout. If you parallelise,
+  cap it at **2–3 background jobs**: rendering is CPU-side (SwiftShader), so more
+  browsers starve the box and reads stall for minutes. A few CLI subcommands are
+  **renamed** from the in-page tool — `trackInfo`→`track`, `carView`→`car`,
+  `worldModel`→`model`, `agentHelp`→`help`; `terminal`/`seed` are in-page only.
+  Run `agent.mjs <track>` with no command for the exact list.
 - `node tools/apex-eval.mjs <track> "<expr>"` — boots once and evaluates one
-  expression where `a` = `window.__apex`. This is the door for **anything past a
-  single read**: a multi-call sequence, a custom driving policy, a seeded A/B.
-  Batch your reads into one expression (`JSON.stringify({x:a.world(), y:a.field()})`)
-  and pay one boot instead of N. Note it stages only `race()` — see Staging.
+  expression where `a` = `window.__apex`. The door for **anything past a single
+  read**: a multi-call sequence, a custom driving policy, a seeded A/B. Batch
+  reads into one expression (`JSON.stringify({x:a.world(), y:a.field()})`) and pay
+  one boot instead of N. Catch: it stages `race()` only, so prop-dependent reads
+  (`scene`/`query`/`describe(prop:…)`) come back empty until frames draw — stage
+  and render inside the expression, or use the CLI, which does it for you.
 - `window.__apex.<tool>(...)` inside a live page (Playwright `page.evaluate`, the
   browser console) when you already have one open.
 
@@ -59,10 +65,14 @@ Read both once; do not re-fetch per tick.
   visibility, wet road.
 
 **What is this place / thing? (static — fetch once)**
-- `trackInfo({what})` — corners / sectors / elevation profile; grounded in the
-  real circuit (`gp`, `realLengthKm`, `lengthErrorPct`).
-- `carView({detail})` — the car as JSON: team, parts spec + effects, measured
-  geometry; `detail:"parts"` adds per-part boxes.
+- `worldModel({detail})` (CLI `model`) — the WHOLE circuit as ONE document:
+  repeated dressing clustered into features, named landmarks with sizes, barrier
+  spans, and a corner-by-corner walk. `summary|sections|full`. The first call for
+  "understand a place I can't see."
+- `trackInfo({what})` (CLI `track`) — corners / sectors / elevation profile;
+  grounded in the real circuit (`gp`, `realLengthKm`, `lengthErrorPct`).
+- `carView({detail})` (CLI `car`) — the car as JSON: team, parts spec + effects,
+  measured geometry; `detail:"parts"` adds per-part boxes.
 - `objective()` — what the game is (see above).
 
 **Drill down (pull, never dump)**
@@ -71,10 +81,11 @@ Read both once; do not re-fetch per tick.
 - `query({kind, near, fromS, toS})` — a bounded slice as prototype + instances
   (6 pines cost ~1 KB, not 6 records), and it reports what it withheld.
 
-**Show it (optional, APPROXIMATE)**
-- `render({what})` — the ONE raster: `view` | `map` | `circuit` | `car`. Flagged
-  approximate on purpose — a character grid reads *worse* than the numbers it is
-  drawn from, so this is for composition/debugging, not for reading geometry.
+**Show it (optional)**
+- `render({what})` — a visual aid. `view`/`map` are APPROXIMATE character-grid
+  rasters (composition/debugging, not geometry — a glyph grid reads worse than the
+  numbers it is drawn from); `circuit`/`car` just route to the structured
+  `worldModel`/`carView` payloads. Prefer the numeric tools to measure anything.
 
 **Act & check**
 - `rollout({seconds, policy|input})` — drive an interval, get a DIGEST (speed
@@ -86,15 +97,44 @@ Read both once; do not re-fetch per tick.
 
 ## The driving loop
 
+Action space: `{steer, throttle, brake}`. `steer` ∈ [−1,1], **+1 = full right
+lock** (matches `+k`); `throttle`/`brake` are **booleans** (any truthy = full, so
+`throttle:0.5` is full throttle, not half). `act(input, dt, n)` applies it for `n`
+ticks; `rollout({policy})` calls your policy repeatedly.
+
 ```
 objective()                       // once — what winning is
 trackInfo({what:"corners"})       // once — the static map
 loop:
   w = world({detail:"drive"})     // where am I, what's ahead
-  decide from w.nextCorner / w.pacenotes / w.rivals / w.ego
-  act({steer,throttle,brake}, dt, n)   // or rollout({seconds, policy})
+  act(policy(w), dt, n)           // or rollout({seconds, policy})
   terminal().done ? stop : repeat
 ```
+
+A runnable starter policy — nulls heading error, recentres, brakes for the corner:
+
+```js
+policy = w => {
+  const e = w.ego, nc = w.nextCorner;
+  let steer = -e.headingErrDeg*0.045 - e.lateralM*0.045;   // null heading + recentre
+  steer = Math.max(-1, Math.min(1, steer));
+  const tgt = nc ? nc.apexSpeedKph/3.6*0.9 : 60;           // hints are OPTIMISTIC
+  const braking = nc && e.speed > tgt && nc.distM < nc.suggestBrakeM*1.5;
+  return { steer, throttle: !braking, brake: braking };    // brake EARLIER than the hint
+};
+```
+
+`apexSpeedKph`/`suggestBrakeM` assume more grip than default parts have — target
+below them and brake early, then tune from the digest's `offTrack.pct` and
+`cornerMinSpeedKph`. Two gotchas the loop above hides:
+- **`rollout`'s policy receives `world({detail:"brief"})`** — which carries `ego`
+  and a single `nextCorner` but NOT `pacenotes`/`rivals`/`nextCorners`. Reading
+  those inside a rollout policy returns `undefined`; call `world({detail:"drive"})`
+  yourself between decisions if you need them.
+- **`rollout` runs the full `seconds` regardless of a terminal event.** A rescue
+  or wrong-way lands in `digest.terminal` but does not stop the interval (the car
+  keeps being simulated, often stalled). Shorten `seconds`, or gate in the policy,
+  to end on the event.
 
 An LLM cannot decide at 60 Hz — that is what `rollout({policy})` is for: it runs
 your policy at `policyHz` (default 10) while physics steps every tick, and hands
@@ -103,11 +143,25 @@ back a digest. Use it for a lap; use `world()`+`act()` for a single decision.
 ## Determinism — pin the seed before any comparison
 
 The simulation is seeded. `seed(n)` sets it; `reset(frac, speed, x, seed)`
-reproduces an episode exactly — **same seed + same inputs ⇒ same result**. Any
-A/B (a physics tweak, two policies) is noise unless both runs share a seed, and
+reproduces an episode exactly — **same seed + same inputs ⇒ same result**, and
 `world({full}).session.seed` makes a snapshot self-describing (replay it with
 `reset(...,seed)`). Cosmetic randomness (particles, camera shake) is deliberately
 unseeded so it can never perturb the sim.
+
+**What the seed actually controls: the AI field, not a lone car.** A `reset()`
+episode is *solo* — no live field — so with fixed inputs it is already
+deterministic and the seed is a **no-op** there; matching seeds only matters once
+the 22-car AI field is in play, which exists via `go()`, not `reset()`. So: A/B
+the player's own dynamics with a solo `reset()`+`rollout` (seed irrelevant); A/B
+anything field-dependent by comparing `go()` races.
+
+**A physics A/B uses `setPhysics({...})`** — whose keys are lowercase camelCase
+(`pace, drift, frontGrip, playerGrip, roadFollow, wheelbase, expo, maxSlip,
+speedRef, yawDamp, yawInertia`), NOT the uppercase constant names (`PACE`,
+`FRONT_GRIP`) from the Physics reference. **Unknown keys are silently ignored** —
+the one hook with no typed error — so a mistyped key looks like "the tweak did
+nothing." Confirm it took from the object `setPhysics` returns; `physState()` does
+not carry these params.
 
 ## Staging (the sharp edges the CLI handles for you)
 
