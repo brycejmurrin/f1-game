@@ -5049,6 +5049,11 @@ function syncAudioPanel() {
 }
 
 $("pm-audio").onclick = () => { syncAudioPanel(); $("audioset").hidden = false; };
+// The SPOTIFY entry is owned by js/game/spotify.js — it knows whether there is
+// anything to control, and keeps its own button's disabled state in sync.
+$("pm-spotify").onclick = () => {
+  if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.openPanel) SpotifyMusic.openPanel();
+};
 $("as-close").onclick = () => { $("audioset").hidden = true; };
 $("as-music-on").onclick = () => { setMusic(true); if (soundOn) GameAudio.uiTick(); };
 $("as-music-off").onclick = () => { setMusic(false); if (soundOn) GameAudio.uiTick(); };

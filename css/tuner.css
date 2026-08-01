@@ -341,12 +341,32 @@
    the whole app, so without this the one string the setup depends on cannot be
    selected. It has to match the Spotify dashboard byte for byte, which is why
    it is monospace and wraps rather than being ellipsised. */
-#as-sp-playlist, #as-sp-device {
+/* ---------- SPOTIFY player panel ---------- */
+.sp-now { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.sp-art {
+  flex: 0 0 auto; width: 56px; height: 56px; border-radius: 6px; object-fit: cover;
+  background: rgba(255, 255, 255, 0.06);
+}
+.sp-now-txt { min-width: 0; }              /* lets the ellipsis below actually engage */
+.sp-title, .sp-artist, .sp-on { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-title { font-size: 14px; font-weight: 700; }
+.sp-artist { font-size: 12px; opacity: 0.75; }
+.sp-on { font-size: 10px; opacity: 0.5; letter-spacing: 0.04em; margin-top: 2px; }
+.sp-bar { height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.14); overflow: hidden; margin: 2px 0 8px; }
+.sp-bar-fill { height: 100%; background: var(--red); width: 0; transition: width 0.4s linear; }
+#sp-search {
+  width: 100%; margin-top: 6px; font: inherit; font-size: 16px;   /* 16px: iOS zoom floor */
+  background: rgba(255, 255, 255, 0.08); color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 6px 8px;
+}
+#sp-results:empty { display: none; }
+#as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {
   width: 100%; font: inherit; font-size: 16px;   /* 16px: iOS zooms a focused control under it */
   background: rgba(255, 255, 255, 0.08); color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 6px 8px;
 }
-#as-sp-playlist:disabled, #as-sp-device:disabled { opacity: 0.45; }
+#as-sp-playlist:disabled, #as-sp-device:disabled,
+#sp-playlist2:disabled, #sp-device2:disabled { opacity: 0.45; }
 .sp-uri {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px;
   word-break: break-all; opacity: 0.9;
