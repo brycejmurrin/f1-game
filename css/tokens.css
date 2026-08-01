@@ -80,6 +80,14 @@
    @property is not part of the element cascade, so it sits outside the layers. */
 @property --sfade-t { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --sfade-b { syntax: "<length>"; inherits: false; initial-value: 0px; }
+/* Scroll-thumb geometry, written by js/game/scrollfade.js on each scroll region.
+   `inherits: false` is the load-bearing part, not the typing: a plain custom
+   property inherits, so setting one on a scroll container invalidates style for
+   its WHOLE subtree — and these are set on containers holding 80+ rows (the
+   lighting tuner), on every scroll. Declared non-inherited, a change touches
+   only the element and the ::before that draws the thumb. */
+@property --sf-h { syntax: "<length>"; inherits: false; initial-value: 24px; }
+@property --sf-y { syntax: "<length>"; inherits: false; initial-value: 0px; }
 
 @layer base {
 /* Apex 26 — layout, HUD, menus. Data hub styles live in css/data.css */
