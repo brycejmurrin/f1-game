@@ -38,6 +38,7 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **test-shards.sh** | Runs whole npm test groups concurrently, one port + log per group, with a pass/fail summary. `tools/test-shards.sh smoke api collision`; `WORKERS=N` sets workers per group. |
 
 | **agent.mjs** | The agent toolbelt as a CLI — boots the game headless and calls one agent-view surface (`world`/`track`/`scene`/`rollout`/`help`) with the staging done correctly. `agent.mjs <track> <cmd> [flags]`. | agent-view |
+| **import-models.mjs** | Batch glTF → AX26 model importer. Separate from `assets.mjs bake-model`, which takes one local `.glb` through the game's own `js/render/gltf.js`: real CC0 model PACKS are directories of `.gltf` + sidecar `.bin` + textures, so this repacks them. Gated by `tests/import-models.test.mjs`. | — |
 | **assets.mjs** | Asset bake CLI (AUTHOR-TIME ONLY — never loaded by the game). `bake-synthetic` rebuilds `assets/pack` with no network or deps; `verify` checks the licence allow-list, md5s and size budget. | — |
 | **float-audit.cjs** | Exhaustive FLOATING-scenery detector — wraps `TrackGeom`'s emitters to record every primitive, then reports props hanging above (or buried under) the ground. `--all` sweeps the fleet. | survey-track |
 | **clip-audit.cjs** | PROP-VS-PROP interpenetration detector — the third axis after road (`rejBox`) and ground (float-audit). Uses emission-order adjacency to tell "one assembly" from "two models fighting". Gated by `tests/prop-clipping.test.mjs` against `clip-baseline.json`. | scenery-dress |
