@@ -87,10 +87,25 @@ function updateHud(force) {
   // pressing), or it is simply unavailable here. `aeroX` is the flap travel,
   // not the switch, so the readout follows the wing rather than the button.
   const xOpen = (player.aeroX || 0) > 0.05;
+  // ACTIVATION ZONES are a PLACE, so the readout is a distance, not a mood. The
+  // rolling look-ahead this replaced could only ever say yes/no about the here
+  // and now; a fixed zone can be announced like a DRS board, which is the whole
+  // reason the real system uses fixed zones. Four states: open, standing in a
+  // zone (press it), a zone counting down ahead, and a circuit that has none —
+  // Monaco has no qualifying straight, and there the button is simply not a
+  // thing that exists.
+  const dz = G.aeroZoneAhead ? G.aeroZoneAhead(player.s || 0) : Infinity;
+  const noZones = !(G.aeroZones && G.aeroZones.length);
   hToggle(els.btnAero, "on", xOpen);
   hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
-  hClass(els.aero, xOpen ? "ax-open" : player.xArmed ? "ax-armed" : "ax-off");
-  hText(els.aero, xOpen ? "X-MODE" : "Z-MODE");
+  hToggle(els.btnAero, "dead", noZones);
+  hClass(els.aero, noZones ? "ax-none" : xOpen ? "ax-open"
+    : player.xArmed ? "ax-armed" : "ax-off");
+  hText(els.aero, noZones ? "NO AERO ZONE"
+    : xOpen ? "X-MODE"
+    : player.xArmed ? "AERO ZONE"
+    : dz < 900 ? "AERO " + Math.round(dz) + "m"
+    : "Z-MODE");
   if (timeTrial) {
     // no rivals — show ghost delta (or last lap) and the record to chase instead of gaps
     if (Ghost.hasGhost()) {

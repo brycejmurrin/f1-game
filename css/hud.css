@@ -97,6 +97,11 @@
 #hud-aero.ax-off { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); }
 #hud-aero.ax-armed { color: #7df9ff; border: 1px solid rgba(125,249,255,0.55); }
 #hud-aero.ax-open { color: #04212b; background: #22d3ee; box-shadow: 0 0 14px rgba(34,211,238,0.55); }
+/* A circuit with no qualifying straight has no activation zone and therefore no
+   active aero at all — Monaco. Struck through, because the difference between
+   "not here, yet" and "not on this track" is the difference between waiting and
+   never pressing the button again. */
+#hud-aero.ax-none { color: rgba(255,255,255,0.28); border: 1px dashed rgba(255,255,255,0.18); text-decoration: line-through; }
 @keyframes pulse { 50% { opacity: 0.55; } }
 #minimap {
   position: absolute;

@@ -36,6 +36,11 @@
 #btn-aero  { right: calc(16px + var(--sar)); bottom: calc(184px + var(--sab)); font-size: 12px; }
 #btn-aero.armed { border-color: rgba(125,249,255,0.8); color: #7df9ff; }
 #btn-aero.on { background: #22d3ee; color: #04212b; border-color: #22d3ee; box-shadow: 0 0 18px rgba(34,211,238,0.7); }
+/* No activation zone anywhere on this circuit: the control cannot do anything,
+   so it says so rather than sitting there inviting taps. Faded, not hidden —
+   hiding it would reflow the touch-control stack and move every OTHER button
+   under the player's thumbs (the same reason #pm-calib is disabled, not hidden). */
+#btn-aero.dead { opacity: 0.3; pointer-events: none; }
 
 /* gear shift buttons: right column, stacked (DN bottom, UP above) with 8 px gaps */
 .shiftbtn { flex-direction: column; font-size: 15px; line-height: 1.05; }

@@ -526,7 +526,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (96) + tests/*.test.mjs unit suites (30)
+tests/*.spec.js                 Playwright specs (97) + tests/*.test.mjs unit suites (30)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -655,15 +655,26 @@ table, so they cannot drift apart. Closed = the element's own incidence plus
 `Z_BITE`, CLAMPED per element against the measured nose underside (`NOSE_UNDER`)
 so nothing ever swings into the bodywork; open = flat. `X_OPEN_RATE` is set by
 the FIA's 400 ms transition cap, not by feel. The GARAGE turntable shares the
-same draw, so its ACTIVE AERO button shows the real geometry at real angles. `c.xOn` is the switch and
-`c.xArmed` whether the road allows it at all: `xStraightAhead()` requires
-`X_STRAIGHT_T` **seconds** of road ahead under `X_K_MAX` curvature, so the window
-shrinks as you speed up, exactly like the FIA's "any straight longer than three
-seconds". Braking or leaving that window shuts the flap AND drops the switch, and
+same draw, so its ACTIVE AERO button shows the real geometry at real angles.
+
+`c.xOn` is the switch and `c.xArmed` whether the car is allowed the mode here at
+all. Allowed means **inside an ACTIVATION ZONE**: the FIA approves fixed zones
+per circuit and the standard ECU refuses to rotate the wings outside one, so
+`buildAeroZones()` scans each built track for contiguous runs under `X_ZONE_K`
+and keeps those longer than `X_STRAIGHT_T × X_ZONE_VREF` (210 m — the rule's
+three seconds at racing speed). Zones are measured against a FIXED reference
+speed, never the car's, because they are a property of the circuit and the
+OVERALL SPEED slider must not redraw them. A circuit whose longest straight
+misses the minimum gets **no zones and no active aero** — that is MONACO, and
+`tests/aero-zones.spec.js` pins it. Zones can WRAP the start line, so
+`aeroZones()` exposes `midFrac` and every consumer should use it rather than
+averaging `startFrac`/`endFrac`.
+
+Braking or leaving the zone shuts the flap AND drops the switch, and
 `X_CLOSE_RATE` is ~4× `X_OPEN_RATE` — the downforce comes back faster than it
-left. The AI needs no separate close-before-the-corner rule: its braking scan
-looks 1.7 s ahead and the arming scan 3 s, so X-mode has already un-armed by the
-time it decides to brake.
+left. The HUD chip counts the next zone down in metres like a DRS board, and
+reads `NO AERO ZONE` (struck through, button disabled) on a circuit that has
+none.
 
 Adding a consumer? Read `c.aeroX` (or `aeroDfMult(c)` for the downforce
 multiplier) — **never `c.xOn`**. The switch is not the wing.
@@ -971,7 +982,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-96 Playwright specs + 30 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+97 Playwright specs + 30 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for
