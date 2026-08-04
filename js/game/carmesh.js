@@ -116,6 +116,23 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
   // level (mesh is cached per aLvl — see getCarDecalMesh).
   // Defensive: fall back to the old fixed board if a stale car3d.js bundle lacks
   // numberBoard (never white-screen the race over a decal position).
+  // Rear-wing UPPER FLAP → the sponsor band. REGIONS.wing was drawn into every
+  // atlas and mapped onto nothing at all, so a whole sponsor wordmark was dead
+  // pixels. The flap is a sloped surface, so the quad slopes with it: Car3D
+  // builds it from (z -2.38, upperTrailY - 0.075) to (z -2.64, upperTrailY),
+  // where upperTrailY drops by 0.075 for max-DF and DRS packages alike — read the
+  // aero recipe rather than assuming, or the band floats above the wing.
+  if (Car3D.endplate) {
+    const lvl = aLvl == null ? 2 : aLvl;
+    const aeroV = parts && parts._visual && parts._visual.aero;
+    const drs = aeroV && aeroV.drs ? 1 : 0;
+    const crownY = Car3D.endplate(lvl).rear.top - 0.018;
+    const upperTrailY = crownY - (lvl >= 4 || drs ? 0.075 : 0);
+    const flapY = (z) => upperTrailY - 0.075 * (z + 2.64) / 0.26 + 0.0235;
+    const wzF = -2.42, wzR = -2.60, wX = 0.44;
+    quad([[-wX, flapY(wzF), wzF], [wX, flapY(wzF), wzF],
+          [wX, flapY(wzR), wzR], [-wX, flapY(wzR), wzR]], [0, 1, 0.28], R.wing);
+  }
   const nb = (Car3D.numberBoard ? Car3D.numberBoard(aLvl == null ? 2 : aLvl) : { cy: 0.62, h: 0.20 });
   const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
   quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
