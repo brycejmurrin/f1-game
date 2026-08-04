@@ -1,12 +1,25 @@
-/* Apex 26 — the CAREER screen (#career). Two states in one sheet: the new-career
-   setup when no save exists, and the season hub when one does. The hub replaces
-   #select entirely in career, because the calendar decides where you race — the
-   only thing left to choose is whether you are ready to go.
+/* Apex 26 — the CAREER screen (#career). THREE states in one sheet: CAREER MODES
+   (both modes, their six save slots and their guides — the title button's one
+   door), the new-career setup, and the season hub. The hub replaces #select
+   entirely in career, because the calendar decides where you race — the only
+   thing left to choose is whether you are ready to go.
 
    Rules and persistence live in js/game/career.js; this file is DOM only. Live
    game state comes through the ctx façade handed to CareerUI.create(ctx) at boot
    (see the `G` object in game.js): els, $, cssCol, openGarage, openRaceSettings,
-   updateTrackPreview. Consumes globals Career, Teams, Tracks, Parts, GameAudio.
+   updateTrackPreview. Consumes globals Career, Teams, Tracks, Parts, GameAudio,
+   plus DriverRatings, Reliability and GameTables — but only from inside the
+   GUIDE builders, which run when a player opens the sheet rather than at eval
+   time, so none of them is a load-order dependency.
+
+   THE GUIDES QUOTE THE RULES, NEVER THEMSELVES. Every figure in #career-guide is
+   read from those globals (Career.PRIZE, RESEARCH_MULT, BUDGET_MULT, OBJ_BONUS,
+   START_MONEY, SLOTS, FACILITY_*, SPONSOR_KINDS, the free-agent asks, plus
+   Teams.POINTS, Tracks.SEASON, DriverRatings.AXES, Reliability.TIER_RISK) and
+   never typed into prose. A guide that hard-codes the economy goes stale the
+   first time the economy is tuned, and a wrong number in a rules screen is worse
+   than no number at all.
+
    Must load BEFORE js/game.js (see index.html). */
 const CareerUI = (function () {
   "use strict";
@@ -199,6 +212,71 @@ function create(G) {
 
   const cr = (n) => n.toLocaleString() + " cr";
 
+  // Sections that describe rules BOTH modes obey. Written once and pushed into
+  // each guide rather than duplicated: a shared rule described twice is a shared
+  // rule that will eventually be described two different ways.
+  function sharedSections(my) {
+    const out = [];
+    out.push(guideSection("QUALIFYING", [
+      "Every championship round qualifies before it races, and the sheet IS the "
+      + "grid — there is no fixed starting slot to climb from.",
+      "DRIVE MY LAP gives you one out-lap and one flying lap, alone on track, "
+      + "with nothing to overtake and nothing to avoid. SIMULATE takes the time "
+      + "the model gives you and goes straight to the grid.",
+      "The rest of the field is not driven, it is modelled — the same grip, "
+      + "acceleration and braking your own car obeys, over the same corners. So a "
+      + "lap you drive and a lap they are given are on one scale, and a good lap "
+      + "genuinely gains you places.",
+      "A driver who is not consistent is not slower on average — they are less "
+      + "likely to put the whole lap together on the one run that counts.",
+    ]));
+    out.push(guideSection("THE GRID YOU RACE", [
+      "The twenty-one other drivers are not interchangeable. Each has five "
+      + "ratings — " + DriverRatings.AXES.join(", ") + " — and they decide who is "
+      + "quick, who defends well, who keeps it clean, and who is repeatable.",
+      "CONSISTENCY is a spread, not a speed. A rookie is not slower than a "
+      + "veteran of the same pace, just harder to predict.",
+      "The CAR still matters more than the driver, as it does in the sport. But "
+      + "the gap between the best and worst driver is real enough that a good one "
+      + "in a midfield car can beat a poor one in a better car.",
+      "Ratings drift over a career. Young drivers improve, veterans slip, and a "
+      + "season that beat what the car deserved counts for more than a title in "
+      + "the best car on the grid.",
+    ]));
+    out.push(guideSection("POINTS AND THE SEASON", [
+      ["Rounds in a season", String(Tracks.SEASON.length)],
+      ["Points, P1 down to P" + Teams.POINTS.length, Teams.POINTS.join(" · ")],
+      "Two championships run at once: the DRIVERS', which is you, and the "
+      + "CONSTRUCTORS', which is both of your team's cars added together.",
+      "When the calendar runs out the year is closed off, the grid develops over "
+      + "the winter, and the next season opens. Everything you own and everything "
+      + "you have earned carries over — that is the long arc.",
+    ]));
+    out.push(guideSection("RELIABILITY", [
+      "A race setting, and it ships OFF. Turn it on and cars stop — an "
+      + (Reliability.REASONS.filter((r, i, a2) => a2.indexOf(r) === i).join(", a ")) + ".",
+      ["Risk per race, best car to worst",
+        Math.round(Reliability.TIER_RISK[0] * 100) + "% – "
+        + Math.round(Reliability.TIER_RISK[Reliability.TIER_RISK.length - 1] * 100) + "%"],
+      ["LOW", "half those odds"],
+      "Two things buy the risk down: developing the team, and what you have spent "
+      + "on the ENGINE and GEARBOX. So money buys finishes as well as lap time.",
+      "A retirement is classified below every car that finished and scores "
+      + "nothing. It also fails a CLEAN RACE brief — a car in the barriers on lap "
+      + "two has not completed anything.",
+      "Whether a car stops is decided at the green light, not while you drive, so "
+      + "it is never a reaction to how your race is going.",
+    ]));
+    out.push(guideSection("RACE SETTINGS", [
+      "Reachable on the way to every weekend. Race length, weather, time of day, "
+      + "AI difficulty (" + Object.keys(GameTables.DIFF).join(" / ") + ") and "
+      + "reliability.",
+      "They change the weekend, never the economy: prize money is paid on where "
+      + "you finished, whatever length or weather you chose to finish in.",
+    ]));
+    return out;
+  }
+
   function driverGuide() {
     const out = [];
     out.push(guideSection("THE IDEA", [
@@ -251,6 +329,16 @@ function create(G) {
       ["Levels", String(Career.FACILITY_MAX)],
       ["At the top", "−" + Math.round(Career.FACILITY_DISCOUNT_MAX * 100) + "% on all research"],
     ]));
+    out.push(guideSection("YOUR SEAT AND YOUR TEAM-MATE", [
+      "You replace one of your team's two real drivers. The other one stays, and "
+      + "they are the benchmark the whole mode measures you against — most race "
+      + "briefs are about beating them, and a contract is easier to earn from the "
+      + "seat that is beating the one next to it.",
+      "The LEAD seat and the SECOND seat are the same car. What differs is who "
+      + "you are being compared with.",
+      "You can change teams at the end of a season, never during one. A contract "
+      + "is a contract.",
+    ]));
     out.push(guideSection("THE BRIEF", [
       "One objective a round — finish above a position, beat your team-mate, "
       + "out-qualify them, score points, or keep it clean. It pays, and it moves "
@@ -278,7 +366,7 @@ function create(G) {
       + "Enough that the grid feels alive; few enough that it is still the grid "
       + "you know.",
     ]));
-    return out;
+    return out.concat(sharedSections(false));
   }
 
   function myTeamGuide() {
@@ -358,13 +446,23 @@ function create(G) {
       ["Levels", String(Career.FACILITY_MAX)],
       ["At the top", "−" + Math.round(Career.FACILITY_DISCOUNT_MAX * 100) + "% on all research"],
     ]));
+    out.push(guideSection("DEVELOPING THE TEAM", [
+      "The team itself has a level, separate from the car you bolt together. It "
+      + "moves with results across a whole season, not with one weekend.",
+      "A team that finishes above what its car should manage climbs; one that "
+      + "finishes below slides back. Half of whatever you have gained evaporates "
+      + "every winter, so nothing you build stays built for free.",
+      "Team development is also what buys down your retirement risk once "
+      + "RELIABILITY is on — a better-run team stops breaking.",
+      "THE CAR card on the hub shows where you stand.",
+    ]));
     out.push(guideSection("NOBODY CAN SIGN YOU", [
       "You own the constructor, so no team offers you a seat and no contract runs "
       + "out from under you. The only way out is to start a different career.",
       "What does change is the team itself: develop it and it climbs, neglect it "
       + "and it slides back toward where it started.",
     ]));
-    return out;
+    return out.concat(sharedSections(true));
   }
 
   function buildGuide(flavour) {
