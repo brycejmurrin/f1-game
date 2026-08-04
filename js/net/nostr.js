@@ -234,12 +234,41 @@ const NetNostr = (function () {
             // RTCPeerConnection, so handing the same string to two people has
             // them both answering the same connection and one of them losing.
             // Targeted, so nobody else in the room even sees it.
+            //
+            // ONCE PER PEER, AND ONE AT A TIME. Both guards are load-bearing
+            // and neither was here at first:
+            //
+            //   onPeerJoin is a SETTER that REPLAYS for peers already in the
+            //   room, and a peer re-announces when a relay socket drops and
+            //   reconnects — which is the normal state of a public relay, not
+            //   an edge case. Minting per fire means a fresh
+            //   RTCPeerConnection, a full ICE gather and a post EVERY TIME,
+            //   where the old two-party path posted one short string once.
+            //   That is how a room ends up being told "you are noting too
+            //   much" by the relay, i.e. rate-limited by our own doing.
+            //
+            //   And minting is async: two fires interleaved would both call
+            //   through to the lobby, which swaps the pending transport under
+            //   the other one, so an arriving answer gets applied to the wrong
+            //   connection.
+            const served = new Set();
+            let minting = null;
             room.onPeerJoin = async (id) => {
-              if (done) return;
-              let offer = null;
-              try { offer = await mintOffer(id); } catch (e) { offer = null; }
-              if (!offer || done) return;
-              try { post(offer, id); } catch (e) {}
+              if (done || served.has(id)) return;
+              served.add(id);
+              const prev = minting;
+              minting = (async () => {
+                try { await prev; } catch (e) {}
+                if (done) return;
+                let offer = null;
+                try { offer = await mintOffer(id); } catch (e) { offer = null; }
+                // A refusal (room full, no transport) must not be remembered as
+                // served, or a later retry by the same peer is ignored forever.
+                if (!offer) { served.delete(id); return; }
+                if (done) return;
+                try { post(offer, id); } catch (e) {}
+              })();
+              await minting;
             };
           } else if (send) {
             // Post on join AND immediately: whoever is already in the room gets
