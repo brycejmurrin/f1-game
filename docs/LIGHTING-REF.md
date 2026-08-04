@@ -107,6 +107,27 @@ exactly 15 values.
 distance to camera (with behind-camera bias) and keeps the nearest CAP —
 `LT.lampCull` (def 28) when there is traffic, otherwise 32 (`MAX_LIGHTS`).
 
+### Dark-gap fill (`LT.lampGapFill`, def 60 m)
+
+Lights are emitted **from the mast list** (`track.lampPosts`), so a circuit that
+suppresses the generic flood masts over a stretch — a `dressingExclusions` rule
+of kind `"floodlights"`, usually because a bespoke structure owns that ground —
+also deleted the *light* there. An audit of all 40 circuits found **nine with a
+genuinely unlit stretch at night**: baku (880 m of road, worst point 431 m from
+any lamp), madrid, mexico, silverstone, redbull (528 m spanning its own
+start/finish straight), suzuka, monaco, abudhabi, montreal.
+
+Placing bespoke masts circuit-side does not fix it: `floodMast()` and
+`floodMastRing()` draw a fixture but never register a lamp post, so they emit
+nothing either. Instead `buildTrackLights` walks the sorted mast list and
+inserts fill lights wherever the gap exceeds `LT.lampGapFill`, keeping the mast
+suppressed (the circuit's visual intent) while restoring the pool. Fill lights
+carry `glareW = 0` and damped volumetrics — there is no fixture to anchor a lens
+halo to, so they read as spill from off-camera architectural lighting.
+
+Set the knob to 0 for the old behaviour. With it at the default every node on
+all 40 circuits is within 28 m of a lamp.
+
 ---
 
 ## `applyRaceSettings` — time-of-day branches

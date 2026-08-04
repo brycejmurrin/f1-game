@@ -108,6 +108,7 @@ const TUNE_DEFS = [
   { id: "lampWarmupWarm",label: "WARM-UP WARMTH",  group: "LAMP BEHAVIOUR", min: 0, max: 3, step: 0.05, def: 1.0, help: "How orange a freshly-struck lamp glows before settling to its true colour (strike-warmth amount). 0 = strikes at final colour, 1 = as-shipped sodium-warm start, higher = a strong amber ignition." },
   { id: "lampCull",      label: "LAMP COUNT",      group: "LAMP BEHAVIOUR", min: 16, max: 32, step: 1, def: 28, help: "How many of the nearest lamps light the scene at once when there's traffic (the shader has 32 slots; the rest are reserved for car tail-lights). Higher = more of the field lit but fewer tail-light slots on dense night grids. Solo running always uses all 32." },
   { id: "lampCullFade",  label: "LAMP CULL FADE",  group: "LAMP BEHAVIOUR", min: 0.1, max: 0.9, step: 0.05, def: 0.35, help: "How far inside the nearest-lamp boundary a lamp reaches full brightness (the distance fade that hides lamps entering/leaving the set at speed). Low = a thin fade band, a sharper edge to the lit zone; high = a broad, gentle falloff into the dark." },
+  { id: "lampGapFill",   label: "DARK-GAP FILL",   group: "LAMP BEHAVIOUR", min: 0, max: 400, step: 10, def: 60, rebuild: true, help: "Longest stretch of road (m) allowed with no lamp before fill lights are inserted. Several circuits suppress the generic flood masts over a stretch (dressingExclusions kind \"floodlights\") so a bespoke structure can own that ground — but suppressing the MAST also removed the LIGHT, leaving that stretch genuinely unlit at night. Fill lights restore the pool without adding mast geometry, so they carry no lens halo. 0 = off (the old behaviour: dark where the masts were suppressed)." },
   { id: "lampBehindBias",label: "BEHIND-CAM BIAS", group: "LAMP BEHAVIOUR", min: 1, max: 10, step: 0.25, def: 5.25, help: "How strongly lamps behind the camera are deprioritised in the nearest-lamp cull, so the budget favours the road ahead. 0/low = lamps ranked purely by distance (the lit road ends in a hard line ahead); high = the lit zone pushes much further forward past the fog." },
   { id: "lampNearClamp", label: "LAMP NEAR CLAMP", group: "LAMP BEHAVIOUR", min: 1, max: 12, step: 0.25, def: 4.0, u: "uLampNearClamp", help: "Minimum distance (m) used in each lamp's inverse-square falloff, so a surface right under a fixture can't blow out to infinite brightness. 4 = as-shipped, lower = a hot, tight pool with a fierce hotspot directly beneath the lamp, higher = a softer, flatter pool that never over-brightens up close. Both renderers." },
   // ── NIGHT GLOW & BLOOM ──
@@ -305,7 +306,45 @@ function buildTrackLights(track) {
   // side parity and onTrack suppression as the drawn masts), so glare halos,
   // specular streaks, volumetric beams and reflections all anchor to geometry.
   // Fallback: synthetic stride walk when lampPosts is absent (older track build).
-  const posts = (track.lampPosts && track.lampPosts.length) ? track.lampPosts : null;
+  let posts = (track.lampPosts && track.lampPosts.length) ? track.lampPosts : null;
+  // ── DARK-GAP FILL ─────────────────────────────────────────────────────────
+  // A circuit can suppress the generic flood masts over a stretch with a
+  // dressingExclusions rule of kind "floodlights", usually because a bespoke
+  // structure owns that ground and a row of stock poles through it looks wrong.
+  // But the light is emitted FROM the mast list, so suppressing the mast also
+  // deleted the light — and an audit of all 40 circuits found nine with a
+  // genuinely unlit stretch at night, worst of all Baku (1.2 km, a fifth of the
+  // lap) and Red Bull Ring (784 m spanning its own start/finish straight).
+  // Nine circuits each placing bespoke masts is the wrong fix twice over: the
+  // scenery-side floodMast()/floodMastRing() helpers draw a fixture but never
+  // register a lamp post, so they emit nothing either.
+  // So: keep the mast suppressed (that is the circuit's visual intent) and put
+  // the LIGHT back. Fill lights get no lens halo (glareW 0) and damped
+  // volumetrics, because there is no fixture to anchor them to — they read as
+  // spill from off-camera architectural lighting rather than a floating lens.
+  if (posts && LT.lampGapFill > 0) {
+    const sorted = posts.slice().sort((a, b) => a.k - b.k);
+    const maxGap = Math.max(stride * 2, Math.round(LT.lampGapFill / ds));
+    const fill = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const a = sorted[i], bN = sorted[(i + 1) % sorted.length];
+      const span = (i === sorted.length - 1) ? (bN.k + n - a.k) : (bN.k - a.k);
+      if (span <= maxGap) continue;
+      const steps = Math.floor(span / stride);
+      for (let j = 1; j < steps; j++) {
+        const k = (a.k + j * stride) % n;
+        const side = (j % 2 === 0) ? 1 : -1;
+        const hwk = track.hw[k] || 7;
+        fill.push({
+          k, side, synth: true, kind: null,
+          x: track.px[k] + track.rx[k] * (hwk + 6) * side,
+          y: track.py[k] + height,
+          z: track.pz[k] + track.rz[k] * (hwk + 6) * side,
+        });
+      }
+    }
+    if (fill.length) posts = sorted.concat(fill);
+  }
   const nPosts = posts ? posts.length : Math.ceil(n / stride);
   for (let i = 0; i < nPosts; i++) {
     const k = posts ? posts[i].k : Math.min(n - 1, i * stride);
@@ -376,6 +415,9 @@ function buildTrackLights(track) {
       coneIn  = 0.66 + hard * 0.10;   // 48.7° → 40.5° inner half-angle
       coneOut = coneIn - 0.26;        // soft outer skirt
     }
+    // A fill light has no fixture, so it must not draw a lens halo hanging in
+    // mid-air; damp its volumetric beam for the same reason.
+    if (posts && posts[i].synth) { glareW = 0; volW = Math.min(volW, 0.3); }
     // BEAM CONE WIDTH knob: scale the soft-skirt angular width (coneIn−coneOut).
     // >1 widens the illuminated cone (lower outer cos), <1 tightens the hotspot.
     coneOut = coneIn - (coneIn - coneOut) * (LT.beamCone || 1);
