@@ -6691,8 +6691,43 @@ for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
 // of it is gated on setupPreviewOn, so none of these listeners can touch the
 // camera during a race — the canvas is shared with the track render and, on
 // touch, with the steering.
-for (const btn of document.querySelectorAll("#cs-view [data-cs-view]")) {
-  btn.onclick = () => { setSetupView(btn.dataset.csView); if (soundOn) GameAudio.uiTick(); };
+// ---- the CAMERA disclosure ----
+// The panel holds the whole camera set; only CAMERA and ACTIVE AERO show at
+// rest. Closing is driven by INTENT, not by "a click happened": a preset is an
+// aim-and-leave choice so it closes, while MOVE/zoom/SPIN repeat and must not
+// pull the panel out from under the finger mid-adjustment.
+function setSetupCamPanel(open) {
+  const b = $("cs-cam"), p = $("cs-cam-panel");
+  if (!b || !p) return;
+  p.hidden = !open;
+  b.setAttribute("aria-expanded", open ? "true" : "false");
+}
+const setupCamPanelOpen = () => !$("cs-cam-panel").hidden;
+$("cs-cam").onclick = () => {
+  setSetupCamPanel(!setupCamPanelOpen());
+  if (soundOn) GameAudio.uiTick();
+};
+// Outside-click and Escape, the two ways every disclosure is expected to shut.
+// Pointerdown rather than click so a drag STARTING on the car closes the panel
+// before the orbit begins, instead of leaving it hanging over the car you are
+// now turning.
+document.addEventListener("pointerdown", (e) => {
+  if (!setupPreviewOn || !setupCamPanelOpen()) return;
+  if (!e.target.closest || !e.target.closest("#cs-stack")) setSetupCamPanel(false);
+}, true);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && setupPreviewOn && setupCamPanelOpen()) {
+    setSetupCamPanel(false);
+    e.stopPropagation();   // don't also close the GARAGE behind it
+  }
+}, true);
+
+for (const btn of document.querySelectorAll("#cs-stack [data-cs-view]")) {
+  btn.onclick = () => {
+    setSetupView(btn.dataset.csView);
+    setSetupCamPanel(false);
+    if (soundOn) GameAudio.uiTick();
+  };
 }
 $("cs-view-spin").onclick = () => { setSetupSpin(!setupPreviewSpin); if (soundOn) GameAudio.uiTick(); };
 $("cs-view-reset").onclick = () => { resetSetupCam(); if (soundOn) GameAudio.uiTick(); };
@@ -6731,8 +6766,6 @@ holdSetupCtl("cs-view-right", { az: SP_RATE.az },         () => nudgeSetupCam(0.
 holdSetupCtl("cs-view-up",    { el: SP_RATE.el },         () => nudgeSetupCam(0, 0.12, 0));
 holdSetupCtl("cs-view-down",  { el: -SP_RATE.el },        () => nudgeSetupCam(0, -0.12, 0));
 $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (soundOn) GameAudio.uiTick(); };
-$("cs-wing-front").onclick = () => { setSetupView("wingFront"); if (soundOn) GameAudio.uiTick(); };
-$("cs-wing-rear").onclick  = () => { setSetupView("wingRear");  if (soundOn) GameAudio.uiTick(); };
 {
   const canvas = $("game");
   // Live pointers by id, so a two-finger pinch is separable from a one-finger
@@ -6802,6 +6835,7 @@ function openGarage(from) {
   setupPreviewEl = SP_EL_DEF;
   setupPreviewDist = SP_DIST_DEF;
   setSetupSpin(true);
+  setSetupCamPanel(false);   // same reasoning: the front door is the turntable
   openSetup();
 }
 $("sel-setup").onclick = () => openGarage("select");

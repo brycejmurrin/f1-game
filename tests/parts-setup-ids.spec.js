@@ -209,14 +209,54 @@ test.describe("Car setup — preview camera", () => {
   test.use({ viewport: LANDSCAPE });
 
   const cam = (page) => page.evaluate(() => window.__apex.garageCam());
+  // The camera set lives behind the CAMERA disclosure — only it and ACTIVE AERO
+  // are on screen at rest, so the car is not hidden behind its own controls.
+  // Picking a PRESET closes the panel again (aim and leave); MOVE/zoom/SPIN
+  // repeat, so they leave it open. Hence the re-opens scattered through here.
+  const openCam = async (page) => {
+    if (await page.locator("#cs-cam-panel").isHidden()) await page.locator("#cs-cam").click();
+    await page.locator("#cs-cam-panel").waitFor({ state: "visible" });
+  };
+  const closeCam = async (page) => {
+    if (await page.locator("#cs-cam-panel").isVisible()) await page.locator("#cs-cam").click();
+    await page.locator("#cs-cam-panel").waitFor({ state: "hidden" });
+  };
 
   test("the camera bar exposes a stable data-cs-view per preset", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openSetup(page);
+    await openCam(page);
     const ids = await page.locator("#cs-view [data-cs-view]").evaluateAll(
       (els) => els.map((e) => e.dataset.csView));
     expect(ids).toEqual(["hero", "front", "side", "rear", "top"]);
+  });
+
+  test("the panel starts shut, opens from CAMERA, and a preset shuts it again", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openSetup(page);
+    const panel = page.locator("#cs-cam-panel");
+    await expect(panel).toBeHidden();
+    await expect(page.locator("#cs-cam")).toHaveAttribute("aria-expanded", "false");
+
+    await page.locator("#cs-cam").click();
+    await expect(panel).toBeVisible();
+    await expect(page.locator("#cs-cam")).toHaveAttribute("aria-expanded", "true");
+
+    // A preset is an aim-and-leave choice.
+    await page.locator('[data-cs-view="rear"]').click();
+    await expect(panel).toBeHidden();
+
+    // A repeating control is not: it must stay open under the finger.
+    await openCam(page);
+    await page.locator("#cs-view-in").click();
+    await expect(panel).toBeVisible();
+
+    // Escape shuts the panel without also shutting the GARAGE behind it.
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await expect(page.locator("#carsetup")).toBeVisible();
   });
 
   test("the turntable runs on open and a preset both stops it and re-aims", async ({ page }) => {
@@ -227,6 +267,7 @@ test.describe("Car setup — preview camera", () => {
     expect(opened.on).toBe(true);
     expect(opened.spin).toBe(true);
 
+    await openCam(page);
     await page.locator('[data-cs-view="side"]').click();
     const side = await cam(page);
     // Picking a view that keeps rotating away from itself is the bug this guards.
@@ -236,10 +277,12 @@ test.describe("Car setup — preview camera", () => {
     // the sheet takes the right of the canvas, so a nominal distance crops it.
     expect(side.dist).toBeGreaterThan(opened.dist);
 
+    await openCam(page);
     await page.locator('[data-cs-view="top"]').click();
     expect((await cam(page)).el).toBeGreaterThan(1);
 
     // SPIN is a toggle, and says so for a screen reader.
+    await openCam(page);
     await page.locator("#cs-view-spin").click();
     expect((await cam(page)).spin).toBe(true);
     await expect(page.locator("#cs-view-spin")).toHaveAttribute("aria-pressed", "true");
@@ -249,10 +292,12 @@ test.describe("Car setup — preview camera", () => {
     await page.goto("/");
     await waitReady(page);
     await openSetup(page);
+    await openCam(page);
     await page.locator('[data-cs-view="front"]').click();
     const start = await cam(page);
 
     // Real clicks for the wiring...
+    await openCam(page);
     await page.locator("#cs-view-in").click();
     expect((await cam(page)).dist).toBeLessThan(start.dist);
     await page.locator("#cs-view-out").click();
@@ -274,8 +319,12 @@ test.describe("Car setup — preview camera", () => {
 
     // Drag across the car region: azimuth moves, distance does not, and taking
     // hold of the car stops the turntable fighting the drag.
+    await openCam(page);
     await page.locator("#cs-view-spin").click();
     expect((await cam(page)).spin).toBe(true);
+    // Shut the panel first: the drag below aims at the car region, and an open
+    // panel sits over part of it.
+    await closeCam(page);
     const before = await cam(page);
     await page.mouse.move(180, 200);
     await page.mouse.down();
