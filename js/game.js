@@ -3978,7 +3978,14 @@ function renderSetupPreview(dt) {
   M4.lookAtTo(_spView, eye, [0, 0.35, 0], [0, 1, 0]);
   M4.mulTo(_spVP, _spProj, _spView);
   gfx.begin({
-    viewProj: _spVP, eye, sunDir: [0.4, 0.8, 0.3], sunColor: [1, 1, 1],
+    // Sun with NO sideways component. The shark fin is a thin blade whose two
+    // flanks carry opposite normals (+X and -X), so any X in the sun direction
+    // lights one face and leaves the other on ambient — the same badge came out
+    // two different shades depending on which side you orbited to. On a thick
+    // body that asymmetry is correct; on a blade being inspected in a showroom
+    // it just reads as a bug. Front-and-above keeps the modelling (the ring of
+    // studio lamps below is already symmetric) without favouring a side.
+    viewProj: _spVP, eye, sunDir: [0, 0.86, 0.51], sunColor: [1, 1, 1],
     ambientSky: [0.28, 0.30, 0.34], ambientGround: [0.18, 0.17, 0.16],
     fogColor: [0.05, 0.05, 0.07], fogDensity: 0, lights: buildSetupPreviewLights(),
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
