@@ -47,6 +47,7 @@ const NetPlay = (function () {
     START: "start",                       // host -> guest lights-out tick
     LAP: "lap",                           // completed lap / sector
     RESULT: "result",                     // final classification
+    CAUTION: "caution",                   // host -> guest race control (flags)
     BYE: "bye",                           // clean leave
   };
 
@@ -164,6 +165,7 @@ const NetPlay = (function () {
       opts = opts || {};
       peerLaps = [];
       peerResult = null;
+      resultWaitFrom = null;
       if (!opts.transport && !opts.session) {
         return { ok: false, error: "no_transport", message: "No connection to race over." };
       }
@@ -187,6 +189,7 @@ const NetPlay = (function () {
           if (name === EV.START && d && d.at != null) armStart(d.at, d.hold);
           if (name === EV.LAP && d) peerLaps.push(d);
           if (name === EV.RESULT && d) peerResult = d;
+          if (name === EV.CAUTION && d && G.applyCaution) G.applyCaution(d);
         });
       }
 
@@ -244,8 +247,31 @@ const NetPlay = (function () {
     function reportLap(data) {
       return session ? session.sendEvent(EV.LAP, data) : false;
     }
+    // Race control is the HOST's. Debris is generated locally from each car's
+    // own behaviour and is NOT replicated, so two peers genuinely see different
+    // hazards — left to compute flags independently they would fly different
+    // ones for the same race, which is worse than a slightly stale flag.
+    function reportCaution(data) {
+      return (session && role === "host") ? session.sendEvent(EV.CAUTION, data) : false;
+    }
+
     function reportResult(data) {
       return session ? session.sendEvent(EV.RESULT, data) : false;
+    }
+
+    // The GUEST holds the chequered flag briefly, waiting for the host's
+    // classification. The host owns the order because it is the only peer that
+    // sees every car's finish first-hand — it owns the AI — and a close finish
+    // is exactly where two independently-computed orders disagree. Bounded, so
+    // a host that never sends one cannot hang the results screen forever: past
+    // the deadline the guest publishes its own view rather than nothing.
+    const RESULT_WAIT_MS = 3000;
+    let resultWaitFrom = null;
+    function awaitingResult(now) {
+      if (!active || role !== "guest" || peerResult) return false;
+      const t = now != null ? now : (G.netNow || 0);
+      if (resultWaitFrom == null) resultWaitFrom = t;
+      return (t - resultWaitFrom) < RESULT_WAIT_MS;
     }
 
     function stop(reason) {
@@ -290,7 +316,7 @@ const NetPlay = (function () {
 
     return {
       start, stop, tick,
-      hostStart, reportLap, reportResult,
+      hostStart, reportLap, reportResult, reportCaution, awaitingResult,
       peerLaps: () => peerLaps.slice(),
       peerResult: () => peerResult,
       // updateCar() consults this: a car posed from the network must not also

@@ -524,6 +524,11 @@ let _cautionOn = true;
 try { _cautionOn = (localStorage.getItem("apex26.caution") || "1") !== "0"; } catch (e) {}
 // level: 0 GREEN · 1 local YELLOW (sector) · 2 VSC · 3 SAFETY CAR.
 let caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
+// Last flag state broadcast to a networked guest, so only CHANGES are sent.
+// Declared here rather than next to publishCaution(): resetCaution() assigns
+// it and is defined earlier in the file, so a late `let` would be a temporal
+// dead zone error the first time a race reset it.
+let _cautionSent = "";
 let _cautionQT = 0;   // hazard-query throttle accumulator (s) — query at ~4 Hz
 const CAUTION_YELLOW_MIN = 3;   // settled hazards in ONE sector → local yellow
 const CAUTION_VSC_MIN = 6;      // total settled hazards on the surface → VSC
@@ -1874,7 +1879,34 @@ function endRace(forcedOrder) {
   // classification: finished by time(+penalty), rest by progress
   const fin = cars.filter((c) => c.finished).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
   const run = cars.filter((c) => !c.finished).sort((a, b) => b.prog - a.prog);
-  const order = forcedOrder || fin.concat(run);
+  let order = forcedOrder || fin.concat(run);
+  // THE CLASSIFICATION IS THE HOST'S. Both peers can see both human cars, but
+  // only the host sees every AI finish first-hand, and two independently-sorted
+  // orders disagree exactly when it matters — a close finish. Indices are
+  // stable because both grids are built from the same settings.
+  if (netPlay.active()) {
+    if (netPlay.role() === "host") {
+      netPlay.reportResult(order.map((c) => ({
+        i: cars.indexOf(c), t: c.finishT, p: c.penalty, lap: c.lap,
+      })));
+    } else {
+      const verdict = netPlay.peerResult();
+      if (verdict && verdict.length) {
+        const byIdx = verdict.map((e) => cars[e.i]).filter(Boolean);
+        // Only adopt a classification that accounts for the whole grid; a
+        // partial one would silently drop cars off the results screen.
+        if (byIdx.length === cars.length) {
+          verdict.forEach((e) => {
+            const c = cars[e.i];
+            if (!c) return;
+            if (e.t != null) c.finishT = e.t;
+            if (e.p != null) c.penalty = e.p;
+          });
+          order = byIdx;
+        }
+      }
+    }
+  }
   order.forEach((c, i) => { c.finPos = i + 1; });
   if (isChampionship()) {
     order.forEach((c, i) => {
@@ -2067,7 +2099,7 @@ const G = {
   LAT_MAX, ACCEL, BRAKE,
   vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
-  announce, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  announce, applyCaution, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
   getTeamParts, getLiveryId,   // lobby: the profile it sends is ids, never resolved numbers
   get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
   get netPlay() { return netPlay; },
@@ -2322,7 +2354,15 @@ function update(dt) {
     else if (cars.some((c) => c.finished)) resultT = 3.5;
     else if (raceT > 360 * lapsTarget) resultT = 0.1;
   }
-  if (resultT > 0) { resultT -= dt; if (resultT <= 0) { resultT = 0; endRace(); } }
+  if (resultT > 0) {
+    resultT -= dt;
+    if (resultT <= 0) {
+      // In a session the guest waits (briefly, and boundedly) for the host's
+      // classification rather than publishing its own — see awaitingResult.
+      if (netPlay.awaitingResult()) resultT = 0.05;
+      else { resultT = 0; endRace(); }
+    }
+  }
 
   if (soundOn) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
@@ -3527,8 +3567,17 @@ const _CAUTION_LBL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR"];
 function resetCaution() {
   caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
   _cautionQT = 0;
+  // Clear the change-detector too, or the next race's first flag looks like a
+  // repeat of the last one's and is never sent.
+  _cautionSent = "";
 }
 function updateCaution(dt) {
+  // RACE CONTROL IS THE HOST'S. Debris is generated locally from each car's own
+  // behaviour and is not replicated, so the two peers genuinely see different
+  // hazards; left to decide independently they would fly different flags for
+  // the same race. The guest adopts what the host sends (applyCaution) and
+  // computes nothing of its own.
+  if (netPlay.active() && netPlay.role() === "guest") return;
   if (!_cautionOn || !DebrisWorld.active() || state !== "race") {
     if (caution.level !== 0) resetCaution();
     return;
@@ -3559,7 +3608,38 @@ function updateCaution(dt) {
   } else if (desired === 1 && dsector >= 0) {
     caution.sector = dsector; caution.frac = dfrac;   // track the worst sector
   }
+  publishCaution();
 }
+// Adopt race control from the host. Deliberately does not touch sinceT's
+// meaning — the guest holds whatever the host decided, for as long as the host
+// says, rather than running its own hold timers over someone else's flag.
+function applyCaution(d) {
+  if (!d) return false;
+  caution.level = d.level | 0;
+  caution.sector = d.sector != null ? d.sector : -1;
+  caution.frac = d.frac || 0;
+  caution.cause = d.cause || "";
+  caution.total = d.total || 0;
+  if (Array.isArray(d.sectors)) caution.sectors = d.sectors.slice();
+  caution.sinceT = d.sinceT || 0;
+  return true;
+}
+
+// Broadcast only on a CHANGE: the flag state is checked at 4 Hz but changes
+// perhaps a handful of times a race, and the reliable channel is not the place
+// for a steady drip of unchanged state.
+function publishCaution() {
+  if (!netPlay.active() || netPlay.role() !== "host") return;
+  const key = caution.level + "|" + caution.sector + "|" + caution.cause;
+  if (key === _cautionSent) return;
+  _cautionSent = key;
+  netPlay.reportCaution({
+    level: caution.level, sector: caution.sector, frac: caution.frac,
+    cause: caution.cause, total: caution.total, sectors: caution.sectors,
+    sinceT: caution.sinceT,
+  });
+}
+
 function cautionInfo() {
   return {
     level: caution.level, label: _CAUTION_LBL[caution.level] || "GREEN",
