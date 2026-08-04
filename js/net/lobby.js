@@ -265,7 +265,20 @@ const NetLobby = (function () {
     function waitForOpen() {
       clearInterval(pollTimer);
       const started = Date.now();
-      say("Connecting…");
+      // A TEST FLAG MUST ANNOUNCE ITSELF. iceRelayOnly forbids direct
+      // connections so the TURN leg can be exercised — but it PERSISTS, and
+      // with no reachable TURN server it makes every connection sit at
+      // "Connecting…" forever with nothing on screen saying why. It did
+      // exactly that to a real person who had set it on an earlier
+      // instruction and had no reason to remember it.
+      let relayNote = "";
+      try {
+        if (localStorage.getItem("apex26.iceRelayOnly") === "true") {
+          relayNote = " [RELAY-ONLY TEST MODE is on — run "
+            + "localStorage.removeItem('apex26.iceRelayOnly') and reload unless you are testing TURN]";
+        }
+      } catch (e) {}
+      say("Connecting…" + relayNote);
       // Capture the transport and id being watched: by the time this fires the
       // host may have moved on to inviting somebody else, and polling "the
       // current pending one" would then connect the wrong session.
@@ -284,7 +297,7 @@ const NetLobby = (function () {
         // didn't work".
         const st = watched.stats ? watched.stats() : null;
         const secs = Math.round((Date.now() - started) / 1000);
-        if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")");
+        if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")" + relayNote);
 
         // A definite `failed` is final — ICE has exhausted every pair. Waiting
         // out the rest of the timer after that just makes the player watch a
