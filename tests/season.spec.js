@@ -117,9 +117,17 @@ test.describe("Season — standings panel", () => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
     await page.locator("#mb-season").click();
-    await page.locator("#sel-customize").click();
+    await page.locator("#select").waitFor({ state: "visible" });
+    // MY TEAM lives in the garage's TEAM tab now, so editing the custom team
+    // mid-season is a trip through the garage and back.
+    await page.locator("#sel-setup").click();
+    await page.locator("#carsetup").waitFor({ state: "visible" });
+    await page.locator('#cs-tabs [data-cs-cat="team"]').click();
+    await page.locator("#cs-customize").click();
     await page.locator("#cz-code").fill("NEW");
     await page.locator("#cz-save").click();
+    await page.locator("#cs-done").click();
+    await page.locator("#carsetup").waitFor({ state: "hidden" });
     await page.locator("#sel-go").click();
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });

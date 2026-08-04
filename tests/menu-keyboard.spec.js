@@ -111,9 +111,9 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
     // Left/right cross the select screen's two columns; up/down stay in one. Enter
-    // the list the way a player would, then walk it. CAR SETUP is the rightmost
-    // control of the left column, so one ArrowRight from it has nowhere to go but
-    // across — from MY TEAM beside it, the first press only reaches CAR SETUP.
+    // the list the way a player would, then walk it. GARAGE is the only control
+    // in the left column's action row now (MY TEAM and CAR SETUP were folded into
+    // the garage itself), so one ArrowRight from it has nowhere to go but across.
     await page.evaluate(() => document.getElementById("sel-setup").focus());
     await page.keyboard.press("ArrowRight");
     expect((await focusInfo(page)).cls, "ArrowRight crosses into the circuit column").toContain("track-row");
@@ -144,10 +144,15 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
   test("left/right move along a chip row without leaving it", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
-    const chips = await page.evaluate(() => document.querySelectorAll("#sel-driver .sel-chip").length);
+    // The DRIVER chips moved from the select screen into the GARAGE's TEAM tab
+    // when the screens were split by question (who you are / where you race).
+    await page.locator("#sel-setup").click();
+    await page.locator("#carsetup").waitFor({ state: "visible" });
+    await page.locator('#cs-tabs [data-cs-cat="team"]').click();
+    const chips = await page.evaluate(() => document.querySelectorAll("#cs-driver .sel-chip").length);
     test.skip(chips < 2, "team has a single driver chip");
 
-    await page.evaluate(() => document.querySelector("#sel-driver .sel-chip").focus());
+    await page.evaluate(() => document.querySelector("#cs-driver .sel-chip").focus());
     const a = await focusInfo(page);
     await page.keyboard.press("ArrowRight");
     const b = await focusInfo(page);

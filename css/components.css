@@ -487,7 +487,10 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .screen.dim { background: rgba(0, 0, 0, 0.72); }
 #pausemenu { z-index: 30; }
 #pmsettings { z-index: 35; }
-#results, #standings, #race-settings, #customize { z-index: 30; }
+#results, #standings, #race-settings { z-index: 30; }
+/* Above #carsetup (35): MY TEAM is reachable from inside the GARAGE now, not
+   only from the select screen, so at 30 it opened BEHIND the garage sheet. */
+#customize { z-index: 36; }
 #howtoplay { z-index: 40; }
 #advanced { z-index: 41; }
 #audioset { z-index: 41; }

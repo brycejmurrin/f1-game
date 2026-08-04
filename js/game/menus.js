@@ -1,8 +1,11 @@
-/* Apex 26 — the select-screen UI for js/game.js: team/driver/difficulty grids,
-   the track picker with live preview map + elevation canvases, and the
-   fullscreen circuit-detail modal. Pure DOM; live selection state comes
-   through the ctx façade G handed to Menus.create(G). Consumes globals
-   Teams, Tracks, TrackMaps. Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — the select-screen UI for js/game.js: the YOUR CAR summary card, the
+   track picker with live preview map + elevation canvases, and the fullscreen
+   circuit-detail modal. The screen answers WHERE you race; who you are and what
+   you drive belong to the garage (js/game/setup-ui.js), which the card links to.
+   Also owns the shared team-picker sheet (#teampicker) that the garage opens.
+   Pure DOM; live selection state comes through the ctx façade G handed to
+   Menus.create(G). Consumes globals Teams, Tracks, TrackMaps.
+   Must load BEFORE js/game.js (see index.html). */
 const Menus = (function () {
   "use strict";
 
@@ -36,10 +39,15 @@ const vt = (fn) => {
 };
 
 // ---- team card + full-screen team picker ----------------------------------
-// The select screen shows ONE big card for the current team; the twelve-way
-// choice lives in its own sheet. That keeps the identity column short enough
-// that DRIVER, the car stats and DIFFICULTY all stay on screen on a phone.
+// The select screen shows ONE read-only card summarising the car you will take
+// out — team, engine and driver — and tapping it opens the GARAGE, which is
+// where the choice actually lives. The twelve-way team choice itself is this
+// sheet, opened from the garage's TEAM & DRIVER tab.
 const teamPicker = () => $("teampicker");
+// Which screen opened the picker, so picking a team rebuilds the right one.
+// The sheet is shared; without this, choosing a team in the garage would
+// silently rebuild the select screen behind it and leave the garage stale.
+let pickerHost = "select";
 
 function teamSwatch(t) {
   const sw = document.createElement("span");
@@ -60,24 +68,37 @@ function buildTeamCard(t) {
   body.className = "tm-body";
   const name = document.createElement("span");
   name.className = "tm-name"; name.textContent = t.name;
+  // The driver joins the sub-line. The chip row that used to sit under this
+  // card moved into the garage, so this card is now the only thing on the
+  // select screen that says who is driving.
+  const d = t.drivers[G.driverIdx] || t.drivers[0];
   const sub = document.createElement("span");
-  sub.className = "tm-sub"; sub.textContent = t.short + " · " + (t.engine || "") + " engine";
+  sub.className = "tm-sub";
+  sub.textContent = t.short + " · " + (t.engine || "") + " engine"
+    + (d ? " · #" + d.num + " " + d.name.split(" ").pop().toUpperCase() : "");
   body.append(name, sub);
+  // A right chevron, not the picker's down-caret: this card navigates to another
+  // screen now rather than dropping a sheet open underneath itself.
   const chev = document.createElement("span");
-  chev.className = "tm-chev"; chev.textContent = "\u25BE"; chev.setAttribute("aria-hidden", "true");
+  chev.className = "tm-chev"; chev.textContent = "\u203A"; chev.setAttribute("aria-hidden", "true");
   card.append(teamSwatch(t), body, chev);
-  // aria-haspopup says a dialog EXISTS; aria-expanded is the half that says
-  // whether it is open right now, and without it the card announces the same
-  // either way.
-  card.setAttribute("aria-expanded", teamPicker().hidden ? "false" : "true");
-  card.onclick = () => { setTeamPicker(true); ScrollFadeRefresh(); };
+  // The card is a summary, not a dialog trigger: it opens the GARAGE, which is
+  // where team, driver, parts and paint all live now. (It used to open the team
+  // picker directly, hence the aria-haspopup/aria-expanded pair that used to be
+  // here — neither is true of a button that navigates.)
+  card.onclick = () => { G.openGarage("select"); };
 }
 
-/* Open/close the team picker and keep the card's aria-expanded honest. */
-function setTeamPicker(open) {
+/* Open/close the team picker. `host` is the screen that opened it (see
+   pickerHost); omit it on close so the last host survives the rebuild. */
+function setTeamPicker(open, host) {
+  if (open && host) pickerHost = host;
+  // Build on open, not on every buildSelect(). The tiles used to be filled in
+  // by buildSelect alone, so opening the sheet from the garage straight off the
+  // title screen — where buildSelect has never run — showed an empty sheet.
+  if (open) buildTeamPicker();
   teamPicker().hidden = !open;
-  const card = $("sel-team-card");
-  if (card) card.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) ScrollFadeRefresh();
 }
 
 function buildTeamPicker() {
@@ -100,8 +121,12 @@ function buildTeamPicker() {
     b.append(teamSwatch(t), body);
     b.onclick = () => {
       G.teamIdx = i; G.driverIdx = 0; store.set("team", i);
+      store.set("driver", 0);   // the old team's driver index means nothing here
       setTeamPicker(false);
-      vt(() => { buildSelect(); tickUi(); });
+      // Rebuild whichever screen opened the sheet. The garage repaints its own
+      // 3D car for free — getSetupPreviewMesh() is keyed on the team id.
+      if (pickerHost === "garage") { G.buildSetup(); tickUi(); }
+      else vt(() => { buildSelect(); tickUi(); });
     };
     els.selTeams.appendChild(b);
   });
@@ -117,18 +142,11 @@ function buildSelect() {
   // Track section: interactive circuit picker in GP/TT; read-only NEXT RACE preview in season
   els.selTrackSection.hidden = false;
   if (els.selCircuitLabel) els.selCircuitLabel.textContent = G.seasonMode ? "NEXT RACE" : "CIRCUIT";
-  buildTeamPicker();
   const team = Teams.LIST[G.teamIdx];
   buildTeamCard(team);
-  els.selDriver.textContent = "";
-  team.drivers.forEach((d, i) => {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (i === G.driverIdx ? " active" : "");
-    b.setAttribute("aria-pressed", i === G.driverIdx ? "true" : "false");
-    b.textContent = "#" + d.num + " " + d.name;
-    b.onclick = () => { G.driverIdx = i; store.set("driver", i); vt(() => { buildSelect(); tickUi(); }); };
-    els.selDriver.appendChild(b);
-  });
+  // The DRIVER chip row used to be here. It lives in the garage's TEAM & DRIVER
+  // tab now — this screen is about WHERE you race; the card above summarises
+  // who is driving and opens the garage to change it.
   renderStatBars($("sel-stats"), team);
   if (G.seasonMode) {
     // Non-interactive preview of the upcoming season circuit
@@ -419,7 +437,7 @@ function openTrackDetail() {
     });
   });
 }
-return { buildSelect, updateTrackPreview, openTrackDetail };
+return { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch };
 }
 
 return { create };

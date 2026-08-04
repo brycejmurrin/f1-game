@@ -291,7 +291,10 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   prefer render({what}) and scene({visible})
                                   (docs/AGENT-WORLD-API.md)
   atmosphere.js  Atmosphere     applyRaceSettings — time-of-day/weather scene state
-  setup-ui.js    SetupUI        CAR SETUP screen
+  setup-ui.js    SetupUI        GARAGE screen (#carsetup) — WHO you are and WHAT
+                                  you drive: TEAM & DRIVER, the 8 part categories
+                                  + budget, LIVERY. The select screen owns WHERE
+                                  you race and links here; race settings own HOW
   menus.js       Menus          menu/select/pause DOM flows
   scrollfade.js  ScrollFade     "there is more below" edge fade + position indicator
                                   for every menu scroll region (self-initialising)

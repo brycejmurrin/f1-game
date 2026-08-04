@@ -63,17 +63,23 @@ test.describe("Apex 26 — smoke", () => {
     await page.locator("#mb-race").click();
 
     await expect(page.locator("#select")).toBeVisible();
-    // Teams are one card that opens a full picker sheet of .team-tile rows
-    // (menu redesign) — the old #sel-teams .sel-chip grid no longer exists.
+    // The select screen answers WHERE you race. Who you are is ONE read-only
+    // summary card that opens the garage; the team picker sheet itself lives
+    // behind the garage's TEAM tab.
     await expect(page.locator("#sel-team-card")).toBeVisible();
     await expect(page.locator("#sel-tracks .track-row").first()).toBeVisible();
     // DIFFICULTY moved to RACE SETTINGS (with laps/weather/time of day) — it is
     // a property of the race, not of the driver you pick.
     await expect(page.locator("#sel-diff")).toHaveCount(0);
     await page.locator("#sel-team-card").click();
+    await expect(page.locator("#carsetup")).toBeVisible();
+    await page.locator('#cs-tabs [data-cs-cat="team"]').click();
+    await page.locator("#cs-team-card").click();
     await expect(page.locator("#sel-teams .team-tile").first()).toBeVisible();
     await page.locator("#tp-close").click();
     await expect(page.locator("#teampicker")).toBeHidden();
+    await page.locator("#cs-done").click();
+    await expect(page.locator("#select")).toBeVisible();
 
     // ...and it is on RACE SETTINGS, one step further in, beside the other
     // per-race choices.
