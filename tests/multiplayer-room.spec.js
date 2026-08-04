@@ -160,8 +160,8 @@ test.describe("the waiting room", () => {
     await page.click("#vs-edit-race");
     await expect(page.locator("#select")).toBeVisible();
     await expect(page.locator("#sel-tracks")).toBeVisible();
-    await expect(page.locator("#sel-left")).toBeHidden();
-    await expect(page.locator("#sel-setup")).toBeHidden();     // ...and no way into the garage
+    await expect(page.locator("#sel-left")).toHaveCount(0);
+    await expect(page.locator("#sel-setup")).toHaveCount(0);   // ...and no way into the garage
     // START does not start anything here — it goes on to laps/weather.
     await expect(page.locator("#sel-go")).toHaveText("NEXT");
 

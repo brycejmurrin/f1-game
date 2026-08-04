@@ -41,7 +41,7 @@ async function openSetup(page) {
   await clearState(page);
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-setup").click();
+  await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 
@@ -53,7 +53,7 @@ async function pickOpt(page, catId, optId) {
 async function reopenSetup(page) {
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-setup").click();
+  await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 
@@ -160,7 +160,9 @@ test.describe("Parts persistence — team isolation", () => {
     await openSetup(page);
     await pickOpt(page, "gearbox", "f1_spec");
     await page.locator("#cs-done").click();
-    await page.locator("#select").waitFor({ state: "visible" });
+    // DONE carries on to the race settings — the garage is a step on the way
+    // to a race now, not a side door off the circuit picker.
+    await page.locator("#race-settings").waitFor({ state: "visible" });
 
     await page.evaluate(() => {
       const idx = Teams.LIST.findIndex((t) => t.id !== Teams.LIST[parseInt(localStorage.getItem("apex26.team") ?? "2")].id);
@@ -185,7 +187,9 @@ test.describe("Parts persistence — navigation", () => {
     await openSetup(page);
 
     await page.locator("#cs-done").click();
-    await page.locator("#select").waitFor({ state: "visible" });
+    // DONE carries on to the race settings — the garage is a step on the way
+    // to a race now, not a side door off the circuit picker.
+    await page.locator("#race-settings").waitFor({ state: "visible" });
     await expect(page.locator("#carsetup")).toBeHidden();
     await page.screenshot({ path: galleryPath("parts-persistence", "persistence-done-button.png") });
   });

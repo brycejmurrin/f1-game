@@ -725,11 +725,11 @@ function openSetup() {
   //
   // This list has been wrong twice, each time by one screen. First only #select
   // was hidden, on the assumption that #overlay was gone by the time #select
-  // was reached — true of the sel-setup path, but the title screen's GARAGE
-  // button opens setup straight off #overlay, which then showed the APEX 26
-  // title through the panel. Then the VS FRIEND waiting room grew its own
-  // GARAGE button and #vsfriend stayed up ON TOP, so choosing a car meant
-  // closing the lobby — which drops the connection.
+  // was reached — untrue of the title screen's GARAGE button, which opens setup
+  // straight off #overlay and then showed the APEX 26 title through the panel.
+  // Then the VS FRIEND waiting room grew its own GARAGE button and #vsfriend
+  // stayed up ON TOP, so choosing a car meant closing the lobby — which drops
+  // the connection.
   els.select.hidden = true;
   els.overlay.hidden = true;
   $("vsfriend").hidden = true;

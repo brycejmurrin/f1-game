@@ -58,41 +58,38 @@ test.describe("Apex 26 — smoke", () => {
     expect(pageErrors).toEqual([]);
   });
 
-  test("select screen shows team card, picker and track rows", async ({ page }) => {
+  test("the select screen is a circuit picker, and START opens the garage", async ({ page }) => {
     await page.goto("/");
     await page.locator("#mb-race").click();
 
     await expect(page.locator("#select")).toBeVisible();
-    // The select screen answers WHERE you race. Who you are is ONE summary card
-    // — and it opens the TEAM PICKER, not the garage. Those were two controls
-    // with one destination: the card, and a GARAGE button directly beneath it.
-    await expect(page.locator("#sel-team-card")).toBeVisible();
+    // ONE question: where. The YOUR CAR summary and its GARAGE button used to
+    // share this screen and it won at neither — on a landscape phone the
+    // circuit list got half the sheet, and the summary was a poorer copy of
+    // what the garage shows anyway.
+    await expect(page.locator("#sel-team-card")).toHaveCount(0);
+    await expect(page.locator("#sel-setup")).toHaveCount(0);
     await expect(page.locator("#sel-tracks .track-row").first()).toBeVisible();
     // DIFFICULTY moved to RACE SETTINGS (with laps/weather/time of day) — it is
     // a property of the race, not of the driver you pick.
     await expect(page.locator("#sel-diff")).toHaveCount(0);
-    await page.locator("#sel-team-card").click();
+
+    // Choosing a car is a STEP now, not a side door: START goes to the garage.
+    await page.locator("#sel-go").click();
+    await expect(page.locator("#carsetup")).toBeVisible();
+    await expect(page.locator("#select")).toBeHidden();
+    // ...and the team picker lives there, on the TEAM & DRIVER tab.
+    await page.locator('#cs-tabs [data-cs-cat="team"]').click();
+    await page.locator("#cs-team-card").click();
     await expect(page.locator("#teampicker")).toBeVisible();
     await expect(page.locator("#sel-teams .team-tile").first()).toBeVisible();
     await page.locator("#tp-close").click();
     await expect(page.locator("#teampicker")).toBeHidden();
-    // Picking a team from here returns to the select screen, not the garage.
-    await expect(page.locator("#carsetup")).toBeHidden();
-    // The GARAGE button is the way in, and the picker is also reachable from
-    // the garage's own TEAM tab.
-    await page.locator("#sel-setup").click();
-    await expect(page.locator("#carsetup")).toBeVisible();
-    await page.locator('#cs-tabs [data-cs-cat="team"]').click();
-    await page.locator("#cs-team-card").click();
-    await expect(page.locator("#sel-teams .team-tile").first()).toBeVisible();
-    await page.locator("#tp-close").click();
+    // DONE carries ON to the race settings rather than back to a question
+    // already answered.
     await page.locator("#cs-done").click();
-    await expect(page.locator("#select")).toBeVisible();
-
-    // ...and it is on RACE SETTINGS, one step further in, beside the other
-    // per-race choices.
-    await page.locator("#sel-go").click();
     await expect(page.locator("#race-settings")).toBeVisible();
+    // DIFFICULTY is here, beside the other per-race choices.
     await expect(page.locator("#rs-diff .sel-chip").first()).toBeVisible();
     await expect(page.locator("#rs-diff .sel-chip.active")).toHaveCount(1);
   });
