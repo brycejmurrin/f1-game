@@ -47,6 +47,18 @@ async function enterRoom(page, role = "host") {
 const peerSays = (page, type, data) =>
   page.evaluate(([t, d]) => window.__apex.lobbyPeerEvent(t, d), [type, data]);
 
+// A loopback endpoint only delivers on pump(), so a hello sent by the fake peer
+// lands a beat later. Anything that reads the OTHER player's seat — the greyed
+// chips, the picker's TAKEN marks — has to wait for it to arrive or it races
+// the delivery and passes for the wrong reason.
+const awaitPeer = (page, teamId) =>
+  expect
+    .poll(() => page.evaluate(() => {
+      const r = window.__apex.lobbyRoom();
+      return r && r.peer ? r.peer.team : null;
+    }), { timeout: 5000 })
+    .toBe(teamId);
+
 const mySeat = (page) =>
   page.evaluate(() => {
     const p = window.__apex.lobby().profile;
@@ -134,6 +146,7 @@ test.describe("seat exclusivity — the garage cannot hand out a taken seat", ()
     await seatedAs(page, RBR, 1);
     await enterRoom(page, "host");
     await peerSays(page, EV.HELLO, { team: "redbull", driver: 0 });
+    await awaitPeer(page, "redbull");
     await garageFromRoom(page);
 
     const seat0 = page.locator('#cs-driver .sel-chip[data-cs-driver="0"]');
@@ -150,6 +163,7 @@ test.describe("seat exclusivity — the garage cannot hand out a taken seat", ()
     await seatedAs(page, 1, 0);                    // Ferrari, out of the way
     await enterRoom(page, "host");
     await peerSays(page, EV.HELLO, { team: "redbull", driver: 0 });
+    await awaitPeer(page, "redbull");
     await garageFromRoom(page);
 
     await page.locator("#cs-team-card").click();
@@ -167,6 +181,7 @@ test.describe("seat exclusivity — the garage cannot hand out a taken seat", ()
     await seatedAs(page, 1, 0);
     await enterRoom(page, "host");
     await peerSays(page, EV.HELLO, { team: "redbull", driver: 0 });
+    await awaitPeer(page, "redbull");
     await garageFromRoom(page);
     await page.locator("#cs-team-card").click();
 

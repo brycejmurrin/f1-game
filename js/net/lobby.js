@@ -428,8 +428,10 @@ const NetLobby = (function () {
       // Your READY was for a car you are no longer in — the same reasoning
       // roomChanged() uses when you change your own mind.
       if (selfReady) setReady(false);
-      // The garage lays OVER the room rather than replacing it, so the chips
-      // can be on screen while this happens; repaint them under the player.
+      // The garage REPLACES the room (openSetup hides #vsfriend), so a hello
+      // can land while the chips are the screen — repaint them under the
+      // player. The say() above is not lost meanwhile: #vs-status keeps its
+      // text, so it is there when cs-done brings the room back.
       const garage = $("carsetup");
       if (garage && !garage.hidden && G.buildSetup) G.buildSetup();
       renderRoom();
