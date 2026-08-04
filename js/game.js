@@ -7470,7 +7470,18 @@ Input.init(canvas, { onPause: () => {
   if (paused && els.pmsettings && !els.pmsettings.hidden) { closeSettings(); return; }
   setPaused(!paused);
 } });
-if (!Input.touchControlsNeeded()) { document.body.classList.add("desktop"); els.subtitle.textContent = "2026 grid · " + Tracks.LIST.length + " real circuits"; }
+// The subtitle is DERIVED on both paths. It used to be hardcoded "24 real
+// circuits" in index.html and rewritten on desktop only, from Tracks.LIST.length
+// — which counts the 16 retired classics too, so the same build claimed 24
+// circuits on a phone and 40 on a desktop. Both now read the championship
+// calendar (Tracks.SEASON), and the desktop, which has the room, names the
+// classics rather than silently folding them into the season count.
+if (!Input.touchControlsNeeded()) document.body.classList.add("desktop");
+{
+  const rounds = Tracks.SEASON.length, classics = Tracks.LIST.length - rounds;
+  els.subtitle.textContent = "2026 grid · " + rounds + " real circuits · "
+    + (Input.touchControlsNeeded() ? "tilt to steer" : classics + " classics");
+}
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
 $("pm-steer").textContent = steerLabel();
