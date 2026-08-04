@@ -468,8 +468,14 @@ const SceneryCity = (function () {
       // Restores the CALLER's material (not a hard 0) so a MAT.METAL default set
       // around the whole kind-dispatch below survives between/after sec() calls —
       // that's what tags every cap/antenna/trim box without touching each one.
-      const sec = (yb, sw, sh, sd, seed, to) => {
-        const cen = vadd(vadd(a.c, a.u, yb + sh / 2), b[2], to || 0);
+      // `ro` shifts the section laterally. The "notch" and "arch" kinds each set
+      // two members side by side along the tangent at the SAME sw and sd, so both
+      // members' lateral faces landed on one plane — same facing, zero gap, and
+      // over the members' full height, which on a tower is hundreds of m2. Only
+      // ever called with a positive multiple of `side`, i.e. AWAY from the track,
+      // so no member creeps toward the circuit.
+      const sec = (yb, sw, sh, sd, seed, to, ro) => {
+        const cen = vadd(vadd(vadd(a.c, a.u, yb + sh / 2), b[2], to || 0), b[0], ro || 0);
         const prevMat = out._mat;
         out._mat = bmat;
         // Return the guarded emitter's verdict: false = body rejected, so the
@@ -562,7 +568,7 @@ const SceneryCity = (function () {
       } else if (kind === "notch") {                             // twin slabs split by a vertical slot
         const podH = h * 0.22, off = w * 0.30;
         if (sec(0, w, podH, d, k * 3.1 + side) === false) return;   // body rejected -> drop its dependents // shared podium base
-        for (const o2 of [-off, off]) sec(podH, w * 0.42, h - podH, d, k * 4.3 + side + o2, o2);             // two towers
+        for (const o2 of [-off, off]) sec(podH, w * 0.42, h - podH, d, k * 4.3 + side + o2, o2, o2 > 0 ? side * 0.07 : 0);             // two towers
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.92, 1.0, d * 0.9], cap, b);
       } else if (kind === "fin") {                               // slab with proud vertical fins on the face
         if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
@@ -590,7 +596,7 @@ const SceneryCity = (function () {
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.6, 1.0, d * 0.6], cap, b);
       } else if (kind === "arch") {                              // portal / gateway — two legs + spanning lintel
         const legW = w * 0.26, gp = w * 0.46, legH = h * 0.78, off = gp / 2 + legW / 2;
-        for (const o3 of [-off, off]) sec(0, legW, legH, d, k * 3.3 + side + o3 * 7, o3);   // legs
+        for (const o3 of [-off, off]) sec(0, legW, legH, d, k * 3.3 + side + o3 * 7, o3, o3 > 0 ? side * 0.07 : 0);   // legs
         sec(legH, w, h - legH, d, k * 5.9 + side);                                          // lintel
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.96, 1.0, d * 0.9], cap, b);
       } else if (kind === "ziggurat") {                          // stepped terrace (many small steps)
