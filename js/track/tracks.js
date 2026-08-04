@@ -1650,8 +1650,14 @@ const Tracks = (function () {
       // the identity pass but nothing outside a circuit's own scenery() could
       // reach it. SPECIES names now pass straight through.
       const SPECIES = { cypress: 1, stonePine: 1, broadleafFall: 1, acacia: 1, plane: 1 };
+      // FURN.treeCrown reshapes the broadleaf the scatter plants — the one
+      // foliage pass that runs on every circuit. canopyR keys off the same
+      // name so the fence guard clears what the crown actually spans.
+      const CROWNS = { vase: 1, weeping: 1, columnar: 1 };
+      const crownForm = CROWNS[fz.treeCrown] ? fz.treeCrown : "round";
       const kind = SPECIES[fz.tree] ? fz.tree
-        : fz.tree === "palm" ? "palm" : fz.tree === "fir" ? "fir" : "broad";
+        : fz.tree === "palm" ? "palm" : fz.tree === "fir" ? "fir"
+        : crownForm !== "round" ? crownForm : "broad";
       const crown = canopyR(kind, h);
       // Spatial barrier guard — the canopy allowance above only clears the
       // barrier belonging to THIS node, and the hits that survived it were with
@@ -1665,7 +1671,7 @@ const Tracks = (function () {
       else if (kind === "broadleafFall") broadleafFall(k, side, d, h, col);
       else if (kind === "acacia") acacia(k, side, d, h, col);
       else if (kind === "plane") plane(k, side, d, h, col);
-      else tree(k, side, d, h, col);
+      else tree(k, side, d, h, col, crownForm !== "round" ? { crown: crownForm } : undefined);
     };
     // Lamp posts — streets / modern / desert. Alternate sides, set behind the
     // barrier line; the head glows HDR at night via streetLamp(). ~12% of posts
