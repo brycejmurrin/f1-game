@@ -148,6 +148,8 @@ const FULL = [
   // has to satisfy "before whatever consumes it" — game.js, last as always.
   "js/net/transport.js",
   "js/net/handshake.js",
+  "js/net/snapshot.js",
+  "js/net/session.js",
   "js/game.js",
 ];
 

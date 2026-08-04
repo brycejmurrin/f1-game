@@ -44,7 +44,8 @@ npm run test:map        # minimap hooks
 npm run test:net        # multiplayer car roles: human (person-driven) vs local
                         #   (this screen), the per-car input seam, per-car parts
 npm run test:net-unit   # js/net wire: loopback transport (latency/jitter/loss,
-                        #   deterministic via a seeded rnd) + invite-code codec.
+                        #   deterministic via a seeded rnd), invite-code codec,
+                        #   snapshot quantisation + interpolation, clock sync.
                         #   Pure logic, no browser — runs in under a second
 npm run test:agent      # agent world view (world/trackInfo/scene/visible/rollout)
 npm run test:circuit    # walls + autopilot + elevation + audit (all circuit-level)
@@ -275,6 +276,23 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   splines, barriers and constants. Scenery is
                                   deliberately not checked (props never affect
                                   physics)
+  snapshot.js    NetSnapshot    the wire format (13 B/car: s/x/head/speed/gear/
+                                  lap, quantised to 1 cm and 1 cm/s) + the
+                                  interpolation buffer. Remote cars draw ~100 ms
+                                  in the past between two packets; a late packet
+                                  EXTRAPOLATES ALONG s, which follows the road
+                                  by construction and so cannot dead-reckon a
+                                  rival into a barrier. s and head both wrap the
+                                  short way — getting that wrong sends a car
+                                  backwards down the lap once per lap.
+                                  predict() leads sample(): contact must not be
+                                  resolved against the delayed DRAWN pose
+  session.js     NetSession     clock sync (NTP-style; keeps the LOWEST-RTT
+                                  sample, since a slow reply is a queued reply
+                                  and queuing is pure error), packet routing,
+                                  typed JSON events, and a heartbeat, so
+                                  an abandoned car can be handed back to the AI
+                                  instead of standing still on track
 
 js/game/         — game modules (each created with the G ctx façade from game.js) —
   tables.js      GameTables     static game data (CAM_MODES, DIFF, gears, paints)
@@ -358,7 +376,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (88) + tests/*.test.mjs unit suites (24)
+tests/*.spec.js                 Playwright specs (88) + tests/*.test.mjs unit suites (26)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -724,7 +742,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-88 Playwright specs + 24 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+88 Playwright specs + 26 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

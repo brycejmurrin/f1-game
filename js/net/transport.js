@@ -79,53 +79,72 @@ const NetTransport = (function () {
     const rnd     = opts.rnd       || Math.random;
 
     const a = makeEndpoint("a"), b = makeEndpoint("b");
-    let queue = [];          // { at, to, channel, data, seq }
+    let queue = [];          // { at, to, channel, data, seq } — `at` is WIRE time
     let seq = 0;
-    let now = 0;
     let dropped = 0, delivered = 0;
 
-    function enqueue(to, channel, data) {
+    // Each endpoint pumps with ITS OWN clock, because that is the situation
+    // being modelled: two browsers share no clock, and the session layer exists
+    // precisely to reconcile them. So the transport cannot assume one shared
+    // `now`. Each endpoint's first pump establishes its epoch, and everything
+    // on the queue is scheduled in the neutral wire time that follows from it —
+    // otherwise a peer whose clock reads ten seconds ahead would yank a shared
+    // clock forward and deliver the whole queue instantly.
+    //
+    // This means BOTH endpoints must start pumping at the same real moment for
+    // wire time to line up — pump each one before sending anything. A live
+    // session does this naturally (both sides pump every frame from the moment
+    // they connect); a test has to do it explicitly.
+    function wireNow(ep, localNow) {
+      if (ep._epoch == null) ep._epoch = localNow;
+      ep._wire = localNow - ep._epoch;
+      return ep._wire;
+    }
+
+    function enqueue(from, to, channel, data) {
       if (channel === STATE) {
         if (loss > 0 && rnd() < loss) { dropped++; return; }
       }
-      let at = now + latency + (jitter ? (rnd() * 2 - 1) * jitter : 0);
+      let at = (from._wire || 0) + latency + (jitter ? (rnd() * 2 - 1) * jitter : 0);
       // Reordering: shove this one behind a plausible successor. Only ever
       // applied to the unordered channel.
       if (channel === STATE && reorder > 0 && rnd() < reorder) at += latency * 0.5;
       queue.push({ at, to, channel, data, seq: seq++ });
     }
 
-    function deliverDue(t) {
-      now = t;
+    // Drain only what is addressed to THIS endpoint, matching rtc() where
+    // pump() drains that peer's own inbox. A transport whose two
+    // implementations deliver to different places is not substitutable.
+    function deliverTo(self, localNow) {
+      const t = wireNow(self, localNow);
       if (!queue.length) return 0;
-      // Sort by arrival, then by send order for ties — so an unordered channel
-      // only ever reorders because we ASKED it to above, not because of an
-      // unstable sort.
+      // Sort by arrival, then send order for ties — so the unordered channel
+      // only ever reorders because we ASKED it to above, not by an unstable sort.
       queue.sort((p, q) => (p.at - q.at) || (p.seq - q.seq));
-      let i = 0, n = 0;
-      while (i < queue.length && queue[i].at <= now) {
-        const m = queue[i++];
-        m.to._emit("message", m.channel, m.data);
-        delivered++; n++;
+      const held = [];
+      let n = 0;
+      for (const m of queue) {
+        if (m.to === self && m.at <= t) { m.to._emit("message", m.channel, m.data); delivered++; n++; }
+        else held.push(m);
       }
-      if (i) queue = queue.slice(i);
+      queue = held;
       return n;
     }
 
     function wire(self, peer) {
       self.send = function (channel, data) {
         if (self.status !== "open") return false;
-        enqueue(peer, channel, data);
+        enqueue(self, peer, channel, data);
         return true;
       };
-      self.pump = deliverDue;
+      self.pump = (localNow) => deliverTo(self, localNow);
       self.close = function () {
         if (self.status === "closed") return;
         self.status = peer.status = "closed";
         queue = [];
         self._emit("close", "local"); peer._emit("close", "peer");
       };
-      self.stats = () => ({ dropped, delivered, queued: queue.length, now });
+      self.stats = () => ({ dropped, delivered, queued: queue.length, wire: self._wire || 0 });
     }
     wire(a, b); wire(b, a);
 

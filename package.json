@@ -33,7 +33,7 @@
     "test:agent-contract": "node --test tests/agentview-api-contract.test.mjs",
     "test:map":       "node tools/run-playwright.mjs tests/map-hooks.spec.js",
     "test:net":       "node tools/run-playwright.mjs tests/multiplayer-roles.spec.js",
-    "test:net-unit":  "node --test tests/net-transport.test.mjs",
+    "test:net-unit":  "node --test tests/net-transport.test.mjs tests/net-snapshot.test.mjs tests/net-session.test.mjs",
     "test:paths":     "node tools/run-playwright.mjs tests/output-paths.spec.js",
     "test:service-worker": "node --test tests/service-worker.test.mjs",
     "test:webgpu-lifecycle": "node --test tests/webgpu-lifecycle.test.mjs",

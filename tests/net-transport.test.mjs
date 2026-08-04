@@ -40,10 +40,11 @@ test("nothing is delivered before its latency has elapsed", () => {
   const [a, b] = NetTransport.loopback({ latencyMs: 50, rnd: seededRnd(1) });
   const got = [];
   b.onMessage((ch, d) => got.push(d));
+  a.pump(0); b.pump(0);              // establish both epochs
   a.send(NetTransport.STATE, "x");
-  a.pump(10); assert.equal(got.length, 0, "arrived at 10ms");
-  a.pump(49); assert.equal(got.length, 0, "arrived at 49ms");
-  a.pump(50); assert.equal(got.length, 1, "should have arrived at 50ms");
+  b.pump(10); assert.equal(got.length, 0, "arrived at 10ms");
+  b.pump(49); assert.equal(got.length, 0, "arrived at 49ms");
+  b.pump(50); assert.equal(got.length, 1, "should have arrived at 50ms");
 });
 
 test("loss hits the unreliable channel and never the reliable one", () => {
@@ -57,7 +58,7 @@ test("loss hits the unreliable channel and never the reliable one", () => {
     a.send(NetTransport.STATE, i);
     a.send(NetTransport.EVENT, i);
   }
-  a.pump(1);
+  b.pump(1);
   assert.equal(state, 0, "state channel should have dropped everything");
   assert.equal(event, 20, "event channel must be lossless");
 });
@@ -68,7 +69,7 @@ test("partial loss is reproducible for a given seed", () => {
     const got = [];
     b.onMessage((ch, d) => got.push(d));
     for (let i = 0; i < 100; i++) a.send(NetTransport.STATE, i);
-    a.pump(1);
+    b.pump(1);
     return got.join(",");
   }
   assert.equal(run(), run(), "same seed must drop the same packets");
@@ -76,7 +77,7 @@ test("partial loss is reproducible for a given seed", () => {
   let n = 0;
   b.onMessage(() => n++);
   for (let i = 0; i < 100; i++) a.send(NetTransport.STATE, i);
-  a.pump(1);
+  b.pump(1);
   assert.ok(n > 40 && n < 80, `~60 of 100 should survive 40% loss, got ${n}`);
 });
 
@@ -84,8 +85,9 @@ test("the reliable channel preserves send order", () => {
   const [a, b] = NetTransport.loopback({ latencyMs: 20, rnd: seededRnd(3) });
   const got = [];
   b.onMessage((ch, d) => got.push(d));
+  a.pump(0); b.pump(0);              // establish both epochs — see loopback()
   for (let i = 0; i < 10; i++) a.send(NetTransport.EVENT, i);
-  a.pump(100);
+  b.pump(100);
   assert.equal(got.join(","), "0,1,2,3,4,5,6,7,8,9");
 });
 
@@ -94,7 +96,7 @@ test("traffic flows both ways and close is seen by both ends", () => {
   let toA = 0;
   a.onMessage(() => toA++);
   b.send(NetTransport.EVENT, "hi");
-  b.pump(1);
+  a.pump(1);
   assert.equal(toA, 1, "b -> a should deliver");
 
   const closed = [];
@@ -112,7 +114,7 @@ test("a throwing message handler cannot take down the transport", () => {
   b.onMessage(() => { throw new Error("handler blew up"); });
   b.onMessage(() => second++);
   a.send(NetTransport.EVENT, 1);
-  a.pump(1);
+  b.pump(1);
   assert.equal(second, 1, "the surviving handler should still have run");
   assert.equal(b.status, "open", "the transport should still be open");
 });
