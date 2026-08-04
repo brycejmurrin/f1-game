@@ -5,7 +5,8 @@ whole story. Two front-ends — **DRIVER CAREER** (you are a driver signed to a
 team) and **MY TEAM** (you own the twelfth team) — share one core.
 
 - **Rules and save:** `js/game/career.js` (global `Career`) — no DOM.
-- **Screens:** `js/game/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`.
+- **Screens:** `js/game/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`,
+  `#career-history`.
 - **Qualifying:** `js/game/quali.js` (global `Quali`) — `#quali`.
 - **Ratings:** `js/car/driver-ratings.js` (global `DriverRatings`).
 - **Persistence + migration:** `GameStore.migrateCareer` in `js/game/store.js`.
@@ -357,6 +358,40 @@ __apex.ratings(code?)         // five axes + overall; no args = the whole grid
 __apex.qualiSim(playerTime?)  // the lap model for the loaded track, NON-destructive
 __apex.carAt(i)               // + code, seat, tierV, skill, ratings
 ```
+
+## Career history (`#career-history`)
+
+A career that has run three seasons used to show no trace of the first two. This
+screen is the record: **CAREER TOTALS** — seasons, race starts, wins, podiums,
+points, championships, best championship finish, teams driven for — then **SEASON
+BY SEASON**, one `.res-row` per archived year, newest first.
+
+**Every total is derived, none is stored.** `careerTotals()` in
+`js/game/career-ui.js` walks `career.history` and adds the season in progress from
+`career.results` and `career.season.pts`. A totals block on the save would be one
+more rung on the migration ladder for numbers that are a sum over data already
+there — and a total written once is a total that goes stale, which no migration
+puts right after the fact.
+
+Race starts is the one figure the archive does not record. A season only reaches
+`history` once `seasonDone()` is true, so an archived year ran the whole calendar
+and `history.length * roundsTotal()` is exact; the running year contributes the
+rounds actually settled. Only `__apex.careerRollover()` can archive a short season,
+and it is a debug hook. Best championship is over **finished** seasons only — a
+mid-season standing is not a career best.
+
+The way in is a **card at the foot of the hub's left column** (`.cr-record`), not a
+fourth button in `#cr-foot`. At 844x390 the sheet's left column — which is what the
+foot sits inside at two-column widths — is ~370 px, and four buttons at the shared
+`.sheet-foot .bigbtn` 110 px floor need ~440 px, so a fourth wraps the action bar
+and costs a button's height out of a 390 px-tall screen. A card also states what it
+opens, which a row of exits cannot.
+
+Registered in all three screen registries — `MenuNav.LAYER_IDS`,
+`ScrollFade.SCREENS`, `AriaState.ROOTS` — or it silently loses keyboard nav, scroll
+fades and screen-reader state. Styles are in `css/career.css`; the season rows are
+the shared `.res-row` vocabulary, podium classes included, so a title-winning year
+lights up gold with no new CSS.
 
 ## Tests
 

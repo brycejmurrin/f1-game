@@ -1016,3 +1016,98 @@ test.describe("Career — determinism", () => {
     expect(b.briefs).not.toEqual(a.briefs);
   });
 });
+
+// ── career history ───────────────────────────────────────────────────────────
+// The record of everything a career has achieved. None of it is stored: the
+// totals are a walk over career.history plus the season in progress, so what
+// these tests really pin is that the derivation still agrees with the save.
+
+test.describe("Career — history", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  // The canvas renders continuously, so Playwright's actionability check can spin
+  // on a control laid over it. Click through the DOM instead, the way
+  // tests/menu-survey.spec.js does.
+  const press = (page, sel) => page.locator(sel).evaluate((el) => el.click());
+
+  // #ch-body's key/value card as a plain object, so an assertion names the row it
+  // means rather than indexing a list that gains a row later.
+  const totals = (page) => page.evaluate(() => {
+    const out = {};
+    for (const r of document.querySelectorAll("#ch-body .cr-row"))
+      out[r.querySelector(".cr-row-k").textContent] = r.querySelector(".cr-row-v").textContent;
+    return out;
+  });
+
+  test("the hub opens it, and BACK closes it again", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await expect(page.locator("#cr-history")).toBeVisible();
+    await press(page, "#cr-history");
+    await expect(page.locator("#career-history")).toBeVisible();
+    await expect(page.locator("#ch-body")).toContainText("CAREER TOTALS");
+    await expect(page.locator("#ch-body")).toContainText("SEASON BY SEASON");
+    await press(page, "#ch-back");
+    await expect(page.locator("#career-history")).toBeHidden();
+    await expect(page.locator("#career")).toBeVisible();
+  });
+
+  test("a first season says so rather than rendering an empty box", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await press(page, "#cr-history");
+    await expect(page.locator("#ch-body")).toContainText("first season");
+    // The empty state is a sentence, not a table with no rows in it.
+    expect(await page.locator("#ch-body .res-row").count()).toBe(0);
+
+    const t = await totals(page);
+    expect(t.Seasons).toBe("1 · 2026 in progress");
+    expect(t["Race starts"]).toBe("0");
+    expect(t.Wins).toBe("0");
+    expect(t.Podiums).toBe("0");
+    expect(t.Championships).toBe("0 drivers' · 0 constructors'");
+    expect(t["Best championship"]).toBe("no season finished yet");
+    expect(t["Teams driven for"]).toBe("Haas");
+  });
+
+  test("a rolled-over season becomes a row, and the totals follow it", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await goRacing(page);                     // careerSim needs a track + grid staged
+    const archived = await page.evaluate(() => {
+      window.__apex.careerSim(30);            // stops itself at the end of the calendar
+      window.__apex.careerRollover();
+      const c = window.__apex.career();
+      window.__apex.career(true);             // back to the hub, year archived
+      return { year: c.year, past: c.history[c.history.length - 1], round: c.season.round };
+    });
+    expect(archived.year).toBe(2027);
+    expect(archived.past.year).toBe(2026);
+    expect(archived.round).toBe(0);           // the new season starts clean
+
+    await expect(page.locator("#career")).toBeVisible();
+    await press(page, "#cr-history");
+    await expect(page.locator("#career-history")).toBeVisible();
+
+    const rows = page.locator("#ch-body .res-row");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("2026");
+    await expect(rows.first()).toContainText("Haas");
+    await expect(rows.first()).toContainText("P" + archived.past.pos);
+    await expect(rows.first()).toContainText(archived.past.pts + " pts");
+
+    const t = await totals(page);
+    expect(t.Seasons).toBe("2 · 2027 in progress");
+    // A season only reaches the archive once its calendar is done, so the starts
+    // are exactly one calendar — the running year has settled nothing yet.
+    const cal = await page.evaluate(() => window.__apex.careerState().rounds);
+    expect(t["Race starts"]).toBe(String(cal));
+    expect(t.Wins).toBe(String(archived.past.wins));
+    expect(t.Podiums).toBe(String(archived.past.podiums));
+    expect(t.Points).toBe(String(archived.past.pts));
+    expect(t["Best championship"]).toBe("P" + archived.past.pos + " in 2026");
+    expect(t.Championships).toBe(
+      (archived.past.pos === 1 ? "1" : "0") + " drivers' · " +
+      (archived.past.cPos === 1 ? "1" : "0") + " constructors'");
+  });
+});

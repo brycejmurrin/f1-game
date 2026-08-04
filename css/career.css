@@ -222,6 +222,35 @@
 }
 .co-offer.staying .co-offer-tag { background: rgba(255, 255, 255, 0.14); color: var(--dim); }
 
+/* ---------- career history (#career-history) ---------- */
+/* Same relationship to the hub as #career-offers: a .dim modal laid over it, at
+   the same z-index because only one of the two is ever open. Narrower than the
+   offers sheet — a totals card and a column of season rows are both short lines,
+   and a wide sheet would strand the points column half a screen from the year. */
+#career-history { z-index: 30; --sheet-w: 520px; }
+
+/* The way in, at the foot of the hub's left column. A .cr-card that happens to be
+   a button, so it inherits the card's surface and rhythm and only has to undo the
+   things a <button> brings with it. Hover/focus borrows .co-offer's red edge —
+   the two are the same gesture (a card you press), and they should feel it. */
+.cr-record {
+  width: 100%; text-align: left; cursor: pointer;
+  color: inherit; font: inherit; min-height: var(--tap);
+  gap: 4px;
+}
+.cr-record:hover, .cr-record:focus-visible { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+.cr-record-line { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* The affordance line: dim, tracked-out and red, so the card reads as a door
+   rather than one more read-only summary in a column full of them. */
+.cr-record-cta {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.14em; color: var(--red);
+}
+
+/* The position column carries a "P" here, unlike the championship block on the
+   hub where the same component numbers rows 1..5 — these rows are sorted by YEAR,
+   so a bare figure would read as an index instead of a title finish. */
+#ch-body .res-pos { width: 32px; }
+
 /* ---------- qualifying (#quali) ---------- */
 /* A .dim modal, unlike #career — it lays over whatever screen sent you here and
    the session behind it is still the thing you are in. Rows are the shared
