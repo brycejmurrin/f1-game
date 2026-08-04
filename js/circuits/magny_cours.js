@@ -220,9 +220,11 @@
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 11, 150, null, null,
         { livery: "alu", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
+      // The technopole units: a wide low podium with a set-back upper floor —
+      // the French business-park idiom the whole Magny-Cours site was built in.
       for (let i = 0; i < 4; i++) {
-        building(K(0.925 + i * 0.013), 1, 40, 24, 12, 18,
-          { wall: RENDER, window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.925 + i * 0.013), 1, 40, 27, 10, 17,
+          { kind: "podium", wall: RENDER, window: [0.32, 0.36, 0.44], floor: 4.5 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);

@@ -205,9 +205,11 @@
         const a = anchor(K(0.005), -1, 22);
         addBox(out, vadd(a.c, a.u, 10.4), [0.22, 1.5, 160], winLit, [a.r, a.u, a.t]);
       }
+      // Montmeló's paddock: white render carrying deep vertical sun-shading
+      // fins, which is what Catalan architecture does about a low western sun.
       for (let i = 0; i < 4; i++) {
-        building(K(0.920 + i * 0.014), 1, 40, 24, 12, 18,
-          { wall: [0.88, 0.87, 0.83], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.920 + i * 0.014), 1, 40, 26, 11, 16,
+          { kind: "fin", wall: [0.90, 0.89, 0.85], window: [0.34, 0.38, 0.44], floor: 4.5 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);

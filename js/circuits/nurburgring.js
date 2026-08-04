@@ -274,9 +274,11 @@
           });
         }
       }
+      // The 1984 GP-Strecke complex steps back in stages as it climbs — heavy,
+      // grey and terraced into the Eifel slope rather than standing on it.
       for (let i = 0; i < 4; i++) {
-        building(K(0.930 + i * 0.014), 1, 38, 24, 12, 18,
-          { wall: [0.80, 0.80, 0.82], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.930 + i * 0.014), 1, 38, 23, 15, 18,
+          { kind: "tiered", wall: [0.76, 0.77, 0.79], window: [0.30, 0.34, 0.42], floor: 4.0 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);

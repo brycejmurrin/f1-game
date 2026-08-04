@@ -282,9 +282,12 @@
       }
       gantry(0.0, 9, [0.15, 0.15, 0.18]);
       gantry(0.960, 8.5, [0.15, 0.15, 0.18]);
+      // Sepang's hospitality reads as paired towers under the big sail canopies —
+      // tall and narrow so air moves between them, which is what you build in
+      // equatorial humidity.
       for (let i = 0; i < 4; i++) {
-        building(K(0.900 + i * 0.014), 1, 46, 24, 12, 18,
-          { wall: [0.86, 0.86, 0.84], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.900 + i * 0.014), 1, 46, 21, 17, 16,
+          { kind: "twin", wall: [0.88, 0.88, 0.86], window: [0.34, 0.42, 0.48], floor: 4.0 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);

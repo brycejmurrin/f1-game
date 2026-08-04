@@ -285,9 +285,11 @@
       grandstandEx(0.010, -1, 11, 140, null, null,
         { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       // Paddock hospitality behind the garages.
+      // The 2002 rebuild's hospitality: paired glass slabs split by a full-height
+      // vertical slot — cool, sheer and German, not a rendered Mediterranean box.
       for (let i = 0; i < 4; i++) {
-        building(K(0.955 + i * 0.016), 1, 40, 24, 12, 18,
-          { wall: [0.80, 0.80, 0.82], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.955 + i * 0.016), 1, 40, 22, 14, 20,
+          { kind: "notch", wall: [0.74, 0.76, 0.80], window: [0.36, 0.44, 0.52], floor: 4.0 });
       }
       every(44, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
