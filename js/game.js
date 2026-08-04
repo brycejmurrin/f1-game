@@ -2007,7 +2007,10 @@ const G = {
   GAME_LAPS, TT_LAPS, LONG_GRIP,
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  getTeamParts, getLiveryId,   // lobby: the profile it sends is ids, never resolved numbers
+  get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
   get netPlay() { return netPlay; },
+  get netLobby() { return netLobby; },
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
@@ -2049,6 +2052,9 @@ const incidentSim = IncidentSim.create(G);
 // Two-player racing (js/net/netplay.js). Wholly inert until a session starts:
 // owns() is an identity check against a null, and tick() returns immediately.
 const netPlay = NetPlay.create(G);
+// The VS FRIEND lobby (js/net/lobby.js) — owns the #vsfriend screen and the
+// two code pastes that stand in for a signalling server.
+const netLobby = NetLobby.create(G);
 // C2 visual suspension (js/game/bodyattitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
@@ -5561,6 +5567,15 @@ $("mb-race").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
+$("mb-vs").onclick = () => {
+  // Two drivers, no server: the lobby does the whole handshake by having the
+  // players paste codes to each other. It starts the race itself once both
+  // sides agree on the setup, so there is no select screen in between.
+  // flow/session are the authority now; seasonMode/timeTrial are derived views.
+  setFlow("gp"); session = "race";
+  netLobby.open();
+  if (soundOn) GameAudio.uiSelect();
+};
 $("mb-tt").onclick = () => {
   setFlow("gp"); session = "tt";
   buildSelect();
@@ -6155,5 +6170,9 @@ requestAnimationFrame(tick);
 //   __apex.jump(0.5, 60, 2)        -> 50% of lap, 60 m/s, 2 m right of centre
 // The __apex dev/test API lives in js/game/apex.js (ApexApi.create(G)).
 window.__apex = ApexApi.create(G);
+
+// Lobby buttons + the #vs= invite-link handler. Last, so every element it
+// binds to exists and the G facade is fully built.
+netLobby.wire();
 
 })();

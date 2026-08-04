@@ -1637,6 +1637,26 @@ const api = {
     return true;
   },
 
+  // lobby() — the VS FRIEND screen's state, plus the two profile helpers.
+  // localProfile() is what we'd send a peer; modsFromProfile() is how a peer's
+  // declared setup becomes performance numbers. They are separate on purpose:
+  // the wire carries part IDS and the multipliers are always recomputed
+  // locally, so a tampered peer cannot simply declare itself faster.
+  lobby(o) {
+    if (!G.netLobby) return { available: false };
+    if (o && o.open) G.netLobby.open();
+    if (o && o.cancel) G.netLobby.cancel();
+    return Object.assign({ available: true }, G.netLobby.status(), {
+      profile: G.netLobby.localProfile(),
+      shown: !!(document.getElementById("vsfriend") && !document.getElementById("vsfriend").hidden),
+    });
+  },
+
+  // lobbyMods(profile) — resolve a peer profile to multipliers, locally.
+  lobbyMods(profile) {
+    return G.netLobby ? G.netLobby.modsFromProfile(profile) : null;
+  },
+
   // netTick(nowMs?) — pump the session by hand. The game loop already calls
   // this every frame, but a test must not depend on rAF actually running at a
   // useful rate: driving it explicitly is what makes latency, loss and

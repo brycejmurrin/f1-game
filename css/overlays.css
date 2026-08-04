@@ -256,3 +256,43 @@ body.hud-hidden #hud-restore { display: block; }
   background: var(--bg);
 }
 } /* @layer overlays */
+
+/* ── VS FRIEND lobby ────────────────────────────────────────────────────────
+   The invite/answer codes are a few hundred characters of base64 — a full
+   ICE-gathered SDP, compressed. Nobody is going to retype that, so the boxes
+   are monospace, selectable, scrollable, and paired with copy buttons; the
+   layout assumes the code is moved by clipboard, not by eye. */
+#vsfriend .vs-step { display: flex; flex-direction: column; gap: 10px; }
+#vsfriend .vs-hint {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  opacity: 0.75;
+}
+#vsfriend .vs-code {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  /* Codes have no spaces, so without this they force the sheet wide. */
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.35);
+  color: inherit;
+}
+#vsfriend .vs-code:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+#vsfriend .vs-status {
+  margin: 12px 0 0;
+  min-height: 1.2em;          /* reserve the line so the sheet doesn't jump */
+  font-size: 0.82rem;
+  line-height: 1.35;
+  opacity: 0.9;
+}
+/* Failure here is usually NAT traversal, which the player can act on only if
+   we say so plainly — hence a distinct state rather than the same grey text. */
+#vsfriend .vs-status.vs-error { color: #ff8a80; opacity: 1; }

@@ -160,12 +160,18 @@ const NetPlay = (function () {
 
     function start(opts) {
       opts = opts || {};
-      if (!opts.transport) return { ok: false, error: "no_transport", message: "No connection to race over." };
+      if (!opts.transport && !opts.session) {
+        return { ok: false, error: "no_transport", message: "No connection to race over." };
+      }
       if (!G.track) return { ok: false, error: "no_track", message: "Load a track before starting a session." };
 
       role = opts.role === "host" ? "host" : "guest";
       peerProfile = opts.peerProfile || null;
-      session = NetSession.create({ transport: opts.transport });
+      // The lobby has to talk to the peer BEFORE a track exists — it is how the
+      // guest learns which race to load — so it opens the session itself and
+      // hands it over here. Adopting it keeps one clock estimate and one set of
+      // handlers rather than two sessions competing on the same transport.
+      session = opts.session || NetSession.create({ transport: opts.transport });
       session.onState(onState);
       session.onClose((why) => { lastReason = why; stop(why); });
       for (const type of Object.keys(EV)) {
