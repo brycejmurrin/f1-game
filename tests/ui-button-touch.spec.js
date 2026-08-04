@@ -7,7 +7,22 @@ import { galleryPath } from "./output-paths.js";
 const PORTRAIT  = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
+// A sheet enters with `sheet-in` (0.19s, translateY(10px) scale(0.985) — see
+// css/components.css), so a sheet measured or photographed mid-flight is
+// genuinely 0.985x its final size and 10px low. Read as layout, that is a
+// phantom shift of exactly the kind "buttons keep their positions" exists to
+// catch — it was comparing a still-animating sheet against a settled one.
+// Waiting it out does not work: the game parks its rAF loop behind the menu, so
+// the document stops producing frames and the animation clock stops with it —
+// the entrance sits frozen at t=0 until some input forces a frame. Turn the
+// motion off instead. css/components.css gates every sheet animation behind
+// `prefers-reduced-motion: no-preference`, so the reduced mode lands the final
+// layout on the first frame; these are layout and behaviour tests and none of
+// them assert motion. It has to be this per-page call — `test.use({
+// reducedMotion })` does not reach the page under this config (matchMedia still
+// reports no-preference).
 async function waitReady(page) {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
 }
 
