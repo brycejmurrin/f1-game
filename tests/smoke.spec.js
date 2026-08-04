@@ -32,6 +32,35 @@ async function park(page, frac = 0) {
   await page.waitForTimeout(100);
 }
 
+// Helper: like park(), but for a test that is about to SCREENSHOT the canvas.
+//
+// park() freezes PHYSICS, not rendering — js/game.js keeps redrawing every rAF
+// tick so sky/cloud animation continues (frame() runs even while `frozen`).
+// Under SwiftShader that redraw is CPU-heavy and never idles, so a `.screenshot()`
+// issued while it is still running has to queue behind an ongoing, endless
+// render loop instead of a quiet compositor.
+//
+// MEASURED on this box, solo (no sibling worker): an otherwise-identical
+// goToRace()+park() test with no screenshot takes 30-70s; the SAME test with a
+// screenshot but no headless(true) took 88-96s; under a real 2-worker suite run
+// the same pair reached 154-214s, past Playwright's 120s budget. Stopping the
+// render loop before the shot (below) cut it back to 29-32s solo — screenshot
+// cost becomes negligible once it is reading a quiet compositor instead of
+// racing an endless one.
+//
+// `headless(true)` (js/game/apex.js) stops render() entirely and the compositor
+// keeps the LAST drawn frame — tests/track-helpers.js's tracks-visual capture
+// already relies on exactly this to get a stable, quickly-readable frame. Give
+// the scene time to actually present one real frame first (300ms — 100ms is not
+// reliably enough for a full frame on a heavy circuit under SwiftShader), THEN
+// stop the loop, so the screenshot reads a quiet canvas instead of racing it.
+async function parkForScreenshot(page, frac = 0) {
+  await park(page, frac);
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.__apex.headless(true));
+  await page.waitForTimeout(50);
+}
+
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 test.describe("Apex 26 — smoke", () => {
@@ -127,7 +156,7 @@ test.describe("Apex 26 — rendering", () => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
     await goToRace(page);
-    await park(page, 0);
+    await parkForScreenshot(page, 0);
 
     const buf = await page.locator("canvas#game").screenshot();
     expect(buf.length).toBeGreaterThan(5000);
@@ -140,7 +169,7 @@ test.describe("Apex 26 — rendering", () => {
     // Find the first corner on the track and park there
     const corners = await page.evaluate(() => window.__apex.corners());
     const frac = corners.length > 0 ? corners[0] : 0.15;
-    await park(page, frac);
+    await parkForScreenshot(page, frac);
 
     const buf = await page.locator("canvas#game").screenshot();
     expect(buf.length).toBeGreaterThan(5000);
