@@ -54,7 +54,9 @@ const NetLobby = (function () {
       invite: $("vs-invite"), inviteIn: $("vs-invite-in"),
       answer: $("vs-answer"), answerIn: $("vs-answer-in"),
       answerHint: $("vs-answer-hint"), answerActions: $("vs-answer-actions"),
-      answerWait: $("vs-answer-wait"),
+      answerWait: $("vs-answer-wait"), answerRaw: $("vs-answer-raw"),
+      answerQrWrap: $("vs-answer-qr-wrap"), answerQr: $("vs-answer-qr"),
+      scan: $("vs-scan"), scanVideo: $("vs-scan-video"),
       status: $("vs-status"),
     });
 
@@ -335,11 +337,13 @@ const NetLobby = (function () {
       const res = await NetHandshake.acceptInvite(transport, code, localProfile());
       if (!res.ok) { say(res.message || "That invite could not be read.", true); return res; }
       _peerProfile = res.peer;
-      if (e.answer) { e.answer.value = res.code; e.answer.hidden = false; }
+      if (e.answer) e.answer.value = res.code;
       if (e.answerHint) e.answerHint.hidden = false;
       if (e.answerActions) e.answerActions.hidden = false;
+      if (e.answerRaw) e.answerRaw.hidden = false;
       // Step 2's placeholder prose is replaced by step 2 itself.
       if (e.answerWait) e.answerWait.hidden = true;
+      drawAnswerQr(res.code);
       waitForOpen();
       say("Send that answer code back, then wait for the race to start.");
       return res;
@@ -357,6 +361,72 @@ const NetLobby = (function () {
       _peerProfile = res.peer;
       waitForOpen();
       return res;
+    }
+
+    // ---- getting a code IN, by any route ----------------------------------
+    // Scan, paste button, paste event and invite link all land here, and all
+    // four then behave identically: fill the box and RUN. Requiring a separate
+    // confirming tap after a scan would be asking the player to agree with what
+    // the camera just did.
+    //
+    // The invite QR carries a full URL, so a scan of it yields a link rather
+    // than a code — unwrap it, and accept a bare code just as happily.
+    function codeFrom(text) {
+      const raw = String(text || "").trim();
+      if (!raw) return "";
+      return NetHandshake.inviteFromUrl(raw) || raw;
+    }
+
+    function deliver(kind, text) {
+      const code = codeFrom(text);
+      if (!code) return false;
+      const e = els();
+      const box = kind === "invite" ? e.inviteIn : e.answerIn;
+      if (box) box.value = code;
+      return kind === "invite" ? makeAnswer(code) : acceptAnswer(code);
+    }
+
+    let scanner = null;
+
+    function stopScan() {
+      if (scanner) { scanner.stop(); scanner = null; }
+      const e = els();
+      if (e.scan) e.scan.hidden = true;
+    }
+
+    // kind: "invite" (guest reading the host's screen) | "answer" (host reading
+    // the guest's). Same camera, same decoder, different destination.
+    async function scan(kind) {
+      const e = els();
+      if (!e.scan || !e.scanVideo) return { ok: false, error: "no_ui" };
+      if (!NetScan.supported()) {
+        say("This browser cannot use the camera — paste the code instead.", true);
+        return { ok: false, error: "unsupported" };
+      }
+      stopScan();
+      e.scan.hidden = false;
+      say("Point the camera at their code…");
+      scanner = NetScan.create();
+      const res = await scanner.start(e.scanVideo, (text) => {
+        stopScan();
+        say("Got it.");
+        deliver(kind, text);
+      });
+      if (!res.ok) { stopScan(); say(res.message || "Could not start the camera.", true); }
+      return res;
+    }
+
+    // One tap instead of focus-select-paste-submit, which is the whole of the
+    // remaining friction when the two players are not in the same room.
+    async function pasteInto(kind) {
+      let text = "";
+      try { text = await navigator.clipboard.readText(); }
+      catch (err) {
+        say("Could not read the clipboard — paste into the box instead.", true);
+        return { ok: false, error: "denied" };
+      }
+      if (!codeFrom(text)) { say("There is no code on the clipboard.", true); return { ok: false, error: "empty" }; }
+      return deliver(kind, text);
     }
 
     async function copy(text) {
@@ -404,16 +474,27 @@ const NetLobby = (function () {
     // No in-page scanner anywhere. BarcodeDetector is absent on desktop Linux
     // Chrome and on iOS Safari (measured), so scanning ourselves would serve a
     // minority while the OS camera serves nearly everyone.
-    function drawQr(code) {
-      const wrap = $("vs-qr-wrap"), canvas = $("vs-qr");
+    // Draw `payload` into `canvas`, revealing `wrap` only if it actually
+    // encoded. A code too long for any version, or a page with no location to
+    // build a URL from, hides the QR rather than showing an unreadable one —
+    // the text code beside it still works.
+    function paintQr(wrap, canvas, payload) {
       if (!wrap || !canvas) return false;
-      const url = code ? NetHandshake.inviteUrl(code) : null;
-      // A code too long to encode, or a page with no location to build a URL
-      // from, hides the QR rather than showing an unreadable one — the text
-      // code below it still works.
-      const ok = !!(url && NetQr.draw(canvas, url, { px: 320 }));
+      const ok = !!(payload && NetQr.draw(canvas, payload, { px: 320 }));
       wrap.hidden = !ok;
       return ok;
+    }
+
+    function drawQr(code) {
+      return paintQr($("vs-qr-wrap"), $("vs-qr"),
+        code ? NetHandshake.inviteUrl(code) : null);
+    }
+    // The answer QR carries the RAW CODE, not a link. There is no "open this to
+    // answer" journey — the host scans it from the very page holding their peer
+    // connection, and following a URL would throw that connection away.
+    function drawAnswerQr(code) {
+      const e = els();
+      return paintQr(e.answerQrWrap, e.answerQr, code || null);
     }
 
     function shareInvite() {
@@ -438,13 +519,15 @@ const NetLobby = (function () {
       _peerProfile = null;
       show("pick");
       for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
-      if (e.answer) e.answer.hidden = true;
       if (e.answerHint) e.answerHint.hidden = true;
       if (e.answerActions) e.answerActions.hidden = true;
+      if (e.answerRaw) e.answerRaw.hidden = true;
       if (e.answerWait) e.answerWait.hidden = false;
       // Reopening must not show the PREVIOUS session's QR — it would point a
       // camera at a peer connection that no longer exists.
       if ($("vs-qr-wrap")) $("vs-qr-wrap").hidden = true;
+      if (e.answerQrWrap) e.answerQrWrap.hidden = true;
+      stopScan();
       // Re-fold the raw code: it is the fallback, and an open disclosure from
       // last time makes the sheet open on three lines of base64.
       const raw = document.querySelector("#vs-hosting .vs-raw");
@@ -456,6 +539,10 @@ const NetLobby = (function () {
 
     function close() {
       clearInterval(pollTimer);
+      // Leaving the screen with the camera still running is the failure this
+      // module is most careful about — close() is also the SUCCESS path, since
+      // the race starts by closing the lobby.
+      stopScan();
       const e = els();
       if (e.screen) e.screen.hidden = true;
     }
@@ -463,6 +550,7 @@ const NetLobby = (function () {
     // Abandoning the lobby must tear the half-built connection down, or a
     // stale RTCPeerConnection sits there gathering candidates forever.
     function cancel() {
+      stopScan();
       teardown();
       role = null;
       _peerProfile = null;
@@ -485,7 +573,32 @@ const NetLobby = (function () {
       on("vs-copy-answer", () => copy(($("vs-answer") || {}).value || ""));
       on("vs-share-invite", shareInvite);
       on("vs-share-answer", shareAnswer);
+      on("vs-scan-invite", () => scan("invite"));
+      on("vs-scan-answer", () => scan("answer"));
+      on("vs-paste-invite", () => pasteInto("invite"));
+      on("vs-paste-answer", () => pasteInto("answer"));
+      on("vs-scan-cancel", () => { stopScan(); say(""); });
       on("vs-close", cancel);
+      // A paste straight into the box runs too, so all four routes in behave
+      // the same. Deferred a tick because the value is not in the textarea yet
+      // while the paste event is being dispatched.
+      const onPaste = (id, kind) => {
+        const box = $(id);
+        if (box) box.addEventListener("paste", () => setTimeout(() => deliver(kind, box.value), 0));
+      };
+      onPaste("vs-invite-in", "invite");
+      onPaste("vs-answer-in", "answer");
+      // A camera must not outlive the tab being backgrounded — on a phone that
+      // is someone walking away with the light still on.
+      document.addEventListener("visibilitychange", () => { if (document.hidden) stopScan(); });
+      // No camera, no SCAN button. Unlike the settings grid, this row is built
+      // before the screen is ever shown, so nothing reflows under a thumb.
+      if (!NetScan.supported()) {
+        for (const id of ["vs-scan-invite", "vs-scan-answer"]) {
+          const b = $(id);
+          if (b) b.hidden = true;
+        }
+      }
       // Name the button after what it will actually do on THIS device. With no
       // share sheet it copies the link, and a button labelled SHARE that
       // silently copies is a button that has lied. SHARE LINK and COPY CODE
@@ -512,6 +625,7 @@ const NetLobby = (function () {
     return {
       wire, open, close, cancel, host, join, makeAnswer, acceptAnswer,
       shareInvite, shareAnswer, canShare,
+      scan, stopScan, pasteInto, deliver,
       localProfile, modsFromProfile, setTransportFactory,
       failureMsg,
       status: () => ({

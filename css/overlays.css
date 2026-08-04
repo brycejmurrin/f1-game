@@ -368,6 +368,27 @@ body.hud-hidden #hud-restore { display: block; }
   font-size: 0.78rem;
   background: rgba(255, 255, 255, 0.14);
 }
+/* The viewfinder. Sized on HEIGHT first: this appears on a landscape phone with
+   ~390px to spend, and a preview that needs scrolling is a preview you cannot
+   aim. object-fit: cover so the frame is filled rather than letterboxed — the
+   decoder reads the video element's own pixels, not what CSS shows, so cropping
+   here costs nothing. */
+#vsfriend .vs-scan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+#vsfriend .vs-scan video {
+  width: min(320px, 90%);
+  height: min(240px, 46vh);
+  object-fit: cover;
+  border-radius: 8px;
+  background: #000;
+  transform: scaleX(-1);        /* a mirrored preview is what people expect */
+}
+#vsfriend .vs-scan > .bigbtn { width: auto; margin: 0; }
 #vsfriend .vs-raw > summary {
   cursor: pointer;
   font-size: 0.76rem;
