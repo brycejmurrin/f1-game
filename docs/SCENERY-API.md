@@ -5,7 +5,7 @@ Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
 (`buildProps`, split across the `js/track/scenery-nature.js` / `scenery-city.js`
 / `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
 `js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
-primitives, and composite models. The **96-member `api` surface is a frozen
+primitives, and composite models. The **105-member `api` surface is a frozen
 contract** — `tests/scenery-api-contract.test.mjs` fails on any rename/removal,
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
@@ -239,14 +239,34 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 | `bush(k, side, dist, col)` | low rounded shrub |
 | `hedge(s0, s1, side, gap, h, col)` | continuous clipped hedge / treeline |
 
+**Species** — `pine`/`tree`/`palm`/`conifer` are four silhouettes for forty
+circuits, so a Portuguese hillside, an Argentine avenue and a Highveld plain all
+planted the same rounded cone. These five are the forms circuit files kept
+rewriting locally, promoted with an options bag. All share `tree()`'s signature
+plus a trailing `opts` — `(k, side, dist, h, col, opts)` — and are anchored,
+on-track guarded and noted like it. Choose by **silhouette**, not by palette:
+passing an autumn colour to `tree()` still gives you a `tree()` shape.
+
+| Model | Silhouette | `opts` |
+|---|---|---|
+| `cypress(k, side, dist, h, col, opts)` | columnar dark spire — Italian avenue | `{slim, trunkCol}` |
+| `stonePine(k, side, dist, h, col, opts)` | Mediterranean parasol: bare trunk + flared underside + shallow dome | `{lean, spread, trunkCol}` |
+| `broadleafFall(k, side, dist, h, col, opts)` | turning autumn crown — overlapping off-axis lobes, not one cone of colour | `{lobes, spread, barkCol}` |
+| `acacia(k, side, dist, h, col, opts)` | flat-topped veld thorn: low fork + near-horizontal umbrella | `{spread, layers, barkCol}` |
+| `plane(k, side, dist, h, col, opts)` | pollarded avenue tree — pale mottled trunk + broad flattened crown discs | `{stages, spread, trunkCol}` |
+
 ### Composite models — structures
 | Model | Builds |
 |---|---|
-| `building(k, side, gap, w, h, d, opts)` | mass + window bands; 3rd arg is **clearance** `gap` (metres beyond the road edge; the emitter computes `dist = gap + w/2` so the inner face sits `gap` off the edge). `opts:{wall,window,floor,setback,roof}` |
+| `building(k, side, gap, w, h, d, opts)` | mass + window bands; 3rd arg is **clearance** `gap` (metres beyond the road edge; the emitter computes `dist = gap + w/2` so the inner face sits `gap` off the edge). `opts:{wall,window,floor,arch,kind,neon}` — see **Building forms** below |
 | `tower(k, side, dist, baseW, h, opts)` | tapered tower; `opts:{col,seg,cap,capCol,mast}` |
 | `grandstand(s, side, gap, len, shell, crowd)` | raked stand: shell + crowd + cantilever roof (legacy 6-arg form; delegates to `grandstandEx` with no opts) |
 | `grandstandEx(s, side, gap, len, shell, crowd, opts)` | the full stand model — see **Grandstand variants** below |
 | `spectatorHill(s0, s1, side, gap, opts)` | informal grass-bank terracing: stepped earth risers + standing crowd, no shell/roof. `opts:{rows,rise,depth,grass,riser,density,step,crowd}` |
+| `bleacher(s0, s1, side, gap, opts)` | open raked seating on a bolted frame — see **Open seating** below |
+| `scaffoldStand(s0, s1, side, gap, opts)` | rented tube-and-plank temporary seating — see **Open seating** below |
+| `terrace(s0, s1, side, gap, opts)` | mass-concrete stepped terracing — see **Open seating** below |
+| `tieredBowl(s0, s1, side, gap, opts)` | stepped bowl, tiers climbing and receding — see **Open seating** below |
 | `cameraTower(k, side, gap, opts)` | lattice camera mast + railed platform + camera head. `opts:{h,col,boom,railCol}` |
 | `broadcastCompound(k, side, gap, opts)` | OB-truck row + satellite uplink dishes + link mast. `opts:{vans,dishes,mastH,vanCol,dishCol,spacing}` |
 | `sponsorHoarding(s0, s1, side, gap, opts)` | continuous trackside advertising-board run. `opts:{h,step,palette,postCol}` |
@@ -300,6 +320,82 @@ spectatorHill(0.43, 0.52, 1, 14, { rows: 5, density: 0.6 });
 **Cost note:** `spectatorHill` runs ~70 verts/metre (the standing bodies dominate),
 so a 350 m bank spends a facility-sized budget rather than a furniture-sized one.
 Lower `density`/`rows` or raise `step` on long runs.
+
+### Open seating (`bleacher` / `scaffoldStand` / `terrace` / `tieredBowl`)
+
+`grandstandEx` models one thing: a roofed stand with a **back shell**. Every other
+kind of seating a circuit has — a bolted bleacher, rented scaffolding,
+mass-concrete terracing, a stepped bowl — was therefore hand-rolled circuit-side,
+and the same four models were independently reinvented across fourteen files (a
+bleacher alone in ten). These are those implementations generalised. Note
+`grandstandEx({roof:"none"})` is *not* a bleacher: it still builds the 12 m shell
+wall behind the crowd.
+
+All four are **range** emitters — `(s0, s1, side, gap, opts)` — and walk the arc
+with `along()`, so they follow a corner. The hand-rolled versions were mostly
+point-anchored with a straight `len` box, which at Curva Grande or Parabolica
+cuts the chord instead of the road. All four `indexSolid()` their own footprint,
+so treelines and the roadside scatter no longer grow through them.
+
+| Model | Builds | `opts` |
+|---|---|---|
+| `bleacher` | planks on a bolted frame + back guard rail. No shell, no roof, no fascia. | `{rows, rise, setback, frame:"steel"\|"timber", frameCol, plankCol, riserCol, crowd, density, rail, step, lift}` |
+| `scaffoldStand` | scaffold tubes + timber deck + benches, legs visible below the rake; optional striped canvas awning instead of a roof | `{rows, rise, setback, tubeCol, deckCol, bench, crowd, density, awning, awningCols, step, legEvery}` |
+| `terrace` | poured flight of concrete steps, open front, retaining wall, plain back wall; optional raw earth `cut` face above the top step | `{rows, rise, depth, conc, concAlt, crowd, density, retainer, backWall, cut, cutCol, step}` |
+| `tieredBowl` | tiers climbing **and** receding in big steps, each with a crowd band + pale fascia lip; optional cantilever over the top tier | `{tiers, tierDepth, base, rise, shell:[colA,colB], fascia, crowd, density, roof, roofCol, step}` |
+
+```js
+// Bolted timber bleacher on the inside of a fast corner
+bleacher(0.09, 0.13, -1, 12, { rows: 8, frame: "timber", density: 0.7 });
+// Rented scaffolding with a period canvas awning
+scaffoldStand(0.00, 0.03, -1, 13, { rows: 5, awning: true });
+// 1950s mass-concrete terracing cut into a hillside
+terrace(0.035, 0.095, 1, 16, { rows: 8, cut: true, density: 0.6 });
+// Historic tribuna: four crimson-shelled tiers with a cantilever
+tieredBowl(0.90, 0.94, 1, 26, { tiers: 4, roof: true,
+  shell: [[0.60, 0.44, 0.42], [0.48, 0.34, 0.32]] });
+```
+
+**Crowd discipline (baked in, not the caller's problem).** A crowd is a
+continuous banded run plus **sparse speckle** standing proud of it — never one
+box per spectator. The hand-rolled versions emitted a body per ~1 m seat pitch,
+i.e. ~30 per row per bay, which is how the street circuits reached 1.8 M prop
+verts; at night the individual bodies are invisible anyway and what the eye picks
+up is the scatter of phone screens over an unbroken dark mass. The promoted
+models emit one speckle head per ~6 m, capped at 16 per segment, with a hash
+skip against `density`. Do not add your own bodies on top.
+
+**Cost note:** these run ~120–160 verts/metre with default `rows` (about half
+what the circuit-local versions cost, and roughly double `spectatorHill`). On a
+run longer than ~200 m raise `step`, or drop `rows`/`density`.
+
+### Building forms (`building` `opts.kind`)
+
+`building()` used to have exactly one massing: a plinth, a hash-picked
+`flat`/`setback`/`taper`/`spire` archetype and a sculpted crown. Meanwhile
+`neonTower()` carried a ~20-form massing library — but the only way in was the
+city generator's `STYLES` table, so every hand-placed pit block, paddock and
+hospitality unit in the fleet came out as the same box.
+
+`opts.kind` opens that library to `building()`. **Omit it and nothing changes**;
+the default path is untouched.
+
+| `opts` key | Effect |
+|---|---|
+| `kind` | `"tiered"`, `"podium"`, `"slab"`, `"twin"`, `"jenga"`, `"cylinder"`, `"spire"`, `"pyramid"`, `"screen"`, `"clad"`, `"dome"`, `"chevron"`, `"notch"`, `"fin"`, `"antenna"`, `"cross"`, `"arch"`, `"ziggurat"`, `"drum"`, `"hall"`, `"setback"` |
+| `neon` | 0…1 neon amount for a `kind` form; `0` = a plain building with warm office windows, `1` = a full neon tower. Defaults to 0.85 on `street_night` themes, 0.32 elsewhere — a pit block is not a casino. |
+| `arch` | `"flat"`/`"setback"`/`"taper"`/`"spire"` — the ORIGINAL archetype knob, used only when no `kind` is given |
+
+`wall`/`window` carry through either path: `wall` sets the body tone (a dark
+night-tuned wall is lifted to concrete for daylight, as the default path does),
+`window` the glazing/neon tint.
+
+```js
+// A stepped-terrace paddock block instead of the usual box
+building(K(0.02), 1, 26, 30, 22, 34, { kind: "ziggurat", wall: [0.62, 0.60, 0.55] });
+// Squat arena drum behind the far hairpin
+building(K(0.55), -1, 40, 46, 26, 46, { kind: "drum" });
+```
 
 ### Composite models — barriers / track furniture
 | Model | Builds |

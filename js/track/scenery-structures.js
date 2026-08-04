@@ -12,7 +12,7 @@ const SceneryStructures = (function () {
   function create(ctx) {
     const { out, track, def, n, ds, hw, px, py, pz, NIGHT, MAT,
             indexBarrier,
-            addBox, addCyl, addCone, addFrustum, addPrism, RAW, blockAt, recordBarrier,
+            addBox, addCyl, addFrustum, addPrism, RAW, blockAt, recordBarrier,
             groundYAt, onTrack, overheadSpan, hash, cross, norm, vadd,
             anchor, rejBox } = ctx;
     const { SIGN_SEG, SIGN_DIGIT, CROWD_DAY } = TrackSceneryData;
@@ -319,9 +319,11 @@ const SceneryStructures = (function () {
     // anyway — what the eye picks up is the scatter of phone screens on top of
     // an unbroken dark mass, which is exactly what the speckle is for.
     // `len` is the ALONG-TRACK segment this band covers (see along()'s contract).
+    // `side` is the stand's side, so the speckle can always be nudged TOWARD the
+    // track (which is -side along r) rather than into the seating behind it.
     const CROWD_FALLBACK = [[0.86, 0.30, 0.24], [0.92, 0.90, 0.86],
                             [0.24, 0.36, 0.62], [0.72, 0.63, 0.30]];
-    const crowdBand = (c, b, thick, h, len, pal, dens, seed) => {
+    const crowdBand = (c, b, side, thick, h, len, pal, dens, seed) => {
       if (len <= 0.5) return;
       const cols = (pal && pal.length) ? pal : (CROWD_DAY && CROWD_DAY.length ? CROWD_DAY : CROWD_FALLBACK);
       const pick = (t) => NIGHT
@@ -340,7 +342,7 @@ const SceneryStructures = (function () {
         if (hp > dens) continue;
         const off = cnt > 1 ? (i / (cnt - 1) - 0.5) * (len - 2) : 0;
         addBox(out, vadd(vadd(vadd(c, b[2], off), b[1], h * 0.45),
-                         b[0], -thick * 0.25),
+                         b[0], -side * thick * 0.25),
                [thick * 0.9, h * 0.6, Math.min(1.6, len * 0.12)], pick(hp), b);
       }
       out._mat = prevMat;
@@ -394,7 +396,7 @@ const SceneryStructures = (function () {
           addBox(out, rc, [setback * 1.05, 0.16, seg], plankCol, b);                     // tread plank
           addBox(out, vadd(vadd(rc, a.r, -side * setback * 0.46), a.u, -rise * 0.42),
                  [0.16, rise, seg], riserCol, b);                                        // foot board
-          crowdBand(vadd(rc, a.u, 0.62), b, 0.58, 0.95, seg - 0.6,
+          crowdBand(vadd(rc, a.u, 0.62), b, side, 0.58, 0.95, seg - 0.6,
                     opts.crowd, dens, k * 13.1 + r * 97.3 + side * 5.7);
         }
         if (opts.rail !== false) {
@@ -441,7 +443,7 @@ const SceneryStructures = (function () {
           addBox(out, rc, [setback * 1.02, 0.18, seg], deck, b);                         // deck plank
           addBox(out, vadd(rc, a.u, 0.62), [setback * 0.5, 1.05, seg * 0.94],
                  bench[(bay + r) % bench.length], b);                                    // bench
-          crowdBand(vadd(rc, a.u, 1.55), b, 0.55, 0.95, seg - 1.0,
+          crowdBand(vadd(rc, a.u, 1.55), b, side, 0.55, 0.95, seg - 1.0,
                     opts.crowd, dens, k * 17.3 + r * 89.1 + side * 3.3);
           // Legs under every `legEvery`-th bay: the frame reads as a frame only
           // when the tubes are visible BELOW the rake.
@@ -505,7 +507,7 @@ const SceneryStructures = (function () {
           const tc = vadd(vadd(a.c, a.r, back), a.u, up);
           out._mat = MAT.CONCRETE;
           addBox(out, tc, [dep, rise + 0.3, seg], r & 1 ? conc : concAlt, b);
-          crowdBand(vadd(tc, a.u, rise * 0.5 + 0.6), b, dep * 0.6, 1.1, seg - 1.6,
+          crowdBand(vadd(tc, a.u, rise * 0.5 + 0.6), b, side, dep * 0.6, 1.1, seg - 1.6,
                     opts.crowd, dens, k * 31.7 + r * 11.3 + side * 7.1);
         }
         const topBack = side * (1.0 + rows * dep);
@@ -555,7 +557,7 @@ const SceneryStructures = (function () {
           out._mat = MAT.CONCRETE;
           addBox(out, vadd(a.c, a.u, h * 0.5), [tierDepth * 0.93, h, seg],
                  t % 2 ? shell[0] : shell[1], b);                                        // riser
-          crowdBand(vadd(a.c, a.u, h + 0.85), b, tierDepth * 0.8, 1.6, seg - 1.0,
+          crowdBand(vadd(a.c, a.u, h + 0.85), b, side, tierDepth * 0.8, 1.6, seg - 1.0,
                     opts.crowd, dens, k * 3.1 + t * 31.7 + side * 2.3);
           out._mat = 0;
           addBox(out, vadd(a.c, a.u, h + 1.85), [tierDepth * 0.86, 0.32, seg + 0.5],
