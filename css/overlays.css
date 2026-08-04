@@ -159,6 +159,20 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     pointer-events: auto;
   }
   body:not(.desktop) #dock-right { justify-content: flex-end; }
+  /* ---- GROUPS, NOT LOOSE BUTTONS ----
+     A dock is a wrapping flex row, so a dock holding five loose buttons breaks
+     them apart wherever the width runs out — which is how a DN button ended up
+     above its own UP. Each group carries its own axis and is indivisible, so
+     wrapping can only ever reorder whole groups.
+     Pedals and shifts are COLUMNS because that is where those controls are in
+     a real car and where a thumb expects them: brake above gas, up above down.
+     Steer and the three taps are ROWS. */
+  body:not(.desktop) .dock-grp { display: flex; gap: 8px; pointer-events: auto; }
+  body:not(.desktop) .dock-grp.col { flex-direction: column; align-items: center; }
+  body:not(.desktop) .dock-grp.row { flex-direction: row; align-items: flex-end; }
+  /* `display:flex` above outranks the UA's [hidden] rule, so restate it — an
+     empty group left visible still holds the dock's gap open. */
+  body:not(.desktop) .dock-grp[hidden] { display: none; }
   /* Buttons live in the flow now, not at fixed coordinates. */
   body:not(.desktop) .dock .touchbtn {
     position: static; inset: auto; margin: 0;
@@ -183,35 +197,44 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* ---- THE INSTRUMENT CLUSTER ----
      The readouts were one 467px-wide ROW — gear, speed, energy, OVERTAKE, AERO
      laid end to end — which is why they kept wrapping and fighting the buttons
-     for the same band of screen. Nothing about them wants to be in a line; a
-     dash STACKS them, because they are read as a group and a group is squarer
-     than it is wide. As a 2-column grid the same five items take ~170px.
-     Rows are ordered by eye travel: the status chips on top, nearest the road,
-     because AERO counts DOWN to the next activation zone and a countdown
-     noticed late is one you missed. Gear and speed next. The energy bar last —
-     it moves slowly and glancing at it late costs nothing. */
+     for the same band of screen. Stacking them into two columns fixed the width
+     and traded it straight back for HEIGHT: three rows, ~135px on a 393px-tall
+     landscape phone, a third of the screen spent on five small numbers.
+     THREE COLUMNS, TWO ROWS is the shape that fits the axis actually available.
+     Landscape is short and wide, so the cluster should be too: the gear block is
+     already 65px tall on its own, and everything else fits BESIDE it in that
+     same 65px instead of below it. ~65px tall, ~300px wide.
+       [ GEAR ][ speed  ][ OVERTAKE ]
+       [ +tach][ energy ][ AERO     ]
+     Columns are ordered by how often they are read: gear and speed change every
+     corner, the two status chips a few times a lap. The chips share the right
+     column because they are the same kind of thing — a state you can act on —
+     and AERO sits low where the right thumb's AERO button is, so the readout and
+     its control are on the same side of the screen. */
   body:not(.desktop) .hud-bottom {
     position: static; transform: none; left: auto; right: auto; bottom: auto;
     display: grid;
-    grid-template-columns: auto auto;
+    grid-template-columns: auto auto auto;
     grid-template-areas:
-      "ot     aero"
-      "gear   speed"
-      "energy energy";
+      "gear speed  ot"
+      "gear energy aero";
     align-items: center; justify-items: center;
     gap: 3px 8px;
+    min-width: 0;                  /* may shrink before it pushes a dock */
     pointer-events: none;
   }
-  body:not(.desktop) #hud-ot { grid-area: ot; }
-  body:not(.desktop) #hud-aero { grid-area: aero; }
-  body:not(.desktop) #hud-gearbox { grid-area: gear; margin: 0; }
+  /* Every margin here is a leftover from the old vertical stack, and in a grid
+     each one is pure added height. */
+  body:not(.desktop) #hud-ot { grid-area: ot; margin: 0; }
+  body:not(.desktop) #hud-aero { grid-area: aero; margin: 0; }
+  body:not(.desktop) #hud-gearbox { grid-area: gear; margin: 0; align-self: stretch; justify-content: center; }
   body:not(.desktop) #hud-speed { grid-area: speed; }
-  /* Spans both columns but must NOT set the cluster's width — stretching it to
-     100% made the bar 201px and the cluster wider than the row it replaced,
-     which defeats the stacking entirely. */
-  body:not(.desktop) #hud-energy {
-    grid-area: energy; width: 100%; max-width: 150px; margin: 0; justify-self: stretch;
-  }
+  body:not(.desktop) #hud-energy { grid-area: energy; margin: 0; }
+  /* The AERO chip's text is a live COUNTDOWN — "AERO 240m", "NO AERO ZONE" —
+     so it changes width every frame. Wrapping it to two lines made the whole
+     cluster jump a row taller and back as the car approached a zone. */
+  body:not(.desktop) #hud-ot,
+  body:not(.desktop) #hud-aero { white-space: nowrap; }
   /* console steer: arrows bottom-left, side by side (left thumb home) */
   #btn-steer-left  { left: calc(16px + var(--sal)); bottom: calc(12px + var(--sab)); }
   #btn-steer-right { left: calc(16px + var(--steer) + var(--btn-gap) + var(--sal)); bottom: calc(12px + var(--sab)); }
@@ -243,6 +266,13 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     :root { --ped: 64px; --act: 48px; }
     #hud-gear { font-size: 34px; }
     #hud-tach { width: 72px; }
+    /* An iPhone SE landscape leaves ~323px between the docks in tilt+manual —
+       the widest mode. Three columns at full size want ~343, so the two items
+       that are only ever GLANCED at give the width back. */
+    body:not(.desktop) #hud-energy { width: 92px; }
+    body:not(.desktop) #hud-speed { font-size: 22px; }
+    body:not(.desktop) #hud-ot,
+    body:not(.desktop) #hud-aero { font-size: 11px; padding: 4px 7px; }
   }
   /* touch: BRAKE left corner, BOOST/OT right corner */
   /* touch mode differs only in BRAKE dropping to the left corner (no GAS) —

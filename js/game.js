@@ -2188,6 +2188,13 @@ function showTouchControls(show) {
 // parent. Everything else (spacing, wrapping, centring, never overlapping) is
 // the flex row's job, and there is deliberately not one coordinate here.
 //
+// It moves GROUPS, never single buttons. A dock is a wrapping flex row, so a
+// dock holding five loose buttons breaks them apart wherever the width runs
+// out — which is how a DN button ended up sitting above its own UP. A group is
+// indivisible and carries its own shape (pedals and shifts are vertical pairs,
+// steer and taps are rows), so wrapping can only ever reorder whole groups and
+// a pair can never come apart or invert.
+//
 // Lists are in VISUAL left-to-right order, which for a normal flex row is just
 // DOM order. Each thumb's home is the screen edge it sits at, so what is held
 // continuously goes OUTERMOST — leftmost on the left, rightmost on the right —
@@ -2195,21 +2202,27 @@ function showTouchControls(show) {
 function layoutDocks(steerBtns, manual) {
   const left = $("dock-left"), right = $("dock-right");
   if (!left || !right) return;
+  const pedals = $("grp-pedals"), shifts = $("grp-shifts"),
+        steer = $("grp-steer"), taps = $("grp-taps");
   const L = [], R = [];
-  // The three taps are always the inboard end of the right dock. AERO is the
-  // outermost of them because it is pressed the most — 3-7 times a lap, one per
-  // activation zone, against a couple for BOOST and rarely more than one for OT.
-  R.push(els.btnBoost, els.btnOT, els.btnAero);
   if (steerBtns) {
-    L.push(els.btnSteerLeft, els.btnSteerRight);   // arrows own the left thumb
-    R.push(els.btnBrake, els.btnThrottle);         // ...so the pedals come here,
-                                                   //    GAS outermost at the corner
+    L.push(steer);            // arrows own the left thumb...
+    R.push(taps, pedals);     // ...so the pedals come right, GAS at the corner
   } else {
-    L.push(els.btnThrottle, els.btnBrake);         // tilt/touch: GAS at the corner
-    if (manual) R.push(els.shiftUp, els.shiftDown);   // DN outermost — held constantly
+    L.push(pedals);           // tilt/touch: the pedal column is the left thumb
+    R.push(taps);             // the three taps sit inboard...
+    if (manual) R.push(shifts);   // ...of the shift column at the corner
+  }
+  // An empty group must not hold a gap in the dock. Hiding it is the whole
+  // reason `hidden` on every child is not enough: a flex parent of hidden
+  // children is still a flex item with the dock's own gap around it.
+  for (const g of [pedals, shifts, steer, taps]) {
+    if (!g) continue;
+    g.hidden = !(L.includes(g) || R.includes(g)) ||
+               ![...g.children].some((b) => !b.hidden);
   }
   for (const [dock, list] of [[left, L], [right, R]]) {
-    // Append unconditionally: it both moves a button that changed side and
+    // Append unconditionally: it both moves a group that changed side and
     // rewrites the order, so a mode switch can never leave yesterday's sequence
     // half-applied.
     for (const el of list) if (el) dock.appendChild(el);
