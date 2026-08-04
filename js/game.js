@@ -2435,7 +2435,9 @@ const G = {
   get setupPreviewPan() { return setupPreviewPan; },
   get setupPreviewAeroX() { return setupPreviewAeroX; },
   get raceAeroMode() { return raceAeroMode; },
-  set raceAeroMode(v) { raceAeroMode = v; store.set("aeroMode", v); },
+  // Repaint the pause-menu button too: __apex.aeroMode() and the button are two
+  // doors onto one value, and a stale label is a lie about the car's behaviour.
+  set raceAeroMode(v) { raceAeroMode = v; store.set("aeroMode", v); refreshAeroBtn(); },
   get aeroZones() { return aeroZones; },
   aeroZoneAt: (s) => aeroZoneAt(s),
   aeroZoneAhead: (s) => aeroZoneAhead(s),
@@ -6810,21 +6812,10 @@ function buildRaceSettings() {
   }
   // RELIABILITY — same idiom, same persistence, and hidden alongside DIFFICULTY
   // in a time trial for the same reason: neither has anything to act on there.
-  // ACTIVE AERO applies in a time trial too — it is a lap-time tool, which is
-  // exactly the distinction that hides RELIABILITY there.
-  const aeroEl = $("rs-aero");
-  aeroEl.innerHTML = "";
-  for (const [id, label] of [["manual", "MANUAL"], ["auto", "AUTO"]]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceAeroMode === id ? " active" : "");
-    b.setAttribute("aria-pressed", raceAeroMode === id ? "true" : "false");
-    b.textContent = label;
-    b.onclick = () => {
-      raceAeroMode = id; store.set("aeroMode", id);
-      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
-    };
-    aeroEl.appendChild(b);
-  }
+  // (ACTIVE AERO used to sit here. It is a CONTROL preference, not a property of
+  // the event, so it lives in pause > SETTINGS > DRIVING next to GEARS — where
+  // it can also be changed mid-race, which is when a player discovers they want
+  // it. See refreshAeroBtn.)
   $("rs-reliab-section").hidden = isTimeTrial();
   const relEl = $("rs-reliab");
   relEl.innerHTML = "";
@@ -7450,6 +7441,25 @@ $("pm-gears").onclick = () => {
   if (player && !gearsManual()) player.gear = naturalGear(player.speed);
   showTouchControls(true);
 };
+
+// ACTIVE AERO: MANUAL / AUTO. Same shape as GEARS and for the same reason —
+// both answer "how much of the car do you operate yourself?". Takes effect
+// immediately, so a player who flips it mid-race sees it on the next zone; the
+// HUD's AERO button greys out under AUTO (see hud.js hToggle "dead").
+function refreshAeroBtn() {
+  const b = $("pm-aero");
+  if (b) b.textContent = "ACTIVE AERO: " + (raceAeroMode === "auto" ? "AUTO" : "MANUAL");
+}
+$("pm-aero").onclick = () => {
+  raceAeroMode = raceAeroMode === "auto" ? "manual" : "auto";
+  store.set("aeroMode", raceAeroMode);
+  refreshAeroBtn();
+  // Dropping out of AUTO must not leave the wing latched open — the switch is
+  // the player's again from this instant.
+  if (raceAeroMode !== "auto" && player) player.xOn = false;
+  if (soundOn) GameAudio.uiTick();
+};
+refreshAeroBtn();
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && state === "race") setPaused(true);
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
