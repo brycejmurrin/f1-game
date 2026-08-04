@@ -168,7 +168,7 @@ test.describe("Pause settings — stable layout", () => {
     await page.waitForTimeout(200);
 
     const ids = ["pm-steer", "pm-calib", "pm-advanced", "pm-lighting", "pm-gears",
-      "pm-sound", "pm-audio", "pm-hidehud", "pm-res", "pm-settings-close"];
+      "pm-audio", "pm-hidehud", "pm-res", "pm-settings-close"];
     const grab = () => page.evaluate((ids) => {
       const out = {};
       for (const id of ids) {
@@ -184,9 +184,12 @@ test.describe("Pause settings — stable layout", () => {
     const after = await grab();
     expect(after).toEqual(before);
 
-    // and the button aimed at AFTER the change still receives the tap
-    await page.locator("#pm-sound").click();
-    await expect(page.locator("#pm-sound")).toHaveText(/SOUND: OFF/);
+    // and the button aimed at AFTER the change still receives the tap. RESOLUTION
+    // replaces the old SOUND toggle here: it is a same-grid cycling button, so it
+    // still proves the tap landed on the control the thumb was aimed at.
+    const resBefore = await page.locator("#pm-res").textContent();
+    await page.locator("#pm-res").click();
+    await expect(page.locator("#pm-res")).not.toHaveText(resBefore);
     await expect(page.locator("#pmsettings")).toBeVisible();   // menu did not collapse
   });
 });

@@ -1869,7 +1869,11 @@ function startRace() {
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
-  els.soundbtn.hidden = true;   // sound is toggled from the pause menu during a race
+  // Hidden during a session: the HUD stays clean and the two switches that
+  // matter (MUSIC, SOUND EFFECTS) live in SETTINGS > MUSIC & SOUND. Turning
+  // both off is silence, so the master needs no mid-race button of its own —
+  // and setMusic/setSfx lift it if it is off, so it can never strand you.
+  els.soundbtn.hidden = true;
   document.body.classList.add("in-race");
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
