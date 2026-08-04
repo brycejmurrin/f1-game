@@ -379,8 +379,9 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   you drive: TEAM & DRIVER, the 8 part categories
                                   + budget, LIVERY. The select screen owns WHERE
                                   you race and links here; race settings own HOW
-  career.js      Career         CAREER core: the apex26.career.0..2 saves (THREE
-                                  SLOTS, one live) + migration,
+  career.js      Career         CAREER core: the apex26.career.<flavour>.0..2
+                                  saves (THREE DRIVER SLOTS + THREE MY TEAM,
+                                  one live) + migration,
                                   the credits economy, contracts, driver/team
                                   development, R&D ownership, round settlement.
                                   Pure rules — no DOM. A plain global (like
@@ -745,9 +746,10 @@ __apex.careerSim(n)           // settle n rounds with nobody driving, through th
                               //   track staged; reuses THAT circuit for every round
 __apex.careerRollover()       // force the season rollover -> {champion, offers, history}
 __apex.careerReset()          // wipe the LIVE slot
-__apex.careerSlots()          // the three save slots; a number SWITCHES to one
-                              //   (saving the career being left first)
-__apex.careerSlotDelete(1)    // wipe ONE slot, leaving the other two
+__apex.careerSlots()          // all SIX slots (3 driver + 3 my team); a flavour
+                              //   narrows to one set; (flavour, i) SWITCHES to it,
+                              //   saving the career being left first
+__apex.careerSlotDelete("myteam", 0)   // wipe ONE slot, leaving the other five
 __apex.ratings(code?)         // five-axis driver table + overall; no args = the grid.
                               //   Applies in EVERY mode, not just career
 __apex.qualiSim(playerTime?)  // the qualifying model for the loaded track WITHOUT

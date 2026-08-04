@@ -1957,23 +1957,31 @@ reads.
 ### `careerReset() → true`
 Wipe the **live** slot. The other two are untouched.
 
-### `careerSlots(i?) → [{i, used, …}] | save | null`
-Three careers can be saved at once, one localStorage key each
-(`apex26.career.0..2`). No argument lists all three — `used`, and for a used slot
+### `careerSlots(flavour?, i?) → [{flavour, i, used, …}] | save | null`
+Six careers can be saved at once, in **two sets of three** — `apex26.career.driver.N`
+and `apex26.career.myteam.N` — so neither mode can cost the other room. A slot's
+address is **both halves**; an index alone does not say which career it is.
+
+No argument lists all six. A flavour narrows to that set. A flavour *and* an index
+**switches** to that slot and returns the save it holds (`null` if empty); switching
+writes the career being left first. Rows carry `used`, and for a used slot `live`,
 `flavour`, `team`/`teamName`, `year`, `round`/`rounds`, `money`, `rep`, `seasons`,
-`wins`, `titles`. A number **switches** to that slot and returns the save it holds
-(`null` for an empty one); switching writes the career being left first.
+`wins`, `titles`.
 
 ```js
-__apex.career({ teamId: "haas",  seat: 1, seed: 11, slot: 0 });
-__apex.career({ flavour: "myteam", hire: "OKO", seed: 22, slot: 1 });
-__apex.careerSlots().map((s) => s.used);   // → [true, true, false]
-__apex.careerSlots(0).team;                // → "haas", and slot 0 is now live
+__apex.career({ teamId: "haas", seat: 1, seed: 11 });        // -> driver slot 0
+__apex.career({ flavour: "myteam", hire: "OKO", seed: 22 }); // -> myteam slot 0
+__apex.careerSlots().map((s) => s.flavour + s.i + ":" + s.used);
+// -> ["driver0:true","driver1:false","driver2:false","myteam0:true", …]
+__apex.careerSlots("driver", 0).team;   // -> "haas", and it is now live
 ```
 
-### `careerSlotDelete(i) → [{i, used, …}]`
-Wipe **one** slot, live or not, and return the slot list. Reloads whatever is left
-afterwards, so the title screen's CONTINUE still means something.
+A career's **own flavour decides its set** — `career({teamId:"audi", slot:2})` fills
+driver slot 2, and no argument can put a driver career in the MY TEAM set.
+
+### `careerSlotDelete(flavour, i) → [{flavour, i, used, …}]`
+Wipe **one** slot, live or not, and return all six. Reloads whatever is left
+afterwards, so the title screen still has something behind it.
 
 ### `ratings(code?) → {pace, craft, awareness, consistency, experience, overall}`
 The five-axis driver table (`js/car/driver-ratings.js`) with any career development

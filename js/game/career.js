@@ -1,5 +1,5 @@
-/* Apex 26 — CAREER core: the `apex26.career.0..2` saves (three slots, one live at
-   a time), the credits economy, driver and team development, per-round settlement
+/* Apex 26 — CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER
+   slots and three MY TEAM slots, one live at a time), the credits economy, driver and team development, per-round settlement
    and the season rollover.
 
    Pure data and rules — no DOM, no renderer, no game-loop state. The screens live
@@ -144,77 +144,109 @@ function rnd(...parts) {
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
 // ---------- save lifecycle ----------
-// THREE SLOTS, one key each (`apex26.career.0..2`), plus `apex26.careerSlot` for
-// which one is live. Separate keys rather than one array under the old key,
-// because localStorage writes the WHOLE value every save(): a single array would
-// rewrite all three careers on every round settled, and a quota failure would
-// then lose three saves instead of one.
+// SIX SAVES: three DRIVER-career slots and three MY TEAM slots, kept in separate
+// sets so the two modes can never compete for room. `apex26.career.<flavour>.<i>`
+// is one key each, and `apex26.careerSlot` names the live one as "flavour:index".
 //
-// A career is a long object — a decade of history, a garage, a grid's worth of
-// development deltas — and the whole point of slots is running a driver career
-// and a MY TEAM at once, or trying a different team without burning the season
-// you are twelve rounds into.
-const SLOTS = 3;
-const slotKey = (i) => "career." + (i | 0);
+// Separate keys rather than one array, because localStorage writes the WHOLE
+// value every save(): a single array would rewrite all six careers on every
+// round settled, and a quota failure would lose six saves instead of one.
+//
+// Separate SETS rather than six shared slots, because the two modes are
+// different games. A player twelve rounds into a MY TEAM should not have to
+// weigh that against trying a driver career, and "which of my three careers do I
+// delete to make room" is not a question either mode should be able to ask of
+// the other.
+const SLOTS = 3;                                  // per flavour
+const FLAVOURS = ["driver", "myteam"];
+const flavourIn = (f) => (f === "myteam" ? "myteam" : "driver");
+const slotKey = (f, i) => "career." + flavourIn(f) + "." + (i | 0);
 const slotIn = (i) => clamp(i | 0, 0, SLOTS - 1);
 let slotIdx = 0;
+let slotFlavour = "driver";
 
 function data() { return career; }
 // A career EXISTS (save on disk). For "career rules apply now", use inCareer().
 function active() { return career != null; }
-function slot() { return slotIdx; }
+// The live save's address. Both halves, because an index alone no longer says
+// which career it is.
+function slot() { return { flavour: slotFlavour, i: slotIdx }; }
 
-// The single-save era wrote `apex26.career`. Move it into slot 0 and drop the old
-// key, so an existing career survives the update in the slot a player would
-// expect it to be in. Guarded on slot 0 being empty: running this twice must not
-// overwrite a career started since.
+// Two earlier storage layouts have to survive an update.
+//
+//   `apex26.career`      the single save of the first career build
+//   `apex26.career.0..2` three SHARED slots, either flavour in any of them
+//
+// Both are read, sorted into the per-flavour sets in their original order, and
+// their old keys cleared. Order is preserved rather than index: a MY TEAM that
+// sat in shared slot 2 becomes MY TEAM slot 1 if it is the second MY TEAM found,
+// which is what a player scanning the new screen would expect to see.
 function migrateSlots() {
+  const found = [];
   const legacy = store.get("career", null);
-  if (!legacy) return;
-  if (!store.get(slotKey(0), null)) store.set(slotKey(0), legacy);
-  store.set("career", null);
+  if (legacy) { found.push(legacy); store.set("career", null); }
+  for (let i = 0; i < SLOTS; i++) {
+    const c = store.get("career." + i, null);
+    if (c) { found.push(c); store.set("career." + i, null); }
+  }
+  if (!found.length) return;
+  const next = { driver: 0, myteam: 0 };
+  for (const c of found) {
+    const f = flavourIn(c && c.flavour);
+    // Never overwrite: a set that already holds saves is the current layout, and
+    // a stale key left behind by a half-finished migration must not clobber it.
+    while (next[f] < SLOTS && store.get(slotKey(f, next[f]), null)) next[f]++;
+    if (next[f] >= SLOTS) continue;             // full — the old save is dropped
+    store.set(slotKey(f, next[f]), c);
+    next[f]++;
+  }
 }
-const readSlot = (i) => migrateCareer(store.get(slotKey(i), null));
+const readSlot = (f, i) => migrateCareer(store.get(slotKey(f, i), null));
 
 function load() {
   migrateSlots();
-  slotIdx = slotIn(store.get("careerSlot", 0));
-  career = readSlot(slotIdx);
-  // migrateCareer() is pure now (it must not write, or reading a slot would
-  // rewrite the legacy key), so persisting the climbed shape is this function's
-  // job — otherwise a v0 save would migrate in memory on every boot and never on
-  // disk, and the next build's migration ladder would start from v0 again.
-  // The remembered slot can be empty — it was deleted, or the player started in
-  // slot 1 and the default is 0. Fall through to the first slot that holds
-  // something, because the title button offers CONTINUE and it has to continue
-  // something. Nothing at all is a genuine null: a first-time player.
+  const live = String(store.get("careerSlot", "driver:0")).split(":");
+  slotFlavour = flavourIn(live[0]);
+  slotIdx = slotIn(live[1]);
+  career = readSlot(slotFlavour, slotIdx);
+  // The remembered slot can be empty — it was deleted, or the player started
+  // somewhere else. Fall through to the first save anywhere, because the title
+  // button offers CONTINUE and it has to continue something. Nothing at all is a
+  // genuine null: a first-time player.
   if (!career)
-    for (let i = 0; i < SLOTS; i++) {
-      const c = readSlot(i);
-      if (c) { slotIdx = i; career = c; store.set("careerSlot", i); break; }
-    }
+    outer: for (const f of FLAVOURS)
+      for (let i = 0; i < SLOTS; i++) {
+        const c = readSlot(f, i);
+        if (c) { slotFlavour = f; slotIdx = i; career = c; setLive(); break outer; }
+      }
+  // migrateCareer() is pure (it must not write, or reading a slot would rewrite
+  // the key it was migrated FROM), so persisting the climbed shape is this
+  // function's job — otherwise a v0 save would migrate in memory on every boot
+  // and never on disk, and the next build's ladder would start from v0 again.
   return save();
 }
+function setLive() { store.set("careerSlot", slotFlavour + ":" + slotIdx); }
 function save() {
-  if (career) store.set(slotKey(slotIdx), career);
+  if (career) store.set(slotKey(slotFlavour, slotIdx), career);
   return career;
 }
-// Wipes the ACTIVE slot only. The other two are untouched — deleting one career
+// Wipes the LIVE slot only. The other five are untouched — deleting one career
 // must never be a way to lose the others.
 function clear() {
   career = null;
-  store.set(slotKey(slotIdx), null);
+  store.set(slotKey(slotFlavour, slotIdx), null);
 }
 
-// What the slot picker renders. The ACTIVE slot is summarised from the LIVE
-// object rather than from storage: a round settled but not yet saved would
-// otherwise show the disk copy and read as lost progress.
-function slotInfo(c, i) {
-  if (!c) return { i, used: false };
+// What the picker renders. The LIVE slot is summarised from the in-memory object
+// rather than from storage: a round settled but not yet written would otherwise
+// show the disk copy and read as lost progress.
+function slotInfo(c, f, i) {
+  if (!c) return { flavour: f, i, used: false };
   const team = Teams.LIST.find((t) => t.id === c.team);
   const hist = c.history || [];
   return {
-    i, used: true, flavour: c.flavour, year: c.year,
+    flavour: f, i, used: true, year: c.year,
+    live: f === slotFlavour && i === slotIdx,
     round: c.season.round, rounds: Tracks.SEASON.length,
     team: c.team, teamName: team ? team.name : c.team,
     code: c.driver ? c.driver.code : "", name: c.driver ? c.driver.name : "",
@@ -225,29 +257,41 @@ function slotInfo(c, i) {
         + (c.results || []).filter((r) => r.p === 1).length,
   };
 }
-function slots() {
+// One flavour's three, or all six when asked for neither.
+function slots(flavour) {
+  const fl = flavour == null ? FLAVOURS : [flavourIn(flavour)];
   const out = [];
-  for (let i = 0; i < SLOTS; i++)
-    out.push(slotInfo(i === slotIdx && career ? career : readSlot(i), i));
+  for (const f of fl)
+    for (let i = 0; i < SLOTS; i++) {
+      const live = f === slotFlavour && i === slotIdx && career;
+      out.push(slotInfo(live ? career : readSlot(f, i), f, i));
+    }
   return out;
 }
-function anySave() { return slots().some((s) => s.used); }
+function anySave(flavour) { return slots(flavour).some((s) => s.used); }
+// The lowest free slot in a set, or -1. Lowest rather than "after the live one"
+// so NEW CAREER always fills the first gap the player can see.
+function firstFree(flavour) {
+  const set = slots(flavour);
+  for (const s of set) if (!s.used) return s.i;
+  return -1;
+}
 
-// Switch slots. SAVES THE ONE BEING LEFT FIRST — settleRound() already persists,
-// but a garage edit or an accepted offer between rounds lives on the object until
+// Switch. SAVES THE ONE BEING LEFT FIRST — settleRound() already persists, but a
+// garage edit or an accepted offer between rounds lives on the object until
 // something calls save(), and switching away is exactly when that would be lost.
-function useSlot(i) {
-  i = slotIn(i);
-  if (career && i !== slotIdx) save();
-  slotIdx = i;
-  store.set("careerSlot", i);
-  career = readSlot(i);
+function useSlot(flavour, i) {
+  const f = flavourIn(flavour), n = slotIn(i);
+  if (career && (f !== slotFlavour || n !== slotIdx)) save();
+  slotFlavour = f; slotIdx = n;
+  setLive();
+  career = readSlot(f, n);
   return career;
 }
-function deleteSlot(i) {
-  i = slotIn(i);
-  store.set(slotKey(i), null);
-  if (i === slotIdx) career = null;
+function deleteSlot(flavour, i) {
+  const f = flavourIn(flavour), n = slotIn(i);
+  store.set(slotKey(f, n), null);
+  if (f === slotFlavour && n === slotIdx) career = null;
   return true;
 }
 
@@ -259,14 +303,21 @@ function deleteSlot(i) {
 // which is what the setup screen wants after the picker has already chosen one.
 function start(opts) {
   const o = opts || {};
-  if (o.slot != null) {
-    // Save the career being left before the new one takes its place — starting a
-    // career in slot 1 must not cost an unsaved change in slot 0.
-    if (career && slotIn(o.slot) !== slotIdx) save();
-    slotIdx = slotIn(o.slot);
-    store.set("careerSlot", slotIdx);
-  }
-  const flavour = o.flavour === "myteam" ? "myteam" : "driver";
+  const flavour = flavourIn(o.flavour);
+  // WHICH SET is decided by the career's own flavour, never by the caller: a
+  // driver career belongs in the driver set by definition, and letting an
+  // argument override that is how a MY TEAM ends up filling a driver slot.
+  // WHICH SLOT is `o.slot`, or the first free one, or — when the set is full —
+  // whichever is live there, which is the only remaining meaning of "start one".
+  const target = o.slot != null ? slotIn(o.slot)
+    : firstFree(flavour) >= 0 ? firstFree(flavour)
+    : (flavour === slotFlavour ? slotIdx : 0);
+  // Save the career being left before the new one takes its place — starting a
+  // career must not cost an unsaved change in the one you were playing.
+  if (career && (flavour !== slotFlavour || target !== slotIdx)) save();
+  slotFlavour = flavour;
+  slotIdx = target;
+  setLive();
   const teamId = o.teamId || (flavour === "myteam" ? "custom" : "haas");
   const team = Teams.LIST.find((t) => t.id === teamId) || Teams.LIST[Teams.LIST.length - 1];
   const factory = Parts.getFactorySetup(team);
@@ -919,14 +970,16 @@ function state() {
     roster: career.roster, wages: wageBill(),
     offers: career.offers.length,
     seasons: career.history.length,
-    slot: slotIdx, slotsUsed: slots().filter((s) => s.used).length, slotsTotal: SLOTS,
+    slot: slotIdx, slotFlavour,
+    slotsUsed: slots(career.flavour).filter((s) => s.used).length,
+    slotsTotal: SLOTS,
   };
 }
 
 return {
   PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
   OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX,
-  SLOTS, slot, slots, useSlot, deleteSlot, anySave,
+  SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, anySave, firstFree,
   data, active, inCareer, engage, load, save, clear, start, state, rnd, hash,
   salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
