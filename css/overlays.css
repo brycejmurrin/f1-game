@@ -176,7 +176,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      space-between leaves the cluster dead centre with no desktop-specific rule;
      and at any width or in fullscreen the layout simply reflows, because there
      is no pixel constant left to be wrong. */
-  body:not(.desktop) #hud-dock {
+  /* NOT gated on touch. The bar itself is right for every device — on desktop
+     both docks are simply empty, and space-between then leaves the cluster dead
+     centre with no desktop-specific rule, which is what the paragraph above
+     always claimed. Gating it meant desktop never got the bar OR the grid
+     cluster below, and quietly kept the old end-to-end row: gear, speed, energy,
+     OVERTAKE and AERO strung across 500px of screen and clipped at the bottom
+     edge. Only the DOCK CONTENTS (.dock/.dock-grp/.touchbtn sizing) are
+     touch-only, because only they are about thumbs. */
+  #hud-dock {
     position: absolute;
     left: calc(12px + var(--sal));
     right: calc(12px + var(--sar));
@@ -250,7 +258,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      column because they are the same kind of thing — a state you can act on —
      and AERO sits low where the right thumb's AERO button is, so the readout and
      its control are on the same side of the screen. */
-  body:not(.desktop) .hud-bottom {
+  .hud-bottom {
     position: static; transform: none; left: auto; right: auto; bottom: auto;
     display: grid;
     grid-template-columns: auto auto auto;
@@ -264,17 +272,45 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   }
   /* Every margin here is a leftover from the old vertical stack, and in a grid
      each one is pure added height. */
-  body:not(.desktop) #hud-ot { grid-area: ot; margin: 0; }
-  body:not(.desktop) #hud-aero { grid-area: aero; margin: 0; }
-  body:not(.desktop) #hud-gearbox { grid-area: gear; margin: 0; align-self: stretch; justify-content: center; }
-  body:not(.desktop) #hud-speed { grid-area: speed; }
-  body:not(.desktop) #hud-energy { grid-area: energy; margin: 0; }
+  #hud-ot { grid-area: ot; margin: 0; }
+  #hud-aero { grid-area: aero; margin: 0; }
+  #hud-gearbox { grid-area: gear; margin: 0; align-self: stretch; justify-content: center; }
+  #hud-speed { grid-area: speed; }
+  #hud-energy { grid-area: energy; margin: 0; }
   /* The AERO chip's text is a live COUNTDOWN — "AERO 240m", "NO AERO ZONE" —
      so it changes width every frame. Wrapping it to two lines made the whole
      cluster jump a row taller and back as the car approached a zone. */
-  body:not(.desktop) #hud-ot,
-  body:not(.desktop) #hud-aero {
+  #hud-ot,
+  #hud-aero {
     white-space: nowrap; font-size: 11px; padding: 3px 7px;
+  }
+
+  /* ---- DESKTOP: THE SAME PARTS, LAID OUT FLAT ----
+     The phone stacks into three columns because the width between two thumb
+     docks is the scarce thing there. A desktop has no docks and 1400px of
+     empty bottom edge, so the same compact block just looks like a phone HUD
+     marooned in the middle of a monitor. One ROW instead: gear, speed, a long
+     energy bar, then the two chips — wider, and about 25px flatter, which is
+     25px more road.
+     The gearbox flattens too: the tach moves BESIDE the numeral rather than
+     under it, so the tallest element in the cluster stops setting the height.
+     Gated on width as well as on `desktop`, because a desktop browser dragged
+     narrow needs the phone's compact block, not a row that will not fit. */
+  @media (min-width: 1100px) {
+    body.desktop .hud-bottom {
+      grid-template-columns: auto auto minmax(180px, 300px) auto auto;
+      grid-template-areas: "gear speed energy ot aero";
+      gap: 0 20px;
+    }
+    body.desktop #hud-gearbox {
+      flex-direction: row; align-items: center; gap: 12px;
+      padding: 5px 14px; align-self: center;
+    }
+    body.desktop #hud-gear { font-size: 52px; min-width: 40px; }
+    body.desktop #hud-tach { width: 190px; height: 14px; }
+    body.desktop #hud-energy { width: auto; justify-self: stretch; height: 15px; }
+    body.desktop #hud-speed { font-size: 38px; }
+    body.desktop .hud-unit { font-size: 12px; margin-left: 4px; }
   }
   /* console steer: arrows bottom-left, side by side (left thumb home) */
   #btn-steer-left  { left: calc(16px + var(--sal)); bottom: calc(12px + var(--sab)); }

@@ -106,6 +106,14 @@ body.desktop #pm-calib { display: none !important; }
   #hud-gear  { font-size: 68px; }
   #hud-tach  { width: 150px; height: 18px; }
   #hud-energy { width: 150px; height: 16px; }
+  /* The chips scale with the rest of the cluster. Landscape sizes them for a
+     phone (11px), and desktop now shares that grid — at arm's length on a 27"
+     monitor an 11px countdown is the one readout you cannot actually read. */
+  #hud-ot, #hud-aero { font-size: 15px; padding: 6px 12px; }
+  /* 10px off the bottom is a phone's budget, spent because a phone has no
+     height to spare. A monitor does, and at this size the cluster hugging the
+     edge reads as something that fell off the screen. */
+  #hud-dock { bottom: calc(22px + var(--sab)); }
   #minimap { width: 140px; height: 140px; }
 }
 
