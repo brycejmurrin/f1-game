@@ -329,7 +329,16 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Ferrari — rearing prancing horse, black on a yellow shield hint.
+  // Ferrari — rearing prancing horse on a shield hint. Assembled from SEPARATE
+  // simple shapes (barrel ellipse, tapered neck quad, head wedge, stroked legs
+  // and tail) that overlap in one colour, rather than one long outline path.
+  // Three earlier attempts at a single path all blobbed: the curves between
+  // distant control points swallow the head, and every leg gap the outline
+  // describes is a pixel or two across at badge size.
+  // Proportion is the whole job. A rearing horse is VERTICAL — hind legs
+  // planted, barrel tilted up to the left, small head high. Drawn on a
+  // horizontal axis it reads as a standing animal; give it a short round body,
+  // a blunt head or an upward-curling tail and it reads as a cat.
   function crestFerrari(ctx, R, ink, accent, bare) {
     const f = fit(R, 0.06);
     ctx.save();
@@ -345,60 +354,97 @@ const LiveryTex = (function () {
       ctx.quadraticCurveTo(f.X(0.16), f.Y(0.9), f.X(0.16), f.Y(0.6));
       ctx.closePath();
       ctx.fill();
+      // Tricolore band across the TOP of the shield — green / white / red.
+      const bandY = f.Y(0.06), bandH = f.S(0.085), x0 = 0.16, w = (0.84 - 0.16) / 3;
+      const tri = [[0.00, 0.55, 0.25], [0.95, 0.95, 0.96], [0.80, 0.10, 0.12]];
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = css(tri[i]);
+        ctx.fillRect(f.X(x0 + i * w), bandY, f.S(w) + 1, bandH);
+      }
     }
-    // prancing horse silhouette (rearing on hind legs, facing left, tail up).
-    // In bare mode paint it in ink so it reads on the team-colour fin. On the
-    // shield it is black — through brandMark, so a livery `logo` colour reaches
-    // the horse here too and not only on the fin.
-    ctx.fillStyle = bare ? css(ink) : css(brandMark([0.05, 0.05, 0.06]));
+    // In bare mode the horse takes the ink so it reads on the team-colour fin;
+    // on the shield it is black, via brandMark so a livery `logo` reaches it.
+    const col = bare ? css(ink) : css(brandMark([0.05, 0.05, 0.06]));
+    ctx.fillStyle = col; ctx.strokeStyle = col;
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+    // TAIL — thick at the root, sweeping back and DOWN off the rump.
+    // Filled and tapered, not a stroke: an even-width arc off the rump reads as
+    // a third hind leg.
     ctx.beginPath();
-    ctx.moveTo(f.X(0.40), f.Y(0.20));                              // ear
-    ctx.lineTo(f.X(0.36), f.Y(0.13));                              // pointed ear tip
-    ctx.lineTo(f.X(0.44), f.Y(0.16));
-    ctx.quadraticCurveTo(f.X(0.30), f.Y(0.17), f.X(0.26), f.Y(0.28)); // head/muzzle left
-    ctx.quadraticCurveTo(f.X(0.24), f.Y(0.34), f.X(0.30), f.Y(0.34)); // jaw
-    ctx.quadraticCurveTo(f.X(0.40), f.Y(0.36), f.X(0.44), f.Y(0.44)); // neck front
-    ctx.lineTo(f.X(0.34), f.Y(0.40));                              // raised foreleg 1
-    ctx.lineTo(f.X(0.40), f.Y(0.50));
-    ctx.lineTo(f.X(0.30), f.Y(0.52));                              // raised foreleg 2 (pawing)
-    ctx.lineTo(f.X(0.40), f.Y(0.56));
-    ctx.quadraticCurveTo(f.X(0.46), f.Y(0.60), f.X(0.50), f.Y(0.74)); // chest to belly
-    ctx.lineTo(f.X(0.46), f.Y(0.90));                              // hind leg (planted)
-    ctx.lineTo(f.X(0.56), f.Y(0.90));
-    ctx.quadraticCurveTo(f.X(0.60), f.Y(0.64), f.X(0.60), f.Y(0.50)); // haunch
-    ctx.quadraticCurveTo(f.X(0.62), f.Y(0.40), f.X(0.56), f.Y(0.32)); // back up to withers
-    // flowing tail streaming down-right
-    ctx.quadraticCurveTo(f.X(0.74), f.Y(0.42), f.X(0.72), f.Y(0.62));
-    ctx.quadraticCurveTo(f.X(0.80), f.Y(0.78), f.X(0.68), f.Y(0.86));
-    ctx.quadraticCurveTo(f.X(0.76), f.Y(0.72), f.X(0.66), f.Y(0.60));
-    ctx.quadraticCurveTo(f.X(0.62), f.Y(0.44), f.X(0.52), f.Y(0.30)); // back down to mane
-    ctx.quadraticCurveTo(f.X(0.50), f.Y(0.22), f.X(0.44), f.Y(0.22)); // mane to head
+    ctx.moveTo(f.X(0.60), f.Y(0.47));
+    ctx.quadraticCurveTo(f.X(0.84), f.Y(0.55), f.X(0.80), f.Y(0.90));   // outer edge
+    ctx.quadraticCurveTo(f.X(0.74), f.Y(0.74), f.X(0.72), f.Y(0.58));   // inner edge back
+    ctx.quadraticCurveTo(f.X(0.68), f.Y(0.52), f.X(0.60), f.Y(0.52));
     ctx.closePath();
     ctx.fill();
+    // HIND legs — planted; these are the only ground contact.
+    ctx.lineWidth = f.S(0.070);
+    ctx.beginPath();
+    ctx.moveTo(f.X(0.58), f.Y(0.62));
+    ctx.quadraticCurveTo(f.X(0.64), f.Y(0.78), f.X(0.58), f.Y(0.94));
+    ctx.moveTo(f.X(0.50), f.Y(0.66));
+    ctx.quadraticCurveTo(f.X(0.49), f.Y(0.80), f.X(0.44), f.Y(0.94));
+    ctx.stroke();
+    // FORELEGS — lifted clear and pawing forward-left.
+    ctx.lineWidth = f.S(0.055);
+    ctx.beginPath();
+    ctx.moveTo(f.X(0.41), f.Y(0.46));
+    ctx.quadraticCurveTo(f.X(0.30), f.Y(0.46), f.X(0.22), f.Y(0.38));   // upper, tucked
+    ctx.moveTo(f.X(0.42), f.Y(0.54));
+    ctx.quadraticCurveTo(f.X(0.32), f.Y(0.61), f.X(0.26), f.Y(0.70));   // lower, reaching
+    ctx.stroke();
+
+    // BARREL — an ellipse on the body's own axis (chest high-left, rump low-right).
+    ctx.beginPath();
+    ctx.ellipse(f.X(0.505), f.Y(0.555), f.S(0.180), f.S(0.122), 0.85, 0, Math.PI * 2);
+    ctx.fill();
+    // NECK — a column tapering from the withers up to the poll.
+    ctx.beginPath();
+    ctx.moveTo(f.X(0.375), f.Y(0.475));                                 // chest side, base
+    ctx.quadraticCurveTo(f.X(0.375), f.Y(0.30), f.X(0.395), f.Y(0.185));// throat line
+    ctx.lineTo(f.X(0.495), f.Y(0.165));                                 // poll
+    ctx.quadraticCurveTo(f.X(0.525), f.Y(0.33), f.X(0.575), f.Y(0.475));// mane / crest
+    ctx.closePath();
+    ctx.fill();
+    // HEAD — a slim wedge angled down-left off the poll, with a small ear.
+    ctx.beginPath();
+    ctx.moveTo(f.X(0.215), f.Y(0.325));                                 // muzzle
+    ctx.quadraticCurveTo(f.X(0.33), f.Y(0.20), f.X(0.435), f.Y(0.145)); // face
+    ctx.lineTo(f.X(0.455), f.Y(0.085));                                 // ear (small — a tall one is a cat's)
+    ctx.lineTo(f.X(0.510), f.Y(0.155));
+    ctx.quadraticCurveTo(f.X(0.44), f.Y(0.245), f.X(0.315), f.Y(0.305));// cheek
+    ctx.quadraticCurveTo(f.X(0.265), f.Y(0.305), f.X(0.215), f.Y(0.325));// jaw to muzzle
+    ctx.closePath();
+    ctx.fill();
+    // "SF" at the foot of the shield (badge form only — the bare fin mark is
+    // just the horse).
+    if (!bare) {
+      ctx.font = "700 " + Math.round(f.S(0.13)) + "px Georgia, serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("S F", f.X(0.5), f.Y(0.885));
+    }
     ctx.restore();
   }
 
-  // McLaren — the papaya speedmark "swoosh" (a curved comet / chevron).
+  // McLaren — the speedmark: ONE bold crescent, fat at the left and sweeping up
+  // to a point at the right, with a deeply concave underside. It used to carry a
+  // second streak underneath, which the real mark does not have and which read
+  // as a smear at badge size. brandMark() keeps it visible on McLaren's own car,
+  // where a papaya mark on papaya paint was invisible.
   function crestMclaren(ctx, R, ink, accent) {
     const f = fit(R, 0.08);
     ctx.save();
-    // comet swoosh: thick tail on the left, tapering as it sweeps up to the right.
     ctx.fillStyle = css(brandMark(BRAND.papaya));
+    // ASYMMETRIC: a fat rounded end on the left tapering to a sharp point on the
+    // right. Tapering both ends turns it into a leaf, which is what it looked
+    // like before.
     ctx.beginPath();
-    ctx.moveTo(f.X(0.06), f.Y(0.70));                              // tail bottom
-    ctx.quadraticCurveTo(f.X(0.05), f.Y(0.58), f.X(0.20), f.Y(0.56)); // rounded tail cap
-    ctx.quadraticCurveTo(f.X(0.60), f.Y(0.52), f.X(0.96), f.Y(0.14)); // top edge sweeps up-right
-    ctx.quadraticCurveTo(f.X(1.0), f.Y(0.08), f.X(0.90), f.Y(0.12));  // pointed nose
-    ctx.quadraticCurveTo(f.X(0.58), f.Y(0.40), f.X(0.30), f.Y(0.62)); // inner edge (concave)
-    ctx.quadraticCurveTo(f.X(0.20), f.Y(0.72), f.X(0.06), f.Y(0.70)); // back to tail
-    ctx.closePath();
-    ctx.fill();
-    // lower speed streak beneath, echoing the swoosh
-    ctx.fillStyle = cssA(brandMark(BRAND.papaya), 0.75);
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.10), f.Y(0.82));
-    ctx.quadraticCurveTo(f.X(0.50), f.Y(0.72), f.X(0.80), f.Y(0.50));
-    ctx.quadraticCurveTo(f.X(0.56), f.Y(0.80), f.X(0.20), f.Y(0.90));
+    ctx.moveTo(f.X(0.07), f.Y(0.42));                                    // top of the thick end
+    ctx.quadraticCurveTo(f.X(0.46), f.Y(0.27), f.X(0.98), f.Y(0.16));    // top edge to the tip
+    ctx.quadraticCurveTo(f.X(0.60), f.Y(0.45), f.X(0.31), f.Y(0.66));    // concave underside
+    ctx.quadraticCurveTo(f.X(0.17), f.Y(0.76), f.X(0.07), f.Y(0.73));    // to the base of the end
+    ctx.quadraticCurveTo(f.X(0.01), f.Y(0.58), f.X(0.07), f.Y(0.42));    // rounded cap
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -505,59 +551,64 @@ const LiveryTex = (function () {
     ctx.quadraticCurveTo(f.X(0.28), f.Y(0.30), f.X(0.16), f.Y(0.22));
     ctx.closePath();
     ctx.fill();
-    // "RB" energy mark beneath the head
-    ctx.fillStyle = css([0.97, 0.97, 0.98]);
+    // "RB" energy mark beneath the head. Through brandMark: hardcoded white put
+    // it on Racing Bulls' own near-white car, invisible — the same failure the
+    // papaya-on-papaya speedmark had.
+    ctx.fillStyle = css(brandMark([0.97, 0.97, 0.98]));
     ctx.font = "900 " + Math.round(f.S(0.2)) + "px Arial, sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText("RB", f.X(0.5), f.Y(0.76));
     ctx.restore();
   }
 
-  // Haas — an angular industrial "H": two bold bars + a diagonal.
+  // Haas — the angular "H" inside a bold ring: two uprights joined by a steep
+  // DIAGONAL crossbar, not a flat one. The ring is the half that was missing.
   function crestHaas(ctx, R, ink, accent) {
-    const f = fit(R, 0.1);
+    const f = fit(R, 0.06);
+    const red = css(brandMark(BRAND.haasRed));
     ctx.save();
-    // two vertical bars
-    ctx.fillStyle = css(ink);
-    ctx.fillRect(f.X(0.14), f.Y(0.1), f.S(0.2), f.S(0.8));   // left post
-    ctx.fillRect(f.X(0.66), f.Y(0.1), f.S(0.2), f.S(0.8));   // right post
-    // bold diagonal cross-member (industrial girder look), in red accent
-    ctx.fillStyle = css(brandMark(BRAND.haasRed));
+    // ring
+    ctx.strokeStyle = red;
+    ctx.lineWidth = f.S(0.085);
     ctx.beginPath();
-    ctx.moveTo(f.X(0.30), f.Y(0.34));
-    ctx.lineTo(f.X(0.70), f.Y(0.54));
-    ctx.lineTo(f.X(0.70), f.Y(0.70));
-    ctx.lineTo(f.X(0.30), f.Y(0.50));
+    ctx.arc(f.X(0.5), f.Y(0.5), f.S(0.42), 0, Math.PI * 2);
+    ctx.stroke();
+    // the H: two uprights + a diagonal spanning them
+    ctx.fillStyle = red;
+    ctx.fillRect(f.X(0.24), f.Y(0.20), f.S(0.13), f.S(0.60));   // left upright
+    ctx.fillRect(f.X(0.63), f.Y(0.20), f.S(0.13), f.S(0.60));   // right upright
+    ctx.beginPath();
+    ctx.moveTo(f.X(0.35), f.Y(0.36));
+    ctx.lineTo(f.X(0.65), f.Y(0.56));
+    ctx.lineTo(f.X(0.65), f.Y(0.70));
+    ctx.lineTo(f.X(0.35), f.Y(0.50));
     ctx.closePath();
     ctx.fill();
-    // chamfered corner nicks for a machined feel
-    ctx.fillStyle = css(ink);
-    ctx.fillRect(f.X(0.30), f.Y(0.44), f.S(0.06), f.S(0.12));
-    ctx.fillRect(f.X(0.64), f.Y(0.44), f.S(0.06), f.S(0.12));
     ctx.restore();
   }
 
-  // Williams — the "W" double-chevron racing-stripes mark.
   function crestWilliams(ctx, R, ink, accent) {
     const f = fit(R, 0.08);
     ctx.save();
-    // Two overlapping bold chevrons forming a forward-leaning W of racing stripes.
-    const draw = (dx, style) => {
-      ctx.fillStyle = style;
+    // A real W — four strokes, with the centre peak reaching FULL height like
+    // the mark it is based on. This used to draw one chevron twice at an offset,
+    // which renders as a big V with a shadow.
+    ctx.lineJoin = "miter";
+    ctx.lineCap = "butt";
+    ctx.miterLimit = 8;
+    const w = (dx, style, lw) => {
+      ctx.strokeStyle = style;
+      ctx.lineWidth = f.S(lw);
       ctx.beginPath();
-      // left down-stroke
-      ctx.moveTo(f.X(0.06 + dx), f.Y(0.2));
-      ctx.lineTo(f.X(0.22 + dx), f.Y(0.2));
-      ctx.lineTo(f.X(0.40 + dx), f.Y(0.62));
-      ctx.lineTo(f.X(0.56 + dx), f.Y(0.2));
-      ctx.lineTo(f.X(0.72 + dx), f.Y(0.2));
-      ctx.lineTo(f.X(0.44 + dx), f.Y(0.86));   // valley point
-      ctx.lineTo(f.X(0.30 + dx), f.Y(0.86));
-      ctx.closePath();
-      ctx.fill();
+      ctx.moveTo(f.X(0.02 + dx), f.Y(0.16));
+      ctx.lineTo(f.X(0.26 + dx), f.Y(0.86));
+      ctx.lineTo(f.X(0.50 + dx), f.Y(0.16));   // centre peak, full height
+      ctx.lineTo(f.X(0.74 + dx), f.Y(0.86));
+      ctx.lineTo(f.X(0.98 + dx), f.Y(0.16));
+      ctx.stroke();
     };
-    draw(0.02, css(accent));   // rear stripe (offset, accent)
-    draw(0.16, css(ink));      // front stripe (ink) → overlap reads as double-chevron W
+    w(0.03, css(accent), 0.09);   // accent shadow, offset
+    w(-0.01, css(ink), 0.135);    // the mark itself
     ctx.restore();
   }
 
@@ -619,80 +670,42 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Cadillac — a crest/shield with a laurel wreath + geometric quarters.
-  // `bare` (fin mode): skip the wreath + gold shield plate — a solid heraldic
-  // rectangle looks like a stuck-on badge sticker on a painted tail — and just
-  // paint the crown + quartered emblem straight onto the fin, echoing the
-  // ferrari/redbull/racingbulls fin treatment (motif only, no backing plate).
+  // Cadillac — the modern crest: a WIDE shield, far wider than it is tall,
+  // filled with a grid of horizontal bars. The laurel wreath this used to draw
+  // was dropped from the real mark in 2014, and the shield it ringed was tall
+  // and narrow — both wrong.
   function crestCadillac(ctx, R, ink, accent, bare) {
-    const f = fit(R, 0.08);
-    const shield = () => {
+    const f = fit(R, 0.04);
+    const gold = css(brandMark(BRAND.cadGold));
+    // Shield: flat top with clipped corners, sides falling to a broad point.
+    const shield = (inset) => {
+      const i = inset;
       ctx.beginPath();
-      ctx.moveTo(f.X(0.26), f.Y(0.16));
-      ctx.lineTo(f.X(0.74), f.Y(0.16));
-      ctx.lineTo(f.X(0.74), f.Y(0.56));
-      ctx.quadraticCurveTo(f.X(0.74), f.Y(0.84), f.X(0.5), f.Y(0.94));
-      ctx.quadraticCurveTo(f.X(0.26), f.Y(0.84), f.X(0.26), f.Y(0.56));
+      ctx.moveTo(f.X(0.06 + i), f.Y(0.26 + i * 0.5));
+      ctx.lineTo(f.X(0.94 - i), f.Y(0.26 + i * 0.5));
+      ctx.lineTo(f.X(0.94 - i), f.Y(0.46));
+      ctx.quadraticCurveTo(f.X(0.90 - i), f.Y(0.62), f.X(0.50), f.Y(0.78 - i));
+      ctx.quadraticCurveTo(f.X(0.10 + i), f.Y(0.62), f.X(0.06 + i), f.Y(0.46));
       ctx.closePath();
     };
     ctx.save();
-    if (bare) {
-      // Crown bars, enlarged and centred (no shield/wreath beneath them).
-      ctx.fillStyle = css(brandMark(BRAND.cadGold));
-      for (let i = 0; i < 4; i++) {
-        ctx.fillRect(f.X(0.29 + i * 0.115), f.Y(0.28), f.S(0.055), f.S(0.16));
-      }
-      // Two accent diamonds echoing the shield's heraldic quarters.
-      ctx.fillStyle = css(accent);
-      for (let s = -1; s <= 1; s += 2) {
-        const cx = f.X(0.5 + s * 0.16), cy = f.Y(0.62);
-        ctx.beginPath();
-        ctx.moveTo(cx, cy - f.S(0.1));
-        ctx.lineTo(cx + f.S(0.08), cy);
-        ctx.lineTo(cx, cy + f.S(0.1));
-        ctx.lineTo(cx - f.S(0.08), cy);
-        ctx.closePath();
-        ctx.fill();
-      }
-      ctx.restore();
-      return;
-    }
-    // laurel wreath — two arcs of leaves either side of the shield
-    ctx.fillStyle = css(brandMark(BRAND.cadGold));
-    for (let s = -1; s <= 1; s += 2) {
-      for (let i = 0; i < 5; i++) {
-        const t = i / 4;
-        const ang = (-0.9 + t * 1.5);                     // sweep along the arc
-        const bx = 0.5 + s * (0.30 + 0.06 * Math.sin(t * Math.PI));
-        const by = 0.30 + t * 0.5;
-        ctx.save();
-        ctx.translate(f.X(bx), f.Y(by));
-        ctx.rotate(s * (0.7 - ang));
-        ctx.beginPath();
-        ctx.ellipse(0, 0, f.S(0.055), f.S(0.022), 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-    // gold shield frame
-    ctx.fillStyle = css(brandMark(BRAND.cadGold));
-    shield();
+    ctx.fillStyle = gold;
+    shield(0);
     ctx.fill();
-    // inner shield, quartered
+    // Knock the bar grid out of the shield so the crest reads as panels rather
+    // than a solid blob — destination-out keeps it correct on any paint.
     ctx.save();
-    shield();
+    shield(0.035);
     ctx.clip();
-    // background (ink)
-    ctx.fillStyle = css(ink);
-    ctx.fillRect(f.X(0.26), f.Y(0.16), f.S(0.48), f.S(0.8));
-    // accent quarters (top-left + bottom-right) → checkered heraldic look
-    ctx.fillStyle = css(accent);
-    ctx.fillRect(f.X(0.26), f.Y(0.16), f.S(0.24), f.S(0.39));
-    ctx.fillRect(f.X(0.5), f.Y(0.55), f.S(0.24), f.S(0.41));
-    // crown bars across the top band
-    ctx.fillStyle = css(brandMark(BRAND.cadGold));
-    for (let i = 0; i < 4; i++) {
-      ctx.fillRect(f.X(0.31 + i * 0.11), f.Y(0.19), f.S(0.05), f.S(0.1));
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = "#000";
+    const rows = [0.315, 0.395, 0.475, 0.555];
+    const cuts = [[0.10, 0.26], [0.30, 0.44], [0.48, 0.62], [0.66, 0.86]];
+    for (let r = 0; r < rows.length; r++) {
+      for (let c = 0; c < cuts.length; c++) {
+        if ((r + c) % 2) continue;                       // alternating, like the real grid
+        ctx.fillRect(f.X(cuts[c][0]), f.Y(rows[r]), f.S(cuts[c][1] - cuts[c][0]), f.S(0.045));
+      }
     }
     ctx.restore();
     ctx.restore();
@@ -734,15 +747,26 @@ const LiveryTex = (function () {
   // sun disc, the Racing Bulls plate) keep their own colour so the mark still
   // has something to sit on. Those are skipped in `bare` (shark-fin) mode
   // anyway, which is where a hand-picked logo colour matters most.
-  let _logoInk = null;
-  function brandMark(c) { return _logoInk || c; }
-  function drawCrest(ctx, teamId, R, ink, accent, bare, logo) {
+  let _logoInk = null, _crestBg = null, _crestInk = null;
+  // A brand colour is only usable if it separates from the paint UNDER it.
+  // McLaren's mark is papaya and McLaren's car is papaya, so the speedmark was
+  // drawn invisibly on its own team's livery — the one crest that most needed to
+  // read was the one that could not. Fall back to the contrast ink there, which
+  // is already chosen for this exact background.
+  function brandMark(c) {
+    if (_logoInk) return _logoInk;
+    if (_crestBg && _crestInk && contrast(c, _crestBg) < 2.2) return _crestInk;
+    return c;
+  }
+  function drawCrest(ctx, teamId, R, ink, accent, bare, logo, bg) {
     _logoInk = logo || null;
+    _crestBg = bg || null;
+    _crestInk = ink || null;
     const fn = CRESTS[teamId];
     try {
       if (fn) fn(ctx, R, logo || ink, accent, bare);
       else crestGeneric(ctx, R, logo || ink, accent, teamId);
-    } finally { _logoInk = null; }
+    } finally { _logoInk = _crestBg = _crestInk = null; }
   }
 
   // Per-team livery GRAPHIC backdrop painted behind the crest — an accent wash +
@@ -914,7 +938,7 @@ const LiveryTex = (function () {
 
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe);
-    drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent, false, logo);
+    drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent, false, logo, c1);
     // Shark-fin panel: the SAME tail graphic + a BARE motif (disc/shield stripped)
     // so the fin reads as a painted tail, not a floating badge.
     // The wash + motif strokes are the accent colour, and the FIN IS ITS OWN
@@ -932,7 +956,7 @@ const LiveryTex = (function () {
     // Accent has to separate from the FIN's ink here, not the body's.
     const finAccent = contrast(accent, inkFin) >= 2.0 ? accent
       : (contrast(c1, inkFin) >= 2.0 ? c1 : haloFor(inkFin));
-    drawCrest(ctx, teamId, REGIONS.finBadge, inkFin, finAccent, true, logo);
+    drawCrest(ctx, teamId, REGIONS.finBadge, inkFin, finAccent, true, logo, finPaint);
 
     // Sponsor wordmarks.
     const names = SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
