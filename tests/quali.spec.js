@@ -126,6 +126,12 @@ test.describe("Qualifying — the grid", () => {
   });
 
   test("every round of a season qualifies, not just the first", async ({ page }) => {
+    // The two heaviest tests in the file: each stages TWO circuits and runs a
+    // race to the flag, all on software GL. Their nearest neighbour already
+    // sits at ~86s against the 120s default, so they time out whenever the box
+    // is doing anything else — which is a measurement of the machine, not of
+    // the code.
+    test.slow();
     // The results screen's NEXT ROUND went straight to startRace(), so rounds
     // 2..24 were never qualified for — and gridUp() lined them up on round 1's
     // classification, which Quali.order() remapped onto the new cars by driverId.
@@ -150,6 +156,12 @@ test.describe("Qualifying — the grid", () => {
   });
 
   test("a qualifying grid never leaks into the Grand Prix that follows it", async ({ page }) => {
+    // The two heaviest tests in the file: each stages TWO circuits and runs a
+    // race to the flag, all on software GL. Their nearest neighbour already
+    // sits at ~86s against the 120s default, so they time out whenever the box
+    // is doing anything else — which is a measurement of the machine, not of
+    // the code.
+    test.slow();
     // gridUp() accepts any preOrder whose length matches the field, and the
     // classification outlived quitToMenu() — so the next Grand Prix lined up on a
     // season's qualifying order and silently lost the P12 start that mode exists
