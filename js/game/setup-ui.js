@@ -513,11 +513,16 @@ function livePreviewDraft(team, d) {
 
 function openSetup() {
   buildSetup();
-  // #select sits directly under #carsetup and is nearly opaque (blocks the
-  // live 3D preview behind the now-transparent, docked setup panel) — hide it
-  // while setup is open, same as #overlay is already hidden by the time #select
-  // itself is reached. Restored in the cs-done handler below.
+  // #select and #overlay both sit under #carsetup and are nearly opaque (they
+  // block the live 3D preview behind the now-transparent, docked setup panel),
+  // so hide BOTH while setup is open. Only #select used to be hidden, on the
+  // assumption that #overlay was already gone by the time #select was reached —
+  // true of the sel-setup path, but the title screen's GARAGE button opens setup
+  // straight off #overlay, which then stayed up and showed the APEX 26 title and
+  // the whole main menu through the panel. cs-done restores whichever one the
+  // player came from (garageReturn).
   els.select.hidden = true;
+  els.overlay.hidden = true;
   $("carsetup").hidden = false;
   G.setupPreviewOn = true;
 }

@@ -62,3 +62,45 @@ test.describe("Car setup — stable DOM identifiers", () => {
     await expect(page.locator('#cs-options [data-cs-opt="high_octane"]')).toHaveClass(/active/);
   });
 });
+
+// The setup panel is transparent so the live 3D car shows through it, which
+// means every screen underneath has to be hidden while it is open. openSetup()
+// only hid #select, on the assumption that #overlay was already gone by the time
+// #select was reached — true of the track-picker route, but the title screen's
+// GARAGE button opens setup straight off #overlay, which then stayed up and
+// showed the APEX 26 title and the whole main menu through the panel.
+test.describe("Car setup — nothing shows through from the screen below", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  const screens = (page) => page.evaluate(() => ({
+    overlay:  document.getElementById("overlay").hidden,
+    select:   document.getElementById("select").hidden,
+    carsetup: document.getElementById("carsetup").hidden,
+  }));
+
+  // Both routes in, and both routes back out: DONE returns you where you came
+  // from (garageReturn), so the two paths differ on the way out, not the way in.
+  for (const [route, enter, backTo] of [
+    ["GARAGE from the title", "#mb-garage", "overlay"],
+    ["SETUP from the track picker", "#sel-setup", "select"],
+  ]) {
+    test(`${route}: no screen is left visible behind the panel`, async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      if (enter === "#sel-setup") {
+        await page.locator("#mb-race").click();
+        await page.locator("#select").waitFor({ state: "visible" });
+      }
+      await page.locator(enter).click();
+      await page.locator("#carsetup").waitFor({ state: "visible" });
+
+      expect(await screens(page)).toEqual({ overlay: true, select: true, carsetup: false });
+
+      await page.locator("#cs-done").click();
+      await page.locator("#carsetup").waitFor({ state: "hidden" });
+      const after = await screens(page);
+      expect(after[backTo], `DONE returns to #${backTo}`).toBe(false);
+      expect(after.carsetup).toBe(true);
+    });
+  }
+});
