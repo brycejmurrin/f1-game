@@ -62,6 +62,16 @@ const SceneryCity = (function () {
         const rowN = simple ? lod(Math.max(2, Math.min(6, Math.round(sh / 6.4))), 2) : rows;
         const fhh = sh / rowN, winHH = Math.max(0.5, fhh - railH);
         const fBase = vadd(mid, nVec, nSign * (nHalf + 0.34));
+        // Mullions sit a touch BEHIND the rails. Both used to hang off fBase at
+        // the identical frameT, so at every crossing of the window grid — and
+        // there are thousands per circuit — two same-facing faces met at zero
+        // gap and fought at any distance. This was the single largest z-fight
+        // population in the game. 5 cm reads as a normal facade layering
+        // (horizontal bands proud of the verticals) and holds past 500 m.
+        const mBase = vadd(mid, nVec, nSign * (nHalf + 0.29));
+        // Edge neon is meant to stand PROUD of the frame, but frameT * 1.05 put
+        // it only 7.5 mm clear — inside one depth unit by 200 m. Give it real air.
+        const nBase = vadd(mid, nVec, nSign * (nHalf + 0.40));
         const gBase = vadd(mid, nVec, nSign * (nHalf + 0.04));
         const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
         out._mat = MAT.METAL;
@@ -112,18 +122,18 @@ const SceneryCity = (function () {
         const nm = Math.max(1, Math.min(3, cols - 1));   // perf: fewer mullions (was 5)
         for (let c = 1; c <= nm; c++)
           ctx.instance(UNIT_BOX,
-            { o: vadd(fBase, wVec, (-0.5 + c / (nm + 1)) * faceW), r: bb[0], u: bb[1], t: bb[2],
+            { o: vadd(mBase, wVec, (-0.5 + c / (nm + 1)) * faceW), r: bb[0], u: bb[1], t: bb[2],
               s: dim(frameT, sh, 0.4), col: frameCol },
             unitBox, { kind: "facadeMullion" });
         if (neonAmt > 0.3) {
           const ST = Math.min(0.4, faceW * 0.04);
           for (const dr of [-1, 1])
             ctx.instance(UNIT_BOX,
-              { o: vadd(fBase, wVec, dr * faceW * 0.5), r: bb[0], u: bb[1], t: bb[2],
+              { o: vadd(nBase, wVec, dr * faceW * 0.5), r: bb[0], u: bb[1], t: bb[2],
                 s: dim(frameT * 1.05, sh * 0.96, ST), col: nc },
               unitBox, { kind: "facadeNeon" });
           ctx.instance(UNIT_BOX,
-            { o: vadd(vadd(mid, nVec, nSign * (nHalf + 0.36)), u, sh * 0.48), r: bb[0], u: bb[1], t: bb[2],
+            { o: vadd(nBase, u, sh * 0.48), r: bb[0], u: bb[1], t: bb[2],
               s: dim(frameT * 1.1, Math.min(0.5, sh * 0.018), faceW), col: nc },
             unitBox, { kind: "facadeNeon" });
         }
@@ -249,6 +259,10 @@ const SceneryCity = (function () {
         const fR = -side * (sw / 2 + frameOut);
         const gR = -side * (sw / 2 + glassOut);
         const fBase = vadd(p.c, p.r, fR);
+        // Same rail/mullion tie as the night path above: identical base plane and
+        // identical frameT meant every grid crossing was a zero-gap same-facing
+        // pair. Set the mullions 5 cm back so the horizontals read as proud.
+        const mBase = vadd(p.c, p.r, -side * (sw / 2 + frameOut - 0.05));
         const gBase = vadd(p.c, p.r, gR);
         const railH = Math.max(0.45, fh * 0.28);
         for (let r = 0; r <= rows; r++) {
@@ -284,7 +298,7 @@ const SceneryCity = (function () {
         for (let c = 1; c <= nm; c++) {
           const off = -sd / 2 + (c / (nm + 1)) * sd;
           ctx.instance(UNIT_BOX,
-            { o: vadd(vadd(fBase, p.u, yBase + sh / 2), p.t, off), r: p.r, u: p.u, t: p.t,
+            { o: vadd(vadd(mBase, p.u, yBase + sh / 2), p.t, off), r: p.r, u: p.u, t: p.t,
               s: [frameT, sh, 0.5], col: dayMull },
             unitBox, { kind: "facadeMullion", k, side });
         }
