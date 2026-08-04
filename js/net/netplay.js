@@ -54,7 +54,26 @@ const NetPlay = (function () {
   };
 
   function create(G) {
+    // peerId -> NetSession. The host holds one per guest; a guest holds exactly
+    // one, to the host. `session` is the first entry, kept because most callers
+    // mean "the connection we talk over" and on a guest that is the only one
+    // there will ever be.
+    const sessions = new Map();
+    const sessionList = () => [...sessions.values()];
+    const PEER_ONE = "peer";
     let session = null;
+    // Say something to EVERY peer. On a guest that is the host; on the host it
+    // is every guest, which is what turns lap times, results and flags from a
+    // conversation into an announcement.
+    function broadcast(type, data) {
+      let ok = false;
+      for (const s of sessionList()) { try { ok = s.sendEvent(type, data) || ok; } catch (e) {} }
+      return ok;
+    }
+    // Which rival belongs to a given connection, so one peer dropping hands
+    // back one car. Null until a peer's slot is claimed.
+    const peerCar = new Map();            // peerId -> wireId
+    const remoteFor = (id) => (peerCar.has(id) ? peerCar.get(id) : null);
     let role = null;                      // "host" | "guest"
     let active = false;
     let localCar = null;
@@ -74,9 +93,11 @@ const NetPlay = (function () {
     // the fallbacks unreachable — recording it is how a test can tell that it
     // DID, rather than that the collision merely happened not to occur.
     let lastSlotFallback = null;
-    // Lap/sector times rivals reported. Flat, but each entry now carries the
-    // driverId the reporter stamped on it, so three rivals' laps stay tellable
-    // apart instead of pooling into one anonymous list.
+    // Lap/sector times rivals reported. A DEBUG CHANNEL, not gameplay: the only
+    // reader is __apex.netPeerLaps(). Entries carry whatever reportLap's caller
+    // passed — today `{lap, time, best, code}` from js/game.js, so `code` and
+    // not `driverId` is what tells two reporters apart. Give this a driverId
+    // before anything gameplay-facing starts reading it.
     let peerLaps = [];
     let peerResult = null;                // the host's classification, if sent
     const eventLog = [];                  // recent inbound events, for status()
@@ -201,13 +222,20 @@ const NetPlay = (function () {
     }
 
     // ---- inbound state ----------------------------------------------------
-    function onState(bytes) {
+    function onState(bytes, from) {
       if (!active || !remotes.size) return;
       const pkt = NetSnapshot.decodeSnapshot(bytes);
       if (!pkt || !pkt.cars.length) return;
       // The packet is stamped with the SENDER's clock; place it on ours or it
       // lands at an arbitrary point in the buffer's timeline.
-      const t = session.peerToLocal(pkt.tick);
+      //
+      // Converted through the session it ARRIVED ON, not "the" session. Clock
+      // sync is per-connection — each NetSession keeps its own offset from its
+      // own lowest-RTT ping — so with several guests the first session's
+      // estimate is simply the wrong one for everybody else's packets.
+      const clock = from || session;
+      if (!clock) return;
+      const t = clock.peerToLocal(pkt.tick);
       // EVERY entry, routed by the id on the wire. This used to take cars[0]
       // and ignore the id, because the id was the sender's own cars[] index and
       // the two grids do not agree on those. It is G.wireId() now — the same
@@ -227,6 +255,52 @@ const NetPlay = (function () {
       for (const entry of pkt.cars) {
         const r = remotes.get(entry.id);
         if (r) r.interp.push(t, entry);
+      }
+    }
+
+    // Wire one session's handlers. Split out of start() because there is now
+    // more than one of them, and because a peer joining mid-lobby would bind
+    // exactly the same way.
+    //
+    // `from` is stamped from the session's OWN id rather than trusted off the
+    // payload: a peer saying which peer it is would be a peer that can claim to
+    // be another one, and the connection already knows.
+    function bindSession(id, s) {
+      s.onState((bytes) => onState(bytes, s));
+      // One peer dropping is not the session ending. Hand THAT rival back to
+      // the AI and race on; only the last connection going away stops us — and
+      // for a guest, losing the host always does, because the host owns race
+      // control and every other guest is behind it.
+      s.onClose((why) => {
+        lastReason = why;
+        sessions.delete(id);
+        const carFor = remoteFor(id);
+        if (carFor != null && sessions.size && role === "host") { handBackToAI(why, carFor); }
+        else stop(why);
+        session = sessionList()[0] || null;
+      });
+      for (const type of Object.keys(EV)) {
+        const name = EV[type];
+        s.onEvent(name, (d) => {
+          eventLog.push({ type: name, data: d, from: id });
+          if (eventLog.length > 32) eventLog.shift();
+          if (name === EV.BYE) { lastReason = "bye"; stop("bye"); }
+          if (name === EV.START && d && d.at != null) armStart(d.at, d.hold);
+          // The guest's circuit is up. If the host was already holding for it
+          // (hostStart ran first, which is the normal order), name the moment
+          // now — this is the earliest instant every side can act on one.
+          if (name === EV.ARMED && role === "host") {
+            armedPeers.add(id);
+            if (armDeadline && allArmed()) nameTheMoment();
+          }
+          // A rival's qualifying lap. Handed to the game rather than kept here:
+          // the classification is the game's, and it has to be recomputed with
+          // every real time in it the moment another one lands.
+          if (name === EV.QUALI && d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d);
+          if (name === EV.LAP && d) peerLaps.push(d);
+          if (name === EV.RESULT && d) peerResult = d;
+          if (name === EV.CAUTION && d && G.applyCaution) G.applyCaution(d);
+        });
       }
     }
 
@@ -264,32 +338,26 @@ const NetPlay = (function () {
       // guest learns which race to load — so it opens the session itself and
       // hands it over here. Adopting it keeps one clock estimate and one set of
       // handlers rather than two sessions competing on the same transport.
-      session = opts.session || NetSession.create({ transport: opts.transport });
-      session.onState(onState);
-      session.onClose((why) => { lastReason = why; stop(why); });
-      for (const type of Object.keys(EV)) {
-        const name = EV[type];
-        session.onEvent(name, (d) => {
-          eventLog.push({ type: name, data: d });
-          if (eventLog.length > 32) eventLog.shift();
-          if (name === EV.BYE) { lastReason = "bye"; stop("bye"); }
-          if (name === EV.START && d && d.at != null) armStart(d.at, d.hold);
-          // The guest's circuit is up. If the host was already holding for it
-          // (hostStart ran first, which is the normal order), name the moment
-          // now — this is the earliest instant both sides can act on one.
-          if (name === EV.ARMED && role === "host") {
-            armedPeers.add(d && d.from != null ? d.from : "peer");
-            if (armDeadline && allArmed()) nameTheMoment();
-          }
-          // A rival's qualifying lap. Handed to the game rather than kept here:
-          // the classification is the game's, and it has to be recomputed with
-          // BOTH real times in it the moment the second one lands.
-          if (name === EV.QUALI && d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d);
-          if (name === EV.LAP && d) peerLaps.push(d);
-          if (name === EV.RESULT && d) peerResult = d;
-          if (name === EV.CAUTION && d && G.applyCaution) G.applyCaution(d);
-        });
+      // ONE SESSION PER PEER. A star room means the host holds one connection
+      // per guest while each guest holds exactly one, to the host — so this is
+      // a map, and `session` is kept as the first entry for the many callers
+      // that mean "the connection we talk over".
+      //
+      // opts.session (singular) stays a FIRST-CLASS input, not a fallback: it
+      // is what __apex.netLoopback and every existing spec pass, and the two
+      // regressions in this file so far were both a path that used to always
+      // run being quietly gated behind a newer one.
+      sessions.clear();
+      const incoming = opts.sessions
+        || (opts.session ? [{ id: PEER_ONE, session: opts.session }] : null)
+        || [{ id: PEER_ONE, session: NetSession.create({ transport: opts.transport }) }];
+      for (const entry of incoming) {
+        const id = entry.id != null ? entry.id : PEER_ONE;
+        const s = entry.session || entry;
+        sessions.set(id, s);
+        bindSession(id, s);
       }
+      session = sessionList()[0] || null;
 
       localCar = (G.cars || []).find((c) => c.local) || G.player || null;
       remotes.clear();
@@ -302,10 +370,14 @@ const NetPlay = (function () {
       // pickRemoteSlot(null) has always answered that with the any-free-car
       // arm. Gating the list on peerProfile made those sessions fail no_slot,
       // which is the whole multiplayer-session suite.
-      const joining = opts.peers || [{ profile: peerProfile, mods: opts.peerMods }];
+      const joining = opts.peers || [{ profile: peerProfile, mods: opts.peerMods, id: PEER_ONE }];
+      peerCar.clear();
       for (const j of joining) {
         const car = pickRemoteSlot(j.profile);
         if (!car) continue;
+        // Remember WHICH connection this rival arrived on, so losing one peer
+        // hands back one car rather than emptying the grid of humans.
+        peerCar.set(j.id != null ? j.id : PEER_ONE, G.wireId(car));
         // The rival is human — so it gets the human collision mass and is
         // excluded from the AI's rubber-band — but it is not local, and its
         // driving comes off the wire rather than out of updateCar.
@@ -336,7 +408,7 @@ const NetPlay = (function () {
       // start() is called straight after startRace(), so reaching this line IS
       // "my circuit is built and my loop is about to run again". That is the
       // fact the host needs before it can name lights-out.
-      if (role === "guest") { try { session.sendEvent(EV.ARMED, {}); } catch (e) {} }
+      if (role === "guest") { try { broadcast(EV.ARMED, {}); } catch (e) {} }
       // remoteId stays singular for the callers and tests that read it — it is
       // the FIRST rival, which is the only one there is until Phase C. remoteIds
       // is the shape to read from now on.
@@ -399,7 +471,11 @@ const NetPlay = (function () {
       // The hold is the host's to roll: two independent draws would release
       // one driver before the other, which is the whole thing being fixed.
       const hold = 0.2 + Math.random() * 1.8;
-      session.sendEvent(EV.START, { at: session.localToPeer(at), hold });
+      // Each guest gets the moment converted onto ITS OWN clock — localToPeer
+      // is per-session, so this cannot be hoisted out of the loop.
+      for (const s of sessionList()) {
+        try { s.sendEvent(EV.START, { at: s.localToPeer(at), hold }); } catch (e) {}
+      }
       G.netStart = { at, hold, now: () => (G.netNow != null ? G.netNow : performance.now()) };
       return true;
     }
@@ -409,7 +485,7 @@ const NetPlay = (function () {
     // frame, so it cannot go on the snapshot channel with the positions.
     function reportQuali(driverId, t) {
       if (!session || !(t > 0)) return false;
-      return session.sendEvent(EV.QUALI, { driverId, t: +t.toFixed(3) });
+      return broadcast(EV.QUALI, { driverId, t: +t.toFixed(3) });
     }
 
     // ---- race events ------------------------------------------------------
@@ -417,18 +493,18 @@ const NetPlay = (function () {
     // is in a position to time it — and sent reliably, because a dropped lap
     // time is a wrong result rather than a momentary glitch.
     function reportLap(data) {
-      return session ? session.sendEvent(EV.LAP, data) : false;
+      return sessions.size ? broadcast(EV.LAP, data) : false;
     }
     // Race control is the HOST's. Debris is generated locally from each car's
     // own behaviour and is NOT replicated, so two peers genuinely see different
     // hazards — left to compute flags independently they would fly different
     // ones for the same race, which is worse than a slightly stale flag.
     function reportCaution(data) {
-      return (session && role === "host") ? session.sendEvent(EV.CAUTION, data) : false;
+      return (sessions.size && role === "host") ? broadcast(EV.CAUTION, data) : false;
     }
 
     function reportResult(data) {
-      return session ? session.sendEvent(EV.RESULT, data) : false;
+      return sessions.size ? broadcast(EV.RESULT, data) : false;
     }
 
     // The GUEST holds the chequered flag briefly, waiting for the host's
@@ -451,7 +527,11 @@ const NetPlay = (function () {
       active = false;
       lastReason = reason || "local";
       handBackToAI(reason && reason !== "local" ? reason : null);
-      if (session) { try { session.close(); } catch (e) {} }
+      // Every connection, not just the first — a host leaving must not strand
+      // two guests holding open sockets to a race that has ended.
+      for (const s of sessionList()) { try { s.close(); } catch (e) {} }
+      sessions.clear();
+      peerCar.clear();
       session = null;
       return true;
     }
@@ -462,17 +542,21 @@ const NetPlay = (function () {
     // timing is reproducible under test rather than at the mercy of whatever
     // else the browser felt like doing.
     function tick(now) {
-      if (!active || !session) return;
+      if (!active || !sessions.size) return;
       // Publish the clock the countdown reads, so game.js and the session
       // agree on "now" rather than each calling performance.now() separately.
       G.netNow = now;
-      // pump() can deliver the close that ends this session — onClose calls
-      // stop(), which nulls `session` — so re-check the field rather than
-      // dereferencing it again. Found by the first real two-peer connection:
-      // a loopback session never closes mid-pump, so nothing here could have
-      // caught it.
-      session.pump(now);
-      if (!session || !session.alive()) return;   // onClose already handled it
+      // pump() can deliver the close that ends a session — onClose removes it
+      // from the map and may call stop() — so iterate a SNAPSHOT (sessionList
+      // copies) and re-check afterwards rather than dereferencing again. Found
+      // by the first real two-peer connection: a loopback session never closes
+      // mid-pump, so nothing here could have caught it.
+      for (const s of sessionList()) s.pump(now);
+      if (!active || !sessions.size) return;      // onClose already handled it
+      // Every connection dead is the session over; ONE of several dead is a
+      // player who left, and the others are still racing.
+      if (!sessionList().some((s) => s.alive())) return;
+      session = sessionList()[0];
 
       // Host waiting on the guest's circuit (see hostStart). Checked after the
       // pump, so an ARMED that arrived on this very tick has already been
@@ -504,7 +588,11 @@ const NetPlay = (function () {
         // encodeSnapshot has always taken a list with a count byte and a
         // per-entry id (js/net/snapshot.js). This is the first caller to send
         // more than one, which is what that shape was reserved for.
-        session.sendState(NetSnapshot.encodeSnapshot(Math.round(now), entries));
+        // To every peer. One identical packet serves all of them: a guest
+        // receiving its own car back drops it for free, because localCar is by
+        // construction not in `remotes` (see onState).
+        const bytes = NetSnapshot.encodeSnapshot(Math.round(now), entries);
+        for (const s of sessionList()) { try { s.sendState(bytes); } catch (e) {} }
       }
 
       // Draw each rival where it was INTERP_DELAY_MS ago, blended between the
@@ -551,7 +639,7 @@ const NetPlay = (function () {
         const r = c == null ? remoteList()[0] : remotes.get(G.wireId(c));
         return r ? r.interp.predict(now == null ? c : now) : null;
       },
-      sendEvent: (type, data) => (session ? session.sendEvent(type, data) : false),
+      sendEvent: (type, data) => (sessions.size ? broadcast(type, data) : false),
       onEvent: (type, fn) => (session ? session.onEvent(type, fn) : false),
       status: () => ({
         active, role, reason: lastReason,

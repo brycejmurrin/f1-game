@@ -618,6 +618,9 @@ const NetLobby = (function () {
         return;
       }
       const started = G.netPlay.start({
+        // The whole map, keyed the same way the lobby keyed it, so NetPlay
+        // holds one connection per guest exactly as the room did.
+        sessions: [...sessions.entries()].map(([id, s]) => ({ id, session: s })),
         session, role,
         peerProfile: firstPeer(),
         peerMods: modsFromProfile(firstPeer()),
