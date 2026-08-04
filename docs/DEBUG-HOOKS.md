@@ -862,6 +862,45 @@ __apex.carInput(4, { steer: 0.3, throttle: true });
 __apex.step(1 / 60, 60);
 ```
 
+### `net() → {active, role, localId, remoteId, net, buffered, events, reason}`
+The live session, or `{active:false}` when racing solo. `localId`/`remoteId` are
+`cars()` indices; `net` is the clock/liveness snapshot (`rtt`, `offset`,
+`synced`, `alive`); `buffered` is how many packets the rival's interpolation
+buffer is holding.
+
+### `netLoopback({nowMs?, latencyMs?, jitterMs?, loss?, interpDelayMs?, role?, peer?}) → {ok, role, localId, remoteId}`
+Start a session against an **in-page** peer — no signalling, no second browser,
+no network. This is how the game side of multiplayer is tested at all. Pass
+`nowMs` to run the whole session on a virtual clock you control.
+
+Authority recap, because it explains what you'll see: each peer owns its own
+car outright. The rival is **posed from replicated state and not simulated
+locally** — `updateCar()` early-outs on it — so with a session live and nothing
+arriving, the rival does not move at all.
+
+### `netPeerSend(state, atMs?) → {sent, at} | false`
+Publish one car state **as the remote peer**. Omitted fields default to the
+rival's current values, so you can move one axis at a time. Pass `atMs` to
+stamp it on your virtual clock.
+
+### `netTick(nowMs?) → status`
+Pump the session by hand. The game loop already calls this every frame, but a
+test must not depend on rAF running at a useful rate — drive it explicitly and
+latency, loss and interpolation become reproducible, the same way `step()`
+does for physics.
+
+### `netPeerClose() / netStop()`
+Drop the rival's connection, or end the session locally. On a drop the rival's
+car is handed back to the AI rather than left as a driverless obstacle.
+
+```js
+__apex.race("monza"); __apex.headless(true); __apex.reset(0.05, 40, 0, 1);
+const s = __apex.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0 });
+__apex.netPeerSend({ s: __apex.info().total * 0.42, x: 2.5, speed: 0 }, 1000);
+__apex.netTick(1010);
+__apex.carAt(s.remoteId);        // the rival, posed where its owner said
+```
+
 ---
 
 ## Timing & field

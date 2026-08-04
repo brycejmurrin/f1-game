@@ -1999,7 +1999,8 @@ const G = {
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
   GAME_LAPS, TT_LAPS, LONG_GRIP,
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
-  camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  announce, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  get netPlay() { return netPlay; },
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
@@ -2038,6 +2039,9 @@ DebrisWorld.create(G);
 // exceptions). Inert (owns() is a Set read) unless a flag is on AND the debris
 // side-world is live. DEFAULT ON per feature (apex26.r2Airborne/r3Contact/c1Pileup).
 const incidentSim = IncidentSim.create(G);
+// Two-player racing (js/net/netplay.js). Wholly inert until a session starts:
+// owns() is an identity check against a null, and tick() returns immediately.
+const netPlay = NetPlay.create(G);
 // C2 visual suspension (js/game/bodyattitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
@@ -2436,6 +2440,10 @@ function updateCar(c, dt, ranked) {
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
   // fallback-guarded; outside the window this early-out is never taken.
   if (incidentSim.owns(c)) { c._prevS = c.s; return; }
+  // Same contract for a networked rival: its owner is integrating it on their
+  // machine and we replicate the result, so running the driving model here
+  // would only fight the pose NetPlay writes. See js/net/netplay.js.
+  if (netPlay.owns(c)) { c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
@@ -5184,7 +5192,11 @@ function tickBody(now) {
   if (!paused && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll();   // refresh gamepad state once per frame (before the paused gate
                   // so the Start/Menu button can also un-pause)
-  if (paused) {
+  // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
+  // because a shared world cannot be stopped by one player opening a menu: the
+  // rival keeps driving whatever this screen is doing. Inert solo.
+  netPlay.tick(now);
+  if (paused && !netPlay.active()) {
     // LIGHTING / CAMERA TUNER live preview: keep RENDERING (physics stays
     // paused) while either panel is open so every slider change shows on the
     // held frame — a camera angle is unjudgeable on a frozen picture.
