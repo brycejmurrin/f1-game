@@ -472,6 +472,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   color: var(--text);
   border-color: rgba(255, 255, 255, 0.42);
 }
+/* FINISH is a MATERIAL, not a colour, so its row carries a 3-way choice made of
+   the same pill buttons instead of a colour well + NONE. Exactly one is active. */
+.cz-finish { display: flex; gap: 6px; flex: none; }
+.cz-finish .cz-liv-none { min-width: 52px; }
 /* Columns of rows once the sheet is wide, so all fifteen fit without the dialog
    becoming a long scroll. auto-fill rather than a hard two, so the count follows
    the room the sheet was given — on a landscape phone the sheet is now wide

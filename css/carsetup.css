@@ -331,6 +331,14 @@
   background: rgba(255,255,255,0.06); color: var(--dim);
   border: 1px solid rgba(255,255,255,0.14);
 }
+/* FINISH row: three of the same pill buttons acting as one radio group, with the
+   chosen one lifted a step up the elevation ladder (same language as the custom
+   team's NONE toggles — a pressed toggle, not a stat gain). */
+.cs-liv-ed-finish { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.cs-liv-ed-finish .cs-liv-ed-none { flex: 1 1 0; padding: 4px 4px; }
+.cs-liv-ed-none.active {
+  background: var(--surf-3); color: var(--text); border-color: rgba(255,255,255,0.42);
+}
 .cs-liv-ed-name {
   flex: 1 1 auto; min-width: 0; min-height: var(--chip-h);
   font-size: 13px; font-weight: 600; color: var(--text);

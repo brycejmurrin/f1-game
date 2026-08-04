@@ -863,7 +863,7 @@ function resolveLivery(team) {
     const l = livDraftOverride.liv;
     return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
-             noseStripe: l.noseStripe || null };
+             noseStripe: l.noseStripe || null, finish: l.finish || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -872,7 +872,7 @@ function resolveLivery(team) {
   // — additive, so an unmodified livery still resolves to today's exact object shape.
   const val = liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
-                      noseStripe: liv.noseStripe || null }
+                      noseStripe: liv.noseStripe || null, finish: liv.finish || null }
                   : { c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -5407,6 +5407,16 @@ const CZ_LIV_FIELDS = [
   ["cz-stripe", "stripe"], ["cz-nosestripe", "noseStripe"], ["cz-detail", "accent"],
   ["cz-nose", "nose"], ["cz-pod", "pod"], ["cz-wing", "wing"], ["cz-halo", "halo"],
 ];
+// The custom team's paint FINISH ("gloss" = the default clearcoat car paint, so
+// it is never written to ct.livery). Held here rather than read off the DOM so
+// the three buttons behave as one radio group.
+let czFinish = "gloss";
+function czSetFinish(value) {
+  czFinish = value || "gloss";
+  for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
+    btn.classList.toggle("active", btn.dataset.czFinish === czFinish);
+  }
+}
 // A field is "NONE" when its colour input carries the cz-off class.
 function czSetLivField(domId, arr) {
   const inp = $(domId), none = $(domId + "-none");
@@ -5431,6 +5441,7 @@ function openCustomize() {
   $("cz-num").value = ct.drivers[0].num;
   const liv = ct.livery || {};
   CZ_LIV_FIELDS.forEach(([domId, key]) => czSetLivField(domId, liv[key] || null));
+  czSetFinish(liv.finish);
   czPreview();
   els.customize.hidden = false;
 }
@@ -5442,6 +5453,9 @@ CZ_LIV_FIELDS.forEach(([domId]) => {
   $(domId).addEventListener("input", () => { $(domId).classList.remove("cz-off"); $(domId + "-none").classList.remove("active"); });
   $(domId + "-none").onclick = () => { $(domId).classList.add("cz-off"); $(domId + "-none").classList.add("active"); if (soundOn) GameAudio.uiTick(); };
 });
+for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
+  btn.onclick = () => { czSetFinish(btn.dataset.czFinish); if (soundOn) GameAudio.uiTick(); };
+}
 els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustomize(); };
 // CAR SETUP is reachable from the select screen AND from the title, so DONE has
 // to go back where it came from. It used to unhide #select unconditionally,
@@ -5481,6 +5495,7 @@ $("cz-save").onclick = () => {
   // Optional extra paint -> ct.livery (only the fields that aren't NONE).
   const liv = {};
   CZ_LIV_FIELDS.forEach(([domId, key]) => { if (!$(domId).classList.contains("cz-off")) liv[key] = hexToRgb($(domId).value); });
+  if (czFinish && czFinish !== "gloss") liv.finish = czFinish;
   if (Object.keys(liv).length) ct.livery = liv;
   store.set("customTeam", ct);
   syncCustomTeam();

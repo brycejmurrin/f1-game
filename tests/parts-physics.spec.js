@@ -915,9 +915,15 @@ test.describe("Parts module — visual recipes", () => {
     expect(result.count).toBe(11);
   });
 
-  test("single-option recipes stay within 1.5x the default triangle budget", async ({ page }) => {
+  // The multiplier is a guard against a runaway recipe, not a measured limit —
+  // it exists so one option cannot quietly double the car. 1.6x is the smallest
+  // headroom that admits a legitimately heavy tread: a full-wet tyre carries 5
+  // grooves on all four wheels (1.53x), against the intermediate's 3 (1.32x).
+  const TRIANGLE_BUDGET = 1.6;
+
+  test(`single-option recipes stay within ${TRIANGLE_BUDGET}x the default triangle budget`, async ({ page }) => {
     await load(page);
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate((budget) => {
       const teamFor = (opt) => ({
         id: opt.teams?.[0] || opt.team || "mclaren",
         engine: opt.suppliers?.[0] || opt.supplier || "Mercedes",
@@ -930,11 +936,11 @@ test.describe("Parts module — visual recipes", () => {
           const team = teamFor(opt);
           const parts = Parts.getVisualTiers({ [cat.id]: opt.id }, team);
           const triangles = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { parts }).idx.length / 3;
-          if (triangles > baseTriangles * 1.5) overBudget.push(`${cat.id}:${opt.id}:${triangles}`);
+          if (triangles > baseTriangles * budget) overBudget.push(`${cat.id}:${opt.id}:${triangles}`);
         }
       }
       return { baseTriangles, overBudget };
-    });
+    }, TRIANGLE_BUDGET);
     expect(result.baseTriangles).toBeGreaterThan(0);
     expect(result.overBudget).toEqual([]);
   });
@@ -1163,6 +1169,53 @@ test.describe("Parts module — visual recipes", () => {
     expect(underspecified).toEqual([]);
   });
 
+  test("each structure knob independently deforms the mesh, and its default is inert", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      // Neutral recipes = exactly what the build*Parts() merges produce for a
+      // recipe-less tier-1 car, so "no knob set" must equal the untouched build.
+      const NEUTRAL = {
+        aero: { lvl: 2, beam: 0, drs: 0, vane: 1,
+          frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
+          rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1, floorCut: 0.04, diffuserRise: 1 },
+        engine: { in: 1, snork: 0, twin: 0, inlet: 1, outlet: 1, podWidth: 1,
+          shoulderHeight: 1, undercut: 1, coke: 1, tailWidth: 1, coverHeight: 1,
+          servicePanel: 1, heatShield: 1 },
+        brakes: { cal: null, duct: 1, rim: null, caliperPos: 0, coverOpen: 0, rotor: 1, rotorScale: 1 },
+        // tier 1 leaves the ERS strip unlit, so `led: null` is the inert recipe.
+        ers: { led: null, pack: 1, cells: 3 },
+        fuel: { cap: [0.55, 0.52, 0.6], flame: [1.15, 0.42, 0.14], line: 1 },
+      };
+      // The conduit hangs off the lit ERS strip, so probing it needs a lit pack.
+      const ACTIVE = Object.assign({}, NEUTRAL, { ers: { led: [0.15, 0.55, 1.6], pack: 1, cells: 3 } });
+      const build = (cat, visual) => Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
+        noWheels: true,
+        parts: { [cat]: 1, _visual: { [cat]: Object.assign({ id: "probe", tier: 1 }, visual) } },
+      });
+      const differs = (a, b) => a.pos.length !== b.pos.length
+        || a.pos.some((v, i) => Math.abs(v - b.pos[i]) > 1e-6);
+
+      const bare = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true });
+      const out = { inert: {}, active: {} };
+      const KNOBS = [
+        ["aero", "plate", 2], ["aero", "casc", 3], ["aero", "swan", 1], ["aero", "tvane", 1],
+        ["engine", "chimney", 3], ["brakes", "scoop", 2], ["ers", "conduit", 2], ["fuel", "filler", 2],
+      ];
+      for (const [cat, knob, value] of KNOBS) {
+        out.inert[`${cat}.${knob}`] = differs(build(cat, NEUTRAL[cat]), bare);
+        const base = build(cat, ACTIVE[cat]);
+        out.active[`${cat}.${knob}`] = differs(build(cat, { ...ACTIVE[cat], [knob]: value }), base);
+      }
+      return out;
+    });
+    for (const [knob, changed] of Object.entries(result.inert)) {
+      expect(changed, `${knob} neutral recipe must build the shipped geometry`).toBe(false);
+    }
+    for (const [knob, changed] of Object.entries(result.active)) {
+      expect(changed, `${knob} must deform the mesh`).toBe(true);
+    }
+  });
+
   test("recipe fingerprints are unique within every category", async ({ page }) => {
     await load(page);
     const duplicates = await page.evaluate(() => {
@@ -1233,6 +1286,67 @@ test.describe("Parts module — team signatures and factory presets", () => {
       return result;
     });
     expect(mismatches).toEqual([]);
+  });
+
+  test("every team fields a signature in every category it can", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const factoryEngineTeams = [];
+      const gaps = [];
+      for (const team of Teams.LIST.filter((t) => !t.custom)) {
+        const setup = Parts.getFactorySetup(team);
+        for (const cat of Parts.CATALOG) {
+          const opt = cat.options.find((o) => o.id === setup[cat.id]);
+          if (opt && opt.tag === "SIGNATURE") continue;
+          // A manufacturer-exclusive FACTORY power unit is already a team-unique
+          // model, so those four teams legitimately have no signature engine.
+          if (cat.id === "engine" && opt && (opt.supplier || opt.suppliers)) {
+            factoryEngineTeams.push(team.id);
+            continue;
+          }
+          gaps.push(`${team.id}:${cat.id}:${setup[cat.id]}`);
+        }
+      }
+      return { gaps, factoryEngineTeams };
+    });
+    expect(result.gaps).toEqual([]);
+    // Cadillac is Ferrari-powered and must NOT be in this list — without its own
+    // signature engine it would render the exact same power unit as Ferrari.
+    expect(result.factoryEngineTeams.sort())
+      .toEqual(["astonmartin", "audi", "ferrari", "redbull"]);
+  });
+
+  test("a signature is visible only to its own team and never changes that team's economics", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const leaks = [];
+      const drift = [];
+      for (const cat of Parts.CATALOG) {
+        for (const opt of cat.options.filter((o) => o.tag === "SIGNATURE")) {
+          for (const team of Teams.LIST.filter((t) => !t.custom)) {
+            const owns = (opt.teams || []).includes(team.id);
+            if (Parts.isOptionAvailable(opt, team) !== owns) leaks.push(`${opt.id}:${team.id}`);
+          }
+        }
+      }
+      // Swapping a team's factory signature for its equivalent must not move a
+      // single multiplier or credit — signatures buy a mesh, never an advantage.
+      for (const team of Teams.LIST.filter((t) => !t.custom)) {
+        const factory = Parts.getFactorySetup(team);
+        const plain = {};
+        for (const cat of Parts.CATALOG) {
+          const opt = cat.options.find((o) => o.id === factory[cat.id]);
+          plain[cat.id] = opt && opt.tag === "SIGNATURE" ? opt.equivalent : factory[cat.id];
+        }
+        const a = Parts.resolveSetup(factory, team), b = Parts.resolveSetup(plain, team);
+        if (JSON.stringify(a.mods) !== JSON.stringify(b.mods) || a.cost !== b.cost) {
+          drift.push({ team: team.id, factory: a.mods, plain: b.mods, cost: [a.cost, b.cost] });
+        }
+      }
+      return { leaks, drift };
+    });
+    expect(result.leaks).toEqual([]);
+    expect(result.drift).toEqual([]);
   });
 
   test("a signature selected by the wrong team falls back to the category default", async ({ page }) => {

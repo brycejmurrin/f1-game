@@ -219,7 +219,10 @@ js/circuits/     — circuit DATA —
 
 js/car/          — car —
   car3d.js       Car3D          procedural F1 car geometry
-  liveries.js    Liveries       custom paint jobs
+  liveries.js    Liveries       custom paint jobs — colours plus an optional
+                                  `finish` ("gloss" default | "satin" | "chrome"),
+                                  applied by remapping the body-paint surface id
+                                  (Car3D.FINISH_SURFACE); no shader change
   liverytex.js   LiveryTex      canvas-2D livery texture atlas (crests/sponsors/number)
   parts.js       Parts          upgrade catalog (8 categories, getMods, getCost, statMult)
   ghost.js       Ghost          time-trial ghost record/replay data layer
@@ -305,7 +308,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (83) + tests/*.test.mjs unit suites (22)
+tests/*.spec.js                 Playwright specs (84) + tests/*.test.mjs unit suites (22)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -356,6 +359,22 @@ Budget = 600 cr. `Parts.getMods(setup, teamEngine)` returns
 `{speed, accel, cornering, braking}` multipliers. Supplier-exclusive options
 (e.g. `manu_mercedes`) are only shown when `team.engine` matches.
 `unlimitedBudget` (localStorage `apex26.unlimitedBudget`) removes the 600 cr cap.
+
+Every option also carries a parametric `visual` **recipe** consumed by `Car3D`
+(`getVisualTiers().._visual`); `VISUAL_FIELD_REGISTRY` names the one consumer of
+each recipe field, and `tests/parts-physics.spec.js` fails on an unregistered or
+stale field, a duplicate recipe within a category, or an engine that repeats
+another's six-field bodywork shape. The newer STRUCTURE knobs are
+`aero.plate/casc/swan/tvane` (endplate profile, cascade count, swan-neck mount,
+T-wing), `engine.chimney`, `brakes.scoop`, `ers.conduit` and `fuel.filler` — each
+defaults to the shipped geometry, so an option written before them is unchanged.
+
+**SIGNATURE options** (`tag: "SIGNATURE"`, `teams: [id]`) are cost- and
+physics-identical clones of the universal option named in `equivalent` — they buy
+a distinct mesh, never an advantage, and the test suite enforces that. Every team
+fields one in every category via `FACTORY_PRESETS`, except the four on a
+manufacturer-exclusive FACTORY power unit (that unit is already team-unique).
+`FACTORY_PRESETS` drives AI car MESHES only — never AI physics or player saves.
 
 ---
 
@@ -630,7 +649,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-83 Playwright specs + 22 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+84 Playwright specs + 22 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for
