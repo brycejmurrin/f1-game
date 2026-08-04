@@ -69,10 +69,42 @@ const LiveryTex = (function () {
   ]; }
   function css(c) { const r = to255(c); return "rgb(" + r[0] + "," + r[1] + "," + r[2] + ")"; }
   function cssA(c, a) { const r = to255(c); return "rgba(" + r[0] + "," + r[1] + "," + r[2] + "," + a + ")"; }
-  // Relative luminance (0..1) from a 0..1 float colour.
-  function lum(c) { return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+  // Relative luminance, WCAG-style. The channels MUST be linearised first —
+  // applying the Rec.709 coefficients straight to gamma-encoded sRGB (which this
+  // did) overstates mid-tones badly: 0.5 grey reads as luminance 0.5 when it is
+  // really 0.21. Every ink decision below hangs off this number.
+  function lin(u) { return u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4); }
+  function lum(c) { return 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]); }
+  // WCAG contrast ratio, 1 (identical) .. 21 (black on white).
+  function contrast(a, b) {
+    const la = lum(a), lb = lum(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  const INK_DARK = [0.06, 0.06, 0.08], INK_LIGHT = [0.97, 0.97, 0.98];
+  // Text on this car is legible below about 4.5:1; under 3:1 it disappears at
+  // racing distance. Marks that cannot reach the target get a halo instead.
+  const INK_TARGET = 4.5, INK_FLOOR = 3.0;
+  // Pick the ink with the best WORST-CASE contrast over every paint the mark can
+  // land on. A sidepod wordmark can straddle the base paint AND a livery's pod
+  // panel, so inking it against c1 alone is how a mark ends up invisible on the
+  // half of the panel nobody checked.
+  function inkOn(bgs) {
+    const list = bgs.filter(Boolean);
+    if (!list.length) return INK_LIGHT;
+    const worst = (ink) => Math.min.apply(null, list.map((b) => contrast(ink, b)));
+    const d = worst(INK_DARK), l = worst(INK_LIGHT);
+    // COPY, never the shared constant: the caller tags the result with its
+    // worst-case ratio, and handing back INK_DARK itself would let each region's
+    // score overwrite the previous region's.
+    const ink = (d >= l ? INK_DARK : INK_LIGHT).slice();
+    ink.worst = Math.max(d, l);
+    return ink;
+  }
   // Pick a high-contrast ink for a given paint colour.
-  function inkFor(c) { return lum(c) > 0.5 ? [0.06, 0.06, 0.08] : [0.97, 0.97, 0.98]; }
+  function inkFor(c) { return inkOn([c]); }
+  // The halo a mark needs when no ink clears INK_TARGET on its background: the
+  // opposite ink, stroked behind the glyphs, which buys contrast on any paint.
+  function haloFor(ink) { return lum(ink) < 0.5 ? INK_LIGHT : INK_DARK; }
 
   // ── text drawing ───────────────────────────────────────────────────────────
   // Draw UPPERCASE text with manual letter-spacing, fit-to-width, centred/left
@@ -119,6 +151,18 @@ const LiveryTex = (function () {
     ctx.clip();
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
+    // Halo first, under the fill: a stroke in the opposite ink so the wordmark
+    // still separates from a paint neither black nor white contrasts well with.
+    if (opts.halo) {
+      ctx.strokeStyle = css(opts.halo);
+      ctx.lineWidth = Math.max(2, size * 0.13);
+      ctx.lineJoin = "round";
+      let hx = x;
+      for (let i = 0; i < text.length; i++) {
+        ctx.strokeText(text[i], hx, y);
+        hx += widths[i] + size * spacing;
+      }
+    }
     ctx.fillStyle = css(ink);
     for (let i = 0; i < text.length; i++) {
       ctx.fillText(text[i], x, y);
@@ -771,14 +815,34 @@ const LiveryTex = (function () {
     const c2 = colors.c2 || [0.9, 0.9, 0.92];
     const stripe = colors.stripe || null;
 
-    // Ink reads on the base paint (c1). Accent is the other livery colour;
-    // prefer the stripe accent if present and distinct, else c2.
-    const ink = inkFor(c1);
+    // Each region is inked against the paint IT lands on, not against c1 for all
+    // of them. A livery that sets `pod` repaints the lower sidepod, which is
+    // exactly where the strip and the bottom of the primary wordmark sit — inking
+    // those against the base paint is how a mark ends up unreadable on the panel.
+    const pod = colors.pod || null;
+    const podBg = pod ? [c1, pod] : [c1];     // the mark straddles both
+    const ink = inkFor(c1);                   // crest / fin / number: base paint
+    const inkPod = inkOn(podBg);              // sidepod wordmarks
+    const inkStrip = inkOn(pod ? [pod] : [c1]); // the low strip sits inside the panel
+    // A mark that cannot reach INK_TARGET on its background gets a halo rather
+    // than being left to vanish; below INK_FLOOR it would be invisible outright.
+    const haloIf = (i) => (i.worst < INK_TARGET ? haloFor(i) : null);
+
     let accent = c2;
     if (stripe) accent = stripe;
-    // Guard: if accent is too close to the ink in luminance, fall back so the
-    // second-colour details don't vanish.
-    if (Math.abs(lum(accent) - lum(ink)) < 0.15) accent = (lum(ink) > 0.5) ? c1 : c2;
+    // Guard: the accent has to separate from BOTH the ink it sits beside and the
+    // paint behind it. The old check compared raw luminance difference against a
+    // flat 0.15, which passes plenty of pairs that are indistinguishable in
+    // practice, and its fallback was never re-checked.
+    if (contrast(accent, ink) < 2.0 || contrast(accent, c1) < 1.6) {
+      const options = [c2, stripe, c1, INK_LIGHT, INK_DARK].filter(Boolean);
+      let best = accent, bestScore = -1;
+      for (const cand of options) {
+        const score = Math.min(contrast(cand, ink), contrast(cand, c1));
+        if (score > bestScore) { bestScore = score; best = cand; }
+      }
+      accent = best;
+    }
 
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe);
@@ -790,12 +854,18 @@ const LiveryTex = (function () {
 
     // Sponsor wordmarks.
     const names = SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
-    drawWordmark(ctx, names[0], REGIONS.titleA, ink, { align: "center" });
-    drawWordmark(ctx, names[1], REGIONS.titleB, ink, { align: "center" });
-    drawWordmark(ctx, names[2], REGIONS.wing,   ink, { align: "center", spacing: 0.1 });
+    drawWordmark(ctx, names[0], REGIONS.titleA, inkPod,
+      { align: "center", halo: haloIf(inkPod) });
+    drawWordmark(ctx, names[1], REGIONS.titleB, inkPod,
+      { align: "center", halo: haloIf(inkPod) });
+    // The rear-wing band is inked for the WING flap colour, which a livery sets
+    // independently (it defaults to c2, not c1).
+    const inkWing = inkOn([colors.wing || c2]);
+    drawWordmark(ctx, names[2], REGIONS.wing, inkWing,
+      { align: "center", spacing: 0.1, halo: haloIf(inkWing) });
     // Long thin strip: chain a couple of names.
     drawWordmark(ctx, names[3] + "   " + names[4] + "   " + names[5],
-      REGIONS.strip, ink, { align: "center", spacing: 0.04 });
+      REGIONS.strip, inkStrip, { align: "center", spacing: 0.04, halo: haloIf(inkStrip) });
 
     // Car number — driver-specific when the caller passes one, else the team's
     // primary number. Drawn on the base-paint nose flank, so `ink` (chosen to
