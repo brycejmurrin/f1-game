@@ -298,19 +298,24 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      narrow needs the phone's compact block, not a row that will not fit. */
   @media (min-width: 1100px) {
     body.desktop .hud-bottom {
-      grid-template-columns: auto auto minmax(180px, 300px) auto auto;
+      /* The energy bar is a PROPORTION, not a number — it wants to be long
+         enough to read a quarter-full at a glance and no longer. Stretched to
+         300px it was the widest thing in the cluster, which made the least
+         urgent readout the most prominent one. */
+      grid-template-columns: auto auto minmax(140px, 190px) auto auto;
       grid-template-areas: "gear speed energy ot aero";
       gap: 0 20px;
     }
     body.desktop #hud-gearbox {
       flex-direction: row; align-items: center; gap: 12px;
-      padding: 5px 14px; align-self: center;
+      padding: 7px 16px; align-self: center;
     }
-    body.desktop #hud-gear { font-size: 52px; min-width: 40px; }
-    body.desktop #hud-tach { width: 190px; height: 14px; }
-    body.desktop #hud-energy { width: auto; justify-self: stretch; height: 15px; }
-    body.desktop #hud-speed { font-size: 38px; }
-    body.desktop .hud-unit { font-size: 12px; margin-left: 4px; }
+    body.desktop #hud-gear { font-size: 58px; min-width: 44px; }
+    body.desktop #hud-tach { width: 172px; height: 18px; }
+    body.desktop #hud-energy { width: auto; justify-self: stretch; height: 18px; }
+    body.desktop #hud-speed { font-size: 42px; }
+    body.desktop .hud-unit { font-size: 13px; margin-left: 4px; }
+    body.desktop #hud-ot, body.desktop #hud-aero { font-size: 15px; padding: 8px 14px; }
   }
   /* console steer: arrows bottom-left, side by side (left thumb home) */
   #btn-steer-left  { left: calc(16px + var(--sal)); bottom: calc(12px + var(--sab)); }
