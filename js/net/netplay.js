@@ -58,8 +58,13 @@ const NetPlay = (function () {
     let role = null;                      // "host" | "guest"
     let active = false;
     let localCar = null;
-    let remoteCar = null;
-    let interp = null;
+    // wireId -> { car, interp, profile }. ONE entry today, because there is one
+    // transport — but every read below goes through the map, so growing the
+    // room becomes a transport change rather than a rewrite of this file. The
+    // key is G.wireId(): both peers compute the same number for the same
+    // driver, which is only true because no two humans can share a seat.
+    const remotes = new Map();
+    const remoteList = () => [...remotes.values()];
     let lastPublish = -Infinity;
     let peerProfile = null;
     let lastReason = null;
@@ -69,20 +74,30 @@ const NetPlay = (function () {
     // the fallbacks unreachable — recording it is how a test can tell that it
     // DID, rather than that the collision merely happened not to occur.
     let lastSlotFallback = null;
-    let peerLaps = [];                    // lap/sector times the rival reported
-    let peerResult = null;                // their final classification, if sent
+    // Lap/sector times rivals reported. Flat, but each entry now carries the
+    // driverId the reporter stamped on it, so three rivals' laps stay tellable
+    // apart instead of pooling into one anonymous list.
+    let peerLaps = [];
+    let peerResult = null;                // the host's classification, if sent
     const eventLog = [];                  // recent inbound events, for status()
 
     const _smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 8 };
 
     // ---- car slots --------------------------------------------------------
-    // Which grid car becomes the rival. Prefer the seat they actually picked;
-    // fall back through their team, then anyone, because two players choosing
-    // the same driver must not deadlock the lobby — makeCars() only ever
-    // marks ONE slot as the player.
+    // Which grid car becomes a rival. The seat they actually picked, first and
+    // by preference — with seat exclusivity in the lobby that is now the only
+    // arm that should ever fire, and lastSlotFallback records it when one of
+    // the others does.
+    //
+    // The fallbacks are kept rather than deleted because they are the
+    // behaviour for a peer that did NOT do exclusivity: an older build, or one
+    // that failed the handshake's build check and was let through anyway. A
+    // car already claimed by another rival is excluded, so three peers cannot
+    // be handed the same slot.
     function pickRemoteSlot(profile) {
       const cars = G.cars || [];
-      const free = (c) => c && !c.local;
+      const claimed = new Set(remoteList().map((r) => r.car));
+      const free = (c) => c && !c.local && !claimed.has(c);
       lastSlotFallback = null;
       if (profile) {
         const exact = cars.find((c) => free(c) && c.team && c.team.id === profile.team && c.seat === profile.driver);
@@ -94,19 +109,24 @@ const NetPlay = (function () {
       return cars.find(free) || null;
     }
 
-    // ---- two humans, two grid boxes ---------------------------------------
-    // gridUp() puts THE local player at P12, and it runs identically on both
-    // peers — so out of the box each player's own car and the rival's car
-    // occupy the same slot, and the rival is posed directly inside you. Found
+    // ---- N humans, N grid boxes -------------------------------------------
+    // gridUp() puts THE local player at P12, and it runs identically on every
+    // peer — so out of the box each player's own car and every rival's car
+    // occupy the same slot, and the rivals are posed directly inside you. Found
     // the moment two real browsers first raced: both peers reported their own
     // car at the same s, to the metre.
     //
-    // The rule needs no extra message and no negotiation, which is the point:
-    // the HOST keeps the slot gridUp chose, the GUEST takes the one behind it,
-    // and each peer arranges its own grid to that same pair. Both screens then
-    // agree, because a grid position maps to the same s on both (gridUp's
-    // formula reads only the slot index and track.total, and the track is the
-    // host's choice, so it is the same track).
+    // The rule needs no extra message and no negotiation, which is the point.
+    // Every peer sorts the humans by wireId — a number all of them compute the
+    // same way — and lays that order into consecutive boxes from P12. Each peer
+    // therefore arranges its own grid into the SAME arrangement without anyone
+    // being told what it is, because a grid position maps to the same s on both
+    // (gridUp's formula reads only the slot index and track.total, and the
+    // track is the host's choice, so it is the same track).
+    //
+    // Sorting by wireId rather than "host first, then join order" is what makes
+    // it negotiation-free: join order is knowledge the guests do not all share,
+    // and wireId is derivable from the profiles everyone already has.
     function separateGrid() {
       const cars = G.cars || [];
       const at = (pos) => cars.find((c) => c.gridPos === pos);
@@ -114,14 +134,20 @@ const NetPlay = (function () {
         const held = at(pos);
         if (held && held !== car) G.swapGridSlots(car, held);
       };
-      const hostPos = localCar.gridPos;          // P12 on both peers
-      const guestPos = hostPos + 1;
-      if (role === "host") {
-        move(remoteCar, guestPos);
-      } else {
-        move(localCar, guestPos);                // ...displacing whoever held it
-        move(remoteCar, hostPos);                // ...into the slot we just left
-      }
+      const humans = [localCar, ...remoteList().map((r) => r.car)]
+        .filter(Boolean)
+        .sort((a, b) => G.wireId(a) - G.wireId(b));
+      if (humans.length < 2) return;
+
+      // Walk BACKWARDS off the end rather than no-oping. The old code took
+      // localCar.gridPos + 1 unconditionally; on a grid where the local player
+      // holds the last box that slot does not exist, at() returned undefined,
+      // move() did nothing and the two humans stayed stacked — silently, which
+      // is the worst way for this to fail.
+      let first = localCar.gridPos;
+      const last = cars.length;                  // gridPos is 1-based
+      if (first + humans.length - 1 > last) first = Math.max(1, last - humans.length + 1);
+      humans.forEach((c, i) => move(c, first + i));
     }
 
     // ---- posing a rival ---------------------------------------------------
@@ -176,29 +202,43 @@ const NetPlay = (function () {
 
     // ---- inbound state ----------------------------------------------------
     function onState(bytes) {
-      if (!active || !interp || !remoteCar) return;
+      if (!active || !remotes.size) return;
       const pkt = NetSnapshot.decodeSnapshot(bytes);
       if (!pkt || !pkt.cars.length) return;
       // The packet is stamped with the SENDER's clock; place it on ours or it
       // lands at an arbitrary point in the buffer's timeline.
       const t = session.peerToLocal(pkt.tick);
-      // A peer only ever publishes cars it owns, so take the first entry
-      // rather than trusting an index into our own grid.
-      interp.push(t, pkt.cars[0]);
+      // EVERY entry, routed by the id on the wire. This used to take cars[0]
+      // and ignore the id, because the id was the sender's own cars[] index and
+      // the two grids do not agree on those. It is G.wireId() now — the same
+      // number on every screen — so a packet carrying several cars (which is
+      // what a relaying host sends) lands each one on the right rival.
+      //
+      // An id we have no slot for is dropped, not guessed at: that is a car
+      // this peer does not know about, and posing it over somebody else would
+      // be worse than not drawing it.
+      for (const entry of pkt.cars) {
+        const r = remotes.get(entry.id);
+        if (r) r.interp.push(t, entry);
+      }
     }
 
     // ---- lifecycle --------------------------------------------------------
-    function handBackToAI(reason) {
-      if (remoteCar) {
+    // Hand ONE rival back, or all of them when no id is named (the whole
+    // session went away). Per-entry so that losing one player out of four
+    // leaves the other two being driven by the people driving them, rather
+    // than dropping the entire field to the AI because one phone slept.
+    function handBackToAI(reason, id) {
+      const gone = id == null ? remoteList() : [remotes.get(id)].filter(Boolean);
+      for (const r of gone) {
         // The AI path already exists and needs nothing but the flags cleared:
         // an abandoned car rejoins the race rather than standing on the
         // circuit as an obstacle nobody is driving.
-        G.setCarRole(remoteCar, false, false);
-        remoteCar.netInput = null;
-        remoteCar = null;
+        G.setCarRole(r.car, false, false);
+        r.car.netInput = null;
+        remotes.delete(G.wireId(r.car));
       }
-      interp = null;
-      if (reason && G.announce) G.announce("RIVAL DISCONNECTED", 2);
+      if (reason && gone.length && G.announce) G.announce("RIVAL DISCONNECTED", 2);
     }
 
     function start(opts) {
@@ -231,8 +271,8 @@ const NetPlay = (function () {
           // (hostStart ran first, which is the normal order), name the moment
           // now — this is the earliest instant both sides can act on one.
           if (name === EV.ARMED && role === "host") {
-            peerArmed = true;
-            if (armDeadline) nameTheMoment();
+            armedPeers.add(d && d.from != null ? d.from : "peer");
+            if (armDeadline && allArmed()) nameTheMoment();
           }
           // A rival's qualifying lap. Handed to the game rather than kept here:
           // the classification is the game's, and it has to be recomputed with
@@ -245,33 +285,50 @@ const NetPlay = (function () {
       }
 
       localCar = (G.cars || []).find((c) => c.local) || G.player || null;
-      remoteCar = pickRemoteSlot(peerProfile);
-      if (!localCar || !remoteCar) {
+      remotes.clear();
+      // One profile today, an array when the room grows. Written as a list here
+      // so that the only thing Phase C has to change is where the list comes
+      // from, not what start() does with it.
+      const joining = opts.peers || (peerProfile ? [{ profile: peerProfile, mods: opts.peerMods }] : []);
+      for (const j of joining) {
+        const car = pickRemoteSlot(j.profile);
+        if (!car) continue;
+        // The rival is human — so it gets the human collision mass and is
+        // excluded from the AI's rubber-band — but it is not local, and its
+        // driving comes off the wire rather than out of updateCar.
+        G.setCarRole(car, true, false);
+        car.mods = j.mods || car.mods || null;
+        remotes.set(G.wireId(car), {
+          car,
+          profile: j.profile || null,
+          // One buffer per rival. createInterp holds no car identity, which is
+          // exactly what makes this a matter of instantiating several.
+          interp: NetSnapshot.createInterp({
+            total: G.track.total,
+            delayMs: opts.interpDelayMs != null ? opts.interpDelayMs : INTERP_DELAY_MS,
+          }),
+        });
+      }
+      if (!localCar || !remotes.size) {
         session = null;
         return { ok: false, error: "no_slot", message: "Could not find a grid slot for both drivers." };
       }
-
-      // The rival is human — so it gets the human collision mass and is
-      // excluded from the AI's rubber-band — but it is not local, and its
-      // driving comes off the wire rather than out of updateCar.
-      G.setCarRole(remoteCar, true, false);
-      remoteCar.mods = opts.peerMods || remoteCar.mods || null;
       separateGrid();
 
-      interp = NetSnapshot.createInterp({
-        total: G.track.total,
-        delayMs: opts.interpDelayMs != null ? opts.interpDelayMs : INTERP_DELAY_MS,
-      });
       lastPublish = -Infinity;
       lastReason = null;
-      peerArmed = false;
+      armedPeers.clear();
       armDeadline = 0;
       active = true;
       // start() is called straight after startRace(), so reaching this line IS
       // "my circuit is built and my loop is about to run again". That is the
       // fact the host needs before it can name lights-out.
       if (role === "guest") { try { session.sendEvent(EV.ARMED, {}); } catch (e) {} }
-      return { ok: true, role, localId: G.cars.indexOf(localCar), remoteId: G.cars.indexOf(remoteCar) };
+      // remoteId stays singular for the callers and tests that read it — it is
+      // the FIRST rival, which is the only one there is until Phase C. remoteIds
+      // is the shape to read from now on.
+      const ids = remoteList().map((r) => G.cars.indexOf(r.car));
+      return { ok: true, role, localId: G.cars.indexOf(localCar), remoteId: ids[0], remoteIds: ids };
     }
 
     // ---- synchronised lights-out -----------------------------------------
@@ -288,7 +345,13 @@ const NetPlay = (function () {
     // making the host wait a few more seconds.
     const ARM_WAIT_MS = 20000;
     let armDeadline = 0;                  // host: when to stop waiting for ARMED
-    let peerArmed = false;
+    // WHO has reported their circuit built, not merely whether anyone has. With
+    // one guest this is the boolean it replaces; with three it stops the lights
+    // going out while two of them are still building the track. The sender id
+    // is a placeholder until events carry one (Phase C) — a single guest is
+    // still exactly one entry either way.
+    const armedPeers = new Set();
+    const allArmed = () => armedPeers.size >= Math.max(1, remotes.size);
 
     function armStart(atPeerMs, hold) {
       const at = session ? session.peerToLocal(atPeerMs) : atPeerMs;
@@ -312,7 +375,7 @@ const NetPlay = (function () {
     // reached, instead of from one side's optimism.
     function hostStart() {
       if (role !== "host" || !session) return false;
-      if (!peerArmed) { armDeadline = performance.now() + ARM_WAIT_MS; return true; }
+      if (!allArmed()) { armDeadline = performance.now() + ARM_WAIT_MS; return true; }
       return nameTheMoment();
     }
 
@@ -407,16 +470,18 @@ const NetPlay = (function () {
       // else's position is ours to assert.
       if (localCar && now - lastPublish >= PUBLISH_MS) {
         lastPublish = now;
+        // G.wireId, not cars.indexOf — the receiver has to be able to say WHICH
+        // car this is, and its grid is not indexed the same as ours.
         session.sendState(NetSnapshot.encodeSnapshot(Math.round(now), [
-          { id: G.cars.indexOf(localCar), car: localCar },
+          { id: G.wireId(localCar), car: localCar },
         ]));
       }
 
-      // Draw the rival where it was INTERP_DELAY_MS ago, blended between the
+      // Draw each rival where it was INTERP_DELAY_MS ago, blended between the
       // two packets bracketing that moment.
-      if (remoteCar && interp) {
-        const st = interp.sample(now);
-        if (st) poseRemote(remoteCar, st);
+      for (const r of remotes.values()) {
+        const st = r.interp.sample(now);
+        if (st) poseRemote(r.car, st);
       }
     }
 
@@ -437,23 +502,40 @@ const NetPlay = (function () {
       peerLaps: () => peerLaps.slice(),
       peerResult: () => peerResult,
       // updateCar() consults this: a car posed from the network must not also
-      // be simulated locally, or the two fight every frame.
-      owns: (c) => active && c != null && c === remoteCar,
+      // be simulated locally, or the two fight every frame. A membership test
+      // now rather than an identity one, the same shape incidentSim.owns has.
+      owns: (c) => active && c != null && remotes.has(G.wireId(c)) && remotes.get(G.wireId(c)).car === c,
+      // Who we are holding slots for. qualiNetWaiting() reads this so the grid
+      // waits for every rival's lap rather than the first to arrive.
+      rivalDriverIds: () => remoteList().map((r) => r.car.driverId).filter((x) => x != null),
       active: () => active,
       role: () => role,
       // Where the rival actually IS, not where it is drawn — Phase 3's contact
       // resolution needs this, because hitting a rival at their delayed drawn
       // pose means hitting them where they were 100 ms ago.
-      predict: (now) => (active && interp ? interp.predict(now) : null),
+      // Takes the car now: with several rivals a bare predict(now) cannot say
+      // WHICH one it describes, and contact resolution has to know. No caller
+      // existed yet, so the signature was free to fix.
+      predict: (c, now) => {
+        if (!active) return null;
+        const r = c == null ? remoteList()[0] : remotes.get(G.wireId(c));
+        return r ? r.interp.predict(now == null ? c : now) : null;
+      },
       sendEvent: (type, data) => (session ? session.sendEvent(type, data) : false),
       onEvent: (type, fn) => (session ? session.onEvent(type, fn) : false),
       status: () => ({
         active, role, reason: lastReason,
         localId: localCar ? G.cars.indexOf(localCar) : -1,
-        remoteId: remoteCar ? G.cars.indexOf(remoteCar) : -1,
+        // remoteId/buffered describe the FIRST rival and are kept because the
+        // hooks doc and the specs read them. remotes[] is the whole picture.
+        remoteId: remoteList().length ? G.cars.indexOf(remoteList()[0].car) : -1,
+        remotes: remoteList().map((r) => ({
+          id: G.cars.indexOf(r.car), wire: G.wireId(r.car),
+          driverId: r.car.driverId, buffered: r.interp.size(),
+        })),
         slotFallback: lastSlotFallback,
         net: session ? session.stats() : null,
-        buffered: interp ? interp.size() : 0,
+        buffered: remoteList().length ? remoteList()[0].interp.size() : 0,
         events: eventLog.length,
         peerLaps: peerLaps.length,
         peerResult: !!peerResult,

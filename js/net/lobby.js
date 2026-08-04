@@ -247,13 +247,17 @@ const NetLobby = (function () {
       // first would race the rival's car in whatever they happened to be
       // driving when the connection opened.
       session.onEvent(NetPlay.EV.HELLO, (p) => {
-        _peerProfile = p || _peerProfile;
+        const from = (p && p.from) || PEER_ONE;
+        if (p) _peers.set(from, p);
         // Learning what they picked is the moment a clash becomes knowable.
         resolveSeatClash();
         renderRoom();
       });
       session.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest") applySettings(d); });
-      session.onEvent(NetPlay.EV.READY, (d) => { peerReady = !!(d && d.ready); renderRoom(); });
+      session.onEvent(NetPlay.EV.READY, (d) => {
+        _ready.set((d && d.from) || PEER_ONE, !!(d && d.ready));
+        renderRoom();
+      });
       // GO is separate from SETTINGS on purpose. Settings now change LIVE while
       // both players sit in the room, so "the host chose a track" and "the host
       // pressed start" have to be different messages — they used to be the same
@@ -273,12 +277,24 @@ const NetLobby = (function () {
     // buttons open the game's real #select / #race-settings / #carsetup
     // screens, which is how custom teams, liveries and the parts budget come
     // along for free rather than as a second, poorer copy.
-    let peerReady = false;
+    // peerId -> profile, and peerId -> ready. ONE entry today because there is
+    // one transport; events do not carry a sender yet, so everything the far
+    // side says is filed under PEER_ONE. When Phase C gives each session its own
+    // id, only that constant is replaced — every read below is already keyed.
+    const PEER_ONE = "peer";
+    const _peers = new Map();
+    const _ready = new Map();
+    // The first (and today only) peer, for the callers and specs that ask about
+    // "the other player" in the singular.
+    const firstPeer = () => (_peers.size ? [..._peers.values()][0] : null);
+    // Everyone has to be ready, and there has to BE somebody: an empty room
+    // where nobody has said anything must not read as unanimous consent.
+    const peersReady = () => _peers.size > 0 && [..._peers.keys()].every((k) => _ready.get(k));
     let selfReady = false;
 
     function openRoom() {
       selfReady = false;
-      peerReady = false;
+      _ready.clear();
       show("room");
       // The lobby is a dialog over the menu, and the room is where both players
       // now wait — so it must survive the screens it opens.
@@ -339,8 +355,8 @@ const NetLobby = (function () {
 
     function peerSeats() {
       const out = [];
-      if (_peerProfile && _peerProfile.team) {
-        out.push({ team: _peerProfile.team, driver: _peerProfile.driver || 0 });
+      for (const p of _peers.values()) {
+        if (p && p.team) out.push({ team: p.team, driver: p.driver || 0 });
       }
       return out;
     }
@@ -486,7 +502,9 @@ const NetLobby = (function () {
         e.raceNote.hidden = host;
       }
       if (e.me) e.me.innerHTML = driverLine(localProfile(), "You", selfReady);
-      if (e.them) e.them.innerHTML = driverLine(_peerProfile, "Them", peerReady);
+      // One row still, because the markup has one. Phase C turns #vs-them into
+      // a list; until then this shows the first peer, which is the only peer.
+      if (e.them) e.them.innerHTML = driverLine(firstPeer(), "Them", peersReady());
       if (e.ready) {
         e.ready.textContent = selfReady ? "NOT READY" : "READY";
         e.ready.setAttribute("aria-pressed", selfReady ? "true" : "false");
@@ -496,13 +514,14 @@ const NetLobby = (function () {
         // choosing — a race that begins while someone is still in the garage
         // puts them on the grid in a car they did not pick.
         e.start.hidden = !host;
-        e.start.disabled = !(selfReady && peerReady);
+        e.start.disabled = !(selfReady && peersReady());
       }
     }
 
     function startFromRoom() {
       if (role !== "host" || !session) return false;
-      if (!(selfReady && peerReady)) { say("Both drivers need to be ready.", true); return false; }
+      // "Everyone", not "both" — the sentence has to survive a third player.
+      if (!(selfReady && peersReady())) { say("Everyone needs to be ready.", true); return false; }
       publishSettings();
       session.sendEvent(NetPlay.EV.GO, {});
       beginRace();
@@ -562,8 +581,11 @@ const NetLobby = (function () {
       }
       const started = G.netPlay.start({
         session, role,
-        peerProfile: _peerProfile,
-        peerMods: modsFromProfile(_peerProfile),
+        peerProfile: firstPeer(),
+        peerMods: modsFromProfile(firstPeer()),
+        // The list form. NetPlay builds one remote slot per entry, so growing
+        // the room is a matter of this array getting longer.
+        peers: [..._peers.values()].map((p) => ({ profile: p, mods: modsFromProfile(p) })),
       });
       clearInterval(pumpTimer);          // the game loop pumps it from here on
       pumpTimer = null;
@@ -577,7 +599,6 @@ const NetLobby = (function () {
       close();
     }
 
-    let _peerProfile = null;
     let session = null;
     let pumpTimer = null;
 
@@ -619,7 +640,7 @@ const NetLobby = (function () {
       say("Reading invite…");
       const res = await NetHandshake.acceptInvite(transport, code, localProfile());
       if (!res.ok) { say(res.message || "That invite could not be read.", true); return res; }
-      _peerProfile = res.peer;
+      if (res.peer) _peers.set(PEER_ONE, res.peer);
       if (e.answer) e.answer.value = res.code;
       if (e.answerHint) e.answerHint.hidden = false;
       if (e.answerActions) e.answerActions.hidden = false;
@@ -641,7 +662,7 @@ const NetLobby = (function () {
       say("Reading answer…");
       const res = await NetHandshake.acceptAnswer(transport, code);
       if (!res.ok) { say(res.message || "That answer could not be read.", true); return res; }
-      _peerProfile = res.peer;
+      if (res.peer) _peers.set(PEER_ONE, res.peer);
       waitForOpen();
       return res;
     }
@@ -847,7 +868,7 @@ const NetLobby = (function () {
       }
       const acc = await NetHandshake.acceptAnswer(transport, got.payload);
       if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return acc; }
-      _peerProfile = acc.peer;
+      if (acc.peer) _peers.set(PEER_ONE, acc.peer);
       waitForOpen();
       return { ok: true, code };
     }
@@ -878,7 +899,7 @@ const NetLobby = (function () {
           say("Found it — answering…");
           const res = await NetHandshake.acceptInvite(transport, inviteCode, localProfile());
           if (!res.ok) { answered = res; return null; }
-          _peerProfile = res.peer;
+          if (res.peer) _peers.set(PEER_ONE, res.peer);
           answered = res;
           return res.code;
         },
@@ -904,7 +925,7 @@ const NetLobby = (function () {
     function open() {
       const e = els();
       if (!e.screen) return false;
-      _peerProfile = null;
+      _peers.clear(); _ready.clear();
       show("pick");
       for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
       if (e.answerHint) e.answerHint.hidden = true;
@@ -942,7 +963,7 @@ const NetLobby = (function () {
       stopCodeWait();
       teardown();
       role = null;
-      _peerProfile = null;
+      _peers.clear(); _ready.clear();
       close();
     }
 
@@ -1053,7 +1074,8 @@ const NetLobby = (function () {
       reportQuali,
       roomState: () => ({
         open: !!(els().roomStep && !els().roomStep.hidden),
-        role, selfReady, peerReady, peer: _peerProfile,
+        role, selfReady, peerReady: peersReady(), peer: firstPeer(),
+        peers: [..._peers.values()],
       }),
       localProfile, modsFromProfile, setTransportFactory,
       failureMsg,

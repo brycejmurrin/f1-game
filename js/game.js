@@ -793,7 +793,11 @@ let raceQuali = store.get("raceQuali", false);
 // are real. The rival's arrives over the wire (NetPlay EV.QUALI) as
 // driverId -> seconds; quali.simulate() takes the map and stops caring which of
 // them is "the player". Cleared with the classification.
-let qualiPeer = null;
+// driverId -> seconds, one entry per rival who has driven. A map rather than a
+// single record because three rivals report three laps and the second arrival
+// must not erase the first — qualiDriven() already built a driverId map, so
+// this is the shape the model always wanted.
+let qualiPeers = new Map();
 // Everything anyone actually drove, in the one shape the model wants.
 // The rival's driven lap has arrived. Store it, and redraw whatever is showing:
 // if the sheet is up it must now list their real time instead of the model's
@@ -814,7 +818,13 @@ function netReportQuali(driverId, t) {
 let qualiNetDone = null;          // the lobby's "now finish starting" callback
 function qualiNetWaiting() {
   if (!qualiNetDone) return false;
-  return !(qualiPeer && qualiPeer.t > 0);
+  // EVERY rival, not "a rival". With one peer this is the boolean it always
+  // was; with three it stops the grid forming off one arrived lap and two
+  // guesses. rivalDriverIds() is the roster NetPlay actually holds slots for,
+  // so somebody who dropped during qualifying stops being waited on.
+  const rivals = netPlay.rivalDriverIds();
+  if (!rivals.length) return !(qualiPeers.size > 0);
+  return rivals.some((id) => !(qualiPeers.get(id) > 0));
 }
 
 // Say WHY the grid is not available yet, on the button itself.
@@ -844,7 +854,7 @@ function openQualiForNet(done) {
 }
 
 function onPeerQuali(d) {
-  qualiPeer = { driverId: d.driverId, t: d.t };
+  if (d && d.driverId != null && d.t > 0) qualiPeers.set(d.driverId, d.t);
   if (session !== "quali" && !isQuali()) return;
   const mine = player && player.best < Infinity ? player.best : 0;
   quali.simulate(qualiDriven(mine));
@@ -854,7 +864,7 @@ function onPeerQuali(d) {
 function qualiDriven(myTime) {
   const m = new Map();
   if (myTime > 0 && player) m.set(player.driverId, myTime);
-  if (qualiPeer && qualiPeer.driverId != null && qualiPeer.t > 0) m.set(qualiPeer.driverId, qualiPeer.t);
+  for (const [id, t] of qualiPeers) if (t > 0) m.set(id, t);
   return m.size ? m : 0;
 }
 let raceWeather = "dry";       // "dry" | "wet" | "rain" | "overcast" | "fog"
@@ -1352,6 +1362,31 @@ function setCarRole(c, human, local) {
   c.human = !!human;
   c.local = !!local;
   c.isPlayer = !!local;
+}
+
+// ---- naming a car ACROSS peers ----------------------------------------------
+// cars[] index is not an identity. makeCars() drops the custom team unless the
+// player selected it (the filter above) and walks Career.gridDrivers(), so the
+// grid's LENGTH and ORDER differ between two screens in the same race. That is
+// why onState used to ignore the id on the wire and take cars[0]: the id was
+// the sender's own index and meant nothing to the receiver.
+//
+// driverId ("redbull:1") is content-derived and IS stable, but the snapshot's
+// per-car id is one byte, so the string cannot go on the wire. This is the same
+// fact as a number: Teams.LIST is eleven fixed teams plus exactly one appended
+// custom entry (syncCustomTeam), so a team's INDEX is identical on every peer
+// even when the custom team's contents are not. Two seats each puts the whole
+// grid inside 0..23.
+//
+// Only meaningful once no two humans share a seat — which is what the seat
+// exclusivity in js/net/lobby.js guarantees, and why it had to land first.
+function wireId(c) {
+  if (!c || !c.team) return -1;
+  const ti = Teams.LIST.findIndex((t) => t.id === c.team.id);
+  return ti < 0 ? -1 : ti * 2 + (c.seat || 0);
+}
+function carFromWireId(id) {
+  return (cars || []).find((c) => wireId(c) === id) || null;
 }
 
 // Swap where two cars START. Multiplayer needs this and nothing else does:
@@ -2329,25 +2364,33 @@ function layoutDocks(steerBtns, manual) {
 function netOrder(order) {
   if (!netPlay.active()) return order;
   if (netPlay.ownsClassification()) {
-    // Indices are stable: both grids are built from the same settings.
+    // Keyed by driverId, NOT by cars.indexOf. The old comment here claimed
+    // "indices are stable: both grids are built from the same settings" and it
+    // was simply untrue — makeCars() drops the custom team unless the local
+    // player selected it, so the two grids differ in length and order and the
+    // guest was re-reading the host's indices against its own array. A close
+    // finish is exactly when that matters and exactly when nobody would notice
+    // it had gone wrong.
     netPlay.reportResult(order.map((c) => ({
-      i: cars.indexOf(c), t: c.finishT, p: c.penalty, lap: c.lap,
+      d: c.driverId, t: c.finishT, p: c.penalty, lap: c.lap,
     })));
     return order;
   }
   const verdict = netPlay.peerResult();
   if (!verdict || !verdict.length) return order;          // never arrived
-  const byIdx = verdict.map((e) => cars[e.i]).filter(Boolean);
+  const byId = new Map(cars.map((c) => [c.driverId, c]));
+  const sorted = verdict.map((e) => byId.get(e.d)).filter(Boolean);
   // Only adopt an order accounting for the WHOLE grid; a partial one would
-  // silently drop cars off the results screen.
-  if (byIdx.length !== cars.length) return order;
+  // silently drop cars off the results screen. An order we cannot fully resolve
+  // now fails this the same way a truncated one always did.
+  if (sorted.length !== cars.length) return order;
   verdict.forEach((e) => {
-    const c = cars[e.i];
+    const c = byId.get(e.d);
     if (!c) return;
     if (e.t != null) c.finishT = e.t;
     if (e.p != null) c.penalty = e.p;
   });
-  return byIdx;
+  return sorted;
 }
 
 function endRace(forcedOrder) {
@@ -2625,6 +2668,7 @@ const G = {
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
+  wireId, carFromWireId,                // stable cross-peer car identity
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
   // Seats held by the OTHER players, so the garage can refuse to hand out one
@@ -2735,7 +2779,7 @@ function quitToMenu() {
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
   setFlow("gp"); session = "race";
   quali.clear();   // last weekend's classification is not this one's grid
-  qualiPeer = null;
+  qualiPeers.clear();
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -7085,7 +7129,7 @@ function openQuali() {
   // up, so both paths say the same thing.
   state = "menu";
   quali.clear();
-  qualiPeer = null;
+  qualiPeers.clear();
   loadTrack(trackIdx);
   makeCars();
   quali.simulate(0);              // provisional: everyone simulated, including you
