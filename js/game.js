@@ -6914,7 +6914,7 @@ function buildRaceSettings() {
   $("rs-quali-section").hidden = isTimeTrial() || netRoom;
   const qEl = $("rs-quali");
   qEl.innerHTML = "";
-  for (const [on, label] of [[false, "P12 START"], [true, "QUALIFYING"]]) {
+  for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
     const active = champ ? on : raceQuali === on;
     const b = document.createElement("button");
     b.className = "sel-chip" + (active ? " active" : "");

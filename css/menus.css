@@ -492,6 +492,27 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    out of it. */
 #rs-laps, #rs-weather, #rs-diff { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 #rs-time { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+/* SHORT AND WIDE: fit the whole thing, because scrolling a settings screen is
+   how you miss a setting. A landscape phone gives ~285px of body between the
+   head and the action bar, and seven sections in two columns needs more than
+   that — RELIABILITY and half of QUALIFYING LAP sat below the fold, which is
+   exactly where a player will not find them.
+   The fix is to spend the axis there is plenty of. Three columns instead of
+   two, nothing spanning, and the chips dialled down: seven sections become
+   three rows of about 200px total. Taller screens keep the roomy two-column
+   layout, where there was never a problem. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #rs-body { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: calc(var(--pad) * 0.7); }
+  /* TIME OF DAY and DIFFICULTY stop spanning — in three columns a full-width
+     row is the thing that pushes everything else down. */
+  #rs-body #rs-time-section, #rs-body #rs-diff-section { grid-column: auto; }
+  /* Five chips in a third of the sheet want three across, not five. */
+  #rs-time { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #race-settings .sel-chip { font-size: 11px; padding: 5px 7px; letter-spacing: 0; }
+  #race-settings .sel-label { font-size: 9px; margin-bottom: 3px; }
+  .rs-row { margin-bottom: calc(var(--gap) * 0.5); }
+}
 #race-settings .sel-chip {
   display: flex; align-items: center; justify-content: center; gap: 4px;
   padding-inline: 6px; min-width: 0;

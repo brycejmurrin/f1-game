@@ -323,9 +323,10 @@ test.describe("Qualifying — BACK", () => {
 
 // A one-off Grand Prix has always dropped the player at P12 and gone straight to
 // the lights — the only mode where where you START owes nothing to how fast you
-// are. The GRID setting lets it run the same one-lap session a championship
-// weekend does.
-test.describe("GRID: a one-off race can qualify", () => {
+// are. QUALIFYING LAP lets it run the same one-lap session a championship
+// weekend does. It lives in RACE SETTINGS, beside LAPS and WEATHER, because it
+// is a property of the race rather than a control preference.
+test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
   test.use({ viewport: LANDSCAPE });
 
   // GRAND PRIX -> circuit -> garage -> race settings.
@@ -342,7 +343,7 @@ test.describe("GRID: a one-off race can qualify", () => {
     if (c[n]) c[n].click();
   }, i);
 
-  test("P12 START goes straight to the lights, as it always has", async ({ page }) => {
+  test("OFF goes straight to the lights from P12, as it always has", async ({ page }) => {
     await toSettings(page);
     await expect(page.locator("#rs-quali-section")).toBeVisible();
     await pickGrid(page, 0);
@@ -352,7 +353,7 @@ test.describe("GRID: a one-off race can qualify", () => {
     expect(await page.evaluate(() => window.__apex.info().session)).toBe("race");
   });
 
-  test("QUALIFYING runs the session and the grid comes out of it", async ({ page }) => {
+  test("ON runs the session and the grid comes out of it", async ({ page }) => {
     test.slow();   // stages a circuit twice over software GL
     await toSettings(page);
     await pickGrid(page, 1);
@@ -383,7 +384,7 @@ test.describe("GRID: a one-off race can qualify", () => {
     await expect(page.locator("#rs-quali-section")).toBeVisible();
     const state = await page.evaluate(() => [...document.querySelectorAll("#rs-quali .sel-chip")]
       .map((b) => ({ on: b.classList.contains("active"), off: b.disabled })));
-    expect(state[1].on).toBe(true);          // QUALIFYING
+    expect(state[1].on).toBe(true);          // ON
     expect(state.every((c) => c.off)).toBe(true);
   });
 });
