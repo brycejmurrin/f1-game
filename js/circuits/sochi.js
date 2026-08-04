@@ -212,15 +212,18 @@
             const cAlong = (top ? (r - 1) : (r - 3.5)) * 6.4;
             const cUp = 9.2 + (top ? 2.6 : 0);
             const hub = vadd(vadd(a.c, a.t, cAlong), a.u, cUp);
+            // Each ring is 14 short chords laid end to end around a circle.
+            // dir/perp are rebuilt as an orthonormal pair per chord so the
+            // segments meet cleanly instead of shearing away from the circle.
             for (let j = 0; j < 14; j++) {
-              const ang = j / 14 * 6.2832;
-              const dir = [
-                a.u[0] * Math.cos(ang) + a.t[0] * Math.sin(ang),
-                a.u[1] * Math.cos(ang) + a.t[1] * Math.sin(ang),
-                a.u[2] * Math.cos(ang) + a.t[2] * Math.sin(ang),
-              ];
-              addBox(stage, vadd(hub, dir, 3.1), [0.55, 0.55, 1.5], cols[r],
-                [a.r, dir, a.t]);
+              const ang = j / 14 * 6.2832, cA = Math.cos(ang), sA = Math.sin(ang);
+              const dir = [], perp = [];
+              for (let axis = 0; axis < 3; axis++) {
+                dir[axis] = a.u[axis] * cA + a.t[axis] * sA;
+                perp[axis] = a.t[axis] * cA - a.u[axis] * sA;
+              }
+              addBox(stage, vadd(hub, dir, 3.1), [0.55, 1.5, 0.55], cols[r],
+                [a.r, dir, perp]);
             }
           }
           // Plinth.
@@ -375,15 +378,18 @@
             const across = R - Math.cos(mid) * R;
             const up = 3.0 + Math.sin(mid) * R * lift;
             const chord = (Math.PI / segs) * R * lift * 1.15;
-            // Rib chord, tilted to follow the arc tangent at this station.
-            const tanU = Math.cos(mid), tanR = Math.sin(mid);
-            const dir = [
-              a.u[0] * tanU + a.r[0] * side * tanR,
-              a.u[1] * tanU + a.r[1] * side * tanR,
-              a.u[2] * tanU + a.r[2] * side * tanR,
-            ];
+            // Rib chord, tilted to follow the arc tangent at this station. The
+            // chord's own "right" axis has to be rebuilt perpendicular to that
+            // tilt — reusing a.r would hand addBox a non-orthogonal basis and
+            // shear every rib in the arc.
+            const cM = Math.cos(mid), sM = Math.sin(mid);
+            const dir = [], perp = [];
+            for (let axis = 0; axis < 3; axis++) {
+              dir[axis] = a.u[axis] * cM + a.r[axis] * side * sM;
+              perp[axis] = a.r[axis] * side * cM - a.u[axis] * sM;
+            }
             const c = vadd(vadd(a.c, a.r, side * (across - R * 0.15)), a.u, up);
-            addBox(out, c, [0.34, chord, 0.34], WHITE, [a.r, dir, a.t]);
+            addBox(out, c, [0.34, chord, 0.34], WHITE, [perp, dir, a.t]);
             // Translucent panel spanning to the next rib along the stand.
             if (j % 2 === 0)
               addBox(out, vadd(c, a.u, 0.35), [1.9, 0.12, seg], [0.86, 0.90, 0.94], b);

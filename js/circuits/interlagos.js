@@ -47,7 +47,7 @@
       { frac: 0.8375, angleDeg: 6.0, widthM: 160 },   // Arquibancadas
     ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
+      const { out, MAT, seat, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
               addBox, every, onTrack, hash, vadd, anchor, along, building, motorhome, tower,
               grandstand, grandstandEx, billboard, gantry, marshalPost, fence, guardrail, wall,
               tyreWall, pine, tree, palm, bush, hedge, peak, ridge, mountain,
@@ -134,6 +134,111 @@
         });
       };
 
+      // -- Bespoke: ARQUIBANCADA — the Interlagos stand, and nothing like a
+      // modern cantilever shell. Board-marked raw concrete terracing stained by
+      // thirty tropical summers, a painted yellow-and-green tubular rail along
+      // the front, and a rusted corrugated canopy on open lattice trusses over
+      // the back rows only. The bowl is a natural amphitheatre, so the crowd is
+      // ABOVE you and the roof is a thin rusty line against the sky — a
+      // silhouette grandstandEx cannot make, and the reason this circuit reads
+      // warm and worn instead of grey. --
+      const CONC_WORN = [[0.68, 0.66, 0.60], [0.62, 0.60, 0.55], [0.71, 0.68, 0.61]];
+      const RUSTED = [0.56, 0.32, 0.20], RUST_DK = [0.44, 0.25, 0.16];
+      const RAIL_Y = [0.94, 0.84, 0.16], RAIL_G = [0.10, 0.56, 0.28];
+      const arquibancada = (id, s, side, dist, bays, opts) => {
+        opts = opts || {};
+        const rows = opts.rows || 8, pitch = 6.5, len = bays * pitch;
+        const k = K(s), a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        const IN = -side;                       // +1 along a.r faces the track
+        const backH = 1.1 + rows * 1.12;
+        modelGroup(id, {
+          center: vadd(a.c, a.u, (backH + 6.4) / 2),
+          size: [16, backH + 6.4, len + 3], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          for (let t = 0; t < rows; t++) {
+            const lat = IN * (5.6 - t * 1.28), y = t * 1.12;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y), [1.28, 1.12, len],
+              CONC_WORN[t % CONC_WORN.length], b);
+            // Fibre-cement bench capping — the only "seat" a terrace here has.
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 1.12), [1.05, 0.22, len - 1.2],
+              (t % 2) ? [0.78, 0.75, 0.68] : [0.74, 0.71, 0.64], b);
+            stage._mat = MAT.FABRIC;
+            for (let j = 0; j * 0.82 < len - 2; j++) {
+              const h2 = hash(k * 23 + t * 61 + j * 19);
+              if (h2 < 0.30) continue;          // a famously full house
+              seat.box(stage,
+                vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1.2 + j * 0.82), a.u, y + 1.34),
+                [0.5, 0.92, 0.42], crowdCols[Math.floor(h2 * 61) % crowdCols.length], b);
+            }
+            stage._mat = MAT.CONCRETE;
+          }
+          // Front safety rail — the Brazilian yellow/green that every photo of
+          // this place has along the bottom of the frame.
+          stage._mat = MAT.METAL;
+          for (let i = 0; i * 2.6 < len; i++)
+            seat.cyl(stage, vadd(vadd(a.c, a.t, -len / 2 + i * 2.6 + 1.3), a.r, IN * 6.2),
+              0.07, 1.2, RAIL_G, 4, b);
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 6.2), a.u, 1.2), [0.11, 0.11, len], RAIL_Y, b);
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 6.2), a.u, 0.72), [0.09, 0.09, len], RAIL_G, b);
+          // Rusted canopy on open lattice trusses, over the BACK rows only.
+          if (opts.roof !== false) {
+            stage._mat = MAT.RUST;
+            for (let i = 0; i <= bays; i++) {
+              const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
+              seat.cyl(stage, vadd(p, a.r, -IN * 6.0), 0.17, backH + 4.4, RUST_DK, 5, b);
+              seat.cyl(stage, vadd(p, a.r, IN * 0.4), 0.14, backH + 3.2, RUST_DK, 5, b);
+              addBox(stage, vadd(vadd(p, a.r, -IN * 2.8), a.u, backH + 3.6),
+                [7.2, 0.14, 0.14], RUST_DK, b);
+            }
+            for (let i = 0; i * 1.5 < len; i++) {
+              const p = vadd(a.c, a.t, -len / 2 + i * 1.5 + 0.75);
+              addBox(stage, vadd(vadd(p, a.r, -IN * 2.8), a.u, backH + 4.2),
+                [7.6, 0.22, 0.78], (i % 2) ? RUSTED : [0.60, 0.38, 0.24], b);
+            }
+          }
+          stage._mat = 0;
+        });
+      };
+
+      // -- Bespoke: PIT GARAGE ROW — was four copies of the generic building()
+      // box. Interlagos's pit lane is a low board-marked concrete deck with
+      // individually shuttered bays, a bright team-colour header over each
+      // door, and an open rooftop guest terrace with a plain tube rail. The
+      // roof terrace is the silhouette that identifies this pit lane on TV. --
+      const pitGarageRow = (id, s, side, gap, bays) => {
+        const pitch = 7.4, len = bays * pitch;
+        const k = K(s), a = anchor(k, side, gap + 7), b = [a.r, a.u, a.t];
+        const IN = -side;
+        const DECK = [0.70, 0.69, 0.66], SHUT = [0.26, 0.28, 0.32];
+        const HEADER = [[0.94, 0.84, 0.20], [0.12, 0.56, 0.30], [0.90, 0.90, 0.88]];
+        modelGroup(id, {
+          center: vadd(a.c, a.u, 6), size: [15, 12, len + 2], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 3.4), [13, 6.8, len], DECK, b);
+          for (let i = 0; i < bays; i++) {
+            const p = vadd(a.c, a.t, (i - (bays - 1) / 2) * pitch);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(p, a.r, IN * 6.4), a.u, 2.2),
+              [0.45, 4.0, pitch - 1.6], SHUT, b);                       // roller shutter
+            stage._mat = 0;
+            addBox(stage, vadd(vadd(p, a.r, IN * 6.5), a.u, 5.0),
+              [0.3, 1.0, pitch - 2.4], HEADER[i % HEADER.length], b);   // team header
+          }
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 7.0), [13.6, 0.5, len + 0.6], [0.62, 0.61, 0.58], b);
+          stage._mat = MAT.METAL;
+          for (let i = 0; i < bays * 2; i++) {                          // terrace rail
+            const p = vadd(a.c, a.t, (i - (bays * 2 - 1) / 2) * (pitch / 2));
+            seat.cyl(stage, vadd(vadd(p, a.r, IN * 6.1), a.u, 7.2), 0.06, 1.1, [0.80, 0.80, 0.82], 4, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 6.1), a.u, 8.2),
+            [0.1, 0.1, len], [0.84, 0.84, 0.86], b);
+          stage._mat = 0;
+        });
+      };
+
       // -- Bespoke: Interlagos control / pit tower — tall concrete slab with
       // stacked dark window-band boxes (brief landmark, not a generic frustum). --
       const pitTower = (s, side, gap) => {
@@ -178,10 +283,10 @@
       building(kpit, 1, 8, 14, 16, 32, { wall: [0.62, 0.62, 0.64],
                window: [0.24, 0.32, 0.40], floor: 3.6 });
 
-      // Long low pit garages running down the pit straight
+      // Long low pit garages running down the pit straight — shuttered bays and
+      // a rooftop guest terrace, not four repeats of the generic office box.
       for (const s of [0.97, 0.99, 0.01, 0.03]) {
-        building(K(s), 1, 6, 11, 8, 24, { wall: [0.68, 0.68, 0.70],
-                 window: [0.30, 0.34, 0.42], floor: 3.2, roof: [0.52, 0.52, 0.56] });
+        pitGarageRow(`interlagos-pit-garages-${Math.round(s * 1000)}`, s, 1, 6, 3);
       }
 
       // Paddock hospitality / motorhomes behind the pits — was a single plain
@@ -258,6 +363,9 @@
                    { livery: "concrete", roof: "flat" });
       // Steep PACKED upper terraces rising behind the Curva 1 bowl stands
       crowdBank(0.02, -1, 30, 130, 8);
+      // Curva do Sol arquibancada — raw concrete terracing under a rusted
+      // canopy, the form that actually rings this bowl.
+      arquibancada("interlagos-arq-sol", 0.117, -1, 16, 7, { rows: 8 });
       for (const s of [0.00, 0.04, 0.08]) billboard(K(s), -1, 26, 16, 7, [0.94, 0.92, 0.88]);
 
       // ===================================================================
@@ -513,6 +621,9 @@
       place(kj, -1, 2,   [0.5, 0.18, 9], [0.80, 0.18, 0.18]);
       place(kj, -1, 4.2, [3.0, 0.18, 9], [0.92, 0.92, 0.92]);
       marshalPost(K(0.7414), 1, 9);
+      // Junção's own terrace: the slowest corner on the lap, so the crowd sits
+      // right on top of it. Roofless — this bank is up the open hillside.
+      arquibancada("interlagos-arq-juncao", 0.72, -1, 16, 5, { rows: 6, roof: false });
 
       // ===================================================================
       // ARQUIBANCADAS (bankZones frac 0.8375, L mid) — "the grandstands",
@@ -523,9 +634,15 @@
       // the crowd-bank/billboard budget that used to sit mislabelled at the
       // old 0.805/0.675-0.825 chord is spent here instead.
       // ===================================================================
-      grandstandEx(0.826,  -1, 11, 46, null, [0.96, 0.82, 0.16], { livery: "concrete",  endWalls: true });
-      grandstandEx(0.8375, -1, 12, 52, null, [0.12, 0.58, 0.30], { livery: "steel" });
-      grandstandEx(0.849,  -1, 11, 46, null, [0.96, 0.82, 0.16], { livery: "darkSteel", endWalls: true });
+      grandstandEx(0.826,  -1, 11, 46, null, [0.96, 0.82, 0.16],
+                   { livery: "concrete", roof: "truss", endWalls: true });
+      grandstandEx(0.8375, -1, 12, 52, null, [0.12, 0.58, 0.30],
+                   { livery: "orange", tiers: 2, roof: "cantilever", suites: true });
+      grandstandEx(0.849,  -1, 11, 46, null, [0.96, 0.82, 0.16],
+                   { livery: "concrete", roof: "flat", endWalls: true, h: 9 });
+      // The uncovered general-admission terracing that continues the
+      // Arquibancadas round toward the climb — bare concrete, no canopy.
+      arquibancada("interlagos-arq-subida", 0.86, -1, 16, 6, { rows: 7, roof: false });
       // Upper terrace behind the three bays. crowdBank takes a NODE INDEX, not a
       // lap fraction, and needs an explicit `depth` — called with (0.8375, …, 6)
       // it indexed the node arrays at a fractional index (undefined -> NaN) and

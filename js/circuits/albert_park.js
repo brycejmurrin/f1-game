@@ -50,7 +50,8 @@
               grandstandEx, building, motorhome, tower, tree, palm, bush, hedge, billboard, gantry,
               marshalPost, fence, guardrail, tyreWall, anchor, vadd, addBox,
               addCyl, addCone, addFrustum, addPrism, addPyramid,
-              forestEdge, cityFront, bowlSeatWall, MAT, circuitKit, seat } = api;
+              forestEdge, cityFront, bowlSeatWall, MAT, circuitKit, seat,
+              cameraTower, recordBarrier, track } = api;
       const k = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
@@ -488,11 +489,60 @@
         crowdCols: [[0.86, 0.24, 0.18], [0.88, 0.86, 0.82], [0.18, 0.52, 0.36]],
       });
 
-      // ---- Pit building + garages: long low white box row, dark roof (s≈0.0 R) ----
-      building(k(0.0), 1, 5, 14, 9, 180, { wall: [0.86, 0.87, 0.88], window: [0.18, 0.22, 0.28], floor: 4 });
+      // ====================================================================
+      // PIT COMPLEX (s≈0.0 R) — the one permanent building on a circuit that
+      // is otherwise a public park with a race bolted to it for a fortnight.
+      // A plain building() slab plus a flat dark roof slab said nothing about
+      // it; the Albert Park pit building's actual signature is a LONG shallow
+      // undulating roof running the full 180 m over a white two-storey block,
+      // with the race-control tower stepped up at the pit-exit end. Modelled
+      // as one atomic group (footprint probed: accepted from gap 16 out).
+      // ====================================================================
       {
-        const a = anchor(k(0.0), 1, 12);
-        addBox(out, vadd(a.c, a.u, 9.6), [18, 0.8, 190], [0.30, 0.32, 0.34], [a.r, a.u, a.t]);
+        const aP = anchor(k(0.0), 1, 16), bP = [aP.r, aP.u, aP.t];
+        modelGroup("albert-pit-complex", {
+          center: vadd(aP.c, aP.u, 11),
+          size: [26, 30, 190],
+          basis: bP,
+        }, (stage) => {
+          const aG = anchor(k(0.0), 1, 12), bG = [aG.r, aG.u, aG.t];
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(aG.c, aG.u, 3.6), [14, 7.2, 180], [0.88, 0.89, 0.91], bG);
+          // Roller-door rhythm along the pit lane — 26 garages, the AGP count.
+          const aD = anchor(k(0.0), 1, 5.4), bD = [aD.r, aD.u, aD.t];
+          for (let i = 0; i < 26; i++) {
+            const off = (i - 12.5) * 6.6;
+            addBox(stage, vadd(vadd(aD.c, aD.u, 2.3), aD.t, off),
+                   [0.5, 4.2, 4.4], [0.22, 0.24, 0.28], bD);
+          }
+          // Glazed media / team-office storey, set back above the garage roof.
+          stage._mat = 0;
+          addBox(stage, vadd(aP.c, aP.u, 9.2), [13, 3.6, 168], [0.24, 0.34, 0.44], bP);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(aP.c, aP.u, 11.4), [14.4, 0.8, 170], [0.90, 0.90, 0.92], bP);
+          // The roof: a shallow undulating ribbon, not a slab. Each panel steps
+          // its own height along a long sine, so the eye reads one continuous
+          // wave down the straight rather than a lid.
+          stage._mat = MAT.METAL;
+          const PANELS = 24;
+          for (let i = 0; i < PANELS; i++) {
+            const f = (i + 0.5) / PANELS;
+            const y = 12.6 + Math.sin(f * Math.PI * 3) * 1.5;
+            addBox(stage, vadd(vadd(aP.c, aP.t, (f - 0.5) * 184), aP.u, y),
+                   [22, 0.55, 184 / PANELS + 0.4], [0.80, 0.82, 0.85], bP);
+          }
+          // Race control, stepped up at the pit-exit end.
+          const rc = vadd(aP.c, aP.t, 74);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(rc, aP.u, 9), [15, 18, 22], [0.84, 0.86, 0.88], bP);
+          stage._mat = 0;
+          addBox(stage, vadd(vadd(rc, aP.r, -7.4), aP.u, 15.5), [0.3, 3.2, 20],
+                 [0.22, 0.32, 0.42], bP);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(rc, aP.u, 18.4), [17, 0.7, 24], [0.30, 0.32, 0.36], bP);
+          addCyl(stage, vadd(rc, aP.u, 18.7), 0.18, 9, [0.60, 0.62, 0.66], 5, bP);
+          stage._mat = 0;
+        }, { required: true });
       }
       // marquee tent caps beside the s≈0.62 grandstand — at dist≥42, clear of stand
       for (let j = 0; j < 3; j++) {
@@ -674,16 +724,84 @@
         marshalPost(k(s), side, 6);
       }
 
-      // Temporary bleacher ranks in the parkland viewing areas the stands above
-      // skip — Lakeside, Jones/Ascari and the pit-entry banks. Short runs so the
-      // lap still reads as separate enclosures rather than one wall of seating.
-      // Uncovered bare-aluminium bleachers (roof:"none") — genuinely temporary
-      // general-admission seating, not another roofed permanent stand, and
-      // cheaper than the baseline cantilever-roof template they replace.
-      for (const [s, side, gap, len] of [
-        [0.235, -1, 15, 40], [0.375,  1, 15, 42], [0.415, -1, 16, 38],
-        [0.505,  1, 16, 44], [0.700, -1, 15, 40], [0.855,  1, 15, 42],
-      ]) grandstandEx(s, side, gap, len, null, null, { livery: "alu", roof: "none" });
+      // PARK DECK — the general-admission seating in the viewing areas the named
+      // stands skip. These are not small grandstands: they are scaffold decks
+      // craned onto levelled timber mats over public parkland, with a ridged
+      // canvas shade stretched over the back rows only and a printed hoarding
+      // wrapping the frame. grandstandEx cannot make that — its 10 m concrete
+      // back shell is unconditional, so even at roof:"none" it reads permanent.
+      // The peaked canvas also ties them to the marquees dressing the rest of
+      // the park, which is the thing that makes Melbourne look like Melbourne.
+      const parkDeck = (id, s, side, gap, bays, opts) => {
+        opts = opts || {};
+        const rows = opts.rows || 6, pitch = 6.8, len = bays * pitch;
+        const a = anchor(k(s), side, gap + 4), b = [a.r, a.u, a.t];
+        const IN = -side;                        // +1 along a.r points at the track
+        const topH = 0.9 + rows * 1.3;
+        const half = (len / 2) / track.total;
+        recordBarrier(s - half, s + half, side, gap);
+        modelGroup(id, {
+          center: vadd(a.c, a.u, topH * 0.7),
+          size: [14, topH + 12, len + 4],
+          basis: b,
+        }, (stage) => {
+          const TUBE = [0.66, 0.67, 0.70], MAT_TIMBER = [0.58, 0.50, 0.38];
+          // Timber ground mats — the park turf will not carry a stand directly.
+          stage._mat = MAT.WOOD;
+          seat.box(stage, a.c, [13, 0.35, len + 2], MAT_TIMBER, b);
+          stage._mat = MAT.METAL;
+          for (let i = 0; i <= bays; i++) {
+            const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
+            seat.cyl(stage, vadd(p, a.r, IN * -4.4), 0.15, topH, TUBE, 6, b);
+            seat.cyl(stage, vadd(p, a.r, IN * 4.2), 0.15, 1.6, TUBE, 6, b);
+            addBox(stage, vadd(vadd(p, a.r, IN * -0.1), a.u, topH * 0.45),
+                   [8.6, 0.12, 0.12], TUBE, b);
+          }
+          for (let t = 0; t < rows; t++) {
+            const lat = IN * (3.9 - t * 1.3), y = 0.7 + t * 1.3;
+            stage._mat = MAT.METAL;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y), [1.35, 0.14, len], TUBE, b);
+            stage._mat = MAT.FABRIC;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.14),
+                     [1.0, 0.5, len - 1.2], [0.30, 0.33, 0.38], b);
+            for (let j = 0; j * 1.05 < len - 2.5; j++) {
+              const h2 = hash(k(s) * 11 + t * 61 + j * 19);
+              // General admission, half-empty in practice — and this circuit is
+              // already the heaviest in the fleet, so the crowd stays thin.
+              if (h2 < 0.62) continue;
+              seat.box(stage, vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1.2 + j * 1.05),
+                       a.u, y + 0.64), [0.55, 0.95, 0.45],
+                       [[0.84, 0.26, 0.20], [0.20, 0.44, 0.70], [0.92, 0.86, 0.34],
+                        [0.90, 0.90, 0.88]][Math.floor(h2 * 97) % 4], b);
+            }
+          }
+          // Ridged canvas shade over the back rows only — masts, ridge beam,
+          // and a run of white prisms. Front rows stay open, as they are in
+          // every temporary bleacher at this circuit.
+          const shadeLat = IN * -2.6, shadeY = topH + 3.4;
+          stage._mat = MAT.METAL;
+          for (let i = 0; i <= bays; i++)
+            seat.cyl(stage, vadd(vadd(a.c, a.t, (i - bays / 2) * pitch), a.r, shadeLat),
+                     0.13, shadeY, TUBE, 5, b);
+          stage._mat = MAT.FABRIC;
+          for (let i = 0; i < bays; i++)
+            addPrism(stage, vadd(vadd(vadd(a.c, a.t, (i - (bays - 1) / 2) * pitch),
+                     a.r, shadeLat), a.u, shadeY), [7.6, 1.5, pitch - 0.3],
+                     [0.94, 0.94, 0.92], b);
+          // Printed hoarding wrapping the frame's trackside face.
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 4.5), a.u, 1.1),
+                 [0.12, 2.0, len], opts.fascia || [0.20, 0.42, 0.66], b);
+          stage._mat = 0;
+        });
+      };
+      for (const [id, s, side, gap, bays, fascia] of [
+        ["albert-deck-jones",    0.235, -1, 15, 6, [0.20, 0.42, 0.66]],
+        ["albert-deck-lakeside", 0.375,  1, 15, 6, [0.84, 0.26, 0.20]],
+        ["albert-deck-shore",    0.415, -1, 16, 5, [0.92, 0.86, 0.34]],
+        ["albert-deck-drive",    0.505,  1, 16, 6, [0.18, 0.52, 0.36]],
+        ["albert-deck-south",    0.700, -1, 15, 6, [0.20, 0.42, 0.66]],
+        ["albert-deck-approach", 0.855,  1, 15, 6, [0.84, 0.26, 0.20]],
+      ]) parkDeck(id, s, side, gap, bays, { fascia });
 
       // Trackside sponsor hoardings on the fence line, every parkland sector.
       for (const [s, side] of [[0.17, -1], [0.22, 1], [0.34, -1], [0.40, 1],
@@ -697,8 +815,11 @@
       // ====================================================================
       // PIT / PADDOCK precinct — control tower, motorhomes, support trucks
       // ====================================================================
-      tower(k(0.02), 1, 26, 12, 26, { col: [0.80, 0.82, 0.85], seg: 4,
-        cap: true, capCol: [0.20, 0.24, 0.30], mast: 8 });
+      // Race control now lives inside the pit complex above (it is part of that
+      // building at Albert Park, not a free-standing mast). What the paddock
+      // actually gains each March is TEMPORARY vertical structure: a scaffold
+      // camera/marshal tower behind the garages, trucked in with everything else.
+      cameraTower(k(0.02), 1, 30, { h: 18, col: [0.62, 0.64, 0.68] });
       // Team motorhome row — the comment already called these "motorhomes" but
       // they were generic office-block building() calls; motorhome() gives the
       // real two-tier team-unit body + awning canopy.

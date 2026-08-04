@@ -390,13 +390,17 @@
           addCyl(stage, hub, 0.28, 1.2, [0.40, 0.30, 0.22], 6, [a.r, a.t, a.u]);
           for (let i = 0; i < 4; i++) {
             const ang = i * Math.PI / 2 + 0.4;
-            const dir = [
-              a.u[0] * Math.cos(ang) + a.t[0] * Math.sin(ang),
-              a.u[1] * Math.cos(ang) + a.t[1] * Math.sin(ang),
-              a.u[2] * Math.cos(ang) + a.t[2] * Math.sin(ang),
-            ];
-            addBox(stage, vadd(hub, dir, 3.0), [0.18, 0.35, 0.35], [0.42, 0.32, 0.24],
-              [a.r, dir, a.t]);
+            const cA = Math.cos(ang), sA = Math.sin(ang);
+            // dir is the sail's own long axis; perp completes an ORTHONORMAL
+            // basis with it. Passing a.t alongside dir would shear each sail,
+            // because the two are only perpendicular at ang = 0.
+            const dir = [], perp = [];
+            for (let axis = 0; axis < 3; axis++) {
+              dir[axis] = a.u[axis] * cA + a.t[axis] * sA;
+              perp[axis] = a.t[axis] * cA - a.u[axis] * sA;
+            }
+            addBox(stage, vadd(hub, dir, 3.0), [0.35, 6.0, 0.22], [0.42, 0.32, 0.24],
+              [a.r, dir, perp]);
           }
           stage._mat = 0;
         });

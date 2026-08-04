@@ -159,19 +159,24 @@
         }
 
         // ---- the lagoon the spine crosses ----
-        waterSurface(K(0.030), -1, 40, [46, 0.18, 78], WATER,
-          { id: "shanghai-pit-lagoon" });
+        // Two small panels rather than one broad sheet: the pit straight folds
+        // back close enough on the left that the water preflight refuses
+        // anything wider than ~26 m or further out than ~30 m here (probed).
+        waterSurface(K(0.020), -1, 24, [26, 0.18, 40], WATER,
+          { id: "shanghai-pit-lagoon-a" });
+        waterSurface(K(0.040), -1, 24, [20, 0.18, 30], WATER,
+          { id: "shanghai-pit-lagoon-b" });
 
         // ---- vertical stroke: the spine reaching back over the water ----
-        const sp = anchor(K(0.030), -1, 36), bs = [sp.r, sp.u, sp.t];
+        const sp = anchor(K(0.030), -1, 26), bs = [sp.r, sp.u, sp.t];
         out._mat = MAT.CONCRETE;
-        addBox(out, vadd(sp.c, sp.u, 12.0), [36, 5.6, 15], [0.88, 0.89, 0.91], bs);
+        addBox(out, vadd(sp.c, sp.u, 12.0), [30, 5.6, 15], [0.88, 0.89, 0.91], bs);
         out._mat = 0;
-        addBox(out, vadd(sp.c, sp.u, 9.6), [35, 1.8, 15.4], GLASS_HAZE, bs);
+        addBox(out, vadd(sp.c, sp.u, 9.6), [29, 1.8, 15.4], GLASS_HAZE, bs);
         out._mat = MAT.METAL;
-        addBox(out, vadd(sp.c, sp.u, 15.1), [39, 0.7, 17], WHITE, bs);
+        addBox(out, vadd(sp.c, sp.u, 15.1), [33, 0.7, 17], WHITE, bs);
         // Colonnade standing in the lagoon — the spine is a bridge, not a berm.
-        for (const d of [22, 30, 38, 46]) {
+        for (const d of [18, 26, 34, 40]) {
           const aC = anchor(K(0.030), -1, d), bC = [aC.r, aC.u, aC.t];
           for (const off of [-5.5, 5.5])
             seat.cyl(out, vadd(aC.c, aC.t, off), 0.5, 9.2, STEEL, 8, bC);
@@ -180,7 +185,7 @@
 
         // ---- short top stroke: the cross bar closing the character ----
         for (let i = 0; i < 3; i++) {
-          const a = anchor(K(0.016 + i * 0.014), -1, 54), b = [a.r, a.u, a.t];
+          const a = anchor(K(0.016 + i * 0.014), -1, 46), b = [a.r, a.u, a.t];
           out._mat = MAT.CONCRETE;
           addBox(out, vadd(a.c, a.u, 5.5), [15, 11, 17], [0.84, 0.86, 0.88], b);
           out._mat = 0;

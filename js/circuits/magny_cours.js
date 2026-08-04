@@ -262,20 +262,31 @@
             out._mat = MAT.CONCRETE;
           }
           out._mat = MAT.METAL;
-          // Two lattice legs and the vault they carry.
+          // Two lattice legs and the vault they carry. The vault is built from
+          // chords across the bank rather than a cylinder: a cylinder wide
+          // enough to span the seating also reaches DOWN into it, and a shallow
+          // segmental arc is what a corrugated span this cheap actually is.
           const backTop = rows * depth;
-          const roofY = 1.0 + rows * rise + 3.6;
-          for (const f of [0.05, 0.95]) {
+          const roofY = 1.4 + rows * rise + 2.2;
+          for (const f of [0.02, 0.98]) {
             const off = f * backTop;
             addCyl(out, vadd(vadd(a.c, a.r, side * off), a.u, roofY * 0.5),
               0.13, roofY, [0.60, 0.62, 0.66], 5, b);
           }
-          addBox(out, vadd(vadd(a.c, a.r, side * backTop * 0.5), a.u, roofY - 0.6),
+          // Tie beam across the legs — the "lattice truss" read.
+          addBox(out, vadd(vadd(a.c, a.r, side * backTop * 0.5), a.u, roofY - 0.5),
             [backTop * 1.05, 0.16, 0.16], [0.60, 0.62, 0.66], b);
-          addCyl(out, vadd(vadd(vadd(a.c, a.r, side * backTop * 0.5), a.u, roofY),
-            a.t, -seg / 2), R, seg, [0.74, 0.76, 0.80], 8, [a.r, a.t, a.u]);
-          addCyl(out, vadd(vadd(vadd(a.c, a.r, side * backTop * 0.5), a.u, roofY),
-            a.t, -seg / 2), R + 0.2, 0.3, [0.24, 0.38, 0.62], 8, [a.r, a.t, a.u]);
+          const bays = 6;
+          for (let j = 0; j < bays; j++) {
+            const f = (j + 0.5) / bays, cam = (1 - (f * 2 - 1) * (f * 2 - 1)) * R * 0.42;
+            addBox(out, vadd(vadd(a.c, a.r, side * (f * backTop * 1.06 - backTop * 0.03)),
+              a.u, roofY + cam),
+              [backTop * 1.06 / bays + 0.15, 0.28, seg],
+              j & 1 ? [0.74, 0.76, 0.80] : [0.70, 0.72, 0.76], b);
+          }
+          // Blue eaves lip, the same trim as the pit vault and the sheds.
+          addBox(out, vadd(vadd(a.c, a.r, -side * backTop * 0.04), a.u, roofY - 0.2),
+            [0.4, 0.5, seg], [0.24, 0.38, 0.62], b);
           out._mat = 0;
         });
       };

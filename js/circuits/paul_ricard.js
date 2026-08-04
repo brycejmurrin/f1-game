@@ -220,7 +220,10 @@
           stage._mat = 0;
         }, { required: true });
       }
-      gantry(0.0, 9, [0.15, 0.15, 0.18]);
+      // s=0.004, not 0.000: at node 0 exactly, the span's support footprint is
+      // rejected and the START gantry silently never existed. One node further
+      // on is clear, and 4 m along a 5.8 km lap is invisible.
+      gantry(0.004, 9, [0.15, 0.15, 0.18]);
       gantry(0.965, 8.5, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 12, 150, null, null,
         { livery: "alu", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
