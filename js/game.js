@@ -273,12 +273,12 @@ const DOWNFORCE = 0.65;     // extra grip fraction at VMAX (0 = no wings)
 // The blend `c.aeroX` is what every consumer reads (top speed, coast drag,
 // lateral grip, the rear-wing flap angle the renderer draws).
 //
-// The FIA gates X-mode to "any straight longer than three seconds" — not to
-// painted DRS zones, and not to a proximity window. So does this: X_STRAIGHT_T
-// seconds of road ahead must be straighter than X_K_MAX before the mode ARMS,
-// which means the arming window shrinks as you speed up and the flap is already
-// shut by the time the car reaches the braking zone. Un-arming (or touching the
-// brake) SLAMS the flap shut — X_CLOSE_RATE is deliberately several times
+// The FIA approves fixed ACTIVATION ZONES per circuit and the standard ECU
+// refuses to rotate the wings outside one — it is not a proximity window like
+// DRS, and it is not a rolling "is the road ahead clear" test either. A zone
+// only exists where a straight exceeds three seconds at racing speed, which is
+// why MONACO has none and runs no active aero at all. See buildAeroZones().
+// Leaving the zone (or touching the brake) SLAMS the flap shut — X_CLOSE_RATE is deliberately several times
 // X_OPEN_RATE, so the downforce comes back faster than it left. Both directions
 // sit inside the FIA's 400 ms transition cap.
 const X_VMAX_GAIN = 0.075;  // top-speed gain at full X-mode (~+19 km/h at pace 1)
@@ -292,6 +292,12 @@ const X_CLOSE_RATE = 8.0;   // aeroX per second closing (~0.125 s back to Z — 
 const X_STRAIGHT_T = 3.0;   // s of clear road ahead required to arm (FIA's rule)
 const X_LOOK_MIN = 45, X_LOOK_MAX = 260;   // m — clamps on that look-ahead
 const X_K_MAX = 0.0045;     // curvature that still counts as "straight" (r ~ 220 m)
+// Curvature that counts as straight FOR A ZONE — much stricter than X_K_MAX,
+// which was tuned for "is the car allowed to hold the mode right now" and lets a
+// 220 m-radius kink through. Approving zones at that threshold gave MONACO four
+// of them, which is exactly the circuit the real rule exists to exclude. A zone
+// is a proper straight (r >= ~700 m), and the length test then does the rest.
+const X_ZONE_K = 0.0014;
 const X_MIN_SPEED = 25;     // m/s (a vStd() threshold) — no X-mode at crawl speed
 // Lateral grip OFF the racing surface. muBase had no off-track term at all, so
 // grass and gravel cornered exactly like tarmac and only scrubbed forward speed —
@@ -480,19 +486,82 @@ function isErsDeploying(c) {
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
 
-// -- ACTIVE AERO ------------------------------------------------------------
-// Is there enough straight road ahead of this car to run X-mode? The window is
-// X_STRAIGHT_T SECONDS long, so it stretches with speed exactly like the real
-// rule: a slow car needs a short clear stretch, a car at 300 km/h needs most of
-// a straight. Sampled every 12 m — the same granularity the AI's braking scan
-// uses, and fine enough that a chicane can't hide between two samples.
-function xStraightAhead(c) {
-  const look = clamp(Math.abs(c.speed) * X_STRAIGHT_T, X_LOOK_MIN, X_LOOK_MAX);
-  for (let d = 10; d <= look; d += 12) {
-    if (Math.abs(Tracks.curvature(track, wrapS(c.s + d))) > X_K_MAX) return false;
+// -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
+// The real system does NOT ask "is the road ahead straight enough right now".
+// The FIA approves fixed ACTIVATION ZONES per circuit, and the standard ECU
+// refuses to rotate the wings unless the car is inside one. A zone only exists
+// if it is longer than three seconds at racing speed — the rule that leaves
+// MONACO with no zones at all, and therefore no active aero.
+//
+// That distinction is the whole feel of the mechanic. A rolling look-ahead (what
+// this used to be) has no start and no end: the window opens and closes under
+// you as the road bends, so there is nothing to learn and nothing to see coming.
+// Fixed zones are a place on the track. You can be shown the boards, you can
+// know the next one is 400 m away, and pressing the button becomes a thing you
+// do SOMEWHERE rather than a thing you retry until it takes.
+//
+// Zones are measured against a fixed reference speed, not the car's own: they
+// are a property of the CIRCUIT, and the OVERALL SPEED slider must not silently
+// add or remove them (PACE scales real m/s — see vTop()/vStd()).
+const X_ZONE_VREF = 70;                       // m/s — "racing speed" for the 3 s test
+const X_ZONE_MIN = X_STRAIGHT_T * X_ZONE_VREF;  // 210 m — the FIA's three seconds
+const X_ZONE_STEP = 8;                        // m between curvature samples
+let aeroZones = [];                           // [{start, end, len}] in arc metres
+
+// Scan the whole lap for contiguous runs under X_ZONE_K and keep the ones long
+// enough to qualify. Runs are found on the OPEN lap then the wrap is stitched,
+// so a straight crossing the start line is one zone rather than two short ones
+// that each fail the length test.
+function buildAeroZones() {
+  aeroZones = [];
+  if (!track || !track.total) return;
+  const total = track.total, n = Math.max(8, Math.round(total / X_ZONE_STEP));
+  const straight = new Array(n);
+  for (let i = 0; i < n; i++) {
+    straight[i] = Math.abs(Tracks.curvature(track, (i + 0.5) * total / n)) <= X_ZONE_K;
   }
-  return true;
+  if (straight.every((v) => v)) {   // a full-lap oval: one zone, the whole lap
+    aeroZones = [{ start: 0, end: total, len: total }];
+    return;
+  }
+  let i0 = 0;
+  while (i0 < n && straight[i0]) i0++;          // begin at a corner, so no run is cut
+  const runs = [];
+  let cur = null;
+  for (let k = 0; k < n; k++) {
+    const i = (i0 + k) % n;
+    if (straight[i]) {
+      if (!cur) cur = { start: i * total / n, len: 0 };
+      cur.len += total / n;
+    } else if (cur) { cur.end = cur.start + cur.len; runs.push(cur); cur = null; }
+  }
+  if (cur) { cur.end = cur.start + cur.len; runs.push(cur); }
+  for (const r of runs) if (r.len >= X_ZONE_MIN) aeroZones.push(r);
 }
+// The zone containing arc position s, or null. Zones can run past `total` when
+// they wrap the start line, hence the second test.
+function aeroZoneAt(s) {
+  if (!track || !track.total) return null;
+  for (const z of aeroZones) {
+    if (s >= z.start && s <= z.end) return z;
+    if (z.end > track.total && s + track.total <= z.end) return z;   // wrapped
+  }
+  return null;
+}
+// Metres from s to the start of the next zone (0 when already inside one), or
+// Infinity on a circuit with no zones at all.
+function aeroZoneAhead(s) {
+  if (!aeroZones.length || !track) return Infinity;
+  if (aeroZoneAt(s)) return 0;
+  let best = Infinity;
+  for (const z of aeroZones) {
+    let d = z.start - s;
+    if (d < 0) d += track.total;
+    if (d < best) best = d;
+  }
+  return best;
+}
+function xStraightAhead(c) { return !!aeroZoneAt(wrapS(c.s)); }
 // Live downforce multiplier on the DOWNFORCE (aero-load) term. 1 in Z-mode,
 // 1 - X_DF_LOSS with the flaps fully open. Nothing else in the grip model
 // changes: mechanical grip, kerbs, weather and the friction ellipse are
@@ -1826,6 +1895,7 @@ function loadTrack(idx) {
     DebrisWorld.registerFurniture(track);
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
+    buildAeroZones();           // fixed ACTIVATION ZONES for this circuit
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
     if (gfx.envProbeReset) gfx.envProbeReset();
@@ -2292,6 +2362,9 @@ const G = {
   get setupPreviewDist() { return setupPreviewDist; },
   get setupPreviewPan() { return setupPreviewPan; },
   get setupPreviewAeroX() { return setupPreviewAeroX; },
+  get aeroZones() { return aeroZones; },
+  aeroZoneAt: (s) => aeroZoneAt(s),
+  aeroZoneAhead: (s) => aeroZoneAhead(s),
   stepSetupAero: (dt) => stepSetupAero(dt),
   // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
   // LEVEL and STYLE from the player's own parts, not the defaults. Probing with

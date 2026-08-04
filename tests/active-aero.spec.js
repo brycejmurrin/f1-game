@@ -26,31 +26,40 @@ async function load(page, trackId = "monza") {
   });
 }
 
-// Find a point on the loaded track to test from. "straight" must be a real
-// STRETCH, not a single low-curvature sample: a track's curvature crosses zero
-// in the middle of every S-bend, so picking the minimum-|k| point lands you in
-// a chicane as often as on a straight. So: find the longest RUN of samples
-// under the arming threshold and return a frac just inside its start, which is
-// exactly what "3 seconds of straight road ahead" means.
-const K_STRAIGHT = 0.0045;   // mirrors X_K_MAX in js/game.js
+// Find a point on the loaded track to test from. X-mode is gated on fixed
+// ACTIVATION ZONES now, so "straight" is not a curvature guess — it is a
+// question with an authoritative answer, and the test asks the game for it
+// rather than re-deriving it and hoping the two agree. "corner" is anywhere
+// OUTSIDE every zone, which is what the mode being unavailable actually means.
 async function fracWhere(page, pick) {
-  return page.evaluate(({ p, kMax }) => {
-    const prof = window.__apex.trackProfile(600);
-    if (p === "corner") {
-      let best = prof[0];
-      for (const s of prof) if (Math.abs(s.k) > Math.abs(best.k)) best = s;
-      return best.frac;
+  return page.evaluate((p) => {
+    const zones = window.__apex.aeroZones();
+    if (!zones.length) throw new Error("track has no activation zones");
+    // Everything here is in lap FRACTIONS, which is what jump() takes and the
+    // only frame that is wrap-safe without knowing the lap length.
+    if (p === "straight") return zones.slice().sort((a, b) => b.len - a.len)[0].midFrac;
+    // "corner" = the middle of the longest stretch covered by NO zone. Built as
+    // a coverage mask rather than by sorting gaps, because a zone may WRAP the
+    // start line (Monza's main straight does, endFrac < startFrac) and every
+    // interval-arithmetic shortcut gets that one backwards.
+    const N = 2000, covered = new Array(N).fill(false);
+    for (const z of zones) {
+      const a = Math.floor(z.startFrac * N), b = Math.floor(z.endFrac * N);
+      if (b >= a) { for (let i = a; i <= b && i < N; i++) covered[i] = true; }
+      else { for (let i = a; i < N; i++) covered[i] = true;
+             for (let i = 0; i <= b; i++) covered[i] = true; }
     }
-    let bestStart = 0, bestLen = 0, curStart = 0, cur = 0;
-    for (let i = 0; i < prof.length; i++) {
-      if (Math.abs(prof[i].k) < kMax) {
+    let bestStart = 0, bestLen = 0, curStart = -1, cur = 0;
+    for (let i = 0; i < N * 2; i++) {          // twice round, so a run can wrap
+      if (!covered[i % N]) {
         if (cur === 0) curStart = i;
         cur++;
-        if (cur > bestLen) { bestLen = cur; bestStart = curStart; }
+        if (cur > bestLen && cur <= N) { bestLen = cur; bestStart = curStart; }
       } else cur = 0;
     }
-    return prof[bestStart + Math.floor(bestLen * 0.1)].frac;
-  }, { p: pick, kMax: K_STRAIGHT });
+    if (!bestLen) throw new Error("every metre of this circuit is an aero zone");
+    return ((bestStart + bestLen / 2) % N) / N;
+  }, pick);
 }
 
 test.describe("active aero — state surface", () => {

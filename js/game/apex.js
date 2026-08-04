@@ -2135,7 +2135,28 @@ const api = {
       xArmed: !!G.player.xArmed,
       aeroX: +(G.player.aeroX || 0).toFixed(3),
       mode: (G.player.aeroX || 0) > 0.05 ? "X" : "Z",
+      // Where the player is relative to the fixed ACTIVATION ZONES: inside one,
+      // and how far to the next. `zones` 0 means the circuit has none at all
+      // (no straight clears three seconds — the Monaco case), and the mode is
+      // simply unavailable there rather than merely unarmed.
+      inZone: !!G.aeroZoneAt(G.player.s || 0),
+      zoneAhead: Math.round(G.aeroZoneAhead(G.player.s || 0)),
+      zones: G.aeroZones.length,
     };
+  },
+  // The circuit's ACTIVATION ZONES in arc metres — fixed per track, and empty
+  // on a circuit whose longest straight does not clear three seconds.
+  aeroZones() {
+    if (!G.track) return null;
+    return G.aeroZones.map((z) => ({
+      start: Math.round(z.start), end: Math.round(z.end), len: Math.round(z.len),
+      startFrac: +(z.start / G.track.total).toFixed(4),
+      endFrac: +((z.end % G.track.total) / G.track.total).toFixed(4),
+      // Wrap-safe midpoint. A zone can cross the start line (Monza's main
+      // straight does), and then startFrac > endFrac — so a caller that
+      // averaged the two would aim at the far side of the circuit.
+      midFrac: +(((z.start + z.len * 0.5) % G.track.total) / G.track.total).toFixed(4),
+    }));
   },
   carEffects() {
     if (!G.player) return null;
