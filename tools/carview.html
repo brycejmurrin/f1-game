@@ -169,7 +169,7 @@
     sweep: qp("sweep", "0") !== "0",     // a bright point light orbiting the car (reflection test)
     effects: { exhaustFlame: false, brakeGlow: false, ersDeploy: false, boostFlame: false },
   };
-  const PART_CATS = ["engine", "aero", "suspension", "brakes", "tyres", "ers", "gearbox", "fuel"];
+  const PART_CATS = ["engine", "aero", "suspension", "brakes", "tyres", "ers", "gearbox", "fuel", "exhaust", "floor", "cockpit"];
   let sweepA = 0;
   for (const cat of PART_CATS) {
     if (Q.has(cat)) S.parts[cat] = Q.get(cat);

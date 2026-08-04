@@ -283,7 +283,14 @@ const SceneryIdentity = (function () {
         // safer barrier below is 1.1 m tall and wants to stay embedded).
         const SINK = 0.3;
         addBox(out, vadd(a.c, a.u, 0.16 + SINK), [1.05, 0.26, spacing * 0.90], col, b);
-        addBox(out, vadd(vadd(a.c, a.r, side * 0.38), a.u, 0.30 + SINK),
+        // INSET, not flush. At 0.38 this box's outer face landed at 1.890 while
+        // the slab above ends at 1.875 — 15 mm apart, same outward normal, and
+        // both front-facing, so they z-fight beyond ~275 m in cockpit view. The
+        // pair ran continuously down both sides of every circuit using this
+        // ribbon (106 of Qatar's 208 same-facing coplanar pairs). 0.30 puts the
+        // outer face at 1.81, a clear 65 mm BEHIND the slab edge — it reads the
+        // same, and it can never become a new proud lip the way flush would.
+        addBox(out, vadd(vadd(a.c, a.r, side * 0.30), a.u, 0.30 + SINK),
                [0.32, 0.42, spacing * 0.90], col, b);
       });
       if (!doSafer) return;

@@ -1497,6 +1497,14 @@ const Tracks = (function () {
     // (kept marker so night tracks still opt into buildTrackLights via def.night)
     // tire barriers at outside of tight corners on permanent (non-street) circuits
     if (!def.street) {
+      // findCorners returns every local curvature peak, and two peaks a few
+      // nodes apart both survive its `sm[k] >= sm[a] && sm[k] > sm[b]` test. Their
+      // spans then overlap, and because both walk out in the SAME `step` stride
+      // they can land on the identical node — emitting a byte-identical tyre box
+      // twice. Two fully coincident boxes are the purest z-fight there is: every
+      // face coplanar, same normal, zero gap, so they flicker at ANY distance.
+      // Qatar carried 24 such pairs. Claim each (node, side) once.
+      const stacked = new Set();
       for (const c of findCorners(track, 0.014)) {
         const outside = c.sign > 0 ? -1 : 1;
         const lo = Math.max(1, Math.round(c.lo * 0.35));
@@ -1504,6 +1512,9 @@ const Tracks = (function () {
         const step = Math.max(2, Math.round(3.5 / ds));
         for (let i = -lo; i <= hi; i += step) {
           const k = ((c.k + i) + n) % n;
+          const claim = k * 2 + (outside > 0 ? 1 : 0);
+          if (stacked.has(claim)) continue;
+          stacked.add(claim);
           const r = [track.rx[k], track.ry[k], track.rz[k]];
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);

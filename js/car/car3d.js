@@ -443,6 +443,22 @@ const Car3D = (function () {
     // Cover vanes: six slim recessed-look blades sweeping out from the hub — subtle
     // but enough to read the wheel ROTATION (tread/cover are rotationally uniform).
     const VANE = [0.26, 0.26, 0.30];
+    // Sidewall SHOULDER profile — a proud ring just inside the tread that changes
+    // the tyre's outline: 1 rounds it off, 2 steps it in. Purely additive.
+    const tyreShoulder = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.shoulder) || 0)));
+    if (tyreShoulder > 0) {
+      const shR = r * (tyreShoulder === 2 ? 0.90 : 0.945);
+      const shW = tyreShoulder === 2 ? 0.020 : 0.012;
+      for (const ss of [[x0, -1], [x1, 1]]) {
+        const xs = ss[0] + ss[1] * 0.004;
+        for (let k = 0; k < 18; k++) {
+          const a0 = (k / 18) * Math.PI * 2, a1 = ((k + 1) / 18) * Math.PI * 2;
+          const A = (rad, a) => [xs, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+          addQuad(out, A(shR, a0), A(shR + shW, a0), A(shR + shW, a1), A(shR, a1),
+                  TYRE, SURFACES.rubber);
+        }
+      }
+    }
     const coverVanes = tyreStyle && tyreStyle.coverVanes || 6;
     for (const ss of [[x0, -1], [x1, 1]]) {
       const xs = ss[0] + ss[1] * 0.014;
@@ -452,6 +468,21 @@ const Car3D = (function () {
         const hw = 0.010, ri = rimR * 0.46, ro = rimR * 0.98;
         const P = (rad, s) => [xs, cy + uy * rad + py * hw * s, cz + uz * rad + pz * hw * s];
         addQuad(out, P(ri, 1), P(ro, 1), P(ro, -1), P(ri, -1), VANE, SURFACES.metal);
+      }
+      // Disc FACE pattern, proud of the cover so it reads at a glance: a ring of
+      // drilled holes (1) or a set of curved slots (2). Two brake packages with
+      // the same duct size now look like different discs, not one resized disc.
+      const discFace = Math.max(0, Math.min(2, Math.round((brakeStyle && brakeStyle.discFace) || 0)));
+      if (discFace > 0) {
+        const marks = discFace === 1 ? 10 : 6;
+        for (let k = 0; k < marks; k++) {
+          const a = (k / marks) * Math.PI * 2 + 0.14;
+          const rad = rimR * 0.74;
+          const my = cy + rad * Math.cos(a), mz2 = cz + rad * Math.sin(a);
+          const sz = discFace === 1 ? 0.016 : 0.030;
+          addBox(out, xs, my, mz2, 0.004, sz, sz * (discFace === 1 ? 1 : 0.45),
+                 [0.05, 0.05, 0.06], SURFACES.carbon);
+        }
       }
     }
     // Raised hub cap: a proud gunmetal centre disc + a bright wheel-nut cap (the
@@ -598,6 +629,8 @@ const Car3D = (function () {
       arm: tier === 0 ? 0.85 : tier === 2 ? 1.3 : 1,
       push: tier === 2 ? 1 : 0, pull: 0,
       wishbone: 1, toe: 1,
+      // Visible inboard rocker fairing on the tub top: 0 none / 1 blister / 2 full cover.
+      rocker: 0,
     }, recipe);
   }
   function buildBrakeParts(recipe, tier) {
@@ -607,10 +640,14 @@ const Car3D = (function () {
       rotor: tier === 2 ? 2 : 1, rotorScale: tier === 2 ? 1.12 : 1,
       // null = derive the duct fairing from `duct` (the shipped behaviour).
       scoop: null,
+      // Disc face pattern seen through an open cover: 0 plain / 1 drilled / 2 slotted.
+      discFace: 0,
     }, recipe);
   }
   function buildTyreParts(recipe, tier) {
-    return mergeRecipe({ band: TYRE_BAND[tier], grooved: false }, recipe);
+    // `shoulder`: 0 the shipped square sidewall / 1 rounded / 2 stepped. It
+    // changes the tyre's SILHOUETTE, which no amount of band-width tuning can.
+    return mergeRecipe({ band: TYRE_BAND[tier], grooved: false, shoulder: 0 }, recipe);
   }
   function buildErsParts(recipe, tier, accent) {
     return mergeRecipe({ led: tier === 2 ? accent : null, pack: 1,
@@ -631,6 +668,23 @@ const Car3D = (function () {
       line: 1, filler: 0,
     }, recipe);
   }
+  // EXHAUST: `pipes` null = derive the tip count from the engine's own plumbing
+  // (the shipped behaviour); a recipe may state it outright. bore/flare/wastegate/
+  // wrap default to the values that reproduce today's tailpipe exactly.
+  function buildExhaustParts(recipe) {
+    return mergeRecipe({ pipes: null, bore: 1, flare: 0, wastegate: 0, wrap: 0 }, recipe);
+  }
+  // FLOOR: the five evenly-spaced edge fences that used to be hardcoded, plus
+  // skid blocks and an edge lip. fences 5 / fenceH 1 is the shipped array.
+  function buildFloorParts(recipe) {
+    return mergeRecipe({ fences: 5, fenceH: 1, skid: 0, edgeLip: 0 }, recipe);
+  }
+  // COCKPIT: the halo and its furniture. haloBlade thickens the hoop into an
+  // aero section, haloWing adds the upper flap many cars carry, camPods sets the
+  // T-cam pod count. All default to the shipped cockpit.
+  function buildCockpitParts(recipe) {
+    return mergeRecipe({ haloBlade: 0, haloWing: 0, camPods: 0, screen: 0 }, recipe);
+  }
   function buildPartRecipes(T, accent) {
     const tier = (id) => T[id] != null ? T[id] : 1;
     const recipe = (id) => T._visual && T._visual[id] || null;
@@ -643,6 +697,9 @@ const Car3D = (function () {
       ers: buildErsParts(recipe("ers"), tier("ers"), accent),
       gearbox: buildGearboxParts(recipe("gearbox"), tier("gearbox")),
       fuel: buildFuelParts(recipe("fuel"), tier("fuel")),
+      exhaust: buildExhaustParts(recipe("exhaust")),
+      floor: buildFloorParts(recipe("floor")),
+      cockpit: buildCockpitParts(recipe("cockpit")),
     };
   }
   // Resolve the continuous 0..4 downforce level from a getVisualTiers() object.
@@ -856,6 +913,9 @@ const Car3D = (function () {
     const gbStyle = design.gearbox;
     const fuelStyle = design.fuel;
     const aeroStyle = design.aero;
+    const exhStyle = design.exhaust;
+    const floorStyle = design.floor;
+    const cockpitStyle = design.cockpit;
     // Per-team chassis identity (opts.teamId): nose profile, airbox scale,
     // dorsal fin, mirror style, sidepod-inlet aspect. Absent → shared default
     // silhouette, byte-identical to before.
@@ -1161,9 +1221,30 @@ const Car3D = (function () {
       } else {
         addBox(out, s*inlet.x, inlet.y, inlet.z, inlet.width * 0.70, inlet.height * 0.68, 0.05, INTAKE);
       }
-      for (const fz of [0.42, 0.06, -0.30, -0.66, -1.02]) {
+      // Floor-edge fences: count and height come from the FLOOR recipe. The
+      // shipped array is 5 fences on a 0.36 m pitch from z 0.42, which is what
+      // the default recipe reproduces exactly.
+      const fenceN = Math.max(0, Math.min(6, Math.round(floorStyle.fences)));
+      const fenceH = Math.max(0.6, Math.min(1.6, floorStyle.fenceH));
+      for (let i = 0; i < fenceN; i++) {
+        const fz = 0.42 - i * 0.36;
         const fp = anchors.podAt(fz);
-        addBox(out, s*(fp.x + 0.012), fp.bottom + 0.025, fz, 0.014, 0.05, 0.13, CARBON);
+        addBox(out, s*(fp.x + 0.012), fp.bottom + 0.025 * fenceH, fz,
+               0.014, 0.05 * fenceH, 0.13, CARBON);
+      }
+      // Floor-edge lip: a thin outward return along the whole floor edge.
+      const edgeLip = Math.max(0, Math.min(1, floorStyle.edgeLip || 0));
+      if (edgeLip > 0) {
+        const lipF = anchors.podAt(0.50), lipR = anchors.podAt(-1.10);
+        addSpan(out, { z: 0.50, x: s*(lipF.x + 0.020), y: lipF.bottom + 0.004, w: 0.030 * edgeLip + 0.010, h: 0.012 },
+                     { z: -1.10, x: s*(lipR.x + 0.020), y: lipR.bottom + 0.004, w: 0.036 * edgeLip + 0.010, h: 0.012 },
+                CARBON);
+      }
+      // Titanium skid blocks under the plank — the bits that throw sparks.
+      const skids = Math.max(0, Math.min(2, Math.round(floorStyle.skid || 0)));
+      for (let i = 0; i < skids; i++) {
+        addBox(out, s * 0.22, 0.046 + rideDY, 0.30 - i * 1.10, 0.10, 0.014, 0.26,
+               [0.62, 0.60, 0.56], SURFACES.metal);
       }
     }
     // --- Sidepod cooling CHIMNEYS (engine recipe `chimney`, 0..3): squat stacks
@@ -1270,6 +1351,29 @@ const Car3D = (function () {
     }
     addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop
     addBox(out, 0, 0.60,  0.62, 0.05, 0.20, 0.05, DARK); // front pillar
+    // COCKPIT recipe. haloBlade fairs the hoop into an aero section, haloWing
+    // adds the upper flap, camPods sets the T-cam count, screen adds the
+    // deflector ahead of the opening. All zero = the shipped cockpit.
+    const haloBlade = Math.max(0, Math.min(2, Math.round(cockpitStyle.haloBlade || 0)));
+    if (haloBlade > 0) {
+      const bw = haloBlade === 2 ? 0.055 : 0.034;
+      for (const s of [-1, 1]) {
+        addLoft(out, -0.15, s * 0.27, 0.775, bw, 0.016,
+                 0.62, 0, 0.735, bw * 0.7, 0.014, haloTint || HALO, SURFACES.metal);
+      }
+    }
+    if (cockpitStyle.haloWing) {
+      addBox(out, 0, 0.805, 0.10, 0.30, 0.014, 0.11, haloTint || HALO, SURFACES.metal);
+    }
+    const camPods = Math.max(0, Math.min(2, Math.round(cockpitStyle.camPods || 0)));
+    for (let i = 0; i < camPods; i++) {
+      const s = i === 0 ? -1 : 1;
+      addBox(out, s * 0.13, 0.795, -0.16, 0.045, 0.038, 0.075, DARK);
+      addBox(out, s * 0.13, 0.795, -0.125, 0.026, 0.022, 0.012, VISOR, SURFACES.glass);
+    }
+    if (cockpitStyle.screen) {
+      addLoft(out, 0.50, 0, 0.665, 0.34, 0.030, 0.66, 0, 0.700, 0.24, 0.026, DARK);
+    }
 
     part("mirrors");
     // --- Side mirrors ---. In cockpit view they're moved FORWARD (ahead of the eye at z0.32)
@@ -1347,10 +1451,34 @@ const Car3D = (function () {
     // --- Exhaust outlet poking from the tail cap --- per ENGINE option: a lone
     // slim pipe at low spec, a fat central tailpipe flanked by two extra tips
     // for engine recipes with the `twin` flag.
-    const exhTwin = engStyle ? !!engStyle.twin : tier("engine") === 2;
-    const exhR = engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
-                          : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07);
+    // The EXHAUST recipe owns the tailpipe; `pipes` null defers to the engine's
+    // own plumbing so a car with no exhaust part fitted is unchanged.
+    const exhTwin = exhStyle.pipes != null ? exhStyle.pipes >= 3
+      : (engStyle ? !!engStyle.twin : tier("engine") === 2);
+    const exhBore = Math.max(0.7, Math.min(1.5, exhStyle.bore));
+    const exhR = (engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
+                          : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07)) * exhBore;
     addBox(out, 0, 0.40, -2.12, exhR, exhR, 0.16, [0.16, 0.16, 0.17], SURFACES.metal);
+    // Megaphone flare: the bore opens out over the last few centimetres.
+    const exhFlare = Math.max(0, Math.min(1, exhStyle.flare || 0));
+    if (exhFlare > 0) {
+      addLoft(out, -2.16, 0, 0.40, exhR * 2, exhR * 2,
+              -2.23, 0, 0.40, exhR * 2 * (1 + 0.55 * exhFlare), exhR * 2 * (1 + 0.55 * exhFlare),
+              [0.18, 0.18, 0.19], SURFACES.metal);
+    }
+    // Heat wrap: a pale bandage band around the primary, just ahead of the tip.
+    if (exhStyle.wrap) {
+      addBox(out, 0, 0.40, -2.04, exhR * 1.18, exhR * 1.18, 0.06,
+             [0.72, 0.70, 0.66], SURFACES.panel);
+    }
+    // Wastegate stacks: short pipes venting up and out above the primary.
+    const exhGates = Math.max(0, Math.min(2, Math.round(exhStyle.wastegate || 0)));
+    for (let i = 0; i < exhGates; i++) {
+      const s = i === 0 ? -1 : 1;
+      addSpan(out, { z: -2.02, x: s * 0.075, y: 0.47, w: 0.036, h: 0.036 },
+                   { z: -2.16, x: s * 0.095, y: 0.53, w: 0.030, h: 0.030 },
+              [0.20, 0.20, 0.22], null, SURFACES.metal);
+    }
     // Heat-glazed tailpipe mouth: a dark bore tinted by the fuel blend; transient
     // after-fire is rendered separately from live throttle state.
     // signature colour (green biofuel, violet quali mix, …), read racing behind it.
@@ -1719,6 +1847,20 @@ const Car3D = (function () {
     // bottom-inboard vs bottom-outboard → top-inboard) — a clear layout tell.
     const wbPull = suspStyle && suspStyle.pull ? 1 : 0;
     const armTh = 0.026 * wbMul, suspC = [0.11, 0.11, 0.13];
+    // Inboard ROCKER fairing on the tub top ahead of the dash — the blister that
+    // covers the heave/rocker assembly. A silhouette tell no arm scaling gives.
+    const rockerLvl = Math.max(0, Math.min(2, Math.round(suspStyle.rocker || 0)));
+    if (rockerLvl > 0) {
+      const rh = rockerLvl === 2 ? 0.055 : 0.032;
+      addLoft(out, 0.78, 0, 0.545 + rideDY + rh * 0.5, 0.20, rh,
+              1.16, 0, 0.500 + rideDY + rh * 0.4, 0.15, rh * 0.8, CARBON);
+      if (rockerLvl === 2) {
+        for (const s of [-1, 1]) {
+          addBox(out, s * 0.085, 0.575 + rideDY, 0.95, 0.020, 0.030, 0.16,
+                 [0.24, 0.24, 0.27], SURFACES.metal);
+        }
+      }
+    }
     const wishboneSpread = 0.20 * Math.max(0.72, Math.min(1.3, suspStyle.wishbone));
     const toeScale = Math.max(0.7, Math.min(1.35, suspStyle.toe));
     for (const s of [-1, 1]) {

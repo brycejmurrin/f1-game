@@ -134,8 +134,16 @@
           basis: b,
         }, (stage) => {
           addBox(stage, vadd(a.c, a.u, h * 0.28), [depth, h * 0.56, len], shell, b);
+          // The crowd band is buried inside the shell and reads ONLY through its
+          // trackward face, so that face has to clear the shell's. It used to sit
+          // at depth*0.34 with half-width depth*0.16 — summing to exactly
+          // depth*0.50, i.e. dead flush with the shell, for ANY depth. Two large
+          // same-facing faces at zero gap fight at every distance, and at up to
+          // 2000 m2 each these were the biggest z-fight in the game: the stand
+          // wall that fills the right of frame on the pit straight. 6 cm of
+          // standoff holds to ~550 m, past where fog takes over.
           addBox(stage,
-            vadd(vadd(a.c, a.u, h * 0.62), a.r, -side * (depth * 0.34)),
+            vadd(vadd(a.c, a.u, h * 0.62), a.r, -side * (depth * 0.34 + 0.06)),
             [depth * 0.32, h * 0.48, len * 0.94], crowd, b);
           addBox(stage, vadd(a.c, a.u, h), [depth + 3, 0.7, len + 1.5], WHITE, b);
           addBox(stage,
@@ -267,7 +275,19 @@
         let i = 0;
         along(0.0, 0.12, 6, (k) => {
           const col = (i % 2) ? [0.18, 0.18, 0.20] : [0.28, 0.28, 0.30];
-          place(k, -1, 3, [0.5, 4.5, 5.0], col);
+          // Garages stand BEHIND the pit wall below, not in it. Both helpers
+          // centre a 0.5 m-thick box on their lateral distance — place() on
+          // `dist` (tracks.js), wall() on `gap` with thick defaulting to 0.5 —
+          // so at the same value of 3 they spanned an identical hw+2.75..3.25
+          // and their outward faces were EXACTLY coplanar, same normal, zero
+          // gap. The wall runs 0.96->0.08 and these run 0.00->0.12, so the two
+          // overlapped for 432 m starting precisely at the start line: the
+          // z-fighting flash reported at Qatar's start. 3.9 leaves 0.40 m of
+          // real clearance rather than betting on depth precision.
+          // blockAt() still records the garage at dist - sz[0]/2 = 3.65 while
+          // the wall records 3.0, and the tighter wins — the driving limit is
+          // unchanged.
+          place(k, -1, 3.9, [0.5, 4.5, 5.0], col);
           i++;
         });
       })();

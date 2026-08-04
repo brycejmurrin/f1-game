@@ -32,6 +32,11 @@ const CAT_VIEW = {
   ers:        { az: 322, el: 16, dist: 5.6, tod: "dusk" },
   gearbox:    { az: 26,  el: 22, dist: 5.8, tod: "day" },
   fuel:       { az: 6,   el: 15, dist: 6.0, tod: "dusk" },
+  // The tailpipe cluster reads from close behind and slightly above; the floor
+  // fences and skids need a low angle from the side to clear the bodywork.
+  exhaust:    { az: 10,  el: 12, dist: 4.6, tod: "dusk" },
+  floor:      { az: 118, el: 4,  dist: 5.4, tod: "day" },
+  cockpit:    { az: 148, el: 26, dist: 3.9, tod: "day" },
 };
 const cats = arg("cats", Object.keys(CAT_VIEW).join(",")).split(",")
   .map((value) => assertSafePathToken(value.trim(), "category")).filter(Boolean);
