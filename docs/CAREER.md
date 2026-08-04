@@ -460,6 +460,70 @@ that `makeCars()` already calls — one path, not two. The gate moved: it used t
 early for `flavour !== "driver"`, and now it defers to an ungated `seatDriver()` so a
 market swap applies in MY TEAM as well, while the player's own seat still outranks it.
 
+## The economy, measured
+
+`tools/career-economy.mjs` sims a season per starting team through the **real**
+`Career.settleRound()` and prices the income against the catalog. It exists because
+`QUALI_TRIM` shipped as a reasoned guess and was **27% wrong**, and `RESEARCH_MULT`
+/ `PRIZE` / `BUDGET_MULT` had never had the same treatment.
+
+It found one immediately. `salaryFor()` read `(4 - team.tier) * 15` while its own
+comment said salary *"falls with the quality of the car you are given: a back-marker
+has to pay you more to sign"*. Tier 0 is the **best** car, so the code did the exact
+opposite of the sentence above it.
+
+| | before | after |
+|---|---|---|
+| tier 3 season (Alpine / RB / Haas / Williams) | 5,766 – 7,516 cr | 6,486 – 8,236 cr |
+| tier 4 season (Audi / Aston / Cadillac) | **4,014 – 4,764 cr** | **5,454 – 6,204 cr** |
+| worst-to-best spread | 2.3× | 1.7× |
+
+The slowest cars on the grid also earned ~35% less to fix themselves with. The mode
+already hands them the disadvantage; the economy was compounding it.
+
+**Read the re-spec figure, not the catalog percentage.** The fitted cap means you can
+never run more than a fraction of what you own, so nobody needs the whole catalog —
+what says whether a season is worth playing is how many complete *cars-worth* of
+research it buys. Below ~1 is a grind; above ~6 solves the car in year one.
+
+`RESEARCH_MULT` is the single knob. Re-measure after touching it, the `PRIZE` ladder,
+or `salaryFor()`.
+
+## Sponsors — MY TEAM's second income
+
+A driver is paid a **salary**; an owner is paid by **sponsors**. That is the income
+the two modes should not share, and it was the one thing MY TEAM had none of — it
+started with more money and then earned exactly like a driver.
+
+A sponsor is a **multi-round brief**: the round objective asks how a weekend went, a
+sponsor asks how the *season* is going, which is what a principal is judged on. Built
+from the same parts as the round objective — a type, a value, a pure draw off the
+career seed — rather than as a second system. Windows tile the season, so a single
+lucky weekend cannot pay one and a single bad one does not sink it.
+
+Progress is read off `career.results`, the rows the season already records, so there
+is no second ledger to keep in step. `career.paidSponsors` records which windows have
+paid, so a reload cannot double-pay and an unmet window cannot be retried.
+
+## The facility — the sink that does not run out
+
+Ownership only grows and the budget ladder stops at three, so a successful career
+converged on owning everything with nothing to spend on: the mode had no end game.
+Eight open-ended levels, each a permanent cut to research cost — a geometric price
+against a linear, capped discount, so it is always affordable in principle and never
+trivialises the catalog. The discount lands inside `researchCost()` rather than at the
+point of sale, so the garage's price and what the balance is charged cannot disagree.
+
+## Extra funds
+
+Opt-in, off by default, stored **outside** the save (`apex26.career.freeMoney`) —
+a preference about how you want to play, not a fact about one career. The career
+garage hides FREE BUILD precisely because an unlimited parts budget would hand away
+the economy; this is the same trade made explicit and reversible instead of hidden.
+Money stops being scarce, **the fitted cap does not move**, and every other rule
+stands — so a bottomless balance still cannot put more on the car than the rules
+allow, which is the constraint that actually makes a weekend a choice.
+
 ## Qualifying
 
 A `session`, not a game state. The player's flying lap **is** a time trial: one car,

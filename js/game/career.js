@@ -572,6 +572,85 @@ function upgradeBudget() {
   return true;
 }
 
+// ---------- MY TEAM: sponsors ----------
+// A driver is paid a salary; an owner is paid by SPONSORS. That is the second
+// income the two modes should not share, and it is the one thing MY TEAM had
+// nothing of — it started with more money and then earned exactly like a driver.
+//
+// A sponsor is a MULTI-ROUND brief. The per-round objective already asks "how
+// did this weekend go"; a sponsor asks "how is the season going", which is the
+// question a team principal is actually judged on. Deliberately built out of the
+// same parts as the round objective rather than a second system: a type, a
+// value, and a pure draw off the career seed.
+const SPONSOR_KINDS = [
+  // Every one is measured over a WINDOW of consecutive rounds, so a single lucky
+  // weekend cannot pay it and a single bad one does not sink it.
+  { type: "points", window: 5, value: (t) => Math.max(2, 14 - t.tier * 2), pay: 600 },
+  { type: "finishes", window: 4, value: () => 3, pay: 450 },
+  { type: "double", window: 6, value: () => 2, pay: 800 },
+  { type: "clean", window: 4, value: () => 4, pay: 400 },
+];
+const SPONSOR_LABELS = {
+  points: (v, w) => "Score " + v + " points across " + w + " rounds",
+  finishes: (v, w) => "Finish " + v + " of the next " + w + " rounds in the points",
+  double: (v, w) => "Get BOTH cars home in the points " + v + " times in " + w + " rounds",
+  clean: (v, w) => "Keep it clean — no retirements, no penalties — for " + w + " rounds",
+};
+function sponsorLabel(sp) {
+  const f = sp && SPONSOR_LABELS[sp.type];
+  return f ? f(sp.value, sp.window) : "";
+}
+
+// The deal running right now, drawn once per window and pure in (seed, year,
+// windowIndex) so it survives a reload and cannot be rerolled.
+function sponsor() {
+  if (!inCareer() || career.flavour !== "myteam") return null;
+  const team = Teams.LIST.find((t) => t.id === career.team) || { tier: 2 };
+  // Which window we are in. Windows tile the season from round 0.
+  const round = career.season.round;
+  let start = 0, idx = 0, kind = null;
+  while (start <= round) {
+    const i = Math.floor(rnd(career.year, "spon", idx) * SPONSOR_KINDS.length);
+    kind = SPONSOR_KINDS[Math.min(i, SPONSOR_KINDS.length - 1)];
+    if (start + kind.window > round) break;
+    start += kind.window;
+    idx++;
+  }
+  if (!kind) return null;
+  const value = kind.value(team);
+  // Progress is read off the results the season already recorded — no second
+  // ledger to keep in step, and a settled round counts the moment it settles.
+  const rows = (career.results || []).filter((r) => r.r >= start && r.r < start + kind.window);
+  let done = 0;
+  for (const r of rows) {
+    if (kind.type === "points") done += r.pts || 0;
+    else if (kind.type === "finishes") done += (r.pts || 0) > 0 ? 1 : 0;
+    else if (kind.type === "double") done += r.double ? 1 : 0;
+    else if (kind.type === "clean") done += (!r.dnf && r.clean) ? 1 : 0;
+  }
+  const need = kind.type === "points" ? value : kind.type === "clean" ? kind.window : value;
+  return {
+    type: kind.type, value, window: kind.window, pay: kind.pay,
+    start, end: start + kind.window - 1, idx,
+    done, need, met: done >= need,
+    roundsLeft: Math.max(0, start + kind.window - 1 - round),
+    label: sponsorLabel({ type: kind.type, value, window: kind.window }),
+  };
+}
+// Paid ONCE, at the round that closes the window, and only if it was met.
+// `career.paidSponsors` records which windows have paid so a reload cannot
+// double-pay and an unmet window cannot be retried by replaying the round.
+function settleSponsor() {
+  const sp = sponsor();
+  if (!sp || career.season.round - 1 < sp.end) return 0;
+  career.paidSponsors = career.paidSponsors || [];
+  if (career.paidSponsors.indexOf(sp.idx) >= 0) return 0;
+  career.paidSponsors.push(sp.idx);
+  if (!sp.met) return 0;
+  career.money += sp.pay;
+  return sp.pay;
+}
+
 // ---------- the facility: the sink that does not run out ----------
 // Ownership only ever grows and the budget ladder stops at three, so a
 // successful career converged on owning the whole catalog with nothing left to
@@ -725,10 +804,21 @@ function settleRound(order, player) {
   // came apart. Classification (and therefore prize money) already handles the
   // cost of it — a retirement is last, and last pays the tail.
   const dnf = player.retired ? (player.dnf || "mechanical") : null;
-  career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf });
+  // Two extra facts the SPONSOR windows read. Recorded here rather than derived
+  // later because the cars are live right now and will not be by the time the
+  // window closes: `double` is both your cars in the points (MY TEAM only), and
+  // `clean` is the same test the round objective uses.
+  const matePts = mate ? (Teams.POINTS[order.indexOf(mate)] || 0) : 0;
+  const dbl = career.flavour === "myteam" && pts > 0 && matePts > 0;
+  const cleanRun = !player.retired && !(player.cuts | 0) && !(player.penalty | 0);
+  career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf,
+                        double: dbl, clean: cleanRun });
   career.obj = null;          // the next round draws its own brief on demand
+  // A sponsor pays after the round is on the books, because that round is what
+  // closes its window.
+  const sponsorPay = settleSponsor();
   save();
-  return { pos, pts, prize, salary, bonus, wages, obj, dnf,
+  return { pos, pts, prize, salary, bonus, wages, obj, dnf, sponsorPay,
            money: career.money, rep: career.rep };
 }
 
@@ -1133,6 +1223,7 @@ function state() {
     dnfs: career.results.filter((r) => r.dnf).length,
     // MY TEAM only; null in a driver career, where you are the wage bill.
     roster: career.roster, wages: wageBill(), hire: hirePending(),
+    sponsor: sponsor(),
     offers: career.offers.length, moves: (career.moves || []).length,
     seasons: career.history.length,
     slot: slotIdx, slotFlavour,
@@ -1147,6 +1238,7 @@ return {
   SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, anySave, firstFree,
   data, active, inCareer, engage, load, save, clear, start, state, rnd, hash,
   GRANT, freeMoney, grant,
+  sponsor, sponsorLabel, settleSponsor,
   FACILITY_MAX, facility, facilityCost, facilityDiscount, upgradeFacility,
   renewHire, hireDriver, hirePending, HIRE_MIN,
   salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,

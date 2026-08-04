@@ -122,18 +122,29 @@ for (const t of [...teams.map((x) => ({ ...x, flavour: "driver" })),
 const parts = rows.map((r) => r.earned / (cat.median * cat.mult));
 const lo = Math.min(...parts), hi = Math.max(...parts);
 const pctOfCatalog = rows.map((r) => r.earned / (cat.total * cat.mult));
+// "% of the whole catalog" is the wrong yardstick on its own, and worth saying
+// so: the FITTED CAP means you can never run more than a fraction of what you
+// own, so nobody needs the catalog. The number that actually says whether a
+// season is worth playing is how many complete CARS-WORTH of research it buys —
+// income divided by (the fitted cap x RESEARCH_MULT).
+const loads = rows.map((r) => r.earned / (r.budget * cat.mult));
 console.log(`\n${YEARS} season(s): ${lo.toFixed(1)}–${hi.toFixed(1)} median parts affordable`);
 console.log(`that is ${(Math.min(...pctOfCatalog) * 100).toFixed(1)}%–${(Math.max(...pctOfCatalog) * 100).toFixed(1)}% of the whole catalog`);
+console.log(`and ${Math.min(...loads).toFixed(1)}–${Math.max(...loads).toFixed(1)} COMPLETE re-specs of the car you are allowed to fit`);
 console.log(`
-READING IT. Under ~10% a season is a grind — a whole year buys almost nothing.
-Over ~50% and one good season solves the car, ownership stops being a choice and
-only the fitted cap is left doing any work. The spread across teams matters as
-much as the middle: a back-marker earning far less than a midfield car compounds
-the wrong way, because the mode already gives them the slower car.
+READING IT. The re-spec figure is the one that matters. Below ~1 a season cannot
+even replace the car once and the mode is a grind; above ~6 the catalog is
+solved in year one and ownership stops being a choice. Somewhere around 2-4 is a
+season that visibly changes the car while still making you pick.
 
-RESEARCH_MULT in js/game/career.js is the single knob — it scales the whole
-economy against a catalog that stays the source of truth for what a part is
-worth. Re-measure here after changing it.`);
+The SPREAD matters as much as the middle. A back-marker earning far less than a
+midfield car compounds the wrong way, because the mode already gave them the
+slower car — that is exactly the bug this tool was written and immediately found
+(salaryFor's tier term had the wrong sign; see js/game/career.js).
+
+RESEARCH_MULT is the single knob — it scales the whole economy against a catalog
+that stays the source of truth for what a part is worth. Re-measure after any
+change to it, to the PRIZE ladder, or to salaryFor.`);
 
 await browser.close();
 server.close();

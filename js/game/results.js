@@ -75,6 +75,7 @@ function buildResults(order) {
         box.appendChild(miss);
       }
     }
+    line("Sponsor bonus", st.sponsorPay);
     line("Driver wages", -st.wages);
     const tot = document.createElement("div");
     tot.className = "res-settle-row total";

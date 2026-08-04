@@ -158,6 +158,7 @@ function migrateCareer(career) {
   // migration step: a save from before it existed is a valid v1 save at level 0.
   career.facility = career.facility | 0;
   career.moves = Array.isArray(career.moves) ? career.moves : [];
+  career.paidSponsors = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
   return career;
 }
 

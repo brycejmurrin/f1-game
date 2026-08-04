@@ -535,6 +535,22 @@ function create(G) {
       left.appendChild(objCard);
     }
 
+    // THE SPONSOR. MY TEAM only: a driver is paid a salary, an owner is paid by
+    // sponsors. Sits with the round's brief because it is the same idea over a
+    // longer window — how the SEASON is going, which is what a principal is
+    // actually judged on.
+    if (st.sponsor) {
+      const sp = st.sponsor;
+      left.appendChild(head("SPONSOR"));
+      const card = el("div", "cr-card");
+      card.appendChild(el("div", "cr-obj-line", sp.label));
+      card.appendChild(row("Progress", sp.done + " / " + sp.need
+        + (sp.met ? "  ·  MET" : "")));
+      card.appendChild(row("Rounds left", sp.roundsLeft === 0 ? "this one" : String(sp.roundsLeft)));
+      card.appendChild(row("Pays", sp.pay.toLocaleString() + " cr"));
+      left.appendChild(card);
+    }
+
     left.appendChild(head("CONTRACT"));
     if (c.deal) {
       const card = el("div", "cr-card");
