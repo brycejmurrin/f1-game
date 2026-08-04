@@ -215,7 +215,7 @@ const CircuitKit = (function () {
         landmark("tower", stage, place, {
           offset: [0, 0, 0],
           size: place.size,
-          levels: 6,
+          levels: spec.levels || 6,
           kind: spec.style || "lattice",
           colorName: "shell",
         }));

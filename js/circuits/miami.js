@@ -403,7 +403,7 @@
             id: "kit:miami:pit-building", frac: 0.0, side: -1, gap: 13,
             size: [22, 9, 120], garages: 20, required: true,
           });
-          circuitKit.raceControl({
+          circuitKit.raceControl({ style: "stepped",
             id: "kit:miami:race-control", frac: 0.006, side: -1, gap: 76,
             size: [12, 26, 14], required: true,
           });

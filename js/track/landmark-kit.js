@@ -59,12 +59,43 @@ const LandmarkKit = (function () {
       return true;
     }
 
+    // `kind` was accepted and then ignored — circuit-kit.js passed
+    // `kind: spec.style` but only `spec.levels` was ever read, so every
+    // raceControl in the game was the same stack of shrinking boxes and
+    // style:"tapered" was a silent no-op. The kinds below are real.
     function tower(stage, spec) {
       if (!ready(stage, spec)) return false;
       const levels = boundedCount(spec.levels, 4, 12);
       if (!levels) return false;
+      const kind = spec.kind || "lattice";
+      if (kind === "tapered" && p.frustum) {
+        // One tapered shaft plus a proud cap slab — a modern control tower.
+        const half = spec.size[1] / 2;
+        return emit(p.frustum, [stage,
+          [spec.center[0], spec.center[1] - half, spec.center[2]],
+          spec.size[0] * 0.5, spec.size[0] * 0.28, spec.size[1] * 0.88,
+          spec.color, 8, spec.basis]) &&
+          emit(p.box, [stage,
+            [spec.center[0], spec.center[1] + half * 0.80, spec.center[2]],
+            [spec.size[0] * 0.86, spec.size[1] * 0.08, spec.size[2] * 0.86],
+            spec.color, spec.basis]);
+      }
+      if (kind === "drum" && p.cylinder) {
+        const half = spec.size[1] / 2;
+        return emit(p.cylinder, [stage,
+          [spec.center[0], spec.center[1] - half, spec.center[2]],
+          spec.size[0] * 0.46, spec.size[1] * 0.86, spec.color, 10, spec.basis]) &&
+          emit(p.box, [stage,
+            [spec.center[0], spec.center[1] + half * 0.74, spec.center[2]],
+            [spec.size[0] * 1.05, spec.size[1] * 0.10, spec.size[2] * 1.05],
+            spec.color, spec.basis]);
+      }
       for (let i = 0; i < levels; i++) {
-        const scale = 1 - i / levels * 0.35;
+        // "stepped" alternates the setback side instead of shrinking evenly,
+        // which reads as offset slabs rather than a wedding cake.
+        const scale = kind === "stepped"
+          ? (i % 2 ? 0.78 : 1.0)
+          : 1 - i / levels * 0.35;
         const center = [
           spec.center[0],
           spec.center[1] - spec.size[1] / 2 + (i + 0.5) * spec.size[1] / levels,

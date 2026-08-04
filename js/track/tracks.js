@@ -827,6 +827,8 @@ const Tracks = (function () {
           prism: (stage, c, size, color, basis) => addPrism(stage, c, size, color, basis),
           cylinder: (stage, c, radius, height, color, seg, basis) =>
             addCyl(stage, c, radius, height, color, seg, basis),
+          frustum: (stage, c, rB, rT, h, color, seg, basis) =>
+            addFrustum(stage, c, rB, rT, h, color, seg, basis),
         });
       }
       if (sceneryTheme && landmarkKit && typeof CircuitKit !== "undefined" && CircuitKit &&

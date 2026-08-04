@@ -293,7 +293,7 @@
         // Suzuka's Race Control tower — the clock-face silhouette in every
         // pit-straight broadcast shot. Was a generic scenic tower() with no
         // clock and no relationship to the garage block it sits beside.
-        circuitKit.raceControl({
+        circuitKit.raceControl({ style: "tapered",
           id: "kit:suzuka:race-control", frac: 0.995, side: 1, gap: 22,
           size: [9, 30, 9], required: true,
         });
