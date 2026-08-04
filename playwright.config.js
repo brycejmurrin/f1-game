@@ -56,9 +56,12 @@ const WORKERS = Number.isFinite(REQUESTED_WORKERS) && REQUESTED_WORKERS > 0
 
 export default defineConfig({
   testDir: "./tests",
-  // Scratch/scan suites are ad-hoc investigation scripts, not part of the
-  // regression suite — keep them out of default discovery.
-  testIgnore: ["**/inspect/**", "**/blank-scan/**", "**/galleries/**"],
+  // tests/manual/ holds the suites a HUMAN runs on purpose: the per-circuit
+  // blank scan and contact sheets, and the gallery emitters. They render
+  // hundreds of SwiftShader frames or produce images for review, so they gate
+  // nothing and stay out of default discovery. Run them by explicit path
+  // (see tests/manual/README.md).
+  testIgnore: ["**/manual/**"],
   globalSetup: './tests/global-setup.js',
   fullyParallel: true,
   workers: WORKERS,

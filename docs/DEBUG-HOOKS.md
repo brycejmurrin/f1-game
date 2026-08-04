@@ -28,8 +28,11 @@ geometry; `eyeAt()`/`orbit()`/`view()` for reproducible camera framing. Assert
 *behaviour and relative/geometric facts* ("tarmac faster than grass", "no terrain
 above the racing line", "heading barely changes off-track") rather than brittle
 absolute magnitudes, which go stale as physics is retuned. The older
-`blank-scan/*` (PNG byte-size) and `tracks-visual.spec.js` (per-circuit pixel-diff)
-specs are coarser rendering heuristics — keep them, but write new checks against hooks.
+`tests/manual/blank-scan.spec.js` (PNG byte-size) and `tracks-visual.spec.js`
+(per-circuit pixel-diff) specs are coarser rendering heuristics — keep them, but
+write new checks against hooks. Read `__apex.logs({ns})` rather than scraping
+console text: a scraped message ties the spec to its exact wording and misses
+anything below the print threshold.
 
 ## Catalog & meta
 

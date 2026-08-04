@@ -2,6 +2,10 @@
 // Coverage guard: every top-level browser spec and Node tool test must be named
 // explicitly by a topical test:* script. Catch-all/project partition scripts do
 // not demonstrate that a spec belongs to an intentional verification group.
+//
+// ".test.cjs" is in the glob because leaving it out is how a test goes missing:
+// shared-track-foundation-characterization.test.cjs sat in tests/ for months
+// pinning five real behaviours and was run by nothing at all.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +22,7 @@ export function auditCoverage(testFiles, scripts) {
   const covered = new Set();
   for (const [name, command] of Object.entries(scripts)) {
     if (!name.startsWith("test:") || name === "test:headless" || name === "test:render") continue;
-    for (const token of command.match(/tests\/[^\s"']+\.(?:spec\.js|test\.mjs)/g) || []) {
+    for (const token of command.match(/tests\/[^\s"']+\.(?:spec\.js|test\.(?:mjs|cjs))/g) || []) {
       const pattern = path.basename(token);
       const regex = globRegex(pattern);
       testFiles.filter((file) => regex.test(file)).forEach((file) => covered.add(file));
@@ -33,7 +37,7 @@ export function auditCoverage(testFiles, scripts) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   const testFiles = fs.readdirSync(path.join(ROOT, "tests"))
-    .filter((file) => file.endsWith(".spec.js") || file.endsWith(".test.mjs"))
+    .filter((file) => /\.(spec\.js|test\.(mjs|cjs))$/.test(file))
     .sort();
   const { orphans } = auditCoverage(testFiles, pkg.scripts);
   if (orphans.length) {

@@ -15,136 +15,155 @@ node tools/verify-track.cjs <id>  # headless build check (no browser) — catche
                                   #   scenery/buildRoad/buildProps THROW that would
                                   #   strand the game on the menu (e.g. a bad ref).
                                   #   Fast pre-push guard for track scenery edits.
-npx playwright test               # run all specs
-npx playwright test tests/<file>.spec.js   # single spec
-npx playwright test tests/ui-audit.spec.js # → artifacts/galleries-<port>/ui-audit/
-npx playwright test tests/tracks-visual.spec.js  # per-circuit pixel-diff regression
-
-# Named test groups (via npm run <script>):
-npm run test:headless   # the whole headless project (all non-render specs, no GPU)
-npm run test:render     # the render project only (screenshots/pixel/GL) at --workers=4
-npm run test:smoke      # page load + __apex available
-npm run test:api        # __apex contract: dev-tools + headless + obs/act + new-hooks
-npm run test:hooks      # camera/driving/map/new __apex hook contracts
-npm run test:physics    # physics regression + elevation + projection
-npm run test:collision  # collision, drift, offtrack
-npm run test:behaviour  # collision + drift + offtrack + world-physics + physics-fixes
-npm run test:barriers   # track wall geometry + AI-fixes barrier tests
-npm run test:parts      # parts catalog, budget, persistence, physics
-npm run test:steering   # presets, sliders, steering modes, gamepad
-npm run test:camera     # camera modes + camera hooks + driving hooks + camera tuner
-npm run test:ui         # UI screenshots: audit + button-touch + desktop + hud (slow)
-npm run test:visual     # pixel-diff visual regression (tracks-visual, slow)
-npm run test:scenery    # props/terrain over road + f1-track-accuracy
-npm run test:webgl      # webgl-probes + lighting-ab
-npm run test:audio      # engine/sfx audio smoke
-npm run test:modes      # season + time-trial + career game modes
-npm run test:career     # career + qualifying: mode axes, the save, the hub, the grid
-npm run test:map        # minimap hooks
-npm run test:net        # multiplayer: car roles (human vs local), the per-car
-                        #   input seam, per-car parts, and the SESSION — rival
-                        #   posing, extrapolation, loss, hand-back to AI. Driven
-                        #   on a virtual clock (netTick/step), never on rAF.
-                        #   Plus the lobby and the CAMERA SCAN, which runs a real
-                        #   getUserMedia against a Y4M of a real QR that Chromium
-                        #   plays as a webcam (tests/qr-camera.js). Two cameras,
-                        #   two spec files: one always showing the code (does it
-                        #   decode), one showing nothing (cancel/close teardown,
-                        #   which against a decoding camera would pass for the
-                        #   wrong reason)
-npm run test:net-unit   # js/net wire: loopback transport (latency/jitter/loss,
-                        #   deterministic via a seeded rnd), invite-code codec,
-                        #   snapshot quantisation + interpolation, clock sync.
-                        #   Pure logic, no browser — runs in under a second
-npm run test:agent      # agent world view (world/trackInfo/scene/visible/rollout)
-npm run test:circuit    # walls + autopilot + elevation + audit (all circuit-level)
-npm run test:tiny       # START HERE: page loads, __apex present, dev hooks respond
-                        #   (~40 s, headless project only). If this is red nothing
-                        #   else is worth running.
-npm run test:fast       # curated fast subset: smoke + api + collision + offtrack +
-                        #   parts-physics + steering (~3 min)
-npm run test:ab         # lighting A/B pixel comparison (tests/lighting-ab.spec.js)
-npm run test:audit      # coverage guard: every spec must belong to ≥1 group
-npm run test:tooling-fast  # the STRUCTURAL half of test:tooling in ~4 s (load order,
-                        #   docs integrity, api contract, graph, validators). Two
-                        #   full-fleet audits dominate test:tooling's ~3 min —
-                        #   this is everything else, for the edit loop.
-npm run test:sweeps     # the full-fleet audits: prop-clipping + road-under-floor
-                        #   + coplanar-faces (rebuilds every circuit).
-                        #   test:tooling still runs all three.
-                        #   coplanar-faces is the Z-FIGHTING ratchet: SAME-FACING
-                        #   coplanar faces, the pairs that flicker at every
-                        #   distance. clip-audit CANNOT see them — its
-                        #   DEPTH_MIN = 0.5 discards exactly that bucket.
 ```
 
-### Running tests without stalls (background + logs, parallel ports)
+---
 
-Playwright runs are slow (UI groups ~5 min) and look "stuck" when run silently in
-the foreground. The default reporter is `tests/live-reporter.js`: one timestamped,
-immediately-flushed line per test **start** and **end** (`> start` / `+ pass` /
-`x FAIL`, with duration), so a piped log is genuinely tail-able and a hung test is
-identifiable — it's the one with a `> start` line and no end line. The webServer's
-per-request stderr spam is suppressed in playwright.config.js. Run in the
-background and tail:
+## Testing workflow
+
+Three rules, in order. The reference — every group, every spec, the fixtures and
+the philosophy — is **`docs/TESTING.md`**, and `tests/test-groups.test.mjs`
+fails if it and `package.json` disagree. Do not maintain a second copy of that
+table here.
+
+### 1. Run tests in the BACKGROUND, and tail the log
+
+A foreground run blocks for minutes and prints nothing you can act on. Backgrounding
+is the default, not the exception:
 
 ```sh
-npm test -- tests/foo.spec.js > artifacts/tmp/foo.log 2>&1 &
-tail -f artifacts/tmp/foo.log
+node tools/test-bg.mjs smoke api collision   # start; returns immediately
+tail -f artifacts/logs/smoke.log             # watch one
+node tools/test-bg.mjs --status              # running / how each ended
+node tools/test-bg.mjs --wait                # block until all groups finish
+node tools/test-bg.mjs --stop                # kill everything still running
 ```
 
-The npm scripts use `tools/run-playwright.mjs`, which allocates a free port and
-port-suffixed report/artifact paths for every invocation. Independent npm test
-commands can therefore run concurrently without sharing and tearing down each
-other's web server:
+Each group gets its own free port, report dir and log, so groups cannot tear
+down each other's web server and a stall is attributable to ONE log rather than
+to "the run". The reporter (`tests/live-reporter.js`) writes a timestamped line
+per test start and end plus a 30 s heartbeat naming everything in flight — a
+hung test is the one with a `> start` line and no end line
+(`APEX_HEARTBEAT=<s>`, `0` disables).
+
+`tools/test-shards.sh` is the BLOCKING counterpart, for CI. Raw `npm test -- <spec>`
+is fine for one spec; anything larger goes in the background.
+
+### 2. Run the groups the change needs — not all of them
+
+The whole suite is ~40 minutes of SwiftShader. Which groups a change needs is
+mechanical, so ask instead of guessing:
 
 ```sh
-npm test -- tests/a.spec.js > artifacts/tmp/a.log 2>&1 &
-npm test -- tests/b.spec.js > artifacts/tmp/b.log 2>&1 &
+node tools/pick-tests.mjs                 # branch point + working tree
+node tools/pick-tests.mjs --staged
+node tools/pick-tests.mjs js/car/parts.js # explicit paths
+node tools/pick-tests.mjs --bg            # ready-to-paste background command
 ```
 
-Reports land in `artifacts/report-<port>/`, artifacts in `artifacts/test-results-<port>/`
-(both gitignored). Direct `npx playwright test` still uses port 3456; prefer npm.
+Rules live in `RULES` at the top of `tools/pick-tests.mjs`, deliberately coarse
+and biased toward running too much. **A new source directory or a new group means
+a new rule** — `tests/test-groups.test.mjs` fails if a rule names a group that
+does not exist, or if a source directory routes to nothing.
 
-**Two projects, not one.** `playwright.config.js` splits the suite into a
-`headless` project (physics/geometry/hook specs — the default, no GPU) and a
-`render` project (screenshot/pixel-diff/GL specs, listed in `RENDER_SPECS`). The
-old single `chromium` project is gone — target `--project=headless` or
-`--project=render` when filtering, not `--project=chromium`. `npm run test:render`
-runs the render project at `--workers=4` to cap SwiftShader (CPU-GL) concurrency;
-`npm run test:headless` runs everything else and can use more workers safely.
+Order to escalate in:
 
-**`tools/test-shards.sh`** wraps all of this — run whole npm groups concurrently,
-one port + log per group, with a pass/fail summary at the end:
+| When | Run |
+|---|---|
+| after any edit | `npm run test:tiny` — page loads, `__apex` responds. If this is red nothing else is worth running |
+| edit loop | `npm run test:tooling-fast` (~4 s: load order, docs integrity, test groups, api contracts) then the groups `pick-tests` named |
+| track/scenery edit | `node tools/verify-track.cjs <id>` first — 2 s, no browser, catches a build THROW |
+| before pushing | those groups, plus `npm run test:sweeps` if geometry moved |
+
+### 3. Make failures explain themselves
+
+Specs that import `tests/fixtures.js` attach three things on failure, and
+`live-reporter.js` echoes the tail of each into the log:
+
+| Attachment | What it holds |
+|---|---|
+| `apex-state` | `physState` + `probe` + `timing` + `lightState` + `info` |
+| `apex-logs` | the `Log` ring buffer — retained diagnostics **including ones never printed** |
+| `page-console` | what the page said, in order, favicon noise stripped |
+
+Turn diagnostics up for a run without editing the spec:
 
 ```sh
-tools/test-shards.sh smoke api collision        # 3 groups at once
-WORKERS=2 tools/test-shards.sh circuit barriers # workers per group (default 2)
-tail -f artifacts/logs/smoke.log                # watch one group live
+APEX_LOG=scenery:debug npm test -- tests/props-over-road.spec.js
 ```
 
-Sizing: total browsers = groups × WORKERS, and rendering is SwiftShader (CPU),
-so on a small box 2-3 groups × 2 workers is the sweet spot. A single local run
-defaults to at most 4 workers (`APEX_WORKERS=N` overrides it). Playwright shards
-are for distributing CI work across machines; local `SPLIT` multiplies browser
-pools and usually makes this software-rendered suite slower.
+Take the `consoleLines` fixture instead of hand-rolling `page.on("console", …)`,
+and read `__apex.logs({ns})` rather than scraping console text — a scraped
+message ties the spec to its exact wording and misses anything below the print
+threshold.
 
 IMPORTANT: tests serve `js/`/`css/` straight from the working tree — don't edit
 source files while a run is in flight, or its later specs load mixed versions.
 
-The npm wrapper owns its static server in-process and forwards termination
-signals to Playwright so browser children shut down. Direct CLI/sharded runs
-still use Python; after an uncatchable SIGKILL, check for an orphan with
-`pgrep -fa http.server` before removing it.
+**Two projects, not one.** `playwright.config.js` splits the suite into a
+`headless` project (physics/geometry/hook specs — the default, no GPU) and a
+`render` project (screenshot/pixel-diff/GL specs, listed in `RENDER_SPECS`).
+Target `--project=headless` or `--project=render` when filtering, never
+`--project=chromium` (gone). `RENDER_SPECS` is the partition — the headless
+project is "everything NOT in it", so a name there that matches no file silently
+drops a GL spec into the wide pool.
 
-### Output dirs (standard)
+`tests/manual/` is excluded from discovery: the per-circuit blank scan and
+contact sheets, and the gallery emitters. They gate nothing and are run by path
+(see `tests/manual/README.md`).
+
+---
+
+## Logging (`js/log.js`, global `Log`)
+
+Every diagnostic goes through `Log`, never a bare `console.*`. Loads FIRST, so
+any module can call it at evaluation time.
+
+```js
+Log.warn("scenery", `pine SUPPRESSED at k=${k}: dist=${dist}`);
+Log.info("track", `built ${id} in ${ms}ms`);
+if (Log.enabled("gfx", Log.DEBUG)) Log.debug("gfx", expensiveDump());
+```
+
+First argument is always a NAMESPACE (`Log.NAMESPACES`: scenery, track, gfx,
+game, data, net, audio, assets, apex). It is prefixed automatically — do not
+repeat it in the message.
+
+**Two independent thresholds**, which is the whole point:
+
+- the **console** level decides what a human sees (default `warn`)
+- the **buffer** level decides what is RETAINED in a 500-entry ring (default
+  `info`), readable afterwards via `__apex.logs()`. A failure that has already
+  happened still has a record.
+
+```js
+__apex.logLevel()                  // resolved thresholds
+__apex.logLevel("scenery:debug")   // one namespace up
+__apex.logLevel("buffer:debug")    // retain more without printing more
+__apex.logLevel("debug", true)     // …and remember it across reloads
+__apex.logs({ ns: "scenery", limit: 40 })
+```
+
+Also settable by `?log=scenery:debug` on the URL and by `apex26.logLevel` in
+localStorage; `APEX_LOG=<spec>` does it for a whole test run.
+
+**HOT PATHS**: arguments are evaluated whether or not they print, so guard a
+per-frame or per-primitive debug line with `Log.enabled(ns, level)`.
+
+Two things stay bare `console` on purpose: `__apex.diag()`'s object dump (DevTools
+renders an inspectable tree, which `Log` flattens to text), and anything in a
+tool that is not part of the game.
+
+---
+
+## Output dirs (standard)
 
 All regenerable output lives in **two** top-level gitignored dirs — never `/tmp`,
 never scattered at the repo root:
 
 - **`artifacts/test-results-<port>/`** — test failures, traces, attachments, JUnit
 - **`artifacts/report-<port>/`** — HTML report
-- **`artifacts/logs/`** — shard and batch logs
+- **`artifacts/logs/`** — background-run (`test-bg.mjs`) and shard logs
 - **`artifacts/galleries-<port>/`** — test-emitted screenshots/reports
 - **`artifacts/tmp/`** — one-off batch probes
 - **`scratch/captures/`** — interactive tool captures
@@ -168,6 +187,9 @@ an engine/placement change goes in `js/track/`. `tools/manifest.cjs` is the
 single source of truth for load order (see Critical conventions).
 
 ```
+js/log.js        Log            levelled, namespaced logging + a retained ring
+                                  buffer (see Logging). Loads FIRST — everything
+                                  below may log at evaluation time
 js/mat4.js       M4, V3         matrix math
 js/game.js       (main)         entry — game loop, physics, AI, race logic; owns the
                                   closure state and hands the G ctx façade to js/game/*
@@ -1016,20 +1038,43 @@ curvature peak and overlapping results merged (`T9-T10`).
 is the same surface from a shell, with the staging (race/go/jump + let frames
 render) done correctly.
 
+// ── Logging (js/log.js) ──
+__apex.logs({ns:"scenery"})   // the retained log ring — filter {ns, level,
+                              //   since, limit}. Diagnostics down to `info` are
+                              //   kept whether or not they printed, so a failure
+                              //   that already happened still has a record
+__apex.logLevel("scenery:debug")  // move a threshold; "buffer:debug" retains
+                              //   more without printing more; second arg true
+                              //   persists it across reloads
+
 **Note:** `obs()` / `physState()` require `player.px` initialised (`jump()` or one
 tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` first.
 
 ---
 
-## Testing
+## Writing tests
 
-100 Playwright specs + 32 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
-commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
-magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
-geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for
-`#pm-steer`/`#pm-calib` tests; landscape `{width:844, height:390}` for in-race.
+99 Playwright specs + 33 `node --test` unit suites. **How to RUN them is under
+Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
+to do when writing one.
 
-See `docs/TESTING.md` for spec coverage table, fixture docs, and philosophy.
+Assert behaviour and geometry via `__apex` hooks — not brittle rendering
+magnitudes. A threshold like "speed > 10 after 2 s" goes stale the moment
+physics is retuned; prefer relative checks ("faster on tarmac than on grass").
+Use `obs()`/`act()`/`reset()` for physics, `seed()` for reproducibility,
+`groundY()` for terrain geometry, `eyeAt()`/`orbit()` for camera framing, and
+`__apex.logs({ns})` rather than scraping console text.
+
+Viewport: `hasTouch: true` for `#pm-steer`/`#pm-calib` tests; landscape
+`{width:844, height:390}` for in-race.
+
+**New test checklist:** (1) put it in `tests/` — `tests/manual/` is only for
+suites a human runs on purpose; (2) import `test`/`expect` from
+`tests/fixtures.js` unless you have a reason not to; (3) name it in a topical
+`test:<group>` script — `npm run test:audit` fails on an orphan; (4) give it a
+row in the `docs/TESTING.md` coverage table — `tests/test-groups.test.mjs` fails
+without one; (5) if it renders or pixel-diffs, add it to `RENDER_SPECS` in
+`playwright.config.js`.
 
 ---
 
@@ -1046,5 +1091,5 @@ the wrong button.
 
 ## Git branch
 
-Active development branch: `claude/project-architecture-reorganize-7hv8ez`. Never push to main
+Active development branch: `claude/project-cleanup-tests-k7mqb6`. Never push to main
 without review.
