@@ -162,6 +162,10 @@ const TrackSceneryData = (function () {
     cota:        { tree: "broad", fol: [0.32, 0.39, 0.18], lamp: "none" },                 // dry Texas live oak
     montreal:    { tree: "fir",   fol: [0.20, 0.42, 0.23], lamp: "none" },                 // lush island maple/conifer
     albert_park: { tree: "broad", fol: [0.28, 0.46, 0.22], lamp: "none" },                 // tidy Melbourne parkland
+    // ── retired / off-calendar circuits (def `classic: true`) ──
+    indianapolis:  { tree: "broad", fol: [0.22, 0.42, 0.19], lamp: "post",  lc: [0.94, 0.96, 1.0] },  // clipped infield planting + service lighting
+    buenos_aires:  { tree: "broad", fol: [0.30, 0.50, 0.24], lamp: "globe", lc: [1.0, 0.90, 0.68] },  // plátano avenues, city-park globes
+    jacarepagua:   { tree: "palm",  fol: [0.18, 0.44, 0.20], lamp: "post",  lc: [1.0, 0.88, 0.62] },  // Rio coconut palm over restinga
   };
 
   const FURN_DEF = {
@@ -317,6 +321,10 @@ const TrackSceneryData = (function () {
     shanghai:    ["steel", "crimson", "concrete"],
     albert_park: ["steel", "navy", "alu"],
     madrid:      ["terracotta", "concrete", "steel"],
+    // ── retired / off-calendar circuits (def `classic: true`) ──
+    indianapolis:  ["alu", "concrete", "darkSteel"],        // bare Speedway bleachers, no colour
+    buenos_aires:  ["concrete", "scaffold", "pastel"],      // 1950s mass concrete + temporary tube
+    jacarepagua:   ["concrete", "alu", "sandstone"],        // sun-bleached coastal concrete
   };
 
   return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF, STYLES, THEME_DEF, ATM, COL, STAND_LIVERIES, STAND_SETS, STAND_SET_DEF };

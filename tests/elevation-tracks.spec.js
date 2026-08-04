@@ -17,6 +17,11 @@ const ELEVATION_TRACKS = [
   "interlagos", "jeddah", "madrid", "mexico", "miami", "monaco", "montreal",
   "monza", "qatar", "redbull", "shanghai", "silverstone", "singapore", "spa",
   "suzuka", "vegas", "zandvoort",
+  // Retired / off-calendar circuits (def `classic: true`).
+  "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
+  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
+  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
+  "jacarepagua",
 ];
 // Circuits with `banked: true` (raised outer edge through the fast corners).
 const BANKED_TRACKS = ["zandvoort", "madrid"];

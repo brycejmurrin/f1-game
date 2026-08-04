@@ -77,10 +77,23 @@
     scenery: function (api) {
       const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
         px, pz, pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
-        broadcastCompound, billboard, gantry, marshalPost, tower, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, prop,
-        addBox, addCyl, addCone, addPrism } = api;
+        broadcastCompound, billboard, gantry, marshalPost, motorhome,
+        fence, guardrail, tyreWall, groundPatch, modelGroup,
+        sponsorHoarding, cameraTower, seat,
+        addBox, addCyl, addPrism } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      // A basis rotated by `ang` in the (right, up) plane. Hockenheim's pit roof
+      // and the Motodrom's rake are both SLOPES, and a slope is the one thing a
+      // stack of axis-aligned boxes cannot fake at silhouette distance.
+      const tiltBasis = (a, ang) => {
+        const c = Math.cos(ang), s = Math.sin(ang);
+        return [
+          [a.r[0] * c + a.u[0] * s, a.r[1] * c + a.u[1] * s, a.r[2] * c + a.u[2] * s],
+          [a.u[0] * c - a.r[0] * s, a.u[1] * c - a.r[1] * s, a.u[2] * c - a.r[2] * s],
+          a.t,
+        ];
+      };
 
       // Baden pine + mixed broadleaf greens.
       const PINE_D = [0.09, 0.25, 0.13], PINE = [0.11, 0.30, 0.15];
@@ -130,47 +143,145 @@
       });
 
       // =====================================================================
-      // 2. THE MOTODROM — the signature. A near-continuous bowl of grandstand
-      //    wrapping the stadium section, which is what made Hockenheim read as
-      //    a stadium rather than a forest circuit.
+      // 2. THE MOTODROM — the signature, and the reason this section is built
+      //    from scratch rather than from grandstandEx: the stadium is one
+      //    UNBROKEN ring of terracing, and a row of separate stand boxes with
+      //    daylight between them is exactly what Hockenheim does not look like.
+      //    The bowl below runs continuously from the Sachskurve right round to
+      //    the pit-straight entry; the roofed tribunes then sit on top of it.
       // =====================================================================
-      // Outer bowl: the big covered stands around the Sachskurve arc.
-      grandstandEx(0.855, 1, 16, 120, null, null,
-        { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.900, 1, 16, 120, null, null,
-        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true });
-      grandstandEx(0.940, 1, 15, 100, null, null,
-        { livery: "concrete", tiers: 2, endWalls: true });
-      // Inner bowl facing back across the stadium.
-      grandstandEx(0.870, -1, 14, 100, null, null, { livery: "steel", endWalls: true });
-      grandstandEx(0.915, -1, 14, 100, null, null, { livery: "concrete", endWalls: true });
-      // Mercedes-tribune style banked terraces closing the far end.
-      spectatorHill(0.800, 0.850, -1, 15, { rows: 4, rise: 1.2, depth: 1.9, density: 0.55, step: 8 });
-      spectatorHill(0.955, 0.995, 1, 16, { rows: 3, rise: 1.1, depth: 1.8, density: 0.50, step: 8 });
+      const BOWL_CONC = [[0.63, 0.62, 0.59], [0.55, 0.545, 0.525]];
+      const BOWL_CROWD = [[0.88, 0.86, 0.82], [0.22, 0.30, 0.52],
+                          [0.78, 0.28, 0.22], [0.90, 0.78, 0.28]];
+      // One continuous rake of stepped concrete: each row is a riser slab plus a
+      // crowd band, and the whole thing walks the arc node by node so it hugs
+      // the stadium curve instead of chording across it.
+      function motodromTerrace(s0, s1, side, gap, rows, step) {
+        let i = 0;
+        along(s0, s1, step, (k, spacing) => {
+          const seg = spacing * 0.96;
+          for (let t = 0; t < rows; t++) {
+            const a = anchor(k, side, gap + t * 4.3);
+            const b = [a.r, a.u, a.t];
+            const h = 2.4 + t * 2.7;
+            addBox(out, vadd(a.c, a.u, h * 0.5), [4.1, h, seg], BOWL_CONC[t & 1], b);
+            addBox(out, vadd(a.c, a.u, h + 0.75), [3.3, 1.5, seg], BOWL_CROWD[(i + t) & 3], b);
+          }
+          i++;
+        });
+      }
+      // The outer ring: 5 rows, ~19 m of rake, unbroken through the whole arc.
+      // It stops at 0.945 because the pit terrace below stands on the same side
+      // from 0.952 — the bowl ends where the garages begin, as it really does.
+      motodromTerrace(0.790, 0.945, 1, 13, 5, 9);
+      // The inner ring facing back across the infield is shallower — the
+      // stadium is asymmetric, and a matching rake both sides reads as a bowl
+      // that isn't there. Ends short of the main grandstand at 0.010.
+      motodromTerrace(0.840, 0.965, -1, 12, 3, 10);
 
-      // Lit window bands on the stadium shells — reads as glazing by day, as
-      // interior light at dusk.
+      // Continuous fascia + cantilever roof band over the covered half of the
+      // outer ring. Emitted as a run of short slabs on the arc for the same
+      // reason as the terracing: one long chord would leave the curve.
       {
-        const winLit = [0.97, 0.88, 0.54];
-        for (const [s, side, dist] of [[0.855, 1, 24], [0.900, 1, 24], [0.870, -1, 21]]) {
-          const a = anchor(K(s), side, dist);
-          addBox(out, vadd(a.c, a.u, 10.5), [0.22, 1.5, 108], winLit, [a.r, a.u, a.t]);
-        }
+        const roofCol = [0.30, 0.31, 0.34], fascia = [0.86, 0.86, 0.84];
+        along(0.815, 0.940, 11, (k, spacing) => {
+          const a = anchor(k, 1, 27);
+          const b = [a.r, a.u, a.t];
+          addCyl(out, a.c, 0.28, 21, [0.42, 0.43, 0.46], 6, b);           // rear column
+          addBox(out, vadd(a.c, a.u, 21.4), [15, 0.55, spacing * 0.97], roofCol, b);
+          addBox(out, vadd(vadd(a.c, a.r, -7.2), a.u, 20.4), [1.1, 1.6, spacing * 0.97], fascia, b);
+        });
+      }
+      // Mercedes-tribune style banked earth terraces closing the far end.
+      spectatorHill(0.760, 0.798, -1, 15, { rows: 4, rise: 1.2, depth: 1.9, density: 0.55, step: 8 });
+
+      // Stadium videowall + scoreboard mast at the Sachskurve — the thing the
+      // whole bowl faces, and the tallest object in the arena.
+      {
+        const a = anchor(K(0.882), 1, 40);
+        const b = [a.r, a.u, a.t];
+        modelGroup("hockenheim-motodrom-screen", {
+          center: vadd(a.c, a.u, 13), size: [14, 26, 18], basis: b,
+        }, (stage) => {
+          for (const st of [-1, 1])
+            addCyl(stage, vadd(a.c, a.t, st * 6), 0.55, 16, [0.26, 0.27, 0.30], 6, b);
+          addBox(stage, vadd(a.c, a.u, 21), [1.6, 9, 16], [0.14, 0.14, 0.16], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -1.0), a.u, 21), [0.35, 7.6, 14],
+            [0.10, 0.16, 0.22], b);                                        // dark screen face
+          addBox(stage, vadd(vadd(a.c, a.r, -1.2), a.u, 21), [0.2, 6.6, 12.6],
+            [0.62, 0.72, 0.80], b);                                        // lit picture
+        }, { required: true });
       }
 
       // =====================================================================
-      // 3. PIT COMPLEX & START/FINISH
+      // 3. PIT COMPLEX & START/FINISH — the 2002 Motodrom rebuild. Its
+      //    silhouette from the straight is a single long SLOPE: one shallow
+      //    roof plane cantilevered over the pit lane on raking struts, above a
+      //    glazed team-balcony mezzanine. A row of identical building() boxes
+      //    with a flat slab on top gets none of that, so the whole terrace is
+      //    built here from primitives, one atomic bay at a time.
       // =====================================================================
-      const pitWall = [0.87, 0.87, 0.85];
-      for (let i = 0; i < 7; i++) {
-        building(K(0.975 + i * 0.008), 1, 15, 16, 9, 11,
-          { wall: pitWall, window: [0.28, 0.32, 0.38], floor: 4.5, roof: true });
+      {
+        const PIT_WALL = [0.90, 0.90, 0.88], PLINTH = [0.34, 0.35, 0.38];
+        const SHUTTER = [0.22, 0.23, 0.26], GLASS = [0.34, 0.45, 0.54];
+        const ROOF = [0.80, 0.81, 0.83];
+        for (let i = 0; i < 6; i++) {
+          const s = 0.952 + i * 0.011;
+          const a = anchor(K(s), 1, 20);
+          const b = [a.r, a.u, a.t];
+          const roofB = tiltBasis(a, -0.14);   // roof plane falls toward the lane
+          modelGroup(`hockenheim-pit-bay-${i + 1}`, {
+            center: vadd(a.c, a.u, 9), size: [22, 18, 32], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [16, 1.1, 30], PLINTH, b);
+            addBox(stage, vadd(a.c, a.u, 4.8), [14, 6.6, 30], PIT_WALL, b);
+            stage._mat = MAT.METAL;
+            // Three roller shutters per bay on the trackside face.
+            for (let d = 0; d < 3; d++)
+              addBox(stage, vadd(vadd(vadd(a.c, a.r, -7.1), a.u, 3.6), a.t, (d - 1) * 9),
+                [0.35, 4.4, 6.2], SHUTTER, b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(a.c, a.u, 10.0), [14.6, 3.4, 30], GLASS, b);
+            stage._mat = MAT.METAL;
+            // Team viewing balcony projecting over the lane.
+            addBox(stage, vadd(vadd(a.c, a.r, -8.4), a.u, 8.3), [3.6, 0.35, 29], ROOF, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -10.0), a.u, 8.9), [0.16, 1.1, 29], [0.72, 0.74, 0.78], b);
+            // The roof plane itself, tilted, reaching well past the balcony.
+            addBox(stage, vadd(vadd(a.c, a.r, -3.0), a.u, 13.4), [24, 0.6, 30], ROOF, roofB);
+            // Raking struts that carry it — the diagonal is the whole point.
+            for (let d = 0; d < 2; d++) {
+              const foot = vadd(vadd(a.c, a.r, 5.5), a.t, (d - 0.5) * 18);
+              addCyl(stage, vadd(foot, a.u, 6.5), 0.22, 8.6,
+                [0.52, 0.54, 0.58], 5, tiltBasis(a, 0.55));
+            }
+            stage._mat = 0;
+          }, { required: true });
+        }
+        // Race control: a narrow slab with a glazed wedge head cantilevered out
+        // over the line, not the generic tapered tower() cylinder.
+        const a = anchor(K(0.995), 1, 14);
+        const b = [a.r, a.u, a.t];
+        modelGroup("hockenheim-race-control", {
+          center: vadd(a.c, a.u, 18), size: [10, 42, 12], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 14), [5.5, 28, 8], [0.84, 0.85, 0.86], b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(a.c, a.r, -2.4), a.u, 26.5), [5.6, 5.0, 9.5],
+            [0.16, 0.22, 0.30], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -2.6), a.u, 26.5), [5.2, 4.0, 8.6],
+            [0.92, 0.86, 0.60], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.r, -2.4), a.u, 29.6), [7.0, 0.5, 11], ROOF, b);
+          addCyl(stage, vadd(a.c, a.u, 28), 0.14, 11, [0.30, 0.31, 0.34], 4, b);
+          stage._mat = 0;
+        }, { required: true });
       }
-      // Race-control / timing tower over the line.
-      tower(K(0.995), 1, 13, 6, 34, { col: [0.90, 0.90, 0.88], cap: true, capCol: [0.12, 0.12, 0.14], mast: 7 });
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.975, 8.0, [0.15, 0.15, 0.18]);
-      // Main grandstand opposite the pits.
+      // Main grandstand opposite the pits — the one covered stand at Hockenheim
+      // that really is a separate steel structure rather than part of the bowl.
       grandstandEx(0.010, -1, 11, 140, null, null,
         { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       // Paddock hospitality behind the garages.
@@ -245,24 +356,35 @@
       }
 
       // =====================================================================
-      // 7. BESPOKE IDENTITY — the Mercedes-Benz-era pit roof, the forest
-      //    marker boards, and the stadium's inner infield service compound.
+      // 7. BESPOKE IDENTITY — the forest corridor wall, the marker boards, and
+      //    the stadium's inner infield service compound.
       // =====================================================================
-      // Long tensile canopy over the pit garages — one atomic hero group so a
-      // preflight foldback can never leave half a roof behind.
+      // THE HARDTWALD WALL. Outside the stadium, Hockenheim is a corridor cut
+      // through a plantation: the trees start at the fence line and stop being
+      // individual trees within a few metres. Scattered pine() ranks alone read
+      // as parkland, so a continuous dark canopy mass is emitted right behind
+      // the armco and the scattered ranks in section 1 break its edge up. The
+      // arena arc is deliberately excluded — that contrast IS the circuit.
       {
-        const a = anchor(K(0.005), 1, 18);
-        modelGroup("hockenheim-pit-canopy", {
-          center: vadd(a.c, a.u, 10.8),
-          size: [5.6, 1.4, 70],
-          basis: [a.r, a.u, a.t],
-        }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, 11), [5.4, 0.8, 70], [0.86, 0.85, 0.82], [a.r, a.u, a.t]);
-          addBox(stage, vadd(a.c, a.u, 10.2), [4.9, 0.25, 68], [0.95, 0.90, 0.62], [a.r, a.u, a.t]);
-        }, { required: true });
-        for (let j = 0; j < 4; j++) {
-          const a2 = anchor(K(0.975 + j * 0.014), 1, 16);
-          addCyl(out, a2.c, 0.34, 9, [0.72, 0.70, 0.68], 8, null);
+        const WALL_D = [0.075, 0.20, 0.105], WALL = [0.095, 0.245, 0.125];
+        for (const [s0, s1] of [
+          [0.065, 0.315], [0.360, 0.430], [0.490, 0.600], [0.640, 0.755],
+        ]) {
+          for (const side of [-1, 1]) {
+            let i = 0;
+            along(s0, s1, 12, (k, spacing) => {
+              const seg = spacing * 1.02;   // overlap so the wall never gaps
+              const h = hash(k * 29 + side);
+              // Two overlapping slabs at different depths and heights: the
+              // silhouette has to be ragged or it reads as a hedge.
+              const a1 = anchor(k, side, 16 + h * 3);
+              addPrism(out, a1.c, [11, 17 + h * 7, seg], (i & 1) ? WALL_D : WALL,
+                [a1.r, a1.u, a1.t]);
+              const a2 = anchor(k, side, 28 + h * 6);
+              addPrism(out, a2.c, [15, 21 + h * 9, seg], WALL_D, [a2.r, a2.u, a2.t]);
+              i++;
+            });
+          }
         }
       }
 
@@ -295,17 +417,20 @@
         });
       }
 
-      // Sachskurve crowd terracing already exists as spectatorHill; add the
-      // sponsor hoarding band that fronted it.
-      for (const s of [0.865, 0.895, 0.925]) billboard(K(s), 1, 13, 14, 5, [0.90, 0.20, 0.18]);
+      // Advertising runs at the foot of the bowl. Board height is deliberately
+      // low: the terracing starts at 13 m out, so anything taller would stand
+      // in front of the first row rather than in front of the crowd.
+      sponsorHoarding(0.800, 0.945, 1, 6.5, {
+        h: 1.3, step: 10,
+        palette: [[0.86, 0.16, 0.14], [0.94, 0.93, 0.90], [0.10, 0.30, 0.62], [0.96, 0.78, 0.08]],
+      });
+      sponsorHoarding(0.845, 0.960, -1, 6.0, { h: 1.2, step: 11 });
 
-      // Stadium floodlight-style mast heads — Hockenheim ran evening support
-      // races under lights; the poles read as circuit furniture by day.
-      for (const [s, side] of [[0.845, 1], [0.905, 1], [0.880, -1]]) {
-        const a = anchor(K(s), side, side > 0 ? 30 : 26);
-        addCyl(out, a.c, 0.22, 20, [0.20, 0.20, 0.23], 6, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 20.4), [1.6, 0.7, 3.2], [0.94, 0.92, 0.80], [a.r, a.u, a.t]);
-      }
+      // Broadcast lattice masts in the stadium — the Motodrom is the one place
+      // on this circuit with an elevated camera on every corner of the arena.
+      cameraTower(K(0.838), 1, 8, { h: 17 });
+      cameraTower(K(0.918), -1, 8, { h: 15 });
+      cameraTower(K(0.470), 1, 10, { h: 14 });   // Spitzkehre, the other TV vantage
     },
   }
   );

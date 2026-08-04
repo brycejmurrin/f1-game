@@ -39,7 +39,9 @@ const CIRCUITS = [
   "hungaroring", "baku", "mexico", "qatar", "abudhabi",
   // ── retired / off-calendar (classic: true) ──
   "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
-  "paul_ricard",
+  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
+  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
+  "jacarepagua",
 ];
 
 const CIRCUITS_DIR = "js/circuits";

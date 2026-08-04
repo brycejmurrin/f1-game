@@ -25,6 +25,7 @@ const REFERENCE = JSON.parse(fs.readFileSync(
 const RACE_DIRECTION_OVERRIDES = {
   "mc-1929": "CW",   // Monaco
   "fr-1969": "CW",   // Paul Ricard
+  "za-1961": "CW",   // Kyalami
 };
 
 // game circuit id → bacinger/f1-circuits feature id

@@ -267,7 +267,7 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 
 ### Grandstand variants (`grandstandEx`)
 
-`grandstand()` is one template, and the 24 circuit files call it 248 times — with
+`grandstand()` is one template, and the circuit files call it hundreds of times — with
 only `len` and two colours variable, every stand on every circuit rendered the
 same 12 m grey box. `grandstandEx` adds the shape knobs; the legacy entry point
 delegates to it, so existing calls are unchanged.
@@ -379,7 +379,7 @@ whole shape is dropped (`[scenery] ... SUPPRESSED at k=...`). Composite helpers
 same for any new composite (`rejBox(centre,[w,h,d],basis)`), never a single
 `onTrack()` point, which misses a long/deep model swinging over a curving stretch.
 `RAW.*` emissions (crowd spectators) skip the guard for speed — keep them behind a
-shell. `tests/props-over-road.spec.js` audits all 24 circuits and fails on any new
+shell. `tests/props-over-road.spec.js` audits all 40 circuits and fails on any new
 intrusion; measure one with `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots`.
 
 ## Pattern: an encircling mountain range

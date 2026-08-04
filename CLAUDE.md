@@ -54,7 +54,7 @@ npm run test:tooling-fast  # the STRUCTURAL half of test:tooling in ~4 s (load o
                         #   full-fleet audits dominate test:tooling's ~3 min —
                         #   this is everything else, for the edit loop.
 npm run test:sweeps     # those two: prop-clipping + road-under-floor (~3 min,
-                        #   rebuilds all 24 circuits). test:tooling still runs both.
+                        #   rebuilds all 40 circuits). test:tooling still runs both.
 ```
 
 ### Running tests without stalls (background + logs, parallel ports)
@@ -214,7 +214,8 @@ js/track/        — track ENGINE (shared code) —
                                   tests/scenery-api-contract.test.mjs
 
 js/circuits/     — circuit DATA —
-  <id>.js        TrackDefs      24 circuits (one file each, registers on Tracks.LIST);
+  <id>.js        TrackDefs      40 circuits (one file each, registers on Tracks.LIST):
+                                  24 season rounds then 16 retired `classic: true`;
                                   script-tag order == Tracks.LIST == picker/season order
 
 js/car/          — car —

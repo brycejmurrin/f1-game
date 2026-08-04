@@ -1,0 +1,287 @@
+/* Apex 26 — AUTÓDROMO INTERNACIONAL NELSON PIQUET (JACAREPAGUÁ) definition
+   (data only). Retired circuit (`classic: true`): last Brazilian GP 1989; the
+   circuit itself was demolished in 2012 for the Olympic park.
+   Geometry from the OSM trace in js/track/geo-paths.js. */
+(function () {
+  "use strict";
+  (window.TrackDefs = window.TrackDefs || []).push(
+  {
+    id: "jacarepagua",
+    classic: true,
+    // Jacarepaguá ran ANTI-CLOCKWISE, like Interlagos, and upstream br-1977 is
+    // already drawn that way.
+    reverse: false,
+    // A ~610 m straight spans the trace's wrap point (source 0.931→0.054) —
+    // that is the pit straight. Not GPS-calibrated.
+    startFrac: 0.0,
+    name: "JACAREPAGUA",
+    gp: "Brazilian GP",
+    country: "Brazil",
+    night: false,
+    theme: "modern",
+    lengthKm: 5.0,
+    baseHW: 7.5,
+    sceneryCoordinates: "racing",
+    terrainOuter: 120,
+    dressingExclusions: [
+      { kinds: ["foliage", "lamps"], s0: 0.92, s1: 0.10 },
+      { kind: "foliage", s0: 0.36, s1: 0.50 },   // the lagoon frontage
+    ],
+    // Rio: brilliant tropical light with heavy coastal humidity flattening the
+    // horizon, over sandy restinga scrub.
+    pal: {
+      zenith:        [0.24, 0.48, 0.80],
+      horizon:       [0.86, 0.86, 0.82],
+      sun:           [1.0,  0.97, 0.88],
+      sunColor:      [1.0,  0.96, 0.86],
+      ambientSky:    [0.56, 0.58, 0.62],
+      ambientGround: [0.32, 0.30, 0.22],
+      fogColor:      [0.84, 0.85, 0.84],
+      fogDensity:    0.0034,
+      grass:         [0.24, 0.44, 0.20],
+      runoff:        [0.72, 0.68, 0.54],   // pale coastal sand
+      sunDir:        [0.24, 0.86, 0.20],
+    },
+    // Jacarepaguá was built on reclaimed coastal flat between a lagoon and the
+    // mountains — dead flat, and notorious for it.
+    elevations: [
+      { s: 0.28, halfM: 380, rise: 2.0 },
+      { s: 0.70, halfM: 360, rise: -1.8 },
+    ],
+    hwZones: [
+      { s0: 0.180, s1: 0.225, hw: 6.3, ease: 0.012 },
+      { s0: 0.600, s1: 0.645, hw: 6.2, ease: 0.012 },
+      { s0: 0.860, s1: 0.905, hw: 6.4, ease: 0.012 },
+    ],
+    bankZones: [
+      { frac: 0.075, angleDeg: 3.5, widthM: 120 },
+      { frac: 0.470, angleDeg: 4.5, widthM: 200 },   // the long lagoon-side sweep
+    ],
+    scenery: function (api) {
+      const { out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
+        tree, bush, ridge, mountain, building, grandstandEx, spectatorHill,
+        broadcastCompound, billboard, gantry, marshalPost, motorhome,
+        floodMast, cameraTower, sponsorHoarding,
+        fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
+        addBox, addCyl, addCone, addPrism } = api;
+      const K = (s) => Math.round(s * n) % n;
+
+      const PALM = [0.18, 0.44, 0.20], PALM_D = [0.14, 0.36, 0.17];
+      const RESTINGA = [0.34, 0.44, 0.24];   // low sandy coastal scrub
+      const SAND = [0.76, 0.71, 0.56];
+
+      // =====================================================================
+      // 1. THE PEDRA BRANCA MASSIF — the single thing that made Jacarepaguá
+      //    unmistakable: sheer forested granite peaks rising straight out of
+      //    the coastal flat right behind the circuit. Placed FIRST and given
+      //    the biggest budget, because in every photograph of this place the
+      //    mountains dominate and the track is an afterthought.
+      // =====================================================================
+      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
+      let rad = 0;
+      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      // Steep, tall, closely-spaced peaks over roughly half the horizon — Rio's
+      // morros are near-vertical, not rolling hills, so hMin is high relative
+      // to wMin and `rough` is low (smooth granite domes, not eroded ridges).
+      for (const rg of [
+        { extra: 220, wMin: 190, hMin: 150, hVar: 90, wVar: 70, count: 16, arc: [0.55, 1.35],
+          opts: { seg: 8, rough: 0.20, forest: [0.12, 0.32, 0.16], rock: [0.44, 0.42, 0.40], snowline: 2 } },
+        { extra: 340, wMin: 260, hMin: 210, hVar: 130, wVar: 110, count: 12, arc: [0.60, 1.30],
+          opts: { seg: 8, rough: 0.22, forest: [0.16, 0.36, 0.20], rock: [0.50, 0.49, 0.48], snowline: 2 } },
+      ]) {
+        for (let i = 0; i < rg.count; i++) {
+          // Confined to an arc so the mountains sit on ONE side, as they do in
+          // reality — a full ring would read as a crater, not a coastal plain.
+          const frac = rg.arc[0] + (i / (rg.count - 1)) * (rg.arc[1] - rg.arc[0]);
+          const a = frac * 6.2832, h = hash(i * 7 + rg.extra);
+          const r = rad + rg.extra + h * 40;
+          mountain(cx + Math.cos(a) * r, cz + Math.sin(a) * r, pyMin,
+            rg.wMin + h * rg.wVar, rg.hMin + h * rg.hVar,
+            Object.assign({ seed: i * 13 + rg.extra }, rg.opts));
+        }
+      }
+      // Low hazy treeline closing the rest of the horizon (the seaward side).
+      for (let i = 0; i < 34; i++) {
+        const a = i / 34 * 6.2832;
+        if (a > 3.3 && a < 8.6) continue;   // leave the mountain arc alone
+        const h = hash(i * 11 + 3);
+        const r = rad + 130 + h * 40;
+        const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
+        if (onTrack(tx, tz, 32)) continue;
+        ridge(tx, tz, pyMin, a + 1.5708, 160, 40, 12 + h * 6, [0.16, 0.36, 0.18]);
+      }
+
+      // =====================================================================
+      // 2. THE LAGOON — Jacarepaguá sat on the edge of the Lagoa de Jacarepaguá,
+      //    and the water was visible from the long back sweep.
+      // =====================================================================
+      // A water body is centred on its anchor, so its SETBACK has to exceed its
+      // own half-width or the footprint swallows the road. The lap also folds
+      // back close on this side, so the engine only accepts a fairly compact
+      // basin here — 120 m across at 120 m out, measured with the footprint
+      // probe rather than guessed.
+      waterSurface(K(0.470), -1, 120, [120, 0.18, 320], [0.26, 0.46, 0.60],
+        { id: "jacarepagua-lagoa", required: true });
+      // Sandy restinga shoreline between the track and the water.
+      groundPatch(K(0.470), -1, 55, [60, 0.18, 300], SAND,
+        { id: "jacarepagua-shoreline", samples: 10 });
+      // Coconut palms leaning along the shore.
+      every(20, (k) => {
+        const s = k / n;
+        if (s < 0.36 || s > 0.60) return;
+        const h = hash(k * 17);
+        tree(k, -1, 46 + h * 30, 13 + h * 5, h < 0.5 ? PALM : PALM_D);
+        if (h > 0.5) tree(k, -1, 74 + h * 26, 12 + h * 5, PALM_D);
+      });
+
+      // =====================================================================
+      // 3. RESTINGA SCRUB — low, sandy, wind-flattened coastal vegetation
+      //    everywhere else. Deliberately LOW: this circuit had no trees of any
+      //    height around it, which is part of why it looked so exposed.
+      // =====================================================================
+      const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.36 && s <= 0.50);
+      every(18, (k) => {
+        const s = k / n;
+        if (openArea(s)) return;
+        const h = hash(k * 97 + 23);
+        if (h < 0.32) return;
+        bush(k, h < 0.68 ? -1 : 1, 8 + h * 8, h < 0.6 ? RESTINGA : [0.28, 0.38, 0.20]);
+      });
+      every(30, (k) => {
+        const s = k / n;
+        if (openArea(s)) return;
+        const h = hash(k * 31);
+        if (h < 0.52) return;
+        tree(k, h < 0.5 ? -1 : 1, 24 + h * 18, 11 + h * 5, PALM);
+      });
+
+      // =====================================================================
+      // 4. PIT COMPLEX — a long, low, sun-bleached 1970s concrete grandstand
+      //    with the pit boxes UNDERNEATH it, which is how Jacarepaguá was
+      //    built: one structure doing both jobs, not a separate stand and
+      //    garage block.
+      // =====================================================================
+      {
+        const a = anchor(K(0.975), 1, 13);
+        const b = [a.r, a.u, a.t];
+        modelGroup("jacarepagua-pit-grandstand", {
+          center: vadd(a.c, a.u, 8), size: [22, 20, 150], basis: b,
+        }, (stage) => {
+          // Ground level: open pit boxes behind a continuous beam.
+          addBox(stage, vadd(vadd(a.c, a.r, 5), a.u, 2.6), [9, 5.2, 146], [0.82, 0.80, 0.74], b);
+          for (let i = 0; i < 18; i++) {
+            const p = vadd(a.c, a.t, (i - 8.5) * 8);
+            addBox(stage, vadd(p, a.u, 2.6), [10, 5.2, 0.4], [0.88, 0.86, 0.80], b);
+          }
+          // The deck slab dividing pits from seating.
+          addBox(stage, vadd(a.c, a.u, 5.6), [20, 0.8, 148], [0.74, 0.72, 0.68], b);
+          // Stepped seating above, canted back over the pits.
+          for (let t = 0; t < 5; t++) {
+            addBox(stage, vadd(vadd(a.c, a.r, 1 + t * 2.6), a.u, 6.6 + t * 1.7),
+              [2.5, 1.6, 146], t % 2 ? [0.78, 0.76, 0.71] : [0.72, 0.70, 0.66], b);
+            stage._mat = MAT.FABRIC;
+            addBox(stage, vadd(vadd(a.c, a.r, 1 + t * 2.6), a.u, 7.7 + t * 1.7),
+              [2.1, 0.9, 142],
+              [[0.94, 0.86, 0.20], [0.10, 0.42, 0.24], [0.90, 0.90, 0.88]][t % 3], b);
+            stage._mat = 0;
+          }
+          // Thin brise-soleil roof on slim columns — tropical shading, not a
+          // heavy cantilever.
+          addBox(stage, vadd(vadd(a.c, a.r, 8), a.u, 17), [18, 0.5, 148], [0.86, 0.85, 0.80], b);
+          for (let i = 0; i < 9; i++) {
+            const p = vadd(vadd(a.c, a.r, 15), a.t, (i - 4) * 17);
+            addCyl(stage, p, 0.30, 17, [0.80, 0.79, 0.75], 6, b);
+          }
+        }, { required: true });
+      }
+      // Squat square timing box on the roofline rather than a separate tower.
+      {
+        const a = anchor(K(0.998), 1, 20);
+        const b = [a.r, a.u, a.t];
+        modelGroup("jacarepagua-timing-box", {
+          center: vadd(a.c, a.u, 20), size: [12, 8, 16], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 19), [9, 4.4, 13], [0.86, 0.85, 0.80], b);
+          addBox(stage, vadd(a.c, a.u, 19.4), [9.4, 2.0, 13.4], [0.30, 0.42, 0.52], b);
+          addBox(stage, vadd(a.c, a.u, 21.6), [10, 0.5, 14], [0.70, 0.69, 0.66], b);
+        });
+      }
+      gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
+      gantry(0.955, 8.0, [0.15, 0.15, 0.18]);
+      for (let i = 0; i < 4; i++) {
+        building(K(0.918 + i * 0.013), 1, 46, 24, 9, 18,
+          { wall: [0.86, 0.84, 0.78], window: [0.30, 0.34, 0.42], floor: 4.2, roof: true });
+      }
+      every(48, (k) => {
+        const s = k / n, h = hash(k * 71 + 31);
+        if (!(s > 0.90 || s < 0.05) || h < 0.55) return;
+        motorhome(k, 1, 62 + h * 10, 10, 4, 6, { wall: [0.72 + h * 0.18, 0.72, 0.72] });
+      });
+      broadcastCompound(K(0.908), 1, 78, { vans: 2, dishes: 2, mastH: 9 });
+      // Brazilian green-and-gold hoardings.
+      for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.10, 0.44, 0.24]);
+
+      // =====================================================================
+      // 5. CORNERS — sand traps rather than gravel, which is what a circuit
+      //    built on a coastal sand flat actually had.
+      // =====================================================================
+      groundPatch(K(0.075), 1, 6, [34, 0.18, 46], SAND,
+        { id: "jacarepagua-t1-sand", samples: 8 });
+      tyreWall(0.058, 0.094, 1, 5, [0.86, 0.20, 0.18]);
+      grandstandEx(0.075, -1, 18, 84, null, null, { livery: "concrete", tiers: 2, endWalls: true });
+      marshalPost(K(0.070), -1, 10);
+
+      groundPatch(K(0.205), 1, 5, [26, 0.18, 34], SAND,
+        { id: "jacarepagua-t3-sand", samples: 6 });
+      marshalPost(K(0.200), -1, 9);
+
+      groundPatch(K(0.622), 1, 5, [26, 0.18, 34], SAND,
+        { id: "jacarepagua-t9-sand", samples: 6 });
+      tyreWall(0.608, 0.638, 1, 4, [0.20, 0.40, 0.85]);
+      grandstandEx(0.622, -1, 20, 70, null, null, { livery: "alu", endWalls: true });
+      marshalPost(K(0.616), -1, 9);
+
+      groundPatch(K(0.882), 1, 5, [28, 0.18, 36], SAND,
+        { id: "jacarepagua-final-sand", samples: 6 });
+      tyreWall(0.866, 0.900, 1, 4, [0.85, 0.78, 0.20]);
+      marshalPost(K(0.876), -1, 9);
+
+      spectatorHill(0.14, 0.24, -1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
+      spectatorHill(0.66, 0.76, -1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
+
+      // =====================================================================
+      // 6. BOUNDARIES
+      // =====================================================================
+      for (const [s0, s1] of [[0.11, 0.34], [0.52, 0.60], [0.65, 0.85]]) {
+        guardrail(s0, s1, -1, 8, [0.80, 0.81, 0.83]);
+        guardrail(s0, s1,  1, 8, [0.80, 0.81, 0.83]);
+      }
+      guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
+      fence(0.95, 0.06, -1, 9, 4, [0.74, 0.76, 0.80]);
+      for (const s of [0.16, 0.28, 0.44, 0.56, 0.72, 0.88]) {
+        marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
+      }
+
+      // =====================================================================
+      // 7. BESPOKE IDENTITY — the tall slim floodlight masts and the Brazilian
+      //    flagpole rank, both of which show against the mountains.
+      // =====================================================================
+      // Warm-lensed masts: Rio ran evening support races, and the tall poles
+      // silhouetted against the granite are part of the place.
+      for (const [s, side, gap] of [
+        [0.030, -1, 26], [0.075, -1, 34], [0.470, 1, 40], [0.622, -1, 30], [0.882, -1, 26],
+      ]) {
+        floodMast(K(s), side, gap, { h: 30, cool: false, arms: 2 });
+      }
+      cameraTower(K(0.205), -1, 24, { h: 15 });
+      for (let i = 0; i < 8; i++) {
+        const a = anchor(K(0.962 + i * 0.005), -1, 7);
+        const b = [a.r, a.u, a.t];
+        addCyl(out, a.c, 0.11, 9.5, [0.90, 0.90, 0.92], 6, b);
+        addBox(out, vadd(vadd(a.c, a.u, 8.0), a.t, 1.2), [0.14, 1.6, 2.6],
+          i % 2 ? [0.10, 0.44, 0.24] : [0.94, 0.86, 0.20], b);
+      }
+    },
+  }
+  );
+})();

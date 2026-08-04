@@ -24,6 +24,11 @@ const CIRCUITS = [
   "imola", "interlagos", "jeddah", "madrid", "mexico", "miami",
   "monaco", "montreal", "monza", "qatar", "redbull", "shanghai",
   "silverstone", "singapore", "spa", "suzuka", "vegas", "zandvoort",
+  // retired / off-calendar circuits
+  "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
+  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
+  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
+  "jacarepagua",
 ];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
