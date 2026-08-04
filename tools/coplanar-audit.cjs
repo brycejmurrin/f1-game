@@ -65,7 +65,14 @@ const GAP_MAX = 0.020;       // plane separation worth looking at (m)
 const AREA_MIN = 2.0;        // overlap area on the shared plane (m2)
 const FIGHT_MAX = 150;       // gate: fights within this distance (m)
 const NEAR_TRACK = 300;      // beyond this, fog+framing make it moot (m)
-const MAX_DIM = 25;          // landforms are BUILT to interpenetrate (m)
+// Big is not benign here. clip-audit caps primitive span at 25 m because
+// landforms are BUILT to interpenetrate — a depth-of-penetration argument. It
+// does not carry over: a grandstand wall coplanar with the band inside it is a
+// worse fight than a fencepost, not a lesser one, because the fighting area
+// scales with the face. Capping at 25 hid Qatar's 2000 m2 stand walls entirely.
+// The cap survives only to keep terrain skirts and skyline slabs from drowning
+// the report; --maxdim raises it.
+const MAX_DIM = 220;
 const MAX_FACES = 64;        // per primitive — cones/spheres must not dominate
 const PLANAR_TOL = 0.020;    // reject non-planar vertex fans (m)
 const SPOT = 40;             // spot clustering cell (m), same as clip-audit
@@ -131,8 +138,7 @@ function overlapArea(a, b) {
   return s[0] * s[1];
 }
 
-function analyse(env, track, prims, opt) {
-  const pos = env.pos, nrm = env.nrm;
+function analyse(track, prims, opt) {
   const stats = { prims: prims.length, faces: 0, buckets: 0, antiParallel: 0,
                   tooFar: 0, tooSmall: 0, notFighting: 0 };
 
@@ -149,9 +155,13 @@ function analyse(env, track, prims, opt) {
   const faces = [];
   for (let i = 0; i < prims.length; i++) {
     const p = prims[i];
-    if (span(p) > MAX_DIM) continue;
+    if (span(p) > opt.maxDim) continue;
     p.__i = i;
-    for (const f of facesOf(p, pos, nrm)) faces.push(f);
+    // Each primitive indexes into ITS OWN buffer. Faces must be pooled across
+    // all of them: props and glass are separate meshes but are rasterised into
+    // the same depth buffer, so a pane coplanar with the wall behind it fights
+    // exactly like two props do. Bucketing per-buffer made that pair invisible.
+    for (const f of facesOf(p, p.buf.pos, p.buf.nrm)) faces.push(f);
   }
   stats.faces = faces.length;
 
@@ -222,19 +232,7 @@ function run(env, id, opt) {
   const from = env.mark();
   const track = Tracks.build(def, {});
   const prims = shipped(env.prims.slice(from), env.liveBufs);
-  // The vertex arrays every primitive's [s,e) indexes into.
-  const bufs = new Map();
-  for (const p of prims) if (!bufs.has(p.buf)) bufs.set(p.buf, p.buf);
-  const res = { id };
-  let all = { pairs: 0, spots: 0, hits: [], spotList: [], stats: null };
-  for (const [buf] of bufs) {
-    const sub = prims.filter((p) => p.buf === buf);
-    const r = analyse({ pos: buf.pos, nrm: buf.nrm }, track, sub, opt);
-    all.pairs += r.pairs; all.spots += r.spots;
-    all.hits.push(...r.hits); all.spotList.push(...r.spotList);
-    all.stats = all.stats || r.stats;
-  }
-  return Object.assign(res, all);
+  return Object.assign({ id }, analyse(track, prims, opt));
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +246,7 @@ function main() {
     gap: flag("gap", GAP_MAX),
     area: flag("area", AREA_MIN),
     fight: flag("fight", FIGHT_MAX),
+    maxDim: flag("maxdim", MAX_DIM),
     horizontal: argv.includes("--horizontal"),
   };
   const wantJson = argv.includes("--json");

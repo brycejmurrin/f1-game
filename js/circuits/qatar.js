@@ -134,8 +134,16 @@
           basis: b,
         }, (stage) => {
           addBox(stage, vadd(a.c, a.u, h * 0.28), [depth, h * 0.56, len], shell, b);
+          // The crowd band is buried inside the shell and reads ONLY through its
+          // trackward face, so that face has to clear the shell's. It used to sit
+          // at depth*0.34 with half-width depth*0.16 — summing to exactly
+          // depth*0.50, i.e. dead flush with the shell, for ANY depth. Two large
+          // same-facing faces at zero gap fight at every distance, and at up to
+          // 2000 m2 each these were the biggest z-fight in the game: the stand
+          // wall that fills the right of frame on the pit straight. 6 cm of
+          // standoff holds to ~550 m, past where fog takes over.
           addBox(stage,
-            vadd(vadd(a.c, a.u, h * 0.62), a.r, -side * (depth * 0.34)),
+            vadd(vadd(a.c, a.u, h * 0.62), a.r, -side * (depth * 0.34 + 0.06)),
             [depth * 0.32, h * 0.48, len * 0.94], crowd, b);
           addBox(stage, vadd(a.c, a.u, h), [depth + 3, 0.7, len + 1.5], WHITE, b);
           addBox(stage,
