@@ -309,8 +309,9 @@
         grandstandEx(s, side, gap, len, null, null, Object.assign(
           { roofCol: TENT_ROOF, fasciaCol: TENT_FASCIA }, opts));
       shelter(0.060, 1, 30, 90, { livery: "alu", tiers: 2, roof: "cantilever", endWalls: true });
-      shelter(0.340, -1, 34, 80, { livery: "concrete", endWalls: true });
-      shelter(0.580, 1, 30, 76, { livery: "alu", endWalls: true });
+      // Petronas teal and Malaysian flag colours, rather than a fourth grey.
+      shelter(0.340, -1, 34, 80, { livery: "teal", endWalls: true });
+      shelter(0.580, 1, 30, 76, { livery: "navy", endWalls: true });
       shelter(0.885, -1, 26, 92, { livery: "concrete", tiers: 2, roof: "cantilever", endWalls: true });
       spectatorHill(0.62, 0.70, -1, 20, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
 

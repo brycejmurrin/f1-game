@@ -198,7 +198,11 @@
       gantry(0.965, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 11, 180, null, null,
         { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.055, -1, 12, 120, null, null, { livery: "alu", endWalls: true });
+      // Catalunya's stands were entirely grey — the only fully monochrome
+      // stand set left in the fleet besides the two poured-concrete German ones.
+      // The senyera's red and gold is the obvious local colour, and Montmeló
+      // flies it everywhere.
+      grandstandEx(0.055, -1, 12, 120, null, null, { livery: "crimson", endWalls: true });
       {
         const winLit = [0.97, 0.88, 0.54];
         // On the stand's back shell rather than inside the seating bowl.
@@ -227,7 +231,7 @@
       // bleached terracing under shade sails, which is what Barcelona actually
       // looks like on a test day.
       grandstandEx(0.065, 1, 20, 96, null, null,
-        { livery: "alu", tiers: 2, roof: "cantilever", endWalls: true });
+        { livery: "orange", tiers: 2, roof: "cantilever", endWalls: true });
       sunTerrace(0.222, 0.262, -1, 19, 5);
       sunTerrace(0.492, 0.522, 1, 21, 5);
       sunTerrace(0.674, 0.708, -1, 19, 6);
