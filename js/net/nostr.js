@@ -109,13 +109,18 @@ const NetNostr = (function () {
   // — that is the nature of free infrastructure — which is why the list is
   // overridable at runtime and why room codes are the BACKUP path: the invite
   // link and QR need no third party at all and must stay the way in.
+  // Ordered by what was MEASURED from a real browser, not by reputation.
+  // relay.damus.io answered 503 four times running and relay.nostr.band timed
+  // out, so both are gone — a relay that fails is worse than absent, because
+  // Trystero keeps reconnecting to it and the console fills with noise that
+  // hides the real problem. The rest connected.
   const RELAYS = [
-    "wss://relay.damus.io",
     "wss://nos.lol",
     "wss://relay.primal.net",
-    "wss://relay.nostr.band",
     "wss://offchain.pub",
     "wss://nostr.mom",
+    "wss://relay.snort.social",
+    "wss://nostr-pub.wellorder.net",
   ];
 
   // localStorage apex26.nostrRelays = ["wss://…", …] overrides the list above,
