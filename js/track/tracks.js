@@ -277,7 +277,8 @@ const Tracks = (function () {
     for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree",
                         "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
                         "marshalPost", "bush", "signBoard", "ferrisWheel", "floodMast", "runoffApron",
-                        "cameraTower", "broadcastCompound"]) {
+                        "cameraTower", "broadcastCompound",
+                        "cypress", "stonePine", "broadleafFall", "acacia", "plane"]) {
       const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), SIDE(side), ...r);
     }
     // (s, side, ...rest): single fraction + side
@@ -288,7 +289,8 @@ const Tracks = (function () {
     for (const name of ["wall", "fence", "guardrail", "tyreWall", "hedge",
                         "forestEdge", "cityFront", "recordBarrier", "concreteCanyon",
                         "bankedKerbStrip", "bowlSeatWall", "pastelStreetRow",
-                        "spectatorHill", "sponsorHoarding"]) {
+                        "spectatorHill", "sponsorHoarding",
+                        "bleacher", "scaffoldStand", "terrace", "tieredBowl"]) {
       const f = api[name]; if (f) w[name] = (s0, s1, side, ...r) => {
         const range = TrackSpace.range(def, s0, s1, "source");
         return f(range.s0, range.s1, SIDE(side), ...r);
@@ -1467,8 +1469,10 @@ const Tracks = (function () {
     const { canopyR, forestEdgeNow, deferredFoliage } = ctx;
     const { anchor, pine, tree, palm, conifer, peak, mountain, ridge,
             crowdBank, grandstand, grandstandEx, spectatorHill, bush, hedge, forestEdge,
+            cypress, stonePine, broadleafFall, acacia, plane,
             along, wall, fence, guardrail, tyreWall, gantry, marshalPost,
             signBoard, sponsorHoarding, cameraTower, ferrisWheel,
+            bleacher, scaffoldStand, terrace, tieredBowl,
             building, house, motorhome, tower, billboard, cityFront,
             streetLamp, neonSign, neonTower,
             underpassPortal, floodMast, floodMastRing, ledFacadeBands,
@@ -1857,8 +1861,13 @@ const Tracks = (function () {
         addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain, anchor, along,
         // landscape + vegetation
         pine, tree, palm, bush, hedge, peak, mountain, ridge, forestEdge, conifer,
+        // ...plus the species the six above cannot shape (columnar / parasol /
+        // autumn-lobed / flat-topped thorn / pollarded avenue)
+        cypress, stonePine, broadleafFall, acacia, plane,
         // spectator terracing (informal grass banks — see docs/SCENERY-API.md)
         spectatorHill,
+        // open seating — the stand forms grandstandEx is not (no back shell)
+        bleacher, scaffoldStand, terrace, tieredBowl,
         // structures
         building, house, motorhome, tower, grandstand, grandstandEx, billboard,
         gantry, marshalPost, cameraTower, cityFront,

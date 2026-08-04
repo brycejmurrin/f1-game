@@ -68,7 +68,7 @@
         ridge, floodMast, tree, bush, hedge,
         billboard, marshalPost, wall, fence, guardrail, tyreWall,
         grandstandEx, cameraTower, broadcastCompound, sponsorHoarding,
-        bankedKerbStrip, runoffApron, anchor: _anchor, along,
+        bankedKerbStrip, runoffApron,
       } = api;
 
       const WHITE = [0.92, 0.93, 0.94];
@@ -595,6 +595,43 @@
         const k = at(frac);
         floodMast(k, 1, 44, { h: 34, cool: true, pool: false });
         floodMast(k, -1, 44, { h: 34, cool: true, pool: false });
+      }
+
+      // ── THE BANKING, MADE VISIBLE ───────────────────────────────────────
+      // bankZones tilts the ROAD through La Monumental at 13.5° (a 24% grade,
+      // the circuit's single most-quoted fact) but nothing trackside said so:
+      // from the car the bowl read as an ordinary flat corner with a white
+      // stand ring behind it. These three layers are what makes a banked
+      // section legible, and all of them inherit the track basis, so they
+      // tilt WITH the road rather than needing a hand-built angle.
+      //   1. a red/white kerb ribbon on the tilted surface — the reference
+      //      edge the eye uses to read a bank angle at all
+      //   2. a paved apron at the bottom of the bank where cars run wide
+      //   3. raked buttress fins on the outside, so the bowl reads as a
+      //      built structure rather than a painted corner
+      // `safer:false` on the ribbon: this circuit already runs open armco
+      // through 0.54-0.86, and the strip's own SAFER rail sits at the same
+      // 4.8 m stand-off, so enabling it would double the barrier.
+      bankedKerbStrip(0.705, 0.815,  1, { safer: false, step: 5.0 });
+      bankedKerbStrip(0.705, 0.815, -1, { safer: false, step: 5.0 });
+      for (const frac of [0.715, 0.745, 0.775, 0.805]) {
+        runoffApron(at(frac), 1, 6.0, [11, 0.3, 30], [0.44, 0.42, 0.40]);
+        runoffApron(at(frac), -1, 6.0, [11, 0.3, 30], [0.44, 0.42, 0.40]);
+      }
+      // Raking buttress fins between the guardrail (4.8) and the bowl's stand
+      // ring (inner face ~19.5). One fin every ~24 m, each a wedge leaning back
+      // off the banking — a handful of primitives apiece, deliberately not a
+      // continuous wall.
+      for (let f = 0.688; f <= 0.838; f += 0.0088) {
+        for (const side of [-1, 1]) {
+          const a = anchor(at(f), side, 9.5);
+          if (!a) continue;
+          const b = basis(a);
+          out._mat = MAT.CONCRETE;
+          addPrism(out, a.c, [4.6, 5.2, 1.6], CONCRETE, b);                  // raking fin
+          addBox(out, vadd(a.c, a.u, 5.45), [5.0, 0.5, 2.0], OFFWHITE, b);   // capping pad
+          out._mat = 0;
+        }
       }
 
       // Tunnel-mouth colour: the two portals below were thin trusses that read
