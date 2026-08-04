@@ -539,6 +539,16 @@ state-machine value, and current camera geometry (`eye`, `tgt`, `fov`). The
 single call to check "what is the scene doing right now" before taking a
 screenshot — avoids calling `info()`, `camera()`, and `probe()` separately.
 
+### `garageCam() → {on, spin, az, el, dist}`
+The GARAGE (`#carsetup`) preview camera — **read-only**. `on` is false whenever
+the garage is closed (the rest is then just the parked state). `spin` is the
+auto-turntable toggle; `az`/`el` are radians (az 0 = ahead of the nose, PI =
+behind the wing; el 0 = level, ~1.2 = overhead) and `dist` is the orbit radius in
+metres. The camera is driven by the `#cs-view` chips (`[data-cs-view]`, `hero` |
+`front` | `side` | `rear` | `top`), a drag on the canvas, the wheel/pinch, or the
+`+`/`−` chips — this hook is how tests observe the result without going anywhere
+near rendered pixels.
+
 ### `corners() → [number, …]`
 Lap-fractions of **curvature-peak** apexes (local maxima of `|curvature|`). Handy
 for parking at sharp bends. This is **not** the curated FIA turn list — that lives

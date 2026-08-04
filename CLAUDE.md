@@ -235,7 +235,12 @@ js/car/          — car —
   liveries.js    Liveries       custom paint jobs — colours plus an optional
                                   `finish` ("gloss" default | "satin" | "chrome"),
                                   applied by remapping the body-paint surface id
-                                  (Car3D.FINISH_SURFACE); no shader change
+                                  (Car3D.FINISH_SURFACE); no shader change.
+                                  The SHARK FIN is its own two paint slots:
+                                  `fin` (the plate, defaults to c2) and `finArt`
+                                  (the tail graphic on it, defaults to a colour
+                                  picked to contrast the fin) — the fin is one
+                                  flat colour, so art equal to it is invisible
   liverytex.js   LiveryTex      canvas-2D livery texture atlas (crests/sponsors/number)
   parts.js       Parts          upgrade catalog (8 categories, getMods, getCost, statMult)
   ghost.js       Ghost          time-trial ghost record/replay data layer
