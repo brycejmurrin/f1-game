@@ -146,6 +146,178 @@ function create(G) {
     $("cr-garage").hidden = true;
   }
 
+  // ---------- how it works ----------
+  // TWO documents, not one with caveats. A driver career and MY TEAM share a
+  // core but are different games — you are paid or you pay, you are hired or you
+  // hire — and a guide that hedged between them would describe neither.
+  //
+  // Every figure below is READ FROM THE RULES (Career.PRIZE, RESEARCH_MULT,
+  // BUDGET_MULT, OBJ_BONUS, Career.SLOTS, the free-agent asks), never typed out.
+  // A guide that quotes the economy is a guide that goes stale the first time
+  // the economy is tuned, and a wrong number here is worse than no number.
+  function guideSection(title, paras) {
+    const frag = document.createDocumentFragment();
+    frag.appendChild(head(title));
+    const card = el("div", "cr-card cg-card");
+    for (const p of paras) {
+      if (Array.isArray(p)) card.appendChild(row(p[0], p[1]));
+      else card.appendChild(el("p", "cg-p", p));
+    }
+    frag.appendChild(card);
+    return frag;
+  }
+
+  const cr = (n) => n.toLocaleString() + " cr";
+
+  function driverGuide() {
+    const out = [];
+    out.push(guideSection("THE IDEA", [
+      "You are a driver, not a team. You sign for whoever will have you — which "
+      + "at the start is the back half of the grid — and the whole mode is the "
+      + "climb out of it.",
+      "Every round pays. Every round is scored against what your CAR should have "
+      + "managed, so beating a bad one counts for more than cruising in a good one.",
+    ]));
+    out.push(guideSection("A WEEKEND", [
+      "The calendar decides where you race, so there is no track to pick — press "
+      + "GO RACING and the weekend starts.",
+      "QUALIFYING comes first. Drive the flying lap yourself, or take the "
+      + "simulated time and go straight to the grid. Either way the sheet IS the "
+      + "grid: no more starting twelfth every time.",
+      "Then the race, and then the money.",
+    ]));
+    out.push(guideSection("MONEY", [
+      "Credits are the same units the garage prices parts in, so a result "
+      + "converts straight into most of a new front wing.",
+      ["Win a race", cr(Career.PRIZE[0])],
+      ["Podium", cr(Career.PRIZE[2]) + " – " + cr(Career.PRIZE[1])],
+      ["Last place", cr(Career.prizeFor(22))],
+      ["Meet the round's brief", "+" + cr(Career.OBJ_BONUS)],
+      ["Salary, per round", "your contract"],
+      "Finishing last still pays. A career that can go bankrupt in one bad "
+      + "weekend stops being worth playing.",
+      "A worse car pays you MORE to sign it. That is true to life, and it is "
+      + "what stops a first season being unwinnable.",
+    ]));
+    out.push(guideSection("UPGRADING THE CAR", [
+      "The garage is the R&D tree. Every part you do not own yet shows a RESEARCH "
+      + "price; buy it once and it is yours for good, free to fit and unfit from "
+      + "then on.",
+      ["Research costs", Career.RESEARCH_MULT + "x the part's price"],
+      ["You may FIT, at first", "your team's own works car"],
+      ["Raising that cap", "up to " + Career.BUDGET_MULT[Career.BUDGET_MULT.length - 1]
+        + "x, three upgrades"],
+      "Two limits, on purpose. Your BALANCE is what you can spend; the FITTED CAP "
+      + "is what you may run at once. You will own more than you can fit, so "
+      + "every weekend is a choice about which car to bring.",
+    ]));
+    out.push(guideSection("THE BRIEF", [
+      "One objective a round — finish above a position, beat your team-mate, "
+      + "out-qualify them, score points, or keep it clean. It pays, and it moves "
+      + "your reputation either way.",
+      "The brief is fixed for the round. It cannot be rerolled by leaving and "
+      + "coming back.",
+    ]));
+    out.push(guideSection("REPUTATION AND CONTRACTS", [
+      "Reputation is what the paddock thinks. It rises when you beat what the car "
+      + "should have done and when you hit your briefs, and it falls when you do "
+      + "not.",
+      "At the end of the year the teams that will have you make offers. A better "
+      + "team wants a higher standing, and it is a visible ladder — nothing "
+      + "hidden.",
+      "MOVING re-seeds your garage from the new team's car: you do not take your "
+      + "parts with you. RENEWING keeps everything you built. Loyalty is not "
+      + "punished.",
+    ]));
+    out.push(guideSection("THE WINTER", [
+      "Drivers develop. Young ones get quicker, veterans slip, and a season that "
+      + "beat the car counts for more than a title in the best one.",
+      "Teams move too — the order you learned last year will not be this year's. "
+      + "A team that gets ahead does not stay ahead for free.",
+      "Nought to two seats change hands. Enough that the grid feels alive; few "
+      + "enough that it is still the grid you know.",
+    ]));
+    return out;
+  }
+
+  function myTeamGuide() {
+    const asks = Career.freeAgents().map((a) => a.ask);
+    const lo = Math.min(...asks), hi = Math.max(...asks);
+    const out = [];
+    out.push(guideSection("THE IDEA", [
+      "You own the twelfth team, and you drive one of its two cars. The other "
+      + "seat is a driver you hire and pay.",
+      "So there are two championships in play at once: yours, and the "
+      + "constructors' — which your team-mate scores in as well as you.",
+    ]));
+    out.push(guideSection("A WEEKEND", [
+      "The same as any other: qualifying, then the race. Your team-mate qualifies "
+      + "and races alongside you, and their result is yours too.",
+      "The calendar decides where you go. There is no track to pick.",
+    ]));
+    out.push(guideSection("MONEY", [
+      "You start with more than a driver does, and it has to go further: the car "
+      + "is yours to build and the wage bill is yours to pay.",
+      ["Starting balance", cr(Career.START_MONEY.myteam)],
+      ["Win a race", cr(Career.PRIZE[0])],
+      ["Meet the round's brief", "+" + cr(Career.OBJ_BONUS)],
+      ["Your driver's wage, per round", cr(lo) + " – " + cr(hi)],
+      "Prize money counts every finish, not just yours — two cars in the points "
+      + "is two payments.",
+    ]));
+    out.push(guideSection("THE DRIVER YOU HIRE", [
+      "This is the choice the mode is built on. A quick driver scores "
+      + "constructors' points you keep and pushes you every weekend; a cheap one "
+      + "leaves you the money to build a better car.",
+      ["Cheapest on the market", cr(lo) + " a round"],
+      ["Dearest", cr(hi) + " a round"],
+      "The wage comes off your BALANCE, never off the cap on what you may fit. "
+      + "So hiring well costs you upgrades — not legality.",
+    ]));
+    out.push(guideSection("BUILDING THE CAR", [
+      "You start with a startup team's car, not a works one: slower than the "
+      + "grid, and entirely yours to fix.",
+      ["Research costs", Career.RESEARCH_MULT + "x the part's price"],
+      ["Raising the fitted cap", "up to " + Career.BUDGET_MULT[Career.BUDGET_MULT.length - 1]
+        + "x, three upgrades"],
+      "Buy a part once and it is yours for good. You will own more than you can "
+      + "fit at one time, which is the point: the car you bring to a circuit is a "
+      + "decision, not an inventory.",
+      "Both cars run your build.",
+    ]));
+    out.push(guideSection("NOBODY CAN SIGN YOU", [
+      "You own the constructor, so no team offers you a seat and no contract runs "
+      + "out from under you. The only way out is to start a different career.",
+      "What does change is the team itself: develop it and it climbs, neglect it "
+      + "and it slides back toward where it started.",
+    ]));
+    return out;
+  }
+
+  function buildGuide(flavour) {
+    const body = $("cg-body");
+    body.textContent = "";
+    const my = flavour === "myteam";
+    $("cg-title").textContent = my ? "HOW MY TEAM WORKS" : "HOW CAREER WORKS";
+    for (const part of (my ? myTeamGuide() : driverGuide())) body.appendChild(part);
+    // The two shared rules, said once at the foot of both.
+    body.appendChild(guideSection("GOOD TO KNOW", [
+      ["Save slots", Career.SLOTS + ", each a whole career"],
+      ["Progress saves", "after every round"],
+      "Your career car and your free-play car are separate builds. Nothing you do "
+      + "here changes a Grand Prix or a Time Trial, and nothing there changes this.",
+    ]));
+    ScrollFade.refresh();
+  }
+  // `flavour` is optional: the hub knows which career is running, the setup
+  // screen passes the one being considered.
+  function openGuide(flavour) {
+    const c = Career.data();
+    buildGuide(flavour || (c ? c.flavour : "driver"));
+    $("career-guide").hidden = false;
+  }
+  function closeGuide() { $("career-guide").hidden = true; }
+
   // ---------- new-career setup ----------
 
   function buildSetupPanes() {
@@ -261,6 +433,21 @@ function create(G) {
           ". Most of your race objectives are measured against them."));
       }
     }
+
+    // The guide, for the flavour being CONSIDERED rather than the one running —
+    // there is no career running yet. Reading what a mode actually is should not
+    // cost you a career to find out, which is the whole reason this is on the
+    // setup screen and not only in the hub.
+    right.appendChild(head("BEFORE YOU START"));
+    const learn = el("button", "cr-card cr-record");
+    learn.id = "cr-learn";
+    learn.append(
+      el("span", "cr-record-line", draft.flavour === "myteam"
+        ? "What owning a team involves"
+        : "What a driver career involves"),
+      el("span", "cr-record-cta", draft.flavour === "myteam" ? "HOW MY TEAM WORKS" : "HOW CAREER WORKS"));
+    learn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openGuide(draft.flavour); };
+    right.appendChild(learn);
 
     $("cr-title").textContent = "NEW CAREER";
     $("cr-sub").textContent = "";
@@ -380,6 +567,20 @@ function create(G) {
       el("span", "cr-record-cta", "SWITCH CAREER"));
     slotBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openSlots(); };
     left.appendChild(slotBtn);
+
+    // The rules, in the player's words. A card for the same reason the two above
+    // are: the action bar has room for three buttons at 844x390 and it already
+    // has three. Named for the flavour actually being played — a MY TEAM owner
+    // pressing "HOW CAREER WORKS" would get a document about signing contracts.
+    const guideBtn = el("button", "cr-card cr-record");
+    guideBtn.id = "cr-guide";
+    guideBtn.append(
+      el("span", "cr-record-line", c.flavour === "myteam"
+        ? "Running a team: money, the hire, the car"
+        : "Contracts, money, upgrades and the climb"),
+      el("span", "cr-record-cta", c.flavour === "myteam" ? "HOW MY TEAM WORKS" : "HOW CAREER WORKS"));
+    guideBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openGuide(c.flavour); };
+    left.appendChild(guideBtn);
 
     // ---- right: next race + standings ----
     if (st.offers) {
@@ -692,8 +893,15 @@ function create(G) {
     closeHistory();
     if (G.soundOn) GameAudio.uiSelect();
   };
+  // The guide is read-only too, so BACK just drops the modal — whatever is
+  // behind it (the hub, or the setup form mid-edit) is exactly as it was left.
+  $("cg-back").onclick = () => {
+    closeGuide();
+    if (G.soundOn) GameAudio.uiSelect();
+  };
 
-  return { build, openHub, openSlots, close, openOffers, closeOffers, openHistory, closeHistory };
+  return { build, openHub, openSlots, close, openOffers, closeOffers,
+           openHistory, closeHistory, openGuide, closeGuide };
 }
 
 return { create, STARTER_TIER_MIN };

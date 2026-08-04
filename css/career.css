@@ -325,3 +325,22 @@
 .cr-slot-del.armed {
   color: #fff; border-color: var(--red); background: rgba(225, 6, 0, 0.35);
 }
+
+/* ---------- how it works (#career-guide) ---------- */
+/* A reading sheet, so it is narrower than the hub and its prose gets a real
+   measure rather than the full 1020px the career page runs at. Sits above
+   #career at the same z-index as the history sheet — both are read-only modals
+   opened FROM the hub, and neither can be open at once. */
+#career-guide { z-index: 30; --sheet-w: 560px; }
+#cg-body { display: flex; flex-direction: column; gap: 4px; }
+/* Sections are a heading plus one card, and the heading owns the space above it
+   — so the gap between a card and the NEXT heading is set once here rather than
+   fought over by two margins. */
+#cg-body .sel-label { margin-top: 14px; }
+#cg-body .sel-label:first-child { margin-top: 0; }
+.cg-card { gap: 9px; }
+/* Prose, not a data row: this is the one place in career that runs sentences, so
+   it gets the line-height and measure they need. .cr-row pairs sit alongside it
+   in the same card, which is what lets a section state a rule and then price it. */
+.cg-p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
+.cg-card .cr-row + .cg-p { margin-top: 3px; }

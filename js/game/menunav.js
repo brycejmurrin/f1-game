@@ -29,7 +29,7 @@ window.MenuNav = (function () {
   // #overlay is the main menu; the rest are the `.screen` overlays plus the two
   // full-screen panels that are not `.screen` (#track-detail, #datahub).
   const LAYER_IDS = ["overlay", "pausemenu", "pmsettings", "select", "career", "career-offers",
-    "career-history", "teampicker", "race-settings", "quali", "standings", "results", "customize",
+    "career-history", "career-guide", "teampicker", "race-settings", "quali", "standings", "results", "customize",
     "carsetup", "howtoplay", "advanced", "track-detail", "datahub"];
   // `:not([hidden])` belongs IN the selector rather than in a filter after it.
   // Every one of these overlays is opened and closed with the hidden attribute, so

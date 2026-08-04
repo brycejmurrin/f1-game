@@ -1470,3 +1470,97 @@ test.describe("Career — slots", () => {
     expect(await page.locator("#mb-career-sub").textContent()).toContain("2 SAVED");
   });
 });
+
+// ── the in-game guide ────────────────────────────────────────────────────────
+// #career-guide. TWO documents sharing one sheet, because a driver career and MY
+// TEAM are different games — you are paid or you pay, hired or hiring — and a
+// guide that hedged between them would describe neither. Every figure in it is
+// read from Career's own constants, so the assertions here are really asking
+// "does the guide still agree with the rules it is describing".
+
+test.describe("Career — the guide", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("the setup screen explains a mode BEFORE you commit to it", async ({ page }) => {
+    await boot(page);
+    await page.locator("#mb-career").click();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+    await page.locator("#cr-learn").click();
+    await expect(page.locator("#career-guide")).toBeVisible();
+    await expect(page.locator("#cg-title")).toHaveText("HOW CAREER WORKS");
+    await page.locator("#cg-back").click();
+    await expect(page.locator("#career-guide")).toBeHidden();
+    // Still on the form, still unstarted — reading is not a commitment.
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+    expect(await page.evaluate(() => window.__apex.career())).toBeNull();
+  });
+
+  test("switching flavour switches which document you get", async ({ page }) => {
+    await boot(page);
+    await page.locator("#mb-career").click();
+    await page.evaluate(() => {
+      const b = [...document.querySelectorAll(".cr-flavour")].find((x) => x.innerText.includes("MY TEAM"));
+      b.click();
+    });
+    await page.locator("#cr-learn").click();
+    await expect(page.locator("#cg-title")).toHaveText("HOW MY TEAM WORKS");
+    // The document is about OWNING a team, not about being signed by one.
+    const body = await page.locator("#cg-body").innerText();
+    expect(body).toContain("NOBODY CAN SIGN YOU");
+    expect(body).toContain("THE DRIVER YOU HIRE");
+  });
+
+  test("the hub names the flavour actually being played", async ({ page }) => {
+    // A MY TEAM owner pressing "HOW CAREER WORKS" would get a document about
+    // signing contracts they can never be offered.
+    await boot(page);
+    await startCareer(page);
+    await expect(page.locator("#cr-guide .cr-record-cta")).toHaveText("HOW CAREER WORKS");
+    await page.evaluate(() => window.__apex.careerReset());
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 3 }));
+    await expect(page.locator("#cr-guide .cr-record-cta")).toHaveText("HOW MY TEAM WORKS");
+    await page.locator("#cr-guide").click();
+    await expect(page.locator("#cg-title")).toHaveText("HOW MY TEAM WORKS");
+  });
+
+  test("its numbers come from the rules, not from prose", async ({ page }) => {
+    // The guarantee that matters: tuning the economy cannot leave the guide
+    // quoting a price the garage no longer charges.
+    await boot(page);
+    await startCareer(page);
+    await page.locator("#cr-guide").click();
+    const { body, rules } = await page.evaluate(() => ({
+      body: document.getElementById("cg-body").innerText,
+      rules: {
+        win: window.__apex.career() && null,
+      },
+    }));
+    const consts = await page.evaluate(() => ({
+      win: Career.PRIZE[0], last: Career.prizeFor(22),
+      bonus: Career.OBJ_BONUS, mult: Career.RESEARCH_MULT,
+      cap: Career.BUDGET_MULT[Career.BUDGET_MULT.length - 1],
+      slots: Career.SLOTS,
+    }));
+    expect(body).toContain(consts.win.toLocaleString() + " cr");
+    expect(body).toContain(consts.last.toLocaleString() + " cr");
+    expect(body).toContain("+" + consts.bonus.toLocaleString() + " cr");
+    expect(body).toContain(consts.mult + "x the part's price");
+    expect(body).toContain(consts.cap + "x");
+    expect(body).toContain(consts.slots + ", each a whole career");
+    expect(rules.win).toBeNull();
+  });
+
+  test("MY TEAM's guide prices the actual driver market", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 4 }));
+    await page.locator("#cr-guide").click();
+    const body = await page.locator("#cg-body").innerText();
+    const asks = await page.evaluate(() => Career.freeAgents().map((a) => a.ask));
+    const lo = Math.min(...asks), hi = Math.max(...asks);
+    expect(body).toContain(lo + " cr a round");
+    expect(body).toContain(hi + " cr a round");
+    // And the starting balance the flavour actually gets.
+    const start = await page.evaluate(() => Career.START_MONEY.myteam);
+    expect(body).toContain(start.toLocaleString() + " cr");
+  });
+});
