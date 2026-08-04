@@ -1088,13 +1088,18 @@ function makeCars() {
   cars = [];
   // the custom team only enters the grid when the player has selected it
   const grid = Teams.LIST.filter((t, ti) => !t.custom || ti === teamIdx);
-  const total = grid.reduce((s, t) => s + t.drivers.length, 0);
+  // Counted through the same accessor the loop below iterates, or MY TEAM's second
+  // car would be missing from the lane spread it feeds.
+  const total = grid.reduce((s, t) => s + Career.gridDrivers(t).length, 0);
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
     const factoryParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
     const savedParts = ti === teamIdx ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
-    team.drivers.forEach((dSeat, di) => {
+    // MY TEAM enters TWO cars — you and the driver you hired — where the custom
+    // team ships with one. gridDrivers() returns team.drivers unchanged in every
+    // other case, so free play and driver careers are untouched.
+    Career.gridDrivers(team).forEach((dSeat, di) => {
       const isP = ti === teamIdx && di === driverIdx;
       const resolvedParts = isP ? savedParts : factoryParts;
       // In a driver career YOU take one of the team's two real seats; the driver

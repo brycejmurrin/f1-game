@@ -393,7 +393,7 @@ test.describe("Career — the garage", () => {
 
   // The garage is opened from the hub, and its rows are rebuilt on every mutation.
   async function openGarage(page) {
-    await page.locator("#cr-garage").click();
+    await page.evaluate(() => document.getElementById("cr-garage").click());
     await expect(page.locator("#carsetup")).toBeVisible();
   }
   // The first unowned row in the open category, or null. Rows are <button>s, and
@@ -405,14 +405,19 @@ test.describe("Career — the garage", () => {
   };
 
   test("FREE BUILD is hidden in career and offered outside it", async ({ page }) => {
+    // In-page clicks: the game canvas renders continuously behind these sheets and
+    // Playwright's actionability check can spin on it (see menu-survey.spec.js).
+    const tap = (id) => page.evaluate((i) => document.getElementById(i).click(), id);
     await boot(page);
-    await page.locator("#mb-race").click();
-    await page.locator("#sel-setup").click();
+    await tap("mb-race");
+    await tap("sel-setup");
+    await expect(page.locator("#carsetup")).toBeVisible();
     await expect(page.locator("#cs-unlimited")).toBeVisible();
-    await page.locator("#cs-done").click();
+    await tap("cs-done");
 
     await startCareer(page);
-    await openGarage(page);
+    await tap("cr-garage");
+    await expect(page.locator("#carsetup")).toBeVisible();
     // An unlimited-budget cheat would hand away the economy the mode is built on.
     await expect(page.locator("#cs-unlimited")).toBeHidden();
   });
@@ -586,5 +591,102 @@ test.describe("Career — the season arc", () => {
     await page.evaluate(() => window.__apex.careerReset());
     const b = await arc(777);
     expect(b).toEqual(a);
+  });
+});
+
+// ── MY TEAM (phase 6) ────────────────────────────────────────────────────────
+// You own the eleventh team and drive one of its two cars. The other seat is a
+// hire you pay for every round.
+
+test.describe("Career — MY TEAM", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  const startMyTeam = (page, opts) =>
+    page.evaluate((o) => window.__apex.career(o),
+      Object.assign({ flavour: "myteam", name: "Team Boss", code: "BOS", num: 8, seed: 55 }, opts || {}));
+
+  test("the setup screen offers a driver market", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => document.getElementById("mb-career").click());
+    await expect(page.locator("#career")).toBeVisible();
+    // Switch to MY TEAM and the left column becomes the driver market.
+    await page.evaluate(() => {
+      const b = [...document.querySelectorAll(".cr-flavour")].find((x) => x.innerText.includes("MY TEAM"));
+      b.click();
+    });
+    const tiles = page.locator(".cr-teamtile");
+    expect(await tiles.count()).toBeGreaterThan(3);
+    await expect(page.locator("#cr-left")).toContainText("cr / round");
+  });
+
+  test("the fitted cap is a real number, not zero", async ({ page }) => {
+    // The custom team has no factory preset, so its resolved build is the all
+    // cost-0 DEFAULTS. Deriving the cap from that gave MY TEAM a 0 cr cap and
+    // nothing in the garage could ever be fitted.
+    await boot(page);
+    await startMyTeam(page);
+    const budget = await page.evaluate(() => window.__apex.careerState().budget);
+    expect(budget).toBeGreaterThan(0);
+    expect(budget).toBe(await page.evaluate(() => Career.MYTEAM_WORKS));
+  });
+
+  test("the team enters TWO cars — you and your hire", async ({ page }) => {
+    await boot(page);
+    await startMyTeam(page, { hire: "NKM" });
+    await goRacing(page);
+    const grid = await page.evaluate(() => window.__apex.fieldState().map((c) => c.code));
+    expect(grid).toContain("BOS");     // you
+    expect(grid).toContain("NKM");     // the driver you hired
+    // 11 real teams x 2, plus your two.
+    expect(grid.length).toBe(24);
+  });
+
+  test("the hire is paid every round, out of the balance", async ({ page }) => {
+    await boot(page);
+    await startMyTeam(page, { hire: "FER2" });     // the expensive one
+    const wages = await page.evaluate(() => window.__apex.careerState().wages);
+    expect(wages).toBeGreaterThan(0);
+    await goRacing(page);
+    const before = await page.evaluate(() => window.__apex.careerState().money);
+    const r = await page.evaluate(() => window.__apex.careerSim(1));
+    expect(r[0].wages).toBe(wages);
+    const after = await page.evaluate(() => window.__apex.careerState().money);
+    // Prize + salary in, wages out — the wage bill is genuinely deducted.
+    expect(after).toBe(before + r[0].prize + r[0].salary + r[0].bonus
+                       + (r[0].obj && r[0].obj.done ? await page.evaluate(() => Career.OBJ_BONUS) : 0)
+                       - wages);
+  });
+
+  test("a cheaper hire leaves more to develop the car with", async ({ page }) => {
+    const balanceAfter = async (hire) => {
+      await boot(page);
+      await page.evaluate(() => window.__apex.careerReset());
+      await startMyTeam(page, { hire });
+      await goRacing(page);
+      await page.evaluate(() => window.__apex.careerSim(4));
+      return page.evaluate(() => window.__apex.careerState().money);
+    };
+    const rich = await balanceAfter("OKO");    // cheapest
+    const poor = await balanceAfter("FER2");   // dearest
+    expect(rich).toBeGreaterThan(poor);
+  });
+
+  test("a driver career has no roster and no wage bill", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    const st = await page.evaluate(() => window.__apex.careerState());
+    expect(st.roster).toBeNull();
+    expect(st.wages).toBe(0);
+  });
+
+  test("free play still fields ONE custom car", async ({ page }) => {
+    // gridDrivers() must return team.drivers untouched outside a MY TEAM career,
+    // or picking MY TEAM in a Grand Prix would silently add a second entry.
+    await page.addInitScript(() => localStorage.setItem("apex26.team", "11"));
+    await boot(page);
+    await page.evaluate(() => { window.__apex.seed(2); window.__apex.race("monza"); });
+    const grid = await page.evaluate(() => window.__apex.fieldState());
+    const mine = grid.filter((c) => c.team === "custom");
+    expect(mine.length).toBe(1);
   });
 });

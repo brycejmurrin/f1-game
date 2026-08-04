@@ -47,6 +47,9 @@ function create(G) {
       teamId: teams.length ? teams[0].id : "haas",
       seat: 1,                 // the junior seat by default — you are the newcomer
       name: "Your Name", code: "YOU", num: 99,
+      // Mid-table by default: affordable on the starting balance, and not so slow
+      // that the constructors' championship is out of reach in year one.
+      hire: "NKM",
     };
   }
 
@@ -98,6 +101,30 @@ function create(G) {
         grid.appendChild(b);
       }
       left.appendChild(grid);
+    }
+
+    if (draft.flavour === "myteam") {
+      left.appendChild(head("YOUR SECOND DRIVER"));
+      left.appendChild(el("div", "cr-note",
+        "You own the team and drive one of its two cars. The other seat is a hire, "
+        + "and you pay their salary every round out of the same balance that "
+        + "develops the car — a quick team-mate costs you upgrades."));
+      const list = el("div", "cr-teamgrid");
+      for (const a of Career.freeAgents()) {
+        const b = el("button", "cr-teamtile" + (draft.hire === a.code ? " active" : ""));
+        b.setAttribute("aria-pressed", draft.hire === a.code ? "true" : "false");
+        const sw = el("span", "cr-teamtile-sw");
+        // Their pace, from the same deterministic tier fallback the grid will use,
+        // so the number on the tile is the number you get.
+        const r = DriverRatings.get(a.code, a.tier);
+        sw.style.background = G.cssCol([0.2 + r.pace / 200, 0.5, 0.9 - r.pace / 300]);
+        b.append(sw, el("span", "cr-teamtile-name", a.name),
+          el("span", "cr-teamtile-meta",
+            "PACE " + r.pace + " · CRAFT " + r.craft + " · " + a.ask + " cr / round"));
+        b.onclick = () => { draft.hire = a.code; buildSetupPanes(); if (G.soundOn) GameAudio.uiTick(); };
+        list.appendChild(b);
+      }
+      left.appendChild(list);
     }
 
     // ---- identity ----
@@ -208,6 +235,21 @@ function create(G) {
       row("Fitted", fittedCost + " / " + Career.budget() + " cr"),
       row("Development", devLabel(c.tdev[c.team] || 0)));
     left.appendChild(carCard);
+
+    // MY TEAM runs a wage bill on top of the car. Shown as its own card because it
+    // is a different budget: salaries come off the BALANCE, never off the fitted
+    // cap, so a fast team-mate costs you upgrades rather than legality.
+    if (c.flavour === "myteam" && c.roster && c.roster.length) {
+      left.appendChild(head("THE TEAM"));
+      const teamCard = el("div", "cr-card");
+      teamCard.appendChild(row("Car 1", c.driver.name + " (you)"));
+      for (const d of c.roster) {
+        teamCard.appendChild(row("Car 2", d.name));
+        teamCard.appendChild(row("Salary", d.salary + " cr / round"));
+        teamCard.appendChild(row("Contract", d.left + (d.left === 1 ? " season" : " seasons")));
+      }
+      left.appendChild(teamCard);
+    }
 
     // ---- right: next race + standings ----
     if (st.offers) {

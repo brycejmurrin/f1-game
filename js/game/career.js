@@ -53,6 +53,30 @@ const BUDGET_UPGRADE = [2500, 5000, 9000];   // cost to reach level 1 / 2 / 3
 // 1.5%) — enough for a team to genuinely climb or fall a tier across two or three
 // seasons without ever rewriting `team.tier`, which drives the grid sort, the mesh
 // presets and the colours.
+// ---------- MY TEAM ----------
+// The custom team has no FACTORY_PRESETS entry, so Parts.getFactorySetup() gives
+// it the all-cost-0 DEFAULTS and its works cost is zero — which made the fitted
+// cap zero too, and every part in the garage unfittable. A startup team is not a
+// works team, so this is a deliberate figure rather than a derived one: between
+// Haas (570) and Alpine (955), i.e. a real car, off the back of the grid.
+const MYTEAM_WORKS = 900;
+
+// Drivers for hire. Codes are chosen not to collide with the 22 on the grid, and
+// they carry no ratings table of their own: DriverRatings.get() falls through to
+// its deterministic tier hash for an unknown code, so each one has a stable
+// personality without a second table to maintain. `ask` is the salary per round.
+const FREE_AGENTS = [
+  { name: "Matteo Ferrante", code: "FER2", num: 21, tier: 1, ask: 95 },
+  { name: "Kai Lindqvist",   code: "LNQ",  num: 34, tier: 1, ask: 84 },
+  { name: "Diego Salazar",   code: "SLZ",  num: 19, tier: 2, ask: 62 },
+  { name: "Tom Ashcroft",    code: "ASH",  num: 46, tier: 2, ask: 55 },
+  { name: "Yuki Nakamura",   code: "NKM",  num: 52, tier: 3, ask: 38 },
+  { name: "Pierre Duval",    code: "DVL",  num: 28, tier: 3, ask: 33 },
+  { name: "Ravi Chandra",    code: "CHD",  num: 61, tier: 4, ask: 22 },
+  { name: "Sam Okonkwo",     code: "OKO",  num: 73, tier: 4, ask: 18 },
+];
+function freeAgents() { return FREE_AGENTS.slice(); }
+
 const TDEV_MAX = 8;
 const TDEV_TO_PACE = 0.0025;
 
@@ -151,7 +175,16 @@ function start(opts) {
     dev: {}, tdev: {}, seats: {},
     obj: null,
     history: [],
+    // MY TEAM only. You own the team and drive one of its two cars; `roster` is
+    // the OTHER seat — a driver you hire and pay every round. Null in a driver
+    // career, where the team already has two drivers of its own.
+    roster: null,
   };
+  if (flavour === "myteam") {
+    const hired = FREE_AGENTS.find((a) => a.code === o.hire) || FREE_AGENTS[FREE_AGENTS.length - 3];
+    career.roster = [{ name: hired.name, code: hired.code, num: hired.num,
+                       tier: hired.tier, salary: hired.ask, left: 1 }];
+  }
   career.deal = newDeal(team, 1);
   return save();
 }
@@ -203,7 +236,34 @@ function seatDriver(teamId, seatIdx, fallback) {
 // the grid by — the market writes career.seats and is read right here.
 function driverOverride(teamId, seatIdx) {
   if (!inCareer()) return null;
+  // MY TEAM: seat 0 is you, seat 1 is whoever you hired. The custom team ships
+  // with a single driver, so seat 1 only exists because gridDrivers() below adds
+  // it — this is what fills it.
+  if (career.flavour === "myteam" && teamId === career.team) {
+    if (seatIdx === 0) return career.driver;
+    const hired = career.roster && career.roster[0];
+    return hired ? { name: hired.name, code: hired.code, num: hired.num } : null;
+  }
   return seatDriver(teamId, seatIdx, null);
+}
+
+// The seats makeCars() should build for a team. Normally the team's own drivers;
+// for the MY TEAM custom team it is TWO, because you own a constructor and a
+// constructor enters two cars. Returning team.drivers unchanged everywhere else
+// keeps free play (where the custom team is a single entry) exactly as it was.
+function gridDrivers(team) {
+  if (!inCareer() || !team) return team && team.drivers;
+  if (career.flavour !== "myteam" || team.id !== career.team) return team.drivers;
+  const hired = career.roster && career.roster[0];
+  if (!hired) return team.drivers;
+  return [career.driver, { name: hired.name, code: hired.code, num: hired.num }];
+}
+
+// What the team-mate costs per round. Zero in a driver career: there you ARE the
+// wage bill, and it is paid TO you.
+function wageBill() {
+  if (!inCareer() || career.flavour !== "myteam" || !career.roster) return 0;
+  return career.roster.reduce((n, d) => n + (d.salary || 0), 0);
 }
 
 // Per-driver development deltas, or null outside career. DriverRatings owns the
@@ -257,7 +317,12 @@ const _worksCost = new Map();
 function worksCost(teamId) {
   if (_worksCost.has(teamId)) return _worksCost.get(teamId);
   const team = Teams.LIST.find((t) => t.id === teamId);
-  const c = team ? Parts.getCost(Parts.getFactorySetup(team), team) : 0;
+  // The custom team has no factory preset, so its resolved build is the cost-0
+  // DEFAULTS — a zero baseline, and therefore a zero fitted cap that nothing can
+  // be fitted under. MY TEAM gets a startup car's worth instead.
+  const c = !team ? 0
+    : team.custom ? MYTEAM_WORKS
+    : Parts.getCost(Parts.getFactorySetup(team), team);
   _worksCost.set(teamId, c);
   return c;
 }
@@ -386,14 +451,18 @@ function settleRound(order, player) {
   // relative to the CAR (expectedFinish already encodes the tier), so beating a
   // bad car raises reputation and cruising in a good one does not. The objective
   // term is flat, because a brief is met or it is not.
-  career.money += prize + salary + bonus + (obj.done ? OBJ_BONUS : 0);
+  // MY TEAM pays its second driver every round. Real driver salaries sit OUTSIDE
+  // the development cost cap, and so does this: it comes off the balance, never
+  // off the fitted cap, so hiring well costs you upgrades rather than legality.
+  const wages = wageBill();
+  career.money += prize + salary + bonus + (obj.done ? OBJ_BONUS : 0) - wages;
   const repDelta = clamp((expectedFinish(team) - pos) * 0.6, -4, 6)
                  + (obj.done ? OBJ_REP : -OBJ_REP);
   career.rep = clamp(career.rep + repDelta, 0, 100);
   career.results.push({ r: raced, p: pos, pts, obj: obj.done });
   career.obj = null;          // the next round draws its own brief on demand
   save();
-  return { pos, pts, prize, salary, bonus, obj, money: career.money, rep: career.rep };
+  return { pos, pts, prize, salary, bonus, wages, obj, money: career.money, rep: career.rep };
 }
 
 // ---------- the grid, as career sees it ----------
@@ -697,6 +766,8 @@ function state() {
     budget: budget(), budgetLvl: career.budgetLvl,
     owned: career.owned.length,
     deal: career.deal, obj: objective(),
+    // MY TEAM only; null in a driver career, where you are the wage bill.
+    roster: career.roster, wages: wageBill(),
     offers: career.offers.length,
     seasons: career.history.length,
   };
@@ -707,6 +778,7 @@ return {
   OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX,
   data, active, inCareer, engage, load, save, clear, start, state, rnd,
   salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,
+  gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
   objective, objectiveFor, objectiveLabel, prizeFor, settleRound, worksCost,
