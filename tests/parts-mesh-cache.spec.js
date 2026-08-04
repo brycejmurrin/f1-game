@@ -96,7 +96,7 @@ async function openSetup(page) {
     }
     await page.locator("#select").waitFor({ state: "visible" });
   }
-  await page.locator("#sel-setup").click();
+  await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 
@@ -112,7 +112,7 @@ async function pickOpt(page, catId, optId) {
 
 async function applyPartsAndPark(page) {
   await page.locator("#cs-done").click();
-  await page.locator("#select").waitFor({ state: "visible" });
+  await page.locator("#race-settings").waitFor({ state: "visible" });
   // Skip race-settings UI — startRace via the public hook (recomputes mods).
   await page.evaluate(() => {
     window.__apex.race("monza");

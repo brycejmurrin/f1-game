@@ -74,7 +74,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
         .map((el) => el.id || el.className));
     expect(scrollers).toContain("sel-tracks");
 
-    for (const sel of ["#sel-preview-map", "#sel-preview-info", ".sheet-head", "#sel-left", ".sheet-foot"]) {
+    for (const sel of ["#sel-preview-map", "#sel-preview-info", ".sheet-head", ".sheet-foot"]) {
       const r = await wheelOver(page, sel);
       expect(r.missing, `${sel} exists`).toBeFalsy();
       expect(r.top, `wheel over ${sel} scrolls the list`).toBeGreaterThan(0);
@@ -114,7 +114,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     // the list the way a player would, then walk it. GARAGE is the only control
     // in the left column's action row now (MY TEAM and CAR SETUP were folded into
     // the garage itself), so one ArrowRight from it has nowhere to go but across.
-    await page.evaluate(() => document.getElementById("sel-setup").focus());
+    await page.evaluate(() => document.getElementById("sel-go").focus());
     await page.keyboard.press("ArrowRight");
     expect((await focusInfo(page)).cls, "ArrowRight crosses into the circuit column").toContain("track-row");
 
@@ -146,7 +146,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await openSelect(page);
     // The DRIVER chips moved from the select screen into the GARAGE's TEAM tab
     // when the screens were split by question (who you are / where you race).
-    await page.locator("#sel-setup").click();
+    await page.locator("#sel-go").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();
     const chips = await page.evaluate(() => document.querySelectorAll("#cs-driver .sel-chip").length);

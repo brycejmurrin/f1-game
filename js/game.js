@@ -22,7 +22,7 @@ const els = {
   selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"),
   selPreviewRec: $("sel-preview-rec"),
   selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"),
-  selBack: $("sel-back"), selGo: $("sel-go"), selLeft: $("sel-left"),
+  selBack: $("sel-back"), selGo: $("sel-go"),
   customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
   resultsTable: $("results-table"), resMenu: $("res-menu"), resNext: $("res-next"),
@@ -194,6 +194,15 @@ let difficulty = store.get("difficulty", "normal");
 // what every existing player gets. OFF is therefore the only choice that does not
 // silently start retiring cars in a game somebody was already halfway through.
 let raceReliability = store.get("reliability", "off");
+// ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
+// "auto". Inside an activation zone X-mode has no cost and no downside, so the
+// optimal play is unconditionally "on" — which is exactly what the AI does, in
+// one line. Manual therefore asks the player to keep pace with cars that pay no
+// attention tax, and anyone who forgets concedes X_VMAX_GAIN of top speed on
+// every straight. AUTO hands the player the same deal the AI gets. It stays
+// OPT-IN because pressing the button is the mechanic, and taking that away by
+// default would remove the one thing there is to do with the system.
+let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
@@ -2378,6 +2387,8 @@ const G = {
   get setupPreviewDist() { return setupPreviewDist; },
   get setupPreviewPan() { return setupPreviewPan; },
   get setupPreviewAeroX() { return setupPreviewAeroX; },
+  get raceAeroMode() { return raceAeroMode; },
+  set raceAeroMode(v) { raceAeroMode = v; store.set("aeroMode", v); },
   get aeroZones() { return aeroZones; },
   aeroZoneAt: (s) => aeroZoneAt(s),
   aeroZoneAhead: (s) => aeroZoneAhead(s),
@@ -2664,8 +2675,14 @@ function update(dt) {
     }
     const lit = Math.min(5, Math.floor(countT));
     if (lit > lightsLit) {
+      // Light EVERY lamp up to `lit`, not just the newest. countT can advance
+      // by more than one second in a frame — a networked countdown is pinned to
+      // a shared instant rather than accumulated from dt, so a peer that was
+      // busy building its circuit rejoins the sequence part-way through — and
+      // lighting only children[lit-1] left the earlier lamps dark forever. The
+      // guest saw an unlit gantry and then, abruptly, a green track.
+      for (let i = lightsLit; i < lit; i++) els.lights.children[i].classList.add("on");
       lightsLit = lit;
-      els.lights.children[lit - 1].classList.add("on");
       if (soundOn) GameAudio.lightOn(lit - 1);
       if (lit === 1) Input.calibrate();
       // all five lit — hold for a randomised beat, as in real F1, so the
@@ -3155,7 +3172,10 @@ function updateCar(c, dt, ranked) {
   // already un-armed by the time the AI decides to brake for a corner.
   c.xArmed = !c.offroad && !braking && vStd(c.speed) > X_MIN_SPEED
     && !c.finished && state === "race" && xStraightAhead(c);
-  if (c.human) {
+  if (c.human && raceAeroMode === "auto") {
+    // Same rule the AI runs: take every zone the circuit offers.
+    c.xOn = c.xArmed;
+  } else if (c.human) {
     if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
     else c.xOn = !!(inp && inp.aero);
   } else {
@@ -6743,6 +6763,21 @@ function buildRaceSettings() {
   }
   // RELIABILITY — same idiom, same persistence, and hidden alongside DIFFICULTY
   // in a time trial for the same reason: neither has anything to act on there.
+  // ACTIVE AERO applies in a time trial too — it is a lap-time tool, which is
+  // exactly the distinction that hides RELIABILITY there.
+  const aeroEl = $("rs-aero");
+  aeroEl.innerHTML = "";
+  for (const [id, label] of [["manual", "MANUAL"], ["auto", "AUTO"]]) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (raceAeroMode === id ? " active" : "");
+    b.setAttribute("aria-pressed", raceAeroMode === id ? "true" : "false");
+    b.textContent = label;
+    b.onclick = () => {
+      raceAeroMode = id; store.set("aeroMode", id);
+      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
+    };
+    aeroEl.appendChild(b);
+  }
   $("rs-reliab-section").hidden = isTimeTrial();
   const relEl = $("rs-reliab");
   relEl.innerHTML = "";
@@ -6796,7 +6831,13 @@ function openRaceSettings(from) {
 }
 els.selGo.onclick = () => {
   if (soundOn) GameAudio.uiSelect();
-  openRaceSettings("select");
+  // The garage is a STEP now, not a side door. #select asks where you race and
+  // nothing else; START goes on to the garage, and the garage's DONE carries on
+  // to the race settings. In the VS FRIEND room it is skipped — the room has
+  // its own GARAGE button because each player owns their own car, and the host
+  // coming here is only editing the shared race.
+  if (netRoom) { openRaceSettings("select"); return; }
+  openGarage("select");
 };
 $("rs-cancel").onclick = () => {
   $("race-settings").hidden = true;
@@ -7087,7 +7128,6 @@ function openGarage(from) {
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
   openSetup();
 }
-$("sel-setup").onclick = () => openGarage("select");
 $("mb-garage").onclick = () => openGarage("menu");
 $("cs-done").onclick = () => {
   $("carsetup").hidden = true;
@@ -7102,9 +7142,13 @@ $("cs-done").onclick = () => {
     return;
   }
   if (garageReturn === "career") { careerUi.openHub(); return; }
+  // Reached from the circuit picker's START, so DONE goes FORWARD to the race
+  // settings, not back to a screen whose question is already answered. Race
+  // settings' own BACK still returns to #select, so the circuit stays two taps
+  // away if you change your mind.
+  if (garageReturn === "select") { openRaceSettings("select"); return; }
   buildSelect();
-  if (garageReturn === "menu") els.overlay.hidden = false;
-  else els.select.hidden = false;
+  els.overlay.hidden = false;   // only the title screen's GARAGE button gets here
 };
 $("cs-unlimited").onclick = () => {
   unlimitedBudget = !unlimitedBudget;

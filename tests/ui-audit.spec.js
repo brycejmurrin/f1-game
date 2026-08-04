@@ -57,7 +57,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#mb-race").click();
       await page.locator("#select").waitFor({ state: "visible" });
       // MY TEAM lives in the garage's TEAM tab now, not on the select screen.
-      await page.locator("#sel-setup").click();
+      await page.locator("#sel-go").click();
       await page.locator("#carsetup").waitFor({ state: "visible" });
       await page.locator('#cs-tabs [data-cs-cat="team"]').click();
       await page.locator("#cs-customize").click();
@@ -70,7 +70,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.locator("#mb-race").click();
       await page.locator("#select").waitFor({ state: "visible" });
-      await page.locator("#sel-setup").click();
+      await page.locator("#sel-go").click();
       await page.locator("#carsetup").waitFor({ state: "visible" });
       await shot(page, `${orient}-04-carsetup`);
     });

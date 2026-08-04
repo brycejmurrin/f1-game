@@ -19,7 +19,7 @@ async function load(page) {
 async function openSetup(page) {
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-setup").click();
+  await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 

@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 // and closes it again, leaving the caller back on the select screen exactly
 // where the old one-line #sel-customize click did.
 async function saveMyTeam(page, edit) {
-  await page.locator("#sel-setup").click();
+  await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.locator('#cs-tabs [data-cs-cat="team"]').click();
   await page.locator("#cs-customize").click();
@@ -31,7 +31,7 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   // the id captured here is always the team of the very next texture.
   //
   // This used to just take createdTextureIds[0] and assume it was the custom
-  // team's. It is not: the first #sel-setup happens BEFORE cz-save selects the
+  // team's. It is not: the first #sel-go happens BEFORE cz-save selects the
   // custom team, so the preview builds an atlas for whichever team was already
   // fitted (McLaren by default) and that one is id 1. invalidateDecalTextures
   // ("custom") then correctly frees only the custom atlas, and the assertion
@@ -78,7 +78,7 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   // Save the default custom team once so it is selected for the setup preview.
   await saveMyTeam(page);
 
-  await page.locator("#sel-setup").click();
+  await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.waitForFunction(() => window.__customAtlases().length > 0);
   const firstTextureId = await page.evaluate(() => window.__customAtlases()[0]);
@@ -86,7 +86,7 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   await page.locator("#cs-done").click();
   await saveMyTeam(page, () => page.locator("#cz-color").fill("#123456"));
 
-  await page.locator("#sel-setup").click();
+  await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.waitForFunction(() => window.__customAtlases().length > 1, { timeout: 45_000 });
 
@@ -178,7 +178,7 @@ test("custom livery actions are independent keyboard buttons", async ({ page }) 
   await page.goto("/");
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
   await page.locator("#mb-race").click();
-  await page.locator("#sel-setup").click();
+  await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.getByRole("button", { name: /LIVERY/ }).click();
 

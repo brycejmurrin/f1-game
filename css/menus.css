@@ -160,11 +160,8 @@
 /* ---------- select screen ---------- */
 #select { z-index: 25; background: rgba(6, 6, 10, 0.92); }
 #sel-inner { --sheet-w: 1020px; }
-/* Portrait / narrow: ONE column that scrolls as a single body. #sel-left must
-   give up being its own scroll region here — a .pane nested in a flex column
-   with nothing to size it collapses to a sliver (DRIVER and everything under it
-   simply vanished). The body is the scroller; the track list keeps its own cap
-   below so the two never fight. */
+/* Portrait / narrow: the body is the scroller and the track list keeps its own
+   cap below, so the two never fight. */
 #sel-body { display: flex; flex-direction: column; gap: var(--gap); }
 .sel-section { min-width: 0; }
 @container sheet (max-width: 619px) {
@@ -172,7 +169,6 @@
     overflow-y: auto; overflow-x: hidden;
     overscroll-behavior-y: contain; scrollbar-gutter: stable; touch-action: pan-y;
   }
-  #sel-left { overflow: visible; flex: 0 0 auto; }
 }
 
 /* The car's spec strip: the four numbers that change when you swap team or fit
@@ -197,28 +193,15 @@
 #sel-stats .cs-stat-val { width: auto; font-size: 12px; }
 .sel-edit-row { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.7); margin-top: calc(var(--gap) * 0.7); }
 
-/* Two columns once there is room: identity | circuit — and the FOOT belongs to
-   the left column only.
-   The sheet's default three rows (head / body / foot) run the full width, so a
-   full-width action bar cut the circuit list off ~50px above the sheet floor for
-   no reason: BACK and START only ever sit under the left column. Here #sel-body
-   goes `display: contents` so its two children become grid items of the sheet
-   itself, which lets the circuit column span BOTH the body row and the foot row
-   and use every pixel of the sheet's height for scrolling.
-   Consequence of display:contents: #sel-body's own padding disappears, so each
-   column now carries its own — which is also what gives the left pane the inset
-   its focus rings need (children are no longer flush with the clip edge). */
-/* The columns are declared on the sheet UNCONDITIONALLY, because a @container
-   rule cannot style the element that establishes the container — `#sel-inner`
-   is the `sheet` container, so a `@container sheet` block targeting it resolves
-   against an outer container that does not exist and silently never applies.
-   Instead every direct child spans both columns by default, which lays out
-   exactly like the one-column sheet; the split only comes alive below, when
-   #sel-body dissolves and its two panes become the real grid items. */
-#sel-inner {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-  column-gap: calc(var(--pad) * 0.9);
-}
+/* ONE COLUMN, the circuit list, using the whole sheet.
+   This used to be a two-column grid — identity | circuit — with the action bar
+   under the left column only. The identity column is gone (see index.html): the
+   screen asks WHERE, and START goes on to the garage, which is where WHO and
+   WHAT have always actually been chosen. What is left is a list, and a list
+   wants width.
+   The circuit section still spans the body row AND the foot row, which is what
+   lets it scroll down to the sheet floor rather than stopping ~50px above it. */
+#sel-inner { grid-template-columns: minmax(0, 1fr); }
 #sel-inner > .sheet-head,
 #sel-inner > .sheet-body,
 #sel-inner > .sheet-foot { grid-column: 1 / -1; }
@@ -226,26 +209,28 @@
 @container sheet (min-width: 620px) {
   #sel-body { display: contents; }
   #sel-inner > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
-  #sel-left {
-    grid-column: 1; grid-row: 2;
-    overflow-y: auto; min-height: 0;
-    border-right: 1px solid rgba(255, 255, 255, 0.07);
-    padding: calc(var(--pad) * 0.25) calc(var(--pad) * 0.6) 0 var(--pad);
-  }
-  /* rows 2→4: the body row AND the foot row, i.e. down to the sheet floor */
+  /* PREVIEW BESIDE THE LIST, not above it. Stacked full-width, the preview card
+     is ~190px tall and takes more than half a landscape phone's sheet — the
+     first capture of this layout left the track list 73px high, one and a bit
+     rows, on the shape the game is most played in. It reads as a big picture of
+     a circuit you have not chosen yet.
+     Side by side, the list gets the full height of the sheet and the preview
+     gets a column narrow enough that its map and its facts stack inside it
+     (see the max-width rule below), which is the shape that card was designed
+     for anyway. */
   #sel-track-section {
-    grid-column: 2; grid-row: 2 / 4;
-    display: flex; flex-direction: column; overflow: hidden; min-height: 0;
-    padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5) 0;
+    grid-column: 1 / -1; grid-row: 2 / 3;
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: calc(var(--pad) * 0.8);
+    overflow: hidden; min-height: 0;
+    padding: calc(var(--pad) * 0.25) var(--pad) 0 var(--pad);
   }
-  #sel-tracks { flex: 1 1 auto; min-height: 0; }
-  /* The action bar sits under the left column; its border-top separates the
-     actions from that column's content, and border-right continues the column
-     divider to the sheet floor so the two columns read as one clean split. */
-  #sel-inner > .sheet-foot {
-    grid-column: 1; grid-row: 3;
-    border-right: 1px solid rgba(255, 255, 255, 0.07);
-  }
+  #sel-circuit-label { grid-column: 1 / -1; grid-row: 1; }
+  #sel-track-preview { grid-column: 1; grid-row: 2; }
+  #sel-tracks { grid-column: 2; grid-row: 2; min-height: 0; }
+  #sel-inner > .sheet-foot { grid-column: 1 / -1; grid-row: 3; }
 }
 
 /* ---------- team card + team picker ----------
@@ -365,12 +350,40 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      preview's width instead of sitting as a thumbnail with dead space beside
      it. clamp keeps it legible on a phone and stops it dwarfing the facts on a
      desktop. */
-  flex: none; width: clamp(140px, 50%, 260px); height: auto;
+  /* Width is a KNOB, not a literal, because the layouts that need to change it
+     sit in @container blocks — and a container query adds no specificity, so
+     those rules tie with this one and win or lose on source order alone. Two
+     attempts at overriding it that way were silently discarded. A custom
+     property cascades by INHERITANCE from the card instead, which no ordering
+     can undo. */
+  flex: none; width: var(--sel-map-w, clamp(140px, 50%, 260px)); height: auto;
   aspect-ratio: 520 / 300;
   border-radius: var(--r-md);
   background: rgba(0, 0, 0, 0.25);
 }
 #sel-preview-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+
+/* THE PREVIEW CARD IN THE TWO-COLUMN LAYOUT.
+   Scoped through #sel-track-preview — two IDs — deliberately. A container query
+   adds no specificity, so a single-ID rule here ties with every other single-ID
+   rule for these elements and the winner is decided by source order alone. The
+   first attempt lost that race twice (measured: flex stuck at `0 0 auto`, then
+   width stuck at the base clamp), which is a silly thing to keep re-deriving.
+   The card fills its column, stacked map-over-facts so the map gets the FULL
+   column width rather than half of it, and the leftover height splits above and
+   below instead of pooling at the bottom. The map keeps its own 520:300
+   proportions — stretching a circuit outline to fill a box would misdraw the
+   one thing this card exists to show. */
+@container sheet (min-width: 620px) {
+  #sel-track-preview {
+    align-self: stretch; margin-bottom: 0;
+    flex-direction: column; align-items: stretch; justify-content: center;
+    gap: calc(var(--gap) * 0.8);
+    --sel-map-w: 100%;          /* the whole column, not half of it */
+  }
+  #sel-preview-info { flex: 0 0 auto; }
+}
+}
 #sel-preview-name { font-size: 15px; font-weight: 800; font-style: italic; color: #fff; letter-spacing: 0.02em; }
 #sel-preview-gp { font-size: 11px; color: var(--red); font-weight: 700; margin-top: 2px; }
 #sel-preview-meta { font-size: 12px; color: var(--dim); margin-top: 6px; line-height: 1.5; }
@@ -382,9 +395,14 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 .spf-elev { background: rgba(56,183,240,0.18); color: #39b7f0; }
 .spf-drs { background: rgba(0,220,180,0.15); color: #00dcb4; }
 .spf-corner { background: rgba(225,6,0,0.18); color: #e10600; }
-/* Roomier preview once the sheet is wide enough that it does not steal list rows */
+/* A roomier preview once the sheet is wide. This used to widen the map to ~52%
+   of the card, which was right when the card sat above a full-width list and
+   its map and facts were side by side. In the two-column layout the map already
+   takes the whole card width, and re-setting the knob here just undid that —
+   the 620px rule and this one are both single-ID on the same element, so the
+   later one won, which is why an iPad in portrait (786px sheet) came out right
+   and a desktop (1020px) did not. Only the type scales now. */
 @container sheet (min-width: 820px) {
-  #sel-preview-map { width: clamp(180px, 52%, 300px); }
   #sel-preview-name { font-size: 18px; }
 }
 /* Short landscape: the map and the facts are the useful part; prose is not. */
