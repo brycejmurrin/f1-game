@@ -135,10 +135,11 @@ function buildSelect() {
     els.selTracks.textContent = "";
     updateTrackPreview();
     const rnd = (G.season && G.season.round || 0) + 1;
-    els.selPreviewRec.textContent = "Round " + rnd + " of " + Tracks.LIST.length;
-    // Upcoming rounds list (next 5 circuits after current)
+    els.selPreviewRec.textContent = "Round " + rnd + " of " + Tracks.SEASON.length;
+    // Upcoming rounds list (next 5 circuits after current). Indexes SEASON, not
+    // LIST — classics are playable but never a championship round.
     const upcoming = [];
-    for (let i = rnd; i < Math.min(rnd + 5, Tracks.LIST.length); i++) upcoming.push({ n: i + 1, t: Tracks.LIST[i] });
+    for (let i = rnd; i < Math.min(rnd + 5, Tracks.SEASON.length); i++) upcoming.push({ n: i + 1, t: Tracks.SEASON[i] });
     if (upcoming.length) {
       const upHead = document.createElement("div");
       upHead.className = "season-upcoming-head";
@@ -156,7 +157,18 @@ function buildSelect() {
     }
   } else {
     els.selTracks.textContent = "";
+    // Two groups: the championship calendar, then the retired circuits. Only the
+    // header changes — every row is a normal, selectable track either way.
+    let group = null;
     Tracks.LIST.forEach((t, i) => {
+      const g = t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
+      if (g !== group) {
+        group = g;
+        const head = document.createElement("div");
+        head.className = "track-group-head";
+        head.textContent = g;
+        els.selTracks.appendChild(head);
+      }
       const row = document.createElement("button");
       row.className = "track-row" + (i === G.trackIdx ? " active" : "");
       row.setAttribute("aria-label", t.name);
@@ -168,6 +180,7 @@ function buildSelect() {
       nm.textContent = t.name;
       if (t.night) { const b = document.createElement("span"); b.className = "trb trb-night"; b.textContent = "NIGHT"; nm.appendChild(b); }
       if (t.street) { const b = document.createElement("span"); b.className = "trb trb-street"; b.textContent = "STREET"; nm.appendChild(b); }
+      if (t.classic) { const b = document.createElement("span"); b.className = "trb trb-classic"; b.textContent = "CLASSIC"; nm.appendChild(b); }
       row.appendChild(nm);
 
       const mt = document.createElement("span");
