@@ -60,7 +60,7 @@
         gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
         addFrustum, ferrisWheel, vadd, hash, cityFront,
-        circuitKit,
+        circuitKit, plane, cypress, terrace,
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -82,6 +82,15 @@
       const TARMAC_AD   = [0.85, 0.20, 0.18];        // red ad accent
       const AZ_BLUE     = [0.10, 0.45, 0.78];        // Azerbaijan flag blue
       const LAMP_WARM   = [1.00, 0.96, 0.70];        // sodium lamp glow
+      // Azerbaijani carpet accents. The flag blue above is the STATE colour;
+      // the colours the country actually dresses an event in — and weaves its
+      // carpets and paints its buta motif in — are a green-shifted teal and a
+      // hot madder orange. Those two against sandstone are unmistakably
+      // Caucasian and are worn by none of the three Gulf circuits, which run
+      // teal-magenta-amber LED (Abu Dhabi), green-gold (Jeddah) and maroon
+      // (Qatar). Introduced here as the seafront/Old City accent pair.
+      const AZ_TEAL     = [0.06, 0.66, 0.62];
+      const AZ_ORANGE   = [0.94, 0.42, 0.10];
 
       // Sandstone facade palette for Old City streets
       const SAND_PAL = [
@@ -399,10 +408,29 @@
           addBox(out, rail, [0.16, 1.0, 7.7], [0.78, 0.73, 0.64], b);
         }
       }
-      // Boulevard palm row along the Caspian-side of the main straight
+      // BOULEVARD PLANTING — the one place Baku's latitude shows.
+      // This was a row of 14 date palms, which is the SAME silhouette Abu
+      // Dhabi, Jeddah and Qatar all line their straights with: four night
+      // races, one tree. Baku is on the Caspian at 40°N, not in the Gulf, and
+      // Dənizkənarı Milli Park (the Boulevard, planted 1909) is an avenue of
+      // pollarded PLANE trees with dark CYPRESS spires between them — a broad
+      // flat disc of a crown next to a narrow black column. Neither shape can
+      // be mistaken for a palm from a car, and together they say "temperate
+      // seafront promenade" before any building is in frame. A handful of the
+      // Boulevard's real palms stay in the mix; they are a minority here, not
+      // the whole row.
+      const PLANE_LEAF = [0.24, 0.40, 0.20], CYPRESS_LEAF = [0.09, 0.20, 0.13];
       for (let i = 0; i < 14; i++) {
         const s = 0.23 + i * 0.009;
-        palm(K(s), -1, 9 + (i % 2), 8 + hash(i * 7) * 3, [0.18, 0.44, 0.24]);
+        const dist = 9 + (i % 2);
+        if (i % 4 === 1) {
+          cypress(K(s), -1, dist, 9.5 + hash(i * 5) * 3, CYPRESS_LEAF, { slim: 0.85 });
+        } else if (i % 7 === 3) {
+          palm(K(s), -1, dist, 8 + hash(i * 7) * 3, [0.18, 0.44, 0.24]);
+        } else {
+          plane(K(s), -1, dist, 9 + hash(i * 7) * 2.5, PLANE_LEAF,
+                { stages: 2, spread: 0.62 });
+        }
       }
 
       // ===================================================================
@@ -429,6 +457,22 @@
             addBox(out, mc, [2.4, 1.8, 2.2], SAND, [a.r, a.u, a.t]);
           }
         }
+      }
+
+      // BUTA BANNERS on the rampart. Every Baku GP hangs long vertical fabric
+      // panels down the Old City wall carrying the buta (paisley) motif in
+      // carpet teal and madder orange over a gold band. One box per banner
+      // plus its band, hung ON the existing 9 m wall face, so the whole run
+      // costs almost nothing — and it is the single cheapest way to make this
+      // stretch unmistakable: no other circuit in the fleet has a medieval
+      // stone wall, let alone one dressed in carpet colours.
+      for (let i = 0; i < 22; i++) {
+        const s = 0.362 + i * 0.0082;
+        if (s > 0.535 && s < 0.556) continue;   // the terracing gap carved above
+        const a = anchor(K(s), 1, 19.3), b = [a.r, a.u, a.t];
+        const col = (i % 2) ? AZ_TEAL : AZ_ORANGE;
+        addBox(out, vadd(a.c, a.u, 5.4), [0.14, 6.4, 1.9], col, b);
+        addBox(out, vadd(a.c, a.u, 8.2), [0.18, 0.7, 2.1], [0.86, 0.72, 0.26], b);
       }
 
       // Low buttresses and warm uplights articulate the long outer rampart.
@@ -643,13 +687,24 @@
       }
 
       // ===================================================================
-      // s≈0.545 R — ICHERI SHEHER GRANDSTAND: the Old City castle-section exit,
-      // one of Baku's two empty hero grandstand slots (see plan doc §3). Sits
-      // in front of the rampart wall (carved above) with the historic wall as
-      // its backdrop. Multi-tier scaffold-on-stone temporary structure, matching
-      // STAND_SETS.baku's "sandstone" family for this Old City position.
+      // s≈0.545 R — ICHERI SHEHER TERRACING: the Old City castle-section exit.
+      // This was a two-tier roofed grandstandEx, i.e. the same modern shell
+      // Abu Dhabi and Jeddah field, parked directly in front of a 12th-century
+      // rampart. Baku is the ONLY circuit in this group with genuine historic
+      // architecture, and the way to show that is to make the seating itself
+      // historic: mass-stone stepped terracing, open front, no roof, no back
+      // shell, cut against the wall behind it. terrace() is the only stand
+      // form in the library that has no shell to hide behind, so the merlons
+      // and the old town stay visible OVER the crowd instead of behind a slab
+      // — which is the entire reason to have put a stand here.
       // ===================================================================
-      if (grandstandEx) {
+      if (typeof terrace === "function") {
+        terrace(0.528, 0.562, 1, 15, {
+          rows: 6, rise: 1.45, depth: 2.4, step: 16, density: 0.5,
+          conc: [0.66, 0.58, 0.44], concAlt: [0.57, 0.50, 0.38],
+          backWall: false,   // the rampart IS the back wall
+        });
+      } else if (grandstandEx) {
         grandstandEx(0.545, 1, 16, 60, null, null, {
           livery: "sandstone", tiers: 2, roof: "cantilever",
           pylons: true, endWalls: true,
@@ -734,7 +789,7 @@
         // Glass curtain wall window band (mid-level, emissive cool white)
         addFrustum(out, vadd(aH.c, aH.u, 9), 20.5, 20.5, 5, WIN_COOL, 10, b);
         // Crown light ring at apex
-        addFrustum(out, vadd(aH.c, aH.u, 26.5), 13, 12, 1.2, WIN_COOL, 10, b);
+        addFrustum(out, vadd(aH.c, aH.u, 26.5), 13, 12, 1.2, AZ_TEAL, 10, b);
         // Uplit forecourt wash
         addBox(out, vadd(aH.c, aH.u, 0.1), [54, 0.4, 44], [0.10, 0.12, 0.20], b);
       }
@@ -791,7 +846,7 @@
 
       // Illuminated billboards along the Caspian straight
       for (let i = 0; i < 5; i++) {
-        billboard(K(0.65 + i * 0.065), 1, 9, 14, 6, i % 2 ? FLAME : AZ_BLUE);
+        billboard(K(0.65 + i * 0.065), 1, 9, 14, 6, i % 2 ? AZ_ORANGE : AZ_TEAL);
       }
 
       // Continuous sponsor hoarding along the ~2.2 km Neftchilar Ave straight
@@ -801,11 +856,11 @@
       if (sponsorHoarding) {
         sponsorHoarding(0.655, 0.738, 1, 2.4, {
           h: 1.2, step: 14, postCol: [0.20, 0.21, 0.24],
-          palette: [FLAME, AZ_BLUE, [0.90, 0.90, 0.92], TARMAC_AD, [0.14, 0.55, 0.28]],
+          palette: [AZ_TEAL, AZ_ORANGE, [0.90, 0.90, 0.92], AZ_BLUE, TARMAC_AD],
         });
         sponsorHoarding(0.762, 0.94, 1, 2.4, {
           h: 1.2, step: 14, postCol: [0.20, 0.21, 0.24],
-          palette: [FLAME, AZ_BLUE, [0.90, 0.90, 0.92], TARMAC_AD, [0.14, 0.55, 0.28]],
+          palette: [AZ_TEAL, AZ_ORANGE, [0.90, 0.90, 0.92], AZ_BLUE, TARMAC_AD],
         });
       }
 
@@ -846,7 +901,7 @@
         const a = anchor(K(0.80), -1, 88);
         const b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, 0.2), [32, 0.4, 32], [0.14, 0.12, 0.18], b);
-        addCyl(out, vadd(a.c, a.u, 28), 3.0, 2.8, WIN_COOL, 14, b);
+        addCyl(out, vadd(a.c, a.u, 28), 3.0, 2.8, AZ_TEAL, 14, b);
       }
 
       // ── CASPIAN MARINA — sparse far yachts only (near marina culled)

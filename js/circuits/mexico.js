@@ -61,7 +61,7 @@
               guardrail, tyreWall, marshalPost, tower, gantry, mountain, wall,
               modelGroup, groundPatch, groundedSegments,
               cityFront, forestEdge, bush,
-              terrace, tieredBowl, broadleafFall, plane, acacia,
+              terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
               cameraTower, sponsorHoarding, broadcastCompound, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
       // Lap sectors where dressingExclusions leaves the generic city generator
@@ -294,15 +294,23 @@
       // ════════════════════════════════════════════════════════════════════════
       // s=0.12  TURN 1 GRANDSTAND
       // ════════════════════════════════════════════════════════════════════════
-      grandstand(0.12, 1,  9, 80, SEATS,    GREEN);
-      grandstand(0.12, 1, 24, 80, CONCRETE, ORANGE);
+      // Two-deck main T1 enclosure. Every stand outside the stadium used to be
+      // the same one-tier cantilever silhouette in a different colour; the
+      // liveries below come from STAND_SETS.mexico (navy / concrete / steel)
+      // and the tiers/roof kinds are what actually change the outline.
+      grandstandEx(0.12, 1,  9, 80, null, GREEN,
+                   { livery: "navy", tiers: 2, roof: "cantilever", endWalls: true });
+      grandstandEx(0.12, 1, 30, 80, null, ORANGE,
+                   { livery: "concrete", roof: "flat" });
       kerb(0.12, 1, 9); kerb(0.115, -1, 8);
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.20  MOISES SOLANA ESSES (both sides)
       // ════════════════════════════════════════════════════════════════════════
       for (const side of [-1, 1]) {
-        grandstand(0.20, side, 8, 48, [0.50, 0.50, 0.54], side < 0 ? ORANGE : PINK);
+        grandstandEx(0.20, side, 8, 48, null, side < 0 ? ORANGE : PINK,
+                     { livery: side < 0 ? "steel" : "navy",
+                       roof: side < 0 ? "truss" : "cantilever", pylons: side < 0 });
       }
       kerb(0.20, -1, 7); kerb(0.205, 1, 7);
       // Broadcast vantage — the Esses are a real TV camera position and had
@@ -364,7 +372,8 @@
       // ════════════════════════════════════════════════════════════════════════
       groundPlane(K(0.42), 1, 5, [60, 1.0, 50], [0.40, 0.40, 0.43]);  // grey runoff
       kerb(0.42, 1, 10);
-      grandstand(0.42, 1, 7, 40, [0.50, 0.50, 0.54], ORANGE);
+      grandstandEx(0.42, 1, 7, 40, null, ORANGE,
+                   { livery: "steel", roof: "truss", endWalls: true });
       banners(0.42, 1, 6);
       // Broadcast vantage on the outside of the hairpin, and braking boards on
       // the approach — both completely unmarked before this pass.
@@ -525,11 +534,13 @@
       // (The painted crowd-block accents that used to sit at 33 m are gone —
       // that band is now the upper terrace, which carries real crowd bands.)
 
-      // Interior fencing at trackside (safety fence inside stadium) — bowl only
-      fence(0.735, 0.855, -1, 10, 3.8, [0.82, 0.84, 0.88]);
-      fence(0.735, 0.855,  1, 10, 3.8, [0.82, 0.84, 0.88]);
-      wall(0.735, 0.855, -1, 9, 1.0, CONCRETE, 0.45);
-      wall(0.735, 0.855,  1, 9, 1.0, CONCRETE, 0.45);
+      // Interior fencing at trackside (safety fence inside stadium) — bowl only.
+      // Pulled inside the bowl's first riser (gap 9): the fence used to sit at
+      // 10 m, which the stepped rake now occupies.
+      fence(0.735, 0.855, -1, 7.5, 3.8, [0.82, 0.84, 0.88]);
+      fence(0.735, 0.855,  1, 7.5, 3.8, [0.82, 0.84, 0.88]);
+      wall(0.735, 0.855, -1, 6.4, 1.0, CONCRETE, 0.45);
+      wall(0.735, 0.855,  1, 6.4, 1.0, CONCRETE, 0.45);
       tyreWall(0.755, 0.775, -1, 5, ORANGE);
       tyreWall(0.795, 0.815,  1, 5, PINK);
       kerb(0.76, -1, 8); kerb(0.80, 1, 8);
@@ -663,14 +674,30 @@
       // ── Named enclosures the lap was missing ────────────────────────────────
       // Grandstands 1-9 ring the Esses, Horquilla and the Peraltada run-in; the
       // circuit previously had four stands outside the stadium.
-      for (const [s, side, gap, len, crowd] of [
+      // Liveries rotate STAND_SETS.mexico and the roof/tier options rotate with
+      // them, so the twelve enclosures read as twelve structures rather than
+      // one template tinted twelve ways. `crowd` still carries the fiesta
+      // fleck — that is a shirt colour, not a building.
+      const MEX_STANDS = ["navy", "concrete", "steel"];
+      const MEX_ROOFS  = ["cantilever", "flat", "truss"];
+      const named = [
         [0.055,  1, 10, 56, ORANGE], [0.055, -1, 11, 48, PINK],
         [0.165,  1, 10, 50, PINK],   [0.245, -1, 10, 52, GREEN],
         [0.285,  1, 11, 46, ORANGE], [0.345, -1, 10, 48, PINK],
         [0.455, -1, 11, 44, GREEN],  [0.520,  1, 10, 50, ORANGE],
         [0.575, -1, 10, 46, PINK],   [0.655,  1, 11, 48, GREEN],
         [0.905, -1, 11, 52, ORANGE], [0.945,  1, 10, 54, PINK],
-      ]) grandstand(s, side, gap, len, SEATS, crowd);
+      ];
+      for (let i = 0; i < named.length; i++) {
+        const [s, side, gap, len, crowd] = named[i];
+        grandstandEx(s, side, gap, len, null, crowd, {
+          livery: MEX_STANDS[i % MEX_STANDS.length],
+          roof: MEX_ROOFS[(i + 1) % MEX_ROOFS.length],
+          tiers: i % 4 === 1 ? 2 : 1,
+          pylons: i % 3 === 2,
+          endWalls: i % 5 === 0,
+        });
+      }
       // Packed standing terraces behind the Esses and the Peraltada banking.
       // Stepped concrete, not a flat eye-height slab: the general-admission
       // terracing at Hermanos Rodríguez is poured steps, and the step profile
@@ -721,18 +748,23 @@
       }
 
       // ════════════════════════════════════════════════════════════════════════
-      // VEGETATION: palms along the straights, park trees
+      // VEGETATION: cypress accents on the straights, park trees
+      // Palms used to stand here. They are a coastal-resort cue and read as
+      // Miami; the Magdalena Mixhuca park at 2,240 m plants columnar cypress
+      // (Cupressus lusitanica), jacaranda and ash instead.
       // ════════════════════════════════════════════════════════════════════════
       for (const s of [0.05, 0.08, 0.92, 0.97]) {
-        palm(K(s), 1, 12 + hash(K(s)) * 7, 9 + hash(K(s) * 3) * 4, GREEN);
+        cypress(K(s), 1, 12 + hash(K(s)) * 7, 12 + hash(K(s) * 3) * 5, [0.16, 0.31, 0.20],
+                { slim: 0.9 });
       }
-      // Sparse trees on open sections (avoiding stadium and park sections)
+      // Sparse park trees on the open sections (avoiding stadium/park sections)
       every(22, (k) => {
         const s = k / n;
         if (s < 0.04 || (s > 0.04 && s < 0.50)) return;   // start-finish straight + park/city sections handled
         if (s > 0.70 && s < 0.90) return;   // stadium section
         for (const side of [-1, 1]) {
-          if (hash(k * 91 + side) > 0.50) continue;
+          const r = hash(k * 91 + side);
+          if (r > 0.50) continue;
           // Inside the generic city sectors the skyline towers occupy the whole
           // 8-80 m band, so a tree dropped in there grows through one. Park
           // sectors get the near planting; city sectors keep the old set-back.
@@ -740,8 +772,10 @@
                                 : 13 + hash(k * 92 + side) * 22;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 9)) continue;
-          tree(k, side, d, 8 + hash(k * 94 + side) * 5,
-               hash(k * 96 + side) > 0.5 ? TREEGRN : PARKGRN);
+          const h = 8 + hash(k * 94 + side) * 5;
+          if (r < 0.18)      broadleafFall(k, side, d, h, r < 0.09 ? JACARANDA : JAC2, { lobes: 3 });
+          else if (r < 0.36) plane(k, side, d, h, PARKGRN, { stages: 2, spread: 0.85 });
+          else               acacia(k, side, d, h * 0.8, HUIZACHE, { layers: 2 });
         }
       });
 
@@ -759,11 +793,11 @@
 
       // ════════════════════════════════════════════════════════════════════════
       // PARKLAND TREES — the Autódromo sits inside the leafy Magdalena Mixhuca
-      // sports park, NOT a desert. Broadleaf park trees on the open sections
-      // (the old code scattered green saguaro cacti — wrong biome, and the
-      // horizontal addBox cross-arm floated as a box).
+      // sports park, NOT a desert. The second, deeper rank this used to emit at
+      // every node is gone: two full-lap tree scatters plus the treelines above
+      // was three layers of the same green in the same 15-35 m band.
       // ════════════════════════════════════════════════════════════════════════
-      every(16, (k) => {
+      every(24, (k) => {
         for (const side of [1, -1]) {
           const s = k / n;
           if (s < 0.04 || (s > 0.04 && s < 0.50)) continue;   // start-finish straight + park/city sections handled elsewhere
@@ -774,8 +808,9 @@
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 8)) continue;
           const r = hash(k * 67 + side);
-          tree(k, side, d, 6.5 + r * 4.5, [0.15 + r * 0.07, 0.34 + r * 0.06, 0.17]);
-          if (r > 0.62) tree(k, side, d + 4 + r * 5, 5 + r * 3, [0.17, 0.32, 0.16]);
+          if (r < 0.30) broadleafFall(k, side, d, 7 + r * 6, JACARANDA, { lobes: 3, spread: 0.95 });
+          else          plane(k, side, d, 6.5 + r * 4.5, [0.15 + r * 0.07, 0.34 + r * 0.06, 0.17],
+                              { stages: r > 0.7 ? 3 : 2, spread: 0.85 });
         }
       });
 

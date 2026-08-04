@@ -562,8 +562,15 @@
         const sf = 0.275 + i * 0.0095;
         const k = K(sf), h1 = hash(k * 37 + i * 5);
         const side = h1 < 0.45 ? 1 : -1;
-        // Left side carries the RV field out to ~48 m; sit the mesquite beyond it.
-        const dist = (side < 0 ? 56 : 26) + h1 * 22;
+        // Asymmetric on purpose, and measured rather than guessed. COTA folds
+        // back on itself through here: anything past ~50 m to the LEFT lands on
+        // the other leg of the lap and the on-track guard drops it outright
+        // (six of these were dropped silently before this was probed). So the
+        // left-side mesquite sits INSIDE the RV field's first row instead of
+        // behind it — which is what a tailgate field looks like anyway, tents
+        // pitched around the trees that were already there. The right side is
+        // open ground and takes the deeper scatter.
+        const dist = (side < 0 ? 15 : 28) + h1 * (side < 0 ? 6 : 24);
         const th = 5.5 + h1 * 3;
         acacia(k, side, dist, th, h1 < 0.5 ? MESQUITE : MESQ_D,
                { spread: th * (1.15 + h1 * 0.4), layers: h1 > 0.6 ? 2 : 1 });

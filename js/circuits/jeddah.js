@@ -224,10 +224,10 @@
       // what the eye picks up at 300 km/h — a metronome of trunks flicking past
       // a wall. Two staggered ranks, identical pitch, deliberately uniform
       // height so the row does not dissolve into generic foliage.
-      for (let i = 0; i < 18; i++) {
-        const s = 0.655 + i * 0.0125;
+      for (let i = 0; i < 16; i++) {
+        const s = 0.655 + i * 0.0138;
         palm(K(s), -1, 11.5, 8.4 + (i % 2) * 0.5, PALMFROND);
-        if (i % 2 === 0) palm(K(s + 0.006), -1, 17.5, 7.6, [0.09, 0.38, 0.16]);
+        if (i % 3 === 0) palm(K(s + 0.007), -1, 17.5, 7.6, [0.09, 0.38, 0.16]);
       }
 
       // ── Marshal posts ─────────────────────────────────────────────────────

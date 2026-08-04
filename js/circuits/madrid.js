@@ -143,7 +143,12 @@
             for (let i = -2; i <= 2; i++) {
               const p = vadd(vadd(a.c, a.t, i * 14), a.u, 18.4);
               addBox(stage, vadd(p, a.r, IN * 5), [7, 3.2, 8], STEEL, b);     // AHU plant
-              addBox(stage, vadd(p, a.r, -IN * 7), [4.2, 1.6, 5], CONCRETE, b);
+              // Seat the shorter unit ON the deck. Sharing the tall unit's
+              // centre height left it hanging 0.8 m clear — addBox CENTRES, so
+              // two boxes of different heights cannot share a centre and both
+              // still touch the roof.
+              addBox(stage, vadd(vadd(vadd(a.c, a.t, i * 14), a.r, -IN * 7), a.u, 17.6),
+                [4.2, 1.6, 5], CONCRETE, b);
             }
             addCyl(stage, vadd(vadd(a.c, a.t, 30), a.u, 16.8), 0.22, 9, STEEL, 5, b);
           } else {
@@ -627,9 +632,15 @@
       // 4.8 m stand-off, so enabling it would double the barrier.
       bankedKerbStrip(0.705, 0.815,  1, { safer: false, step: 5.0 });
       bankedKerbStrip(0.705, 0.815, -1, { safer: false, step: 5.0 });
-      for (const frac of [0.715, 0.745, 0.775, 0.805]) {
-        runoffApron(at(frac), 1, 6.0, [11, 0.3, 30], [0.44, 0.42, 0.40]);
-        runoffApron(at(frac), -1, 6.0, [11, 0.3, 30], [0.44, 0.42, 0.40]);
+      // Aprons are laid in SHORT bays. runoffApron emits one rigid box along a
+      // single node's tangent, and this is the tightest, most steeply banked
+      // arc on the lap — a 30 m bay chorded straight across it and put paving
+      // ~1 m over the racing line (measure-props-over-road went 1.03 → 1.97).
+      // 10 m bays at twice the station count cover the same ground and follow
+      // the curve. Same lesson as the pit bays and the main grandstand above.
+      for (let f = 0.712; f <= 0.812; f += 0.0074) {
+        runoffApron(at(f), 1, 6.0, [11, 0.3, 10], [0.44, 0.42, 0.40]);
+        runoffApron(at(f), -1, 6.0, [11, 0.3, 10], [0.44, 0.42, 0.40]);
       }
       // Raking buttress fins between the guardrail (4.8) and the bowl's stand
       // ring (inner face ~19.5). One fin every ~24 m, each a wedge leaning back
