@@ -297,20 +297,29 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   deflated full text if this browser refuses
                                   our own reconstruction. TCP candidates are
                                   dropped on purpose
-  mqtt.js        NetMqtt        just enough MQTT 3.1.1 over WebSocket to use a
-                                  PUBLIC broker as a rendezvous — CONNECT/
-                                  SUBSCRIBE/PUBLISH/PING at QoS 0, written out
-                                  rather than imported (mqtt.js is ~150 KB and
-                                  needs a Node shim stack). RETAINED MESSAGES
-                                  are the whole reason it is MQTT: the broker
-                                  holds a publish for whoever subscribes NEXT,
-                                  which is exactly "host leaves an offer, guest
-                                  collects it a minute later". Several brokers
-                                  from different operators, tried in order
+  nostr.js       NetNostr       the room-code rendezvous, over PUBLIC NOSTR
+                                  RELAYS via a vendored Trystero
+                                  (vendor/trystero-0.25.3, MIT, dynamic
+                                  import()). Nostr and not a public MQTT
+                                  broker because accepting arbitrary events
+                                  from anonymous clients is what a relay is
+                                  FOR — HiveMQ's and EMQX's free brokers say
+                                  outright they must NOT be used by real
+                                  applications, and an earlier build did
+                                  exactly that. SIGNALLING ONLY: Trystero opens
+                                  its channel with createDataChannel("data")
+                                  and no options, i.e. reliable+ordered, which
+                                  is precisely wrong for snapshots — so it
+                                  carries the two invite/answer STRINGS and the
+                                  race then runs over our own PC. The host
+                                  posts and waits; the guest passes a `reply`
+                                  because it cannot answer until it has seen
+                                  the invite
   rendezvous.js  NetRendezvous  room codes — the BACKUP way in, and the
                                   only part of the game leaning on someone
                                   else's server. NOTHING TO DEPLOY: a public
-                                  MQTT broker is the default meeting place, and
+                                  Nostr relay network is the default meeting
+                                  place (js/net/nostr.js), and
                                   worker/rendezvous.js (one Cloudflare Durable
                                   Object per code) is an optional upgrade when
                                   its URL is set. The broker is public, so the

@@ -48,6 +48,13 @@ async function precacheAssetLists() {
     // OPTIONAL for the same reason as three.js: most sessions never scan, and
     // an install must not fail over 257 KB they will not run.
     "vendor/jsqr-1.4.0/jsQR.js",
+    // Trystero + its schnorr dependency, reached by dynamic import() through
+    // the importmap for the room-code path only. OPTIONAL for the same reason
+    // as three.js: most sessions never open a room code, and an install must
+    // not fail over ~170 KB they will not run.
+    "vendor/trystero-0.25.3/nostr/index.mjs",
+    "vendor/trystero-0.25.3/core/index.mjs",
+    "vendor/trystero-0.25.3/noble-secp256k1.js",
     // Self-hosted fonts (referenced from css/tokens.css @font-face, so the tag
     // parser below never sees them). Immutable vendored assets — no ?v=. Seeded
     // as OPTIONAL: font-display:swap means a missed precache just falls back to

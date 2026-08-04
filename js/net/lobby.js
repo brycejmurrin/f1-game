@@ -681,13 +681,17 @@ const NetLobby = (function () {
 
       const invite = await NetHandshake.createInvite(transport, localProfile());
       if (!invite.ok) { say(invite.message || "Could not create an invite.", true); return invite; }
-      const put = await NetRendezvous.put(code, "offer", invite.code);
-      if (!put.ok) { say(put.message, true); return put; }
 
       say("Waiting for them to join…");
       codeWait = { cancelled: false };
-      const got = await NetRendezvous.waitFor(code, "answer", codeWait,
-        (secs) => say("Waiting for them to join… " + secs + "s"));
+      // One exchange, not a post and a poll: on the public relay both peers
+      // meet in a live room and swap strings, and the private mailbox backend
+      // is made to look the same from here.
+      const got = await NetRendezvous.swap({
+        code, mine: invite.code, slot: "offer", want: "answer",
+        token: codeWait,
+        onTick: () => say("Waiting for them to join… (code " + code + ")"),
+      });
       if (!got.ok) {
         if (got.error !== "cancelled") say(got.message, true);
         return got;
@@ -712,14 +716,31 @@ const NetLobby = (function () {
       }
       if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       say("Looking for that room…");
-      const offer = await NetRendezvous.get(code, "offer");
-      if (!offer.ok) { say(offer.message, true); return offer; }
-
-      const res = await NetHandshake.acceptInvite(transport, offer.body.payload, localProfile());
-      if (!res.ok) { say(res.message || "That invite could not be read.", true); return res; }
-      _peerProfile = res.peer;
-      const put = await NetRendezvous.put(code, "answer", res.code);
-      if (!put.ok) { say(put.message, true); return put; }
+      // The guest cannot answer until it has SEEN the host's invite, so it
+      // hands the exchange a reply function instead of a string: whatever the
+      // host posted comes in, and the answer this produces goes back out over
+      // the same room without it being torn down in between.
+      codeWait = { cancelled: false };
+      let answered = null;
+      const done = await NetRendezvous.swap({
+        code, slot: "answer", want: "offer", token: codeWait,
+        onTick: () => say("Looking for that room… (code " + code + ")"),
+        reply: async (inviteCode) => {
+          say("Found it — answering…");
+          const res = await NetHandshake.acceptInvite(transport, inviteCode, localProfile());
+          if (!res.ok) { answered = res; return null; }
+          _peerProfile = res.peer;
+          answered = res;
+          return res.code;
+        },
+      });
+      if (!done.ok) {
+        // A reply that failed has the REAL reason (a stale invite, a build
+        // mismatch); the exchange only knows that it did not produce a string.
+        const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
+        if (why.error !== "cancelled") say(why.message || "Could not join that room.", true);
+        return why;
+      }
       waitForOpen();
       say("Joining…");
       return { ok: true, code };
