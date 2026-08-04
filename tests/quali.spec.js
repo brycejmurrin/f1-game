@@ -207,3 +207,59 @@ test.describe("Qualifying — lap times", () => {
     expect(t.spa).toBeGreaterThan(t.monaco * 1.2);
   });
 });
+
+// ── driving the lap ──────────────────────────────────────────────────────────
+// The session is ONE lap, which forces it to be a FLYING one. Two laps used to
+// buy the flying lap with a standing out-lap; with only one, the car has to
+// already be at racing speed when the lights go out — otherwise the driven time
+// is a standing-start time measured against a field modelled on flying laps, and
+// no amount of driving closes a gap that is purely the launch.
+
+test.describe("Qualifying — the flying lap", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  async function driveQuali(page) {
+    await toQuali(page);
+    await page.evaluate(() => document.getElementById("q-drive").click());
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
+  }
+
+  test("the session is one lap, not two", async ({ page }) => {
+    await driveQuali(page);
+    expect(await page.evaluate(() => window.__apex.info().lapsTarget)).toBe(1);
+    expect(await page.evaluate(() => window.__apex.info().session)).toBe("quali");
+  });
+
+  test("the car is already at racing speed when the lights go out", async ({ page }) => {
+    await driveQuali(page);
+    const out = await page.evaluate(() => {
+      const before = window.__apex.carAt(0).speed;
+      // Run the countdown out.
+      for (let i = 0; i < 900 && window.__apex.info().state !== "race"; i++) window.__apex.step(1 / 60, 1);
+      const c = window.__apex.carAt(0);
+      return { before, state: window.__apex.info().state, speed: c.speed, x: c.x };
+    });
+    expect(out.before).toBe(0);           // stationary on the grid, as any session starts
+    expect(out.state).toBe("race");
+    // Flat out, not launching: comfortably faster than anything a standing start
+    // reaches in the first metres.
+    expect(out.speed).toBeGreaterThan(50);
+    // ...and on the centreline rather than in a grid slot.
+    expect(Math.abs(out.x)).toBeLessThan(0.5);
+  });
+
+  test("a Grand Prix still starts from a standstill", async ({ page }) => {
+    // The launch is qualifying-only. A race that began at 300 km/h would be a
+    // different game.
+    await boot(page);
+    await page.locator("#mb-race").click();
+    await page.locator("#sel-go").click();
+    await page.locator("#rs-go").click();
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
+    const speed = await page.evaluate(() => {
+      for (let i = 0; i < 900 && window.__apex.info().state !== "race"; i++) window.__apex.step(1 / 60, 1);
+      return window.__apex.carAt(0).speed;
+    });
+    expect(speed).toBeLessThan(5);
+  });
+});

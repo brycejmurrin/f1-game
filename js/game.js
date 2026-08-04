@@ -1956,18 +1956,56 @@ function armReliability(field) {
   return field;
 }
 
+// Put the player on a flying lap: at the line, on the racing side, already at
+// the speed the qualifying model assumes. Written in TRACK coordinates and
+// pushed back out to world space through worldFromTrack, exactly as
+// rescuePlayer() and retireCar() do — a moving start is not a new kind of
+// physics, it is the existing placement with speed left in.
+function launchFlyingLap() {
+  if (!player || !track) return;
+  // The player's OWN top speed — the identical expression updateCar() uses for a
+  // human car — and NOT quali.capFor(). That is the model's INTEGRATION ceiling:
+  // it carries QUALI_TRIM (0.75, the constant that reconciles a simulated lap
+  // with a driven one) and the AI's tierV/skill/difficulty multipliers, none of
+  // which describe the car the player is about to drive. Launching off it would
+  // start them a quarter down on their own straight-line pace and hand the
+  // simulated field a second or more before the first corner.
+  //
+  // Then capped by what the road at the line will actually take, so a circuit
+  // whose start/finish sits in a corner does not launch the car into a wall.
+  const mods = playerMods;
+  const flat = VMAX * PACE * mods.speed;
+  const k = Math.abs(Tracks.curvature(track, player.s));
+  const corner = k > 1e-5 ? Math.sqrt(LAT_MAX * gripMult() / k) : flat;
+  const v = Math.min(flat, corner);
+  Tracks.sample(track, player.s, smp);
+  player.x = 0;                       // on the line, not on the grid slot
+  player.xVis = 0;
+  const w = worldFromTrack(player.s, player.x, smp);
+  player.px = w.x; player.pz = w.z;
+  player.head = Math.atan2(smp.t[0], smp.t[2]);
+  player.speed = v;
+  player.vLat = 0; player.yawRateCur = 0; player.yawVis = 0; player.steerVis = 0;
+  // Seed the render-interpolation anchors, or the first frame smears the car
+  // across the track from wherever the grid slot was.
+  player.rPrevPx = player.px; player.rPrevPz = player.pz;
+  player.rPrevS = player.s; player.rPrevX = player.x;
+  player.rPrevHead = player.head; player.rPrevYawVis = 0;
+  announce("FLYING LAP", 1.6);
+}
+
 function startRace() {
   loadTrack(trackIdx);
   makeCars();
   // A qualifying lap is a time trial with the rest of the field simulated: one
   // car on track, the existing lap-timing and validity path, and no new game
-  // state. Two laps — a standing out-lap, then the flying one that counts, the
-  // same reason TT_LAPS exists. The AI field is built BEFORE cars is narrowed,
-  // so the classification can still see every car.
+  // state. ONE lap — and because it is the only one, it has to be a FLYING lap:
+  // see the launch at lights-out below. The AI field is built BEFORE cars is
+  // narrowed, so the classification can still see every car.
   if (isQuali()) {
     qualiField = cars;
     cars = [player];
-    lapsTarget = 2;
+    lapsTarget = 1;
   } else if (isTimeTrial()) {
     cars = [player];          // solo against the clock — no AI on track
     lapsTarget = raceLaps;
@@ -2511,6 +2549,18 @@ function update(dt) {
       announce("LIGHTS OUT!", 1.4);
       if (soundOn) GameAudio.lightsOut();
       cars.forEach((c) => { c.lapStart = 0; });
+      // QUALIFYING IS ONE LAP, SO IT MUST BE A FLYING ONE. The session used to
+      // run two — a standing out-lap to build speed, then the lap that counted.
+      // Cutting it to one without this would time you from a standstill while
+      // the entire simulated field is modelled on a flying lap, and no amount of
+      // driving would close a gap that is purely the launch: you would qualify
+      // last every weekend by construction.
+      //
+      // So the car is already at racing speed as the lights go out. The launch
+      // speed is the model's own straight-line ceiling for THIS car (the same
+      // number quali.js integrates against), so a driven lap and a simulated one
+      // start from the same place and stay on one scale.
+      if (isQuali()) launchFlyingLap();
     }
     return;
   }
