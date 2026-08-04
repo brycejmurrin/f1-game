@@ -53,8 +53,13 @@ npm run test:tooling-fast  # the STRUCTURAL half of test:tooling in ~4 s (load o
                         #   docs integrity, api contract, graph, validators). Two
                         #   full-fleet audits dominate test:tooling's ~3 min —
                         #   this is everything else, for the edit loop.
-npm run test:sweeps     # those two: prop-clipping + road-under-floor (~3 min,
-                        #   rebuilds all 24 circuits). test:tooling still runs both.
+npm run test:sweeps     # the full-fleet audits: prop-clipping + road-under-floor
+                        #   + coplanar-faces (rebuilds every circuit).
+                        #   test:tooling still runs all three.
+                        #   coplanar-faces is the Z-FIGHTING ratchet: SAME-FACING
+                        #   coplanar faces, the pairs that flicker at every
+                        #   distance. clip-audit CANNOT see them — its
+                        #   DEPTH_MIN = 0.5 discards exactly that bucket.
 ```
 
 ### Running tests without stalls (background + logs, parallel ports)
@@ -311,7 +316,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (86) + tests/*.test.mjs unit suites (22)
+tests/*.spec.js                 Playwright specs (86) + tests/*.test.mjs unit suites (23)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -677,7 +682,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-86 Playwright specs + 22 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+86 Playwright specs + 23 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for
