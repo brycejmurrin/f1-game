@@ -147,6 +147,7 @@ const FULL = [
   // Multiplayer wire. Pure logic with no game dependency, so position only
   // has to satisfy "before whatever consumes it" — game.js, last as always.
   "js/net/sdp.js",
+  "js/net/qr.js",
   "js/net/transport.js",
   "js/net/handshake.js",
   "js/net/snapshot.js",
@@ -228,6 +229,8 @@ const HARD_EDGES = [
   // the click handler that generates the invite — the one place an error is
   // least visible.
   ["js/net/sdp.js", "js/net/handshake.js"],
+  // lobby.js draws the invite QR through NetQr the moment an invite exists.
+  ["js/net/qr.js", "js/net/lobby.js"],
   // chunks.js before every shader file (lit/sky/post interpolate GLXChunks at
   // eval; fx.js is chunk-free today but keeps the uniform ordering contract).
   ["js/render/shaders/chunks.js", "js/render/shaders/lit.js"],

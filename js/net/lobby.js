@@ -48,7 +48,7 @@ const NetLobby = (function () {
       invite: $("vs-invite"), inviteIn: $("vs-invite-in"),
       answer: $("vs-answer"), answerIn: $("vs-answer-in"),
       answerHint: $("vs-answer-hint"), answerActions: $("vs-answer-actions"),
-      shareInvite: $("vs-share-invite"),
+      answerWait: $("vs-answer-wait"),
       status: $("vs-status"),
     });
 
@@ -266,7 +266,10 @@ const NetLobby = (function () {
       if (!res.ok) { say(res.message || "Could not create an invite.", true); return res; }
       const e = els();
       if (e.invite) e.invite.value = res.code;
-      say("Send that invite code to your friend.");
+      const scannable = drawQr(res.code);
+      say(scannable
+        ? "Send them the link, or have them scan the code."
+        : "Send that invite code to your friend.");
       return res;
     }
 
@@ -291,6 +294,8 @@ const NetLobby = (function () {
       if (e.answer) { e.answer.value = res.code; e.answer.hidden = false; }
       if (e.answerHint) e.answerHint.hidden = false;
       if (e.answerActions) e.answerActions.hidden = false;
+      // Step 2's placeholder prose is replaced by step 2 itself.
+      if (e.answerWait) e.answerWait.hidden = true;
       waitForOpen();
       say("Send that answer code back, then wait for the race to start.");
       return res;
@@ -347,6 +352,26 @@ const NetLobby = (function () {
       return copy(fallbackText);
     }
 
+    // The QR carries the invite LINK, not the code, and that distinction is the
+    // whole feature: a link scanned by the guest's ordinary camera app opens
+    // the game with the joining step showing and the code already filled in. A
+    // QR of the bare code would just show them 240 characters to retype.
+    //
+    // No in-page scanner anywhere. BarcodeDetector is absent on desktop Linux
+    // Chrome and on iOS Safari (measured), so scanning ourselves would serve a
+    // minority while the OS camera serves nearly everyone.
+    function drawQr(code) {
+      const wrap = $("vs-qr-wrap"), canvas = $("vs-qr");
+      if (!wrap || !canvas) return false;
+      const url = code ? NetHandshake.inviteUrl(code) : null;
+      // A code too long to encode, or a page with no location to build a URL
+      // from, hides the QR rather than showing an unreadable one — the text
+      // code below it still works.
+      const ok = !!(url && NetQr.draw(canvas, url, { px: 320 }));
+      wrap.hidden = !ok;
+      return ok;
+    }
+
     function shareInvite() {
       const e = els();
       const code = e.invite ? e.invite.value : "";
@@ -372,6 +397,14 @@ const NetLobby = (function () {
       if (e.answer) e.answer.hidden = true;
       if (e.answerHint) e.answerHint.hidden = true;
       if (e.answerActions) e.answerActions.hidden = true;
+      if (e.answerWait) e.answerWait.hidden = false;
+      // Reopening must not show the PREVIOUS session's QR — it would point a
+      // camera at a peer connection that no longer exists.
+      if ($("vs-qr-wrap")) $("vs-qr-wrap").hidden = true;
+      // Re-fold the raw code: it is the fallback, and an open disclosure from
+      // last time makes the sheet open on three lines of base64.
+      const raw = document.querySelector("#vs-hosting .vs-raw");
+      if (raw) raw.open = false;
       say("");
       e.screen.hidden = false;
       return true;
@@ -411,9 +444,15 @@ const NetLobby = (function () {
       on("vs-close", cancel);
       // Name the button after what it will actually do on THIS device. With no
       // share sheet it copies the link, and a button labelled SHARE that
-      // silently copies is a button that has lied.
+      // silently copies is a button that has lied. SHARE LINK and COPY CODE
+      // stay distinct even then, because they hand over different things.
       const si = $("vs-share-invite");
       if (si && !canShare()) si.textContent = "COPY LINK";
+      // The answer is the same string either way, so without a share sheet the
+      // two buttons would be one button twice. Decided once here, at boot,
+      // before the screen is ever shown — not a reflow under someone's thumb.
+      const sa = $("vs-share-answer");
+      if (sa && !canShare()) sa.hidden = true;
       // An invite link puts the code in the fragment, so opening one should
       // drop straight into joining rather than making them find the button.
       const fromUrl = NetHandshake.inviteFromUrl();

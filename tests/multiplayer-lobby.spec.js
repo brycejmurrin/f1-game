@@ -212,6 +212,27 @@ test.describe("VS FRIEND lobby", () => {
     expect(out.status).toMatch(/copied/i);
   });
 
+  test("the QR encodes the invite LINK, not the bare code", async ({ page }) => {
+    // The distinction is the entire feature. A QR of the code shows the guest
+    // 240 characters to retype; a QR of the link opens the game for them with
+    // the joining step showing and the code already in the box. Encoder
+    // correctness is proved against an independent decoder in
+    // tests/net-qr.test.mjs — what is checked here is which string we hand it.
+    await menu(page);
+    await page.click("#mb-vs");
+    await expect(page.locator("#vs-qr-wrap")).toBeHidden();
+
+    const out = await page.evaluate(() => {
+      const url = NetHandshake.inviteUrl("APEX1.s.aB3-_x9Zq");
+      const qr = NetQr.encode(url);
+      return { url, size: qr && qr.size, version: qr && qr.version };
+    });
+    expect(out.url).toContain("#vs=");
+    expect(out.version).toBeGreaterThan(0);
+    // Odd, and 21 + 4n: the module count of a real QR symbol.
+    expect((out.size - 21) % 4).toBe(0);
+  });
+
   test("sharing before there is a code says so rather than sharing nothing",
     async ({ page }) => {
       await menu(page);

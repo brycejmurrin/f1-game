@@ -298,7 +298,98 @@ body.hud-hidden #hud-restore { display: block; }
    "COPY LINK" with no share sheet). They wrap on a narrow phone rather than
    squeezing the text to unreadable. */
 #vsfriend .vs-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-#vsfriend .vs-actions > .bigbtn { flex: 1 1 44%; margin: 0; }
+#vsfriend .vs-actions > .bigbtn {
+  flex: 1 1 44%;
+  margin: 0;
+  /* Sized down from the 20px menu default: in a half-width column these wrap
+     their label onto two lines and the row grows to fit. */
+  font-size: 14px;
+  padding: 10px 12px;
+}
+/* The QR is the one element on this screen whose job is to be machine-read, so
+   it keeps its white quiet zone whatever the page theme is doing. An inverted
+   QR is unreadable to a large share of scanners. */
+#vsfriend .vs-qr-wrap {
+  margin: 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+#vsfriend .vs-qr-wrap canvas {
+  /* Capped on HEIGHT as well as width: a landscape phone has ~390px of it in
+     total, and a QR that needs scrolling to see is a QR nobody can scan. */
+  width: min(180px, 38vh);
+  height: auto;
+  image-rendering: pixelated;   /* never blur module edges; that is what breaks a scan */
+  border-radius: 6px;
+  background: #fff;
+}
+/* ---- the two-step layout ----------------------------------------------
+   Both flows are "do this, then do that", and the game is played in
+   LANDSCAPE where the sheet is short and wide. Stacked, step 2 fell entirely
+   below the fold and the screen read as "generate a code, then nothing
+   happens". Side by side, the exchange is visible in one glance. Falls back
+   to a single column below 620px, where two columns would be too narrow to
+   read a code in. */
+#vsfriend .vs-two { display: flex; flex-direction: column; gap: 14px; }
+#vsfriend .vs-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;                 /* let the code box shrink instead of overflowing */
+  box-sizing: border-box;
+}
+/* .bigbtn is width: min(78vw, 340px) with auto margins — sized for a full-width
+   menu, not for a column. Left alone it shoots straight out of the sheet. */
+#vsfriend .vs-col > .bigbtn {
+  width: 100%;
+  margin: 2px 0 0;
+}
+#vsfriend .vs-col-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+/* The step number as a chip rather than "1." in prose — at a glance it reads
+   as an ordered pair of things to do, which is exactly what it is. */
+#vsfriend .vs-num {
+  flex: 0 0 auto;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.14);
+}
+#vsfriend .vs-raw > summary {
+  cursor: pointer;
+  font-size: 0.76rem;
+  opacity: 0.7;
+  padding: 2px 0;
+}
+#vsfriend .vs-raw[open] > summary { margin-bottom: 6px; }
+
+@media (min-width: 620px) {
+  #vsfriend .vs-two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 20px;
+    align-items: start;
+  }
+  /* A hairline between the two steps, so they read as two things rather than
+     one wrapped list. */
+  #vsfriend .vs-two > .vs-col + .vs-col {
+    padding-left: 20px;
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+  }
+}
 #vsfriend .vs-status {
   margin: 12px 0 0;
   min-height: 1.2em;          /* reserve the line so the sheet doesn't jump */
