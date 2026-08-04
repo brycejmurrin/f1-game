@@ -52,6 +52,15 @@ let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true, _downHold = 0;
 // conservative instead of dying the same way again; each cleanly FINISHED race
 // pays one strike back down, so a recovered device climbs back to full quality.
 const SENT_ACTIVE = "apex26.raceActive", SENT_STRIKES = "apex26.crashStrikes";
+// The build those strikes were earned against. A strike is evidence that THIS
+// CODE killed this device — and the moment the code is replaced that evidence
+// expires. Without this the safe mode is a one-way door: a build that ran the
+// phone out of memory leaves two strikes behind, the floor pins at tier 4 with
+// the render scale pre-dropped to 0.7, and the ONLY way back is finishing whole
+// races on a game that now looks broken enough that nobody wants to. Exactly
+// that happened: shipping vendor/ switched a Rapier world on, phones started
+// dying, and fixing it changed nothing on the devices already in safe mode.
+const SENT_BUILD = "apex26.crashStrikesBuild";
 let _crashStrikes = 0;
 // Safe-mode floor the governor's restore path can't climb below (per session —
 // only strikes paying off across boots lift it): one strike starts with
@@ -68,6 +77,15 @@ function init(gfx) {
   // Desktop stays isMobile=false, so the test suite never enters safe mode.
   if (gfx && gfx.isMobile) {
     try {
+      const build = String((typeof window !== "undefined" && window.__APEX_BUILD) || 0);
+      if (localStorage.getItem(SENT_BUILD) !== build) {
+        // New code, clean slate. Also clears any in-flight race flag: a race
+        // that was running when the update landed did not crash, it was
+        // replaced.
+        localStorage.setItem(SENT_BUILD, build);
+        localStorage.setItem(SENT_STRIKES, "0");
+        localStorage.removeItem(SENT_ACTIVE);
+      }
       _crashStrikes = Math.min(4, parseInt(localStorage.getItem(SENT_STRIKES), 10) || 0);
       if (localStorage.getItem(SENT_ACTIVE) === "1") {
         _crashStrikes = Math.min(4, _crashStrikes + 1);
@@ -112,8 +130,17 @@ function tick(dtMs) {
   }
 }
 
+// Forget the crash history and lift the floor NOW, without waiting for whole
+// finished races to pay it down one at a time. The escape hatch behind
+// __apex.safeMode(false).
+function clearStrikes() {
+  _crashStrikes = 0;
+  _perfTierFloor = 0;
+  try { localStorage.setItem(SENT_STRIKES, "0"); localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
+}
+
 return {
-  init, tick, sentinelArm, cleanRace,
+  init, tick, sentinelArm, cleanRace, clearStrikes,
   tier: () => _perfTier,
   tierFloor: () => _perfTierFloor,
   strikes: () => _crashStrikes,

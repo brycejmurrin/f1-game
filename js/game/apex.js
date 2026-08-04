@@ -1533,6 +1533,17 @@ const api = {
     PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
   },
 
+  // safeMode(false) — clear the crash-sentinel strikes and lift the safe-mode
+  // floor for this session. A phone that died mid-race a few times starts every
+  // later session at tier 4 with the render scale pre-dropped, which looks like
+  // a broken renderer rather than a protection; strikes now expire when the
+  // build changes, and this is the manual version of that. No arg reports.
+  safeMode(v) {
+    if (v === undefined) return { strikes: PerfGov.strikes(), tierFloor: PerfGov.tierFloor(), tier: PerfGov.tier() };
+    if (v === false) PerfGov.clearStrikes();
+    return this.safeMode();
+  },
+
   // obs() — full debug observation of the current game state. Superset of
   // physState() and probe() with track context, barrier clearances, lookahead
   // scan, nearest rivals, reward components, and episode terminal flag.
