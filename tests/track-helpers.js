@@ -1,4 +1,32 @@
 // @ts-check
+// DETERMINISM STATUS — read before regenerating baselines.
+//
+// This suite had no committed baselines because it could not produce any: every
+// circuit timed out at 15 s. Four separate causes were found and fixed here, and
+// one remains, measured on Monza as the ratio of pixels differing between two
+// runs of the SAME scene:
+//
+//   0.64  freeze() stops the PHYSICS, not the RENDER — uTime kept advancing, so
+//         the canvas never held still and toHaveScreenshot, which retries until
+//         two consecutive captures are IDENTICAL, could never converge.
+//         -> headless(true) after the pose is set. Two grabs 800 ms apart went
+//            from 264 604 differing bytes to byte-identical.
+//   0.41  the settle was 120 ms while the loop runs at ~1 fps, so the frozen
+//         frame was often one from BEFORE the teleport, and a different one each
+//         run. -> wait for the new pose to actually present.
+//   0.39  the render clock (sky drift, FLAG cloth) accumulates real frame dt.
+//         -> __apex.renderClock(0) pins it.
+//   0.12  the chase rig eases toward its target on every RENDERED frame, so an
+//         early snapCam() is undone by however many frames follow. -> re-snap
+//         AFTER the settle.
+//   0.12  STILL UNEXPLAINED. The residual diff is a whole-scene offset of a few
+//         metres, i.e. the camera still lands slightly differently. park()
+//         instead of jump() is NOT the answer — it measures 0.55, because a
+//         stationary car gives the chase rig no heading.
+//
+// So: 0.12 against a 0.10 threshold. Do NOT "fix" that by raising the ratio —
+// 12% of pixels is far too coarse to catch a real regression, which is the whole
+// point of the suite. Find the last source first.
 // Shared helpers + data for the consolidated per-track visual regression suite
 // (tests/tracks-visual.spec.js). Previously each of the 24 circuits had its own
 // 5-line stub spec calling describeTrack(id) with 25 fractions each (600 golden
@@ -41,6 +69,9 @@ async function goToRace(page, circuit) {
 async function snapForward(page, frac) {
   await page.evaluate((f) => {
     window.__apex.camera("chase");
+    // jump(), not park(): the chase rig needs a HEADING, and park() leaves the
+    // car stationary, which measured markedly WORSE (0.55 of pixels differing
+    // across runs vs 0.12) because the camera orientation is then ill-defined.
     window.__apex.jump(f, 40, 0);   // non-zero speed → camera has a heading
     window.__apex.snapCam();         // instantly align camera, no damping lag
     window.__apex.step(1 / 60, 5);  // advance a few ticks so GPU draws the frame
@@ -49,10 +80,37 @@ async function snapForward(page, frac) {
   }, frac);
   // A short settle ensures the compositor has flushed the latest frame.
   await page.waitForTimeout(150);
+  // freeze() stops the PHYSICS, not the RENDER. uTime keeps advancing, so the
+  // flag cloth wave and cloud drift repaint every frame and the canvas is never
+  // pixel-stable — and toHaveScreenshot retries until two consecutive captures
+  // are IDENTICAL. Measured on a frozen Monza: two grabs 800 ms apart differed
+  // in 264 604 bytes, so the comparison could never converge and every circuit
+  // timed out at 15 s. That is why this suite has no baselines. headless(true)
+  // stops render() entirely; the compositor keeps the last drawn frame, and the
+  // same measurement then reports the two grabs byte-identical.
+  // The settle must outlast a real FRAME, not just a tick. Under SwiftShader the
+  // loop runs at ~1 fps, so freezing 120 ms after the jump pinned whatever frame
+  // happened to be on screen — often one from BEFORE the teleport, and a
+  // different one each run. That is not instability, it is non-determinism: two
+  // runs of the same scene differed in 64% of pixels. Wait for the renderer to
+  // actually present the new pose, then stop it.
+  await page.waitForTimeout(2500);
+  // Re-snap the camera AFTER those frames, not before. The chase rig eases
+  // toward its target every RENDERED frame, so an early snapCam() is undone by
+  // however many frames happen to run next — and under SwiftShader that count
+  // varies per run. The diff was the whole scene offset by a few metres, not
+  // anything animating. Snapping here lands the camera exactly on the rig target
+  // no matter what preceded it. Pin the render clock at the same moment so sky
+  // drift and cloth land at a fixed phase too.
+  await page.evaluate(() => { window.__apex.snapCam(); window.__apex.renderClock(0); });
+  await page.waitForTimeout(1800);   // let that pose actually present
+  await page.evaluate(() => window.__apex.headless(true));
+  await page.waitForTimeout(120);
 }
 
 async function resetScene(page) {
   await page.evaluate(() => {
+    window.__apex.headless(false);   // resume rendering for the next position
     window.__apex.freeze(false);
     window.__apex.hud(true);
     window.__apex.clearInput();
@@ -76,7 +134,11 @@ export function describeTrack(circuit) {
 
         await expect.soft(page.locator("canvas#game")).toHaveScreenshot(
           `${circuit}-${label}.png`,
-          { maxDiffPixelRatio: 0.10, timeout: 15000 }
+          // 15 s was not enough under SwiftShader: toHaveScreenshot needs at least
+          // TWO captures to agree, and the first grab after a track build pays
+          // shader compile + texture upload. The scene is pixel-stable by then
+          // (see snapForward), so this waits on throughput, not on convergence.
+          { maxDiffPixelRatio: 0.10, timeout: 60000 }
         );
 
         await resetScene(page);

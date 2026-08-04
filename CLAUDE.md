@@ -385,6 +385,21 @@ Per-axle bicycle model. Key tuning variables in `game.js`: `WHEELBASE`,
 `PLAYER_GRIP`, `FRONT_GRIP`, `YAW_DAMP`, `YAW_INERTIA`, `PACE`. Modify via
 `__apex.setPhysics(o)` for A/B tests.
 
+**`PACE` is a ground-speed scale, not a speed cap.** The OVERALL SPEED slider
+scales the car's real m/s (and the accel curve) — nothing else. Everything else
+measured in speed is pace-normalised through two helpers next to `VMAX`:
+`vTop()` (where the envelope tops out in m/s — divide by it to normalise) and
+`vStd(v)` (that speed on the standard, pace-5 scale — compare hard-coded
+thresholds against it). So `VMAX`, `GEAR_TOP`, `TAPER_LO/HI`, `GRASS_V` and
+`STEER_SPEED_REF` all keep their literal values, while the gearbox still sweeps
+1→8, the tach its whole band, and the dial 0 → ~259 km/h at *every* setting.
+Only lap times move. **Adding anything that divides a speed by `VMAX`, or
+compares one against a literal, means picking `vTop()` or `vStd()`** — a bare
+`VMAX` there silently makes the slider shrink the player's envelope again.
+`__apex` hooks stay raw m/s; `obs().dashKph` is what the dial reads. True force
+constants (`LAT_MAX`, `BRAKE`, `LONG_GRIP`, `ACCEL`) are deliberately absolute —
+that is what makes low pace more forgiving.
+
 **Combined-slip (friction ellipse)**: `LONG_GRIP = 34 m/s²` is the longitudinal
 axis of the traction circle. Braking or accelerating consumes longitudinal grip;
 `slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip. Trail-braking
