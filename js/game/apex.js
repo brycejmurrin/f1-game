@@ -901,6 +901,23 @@ const api = {
     return c.money;
   },
   careerReset() { Career.clear(); G.refreshCareerButton(); return true; },
+  // The five-axis skill table (js/car/driver-ratings.js) with any career
+  // development folded in, plus the derived `overall`. No args = the whole 2026
+  // grid keyed by code. An unknown code resolves through the tier fallback; with
+  // no team to read a tier from it is treated as midfield (tier 2).
+  ratings(code) {
+    const one = (c, tier, teamId, seat) => {
+      const r = DriverRatings.get(c, tier, Career.devFor(teamId, seat));
+      return Object.assign({}, r, { overall: DriverRatings.overall(r) });
+    };
+    if (code) {
+      const car = G.cars.find((x) => x.code === code);
+      return car ? one(code, car.tier, car.team && car.team.id, car.seat) : one(code, 2, null, 0);
+    }
+    const out = {};
+    Teams.LIST.forEach((t) => t.drivers.forEach((d, i) => { out[d.code] = one(d.code, t.tier, t.id, i); }));
+    return out;
+  },
   // Load an optional .glb car model at runtime (team meshes rebuild from it,
   // tinted per livery); resolves false and keeps the procedural car on failure.
   loadCarModel: (url) => loadCarModel(url),
@@ -1071,6 +1088,7 @@ const api = {
       // tierV folds the team's TIER_V together with career team development;
       // skill is the driver. Both are 1-ish multipliers on vmax.
       tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6),
+      ratings: DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat)),
       x: +c.x.toFixed(3), speed: +c.speed.toFixed(2),
       prog: +c.prog.toFixed(2), s: +c.s.toFixed(2), lap: c.lap,
       finished: !!c.finished, finishT: c.finishT != null ? +c.finishT.toFixed(2) : null,

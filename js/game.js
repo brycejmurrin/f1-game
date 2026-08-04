@@ -904,7 +904,8 @@ const _mFlView = new Float32Array(16), _mFlProj = new Float32Array(16), _mFlVP =
 const _mInvVP = new Float32Array(16);
 const _mInvProj = new Float32Array(16);
 const _sunVS = new Float32Array(3);
-const _upVS = new Float32Array(3);   // world-up expressed in view space (wet-road SSR)
+const _upVS = new Float32Array(3);   // the ROAD PLANE's normal in view space (wet-road SSR)
+const _smpRoad = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // its own scratch: smp/smp2 are live elsewhere in the frame
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
@@ -1056,6 +1057,22 @@ function recomputePlayerMods() {
 }
 
 // ---------- car setup ----------
+// The AI speed multiplier for one driver. Ratings apply in EVERY mode — the grid
+// has personality in a one-off Grand Prix too, not only in a career, which is
+// where career layers its own development deltas on top.
+//
+// The simRnd() draw is UNCONDITIONAL and comes FIRST. The stream position after
+// makeCars() must be identical whatever the ratings say: move the draw inside a
+// branch and a career's mere existence shifts every subsequent seeded result,
+// silently breaking tests/agent-determinism.spec.js, tests/autopilot.spec.js and
+// the seeded visual baselines. DriverRatings.skill() takes the sample rather than
+// drawing its own for exactly this reason.
+function driverSkill(team, d, di) {
+  const roll = simRnd();
+  const r = DriverRatings.get(d.code, team.tier, Career.devFor(team.id, di));
+  return DriverRatings.skill(r, roll);
+}
+
 function makeCars() {
   cars = [];
   // the custom team only enters the grid when the player has selected it
@@ -1102,7 +1119,7 @@ function makeCars() {
         finished: false, finishT: 0, finPos: 0,
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
-        skill: Math.min(1.0, 0.92 + simRnd() * 0.1),
+        skill: driverSkill(team, d, di),
         aiBrakeT: 0, lane,
       });
     });
@@ -3987,11 +4004,38 @@ function render(dt) {
     const l = Math.hypot(x, y, z) || 1;
     _sunVS[0] = x/l; _sunVS[1] = y/l; _sunVS[2] = z/l;
   }
-  // World-up (0,1,0) in VIEW space: the second column of mat3(view). Used by the
-  // wet-road screen-space reflection to pick out up-facing road pixels.
+  // The ROAD PLANE's normal in VIEW space. Used by the wet-road SSR to pick out
+  // road pixels AND — the part that matters — as the plane its reflection ray is
+  // flattened onto (post.js: Nr = mix(Nv, upVSn, 0.85)).
+  //
+  // This was world-up (0,1,0), i.e. mat3(view)'s second column, which is only the
+  // road's normal ON THE FLAT. On a gradient θ the two differ by θ, the flatten
+  // carries 0.85 of that error into the reflection normal, and a reflection
+  // DOUBLES angular error — so a 10° climb threw the reflected ray ~17° off. At
+  // grazing incidence that ray only leaves the surface at 2-5°, so being 17° out
+  // either dives it into the tarmac (mirroring asphalt) or throws it clear over
+  // the scene (a miss). That is why the wet road went patchy specifically on
+  // elevation. Sampling the real road normal costs one track sample per frame.
+  //
+  // r is bank-rotated at build time (tracks.js), so n = r × t carries CAMBER too,
+  // not just gradient — the same basis the cockpit rig builds.
   {
-    const l = Math.hypot(_mView[4], _mView[5], _mView[6]) || 1;
-    _upVS[0] = _mView[4]/l; _upVS[1] = _mView[5]/l; _upVS[2] = _mView[6]/l;
+    let nx = 0, ny = 1, nz = 0;
+    if (track && player && player.s != null) {
+      Tracks.sample(track, player.s, _smpRoad);
+      const t = _smpRoad.t, r = _smpRoad.r;
+      const ux = r[1]*t[2] - r[2]*t[1],
+            uy = r[2]*t[0] - r[0]*t[2],
+            uz = r[0]*t[1] - r[1]*t[0];
+      const ul = Math.hypot(ux, uy, uz);
+      if (ul > 1e-6) { nx = ux/ul; ny = uy/ul; nz = uz/ul; }   // else keep world-up
+    }
+    // mat3(view) * n  (column-major: column j is elements 4j..4j+2)
+    const x = _mView[0]*nx + _mView[4]*ny + _mView[8]*nz,
+          y = _mView[1]*nx + _mView[5]*ny + _mView[9]*nz,
+          z = _mView[2]*nx + _mView[6]*ny + _mView[10]*nz;
+    const l = Math.hypot(x, y, z) || 1;
+    _upVS[0] = x/l; _upVS[1] = y/l; _upVS[2] = z/l;
   }
   frame.viewProj = _mVP;
   frame.proj = _mProj;

@@ -787,11 +787,17 @@ void main() {
       // scatters the reflected ray, so the march hits on-screen scenery in some
       // pixels and shoots off-screen (miss) in others. That is the "patchy, shifts
       // as I drive" wet road: the reflective/matte split wanders with the bumps and
-      // the camera. Reflecting off the smooth road plane (world-up in view space)
-      // keeps every road pixel's ray coherent → one continuous, stable reflection
-      // that still mirrors the real scene. Car paint keeps its true normal (curved
-      // bodywork needs it). 0.85 toward flat: kills the bump scatter while retaining
-      // a little real slope/bank response.
+      // the camera. Reflecting off the smooth road plane keeps every road pixel's
+      // ray coherent → one continuous, stable reflection that still mirrors the
+      // real scene. Car paint keeps its true normal (curved bodywork needs it).
+      // 0.85 toward flat: kills the bump scatter while retaining a little real
+      // slope/bank response.
+      //
+      // upVSn is the ROAD's normal, not world-up (game.js builds it from r × t).
+      // That distinction is the whole elevation story: flattening onto world-up
+      // put this normal a full gradient-angle off the surface it is meant to
+      // approximate, the reflect() doubled it, and on any real climb the ray left
+      // at an angle the road never had.
       vec3 Nr = (carTerm > roadTerm) ? Nv : normalize(mix(Nv, upVSn, 0.85));
       vec3 R = reflect(-V, Nr);                    // points up toward the city
       // Finer refined march: small fixed steps (dense near/mid) so small/distant
@@ -897,7 +903,14 @@ void main() {
       // the ZENITH — matching the lit shader's analytic env mix(horizon,zenith)
       // and physical wet-road reflection. Was mix(zenith,horizon), inverted, so
       // the reflected sky bands ran upside-down vs the road's own paint mirror.
-      vec3 skyRefl = mix(uReflSkyHi, uReflSkyLo, clamp(R.y, 0.0, 1.0));
+      // ...but "up-ness" is measured against the surface, and R.y is the ray's
+      // VIEW-space y — those only agree while the camera is level. In the cockpit
+      // the view pitches with the road, so on a climb or a dip R.y drifted off the
+      // real up axis and the fallback picked horizon-vs-zenith from the wrong one:
+      // the miss regions took a sky colour that did not belong to the direction
+      // they were reflecting. Now that a miss substitutes at the same cover as a
+      // hit, that error is fully visible, so measure against the road plane.
+      vec3 skyRefl = mix(uReflSkyHi, uReflSkyLo, clamp(dot(R, upVSn), 0.0, 1.0));
       // CONFIDENCE in the marched hit, not a boolean. hit already tapers as the
       // hit approaches the frame border; blending the fallback in over that taper
       // (instead of swapping colours outright) means a ray that walks off screen

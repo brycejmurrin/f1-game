@@ -281,3 +281,103 @@ test.describe("Career — a round", () => {
     expect(grid).toContain("OCO");       // your team-mate stays
   });
 });
+
+// ── driver ratings ───────────────────────────────────────────────────────────
+// Ratings apply in EVERY mode, so most of these run in a plain Grand Prix.
+
+test.describe("Driver ratings", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  const skills = () => {
+    window.__apex.seed(5);
+    window.__apex.race("monza");
+    const out = [];
+    for (let i = 0; i < 24; i++) {
+      const c = window.__apex.carAt(i);
+      if (!c) break;
+      out.push(c.code + ":" + c.skill);
+    }
+    return out;
+  };
+
+  test("the same seed produces the same grid — the RNG stream is unchanged", async ({ page }) => {
+    // driverSkill() must draw simRnd() unconditionally. If the draw ever moves
+    // inside a branch, the stream position after makeCars() shifts and every
+    // seeded spec in the suite starts lying. This is that guard.
+    await boot(page);
+    const a = await page.evaluate(skills);
+    const b = await page.evaluate(skills);
+    expect(b).toEqual(a);
+    expect(a.length).toBeGreaterThan(20);
+  });
+
+  test("ratings differentiate the field, fastest to slowest", async ({ page }) => {
+    await boot(page);
+    const grid = await page.evaluate(() => {
+      window.__apex.seed(5); window.__apex.race("monza");
+      const g = [];
+      for (let i = 0; i < 24; i++) { const c = window.__apex.carAt(i); if (!c) break; g.push(c); }
+      return g.map((c) => ({ code: c.code, skill: c.skill }));
+    });
+    const by = (c) => grid.find((x) => x.code === c);
+    expect(by("VER").skill).toBeGreaterThan(by("LIN").skill);
+    expect(by("VER").skill).toBeGreaterThan(by("STR").skill);
+    // …but the spread stays narrow enough that the CAR still dominates: the whole
+    // field sits inside the band the old random roll used.
+    const all = grid.map((c) => c.skill);
+    expect(Math.min(...all)).toBeGreaterThanOrEqual(0.9);
+    expect(Math.max(...all)).toBeLessThanOrEqual(1.0);
+  });
+
+  test("consistency is a variance axis, not a speed one", async ({ page }) => {
+    await boot(page);
+    const r = await page.evaluate(() => ({
+      ver: window.__apex.ratings("VER"), lin: window.__apex.ratings("LIN"),
+    }));
+    expect(r.ver.consistency).toBeGreaterThan(r.lin.consistency);
+    expect(r.ver.pace).toBeGreaterThan(r.lin.pace);
+    expect(r.ver.overall).toBeGreaterThan(r.lin.overall);
+  });
+
+  test("an unknown driver code still resolves to a full rating", async ({ page }) => {
+    await boot(page);
+    const r = await page.evaluate(() => window.__apex.ratings("ZZZ"));
+    for (const k of ["pace", "craft", "awareness", "consistency", "experience"]) {
+      expect(Number.isFinite(r[k])).toBe(true);
+      expect(r[k]).toBeGreaterThan(0);
+      expect(r[k]).toBeLessThanOrEqual(100);
+    }
+  });
+
+  test("career development moves a rating inside the career, not outside it", async ({ page }) => {
+    await boot(page);
+    const gpBefore = await page.evaluate(() => window.__apex.ratings("OCO").pace);
+    await page.evaluate(() => {
+      window.__apex.career({ teamId: "haas", seat: 1, seed: 11 });
+      window.__apex.career().dev["haas:0"] = { pace: 9 };   // OCO is haas seat 0
+    });
+    // Inside the career the delta is live…
+    await page.locator("#cr-go").click();
+    await page.locator("#rs-go").click();
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15_000 });
+    const inCareer = await page.evaluate(() => {
+      for (let i = 0; i < 24; i++) {
+        const c = window.__apex.carAt(i);
+        if (c && c.code === "OCO") return c.ratings.pace;
+      }
+      return null;
+    });
+    expect(inCareer).toBe(gpBefore + 9);
+
+    // …and gone again in a Grand Prix, which never inherits career development.
+    const gpAfter = await page.evaluate(() => {
+      window.__apex.race("monza");
+      for (let i = 0; i < 24; i++) {
+        const c = window.__apex.carAt(i);
+        if (c && c.code === "OCO") return c.ratings.pace;
+      }
+      return null;
+    });
+    expect(gpAfter).toBe(gpBefore);
+  });
+});

@@ -76,6 +76,7 @@ const FULL = [
   "js/render/gltf.js",
   "js/render/assets.js",
   "js/car/teams.js",
+  "js/car/driver-ratings.js",
   "js/track/geo-paths.js",
   "js/track/geom.js",
   "js/track/scenery-data.js",
@@ -137,6 +138,7 @@ const FULL = [
   "js/game/cameras.js",
   "js/game/hud.js",
   "js/game/results.js",
+  "js/game/quali.js",
   "js/game/debrisworld.js",
   "js/game/incidentsim.js",
   "js/game/agentview-raster.js",
@@ -270,6 +272,8 @@ const HARD_EDGES = [
   ["js/game/store.js", "js/game/cam-tune.js"],  // cam-tune destructures GameStore at eval
   ["js/game/store.js", "js/game/career.js"],    // career destructures GameStore at eval
   ["js/car/parts.js", "js/game/career.js"],     // Career.start seeds owned/fitted from Parts (call time, keep ordered)
+  ["js/car/driver-ratings.js", "js/game.js"],   // makeCars reads DriverRatings for every car's skill
+  ["js/game/career.js", "js/game/quali.js"],    // quali reads Career.rnd/devFor for its spread
   ["js/game/career.js", "js/game/career-ui.js"],  // the screen reads the Career rules
 ];
 
