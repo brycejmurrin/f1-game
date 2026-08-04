@@ -928,6 +928,8 @@ function partsVisualKey(teamId) {
 // Parts.getVisualTiers() call). Refreshed whenever parts change (below).
 let playerTyreTier = 1, playerBrakesTier = 1, playerTyreId = "medium", playerBrakeId = "standard";
 let playerTyreVisual = null, playerBrakeVisual = null;
+// WHEELS rides along with the other two wheel-facing categories.
+let playerWheelId = "standard", playerWheelVisual = null;
 // Full 8-char cosmetic key for the PLAYER's body/cockpit mesh caches — computed
 // once here (parts only change from the setup screen, which calls this on close)
 // so the render loop reads a cached string instead of rebuilding it via
@@ -952,6 +954,8 @@ function recomputePlayerMods() {
   playerBrakeId = vt._ids ? vt._ids.brakes : "standard";
   playerTyreVisual = vt._visual && vt._visual.tyres || null;
   playerBrakeVisual = vt._visual && vt._visual.brakes || null;
+  playerWheelId = vt._ids ? vt._ids.wheels : "standard";
+  playerWheelVisual = vt._visual && vt._visual.wheels || null;
   // Key on the full set of resolved option ids + the chosen livery (see partsVisualKey).
   playerVisualKey = (vt._ids ? Parts.CATALOG.map((c) => vt._ids[c.id]).join("|")
                              : Parts.CATALOG.map((c) => vt[c.id]).join(""))
@@ -1369,16 +1373,16 @@ function freeWheelPair(m) {
   }
 }
 function getPlayerWheelMeshes() {
-  const key = playerTyreId + ":" + playerBrakeId;
+  const key = playerTyreId + ":" + playerBrakeId + ":" + playerWheelId;
   return putBoundedMesh(wheelMeshCache, wheelMeshOrder, key, () => {
     const band = playerTyreVisual && playerTyreVisual.band || Car3D.TYRE_BAND[playerTyreTier];
     const caliper = playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
     const rim = playerBrakeVisual && playerBrakeVisual.rim;
     const grooved = !!(playerTyreVisual && playerTyreVisual.grooved);
     const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, grooved,
-      playerTyreVisual, playerBrakeVisual);
+      playerTyreVisual, playerBrakeVisual, playerWheelVisual);
     const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, grooved,
-      playerTyreVisual, playerBrakeVisual);
+      playerTyreVisual, playerBrakeVisual, playerWheelVisual);
     return {
       F: gfx.createMesh(front.rotating),
       R: gfx.createMesh(rear.rotating),

@@ -10,17 +10,17 @@ async function load(page) {
 }
 
 test.describe("Parts module — catalog structure", () => {
-  test("has exactly 11 categories", async ({ page }) => {
+  test("has exactly 12 categories", async ({ page }) => {
     await load(page);
     const count = await page.evaluate(() => Parts.CATALOG.length);
-    expect(count).toBe(11);
+    expect(count).toBe(12);
   });
 
   test("category IDs are correct", async ({ page }) => {
     await load(page);
     const ids = await page.evaluate(() => Parts.CATALOG.map((c) => c.id));
     expect(ids).toEqual(["engine", "aero", "suspension", "brakes", "tyres", "ers",
-      "gearbox", "fuel", "exhaust", "floor", "cockpit"]);
+      "gearbox", "fuel", "exhaust", "floor", "cockpit", "wheels"]);
   });
 
   test("GEARBOX category exists with F1 Spec option", async ({ page }) => {
@@ -1189,6 +1189,7 @@ test.describe("Parts module — visual recipes", () => {
         exhaust: { pipes: null, bore: 1, flare: 0, wastegate: 0, wrap: 0 },
         floor: { fences: 5, fenceH: 1, skid: 0, edgeLip: 0 },
         cockpit: { haloBlade: 0, haloWing: 0, camPods: 0, screen: 0 },
+        wheels: { spokes: 0, tape: 0, dish: 0, nut: null },
       };
       // The conduit hangs off the lit ERS strip, so probing it needs a lit pack.
       const ACTIVE = Object.assign({}, NEUTRAL, { ers: { led: [0.15, 0.55, 1.6], pack: 1, cells: 3 } });
@@ -1209,6 +1210,7 @@ test.describe("Parts module — visual recipes", () => {
         ["floor", "fences", 0], ["floor", "fenceH", 1.45], ["floor", "skid", 2], ["floor", "edgeLip", 1],
         ["cockpit", "haloBlade", 2], ["cockpit", "haloWing", 1], ["cockpit", "camPods", 2], ["cockpit", "screen", 1],
         ["tyres", "shoulder", 2], ["brakes", "discFace", 2], ["suspension", "rocker", 2],
+        ["wheels", "spokes", 6], ["wheels", "tape", 1], ["wheels", "dish", 2],
       ];
       for (const [cat, knob, value] of KNOBS) {
         out.inert[`${cat}.${knob}`] = differs(build(cat, NEUTRAL[cat]), bare);

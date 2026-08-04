@@ -334,7 +334,7 @@ const Car3D = (function () {
   // Wheel: smooth-shaded tyre tread (shared ring verts, radial normals) + flat
   // 2026-style cover disc + hub on both faces.
   function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
-                    grooved, tyreStyle, fixedOut, brakeStyle) {
+                    grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
     const RC = rimColor || RIM;
     const SEG = 18;
     const x0 = cx - w/2, x1 = cx + w/2;
@@ -498,7 +498,40 @@ const Car3D = (function () {
                          [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP, SURFACES.metal);   // single face (cull-off → opaque both sides)
       }
       // rim of the hub cap (thin bright ring), then the proud wheel-nut cap.
-      addBox(out, ss[0] + dir * 0.032, cy, cz, 0.026, hcR * 0.42, hcR * 0.42, NUT, SURFACES.metal);
+      const nutCol = (wheelStyle && wheelStyle.nut) || NUT;
+      addBox(out, ss[0] + dir * 0.032, cy, cz, 0.026, hcR * 0.42, hcR * 0.42, nutCol, SURFACES.metal);
+      // Rim SPOKES: straight blades from the hub out to the rim, proud of the
+      // cover so they read whether or not the cover is cut open.
+      const spokeN = Math.max(0, Math.min(8, Math.round((wheelStyle && wheelStyle.spokes) || 0)));
+      for (let k = 0; k < spokeN; k++) {
+        const a = (k / spokeN) * Math.PI * 2 + 0.4;
+        const uy = Math.cos(a), uz = Math.sin(a), py = -Math.sin(a), pz = Math.cos(a);
+        const hw = 0.018, ri = hcR * 1.05, ro = rimR * 0.92, xs2 = ss[0] + dir * 0.024;
+        const P = (rad, sgn) => [xs2, cy + uy * rad + py * hw * sgn, cz + uz * rad + pz * hw * sgn];
+        addQuad(out, P(ri, 1), P(ro, 1), P(ro, -1), P(ri, -1), HUBCAP, SURFACES.metal);
+      }
+      // Rim TAPE: a coloured band around the rim shoulder — the cheapest way to
+      // tell two otherwise identical wheels apart at racing speed.
+      if (wheelStyle && wheelStyle.tape) {
+        const tr = rimR * 1.02, tc = (wheelStyle.nut) || bandColor;
+        for (let k = 0; k < 20; k++) {
+          const a0 = (k / 20) * Math.PI * 2, a1 = ((k + 1) / 20) * Math.PI * 2;
+          const A = (rad, a) => [ss[0] + dir * 0.010, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+          addQuad(out, A(tr, a0), A(tr + 0.022, a0), A(tr + 0.022, a1), A(tr, a1), tc, SURFACES.metal);
+        }
+      }
+      // Cover DISH: a recessed inner face, so the wheel reads concave or flat
+      // from the side rather than always being a flat disc.
+      const dish = Math.max(0, Math.min(2, Math.round((wheelStyle && wheelStyle.dish) || 0)));
+      if (dish > 0) {
+        const dr = rimR * (dish === 2 ? 0.80 : 0.88), dx = ss[0] + dir * (0.012 * dish);
+        for (let k = 0; k < 16; k++) {
+          const a0 = (k / 16) * Math.PI * 2, a1 = ((k + 1) / 16) * Math.PI * 2;
+          addTri(out, [dx, cy, cz],
+                 [dx, cy + dr * Math.cos(a0), cz + dr * Math.sin(a0)],
+                 [dx, cy + dr * Math.cos(a1), cz + dr * Math.sin(a1)], HUBCAP, SURFACES.metal);
+        }
+      }
     }
     // Brake caliper: a compact monobloc clamped at the TOP of the disc (12 o'clock)
     // where a covered-wheel caliper actually peeks out above the cover. Straddles
@@ -543,18 +576,18 @@ const Car3D = (function () {
   // A single wheel centred on the origin, axle along X — so the render layer can
   // spin it about X (∝ speed) and steer the fronts about Y, then translate it to
   // each corner. Used only for the player car (AI keep the baked static wheels).
-  function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle) {
+  function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle) {
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor,
-      grooved, tyreStyle, null, brakeStyle);
+      grooved, tyreStyle, null, brakeStyle, wheelStyle);
     return out;
   }
-  function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle) {
+  function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle) {
     const rotating = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     const fixed = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     const width = w || 0.34;
     addWheel(rotating, 0, 0, 0, 0.34, width, bandColor, caliperColor, rimColor,
-      grooved, tyreStyle, fixed, brakeStyle);
+      grooved, tyreStyle, fixed, brakeStyle, wheelStyle);
     // Upright and hub carrier give the wishbones/caliper a visible termination.
     addBox(fixed, 0, 0, 0, width * 0.72, 0.12, 0.12, [0.18, 0.18, 0.20], SURFACES.metal);
     return { rotating, fixed };
@@ -682,6 +715,12 @@ const Car3D = (function () {
   // COCKPIT: the halo and its furniture. haloBlade thickens the hoop into an
   // aero section, haloWing adds the upper flap many cars carry, camPods sets the
   // T-cam pod count. All default to the shipped cockpit.
+  // WHEELS: rim furniture. spokes shows through an open cover, tape is a
+  // coloured band around the rim, dish sets how far the cover face is recessed,
+  // nut recolours the centre-lock. All default to the shipped wheel.
+  function buildWheelParts(recipe) {
+    return mergeRecipe({ spokes: 0, tape: 0, dish: 0, nut: null }, recipe);
+  }
   function buildCockpitParts(recipe) {
     return mergeRecipe({ haloBlade: 0, haloWing: 0, camPods: 0, screen: 0 }, recipe);
   }
@@ -700,6 +739,7 @@ const Car3D = (function () {
       exhaust: buildExhaustParts(recipe("exhaust")),
       floor: buildFloorParts(recipe("floor")),
       cockpit: buildCockpitParts(recipe("cockpit")),
+      wheels: buildWheelParts(recipe("wheels")),
     };
   }
   // Resolve the continuous 0..4 downforce level from a getVisualTiers() object.
@@ -916,6 +956,7 @@ const Car3D = (function () {
     const exhStyle = design.exhaust;
     const floorStyle = design.floor;
     const cockpitStyle = design.cockpit;
+    const wheelStyle = design.wheels;
     // Per-team chassis identity (opts.teamId): nose profile, airbox scale,
     // dorsal fin, mirror style, sidepod-inlet aspect. Absent → shared default
     // silhouette, byte-identical to before.
@@ -1935,9 +1976,9 @@ const Car3D = (function () {
       const grooved = !!(tyreStyle && tyreStyle.grooved);
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
-          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle);
+          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle, wheelStyle);
         addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38,
-          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle);
+          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle, wheelStyle);
       }
     }
 

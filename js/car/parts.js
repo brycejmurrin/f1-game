@@ -484,13 +484,49 @@ const Parts = (function () {
           desc: "Cadillac signature cockpit — Twin T-Cam performance with a bladed halo", speed: 0.99, cornering: 1.02, visual: { haloBlade: 1, haloWing: 0, camPods: 1, screen: 0 }, visualTier: 1 },
       ],
     },
+    {
+      id: "wheels", label: "WHEELS",
+      options: [
+        { id: "standard",  label: "Standard",     cost:   0, desc: "Regulation 18-inch rim with the stock aero cover",                          visual: { spokes: 0, tape: 0, dish: 0, nut: null }, visualTier: 1 },
+        { id: "spoked",    label: "Spoked Rim",   cost:  40, desc: "Visible spoke blades — a little more brake cooling through the rim face",   braking: 1.04, visual: { spokes: 6, tape: 0, dish: 0, nut: [0.85, 0.72, 0.10] }, visualTier: 1 },
+        { id: "dished",    label: "Dished Cover", cost:  60, desc: "Recessed cover face — cleaner flow off the wheel at speed",                 speed: 1.03, visual: { spokes: 0, tape: 0, dish: 1, nut: [0.70, 0.72, 0.78] }, visualTier: 1 },
+        { id: "taped",     label: "Taped Rim",    cost:  50, desc: "Banded rim shoulder — seals the bead and marks the set at a glance",        cornering: 1.04, visual: { spokes: 0, tape: 1, dish: 0, nut: [0.95, 0.20, 0.15] }, visualTier: 1 },
+        { id: "mag_forged",label: "Forged Mag",   cost: 110, desc: "Forged magnesium rim — real unsprung mass saved at every corner",           accel: 1.05, braking: 1.05, cornering: 1.03, visual: { spokes: 8, tape: 0, dish: 1, nut: [0.60, 0.55, 0.30] }, visualTier: 2 },
+        { id: "aero_disc", label: "Aero Disc",    cost: 130, desc: "Fully dished aero disc — top speed at the cost of brake cooling",           speed: 1.05, braking: 0.98, visual: { spokes: 0, tape: 1, dish: 2, nut: [0.15, 0.60, 0.95] }, visualTier: 2 },
+        { id: "works_rim", label: "Works Rim",    cost: 170, desc: "Works-spec rim package — the complete wheel, and it looks it",              speed: 1.03, accel: 1.04, cornering: 1.04, braking: 1.04, visual: { spokes: 6, tape: 1, dish: 2, nut: [0.98, 0.62, 0.05] }, visualTier: 2 },
+        // WHEELS — one SIGNATURE per team (stat- and cost-identical to the
+        // universal option each team already fields; only the mesh differs).
+        { id: "sig_mercedes_rim", label: "Brackley Rim", cost: 110, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "mag_forged",
+          desc: "Mercedes signature rim — Forged Mag performance with a 7-spoke rim with a banded shoulder", accel: 1.05, cornering: 1.03, braking: 1.05, visual: { spokes: 7, tape: 1, dish: 1, nut: [0, 0.75, 0.7] }, visualTier: 2 },
+        { id: "sig_ferrari_rim", label: "Maranello Rim", cost: 170, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "works_rim",
+          desc: "Ferrari signature rim — Works Rim performance with a plain rim with a banded shoulder", speed: 1.03, accel: 1.04, cornering: 1.04, braking: 1.04, visual: { spokes: 0, tape: 1, dish: 2, nut: [0.95, 0.05, 0.04] }, visualTier: 2 },
+        { id: "sig_mclaren_rim", label: "Woking Rim", cost: 170, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "works_rim",
+          desc: "McLaren signature rim — Works Rim performance with a 8-spoke rim with a banded shoulder", speed: 1.03, accel: 1.04, cornering: 1.04, braking: 1.04, visual: { spokes: 8, tape: 1, dish: 1, nut: [1, 0.5, 0] }, visualTier: 2 },
+        { id: "sig_redbull_rim", label: "Milton Keynes Rim", cost: 40, teams: ["redbull"], tag: "SIGNATURE", equivalent: "spoked",
+          desc: "Red Bull signature rim — Spoked Rim performance with a 5-spoke rim with a banded shoulder", braking: 1.04, visual: { spokes: 5, tape: 1, dish: 2, nut: [0.95, 0.78, 0] }, visualTier: 1 },
+        { id: "sig_alpine_rim", label: "Enstone Rim", cost: 50, teams: ["alpine"], tag: "SIGNATURE", equivalent: "taped",
+          desc: "Alpine signature rim — Taped Rim performance with a 4-spoke rim with a banded shoulder", cornering: 1.04, visual: { spokes: 4, tape: 1, dish: 1, nut: [1, 0.53, 0.74] }, visualTier: 1 },
+        { id: "sig_racingbulls_rim", label: "Faenza Rim", cost: 60, teams: ["racingbulls"], tag: "SIGNATURE", equivalent: "dished",
+          desc: "Racing Bulls signature rim — Dished Cover performance with a 6-spoke rim", speed: 1.03, visual: { spokes: 6, tape: 0, dish: 0, nut: [0.2, 0.3, 0.95] }, visualTier: 1 },
+        { id: "sig_haas_rim", label: "Kannapolis Rim", cost: 0, teams: ["haas"], tag: "SIGNATURE", equivalent: "standard",
+          desc: "Haas signature rim — Standard performance with a 8-spoke rim", visual: { spokes: 8, tape: 0, dish: 0, nut: [0.88, 0.88, 0.9] }, visualTier: 1 },
+        { id: "sig_williams_rim", label: "Grove Rim", cost: 130, teams: ["williams"], tag: "SIGNATURE", equivalent: "aero_disc",
+          desc: "Williams signature rim — Aero Disc performance with a plain rim", speed: 1.05, braking: 0.98, visual: { spokes: 0, tape: 0, dish: 1, nut: [0.2, 0.55, 0.95] }, visualTier: 2 },
+        { id: "sig_audi_rim", label: "Neuburg Rim", cost: 110, teams: ["audi"], tag: "SIGNATURE", equivalent: "mag_forged",
+          desc: "Audi signature rim — Forged Mag performance with a 7-spoke rim with a banded shoulder", accel: 1.05, cornering: 1.03, braking: 1.05, visual: { spokes: 7, tape: 1, dish: 2, nut: [0.98, 0.28, 0.05] }, visualTier: 2 },
+        { id: "sig_astonmartin_rim", label: "Silverstone Rim", cost: 60, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "dished",
+          desc: "Aston Martin signature rim — Dished Cover performance with a 6-spoke rim with a banded shoulder", speed: 1.03, visual: { spokes: 6, tape: 1, dish: 1, nut: [0.72, 0.88, 0.11] }, visualTier: 1 },
+        { id: "sig_cadillac_rim", label: "Detroit Rim", cost: 130, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "aero_disc",
+          desc: "Cadillac signature rim — Aero Disc performance with a 4-spoke rim with a banded shoulder", speed: 1.05, braking: 0.98, visual: { spokes: 4, tape: 1, dish: 2, nut: [0.85, 0.7, 0.32] }, visualTier: 2 },
+      ],
+    },
   ];
 
   const DEFAULTS = {
     engine: "stock", aero: "medium", suspension: "standard",
     brakes: "standard", tyres: "medium", ers: "standard",
     gearbox: "standard", fuel: "standard",
-    exhaust: "stock", floor: "standard", cockpit: "standard",
+    exhaust: "stock", floor: "standard", cockpit: "standard", wheels: "standard",
   };
 
   // Every option.visual field has one declared consumer. Keep this registry
@@ -513,8 +549,10 @@ const Parts = (function () {
       exhaust: Object.freeze(["pipes", "bore", "flare", "wastegate", "wrap"]),
       floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip"]),
       cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen"]),
+      wheels: Object.freeze(["spokes", "tape", "dish"]),
     }),
     material: Object.freeze({
+      wheels: Object.freeze(["nut"]),
       brakes: Object.freeze(["cal", "rim"]),
       tyres: Object.freeze(["band"]),
       ers: Object.freeze(["led"]),
@@ -535,17 +573,17 @@ const Parts = (function () {
   // redundant. Cadillac is the exception — it is Ferrari-powered and would
   // otherwise render the exact same power unit as Ferrari.
   const FACTORY_PRESETS = {
-    mercedes:    { engine: "sig_mercedes_zero", aero: "sig_mercedes_wing", suspension: "sig_mercedes_susp", brakes: "sig_mercedes_discs", tyres: "sig_mercedes_tyre", ers: "sig_mercedes_ers", gearbox: "sig_mercedes_gbox", fuel: "sig_mercedes_fuel", exhaust: "sig_mercedes_exh", floor: "sig_mercedes_floor", cockpit: "sig_mercedes_cpit" },
-    ferrari:     { engine: "manu_ferrari", aero: "sig_ferrari_wing", suspension: "sig_ferrari_susp", brakes: "sig_ferrari_brembo", tyres: "sig_ferrari_tyre", ers: "sig_ferrari_ers", gearbox: "sig_ferrari_seamless", fuel: "sig_ferrari_fuel", exhaust: "sig_ferrari_exh", floor: "sig_ferrari_floor", cockpit: "sig_ferrari_cpit" },
-    mclaren:     { engine: "sig_mclaren_pu", aero: "sig_mclaren_flex", suspension: "sig_mclaren_active", brakes: "sig_mclaren_brakes", tyres: "sig_mclaren_tyre", ers: "sig_mclaren_ers", gearbox: "sig_mclaren_gbox", fuel: "sig_mclaren_fuel", exhaust: "sig_mclaren_exh", floor: "sig_mclaren_floor", cockpit: "sig_mclaren_cpit" },
-    redbull:     { engine: "manu_ford", aero: "sig_redbull_concept", suspension: "sig_redbull_pullrod", brakes: "sig_redbull_brakes", tyres: "sig_redbull_tyre", ers: "sig_redbull_ers", gearbox: "sig_redbull_gbox", fuel: "sig_redbull_fuel", exhaust: "sig_redbull_exh", floor: "sig_redbull_floor", cockpit: "sig_redbull_cpit" },
-    alpine:      { engine: "sig_alpine_pu", aero: "sig_alpine_wing", suspension: "sig_alpine_susp", brakes: "sig_alpine_brakes", tyres: "sig_alpine_tyre", ers: "sig_alpine_boost", gearbox: "sig_alpine_gbox", fuel: "sig_alpine_efuel", exhaust: "sig_alpine_exh", floor: "sig_alpine_floor", cockpit: "sig_alpine_cpit" },
-    racingbulls: { engine: "sig_racingbulls_pu", aero: "sig_racingbulls_wing", suspension: "sig_racingbulls_susp", brakes: "sig_racingbulls_brakes", tyres: "sig_rb_street", ers: "sig_racingbulls_ers", gearbox: "sig_rb_shortcase", fuel: "sig_racingbulls_fuel", exhaust: "sig_racingbulls_exh", floor: "sig_racingbulls_floor", cockpit: "sig_racingbulls_cpit" },
-    haas:        { engine: "sig_haas_pu", aero: "sig_haas_wing", suspension: "sig_haas_susp", brakes: "sig_haas_carbonmag", tyres: "sig_haas_tyre", ers: "sig_haas_ers", gearbox: "sig_haas_gbox", fuel: "sig_haas_blend", exhaust: "sig_haas_exh", floor: "sig_haas_floor", cockpit: "sig_haas_cpit" },
-    williams:    { engine: "sig_williams_pu", aero: "sig_williams_lowdrag", suspension: "sig_williams_susp", brakes: "sig_williams_brakes", tyres: "sig_williams_tyre", ers: "sig_williams_ers", gearbox: "sig_williams_longshift", fuel: "sig_williams_fuel", exhaust: "sig_williams_exh", floor: "sig_williams_floor", cockpit: "sig_williams_cpit" },
-    audi:        { engine: "manu_audi", aero: "sig_audi_wing", suspension: "sig_audi_damper", brakes: "sig_audi_brakes", tyres: "sig_audi_tyre", ers: "sig_audi_quattro", gearbox: "sig_audi_gbox", fuel: "sig_audi_fuel", exhaust: "sig_audi_exh", floor: "sig_audi_floor", cockpit: "sig_audi_cpit" },
-    astonmartin: { engine: "manu_honda", aero: "sig_aston_tunnel", suspension: "sig_astonmartin_susp", brakes: "sig_aston_carbon", tyres: "sig_astonmartin_tyre", ers: "sig_astonmartin_ers", gearbox: "sig_astonmartin_gbox", fuel: "sig_astonmartin_fuel", exhaust: "sig_astonmartin_exh", floor: "sig_astonmartin_floor", cockpit: "sig_astonmartin_cpit" },
-    cadillac:    { engine: "sig_cadillac_pu", aero: "sig_cadillac_lowline", suspension: "sig_cadillac_susp", brakes: "sig_cadillac_brakes", tyres: "sig_cadillac_sprint", ers: "sig_cadillac_ers", gearbox: "sig_cadillac_gbox", fuel: "sig_cadillac_fuel", exhaust: "sig_cadillac_exh", floor: "sig_cadillac_floor", cockpit: "sig_cadillac_cpit" },
+    mercedes:    { engine: "sig_mercedes_zero", aero: "sig_mercedes_wing", suspension: "sig_mercedes_susp", brakes: "sig_mercedes_discs", tyres: "sig_mercedes_tyre", ers: "sig_mercedes_ers", gearbox: "sig_mercedes_gbox", fuel: "sig_mercedes_fuel", exhaust: "sig_mercedes_exh", floor: "sig_mercedes_floor", cockpit: "sig_mercedes_cpit", wheels: "sig_mercedes_rim" },
+    ferrari:     { engine: "manu_ferrari", aero: "sig_ferrari_wing", suspension: "sig_ferrari_susp", brakes: "sig_ferrari_brembo", tyres: "sig_ferrari_tyre", ers: "sig_ferrari_ers", gearbox: "sig_ferrari_seamless", fuel: "sig_ferrari_fuel", exhaust: "sig_ferrari_exh", floor: "sig_ferrari_floor", cockpit: "sig_ferrari_cpit", wheels: "sig_ferrari_rim" },
+    mclaren:     { engine: "sig_mclaren_pu", aero: "sig_mclaren_flex", suspension: "sig_mclaren_active", brakes: "sig_mclaren_brakes", tyres: "sig_mclaren_tyre", ers: "sig_mclaren_ers", gearbox: "sig_mclaren_gbox", fuel: "sig_mclaren_fuel", exhaust: "sig_mclaren_exh", floor: "sig_mclaren_floor", cockpit: "sig_mclaren_cpit", wheels: "sig_mclaren_rim" },
+    redbull:     { engine: "manu_ford", aero: "sig_redbull_concept", suspension: "sig_redbull_pullrod", brakes: "sig_redbull_brakes", tyres: "sig_redbull_tyre", ers: "sig_redbull_ers", gearbox: "sig_redbull_gbox", fuel: "sig_redbull_fuel", exhaust: "sig_redbull_exh", floor: "sig_redbull_floor", cockpit: "sig_redbull_cpit", wheels: "sig_redbull_rim" },
+    alpine:      { engine: "sig_alpine_pu", aero: "sig_alpine_wing", suspension: "sig_alpine_susp", brakes: "sig_alpine_brakes", tyres: "sig_alpine_tyre", ers: "sig_alpine_boost", gearbox: "sig_alpine_gbox", fuel: "sig_alpine_efuel", exhaust: "sig_alpine_exh", floor: "sig_alpine_floor", cockpit: "sig_alpine_cpit", wheels: "sig_alpine_rim" },
+    racingbulls: { engine: "sig_racingbulls_pu", aero: "sig_racingbulls_wing", suspension: "sig_racingbulls_susp", brakes: "sig_racingbulls_brakes", tyres: "sig_rb_street", ers: "sig_racingbulls_ers", gearbox: "sig_rb_shortcase", fuel: "sig_racingbulls_fuel", exhaust: "sig_racingbulls_exh", floor: "sig_racingbulls_floor", cockpit: "sig_racingbulls_cpit", wheels: "sig_racingbulls_rim" },
+    haas:        { engine: "sig_haas_pu", aero: "sig_haas_wing", suspension: "sig_haas_susp", brakes: "sig_haas_carbonmag", tyres: "sig_haas_tyre", ers: "sig_haas_ers", gearbox: "sig_haas_gbox", fuel: "sig_haas_blend", exhaust: "sig_haas_exh", floor: "sig_haas_floor", cockpit: "sig_haas_cpit", wheels: "sig_haas_rim" },
+    williams:    { engine: "sig_williams_pu", aero: "sig_williams_lowdrag", suspension: "sig_williams_susp", brakes: "sig_williams_brakes", tyres: "sig_williams_tyre", ers: "sig_williams_ers", gearbox: "sig_williams_longshift", fuel: "sig_williams_fuel", exhaust: "sig_williams_exh", floor: "sig_williams_floor", cockpit: "sig_williams_cpit", wheels: "sig_williams_rim" },
+    audi:        { engine: "manu_audi", aero: "sig_audi_wing", suspension: "sig_audi_damper", brakes: "sig_audi_brakes", tyres: "sig_audi_tyre", ers: "sig_audi_quattro", gearbox: "sig_audi_gbox", fuel: "sig_audi_fuel", exhaust: "sig_audi_exh", floor: "sig_audi_floor", cockpit: "sig_audi_cpit", wheels: "sig_audi_rim" },
+    astonmartin: { engine: "manu_honda", aero: "sig_aston_tunnel", suspension: "sig_astonmartin_susp", brakes: "sig_aston_carbon", tyres: "sig_astonmartin_tyre", ers: "sig_astonmartin_ers", gearbox: "sig_astonmartin_gbox", fuel: "sig_astonmartin_fuel", exhaust: "sig_astonmartin_exh", floor: "sig_astonmartin_floor", cockpit: "sig_astonmartin_cpit", wheels: "sig_astonmartin_rim" },
+    cadillac:    { engine: "sig_cadillac_pu", aero: "sig_cadillac_lowline", suspension: "sig_cadillac_susp", brakes: "sig_cadillac_brakes", tyres: "sig_cadillac_sprint", ers: "sig_cadillac_ers", gearbox: "sig_cadillac_gbox", fuel: "sig_cadillac_fuel", exhaust: "sig_cadillac_exh", floor: "sig_cadillac_floor", cockpit: "sig_cadillac_cpit", wheels: "sig_cadillac_rim" },
   };
 
   function teamContext(team) {

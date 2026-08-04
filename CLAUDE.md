@@ -351,9 +351,9 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Parts system (`js/car/parts.js`)
 
-`Parts.CATALOG` — an **array** of 11 category objects (ordered, not keyed by id):
+`Parts.CATALOG` — an **array** of 12 category objects (ordered, not keyed by id):
 `engine`, `aero`, `suspension`, `brakes`, `tyres`, `ers`, `gearbox`, `fuel`,
-`exhaust`, `floor`, `cockpit`. Each
+`exhaust`, `floor`, `cockpit`, `wheels`. Each
 category is `{ id, label, options:[…] }`; each option has
 `{ id, label, cost, desc, speed?, accel?, cornering?, braking?, supplier? }`.
 Budget = 600 cr. `Parts.getMods(setup, teamEngine)` returns
