@@ -75,6 +75,12 @@ Order to escalate in:
 | track/scenery edit | `node tools/verify-track.cjs <id>` first — 2 s, no browser, catches a build THROW |
 | before pushing | those groups, plus `npm run test:sweeps` if geometry moved |
 
+`test:sweeps` and `test:tooling` pass `--test-concurrency=1` **deliberately**:
+every suite in them rebuilds all 40 circuits, and four at once reached 5.4 GB and
+was OOM-killed — which shows up as a `SIGKILL` with no assertion, so it does not
+read as a test failure. Run several GROUPS in parallel instead; those are
+separate processes.
+
 ### 3. Make failures explain themselves
 
 Specs that import `tests/fixtures.js` attach three things on failure, and

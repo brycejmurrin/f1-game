@@ -122,7 +122,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 |---|---|
 | `circuit` | walls + autopilot + elevation + the codebase-audit edge cases |
 | `scenery` | props/terrain over road, F1 track accuracy, scenery kits |
-| `sweeps` | the full-fleet geometry audits — prop-clipping, road-under-floor, coplanar-faces. Each rebuilds all 40 circuits; `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see |
+| `sweeps` | the full-fleet geometry audits — prop-clipping, road-under-floor, coplanar-faces, and the shared-foundation characterization. Each rebuilds all 40 circuits; `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
 | `map` | minimap polyline + orientation |
 
 ### Render
@@ -169,7 +169,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 
 | Group | What it runs |
 |---|---|
-| `tooling` | every Node contract suite, including the three full-fleet sweeps |
+| `tooling` | every Node contract suite, including the full-fleet sweeps. `--test-concurrency=1`, see below |
 | `tooling-fast` | the structural half in ~4 s — load order, docs integrity, test groups, api contracts, graph, validators. The two full-fleet audits dominate `tooling`; this is everything else, for the edit loop |
 | `paths` | output paths are port-scoped and self-creating |
 | `graph-parity` | builds each track from a baseline ref AND the working tree and diffs prop geometry vertex for vertex (`tools/graph-parity.cjs`) |
@@ -217,6 +217,19 @@ aborts the run with one clear message instead of dozens of
 
 **Tests serve `js/` and `css/` straight from the working tree** — do not edit
 source while a run is in flight, or its later specs load mixed versions.
+
+### Why the sweeps run serially
+
+`node --test` defaults to a concurrency of CPU-count, and every suite in
+`test:sweeps` rebuilds all 40 circuits and holds their meshes. Four of those at
+once reached 5.4 GB RSS and the kernel OOM-killed the run — which surfaces as a
+`SIGKILL` with `exitCode: ~` and no assertion, i.e. it does not look like a test
+failure at all. `--test-concurrency=1` on `test:sweeps` and `test:tooling` is
+deliberate: these suites already saturate the machine one at a time, so
+overlapping them buys nothing and costs the whole run.
+
+Run several GROUPS concurrently instead (`tools/test-bg.mjs`) — those are
+separate processes with separate ports, and the sizing guidance above applies.
 
 ### Output
 
