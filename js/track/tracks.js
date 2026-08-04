@@ -1632,15 +1632,27 @@ const Tracks = (function () {
       // canopy allowance, so any tree it dropped within (barrier gap + crown
       // radius) of a catch fence grew straight through it. Suzuka was worst hit:
       // fences cover ~32% of its lap.
-      const kind = fz.tree === "palm" ? "palm" : fz.tree === "fir" ? "fir" : "broad";
+      // FURN.tree used to resolve to exactly THREE silhouettes — palm, fir or
+      // broad — so 18 circuits shared one tree shape on the generic roadside
+      // scatter that runs on every lap. The species library grew to nine during
+      // the identity pass but nothing outside a circuit's own scenery() could
+      // reach it. SPECIES names now pass straight through.
+      const SPECIES = { cypress: 1, stonePine: 1, broadleafFall: 1, acacia: 1, plane: 1 };
+      const kind = SPECIES[fz.tree] ? fz.tree
+        : fz.tree === "palm" ? "palm" : fz.tree === "fir" ? "fir" : "broad";
       const crown = canopyR(kind, h);
       // Spatial barrier guard — the canopy allowance above only clears the
       // barrier belonging to THIS node, and the hits that survived it were with
       // walls belonging to other parts of the lap.
       const d = clearTreeDist(k, side, dist + crown, crown);
       if (d == null) return;
-      if (fz.tree === "palm") palm(k, side, d, h, col);
-      else if (fz.tree === "fir") conifer(k, side, d, h, col);
+      if (kind === "palm") palm(k, side, d, h, col);
+      else if (kind === "fir") conifer(k, side, d, h, col);
+      else if (kind === "cypress") cypress(k, side, d, h, col);
+      else if (kind === "stonePine") stonePine(k, side, d, h, col);
+      else if (kind === "broadleafFall") broadleafFall(k, side, d, h, col);
+      else if (kind === "acacia") acacia(k, side, d, h, col);
+      else if (kind === "plane") plane(k, side, d, h, col);
       else tree(k, side, d, h, col);
     };
     // Lamp posts — streets / modern / desert. Alternate sides, set behind the
