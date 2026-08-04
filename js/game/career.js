@@ -53,6 +53,9 @@ const BUDGET_UPGRADE = [2500, 5000, 9000];   // cost to reach level 1 / 2 / 3
 // 1.5%) — enough for a team to genuinely climb or fall a tier across two or three
 // seasons without ever rewriting `team.tier`, which drives the grid sort, the mesh
 // presets and the colours.
+const TDEV_MAX = 8;
+const TDEV_TO_PACE = 0.0025;
+
 // ---------- MY TEAM ----------
 // The custom team has no FACTORY_PRESETS entry, so Parts.getFactorySetup() gives
 // it the all-cost-0 DEFAULTS and its works cost is zero — which made the fitted
@@ -76,9 +79,6 @@ const FREE_AGENTS = [
   { name: "Sam Okonkwo",     code: "OKO",  num: 73, tier: 4, ask: 18 },
 ];
 function freeAgents() { return FREE_AGENTS.slice(); }
-
-const TDEV_MAX = 8;
-const TDEV_TO_PACE = 0.0025;
 
 // Per-round objective payout. Small next to a podium's prize money on purpose:
 // the brief is a reason to care about a race you cannot win, not a second economy.
@@ -129,8 +129,15 @@ function mix32(h) {
   h ^= h >>> 16;
   return h >>> 0;
 }
+// The draw with the seed passed in. Exported because js/game/reliability.js needs
+// exactly this construction OUTSIDE a career, where there is no career.seed to
+// hash on and the sim seed stands in for it — one implementation of the finalizer
+// above rather than a second copy that could quietly lose it.
+function hash(seed, ...parts) {
+  return mix32(hash32(seed + ":" + parts.join(":"))) / 4294967296;
+}
 function rnd(...parts) {
-  return mix32(hash32((career ? career.seed : 0) + ":" + parts.join(":"))) / 4294967296;
+  return hash(career ? career.seed : 0, ...parts);
 }
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
@@ -428,7 +435,11 @@ function objectiveMet(o, ctx) {
   switch (o.type) {
     case "finish": return ctx.pos <= o.value;
     case "points": return ctx.pts >= o.value;
-    case "clean": return !(ctx.player.cuts | 0) && !(ctx.player.penalty | 0);
+    // A retirement is not a clean race. Even a mechanical one: the brief asks for
+    // a race completed without incident, and a car in the barriers on lap two has
+    // not completed anything. Paying the bonus for a DNF would make the one round
+    // you did not race the cheapest one to bank.
+    case "clean": return !ctx.player.retired && !(ctx.player.cuts | 0) && !(ctx.player.penalty | 0);
     case "beatMate": return !ctx.mate || ctx.pos < ctx.matePos;
     case "outQualMate": return !ctx.mate || (ctx.player.gridPos || 99) < (ctx.mate.gridPos || 99);
     default: return false;
@@ -447,7 +458,10 @@ function settleRound(order, player) {
   if (!inCareer() || !player) return null;
   const pos = order.indexOf(player) + 1;
   const team = Teams.LIST.find((t) => t.id === career.team);
-  const pts = Teams.POINTS[pos - 1] || 0;
+  // A retirement scores nothing — the same rule endRace() awards on. Recomputing
+  // it from position alone would disagree with the championship the moment a
+  // race loses enough cars for a DNF to land inside the top ten.
+  const pts = player.retired ? 0 : (Teams.POINTS[pos - 1] || 0);
   const prize = prizeFor(pos);
   const salary = career.deal ? career.deal.salary : 0;
   const bonus = career.deal ? career.deal.bonusPt * pts : 0;
@@ -474,10 +488,16 @@ function settleRound(order, player) {
   const repDelta = clamp((expectedFinish(team) - pos) * 0.6, -4, 6)
                  + (obj.done ? OBJ_REP : -OBJ_REP);
   career.rep = clamp(career.rep + repDelta, 0, 100);
-  career.results.push({ r: raced, p: pos, pts, obj: obj.done });
+  // The reason, not just the fact: `dnf` is null for a finish and "engine" /
+  // "gearbox" / "accident" for a retirement, so the archive can say WHY a season
+  // came apart. Classification (and therefore prize money) already handles the
+  // cost of it — a retirement is last, and last pays the tail.
+  const dnf = player.retired ? (player.dnf || "mechanical") : null;
+  career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf });
   career.obj = null;          // the next round draws its own brief on demand
   save();
-  return { pos, pts, prize, salary, bonus, wages, obj, money: career.money, rep: career.rep };
+  return { pos, pts, prize, salary, bonus, wages, obj, dnf,
+           money: career.money, rep: career.rep };
 }
 
 // ---------- the grid, as career sees it ----------
@@ -651,6 +671,14 @@ function offerFrom(team, years) {
   };
 }
 function makeOffers(mv) {
+  // MY TEAM IS NOT A SEAT. You own the constructor, so nobody signs you and there
+  // is nothing to renew — and an offer accepted here was actively destructive:
+  // acceptOffer() moves career.team while `flavour` stays "myteam", so the next
+  // makeCars() put you and your hired driver into the seats of a real team and
+  // dropped the custom team off the grid entirely. The career you were playing
+  // simply stopped existing. An empty list is also what the hub already handles:
+  // with no seat to sign it goes straight to NEXT RACE.
+  if (career.flavour === "myteam") return [];
   // Length of deal tracks standing: a team gambling on an unknown signs them for
   // one year, a team signing a proven driver locks them up for three.
   const years = clamp(1 + Math.floor(mv / 40), 1, 3);
@@ -745,7 +773,10 @@ function rollover() {
   rolloverMarket();
 
   const mv = marketValue(dStand);
-  if (career.deal && career.deal.left > 0) career.deal.left--;
+  // An owner's deal has no clock to run down: there is no year at which you stop
+  // being allowed to drive your own car, and counting to zero only ever showed
+  // "Seasons left 0" on the hub for the rest of the save.
+  if (career.flavour !== "myteam" && career.deal && career.deal.left > 0) career.deal.left--;
   career.offers = makeOffers(mv);
 
   career.year++;
@@ -781,6 +812,9 @@ function state() {
     budget: budget(), budgetLvl: career.budgetLvl,
     owned: career.owned.length,
     deal: career.deal, obj: objective(),
+    // Retirements this season, off the same results rows the archive counts wins
+    // and podiums from — a season's reliability record with no second ledger.
+    dnfs: career.results.filter((r) => r.dnf).length,
     // MY TEAM only; null in a driver career, where you are the wage bill.
     roster: career.roster, wages: wageBill(),
     offers: career.offers.length,
@@ -789,9 +823,9 @@ function state() {
 }
 
 return {
-  PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, START_MONEY,
+  PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
   OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX,
-  data, active, inCareer, engage, load, save, clear, start, state, rnd,
+  data, active, inCareer, engage, load, save, clear, start, state, rnd, hash,
   salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats,

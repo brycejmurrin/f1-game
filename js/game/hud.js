@@ -61,7 +61,10 @@ function updateHud(force) {
   hudT -= 1;
   if (!force && hudT > 0) return;
   hudT = 6; // ~10Hz at 60fps
-  hText(els.pos, timeTrial ? "TT" : (player.rank || "-") + "/" + cars.length);
+  // A retirement has no race position left to hold — `rank` is whatever it was
+  // when the car stopped, and the field it was measured against no longer
+  // contains it (see the ranked build in game.js).
+  hText(els.pos, timeTrial ? "TT" : player.retired ? "DNF" : (player.rank || "-") + "/" + cars.length);
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   hText(els.time, G.fmtTime(player.lapTime));
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
@@ -100,8 +103,10 @@ function updateHud(force) {
   } else {
     // gaps — reuse the module-scope prog-sorted field from the update loop
     const ranked = G.ranked;
+    // -1 once the player has retired: it is no longer in `ranked`, and ranked[0]
+    // would then read as "the car right behind you" — the leader.
     const i = ranked.indexOf(player);
-    const a = ranked[i - 1], b = ranked[i + 1];
+    const a = i > 0 ? ranked[i - 1] : null, b = i >= 0 ? ranked[i + 1] : null;
     hText(els.gapA, a ? "▲ " + a.code + " +" + ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "");
     hText(els.gapB, b ? "▼ " + b.code + " +" + ((player.prog - b.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "");
   }

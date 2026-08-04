@@ -63,7 +63,7 @@ function create(G) {
     const flavours = el("div", "cr-flavours");
     for (const [id, label, blurb] of [
       ["driver", "DRIVER", "Sign for a team, hit your targets, earn a better seat."],
-      ["myteam", "MY TEAM", "Own the eleventh team. Run the money, run the drivers."],
+      ["myteam", "MY TEAM", "Own the twelfth team. Run the money, run the drivers."],
     ]) {
       const b = el("button", "cr-flavour" + (draft.flavour === id ? " active" : ""));
       b.setAttribute("aria-pressed", draft.flavour === id ? "true" : "false");
@@ -233,7 +233,10 @@ function create(G) {
     carCard.append(
       row("Parts owned", c.owned.length + " of " + totalOptions()),
       row("Fitted", fittedCost + " / " + Career.budget() + " cr"),
-      row("Development", devLabel(c.tdev[c.team] || 0)));
+      row("Development", devLabel(c.tdev[c.team] || 0)),
+      // Reliability belongs on THE CAR: a DNF is the car letting you down, and
+      // team development plus a developed engine and gearbox are what buy it off.
+      row("Retirements", st.dnfs + " this season"));
     left.appendChild(carCard);
 
     // MY TEAM runs a wage bill on top of the car. Shown as its own card because it

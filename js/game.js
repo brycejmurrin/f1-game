@@ -170,6 +170,14 @@ let teamIdx = store.get("team", 2);          // default McLaren
 let driverIdx = store.get("driver", 0);
 let trackIdx = store.get("track", 0);
 let difficulty = store.get("difficulty", "normal");
+// RELIABILITY — "off" | "low" | "real" (js/game/reliability.js). A standing
+// preference like difficulty, so it persists. Ships OFF: store.get returns the
+// stored value whenever the key exists, so a new default only ever reaches a
+// fresh install — and this key is new for EVERY save, which means the default is
+// what every existing player gets. OFF is therefore the only choice that does not
+// silently start retiring cars in a game somebody was already halfway through.
+let raceReliability = store.get("reliability", "off");
+if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
@@ -1137,6 +1145,10 @@ function makeCars() {
         energy: 1, otT: 0, otCool: 0, deploying: false,
         lapStart: 0, lapTime: 0, best: Infinity, totalT: 0,
         finished: false, finishT: 0, finPos: 0,
+        // Retirement (js/game/reliability.js). `retired`/`dnf` are the record;
+        // dnfAt/dnfWhy are the plan Reliability.arm() draws at the green light.
+        // Declared here so every car has the shape whether or not a race arms it.
+        retired: false, dnf: null, dnfAt: null, dnfWhy: null,
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
         skill: driverSkill(team, d, di),
@@ -1772,6 +1784,30 @@ function snapGameCam() {
   camRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
 }
 
+// Races started this session. It is the round number a one-off Grand Prix hashes
+// its retirements on: without it every GP drawn off the same sim seed would lose
+// the same two cars forever, because the reliability draw deliberately consumes
+// nothing from the stream that would otherwise have moved on. Starting from zero
+// on every load is what keeps a seeded run reproducible across reloads.
+let raceIndex = 0;
+// Draw the field's retirements for the race about to start (or the round about to
+// be simulated). The seed is the CAREER's inside a career and the SIM seed
+// outside one — the two places a run's reproducibility is already anchored.
+// Nothing here draws from simRnd: see js/game/reliability.js.
+function armReliability(field) {
+  const c = Career.data();
+  const team = player ? player.team : Teams.LIST[teamIdx];
+  Reliability.arm(field, {
+    level: raceReliability,
+    seed: Career.inCareer() && c ? c.seed : simSeed(),
+    round: isChampionship() ? season.round : raceIndex,
+    // The player's own build is the R&D economy's grip on this: an AI runs its
+    // team's works car, which `tier` already says everything about.
+    build: Reliability.buildQuality(getTeamParts(team.id), team),
+  });
+  return field;
+}
+
 function startRace() {
   loadTrack(trackIdx);
   makeCars();
@@ -1804,6 +1840,10 @@ function startRace() {
   }
   gridUp(quali.order(cars));
   recomputePlayerMods();
+  // Only a RACE can retire a car. A time trial is you against the clock and
+  // qualifying is one flying lap — losing the car to a gearbox there would end
+  // the session with nothing to show and no race to have lost it in.
+  if (session === "race") { raceIndex++; armReliability(cars); }
   resultT = 0;
   camRoll = 0; camSlipSm = 0;
   sectorIdx = sectorAt(player.s); sectorStartT = 0;
@@ -1871,14 +1911,20 @@ function endRace(forcedOrder) {
     return;
   }
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
-  // classification: finished by time(+penalty), rest by progress
-  const fin = cars.filter((c) => c.finished).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
-  const run = cars.filter((c) => !c.finished).sort((a, b) => b.prog - a.prog);
-  const order = forcedOrder || fin.concat(run);
+  // classification: finished by time(+penalty), still running by progress, and
+  // RETIREMENTS below both — ordered among themselves by how far they got, which
+  // is the only thing that separates two cars that never saw the flag.
+  const fin = cars.filter((c) => c.finished && !c.retired).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
+  const run = cars.filter((c) => !c.finished && !c.retired).sort((a, b) => b.prog - a.prog);
+  const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
+  const order = forcedOrder || fin.concat(run, out);
   order.forEach((c, i) => { c.finPos = i + 1; });
   if (isChampionship()) {
     order.forEach((c, i) => {
-      const pts = Teams.POINTS[i] || 0;
+      // A retirement scores nothing. Explicit rather than relying on it landing
+      // outside POINTS' ten slots: `i` still advances, so every classified car
+      // above keeps the points its position earns.
+      const pts = c.retired ? 0 : (Teams.POINTS[i] || 0);
       season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;
       season.driverCodes[c.driverId] = c.code;
       season.teamPts[c.team.id] = (season.teamPts[c.team.id] || 0) + pts;
@@ -1933,6 +1979,16 @@ const G = {
   get timeTrial() { return isTimeTrial(); },
   set timeTrial(v) { session = v ? "tt" : "race"; },
   get lapsTarget() { return lapsTarget; },
+  // RELIABILITY: the race setting, the shared arming path (so a simulated career
+  // round draws its retirements exactly as a driven race does), and the manual
+  // retire the debug hook exposes.
+  get raceReliability() { return raceReliability; },
+  set raceReliability(v) {
+    if (!Reliability.isLevel(v)) return;
+    raceReliability = v; store.set("reliability", v);
+  },
+  armReliability: (field) => armReliability(field || cars),
+  retireCar: (c, reason) => retireCar(c, reason),
   get ranked() { return ranked; },
   get sectorLast() { return sectorLast; },
   // Setting the seed also rewinds the stream, so seeding then rebuilding the
@@ -2271,9 +2327,15 @@ function update(dt) {
   if (state !== "race") return;
   raceT += dt;
   tickWeatherArc(dt);   // dynamic weather progression (no-op unless an arc is armed)
-  // ranks by progress (reuse module-scope buffer, no per-step allocation)
+  checkRetirements();
+  // ranks by progress (reuse module-scope buffer, no per-step allocation).
+  // RETIREMENTS ARE NOT IN THE FIELD. Dropping them here is one exclusion that
+  // does four jobs: the HUD position stops counting a parked car, the AI stops
+  // treating it as a blocker, resolveCollisions leaves it where it was put, and
+  // the overtake target walks past it — all of which would otherwise need their
+  // own `c.retired` check and one of them would eventually be forgotten.
   ranked.length = 0;
-  for (const c of cars) ranked.push(c);
+  for (const c of cars) if (!c.retired) ranked.push(c);
   ranked.sort((a, b) => b.prog - a.prog);
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
@@ -2281,7 +2343,7 @@ function update(dt) {
 
   // Leading human, for the AI rubber-band. Once per step, not once per AI car.
   _leadHuman = null;
-  for (const c of cars) if (c.human && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
+  for (const c of cars) if (c.human && !c.retired && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
 
   for (const c of cars) updateCar(c, dt, ranked);
 
@@ -2316,7 +2378,9 @@ function update(dt) {
     for (const c of cars) {
       if (!c.human) continue;
       anyHuman = true;
-      if (!c.finished) { allHumansDone = false; break; }
+      // Retired counts as done. A driver whose race is over should see the
+      // classification, not sit in the gravel watching the rest of the field.
+      if (!c.finished && !c.retired) { allHumansDone = false; break; }
     }
     if (anyHuman && allHumansDone) resultT = 2.2;
     else if (cars.some((c) => c.finished)) resultT = 3.5;
@@ -2554,6 +2618,9 @@ function resolveCollisions(ranked, dt) {
 }
 
 function updateCar(c, dt, ranked) {
+  // A retirement is out of the race: no driving model, no coast, no lap timing.
+  // It stays exactly where retireCar() parked it until the flag.
+  if (c.retired) { c._prevS = c.s; return; }
   if (c.finished) { coast(c, dt); c._prevS = c.s; return; }
   // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
@@ -3588,6 +3655,56 @@ function rescuePlayer(c) {
   if (c.local) {
     announce("RECOVERED", 1.2);
     if (soundOn) GameAudio.offtrack();
+  }
+}
+
+// Retire a car. The counterpart of rescuePlayer above — same job, opposite
+// intent: instead of putting the car back on the racing line it puts it as far
+// off the racing line as the circuit allows, and leaves it there.
+//
+// WHERE IT GOES. A retirement that vanished would read as a bug and one left on
+// the line would be a rolling roadblock, so it pulls over to the side it was
+// already on, hard against the barrier. The lateral limit is the same
+// Tracks.wallAt() the collision pass clamps every car to, and the world pose is
+// written back through worldFromTrack exactly as rescuePlayer and coast do — a
+// stopped car is not a new kind of physics, it is the existing placement with the
+// speed taken out.
+function retireCar(c, reason) {
+  c.retired = true;
+  c.dnf = reason || "mechanical";
+  c.dnfAt = null;
+  Tracks.sample(track, c.s, smp);
+  const side = c.x >= 0 ? 1 : -1;
+  const wall = Tracks.wallAt(track, c.s, side);
+  // Out past the verge if there is room, but never through the barrier — on a
+  // street circuit "the far side of the runoff" is barely a car's width.
+  c.x = side * clamp(Math.max(smp.hw * 0.85, wall - 1.6), 0, Math.max(0, wall - 0.6));
+  c.xVis = c.x;
+  const w = worldFromTrack(c.s, c.x, smp);
+  c.px = w.x; c.pz = w.z;
+  c.head = Math.atan2(smp.t[0], smp.t[2]);
+  // Seed the render-interpolation anchors too, or the first frame after this
+  // smears the car across the track from wherever it was a step ago.
+  c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x;
+  c.rPrevHead = c.head; c.rPrevYawVis = 0;
+  c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0; c.steerVis = 0;
+  c.gear = 1; c.rpm = IDLE_RPM;
+  c.boostOn = false; c.deploying = false; c.otT = 0; c.otArmed = false;
+  // The broadcast call. Every retirement is announced, not only the player's:
+  // losing a rival is race information, and it is the only way a DNF that
+  // happened half a lap away is visible at all.
+  announce("RETIREMENT — " + c.code, 2);
+  if (c.local && soundOn) GameAudio.offtrack();
+}
+
+// Retirements arrive by race DISTANCE, not by clock: the moment was drawn as a
+// fraction of the full race at the green light (see armReliability), so a 3-lap
+// blast and a 25-lap race lose their cars at the same points of the story.
+function checkRetirements() {
+  const dist = Math.max(1, lapsTarget * track.total);
+  for (const c of cars) {
+    if (c.dnfAt == null || c.retired || c.finished) continue;
+    if (c.prog / dist >= c.dnfAt) retireCar(c, c.dnfWhy);
   }
 }
 
@@ -5921,6 +6038,22 @@ function buildRaceSettings() {
     b.textContent = d.toUpperCase();
     b.onclick = () => { difficulty = d; store.set("difficulty", d); buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
     diffEl.appendChild(b);
+  }
+  // RELIABILITY — same idiom, same persistence, and hidden alongside DIFFICULTY
+  // in a time trial for the same reason: neither has anything to act on there.
+  $("rs-reliab-section").hidden = isTimeTrial();
+  const relEl = $("rs-reliab");
+  relEl.innerHTML = "";
+  for (const [id, label] of [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]]) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (raceReliability === id ? " active" : "");
+    b.setAttribute("aria-pressed", raceReliability === id ? "true" : "false");
+    b.textContent = label;
+    b.onclick = () => {
+      raceReliability = id; store.set("reliability", id);
+      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
+    };
+    relEl.appendChild(b);
   }
 }
 
