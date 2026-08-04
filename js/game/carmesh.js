@@ -326,7 +326,14 @@ function getAeroFlap(aLvl, col, idx, style) {
   // either (it is part of the cache key for the same reason).
   const g = Car3D.aeroFlaps(aLvl, style)[idx | 0];
   if (!g) return null;
-  const key = g.id + aLvl + "|" + c.map((v) => v.toFixed(2)).join(",");
+  // The style is part of the key: the flap PLANFORM reads the recipe's
+  // sweep/taper/rise (and drs moves the rear slot), and with real per-option
+  // recipes flowing through here two options at the same level and colour are
+  // NOT the same mesh. Keying without it served whichever was built first.
+  const sig = style ? [style.frontSweep, style.frontTaper, style.frontRise,
+                       style.rearSweep, style.rearTaper, style.drs || 0]
+    .map((v) => +v || 0).join(",") : "d";
+  const key = g.id + aLvl + "|" + sig + "|" + c.map((v) => v.toFixed(2)).join(",");
   if (_flapMeshes[key]) return _flapMeshes[key];
   const mesh = _gfx.createMesh(Car3D.buildFlapGeom(g, c));
   _flapMeshes[key] = mesh;

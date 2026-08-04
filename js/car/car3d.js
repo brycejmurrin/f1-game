@@ -919,7 +919,12 @@ const Car3D = (function () {
     }
   }
   function aeroFlapsGeom(aLvl, style) {
-    const a = aLvl, st = style || AERO_STYLE_DEF;
+    // A style must be a RECIPE OBJECT (see aeroStyleOf). Anything else — most
+    // dangerously the truthy tier NUMBER getVisualTiers stores under .aero —
+    // would have .frontSweep read off it as undefined and clamped into NaN,
+    // NaN-ing every vertex downstream. Refuse to let that class of misuse make
+    // the wing invisible again.
+    const a = aLvl, st = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
     const frontSweep = Math.max(-0.08, Math.min(0.22, st.frontSweep));
     const frontTaper = Math.max(0.72, Math.min(1.08, st.frontTaper));
     const frontRise = Math.max(-0.03, Math.min(0.16, st.frontRise));
@@ -1232,6 +1237,19 @@ const Car3D = (function () {
   function aeroLevelOf(T) {
     T = T || {};
     return buildAeroParts(T._visual && T._visual.aero, T.aero != null ? T.aero : 1).lvl;
+  }
+  // The resolved aero RECIPE for a getVisualTiers() bag — the companion of
+  // aeroLevelOf, and the ONLY correct thing to hand aeroFlaps()/getAeroFlap().
+  // Every flap call site used to pass `parts.aero`, which is the coarse TIER
+  // NUMBER (0|1|2), not a recipe: a number is truthy, so aeroFlapsGeom took it
+  // as the style, read .frontSweep off it, and clamped undefined into NaN —
+  // silently NaN-ing every vertex of every moveable element. The wings were not
+  // failing to move; they were not being DRAWN, on any car whose style came
+  // through this path. buildAeroParts merges full defaults, so the recipe this
+  // returns always carries every field.
+  function aeroStyleOf(T) {
+    T = T || {};
+    return buildAeroParts(T._visual && T._visual.aero, T.aero != null ? T.aero : 1);
   }
   // Per-DRIVER helmet crown-stripe palette (indexed by car number) so team-mates
   // and the field carry distinct helmets.
@@ -2563,5 +2581,5 @@ const Car3D = (function () {
            endplate: endplateGeom, numberBoard,
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
            sharkFin: FIN, sharkFinPanel, sharkFinBadge,
-           aeroLevelOf };
+           aeroLevelOf, aeroStyleOf };
 })();

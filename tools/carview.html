@@ -231,7 +231,10 @@
     // Car3D.build() would therefore show a wing missing its top flaps. Keep what
     // they need so frame() can draw them at the current blend.
     flapLvl = Car3D.aeroLevelOf(tiers);
-    flapStyle = tiers && tiers.aero;
+    // The resolved RECIPE, never tiers.aero — that is the tier NUMBER, and
+    // aeroFlapsGeom reading .frontSweep off a number NaN'd every flap vertex,
+    // which is how this page rendered byte-identical frames at flap=0 and 1.
+    flapStyle = Car3D.aeroStyleOf ? Car3D.aeroStyleOf(tiers) : null;
     flapCol = liv.wing || liv.c2 || team.color2;
     // Shared runtime implementation: same body anchors, segmentation and bounded
     // cache as the race renderer.
