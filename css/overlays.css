@@ -245,7 +245,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      groups, so a 54px tap circle and a 72px pedal sharing a bottom edge have
      centres 9px apart — BOOST/OT/AERO sat visibly low against GAS, which is the
      one relationship the eye checks because they are the same shape. Half the
-     size difference brings the row of small circles onto the big one's centre
+     size difference brings the bottom of the tap COLUMN onto the pedal's centre
      line, and it is derived rather than typed so it survives a resize. */
   body:not(.desktop) #grp-taps { padding-bottom: calc((var(--hold) - var(--tap)) / 2); }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */

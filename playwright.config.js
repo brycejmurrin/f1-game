@@ -26,6 +26,20 @@ const LAUNCH = {
     "--enable-unsafe-webgpu",
     "--disable-background-timer-throttling",
     "--disable-renderer-backgrounding",
+    // WITHOUT THESE TWO, THIS PAGE GETS ZERO requestAnimationFrame. Measured, on
+    // one browser, back to back: a blank data: URL runs at 61 rAF/s and our
+    // title screen at 0/s; adding them takes the title screen to 25/s and leaves
+    // the blank page alone. It is not the browser being headless — it is that a
+    // page with a WebGL canvas gates BeginFrame on a buffer swap that, under
+    // SwiftShader with vsync on, never signals here.
+    //
+    // Zero rAF is not merely slow, it BREAKS CLICKING. Playwright's actionability
+    // poll (visible/enabled/stable, then the hit test) ticks on rAF, so every
+    // locator.click() hangs to timeout while page.mouse.click() at the same
+    // coordinates works instantly — the signature that sent season.spec.js red
+    // in six places and reads like a broken menu when the menu is fine.
+    "--disable-gpu-vsync",
+    "--disable-frame-rate-limit",
   ],
 };
 
