@@ -1955,7 +1955,25 @@ driver market, and put contract offers on the table. What the end-of-season shee
 reads.
 
 ### `careerReset() → true`
-Wipe the save.
+Wipe the **live** slot. The other two are untouched.
+
+### `careerSlots(i?) → [{i, used, …}] | save | null`
+Three careers can be saved at once, one localStorage key each
+(`apex26.career.0..2`). No argument lists all three — `used`, and for a used slot
+`flavour`, `team`/`teamName`, `year`, `round`/`rounds`, `money`, `rep`, `seasons`,
+`wins`, `titles`. A number **switches** to that slot and returns the save it holds
+(`null` for an empty one); switching writes the career being left first.
+
+```js
+__apex.career({ teamId: "haas",  seat: 1, seed: 11, slot: 0 });
+__apex.career({ flavour: "myteam", hire: "OKO", seed: 22, slot: 1 });
+__apex.careerSlots().map((s) => s.used);   // → [true, true, false]
+__apex.careerSlots(0).team;                // → "haas", and slot 0 is now live
+```
+
+### `careerSlotDelete(i) → [{i, used, …}]`
+Wipe **one** slot, live or not, and return the slot list. Reloads whatever is left
+afterwards, so the title screen's CONTINUE still means something.
 
 ### `ratings(code?) → {pace, craft, awareness, consistency, experience, overall}`
 The five-axis driver table (`js/car/driver-ratings.js`) with any career development

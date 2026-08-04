@@ -379,7 +379,8 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   you drive: TEAM & DRIVER, the 8 part categories
                                   + budget, LIVERY. The select screen owns WHERE
                                   you race and links here; race settings own HOW
-  career.js      Career         CAREER core: the apex26.career save + migration,
+  career.js      Career         CAREER core: the apex26.career.0..2 saves (THREE
+                                  SLOTS, one live) + migration,
                                   the credits economy, contracts, driver/team
                                   development, R&D ownership, round settlement.
                                   Pure rules — no DOM. A plain global (like
@@ -734,7 +735,7 @@ __apex.trackProfile(n?)       // [{frac,y,k,hw,slope}] — elevation/curvature p
 //    flow === "career". A career IS a championship, so seasonMode stays true.
 __apex.info()                 // + flow ("gp"|"season"|"career"), session
                               //   ("race"|"tt"|"quali"), career (a save exists)
-__apex.career()               // the whole apex26.career save, or null
+__apex.career()               // the whole live career save, or null
 __apex.career({teamId:"haas", seat:1, seed:42})   // start one, skipping the setup
                               //   screen; flavour:"myteam" + hire:"<code>" for MY TEAM
 __apex.careerState()          // compact snapshot — prefer this to reading the save
@@ -743,7 +744,10 @@ __apex.careerSim(n)           // settle n rounds with nobody driving, through th
                               //   SAME settleRound() the driven path uses. Needs a
                               //   track staged; reuses THAT circuit for every round
 __apex.careerRollover()       // force the season rollover -> {champion, offers, history}
-__apex.careerReset()          // wipe the save
+__apex.careerReset()          // wipe the LIVE slot
+__apex.careerSlots()          // the three save slots; a number SWITCHES to one
+                              //   (saving the career being left first)
+__apex.careerSlotDelete(1)    // wipe ONE slot, leaving the other two
 __apex.ratings(code?)         // five-axis driver table + overall; no args = the grid.
                               //   Applies in EVERY mode, not just career
 __apex.qualiSim(playerTime?)  // the qualifying model for the loaded track WITHOUT

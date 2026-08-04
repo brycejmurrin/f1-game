@@ -71,7 +71,8 @@ test.describe("Career — save", () => {
   test("starting a career writes a versioned save", async ({ page }) => {
     await boot(page);
     await startCareer(page);
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")));
+    // Slot 0 — careers live under apex26.career.0..2 now, one key each.
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career.0")));
     expect(saved.v).toBe(1);
     expect(saved.flavour).toBe("driver");
     expect(saved.team).toBe("haas");
@@ -95,6 +96,8 @@ test.describe("Career — save", () => {
   });
 
   test("a save with no version field migrates instead of being discarded", async ({ page }) => {
+    // ALSO the single-save era's storage layout: this writes the old
+    // `apex26.career` key, which now has to land in slot 0 on the way through.
     await page.addInitScript(() => {
       localStorage.setItem("apex26.career", JSON.stringify({
         flavour: "driver", team: "williams", seat: 0, money: 500,
@@ -103,13 +106,22 @@ test.describe("Career — save", () => {
       }));
     });
     await boot(page);
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")));
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career.0")));
     expect(saved.v).toBe(1);
     expect(saved.season.pts["williams:0"]).toBe(12);   // remapped onto the stable id
     expect(saved.season.pts.SAI).toBeUndefined();
     expect(Array.isArray(saved.owned)).toBe(true);
     expect(saved.driver.code).toBe("YOU");
     expect(saved.season.round).toBe(3);                // progress preserved
+    // The legacy key is CLEARED, and stays cleared. migrateCareer() used to end
+    // in store.set("career", …), so reading slot 0 wrote the save straight back
+    // under the old name — a stale duplicate an older build would happily load.
+    const legacy = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")));
+    expect(legacy).toBeNull();
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")))).toBeNull();
+    expect(await page.evaluate(() => window.__apex.career().team)).toBe("williams");
   });
 
   test("migrating a career does NOT touch the standalone season save", async ({ page }) => {
@@ -1321,5 +1333,140 @@ test.describe("Career — reliability", () => {
     await page.reload();
     await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
     expect(await page.evaluate(() => window.__apex.reliability())).toBe("real");
+  });
+});
+
+// ── save slots ───────────────────────────────────────────────────────────────
+// Three careers at once (Career.SLOTS), one localStorage key each. The property
+// under test throughout is ISOLATION: a slot must be untouched by anything done
+// in another one, including being deleted.
+
+test.describe("Career — slots", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  // Three distinct careers, one per slot, in a known order.
+  async function threeCareers(page) {
+    await boot(page);
+    await page.evaluate(() => {
+      window.__apex.career({ teamId: "haas", seat: 1, seed: 11, slot: 0 });
+      window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 22, slot: 1 });
+      window.__apex.career({ teamId: "williams", seat: 0, seed: 33, slot: 2 });
+    });
+  }
+
+  test("three careers coexist, one key each", async ({ page }) => {
+    await threeCareers(page);
+    const s = await page.evaluate(() => window.__apex.careerSlots());
+    expect(s.map((x) => x.used)).toEqual([true, true, true]);
+    expect(s.map((x) => x.team)).toEqual(["haas", "custom", "williams"]);
+    expect(s[1].flavour).toBe("myteam");
+    // Separate keys, not one array: a quota failure must cost one career, not three.
+    const keys = await page.evaluate(() =>
+      ["0", "1", "2"].map((i) => localStorage.getItem("apex26.career." + i) != null));
+    expect(keys).toEqual([true, true, true]);
+  });
+
+  test("switching slots leaves the others exactly as they were", async ({ page }) => {
+    await threeCareers(page);
+    const out = await page.evaluate(() => {
+      window.__apex.careerSlots(0);
+      window.__apex.careerMoney(4321);          // spend in slot 0 only
+      const two = window.__apex.careerSlots(2);
+      const zero = window.__apex.careerSlots(0);
+      return { slot2: two.money, slot0: zero.money, seed2: two.seed, seed0: zero.seed };
+    });
+    expect(out.slot0).toBe(4321);
+    expect(out.slot2).not.toBe(4321);
+    expect(out.seed0).toBe(11);
+    expect(out.seed2).toBe(33);
+  });
+
+  test("deleting one slot keeps the other two", async ({ page }) => {
+    await threeCareers(page);
+    const after = await page.evaluate(() => {
+      const slots = window.__apex.careerSlotDelete(1);
+      return { used: slots.map((s) => s.used), live: window.__apex.career() };
+    });
+    expect(after.used).toEqual([true, false, true]);
+    // Something is still live, so CONTINUE on the title screen still means something.
+    expect(after.live).not.toBeNull();
+    await expect(page.locator("#mb-career .mb-label")).toHaveText("CONTINUE CAREER");
+  });
+
+  test("the slots survive a reload, and the live one is remembered", async ({ page }) => {
+    await threeCareers(page);
+    await page.evaluate(() => window.__apex.careerSlots(1));
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    const st = await page.evaluate(() => ({
+      slot: window.__apex.careerState().slot,
+      team: window.__apex.career().team,
+      used: window.__apex.careerSlots().map((s) => s.used),
+    }));
+    expect(st.slot).toBe(1);
+    expect(st.team).toBe("custom");
+    expect(st.used).toEqual([true, true, true]);
+  });
+
+  test("the picker opens when more than one career is saved", async ({ page }) => {
+    await threeCareers(page);
+    // Back to the title screen, then in through the button a player would press.
+    await page.locator("#cr-back").click();
+    await expect(page.locator("#overlay")).toBeVisible();
+    await page.locator("#mb-career").click();
+    await expect(page.locator("#career")).toBeVisible();
+    await expect(page.locator("#cr-title")).toHaveText("CAREERS");
+    await expect(page.locator(".cr-slot")).toHaveCount(3);
+    // GO RACING has nothing to act on until a career is chosen.
+    await expect(page.locator("#cr-go")).toBeHidden();
+    // Taking one lands in its hub, engaged.
+    await page.locator(".cr-slot").nth(2).locator(".cr-slot-main").click();
+    await expect(page.locator("#cr-go")).toBeVisible();
+    const info = await page.evaluate(() => ({
+      flow: window.__apex.info().flow, team: window.__apex.career().team,
+    }));
+    expect(info.flow).toBe("career");
+    expect(info.team).toBe("williams");
+  });
+
+  test("a single career goes straight to its hub, and none goes to setup", async ({ page }) => {
+    // The picker is not a toll gate. One save has nothing to choose between, and
+    // a first-time player offered three identical empty boxes cannot answer the
+    // question it is asking.
+    await boot(page);
+    await page.locator("#mb-career").click();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+    await page.locator("#cr-back").click();
+    await page.evaluate(() => window.__apex.career({ teamId: "haas", seat: 1, seed: 5, slot: 0 }));
+    await page.locator("#cr-back").click();
+    await page.locator("#mb-career").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREER 2026");
+  });
+
+  test("deleting requires a second press", async ({ page }) => {
+    await threeCareers(page);
+    await page.locator("#cr-back").click();
+    await page.locator("#mb-career").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREERS");
+    const del = page.locator(".cr-slot").nth(0).locator(".cr-slot-del");
+    await del.click();
+    await expect(page.locator(".cr-slot").nth(0).locator(".cr-slot-del")).toHaveText("DELETE?");
+    // Still there after one press.
+    expect(await page.evaluate(() => window.__apex.careerSlots()[0].used)).toBe(true);
+    await page.locator(".cr-slot").nth(0).locator(".cr-slot-del").click();
+    expect(await page.evaluate(() => window.__apex.careerSlots()[0].used)).toBe(false);
+  });
+
+  test("the title button names the career it will continue", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ teamId: "williams", seat: 0, seed: 8, slot: 0 }));
+    await page.locator("#cr-back").click();
+    const sub = await page.locator("#mb-career-sub").textContent();
+    expect(sub).toContain("WILLIAMS");
+    expect(sub).toContain("2026");
+    // …and says how many there are once that is a real question.
+    await page.evaluate(() => window.__apex.career({ teamId: "haas", seat: 1, seed: 9, slot: 1 }));
+    await page.locator("#cr-back").click();
+    expect(await page.locator("#mb-career-sub").textContent()).toContain("2 SAVED");
   });
 });

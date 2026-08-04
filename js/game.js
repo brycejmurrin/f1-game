@@ -1971,6 +1971,7 @@ const G = {
   // read-through so there is exactly one copy, never a stale mirror in a closure.
   get career() { return Career.data(); },
   openCareer: (...a) => openCareer(...a),
+  openCareerSlots: (...a) => openCareerSlots(...a),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   get ttNewRecord() { return ttNewRecord; },
@@ -5922,6 +5923,15 @@ function openCareer() {
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 }
+// The same entry, stopping at the slot picker. Deliberately does NOT engage the
+// career flow: nothing has been chosen yet, so a save's rules must not be live —
+// the picker's own handler calls openCareer() once a slot is taken.
+function openCareerSlots() {
+  careerUi.openSlots();
+  els.overlay.hidden = true;
+  if (soundOn) GameAudio.uiSelect();
+  scheduleFlybyTrack();
+}
 // The title-screen button reads CONTINUE once a career exists, so the player can
 // tell at a glance whether pressing it resumes or starts something.
 function refreshCareerButton() {
@@ -5929,9 +5939,28 @@ function refreshCareerButton() {
   if (!btn) return;
   const c = Career.data() || Career.load();
   const label = btn.querySelector(".mb-label");
+  const used = Career.slots().filter((s) => s.used).length;
   if (label) label.textContent = c ? "CONTINUE CAREER" : "CAREER";
+  // The second line says WHICH career, because with up to three saved,
+  // "CONTINUE" on its own does not answer the only question that matters. Blank
+  // when there is nothing to continue — .mb-sub:empty collapses, so a first-time
+  // title screen is unchanged.
+  const sub = $("mb-career-sub");
+  if (!sub) return;
+  if (!c) { sub.textContent = ""; return; }
+  const team = Teams.LIST.find((t) => t.id === c.team);
+  const who = c.flavour === "myteam" ? "MY TEAM" : (c.driver ? c.driver.code : "YOU");
+  sub.textContent = who + " · " + (team ? team.name : c.team).toUpperCase()
+    + " · " + c.year + " R" + Math.min(c.season.round + 1, Tracks.SEASON.length)
+    + (used > 1 ? "  ·  " + used + " SAVED" : "");
 }
-$("mb-career").onclick = () => openCareer();
+// With more than one career saved, "which one" is the first question rather than
+// an afterthought, so the button opens the picker instead of dropping straight
+// into whichever slot happened to be live.
+$("mb-career").onclick = () => {
+  if (Career.slots().filter((s) => s.used).length > 1) { openCareerSlots(); return; }
+  openCareer();
+};
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
 $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };

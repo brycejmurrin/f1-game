@@ -1,5 +1,6 @@
-/* Apex 26 — CAREER core: the `apex26.career` save, the credits economy, driver and
-   team development, per-round settlement and the season rollover.
+/* Apex 26 — CAREER core: the `apex26.career.0..2` saves (three slots, one live at
+   a time), the credits economy, driver and team development, per-round settlement
+   and the season rollover.
 
    Pure data and rules — no DOM, no renderer, no game-loop state. The screens live
    in js/game/career-ui.js; qualifying lives in js/game/quali.js. game.js calls into
@@ -143,29 +144,128 @@ function rnd(...parts) {
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
 // ---------- save lifecycle ----------
+// THREE SLOTS, one key each (`apex26.career.0..2`), plus `apex26.careerSlot` for
+// which one is live. Separate keys rather than one array under the old key,
+// because localStorage writes the WHOLE value every save(): a single array would
+// rewrite all three careers on every round settled, and a quota failure would
+// then lose three saves instead of one.
+//
+// A career is a long object — a decade of history, a garage, a grid's worth of
+// development deltas — and the whole point of slots is running a driver career
+// and a MY TEAM at once, or trying a different team without burning the season
+// you are twelve rounds into.
+const SLOTS = 3;
+const slotKey = (i) => "career." + (i | 0);
+const slotIn = (i) => clamp(i | 0, 0, SLOTS - 1);
+let slotIdx = 0;
+
 function data() { return career; }
 // A career EXISTS (save on disk). For "career rules apply now", use inCareer().
 function active() { return career != null; }
+function slot() { return slotIdx; }
+
+// The single-save era wrote `apex26.career`. Move it into slot 0 and drop the old
+// key, so an existing career survives the update in the slot a player would
+// expect it to be in. Guarded on slot 0 being empty: running this twice must not
+// overwrite a career started since.
+function migrateSlots() {
+  const legacy = store.get("career", null);
+  if (!legacy) return;
+  if (!store.get(slotKey(0), null)) store.set(slotKey(0), legacy);
+  store.set("career", null);
+}
+const readSlot = (i) => migrateCareer(store.get(slotKey(i), null));
 
 function load() {
-  career = migrateCareer(store.get("career", null));
-  return career;
+  migrateSlots();
+  slotIdx = slotIn(store.get("careerSlot", 0));
+  career = readSlot(slotIdx);
+  // migrateCareer() is pure now (it must not write, or reading a slot would
+  // rewrite the legacy key), so persisting the climbed shape is this function's
+  // job — otherwise a v0 save would migrate in memory on every boot and never on
+  // disk, and the next build's migration ladder would start from v0 again.
+  // The remembered slot can be empty — it was deleted, or the player started in
+  // slot 1 and the default is 0. Fall through to the first slot that holds
+  // something, because the title button offers CONTINUE and it has to continue
+  // something. Nothing at all is a genuine null: a first-time player.
+  if (!career)
+    for (let i = 0; i < SLOTS; i++) {
+      const c = readSlot(i);
+      if (c) { slotIdx = i; career = c; store.set("careerSlot", i); break; }
+    }
+  return save();
 }
 function save() {
-  if (career) store.set("career", career);
+  if (career) store.set(slotKey(slotIdx), career);
   return career;
 }
+// Wipes the ACTIVE slot only. The other two are untouched — deleting one career
+// must never be a way to lose the others.
 function clear() {
   career = null;
-  store.set("career", null);
+  store.set(slotKey(slotIdx), null);
+}
+
+// What the slot picker renders. The ACTIVE slot is summarised from the LIVE
+// object rather than from storage: a round settled but not yet saved would
+// otherwise show the disk copy and read as lost progress.
+function slotInfo(c, i) {
+  if (!c) return { i, used: false };
+  const team = Teams.LIST.find((t) => t.id === c.team);
+  const hist = c.history || [];
+  return {
+    i, used: true, flavour: c.flavour, year: c.year,
+    round: c.season.round, rounds: Tracks.SEASON.length,
+    team: c.team, teamName: team ? team.name : c.team,
+    code: c.driver ? c.driver.code : "", name: c.driver ? c.driver.name : "",
+    money: c.money, rep: c.rep,
+    seasons: hist.length + 1,
+    titles: hist.filter((h) => h.pos === 1).length,
+    wins: hist.reduce((n, h) => n + (h.wins || 0), 0)
+        + (c.results || []).filter((r) => r.p === 1).length,
+  };
+}
+function slots() {
+  const out = [];
+  for (let i = 0; i < SLOTS; i++)
+    out.push(slotInfo(i === slotIdx && career ? career : readSlot(i), i));
+  return out;
+}
+function anySave() { return slots().some((s) => s.used); }
+
+// Switch slots. SAVES THE ONE BEING LEFT FIRST — settleRound() already persists,
+// but a garage edit or an accepted offer between rounds lives on the object until
+// something calls save(), and switching away is exactly when that would be lost.
+function useSlot(i) {
+  i = slotIn(i);
+  if (career && i !== slotIdx) save();
+  slotIdx = i;
+  store.set("careerSlot", i);
+  career = readSlot(i);
+  return career;
+}
+function deleteSlot(i) {
+  i = slotIn(i);
+  store.set(slotKey(i), null);
+  if (i === slotIdx) career = null;
+  return true;
 }
 
 // A fresh career. `teamId` is who you drive for (driver flavour) or who you own
 // (my team). The starting garage is seeded with the team's OWN factory build, so
 // your career car begins as that team's real 2026 car — signature parts and all —
 // rather than a stripped default nobody would want to drive.
+// `slot` says WHERE it goes; omitted, it replaces whatever is in the live slot,
+// which is what the setup screen wants after the picker has already chosen one.
 function start(opts) {
   const o = opts || {};
+  if (o.slot != null) {
+    // Save the career being left before the new one takes its place — starting a
+    // career in slot 1 must not cost an unsaved change in slot 0.
+    if (career && slotIn(o.slot) !== slotIdx) save();
+    slotIdx = slotIn(o.slot);
+    store.set("careerSlot", slotIdx);
+  }
   const flavour = o.flavour === "myteam" ? "myteam" : "driver";
   const teamId = o.teamId || (flavour === "myteam" ? "custom" : "haas");
   const team = Teams.LIST.find((t) => t.id === teamId) || Teams.LIST[Teams.LIST.length - 1];
@@ -819,12 +919,14 @@ function state() {
     roster: career.roster, wages: wageBill(),
     offers: career.offers.length,
     seasons: career.history.length,
+    slot: slotIdx, slotsUsed: slots().filter((s) => s.used).length, slotsTotal: SLOTS,
   };
 }
 
 return {
   PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
   OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX,
+  SLOTS, slot, slots, useSlot, deleteSlot, anySave,
   data, active, inCareer, engage, load, save, clear, start, state, rnd, hash,
   salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,

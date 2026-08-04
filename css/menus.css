@@ -37,14 +37,38 @@
 }
 #title::after { content: ""; display: block; height: 5px; width: 70%; margin: 4px auto 0; background: var(--red); transform: skewX(-30deg); box-shadow: 0 0 14px rgba(225,6,0,0.6); }
 #subtitle { color: rgba(242, 242, 245, 0.72); margin: 6px 0 14px; font-size: 14px; letter-spacing: 0.04em; }
-/* TWO TIERS, not one list of seven.
-   Three ways to PLAY, full size and red; everything else half-height and two
-   across underneath. Seven identical buttons gave the garage the same weight as
-   RACE and made the column tall enough to crowd a landscape phone; this reads
-   as "pick a mode, and here are the other rooms" and is ~90px shorter. */
+/* THREE TIERS, by how much of your evening the thing costs.
+   HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
+   the four one-sitting modes, 2x2. SECONDARY is the rooms: half-height, two
+   across, no glow.
+
+   It was two tiers, but the play row had grown to FIVE full-size red buttons, so
+   the flat list the two-tier split existed to break up had quietly come back —
+   and a 24-round career carried exactly the weight of a time trial. Folding the
+   four quick modes into 2x2 pays for the hero's extra height, so the column is
+   no taller than before and still clears a 390px landscape phone. */
 #menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
-#menu-primary, #menu-secondary { display: grid; width: min(78vw, 340px); }
-#menu-primary { gap: var(--gap); }
+#menu-hero, #menu-primary, #menu-secondary { display: grid; width: min(78vw, 340px); }
+/* 2x2. minmax(0,1fr) rather than 1fr because a grid column's default `min-width:
+   auto` refuses to shrink below its longest word — RACE A FRIEND would push the
+   pair wider than the hero above it. */
+#menu-primary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.7);
+}
+/* The hero is the one button on the screen with two lines of text, so it centres
+   its own stack rather than inheriting the single-line baseline the others use. */
+#menu-hero .bigbtn { padding-block: 13px; }
+.mb-stack { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+/* The live save line. Dim and small: it is what the button will DO, not a second
+   label competing with CAREER. Empty (and therefore zero-height) until a save
+   exists, so a first-time title screen is exactly as it was. */
+.mb-sub {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+  font-style: normal; color: rgba(255, 255, 255, 0.72);
+  text-transform: none;
+}
+.mb-sub:empty { display: none; }
 #menu-secondary {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: calc(var(--gap) * 0.55);
@@ -99,7 +123,9 @@
   #audiostate { font-size: 10px; min-height: 0; }
   #disclaimer { font-size: 10px; margin-top: 6px; }
   /* the group is what gets the width now; the buttons fill their cell */
-  #menu-primary, #menu-secondary { width: min(42vw, 260px); }
+  #menu-hero, #menu-primary, #menu-secondary { width: min(46vw, 300px); }
+  #menu-hero .bigbtn { padding-block: 10px; }
+  .mb-sub { font-size: 9px; }
   #menu-buttons .bigbtn { width: 100%; padding: 9px 14px; font-size: 14px; }
   #menu-buttons .minibtn { padding: 6px 8px; font-size: 11px; }
 }

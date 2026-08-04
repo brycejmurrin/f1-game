@@ -52,7 +52,35 @@ So every **gameplay** accessor in `Career` is gated on `inCareer()` — `paceMul
 (`data`, `state`, `start`, `load`, `save`) are not. `tests/career.spec.js` pins both
 directions: development must not reach a Grand Prix, and must reach the career.
 
-## The save — `apex26.career`
+## The saves — `apex26.career.0` … `.2`
+
+**Three slots, one live at a time.** `apex26.careerSlot` holds which. Each slot is a
+whole career — its own team, garage, money, development and archive — so a driver
+career and a MY TEAM can run side by side, and a different team can be tried without
+giving up the season you are twelve rounds into.
+
+**One key per slot, not one array under one key.** localStorage rewrites the *whole*
+value on every `setItem`, so a single array would rewrite all three careers on every
+round settled — and a quota failure would then lose three saves instead of one.
+
+`Career.slots()` summarises all three for the picker (the **live** one from the
+in-memory object, not from storage: a round settled but not yet written would
+otherwise read as lost progress). `useSlot(i)` **saves the career being left first** —
+`settleRound()` already persists, but a garage edit or an accepted offer lives on the
+object until something calls `save()`, and switching away is exactly when that would
+be lost. `deleteSlot(i)` wipes one and leaves the others.
+
+The single-save era wrote `apex26.career`. `migrateSlots()` moves it into slot 0 and
+clears the old key, guarded on slot 0 being empty so running twice cannot overwrite a
+career started since.
+
+> **`migrateCareer()` must stay PURE.** It used to end in `store.set("career", …)`,
+> which was right when there was one save under one key and wrong the moment there
+> were three: reading slot 0 wrote it straight back under the *legacy* name, so the
+> key `migrateSlots()` had just cleared came back on the same boot and every later
+> boot resurrected it — a stale duplicate an older build would happily load.
+> `Career.load()` persists the climbed shape instead, because it is the one that
+> knows the slot.
 
 Versioned (`CAREER_V`), migrated through a ladder of one function per version step,
 mirroring `migrateSeasonPoints`. Key fields:

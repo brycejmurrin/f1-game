@@ -974,6 +974,24 @@ const api = {
     return c.money;
   },
   careerReset() { Career.clear(); G.refreshCareerButton(); return true; },
+  // ── Career SLOTS ──────────────────────────────────────────────────────────
+  // Three careers can be saved at once (`apex26.career.0..2`). No argument lists
+  // them; a number SWITCHES to that slot and returns the save it holds (null for
+  // an empty one). Switching saves the career being left first.
+  careerSlots(i) {
+    if (i === undefined) return Career.slots();
+    const c = Career.useSlot(i);
+    G.refreshCareerButton();
+    return c;
+  },
+  // Wipe ONE slot, whichever is live or not. The other two are untouched —
+  // careerReset() is the narrower "wipe the one I am in".
+  careerSlotDelete(i) {
+    Career.deleteSlot(i);
+    Career.load();               // land on whatever is left, so CONTINUE still means something
+    G.refreshCareerButton();
+    return Career.slots();
+  },
   // Settle `n` whole rounds WITHOUT driving them. The qualifying model supplies
   // the pace order, a ratings-weighted draw turns it into a race result, and the
   // result goes through the same championship award + Career.settleRound() the

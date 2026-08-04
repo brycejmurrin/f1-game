@@ -273,3 +273,55 @@
 #quali.q-done #q-drive, #quali.q-done #q-sim { display: none; }
 #quali:not(.q-done) #q-go { display: none; }
 }
+
+/* ---------- the slot picker ---------- */
+/* Three careers can be live at once (Career.SLOTS). Each row is a CARD YOU PRESS
+   plus a DELETE beside it, laid out as a grid rather than a flex row so the
+   delete button keeps a fixed column and the summaries stay left-aligned with
+   each other whatever they contain. Same surface and radius as .cr-card, because
+   a slot is one more card in a column full of them — it just happens to be the
+   one that changes which career you are in. */
+.cr-slot {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch; gap: 6px; margin-bottom: 6px;
+}
+.cr-slot-main {
+  display: flex; flex-direction: column; gap: 3px;
+  text-align: left; cursor: pointer; color: inherit; font: inherit;
+  min-height: var(--tap); padding: calc(var(--pad) * 0.5);
+  background: var(--surf-1); border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--r-sm);
+  transition: border-color 0.15s, background 0.15s;
+}
+.cr-slot-main:hover, .cr-slot-main:focus-visible {
+  border-color: var(--red); background: rgba(225, 6, 0, 0.12);
+}
+/* An EMPTY slot is an invitation, not a result: dashed edge and dimmed text, so
+   a column of three reads at a glance as "one career and two openings" without
+   having to compare their contents. */
+.cr-slot.empty .cr-slot-main { border-style: dashed; }
+.cr-slot.empty .cr-slot-who { color: var(--dim); }
+/* The career you are IN keeps the red edge permanently — after a switch, "which
+   one am I in" has to be answerable without pressing anything. */
+.cr-slot.active .cr-slot-main { border-color: var(--red); }
+.cr-slot-n {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.14em; color: var(--red);
+}
+.cr-slot-who { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
+.cr-slot-meta {
+  font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums;
+}
+/* DELETE is deliberately quiet until it is armed. The first press turns it red
+   and relabels it DELETE?, which is the whole confirmation — a modal for this
+   would be a screen, and a single-tap delete would be unforgivable. */
+.cr-slot-del {
+  align-self: stretch; min-width: 62px; cursor: pointer;
+  font: inherit; font-size: 9px; font-weight: 800; letter-spacing: 0.1em;
+  color: var(--dim); background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--r-sm);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.cr-slot-del:hover, .cr-slot-del:focus-visible { color: var(--red); border-color: var(--red); }
+.cr-slot-del.armed {
+  color: #fff; border-color: var(--red); background: rgba(225, 6, 0, 0.35);
+}
