@@ -263,3 +263,44 @@ test.describe("Qualifying — the flying lap", () => {
     expect(speed).toBeLessThan(5);
   });
 });
+
+// ── backing out ──────────────────────────────────────────────────────────────
+// The sheet commits you to a grid, so it needs a way out — but only BEFORE the
+// session. Once a lap is driven or taken, the classification IS the grid and
+// there is nothing left to reconsider.
+
+test.describe("Qualifying — BACK", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("BACK returns to race settings, one step, with nothing run", async ({ page }) => {
+    await toQuali(page);
+    await expect(page.locator("#q-back")).toBeVisible();
+    await page.evaluate(() => document.getElementById("q-back").click());
+    await expect(page.locator("#race-settings")).toBeVisible();
+    await expect(page.locator("#quali")).toBeHidden();
+    // The flow stops claiming a qualifying session is running.
+    expect(await page.evaluate(() => window.__apex.info().session)).toBe("race");
+    expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");
+  });
+
+  test("...and the weekend can be entered again from there", async ({ page }) => {
+    await toQuali(page);
+    await page.evaluate(() => document.getElementById("q-back").click());
+    await expect(page.locator("#race-settings")).toBeVisible();
+    await page.evaluate(() => document.getElementById("rs-go").click());
+    await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
+    // A fresh sheet, with both choices offered again.
+    await expect(page.locator("#q-drive")).toBeVisible();
+    await expect(page.locator("#q-sim")).toBeVisible();
+    expect(await page.evaluate(codes)).toHaveLength(22);
+  });
+
+  test("BACK disappears once the session has been run", async ({ page }) => {
+    // Backing out after a result would silently throw it away.
+    await toQuali(page);
+    await page.evaluate(() => document.getElementById("q-sim").click());
+    await expect(page.locator("#q-go")).toBeVisible();
+    await expect(page.locator("#q-back")).toBeHidden();
+    await expect(page.locator("#q-drive")).toBeHidden();
+  });
+});

@@ -6214,6 +6214,20 @@ $("q-sim").onclick = () => {
   quali.build();
 };
 $("q-go").onclick = () => { if (soundOn) GameAudio.uiSelect(); closeQualiToGrid(); };
+// BACK goes ONE step, to the race settings the weekend was staged from — which
+// has its own BACK to the hub or the select screen, so the two together are a
+// real back-stack rather than a shortcut that skips a screen.
+//
+// `session` has to come back with it. openQuali() set it to "quali", and leaving
+// the sheet without undoing that would leave the flow claiming a qualifying
+// session is running while the player sits in a menu.
+$("q-back").onclick = () => {
+  if (soundOn) GameAudio.uiSelect();
+  quali.close();
+  quali.clear();          // nothing was run; the next visit draws its own sheet
+  session = "race";
+  $("race-settings").hidden = false;
+};
 
 // ---- customize my team ----
 // Optional extra-paint rows: DOM colour-input id -> livery key. Saved onto the
