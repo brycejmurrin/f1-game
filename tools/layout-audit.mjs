@@ -489,6 +489,52 @@ const PROBE = (rootSel) => {
       out.truncated.push({ el: desc(el), text: (el.textContent || "").trim().slice(0, 30) });
   }
 
+  // UNDER THE HARDWARE: does anything interactive sit inside the safe-area
+  // inset — behind a notch, a Dynamic Island, or a home indicator?
+  //
+  // This is the axis the project claims to handle and never verified. The tokens
+  // are right (`--safe-t/r/b/l` over `env(safe-area-inset-*)`, with
+  // viewport-fit=cover), which is the half most projects get wrong — but nothing
+  // asserted that every screen actually uses them. And the insets are NOT the
+  // same in both orientations: held sideways the notch moves to the SIDE, which
+  // is the orientation this game is played in and the one where a mis-inset
+  // control is least likely to be noticed by eye.
+  //
+  // Playwright cannot emulate a physical notch, so the check reads whatever the
+  // tokens resolve to and, when they are zero (every desktop, and Chromium's
+  // phone emulation), falls back to the iPhone's real values for the orientation
+  // being measured. That turns "we handled the notch" from a claim into a
+  // number on a screen nobody can hold.
+  const cssPx = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+  const rs = getComputedStyle(document.documentElement);
+  let inset = {
+    t: cssPx(rs.getPropertyValue("--sat")), r: cssPx(rs.getPropertyValue("--sar")),
+    b: cssPx(rs.getPropertyValue("--sab")), l: cssPx(rs.getPropertyValue("--sal")),
+  };
+  out.insetReal = inset.t || inset.r || inset.b || inset.l ? true : false;
+  if (!out.insetReal && /iphone/i.test(navigator.userAgent)) {
+    // iPhone 15 Pro, measured: 59/34 top/bottom upright, 59 on the leading edge
+    // and 21 at the bottom on its side.
+    inset = vw > vh ? { t: 0, r: 59, b: 21, l: 59 } : { t: 59, r: 0, b: 34, l: 0 };
+  }
+  out.inset = inset;
+  out.underHardware = [];
+  if (inset.t || inset.r || inset.b || inset.l) {
+    for (const el of root.querySelectorAll(FOCUSABLE)) {
+      if (!visible(el)) continue;
+      const r = targetRect(el);
+      if (r.width < 1 || r.height < 1) continue;
+      if (r.right < 0 || r.bottom < 0 || r.left > vw || r.top > vh) continue;
+      const into = {
+        top: px(inset.t - r.top), bottom: px(r.bottom - (vh - inset.b)),
+        left: px(inset.l - r.left), right: px(r.right - (vw - inset.r)),
+      };
+      const worst = Math.max(into.top, into.bottom, into.left, into.right);
+      if (worst > 1) out.underHardware.push({ el: desc(el), into, worst,
+        text: (el.textContent || "").trim().slice(0, 24) });
+    }
+  }
+
   // SCROLLERS: how much is hidden, and how close to the floor of its sheet the
   // region reaches — the measurement that caught the action bar stealing a row.
   const sheet = root.querySelector(".sheet") || root;
@@ -638,7 +684,7 @@ async function sweepViewport([vpName, vpOpts, why]) {
       (cell.skipped ? `SKIPPED: ${cell.skipped}`
         : `clipped ${String(n(cell.clipped)).padStart(2)}  offscreen ${String(n(cell.offscreen)).padStart(2)}` +
           `  tapUnder24 ${String(n(cell.tinyTaps)).padStart(2)}  tapSoft ${String(n(cell.smallTaps)).padStart(2)}` +
-          `  trunc ${String(n(cell.truncated)).padStart(2)}` +
+          `  trunc ${String(n(cell.truncated)).padStart(2)}  underHW ${String(n(cell.underHardware)).padStart(2)}` +
           `  xOverflow ${cell.docOverflowX ? "YES" : "no "}  err ${n(cell.errors)}`));
   }
   await page.close();
@@ -668,7 +714,8 @@ fs.writeFileSync(path.join(OUT, "audit.json"), JSON.stringify({
 }, null, 2));
 writeIndex(merged);
 const bad = rows.filter((r) => r.skipped || (r.clipped || []).length || (r.offscreen || []).length
-  || r.docOverflowX || (r.errors || []).length || (r.tinyTaps || []).length);
+  || r.docOverflowX || (r.errors || []).length || (r.tinyTaps || []).length
+  || (r.underHardware || []).length);
 console.log(`\n${rows.length} cells, ${bad.length} with something to look at -> ${path.relative(ROOT, OUT)}/index.html`);
 
 function writeIndex(rows) {
@@ -676,13 +723,14 @@ function writeIndex(rows) {
   const cellHtml = (r) => {
     if (r.skipped) return `<td class="skip" title="${esc(r.skipped)}">skipped</td>`;
     const issues = (r.clipped || []).length + (r.offscreen || []).length + (r.errors || []).length
-      + (r.docOverflowX ? 1 : 0) + (r.tinyTaps || []).length;
+      + (r.docOverflowX ? 1 : 0) + (r.tinyTaps || []).length + (r.underHardware || []).length;
     const cls = issues ? "bad" : (r.smallTaps || []).length ? "warn" : "ok";
     const detail = [
       ...(r.clipped || []).map((c) => `clipped ${c.el} past ${c.by}`),
       ...(r.offscreen || []).map((c) => `offscreen ${c.el}`),
       ...(r.docOverflowX ? ["horizontal overflow"] : []),
       ...(r.errors || []).map((e) => "error " + e),
+      ...(r.underHardware || []).slice(0, 4).map((u) => `under hardware: ${u.el} by ${u.worst}px`),
       ...(r.tinyTaps || []).slice(0, 4).map((t) => `under WCAG 24px: ${t.el} ${t.w}x${t.h}`),
       ...(r.smallTaps || []).slice(0, 4).map((t) => `below house tap floor ${t.el} ${t.w}x${t.h}`),
     ].join("\n");

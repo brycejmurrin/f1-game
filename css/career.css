@@ -70,7 +70,7 @@
 #cr-inner {
   --pair-at: 620px;
   --pair-split: minmax(0, 1fr);
-  --pair-detail: minmax(0, 1.05fr);
+  --pair-main: minmax(0, 1.05fr);
   --pair-gap: calc(var(--pad) * 0.9);
 }
 
