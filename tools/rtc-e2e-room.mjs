@@ -58,7 +58,7 @@ const mk = async (name, teamIdx) => {
   // so they are worth carrying up here — a silent room is the failure mode.
   p.on("console", (m) => {
     const t = m.text();
-    if (/relay failure|rate-limited|WebSocket/i.test(t)) log(`  [${name} relay]`, t.slice(0, 120));
+    if (/relay failure|rate-limited|WebSocket|NETDBG/i.test(t)) log(`  [${name}]`, t.slice(0, 160));
   });
   await p.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "domcontentloaded", timeout: 90000 });
   await p.waitForFunction(() => window.__apex != null, { timeout: 90000 });
@@ -97,7 +97,20 @@ const want = PEERS - 1;
 for (let i = 0; i < 45 && (await guests()) < want; i++) await new Promise((r) => setTimeout(r, 2000));
 const got = await guests();
 log(el(), `guests connected: ${got}/${want}`);
-if (got < want) await die(`only ${got} of ${want} guest(s) arrived by room code`);
+if (got < want) {
+  // What each side BELIEVES, which is the only way to tell "the answer never
+  // arrived" from "it arrived and the handshake failed" — they look identical
+  // from outside.
+  for (let i = 0; i < PEERS; i++) {
+    const st = await pages[i].evaluate(() => {
+      const l = window.__apex.lobby();
+      return { role: l.role, guests: l.guests, pending: l.pending, connected: l.connected,
+               status: l.statusText, wire: l.wire };
+    });
+    log(`  P${i + 1}: ${JSON.stringify(st)}`);
+  }
+  await die(`only ${got} of ${want} guest(s) arrived by room code`);
+}
 
 log(`\n*** ROOM CODE WORKS — ${PEERS} peers met over a relay, no invite pasted, at ${el()} ***`);
 await b.close(); stopSrv();

@@ -2057,6 +2057,24 @@ const api = {
     return G.netLobby.acceptAnswer(answerCode);
   },
 
+  // lobbyCodeHost() / lobbyCodeJoin(code) — the ROOM CODE path, driven
+  // directly. Exposed because that path had NO test of any kind: exchange() is
+  // unreachable from the suite (the loopback has no SDP, the lobby specs use a
+  // fake transport), so every change to it shipped on reasoning alone — which
+  // is exactly how four separate regressions got out. tools/rtc-e2e-room.mjs
+  // drives these against a relay on localhost, where a failure is ours by
+  // construction rather than somebody else's server having a bad day.
+  lobbyCodeHost() {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    return G.netLobby.codeHost();
+  },
+  lobbyCodeJoin(code) {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    return G.netLobby.codeJoin(code);
+  },
+
   // lobbyInviteAnother() — mint a FURTHER invite without disturbing the room.
   // Deliberately not lobbyHost() twice: that calls open(), which clears the
   // peer maps, so inviting a third player would forget the second.

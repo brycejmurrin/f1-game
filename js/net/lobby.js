@@ -317,6 +317,11 @@ const NetLobby = (function () {
       if (transport === t) { transport = null; pendingId = null; }
       const made = NetSession.create({ transport: t });
       sessions.set(id, made);
+      // This guest is IN, so the offer it used is spent — an SDP offer belongs
+      // to one connection. Put a fresh one on the table for whoever is next.
+      // Safe here and not earlier: t has moved into `transports` and pendingId
+      // is cleared just above, so minting cannot close a live handshake.
+      if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) {} }
       // The first connection, not the most recent — `session` means "the one
       // most callers mean", and on a guest it is the only one there is.
       session = [...sessions.values()][0];
@@ -1105,9 +1110,14 @@ const NetLobby = (function () {
             if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return; }
             if (acc.peer && pendingId) _peers.set(pendingId, acc.peer);
             waitForOpen();
-            // That offer is spent — it belongs to the connection just accepted
-            // — so put a fresh one on the table for whoever comes next.
-            if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) {} }
+            // NOT rotating here. Minting the next offer means newTransport(),
+            // which drops the PENDING one — and the pending one is this guest's
+            // connection, still gathering ICE. Doing it here killed the
+            // handshake a moment after completing it: the answer arrived, was
+            // accepted, and then the transport it belonged to was closed.
+            // The room rotates once the guest is actually connected, in
+            // onConnected() below, by which point this transport has moved into
+            // `transports` and pendingId is clear.
           },
         });
         if (!sub.ok) { say(sub.message || "Could not open that room.", true); return sub; }
