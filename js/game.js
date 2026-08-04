@@ -2175,11 +2175,45 @@ function showTouchControls(show) {
   const steerBtns = t && steerMode === "buttons";
   els.btnSteerLeft.hidden = !steerBtns;
   els.btnSteerRight.hidden = !steerBtns;
-  // manual mode => shifts take the right column, boost/OT move to centre (CSS).
-  // button/touch modes => boost/OT pull in next to the steering thumb (CSS).
   document.body.classList.toggle("manual", manual);
   document.body.classList.toggle("steer-buttons", steerBtns);
   document.body.classList.toggle("steer-touch", t && steerMode === "touch");
+  layoutDocks(steerBtns, manual);
+}
+
+// Fill the two thumb docks. This is the ONE thing the flex bar cannot express
+// on its own: a control genuinely changes SIDE between modes — the throttle is
+// a left-thumb pedal in tilt mode and a right-thumb one in buttons mode, where
+// the arrows own the left — and CSS cannot move an element to a different
+// parent. Everything else (spacing, wrapping, centring, never overlapping) is
+// the flex row's job, and there is deliberately not one coordinate here.
+//
+// Lists are in VISUAL left-to-right order, which for a normal flex row is just
+// DOM order. Each thumb's home is the screen edge it sits at, so what is held
+// continuously goes OUTERMOST — leftmost on the left, rightmost on the right —
+// and the discretionary taps sit inboard of it.
+function layoutDocks(steerBtns, manual) {
+  const left = $("dock-left"), right = $("dock-right");
+  if (!left || !right) return;
+  const L = [], R = [];
+  // The three taps are always the inboard end of the right dock. AERO is the
+  // outermost of them because it is pressed the most — 3-7 times a lap, one per
+  // activation zone, against a couple for BOOST and rarely more than one for OT.
+  R.push(els.btnBoost, els.btnOT, els.btnAero);
+  if (steerBtns) {
+    L.push(els.btnSteerLeft, els.btnSteerRight);   // arrows own the left thumb
+    R.push(els.btnBrake, els.btnThrottle);         // ...so the pedals come here,
+                                                   //    GAS outermost at the corner
+  } else {
+    L.push(els.btnThrottle, els.btnBrake);         // tilt/touch: GAS at the corner
+    if (manual) R.push(els.shiftUp, els.shiftDown);   // DN outermost — held constantly
+  }
+  for (const [dock, list] of [[left, L], [right, R]]) {
+    // Append unconditionally: it both moves a button that changed side and
+    // rewrites the order, so a mode switch can never leave yesterday's sequence
+    // half-applied.
+    for (const el of list) if (el) dock.appendChild(el);
+  }
 }
 
 // THE CLASSIFICATION IS THE HOST'S. Both peers can see both human cars, but
