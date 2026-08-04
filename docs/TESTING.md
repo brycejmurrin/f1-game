@@ -194,6 +194,8 @@ hook values.
 | `dev-tools.spec.js` | `__apex` API contract tests (60+ tests) |
 | `new-hooks.spec.js` | contract tests for timing/field/energy hooks plus `modelDiagnostics()` / `geometryDiagnostics()` and day/night model manifests |
 | `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |
+| `career.spec.js` | career mode: the flow/session axes, the save + its migration, the isolation guarantees (career development must not reach a Grand Prix, and must reach the career), the hub flow, a settled round, driver ratings |
+| `quali.spec.js` | one-lap qualifying: the simulated field and its spread, the sheet's two states, and that the race grid IS the qualifying order car-for-car (not the hardcoded P12) |
 | `custom-team.spec.js` | custom-team livery editor: colour save frees/rebuilds the decal texture |
 | `data-lifecycle.spec.js` | data hub session plumbing: meeting/year/session/driver responses own their option lists (no stale races) |
 | `telemetry-compare.spec.js` | TELEMETRY multi-lane compare (3+ drivers) + cross-session (one driver's race vs quali via the session-surviving tray), lane removal |
