@@ -378,6 +378,14 @@ come last.
    tier 4 will take anyone. Your own team always offers first — an empty list would
    strand a career with nothing to press. Deal length is `1 + floor(mv / 40)`, capped at 3.
 
+   **MY TEAM is never offered a seat, and its contract clock does not run.** You own the
+   constructor; there is nothing to sign and nobody to be hired away by. This is a
+   correctness rule, not flavour: `acceptOffer()` moves `career.team` while `flavour`
+   stays `"myteam"`, so an offer taken from a MY TEAM save put the player and their
+   hired driver into a real team's two seats and dropped the custom team off the grid
+   — the career being played stopped existing. `makeOffers()` returns `[]` for the
+   flavour, and the hub already handles an empty list by going straight to NEXT RACE.
+
 `rollover()` **mutates `career.season` in place** and never reassigns it. `openCareer()`
 does `season = c.season`, and that shared identity is the whole reason `buildResults` /
 `buildStandings` / the HUD work in career with no career-specific branch. Swapping in a
@@ -417,6 +425,22 @@ careless check. `Quali.order(live)` returns `null` unless every car maps.
 
 A one-off Grand Prix skips qualifying and keeps its hardcoded P12 start — that mode
 is a quick blast, not a weekend. SEASON gets qualifying as well as career.
+
+**Every round qualifies, and the classification never outlives its weekend.** Two
+bugs came out of getting that wrong, and both looked like working grids:
+
+- The results screen's NEXT ROUND went straight to `startRace()`, so only the round
+  entered through race settings was ever qualified for. Rounds 2–24 of a season
+  lined up on round 1's classification — which `Quali.order()` dutifully remapped
+  onto the new cars by `driverId`, producing a plausible grid for a session that
+  never happened. NEXT ROUND opens the sheet for a championship now, and
+  `openQuali()` clears the previous classification.
+- `gridUp()` accepts any `preOrder` whose length matches the field, and the
+  classification survived `quitToMenu()` — so the next **Grand Prix** started on a
+  season's qualifying order, silently losing the P12 climb that mode exists for.
+  The read is gated on `isChampionship()` rather than on every exit having
+  remembered to clear: a Grand Prix holds no qualifying session, so it has no grid
+  to inherit, by construction. `quitToMenu()` clears it as well.
 
 ## Debug hooks
 

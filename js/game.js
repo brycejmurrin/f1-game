@@ -1838,7 +1838,7 @@ function startRace() {
   } else {
     Particles.rainShow(false);
   }
-  gridUp(quali.order(cars));
+  gridUp(isChampionship() ? quali.order(cars) : null);
   recomputePlayerMods();
   // Only a RACE can retire a car. A time trial is you against the clock and
   // qualifying is one flying lap — losing the car to a gearbox there would end
@@ -2210,6 +2210,7 @@ function quitToMenu() {
   // next thing the player presses. The championship SAVES are untouched — what
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
   setFlow("gp"); session = "race";
+  quali.clear();   // last weekend's classification is not this one's grid
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -6095,6 +6096,10 @@ $("rs-go").onclick = () => {
 // the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
 function openQuali() {
   session = "quali";
+  // Reached from race settings this is already "menu"; reached from the results
+  // screen it would still say "results". No race is running while the sheet is
+  // up, so both paths say the same thing.
+  state = "menu";
   quali.clear();
   loadTrack(trackIdx);
   makeCars();
@@ -6368,7 +6373,10 @@ els.resNext.onclick = () => {
     trackIdx = Tracks.seasonIndex(season.round);
   }
   els.results.hidden = true;
-  startRace();
+  // A championship weekend qualifies — every round, not just the one entered
+  // through race settings. openQuali() also clears the previous round's
+  // classification, which is what stops this grid being last week's.
+  if (isChampionship()) openQuali(); else startRace();
 };
 
 function setPaused(p) {
