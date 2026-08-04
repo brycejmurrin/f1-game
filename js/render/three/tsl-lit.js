@@ -578,6 +578,58 @@
       return vec4(albedo, rough);
     }) : null;
 
+    /* ── roadMarkings (lit.js:523-554) — the painted lines ────────────────────
+     * The white edge lines and the dashed centre line are NOT geometry and NOT
+     * vertex colour: js/track/mesh.js:413 stopped emitting them as colour and
+     * the fragment shader now draws them analytically from the road's
+     * track-space coords (arc-length s, signed lateral x, half-width), carried
+     * by the `trk` attribute (glx.js:441-468, tlx.js buildGeometry). This port
+     * did not exist, so every road on this backend rendered as bare tarmac.
+     *
+     * DERIVATIVES ARE UNCONDITIONAL. GLX opens with `if (hw <= 0.5) return;`
+     * and takes fwidth() after it — legal in GLSL, but the same shape in TSL
+     * puts a derivative inside non-uniform control flow, which is a HARD WGSL
+     * compile error (and it is reported asynchronously, so the backend boots
+     * clean and then draws wrong). Both fwidth() calls are therefore hoisted
+     * above every branch and the road test becomes a MASK on the output, not a
+     * branch around it — same result, no derivative hazard, and it stays
+     * correct when this backend runs on real WebGPU rather than the WebGL2
+     * fallback. For the same reason the body uses select()/arithmetic
+     * throughout instead of If().
+     * Returns vec4(albedo, rough), matching applyMaterial's packing. */
+    const roadMarkings = Fn(([trkIn, albedoIn, roughIn]) => {
+      const s = float(trkIn.x).toVar();
+      const x = float(trkIn.y).toVar();
+      const hw = float(trkIn.z).toVar();
+      // Hoisted derivatives — see the note above.
+      const aaX = clamp(fwidth(x), 1e-4, 0.30).toVar();
+      const aaS = clamp(fwidth(s).div(7.0), 1e-4, 0.24).toVar();
+      const albedo = vec3(albedoIn).toVar();
+      const rough = float(roughIn).toVar();
+
+      // Edge lines — a 0.20 m band just inside each tarmac edge.
+      const dEdge = abs(abs(x).sub(hw.sub(0.10))).toVar();
+      const edge = smoothstep(aaX.mul(-1.0).add(0.10), aaX.add(0.10), dEdge).oneMinus().toVar();
+
+      // Dashed centre line — 0.60 m wide, 7 m period, 50 % duty, measured from
+      // the dash CENTRE so the band is symmetric and wraps at the period seam.
+      const band = smoothstep(aaX.mul(-1.0).add(0.30), aaX.add(0.30), abs(x)).oneMinus().toVar();
+      const ph = fract(s.div(7.0)).toVar();
+      const dash = smoothstep(aaS.mul(-1.0).add(0.25), aaS.add(0.25), abs(ph.sub(0.25))).oneMinus().toVar();
+
+      // Sub-pixel minification: fade amplitude rather than let a half-covered
+      // band strobe.
+      const mip = clamp(aaX.sub(0.06).div(0.24).oneMinus(), 0.0, 1.0).toVar();
+      // hw > 0.5 marks road SURFACE; every other mesh reads trk = (0,0,0), and
+      // the kerb ribbon / edge skirt push hw 0 so they are skipped too.
+      const onRoad = select(hw.greaterThan(0.5), float(1.0), float(0.0)).toVar();
+      const m = max(edge, band.mul(dash)).mul(mip).mul(onRoad).toVar();
+
+      albedo.assign(mix(albedo, vec3(0.95, 0.95, 0.97), m));
+      rough.assign(mix(rough, 0.55, m));    // paint is smoother than tarmac
+      return vec4(albedo, rough);
+    });
+
     /* ── applyMaterial (lit.js:279-389): albedo + roughness modulation for the
      *    15 track materials. nrmIn = the RAW varying normal (vNrm), matching
      *    the GLSL call site. Returns vec4(albedo, rough). ─────────────────── */
@@ -707,7 +759,18 @@
      * matU = the per-draw material scalars as uniform nodes (one set per
      * cached variant — every variant compiles to the SAME program text, so
      * three's program cache dedupes the actual GL compiles). */
-    function buildFragment(matU) {
+    // `chunked` = this variant is only ever bound to createChunkedMesh
+    // geometry (the city props / glass). Those never carry track coords, so
+    // the variant omits BOTH the `trk` attribute read and roadMarkings(). That
+    // is what lets tlx-chunked.js skip the attribute entirely: 12 B/vertex on
+    // a multi-million-vertex street circuit is ~27 MB of zeros, on the one
+    // buffer the whole chunked subsystem exists to keep small (see its header
+    // — the staged-release mobile-OOM guard). GLX pays nothing there either:
+    // its aTrk is per-mesh optional (glx.js:441-442) and a disabled attrib
+    // array reads a constant (0,0,0), which a node material cannot express.
+    // Cost: one extra program. INVARIANT: a chunked mesh must only ever be
+    // drawn through drawChunked/castShadowChunked (it is — game.js:4805,4810).
+    function buildFragment(matU, chunked) {
       return Fn(() => {
         // ── STANDING-RULE ANCHORS: unconditional Fn-body .toVar() on every
         //    shared varying-derived node BEFORE any conditional use. ──────────
@@ -716,6 +779,10 @@
         const objP = vec3(positionGeometry).toVar();          // vObjPos
         const albedoIn = vec3(attribute("color", "vec3")).toVar();   // vCol
         const matA = float(attribute("mat", "float")).toVar();       // vMat
+        // vTrk — road track-space (s, x, halfWidth); (0,0,0) on every other
+        // non-chunked mesh. Anchored here with the other varyings per the
+        // standing rule, because roadMarkings() takes derivatives of it.
+        const trkA = chunked ? null : vec3(attribute("trk", "vec3")).toVar();  // vTrk
         const vd = length(wp.sub(cameraPosition)).toVar();    // vDist
         const V = normalize(cameraPosition.sub(wp)).toVar();
 
@@ -856,6 +923,17 @@
           const packedTex = applyMaterialTex(surfaceId, albedo, rough, wp, Nvary, vd);
           albedo.assign(packedTex.xyz);
           rough.assign(packedTex.w);
+        }
+
+        // ── painted road markings (lit.js:882) ─────────────────────────────
+        // AFTER the material grain and the baked texture, exactly as GLX
+        // orders it, so the paint sits ON the tarmac rather than under it.
+        // Called unconditionally: it carries its own hw mask and its
+        // derivatives must not sit inside a branch (see roadMarkings above).
+        if (trkA) {
+          const packedPaint = roadMarkings(trkA, albedo, rough);
+          albedo.assign(packedPaint.xyz);
+          rough.assign(packedPaint.w);
         }
 
         // ── specular AA: widen roughness by the normal's screen-space
@@ -1201,7 +1279,7 @@
       };
       const alpha = val(o.alpha, 1);
       const m = new THREE.MeshBasicNodeMaterial();
-      const packed = buildFragment(matU);
+      const packed = buildFragment(matU, !!o.chunked);
       m.colorNode = packed.rgb;
       m.opacityNode = packed.a;
       m.positionNode = flagPositionNode();

@@ -46,6 +46,7 @@ const NetPlay = (function () {
     GO: "go",                             // host -> guest: leave the room, build the race
     START: "start",                       // host -> guest lights-out tick
     ARMED: "armed",                       // guest -> host: my circuit is built, name the moment
+    QUALI: "quali",                       // a driven qualifying lap: {driverId, t}
     LAP: "lap",                           // completed lap / sector
     RESULT: "result",                     // final classification
     CAUTION: "caution",                   // host -> guest race control (flags)
@@ -225,6 +226,10 @@ const NetPlay = (function () {
             peerArmed = true;
             if (armDeadline) nameTheMoment();
           }
+          // A rival's qualifying lap. Handed to the game rather than kept here:
+          // the classification is the game's, and it has to be recomputed with
+          // BOTH real times in it the moment the second one lands.
+          if (name === EV.QUALI && d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d);
           if (name === EV.LAP && d) peerLaps.push(d);
           if (name === EV.RESULT && d) peerResult = d;
           if (name === EV.CAUTION && d && G.applyCaution) G.applyCaution(d);
@@ -313,6 +318,14 @@ const NetPlay = (function () {
       session.sendEvent(EV.START, { at: session.localToPeer(at), hold });
       G.netStart = { at, hold, now: () => (G.netNow != null ? G.netNow : performance.now()) };
       return true;
+    }
+
+    // Publish OUR driven qualifying lap. Rides the reliable channel: a lost
+    // qualifying time is a wrong grid for the whole race, not one stuttered
+    // frame, so it cannot go on the snapshot channel with the positions.
+    function reportQuali(driverId, t) {
+      if (!session || !(t > 0)) return false;
+      return session.sendEvent(EV.QUALI, { driverId, t: +t.toFixed(3) });
     }
 
     // ---- race events ------------------------------------------------------
@@ -412,7 +425,7 @@ const NetPlay = (function () {
     return {
       start, stop, tick,
       ownsRaceControl, ownsClassification,
-      hostStart, reportLap, reportResult, reportCaution, awaitingResult,
+      hostStart, reportLap, reportResult, reportCaution, awaitingResult, reportQuali,
       peerLaps: () => peerLaps.slice(),
       peerResult: () => peerResult,
       // updateCar() consults this: a car posed from the network must not also
