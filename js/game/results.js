@@ -24,9 +24,14 @@ function buildResults(order) {
     const sw = document.createElement("span"); sw.className = "res-swatch";
     sw.style.background = G.cssCol(c.team.color);
     const nm = document.createElement("span"); nm.className = "res-name";
-    nm.textContent = c.code + "  " + c.name + (c.penalty ? "  (+" + c.penalty + "s)" : "");
+    // A retirement says WHY in the place a penalty would say how much: the two
+    // never co-occur (a car that stopped was not given time back).
+    nm.textContent = c.code + "  " + c.name
+      + (c.retired ? "  (" + (c.dnf || "dnf") + ")" : c.penalty ? "  (+" + c.penalty + "s)" : "");
     const pt = document.createElement("span"); pt.className = "res-pts";
-    pt.textContent = (Teams.POINTS[i] || 0) + " pts";
+    // Classified last and scoring nothing — the same rule endRace awards on, said
+    // in the one word the sport uses for it.
+    pt.textContent = c.retired ? "DNF" : (Teams.POINTS[i] || 0) + " pts";
     row.append(pos, sw, nm, pt);
     els.resultsTable.appendChild(row);
   });

@@ -294,8 +294,13 @@ const NetPlay = (function () {
       // Publish the clock the countdown reads, so game.js and the session
       // agree on "now" rather than each calling performance.now() separately.
       G.netNow = now;
+      // pump() can deliver the close that ends this session — onClose calls
+      // stop(), which nulls `session` — so re-check the field rather than
+      // dereferencing it again. Found by the first real two-peer connection:
+      // a loopback session never closes mid-pump, so nothing here could have
+      // caught it.
       session.pump(now);
-      if (!session.alive()) return;             // onClose already handled it
+      if (!session || !session.alive()) return;   // onClose already handled it
 
       // Publish our own car. Only ours — under distributed authority nobody
       // else's position is ours to assert.
