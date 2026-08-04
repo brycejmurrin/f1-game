@@ -182,12 +182,23 @@
             seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.14), [0.9, 0.7, len - 1.4],
               [0.60, 0.61, 0.64], b);
             stage._mat = MAT.FABRIC;
-            for (let j = 0; j * 0.98 < len - 3; j++) {
+            // Crowd = one continuous dark BAND plus sparse speckle, never one
+            // box per seat. At ~1 m spacing this loop was emitting ~30 bodies
+            // per row on every row of every bleacher, and Vegas is already the
+            // heaviest circuit in the fleet. A night crowd reads as an unbroken
+            // dark mass anyway — the individual bodies were invisible; what the
+            // eye actually picks up is the scatter of phone screens on top of
+            // it, which is what the speckle below is for.
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.86),
+              [0.58, 0.88, len - 2.2], LOT_FANS[0], b);
+            const cnt = Math.min(13, Math.floor(len / 4.4));
+            for (let j = 0; j < cnt; j++) {
               const h2 = hash(k * 19 + t * 53 + j * 41);
-              if (h2 < 0.40) continue;
+              if (h2 < 0.46) continue;
               seat.box(stage,
-                vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1.6 + j * 0.98), a.u, y + 0.84),
-                [0.5, 0.9, 0.42], LOT_FANS[Math.floor(h2 * 53) % LOT_FANS.length], b);
+                vadd(vadd(vadd(a.c, a.r, lat), a.t, (j / (cnt - 1) - 0.5) * (len - 4)),
+                  a.u, y + 0.94),
+                [0.52, 0.92, 1.5], LOT_FANS[Math.floor(h2 * 53) % LOT_FANS.length], b);
             }
             stage._mat = MAT.METAL;
           }

@@ -764,13 +764,20 @@
             stage._mat = MAT.FABRIC;
             seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.14),
                      [1.0, 0.5, len - 1.2], [0.30, 0.33, 0.38], b);
-            for (let j = 0; j * 1.05 < len - 2.5; j++) {
+            // General admission, half-empty in practice — so this row is a
+            // SPARSE speckle of standing clumps, never one box per seat. The
+            // old ~1 m stride emitted a body slot for every seat on every row
+            // of every deck; at the distance these are read from, a clump of
+            // three is indistinguishable from three people, and this circuit is
+            // already among the heaviest in the fleet. Clump width (1.6 m) is
+            // what keeps the thinned run reading as full as the old one.
+            const cnt = Math.min(12, Math.floor(len / 4.2));
+            for (let j = 0; j < cnt; j++) {
               const h2 = hash(k(s) * 11 + t * 61 + j * 19);
-              // General admission, half-empty in practice — and this circuit is
-              // already the heaviest in the fleet, so the crowd stays thin.
-              if (h2 < 0.62) continue;
-              seat.box(stage, vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1.2 + j * 1.05),
-                       a.u, y + 0.64), [0.55, 0.95, 0.45],
+              if (h2 < 0.42) continue;
+              seat.box(stage, vadd(vadd(vadd(a.c, a.r, lat), a.t,
+                       (j / (cnt - 1) - 0.5) * (len - 3.4)),
+                       a.u, y + 0.64), [0.55, 0.95, 1.6],
                        [[0.84, 0.26, 0.20], [0.20, 0.44, 0.70], [0.92, 0.86, 0.34],
                         [0.90, 0.90, 0.88]][Math.floor(h2 * 97) % 4], b);
             }

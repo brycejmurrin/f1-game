@@ -166,18 +166,15 @@
                    { livery: "alu", tiers: 1, roof: "truss", endWalls: true });     // Turn 5 Mogyoród
       grandstandEx(0.255, -1, 22, 54, SHELL, CROWD[3],
                    { livery: "steel", tiers: 1, roof: "cantilever", suites: true }); // T6/7 Driving Centre chicane
-      grandstandEx(0.35, -1, 12, 48, SHELL, CROWD[1],
-                   { livery: "concrete", tiers: 1, roof: "cantilever" });
       grandstandEx(0.40,  1, 13, 46, SHELL, CROWD[0],
                    { livery: "steel", tiers: 2, roof: "flat" });
       grandstandEx(0.55, -1, 10, 50, SHELL, CROWD[1],
                    { livery: "alu", tiers: 1, roof: "truss" });
-      grandstandEx(0.68, -1, 10, 44, SHELL, CROWD[2],
-                   { livery: "concrete", tiers: 1, roof: "cantilever" });
-      grandstandEx(0.80,  1, 10, 40, SHELL, CROWD[3],
-                   { livery: "steel", tiers: 1, roof: "flat" });
       grandstandEx(0.90,  1, 10, 62, SHELL, CROWD[0],   // Club stand — final corner
                    { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+      // s 0.35 / 0.68 / 0.80 are deliberately NOT grandstandEx — see
+      // bowlTerrace() below. Those three are the circuit's original 1986 open
+      // concrete terracing, and a roofed shell is the wrong silhouette for them.
 
       // ====================================================================
       // GRANDSTAND ACCENT STRIPS — lit fascia + concourse window bands
@@ -196,12 +193,11 @@
       standAccent(0.12, -1, 10, 44);
       standAccent(0.155, 1, 24, 58);
       standAccent(0.255, -1, 22, 54);
-      standAccent(0.35, -1, 12, 48);
       standAccent(0.40,  1, 13, 46);
       standAccent(0.55, -1, 10, 50);
-      standAccent(0.68, -1, 10, 44);
-      standAccent(0.80,  1, 10, 40);
       standAccent(0.90,  1, 10, 62);
+      // No accent strip at 0.35/0.68/0.80: those are open terraces with no
+      // shell to carry a fascia, so the band would hang in mid-air.
 
       // Grandstand lit-window concourse strips
       const gsLit = [
@@ -209,7 +205,6 @@
         { s: 0.10, side: -1, gap: 15, len: 52 },
         { s: 0.155, side: 1, gap: 26, len: 54 },
         { s: 0.255, side: -1, gap: 24, len: 50 },
-        { s: 0.35, side: -1, gap: 17, len: 44 },
         { s: 0.55, side: -1, gap: 15, len: 46 },
         { s: 0.90, side: 1, gap: 15, len: 58 },
       ];
@@ -374,7 +369,38 @@
                   { id: "hungaroring-paddock", samples: 8 });
       // Rear hospitality — motorhome row behind the pit slab
       motorhome(K(0.03), -1, 34, 16, 8, 34, { wall: WHITE, window: WIN_WARM });
-      tower(K(0.02), -1, 46, 8, 32, { col: [0.74, 0.76, 0.80], cap: [0.6, 0.62, 0.66], mast: 8 });
+      // Timing / press block. Was a generic tower() — the same tapered shaft
+      // with a cap and a mast that stands behind a dozen other paddocks in the
+      // fleet. The Hungaroring's is a squat 1986 concrete slab: three banded
+      // storeys, a stepped-back control deck and an EXTERNAL stair cage bolted
+      // to one flank. Same footprint, a silhouette that is this venue's.
+      (function timingBlock() {
+        const a = anchor(K(0.02), -1, 46);
+        const b = [a.r, a.u, a.t], c = a.c;
+        if (onTrack(c[0], c[2], 9)) return;
+        out._mat = MAT.CONCRETE;
+        for (let f = 0; f < 3; f++) {
+          addBox(out, vadd(c, a.u, 2.1 + f * 4.0), [10, 3.6, 17], f % 2 ? GREY : WHITE, b);
+          out._mat = 0;
+          // Continuous ribbon glazing — the banded fenestration of the period.
+          addBox(out, vadd(vadd(c, a.r, 5.05), a.u, 2.6 + f * 4.0),
+                 [0.18, 1.9, 15.5], f === 2 ? WIN_COOL : WIN_WARM, b);
+          out._mat = MAT.CONCRETE;
+        }
+        // Stepped-back control deck on the roof.
+        addBox(out, vadd(c, a.u, 15.4), [7.2, 3.2, 12], WHITE, b);
+        out._mat = 0;
+        addBox(out, vadd(vadd(c, a.r, 3.7), a.u, 15.6), [0.18, 2.0, 11], WIN_COOL, b);
+        out._mat = MAT.METAL;
+        addBox(out, vadd(c, a.u, 17.2), [8.0, 0.3, 12.8], GREY, b);
+        // External stair cage on the far flank — open mesh landings on a spine.
+        const st = vadd(c, a.t, 9.4);
+        addBox(out, vadd(st, a.u, 8.5), [4.4, 17, 0.2], STEEL, b);
+        for (let f = 0; f < 4; f++)
+          addBox(out, vadd(st, a.u, 2.0 + f * 4.0), [4.6, 0.16, 2.4], STEEL, b);
+        addCyl(out, vadd(st, a.r, 2.2), 0.11, 18, LAMP_POST, 5, b);
+        out._mat = 0;
+      })();
       // Broadcast/OB compound — every real venue keeps satellite trucks behind
       // the paddock; this circuit had none. Tucked at a clearance no other
       // paddock facility uses (motorhome sits at 34, hospitality kit at 92,
@@ -584,6 +610,77 @@
         spectatorHill(s - half, s + half, side, gap,
                       { rows, density: 0.35, step: 8, crowd: CROWD, grass: AMPH2, riser: HG_RISER });
       }
+
+      // ── OPEN CONCRETE TERRACE (1986 vintage) ────────────────────────────
+      //    The Hungaroring's original stands are not shells with roofs on
+      //    them — they are poured raked slabs sitting straight on the bank,
+      //    open to the sky, with square vomitory stair shafts punching up
+      //    through the back and a tube crush barrier down every row. That is
+      //    a silhouette grandstandEx cannot produce at any option setting: it
+      //    always builds a back shell and (unless roof:"none", which then
+      //    leaves the shell orphaned) a roof, and the shell is exactly the
+      //    thing that makes a socialist-era terrace read as a modern stand it
+      //    is not. Built from primitives, local to this closure, and cheaper
+      //    per metre than the stand it replaces.
+      const TERR_CONC = [0.72, 0.70, 0.64];   // sun-bleached poured concrete
+      const TERR_RAIL = [0.60, 0.58, 0.53];
+      function bowlTerrace(s, side, gap, len, rows) {
+        const k = K(s);
+        const probe = anchor(k, side, gap);
+        if (onTrack(probe.c[0], probe.c[2], len * 0.4)) return;
+        // Register the front face so the deferred forestEdge() pass frames the
+        // terrace instead of planting the treeline through it — grandstandEx
+        // did this for us at these three fractions before the swap.
+        const half = (len / 2) / (n * ds);
+        recordBarrier(s - half, s + half, side, gap);
+        const CONC2 = [TERR_CONC[0] * 0.88, TERR_CONC[1] * 0.88, TERR_CONC[2] * 0.87];
+        let topH = 0;
+        for (let t = 0; t < rows; t++) {
+          const a = anchor(k, side, gap + 1.2 + t * 2.3);
+          const b = [a.r, a.u, a.t];
+          const h = 1.1 + t * 1.35;
+          topH = h;
+          out._mat = MAT.CONCRETE;
+          addBox(out, vadd(a.c, a.u, h * 0.5), [2.4, h, len], t % 2 ? TERR_CONC : CONC2, b);
+          out._mat = MAT.METAL;
+          // Crush barrier — one continuous tube rail on stub posts. This detail
+          // dates a terrace more than the concrete does.
+          addBox(out, vadd(a.c, a.u, h + 1.02), [0.13, 0.13, len - 1], TERR_RAIL, b);
+          for (const sgn of [-1, 1])
+            addCyl(out, vadd(vadd(a.c, a.t, sgn * (len * 0.5 - 3)), a.u, h),
+                   0.07, 1.02, TERR_RAIL, 4, b);
+          // Crowd is a SPARSE speckle over the row, never one box per seat.
+          out._mat = MAT.FABRIC;
+          const cnt = Math.min(11, Math.floor(len / 7));
+          for (let c = 0; c < cnt; c++) {
+            if (hash(k * 7 + t * 29 + c * 13) < 0.46) continue;
+            const off = (c / Math.max(1, cnt - 1) - 0.5) * (len - 5);
+            addBox(out, vadd(vadd(a.c, a.t, off), a.u, h + 0.6),
+                   [1.8, 1.15, 1.6], CROWD[(c + t) % CROWD.length], b);
+          }
+          out._mat = 0;
+        }
+        // Vomitory stair shafts — the terrace's only vertical elements, set in
+        // the back row with an open dark stair mouth facing the track.
+        const towers = Math.max(2, Math.round(len / 26));
+        const a = anchor(k, side, gap + 1.2 + rows * 2.3);
+        const b = [a.r, a.u, a.t];
+        for (let i = 0; i < towers; i++) {
+          const off = ((i + 0.5) / towers - 0.5) * (len - 8);
+          const c0 = vadd(a.c, a.t, off);
+          out._mat = MAT.CONCRETE;
+          addBox(out, vadd(c0, a.u, (topH + 1.8) * 0.5), [3.4, topH + 1.8, 3.6], CONC2, b);
+          out._mat = 0;
+          addBox(out, vadd(vadd(c0, a.r, -side * 1.72), a.u, 1.5),
+                 [0.3, 2.6, 1.8], [0.10, 0.10, 0.11], b);            // stair mouth
+          out._mat = MAT.METAL;
+          addBox(out, vadd(c0, a.u, topH + 1.9), [3.8, 0.18, 4.0], TERR_RAIL, b);
+          out._mat = 0;
+        }
+      }
+      bowlTerrace(0.35, -1, 12, 48, 7);   // mid-sector inside terrace
+      bowlTerrace(0.68, -1, 10, 44, 6);   // back-of-the-bowl terrace
+      bowlTerrace(0.80,  1, 10, 40, 6);   // outside the run to Turn 11
 
       // ── Trackside jumbotron — a big screen on a truss frame facing the bowl. ──
       (function jumbotron() {
