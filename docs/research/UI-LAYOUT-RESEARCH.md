@@ -415,8 +415,17 @@ about rather than the tag swapped.
    `#pmsettings`, `#race-settings`, `#quali`.
 4. **Safe-area assertion in the audit probe.** The one axis we claim to handle
    and never verify, on the orientation the game is played in. *(cheap)*
-5. **Cost out `container-type: size` on the sheet** — if it can have a definite
-   height, `sheetshape.js` deletes itself. *(cheap to investigate)*
+5. ~~**Cost out `container-type: size` on the sheet**~~ — **costed, and the
+   answer is no.** Size containment forbids a container from taking its size
+   from its contents, and that is exactly how every sheet is sized: `.sheet` sets
+   `width` and `max-height: 100%` but no `height`, and sits in a
+   `display: grid; place-items: center` screen, so it SHRINKS TO FIT. The only
+   exception is `#sel-inner`, and only in one branch
+   (`css/responsive.css: height: min(100%, 720px)`). Making the rest definite
+   means `height: 100%` on every sheet — every modal becomes a full-height card
+   instead of hugging its content, which is a visual redesign, not a refactor.
+   `js/game/sheetshape.js` stays, and its 90 lines are the cheaper side of that
+   trade.
 6. **Foldable guard** — one media query, turns broken into unoptimised. *(cheap)*
 7. **`svh` as the house cap unit**, and **six blessed pixel baselines** — carried
    over from the first pass, both still worth doing. *(trivial / cheap)*

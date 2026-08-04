@@ -318,6 +318,54 @@ const SCREENS = [
       await p.waitForFunction(() => !document.querySelector("#camtune").hidden, null, { timeout: 15000 });
       await p.waitForTimeout(400); } },
 
+  // ---- the sub-views the first pass documented as gaps and did not measure ----
+
+  // The data hub's other four tabs. SCHEDULE and TELEMETRY were already covered;
+  // these three are tables and one is a form, and a table is where a narrow
+  // sheet runs out of width.
+  ...["standings", "lastrace", "live", "export"].map((tab) => ({
+    id: "data" + tab, name: "Data hub — " + tab, root: "#datahub", open: async (p) => {
+      await p.click("#mb-data"); await p.waitForSelector("#datahub:not([hidden])", { timeout: 15000 });
+      await p.waitForTimeout(1200);
+      await p.evaluate((t) => document.getElementById("dh-tab-" + t)?.click(), tab);
+      await p.waitForTimeout(1500); } })),
+
+  // RESULTS has two layouts behind one root: a Grand Prix classification, and
+  // the same screen carrying a championship table after a season round. The
+  // second is taller by ten rows and was never measured.
+  { id: "resultsseason", name: "Results — season round", root: "#results", open: async (p) => {
+      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
+      await p.evaluate(() => { window.__apex.career({ teamId: "haas", seat: 1, seed: 42 }); });
+      await p.evaluate(() => { window.__apex.go(); window.__apex.setLap(3); window.__apex.finishRace(); });
+      await p.waitForSelector("#results:not([hidden])", { timeout: 20000 });
+      await p.waitForTimeout(400); } },
+
+  // The other two STEERING MODES. Each changes which touch controls exist —
+  // "touch" hides the gas pedal entirely (autoThrottle), "buttons" adds an
+  // explicit GAS — so the control stack is a different shape, not a restyle.
+  // steerMode is read from localStorage at boot, so it has to be set and the
+  // page reloaded rather than poked at runtime.
+  ...[["touch", "touch steering"], ["buttons", "button steering"]].map(([mode, label]) => ({
+    id: "hud" + mode, name: "In-race HUD — " + label, root: "#hud", open: async (p) => {
+      await p.evaluate((m) => localStorage.setItem("apex26.steerMode", JSON.stringify(m)), mode);
+      await p.reload({ waitUntil: "domcontentloaded" });
+      await p.waitForFunction(() => !!window.__apex, null, { timeout: 60000 });
+      await p.evaluate(() => window.__apex.headless(true));
+      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
+      await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 45); window.__apex.snapCam(); });
+      await p.waitForTimeout(600); } })),
+
+  // ONE more parts tab, to MEASURE the claim that the garage's ten remaining
+  // categories share one layout rather than assert it. WHEELS is the last tab,
+  // so it also exercises the rail scrolled to its end.
+  { id: "garagewheels", name: "Garage — wheels tab (last)", root: "#carsetup", open: async (p) => {
+      await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
+      await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
+        (t.find((e) => /WHEELS/i.test(e.textContent)) || t[t.length - 1])?.click(); });
+      await p.waitForTimeout(500); } },
+
   { id: "hudmanual", name: "In-race HUD — manual gears", root: "#hud", open: async (p) => {
       // MANUAL moves the gearbox into the right thumb column and pushes BOOST/OT
       // /AERO elsewhere — a different control stack, not a restyle of the same
