@@ -54,6 +54,30 @@ test("makeAction returns an OBJECT with send + an onMessage setter", () => {
     "destructuring a tuple would throw into the relay catch");
 });
 
+test("send TARGETS with an options object, and onMessage reports the sender", () => {
+  // The third and fourth shapes, pinned before they bite rather than after.
+  // Multi-joiner needs BOTH: a fresh offer per arrival has to reach that
+  // arrival alone (an untargeted post is exactly what makes two joiners answer
+  // the same connection and one of them lose), and answering a joiner needs to
+  // know WHICH joiner sent it.
+  //
+  // Neither is send(data, id) nor onMessage(data, id). Trystero 0.25 takes
+  // send(data, options) with options.target, and hands the handler a metadata
+  // object carrying peerId. Both wrong guesses fail SILENTLY into nostr.js's
+  // relay catch and surface as "could not reach the room service" — a bug
+  // wearing a network failure's clothes, which is this file's whole reason to
+  // exist.
+  assert.match(actions, /send:\s*async\s*\(\s*data\s*,\s*options/,
+    "send takes (data, options), not (data, peerId)");
+  assert.match(actions, /options\.target/, "targeting is options.target");
+  assert.match(actions, /peerId/, "the receive path carries peerId in its metadata");
+
+  assert.match(ours, /swap\.send\(data,\s*\{\s*target:/,
+    "our targeted post must pass { target: id }");
+  assert.match(ours, /ctx\s*&&\s*ctx\.peerId/,
+    "we read the sender off the metadata object, not a bare second argument");
+});
+
 test("leave() exists, because a room we never leave keeps sockets open", () => {
   assert.match(room, /leave\s*[(:]/, "vendored Trystero must expose leave");
   assert.match(ours, /room\.leave\(\)/, "every exit path has to close the room");
