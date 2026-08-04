@@ -316,7 +316,14 @@ function getErsLight() {
 // it. These are not parts laid OVER the wing — they are the wing.
 const _flapMeshes = {};
 const _flapOrder = [];
-const FLAP_CACHE_MAX = 48;
+// Sized from the FIELD, not picked. Colour and aero recipe are per TEAM, so a
+// full grid needs one mesh per moveable element per team — 11 teams times up to
+// five elements is 55, before the player's own setup, the garage turntable and a
+// career MY TEAM. 48 was under that, and the eviction is FIFO: a full grid
+// overflowed it and then thrashed, deleting and recreating a GPU buffer for
+// every flap of every car, every frame. Each mesh is one wing element, so the
+// headroom costs nothing.
+const FLAP_CACHE_MAX = 128;
 // One mesh per (element, downforce level, colour). `idx` indexes the array
 // Car3D.aeroFlaps() returns — each element has its own chord, span and taper.
 function getAeroFlap(aLvl, col, idx, style) {

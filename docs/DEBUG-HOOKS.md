@@ -1080,6 +1080,30 @@ __apex.renderScale(0.6);   // pin 60% 3D scale
 __apex.renderScale(true);  // hand back to the auto governor
 ```
 
+### `safeMode(v?) → {strikes, tierFloor, tier}`
+The crash sentinel's safe mode. A phone that was killed mid-race (jetsam/OOM)
+earns a *strike*; two strikes pin the feature floor at tier 4 — env probe, lamp
+shadows, SSR, car shadows, SSAO, god rays and bloom all shed — clamp the cull
+distance to 900 m and pre-drop the render scale. That reads as a broken renderer
+rather than as a protection, and strikes only pay back one per cleanly finished
+race. Strikes now expire when the build number changes (`js/game/perf.js`);
+`safeMode(false)` is the manual version.
+```js
+__apex.safeMode();        // { strikes: 2, tierFloor: 4, tier: 4 }
+__apex.safeMode(false);   // forget the crash history, lift the floor now
+```
+
+### `diag() → {…}`
+Everything needed to explain a rendering complaint from a device you cannot
+reach: build, canvas CSS size vs backing-store size vs DPR, render scale, fps,
+PerfGov tier/floor/strikes, the WebGL renderer string and the float-target
+extensions, the live lighting values, and which `apex26.*` overrides are stored
+on that device. A backing store far below `css × dpr` **is** the blur; a
+`tierFloor > 0` means features are being withheld on purpose.
+```js
+__apex.diag();
+```
+
 ### `f1api → F1API | null`
 Raw handle to the `F1API` module (the cached Jolpica + OpenF1 client the data hub
 uses); `null` if `F1API` didn't load. All methods return Promises.

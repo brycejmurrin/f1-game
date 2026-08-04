@@ -918,7 +918,41 @@ const Car3D = (function () {
       return { bite, open: open == null ? bite : open, pz: qz, py: qy };
     }
   }
+  // SOLVED ONCE PER (level, recipe), NEVER PER FRAME.
+  //
+  // aeroFlapsGeom is not a table lookup — hinged() SEARCHES for each element's
+  // pivot: up to 9 candidate hinges, each solving two end poses, each backing
+  // off in up to 121 steps, each step sampling 41 points against the nose
+  // underside and the element below. That is per element, and a wing has five
+  // to eight of them.
+  //
+  // drawAeroFlaps (js/game.js) calls this for EVERY CAR, EVERY FRAME, because a
+  // rival's wings opening is the point of the feature. At one car — a time
+  // trial — the solver is merely expensive. At twenty-two it is the frame, and
+  // that is exactly how it presented: time trial fine, a race slow enough that
+  // the resolution governor bottomed out and started shedding features, which
+  // read as a broken renderer rather than a slow one.
+  //
+  // Nothing in the result depends on the car or on the blend: the records carry
+  // both end poses (zAngle/xAngle) and drawAeroFlaps interpolates between them
+  // at draw time. So the whole search is a pure function of (aLvl, recipe), and
+  // memoising it is not an optimisation so much as fixing a category error.
+  // Bounded by five levels times the handful of aero recipes in the catalog.
+  //
+  // Callers MUST treat the records as immutable — they are shared now.
+  const _flapSpecs = new Map();
   function aeroFlapsGeom(aLvl, style) {
+    const st0 = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
+    // The same six fields the mesh cache keys on (js/game/carmesh.js) — the
+    // only ones the planform and the rear slot height read.
+    const key = (aLvl | 0) + "|" + [st0.frontSweep, st0.frontTaper, st0.frontRise,
+                                    st0.rearSweep, st0.rearTaper, st0.drs || 0]
+      .map((v) => +v || 0).join(",");
+    let hit = _flapSpecs.get(key);
+    if (!hit) { hit = solveFlapsGeom(aLvl, st0); _flapSpecs.set(key, hit); }
+    return hit;
+  }
+  function solveFlapsGeom(aLvl, style) {
     // A style must be a RECIPE OBJECT (see aeroStyleOf). Anything else — most
     // dangerously the truthy tier NUMBER getVisualTiers stores under .aero —
     // would have .frontSweep read off it as undefined and clamped into NaN,

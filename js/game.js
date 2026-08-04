@@ -46,9 +46,25 @@ let gfx = null;
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
+  // NEVER ON A PHONE. Both alternates are in-progress migrations, and TLX on
+  // iOS renders a flat pale ground under a correct sky with the lower half of
+  // the frame black — an unusable game, reported from a real device. Until
+  // build 895 that could not happen in production at all: vendor/ was not
+  // staged by the Pages workflow, three.js 404'd, Gfx.create() returned null
+  // and this fell straight back to GLX, so the RENDERER button LOOKED inert
+  // and cost nothing to press. Shipping vendor/ made it real, and the first
+  // phone to land on it got the broken frame.
+  //
+  // Checked here rather than trusted to the UI, because the preference is
+  // stored per device and long outlives the tap that set it — a phone that
+  // chose "three" yesterday must boot on WebGL2 today without anyone having to
+  // find their way back through a menu they cannot read. Desktop keeps both,
+  // which is what the migration needs.
+  const phone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
   // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
   // self-falls-back to WebGL2 inside three so no capability gate here).
-  const optIn = pref === "three" || (pref === "webgpu" && navigator.gpu);
+  const optIn = !phone && (pref === "three" || (pref === "webgpu" && navigator.gpu));
   if (optIn && typeof Gfx !== "undefined") {
     const backend = await Gfx.create(canvas, {});
     if (backend) {
@@ -6477,7 +6493,12 @@ applyResMode();
       } catch (_) { return "webgl2"; }
     };
     const label = (v) => v === "three" ? "THREE" : v.toUpperCase();
-    rb.hidden = false;
+    // Hidden on phones, where boot refuses both alternates (see the backend
+    // selection at the top of this file). A button that stores a preference the
+    // next boot ignores is worse than no button: it reads as "I chose THREE and
+    // nothing happened", and the last phone to press it spent a while on an
+    // unusable game before anyone worked out why.
+    rb.hidden = !!(gfx && gfx.isMobile);
     rb.textContent = "RENDERER: " + label(read());
     rb.onclick = () => {
       if (soundOn) GameAudio.uiSelect();

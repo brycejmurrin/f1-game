@@ -194,26 +194,27 @@ function setEnabled(on) {
 
 function create(ctx) {
   G = ctx;
-  // DEFAULT OFF, and the reason is worth writing down. Until build 895 this
-  // module had never run on the deployed site AT ALL: the Pages workflow
-  // staged an allow-list of directories and vendor/ was not on it, so
-  // rapier.mjs 404'd, _loadState stuck at -1, and active() was false for every
-  // player. Everyone who has ever played the deployed game has played it with
-  // this off. The budget in the header (0.36 ms mean / 1.1 ms p95) was
-  // measured locally, in the authoring sandbox.
+  // Default ON, as originally intended — and worth recording why it spent
+  // builds 897-902 off.
   //
-  // Fixing the deploy therefore switched a Rapier WASM side-world — road
-  // trimesh, 22 kinematic car mirrors, a debris pool, marbles, breakable
-  // barriers, and IncidentSim on top of it, which MOVES CARS — on for
-  // everybody in a single build. The report back was immediate and the same
-  // from both devices: fast before, slow and struggling after. Restricting it
-  // to desktop was not enough, so it is off everywhere.
+  // Until build 893 this module had never run on the deployed site at all: the
+  // Pages workflow staged an allow-list of directories and vendor/ was not on
+  // it, so rapier.mjs 404'd, _loadState stuck at -1, and active() was false for
+  // every player. Staging vendor/ switched a Rapier WASM side-world on for
+  // everybody in one build, the next report was "fast before, slow and
+  // struggling after", and the timing made this the obvious culprit. It was
+  // turned off on that reasoning.
   //
-  // This is not a verdict on the physics. It is that a subsystem which arrived
-  // by accident has to be turned on deliberately, after somebody measures it
-  // on a device that has actually run it. apex26.debris = "1", or
-  // __apex.debris(true), does that.
-  let opt = "0";
+  // The reasoning was wrong. The slowness was Car3D.aeroFlaps() — a hinge
+  // SEARCH costing 64 ms per wing, run once per car per frame, measured at
+  // ~180 ms of solver time in a single real frame and fixed by memoising it in
+  // build 900. Turning this off never moved that number; the two changes only
+  // happened to land together.
+  //
+  // So it comes back. What remains true is that it has still never run on a
+  // phone, so the escape hatch stays one call wide: apex26.debris = "0", or
+  // __apex.debris(false).
+  let opt = "1";
   try { opt = localStorage.getItem("apex26.debris") || opt; } catch (e) {}
   // Group B disable flags — default ON, read once at boot (any value but "0" is on).
   try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) {}
