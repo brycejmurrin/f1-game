@@ -292,7 +292,7 @@ const DataHub = (function () {
       if (openFlag && active === id) showTab(id);
     }, function (err) {
       if (gen[id] !== myGen) return;
-      console.warn("apex26: data hub tab failed", id, err);
+      Log.warn("data", "apex26: data hub tab failed", id, err);
       state[id] = null;
       if (openFlag && active === id) {
         clear(contentEl);
@@ -336,7 +336,7 @@ const DataHub = (function () {
   }
 
   /* ================= SCHEDULE ================= */
-  // Implementation: js/data-schedule.js.
+  // Implementation: js/data/schedule.js.
   const { loadSchedule } = DataSchedule.create({ el, emptyMsg, fmtDate, fmtDateTime, todayISO });
 
   /* ================= STANDINGS ================= */
@@ -484,14 +484,14 @@ const DataHub = (function () {
   });
 
   /* ================= TELEMETRY ================= */
-  // Implementation: js/data-telemetry.js.
+  // Implementation: js/data/telemetry.js.
   const { loadTelemetry, closeTelemPopup } = DataTelemetry.create({
     el: el, clear: clear, emptyMsg: emptyMsg, spinner: spinner, sel: sel,
     ensureSession: ensureSession, buildPicker: buildPicker,
     invalidateOther: invalidateOther, COMPOUND: COMPOUND, findTeam: findTeam,
     cssColor: cssColor, textColorOn: textColorOn, NO_TELEM_MSG: NO_TELEM_MSG });
   /* ================= EXPORT tab (dev) ================= */
-  // Implementation: js/data-export.js.
+  // Implementation: js/data/export.js.
   const { loadExport } = DataExport.create({ el: el, clear: clear });
   return { init: init, open: open, close: close, isOpen: isOpen };
 })();

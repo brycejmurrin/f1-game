@@ -154,7 +154,7 @@ const SceneryCity = (function () {
     const building = (k, side, gap, w, h, d, opts) => {
       opts = opts || {};
       if (w > d * 2.5)
-        console.warn(`[scenery] building: w=${w} >> d=${d} at k=${k} — dimensions likely swapped`);
+        Log.warn("scenery", `building: w=${w} >> d=${d} at k=${k} — dimensions likely swapped`);
       const dist = gap + w / 2;
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
       // Keep the whole footprint clear of the track — not just the inner-face
@@ -176,7 +176,7 @@ const SceneryCity = (function () {
       // on every street circuit and broke the walled-tight guarantee.
       if (massBlocked(p.c, w, d, b, 0.82)) { blockAt(k, side, gap, d / 2); return; }
       if (rejBox(p.c, [w + clearMargin * 2, h, d + clearMargin * 2], b)) {
-        console.warn(`[scenery] building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (footprint over track)`);
+        Log.warn("scenery", `building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (footprint over track)`);
         return;
       }
       // Past both guards (mass collision, footprint over track) — this building
@@ -764,7 +764,7 @@ const SceneryCity = (function () {
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
       const ifx = p.c[0] - p.r[0] * side * w / 2, ifz = p.c[2] - p.r[2] * side * w / 2;
       if (onTrack(ifx, ifz, 2)) {
-        console.warn(`[scenery] house SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w}`);
+        Log.warn("scenery", `house SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w}`);
         return;
       }
       ctx.note("house", [p.c[0], p.c[1] + h / 2, p.c[2]], [w, h, d], { k, side });
@@ -801,7 +801,7 @@ const SceneryCity = (function () {
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
       const ifx = p.c[0] - p.r[0] * side * w / 2, ifz = p.c[2] - p.r[2] * side * w / 2;
       if (onTrack(ifx, ifz, 2)) {
-        console.warn(`[scenery] motorhome SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w}`);
+        Log.warn("scenery", `motorhome SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w}`);
         return;
       }
       ctx.note("motorhome", [p.c[0], p.c[1] + h / 2, p.c[2]], [w, h, d], { k, side });
@@ -845,7 +845,7 @@ const SceneryCity = (function () {
       const ifx = p.c[0] - p.r[0] * side * baseW / 2;
       const ifz = p.c[2] - p.r[2] * side * baseW / 2;
       if (onTrack(ifx, ifz, 0)) {
-        console.warn(`[scenery] tower SUPPRESSED at k=${k} side=${side}: dist=${dist} baseW=${baseW}`);
+        Log.warn("scenery", `tower SUPPRESSED at k=${k} side=${side}: dist=${dist} baseW=${baseW}`);
         return;
       }
       ctx.note("tower", [p.c[0], p.c[1] + h / 2, p.c[2]], [baseW, h, baseW], { k, side });
@@ -872,7 +872,7 @@ const SceneryCity = (function () {
       const st = (opts && opts.style) || kitOf("board", "panel");
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
       if (onTrack(p.c[0], p.c[2], w / 2 + 1)) {
-        console.warn(`[scenery] billboard SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (need gap>${(w/2+1).toFixed(1)})`);
+        Log.warn("scenery", `billboard SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (need gap>${(w/2+1).toFixed(1)})`);
         return;
       }
       ctx.note("billboard", vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], { k, side });
