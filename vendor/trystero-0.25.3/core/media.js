@@ -1,4 +1,4 @@
-import { genId } from "./utils.mjs";
+import { genId } from "./utils.js";
 //#region src/media.ts
 const toPendingMediaMeta = (value) => {
 	if (value && typeof value === "object" && !Array.isArray(value) && typeof value.k === "string") return {

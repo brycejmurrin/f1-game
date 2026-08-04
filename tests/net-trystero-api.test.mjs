@@ -24,8 +24,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const VENDOR = path.join(ROOT, "vendor/trystero-0.25.3");
-const room = fs.readFileSync(path.join(VENDOR, "core/room.mjs"), "utf8");
-const actions = fs.readFileSync(path.join(VENDOR, "core/actions.mjs"), "utf8");
+const room = fs.readFileSync(path.join(VENDOR, "core/room.js"), "utf8");
+const actions = fs.readFileSync(path.join(VENDOR, "core/actions.js"), "utf8");
 const ours = fs.readFileSync(path.join(ROOT, "js/net/nostr.js"), "utf8");
 
 test("onPeerJoin is a SETTER, and we assign to it rather than calling it", () => {
@@ -59,10 +59,36 @@ test("leave() exists, because a room we never leave keeps sockets open", () => {
   assert.match(ours, /room\.leave\(\)/, "every exit path has to close the room");
 });
 
+test("the vendored tree ships as .js, not .mjs", () => {
+  // NOT the cause of the reported failure — that was pages.yml never staging
+  // vendor/ at all (tests/deploy-staging.test.mjs). This is the belt to that
+  // braces: `.mjs` has a history of being served as application/octet-stream by
+  // static hosts, and a browser REFUSES an octet-stream module script outright.
+  // The repo's other ESM island (vendor/three-0.184.0) is .js already, so
+  // matching it costs nothing and removes a variable we cannot test from here.
+  const stray = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (e.name.endsWith(".mjs")) stray.push(path.relative(ROOT, full));
+    }
+  };
+  walk(VENDOR);
+  assert.deepEqual(stray, [], "these will not load from GitHub Pages");
+});
+
+test("a .nojekyll file exists, so Pages publishes the tree verbatim", () => {
+  // Without it GitHub Pages runs the files through Jekyll, which has its own
+  // ideas about what to publish. A static game has nothing to gain from that
+  // and a whole class of silent omissions to lose.
+  assert.ok(fs.existsSync(path.join(ROOT, ".nojekyll")), ".nojekyll must be committed");
+});
+
 test("the vendored tree is complete and self-contained", () => {
   // A missing file here is a dynamic import that fails at the exact moment a
   // player taps a button, which is the worst possible time to discover it.
-  for (const f of ["core/index.mjs", "core/room.mjs", "nostr/index.mjs", "noble-secp256k1.js"]) {
+  for (const f of ["core/index.js", "core/room.js", "nostr/index.js", "noble-secp256k1.js"]) {
     assert.ok(fs.existsSync(path.join(VENDOR, f)), `missing vendored file: ${f}`);
   }
   // Licences travel with the code — both packages are MIT.
@@ -82,7 +108,7 @@ test("every bare import in the vendored tree is covered by the importmap", () =>
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, e.name);
       if (e.isDirectory()) { walk(full); continue; }
-      if (!/\.(mjs|js)$/.test(e.name)) continue;
+      if (!/\.js$/.test(e.name)) continue;
       const src = fs.readFileSync(full, "utf8");
       for (const m of src.matchAll(/from\s*"([^"]+)"/g)) {
         if (!m[1].startsWith(".")) bare.add(m[1]);

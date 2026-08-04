@@ -34,13 +34,28 @@ jobs:
       # Stage ONLY the runtime files. Uploading the repo root shipped a ~174 MB
       # artifact (142 MB of tests/ visual-regression snapshots + node_modules)
       # for a ~14 MB site — slow enough to hit the 10-minute Pages deployment
-      # timeout. The game is static: html + manifest + sw.js + js/css + icons +
-      # assets is everything the browser ever requests.
+      # timeout.
+      #
+      # vendor/ IS a runtime directory and was missing here until build 893.
+      # Everything reached by dynamic import lives in it — trystero (room
+      # codes), rapier (debris), jsQR (invite scanning), three.js — so each of
+      # those 404'd on the deployed site while working perfectly in every local
+      # run, because a local run serves the repo root. The room-code path was
+      # the one that reported it, as "could not load the room service".
+      #
+      # tests/deploy-staging.test.mjs asserts this list covers every top-level
+      # directory the shipped code can fetch: an allow-list that has to be
+      # edited by hand fails silently and late, so it is pinned by a test
+      # rather than by this comment.
+      #
+      # .nojekyll goes up too — Pages otherwise runs the tree through Jekyll,
+      # which has its own opinions about which files deserve to exist.
       - name: Stage site
         run: |
           mkdir -p _site
           cp index.html version.json manifest.json sw.js _site/
-          cp -r js css icons assets _site/
+          cp .nojekyll _site/
+          cp -r js css icons assets vendor _site/
       # Artifact name is scoped to the RUN ATTEMPT: artifacts survive across
       # re-run attempts of the same run, so a re-run after a failed deploy left
       # multiple artifacts named "github-pages" in the run and deploy-pages@v4

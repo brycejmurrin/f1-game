@@ -1,5 +1,5 @@
-import { fromJson, mkErr, selfId, toJson } from "./utils.mjs";
-import strategy_default from "./strategy.mjs";
+import { fromJson, mkErr, selfId, toJson } from "./utils.js";
+import strategy_default from "./strategy.js";
 //#region src/topic-strategy.ts
 const signalKeys = [
 	"offer",

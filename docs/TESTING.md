@@ -62,7 +62,7 @@ node tools/verify-track.cjs --all
 | `fast` | curated fast subset: smoke + api + collision + offtrack + parts-physics + steering (~3 min) |
 | `ab` | lighting A/B pixel comparison (`lighting-ab.spec.js`) |
 | `audit` | coverage guard: every spec must belong to ≥1 group (`tools/test-coverage-audit.mjs`) |
-| `tooling` | `node --test` unit suites (no browser): coverage-audit, fixture-consumer-audit, quick-validate, track-accuracy-validator, **`load-order.test.mjs`** (the `<script>` tags in `index.html` must match `tools/manifest.cjs` — the load-order single source of truth), **`scenery-api-contract.test.mjs`** (the 107-member `scenery(api)` surface served by the `js/track/scenery-*.js` modules is frozen) |
+| `tooling` | `node --test` unit suites (no browser): coverage-audit, fixture-consumer-audit, quick-validate, track-accuracy-validator, **`load-order.test.mjs`** (the `<script>` tags in `index.html` must match `tools/manifest.cjs` — the load-order single source of truth), **`scenery-api-contract.test.mjs`** (the 107-member `scenery(api)` surface served by the `js/track/scenery-*.js` modules is frozen), **`deploy-staging.test.mjs`** (the Pages workflow uploads an allow-list of directories, not the repo root — every path the shipped code can fetch has to be inside it, or it 404s in production while passing every local run) |
 
 ---
 

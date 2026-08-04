@@ -718,16 +718,21 @@ function endLivPreview(team) {
 
 function openSetup() {
   buildSetup();
-  // #select and #overlay both sit under #carsetup and are nearly opaque (they
-  // block the live 3D preview behind the now-transparent, docked setup panel),
-  // so hide BOTH while setup is open. Only #select used to be hidden, on the
-  // assumption that #overlay was already gone by the time #select was reached —
-  // true of the sel-setup path, but the title screen's GARAGE button opens setup
-  // straight off #overlay, which then stayed up and showed the APEX 26 title and
-  // the whole main menu through the panel. cs-done restores whichever one the
+  // Hide every screen the garage can be opened FROM. They sit under #carsetup
+  // and are nearly opaque, so they block the live 3D preview behind the
+  // now-transparent, docked setup panel. cs-done restores whichever one the
   // player came from (garageReturn).
+  //
+  // This list has been wrong twice, each time by one screen. First only #select
+  // was hidden, on the assumption that #overlay was gone by the time #select
+  // was reached — true of the sel-setup path, but the title screen's GARAGE
+  // button opens setup straight off #overlay, which then showed the APEX 26
+  // title through the panel. Then the VS FRIEND waiting room grew its own
+  // GARAGE button and #vsfriend stayed up ON TOP, so choosing a car meant
+  // closing the lobby — which drops the connection.
   els.select.hidden = true;
   els.overlay.hidden = true;
+  $("vsfriend").hidden = true;
   $("carsetup").hidden = false;
   G.setupPreviewOn = true;
 }

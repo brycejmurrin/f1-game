@@ -1,4 +1,4 @@
-import { all, alloc, decodeBytes, encodeBytes, fromJson, libName, mkErr, noOp, resetTimer, toJson } from "./utils.mjs";
+import { all, alloc, decodeBytes, encodeBytes, fromJson, libName, mkErr, noOp, resetTimer, toJson } from "./utils.js";
 //#region src/action-wire.ts
 const TypedArray = Object.getPrototypeOf(Uint8Array);
 const typeByteLimit = 32;

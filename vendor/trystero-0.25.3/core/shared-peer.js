@@ -1,5 +1,5 @@
-import { decodeBytes, encodeBytes, keys, libName, noOp, resetTimer, values } from "./utils.mjs";
-import { createMediaIdentityCache } from "./media.mjs";
+import { decodeBytes, encodeBytes, keys, libName, noOp, resetTimer, values } from "./utils.js";
+import { createMediaIdentityCache } from "./media.js";
 //#region src/shared-peer.ts
 const roomFrameVersion = 1;
 const roomPresenceFrameVersion = 2;

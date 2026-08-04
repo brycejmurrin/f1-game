@@ -134,4 +134,40 @@ test.describe("the waiting room", () => {
     // under software GL, so this is given room.
     await expect(page.locator("#vsfriend")).toBeHidden({ timeout: 60000 });
   });
+
+  test("the garage REPLACES the room rather than opening under it", async ({ page }) => {
+    // Reported from a phone: tapping GARAGE left the room sheet on top of the
+    // car, so the only way to see what you were choosing was to CLOSE the
+    // room — which drops the connection. openSetup() hid #select and #overlay
+    // by name and had never heard of #vsfriend.
+    await enterRoom(page, "guest");
+    await page.click("#vs-edit-car");
+    await expect(page.locator("#carsetup")).toBeVisible();
+    await expect(page.locator("#vsfriend")).toBeHidden();
+    // ...and DONE brings the room back, because the session never went away.
+    await page.click("#cs-done");
+    await expect(page.locator("#vs-room")).toBeVisible();
+    await expect(page.locator("#carsetup")).toBeHidden();
+  });
+
+  test("lights-out clears whatever screen the guest was standing on", async ({ page }) => {
+    // The guest does not choose WHEN the race starts — the host does. So GO can
+    // land while they are in the garage, and it used to leave #carsetup up over
+    // a running race: the turntable still drawing, the HUD and the pedals
+    // showing through it. startRace() named the three screens a race could be
+    // started FROM, which was true until somebody else could start it.
+    test.slow();
+    await enterRoom(page, "guest");
+    await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day" });
+    await page.click("#vs-edit-car");
+    await expect(page.locator("#carsetup")).toBeVisible();
+
+    await peerSays(page, EV.GO, {});
+    await expect(page.locator("#hud")).toBeVisible({ timeout: 60000 });
+    // Nothing menu-shaped may survive the green light.
+    const open = await page.evaluate(() =>
+      [...document.querySelectorAll(".screen"), document.getElementById("overlay")]
+        .filter((el) => el && !el.hidden).map((el) => el.id));
+    expect(open).toEqual([]);
+  });
 });

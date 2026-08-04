@@ -1,11 +1,11 @@
-import { all, entries, keys, libName, mkErr, noOp, resetTimer, selfId, toErrorMessage, topicPath, values, watchOnline } from "./utils.mjs";
-import { decrypt, deriveRoomNamespace, encrypt, genKey, sha1 } from "./crypto.mjs";
-import { OfferPool, offerTtl } from "./offer-pool.mjs";
-import { createPasswordHandshake } from "./handshake.mjs";
-import peer_default from "./peer.mjs";
-import room_default from "./room.mjs";
-import { SharedPeerManager } from "./shared-peer.mjs";
-import { clearConnectedPeer, createSignalHandler, getState, resetOfferState, updateStatus } from "./signal-handler.mjs";
+import { all, entries, keys, libName, mkErr, noOp, resetTimer, selfId, toErrorMessage, topicPath, values, watchOnline } from "./utils.js";
+import { decrypt, deriveRoomNamespace, encrypt, genKey, sha1 } from "./crypto.js";
+import { OfferPool, offerTtl } from "./offer-pool.js";
+import { createPasswordHandshake } from "./handshake.js";
+import peer_default from "./peer.js";
+import room_default from "./room.js";
+import { SharedPeerManager } from "./shared-peer.js";
+import { clearConnectedPeer, createSignalHandler, getState, resetOfferState, updateStatus } from "./signal-handler.js";
 //#region src/strategy.ts
 const announceIntervalMs = 5333;
 const announceWarmupIntervalsMs = [

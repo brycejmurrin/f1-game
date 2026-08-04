@@ -1,7 +1,7 @@
-import { entries, fromEntries, isBrowser, keys, libName, mkErr, noOp, toError } from "./utils.mjs";
-import { createHandshakeManager } from "./handshake.mjs";
-import { createActionManager } from "./actions.mjs";
-import { createMediaManager } from "./media.mjs";
+import { entries, fromEntries, isBrowser, keys, libName, mkErr, noOp, toError } from "./utils.js";
+import { createHandshakeManager } from "./handshake.js";
+import { createActionManager } from "./actions.js";
+import { createMediaManager } from "./media.js";
 //#region src/room.ts
 const unloadEvent = "beforeunload";
 const defaultHandshakeTimeoutMs = 1e4;
