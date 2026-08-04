@@ -296,7 +296,28 @@
 @media (orientation: portrait) {
   @container sheet (min-width: 620px) {
     #sel-body { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; }
-    #sel-track-section { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 0; }
+    /* THE BAND IS CAPPED AT HALF THE BODY, AND THE MAP YIELDS INSIDE IT.
+       A portrait VIEWPORT does not guarantee a portrait SHEET: on a rotated
+       1080x1920 monitor css/responsive.css caps #sel-inner at 720px tall, so the
+       sheet is landscape-shaped inside a portrait window. Sized purely by its
+       content, the full-width map band came out 710px of that 720 and left the
+       circuit list TWO PIXELS. Capping the section and letting the map shrink
+       inside it (object-fit keeps the outline true when the cap binds) means the
+       list always gets the other half, whatever shape the sheet turns out to be. */
+    #sel-track-section {
+      display: flex; flex-direction: column;
+      flex: 0 1 auto; min-height: 0; max-height: 52%;
+    }
+    /* The card FILLS the capped band, which gives it a definite height, and the
+       map is capped at that height minus the room the caption needs. A share of
+       the card (66%) was wrong: the caption's height is roughly fixed — name,
+       GP, meta, up to two chip rows, the elevation strip — while the band's is
+       not, so a percentage left the facts 50px on a rotated monitor and clipped
+       them. Subtracting a constant leaves the caption whole at every band size
+       and lets the map have the rest; where the map's own 520:300 height is
+       smaller than the cap, the cap simply does not bind. */
+    #sel-track-preview { flex: 1 1 auto; min-height: 0; }
+    #sel-track-preview #sel-preview-map { max-height: calc(100% - 9.5rem); }
     /* The card keeps the wide-sheet shape it already has — map across the top,
        facts under it — and in a full-width band that makes the map ~765px on an
        iPad instead of the ~300 it got as a 42% column. Nothing to set here: the
@@ -437,6 +458,43 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   background: rgba(0, 0, 0, 0.25);
 }
 #sel-preview-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+
+/* PORTRAIT: THE MAP IS THE SUBJECT, THE FACTS ARE A CAPTION.
+   A phone held upright gives the card width and almost no height, and half of
+   that width was going to four short lines of text — the circuit outline, the
+   one thing you are actually choosing between, came out 160px wide. The map
+   takes 62% here and every readout under it drops a step, which buys the map
+   its width AND gives the list back the height the smaller type frees.
+   Only the type sizes are listed: the map's width is the inherited knob, so an
+   upright TABLET (which stacks map-over-facts at --sel-map-w: 100%) keeps its
+   full-width map and simply gets the smaller caption too. */
+@media (orientation: portrait) {
+  /* PHONE PORTRAIT: MAP ON TOP, FACTS AS A CAPTION UNDER IT — the same band the
+     upright tablet gets, for the same reason. Widening the map inside the ROW
+     layout backfired: at 62% the facts had 230px left, so the meta wrapped to
+     two lines and every chip took a row of its own, and the card came out TALLER
+     than when the map was small. Full width doubles the map (160 -> 323px) and
+     the caption under it costs four short lines. The elevation strip goes: at
+     323px wide and 22px tall it is a texture, not a reading, and it is the one
+     thing here that costs height without saying anything the chips do not. */
+  @container sheet (max-width: 619px) {
+    #sel-track-preview { flex-direction: column; align-items: stretch; --sel-map-w: 100%; }
+    #sel-preview-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+    #sel-preview-name, #sel-preview-gp, #sel-preview-meta { margin: 0; }
+    #sel-preview-facts { flex-basis: 100%; }
+    /* Two IDs: the base `#sel-preview-elev { display: block }` is declared later
+       in this file, and a single-ID rule here would lose to it on source order —
+       the same trap the map's width knob exists to dodge. */
+    #sel-track-preview #sel-preview-elev { display: none; }
+  }
+  #sel-preview-name { font-size: 13px; }
+  #sel-preview-gp { font-size: 10px; }
+  #sel-preview-meta { font-size: 10px; line-height: 1.35; margin-top: 4px; }
+  #sel-preview-rec { font-size: 10px; margin-top: 3px; }
+  .spf-fact { font-size: 9px; padding: 1px 6px; }
+  #sel-preview-facts { gap: 4px; margin-top: 4px; }
+  #sel-preview-elev { height: 22px; margin-top: 4px; }
+}
 
 /* THE PREVIEW CARD IN THE TWO-COLUMN LAYOUT.
    Scoped through #sel-track-preview — two IDs — deliberately. A container query
