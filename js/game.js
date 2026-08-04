@@ -2627,6 +2627,11 @@ const G = {
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
+  // Seats held by the OTHER players, so the garage can refuse to hand out one
+  // that is taken. An array today of at most one entry; up to three when the
+  // room grows past two. Empty off-line, which is what keeps every solo mode
+  // exactly as it was.
+  peerSeats: () => (netLobby && netLobby.peerSeats ? netLobby.peerSeats() : []),
   onPeerQuali, openQualiForNet,
   get raceQuali() { return raceQuali; }, set raceQuali(v) { raceQuali = !!v; },
   openGarageFrom: (from) => openGarage(from),

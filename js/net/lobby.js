@@ -328,6 +328,14 @@ const NetLobby = (function () {
       renderRoom();
     }
 
+    function peerSeats() {
+      const out = [];
+      if (_peerProfile && _peerProfile.team) {
+        out.push({ team: _peerProfile.team, driver: _peerProfile.driver || 0 });
+      }
+      return out;
+    }
+
     const TEAM_OF = (p) => (p && p.team && Teams.LIST.find((t) => t.id === p.team)) || null;
 
     // team.color is an [r,g,b] triple in 0..1 — the renderer's format, not CSS.
@@ -933,6 +941,10 @@ const NetLobby = (function () {
       // The waiting room. roomChanged() is game.js's way back in after a player
       // returns from the garage or the race settings.
       roomChanged, setReady, startFromRoom, renderRoom,
+      // Every seat somebody ELSE is in. Built from the profiles the room
+      // already exchanges (EV.HELLO, re-sent on every garage exit), so this
+      // adds no wire traffic — it only reads what was always being sent.
+      peerSeats,
       // Our own qualifying lap goes out through whichever of the lobby and
       // NetPlay currently holds the connection; during the session that is the
       // lobby, because the hand-off has not happened yet.
