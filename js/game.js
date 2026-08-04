@@ -2221,9 +2221,6 @@ function loadTrack(idx) {
     if (gfx.envProbeReset) gfx.envProbeReset();
     Ghost.setTrack(def.id);
     hud.invalidateMap();        // force minimap redraw for new track
-    sectorIdx = 0; sectorStartT = 0;
-    sectorBests = [Infinity, Infinity, Infinity];
-    sectorLast = [null, null, null];
   }
   const pal = def.palette;
   frame = {
@@ -2438,6 +2435,16 @@ function startRace() {
   resultT = 0;
   camRoll = 0; camSlipSm = 0;
   sectorIdx = sectorAt(player.s); sectorStartT = 0;
+  // The SPLITS reset here, with the rest of the session — not in loadTrack.
+  // They used to sit inside loadTrack's `builtTrackId !== def.id ||
+  // builtTrackNight !== sessionDark` rebuild gate, so racing the same circuit
+  // twice at the same time of day skipped the reset entirely: session two
+  // opened with session one's bests already in the HUD, and its lap-1 deltas
+  // were measured against a race that had already finished. Changing the time
+  // of day cleared them, which made two otherwise identical sessions differ on
+  // an unrelated setting. Session state belongs to the session.
+  sectorBests = [Infinity, Infinity, Infinity];
+  sectorLast = [null, null, null];
   // Arm the crash sentinel (mobile only) and, after a strike, start the
   // session pre-scaled-down — the governor may restore upward, but only under
   // the clear sustained headroom that proves the device can afford it.
