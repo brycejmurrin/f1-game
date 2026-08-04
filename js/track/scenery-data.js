@@ -315,41 +315,41 @@ const TrackSceneryData = (function () {
   const STAND_SET_DEF = ["steel", "darkSteel", "concrete"];
   const STAND_SETS = {
     monza:       ["crimson", "concrete", "steel"],          // tifosi red + old park concrete
-    imola:       ["crimson", "concrete", "steel"],
+    imola:       ["crimson", "sandstone", "concrete"],        // Ferrari red over Imola's stone-and-terracotta town
     silverstone: ["navy", "steel", "alu"],                  // Silverstone blue
     spa:         ["darkSteel", "steel", "concrete"],
-    suzuka:      ["steel", "navy", "concrete"],
-    zandvoort:   ["orange", "alu", "steel"],                // Oranje army
+    suzuka:      ["navy", "orange", "steel"],                 // Honda crown orange; navy no longer clashes with Silverstone
+    zandvoort:   ["orange", "alu", "scaffold"],               // Oranje army; two-thirds of capacity is trucked in
     redbull:     ["crimson", "steel", "alu"],
-    hungaroring: ["steel", "concrete", "alu"],
-    montreal:    ["steel", "navy", "alu"],
-    interlagos:  ["concrete", "steel", "darkSteel"],
+    hungaroring: ["sandstone", "alu", "crimson"],           // dusty bowl, plain 80s stands, Magyar red
+    montreal:    ["alu", "steel", "teal"],                    // teal is the park's own colour (COL.basinTeal)
+    interlagos:  ["concrete", "sandstone", "terracotta"],     // sun-bleached tropical concrete, not three greys
     mexico:      ["navy", "concrete", "steel"],             // Foro Sol blue buckets
-    cota:        ["alu", "darkSteel", "sandstone"],         // bare T1 bleachers
+    cota:        ["darkSteel", "sandstone", "alu"],         // T1 bleachers are real bleacher() now
     miami:       ["pastel", "teal", "alu"],
     vegas:       ["darkSteel", "scaffold", "alu"],
     baku:        ["scaffold", "sandstone", "steel"],
-    jeddah:      ["scaffold", "alu", "darkSteel"],
+    jeddah:      ["scaffold", "sandstone", "darkSteel"],      // temporary tube on Corniche stone
     singapore:   ["scaffold", "teal", "darkSteel"],
     monaco:      ["scaffold", "pastel", "alu"],
     bahrain:     ["sandstone", "steel", "alu"],
     qatar:       ["sandstone", "steel", "concrete"],
     abudhabi:    ["darkSteel", "teal", "sandstone"],
-    shanghai:    ["steel", "crimson", "concrete"],
-    albert_park: ["steel", "navy", "alu"],
+    shanghai:    ["crimson", "alu", "darkSteel"],             // China red against modern steel
+    albert_park: ["steel", "pastel", "alu"],                  // temporary park build, pale Melbourne palette
     madrid:      ["terracotta", "concrete", "steel"],
     // ── retired / off-calendar circuits (def `classic: true`) ──
-    hockenheim:    ["concrete", "crimson", "steel"],        // Motodrom concrete bowl + German-GP red
+    hockenheim:    ["concrete", "darkSteel", "crimson"],        // Motodrom concrete bowl, German-GP red accents
     nurburgring:   ["darkSteel", "concrete", "alu"],        // cold Eifel steel and poured concrete
     catalunya:     ["pastel", "concrete", "terracotta"],    // bleached white render, warm Catalan trim
     sepang:        ["alu", "teal", "concrete"],             // aluminium under the fabric canopies
-    istanbul:      ["sandstone", "crimson", "concrete"],    // pale stone + Turkish red
+    istanbul:      ["sandstone", "crimson", "darkSteel"],     // pale Thracian stone, Turkish red, modern steel
     paul_ricard:   ["alu", "navy", "pastel"],               // clinical: aluminium against the blue runoff
     portimao:      ["terracotta", "concrete", "alu"],       // Algarve pantile over hillside terracing
     sochi:         ["alu", "teal", "darkSteel"],            // 2014 Olympic-park metal and glass
     mugello:       ["crimson", "terracotta", "concrete"],   // Ferrari red over Tuscan clay
     magny_cours:   ["navy", "alu", "concrete"],             // French blue on a plain 1990s facility
-    indianapolis:  ["alu", "concrete", "darkSteel"],        // bare Speedway bleachers, no colour
+    indianapolis:  ["alu", "scaffold", "navy"],                 // bare bleachers; navy nods to the blue seat bands
     buenos_aires:  ["concrete", "scaffold", "pastel"],      // 1950s mass concrete + temporary tube
     jacarepagua:   ["concrete", "alu", "sandstone"],        // sun-bleached coastal concrete
     estoril:       ["scaffold", "terracotta", "pastel"],    // period tube stands + one masonry terrace
