@@ -60,7 +60,7 @@ not.
 
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `mb-`, `rs-`, `no-`, `rotate-`,
-`cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`, `foot-`,
+`cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
 `season-`, `pair-`) is one file each and needs no map.
 
 **The `(unprefixed)` row is the one to watch.** 226 rules across nine files, on
@@ -102,10 +102,18 @@ mistakes them for components.
 
 ## Dead classes
 
-Three, out of 516: `dh-leg-swatch`, `dh-sectors`, `foot-end`. Defined in `css/`
-and referenced from neither `index.html` nor any `js/` file. That ratio is the
-real headline of this exercise — the stylesheet is not carrying rot, it was just
-carrying no map.
+None, out of 515 — a class defined in `css/` and referenced from neither
+`index.html` nor any `js/` file. The three this section used to name
+(`dh-leg-swatch`, `dh-sectors`, `foot-end`) have since been deleted from `css/`,
+and the last of them took its whole class family with it — which is why no
+"foot" prefix is listed above any more.
+
+That the count reached zero is the real headline of this exercise: the
+stylesheet was never carrying rot, it was just carrying no map. Keep this
+section even at zero — `tests/component-inventory.test.mjs` asserts that every
+dead class is named here, so the number moving is a prompt to decide whether the
+class is unfinished work or a leftover, and an empty list is a claim worth
+being held to.
 
 ---
 
