@@ -391,8 +391,19 @@ const SceneryStructures = (function () {
         addBox(out, [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2],
                [thick, L, thick], col, [rr, up, ff]);
       };
+      // Spokes start at the HUB'S SURFACE, not its centre. Run to the centre and
+      // all 16 pile through each other inside the 3 m hub cube, every one of them
+      // lying in the same wheel plane at the same thickness — a knot of exactly
+      // coplanar same-facing faces that flickers at any distance. Springing them
+      // from r = 1.7 leaves 0.6 m between neighbours there, well clear of the
+      // 0.28 m strut, and is how a real wheel is built anyway.
+      const HUB_R = 1.7;
       for (let i = 0; i < seg; i++) {
-        strut(hub, rim[i], 0.28, wheelCol);                  // spoke
+        const d = [rim[i][0] - hub[0], rim[i][1] - hub[1], rim[i][2] - hub[2]];
+        const L = Math.hypot(d[0], d[1], d[2]) || 1;
+        const root = [hub[0] + d[0] / L * HUB_R, hub[1] + d[1] / L * HUB_R,
+                      hub[2] + d[2] / L * HUB_R];
+        strut(root, rim[i], 0.28, wheelCol);                 // spoke
         strut(rim[i], rim[(i + 1) % seg], 0.34, wheelCol);   // rim segment
       }
       for (let i = 0; i < seg; i++) {                        // cabins hung off the rim
