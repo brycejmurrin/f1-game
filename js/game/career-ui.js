@@ -142,8 +142,45 @@ function create(G) {
       "Progress saves automatically after every round, and switching slots saves "
       + "the one you are leaving first."));
 
-    $("cr-go").hidden = true;
+    // With every slot full there is nowhere to put a new career, and the honest
+    // thing is to say which action makes room rather than to leave a dead
+    // button. DELETE is right there on each card.
+    const free = firstFreeSlot();
+    if (free < 0) {
+      right.appendChild(head("ALL SLOTS FULL"));
+      right.appendChild(el("div", "cr-note",
+        "There is nowhere to put a new career. Delete one you have finished with "
+        + "and its slot opens up — deleting asks twice, and only ever removes the "
+        + "career you pressed it on."));
+    }
+    $("cr-go").hidden = false;
+    $("cr-go").textContent = "NEW CAREER";
+    $("cr-go").disabled = free < 0;
     $("cr-garage").hidden = true;
+  }
+
+  // The lowest slot with nothing in it, or -1. Lowest rather than "next after
+  // the live one" so the picker's NEW CAREER always fills the first gap a player
+  // can see, which is the one they expect it to use.
+  function firstFreeSlot() {
+    const slots = Career.slots();
+    for (let i = 0; i < slots.length; i++) if (!slots[i].used) return i;
+    return -1;
+  }
+
+  // Start a fresh career in `i` (default: the first free slot). Leaves the
+  // picker for the setup form with the slot already chosen, so Career.start()
+  // writes where the player pointed.
+  function newCareerIn(i) {
+    const slot = i == null ? firstFreeSlot() : i;
+    if (slot < 0) return false;
+    armedDelete = -1;
+    picking = false;
+    Career.useSlot(slot);
+    draft = freshDraft();
+    draft.slot = slot;
+    build();
+    return true;
   }
 
   // ---------- how it works ----------
@@ -454,6 +491,7 @@ function create(G) {
     $("cr-meters").textContent = "";
     $("cr-go").textContent = "START CAREER";
     $("cr-go").hidden = false;
+    $("cr-go").disabled = false;
     $("cr-garage").hidden = true;
   }
 
@@ -637,6 +675,7 @@ function create(G) {
     $("cr-go").textContent = st.offers ? "SIGN A CONTRACT"
       : Career.seasonDone() ? "END OF SEASON" : "GO RACING";
     $("cr-go").hidden = false;
+    $("cr-go").disabled = false;
     $("cr-garage").hidden = false;
   }
 
@@ -866,6 +905,10 @@ function create(G) {
   $("cr-garage").onclick = () => { close(); G.openGarage("career"); };
   $("cr-go").onclick = () => {
     if (G.soundOn) GameAudio.uiSelect();
+    // The picker comes first: a career is normally LOADED while it is open (you
+    // are choosing another one), so the "no career yet" branch below would never
+    // be reached and NEW CAREER would silently go racing instead.
+    if (picking) { newCareerIn(); return; }
     if (!Career.active()) {
       Career.start(draft);          // draft.slot, when the picker set one
       G.openCareer();          // re-enters the hub with the save in place

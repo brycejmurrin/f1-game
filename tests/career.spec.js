@@ -1417,8 +1417,9 @@ test.describe("Career — slots", () => {
     await expect(page.locator("#career")).toBeVisible();
     await expect(page.locator("#cr-title")).toHaveText("CAREERS");
     await expect(page.locator(".cr-slot")).toHaveCount(3);
-    // GO RACING has nothing to act on until a career is chosen.
-    await expect(page.locator("#cr-go")).toBeHidden();
+    // The primary action becomes NEW CAREER — the picker is where careers are
+    // made and unmade, so GO RACING has nothing to mean here.
+    await expect(page.locator("#cr-go")).toHaveText("NEW CAREER");
     // Taking one lands in its hub, engaged.
     await page.locator(".cr-slot").nth(2).locator(".cr-slot-main").click();
     await expect(page.locator("#cr-go")).toBeVisible();
@@ -1562,5 +1563,101 @@ test.describe("Career — the guide", () => {
     // And the starting balance the flavour actually gets.
     const start = await page.evaluate(() => Career.START_MONEY.myteam);
     expect(body).toContain(start.toLocaleString() + " cr");
+  });
+});
+
+// ── making and unmaking careers ──────────────────────────────────────────────
+// Deleting a save and starting a fresh one are the same screen's two jobs, and
+// they interlock: with every slot full there is nowhere to put a new career, so
+// the only thing that makes room is deleting one.
+
+test.describe("Career — new and deleted", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  const fill = (page, n) => page.evaluate((count) => {
+    const teams = ["haas", "williams", "audi"];
+    for (let i = 0; i < count; i++)
+      window.__apex.career({ teamId: teams[i], seat: 1, seed: 10 + i, slot: i });
+  }, n);
+
+  // Into the picker from the title screen, whatever is saved.
+  async function toPicker(page) {
+    await page.locator("#cr-back").click();
+    await expect(page.locator("#overlay")).toBeVisible();
+    await page.locator("#mb-career").click();
+    if (await page.locator("#cr-title").textContent() !== "CAREERS")
+      await page.locator("#cr-slots").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREERS");
+  }
+
+  test("NEW CAREER fills the first free slot", async ({ page }) => {
+    await boot(page);
+    await fill(page, 2);                       // slots 0 and 1 taken, 2 free
+    await toPicker(page);
+    await expect(page.locator("#cr-go")).toBeEnabled();
+    await page.locator("#cr-go").click();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+    await page.locator("#cr-go").click();      // START CAREER
+    await expect(page.locator("#cr-title")).toHaveText("CAREER 2026");
+    const st = await page.evaluate(() => window.__apex.careerState());
+    expect(st.slot).toBe(2);                   // the free one, not the live one
+    const used = await page.evaluate(() => window.__apex.careerSlots().map((s) => s.used));
+    expect(used).toEqual([true, true, true]);
+  });
+
+  test("with every slot full it says what makes room, instead of failing quietly", async ({ page }) => {
+    await boot(page);
+    await fill(page, 3);
+    await toPicker(page);
+    await expect(page.locator("#cr-go")).toBeDisabled();
+    await expect(page.locator("#cr-right")).toContainText("ALL SLOTS FULL");
+    await expect(page.locator("#cr-right")).toContainText("Delete one");
+  });
+
+  test("deleting frees the slot, and NEW CAREER works again", async ({ page }) => {
+    await boot(page);
+    await fill(page, 3);
+    await toPicker(page);
+    await expect(page.locator("#cr-go")).toBeDisabled();
+    // Delete slot 1 — twice, because the first press only arms it.
+    const del = () => page.locator(".cr-slot").nth(1).locator(".cr-slot-del");
+    await del().click();
+    await del().click();
+    await expect(page.locator("#cr-go")).toBeEnabled();
+    await page.locator("#cr-go").click();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+    await page.locator("#cr-go").click();
+    const st = await page.evaluate(() => window.__apex.careerState());
+    expect(st.slot).toBe(1);                   // the slot that was freed
+    // And the other two are exactly as they were.
+    const teams = await page.evaluate(() => window.__apex.careerSlots().map((s) => s.team));
+    expect(teams[0]).toBe("haas");
+    expect(teams[2]).toBe("audi");
+  });
+
+  test("deleting every career leaves the picker able to start one", async ({ page }) => {
+    await boot(page);
+    await fill(page, 3);
+    await toPicker(page);
+    for (let i = 0; i < 3; i++) {
+      const del = () => page.locator(".cr-slot").nth(i).locator(".cr-slot-del");
+      await del().click();
+      await del().click();
+    }
+    expect(await page.evaluate(() => window.__apex.career())).toBeNull();
+    await expect(page.locator(".cr-slot.empty")).toHaveCount(3);
+    await expect(page.locator("#cr-go")).toBeEnabled();
+    await page.locator("#cr-go").click();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+  });
+
+  test("the title button stops offering to continue once nothing is saved", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ teamId: "haas", seat: 1, seed: 2, slot: 0 }));
+    await page.locator("#cr-back").click();
+    await expect(page.locator("#mb-career .mb-label")).toHaveText("CONTINUE CAREER");
+    await page.evaluate(() => window.__apex.careerSlotDelete(0));
+    await expect(page.locator("#mb-career .mb-label")).toHaveText("CAREER");
+    await expect(page.locator("#mb-career-sub")).toHaveText("");
   });
 });
