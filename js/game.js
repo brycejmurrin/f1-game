@@ -2130,11 +2130,17 @@ function armReliability(field) {
   return field;
 }
 
-// Put the player on a flying lap: at the line, on the racing side, already at
-// the speed the qualifying model assumes. Written in TRACK coordinates and
-// pushed back out to world space through worldFromTrack, exactly as
-// rescuePlayer() and retireCar() do — a moving start is not a new kind of
-// physics, it is the existing placement with speed left in.
+// Put the player on the LINE, AT REST — a standing qualifying lap.
+//
+// This used to launch at racing speed, because the simulated field is modelled
+// on a flying lap and timing a driven lap from a standstill against it would
+// lose you the launch every weekend by construction. The answer to that is not
+// to fake the player's start, though: it is to charge the MODEL the same
+// standing start (see STANDING_LOSS in js/game/quali.js), so both sides of the
+// comparison begin from rest and the two remain on one scale.
+//
+// Written in TRACK coordinates and pushed back out through worldFromTrack,
+// exactly as rescuePlayer() and retireCar() do.
 function launchFlyingLap() {
   if (!player || !track) return;
   // The player's OWN top speed — the identical expression updateCar() uses for a
@@ -2147,25 +2153,20 @@ function launchFlyingLap() {
   //
   // Then capped by what the road at the line will actually take, so a circuit
   // whose start/finish sits in a corner does not launch the car into a wall.
-  const mods = playerMods;
-  const flat = VMAX * PACE * mods.speed;
-  const k = Math.abs(Tracks.curvature(track, player.s));
-  const corner = k > 1e-5 ? Math.sqrt(LAT_MAX * gripMult() / k) : flat;
-  const v = Math.min(flat, corner);
   Tracks.sample(track, player.s, smp);
   player.x = 0;                       // on the line, not on the grid slot
   player.xVis = 0;
   const w = worldFromTrack(player.s, player.x, smp);
   player.px = w.x; player.pz = w.z;
   player.head = Math.atan2(smp.t[0], smp.t[2]);
-  player.speed = v;
+  player.speed = 0;               // standing start, like the real thing
   player.vLat = 0; player.yawRateCur = 0; player.yawVis = 0; player.steerVis = 0;
   // Seed the render-interpolation anchors, or the first frame smears the car
   // across the track from wherever the grid slot was.
   player.rPrevPx = player.px; player.rPrevPz = player.pz;
   player.rPrevS = player.s; player.rPrevX = player.x;
   player.rPrevHead = player.head; player.rPrevYawVis = 0;
-  announce("FLYING LAP", 1.6);
+  announce("QUALIFYING LAP", 1.6);
 }
 
 function startRace() {
@@ -2828,17 +2829,12 @@ function update(dt) {
       announce("LIGHTS OUT!", 1.4);
       if (soundOn) GameAudio.lightsOut();
       cars.forEach((c) => { c.lapStart = 0; });
-      // QUALIFYING IS ONE LAP, SO IT MUST BE A FLYING ONE. The session used to
-      // run two — a standing out-lap to build speed, then the lap that counted.
-      // Cutting it to one without this would time you from a standstill while
-      // the entire simulated field is modelled on a flying lap, and no amount of
-      // driving would close a gap that is purely the launch: you would qualify
-      // last every weekend by construction.
-      //
-      // So the car is already at racing speed as the lights go out. The launch
-      // speed is the model's own straight-line ceiling for THIS car (the same
-      // number quali.js integrates against), so a driven lap and a simulated one
-      // start from the same place and stay on one scale.
+      // ONE STANDING LAP, from the line. It used to launch at racing speed
+      // because the simulated field is modelled on a flying lap, and timing a
+      // standing lap against a flying one loses you the launch by construction.
+      // That is fixed on the other side now — quali.js charges every modelled
+      // lap the same standing start — so both begin from rest and stay on one
+      // scale, and the session reads like the thing it is named after.
       if (isQuali()) launchFlyingLap();
     }
     return;

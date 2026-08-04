@@ -137,9 +137,21 @@ function create(G) {
     return G.vTop() * c.tierV * c.skill * dd.ai * QUALI_TRIM;
   }
 
+  // What a STANDING start costs, in seconds, for a car whose flying pace is
+  // `cap`. lapTime() integrates a lap that is already up to speed, so a car
+  // leaving the line from rest is behind that model by the time it loses
+  // accelerating to it: reaching v under constant a takes v/a and covers
+  // v^2/(2a), a distance the flying lap covers in v/(2a) — so the loss is the
+  // difference, v/(2a). Roughly two and a half seconds at F1 pace, and it
+  // applies to every modelled car exactly as it applies to the driven one.
+  function standingLoss(cap) {
+    return cap / (2 * Math.max(G.ACCEL || 12, 1));
+  }
+
   // One car's qualifying lap. Deterministic for a given (career seed, round, car).
   function simLap(c, track, grip, round) {
-    const base = lapTime(track, capFor(c), grip);
+    const cap = capFor(c);
+    const base = lapTime(track, cap, grip) + standingLoss(cap);
     const r = DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat));
     // Execution: a driver who is not consistent is not slower on average, just
     // less likely to put the whole lap together on the one run that counts.
