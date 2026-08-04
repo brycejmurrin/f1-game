@@ -1,0 +1,117 @@
+# Layout audit — how to measure the menus before changing them
+
+Every layout bug this project has shipped lived in a **cell of a matrix**, not in
+a screen: the circuit list stopped 49px above the sheet floor *only* in the
+two-column branch; the garage stacked its category rail *only* at the sheet's
+430px floor width; the preview card clipped its chip row *only* where the column
+was shorter than the card; a full-width map band left the circuit list two pixels
+*only* on a rotated monitor, where a portrait window holds a landscape-shaped
+sheet. Each was found by looking at one screenshot, and each was invisible in
+every other screenshot taken that day.
+
+The cure is not more screenshots. It is enumerating the matrix and measuring it.
+
+```sh
+node tools/layout-audit.mjs                          # measure every cell
+node tools/layout-audit.mjs --shots                  # + a PNG per cell (slow)
+node tools/layout-audit.mjs --screens=select,garage --viewports=ios-*
+```
+
+Output lands in `artifacts/layout-audit/`: `audit.json` (the raw measurements,
+diffable build to build) and `index.html` (a screen x viewport grid, green /
+amber / red, hover a cell for the findings).
+
+---
+
+## Measure first, look second
+
+Screenshots are slow here — the renderer is SwiftShader, and a 1440x900 capture
+of a live 3D scene can take minutes — and they prove nothing you can grep. A
+geometry probe reads the same truth out of the DOM in milliseconds:
+
+| what it asks | why it is the question |
+|---|---|
+| does any visible box escape the thing that clips it | this is "text is cut off", stated in a way a machine can check. Scroll containers are exempt on their scroll axis — that is what scrolling is |
+| is any interactive element outside the viewport | a button you cannot reach is worse than one that looks wrong |
+| is any tap target under 44px | the project's own `--tap` floor; landscape phones deliberately run 40, so this is amber, not red |
+| is any text ellipsised | not always a bug — often the point — but it is the difference between SUSPENSION and SUSPENSI… |
+| does the document scroll horizontally | always a bug on a fixed-viewport game |
+| for each scroll region: how much is hidden, and how far it stops above the sheet floor | the measurement that caught the action bar stealing a row from the circuit list |
+| did the page throw | a layout that only looks right because a script died is not right |
+
+Only after the grid says *where* is a screenshot worth waiting for. `--shots`
+takes them, and the gallery links each cell to its own.
+
+**Stop the render loop first.** The probe calls `__apex.headless(true)` before
+opening anything: the 3D scene starves the compositor, which makes every wait and
+every capture an order of magnitude slower. A desktop screenshot that timed out
+at four minutes took twenty seconds with the loop stopped.
+
+---
+
+## The viewports, and what each one is for
+
+These are shapes a display can be, not devices people own. Each exists because
+some branch turns on or off at it.
+
+| viewport | why it is in the matrix |
+|---|---|
+| `ios-iphone-portrait` 393x852 | the phone as most people hold it |
+| `ios-iphone-landscape` 852x393 | the shape the game is PLAYED in — 343px of sheet height for everything |
+| `ios-ipad-portrait` 834x1194 | wide sheet, tall window: wants bands, not columns |
+| `ios-ipad-landscape` 1194x834 | the two-column case at its smallest |
+| `desktop-1280x800` | a small laptop |
+| `desktop-1440x900` | the common desktop |
+| `desktop-1920x1080` | full screen on a 1080p monitor |
+| `desktop-windowed-1920x937` | the same monitor with browser chrome — 143px less, and browser chrome is why a "desktop" can land on a phone branch |
+| `desktop-narrow-860x560` | a small window, or a maximised one at 125% zoom; below the 900x600 large-screen gate |
+| `desktop-portrait-1080x1920` | a rotated monitor: a PORTRAIT window whose sheet is capped landscape by `#sel-inner { height: min(100%, 720px) }` |
+
+The last two are the ones that keep finding bugs. A viewport's orientation does
+not tell you the sheet's shape, and the sheet is what the layout keys on.
+
+---
+
+## The three ways a layout decision gets made here
+
+Knowing which mechanism owns a decision is most of debugging one:
+
+1. **Container queries on the sheet** (`@container sheet (min-width: …)`) — the
+   default, and right for anything that depends on the room a panel actually got.
+   **A container query cannot style its own container.** `#sel-inner` *is* the
+   `sheet` container, so a rule for it inside `@container sheet` silently never
+   applies; the column template has to live outside the block. This has now cost
+   two debugging sessions.
+2. **Media queries on the viewport** (`@media (orientation: …)`, `(max-height: …)`)
+   — for what the *window* is, not what a panel got: orientation, the density
+   token ladder in `css/tokens.css`, `body.desktop` behaviour.
+3. **A class on `<body>`** — `desktop` is set from `pointer: coarse`, which is
+   input, not size. Use it for input affordances, never for room.
+
+Two traps worth writing on the wall:
+
+- **Specificity ties are decided by source order, and container queries add
+  none.** A single-ID rule inside `@container` loses to an identical single-ID
+  rule declared later in the file. `--sel-map-w` exists as a custom property
+  precisely so the map's width can be set by inheritance instead; where that is
+  not available, use two IDs (`#sel-track-preview #sel-preview-map`).
+- **An `auto` grid track's growth limit is max-content.** A scroll region that
+  spans into an `auto` row hands that row its entire content height — a 24-row
+  circuit list turned a 76px action bar into 358px. Use `min-content` for a track
+  a scroller spans into.
+
+---
+
+## Reading the grid
+
+- **green** — nothing clipped, nothing off screen, no horizontal overflow, no
+  page errors.
+- **amber** — only sub-44px tap targets. Expected on a landscape phone, where
+  `--tap` is deliberately 40.
+- **red** — the count of real findings. Hover for the list; `audit.json` has the
+  element, its clipper, and how many pixels it escaped by.
+- **skipped** — the screen could not be reached in that viewport. That is a
+  finding too, and the reason is in the tooltip.
+
+A cell going from green to red between builds is a regression with an address:
+screen, viewport, element, and the number of pixels involved.
