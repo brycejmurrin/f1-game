@@ -41,6 +41,10 @@
 
 const NetHandshake = (function () {
   const MAGIC = "APEX1";          // format marker + version, kept human-visible
+  const CORRUPT = { ok: false, error: "corrupt_code",
+    message: "That code is incomplete or corrupted — copy the whole thing." };
+  const NO_TRANSPORT = { ok: false, error: "no_transport",
+    message: "WebRTC is unavailable in this browser." };
   const GATHER_TIMEOUT_MS = 8000; // stop waiting for stragglers; what we have is usually enough
 
   // ---- base64url (no padding) — safe in a URL fragment and in a chat message
@@ -93,7 +97,9 @@ const NetHandshake = (function () {
   }
 
   // ---- code encode / decode ------------------------------------------------
-  // Payload: {v: MAGIC, b: build, k: "offer"|"answer", p: {...profile}, s: sdp}
+  // Payload: {b: build, k: "offer"|"answer", p: {...profile}, s: sdp}
+  // No version field: the MAGIC prefix already carries it, and a second
+  // marker is a second thing that can disagree.
   async function encodeCode(payload) {
     const json = JSON.stringify(payload);
     if (canCompress()) {
@@ -109,15 +115,13 @@ const NetHandshake = (function () {
       return { ok: false, error: "bad_code", message: "That does not look like an Apex invite code." };
     }
     const [, mode, body] = parts;
-    let json;
     try {
       const bytes = b64urlToBytes(body);
-      json = mode === "z" ? await inflate(bytes) : dec().decode(bytes);
+      const json = mode === "z" ? await inflate(bytes) : dec().decode(bytes);
+      return { ok: true, payload: JSON.parse(json) };
     } catch (e) {
-      return { ok: false, error: "corrupt_code", message: "That code is incomplete or corrupted — copy the whole thing." };
+      return CORRUPT;   // decode, inflate and parse all mean the same to a player
     }
-    try { return { ok: true, payload: JSON.parse(json) }; }
-    catch (e) { return { ok: false, error: "corrupt_code", message: "That code is incomplete or corrupted — copy the whole thing." }; }
   }
 
   // ---- ICE gathering -------------------------------------------------------
@@ -177,17 +181,21 @@ const NetHandshake = (function () {
   // `profile` is whatever the lobby needs to build the rival's car: team,
   // driver, livery, and the parts SETUP IDS. Ids, never resolved multipliers —
   // a peer declaring `{cornering: 9}` should be impossible, not merely rude.
-  async function createInvite(transport, profile, opts) {
-    const pc = transport && transport.pc;
-    if (!pc) return { ok: false, error: "no_transport", message: "WebRTC is unavailable in this browser." };
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+  // Gather fully, then emit. Shared by both halves so the two can never drift.
+  async function makeCode(pc, kind, profile, opts) {
     await waitForIce(pc, opts && opts.gatherTimeoutMs);
-    const code = await encodeCode({
-      v: MAGIC, b: await localBuild(), k: "offer",
+    return encodeCode({
+      b: await localBuild(), k: kind,
       p: profile || null,
       s: normaliseSdp(pc.localDescription.sdp),
     });
+  }
+
+  async function createInvite(transport, profile, opts) {
+    const pc = transport && transport.pc;
+    if (!pc) return NO_TRANSPORT;
+    await pc.setLocalDescription(await pc.createOffer());
+    const code = await makeCode(pc, "offer", profile, opts);
     return { ok: true, code, url: inviteUrl(code) };
   }
 
@@ -203,17 +211,11 @@ const NetHandshake = (function () {
     const build = checkBuild(await localBuild(), parsed.payload.b);
     if (!build.ok) return build;
     const pc = transport && transport.pc;
-    if (!pc) return { ok: false, error: "no_transport", message: "WebRTC is unavailable in this browser." };
+    if (!pc) return NO_TRANSPORT;
 
     await pc.setRemoteDescription({ type: "offer", sdp: parsed.payload.s });
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    await waitForIce(pc, opts && opts.gatherTimeoutMs);
-    const out = await encodeCode({
-      v: MAGIC, b: await localBuild(), k: "answer",
-      p: profile || null,
-      s: normaliseSdp(pc.localDescription.sdp),
-    });
+    await pc.setLocalDescription(await pc.createAnswer());
+    const out = await makeCode(pc, "answer", profile, opts);
     return { ok: true, code: out, peer: parsed.payload.p || null };
   }
 
@@ -226,7 +228,7 @@ const NetHandshake = (function () {
     const build = checkBuild(await localBuild(), parsed.payload.b);
     if (!build.ok) return build;
     const pc = transport && transport.pc;
-    if (!pc) return { ok: false, error: "no_transport", message: "WebRTC is unavailable in this browser." };
+    if (!pc) return NO_TRANSPORT;
     await pc.setRemoteDescription({ type: "answer", sdp: parsed.payload.s });
     return { ok: true, peer: parsed.payload.p || null };
   }

@@ -25,20 +25,44 @@ import { chromium } from "playwright";
 import { spawn } from "node:child_process";
 
 const PORT = 4467;
-const srv = spawn("python3", ["-m", "http.server", String(PORT)], { stdio: "ignore" });
-srv.on("error", (e) => console.log("[srv error]", String(e)));
-srv.on("exit", (c) => console.log("[srv exited]", c));
+const alive = async () => {
+  try { return (await fetch(`http://127.0.0.1:${PORT}/version.json`)).ok; } catch (e) { return false; }
+};
+// A previous run killed with SIGKILL leaves its server behind, and spawning a
+// second one on the same port fails silently — the fetch below then succeeds
+// against the ORPHAN and the run looks fine until srv.kill() kills nothing.
+// Adopt an already-listening server instead of racing it.
+const adopted = await alive();
+const srv = adopted ? null : spawn("python3", ["-m", "http.server", String(PORT)], { stdio: "ignore" });
+if (srv) {
+  srv.on("error", (e) => console.log("[srv error]", String(e)));
+  srv.on("exit", (c) => console.log("[srv exited]", c));
+}
+const stopSrv = () => { if (srv) srv.kill(); };
 // Poll until it actually answers, rather than hoping a fixed sleep was enough.
-let up = false;
+let up = adopted;
 for (let i = 0; i < 40 && !up; i++) {
-  try { const r = await fetch(`http://127.0.0.1:${PORT}/version.json`); up = r.ok; } catch (e) {}
+  up = await alive();
   if (!up) await new Promise((r) => setTimeout(r, 250));
 }
-console.log("server up:", up);
-if (!up) { srv.kill(); process.exit(1); }
+console.log("server up:", up, adopted ? "(adopted an existing one)" : "");
+if (!up) { stopSrv(); process.exit(1); }
 const log = (...a) => console.log(...a);
 
-const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+// Two pages in one browser means one of them is always the background tab, and
+// Chromium throttles a background tab's rAF to a crawl. That is fatal here and
+// not obviously so: the game loop is what pumps the transport, so a throttled
+// page stops draining its receive inbox, stops answering pings, and the session
+// times out 2.5 s later. It reads exactly like a network failure.
+const b = await chromium.launch({
+  executablePath: "/opt/pw-browsers/chromium",
+  args: [
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    "--disable-features=CalculateNativeWinOcclusion",
+  ],
+});
 const mk = async () => {
   const c = await b.newContext({ viewport: { width: 844, height: 390 } });
   const p = await c.newPage();
@@ -47,6 +71,13 @@ const mk = async () => {
   // present is the real readiness signal, same as the Playwright specs use.
   await p.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "domcontentloaded", timeout: 90000 });
   await p.waitForFunction(() => window.__apex != null, { timeout: 90000 });
+  // Two software-rendered (SwiftShader) racing games on one box starve each
+  // other's game loop down to well under 1 Hz — and the game loop is what pumps
+  // the transport, so the session times out after 2.5 s of not being pumped and
+  // it reads as a network failure. headless() skips render() only; physics,
+  // netPlay.tick and the countdown all still run. The wire is what is under
+  // test here, not the pixels.
+  await p.evaluate(() => window.__apex.headless(true));
   return p;
 };
 const A = await mk(), B = await mk();
@@ -57,11 +88,11 @@ const el = () => ((Date.now() - t0) / 1000).toFixed(1) + "s";
 
 const hostRes = await A.evaluate(() => window.__apex.lobbyHost());
 log(el(), "host invite:", hostRes.ok ? `ok len=${hostRes.code.length}` : JSON.stringify(hostRes));
-if (!hostRes.ok) { await b.close(); srv.kill(); process.exit(1); }
+if (!hostRes.ok) { await b.close(); stopSrv(); process.exit(1); }
 
 const joinRes = await B.evaluate((c) => window.__apex.lobbyJoin(c), hostRes.code);
 log(el(), "guest answer:", joinRes.ok ? `ok len=${joinRes.code.length}` : JSON.stringify(joinRes));
-if (!joinRes.ok) { await b.close(); srv.kill(); process.exit(1); }
+if (!joinRes.ok) { await b.close(); stopSrv(); process.exit(1); }
 
 const accRes = await A.evaluate((c) => window.__apex.lobbyAccept(c), joinRes.code);
 log(el(), "host accepted:", JSON.stringify(accRes).slice(0, 120));
@@ -82,6 +113,83 @@ while (Date.now() < deadline) {
   }
   await new Promise((r) => setTimeout(r, 3000));
 }
-if (!ok) log(`\n*** NO SESSION after 90s ***`);
-await b.close(); srv.kill();
-process.exit(ok ? 0 : 1);
+if (!ok) {
+  log(`\n*** NO SESSION after 90s ***`);
+  await b.close(); stopSrv();
+  process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// Connected is not the same as PLAYING. Everything above proves the handshake;
+// this proves the thing the handshake is FOR — that both peers are in the same
+// race and each one can see the other actually driving.
+//
+// Both cars are given throttle and left to run on real rAF (no step(), no
+// virtual clock — this is the one harness where the real loop is the point).
+// Then each peer is asked where it thinks the RIVAL is, and that is compared
+// against where the rival says IT is. Agreement to within a few metres is the
+// whole replication path working end to end: publish -> wire -> clock sync ->
+// interpolation buffer -> poseRemote.
+// ---------------------------------------------------------------------------
+const raceUp = async (p) => p.evaluate(() => {
+  const n = window.__apex.net();
+  return { active: n.active, role: n.role, localId: n.localId, remoteId: n.remoteId,
+           cars: (window.__apex.cars() || []).length };
+});
+const ra = await raceUp(A), rb = await raceUp(B);
+log(`\n${el()} race: A ${JSON.stringify(ra)}\n${el()} race: B ${JSON.stringify(rb)}`);
+if (!ra.cars || !rb.cars) {
+  log("*** neither peer got onto a track — the lobby did not start the race ***");
+  await b.close(); stopSrv(); process.exit(1);
+}
+
+// Lights-out is armed ~2.5 s ahead by hostStart(); give the countdown time to
+// run out before expecting either car to move.
+log(`${el()} waiting out the countdown, then driving both cars…`);
+await Promise.all([A, B].map((p) => p.evaluate(() => window.__apex.setInput({ throttle: true, steer: 0 }))));
+
+// Each peer's own car, and the rival as that peer sees it. Sampled REPEATEDLY,
+// because the interesting failures here are transitions — a session that comes
+// up and then times out, a countdown that never releases — and a single
+// snapshot at the end cannot tell those apart from "never worked".
+const readPair = (p) => p.evaluate(() => {
+  const n = window.__apex.net();
+  const mine = window.__apex.carAt(n.localId) || {};
+  const rival = n.remoteId >= 0 ? (window.__apex.carAt(n.remoteId) || {}) : {};
+  return {
+    role: n.role, active: n.active, reason: n.reason, buffered: n.buffered,
+    localId: n.localId, remoteId: n.remoteId, startPending: n.startPending,
+    rtt: n.net ? Math.round(n.net.rtt) : null,
+    synced: n.net ? n.net.synced : null,
+    queued: n.net && window.__apex.lobby().wire ? window.__apex.lobby().wire.queued : null,
+    mine: { s: +(mine.s || 0).toFixed(1), speed: +(mine.speed || 0).toFixed(1), lap: mine.lap },
+    rival: { s: +(rival.s || 0).toFixed(1), speed: +(rival.speed || 0).toFixed(1), lap: rival.lap },
+  };
+});
+let pa = null, pb = null;
+for (let i = 0; i < 8; i++) {
+  await new Promise((r) => setTimeout(r, 3000));
+  [pa, pb] = await Promise.all([readPair(A), readPair(B)]);
+  log(`${el()} A ${JSON.stringify(pa)}`);
+  log(`${el()} B ${JSON.stringify(pb)}`);
+}
+
+// A rival drawn ~100 ms in the past at racing speed is legitimately ~10 m
+// behind where it says it is, and the two browsers' clocks are only agreed to
+// within the RTT. 40 m is loose enough not to be flaky and tight enough that a
+// car stuck on the grid, posed at the wrong slot, or never replicated at all
+// fails it outright.
+const TOL_M = 40;
+const moving = pa.mine.speed > 5 && pb.mine.speed > 5;
+const seesB = Math.abs(pa.rival.s - pb.mine.s) < TOL_M && pa.rival.speed > 5;
+const seesA = Math.abs(pb.rival.s - pa.mine.s) < TOL_M && pb.rival.speed > 5;
+log(`\nboth cars driving:        ${moving}`);
+log(`A sees B where B says:    ${seesB}  (A thinks s=${pa.rival.s}, B says s=${pb.mine.s})`);
+log(`B sees A where A says:    ${seesA}  (B thinks s=${pb.rival.s}, A says s=${pa.mine.s})`);
+
+const playing = moving && seesB && seesA;
+log(playing
+  ? `\n*** TWO PEERS RACING EACH OTHER OVER REAL WebRTC at ${el()} ***`
+  : `\n*** connected, but not racing correctly ***`);
+await b.close(); stopSrv();
+process.exit(playing ? 0 : 1);

@@ -63,7 +63,7 @@ const NetTransport = (function () {
   }
 
   // ---- loopback ------------------------------------------------------------
-  // opts: { latencyMs, jitterMs, loss (0..1), reorder (0..1), rnd, manual }
+  // opts: { latencyMs, jitterMs, loss (0..1), rnd }
   // Returns [a, b]. Anything a sends arrives at b and vice versa.
   //
   // Loss and reorder apply ONLY to the "state" channel: that is the honest
@@ -75,7 +75,6 @@ const NetTransport = (function () {
     const latency = opts.latencyMs != null ? opts.latencyMs : 50;
     const jitter  = opts.jitterMs  != null ? opts.jitterMs  : 0;
     const loss    = opts.loss      || 0;
-    const reorder = opts.reorder   || 0;
     const rnd     = opts.rnd       || Math.random;
 
     const a = makeEndpoint("a"), b = makeEndpoint("b");
@@ -105,10 +104,10 @@ const NetTransport = (function () {
       if (channel === STATE) {
         if (loss > 0 && rnd() < loss) { dropped++; return; }
       }
-      let at = (from._wire || 0) + latency + (jitter ? (rnd() * 2 - 1) * jitter : 0);
-      // Reordering: shove this one behind a plausible successor. Only ever
-      // applied to the unordered channel.
-      if (channel === STATE && reorder > 0 && rnd() < reorder) at += latency * 0.5;
+      // Jitter alone reorders the unordered channel: two packets sent in
+      // order can land out of order once their arrival times cross, which is
+      // the real mechanism rather than a separate knob.
+      const at = (from._wire || 0) + latency + (jitter ? (rnd() * 2 - 1) * jitter : 0);
       queue.push({ at, to, channel, data, seq: seq++ });
     }
 
@@ -243,5 +242,5 @@ const NetTransport = (function () {
     return typeof RTCPeerConnection !== "undefined";
   }
 
-  return { STATE, EVENT, CHANNELS, loopback, rtc, supported };
+  return { STATE, EVENT, loopback, rtc, supported };
 })();

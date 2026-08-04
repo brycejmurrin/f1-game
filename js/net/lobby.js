@@ -348,8 +348,14 @@ const NetLobby = (function () {
       const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
       on("vs-host", host);
       on("vs-join", join);
-      on("vs-make-answer", makeAnswer);
-      on("vs-accept", acceptAnswer);
+      // Called with NO argument on purpose. Both take an optional code so a
+      // test can drive the handshake without scraping textareas — and wiring
+      // them as bare handlers passes the CLICK EVENT as that code, which is not
+      // null, so the textarea is ignored and code.trim() throws on a MouseEvent.
+      // The visible symptom is the opposite of a crash: pasting junk silently
+      // does nothing instead of explaining itself.
+      on("vs-make-answer", () => makeAnswer());
+      on("vs-accept", () => acceptAnswer());
       on("vs-copy-invite", () => copy(($("vs-invite") || {}).value || ""));
       on("vs-copy-answer", () => copy(($("vs-answer") || {}).value || ""));
       on("vs-close", cancel);

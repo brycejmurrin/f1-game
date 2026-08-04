@@ -216,6 +216,12 @@ const HARD_EDGES = [
   // the raster module must have evaluated first.
   ["js/game/agentview-raster.js", "js/game/agentview.js"],
   ["js/mat4.js", "js/render/glx.js"],                       // glx uses M4 at init
+  // session.js decodes off the same channel as snapshot.js and shares its ONE
+  // toView(); the two hand-rolled copies had already diverged over how a
+  // DataView argument is handled, which is exactly the bug a shared helper
+  // prevents. Call-time, not eval-time, but a session with no NetSnapshot
+  // silently drops every state packet rather than throwing — so pin the order.
+  ["js/net/snapshot.js", "js/net/session.js"],
   // chunks.js before every shader file (lit/sky/post interpolate GLXChunks at
   // eval; fx.js is chunk-free today but keeps the uniform ordering contract).
   ["js/render/shaders/chunks.js", "js/render/shaders/lit.js"],

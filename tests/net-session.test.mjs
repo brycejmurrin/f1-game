@@ -18,6 +18,12 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const load = (rel, name) => eval(fs.readFileSync(path.join(ROOT, rel), "utf8") + ";" + name);
 const NetTransport = load("js/net/transport.js", "NetTransport");
+// session.js shares NetSnapshot's ONE toView() rather than keeping a second
+// copy that can drift. Loading it is not optional decoration: without it every
+// state packet throws inside the message handler, the transport swallows the
+// throw (a handler bug must not read as a disconnect), and the session simply
+// never syncs its clock — a failure mode with no error message at all.
+const NetSnapshot = load("js/net/snapshot.js", "NetSnapshot");
 const NetSession = load("js/net/session.js", "NetSession");
 
 const seededRnd = (seed) => {
