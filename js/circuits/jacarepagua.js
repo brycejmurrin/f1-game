@@ -59,9 +59,9 @@
     ],
     scenery: function (api) {
       const { out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
-        tree, bush, ridge, mountain, building, grandstandEx, spectatorHill,
+        tree, bush, ridge, mountain, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        floodMast, cameraTower, sponsorHoarding,
+        floodMast, cameraTower, sponsorHoarding, palm, terrace,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
         addBox, addCyl, addCone, addPrism } = api;
       const K = (s) => Math.round(s * n) % n;
@@ -111,6 +111,59 @@
         ridge(tx, tz, pyMin, a + 1.5708, 160, 40, 12 + h * 6, [0.16, 0.36, 0.18]);
       }
 
+      // THE MORRO HOUSING. Rio's granite hills carry dense self-built housing up
+      // their lower slopes, and no other circuit in the game has anything like
+      // it — a bare green mountain reads as alpine or Malaysian, and this one
+      // must read as Rio. Small flat-roofed concrete boxes in saturated paint,
+      // stacked tight and stepping UP the slope, each roof carrying the water
+      // tank and antenna clutter that is most of what you actually see at
+      // distance. Placed in world space against pyMin like the mountains
+      // themselves, since this is far outside the terrain ribbon.
+      {
+        const SKIN = [
+          [0.86, 0.72, 0.52], [0.80, 0.44, 0.34], [0.72, 0.74, 0.66],
+          [0.58, 0.66, 0.62], [0.86, 0.82, 0.68], [0.66, 0.52, 0.44],
+          [0.84, 0.62, 0.36], [0.60, 0.64, 0.72],
+        ];
+        const ROOF = [0.62, 0.60, 0.56], TANK = [0.30, 0.36, 0.46];
+        // Six clusters spread along the same arc the massif occupies, so the
+        // housing sits ON the mountains rather than floating beside them.
+        for (let c = 0; c < 6; c++) {
+          const frac = 0.62 + (c / 5) * 0.66;
+          const ang = frac * 6.2832;
+          const hc = hash(c * 29 + 5);
+          const r = rad + 165 + hc * 55;
+          const bx = cx + Math.cos(ang) * r, bz = cz + Math.sin(ang) * r;
+          if (onTrack(bx, bz, 40)) continue;
+          // Rows climbing the slope: each row further back also sits higher,
+          // which is what makes a favela read as built on a hill rather than
+          // as a housing estate on a flat.
+          for (let row = 0; row < 7; row++) {
+            const climb = row * 9.5;
+            const back = row * 13;
+            for (let i = 0; i < 9; i++) {
+              const h = hash(c * 131 + row * 17 + i * 7);
+              if (h < 0.18) continue;   // gaps — alleys and rock outcrops
+              const along = (i - 4) * 15 + (h - 0.5) * 8;
+              const wx = bx + Math.cos(ang) * back - Math.sin(ang) * along;
+              const wz = bz + Math.sin(ang) * back + Math.cos(ang) * along;
+              const hh = 5 + h * 5;                       // one to three storeys
+              const y = pyMin + climb + hh / 2;
+              const w = 7 + h * 4, d = 7 + (1 - h) * 4;
+              addBox(out, [wx, y, wz], [w, hh, d], SKIN[(c * 5 + row * 3 + i) % SKIN.length]);
+              // Flat roof slab, water tank, and a whip antenna. At this range
+              // the roof clutter is most of the visible texture.
+              addBox(out, [wx, y + hh / 2 + 0.3, wz], [w + 0.8, 0.5, d + 0.8], ROOF);
+              if (h > 0.42)
+                addCyl(out, [wx + 1.6, y + hh / 2 + 1.6, wz - 1.2], 1.1, 2.0, TANK, 6);
+              if (h > 0.72)
+                addCyl(out, [wx - 1.8, y + hh / 2 + 2.4, wz + 1.4], 0.12, 4.0,
+                  [0.72, 0.72, 0.74], 4);
+            }
+          }
+        }
+      }
+
       // =====================================================================
       // 2. THE LAGOON — Jacarepaguá sat on the edge of the Lagoa de Jacarepaguá,
       //    and the water was visible from the long back sweep.
@@ -125,13 +178,16 @@
       // Sandy restinga shoreline between the track and the water.
       groundPatch(K(0.470), -1, 55, [60, 0.18, 300], SAND,
         { id: "jacarepagua-shoreline", samples: 10 });
-      // Coconut palms leaning along the shore.
+      // Coconut palms along the shore. These were tree() — a lollipop canopy on
+      // a trunk — which is the one silhouette a coconut palm does not have, and
+      // the shoreline is the signature view here. palm() draws the real thing:
+      // bare leaning trunk, radiating fronds, no ball of foliage.
       every(20, (k) => {
         const s = k / n;
         if (s < 0.36 || s > 0.60) return;
         const h = hash(k * 17);
-        tree(k, -1, 46 + h * 30, 13 + h * 5, h < 0.5 ? PALM : PALM_D);
-        if (h > 0.5) tree(k, -1, 74 + h * 26, 12 + h * 5, PALM_D);
+        palm(k, -1, 46 + h * 30, 13 + h * 5, h < 0.5 ? PALM : PALM_D);
+        if (h > 0.5) palm(k, -1, 74 + h * 26, 12 + h * 5, PALM_D);
       });
 
       // =====================================================================
@@ -208,9 +264,41 @@
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.955, 8.0, [0.15, 0.15, 0.18]);
-      for (let i = 0; i < 4; i++) {
-        building(K(0.918 + i * 0.013), 1, 46, 24, 9, 18,
-          { wall: [0.86, 0.84, 0.78], window: [0.30, 0.34, 0.42], floor: 4.2, roof: true });
+      // The paddock buildings, in Brazilian modernist idiom rather than as four
+      // window-banded boxes. The tell is the COBOGÓ screen — a perforated
+      // breeze-block wall carrying the whole facade, which is how you build for
+      // shade and ventilation in Rio and which no glazed European paddock has.
+      // Deep eaves on slim pilotis, raised off the ground, brise-soleil fins.
+      for (let i = 0; i < 3; i++) {
+        const a = anchor(K(0.916 + i * 0.020), 1, 46);
+        const b = [a.r, a.u, a.t];
+        modelGroup(`jacarepagua-paddock-${i + 1}`, {
+          center: vadd(a.c, a.u, 7), size: [20, 16, 40], basis: b,
+        }, (stage) => {
+          const WALL = [0.90, 0.88, 0.82], SHADE = [0.52, 0.50, 0.46];
+          // Raised on pilotis — the ground floor is open shaded space.
+          for (let p = 0; p < 7; p++)
+            addCyl(stage, vadd(a.c, a.t, (p - 3) * 5.6), 0.26, 3.6, WALL, 6, b);
+          addBox(stage, vadd(a.c, a.u, 3.9), [15, 0.6, 36], [0.80, 0.78, 0.74], b);
+          // Two storeys set back behind the screen.
+          addBox(stage, vadd(vadd(a.c, a.r, 1.6), a.u, 7.2), [11, 6.0, 34], SHADE, b);
+          // COBOGÓ: a lattice of blocks with gaps, standing proud of the wall.
+          // Rendered as alternating pierced courses — the gaps are the point.
+          for (let cRow = 0; cRow < 5; cRow++) {
+            const y = 5.0 + cRow * 1.5;
+            for (let cCol = 0; cCol < 22; cCol++) {
+              if ((cRow + cCol) % 3 === 0) continue;      // the perforations
+              addBox(stage, vadd(vadd(vadd(a.c, a.r, -5.0), a.u, y),
+                a.t, (cCol - 10.5) * 1.55), [0.45, 1.15, 1.15], WALL, b);
+            }
+          }
+          // Deep flat eave with vertical brise-soleil fins on the sun side.
+          addBox(stage, vadd(vadd(a.c, a.r, -1.5), a.u, 12.6), [19, 0.5, 38],
+            [0.88, 0.86, 0.80], b);
+          for (let f = 0; f < 12; f++)
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, -8.4), a.u, 10.6),
+              a.t, (f - 5.5) * 3.1), [0.9, 4.2, 0.28], [0.84, 0.82, 0.76], b);
+        });
       }
       every(48, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
@@ -228,7 +316,15 @@
       groundPatch(K(0.075), 1, 6, [34, 0.18, 46], SAND,
         { id: "jacarepagua-t1-sand", samples: 8 });
       tyreWall(0.058, 0.094, 1, 5, [0.86, 0.20, 0.18]);
-      grandstandEx(0.075, -1, 18, 84, null, null, { livery: "concrete", tiers: 2, endWalls: true });
+      // Poured mass-concrete terracing, open to the sky. Jacarepaguá's stands
+      // were 1970s steps with no roof and no back shell — grandstandEx builds
+      // both, which put a modern covered stand on a circuit whose whole look
+      // was sun-bleached bare concrete.
+      terrace(0.066, 0.085, -1, 18, {
+        rows: 7, rise: 1.4, depth: 2.5, step: 9, density: 0.42,
+        conc: [0.80, 0.78, 0.72], concAlt: [0.71, 0.69, 0.64],
+        crowd: [[0.94, 0.86, 0.20], [0.10, 0.44, 0.24], [0.92, 0.90, 0.86]],
+      });
       marshalPost(K(0.070), -1, 10);
 
       groundPatch(K(0.205), 1, 5, [26, 0.18, 34], SAND,
@@ -238,7 +334,11 @@
       groundPatch(K(0.622), 1, 5, [26, 0.18, 34], SAND,
         { id: "jacarepagua-t9-sand", samples: 6 });
       tyreWall(0.608, 0.638, 1, 4, [0.20, 0.40, 0.85]);
-      grandstandEx(0.622, -1, 20, 70, null, null, { livery: "alu", endWalls: true });
+      terrace(0.615, 0.630, -1, 20, {
+        rows: 5, rise: 1.4, depth: 2.5, step: 9, density: 0.34,
+        conc: [0.78, 0.76, 0.70], concAlt: [0.69, 0.67, 0.62],
+        crowd: [[0.10, 0.44, 0.24], [0.94, 0.86, 0.20], [0.92, 0.90, 0.86]],
+      });
       marshalPost(K(0.616), -1, 9);
 
       groundPatch(K(0.882), 1, 5, [28, 0.18, 36], SAND,
