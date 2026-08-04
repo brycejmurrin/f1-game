@@ -205,9 +205,12 @@
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
+      // Highveld paddock: pitched corrugated roofs over low masonry, which is
+      // how everything on this plateau is built and nothing like a flat-roofed
+      // European hospitality block.
       for (let i = 0; i < 4; i++) {
-        building(K(0.925 + i * 0.013), 1, 38, 24, 12, 18,
-          { wall: [0.86, 0.84, 0.80], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.925 + i * 0.013), 1, 38, 25, 9, 19,
+          { kind: "chevron", wall: [0.84, 0.80, 0.72], window: [0.32, 0.34, 0.38], floor: 4.5 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);

@@ -198,16 +198,22 @@
       gantry(0.965, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 11, 180, null, null,
         { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.055, -1, 12, 120, null, null, { livery: "alu", endWalls: true });
+      // Catalunya's stands were entirely grey — the only fully monochrome
+      // stand set left in the fleet besides the two poured-concrete German ones.
+      // The senyera's red and gold is the obvious local colour, and Montmeló
+      // flies it everywhere.
+      grandstandEx(0.055, -1, 12, 120, null, null, { livery: "crimson", endWalls: true });
       {
         const winLit = [0.97, 0.88, 0.54];
         // On the stand's back shell rather than inside the seating bowl.
         const a = anchor(K(0.005), -1, 22);
         addBox(out, vadd(a.c, a.u, 10.4), [0.22, 1.5, 160], winLit, [a.r, a.u, a.t]);
       }
+      // Montmeló's paddock: white render carrying deep vertical sun-shading
+      // fins, which is what Catalan architecture does about a low western sun.
       for (let i = 0; i < 4; i++) {
-        building(K(0.920 + i * 0.014), 1, 40, 24, 12, 18,
-          { wall: [0.88, 0.87, 0.83], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.920 + i * 0.014), 1, 40, 26, 11, 16,
+          { kind: "fin", wall: [0.90, 0.89, 0.85], window: [0.34, 0.38, 0.44], floor: 4.5 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
@@ -225,7 +231,7 @@
       // bleached terracing under shade sails, which is what Barcelona actually
       // looks like on a test day.
       grandstandEx(0.065, 1, 20, 96, null, null,
-        { livery: "alu", tiers: 2, roof: "cantilever", endWalls: true });
+        { livery: "orange", tiers: 2, roof: "cantilever", endWalls: true });
       sunTerrace(0.222, 0.262, -1, 19, 5);
       sunTerrace(0.492, 0.522, 1, 21, 5);
       sunTerrace(0.674, 0.708, -1, 19, 6);

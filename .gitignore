@@ -13,6 +13,15 @@ artifacts/
 
 # Transient agent/debug scripts must be underscore-prefixed.
 tools/_*.mjs
+tools/_*.cjs
+tools/_*.js
+# ...and stray dotfiles/backups a parallel agent leaves behind, which a
+# blanket `git add -A` would otherwise commit (tools/.vt-warn.cjs did).
+tools/.*
+!tools/.gitkeep
+*.bak
+*.orig
+*~
 
 # git worktrees for isolated agent work
 .worktrees/

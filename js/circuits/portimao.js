@@ -227,9 +227,11 @@
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 11, 140, null, null,
         { livery: "concrete", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
+      // The Algarve paddock is cut into a hillside, so its blocks STEP with the
+      // slope. A flat-topped box here would sit level against ground that isn't.
       for (let i = 0; i < 4; i++) {
-        building(K(0.925 + i * 0.013), 1, 40, 24, 12, 18,
-          { wall: LIME, window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.925 + i * 0.013), 1, 40, 25, 13, 17,
+          { kind: "ziggurat", wall: LIME, window: [0.32, 0.36, 0.42], floor: 4.5 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);

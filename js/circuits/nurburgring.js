@@ -274,9 +274,11 @@
           });
         }
       }
+      // The 1984 GP-Strecke complex steps back in stages as it climbs — heavy,
+      // grey and terraced into the Eifel slope rather than standing on it.
       for (let i = 0; i < 4; i++) {
-        building(K(0.930 + i * 0.014), 1, 38, 24, 12, 18,
-          { wall: [0.80, 0.80, 0.82], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.930 + i * 0.014), 1, 38, 23, 15, 18,
+          { kind: "tiered", wall: [0.76, 0.77, 0.79], window: [0.30, 0.34, 0.42], floor: 4.0 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
@@ -465,6 +467,61 @@
       // General-admission grass banks cut into the treeline on the back section.
       spectatorHill(0.36, 0.46, 1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
       spectatorHill(0.70, 0.78, -1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
+
+      // =====================================================================
+      // 7. BURG NÜRBURG — the twelfth-century castle on the volcanic plug above
+      //    the track. The circuit is NAMED after it, it is visible from most of
+      //    the lap, and it is the one thing in the Eifel that could not be
+      //    anywhere else. A ring of forested hills is generic upland; a ruined
+      //    keep on a cone is the Nürburgring.
+      // =====================================================================
+      {
+        // Sit it on its own hill, clear of the mountain ring so the silhouette
+        // reads against sky rather than against another summit.
+        const ang = 1.15 * 6.2832 % 6.2832;
+        const r = rad + 210;
+        const bx = cx + Math.cos(ang) * r, bz = cz + Math.sin(ang) * r;
+        // The plug the castle stands on — steep, isolated, and taller than the
+        // ridge line around it.
+        mountain(bx, bz, pyMin, 170, 128,
+          { seg: 7, rough: 0.16, forest: [0.13, 0.32, 0.16], rock: [0.42, 0.40, 0.37], snowline: 2, seed: 991 });
+        const STONE = [0.55, 0.53, 0.48], STONE_D = [0.44, 0.42, 0.38];
+        const SLATE = [0.30, 0.31, 0.34];
+        const base = pyMin + 118;   // near the summit of that cone
+        // Curtain wall: an irregular octagon of squat towers linked by wall
+        // runs, which is what a hilltop Burg is — not a fairy-tale palace.
+        const R = 26;
+        for (let i = 0; i < 8; i++) {
+          const t = i / 8 * 6.2832;
+          const tx = bx + Math.cos(t) * R, tz = bz + Math.sin(t) * R;
+          const th = 9 + hash(i * 37 + 3) * 5;
+          addCyl(out, [tx, base + th / 2, tz], 4.2, th, i & 1 ? STONE : STONE_D, 6);
+          addCyl(out, [tx, base + th + 0.6, tz], 4.8, 1.2, STONE_D, 6);   // corbelled parapet
+          // Wall run to the next tower.
+          const t2 = (i + 1) / 8 * 6.2832;
+          const mx = bx + Math.cos((t + t2) / 2) * R * 0.96;
+          const mz = bz + Math.sin((t + t2) / 2) * R * 0.96;
+          addBox(out, [mx, base + 4.2, mz], [R * 0.72, 8.4, 2.4], STONE_D,
+            [[Math.cos((t + t2) / 2 + 1.5708), 0, Math.sin((t + t2) / 2 + 1.5708)],
+             [0, 1, 0],
+             [Math.cos((t + t2) / 2), 0, Math.sin((t + t2) / 2)]]);
+        }
+        // The keep — square, tall, broken-topped. A ruin, so no roof on it.
+        addBox(out, [bx, base + 13, bz], [13, 26, 13], STONE);
+        addBox(out, [bx, base + 26.4, bz], [14.2, 1.4, 14.2], STONE_D);
+        // Broken merlons around the keep head, alternating so the top reads as
+        // toothed rather than as a flat slab.
+        for (let i = 0; i < 12; i++) {
+          const t = i / 12 * 6.2832;
+          if (i % 3 === 2) continue;                       // the missing teeth
+          addBox(out, [bx + Math.cos(t) * 6.6, base + 28.2, bz + Math.sin(t) * 6.6],
+            [1.8, 2.4, 1.8], STONE);
+        }
+        // One intact corner turret with a slate cap — the single pointed
+        // silhouette that makes the whole thing legible at distance.
+        addCyl(out, [bx + 8.5, base + 16, bz - 8.5], 3.0, 32, STONE, 6);
+        addCone(out, [bx + 8.5, base + 32, bz - 8.5], 3.6, 7.5, SLATE, 6);
+      }
       // Camp-style spectator clusters in the forest clearings.
       for (const [id, s, side] of [
         ["nurburgring-camp-north", 0.44, -1],

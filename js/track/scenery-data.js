@@ -142,7 +142,7 @@ const TrackSceneryData = (function () {
     singapore: { tree: "palm",  fol: [0.16, 0.46, 0.20], lamp: "arm",   lc: [0.85, 0.95, 1.0] },
     baku:      { tree: "palm",  fol: [0.30, 0.42, 0.20], lamp: "globe", lc: [1.0, 0.82, 0.50] },  // Caspian boulevard palms
     jeddah:    { tree: "palm",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },
-    madrid:    { tree: "broad", fol: [0.30, 0.40, 0.18], lamp: "post",  lc: [1.0, 0.90, 0.66] },
+    madrid:    { tree: "broad", fol: [0.40, 0.45, 0.27], lamp: "post",  lc: [1.0, 0.90, 0.66] },   // olive, not northern green
     miami:     { tree: "palm",  fol: [0.20, 0.48, 0.22], lamp: "post",  lc: [1.0, 0.78, 0.85] },
     shanghai:  { tree: "broad", fol: [0.24, 0.42, 0.22], lamp: "post",  lc: [0.90, 0.96, 1.0] },
     mexico:    { tree: "broad", fol: [0.32, 0.44, 0.18], lamp: "post",  lc: [1.0, 0.86, 0.55] },
@@ -315,41 +315,41 @@ const TrackSceneryData = (function () {
   const STAND_SET_DEF = ["steel", "darkSteel", "concrete"];
   const STAND_SETS = {
     monza:       ["crimson", "concrete", "steel"],          // tifosi red + old park concrete
-    imola:       ["crimson", "concrete", "steel"],
+    imola:       ["crimson", "sandstone", "concrete"],        // Ferrari red over Imola's stone-and-terracotta town
     silverstone: ["navy", "steel", "alu"],                  // Silverstone blue
     spa:         ["darkSteel", "steel", "concrete"],
-    suzuka:      ["steel", "navy", "concrete"],
-    zandvoort:   ["orange", "alu", "steel"],                // Oranje army
+    suzuka:      ["navy", "orange", "steel"],                 // Honda crown orange; navy no longer clashes with Silverstone
+    zandvoort:   ["orange", "alu", "scaffold"],               // Oranje army; two-thirds of capacity is trucked in
     redbull:     ["crimson", "steel", "alu"],
-    hungaroring: ["steel", "concrete", "alu"],
-    montreal:    ["steel", "navy", "alu"],
-    interlagos:  ["concrete", "steel", "darkSteel"],
+    hungaroring: ["concrete", "sandstone", "steel"],        // poured 1986 terracing; alu reads as steel at distance
+    montreal:    ["alu", "steel", "teal"],                    // teal is the park's own colour (COL.basinTeal)
+    interlagos:  ["concrete", "sandstone", "terracotta"],     // sun-bleached tropical concrete, not three greys
     mexico:      ["navy", "concrete", "steel"],             // Foro Sol blue buckets
-    cota:        ["alu", "darkSteel", "sandstone"],         // bare T1 bleachers
+    cota:        ["darkSteel", "sandstone", "alu"],         // T1 bleachers are real bleacher() now
     miami:       ["pastel", "teal", "alu"],
     vegas:       ["darkSteel", "scaffold", "alu"],
     baku:        ["scaffold", "sandstone", "steel"],
-    jeddah:      ["scaffold", "alu", "darkSteel"],
+    jeddah:      ["scaffold", "sandstone", "darkSteel"],      // temporary tube on Corniche stone
     singapore:   ["scaffold", "teal", "darkSteel"],
     monaco:      ["scaffold", "pastel", "alu"],
     bahrain:     ["sandstone", "steel", "alu"],
     qatar:       ["sandstone", "steel", "concrete"],
     abudhabi:    ["darkSteel", "teal", "sandstone"],
-    shanghai:    ["steel", "crimson", "concrete"],
-    albert_park: ["steel", "navy", "alu"],
-    madrid:      ["terracotta", "concrete", "steel"],
+    shanghai:    ["crimson", "alu", "darkSteel"],             // China red against modern steel
+    albert_park: ["steel", "pastel", "alu"],                  // temporary park build, pale Melbourne palette
+    madrid:      ["crimson", "sandstone", "terracotta"],    // the file hardcodes these at its own call sites
     // ── retired / off-calendar circuits (def `classic: true`) ──
-    hockenheim:    ["concrete", "crimson", "steel"],        // Motodrom concrete bowl + German-GP red
+    hockenheim:    ["concrete", "darkSteel", "crimson"],        // Motodrom concrete bowl, German-GP red accents
     nurburgring:   ["darkSteel", "concrete", "alu"],        // cold Eifel steel and poured concrete
     catalunya:     ["pastel", "concrete", "terracotta"],    // bleached white render, warm Catalan trim
     sepang:        ["alu", "teal", "concrete"],             // aluminium under the fabric canopies
-    istanbul:      ["sandstone", "crimson", "concrete"],    // pale stone + Turkish red
+    istanbul:      ["sandstone", "crimson", "darkSteel"],     // pale Thracian stone, Turkish red, modern steel
     paul_ricard:   ["alu", "navy", "pastel"],               // clinical: aluminium against the blue runoff
     portimao:      ["terracotta", "concrete", "alu"],       // Algarve pantile over hillside terracing
     sochi:         ["alu", "teal", "darkSteel"],            // 2014 Olympic-park metal and glass
     mugello:       ["crimson", "terracotta", "concrete"],   // Ferrari red over Tuscan clay
     magny_cours:   ["navy", "alu", "concrete"],             // French blue on a plain 1990s facility
-    indianapolis:  ["alu", "concrete", "darkSteel"],        // bare Speedway bleachers, no colour
+    indianapolis:  ["alu", "scaffold", "navy"],                 // bare bleachers; navy nods to the blue seat bands
     buenos_aires:  ["concrete", "scaffold", "pastel"],      // 1950s mass concrete + temporary tube
     jacarepagua:   ["concrete", "alu", "sandstone"],        // sun-bleached coastal concrete
     estoril:       ["scaffold", "terracotta", "pastel"],    // period tube stands + one masonry terrace

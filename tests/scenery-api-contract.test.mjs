@@ -36,7 +36,7 @@ const CONTRACT = [
   "pastelStreetRow", "peak", "pine", "place", "plane", "prop", "px", "py", "pyMin",
   "pz", "recordBarrier", "ridge", "runoffApron", "sailCanopy", "scaffoldStand",
   "sceneryTheme", "seat",
-  "signBoard", "spectatorHill", "sponsorHoarding", "stonePine", "terrace", "theme",
+  "signBoard", "signDigit", "spectatorHill", "sponsorHoarding", "stonePine", "terrace", "theme",
   "tieredBowl", "tower", "track", "tree",
   "tyreWall",
   "underpassPortal", "upOf", "vadd", "wall", "waterBand", "waterField", "waterSurface",
@@ -46,7 +46,7 @@ const CONTRACT = [
 // that drops one name while adding another still satisfies "these are sorted and
 // equal" if BOTH lists are edited together, and the count is the cheap tripwire
 // that says how many things circuits may call. Bump it deliberately.
-const CONTRACT_SIZE = 105;
+const CONTRACT_SIZE = 106;
 
 test("the frozen contract is the size it declares", () => {
   assert.equal(CONTRACT.length, CONTRACT_SIZE);

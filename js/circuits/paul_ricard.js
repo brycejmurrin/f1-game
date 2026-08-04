@@ -227,9 +227,12 @@
       gantry(0.965, 8.5, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 12, 150, null, null,
         { livery: "alu", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
+      // Le Castellet sits on a flat limestone plateau and its buildings are long
+      // horizontal slabs — the site reads as an airfield, and its architecture
+      // agrees with that rather than fighting it.
       for (let i = 0; i < 4; i++) {
-        building(K(0.918 + i * 0.013), 1, 40, 24, 12, 18,
-          { wall: [0.84, 0.84, 0.84], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.918 + i * 0.013), 1, 40, 30, 9, 15,
+          { kind: "slab", wall: [0.87, 0.87, 0.86], window: [0.30, 0.34, 0.42], floor: 4.5 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);

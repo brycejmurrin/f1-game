@@ -270,10 +270,10 @@
           conc: [0.74, 0.72, 0.68], concAlt: [0.66, 0.64, 0.60] });
 
       // ---- Turn 1 hill — the real natural grass amphitheatre ----
-      // The built crowdBank terraces above are the temporary stands; behind
-      // and above them the actual hill is informal grass-bank viewing, which
-      // is what makes T1 famous. Set further back (gap 58) than the crowdBank
-      // terraces so it reads as the hillside rising behind the built seating.
+      // The bleachers above are the built, temporary stands; behind and above
+      // them the actual hill is informal grass-bank viewing, which is what
+      // makes T1 famous. Set further back (gap 58) than the bleachers so it
+      // reads as the hillside rising behind the built seating.
       spectatorHill(0.088, 0.118, -1, 58, { rows: 5, rise: 1.3, depth: 2.2, density: 0.55, grass: dryGrass });
 
       // ---- Austin360 Amphitheater + Observation Tower (T16–18, s≈0.76–0.80, R) ----
@@ -562,8 +562,15 @@
         const sf = 0.275 + i * 0.0095;
         const k = K(sf), h1 = hash(k * 37 + i * 5);
         const side = h1 < 0.45 ? 1 : -1;
-        // Left side carries the RV field out to ~48 m; sit the mesquite beyond it.
-        const dist = (side < 0 ? 56 : 26) + h1 * 22;
+        // Asymmetric on purpose, and measured rather than guessed. COTA folds
+        // back on itself through here: anything past ~50 m to the LEFT lands on
+        // the other leg of the lap and the on-track guard drops it outright
+        // (six of these were dropped silently before this was probed). So the
+        // left-side mesquite sits INSIDE the RV field's first row instead of
+        // behind it — which is what a tailgate field looks like anyway, tents
+        // pitched around the trees that were already there. The right side is
+        // open ground and takes the deeper scatter.
+        const dist = (side < 0 ? 15 : 28) + h1 * (side < 0 ? 6 : 24);
         const th = 5.5 + h1 * 3;
         acacia(k, side, dist, th, h1 < 0.5 ? MESQUITE : MESQ_D,
                { spread: th * (1.15 + h1 * 0.4), layers: h1 > 0.6 ? 2 : 1 });

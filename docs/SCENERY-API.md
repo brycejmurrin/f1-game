@@ -5,7 +5,7 @@ Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
 (`buildProps`, split across the `js/track/scenery-nature.js` / `scenery-city.js`
 / `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
 `js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
-primitives, and composite models. The **105-member `api` surface is a frozen
+primitives, and composite models. The **106-member `api` surface is a frozen
 contract** — `tests/scenery-api-contract.test.mjs` fails on any rename/removal,
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
@@ -98,7 +98,7 @@ through the same guarded emitters, so geometry and on-track suppression are
 unchanged — the build simply also leaves behind `track.graph`, a description of
 what stands where.
 
-This is internal to `js/track/`: the 105-member `scenery(api)` surface a circuit
+This is internal to `js/track/`: the 106-member `scenery(api)` surface a circuit
 destructures is untouched, and circuit files need no changes. Gate any migration
 with `node tools/graph-parity.cjs --all`. See
 [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md).

@@ -271,7 +271,7 @@ modules — nature (trees/terrain furniture), city (the `STYLES` building
 generator, neon, glass), structures (grandstands, gantries, barriers,
 floodmasts), identity (per-circuit landmark passes) — each instantiated with a
 ctx of the placement helpers and accumulators. Together they serve the
-**105-member `scenery(api)` contract**, frozen by
+**106-member `scenery(api)` contract**, frozen by
 `tests/scenery-api-contract.test.mjs`: a circuit's `scenery(api)` callback can
 destructure any of those 84 names, so removing/renaming one is a breaking
 change the test catches. See [SCENERY-API.md](SCENERY-API.md).
@@ -542,7 +542,9 @@ arcade — vmax base `VMAX = 72` m/s scaled by tier (player = tier1 equivalent),
 electric deploy (`DEPLOY_A = 3.0` m/s²) tapers to 0 across the `TAPER_LO..TAPER_HI`
 = 41–53 m/s band, boost drains energy bar (recharges under braking + slow
 corners), OVERTAKE: when gap to car ahead < 1.0 s, OT light on; activating gives
-4 s full-taper-free deploy (then 12 s cooldown). Grass (|x| > hw) = heavy drag.
+4 s full-taper-free deploy (then 12 s cooldown). OT is FREE — it draws nothing
+from the battery and fires on a flat one; its OT_GAP/OT_COOL window is the only
+limiter. Grass (|x| > hw) = heavy drag.
 Walls sit at the per-node barrier limit from `Tracks.wallAt`: soft push back.
 Cars collide as ~4.8 × 2.0 m oriented boxes: lateral push + small speed loss.
 AI: follow racing-line offset = -curvatureAhead * k, brake by curvature, tier

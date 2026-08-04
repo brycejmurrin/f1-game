@@ -46,7 +46,7 @@
 
   function post(THREE, TSL, ctx) {
     const {
-      Fn, If, Loop, Break, uniform, uniformArray, texture,
+      Fn, If, Loop, Break, Continue, uniform, uniformArray, texture,
       float, int, vec2, vec3, vec4,
       screenUV, screenCoordinate,
       fract, floor, mod, dot, cross, mix, smoothstep, clamp, pow, exp, exp2,
@@ -455,6 +455,11 @@
       reflect: uniform(0), ssrOk: uniform(0),
       reflSkyHi: uniform(new THREE.Vector3(0.05, 0.06, 0.09)),
       reflSkyLo: uniform(new THREE.Vector3(0.02, 0.025, 0.05)),
+      // Camera-aware SSR extent, matching GLX: a low ONBOARD eye needs the top
+      // cutoff raised and the near fade pulled in, or half the wet road falls
+      // outside the band. These were baked in as 0.62 / -2.5 here, so the three
+      // backend paths disagreed about where the wet road even is.
+      ssrTopUV: uniform(0.62), ssrNear: uniform(-2.5),
       ssrThick: uniform(0.20), chromAb: uniform(0), grain: uniform(0),
       grainTime: uniform(0), sharpen: uniform(0), blackLift: uniform(0.005),
       whitePoint: uniform(1.0),
@@ -587,29 +592,48 @@
         If(C.ssrOk.greaterThan(0.5)
           .and(C.reflect.greaterThan(0.001).or(carPx.greaterThan(0.3)))
           .and(depthAt(vUV).lessThan(0.9999))
-          .and(vUV.y.lessThan(0.62)), () => {         // sky/horizon seam gate
+          .and(vUV.y.lessThan(C.ssrTopUV)), () => {   // sky/horizon seam gate
           const P = vec3(ssrViewPos(vUV)).toVar();
-          const dpx = ssrViewPos(vUV.add(vec2(C.reflTexel.x, 0.0))).sub(P).toVar();
-          const dpy = ssrViewPos(vUV.add(vec2(0.0, C.reflTexel.y))).sub(P).toVar();
+          // 3-TEXEL derivative baseline (GLX build 746): at phone resolution one
+          // texel spans so little world space at a grazing road angle that the
+          // depth deltas are quantization-dominated and the normal turns to noise.
+          const nT = C.reflTexel.mul(3.0).toVar();
+          const dpx = ssrViewPos(vUV.add(vec2(nT.x, 0.0))).sub(P).toVar();
+          const dpy = ssrViewPos(vUV.add(vec2(0.0, nT.y))).sub(P).toVar();
           const crv = cross(dpx, dpy).toVar();
           const crvL = length(crv).toVar();
-          const Nv = select(crvL.greaterThan(1e-6), crv.div(crvL), vec3(0.0, 0.0, 1.0)).toVar();
+          // upVS is the ROAD PLANE's normal (game.js builds it from r x t), which
+          // is also the right degenerate fallback — defaulting to view-forward
+          // (0,0,1) zeroed upDot and collapsed the mask in one step.
+          const upVSn = normalize(C.upVS).toVar();
+          const Nv = select(crvL.greaterThan(1e-6), crv.div(crvL), upVSn).toVar();
           If(Nv.z.lessThan(0.0), () => { Nv.assign(Nv.negate()); });
-          const upDot = dot(Nv, normalize(C.upVS)).toVar();
-          const roadMask = smoothstep(0.40, 0.75, upDot)
-            .mul(smoothstep(-2.5, -7.0, P.z))
-            .mul(smoothstep(-22.0, -55.0, P.z).oneMinus()).toVar();
+          // A ground normal's view-space z is ~0 at grazing incidence, so the flip
+          // above is a coin toss and lands DOWN when the camera pitches up. That
+          // drove upDot to -1 and killed the mask past a few metres.
+          If(dot(Nv, upVSn).lessThan(-0.25), () => { Nv.assign(Nv.negate()); });
+          const upDot = dot(Nv, upVSn).toVar();
+          // Relaxed up-facing test + far fade pushed out, matching GLX.
+          const roadMask = smoothstep(0.25, 0.55, upDot)
+            .mul(smoothstep(C.ssrNear, C.ssrNear.mul(2.8), P.z))
+            .mul(smoothstep(-22.0, -78.0, P.z).oneMinus()).toVar();
           const carMask = carPx.mul(smoothstep(0.30, 0.65, upDot))
             .mul(smoothstep(-1.0, -3.0, P.z))
             .mul(smoothstep(-22.0, -55.0, P.z).oneMinus()).toVar();
-          const edgeGrad = length(dpx).add(length(dpy));
+          // /3 keeps the per-texel meaning under the wider baseline.
+          const edgeGrad = length(dpx).add(length(dpy)).div(3.0);
           carMask.mulAssign(smoothstep(0.35, 0.9, edgeGrad).oneMinus());
           const roadTerm = roadMask.mul(C.reflect).toVar();
           const carTerm = carMask.mul(C.carReflect).toVar();
           const ssrGate = max(roadTerm, carTerm).toVar();
           If(ssrGate.greaterThan(0.001), () => {
+            const carDomEarly = carTerm.greaterThan(roadTerm);
             const V = normalize(P.negate()).toVar();
-            const R = reflect(V.negate(), Nv).toVar();
+            // The ROAD reflects off its smooth PLANE, not its bumpy per-pixel
+            // normal — reflecting off Nv scatters the ray and splits the mirror
+            // into hit/miss patches. Car paint keeps its true normal.
+            const Nr = select(carDomEarly, Nv, normalize(mix(Nv, upVSn, 0.85))).toVar();
+            const R = reflect(V.negate(), Nr).toVar();
             // Jittered fine march (post.js:722-759).
             const ign = ignoise(fragXY).toVar();
             const pos = vec3(P).toVar();
@@ -645,7 +669,22 @@
                   });
                 });
                 const fc = C.proj.mul(vec4(bP, 1.0)).toVar();
-                hitUV.assign(fc.xy.div(fc.w).mul(0.5).add(0.5));
+                const huv = fc.xy.div(fc.w).mul(0.5).add(0.5).toVar();
+                // GRAZING SELF-REFLECTION REJECT: at a low onboard eye the ray
+                // skims the tarmac and lands on the ROAD itself, filling the wet
+                // mirror with wet-darkened asphalt. A rough wet surface barely
+                // reflects itself at grazing angles, so drop hits whose surface
+                // faces the same way the reflector does.
+                const hP = vec3(ssrViewPos(huv)).toVar();
+                const hdx = ssrViewPos(huv.add(vec2(nT.x, 0.0))).sub(hP).toVar();
+                const hdy = ssrViewPos(huv.add(vec2(0.0, nT.y))).sub(hP).toVar();
+                const hcr = cross(hdx, hdy).toVar();
+                const hcl = length(hcr).toVar();
+                const hN = select(hcl.greaterThan(1e-6), hcr.div(hcl), upVSn).toVar();
+                If(hN.z.lessThan(0.0), () => { hN.assign(hN.negate()); });
+                const selfHit = carDomEarly.not().and(dot(hN, upVSn).greaterThan(0.55));
+                If(selfHit, () => { Continue(); });
+                hitUV.assign(huv);
                 hitDist.assign(length(bP.sub(P)));
                 const e = abs(hitUV.sub(0.5)).mul(2.0).toVar();
                 hit.assign(pow(max(e.x, e.y), 4.0).oneMinus());   // screen-edge fade
@@ -670,22 +709,33 @@
                 .add(sTap(0.5).mul(w1)).add(sTap(1.0).mul(w2)));
               hitCol.divAssign(w0 + 2 * w1 + 2 * w2 + w3 + w4);
             });
-            // Miss fallback: horizon-vs-zenith by the reflection's up-ness.
-            const skyRefl = mix(C.reflSkyHi, C.reflSkyLo, clamp(R.y, 0.0, 1.0));
-            const reflCol = select(found.greaterThan(0.5), hitCol, skyRefl).toVar();
+            // Miss fallback: horizon-vs-zenith by the reflection's up-ness,
+            // measured against the ROAD PLANE — R.y is view-space y, which only
+            // tracks up while the camera is level, and the cockpit pitches with
+            // the road.
+            const skyRefl = mix(C.reflSkyHi, C.reflSkyLo, clamp(dot(R, upVSn), 0.0, 1.0));
+            // Confidence, not a boolean: blend the fallback in over the hit's own
+            // screen-edge taper so a ray walking off frame has no seam.
+            const conf = select(found.greaterThan(0.5), clamp(hit, 0.0, 1.0), float(0.0)).toVar();
+            const reflCol = mix(skyRefl, hitCol, conf).toVar();
             reflCol.mulAssign(aoV.mul(aoV));           // Lagarde specular occlusion
             reflCol.assign(reflCol.div(reflCol.mul(0.35).add(1.0)));   // soft-clip
-            // Car miss falls through to the lit shader's analytic mirror.
-            const cover = select(found.greaterThan(0.5), hit,
-              select(carDom, float(0.0), float(1.0))).toVar();
-            const fres = pow(max(dot(Nv, V), 0.0).oneMinus(), 3.0).toVar();
+            // SSR changes WHAT the road mirrors, never HOW MUCH: a hit/miss step
+            // in the substitution turned reflected CONTENT into a change of
+            // SURFACE (glossy vs matte patches). Car paint keeps its
+            // confidence-scaled cover — its env cube covers every direction.
+            const cover = select(carDom, conf, float(0.60)).toVar();
+            // Fresnel off the SAME normal the ray used, not the bumpy Nv.
+            const fres = pow(max(dot(Nr, V), 0.0).oneMinus(), 3.0).toVar();
             const strength = ssrGate.mul(select(carDom,
               fres.mul(0.45).add(0.50), fres.mul(0.42).add(0.55))).toVar();
             const gateSrc = select(carDom, C.carReflect, C.reflect);
             strength.mulAssign(min(gateSrc.div(0.20), 1.0));
             // Soft fade below the hard 0.62 gate — no seam (post.js:836-843).
-            strength.mulAssign(smoothstep(0.56, 0.62, vUV.y).oneMinus());
-            const mixAmt = clamp(strength.mul(cover), 0.0, select(carDom, float(0.85), float(0.94)));
+            strength.mulAssign(smoothstep(C.ssrTopUV.sub(0.06), C.ssrTopUV, vUV.y).oneMinus());
+            // Road cap 0.94 -> 0.80, matching GLX: keep more of the reflective lit
+            // base under a hit so hit and miss regions share the same wet look.
+            const mixAmt = clamp(strength.mul(cover), 0.0, select(carDom, float(0.85), float(0.80)));
             const mirrored = select(carDom,
               c.mul(0.22).add(reflCol.mul(0.88)),
               c.mul(0.10).add(reflCol.mul(0.92)));

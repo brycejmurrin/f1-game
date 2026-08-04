@@ -68,7 +68,7 @@
         ridge, floodMast, tree, bush, hedge,
         billboard, marshalPost, wall, fence, guardrail, tyreWall,
         grandstandEx, cameraTower, broadcastCompound, sponsorHoarding,
-        bankedKerbStrip, runoffApron,
+        runoffApron,
       } = api;
 
       const WHITE = [0.92, 0.93, 0.94];
@@ -143,7 +143,12 @@
             for (let i = -2; i <= 2; i++) {
               const p = vadd(vadd(a.c, a.t, i * 14), a.u, 18.4);
               addBox(stage, vadd(p, a.r, IN * 5), [7, 3.2, 8], STEEL, b);     // AHU plant
-              addBox(stage, vadd(p, a.r, -IN * 7), [4.2, 1.6, 5], CONCRETE, b);
+              // Seat the shorter unit ON the deck. Sharing the tall unit's
+              // centre height left it hanging 0.8 m clear — addBox CENTRES, so
+              // two boxes of different heights cannot share a centre and both
+              // still touch the roof.
+              addBox(stage, vadd(vadd(vadd(a.c, a.t, i * 14), a.r, -IN * 7), a.u, 17.6),
+                [4.2, 1.6, 5], CONCRETE, b);
             }
             addCyl(stage, vadd(vadd(a.c, a.t, 30), a.u, 16.8), 0.22, 9, STEEL, 5, b);
           } else {
@@ -615,21 +620,26 @@
       // the circuit's single most-quoted fact) but nothing trackside said so:
       // from the car the bowl read as an ordinary flat corner with a white
       // stand ring behind it. These three layers are what makes a banked
-      // section legible, and all of them inherit the track basis, so they
-      // tilt WITH the road rather than needing a hand-built angle.
-      //   1. a red/white kerb ribbon on the tilted surface — the reference
-      //      edge the eye uses to read a bank angle at all
-      //   2. a paved apron at the bottom of the bank where cars run wide
-      //   3. raked buttress fins on the outside, so the bowl reads as a
+      // section legible, and both inherit the track basis, so they tilt WITH
+      // the road rather than needing a hand-built angle.
+      //   1. a paved apron at the bottom of the bank where cars run wide
+      //   2. raked buttress fins on the outside, so the bowl reads as a
       //      built structure rather than a painted corner
-      // `safer:false` on the ribbon: this circuit already runs open armco
-      // through 0.54-0.86, and the strip's own SAFER rail sits at the same
-      // 4.8 m stand-off, so enabling it would double the barrier.
-      bankedKerbStrip(0.705, 0.815,  1, { safer: false, step: 5.0 });
-      bankedKerbStrip(0.705, 0.815, -1, { safer: false, step: 5.0 });
-      for (const frac of [0.715, 0.745, 0.775, 0.805]) {
-        runoffApron(at(frac), 1, 6.0, [11, 0.3, 30], [0.44, 0.42, 0.40]);
-        runoffApron(at(frac), -1, 6.0, [11, 0.3, 30], [0.44, 0.42, 0.40]);
+      // NOT bankedKerbStrip(): the shared ribbon is tuned for the shallow
+      // bowls that use it (zandvoort/miami/qatar). Measured on THIS bank —
+      // 13.5°, a 24% grade, on a 180° hairpin with hw 9 — it lands its kerb
+      // boxes ~2 m over the racing line (measure-props-over-road 1.03 → 1.97,
+      // isolated by removing each layer in turn). The apron and the fins carry
+      // the same read without touching the road.
+      // Aprons are laid in SHORT bays. runoffApron emits one rigid box along a
+      // single node's tangent, and this is the tightest, most steeply banked
+      // arc on the lap — a 30 m bay chorded straight across it and put paving
+      // ~1 m over the racing line (measure-props-over-road went 1.03 → 1.97).
+      // 10 m bays at twice the station count cover the same ground and follow
+      // the curve. Same lesson as the pit bays and the main grandstand above.
+      for (let f = 0.712; f <= 0.812; f += 0.0074) {
+        runoffApron(at(f), 1, 6.0, [11, 0.3, 10], [0.44, 0.42, 0.40]);
+        runoffApron(at(f), -1, 6.0, [11, 0.3, 10], [0.44, 0.42, 0.40]);
       }
       // Raking buttress fins between the guardrail (4.8) and the bowl's stand
       // ring (inner face ~19.5). One fin every ~24 m, each a wedge leaning back

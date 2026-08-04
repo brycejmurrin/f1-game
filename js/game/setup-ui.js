@@ -16,7 +16,7 @@ function create(G) {
 // Stable helpers from the game.js closure.
 const { $, els, cssCol, store, arrToHex, hexToArr,
         getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
-        getCustomLiveries, setCustomLiveries, getLiveries } = G;
+        getCustomLiveries, setCustomLiveries, getLiveries, invalidateDecalTextures } = G;
 
 const CS_STATS = [
   { key: "speed",     label: "SPEED" },
@@ -390,7 +390,7 @@ function buildLiveryOptions(container, team) {
     const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
-                     noseStripe: "", nose: "", pod: "", wing: "", halo: "", finish: "gloss" };
+                     noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", halo: "", finish: "gloss" };
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -443,6 +443,7 @@ function buildLiveryOptions(container, team) {
           stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
+          fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = liv.id;
@@ -483,6 +484,7 @@ function buildLiveryOptions(container, team) {
           stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
+          fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = null;   // create-new: never overwrites the stock scheme
@@ -550,6 +552,11 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
   wrap.appendChild(colorRow("WINGS", "wing", true));
+  // The shark-fin plate and the tail GRAPHIC painted on it are two separate
+  // picks: the fin is one flat colour, so an art colour equal to it disappears.
+  // NONE on FIN ART keeps the automatic choice, which contrasts the fin paint.
+  wrap.appendChild(colorRow("TAIL FIN", "fin", true));
+  wrap.appendChild(colorRow("FIN ART", "finArt", true));
   wrap.appendChild(colorRow("HALO", "halo", true));
   // FINISH is the paint MATERIAL rather than a colour, so it is a 3-way choice
   // instead of a colour well: gloss (the clearcoat car paint every livery has
@@ -593,7 +600,7 @@ function buildLiveryCreator(container, team) {
 
   const btns = document.createElement("div"); btns.className = "cs-liv-ed-btns";
   const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "cs-liv-ed-cancel"; cancel.textContent = "CANCEL";
-  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; G.livDraftOverride = null; G._spMeshKey = ""; if (G.soundOn) GameAudio.uiTick(); buildSetup(); };
+  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team); if (G.soundOn) GameAudio.uiTick(); buildSetup(); };
   const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
   save.onclick = () => {
     const id = csLivEditId || ("custom_" + livIdCounter());
@@ -604,13 +611,15 @@ function buildLiveryCreator(container, team) {
     if (d.nose) liv.nose = hexToArr(d.nose);
     if (d.pod)  liv.pod  = hexToArr(d.pod);
     if (d.wing) liv.wing = hexToArr(d.wing);
+    if (d.fin)  liv.fin  = hexToArr(d.fin);
+    if (d.finArt) liv.finArt = hexToArr(d.finArt);
     if (d.halo) liv.halo = hexToArr(d.halo);
     if (d.finish && d.finish !== "gloss") liv.finish = d.finish;
     const existing = getCustomLiveries(team.id);
     // Edit-in-place replaces the matching entry (same id); create appends.
     setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === id ? liv : l)) : existing.concat([liv]));
     saveLiveryId(team.id, id);
-    csLivCreating = false; csLivDraft = null; csLivEditId = null; G.livDraftOverride = null; G._spMeshKey = "";
+    csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team);
     if (G.soundOn) GameAudio.uiSelect();
     buildSetup();
   };
@@ -628,12 +637,32 @@ function livIdCounter() { _livSeq = (_livSeq + 1) % 1000; return String(Date.now
 
 // Paint the live 3D preview with an uncommitted draft via the transient
 // override (no localStorage writes), then force a mesh rebuild.
+// Last draft actually pushed to the preview, so a colour well that fires `input`
+// per drag tick without changing value costs nothing. The decal ATLAS is keyed
+// by (team, liveryId) — neither of which moves while the creator is open — so it
+// has to be dropped explicitly or the painted marks (the fin's tail graphic
+// above all, which is FIN ART's whole point) keep showing the previous colours.
+let _livPreviewKey = "";
 function livePreviewDraft(team, d) {
+  const key = team.id + "|" + JSON.stringify(d);
+  if (key === _livPreviewKey) return;
+  _livPreviewKey = key;
+  if (invalidateDecalTextures) invalidateDecalTextures(team.id);
   G.livDraftOverride = { teamId: team.id, liv: { c1: hexToArr(d.c1), c2: hexToArr(d.c2), stripe: d.stripe ? hexToArr(d.stripe) : null, accent: d.accent ? hexToArr(d.accent) : null,
     nose: d.nose ? hexToArr(d.nose) : null, pod: d.pod ? hexToArr(d.pod) : null, wing: d.wing ? hexToArr(d.wing) : null, halo: d.halo ? hexToArr(d.halo) : null,
+    fin: d.fin ? hexToArr(d.fin) : null, finArt: d.finArt ? hexToArr(d.finArt) : null,
     noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null,
     finish: d.finish && d.finish !== "gloss" ? d.finish : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
+}
+
+// Leave the creator: drop the draft override AND the atlas built from it, so the
+// car goes back to (or arrives at) the livery that is actually fitted.
+function endLivPreview(team) {
+  _livPreviewKey = "";
+  G.livDraftOverride = null;
+  if (invalidateDecalTextures) invalidateDecalTextures(team.id);
+  G._spMeshKey = "";
 }
 
 function openSetup() {

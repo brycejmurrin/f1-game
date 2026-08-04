@@ -189,9 +189,12 @@
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.955, 8.0, [0.15, 0.15, 0.18]);
+      // Peronist-era civic building: squat masonry drums, monumental at ground
+      // level and deliberately heavy — the autodromo was a state project and
+      // its buildings were built to say so.
       for (let i = 0; i < 4; i++) {
-        building(K(0.918 + i * 0.013), 1, 40, 24, 10, 18,
-          { wall: [0.86, 0.85, 0.80], window: [0.30, 0.34, 0.42], floor: 4.2, roof: true });
+        building(K(0.918 + i * 0.013), 1, 40, 22, 9, 22,
+          { kind: "drum", wall: [0.86, 0.85, 0.80], window: [0.30, 0.34, 0.42], floor: 4.2 });
       }
       every(48, (k) => {
         const s = k / n, h = hash(k * 71 + 31);

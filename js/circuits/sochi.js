@@ -328,9 +328,12 @@
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, 1, 12, 150, null, null,
         { livery: "alu", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
+      // Olympic-park civic architecture: crossed perpendicular slabs on a broad
+      // footprint, monumental rather than commercial. The circuit threads through
+      // a set of buildings that were never designed for it.
       for (let i = 0; i < 4; i++) {
-        building(K(0.925 + i * 0.013), -1, 40, 24, 12, 18,
-          { wall: [0.86, 0.86, 0.88], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.925 + i * 0.013), -1, 40, 24, 13, 24,
+          { kind: "cross", wall: [0.88, 0.88, 0.90], window: [0.34, 0.40, 0.48], floor: 4.5 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);

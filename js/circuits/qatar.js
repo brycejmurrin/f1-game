@@ -549,13 +549,11 @@
       // screenshot was indistinguishable from theirs. Lusail is 20 km out in
       // open desert — from the circuit there is NO city on the horizon at all,
       // only the two hero silhouettes below and a lot of sand. Emptiness is
-      // this venue's identity, so the horizon is left empty on purpose. Two
-      // distant aviation beacons alone mark the Doha direction; anything more
-      // and it stops reading as desert.
-      for (const [s, dist] of [[0.455, 900], [0.585, 980]]) {
-        const a = anchor(K(s), -1, dist);
-        addBox(out, vadd(a.c, a.u, 46), [2.0, 5.0, 2.0], BEACON, [a.r, a.u, a.t]);
-      }
+      // this venue's identity, so the horizon is left empty on purpose. Nothing
+      // is emitted here at all — an unbroken sand line under the mast ring is
+      // the point, and even a pair of distant aviation beacons floats with
+      // nothing under it (the float audit says so) and reads as a city edge.
+      void BEACON;
 
       // ================= KATARA TOWERS + LUSAIL STADIUM =======================
       // Real Lusail landmarks the brief flags as missing from an otherwise

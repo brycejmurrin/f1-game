@@ -726,12 +726,23 @@
         { livery: "alu", roof: "flat", endWalls: true, h: 9 });
       grandstandEx(0.335, 1, 28, 42, null, null, { livery: "sandstone", roof: "flat" });
 
-      // ── General-admission terracing above the T1 stands ──────────────────
-      // Poured mass-concrete steps in the sandstone family, set well behind the
-      // three T1 grandstands and their light bank. No roof, no back shell: the
-      // form the venue actually uses for GA, and the one open-seating silhouette
-      // Sakhir was missing between its cream shells and its bare desert.
-      terrace(0.018, 0.048, 1, 58,
+      // ── General-admission terracing behind the main straight ─────────────
+      // Poured mass-concrete steps in the sandstone family, sitting between the
+      // 140 m hero stand at gap 18 and the far pit-straight stand at gap 90. No
+      // roof and no back shell: the form the venue actually uses for GA, and
+      // the one open-seating silhouette Sakhir was missing between its cream
+      // shells and its bare desert.
+      //
+      // Deliberately on the STRAIGHT, and that constraint is real rather than
+      // aesthetic. along() hands a range emitter a CONSTANT nominal bay length
+      // (step * ds, measured on the centreline), so a run placed far off the
+      // road on the INSIDE of any curve gets bays longer than the arc they have
+      // to fill and buries ~1.7 m of each into its neighbour. Both earlier
+      // homes for this terrace — above the T1 stands, then behind the final
+      // corner — were inside-of-curve at gap 58 and both failed the clip audit
+      // for exactly that reason. Anything this deep and this far out belongs on
+      // a straight until along() reports the arc length at the emitter's gap.
+      terrace(0.996, 0.030, 1, 58,
         { rows: 6, rise: 1.4, depth: 2.6, step: 9, density: 0.5,
           conc: [0.76, 0.70, 0.57], concAlt: [0.68, 0.62, 0.50],
           crowd: [SEAT_BLUE, SEAT, [0.62, 0.58, 0.52], [0.40, 0.30, 0.24]] });
