@@ -361,7 +361,46 @@ Two things this cost, both worth writing down:
   so fourteen categories grew past the sheet and five were unreachable below it.
   Anything true only *when the panes split* belongs on `[data-pair="on"]`.
 
-## 16. Ranked, second pass
+## 16. `<dialog>`: a seam, not a rewrite
+
+The z-index case in §14 is now acted on for 12 of the 16 `.screen.dim` modals.
+The interesting part was not the feature — `showModal()` is one call — but how to
+adopt it without a sixty-site rewrite of a state machine that had already proved
+fragile.
+
+**The seam.** A migrated screen becomes a `<dialog>` in the markup and gains
+nothing else. `js/game/topmodal.js` watches its `hidden` attribute and mirrors it
+onto `showModal()` / `close()`. Every existing `.hidden = false` call site keeps
+working, unchanged and unaware, and screens migrate one at a time. `hidden` stays
+authoritative on purpose: making `open` the source of truth would force every
+reader of `.hidden` — menus.js, the pause flow, the audit harness, the specs — to
+learn a second way to ask the same question on a staggered schedule.
+
+**Escape is where the free feature turns into a trap.** A native dialog closes
+itself on Escape, but closing the ELEMENT is not closing the SCREEN. The VS
+FRIEND lobby's own close path stops the camera and tears down a half-built
+RTCPeerConnection *before* hiding anything, and CLAUDE.md is explicit that a
+camera outliving its screen is a privacy bug nothing on screen would reveal. A
+bare Escape leaves both running. So `data-esc-close="<id>"` names the control
+Escape should press, and Escape then does exactly what that button does — no
+second code path to keep in step. `data-esc="none"` refuses Escape for a screen
+that is a gate rather than an overlay (`#results`, whose buttons are MENU and
+NEXT — neither of which means "dismiss").
+
+Verified behaviourally, not just geometrically: opens through the app's existing
+call site; is in the top layer; the background is genuinely inert (the element
+over the main menu's RACE button is the dialog's content, not the button); focus
+moves inside; Escape closes AND puts `hidden` back in step so the screen reopens;
+Escape on the lobby calls the lobby's own close button; `#results` refuses it.
+`npm run test:net` 65/65 with the lobby as a `<dialog>`, and 300 audit cells clean.
+
+**The four left out** — `#pausemenu`, `#pmsettings`, `#race-settings`, `#quali` —
+own or gate a flow rather than being dismissible, and `#pmsettings` has already
+demonstrated that changing its visibility behind its own back makes every button
+inside it a silent no-op. They deserve their own pass, with the flow reasoned
+about rather than the tag swapped.
+
+## 17. Ranked, second pass
 
 1. ~~**Write the seven-axis table into `docs/LAYOUT-AUDIT.md`**~~ — **done**.
 2. ~~**`.pane-pair` primitive**~~ — **built**, and `#carsetup` + `#career` are on
@@ -370,10 +409,10 @@ Two things this cost, both worth writing down:
    is (1,1,0) against the primitive's (0,3,0)), plus one rule returning the foot
    to `grid-column: 1 / -1` in the band layout, and its `:not([data-shape="tall"])`
    column extras moved off the container query onto `[data-pair="on"]`.
-3. **Migrate the `.screen.dim` modals to `<dialog>.showModal()`** — the platform
-   answer from §14. Deletes the z-index ladder, and supplies ESC, focus
-   containment and an inert background that none of them have today.
-   *(incremental: one helper, one screen at a time, each verified by its grid row)*
+3. ~~**Migrate the `.screen.dim` modals to `<dialog>.showModal()`**~~ — **12 of
+   16 done** (`js/game/topmodal.js`). See §17. The four left are the ones that
+   own or gate a FLOW rather than being dismissible overlays: `#pausemenu`,
+   `#pmsettings`, `#race-settings`, `#quali`.
 4. **Safe-area assertion in the audit probe.** The one axis we claim to handle
    and never verify, on the orientation the game is played in. *(cheap)*
 5. **Cost out `container-type: size` on the sheet** — if it can have a definite
