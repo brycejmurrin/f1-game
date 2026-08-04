@@ -797,6 +797,26 @@ const LiveryTex = (function () {
   // SHORT, which is the canonical list in this file.
   try { loadLogos(Object.keys(SHORT)); } catch (_) {}
 
+  // Register a mark at RUNTIME for one team — how MY TEAM's uploaded logo gets
+  // in. Same slot the shipped files use, so everything downstream (halo, the
+  // `logo` tint, the fin badge) applies to it unchanged. `src` may be a data
+  // URL or a path; falsy clears it and drops back to the vector crest.
+  function setTeamLogo(id, src) {
+    if (!src) {
+      delete LOGOS[id];
+      for (const cb of _logosReady) { try { cb(); } catch (_) {} }
+      return;
+    }
+    if (typeof Image === "undefined") return;
+    const img = new Image();
+    img.onload = () => {
+      img._avg = avgColour(img);
+      LOGOS[id] = img;
+      for (const cb of _logosReady) { try { cb(); } catch (_) {} }
+    };
+    img.src = src;
+  }
+
   // Mean colour of a mark's opaque pixels — what it "reads as" from a distance.
   // Sampled at low resolution once per image; buildAtlas uses it to decide
   // whether the mark separates from the paint it is about to land on.
@@ -1111,6 +1131,6 @@ const LiveryTex = (function () {
     return canvas;
   }
 
-  return { SIZE, REGIONS, buildAtlas, drawCrest, loadLogos, onLogosReady, LOGOS };
+  return { SIZE, REGIONS, buildAtlas, drawCrest, loadLogos, onLogosReady, setTeamLogo, LOGOS };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

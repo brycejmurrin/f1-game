@@ -5898,6 +5898,7 @@ function openCustomize() {
   const liv = ct.livery || {};
   CZ_LIV_FIELDS.forEach(([domId, key]) => czSetLivField(domId, liv[key] || null));
   czSetFinish(liv.finish);
+  refreshCustomLogoUi(loadCustomLogo());
   czPreview();
   els.customize.hidden = false;
 }
@@ -6306,6 +6307,66 @@ if (typeof window !== "undefined" && window.__APEX_DEBUG) {
   window.__APEX = { cars: () => cars, player: () => player, state: () => state, track: () => track };
 }
 
+// MY TEAM's own emblem. Stored as a downscaled data URL under apex26.customLogo
+// so it survives a reload without touching the asset pipeline — LiveryTex takes
+// it through exactly the same slot as the shipped marks.
+const CUSTOM_LOGO_KEY = "customLogo";
+const CUSTOM_LOGO_MAX = 384;      // matches the shipped marks
+function loadCustomLogo() { try { return store.get(CUSTOM_LOGO_KEY, null); } catch (_) { return null; } }
+function applyCustomLogo(dataUrl) {
+  if (typeof LiveryTex === "undefined" || !LiveryTex.setTeamLogo) return;
+  LiveryTex.setTeamLogo("custom", dataUrl || null);
+}
+// Downscale to at most CUSTOM_LOGO_MAX on the long edge before storing: a phone
+// photo is several MB and localStorage would simply throw.
+function readLogoFile(file, done) {
+  const fr = new FileReader();
+  fr.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const sc = Math.min(1, CUSTOM_LOGO_MAX / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * sc));
+      const h = Math.max(1, Math.round(img.height * sc));
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      try { done(c.toDataURL("image/png")); } catch (_) { done(null); }
+    };
+    img.onerror = () => done(null);
+    img.src = fr.result;
+  };
+  fr.onerror = () => done(null);
+  fr.readAsDataURL(file);
+}
+function refreshCustomLogoUi(dataUrl) {
+  const prev = $("cz-logo-prev");
+  if (!prev) return;
+  prev.hidden = !dataUrl;
+  if (dataUrl) prev.src = dataUrl;
+}
+$("cz-logofile").addEventListener("change", (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  readLogoFile(f, (dataUrl) => {
+    if (!dataUrl) return;
+    try { store.set(CUSTOM_LOGO_KEY, dataUrl); } catch (_) {}
+    applyCustomLogo(dataUrl);
+    refreshCustomLogoUi(dataUrl);
+    invalidateDecalTextures("custom");
+    _spMeshKey = "";
+    if (soundOn) GameAudio.uiSelect();
+  });
+  e.target.value = "";       // let the same file be re-picked after a CLEAR
+});
+$("cz-logo-clear").onclick = () => {
+  try { store.set(CUSTOM_LOGO_KEY, null); } catch (_) {}
+  applyCustomLogo(null);
+  refreshCustomLogoUi(null);
+  invalidateDecalTextures("custom");
+  _spMeshKey = "";
+  if (soundOn) GameAudio.uiTick();
+};
+
 // Real team marks (assets/logos/<id>.png). Optional and async: every atlas built
 // before they land uses the hand-drawn vector crest, so this drops those cached
 // textures once the images arrive and the cars repaint with the real emblems.
@@ -6315,6 +6376,7 @@ if (typeof LiveryTex !== "undefined" && LiveryTex.loadLogos) {
     _spMeshKey = "";   // force the garage turntable to repaint too
   });
   LiveryTex.loadLogos(Teams.LIST.map((t) => t.id));
+  applyCustomLogo(loadCustomLogo());
 }
 syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 migrateSeasonPoints();

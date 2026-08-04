@@ -624,3 +624,12 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
 }
 } /* @layer components */
+
+/* MY TEAM logo upload: the file input itself is hidden (its native button is
+   unstyleable), so the <label> is the visible control. */
+.cz-logo-wrap { display: flex; align-items: center; gap: 6px; }
+.cz-logo-wrap label { cursor: pointer; }
+#cz-logo-prev {
+  width: 28px; height: 28px; object-fit: contain;
+  background: rgba(255,255,255,0.08); border-radius: 4px; padding: 2px;
+}
