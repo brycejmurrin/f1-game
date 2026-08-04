@@ -26,20 +26,21 @@ const LAUNCH = {
     "--enable-unsafe-webgpu",
     "--disable-background-timer-throttling",
     "--disable-renderer-backgrounding",
-    // WITHOUT THESE TWO, THIS PAGE GETS ZERO requestAnimationFrame. Measured, on
-    // one browser, back to back: a blank data: URL runs at 61 rAF/s and our
-    // title screen at 0/s; adding them takes the title screen to 25/s and leaves
-    // the blank page alone. It is not the browser being headless — it is that a
-    // page with a WebGL canvas gates BeginFrame on a buffer swap that, under
-    // SwiftShader with vsync on, never signals here.
+    // DO NOT ADD --disable-frame-rate-limit HERE. It was tried, to cure menu
+    // clicks that hang: Playwright's actionability poll ticks on rAF, and this
+    // page's rAF rate can collapse under SwiftShader, so uncapping the frame
+    // clock looks like the fix. Measured on an IDLE box, one browser at a time:
     //
-    // Zero rAF is not merely slow, it BREAKS CLICKING. Playwright's actionability
-    // poll (visible/enabled/stable, then the hit test) ticks on rAF, so every
-    // locator.click() hangs to timeout while page.mouse.click() at the same
-    // coordinates works instantly — the signature that sent season.spec.js red
-    // in six places and reads like a broken menu when the menu is fine.
-    "--disable-gpu-vsync",
-    "--disable-frame-rate-limit",
+    //   flags                          rAF     #mb-season click
+    //   as below                       2/s     1632 ms
+    //   + --disable-gpu-vsync          2/s     1569 ms
+    //   + --disable-frame-rate-limit   7/s    11982 ms
+    //
+    // It makes clicking SEVEN TIMES SLOWER. Uncapping tells a CPU rasteriser to
+    // render as fast as it can, and it obliges — two workers took the load
+    // average past 9 on four cores and every spec slowed with it. The rAF rate
+    // is not the lever; CPU headroom is. A menu click that hangs means the box
+    // is oversubscribed, so lower --workers rather than raise the frame rate.
   ],
 };
 
