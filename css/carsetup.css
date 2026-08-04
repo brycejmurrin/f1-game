@@ -425,8 +425,19 @@
 /* Wide enough for a two-pane setup: a compact header band across the top, the
    categories as a vertical rail on the LEFT, and the option list filling the
    full panel height on the RIGHT — so half a dozen options are readable at once
-   instead of the two that fitted under a stacked header on a landscape phone. */
-@container sheet (min-width: 440px) {
+   instead of the two that fitted under a stacked header on a landscape phone.
+
+   400, not 440. The sheet has a 430px FLOOR (--cs-sheet-w), which after its
+   border leaves 428px of container — four pixels under the old threshold. So the
+   one width the panel is guaranteed to have was the one width that missed the
+   two-pane layout, and a landscape phone got the stacked one in a 343px-tall
+   window: the wrapping category grid took its 48%, the compact header never
+   engaged, and the option list was left showing a SINGLE row clipped through its
+   own description. A desktop window under ~815px wide (or a zoomed one) lands on
+   the same floor and got the same thing. Everything from the floor up now gets
+   the rail; a portrait phone (~367px of container) still gets the grid, which is
+   the right answer there — it has the height to spend and no width. */
+@container sheet (min-width: 400px) {
   #cs-header {
     flex-flow: row wrap; align-items: center;
     column-gap: var(--gap); row-gap: calc(var(--gap) * 0.5);
