@@ -1846,6 +1846,47 @@ const Tracks = (function () {
       });
     }
 
+    // ---------- circuit-registered light fixtures ----------
+    // The generic mast pass below owns every ORDINARY lamp on every circuit, and
+    // game.js/lighting.js emits one point light per exported mast lens. That
+    // covers roadside posts and flood banks — but not a fixture the circuit
+    // builds itself, and there is exactly one shape of those that matters: a
+    // luminaire the circuit had to model by hand because no mast could stand
+    // there (a tunnel soffit, a canopy underside, a portal reveal). Without a
+    // registration path those fixtures are painted geometry that casts nothing.
+    //
+    // lampPost() lets a bespoke scenery() hand back the world position of a lens
+    // it has already drawn, and the light follows the same fixture-anchored rule
+    // as every other lamp: no light without something visible emitting it.
+    // Positions are RAW WORLD coordinates (like the px/py/pz arrays handed to
+    // scenery) and are deliberately NOT remapped by transformSceneryApi — a
+    // reversed lap's bespoke scenery computes them off the same arrays.
+    const customLamps = [];
+    const CUSTOM_LAMP_CAP = 96;
+    const lampPost = (spec) => {
+      spec = spec || {};
+      const p = spec.pos;
+      if (!finiteVec(p, 3, false)) {
+        diagnostics.invalid.push({ id: spec.id || "lamp-post", reason: "non-finite lamp position" });
+        return false;
+      }
+      if (customLamps.length >= CUSTOM_LAMP_CAP) return false;
+      const k = Number.isFinite(spec.k) ? ((Math.round(spec.k) % n) + n) % n : 0;
+      const rec = { k, side: spec.side === -1 ? -1 : 1, x: p[0], y: p[1], z: p[2],
+                    kind: typeof spec.kind === "string" ? spec.kind : "led",
+                    custom: true };
+      // ALWAYS: this fixture burns in daylight too. Ordinary lamps only reach the
+      // shader once the session is dark; a tunnel's are on at noon, and the bore
+      // is in permanent shadow, so gating them on nightfall would leave the one
+      // place on the circuit that genuinely needs light as the one place without.
+      if (spec.always) rec.always = true;
+      if (finiteVec(spec.aim, 3, false)) rec.aim = [spec.aim[0], spec.aim[1], spec.aim[2]];
+      if (Number.isFinite(spec.energy)) rec.energy = Math.max(0, spec.energy);
+      if (Number.isFinite(spec.radius)) rec.radius = Math.max(1, spec.radius);
+      customLamps.push(rec);
+      return true;
+    };
+
     // Per-circuit bespoke scenery lives in js/tracks/<id>.js (def.scenery).
     if (def.scenery) {
       let sceneryApi = {
@@ -1862,7 +1903,7 @@ const Tracks = (function () {
         // Named atmosphere / colour packs (js/track-scenery-data.js)
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
-        modelGroup, overheadSpan, waterSurface, waterField, waterBand, groundPatch, groundedSegments,
+        modelGroup, overheadSpan, lampPost, waterSurface, waterField, waterBand, groundPatch, groundedSegments,
         seat, foundation, cantilever,
         // Resolved data and opt-in architectural/facility helpers. Merely binding
         // these does not emit geometry; each circuit remains responsible for calls.
@@ -2010,6 +2051,12 @@ const Tracks = (function () {
         track.lampPosts.push({ k, side, x: lens[0], y: lens[1], z: lens[2], kind });
       }
     }
+    // Circuit-registered fixtures ride the same export, so buildTrackLights needs
+    // no second code path — they are lamp posts that happened to be modelled by a
+    // scenery() callback instead of by the generic mast pass. Appended AFTER it
+    // because that pass assigns track.lampPosts fresh.
+    for (const lamp of customLamps) track.lampPosts.push(lamp);
+    track.hasAlwaysLamps = customLamps.some((lamp) => lamp.always);
 
     // bridge supports: pillars from the ground up to the raised deck, set a
     // little along the deck from the exact crossing so they clear the lower road

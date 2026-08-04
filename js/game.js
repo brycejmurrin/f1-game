@@ -3576,7 +3576,7 @@ function applyLightTune(fromApplyRace) {
     v = clamp(v, d.min, d.max);
     if (LT[d.id] !== v) { LT[d.id] = v; if (d.rebuild) rebuilt = true; if (d.reinitRain) reinit = true; if (_APPLY_RACE_IDS.has(d.id)) reapply = true; }
   }
-  if (rebuilt && track) track._lights = null;
+  if (rebuilt && track) { track._lights = null; track._alwaysLights = null; }
   // Skip the reapply when applyRaceSettings itself invoked us (it derives from
   // the fresh LT values right after this returns) — re-entering ran the whole
   // sky/ambient/fog derivation twice per track/time/weather transition.
@@ -3598,7 +3598,7 @@ function setLightTune(id, v) {
     if (v === ltFallback(id)) delete prof[id]; else prof[id] = v;
     if (!Object.keys(prof).length) delete _ltStore[key];
   }
-  if (d.rebuild && track) track._lights = null;   // re-bake per-track light records next frame
+  if (d.rebuild && track) { track._lights = null; track._alwaysLights = null; }   // re-bake per-track light records next frame
   if (d.reinitRain && isWetRoad()) initRainDrops();   // re-seed the rain field with the new count/length
   if (_APPLY_RACE_IDS.has(id) && track && state !== "menu" && state !== "select") applyRaceSettings();
   return true;
@@ -3613,8 +3613,8 @@ const _wheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive:
 const _ersLightOpts = { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 };
 const _flameOpts = { emissive: 1.0, roughness: 1, specular: 0, alpha: 1, noAlphaWrite: true };
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
-function setFrameLights(eye, scale, fwd) {
-  LightTune.setFrameLights(frame, track, cars, eye, scale, fwd, gfx.mobileTier);
+function setFrameLights(eye, scale, fwd, srcSet) {
+  LightTune.setFrameLights(frame, track, cars, eye, scale, fwd, gfx.mobileTier, srcSet);
 }
 function appendCarTailLights() {
   LightTune.appendCarTailLights(frame, track, cars, player);
@@ -4405,6 +4405,20 @@ function render(dt) {
     setFrameLights(camEye, floodScale, _lightFwd);
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     if (_floodActive) appendCarTailLights();
+  } else if (track.hasAlwaysLamps) {
+    // ALWAYS-ON FIXTURES in a bright session. A circuit can register lamps that
+    // burn regardless of the hour (lampPost({always:true}) — Monaco's tunnel
+    // luminaires). Those live in a SEPARATE baked set, so a day race lights the
+    // one place the sun cannot reach without switching the whole circuit's
+    // street lighting on. Same cull, same knobs; no twilight ramp and no car
+    // tail-lights, both of which are after-dark cues.
+    if (!track._alwaysLights || track._alwaysLights.length === 0)
+      track._alwaysLights = buildTrackLights(track, true);
+    if (track._alwaysLights.length) {
+      const _al = LT.lampLevel;
+      _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
+      setFrameLights(camEye, [_al, _al, _al], _lightFwd, track._alwaysLights);
+    } else frame.lights = null;
   } else {
     frame.lights = null;
   }
