@@ -232,6 +232,15 @@ Ownership alone would let one good season max the car out and kill the economy
 dead. The cap is what keeps a career owning more than it can fit at once, so every
 weekend stays a choice.
 
+> **The cap does not currently move.** `BUDGET_MULT` describes a four-level
+> ladder and `Career.upgradeBudget()` / `budgetUpgradeCost()` implement it
+> correctly — but neither has a caller outside `js/game/career.js`, so
+> `budgetLvl` stays 0 and `budget()` always returns exactly the works car.
+> The rules are done; the missing piece is a control in `career-ui.js` (beside
+> the FACILITY button, which is the same shape and is wired). The career guide
+> used to advertise "three upgrades" and now describes the cap as fixed —
+> restore that text in the same change that adds the button, not before.
+
 Ownership is enforced on **write**, not on read. `getTeamParts`/`saveTeamParts` in
 `js/game.js` is the two-line funnel every parts consumer already goes through, so
 branching there gives the career a fully isolated build that only ever contains
