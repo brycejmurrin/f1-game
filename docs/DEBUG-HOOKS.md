@@ -493,6 +493,24 @@ Three combined-slip fields expose the traction-circle state in real time:
 
 `slipFactor` < 1 means the car is braking or accelerating hard enough to reduce cornering grip. When it approaches 0 the car will wash wide (understeer). Trail-braking — easing off the brake while turning in — lets `slipFactor` rise and rotates the car.
 
+Six more expose the ACTIVE AERO trade, which is otherwise applied deep inside
+`updateCar` and readable nowhere:
+
+| Field | Meaning |
+|---|---|
+| `aeroX` | flap TRAVEL, 0 (shut) → 1 (open). What the physics reads |
+| `vmaxNow` | this car's top-speed ceiling INCLUDING the X-mode gain |
+| `aeroGrip` | the aero-load grip term at the current speed — `1 + DOWNFORCE × aeroDf × (v/vTop)²` |
+| `aeroDf` | the downforce multiplier alone: 1 shut, `1 − xDfLoss` fully open |
+| `aeroLoad` | HOW MUCH WING this car carries, 0..1 (`Parts.aeroLoad`) — 0 = `minimal`, 1 = `ground_effect`, 0.5 for a car with no parts (every AI) |
+| `xVmaxGain` / `xDfLoss` | the two halves of the trade for THIS car, interpolated by `aeroLoad` |
+
+The trade is not one pair of constants: a big wing has more drag to shed and
+more downforce to lose, so both halves scale with the aero part (+5.5 % → +15.5 %
+of top speed, 42 % → 78 % of the aero load). Do not assert a literal against
+`vmaxNow` ratios — read `xVmaxGain` and compare against that, or the assertion
+breaks the moment the car changes wing.
+
 ### `tuning() → {wheelbase, expo, maxSlip, speedRef, drift, roadFollow, playerGrip, frontGrip, yawDamp, yawInertia, pace, raceLineAssist, maxTilt, deadzone, tiltCutoff}`
 Live values the steering sliders and physics constants currently hold. Each slider
 movement should move its corresponding value here (and the car's behaviour).

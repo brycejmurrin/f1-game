@@ -411,6 +411,22 @@ const api = {
       slipFactor: +Math.sqrt(Math.max(0, 1 - axFrac * axFrac)).toFixed(3),
       aeroX: +(G.player.aeroX || 0).toFixed(3),
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
+      // THE ACTIVE-AERO TRADE, both halves, as the model actually applies them.
+      // vmaxNow carries the X_VMAX_GAIN multiplier; aeroGrip is the aero-load
+      // grip term (1 + DOWNFORCE x aeroDfMult x (v/vTop)^2) at the CURRENT
+      // speed, so it falls as the flaps open and is worth most where aero load
+      // is doing the most work. aeroDf is the multiplier on its own: 1 shut,
+      // 1 - X_DF_LOSS fully open.
+      vmaxNow: +(G.player._vmaxNow || 0).toFixed(3),
+      aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
+      aeroDf: +G.aeroDfMult(G.player).toFixed(3),
+      // HOW BIG THE TRADE IS FOR THIS CAR. Both spans are scaled by the aero
+      // PART (Parts.aeroLoad, 0 = the smallest wing in the catalog, 1 = the
+      // biggest), because a big wing has more drag to shed and more downforce
+      // to lose. A car with no parts sits at 0.5.
+      aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),
+      xVmaxGain: +G.xVmaxGain(G.player).toFixed(4),
+      xDfLoss: +G.xDfLoss(G.player).toFixed(4),
     };
   },
   // Driving-boundary stats for the current track (both sides, all nodes): the

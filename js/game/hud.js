@@ -27,7 +27,10 @@ const _hudSty = new WeakMap();   // el -> { prop: lastVal }
 const _hudCls = new WeakMap();   // el -> last className
 const _hudTog = new WeakMap();   // el -> { cls: lastBool }
 function hText(el, v) { if (!el) return; if (_hudTxt.get(el) !== v) { _hudTxt.set(el, v); el.textContent = v; } }
-function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m) { m = {}; _hudSty.set(el, m); } if (m[prop] !== v) { m[prop] = v; el.style[prop] = v; } }
+// Custom properties need setProperty — `el.style["--e"] = x` is silently a
+// no-op, which is the kind of failure that looks like a broken stylesheet.
+function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m) { m = {}; _hudSty.set(el, m); }
+  if (m[prop] !== v) { m[prop] = v; if (prop.charCodeAt(0) === 45) el.style.setProperty(prop, v); else el.style[prop] = v; } }
 function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 
@@ -77,6 +80,13 @@ function updateHud(force) {
   hToggle(els.tach, "redline", player.rpm > MAX_RPM * 0.92);
   // toggle-button states
   hToggle(els.btnBoost, "on", player.boostOn);
+  // THE BOOST BUTTON IS THE BATTERY. Its colour is mixed from the charge, so a
+  // flat pack reads as a washed-out button and a full one as vivid green — you
+  // can tell what pressing it will buy you without looking away at the bar.
+  // Quantised to 20 steps because hStyle only writes on CHANGE, and a raw float
+  // changes every single frame: that would be a style write per frame per
+  // button, which is exactly what this HUD's write-caching exists to avoid.
+  hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
   hToggle(els.btnOT, "on", player.otT > 0);
   hToggle(els.btnOT, "armed", player.otArmed && player.otT <= 0);
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";

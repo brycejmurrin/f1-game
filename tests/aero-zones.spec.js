@@ -169,3 +169,100 @@ test.describe("overtake mode — the rules active aero does NOT share", () => {
     expect(r.otEnabled, "overtake is not").toBe(false);
   });
 });
+
+// THE TRADE ITSELF: top speed bought with downforce, in the numbers the model
+// actually applies. Both halves were unobservable until physState() carried
+// them — the constants live deep inside updateCar, and you cannot measure them
+// by DRIVING: full lock at 78 m/s puts the car 30 m into a field, which drops
+// xArmed and closes the flaps, so the "X-mode" sample is not X-mode at all.
+// (That is exactly how the first attempt at this test lied.)
+test.describe("active aero — downforce traded for top speed", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("X-mode buys X_VMAX_GAIN of vmax and gives up X_DF_LOSS of the aero load", async ({ page }) => {
+    await loadTrack(page, "monza");
+    const r = await page.evaluate(() => {
+      const A = window.__apex;
+      A.headless(true); A.go();
+      const zone = A.aeroZones().slice().sort((a, b) => b.len - a.len)[0];
+      const read = (wantX) => {
+        A.reset(zone.midFrac, 70, 0);
+        A.setInput({ throttle: true });
+        // the flap TRAVELS (~0.45 s open): sample after it has arrived
+        for (let i = 0; i < 60; i++) { A.aero(wantX); A.step(1 / 60, 1); }
+        const ps = A.physState();
+        A.clearInput();
+        return { aeroX: ps.aeroX, vmaxNow: ps.vmaxNow, aeroGrip: ps.aeroGrip,
+                 aeroDf: ps.aeroDf, xVmaxGain: ps.xVmaxGain, xDfLoss: ps.xDfLoss,
+                 onTrack: Math.abs(ps.x) < 8 };
+      };
+      return { z: read(false), x: read(true) };
+    });
+    // The measurement is only meaningful with the car on the road and the flaps
+    // where they were asked to be.
+    expect(r.z.onTrack && r.x.onTrack, "both samples taken on track").toBe(true);
+    expect(r.z.aeroX).toBe(0);
+    expect(r.x.aeroX).toBe(1);
+
+    // TOP SPEED: exactly the gain this car's wing earns — a plain multiplier.
+    // Asserted against the REPORTED gain rather than a literal, because the
+    // number is no longer one constant: it is interpolated from the aero part
+    // (see the sweep below), and pinning 1.075 here is what made this test fail
+    // the moment the trade started depending on the car.
+    expect(r.x.vmaxNow / r.z.vmaxNow).toBeCloseTo(1 + r.z.xVmaxGain, 3);
+    // DOWNFORCE: the aero-load term keeps 1 - (this car's loss) of itself.
+    expect(r.z.aeroDf).toBeCloseTo(1, 3);
+    expect(r.x.aeroDf).toBeCloseTo(1 - r.z.xDfLoss, 3);
+    // And the grip the car actually gets must FALL, not merely be scaled on
+    // paper: the aero term is what multiplies lateral grip.
+    expect(r.x.aeroGrip).toBeLessThan(r.z.aeroGrip);
+    expect(r.z.aeroGrip).toBeGreaterThan(1);
+  });
+  test("a bigger wing trades HARDER — both halves scale with the aero part", async ({ page }) => {
+    // The whole point of scaling the trade: one pair of constants gave a
+    // Monza-spec sliver and a maximum-downforce floor the same deal, which is
+    // backwards. A big wing has more drag to shed AND more downforce to lose.
+    const rows = [];
+    for (const aero of ["minimal", "medium", "ground_effect"]) {
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+      const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
+      await page.evaluate(([a, id]) => {
+        const key = "apex26.parts." + id;
+        const cur = JSON.parse(localStorage.getItem(key) || "{}");
+        cur.aero = a; localStorage.setItem(key, JSON.stringify(cur));
+        localStorage.setItem("apex26.team", "0");
+        localStorage.setItem("apex26.unlimitedBudget", "true");   // `extreme` blows the 600 cr cap
+      }, [aero, teamId]);
+      await page.reload();
+      await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+      await page.evaluate((t) => window.__apex.race(t), "monza");
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 40_000 });
+      rows.push(await page.evaluate(() => {
+        const A = window.__apex;
+        A.headless(true); A.go();
+        const z = A.aeroZones().slice().sort((a, b) => b.len - a.len)[0];
+        A.reset(z.midFrac, 70, 0);
+        A.setInput({ throttle: true });
+        for (let i = 0; i < 30; i++) { A.aero(false); A.step(1 / 60, 1); }
+        const ps = A.physState();
+        A.clearInput();
+        return { load: ps.aeroLoad, gain: ps.xVmaxGain, loss: ps.xDfLoss };
+      }));
+    }
+    const [small, mid, big] = rows;
+    // The part must actually reach the physics — a flat 0.5 everywhere would
+    // mean the setup never got through, and every other assertion would still
+    // "pass" on identical numbers.
+    expect(small.load).toBeLessThan(mid.load);
+    expect(mid.load).toBeLessThan(big.load);
+    // Both halves grow together: more speed bought, more grip surrendered.
+    expect(small.gain).toBeLessThan(mid.gain);
+    expect(mid.gain).toBeLessThan(big.gain);
+    expect(small.loss).toBeLessThan(mid.loss);
+    expect(mid.loss).toBeLessThan(big.loss);
+    // And the spread is worth having — a trade that varies by a rounding error
+    // is not a decision. Measured: +5.5% to +15.5% of top speed.
+    expect(big.gain / small.gain).toBeGreaterThan(2);
+  });
+});

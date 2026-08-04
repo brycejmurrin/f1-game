@@ -306,9 +306,33 @@ const DOWNFORCE = 0.65;     // extra grip fraction at VMAX (0 = no wings)
 // Leaving the zone (or touching the brake) SLAMS the flap shut — X_CLOSE_RATE is deliberately several times
 // X_OPEN_RATE, so the downforce comes back faster than it left. Both directions
 // sit inside the FIA's 400 ms transition cap.
-const X_VMAX_GAIN = 0.075;  // top-speed gain at full X-mode (~+19 km/h at pace 1)
-const X_DF_LOSS = 0.55;     // fraction of the DOWNFORCE term X-mode gives up
-const X_COAST_CUT = 0.35;   // fraction of COAST_DRAG X-mode sheds while coasting
+// THE TRADE SCALES WITH THE WING, because that is the only way it can mean
+// anything. A single pair of constants gave a Monza-spec sliver and a
+// maximum-downforce floor exactly the same +7.5%/-55%, which is backwards: a
+// big wing has more drag to shed AND more downforce to lose, a small one has
+// neither. So the aero PART now picks where on each span the car sits, via
+// Parts.aeroLoad() (0 = `minimal`, 1 = `ground_effect`).
+//
+// It also matters MORE than it did. The old numbers made X-mode a rounding
+// error you could ignore for a whole race; at the top of the range it is now
+// worth ~+15.5% of top speed and costs ~78% of the aero load, which is a real
+// decision on every zone rather than a free press.
+//
+// A car with no parts (every AI) sits at the MIDPOINT of each span, so the
+// grid's behaviour stays a single well-defined thing rather than inheriting
+// whatever the catalog default happens to be this month.
+const X_VMAX_GAIN_LO = 0.055;  // top-speed gain at full X-mode, smallest wing
+const X_VMAX_GAIN_HI = 0.155;  // ...and the biggest (more drag to shed)
+const X_DF_LOSS_LO = 0.42;     // fraction of the DOWNFORCE term given up, smallest wing
+const X_DF_LOSS_HI = 0.78;     // ...and the biggest (more downforce to lose)
+const X_COAST_CUT_LO = 0.28;   // fraction of COAST_DRAG shed while coasting, smallest wing
+const X_COAST_CUT_HI = 0.55;   // ...and the biggest
+// Where THIS car sits on those spans, 0..1. Defaults to the midpoint so a car
+// that never had parts resolved behaves like the old single constant did.
+function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }
+function xVmaxGain(c) { return lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
+function xDfLoss(c) { return lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
+function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c)); }
 // The FIA caps the transition between the two wing positions at 400 ms, so the
 // OPENING rate is set by that regulation, not by feel: 2.6/s = 385 ms of travel.
 // Closing is deliberately faster (still inside the cap) — see X_CLOSE_RATE.
@@ -591,7 +615,7 @@ function xStraightAhead(c) { return !!aeroZoneAt(wrapS(c.s)); }
 // 1 - X_DF_LOSS with the flaps fully open. Nothing else in the grip model
 // changes: mechanical grip, kerbs, weather and the friction ellipse are
 // untouched, so opening the wing costs you exactly the wing.
-function aeroDfMult(c) { return 1 - X_DF_LOSS * (c && c.aeroX || 0); }
+function aeroDfMult(c) { return 1 - xDfLoss(c) * (c && c.aeroX || 0); }
 
 // ── seeded simulation randomness ────────────────────────────────────────────
 // Everything that FEEDS THE SIMULATION draws from here, never Math.random(), so
@@ -935,6 +959,7 @@ let _leadHuman = null;
 // converted it into. Null solo, and cleared the moment the race starts.
 let netStart = null;
 let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
+let playerAeroLoad = 0.5;   // 0..1 wing size — how far active aero trades (see xVmaxGain)
 // Shared neutral fallback for a human car with no resolved setup. Frozen and
 // module-scope so updateCar's per-car binding never allocates.
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
@@ -1387,6 +1412,11 @@ function recomputePlayerMods() {
   const setup = getTeamParts(team.id);
   playerMods = modsFor(team, setup);
   if (player) player.mods = playerMods;
+  // How much wing this car is carrying (0..1), which sets how much active aero
+  // trades — see X_VMAX_GAIN_LO/HI. Cached here rather than resolved per physics
+  // step: it only changes when the parts do.
+  playerAeroLoad = Parts.aeroLoad(setup, team);
+  if (player) player.aeroLoad = playerAeroLoad;
   const vt = Parts.getVisualTiers(setup, team);
   playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
   playerTyreId = vt._ids ? vt._ids.tyres : "medium";
@@ -1454,6 +1484,9 @@ function makeCars() {
         // Per-car performance multipliers (human cars only — see modsFor).
         // startRace()'s recomputePlayerMods() refreshes the local player's.
         mods: isP ? modsFor(team, getTeamParts(team.id)) : null,
+        // Only a human car carries parts, so only a human car has a wing size;
+        // an AI stays at the midpoint of every active-aero span (aeroLoadOf).
+        aeroLoad: isP ? Parts.aeroLoad(getTeamParts(team.id), team) : null,
         color: team.color, tier: team.tier, seat: di,
         // Baked once here rather than looked up per physics step. Career team
         // development rides along in the same number the tier always contributed,
@@ -2628,6 +2661,7 @@ const G = {
   vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  aeroDfMult, xVmaxGain, xDfLoss,
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
@@ -3356,7 +3390,13 @@ function updateCar(c, dt, ranked) {
   }
   // Low drag is worth top speed. This is the ONLY thrust-side effect — no
   // engine power is added, so X-mode out of a slow corner does nothing at all.
-  vmax *= 1 + X_VMAX_GAIN * c.aeroX;
+  vmax *= 1 + xVmaxGain(c) * c.aeroX;
+  // Stashed for physState(): the two halves of the active-aero trade are
+  // computed deep inside the per-car update and were otherwise unobservable, so
+  // "does the wing actually do anything?" could only be answered by reading this
+  // function. Driving the car to measure it does not work — full lock at 78 m/s
+  // puts it 30 m into a field, which closes the flaps and measures nothing.
+  c._vmaxNow = vmax;
 
   // --- gearbox (player) ---
   let gearMult = 1, speedCap = vmax + 14 * Math.max(PACE, 0.05);   // ERS overspeed margin — a speed, so it rides the pace scale
@@ -3396,7 +3436,7 @@ function updateCar(c, dt, ranked) {
     // coasting: gentle engine-braking/drag both ways (don't snap reverse to 0).
     // X-mode sheds part of that drag — a lift-and-coast in the low-drag wing
     // carries further, which is the whole point of opening it.
-    const cd = COAST_DRAG * (1 - X_COAST_CUT * (c.aeroX || 0));
+    const cd = COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0));
     if (c.speed > 0) c.speed = Math.max(0, c.speed - cd * dt);
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
     c.energy = Math.min(1, c.energy + REGEN * dt);
@@ -3745,6 +3785,7 @@ function updateCar(c, dt, ranked) {
     // fully open). Carrying X-mode into a fast corner is therefore a genuine
     // loss of grip at exactly the speed where aero load is doing the most work.
     const aeroGrip = 1 + DOWNFORCE * aeroDfMult(c) * Math.min(1, (Math.abs(c.speed) / vTop())) ** 2;
+    c._aeroGrip = aeroGrip;          // see c._vmaxNow — the other half of the trade
     const offDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
     const surfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, offDepth);
     // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar

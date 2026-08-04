@@ -638,9 +638,32 @@ fields `axEstSm`, `axFrac`, `slipFactor`.
 BOOST (spends the battery) and OVERTAKE (a free, proximity-gated push). It adds
 NO thrust and spends NO energy — it trades **downforce for drag**, the 2026
 moveable-wing rules. Z-mode (the default) is flaps shut and full downforce;
-X-mode is flaps open, `X_VMAX_GAIN` (+7.5 %) on top speed and `X_COAST_CUT` off
-the coast drag, paid for with `X_DF_LOSS` (55 %) of the `DOWNFORCE` aero-load
-term. Nothing else in the grip model changes.
+X-mode is flaps open, `xVmaxGain(c)` on top speed and `xCoastCut(c)` off the
+coast drag, paid for with `xDfLoss(c)` of the `DOWNFORCE` aero-load term.
+Nothing else in the grip model changes.
+
+**THE SIZE OF THE TRADE IS THE AERO PART'S.** All three were single constants,
+which gave a Monza-spec sliver and a maximum-downforce floor exactly the same
+deal — backwards, because a big wing has more drag to shed AND more downforce to
+lose. `Parts.aeroLoad(setup, team)` reads the resolved aero option's own
+`cornering` and normalises it against the catalog's span (0 = `minimal`,
+1 = `ground_effect`; derived from the catalog, so a new option re-scales the axis
+rather than clipping). The car carries it as `c.aeroLoad`, and each constant
+became a `_LO`/`_HI` pair interpolated by it. **A car with no parts — every AI —
+sits at the midpoint**, so the grid is one well-defined thing rather than
+whatever the catalog default is this month. Measured end to end:
+
+| aero part | load | top speed | downforce given up | net grip at 70 m/s |
+|---|---|---|---|---|
+| `minimal` | 0.00 | +5.5 % | 42 % | −16.0 % |
+| `medium` | 0.41 | +9.6 % | 57 % | −21.4 % |
+| `ground_effect` | 1.00 | +15.5 % | 78 % | −27.3 % |
+
+The big-wing car has the LOWEST base top speed and the biggest gain from opening,
+so X-mode partly buys back the straight-line speed the wing costs — which is the
+real trade, and the reason the two ends are worth choosing between.
+`physState()` reports `aeroLoad`, `xVmaxGain`, `xDfLoss`, `vmaxNow`, `aeroGrip`
+and `aeroDf`, so none of this has to be read out of `updateCar` again.
 
 `c.aeroX` is the FLAP TRAVEL (0..1) and is what every consumer reads — physics,
 HUD and the wings' own moveable ELEMENTS. Per the 2026 rules every element

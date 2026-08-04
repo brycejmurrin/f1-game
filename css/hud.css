@@ -97,8 +97,8 @@
   padding: 5px 10px; border-radius: var(--r-sm);
 }
 #hud-aero.ax-off { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); }
-#hud-aero.ax-armed { color: #04240f; background: #2de26c; }
-#hud-aero.ax-open { color: #d8ffe4; background: #0d5428; box-shadow: 0 0 14px rgba(40,200,100,0.55); }
+#hud-aero.ax-armed { color: #04202e; background: #26a5f5; }
+#hud-aero.ax-open { color: #d6efff; background: #083e78; box-shadow: 0 0 14px rgba(50,175,255,0.55); }
 /* A circuit with no qualifying straight has no activation zone and therefore no
    active aero at all — Monaco. Struck through, because the difference between
    "not here, yet" and "not on this track" is the difference between waiting and

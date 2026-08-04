@@ -26,6 +26,21 @@ const LAUNCH = {
     "--enable-unsafe-webgpu",
     "--disable-background-timer-throttling",
     "--disable-renderer-backgrounding",
+    // DO NOT ADD --disable-frame-rate-limit HERE. It was tried, to cure menu
+    // clicks that hang: Playwright's actionability poll ticks on rAF, and this
+    // page's rAF rate can collapse under SwiftShader, so uncapping the frame
+    // clock looks like the fix. Measured on an IDLE box, one browser at a time:
+    //
+    //   flags                          rAF     #mb-season click
+    //   as below                       2/s     1632 ms
+    //   + --disable-gpu-vsync          2/s     1569 ms
+    //   + --disable-frame-rate-limit   7/s    11982 ms
+    //
+    // It makes clicking SEVEN TIMES SLOWER. Uncapping tells a CPU rasteriser to
+    // render as fast as it can, and it obliges — two workers took the load
+    // average past 9 on four cores and every spec slowed with it. The rAF rate
+    // is not the lever; CPU headroom is. A menu click that hangs means the box
+    // is oversubscribed, so lower --workers rather than raise the frame rate.
   ],
 };
 

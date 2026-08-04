@@ -677,6 +677,32 @@ const Parts = (function () {
     return 0.85 + (stat / 100) * 0.15;
   }
 
+  // HOW MUCH WING, 0..1. The aero catalog runs from `minimal` (cornering 0.78 —
+  // a Monza-spec sliver) to `ground_effect` (1.32 — everything the floor and the
+  // wings can make), and that span IS the axis active aero trades along: a big
+  // wing has more drag to shed and more downforce to lose when the flaps open,
+  // a small one has neither. Read off the resolved option's own `cornering`, not
+  // the combined mods, because suspension and tyres also move that number and
+  // neither of them is a wing.
+  // Derived from the catalog rather than pinned to literals, so adding an option
+  // outside today's range re-scales the axis instead of clipping against it.
+  const AERO_SPAN = (function () {
+    const cat = CATALOG.find((c) => c.id === "aero");
+    let lo = Infinity, hi = -Infinity;
+    for (const o of cat.options) {
+      const w = o.cornering !== undefined ? o.cornering : 1;
+      if (w < lo) lo = w;
+      if (w > hi) hi = w;
+    }
+    return { lo, hi };
+  })();
+  function aeroLoad(setup, team) {
+    const opt = resolveSetup(setup, team).options.aero;
+    const w = opt && opt.cornering !== undefined ? opt.cornering : 1;
+    const { lo, hi } = AERO_SPAN;
+    return hi > lo ? Math.max(0, Math.min(1, (w - lo) / (hi - lo))) : 0.5;
+  }
+
   // getVisualTiers(setup, teamEngine) -> { engine:0|1|2, aero:0|1|2, ... } —
   // the resolved cosmetic tier per category, consumed by Car3D.build(opts.parts)
   // to drive the parts-driven visual redesign. Mirrors getMods()'s resolution
@@ -700,6 +726,6 @@ const Parts = (function () {
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable,
     getFactorySetup, factoryKey,
-    getMods, getCost, getVisualTiers, statMult,
+    getMods, getCost, getVisualTiers, statMult, aeroLoad,
   };
 })();
