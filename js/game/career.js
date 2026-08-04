@@ -114,8 +114,23 @@ function hash32(str) {
   for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
   return h >>> 0;
 }
+// FNV-1a alone is NOT enough here, and the failure is specific rather than
+// theoretical. Every key this draws on ends in the part that varies — a round
+// number, a driver id — and FNV-1a's last multiply barely disturbs the HIGH bits,
+// which is exactly the end `h / 2^32` reads. Drawing one of five objectives that
+// way gave 24-round seasons where the SAME brief came up every single round, and
+// every season was missing at least one kind. This is the standard xorshift-
+// multiply finalizer (Murmur3's, via degski's 32-bit constants): it costs two
+// multiplies and takes the draw from "100% of seasons miss a kind" to the 2.4%
+// that genuinely uniform draws produce.
+function mix32(h) {
+  h ^= h >>> 16; h = Math.imul(h, 0x7feb352d);
+  h ^= h >>> 15; h = Math.imul(h, 0x846ca68b);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
 function rnd(...parts) {
-  return hash32((career ? career.seed : 0) + ":" + parts.join(":")) / 4294967296;
+  return mix32(hash32((career ? career.seed : 0) + ":" + parts.join(":"))) / 4294967296;
 }
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);

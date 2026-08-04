@@ -86,9 +86,18 @@ grid in `js/car/teams.js` never invalidates a save.
 ### Randomness
 
 Career draws use `Career.rnd(...parts)` — a **stateless** FNV-1a hash of
-`seed:parts`. Never `simRnd`: that stream belongs to the physics sim, and drawing
-from it here would make a career's existence change seeded race results. Stateless
-means there is no cursor to persist, so a save/load round-trip cannot desync.
+`seed:parts`, run through an xorshift-multiply finalizer. Never `simRnd`: that
+stream belongs to the physics sim, and drawing from it here would make a career's
+existence change seeded race results. Stateless means there is no cursor to persist,
+so a save/load round-trip cannot desync.
+
+**The finalizer is not decoration.** Every key here ends in the part that varies — a
+round number, a driver id — and FNV-1a's last multiply barely disturbs the high bits,
+which is exactly what `h / 2^32` reads. Without it, picking one of five objectives
+gave seasons where the same brief came up all 24 rounds, and *every* season was
+missing at least one kind. Two extra multiplies take that to the 2.4 % a genuinely
+uniform draw produces. Anything added to this file that ends its key with the varying
+part is relying on it.
 
 ## Driver ratings
 
