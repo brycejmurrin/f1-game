@@ -237,8 +237,23 @@ function drawMinimap() {
   for (const c of cars) {
     if (c === player) continue;
     const p = map[Math.floor(c.s / track.total * n) % n];
+    const x = 6 + p[0] * (W - 16), y = 6 + p[1] * (H - 16);
     mm.fillStyle = c.team._cssColor || (c.team._cssColor = G.cssCol(c.team.color));   // team colours are static — compute once
-    mm.fillRect(6 + p[0] * (W - 16), 6 + p[1] * (H - 16), 4, 4);
+    // ANOTHER PERSON, not an AI. Every rival used to be one 4px team-coloured
+    // square, so the friend you are actually racing looked exactly like the
+    // nineteen cars you are not — and because a friend can be your TEAM-MATE,
+    // that could be two identical squares in the same colour. c.human without
+    // c.local is precisely "a human who is not you" (see setCarRole).
+    if (c.human && !c.local) {
+      mm.fillRect(x - 1, y - 1, 6, 6);
+      // A white ring, because the team colour is the one thing it cannot use to
+      // stand out — the car it must be told apart from may share it.
+      mm.strokeStyle = "#fff";
+      mm.lineWidth = 1;
+      mm.strokeRect(x - 1.5, y - 1.5, 7, 7);
+    } else {
+      mm.fillRect(x, y, 4, 4);
+    }
   }
   // ghost replay marker (time trial): where your best lap is right now
   if (timeTrial && Ghost.hasGhost()) {

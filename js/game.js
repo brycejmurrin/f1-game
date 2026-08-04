@@ -940,7 +940,14 @@ function refreshQualiGate() {
   if (!b) return;
   const waiting = qualiNetWaiting();
   b.disabled = waiting;
-  b.textContent = waiting ? "WAITING FOR THEIR LAP…" : "TO THE GRID";
+  // "THEIR LAP" is wrong the moment there are three rivals, and it never said
+  // how many were outstanding — so a room of four sat on an unexplained
+  // disabled button. The count is already knowable from the same two things
+  // the gate itself reads.
+  if (!waiting) { b.textContent = "TO THE GRID"; return; }
+  const rivals = netPlay.rivalDriverIds();
+  const left = rivals.filter((id) => !(qualiPeers.get(id) > 0)).length;
+  b.textContent = left > 1 ? "WAITING FOR " + left + " LAPS…" : "WAITING FOR THEIR LAP…";
 }
 
 // Stage a qualifying session for a FRIEND race. Same session the solo path
@@ -7189,14 +7196,13 @@ function buildRaceSettings() {
   // rather than removed there, because "why did this race qualify" is a
   // question the screen should answer.
   const champ = isChampionship();
-  // STILL HIDDEN IN THE ROOM. The plumbing below it is now in place — the model
-  // carries two driven laps, the lobby holds its session across the session and
-  // routes EV.QUALI, and TO THE GRID waits for the rival — but the last spec
-  // does not pass: after the rival's lap lands, the click on #q-go hangs, which
-  // is the signature of a button that is not visible rather than of a rule that
-  // is wrong (the sheet is rebuilt when the lap arrives, and that rebuild looks
-  // like it drops the q-done foot). Shipping the chip before that is understood
-  // would offer a session that can strand two players on a sheet.
+  // Qualifying IS offered in a friend race. This note used to say the chip was
+  // still hidden pending a hang on #q-go after a rival's lap landed — both
+  // halves of that are stale and were costing a reader real time. The spec
+  // ("TO THE GRID waits for the rival's lap, then races", multiplayer-room)
+  // passes, and the line below only ever hid the section for a TIME TRIAL,
+  // never in the room. The model now carries a lap per rival rather than two,
+  // and the gate waits for every one of them.
   $("rs-quali-section").hidden = isTimeTrial();
   const qEl = $("rs-quali");
   qEl.innerHTML = "";

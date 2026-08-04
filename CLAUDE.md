@@ -440,8 +440,41 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   netPlay.owns(c), exactly as it already does
                                   for an incident-sim takeover. tick() also runs
                                   through the paused gate: one player opening a
-                                  menu cannot stop a shared world
-  lobby.js       NetLobby       the VS FRIEND screen. The two code pastes ARE
+                                  menu cannot stop a shared world.
+                                  UP TO FOUR PLAYERS, in a STAR: the host holds
+                                  one session per guest and each guest holds one,
+                                  to the host. Rivals are a Map keyed by
+                                  G.wireId(c) = teamIndex*2 + seat — a byte both
+                                  peers compute identically, which is what lets a
+                                  snapshot say WHICH car it describes. cars[]
+                                  index cannot: makeCars() drops the custom team
+                                  unless the local player picked it, so the grids
+                                  differ in length and order. The host RELAYS —
+                                  guests have no connection to each other, so it
+                                  forwards every rival in one multi-entry
+                                  snapshot, unaltered and under that guest's own
+                                  id. Authority does not move; it is a courier.
+                                  A packet with an unknown id is DROPPED, never
+                                  guessed at — which is also how a guest ignores
+                                  its own car coming back round the relay
+  lobby.js       NetLobby       the VS FRIEND screen. INVITES ARE SEQUENTIAL —
+                                  one negotiation in flight, INVITE ANOTHER once
+                                  a guest lands. Not a limit of the wire
+                                  (createInvite and rtc() are per-transport) but
+                                  of people: with several offers outstanding a
+                                  pasted answer must be matched to the offer that
+                                  produced it, and that is the one thing the
+                                  person pasting cannot tell you. A guest's
+                                  profile is filed under the CONNECTION it
+                                  arrived on, never a `from` in the payload — a
+                                  peer that can name itself can name somebody
+                                  else. The exception is a guest receiving a
+                                  RELAYED roster: there a `from` means the host
+                                  is speaking for another guest, and trusting the
+                                  host is not new trust. Without that relay a
+                                  guest never learns the other guests exist, has
+                                  no slot for them, and drops their packets.
+                                  The two code pastes ARE
                                   the signalling server — the one thing WebRTC
                                   cannot start without, and the one thing two
                                   people already have between them. Opens the
