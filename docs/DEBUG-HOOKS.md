@@ -1817,7 +1817,7 @@ speed through each corner *actually driven* is what a change moves.
 
 ### `terminal() → {done, reason} | typedError`
 
-`reason` is `"finished"` · `"wrong_way"` · `"rescued"` · `null`. `obs().done`
+`reason` is `"retired"` · `"finished"` · `"wrong_way"` · `"rescued"` · `null`. `obs().done`
 conflates the last two, so an agent cannot tell "my policy spun the car" from
 "the sim teleported me".
 
@@ -1925,8 +1925,8 @@ __apex.career().season.round;   // 0
 ### `careerState() → {...} | null`
 Compact snapshot — prefer this to reading the save. `flavour`, `year`, `round`,
 `rounds`, `team`, `teamName`, `money`, `rep`, `budget`, `budgetLvl`, `owned`
-(count), `deal`, `obj`, `offers` (count), `seasons`, and — MY TEAM only —
-`roster` and `wages`.
+(count), `deal`, `obj`, `dnfs` (retirements this season), `offers` (count),
+`seasons`, and — MY TEAM only — `roster` and `wages`.
 
 ### `careerMoney(n?) → number | null`
 Get or set the balance. A test that wants to buy a part should not have to drive
@@ -1936,7 +1936,8 @@ twelve races first.
 Settle `n` rounds with nobody driving, through the **same** `Career.settleRound()`
 the driven path uses — so prize money, objectives, reputation and the standings are
 genuinely exercised, not approximated. Each entry is `{pos, pts, prize, salary,
-bonus, wages, obj, money, rep}`.
+bonus, wages, obj, dnf, money, rep}` — `dnf` is `null` for a finish and the
+failure reason for a retirement.
 
 Needs a track and a grid loaded, because the qualifying model reads both: stage one
 weekend first. Every round is simulated on **that** circuit — the per-round
@@ -1954,7 +1955,67 @@ driver market, and put contract offers on the table. What the end-of-season shee
 reads.
 
 ### `careerReset() → true`
-Wipe the save.
+Wipe the **live** slot. The other two are untouched.
+
+### `careerSlots(flavour?, i?) → [{flavour, i, used, …}] | save | null`
+Six careers can be saved at once, in **two sets of three** — `apex26.career.driver.N`
+and `apex26.career.myteam.N` — so neither mode can cost the other room. A slot's
+address is **both halves**; an index alone does not say which career it is.
+
+No argument lists all six. A flavour narrows to that set. A flavour *and* an index
+**switches** to that slot and returns the save it holds (`null` if empty); switching
+writes the career being left first. Rows carry `used`, and for a used slot `live`,
+`flavour`, `team`/`teamName`, `year`, `round`/`rounds`, `money`, `rep`, `seasons`,
+`wins`, `titles`.
+
+```js
+__apex.career({ teamId: "haas", seat: 1, seed: 11 });        // -> driver slot 0
+__apex.career({ flavour: "myteam", hire: "OKO", seed: 22 }); // -> myteam slot 0
+__apex.careerSlots().map((s) => s.flavour + s.i + ":" + s.used);
+// -> ["driver0:true","driver1:false","driver2:false","myteam0:true", …]
+__apex.careerSlots("driver", 0).team;   // -> "haas", and it is now live
+```
+
+A career's **own flavour decides its set** — `career({teamId:"audi", slot:2})` fills
+driver slot 2, and no argument can put a driver career in the MY TEAM set.
+
+### `careerFreeMoney(on?) → boolean`
+EXTRA FUNDS — a deliberate cheat, off by default. Money stops being the
+constraint; **the fitted cap does not move**, so a bottomless balance still cannot
+put more on the car than the rules allow. Stored *outside* the save
+(`apex26.career.freeMoney`) because it is a preference about how you want to play,
+not a fact about one career.
+
+### `careerGrant(n?) → number | null`
+Hand the live career credits; no argument grants `Career.GRANT` (5,000). Returns the
+new balance, or `null` with no career loaded.
+
+### `careerFacility(up?) → {level, max, cost, discount}`
+The open-ended research facility — the money sink that keeps working once the
+catalog is owned. Each level is a permanent cut to what research costs (5% per
+level, capped at 40%). Pass a truthy argument to buy the next level. `cost` is
+`null` at the ceiling.
+
+```js
+__apex.careerMoney(999999);
+__apex.careerFacility(true);      // → { level: 1, max: 8, cost: 4800, discount: 0.05 }
+```
+
+### `careerHire(what?) → {kind, code, name, salary, ask} | null`
+MY TEAM's second seat. No argument reports whether a decision is pending — `null`
+means under contract. `kind` is `"renew"` (they will re-sign at `ask`) or `"left"`
+(a better offer took them; only ever possible after they outperformed the car).
+Pass `"renew"` to take their asking price, or a free-agent **code** to sign somebody
+else. An unresolved seat blocks the weekend: MY TEAM enters two cars.
+
+```js
+__apex.careerHire();          // → { kind: "renew", code: "NKM", salary: 38, ask: 44 }
+__apex.careerHire("renew");   // → null — signed, and the block is cleared
+```
+
+### `careerSlotDelete(flavour, i) → [{flavour, i, used, …}]`
+Wipe **one** slot, live or not, and return all six. Reloads whatever is left
+afterwards, so the title screen still has something behind it.
 
 ### `ratings(code?) → {pace, craft, awareness, consistency, experience, overall}`
 The five-axis driver table (`js/car/driver-ratings.js`) with any career development
@@ -1984,6 +2045,45 @@ multipliers that decide how fast an AI car is allowed to be (`vmax = VMAX · PAC
 tierV · skill · difficulty`), so "why is this car quick?" is answerable without
 reading the source. `tierV` folds the team's `TIER_V` together with career team
 development; `skill` is the driver.
+
+## Reliability & retirements
+
+Whether a car reaches the flag at all (`js/game/reliability.js`; see
+[CAREER.md](CAREER.md#reliability-and-retirements) for the design). Risk comes from
+the team tier, is relieved by career team development and by what the player has
+spent on the power unit and gearbox, and the whole field's retirements are drawn
+**once, at the green light** from a stateless hash of `(seed, round, driver)` — the
+sim RNG stream is never touched, so arming a race cannot shift a seeded result.
+
+**It ships OFF.** A retirement is opt-in via the RELIABILITY race setting.
+
+### `reliability(level?) → "off" | "low" | "real"`
+Get or set the setting. Persisted (`apex26.reliability`), like difficulty. Setting
+it does **not** re-arm a race already running.
+
+### `retirements() → [{idx, code, retired, why, at}, …]`
+The retirement PLAN for the staged race: who is going to stop, `why` (`"engine" |
+"gearbox" | "accident"`) and `at` what fraction of race distance — plus anyone who
+already has (`retired: true`). Empty when reliability is off or the draw spared the
+whole field. Deterministic: the same seed and round always give the same list.
+
+```js
+__apex.seed(7); __apex.reliability("real");
+__apex.race("monza");
+__apex.retirements();   // → [{ idx:4, code:"NOR", why:"gearbox", at:0.715 }, …]
+```
+
+### `retire(idx?, reason?) → {idx, code, retired, why} | null`
+Retire a car **now**, whatever the draw said. `idx` indexes `cars[]`; no argument
+retires the player. The car is parked against the barrier on the side it was
+already on, stops being steered, and classifies below every finisher with no
+points. The one way to get a guaranteed DNF without racing until the probability
+obliges.
+
+### `carAt(i)` / `fieldState()` — additions
+`retired` and `dnf` (the reason, `null` unless the car actually stopped). `carAt`
+also carries `dnfAt` — the planned retirement point it has not reached yet — and
+`finPos`, the classified position (0 until the flag).
 
 ## Headless / RL control loop
 

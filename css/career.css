@@ -273,3 +273,132 @@
 #quali.q-done #q-drive, #quali.q-done #q-sim { display: none; }
 #quali:not(.q-done) #q-go { display: none; }
 }
+
+/* ---------- the slot picker ---------- */
+/* Three careers can be live at once (Career.SLOTS). Each row is a CARD YOU PRESS
+   plus a DELETE beside it, laid out as a grid rather than a flex row so the
+   delete button keeps a fixed column and the summaries stay left-aligned with
+   each other whatever they contain. Same surface and radius as .cr-card, because
+   a slot is one more card in a column full of them — it just happens to be the
+   one that changes which career you are in. */
+.cr-slot {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch; gap: 6px; margin-bottom: 6px;
+}
+.cr-slot-main {
+  display: flex; flex-direction: column; gap: 3px;
+  text-align: left; cursor: pointer; color: inherit; font: inherit;
+  min-height: var(--tap); padding: calc(var(--pad) * 0.5);
+  background: var(--surf-1); border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--r-sm);
+  transition: border-color 0.15s, background 0.15s;
+}
+.cr-slot-main:hover, .cr-slot-main:focus-visible {
+  border-color: var(--red); background: rgba(225, 6, 0, 0.12);
+}
+/* An EMPTY slot is an invitation, not a result: dashed edge and dimmed text, so
+   a column of three reads at a glance as "one career and two openings" without
+   having to compare their contents. */
+.cr-slot.empty .cr-slot-main { border-style: dashed; }
+.cr-slot.empty .cr-slot-who { color: var(--dim); }
+/* The career you are IN keeps the red edge permanently — after a switch, "which
+   one am I in" has to be answerable without pressing anything. */
+.cr-slot.active .cr-slot-main { border-color: var(--red); }
+.cr-slot-n {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.14em; color: var(--red);
+}
+.cr-slot-who { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
+.cr-slot-meta {
+  font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums;
+}
+/* DELETE is deliberately quiet until it is armed. The first press turns it red
+   and relabels it DELETE?, which is the whole confirmation — a modal for this
+   would be a screen, and a single-tap delete would be unforgivable. */
+.cr-slot-del {
+  align-self: stretch; min-width: 62px; cursor: pointer;
+  font: inherit; font-size: 9px; font-weight: 800; letter-spacing: 0.1em;
+  color: var(--dim); background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--r-sm);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.cr-slot-del:hover, .cr-slot-del:focus-visible { color: var(--red); border-color: var(--red); }
+.cr-slot-del.armed {
+  color: #fff; border-color: var(--red); background: rgba(225, 6, 0, 0.35);
+}
+
+/* ---------- how it works (#career-guide) ---------- */
+/* A reading sheet, so it is narrower than the hub and its prose gets a real
+   measure rather than the full 1020px the career page runs at. Sits above
+   #career at the same z-index as the history sheet — both are read-only modals
+   opened FROM the hub, and neither can be open at once. */
+#career-guide { z-index: 30; --sheet-w: 560px; }
+#cg-body { display: flex; flex-direction: column; gap: 4px; }
+/* Sections are a heading plus one card, and the heading owns the space above it
+   — so the gap between a card and the NEXT heading is set once here rather than
+   fought over by two margins. */
+#cg-body .sel-label { margin-top: 14px; }
+#cg-body .sel-label:first-child { margin-top: 0; }
+.cg-card { gap: 9px; }
+/* Prose, not a data row: this is the one place in career that runs sentences, so
+   it gets the line-height and measure they need. .cr-row pairs sit alongside it
+   in the same card, which is what lets a section state a rule and then price it. */
+.cg-p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
+.cg-card .cr-row + .cg-p { margin-top: 3px; }
+
+/* ---------- the round's earnings, on the results sheet ---------- */
+/* Career only. Sits between the classification and the championship, because it
+   is what the classification MEANT — the money is the consequence of the finish,
+   and the standings are the longer story either side of it. */
+.res-settle {
+  margin: 14px 0 4px; padding: 12px 14px;
+  background: var(--surf-1); border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 3px solid var(--red); border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+.res-settle-head {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.14em;
+  color: var(--red); margin-bottom: 8px;
+}
+.res-settle-row {
+  display: flex; justify-content: space-between; gap: var(--gap);
+  font-size: 12px; color: var(--dim); padding: 2px 0;
+}
+/* Money lines are read as a column, so they get tabular figures — otherwise
+   "+900" and "+1,240" do not line up and the total looks unrelated to them. */
+.res-settle-v { font-variant-numeric: tabular-nums; font-weight: 700; color: #d8d8e0; }
+.res-settle-row.missed .res-settle-v { color: var(--dim); font-weight: 600; }
+/* The total is the answer; everything above it is working. */
+.res-settle-row.total {
+  margin-top: 7px; padding-top: 7px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 13px; color: #fff; font-weight: 800;
+}
+.res-settle-row.total .res-settle-v { color: #fff; }
+.res-settle-row.rep { font-size: 11px; }
+
+/* ---------- the seats within reach ---------- */
+/* offerBar(tier) is already a visible ladder in the rules — this is it on
+   screen. Rows are tiers, best at the top, so the climb reads downward and the
+   line between OPEN and "needs N" is where the career currently stands. */
+.cr-ladder {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 var(--gap); align-items: baseline;
+  font-size: 12px; color: var(--dim); padding: 3px 0;
+}
+.cr-ladder-k { font-weight: 700; color: #c9c9d4; }
+/* The teams sit under their tier's label rather than beside it: three or four
+   short names would push the OPEN column out of alignment on a phone. */
+.cr-ladder-teams {
+  grid-column: 1; font-size: 10px; letter-spacing: 0.04em; color: var(--dim);
+}
+.cr-ladder-v {
+  grid-column: 2; grid-row: 1 / span 2;
+  font-variant-numeric: tabular-nums; font-size: 10px;
+  font-weight: 800; letter-spacing: 0.08em; align-self: center;
+}
+/* A tier you clear is a seat that will talk to you at the end of the year. */
+.cr-ladder.open .cr-ladder-k { color: #fff; }
+.cr-ladder.open .cr-ladder-v { color: var(--red); }
+
+/* ---------- extra funds ---------- */
+.cr-cheats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.cr-cheats .sel-chip { flex: 1 1 auto; min-width: 120px; }

@@ -564,6 +564,11 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    moment there is room — which is what stops the landscape phone from hiding
    MUSIC behind the BACK button. */
 .pm-groups { display: grid; grid-template-columns: 1fr; gap: var(--gap); align-items: start; }
+/* Each column owns its groups and stacks them tight. Replaces a 3x2 grid whose
+   cells were assigned by nth-child with two groups spanning both rows — that
+   forced row 1 to half the tallest column's height and left AUDIO floating
+   above a block of dead space. */
+.pm-col { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 .pm-group { display: flex; flex-direction: column; }
 .pm-group-h {
   color: var(--red); font-size: 11px; font-weight: 700; letter-spacing: 0.11em;
@@ -576,19 +581,14 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   .pm-groups { grid-template-columns: 1fr 1fr; }
 }
 @container sheet (min-width: 620px) {
-  /* Four groups into three columns, placed rather than flowed. Left to itself
-     the grid put HELP on a second row under DRIVING — and because row 1 is as
-     tall as DISPLAY (the longest list), that pushed HELP off the bottom of the
-     pane while the AUDIO column sat two-thirds empty right beside it. Stacking
-     HELP under AUDIO fills that hole and takes the whole panel back under the
-     fold: the height becomes max(DRIVING, DISPLAY, AUDIO+HELP) instead of
-     DISPLAY + HELP. DRIVING and DISPLAY span both rows so neither row can be
-     forced taller than the content that actually sits in it. */
-  .pm-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto; }
-  .pm-group:nth-child(1) { grid-column: 1; grid-row: 1 / span 2; }
-  .pm-group:nth-child(2) { grid-column: 2; grid-row: 1; }
-  .pm-group:nth-child(3) { grid-column: 3; grid-row: 1 / span 2; }
-  .pm-group:nth-child(4) { grid-column: 2; grid-row: 2; }
+  /* Three .pm-col columns, each owning its own groups. This replaced a 3x2
+     grid that assigned cells by nth-child with DRIVING and DISPLAY spanning
+     both rows: a spanning item distributes its height across the rows it
+     covers, so row 1 became half of the tallest column and AUDIO sat above a
+     block of dead space (visible with only two buttons in it). Columns that
+     stack their own content are self-sizing, and adding or moving a group no
+     longer means rewriting grid coordinates. */
+  .pm-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   #pmsettings-inner button { font-size: 12px; padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 /* (BACK was outlined red too — same reasoning as the pause stack above. It is

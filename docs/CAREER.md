@@ -5,8 +5,8 @@ whole story. Two front-ends — **DRIVER CAREER** (you are a driver signed to a
 team) and **MY TEAM** (you own the twelfth team) — share one core.
 
 - **Rules and save:** `js/game/career.js` (global `Career`) — no DOM.
-- **Screens:** `js/game/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`,
-  `#career-history`.
+- **Reliability / DNFs:** `js/game/reliability.js` (global `Reliability`).
+- **Screens:** `js/game/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`.
 - **Qualifying:** `js/game/quali.js` (global `Quali`) — `#quali`.
 - **Ratings:** `js/car/driver-ratings.js` (global `DriverRatings`).
 - **Persistence + migration:** `GameStore.migrateCareer` in `js/game/store.js`.
@@ -52,7 +52,65 @@ So every **gameplay** accessor in `Career` is gated on `inCareer()` — `paceMul
 (`data`, `state`, `start`, `load`, `save`) are not. `tests/career.spec.js` pins both
 directions: development must not reach a Grand Prix, and must reach the career.
 
-## The save — `apex26.career`
+## The saves — `apex26.career.<flavour>.0` … `.2`
+
+**Six saves in two sets**: three DRIVER-career slots and three MY TEAM slots, kept
+apart so the two modes can never compete for room. `apex26.careerSlot` names the
+live one as `"flavour:index"`.
+
+Separate **sets** rather than six shared slots, because the two modes are different
+games. A player twelve rounds into a MY TEAM should not have to weigh that against
+trying a driver career, and *&ldquo;which of my three careers do I delete to make
+room&rdquo;* is not a question either mode should be able to ask of the other.
+
+Separate **keys** rather than one array, because localStorage rewrites the *whole*
+value on every write: a single array would rewrite all six careers every time a
+round settled, and a quota failure would cost six saves instead of one.
+
+**A career's own flavour decides its set** — never the caller. `start({slot: 2})` on
+a driver career fills DRIVER slot 2, and there is no argument that can put it in the
+MY TEAM set. That invariant is what keeps the sets meaningful.
+
+`Career.slots()` returns all six; `slots("myteam")` one set. The **live** slot is
+summarised from the in-memory object, not from storage — a round settled but not yet
+written would otherwise read as lost progress. `useSlot(flavour, i)` **saves the
+career being left first**: `settleRound()` already persists, but a garage edit or an
+accepted offer lives on the object until something calls `save()`, and switching away
+is exactly when that would be lost.
+
+### Two earlier layouts migrate
+
+| Wrote | Becomes |
+|---|---|
+| `apex26.career` — the single save of the first career build | its flavour's slot 0 |
+| `apex26.career.0..2` — three SHARED slots, either flavour in any | sorted into the two sets, in order |
+
+Order is preserved rather than index: a MY TEAM that sat in shared slot 2 becomes MY
+TEAM slot 1 if it is the second MY TEAM found, which is what a player scanning the
+new screen expects. Migration never overwrites — a set that already holds saves is
+the current layout, and a stale key from a half-finished migration must not clobber
+it.
+
+> **`migrateCareer()` must stay PURE.** It used to end in `store.set("career", …)`,
+> which was right when there was one save under one key and wrong the moment there
+> were more: reading a slot wrote it straight back under the *legacy* name, so the
+> key the slot migration had just cleared came back on the same boot and every later
+> boot resurrected it — a stale duplicate an older build would happily load.
+> `Career.load()` persists the climbed shape instead, because it is the one that
+> knows the slot.
+
+### CAREER MODES is the one door
+
+The title button reads **CAREER MODES** always — never CONTINUE. It used to go
+straight into whichever save was last touched, which meant a player with a single
+driver career had no way in to MY TEAM, to their other saves, or to the delete that
+makes room. The screen behind it is `#career`'s picker state: one pane per mode,
+each carrying that mode's three slots and its guide. Pressing an empty slot decides
+**both halves of the address** — which mode and which slot — so the setup form opens
+on that mode rather than asking again.
+
+Changing mode on the setup form re-targets the slot (`Career.firstFree`), because
+slot 3 of the driver set is not slot 3 of MY TEAM.
 
 Versioned (`CAREER_V`), migrated through a ladder of one function per version step,
 mirroring `migrateSeasonPoints`. Key fields:
@@ -232,6 +290,41 @@ development cost cap, so a quick team-mate costs you upgrades rather than legali
 through to its deterministic tier hash for an unknown code, so each hire has a
 stable personality without a second table to keep in step with the first.
 
+### The hire has a contract, and it runs
+
+`roster[0].left` was written when they were signed and then **read by nothing at
+all** — the driver could never be renewed, replaced or lost, which made the one
+relationship MY TEAM is built on a static number.
+
+`rolloverHire()` runs at the winter, before offers are drawn. The term ticks down,
+and on expiry it writes a **`pending`** onto the hire rather than resolving it: the
+decision is the player's, and the hub is where they make it.
+
+| Outcome | When | What the player does |
+|---|---|---|
+| `renew` | the default | take `ask`, or sign somebody else |
+| `left` | only after they **outperformed** the car (`pos < expected − 4`), and then only on a seeded 35% draw | sign somebody else |
+
+They can only ever be poached after outperforming. Losing a driver who was beaten
+all year would read as a bug rather than as a story.
+
+What they ask for follows what the seat was worth to them:
+`salary × (1 + clamp((expected − pos) / 8, −0.35, +0.45))`, floored at
+`HIRE_MIN` — beating the car's expectation is worth money, being beaten by it is a
+pay cut, and nobody drives for nothing.
+
+**An unresolved seat blocks the weekend.** `Career.state().hire` is non-null while a
+decision is pending, the hub reads GO RACING as SIGN A DRIVER and disables it: a
+constructor enters two cars, and a season cannot start with one of them empty.
+
+### The winter market is visible
+
+`rolloverMarket()` has always swapped 0–2 seats and the player only ever met the
+*result* — a driver they had raced all year was suddenly somewhere else, with
+nothing to say it had happened, which reads as the game being inconsistent rather
+than as a story. The moves are recorded on `career.moves` and printed on the
+end-of-season sheet, the one screen that sits between two seasons.
+
 ## Objectives and reputation
 
 One objective per round, drawn with `Career.rnd(year, "obj", round)` from a table of
@@ -269,6 +362,86 @@ rep += clamp((expectedFinish(team) - finishPos) * 0.6, -4, +6)   // relative to 
 `expectedFinish` already encodes the tier, so beating a bad car raises reputation and
 cruising in a good one does not.
 
+## Reliability and retirements
+
+`js/game/reliability.js` (global `Reliability`) decides whether a car reaches the
+flag. Without it every one of the twenty-two finishes every race forever, which
+makes a championship a pure pace ranking — and a career flat, because a points
+finish in a bad car is only earned if the good cars can break.
+
+**The rating is derived, never authored.** There is no per-team reliability table
+to keep in step with `js/car/teams.js`. Risk is the team `tier` — the number that
+already says how good the car is — relieved by two things a career can actually
+buy:
+
+| Term | Source | Worth |
+|---|---|---|
+| tier | `TIER_RISK[team.tier]` | 4 % (tier 0) → 12 % (tier 4) per race |
+| team development | `Career.paceMult(teamId)`, normalised to ±1 | up to −40 % at full `tdev` |
+| the build | fitted ENGINE + GEARBOX cost, as a fraction of the dearest option | up to −33 %, human cars only |
+
+The third is the R&D economy's grip on this. ENGINE and GEARBOX because those are
+the two components a real car retires from, and cost because cost is exactly what
+`Career.research()` charges — so developing a power unit buys finishes as well as
+lap time, and a `SIGNATURE` clone scores the same as the universal option it
+stands in for (they are cost-identical by construction). AI cars are scored on
+tier alone: an AI runs its team's works car, which is what `tier` already says.
+
+### The draw touches no stream
+
+`makeCars()` spends exactly one `simRnd()` per driver through `driverSkill()`, and
+the stream position after it is a hard contract (see the rule in Driver ratings
+above). So reliability draws from **nothing**: `Reliability.arm()` hashes
+`(seed, "dnf", round, driverId)` through `Career.hash` — the stateless draw `rnd`
+is built on, with the seed passed in, because a Grand Prix has no career seed.
+Inside a career the seed is `career.seed` and the round is `career.season.round`;
+outside one they are `simSeed()` and a per-session race counter, so two Grands
+Prix in a row are not handed the same casualties.
+
+Arming happens once, at the green light (`armReliability` in game.js), and writes
+a plan: `dnfAt`, a fraction of RACE DISTANCE, and `dnfWhy`. `checkRetirements()`
+fires when the car gets there — so a 3-lap blast and a 25-lap race lose their cars
+at the same points of the story. `Reliability.arm()` also CLEARS, which is what
+resets the flags between sessions.
+
+### What a retirement is
+
+`retireCar()` in game.js is the counterpart of `rescuePlayer()`: same job, opposite
+intent. It parks the car as far off the racing line as the circuit allows, on the
+side it was already on, using the same `Tracks.wallAt()` limit the collision pass
+clamps every car to and the same `worldFromTrack` writeback `rescuePlayer` and
+`coast` use. A stopped car is not a new kind of physics.
+
+Then it leaves the field: retirements are excluded from `ranked` in `update()`,
+which is one line doing four jobs — the HUD position stops counting a parked car,
+the AI stops treating it as a blocker, `resolveCollisions` leaves it where it was
+put, and the overtake target walks past it.
+
+`endRace()` classifies `fin.concat(run, out)`, retirements last and ordered among
+themselves by progress, and awards `c.retired ? 0 : Teams.POINTS[i]` — explicit
+rather than relying on a DNF landing outside the ten scoring slots, so every car
+above keeps what its position earns.
+
+### In career
+
+`settleRound()` records `dnf` on the results row (the reason, not just the fact)
+and returns it, so a season's archive can say why it came apart; `Career.state()`
+counts them as `dnfs` and the hub shows it on THE CAR card, next to development
+and the fitted build — the three things that decide it. `__apex.careerSim()` arms
+the same way, or fast-forwarding a season would quietly hand every car a finish.
+
+**A retirement fails the `clean` objective.** Even a mechanical one: the brief asks
+for a race completed without incident, and paying the bonus for a DNF would make
+the one round you did not race the cheapest one to bank.
+
+### The player can switch it off
+
+RELIABILITY is a race setting (`#rs-reliab`) alongside DIFFICULTY, persisted the
+same way — OFF | LOW | REAL. It ships **OFF**: `store.get(k, d)` returns the stored
+value whenever the key exists, so a new default only ever reaches a fresh install,
+and this key is new for every save. OFF is therefore the only default that does
+not start retiring cars in a game somebody was already halfway through.
+
 ## The season rollover
 
 `Career.rollover()` is what makes a career a career rather than a season that stops.
@@ -298,6 +471,14 @@ come last.
    tier 4 will take anyone. Your own team always offers first — an empty list would
    strand a career with nothing to press. Deal length is `1 + floor(mv / 40)`, capped at 3.
 
+   **MY TEAM is never offered a seat, and its contract clock does not run.** You own the
+   constructor; there is nothing to sign and nobody to be hired away by. This is a
+   correctness rule, not flavour: `acceptOffer()` moves `career.team` while `flavour`
+   stays `"myteam"`, so an offer taken from a MY TEAM save put the player and their
+   hired driver into a real team's two seats and dropped the custom team off the grid
+   — the career being played stopped existing. `makeOffers()` returns `[]` for the
+   flavour, and the hub already handles an empty list by going straight to NEXT RACE.
+
 `rollover()` **mutates `career.season` in place** and never reassigns it. `openCareer()`
 does `season = c.season`, and that shared identity is the whole reason `buildResults` /
 `buildStandings` / the HUD work in career with no career-specific branch. Swapping in a
@@ -313,6 +494,70 @@ a maxed car. **Renewing** leaves the garage alone; loyalty is not a punishment.
 that `makeCars()` already calls — one path, not two. The gate moved: it used to return
 early for `flavour !== "driver"`, and now it defers to an ungated `seatDriver()` so a
 market swap applies in MY TEAM as well, while the player's own seat still outranks it.
+
+## The economy, measured
+
+`tools/career-economy.mjs` sims a season per starting team through the **real**
+`Career.settleRound()` and prices the income against the catalog. It exists because
+`QUALI_TRIM` shipped as a reasoned guess and was **27% wrong**, and `RESEARCH_MULT`
+/ `PRIZE` / `BUDGET_MULT` had never had the same treatment.
+
+It found one immediately. `salaryFor()` read `(4 - team.tier) * 15` while its own
+comment said salary *"falls with the quality of the car you are given: a back-marker
+has to pay you more to sign"*. Tier 0 is the **best** car, so the code did the exact
+opposite of the sentence above it.
+
+| | before | after |
+|---|---|---|
+| tier 3 season (Alpine / RB / Haas / Williams) | 5,766 – 7,516 cr | 6,486 – 8,236 cr |
+| tier 4 season (Audi / Aston / Cadillac) | **4,014 – 4,764 cr** | **5,454 – 6,204 cr** |
+| worst-to-best spread | 2.3× | 1.7× |
+
+The slowest cars on the grid also earned ~35% less to fix themselves with. The mode
+already hands them the disadvantage; the economy was compounding it.
+
+**Read the re-spec figure, not the catalog percentage.** The fitted cap means you can
+never run more than a fraction of what you own, so nobody needs the whole catalog —
+what says whether a season is worth playing is how many complete *cars-worth* of
+research it buys. Below ~1 is a grind; above ~6 solves the car in year one.
+
+`RESEARCH_MULT` is the single knob. Re-measure after touching it, the `PRIZE` ladder,
+or `salaryFor()`.
+
+## Sponsors — MY TEAM's second income
+
+A driver is paid a **salary**; an owner is paid by **sponsors**. That is the income
+the two modes should not share, and it was the one thing MY TEAM had none of — it
+started with more money and then earned exactly like a driver.
+
+A sponsor is a **multi-round brief**: the round objective asks how a weekend went, a
+sponsor asks how the *season* is going, which is what a principal is judged on. Built
+from the same parts as the round objective — a type, a value, a pure draw off the
+career seed — rather than as a second system. Windows tile the season, so a single
+lucky weekend cannot pay one and a single bad one does not sink it.
+
+Progress is read off `career.results`, the rows the season already records, so there
+is no second ledger to keep in step. `career.paidSponsors` records which windows have
+paid, so a reload cannot double-pay and an unmet window cannot be retried.
+
+## The facility — the sink that does not run out
+
+Ownership only grows and the budget ladder stops at three, so a successful career
+converged on owning everything with nothing to spend on: the mode had no end game.
+Eight open-ended levels, each a permanent cut to research cost — a geometric price
+against a linear, capped discount, so it is always affordable in principle and never
+trivialises the catalog. The discount lands inside `researchCost()` rather than at the
+point of sale, so the garage's price and what the balance is charged cannot disagree.
+
+## Extra funds
+
+Opt-in, off by default, stored **outside** the save (`apex26.career.freeMoney`) —
+a preference about how you want to play, not a fact about one career. The career
+garage hides FREE BUILD precisely because an unlimited parts budget would hand away
+the economy; this is the same trade made explicit and reversible instead of hidden.
+Money stops being scarce, **the fitted cap does not move**, and every other rule
+stands — so a bottomless balance still cannot put more on the car than the rules
+allow, which is the constraint that actually makes a weekend a choice.
 
 ## Qualifying
 
@@ -338,6 +583,22 @@ careless check. `Quali.order(live)` returns `null` unless every car maps.
 A one-off Grand Prix skips qualifying and keeps its hardcoded P12 start — that mode
 is a quick blast, not a weekend. SEASON gets qualifying as well as career.
 
+**Every round qualifies, and the classification never outlives its weekend.** Two
+bugs came out of getting that wrong, and both looked like working grids:
+
+- The results screen's NEXT ROUND went straight to `startRace()`, so only the round
+  entered through race settings was ever qualified for. Rounds 2–24 of a season
+  lined up on round 1's classification — which `Quali.order()` dutifully remapped
+  onto the new cars by `driverId`, producing a plausible grid for a session that
+  never happened. NEXT ROUND opens the sheet for a championship now, and
+  `openQuali()` clears the previous classification.
+- `gridUp()` accepts any `preOrder` whose length matches the field, and the
+  classification survived `quitToMenu()` — so the next **Grand Prix** started on a
+  season's qualifying order, silently losing the P12 climb that mode exists for.
+  The read is gated on `isChampionship()` rather than on every exit having
+  remembered to clear: a Grand Prix holds no qualifying session, so it has no grid
+  to inherit, by construction. `quitToMenu()` clears it as well.
+
 ## Debug hooks
 
 ```js
@@ -356,7 +617,12 @@ __apex.careerSim(n)           // settle n rounds WITHOUT driving, through the re
 __apex.careerRollover()       // force the rollover -> {champion, offers, history}
 __apex.ratings(code?)         // five axes + overall; no args = the whole grid
 __apex.qualiSim(playerTime?)  // the lap model for the loaded track, NON-destructive
-__apex.carAt(i)               // + code, seat, tierV, skill, ratings
+__apex.carAt(i)               // + code, seat, tierV, skill, ratings,
+                              //   retired, dnf, dnfAt, finPos
+__apex.reliability("real")    // the RELIABILITY setting — off | low | real
+__apex.retirements()          // the armed plan: who stops, why, and at what
+                              //   fraction of race distance
+__apex.retire(1, "gearbox")   // retire a car NOW (no arg = the player)
 ```
 
 ## Career history (`#career-history`)
@@ -399,8 +665,11 @@ lights up gold with no new CSS.
 (and in `test:modes`). They cover the mode axes, the save and its migration, the
 isolation guarantees, the hub flow, a settled round, the R&D garage, MY TEAM's two
 cars and its wage bill, the objectives, the rollover and the contracts, the ratings,
-and the grid. `tests/ui-audit.spec.js` screenshots the career hub, its new-career
-state, qualifying and the offers sheet in both orientations.
+the grid, and RELIABILITY — that OFF changes nothing, that a seeded season retires
+the same cars for the same reasons every time, that a retirement classifies below
+every finisher and scores no points, and that the draw leaves the sim RNG stream
+exactly where it found it. `tests/ui-audit.spec.js` screenshots the career hub, its
+new-career state, qualifying and the offers sheet in both orientations.
 
 Run `npm run test:modes` after any change here, and `npm run test:parts` after
 anything that touches the garage.

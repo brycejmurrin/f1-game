@@ -28,7 +28,7 @@ window.AriaState = (function () {
   // data hub's own prefix for the same idea.
   const ON = ["active", "dh-active"];
   // Roots to watch: everything that is a menu, plus the two DOM-built overlays.
-  const ROOTS = "#overlay,#select,#career,#career-offers,#career-history,#teampicker,#carsetup,#howtoplay,#advanced," +
+  const ROOTS = "#overlay,#select,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#advanced," +
     "#pmsettings,#pausemenu,#lighting,#camtune,#audioset,#results,#quali,#standings," +
     "#race-settings,#customize,#datahub,#track-detail";
 

@@ -1,6 +1,6 @@
 "use strict";
 /* Apex 26 — Parts catalog and stat helpers.
-   Eight upgrade categories: engine, aero, suspension, brakes, tyres, ers, gearbox, fuel.
+   Twelve upgrade categories: engine, aero, suspension, brakes, tyres, ers, gearbox, fuel.
    Options marked with `supplier` are exclusive to teams using that power unit.
    getMods(setup, teamEngine) / getCost(setup, teamEngine) fall back to the
    category default when a supplier-locked option doesn't match the team.

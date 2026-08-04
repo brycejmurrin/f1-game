@@ -46,11 +46,21 @@ function simCareerRound() {
   const byId = new Map(live.map((c) => [c.driverId, c]));
   const round = Career.round();
 
+  // Reliability applies to a simulated round exactly as it does to a driven one,
+  // or fast-forwarding a season would quietly hand every car a finish and the
+  // championship a career is settled against would be one nobody could lose to a
+  // gearbox. arm() also CLEARS, so it is what resets last round's retirements.
+  G.armReliability(live);
+
   const grid = [];
   for (let i = 0; i < rows.length; i++) {
     const car = byId.get(rows[i].driverId);
     if (!car) continue;
     car.gridPos = i + 1;
+    // No distance is simulated here, so an armed car simply does not finish. The
+    // huge key offset is what puts every retirement behind every classified car
+    // without a second sort.
+    if (car.dnfAt != null) { car.retired = true; car.dnf = car.dnfWhy; car.dnfAt = null; }
     const rt = DriverRatings.get(car.code, car.tier, Career.devFor(car.team && car.team.id, car.seat));
     // Race day is not qualifying. Pace order is a strong prior; craft is how much
     // of it survives first-lap contact and a long run, so a racer moves forward
@@ -60,7 +70,7 @@ function simCareerRound() {
     // objective would be free money every time the season is fast-forwarded.
     car.cuts = Career.rnd(round, "cuts", car.driverId) * 100 < (100 - rt.awareness) ? 2 : 0;
     car.penalty = 0;
-    grid.push({ car, key: i + swing });
+    grid.push({ car, key: car.retired ? 1000 + i : i + swing });
   }
   if (grid.length !== live.length) return null;   // a partial map is not a result
   grid.sort((a, b) => a.key - b.key);
@@ -70,7 +80,7 @@ function simCareerRound() {
   // the standings it leaves behind, so a shortcut here would settle against a
   // season that never happened.
   order.forEach((car, i) => {
-    const pts = Teams.POINTS[i] || 0;
+    const pts = car.retired ? 0 : (Teams.POINTS[i] || 0);   // a DNF scores nothing
     car.finPos = i + 1;
     season.pts[car.driverId] = (season.pts[car.driverId] || 0) + pts;
     season.driverCodes[car.driverId] = car.code;
@@ -964,6 +974,52 @@ const api = {
     return c.money;
   },
   careerReset() { Career.clear(); G.refreshCareerButton(); return true; },
+  // ── Extra funds (a deliberate cheat) ──────────────────────────────────────
+  // Money stops being the constraint; the FITTED CAP does not move, so even a
+  // bottomless balance cannot put more on the car than the rules allow. Stored
+  // outside the save (`apex26.career.freeMoney`) — a preference about how you
+  // want to play, not a fact about one career.
+  careerFreeMoney(on) { return Career.freeMoney(on); },
+  // Hand the live career credits. No argument grants Career.GRANT.
+  careerGrant(n) { return Career.grant(n); },
+  // The open-ended research facility: the money sink that keeps working once the
+  // catalog is owned. Each level is a permanent cut to what research costs.
+  careerFacility(up) {
+    if (up) Career.upgradeFacility();
+    return { level: Career.facility(), max: Career.FACILITY_MAX,
+             cost: Career.facilityCost(), discount: Career.facilityDiscount() };
+  },
+  // MY TEAM's second seat. No argument reports whether a decision is pending;
+  // "renew" takes the driver's asking price, a free-agent CODE signs them.
+  careerHire(what) {
+    if (what === "renew") Career.renewHire(1);
+    else if (typeof what === "string") Career.hireDriver(what, 1);
+    return Career.hirePending();
+  },
+  // ── Career SLOTS ──────────────────────────────────────────────────────────
+  // SIX saves: three DRIVER slots and three MY TEAM slots, in separate sets
+  // (`apex26.career.<flavour>.0..2`). A slot's address is both halves — an index
+  // alone does not say which career it is.
+  //
+  //   careerSlots()            -> all six
+  //   careerSlots("myteam")    -> that set's three
+  //   careerSlots("driver", 1) -> SWITCH to driver slot 1, return the save there
+  //
+  // Switching saves the career being left first.
+  careerSlots(flavour, i) {
+    if (i === undefined) return Career.slots(flavour);
+    const c = Career.useSlot(flavour, i);
+    G.refreshCareerButton();
+    return c;
+  },
+  // Wipe ONE slot, live or not. The other five are untouched — careerReset() is
+  // the narrower "wipe the one I am in".
+  careerSlotDelete(flavour, i) {
+    Career.deleteSlot(flavour, i);
+    Career.load();               // land on whatever is left, anywhere
+    G.refreshCareerButton();
+    return Career.slots();
+  },
   // Settle `n` whole rounds WITHOUT driving them. The qualifying model supplies
   // the pace order, a ratings-weighted draw turns it into a race result, and the
   // result goes through the same championship award + Career.settleRound() the
@@ -994,6 +1050,28 @@ const api = {
     const out = Career.rollover();
     if (out) G.refreshCareerButton();
     return out;
+  },
+  // ── Reliability & retirements (js/game/reliability.js) ────────────────────
+  // The RELIABILITY race setting: "off" (the shipped default) | "low" | "real".
+  // Persisted, like difficulty. Setting it does NOT re-arm a race already
+  // running — the field's retirements are drawn once, at the green light.
+  reliability(level) {
+    if (level !== undefined) G.raceReliability = String(level).toLowerCase();
+    return G.raceReliability;
+  },
+  // The retirement PLAN for the race that is staged: who is going to stop, why,
+  // and at what fraction of race distance — plus anyone who already has. Empty
+  // when reliability is off or the draw spared the whole field. Deterministic:
+  // the same seed and round always produce the same list.
+  retirements: () => Reliability.plan(G.cars),
+  // Retire a car NOW, whatever the draw said. `idx` indexes cars[] (default the
+  // player). The one way a test gets a guaranteed DNF without racing until the
+  // probability obliges.
+  retire(idx, reason) {
+    const c = idx == null ? G.player : G.cars[idx | 0];
+    if (!c || !G.track) return null;
+    if (!c.retired) G.retireCar(c, reason || "engine");
+    return { idx: G.cars.indexOf(c), code: c.code, retired: true, why: c.dnf };
   },
   // The qualifying model's times for the loaded track, fastest first, WITHOUT
   // running a session — a real weekend's classification is left alone. Pass a
@@ -1102,9 +1180,13 @@ const api = {
   // Trigger the race-results screen cleanly, as if all cars crossed the line.
   finishRace() {
     if (!G.track || G.state === "results" || G.state === "menu") return false;
-    const order = G.cars.slice().sort((a, b) => b.prog - a.prog);
-    G.cars.forEach((c) => { if (!c.finished) { c.finished = true; c.finishT = G.raceT; } });
-    endRace(order);
+    // A retirement never crosses the line: it stays unfinished and classifies
+    // behind everyone who did, which is the order endRace() builds for a real
+    // flag. Waving one home here would hand a parked car a finish and points.
+    G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = G.raceT; } });
+    const home = G.cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
+    const out = G.cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
+    endRace(home.concat(out));
     return { state: G.state };
   },
 
@@ -1190,6 +1272,11 @@ const api = {
       x: +c.x.toFixed(3), speed: +c.speed.toFixed(2),
       prog: +c.prog.toFixed(2), s: +c.s.toFixed(2), lap: c.lap,
       finished: !!c.finished, finishT: c.finishT != null ? +c.finishT.toFixed(2) : null,
+      finPos: c.finPos || 0,   // classified position, 0 until the flag
+      // Retirement (js/game/reliability.js). `dnf` is the reason, null unless the
+      // car actually stopped; dnfAt is the plan it has not reached yet.
+      retired: !!c.retired, dnf: c.dnf || null,
+      dnfAt: c.dnfAt != null ? +c.dnfAt.toFixed(4) : null,
       contactT: +(c.contactT || 0).toFixed(3),
       wrongWay: !!c.wrongWay, rescueT: +(c.rescueT || 0).toFixed(2),
       energy: +(c.energy || 0).toFixed(3), boostOn: !!c.boostOn,
@@ -1603,6 +1690,8 @@ const api = {
       gap:      +(leader.prog - c.prog).toFixed(2),
       finished: !!c.finished,
       finishT:  c.finishT != null ? +c.finishT.toFixed(2) : null,
+      retired:  !!c.retired,
+      dnf:      c.dnf || null,
     }));
   },
 

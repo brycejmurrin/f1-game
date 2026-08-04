@@ -170,6 +170,14 @@ let teamIdx = store.get("team", 2);          // default McLaren
 let driverIdx = store.get("driver", 0);
 let trackIdx = store.get("track", 0);
 let difficulty = store.get("difficulty", "normal");
+// RELIABILITY — "off" | "low" | "real" (js/game/reliability.js). A standing
+// preference like difficulty, so it persists. Ships OFF: store.get returns the
+// stored value whenever the key exists, so a new default only ever reaches a
+// fresh install — and this key is new for EVERY save, which means the default is
+// what every existing player gets. OFF is therefore the only choice that does not
+// silently start retiring cars in a game somebody was already halfway through.
+let raceReliability = store.get("reliability", "off");
+if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
@@ -607,6 +615,10 @@ const isQuali = () => session === "quali";
 // The full field as it was before startRace() narrowed `cars` to the lone
 // qualifying car — Quali.simulate() needs every car to build a classification.
 let qualiField = null;
+// What the last career round paid, straight off Career.settleRound(). Null
+// outside career and cleared at the top of every classification, so a Grand Prix
+// can never inherit a career weekend's earnings panel.
+let careerSettlement = null;
 const isCareer = () => flow === "career";
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
@@ -1170,6 +1182,10 @@ function makeCars() {
         energy: 1, otT: 0, otCool: 0, deploying: false,
         lapStart: 0, lapTime: 0, best: Infinity, totalT: 0,
         finished: false, finishT: 0, finPos: 0,
+        // Retirement (js/game/reliability.js). `retired`/`dnf` are the record;
+        // dnfAt/dnfWhy are the plan Reliability.arm() draws at the green light.
+        // Declared here so every car has the shape whether or not a race arms it.
+        retired: false, dnf: null, dnfAt: null, dnfWhy: null,
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
         skill: driverSkill(team, d, di),
@@ -1805,6 +1821,30 @@ function snapGameCam() {
   camRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
 }
 
+// Races started this session. It is the round number a one-off Grand Prix hashes
+// its retirements on: without it every GP drawn off the same sim seed would lose
+// the same two cars forever, because the reliability draw deliberately consumes
+// nothing from the stream that would otherwise have moved on. Starting from zero
+// on every load is what keeps a seeded run reproducible across reloads.
+let raceIndex = 0;
+// Draw the field's retirements for the race about to start (or the round about to
+// be simulated). The seed is the CAREER's inside a career and the SIM seed
+// outside one — the two places a run's reproducibility is already anchored.
+// Nothing here draws from simRnd: see js/game/reliability.js.
+function armReliability(field) {
+  const c = Career.data();
+  const team = player ? player.team : Teams.LIST[teamIdx];
+  Reliability.arm(field, {
+    level: raceReliability,
+    seed: Career.inCareer() && c ? c.seed : simSeed(),
+    round: isChampionship() ? season.round : raceIndex,
+    // The player's own build is the R&D economy's grip on this: an AI runs its
+    // team's works car, which `tier` already says everything about.
+    build: Reliability.buildQuality(getTeamParts(team.id), team),
+  });
+  return field;
+}
+
 function startRace() {
   loadTrack(trackIdx);
   makeCars();
@@ -1835,8 +1875,12 @@ function startRace() {
   } else {
     Particles.rainShow(false);
   }
-  gridUp(quali.order(cars));
+  gridUp(isChampionship() ? quali.order(cars) : null);
   recomputePlayerMods();
+  // Only a RACE can retire a car. A time trial is you against the clock and
+  // qualifying is one flying lap — losing the car to a gearbox there would end
+  // the session with nothing to show and no race to have lost it in.
+  if (session === "race") { raceIndex++; armReliability(cars); }
   resultT = 0;
   camRoll = 0; camSlipSm = 0;
   sectorIdx = sectorAt(player.s); sectorStartT = 0;
@@ -1853,7 +1897,11 @@ function startRace() {
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
-  els.soundbtn.hidden = true;   // sound is toggled from the pause menu during a race
+  // Hidden during a session: the HUD stays clean and the two switches that
+  // matter (MUSIC, SOUND EFFECTS) live in SETTINGS > MUSIC & SOUND. Turning
+  // both off is silence, so the master needs no mid-race button of its own —
+  // and setMusic/setSfx lift it if it is off, so it can never strand you.
+  els.soundbtn.hidden = true;
   document.body.classList.add("in-race");
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
@@ -1932,14 +1980,23 @@ function endRace(forcedOrder) {
     return;
   }
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
-  // classification: finished by time(+penalty), rest by progress
-  const fin = cars.filter((c) => c.finished).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
-  const run = cars.filter((c) => !c.finished).sort((a, b) => b.prog - a.prog);
-  const order = netOrder(forcedOrder || fin.concat(run));
+  careerSettlement = null;   // whatever the last career round paid is not this race's news
+  // classification: finished by time(+penalty), still running by progress, and
+  // RETIREMENTS below both — ordered among themselves by how far they got, which
+  // is the only thing that separates two cars that never saw the flag.
+  const fin = cars.filter((c) => c.finished && !c.retired).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
+  const run = cars.filter((c) => !c.finished && !c.retired).sort((a, b) => b.prog - a.prog);
+  const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
+  // THE CLASSIFICATION IS THE HOST'S — see netOrder(), which is the inline
+  // block that used to live here, unchanged in behaviour.
+  const order = netOrder(forcedOrder || fin.concat(run, out));
   order.forEach((c, i) => { c.finPos = i + 1; });
   if (isChampionship()) {
     order.forEach((c, i) => {
-      const pts = Teams.POINTS[i] || 0;
+      // A retirement scores nothing. Explicit rather than relying on it landing
+      // outside POINTS' ten slots: `i` still advances, so every classified car
+      // above keeps the points its position earns.
+      const pts = c.retired ? 0 : (Teams.POINTS[i] || 0);
       season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;
       season.driverCodes[c.driverId] = c.code;
       season.teamPts[c.team.id] = (season.teamPts[c.team.id] || 0) + pts;
@@ -1949,7 +2006,12 @@ function endRace(forcedOrder) {
     // lets buildResults/buildStandings/the HUD work in career untouched). Persist
     // through the career save, or this would overwrite the standalone SEASON save
     // with career's standings.
-    if (isCareer()) { Career.save(); Career.settleRound(order, player); }
+    // KEEP the settlement. It was being computed and thrown away: prize money,
+    // salary, the points bonus, the brief and the wage bill all resolved here and
+    // the player saw only a changed balance on the next screen. buildResults()
+    // renders it, which is the one place the economy is legible at the moment it
+    // actually moves.
+    if (isCareer()) { Career.save(); careerSettlement = Career.settleRound(order, player); }
     else store.set("season", season);
   }
   dbgCam = null;
@@ -1985,7 +2047,9 @@ const G = {
   // The career SAVE lives in js/game/career.js, which owns it outright — this is a
   // read-through so there is exactly one copy, never a stale mirror in a closure.
   get career() { return Career.data(); },
+  get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
+  openCareerSlots: (...a) => openCareerSlots(...a),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   get ttNewRecord() { return ttNewRecord; },
@@ -1994,6 +2058,16 @@ const G = {
   get timeTrial() { return isTimeTrial(); },
   set timeTrial(v) { session = v ? "tt" : "race"; },
   get lapsTarget() { return lapsTarget; },
+  // RELIABILITY: the race setting, the shared arming path (so a simulated career
+  // round draws its retirements exactly as a driven race does), and the manual
+  // retire the debug hook exposes.
+  get raceReliability() { return raceReliability; },
+  set raceReliability(v) {
+    if (!Reliability.isLevel(v)) return;
+    raceReliability = v; store.set("reliability", v);
+  },
+  armReliability: (field) => armReliability(field || cars),
+  retireCar: (c, reason) => retireCar(c, reason),
   get ranked() { return ranked; },
   get sectorLast() { return sectorLast; },
   // Setting the seed also rewinds the stream, so seeding then rebuilding the
@@ -2213,6 +2287,7 @@ function quitToMenu() {
   // next thing the player presses. The championship SAVES are untouched — what
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
   setFlow("gp"); session = "race";
+  quali.clear();   // last weekend's classification is not this one's grid
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -2330,9 +2405,15 @@ function update(dt) {
   if (state !== "race") return;
   raceT += dt;
   tickWeatherArc(dt);   // dynamic weather progression (no-op unless an arc is armed)
-  // ranks by progress (reuse module-scope buffer, no per-step allocation)
+  checkRetirements();
+  // ranks by progress (reuse module-scope buffer, no per-step allocation).
+  // RETIREMENTS ARE NOT IN THE FIELD. Dropping them here is one exclusion that
+  // does four jobs: the HUD position stops counting a parked car, the AI stops
+  // treating it as a blocker, resolveCollisions leaves it where it was put, and
+  // the overtake target walks past it — all of which would otherwise need their
+  // own `c.retired` check and one of them would eventually be forgotten.
   ranked.length = 0;
-  for (const c of cars) ranked.push(c);
+  for (const c of cars) if (!c.retired) ranked.push(c);
   ranked.sort((a, b) => b.prog - a.prog);
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
@@ -2340,7 +2421,7 @@ function update(dt) {
 
   // Leading human, for the AI rubber-band. Once per step, not once per AI car.
   _leadHuman = null;
-  for (const c of cars) if (c.human && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
+  for (const c of cars) if (c.human && !c.retired && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
 
   for (const c of cars) updateCar(c, dt, ranked);
 
@@ -2375,7 +2456,9 @@ function update(dt) {
     for (const c of cars) {
       if (!c.human) continue;
       anyHuman = true;
-      if (!c.finished) { allHumansDone = false; break; }
+      // Retired counts as done. A driver whose race is over should see the
+      // classification, not sit in the gravel watching the rest of the field.
+      if (!c.finished && !c.retired) { allHumansDone = false; break; }
     }
     if (anyHuman && allHumansDone) resultT = 2.2;
     else if (cars.some((c) => c.finished)) resultT = 3.5;
@@ -2619,6 +2702,9 @@ function resolveCollisions(ranked, dt) {
 }
 
 function updateCar(c, dt, ranked) {
+  // A retirement is out of the race: no driving model, no coast, no lap timing.
+  // It stays exactly where retireCar() parked it until the flag.
+  if (c.retired) { c._prevS = c.s; return; }
   if (c.finished) { coast(c, dt); c._prevS = c.s; return; }
   // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
@@ -3693,6 +3779,56 @@ function rescuePlayer(c) {
   if (c.local) {
     announce("RECOVERED", 1.2);
     if (soundOn) GameAudio.offtrack();
+  }
+}
+
+// Retire a car. The counterpart of rescuePlayer above — same job, opposite
+// intent: instead of putting the car back on the racing line it puts it as far
+// off the racing line as the circuit allows, and leaves it there.
+//
+// WHERE IT GOES. A retirement that vanished would read as a bug and one left on
+// the line would be a rolling roadblock, so it pulls over to the side it was
+// already on, hard against the barrier. The lateral limit is the same
+// Tracks.wallAt() the collision pass clamps every car to, and the world pose is
+// written back through worldFromTrack exactly as rescuePlayer and coast do — a
+// stopped car is not a new kind of physics, it is the existing placement with the
+// speed taken out.
+function retireCar(c, reason) {
+  c.retired = true;
+  c.dnf = reason || "mechanical";
+  c.dnfAt = null;
+  Tracks.sample(track, c.s, smp);
+  const side = c.x >= 0 ? 1 : -1;
+  const wall = Tracks.wallAt(track, c.s, side);
+  // Out past the verge if there is room, but never through the barrier — on a
+  // street circuit "the far side of the runoff" is barely a car's width.
+  c.x = side * clamp(Math.max(smp.hw * 0.85, wall - 1.6), 0, Math.max(0, wall - 0.6));
+  c.xVis = c.x;
+  const w = worldFromTrack(c.s, c.x, smp);
+  c.px = w.x; c.pz = w.z;
+  c.head = Math.atan2(smp.t[0], smp.t[2]);
+  // Seed the render-interpolation anchors too, or the first frame after this
+  // smears the car across the track from wherever it was a step ago.
+  c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x;
+  c.rPrevHead = c.head; c.rPrevYawVis = 0;
+  c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0; c.steerVis = 0;
+  c.gear = 1; c.rpm = IDLE_RPM;
+  c.boostOn = false; c.deploying = false; c.otT = 0; c.otArmed = false;
+  // The broadcast call. Every retirement is announced, not only the player's:
+  // losing a rival is race information, and it is the only way a DNF that
+  // happened half a lap away is visible at all.
+  announce("RETIREMENT — " + c.code, 2);
+  if (c.local && soundOn) GameAudio.offtrack();
+}
+
+// Retirements arrive by race DISTANCE, not by clock: the moment was drawn as a
+// fraction of the full race at the green light (see armReliability), so a 3-lap
+// blast and a 25-lap race lose their cars at the same points of the story.
+function checkRetirements() {
+  const dist = Math.max(1, lapsTarget * track.total);
+  for (const c of cars) {
+    if (c.dnfAt == null || c.retired || c.finished) continue;
+    if (c.prog / dist >= c.dnfAt) retireCar(c, c.dnfWhy);
   }
 }
 
@@ -5640,7 +5776,6 @@ function setSound(b) {
   soundOn = b; store.set("sound", b);
   GameAudio.setEnabled(b);
   els.soundbtn.textContent = b ? "♪ ON" : "♪ OFF";
-  $("pm-sound").textContent = "SOUND: " + (b ? "ON" : "OFF");
   if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); }
   else {
     if (state === "menu") GameAudio.startMusic(-1);
@@ -5654,6 +5789,11 @@ els.soundbtn.onclick = () => setSound(!soundOn);
 // Music on/off, independent of the master sound toggle: engine + SFX keep
 // playing with music off.
 function setMusic(b) {
+  // The master gates both buses and its only button lives on the title screen,
+  // so asking for music mid-race has to lift it — otherwise the switch reads
+  // ON and nothing plays, which is exactly the confusion the duplicated
+  // pause-menu toggle used to cause.
+  if (b && !soundOn) { setSound(true); }
   musicEnabled = b; store.set("music", b);
   GameAudio.setMusicEnabled(b);
   syncAudioPanel();
@@ -5673,6 +5813,7 @@ GameAudio.setSfxEnabled(sfxOn);
 // playing — the sources stay alive at zero gain rather than being torn down, so
 // there is nothing to rebuild when it comes back on.
 function setSfx(b) {
+  if (b && !soundOn) { setSound(true); }
   sfxOn = b; store.set("sfx", b);
   GameAudio.setSfxEnabled(b);
   syncAudioPanel();
@@ -5745,7 +5886,6 @@ function syncAudioPanel() {
   // Disabled, not hidden: the row keeps its slot so nothing reflows under a
   // thumb mid-tap, and .tune-row greys to say the control is inert.
   $("as-mvol").disabled = !musicLive;
-  $("as-skip").disabled = !musicLive;
   $("as-svol").disabled = !sfxLive;
   $("as-mvol").closest(".tune-row").classList.toggle("tune-off", !musicLive);
   $("as-svol").closest(".tune-row").classList.toggle("tune-off", !sfxLive);
@@ -5753,7 +5893,15 @@ function syncAudioPanel() {
   $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
   $("as-svol").value = String(Math.round(sfxVol * 10));
   $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
-  $("as-now").textContent = musicLive ? (GameAudio.trackName() || "—") : "off";
+  $("as-now").textContent = musicLive ? (GameAudio.trackName() || "—") : "Music off";
+  // The caption says WHERE the track came from, which is the question the old
+  // single line could not answer — "Now playing X" with four possible sources.
+  const SRC_LABEL = { all: "All music", builtin: "Built-in", user: "My tracks", spotify: "Spotify" };
+  $("as-now-src").textContent = musicLive ? (SRC_LABEL[musicSrc] || "") : "";
+  $("as-play").innerHTML = musicEnabled ? "&#10074;&#10074;" : "&#9654;";
+  $("as-play").setAttribute("aria-label", musicEnabled ? "Pause music" : "Play music");
+  for (const id of ["as-prev", "as-skip"]) $(id).disabled = !musicLive;
+  $("as-play").disabled = !soundOn;
   // The uploaded-track rows carry a "playing" marker, so they have to be
   // re-rendered whenever the panel is opened or the track changes — MusicLib
   // owns the list, we only tell it the picture is stale.
@@ -5773,7 +5921,7 @@ $("as-src-all").onclick = () => { setMusicSrc("all"); if (soundOn) GameAudio.uiT
 $("as-src-builtin").onclick = () => { setMusicSrc("builtin"); if (soundOn) GameAudio.uiTick(); };
 $("as-src-user").onclick = () => { setMusicSrc("user"); if (soundOn) GameAudio.uiTick(); };
 $("as-src-spotify").onclick = () => { setMusicSrc("spotify"); if (soundOn) GameAudio.uiTick(); };
-$("pm-spotify").onclick = () => {
+$("as-sp-open").onclick = () => {
   if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.openPanel) SpotifyMusic.openPanel();
 };
 $("as-close").onclick = () => { $("audioset").hidden = true; };
@@ -5792,12 +5940,22 @@ $("as-svol").oninput = (e) => {
   store.set("volSfx", sfxVol);
   $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
 };
-$("as-skip").onclick = () => {
-  const name = GameAudio.skipTrack();
+// One handler for all three transport buttons: they differ only in which
+// GameAudio call they make, and all three then have to refresh the same
+// now-playing card and the uploaded-track list's "playing" marker.
+function audioTransport(fn) {
+  const name = fn();
   if (name) $("as-now").textContent = name;
   if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
+  syncAudioPanel();
   if (soundOn) GameAudio.uiTick();
-};
+}
+$("as-skip").onclick = () => audioTransport(() => GameAudio.skipTrack());
+$("as-prev").onclick = () => audioTransport(() => GameAudio.prevTrack());
+// PLAY/PAUSE is the music switch, not a separate transport state — there is
+// one music bus and `musicEnabled` already owns whether it is running, so a
+// third notion of "paused" here would be a second source of truth.
+$("as-play").onclick = () => { setMusic(!musicEnabled); if (soundOn) GameAudio.uiTick(); };
 
 // Render resolution setting: AUTO = the frame-time governor adapts the scale;
 // LOW/MED/HIGH pin a fixed scale (and disable the governor so it can't fight
@@ -5945,6 +6103,15 @@ function openCareer() {
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 }
+// The same entry, stopping at the slot picker. Deliberately does NOT engage the
+// career flow: nothing has been chosen yet, so a save's rules must not be live —
+// the picker's own handler calls openCareer() once a slot is taken.
+function openCareerSlots() {
+  careerUi.openSlots();
+  els.overlay.hidden = true;
+  if (soundOn) GameAudio.uiSelect();
+  scheduleFlybyTrack();
+}
 // The title-screen button reads CONTINUE once a career exists, so the player can
 // tell at a glance whether pressing it resumes or starts something.
 function refreshCareerButton() {
@@ -5952,9 +6119,27 @@ function refreshCareerButton() {
   if (!btn) return;
   const c = Career.data() || Career.load();
   const label = btn.querySelector(".mb-label");
-  if (label) label.textContent = c ? "CONTINUE CAREER" : "CAREER";
+  const used = Career.slots().filter((s) => s.used).length;
+  // ONE door, always the same words. It used to read CONTINUE CAREER once
+  // anything was saved and go straight into that save — which meant a player
+  // with one driver career had no way in to MY TEAM, to their other saves, or to
+  // the delete that makes room. The button opens the modes screen now, and the
+  // line under it says what is behind it.
+  if (label) label.textContent = "CAREER MODES";
+  // The second line says WHICH career, because with up to three saved,
+  // "CONTINUE" on its own does not answer the only question that matters. Blank
+  // when there is nothing to continue — .mb-sub:empty collapses, so a first-time
+  // title screen is unchanged.
+  const sub = $("mb-career-sub");
+  if (!sub) return;
+  if (!c) { sub.textContent = "DRIVER CAREER  ·  MY TEAM"; return; }
+  const team = Teams.LIST.find((t) => t.id === c.team);
+  const who = c.flavour === "myteam" ? "MY TEAM" : (c.driver ? c.driver.code : "YOU");
+  sub.textContent = who + " · " + (team ? team.name : c.team).toUpperCase()
+    + " · " + c.year + " R" + Math.min(c.season.round + 1, Tracks.SEASON.length)
+    + (used > 1 ? "  ·  " + used + " SAVED" : "");
 }
-$("mb-career").onclick = () => openCareer();
+$("mb-career").onclick = () => openCareerSlots();
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
 $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };
@@ -6063,6 +6248,22 @@ function buildRaceSettings() {
     b.onclick = () => { difficulty = d; store.set("difficulty", d); buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
     diffEl.appendChild(b);
   }
+  // RELIABILITY — same idiom, same persistence, and hidden alongside DIFFICULTY
+  // in a time trial for the same reason: neither has anything to act on there.
+  $("rs-reliab-section").hidden = isTimeTrial();
+  const relEl = $("rs-reliab");
+  relEl.innerHTML = "";
+  for (const [id, label] of [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]]) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (raceReliability === id ? " active" : "");
+    b.setAttribute("aria-pressed", raceReliability === id ? "true" : "false");
+    b.textContent = label;
+    b.onclick = () => {
+      raceReliability = id; store.set("reliability", id);
+      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
+    };
+    relEl.appendChild(b);
+  }
 }
 
 // RACE SETTINGS is reachable from #select and (in career) from #career, so it
@@ -6103,6 +6304,10 @@ $("rs-go").onclick = () => {
 // the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
 function openQuali() {
   session = "quali";
+  // Reached from race settings this is already "menu"; reached from the results
+  // screen it would still say "results". No race is running while the sheet is
+  // up, so both paths say the same thing.
+  state = "menu";
   quali.clear();
   loadTrack(trackIdx);
   makeCars();
@@ -6410,7 +6615,10 @@ els.resNext.onclick = () => {
     trackIdx = Tracks.seasonIndex(season.round);
   }
   els.results.hidden = true;
-  startRace();
+  // A championship weekend qualifies — every round, not just the one entered
+  // through race settings. openQuali() also clears the previous round's
+  // classification, which is what stops this grid being last week's.
+  if (isChampionship()) openQuali(); else startRace();
 };
 
 function setPaused(p) {
@@ -6526,7 +6734,6 @@ $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
-$("pm-sound").onclick = () => setSound(!soundOn);
 
 // One STEER button cycles the single mode: TILT -> BUTTONS -> TOUCH.
 const STEER_MODES = ["tilt", "buttons", "touch"];

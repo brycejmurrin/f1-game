@@ -41,8 +41,14 @@ test("re-enabling sound during a race restarts race music", async ({ page }) => 
     return window.__apex.tracks().find((track) => track.id === "monza").i;
   });
 
-  await page.locator("#pm-sound").evaluate((button) => button.click());
-  await page.locator("#pm-sound").evaluate((button) => button.click());
+  // What this guards is a game.js behaviour: when SOUND comes back the game
+  // re-issues GameAudio.startMusic with the RACE track index. That is the
+  // master, not the music bus — setMusicEnabled resumes via an internal
+  // startMusic the stub above cannot see, and passes lastTrackIdx rather than
+  // the race index. The pause menu's duplicate SOUND button is gone, so drive
+  // #soundbtn, which is the master and is only hidden (not removed) in-race.
+  await page.locator("#soundbtn").evaluate((b) => b.click());
+  await page.locator("#soundbtn").evaluate((b) => b.click());
 
   const calls = await page.evaluate(() => window.__raceMusicCalls);
   expect(calls).toEqual([monzaIdx]);

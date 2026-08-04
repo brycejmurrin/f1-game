@@ -188,8 +188,15 @@ test.describe("Garage — TEAM tab owns team, driver and MY TEAM", () => {
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
     await expect(page.locator("#sel-team-card")).toContainText(surname);
-    // ...and the card is the way back in.
+    // ...the card opens the TEAM PICKER (it is the team summary), and the
+    // GARAGE button beside it is the way back in. They used to share one
+    // destination, which is why tapping your own team landed you in the parts
+    // garage.
     await page.locator("#sel-team-card").click();
+    await expect(page.locator("#teampicker")).toBeVisible();
+    await page.locator("#tp-close").click();
+    await expect(page.locator("#carsetup")).toBeHidden();
+    await page.locator("#sel-setup").click();
     await expect(page.locator("#carsetup")).toBeVisible();
   });
 });

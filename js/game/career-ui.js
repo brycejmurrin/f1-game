@@ -1,12 +1,25 @@
-/* Apex 26 — the CAREER screen (#career). Two states in one sheet: the new-career
-   setup when no save exists, and the season hub when one does. The hub replaces
-   #select entirely in career, because the calendar decides where you race — the
-   only thing left to choose is whether you are ready to go.
+/* Apex 26 — the CAREER screen (#career). THREE states in one sheet: CAREER MODES
+   (both modes, their six save slots and their guides — the title button's one
+   door), the new-career setup, and the season hub. The hub replaces #select
+   entirely in career, because the calendar decides where you race — the only
+   thing left to choose is whether you are ready to go.
 
    Rules and persistence live in js/game/career.js; this file is DOM only. Live
    game state comes through the ctx façade handed to CareerUI.create(ctx) at boot
    (see the `G` object in game.js): els, $, cssCol, openGarage, openRaceSettings,
-   updateTrackPreview. Consumes globals Career, Teams, Tracks, Parts, GameAudio.
+   updateTrackPreview. Consumes globals Career, Teams, Tracks, Parts, GameAudio,
+   plus DriverRatings, Reliability and GameTables — but only from inside the
+   GUIDE builders, which run when a player opens the sheet rather than at eval
+   time, so none of them is a load-order dependency.
+
+   THE GUIDES QUOTE THE RULES, NEVER THEMSELVES. Every figure in #career-guide is
+   read from those globals (Career.PRIZE, RESEARCH_MULT, BUDGET_MULT, OBJ_BONUS,
+   START_MONEY, SLOTS, FACILITY_*, SPONSOR_KINDS, the free-agent asks, plus
+   Teams.POINTS, Tracks.SEASON, DriverRatings.AXES, Reliability.TIER_RISK) and
+   never typed into prose. A guide that hard-codes the economy goes stale the
+   first time the economy is tuned, and a wrong number in a rules screen is worse
+   than no number at all.
+
    Must load BEFORE js/game.js (see index.html). */
 const CareerUI = (function () {
   "use strict";
@@ -53,6 +66,438 @@ function create(G) {
     };
   }
 
+  // ---------- the slot picker ----------
+  // Three careers can exist at once (Career.SLOTS), so #career has a third state
+  // besides setup and the hub. A state rather than a new screen: it reuses
+  // #cr-left/#cr-right, so it needs no MenuNav/ScrollFade/AriaState registration
+  // of its own and inherits their behaviour for free.
+  //
+  // `picking` is what the player ASKED for. The dispatcher below also lands here
+  // on its own when the live slot is empty but another holds a save — pressing
+  // CONTINUE has to show you what there is to continue.
+  let picking = false;
+  // Which DELETE is armed, as a "flavour:index" ADDRESS — an index alone would
+  // arm the same-numbered slot in both modes. Deleting a decade of career from
+  // one tap would be unforgivable, and a confirm modal for it would be a whole
+  // screen, so the button asks once in place and disarms on anything else.
+  let armedDelete = "";
+
+  function slotCard(s) {
+    const live = s.used && s.live;
+    const card = el("div", "cr-slot" + (s.used ? " used" : " empty") + (live ? " active" : ""));
+    const open = el("button", "cr-slot-main");
+    open.append(el("span", "cr-slot-n", "SLOT " + (s.i + 1) + (live ? " · PLAYING" : "")));
+    if (s.used) {
+      open.append(
+        el("span", "cr-slot-who", (s.flavour === "myteam" ? s.teamName : s.code + " · " + s.teamName).toUpperCase()),
+        el("span", "cr-slot-meta",
+          s.year + " · round " + Math.min(s.round + 1, s.rounds) + " of " + s.rounds
+          + " · " + s.money.toLocaleString() + " cr"),
+        el("span", "cr-slot-meta",
+          s.seasons + (s.seasons === 1 ? " season" : " seasons")
+          + " · " + s.wins + (s.wins === 1 ? " win" : " wins")
+          + (s.titles ? " · " + s.titles + (s.titles === 1 ? " title" : " titles") : "")));
+    } else {
+      open.append(el("span", "cr-slot-who", "EMPTY"),
+        el("span", "cr-slot-meta", s.flavour === "myteam"
+          ? "Start a team here" : "Start a career here"));
+    }
+    open.onclick = () => {
+      if (G.soundOn) GameAudio.uiSelect();
+      armedDelete = "";
+      picking = false;
+      if (s.used) { Career.useSlot(s.flavour, s.i); G.openCareer(); return; }
+      // An empty slot goes to setup with BOTH halves of its address already
+      // decided — which mode's column it was in, and which slot. The setup form
+      // opens on that mode rather than asking again.
+      Career.useSlot(s.flavour, s.i);
+      draft = freshDraft();
+      draft.flavour = s.flavour;
+      draft.slot = s.i;
+      if (s.flavour === "myteam") draft.teamId = "custom";
+      build();
+    };
+    card.appendChild(open);
+    if (s.used) {
+      // Armed state is keyed by the FULL address. Keyed by index alone, arming
+      // driver slot 2 would also arm MY TEAM slot 2 — two DELETE? buttons for one
+      // press, on two different careers.
+      const id = s.flavour + ":" + s.i;
+      const armed = armedDelete === id;
+      const del = el("button", "cr-slot-del" + (armed ? " armed" : ""), armed ? "DELETE?" : "DELETE");
+      del.setAttribute("aria-label", "Delete the "
+        + (s.flavour === "myteam" ? "team" : "career") + " in slot " + (s.i + 1));
+      del.onclick = (ev) => {
+        ev.stopPropagation();
+        if (G.soundOn) GameAudio.uiTick();
+        if (!armed) { armedDelete = id; build(); return; }
+        armedDelete = "";
+        Career.deleteSlot(s.flavour, s.i);
+        // Deleting the live career leaves nothing engaged; reload picks up
+        // whatever is left, anywhere, so the title screen still has something.
+        Career.load();
+        G.refreshCareerButton();
+        build();
+      };
+      card.appendChild(del);
+    }
+    return card;
+  }
+
+  // One mode's column: its name, its three saves, and its guide. The two modes
+  // get one pane each, so "what have I got, and what is this?" is answered per
+  // mode instead of being pooled into a list that hides which is which.
+  function modeColumn(pane, flavour) {
+    const my = flavour === "myteam";
+    pane.appendChild(head(my ? "MY TEAM" : "DRIVER CAREER"));
+    pane.appendChild(el("div", "cr-note", my
+      ? "Own the twelfth team and drive one of its two cars. You hire your "
+        + "team-mate, pay their wages, and build the car both of you race."
+      : "Sign for a team that will have you, hit what they ask of you, and earn a "
+        + "better seat. You are paid; the car is somebody else's."));
+    for (const s of Career.slots(flavour)) pane.appendChild(slotCard(s));
+
+    const guide = el("button", "cr-card cr-record");
+    guide.id = my ? "cr-guide-myteam" : "cr-guide-driver";
+    guide.append(
+      el("span", "cr-record-line", my
+        ? "Money, the hire, the car you build"
+        : "Contracts, money, upgrades and the climb"),
+      el("span", "cr-record-cta", my ? "HOW MY TEAM WORKS" : "HOW CAREER WORKS"));
+    guide.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openGuide(flavour); };
+    pane.appendChild(guide);
+  }
+
+  function buildSlotPanes() {
+    const left = $("cr-left"), right = $("cr-right");
+    left.textContent = ""; right.textContent = "";
+    $("cr-title").textContent = "CAREER MODES";
+    const used = Career.slots().filter((x) => x.used).length;
+    $("cr-sub").textContent = used
+      ? used + (used === 1 ? " career saved" : " careers saved")
+      : "Two ways to play a championship";
+    $("cr-sub").style.color = "";
+    $("cr-meters").textContent = "";
+
+    modeColumn(left, "driver");
+    modeColumn(right, "myteam");
+
+    // Nothing in the foot to press: every action on this screen is a card. GO
+    // RACING would have to pick a career first, which is the thing being asked.
+    $("cr-go").hidden = true;
+    $("cr-go").disabled = false;
+    $("cr-garage").hidden = true;
+  }
+
+  // ---------- how it works ----------
+  // TWO documents, not one with caveats. A driver career and MY TEAM share a
+  // core but are different games — you are paid or you pay, you are hired or you
+  // hire — and a guide that hedged between them would describe neither.
+  //
+  // Every figure below is READ FROM THE RULES (Career.PRIZE, RESEARCH_MULT,
+  // BUDGET_MULT, OBJ_BONUS, Career.SLOTS, the free-agent asks), never typed out.
+  // A guide that quotes the economy is a guide that goes stale the first time
+  // the economy is tuned, and a wrong number here is worse than no number.
+  function guideSection(title, paras) {
+    const frag = document.createDocumentFragment();
+    frag.appendChild(head(title));
+    const card = el("div", "cr-card cg-card");
+    for (const p of paras) {
+      if (Array.isArray(p)) card.appendChild(row(p[0], p[1]));
+      else card.appendChild(el("p", "cg-p", p));
+    }
+    frag.appendChild(card);
+    return frag;
+  }
+
+  const cr = (n) => n.toLocaleString() + " cr";
+
+  // Sections that describe rules BOTH modes obey. Written once and pushed into
+  // each guide rather than duplicated: a shared rule described twice is a shared
+  // rule that will eventually be described two different ways.
+  function sharedSections(my) {
+    const out = [];
+    out.push(guideSection("QUALIFYING", [
+      "Every championship round qualifies before it races, and the sheet IS the "
+      + "grid — there is no fixed starting slot to climb from.",
+      "DRIVE MY LAP gives you one out-lap and one flying lap, alone on track, "
+      + "with nothing to overtake and nothing to avoid. SIMULATE takes the time "
+      + "the model gives you and goes straight to the grid.",
+      "The rest of the field is not driven, it is modelled — the same grip, "
+      + "acceleration and braking your own car obeys, over the same corners. So a "
+      + "lap you drive and a lap they are given are on one scale, and a good lap "
+      + "genuinely gains you places.",
+      "A driver who is not consistent is not slower on average — they are less "
+      + "likely to put the whole lap together on the one run that counts.",
+    ]));
+    out.push(guideSection("THE GRID YOU RACE", [
+      "The twenty-one other drivers are not interchangeable. Each has five "
+      + "ratings — " + DriverRatings.AXES.join(", ") + " — and they decide who is "
+      + "quick, who defends well, who keeps it clean, and who is repeatable.",
+      "CONSISTENCY is a spread, not a speed. A rookie is not slower than a "
+      + "veteran of the same pace, just harder to predict.",
+      "The CAR still matters more than the driver, as it does in the sport. But "
+      + "the gap between the best and worst driver is real enough that a good one "
+      + "in a midfield car can beat a poor one in a better car.",
+      "Ratings drift over a career. Young drivers improve, veterans slip, and a "
+      + "season that beat what the car deserved counts for more than a title in "
+      + "the best car on the grid.",
+    ]));
+    out.push(guideSection("POINTS AND THE SEASON", [
+      ["Rounds in a season", String(Tracks.SEASON.length)],
+      ["Points, P1 down to P" + Teams.POINTS.length, Teams.POINTS.join(" · ")],
+      "Two championships run at once: the DRIVERS', which is you, and the "
+      + "CONSTRUCTORS', which is both of your team's cars added together.",
+      "When the calendar runs out the year is closed off, the grid develops over "
+      + "the winter, and the next season opens. Everything you own and everything "
+      + "you have earned carries over — that is the long arc.",
+    ]));
+    out.push(guideSection("RELIABILITY", [
+      "A race setting, and it ships OFF. Turn it on and cars stop — an "
+      + (Reliability.REASONS.filter((r, i, a2) => a2.indexOf(r) === i).join(", a ")) + ".",
+      ["Risk per race, best car to worst",
+        Math.round(Reliability.TIER_RISK[0] * 100) + "% – "
+        + Math.round(Reliability.TIER_RISK[Reliability.TIER_RISK.length - 1] * 100) + "%"],
+      ["LOW", "half those odds"],
+      "Two things buy the risk down: developing the team, and what you have spent "
+      + "on the ENGINE and GEARBOX. So money buys finishes as well as lap time.",
+      "A retirement is classified below every car that finished and scores "
+      + "nothing. It also fails a CLEAN RACE brief — a car in the barriers on lap "
+      + "two has not completed anything.",
+      "Whether a car stops is decided at the green light, not while you drive, so "
+      + "it is never a reaction to how your race is going.",
+    ]));
+    out.push(guideSection("RACE SETTINGS", [
+      "Reachable on the way to every weekend. Race length, weather, time of day, "
+      + "AI difficulty (" + Object.keys(GameTables.DIFF).join(" / ") + ") and "
+      + "reliability.",
+      "They change the weekend, never the economy: prize money is paid on where "
+      + "you finished, whatever length or weather you chose to finish in.",
+    ]));
+    return out;
+  }
+
+  function driverGuide() {
+    const out = [];
+    out.push(guideSection("THE IDEA", [
+      "You are a driver, not a team. You sign for whoever will have you — which "
+      + "at the start is the back half of the grid — and the whole mode is the "
+      + "climb out of it.",
+      "Every round pays, and every round is scored against what your CAR should "
+      + "have managed. Beating a bad one counts for more than cruising in a good "
+      + "one.",
+    ]));
+    out.push(guideSection("A WEEKEND", [
+      "The calendar decides where you race, so there is no track to pick — press "
+      + "GO RACING and the weekend starts.",
+      "QUALIFYING comes first. Drive the flying lap yourself, or take the "
+      + "simulated time and go straight to the grid. Either way the sheet IS the "
+      + "grid: no more starting twelfth every time.",
+      "Then the race. Afterwards the results screen shows exactly what the round "
+      + "paid — every figure, and the balance it leaves you on.",
+    ]));
+    out.push(guideSection("MONEY", [
+      "Credits are the same units the garage prices parts in, so a result "
+      + "converts straight into most of a new front wing.",
+      ["Win a race", cr(Career.PRIZE[0])],
+      ["Podium", cr(Career.PRIZE[2]) + " – " + cr(Career.PRIZE[1])],
+      ["Last place", cr(Career.prizeFor(22))],
+      ["Meet the round's brief", "+" + cr(Career.OBJ_BONUS)],
+      ["Salary, per round", "your contract"],
+      "Finishing last still pays. A career that can go bankrupt in one bad "
+      + "weekend stops being worth playing.",
+      "A worse car pays you MORE to sign it. That is the mechanism that stops a "
+      + "first season being unwinnable: the seat you can actually get is also the "
+      + "one that funds your first upgrades.",
+    ]));
+    out.push(guideSection("UPGRADING THE CAR", [
+      "The garage is the R&D tree. Every part you do not own yet shows a RESEARCH "
+      + "price; buy it once and it is yours for good, free to fit and unfit from "
+      + "then on.",
+      ["Research costs", Career.RESEARCH_MULT + "x the part's price"],
+      ["You may FIT, at first", "your team's own works car"],
+      ["Raising that cap", "up to " + Career.BUDGET_MULT[Career.BUDGET_MULT.length - 1]
+        + "x, three upgrades"],
+      "Two limits, on purpose. Your BALANCE is what you can spend; the FITTED CAP "
+      + "is what you may run at once. You will own more than you can fit, so "
+      + "every weekend is a choice about which car to bring.",
+    ]));
+    out.push(guideSection("THE FACTORY", [
+      "The one upgrade that never runs out. Each level permanently cuts what "
+      + "every future part costs to research, so money still buys progress long "
+      + "after you own the parts you actually wanted.",
+      ["Levels", String(Career.FACILITY_MAX)],
+      ["At the top", "−" + Math.round(Career.FACILITY_DISCOUNT_MAX * 100) + "% on all research"],
+    ]));
+    out.push(guideSection("YOUR SEAT AND YOUR TEAM-MATE", [
+      "You replace one of your team's two real drivers. The other one stays, and "
+      + "they are the benchmark the whole mode measures you against — most race "
+      + "briefs are about beating them, and a contract is easier to earn from the "
+      + "seat that is beating the one next to it.",
+      "The LEAD seat and the SECOND seat are the same car. What differs is who "
+      + "you are being compared with.",
+      "You can change teams at the end of a season, never during one. A contract "
+      + "is a contract.",
+    ]));
+    out.push(guideSection("THE BRIEF", [
+      "One objective a round — finish above a position, beat your team-mate, "
+      + "out-qualify them, score points, or keep it clean. It pays, and it moves "
+      + "your reputation either way.",
+      "The brief is fixed for the round. It cannot be rerolled by leaving and "
+      + "coming back.",
+    ]));
+    out.push(guideSection("REPUTATION AND CONTRACTS", [
+      "Reputation is what the paddock thinks. It rises when you beat what the car "
+      + "should have done and when you hit your briefs, and it falls when you do "
+      + "not.",
+      "WHO WOULD SIGN YOU on the hub is the ladder: every tier of team, and what "
+      + "each of them wants to see before they will talk to you. Clear a bar and "
+      + "that tier makes an offer at the end of the year.",
+      "MOVING re-seeds your garage from the new team's car: you do not take your "
+      + "parts with you. RENEWING keeps everything you built. Loyalty is not "
+      + "punished.",
+    ]));
+    out.push(guideSection("THE WINTER", [
+      "Drivers develop. Young ones get quicker, veterans slip, and a season that "
+      + "beat the car counts for more than a title in the best one.",
+      "Teams move too — the order you learned last year will not be this year's. "
+      + "A team that gets ahead does not stay ahead for free.",
+      "A seat or two changes hands, and the end-of-season sheet tells you which. "
+      + "Enough that the grid feels alive; few enough that it is still the grid "
+      + "you know.",
+    ]));
+    return out.concat(sharedSections(false));
+  }
+
+  function myTeamGuide() {
+    const asks = Career.freeAgents().map((a) => a.ask);
+    const lo = Math.min(...asks), hi = Math.max(...asks);
+    const pays = Career.SPONSOR_KINDS.map((k) => k.pay);
+    const out = [];
+    out.push(guideSection("THE IDEA", [
+      "You own the twelfth team, and you drive one of its two cars. The other "
+      + "seat is a driver you hire and pay.",
+      "So there are two championships in play at once: yours, and the "
+      + "constructors' — which your team-mate scores in as well as you.",
+    ]));
+    out.push(guideSection("A WEEKEND", [
+      "The same as any other: qualifying, then the race. Your team-mate qualifies "
+      + "and races alongside you, and their result is yours too.",
+      "Afterwards the results screen breaks down exactly what the round paid — "
+      + "prize money for both cars, your sponsor, and the wages going out.",
+    ]));
+    out.push(guideSection("MONEY", [
+      "You start with more than a driver does, and it has to go further: the car "
+      + "is yours to build and the wage bill is yours to pay.",
+      ["Starting balance", cr(Career.START_MONEY.myteam)],
+      ["Win a race", cr(Career.PRIZE[0])],
+      ["Meet the round's brief", "+" + cr(Career.OBJ_BONUS)],
+      ["Your driver's wage, per round", cr(lo) + " – " + cr(hi)],
+      "Prize money counts every finish, not just yours — two cars in the points "
+      + "is two payments.",
+    ]));
+    out.push(guideSection("SPONSORS", [
+      "A driver is paid a salary. An owner is paid by sponsors, and that is the "
+      + "income the two modes do not share.",
+      "A sponsor is a brief over SEVERAL rounds rather than one — score this many "
+      + "points across five weekends, get both cars home in the points, keep the "
+      + "season clean. The round brief asks how a weekend went; a sponsor asks "
+      + "how the season is going, which is what a team principal is judged on.",
+      ["Each deal pays", cr(Math.min(...pays)) + " – " + cr(Math.max(...pays))],
+      "One lucky weekend cannot pay a sponsor and one bad one does not sink it. "
+      + "The hub shows the deal you are on and how far through it you are.",
+    ]));
+    out.push(guideSection("THE DRIVER YOU HIRE", [
+      "This is the choice the mode is built on. A quick driver scores "
+      + "constructors' points you keep and pushes you every weekend; a cheap one "
+      + "leaves you the money to build a better car.",
+      ["Cheapest on the market", cr(lo) + " a round"],
+      ["Dearest", cr(hi) + " a round"],
+      "The wage comes off your BALANCE, never off the cap on what you may fit. "
+      + "So hiring well costs you upgrades — not legality.",
+    ]));
+    out.push(guideSection("THEIR CONTRACT RUNS OUT", [
+      "At the end of a season your driver's deal expires and they tell you what "
+      + "they want for the next one. A season that beat the car costs you more; a "
+      + "season that did not costs you less.",
+      "Take it, or let them go and sign somebody else from the market — the seat "
+      + "is yours either way.",
+      "And occasionally you lose them. A driver who was genuinely quicker than "
+      + "your car deserved gets looked at by the rest of the grid, and sometimes "
+      + "simply goes. That only ever happens to a driver who OUTPERFORMED.",
+      "The season cannot start with an empty car, so this is settled before you "
+      + "go racing.",
+    ]));
+    out.push(guideSection("BUILDING THE CAR", [
+      "You start with a startup team's car, not a works one: slower than the "
+      + "grid, and entirely yours to fix.",
+      ["Research costs", Career.RESEARCH_MULT + "x the part's price"],
+      ["Raising the fitted cap", "up to " + Career.BUDGET_MULT[Career.BUDGET_MULT.length - 1]
+        + "x, three upgrades"],
+      "Buy a part once and it is yours for good. You will own more than you can "
+      + "fit at one time, which is the point: the car you bring to a circuit is a "
+      + "decision, not an inventory.",
+      "Both cars run your build.",
+    ]));
+    out.push(guideSection("THE FACTORY", [
+      "The one upgrade that never runs out. Each level permanently cuts what "
+      + "every future part costs to research, so a well-run team keeps converting "
+      + "money into progress long after the obvious parts are bought.",
+      ["Levels", String(Career.FACILITY_MAX)],
+      ["At the top", "−" + Math.round(Career.FACILITY_DISCOUNT_MAX * 100) + "% on all research"],
+    ]));
+    out.push(guideSection("DEVELOPING THE TEAM", [
+      "The team itself has a level, separate from the car you bolt together. It "
+      + "moves with results across a whole season, not with one weekend.",
+      "A team that finishes above what its car should manage climbs; one that "
+      + "finishes below slides back. Half of whatever you have gained evaporates "
+      + "every winter, so nothing you build stays built for free.",
+      "Team development is also what buys down your retirement risk once "
+      + "RELIABILITY is on — a better-run team stops breaking.",
+      "THE CAR card on the hub shows where you stand.",
+    ]));
+    out.push(guideSection("NOBODY CAN SIGN YOU", [
+      "You own the constructor, so no team offers you a seat and no contract runs "
+      + "out from under you. The only way out is to start a different career.",
+      "What does change is the team itself: develop it and it climbs, neglect it "
+      + "and it slides back toward where it started.",
+    ]));
+    return out.concat(sharedSections(true));
+  }
+
+  function buildGuide(flavour) {
+    const body = $("cg-body");
+    body.textContent = "";
+    const my = flavour === "myteam";
+    $("cg-title").textContent = my ? "HOW MY TEAM WORKS" : "HOW CAREER WORKS";
+    for (const part of (my ? myTeamGuide() : driverGuide())) body.appendChild(part);
+    // The two shared rules, said once at the foot of both.
+    body.appendChild(guideSection("GOOD TO KNOW", [
+      ["Save slots", Career.SLOTS + " for this mode, " + (Career.SLOTS * Career.FLAVOURS.length) + " in all"],
+      ["Progress saves", "after every round"],
+      "The two modes keep SEPARATE slots, so a driver career and a team can run "
+      + "side by side and neither costs the other room.",
+      "RELIABILITY is a race setting, and it ships off. Turn it on and cars retire "
+      + "— an engine, a gearbox, an accident. Developing the team and spending on "
+      + "the engine and gearbox both buy the risk down, so money buys finishes as "
+      + "well as lap time.",
+      "EXTRA FUNDS on the hub is a deliberate cheat, off unless you turn it on. It "
+      + "stops money being the constraint — but it does NOT raise the cap on what "
+      + "you may fit, so the car is still a choice.",
+      "Your career car and your free-play car are separate builds. Nothing you do "
+      + "here changes a Grand Prix or a Time Trial, and nothing there changes this.",
+    ]));
+    ScrollFade.refresh();
+  }
+  // `flavour` is optional: the hub knows which career is running, the setup
+  // screen passes the one being considered.
+  function openGuide(flavour) {
+    const c = Career.data();
+    buildGuide(flavour || (c ? c.flavour : "driver"));
+    $("career-guide").hidden = false;
+  }
+  function closeGuide() { $("career-guide").hidden = true; }
+
   // ---------- new-career setup ----------
 
   function buildSetupPanes() {
@@ -63,7 +508,7 @@ function create(G) {
     const flavours = el("div", "cr-flavours");
     for (const [id, label, blurb] of [
       ["driver", "DRIVER", "Sign for a team, hit your targets, earn a better seat."],
-      ["myteam", "MY TEAM", "Own the eleventh team. Run the money, run the drivers."],
+      ["myteam", "MY TEAM", "Own the twelfth team. Run the money, run the drivers."],
     ]) {
       const b = el("button", "cr-flavour" + (draft.flavour === id ? " active" : ""));
       b.setAttribute("aria-pressed", draft.flavour === id ? "true" : "false");
@@ -72,6 +517,13 @@ function create(G) {
         draft.flavour = id;
         if (id === "myteam") draft.teamId = "custom";
         else if (draft.teamId === "custom") draft.teamId = freshDraft().teamId;
+        // The slot belongs to the MODE's set, so changing mode here has to move
+        // the target with it — slot 3 of the driver set is not slot 3 of MY TEAM.
+        // -1 (that set is full) is left as-is: Career.start() falls back to the
+        // live slot of the set it is actually writing to.
+        const free = Career.firstFree(id);
+        if (free >= 0) draft.slot = free; else delete draft.slot;
+        Career.useSlot(id, free >= 0 ? free : 0);
         buildSetupPanes();
         if (G.soundOn) GameAudio.uiTick();
       };
@@ -169,10 +621,27 @@ function create(G) {
       }
     }
 
+    // The guide, for the flavour being CONSIDERED rather than the one running —
+    // there is no career running yet. Reading what a mode actually is should not
+    // cost you a career to find out, which is the whole reason this is on the
+    // setup screen and not only in the hub.
+    right.appendChild(head("BEFORE YOU START"));
+    const learn = el("button", "cr-card cr-record");
+    learn.id = "cr-learn";
+    learn.append(
+      el("span", "cr-record-line", draft.flavour === "myteam"
+        ? "What owning a team involves"
+        : "What a driver career involves"),
+      el("span", "cr-record-cta", draft.flavour === "myteam" ? "HOW MY TEAM WORKS" : "HOW CAREER WORKS"));
+    learn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openGuide(draft.flavour); };
+    right.appendChild(learn);
+
     $("cr-title").textContent = "NEW CAREER";
     $("cr-sub").textContent = "";
     $("cr-meters").textContent = "";
     $("cr-go").textContent = "START CAREER";
+    $("cr-go").hidden = false;
+    $("cr-go").disabled = false;
     $("cr-garage").hidden = true;
   }
 
@@ -199,7 +668,7 @@ function create(G) {
     const meters = $("cr-meters");
     meters.textContent = "";
     meters.append(
-      meter("BALANCE", st.money.toLocaleString() + " cr"),
+      meter("BALANCE", Career.freeMoney() ? "UNLIMITED" : st.money.toLocaleString() + " cr"),
       meter("REPUTATION", Math.round(st.rep) + " / 100"),
       meter("ROUND", (Math.min(st.round + 1, st.rounds)) + " / " + st.rounds));
 
@@ -214,6 +683,22 @@ function create(G) {
       if (c.deal) objCard.append(row("Season goal", "P" + c.deal.goal.value + " in the championship"));
       objCard.append(row("If you hit it", "+" + Career.OBJ_BONUS + " cr · +" + Career.OBJ_REP + " REP"));
       left.appendChild(objCard);
+    }
+
+    // THE SPONSOR. MY TEAM only: a driver is paid a salary, an owner is paid by
+    // sponsors. Sits with the round's brief because it is the same idea over a
+    // longer window — how the SEASON is going, which is what a principal is
+    // actually judged on.
+    if (st.sponsor) {
+      const sp = st.sponsor;
+      left.appendChild(head("SPONSOR"));
+      const card = el("div", "cr-card");
+      card.appendChild(el("div", "cr-obj-line", sp.label));
+      card.appendChild(row("Progress", sp.done + " / " + sp.need
+        + (sp.met ? "  ·  MET" : "")));
+      card.appendChild(row("Rounds left", sp.roundsLeft === 0 ? "this one" : String(sp.roundsLeft)));
+      card.appendChild(row("Pays", sp.pay.toLocaleString() + " cr"));
+      left.appendChild(card);
     }
 
     left.appendChild(head("CONTRACT"));
@@ -233,7 +718,14 @@ function create(G) {
     carCard.append(
       row("Parts owned", c.owned.length + " of " + totalOptions()),
       row("Fitted", fittedCost + " / " + Career.budget() + " cr"),
-      row("Development", devLabel(c.tdev[c.team] || 0)));
+      row("Development", devLabel(c.tdev[c.team] || 0)),
+      // The facility is the one upgrade that never runs out, so it belongs with
+      // the car rather than in the economy: it is what late money buys.
+      row("Facility", st.facility + " / " + Career.FACILITY_MAX
+        + (st.facilityDiscount ? "  (−" + Math.round(st.facilityDiscount * 100) + "% research)" : "")),
+      // Reliability belongs on THE CAR: a DNF is the car letting you down, and
+      // team development plus a developed engine and gearbox are what buy it off.
+      row("Retirements", st.dnfs + " this season"));
     left.appendChild(carCard);
 
     // MY TEAM runs a wage bill on top of the car. Shown as its own card because it
@@ -270,8 +762,160 @@ function create(G) {
     recBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openHistory(); };
     left.appendChild(recBtn);
 
+    // The way into the other slots. A card rather than a fourth button in the
+    // action bar, for the same reason CAREER RECORD is one: at 844x390 the left
+    // column is ~370px and four buttons at the shared 110px floor need ~440px, so
+    // a fourth wraps the bar and costs a button's height out of a 390px screen.
+    const used = Career.slots().filter((s) => s.used).length;
+    const slotBtn = el("button", "cr-card cr-record");
+    slotBtn.id = "cr-slots";
+    slotBtn.append(
+      el("span", "cr-record-line",
+        (c.flavour === "myteam" ? "MY TEAM" : "Driver career") + " · slot "
+        + (Career.slot().i + 1) + " of " + Career.SLOTS
+        + " · " + used + (used === 1 ? " career saved" : " careers saved")),
+      el("span", "cr-record-cta", "CAREER MODES"));
+    slotBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openSlots(); };
+    left.appendChild(slotBtn);
+
+    // The facility upgrade sits under THE CAR because that is what it buys: a
+    // permanent cut to what every future part costs. Hidden at the ceiling
+    // rather than shown disabled — there is nothing left to say about it.
+    if (st.facilityCost != null) {
+      const fac = el("button", "cr-card cr-record");
+      fac.id = "cr-facility";
+      const afford = Career.freeMoney() || st.money >= st.facilityCost;
+      fac.disabled = !afford;
+      fac.append(
+        el("span", "cr-record-line", "Upgrade the factory · " + st.facilityCost.toLocaleString() + " cr"),
+        el("span", "cr-record-cta", "LEVEL " + st.facility + " → " + (st.facility + 1)
+          + "  ·  −" + Math.round((st.facilityDiscount + 0.05) * 100) + "% RESEARCH"));
+      fac.onclick = () => {
+        if (!Career.upgradeFacility()) return;
+        if (G.soundOn) GameAudio.uiSelect();
+        build();
+      };
+      left.appendChild(fac);
+    }
+
+    // WHO WOULD SIGN YOU. Reputation is a number on the header and means nothing
+    // on its own; offerBar() is already a visible ladder in the rules, so show
+    // it. A tier you clear is a seat that will talk to you at the end of the
+    // year, which turns a stat into a goal. MY TEAM has no ladder to climb —
+    // nobody signs an owner — so it gets the team's own standing instead.
+    if (c.flavour !== "myteam") {
+      left.appendChild(head("WHO WOULD SIGN YOU"));
+      const mv = Math.round(Career.marketValue(Career.driverStandings()));
+      const ladder = el("div", "cr-card");
+      ladder.appendChild(row("Your market value", mv + " / 100"));
+      // One row per tier, best first, so the climb reads top-down.
+      const TIERS = [[0, "Front runners"], [1, "Title contenders"],
+                     [2, "Upper midfield"], [3, "Midfield"], [4, "The back"]];
+      for (const [tier, label] of TIERS) {
+        const bar = Career.offerBar(tier);
+        const openSeat = mv >= bar;
+        const r = el("div", "cr-ladder" + (openSeat ? " open" : ""));
+        const names = Teams.LIST.filter((t) => !t.custom && t.tier === tier)
+          .map((t) => t.short || t.name).join(" · ");
+        r.append(
+          el("span", "cr-ladder-k", label),
+          el("span", "cr-ladder-teams", names),
+          el("span", "cr-ladder-v", openSeat ? "OPEN" : "needs " + bar));
+        ladder.appendChild(r);
+      }
+      left.appendChild(ladder);
+    }
+
+    // EXTRA FUNDS. A deliberate cheat, kept where it cannot be pressed by
+    // accident: below the car and the contract, not beside GO RACING. The
+    // unlimited toggle does not move the FITTED CAP, so even a bottomless
+    // balance still cannot put more on the car than the rules allow.
+    left.appendChild(head("EXTRA FUNDS"));
+    const cheat = el("div", "cr-card");
+    const unlimited = Career.freeMoney();
+    cheat.appendChild(el("div", "cg-p",
+      "Off by default. Money stops being the constraint; the cap on what you may "
+      + "fit at once does not move, so the car is still a choice."));
+    const cheatRow = el("div", "cr-cheats");
+    const grantBtn = el("button", "sel-chip", "+" + Career.GRANT.toLocaleString() + " CR");
+    grantBtn.id = "cr-grant";
+    grantBtn.onclick = () => {
+      Career.grant(Career.GRANT);
+      if (G.soundOn) GameAudio.uiSelect();
+      build();
+    };
+    const freeBtn = el("button", "sel-chip" + (unlimited ? " active" : ""),
+      unlimited ? "UNLIMITED · ON" : "UNLIMITED · OFF");
+    freeBtn.id = "cr-freemoney";
+    freeBtn.setAttribute("aria-pressed", unlimited ? "true" : "false");
+    freeBtn.onclick = () => {
+      Career.freeMoney(!Career.freeMoney());
+      if (G.soundOn) GameAudio.uiTick();
+      build();
+    };
+    cheatRow.append(grantBtn, freeBtn);
+    cheat.appendChild(cheatRow);
+    left.appendChild(cheat);
+
+    // The rules, in the player's words. A card for the same reason the two above
+    // are: the action bar has room for three buttons at 844x390 and it already
+    // has three. Named for the flavour actually being played — a MY TEAM owner
+    // pressing "HOW CAREER WORKS" would get a document about signing contracts.
+    const guideBtn = el("button", "cr-card cr-record");
+    guideBtn.id = "cr-guide";
+    guideBtn.append(
+      el("span", "cr-record-line", c.flavour === "myteam"
+        ? "Running a team: money, the hire, the car"
+        : "Contracts, money, upgrades and the climb"),
+      el("span", "cr-record-cta", c.flavour === "myteam" ? "HOW MY TEAM WORKS" : "HOW CAREER WORKS"));
+    guideBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openGuide(c.flavour); };
+    left.appendChild(guideBtn);
+
     // ---- right: next race + standings ----
-    if (st.offers) {
+    // YOUR DRIVER'S CONTRACT, when it has run out. Outranks the calendar for the
+    // same reason a driver career's unsigned offers do: MY TEAM enters two cars,
+    // and a season cannot start with one of them empty.
+    if (st.hire) {
+      const h = st.hire;
+      right.appendChild(head(h.kind === "left" ? "YOUR DRIVER HAS GONE" : "YOUR DRIVER IS OUT OF CONTRACT"));
+      right.appendChild(el("div", "cr-note", h.kind === "left"
+        ? h.name + " had a season good enough that somebody else came for them. "
+          + "The seat is empty — the market is below."
+        : h.name + " will re-sign for " + h.ask.toLocaleString() + " cr a round"
+          + (h.ask > h.salary ? ", up from " + h.salary.toLocaleString()
+            : h.ask < h.salary ? ", down from " + h.salary.toLocaleString() : "")
+          + ". Take it, or let them go and sign somebody else."));
+
+      if (h.kind === "renew") {
+        const keep = el("button", "cr-card cr-record");
+        keep.id = "cr-rehire";
+        keep.append(
+          el("span", "cr-record-line", "Keep " + h.name + " · " + h.ask.toLocaleString() + " cr a round"),
+          el("span", "cr-record-cta", "RE-SIGN"));
+        keep.onclick = () => {
+          Career.renewHire(1);
+          if (G.soundOn) GameAudio.uiSelect();
+          build();
+        };
+        right.appendChild(keep);
+      }
+
+      right.appendChild(head(h.kind === "left" ? "THE MARKET" : "OR SIGN SOMEBODY ELSE"));
+      const seats = el("div", "cr-seats");
+      for (const a2 of Career.freeAgents()) {
+        if (a2.code === h.code && h.kind === "renew") continue;   // they are the offer above
+        const b2 = el("button", "cr-seat");
+        b2.append(el("span", "cr-seat-role", a2.name),
+          el("span", "cr-seat-who", a2.ask.toLocaleString() + " cr / round"));
+        b2.onclick = () => {
+          Career.hireDriver(a2.code, 1);
+          if (G.soundOn) GameAudio.uiSelect();
+          build();
+        };
+        seats.appendChild(b2);
+      }
+      right.appendChild(seats);
+    } else if (st.offers) {
       right.appendChild(head("A SEAT TO SIGN"));
       right.appendChild(el("div", "cr-note", "The " + c.year + " season cannot start until you " +
         "have somewhere to drive it. " + st.offers + (st.offers === 1 ? " offer is" : " offers are") +
@@ -322,8 +966,14 @@ function create(G) {
       });
     }
 
-    $("cr-go").textContent = st.offers ? "SIGN A CONTRACT"
+    $("cr-go").textContent = st.hire ? "SIGN A DRIVER"
+      : st.offers ? "SIGN A CONTRACT"
       : Career.seasonDone() ? "END OF SEASON" : "GO RACING";
+    // An empty second seat blocks the weekend outright — there is nothing for
+    // GO RACING to do until the car has a driver in it.
+    $("cr-go").disabled = !!st.hire;
+    $("cr-go").hidden = false;
+    $("cr-go").disabled = false;
     $("cr-garage").hidden = false;
   }
 
@@ -349,6 +999,22 @@ function create(G) {
         row("Constructors", "P" + past.cPos + " · " + past.cPts + " pts"),
         row("Wins / podiums", past.wins + " / " + past.podiums));
       body.appendChild(card);
+    }
+
+    // WHAT THE WINTER DID. The market has always moved 0-2 seats and the player
+    // only ever met the result — a driver they had raced all year was suddenly
+    // somewhere else, with nothing to say it had happened. This is the one
+    // screen between the two seasons, so it is where the news belongs.
+    const moves = c.moves || [];
+    if (moves.length) {
+      body.appendChild(head("THE DRIVER MARKET"));
+      const mv = el("div", "cr-card");
+      for (const m of moves)
+        mv.appendChild(row(m.name, m.fromName + " → " + m.toName));
+      mv.appendChild(el("div", "cg-p", moves.length === 1
+        ? "One seat changed hands over the winter."
+        : moves.length + " seats changed hands over the winter."));
+      body.appendChild(mv);
     }
 
     body.appendChild(head("ON THE TABLE"));
@@ -505,13 +1171,38 @@ function create(G) {
 
   // ---------- shell ----------
 
+  // THREE states in one sheet, in this order of precedence:
+  //
+  //   1. CAREER MODES — the entry. Both modes side by side with their saves and
+  //      their guides, which is the screen the title button opens.
+  //   2. the HUB, once a career has been picked
+  //   3. new-career SETUP, reached by pressing an empty slot (which is also what
+  //      decides the mode, so the form opens on it rather than asking again)
+  //
+  // The modes screen leads because "which career" is genuinely the first
+  // question once there can be six. It is also the only screen that says the two
+  // modes exist at all — the old entry went straight into whichever save was
+  // last touched, so a player with one driver career had no way to discover MY
+  // TEAM, their other saves, or the delete they needed to make room.
   function build() {
-    if (Career.active()) { draft = null; buildHubPanes(); }
-    else { draft = draft || freshDraft(); buildSetupPanes(); }
+    if (picking) { draft = null; buildSlotPanes(); }
+    else if (Career.active()) { draft = null; buildHubPanes(); }
+    else if (draft) buildSetupPanes();
+    else buildSlotPanes();
     ScrollFade.refresh();
   }
 
   function openHub() {
+    picking = false;
+    armedDelete = "";
+    build();
+    $("career").hidden = false;
+  }
+  // The title screen routes here when more than one career exists: with two or
+  // three on the go, "which one" is the first question, not an afterthought.
+  function openSlots() {
+    picking = true;
+    armedDelete = "";
     build();
     $("career").hidden = false;
   }
@@ -520,6 +1211,9 @@ function create(G) {
   // ---------- wiring ----------
 
   $("cr-back").onclick = () => {
+    // From the picker, BACK steps back into the career you were in — the picker
+    // is a detour, not the way out. Only from the hub (or setup) does it leave.
+    if (picking && Career.active()) { picking = false; armedDelete = ""; build(); return; }
     close();
     els.overlay.hidden = false;
     G.flow = "gp"; G.session = "race";
@@ -529,8 +1223,11 @@ function create(G) {
   $("cr-garage").onclick = () => { close(); G.openGarage("career"); };
   $("cr-go").onclick = () => {
     if (G.soundOn) GameAudio.uiSelect();
+    // The picker comes first: a career is normally LOADED while it is open (you
+    // are choosing another one), so the "no career yet" branch below would never
+    // be reached and NEW CAREER would silently go racing instead.
     if (!Career.active()) {
-      Career.start(draft);
+      Career.start(draft);          // draft.slot, when the picker set one
       G.openCareer();          // re-enters the hub with the save in place
       return;
     }
@@ -556,8 +1253,15 @@ function create(G) {
     closeHistory();
     if (G.soundOn) GameAudio.uiSelect();
   };
+  // The guide is read-only too, so BACK just drops the modal — whatever is
+  // behind it (the hub, or the setup form mid-edit) is exactly as it was left.
+  $("cg-back").onclick = () => {
+    closeGuide();
+    if (G.soundOn) GameAudio.uiSelect();
+  };
 
-  return { build, openHub, close, openOffers, closeOffers, openHistory, closeHistory };
+  return { build, openHub, openSlots, close, openOffers, closeOffers,
+           openHistory, closeHistory, openGuide, closeGuide };
 }
 
 return { create, STARTER_TIER_MIN };
