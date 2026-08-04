@@ -456,6 +456,74 @@
         tree(Math.round(n * 0.62) % n, -1, 22, 6.5, sakuraLight);
       }
 
+      // ── Sugi (Japanese cedar) plantation ranks ───────────────────────────
+      // The Suzuka hills are worked cedar forest, and a plantation does not
+      // look like a wood: it is PLANTED IN LINES of near-identical narrow
+      // spires, which is why it reads as Japan and not as Belgian or English
+      // countryside. forestEdge's mixed scatter cannot make that — it is built
+      // to look natural. cypress() is the columnar form; used here at full
+      // height with a tight `slim` it is sugi, the same way monza/imola use it
+      // for the Italian avenue. Ranks sit as a SECOND row at gap ~20, behind
+      // the existing mixed treeline, so the near verge keeps its variety.
+      const SUGI  = [0.10, 0.27, 0.15], SUGI_D = [0.07, 0.21, 0.12];
+      for (const [s0, side, gap, cnt, stepF] of [
+        [0.262,  1, 20, 11, 0.0068],   // Degner descent
+        [0.462, -1, 21,  9, 0.0072],   // Hairpin exit toward 200R
+        [0.722,  1, 20, 10, 0.0070],   // back straight before the crossover break
+        [0.596, -1, 22,  8, 0.0074],   // Spoon outfield
+      ]) {
+        for (let i = 0; i < cnt; i++) {
+          const kk = Math.round(n * (s0 + i * stepF)) % n;
+          cypress(kk, side, gap + (i % 2) * 2.5, 16 + hash(i * 4.3 + s0 * 90) * 5,
+                  (i % 3) ? SUGI : SUGI_D, { slim: 0.72 });
+        }
+      }
+
+      // ── Momiji (Japanese maple) — the low, wide, many-lobed crown planted
+      //    in ones and twos at the foot of the cedar. Suzuka's April slot is
+      //    why the sakura above exist; the red-leaf maple (Acer palmatum
+      //    atropurpureum) carries that colour the rest of the year, so a few
+      //    crimson crowns among the green are correct in the same frame.
+      //    broadleafFall's overlapping off-axis lobes are the point: a solid
+      //    cone of red would read as a traffic cone, not a tree.
+      const MOMIJI_R = [0.62, 0.16, 0.14], MOMIJI_G = [0.24, 0.44, 0.20];
+      for (const [s, side, gap, h, red] of [
+        [0.163,  1, 15, 6.5, 1], [0.172,  1, 19, 7.5, 0], [0.181,  1, 16, 6.0, 1],
+        [0.334, -1, 17, 7.0, 0], [0.345, -1, 21, 6.5, 1],
+        [0.448,  1, 16, 6.0, 1], [0.457,  1, 20, 7.2, 0],
+        [0.655, -1, 18, 6.8, 1], [0.666, -1, 22, 7.4, 0], [0.677, -1, 17, 6.2, 1],
+        [0.905, -1, 20, 7.0, 0], [0.914, -1, 24, 6.4, 1],
+      ]) {
+        broadleafFall(Math.round(n * s) % n, side, gap, h,
+                      red ? MOMIJI_R : MOMIJI_G,
+                      { lobes: 4, spread: 1.25, barkCol: [0.32, 0.26, 0.22] });
+      }
+
+      // ── Nobori: the tall narrow vertical event banners that line every
+      //    Japanese race approach, hung from a short top arm on a slim pole.
+      //    Latin-alphabet sponsor hoardings are what every circuit in the
+      //    fleet already has; this is the one piece of trackside signage whose
+      //    SHAPE — tall, thin, portrait — is specific to this country.
+      const noboriCols = [neonRed, [0.98, 0.98, 0.96], navy, neonYel, [0.10, 0.52, 0.30]];
+      const nobori = (kk, side, dist, i) => {
+        const p = anchor(kk, side, dist), b = [p.r, p.u, p.t];
+        if (onTrack(p.c[0], p.c[2], 1.2)) return;
+        addCyl(out, vadd(p.c, p.u, -0.3), 0.07, 5.6, [0.24, 0.24, 0.27], 4, b);
+        addBox(out, vadd(p.c, p.u, 5.1), [0.06, 0.08, 0.95], [0.24, 0.24, 0.27], b);  // top arm
+        out._mat = MAT.FABRIC;
+        addBox(out, vadd(vadd(p.c, p.u, 3.3), p.t, 0.42),
+               [0.05, 3.4, 0.82], noboriCols[i % noboriCols.length], b);
+        // White header band — a nobori is a coloured field under a plain cap.
+        addBox(out, vadd(vadd(p.c, p.u, 4.85), p.t, 0.42),
+               [0.07, 0.5, 0.82], [0.96, 0.96, 0.94], b);
+        out._mat = 0;
+      };
+      // Pit-straight approach (behind the billboard row at gap 6) and the
+      // Motopia gate walk-up, where the crowd actually files in.
+      for (let i = 0; i < 12; i++) nobori(Math.round(n * (0.955 + i * 0.0042)) % n, 1, 12, i);
+      for (let i = 0; i < 8; i++)  nobori(Math.round(n * (0.045 + i * 0.0046)) % n, -1, 26, i + 2);
+      for (let i = 0; i < 6; i++)  nobori(Math.round(n * (0.298 + i * 0.0055)) % n, -1, 11, i + 1);
+
       // ── Dunlop Curve branded arch ─────────────────────────────────────────────
       // The corner is named for a Dunlop tyre-company arch that once spanned it;
       // nothing in the scene marked it. A branded overhead span (Dunlop blue)

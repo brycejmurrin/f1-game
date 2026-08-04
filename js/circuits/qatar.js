@@ -239,8 +239,8 @@
         // Extra densification on the televised start/finish kilometre
         along(0.86, 0.14, 45, (k) => {
           if (typeof floodMast === "function") {
-            floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: true, arms: 3 });
-            floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: true, arms: 3 });
+            floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: true });
+            floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: true });
           }
         });
       } else {
@@ -639,7 +639,7 @@
       // ================= TURN 16 OUTFIELD BLEACHERS + PIT ENTRY =============
       // Same reasoning as T2/T3: temporary open seating, not a built stand.
       if (typeof bleacher === "function") {
-        bleacher(0.922, 0.966, 1, 15, {
+        bleacher(0.927, 0.961, 1, 15, {
           rows: 6, rise: 0.78, setback: 1.05, step: 17, density: 0.42,
           frameCol: [0.54, 0.53, 0.53], plankCol: [0.64, 0.61, 0.57],
         });

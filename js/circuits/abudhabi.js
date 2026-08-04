@@ -56,7 +56,8 @@
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
         cityFront, forestEdge, backdrop, mountain, ferrisWheel, landmarkKit,
-        modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, circuitKit } = api;
+        modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, circuitKit,
+        bleacher, sailCanopy } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ---- twilight/night marina palette ----
@@ -137,6 +138,32 @@
       spectatorCanopy("yas-north-hairpin-led-left", 0.280, -1, LED_TEAL);
       spectatorCanopy("yas-north-hairpin-led-right", 0.280, 1, LED_AMBER);
       spectatorCanopy("yas-turn-9-led-canopy", 0.420, -1, LED_MAG);
+
+      // Yas Marina's ONE unmistakable signature is that every roofline on the
+      // island — hotel, stands, bridges, hospitality — carries a continuous
+      // programmable LED edge that cycles teal → magenta → amber. Nineteen
+      // grandstandEx call sites here were otherwise the same grey shells the
+      // other 39 circuits use, so at a corner they read as "a grandstand"
+      // rather than "Yas". This is two boxes per stand: a bright colour line
+      // on the roof lip and a dimmer wash below it, in the cycle colour for
+      // that stand's position around the lap. It costs almost nothing and it
+      // is the first thing in frame from any camera at night.
+      // grandstandEx anchors its roof slab at gap+5 and lifts it to
+      // 13 + 7.6*(tiers-1); the slab is 12 m across, so its trackward edge is
+      // 6 m inboard of that anchor. The LED line rides just outside that edge
+      // and just above the slab, where nothing else can be coplanar with it.
+      let ledSeq = 0;
+      const ledFascia = (s, side, gap, len, tiers) => {
+        const col = LED_CYCLE[ledSeq++ % LED_CYCLE.length];
+        const a = anchor(K(s), side, gap + 5), b = [a.r, a.u, a.t];
+        const roofY = 13 + 7.6 * (Math.max(1, tiers || 1) - 1);
+        const lip = vadd(vadd(a.c, a.u, roofY + 0.62), a.r, -side * 5.7);
+        addBox(out, lip, [0.34, 0.44, len + 1.6], col, b);
+        // Dimmer wash on the fascia below the line — reads as spill, and gives
+        // the roof edge depth instead of one bright wire.
+        addBox(out, vadd(lip, a.u, -1.35), [0.24, 0.55, len + 0.6],
+          [col[0] * 0.34, col[1] * 0.34, col[2] * 0.34], b);
+      };
 
       // ===================================================================
       // Flat far horizon: desert-sand dune band ringing the lap (golden sands
@@ -233,8 +260,10 @@
       // suites and closed end walls — the biggest, most finished stand here.
       grandstandEx(0.0, -1, 18, 90, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      ledFascia(0.0, -1, 18, 90, 2);
       grandstandEx(0.02, -1, 9, 70, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", endWalls: true });
+      ledFascia(0.02, -1, 9, 70, 2);
       gantry(0.0, 9, DARK);
 
       // ===================================================================
@@ -275,6 +304,7 @@
       // ===================================================================
       grandstandEx(0.05, -1, 8, 70, null, null,
         { livery: "sandstone", tiers: 1, roof: "flat", endWalls: true });
+      ledFascia(0.05, -1, 8, 70, 1);
       billboard(K(0.05), -1, 10, 18, 11, LED_TEAL);
 
       // ===================================================================
@@ -324,8 +354,10 @@
       for (const side of [-1, 1]) {
         grandstandEx(0.28, side, 7, 90, null, null,
           { livery: "teal", tiers: 2, roof: "cantilever", pylons: true });
+        ledFascia(0.28, side, 7, 90, 2);
         grandstandEx(0.30, side, 7, 70, null, null,
           { livery: "teal", tiers: 2, roof: "cantilever", pylons: true });
+        ledFascia(0.30, side, 7, 70, 2);
       }
 
       // ===================================================================
@@ -365,8 +397,28 @@
       // ===================================================================
       grandstandEx(0.42, -1, 9, 80, null, null,
         { livery: "darkSteel", tiers: 1, roof: "truss", endWalls: true });
+      ledFascia(0.42, -1, 9, 80, 1);
       groundPatch(K(0.42), -1, 2, [42, 0.35, 34], [0.20, 0.21, 0.22],
         { id: "turn-9-runoff", samples: 7 });
+      // SOUTH GRANDSTAND SHADE SAILS — the one stand at Yas that is not a
+      // roofed shell at all. It sits under a run of white tensile sails on
+      // single masts, the same Gulf-hospitality vocabulary as the Yas Hotel's
+      // veil, and its silhouette (a row of floating discs, no fascia, no back
+      // wall) is unlike anything on Qatar, Jeddah or Baku. Placed BEHIND the
+      // truss stand above so the two layer instead of fighting.
+      if (typeof sailCanopy === "function") {
+        for (let i = 0; i < 4; i++) {
+          const sa = anchor(K(0.404 + i * 0.011), -1, 26);
+          sailCanopy(sa.c, [sa.r, sa.u, sa.t], {
+            rx: 13, rz: 9, h: 15.5, ribs: 7, thick: 0.5,
+            col: (i % 2) ? [0.95, 0.94, 0.90] : [0.90, 0.90, 0.88],
+          });
+          // Amber uplight washing the underside of each sail — this is what
+          // makes a white membrane read as lit fabric after dark.
+          addBox(out, vadd(sa.c, sa.u, 15.0), [16, 0.30, 12], LED_AMBER,
+            [sa.r, sa.u, sa.t]);
+        }
+      }
 
       // ===================================================================
       // s 0.52–0.74 R — MARINA CORRIDOR: continuous dark water basin, yacht
@@ -428,8 +480,23 @@
       // bleachers (waterside viewing needs no shade this close to the docks)
       // + amber dock-lamp row
       // ===================================================================
-      grandstandEx(0.69, 1, 14, 35, null, null, { livery: "sandstone", roof: "none" });
-      grandstandEx(0.72, 1, 14, 35, null, null, { livery: "sandstone", roof: "none" });
+      // These two were grandstandEx({roof:"none"}) — the comment above them
+      // has always called them "uncovered bleachers", but grandstandEx still
+      // builds a 12 m back shell behind the crowd even with no roof, so what
+      // stood on the dockside was a windowless wall cutting the yacht basin
+      // off from the track. The shared bleacher() is the form that was
+      // actually wanted: open raked planks on a bolted frame, nothing behind
+      // the top row, so the marina reads THROUGH the seating. Anodised alu
+      // frame over teal-tinted planks picks up the dock lamps below.
+      if (typeof bleacher === "function") {
+        bleacher(0.678, 0.735, 1, 13, {
+          rows: 7, rise: 0.74, setback: 1.0, step: 16, density: 0.5,
+          frameCol: [0.62, 0.65, 0.70], plankCol: [0.30, 0.46, 0.50],
+        });
+      } else {
+        grandstandEx(0.69, 1, 14, 35, null, null, { livery: "sandstone", roof: "none" });
+        grandstandEx(0.72, 1, 14, 35, null, null, { livery: "sandstone", roof: "none" });
+      }
       for (let i = 0; i < 12; i++) {
         const lampK = K(0.68 + i * 0.004);
         const a = anchor(lampK, 1, 11);
@@ -450,7 +517,9 @@
       // (sandstone livery, truss roof) — long gentle chain, cool kerbs
       // ===================================================================
       grandstandEx(0.78, -1, 8, 100, null, null, { livery: "sandstone", roof: "truss", endWalls: true });
+      ledFascia(0.78, -1, 8, 100, 1);
       grandstandEx(0.80, -1, 8, 70, null, null, { livery: "sandstone", roof: "truss" });
+      ledFascia(0.80, -1, 8, 70, 1);
 
       // ===================================================================
       // s 0.88 OVER — W YAS HOTEL (hero): twin towers + continuous LED gridshell
@@ -583,19 +652,37 @@
       billboard(K(0.95), -1, 9, 16, 10, LED_TEAL);
       // MAIN GRANDSTAND flank, closing the bowl back toward the line
       grandstandEx(0.96, -1, 8, 80, null, null, { livery: "darkSteel", roof: "cantilever", endWalls: true });
+      ledFascia(0.96, -1, 8, 80, 1);
 
       // Extra grandstands ringing T1/T5/T9/T11 (completes the seating bowl),
       // assigned to the same five named stands as the primary blocks above —
       // Main/West/North/South/Marina — so the venue reads as five distinct
       // stands rather than nineteen call sites of the same two grey boxes.
+      // Every one carries the LED roof line; the marina one is open bleacher.
       grandstandEx(0.08, -1, 8, 70, null, null, { livery: "sandstone", roof: "flat" });          // WEST
+      ledFascia(0.08, -1, 8, 70, 1);
       grandstandEx(0.10, -1, 8, 60, null, null, { livery: "sandstone", roof: "flat" });           // WEST
+      ledFascia(0.10, -1, 8, 60, 1);
       grandstandEx(0.22, -1, 8, 80, null, null, { livery: "teal", roof: "cantilever" });          // NORTH
+      ledFascia(0.22, -1, 8, 80, 1);
       grandstandEx(0.36, 1, 8, 60, null, null, { livery: "teal", roof: "cantilever" });           // NORTH
+      ledFascia(0.36, 1, 8, 60, 1);
       grandstandEx(0.48, -1, 8, 60, null, null, { livery: "darkSteel", roof: "truss" });          // SOUTH
-      grandstandEx(0.56, 1, 8, 70, null, null, { livery: "sandstone", roof: "none" });            // MARINA
+      ledFascia(0.48, -1, 8, 60, 1);
+      // MARINA — dockside seating, open bleacher for the same reason as the
+      // pair at 0.68-0.74: nothing should wall off the yacht basin.
+      if (typeof bleacher === "function") {
+        bleacher(0.545, 0.578, 1, 8, {
+          rows: 6, rise: 0.74, setback: 1.0, step: 16, density: 0.5,
+          frameCol: [0.62, 0.65, 0.70], plankCol: [0.30, 0.46, 0.50],
+        });
+      } else {
+        grandstandEx(0.56, 1, 8, 70, null, null, { livery: "sandstone", roof: "none" });
+      }
       grandstandEx(0.83, -1, 8, 60, null, null, { livery: "sandstone", roof: "truss" });          // MARINA
+      ledFascia(0.83, -1, 8, 60, 1);
       grandstandEx(0.92, -1, 8, 60, null, null, { livery: "darkSteel", roof: "cantilever" });     // MAIN
+      ledFascia(0.92, -1, 8, 60, 1);
 
       // Second hotel group at s 0.44 R (Radisson / Abu Dhabi circuit area)
       // Using lit:true for proper night window glow

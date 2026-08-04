@@ -56,6 +56,7 @@
               grandstandEx, building, motorhome, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum,
               tower, forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
+              bleacher, broadleafFall, plane,
               groundedSegments, recordBarrier, circuitKit,
               signBoard, seat, addPyramid,
               spectatorHill, cameraTower, sponsorHoarding } = api;
