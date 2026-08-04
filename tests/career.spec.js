@@ -71,7 +71,8 @@ test.describe("Career — save", () => {
   test("starting a career writes a versioned save", async ({ page }) => {
     await boot(page);
     await startCareer(page);
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")));
+    // Driver slot 0 — the two modes keep separate sets of three keys each.
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career.driver.0")));
     expect(saved.v).toBe(1);
     expect(saved.flavour).toBe("driver");
     expect(saved.team).toBe("haas");
@@ -91,10 +92,14 @@ test.describe("Career — save", () => {
     const after = await page.evaluate(() => window.__apex.careerState());
     expect(after.team).toBe(before.team);
     expect(after.money).toBe(before.money);
-    await expect(page.locator("#mb-career .mb-label")).toHaveText("CONTINUE CAREER");
+    // One door, always the same words — see the modes-screen block below.
+    await expect(page.locator("#mb-career .mb-label")).toHaveText("CAREER MODES");
+    await expect(page.locator("#mb-career-sub")).toContainText("HAAS");
   });
 
   test("a save with no version field migrates instead of being discarded", async ({ page }) => {
+    // ALSO the single-save era's storage layout: this writes the old
+    // `apex26.career` key, which now has to land in the DRIVER set's slot 0.
     await page.addInitScript(() => {
       localStorage.setItem("apex26.career", JSON.stringify({
         flavour: "driver", team: "williams", seat: 0, money: 500,
@@ -103,13 +108,22 @@ test.describe("Career — save", () => {
       }));
     });
     await boot(page);
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")));
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career.driver.0")));
     expect(saved.v).toBe(1);
     expect(saved.season.pts["williams:0"]).toBe(12);   // remapped onto the stable id
     expect(saved.season.pts.SAI).toBeUndefined();
     expect(Array.isArray(saved.owned)).toBe(true);
     expect(saved.driver.code).toBe("YOU");
     expect(saved.season.round).toBe(3);                // progress preserved
+    // The legacy key is CLEARED, and stays cleared. migrateCareer() used to end
+    // in store.set("career", …), so reading slot 0 wrote the save straight back
+    // under the old name — a stale duplicate an older build would happily load.
+    const legacy = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")));
+    expect(legacy).toBeNull();
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")))).toBeNull();
+    expect(await page.evaluate(() => window.__apex.career().team)).toBe("williams");
   });
 
   test("migrating a career does NOT touch the standalone season save", async ({ page }) => {
@@ -210,6 +224,8 @@ test.describe("Career — hub", () => {
     await boot(page);
     await page.locator("#mb-career").click();
     await expect(page.locator("#career")).toBeVisible();
+    // CAREER MODES first now; an empty driver slot is what opens the form.
+    await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
     await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
     await expect(page.locator("#cr-go")).toHaveText("START CAREER");
     // Only teams that would actually sign a rookie are offered.
@@ -508,6 +524,8 @@ test.describe("Career — MY TEAM", () => {
     await boot(page);
     await page.evaluate(() => document.getElementById("mb-career").click());
     await expect(page.locator("#career")).toBeVisible();
+    await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
     // Switch to MY TEAM and the left column becomes the driver market.
     await page.evaluate(() => {
       const b = [...document.querySelectorAll(".cr-flavour")].find((x) => x.innerText.includes("MY TEAM"));
@@ -590,6 +608,34 @@ test.describe("Career — MY TEAM", () => {
     const grid = await page.evaluate(() => window.__apex.fieldState());
     const mine = grid.filter((c) => c.team === "custom");
     expect(mine.length).toBe(1);
+  });
+
+  test("MY TEAM is never offered a seat — you own the constructor", async ({ page }) => {
+    // acceptOffer() moves career.team but leaves `flavour` at "myteam", so an
+    // offer taken here put the player and their hired driver into a real team's
+    // two seats and dropped the custom team off the grid: the career being played
+    // stopped existing. The fix is that the offer is never made, and this is the
+    // guard on it.
+    await boot(page);
+    await page.evaluate(() => window.__apex.careerReset());
+    await startMyTeam(page, {});
+    await goRacing(page);
+    const after = await page.evaluate(() => {
+      window.__apex.careerSim(24);
+      window.__apex.careerRollover();
+      const c = window.__apex.career();
+      return { offers: c.offers.length, team: c.team, flavour: c.flavour,
+               roster: c.roster ? c.roster.length : 0, year: c.year,
+               left: c.deal ? c.deal.left : null };
+    });
+    expect(after.offers).toBe(0);
+    // Still your team, still your driver, and the year did move on.
+    expect(after.team).toBe("custom");
+    expect(after.flavour).toBe("myteam");
+    expect(after.roster).toBe(1);
+    expect(after.year).toBe(2027);
+    // An owner's deal has no clock: it cannot run down to a contract that expired.
+    expect(after.left).toBe(1);
   });
 });
 
@@ -1011,9 +1057,51 @@ test.describe("Career — determinism", () => {
   });
 
   test("a different seed produces a different career", async ({ page }) => {
-    const a = await seasonRun(page, 4242);
-    const b = await seasonRun(page, 777);
-    expect(b.briefs).not.toEqual(a.briefs);
+    // Read the brief sequence straight off Career.rnd rather than racing for it.
+    // seasonRun() stages a weekend and simulates 24 rounds, so doing it twice ran
+    // past the 120 s timeout — and this claim is about the DRAW, which needs no
+    // car on track. It also exercises the rnd finalizer directly: before that fix
+    // a whole season could come back as one brief repeated.
+    await boot(page);
+    const briefs = (seed) => page.evaluate((s) => {
+      window.__apex.careerReset();
+      window.__apex.career({ teamId: "haas", seat: 1, seed: s });
+      const out = [];
+      for (let r = 0; r < 24; r++) {
+        const o = Career.objectiveFor(r);
+        out.push(o.type + ":" + o.value);
+      }
+      return out;
+    }, seed);
+    const a = await briefs(4242);
+    const b = await briefs(777);
+    expect(a.length).toBe(24);
+    expect(b).not.toEqual(a);
+    // …and the same seed still reproduces itself, cheaply.
+    expect(await briefs(4242)).toEqual(a);
+  });
+
+  test("a season draws a spread of briefs, not one kind repeated", async ({ page }) => {
+    // The regression guard for the Career.rnd finalizer. FNV-1a alone left 100% of
+    // seasons missing at least one objective kind, because every key ends in the
+    // part that varies and FNV's last multiply barely disturbs the high bits —
+    // exactly the end h/2^32 reads. A uniform draw misses a kind ~2.4% of the time.
+    await boot(page);
+    const kinds = await page.evaluate(() => {
+      const seen = [];
+      for (let seed = 1; seed <= 40; seed++) {
+        window.__apex.careerReset();
+        window.__apex.career({ teamId: "haas", seat: 1, seed });
+        const s = new Set();
+        for (let r = 0; r < 24; r++) s.add(Career.objectiveFor(r).type);
+        seen.push(s.size);
+      }
+      return seen;
+    });
+    // Over 40 seasons almost all should see every kind; none should be stuck on one.
+    expect(Math.min(...kinds)).toBeGreaterThan(1);
+    const full = kinds.filter((n) => n >= 4).length;
+    expect(full).toBeGreaterThan(kinds.length * 0.7);
   });
 });
 
@@ -1109,5 +1197,722 @@ test.describe("Career — history", () => {
     expect(t.Championships).toBe(
       (archived.past.pos === 1 ? "1" : "0") + " drivers' · " +
       (archived.past.cPos === 1 ? "1" : "0") + " constructors'");
+  });
+});
+
+// ── reliability & retirements ────────────────────────────────────────────────
+// js/game/reliability.js. The rules that matter here are all invariants rather
+// than magnitudes: OFF must change nothing, ON must be reproducible, a DNF must
+// classify last and score nothing, and NONE of it may move the sim RNG stream.
+
+// A career whose seed is known to retire the player several times over a season
+// (Haas is tier 3, and the draw is a pure function of (seed, round, driverId) —
+// see armReliability in game.js). Any seed works; this one has margin, so the
+// test is asserting the mechanism rather than a coin flip.
+const DNF_SEED = 99;
+
+// Start a career, stage a weekend, then settle a whole season at `level` and
+// report what the reliability model did to it.
+async function reliabilitySeason(page, level, careerSeed) {
+  await boot(page);
+  await page.evaluate((s) => {
+    window.__apex.careerReset();
+    window.__apex.career({ teamId: "haas", seat: 1, seed: s });
+  }, careerSeed);
+  await goRacing(page);
+  return page.evaluate((lvl) => {
+    window.__apex.reliability(lvl);
+    const rounds = window.__apex.careerSim(24);
+    const c = window.__apex.career();
+    return {
+      level: window.__apex.reliability(),
+      // The reason per round, from settleRound()'s return AND from the row it
+      // wrote onto the save. Two different code paths that must agree.
+      settled: rounds.map((r) => r.round + ":" + (r.dnf || "-")),
+      rows: c.results.map((r) => (r.r + 1) + ":" + (r.dnf || "-")),
+      dnfs: rounds.filter((r) => r.dnf).length,
+      // The whole field of the LAST simulated round.
+      fieldOut: window.__apex.fieldState().filter((f) => f.retired).length,
+      stateDnfs: window.__apex.careerState().dnfs,
+    };
+  }, level);
+}
+
+test.describe("Career — reliability", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("OFF is the shipped default and nothing ever retires", async ({ page }) => {
+    await boot(page);
+    expect(await page.evaluate(() => window.__apex.reliability())).toBe("off");
+    const off = await reliabilitySeason(page, "off", DNF_SEED);
+    expect(off.dnfs).toBe(0);
+    expect(off.fieldOut).toBe(0);
+    expect(off.stateDnfs).toBe(0);
+    expect(off.rows.every((r) => r.endsWith(":-"))).toBe(true);
+  });
+
+  test("a seeded season retires the same cars for the same reasons every time", async ({ page }) => {
+    const a = await reliabilitySeason(page, "real", DNF_SEED);
+    const b = await reliabilitySeason(page, "real", DNF_SEED);
+    expect(a.dnfs).toBeGreaterThanOrEqual(2);   // the model actually fired
+    expect(b).toEqual(a);                       // and fired identically
+    expect(a.rows).toEqual(a.settled);          // save row == settleRound() result
+    expect(a.stateDnfs).toBe(a.dnfs);
+  });
+
+  test("a different career seed retires a different set", async ({ page }) => {
+    const a = await reliabilitySeason(page, "real", DNF_SEED);
+    const b = await reliabilitySeason(page, "real", 4242);
+    expect(b.settled).not.toEqual(a.settled);
+  });
+
+  test("a retirement classifies below every finisher and scores no points", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await goRacing(page);
+    const out = await page.evaluate(() => {
+      // Forced rather than waited for: the classification rule is what is under
+      // test, not the probability of reaching it.
+      const gone = [window.__apex.retire(1, "gearbox"), window.__apex.retire(4, "accident")];
+      window.__apex.finishRace();
+      const season = window.__apex.career().season;
+      const rows = [];
+      for (let i = 0; i < 22; i++) {
+        const c = window.__apex.carAt(i);
+        rows.push({ id: c.id, pos: c.finPos, retired: c.retired, why: c.dnf,
+                    pts: season.pts[c.team + ":" + c.seat] || 0 });
+      }
+      return { gone: gone.map((g) => g.idx), reasons: gone.map((g) => g.why), rows };
+    });
+    expect(out.reasons).toEqual(["gearbox", "accident"]);
+    const retired = out.rows.filter((r) => r.retired);
+    const classified = out.rows.filter((r) => !r.retired);
+    expect(retired.map((r) => r.id).sort()).toEqual(out.gone.slice().sort());
+    // Below EVERY finisher, and scoring nothing.
+    const worstFinisher = Math.max(...classified.map((r) => r.pos));
+    for (const r of retired) {
+      expect(r.pos).toBeGreaterThan(worstFinisher);
+      expect(r.pts).toBe(0);
+    }
+    // The cars above them still got what their positions earn: P1 is 25 in
+    // Teams.POINTS, so a shifted index would show up right here.
+    expect(classified.find((r) => r.pos === 1).pts).toBe(25);
+  });
+
+  test("the reliability draw does not move the sim RNG stream", async ({ page }) => {
+    // makeCars() spends exactly one simRnd() per driver via driverSkill(), and the
+    // stream position after it is a hard contract. A reliability draw taken from
+    // simRnd would shift every seeded result that follows — this is the guard.
+    const grid = async (level) => {
+      await boot(page);
+      return page.evaluate((lvl) => {
+        window.__apex.seed(7);
+        window.__apex.reliability(lvl);
+        window.__apex.race("monza");
+        const out = { skills: [], plan: window.__apex.retirements() };
+        for (let i = 0; i < 22; i++) out.skills.push(window.__apex.carAt(i).skill);
+        return out;
+      }, level);
+    };
+    const off = await grid("off");
+    const real = await grid("real");
+    expect(off.skills.length).toBe(22);
+    expect(real.skills).toEqual(off.skills);
+    // ...and the plan is real, so the equality above is not vacuous.
+    expect(off.plan.length).toBe(0);
+    expect(real.plan.length).toBeGreaterThan(0);
+    for (const p of real.plan) {
+      expect(p.at).toBeGreaterThan(0);
+      expect(["engine", "gearbox", "accident"]).toContain(p.why);
+    }
+  });
+
+  test("RELIABILITY is a persisted race setting", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await page.locator("#cr-go").click();
+    const chips = page.locator("#rs-reliab .sel-chip");
+    await expect(chips).toHaveCount(3);
+    await chips.nth(2).click();      // REAL
+    await expect(chips.nth(2)).toHaveAttribute("aria-pressed", "true");
+    expect(await page.evaluate(() => localStorage.getItem("apex26.reliability"))).toContain("real");
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    expect(await page.evaluate(() => window.__apex.reliability())).toBe("real");
+  });
+});
+
+// ── save slots ───────────────────────────────────────────────────────────────
+// SIX saves: three DRIVER slots and three MY TEAM slots, in SEPARATE SETS. The
+// property under test throughout is isolation — between slots, and between the
+// two sets, so that neither mode can cost the other room.
+
+test.describe("Career — slots", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  // Four careers across both sets, in a known order.
+  async function fourCareers(page) {
+    await boot(page);
+    await page.evaluate(() => {
+      window.__apex.career({ teamId: "haas", seat: 1, seed: 11 });
+      window.__apex.career({ teamId: "williams", seat: 0, seed: 33 });
+      window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 22 });
+      window.__apex.career({ flavour: "myteam", hire: "FER2", seed: 44 });
+    });
+  }
+  const addr = (s) => s.flavour + s.i + ":" + (s.used ? s.team : "-");
+
+  test("two sets of three, filled independently", async ({ page }) => {
+    await fourCareers(page);
+    const slots = await page.evaluate(() => window.__apex.careerSlots());
+    expect(slots.map(addrOf)).toEqual([
+      "driver0:haas", "driver1:williams", "driver2:-",
+      "myteam0:custom", "myteam1:custom", "myteam2:-",
+    ]);
+    function addrOf(x) { return x.flavour + x.i + ":" + (x.used ? x.team : "-"); }
+    // One set can be asked for on its own.
+    const mine = await page.evaluate(() => window.__apex.careerSlots("myteam"));
+    expect(mine).toHaveLength(3);
+    expect(mine.every((x) => x.flavour === "myteam")).toBe(true);
+  });
+
+  test("a career's MODE decides its set, whatever slot is asked for", async ({ page }) => {
+    // The invariant that keeps the sets meaningful: passing slot 2 to a driver
+    // career must fill DRIVER slot 2, never MY TEAM's.
+    await fourCareers(page);
+    await page.evaluate(() => window.__apex.career({ teamId: "audi", seat: 1, seed: 55, slot: 2 }));
+    const slots = await page.evaluate(() => window.__apex.careerSlots());
+    expect(slots.map((x) => x.flavour + x.i + ":" + (x.used ? x.team : "-"))).toEqual([
+      "driver0:haas", "driver1:williams", "driver2:audi",
+      "myteam0:custom", "myteam1:custom", "myteam2:-",
+    ]);
+  });
+
+  test("switching leaves every other slot exactly as it was", async ({ page }) => {
+    await fourCareers(page);
+    const out = await page.evaluate(() => {
+      window.__apex.careerSlots("driver", 0);
+      window.__apex.careerMoney(4321);          // spend in driver slot 0 only
+      return {
+        d0: window.__apex.careerSlots("driver", 0).money,
+        d1: window.__apex.careerSlots("driver", 1).money,
+        m0: window.__apex.careerSlots("myteam", 0).money,
+      };
+    });
+    expect(out.d0).toBe(4321);
+    expect(out.d1).not.toBe(4321);
+    expect(out.m0).not.toBe(4321);
+  });
+
+  test("deleting one leaves the other five", async ({ page }) => {
+    await fourCareers(page);
+    const after = await page.evaluate(() => ({
+      used: window.__apex.careerSlotDelete("myteam", 0).map((s) => s.used),
+      live: window.__apex.career(),
+    }));
+    expect(after.used).toEqual([true, true, false, false, true, false]);
+    expect(after.live).not.toBeNull();   // something is still live to continue
+  });
+
+  test("the slots survive a reload, and the live one is remembered", async ({ page }) => {
+    await fourCareers(page);
+    await page.evaluate(() => window.__apex.careerSlots("myteam", 1));
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    const st = await page.evaluate(() => ({
+      slot: window.__apex.careerState().slot,
+      flavour: window.__apex.careerState().slotFlavour,
+      used: window.__apex.careerSlots().map((s) => s.used),
+    }));
+    expect(st.flavour).toBe("myteam");
+    expect(st.slot).toBe(1);
+    expect(st.used).toEqual([true, true, false, true, true, false]);
+  });
+});
+
+// ── the CAREER MODES screen ──────────────────────────────────────────────────
+// The title button's one door. It exists because the old one went straight into
+// whichever save was last touched, so a player with a single driver career had
+// no way to reach MY TEAM, their other saves, or the delete that makes room.
+
+test.describe("Career — the modes screen", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("the title button opens it, with or without a save", async ({ page }) => {
+    await boot(page);
+    await expect(page.locator("#mb-career .mb-label")).toHaveText("CAREER MODES");
+    await page.locator("#mb-career").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREER MODES");
+    // Both modes, three slots each, and a guide apiece.
+    await expect(page.locator(".cr-slot")).toHaveCount(6);
+    await expect(page.locator("#cr-guide-driver")).toBeVisible();
+    await expect(page.locator("#cr-guide-myteam")).toBeVisible();
+    await expect(page.locator("#cr-left")).toContainText("DRIVER CAREER");
+    await expect(page.locator("#cr-right")).toContainText("MY TEAM");
+    // Nothing to press in the foot: every action here is a card.
+    await expect(page.locator("#cr-go")).toBeHidden();
+  });
+
+  test("an empty slot starts that mode, in that slot", async ({ page }) => {
+    await boot(page);
+    await page.locator("#mb-career").click();
+    // The second MY TEAM slot — so both halves of the address have to survive.
+    await page.locator("#cr-right .cr-slot").nth(1).locator(".cr-slot-main").click();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+    // The form opens on MY TEAM rather than asking which mode again.
+    await expect(page.locator(".cr-flavour").nth(1)).toHaveAttribute("aria-pressed", "true");
+    await page.locator("#cr-go").click();
+    const st = await page.evaluate(() => window.__apex.careerState());
+    expect(st.flavour).toBe("myteam");
+    expect(st.slotFlavour).toBe("myteam");
+    expect(st.slot).toBe(1);
+  });
+
+  test("a used slot continues that career", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => {
+      window.__apex.career({ teamId: "haas", seat: 1, seed: 7 });
+      window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 8 });
+    });
+    await page.locator("#cr-back").click();
+    await page.locator("#mb-career").click();
+    await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREER 2026");
+    const info = await page.evaluate(() => ({
+      flow: window.__apex.info().flow, team: window.__apex.career().team,
+    }));
+    expect(info.flow).toBe("career");
+    expect(info.team).toBe("haas");
+  });
+
+  test("the hub gets back to it", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await page.locator("#cr-slots").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREER MODES");
+    // BACK from here returns to the career, not to the title screen.
+    await page.locator("#cr-back").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREER 2026");
+  });
+
+  test("changing mode on the setup form moves the slot with it", async ({ page }) => {
+    // Slot 3 of the driver set is not slot 3 of MY TEAM, so the target has to
+    // follow the mode or the career lands somewhere the player never pointed.
+    await boot(page);
+    await page.evaluate(() => {
+      window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 1 });   // myteam 0
+    });
+    await page.locator("#cr-back").click();
+    await page.locator("#mb-career").click();
+    await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
+    await page.evaluate(() => {
+      const b = [...document.querySelectorAll(".cr-flavour")].find((x) => x.innerText.includes("MY TEAM"));
+      b.click();
+    });
+    await page.locator("#cr-go").click();
+    const st = await page.evaluate(() => window.__apex.careerState());
+    expect(st.slotFlavour).toBe("myteam");
+    expect(st.slot).toBe(1);            // the first FREE MY TEAM slot, not driver's 0
+    // ...and the MY TEAM career already there is untouched.
+    const used = await page.evaluate(() => window.__apex.careerSlots("myteam").map((s) => s.used));
+    expect(used).toEqual([true, true, false]);
+  });
+});
+
+// ── making and unmaking careers ──────────────────────────────────────────────
+
+test.describe("Career — new and deleted", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  const fillDriver = (page) => page.evaluate(() => {
+    ["haas", "williams", "audi"].forEach((t, i) =>
+      window.__apex.career({ teamId: t, seat: 1, seed: 10 + i }));
+  });
+
+  async function toModes(page) {
+    await page.locator("#cr-back").click();
+    await expect(page.locator("#overlay")).toBeVisible();
+    await page.locator("#mb-career").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREER MODES");
+  }
+
+  test("a full DRIVER set does not cost MY TEAM its room", async ({ page }) => {
+    // The whole point of separate sets. Three driver careers must leave all
+    // three MY TEAM slots open.
+    await boot(page);
+    await fillDriver(page);
+    await toModes(page);
+    await expect(page.locator("#cr-left .cr-slot.empty")).toHaveCount(0);
+    await expect(page.locator("#cr-right .cr-slot.empty")).toHaveCount(3);
+    await page.locator("#cr-right .cr-slot").nth(0).locator(".cr-slot-main").click();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+  });
+
+  test("deleting frees that slot, and only that slot", async ({ page }) => {
+    await boot(page);
+    await fillDriver(page);
+    await toModes(page);
+    const del = () => page.locator("#cr-left .cr-slot").nth(1).locator(".cr-slot-del");
+    await del().click();
+    await expect(del()).toHaveText("DELETE?");     // the first press only arms it
+    expect(await page.evaluate(() => window.__apex.careerSlots("driver")[1].used)).toBe(true);
+    await del().click();
+    const teams = await page.evaluate(() => window.__apex.careerSlots("driver").map((s) => s.team));
+    expect(teams[0]).toBe("haas");
+    expect(teams[1]).toBeUndefined();              // the freed one
+    expect(teams[2]).toBe("audi");
+    await page.locator("#cr-left .cr-slot").nth(1).locator(".cr-slot-main").click();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+  });
+
+  test("arming a delete in one mode does not arm the same slot in the other", async ({ page }) => {
+    // Armed state is keyed by the full address. Keyed by index alone this would
+    // put DELETE? on two cards for one press, on two different careers.
+    await boot(page);
+    await page.evaluate(() => {
+      window.__apex.career({ teamId: "haas", seat: 1, seed: 2 });
+      window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 3 });
+    });
+    await toModes(page);
+    await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-del").click();
+    await expect(page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-del")).toHaveText("DELETE?");
+    await expect(page.locator("#cr-right .cr-slot").nth(0).locator(".cr-slot-del")).toHaveText("DELETE");
+  });
+
+  test("deleting everything leaves a screen you can still start from", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => {
+      window.__apex.career({ teamId: "haas", seat: 1, seed: 2 });
+      window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 3 });
+    });
+    await toModes(page);
+    for (const pane of ["#cr-left", "#cr-right"]) {
+      const del = () => page.locator(pane + " .cr-slot").nth(0).locator(".cr-slot-del");
+      await del().click();
+      await del().click();
+    }
+    expect(await page.evaluate(() => window.__apex.career())).toBeNull();
+    await expect(page.locator(".cr-slot.empty")).toHaveCount(6);
+    // With nothing saved the button advertises the two modes rather than sitting
+    // blank — there is no career to name, but there is still something to say.
+    await expect(page.locator("#mb-career-sub")).toHaveText("DRIVER CAREER  ·  MY TEAM");
+    await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+  });
+});
+
+// ── the in-game guide ────────────────────────────────────────────────────────
+// TWO documents sharing one sheet, because a driver career and MY TEAM are
+// different games — you are paid or you pay, hired or hiring — and a guide that
+// hedged between them would describe neither. Every figure in it is read from
+// Career's own constants, so these are really asking "does the guide still
+// agree with the rules it describes".
+
+test.describe("Career — the guide", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("the modes screen carries one per mode", async ({ page }) => {
+    await boot(page);
+    await page.locator("#mb-career").click();
+    await page.locator("#cr-guide-driver").click();
+    await expect(page.locator("#cg-title")).toHaveText("HOW CAREER WORKS");
+    await page.locator("#cg-back").click();
+    // Reading is not a commitment: still on the modes screen, still nothing saved.
+    await expect(page.locator("#cr-title")).toHaveText("CAREER MODES");
+    expect(await page.evaluate(() => window.__apex.career())).toBeNull();
+    await page.locator("#cr-guide-myteam").click();
+    await expect(page.locator("#cg-title")).toHaveText("HOW MY TEAM WORKS");
+    const body = await page.locator("#cg-body").innerText();
+    expect(body).toContain("NOBODY CAN SIGN YOU");
+    expect(body).toContain("THE DRIVER YOU HIRE");
+  });
+
+  test("the hub names the mode actually being played", async ({ page }) => {
+    // A MY TEAM owner pressing "HOW CAREER WORKS" would get a document about
+    // signing contracts they can never be offered.
+    await boot(page);
+    await startCareer(page);
+    await expect(page.locator("#cr-guide .cr-record-cta")).toHaveText("HOW CAREER WORKS");
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 3 }));
+    await expect(page.locator("#cr-guide .cr-record-cta")).toHaveText("HOW MY TEAM WORKS");
+    await page.locator("#cr-guide").click();
+    await expect(page.locator("#cg-title")).toHaveText("HOW MY TEAM WORKS");
+  });
+
+  test("its numbers come from the rules, not from prose", async ({ page }) => {
+    // The guarantee that matters: tuning the economy cannot leave the guide
+    // quoting a price the garage no longer charges.
+    await boot(page);
+    await startCareer(page);
+    await page.locator("#cr-guide").click();
+    const body = await page.locator("#cg-body").innerText();
+    const c = await page.evaluate(() => ({
+      win: Career.PRIZE[0], last: Career.prizeFor(22), bonus: Career.OBJ_BONUS,
+      mult: Career.RESEARCH_MULT, cap: Career.BUDGET_MULT[Career.BUDGET_MULT.length - 1],
+      slots: Career.SLOTS,
+    }));
+    expect(body).toContain(c.win.toLocaleString() + " cr");
+    expect(body).toContain(c.last.toLocaleString() + " cr");
+    expect(body).toContain("+" + c.bonus.toLocaleString() + " cr");
+    expect(body).toContain(c.mult + "x the part's price");
+    expect(body).toContain(c.cap + "x");
+    expect(body).toContain(c.slots + " for this mode, " + (c.slots * 2) + " in all");
+  });
+
+  test("MY TEAM's guide prices the actual driver market", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 4 }));
+    await page.locator("#cr-guide").click();
+    const body = await page.locator("#cg-body").innerText();
+    const asks = await page.evaluate(() => Career.freeAgents().map((a) => a.ask));
+    expect(body).toContain(Math.min(...asks) + " cr a round");
+    expect(body).toContain(Math.max(...asks) + " cr a round");
+    const start = await page.evaluate(() => Career.START_MONEY.myteam);
+    expect(body).toContain(start.toLocaleString() + " cr");
+  });
+});
+
+// ── the economy, made visible ────────────────────────────────────────────────
+// settleRound() computed prize money, salary, the points bonus, the brief and
+// the wage bill every round and the driven path threw all of it away. These pin
+// that it reaches the screen, and that the numbers on it are the ones the rules
+// actually applied.
+
+test.describe("Career — the settlement", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("a career round shows what it paid, and the total is the new balance", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    const before = await page.evaluate(() => window.__apex.careerState().money);
+    await goRacing(page);
+    await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
+    await expect(page.locator("#results")).toBeVisible({ timeout: 10_000 });
+    const box = page.locator(".res-settle");
+    await expect(box).toBeVisible();
+    await expect(box).toContainText("ROUND SETTLED");
+    // The total is the balance the save actually holds — not a number computed
+    // twice and allowed to drift.
+    const after = await page.evaluate(() => window.__apex.careerState().money);
+    await expect(box.locator(".total .res-settle-v")).toHaveText(after.toLocaleString() + " cr");
+    expect(after).not.toBe(before);
+  });
+
+  test("a Grand Prix never inherits a career round's earnings panel", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await goRacing(page);
+    await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
+    await expect(page.locator(".res-settle")).toBeVisible();
+    await page.locator("#res-menu").click();
+    await page.locator("#mb-race").click();
+    await page.locator("#sel-go").click();
+    await page.locator("#rs-go").click();
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
+    await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
+    await expect(page.locator("#results")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".res-settle")).toHaveCount(0);
+  });
+});
+
+// ── extra funds ──────────────────────────────────────────────────────────────
+
+test.describe("Career — extra funds", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("off by default, and the grant adds exactly what it says", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    expect(await page.evaluate(() => window.__apex.careerFreeMoney())).toBe(false);
+    const out = await page.evaluate(() => {
+      const before = window.__apex.careerState().money;
+      const after = window.__apex.careerGrant();
+      return { before, after, grant: Career.GRANT };
+    });
+    expect(out.after).toBe(out.before + out.grant);
+  });
+
+  test("unlimited money does NOT raise the fitted cap", async ({ page }) => {
+    // The whole point: money stops being the constraint, the cap does not move.
+    // If this ever fails, the cheat has eaten the rule the mode is built on.
+    await boot(page);
+    await startCareer(page);
+    const out = await page.evaluate(() => {
+      const capBefore = window.__apex.careerState().budget;
+      window.__apex.careerFreeMoney(true);
+      const st = window.__apex.careerState();
+      // Research everything the catalog has; free money should permit it...
+      let bought = 0;
+      for (const cat of Parts.CATALOG)
+        for (const o of cat.options) if (o.cost && Career.research(o)) bought++;
+      return { capBefore, capAfter: window.__apex.careerState().budget,
+               money: window.__apex.careerState().money, bought, owned: st.owned };
+    });
+    expect(out.bought).toBeGreaterThan(20);      // the cheat really did buy them
+    expect(out.money).toBeGreaterThan(0);        // ...and cost nothing
+    expect(out.capAfter).toBe(out.capBefore);    // but the cap is untouched
+  });
+
+  test("the toggle survives a reload and is not part of the save", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await page.evaluate(() => window.__apex.careerFreeMoney(true));
+    // Not in the career object — it is a preference, not a fact about a career.
+    expect(await page.evaluate(() => window.__apex.career().freeMoney)).toBeUndefined();
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    expect(await page.evaluate(() => window.__apex.careerFreeMoney())).toBe(true);
+  });
+});
+
+// ── the facility ─────────────────────────────────────────────────────────────
+
+test.describe("Career — the facility", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("each level permanently cuts what research costs", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    const out = await page.evaluate(() => {
+      const opt = Parts.CATALOG.find((c) => c.id === "engine").options.find((o) => o.cost);
+      const before = Career.researchCost(opt);
+      window.__apex.careerMoney(999999);
+      const f1 = window.__apex.careerFacility(true);
+      const mid = Career.researchCost(opt);
+      window.__apex.careerFacility(true);
+      return { before, mid, after: Career.researchCost(opt), level: f1.level };
+    });
+    expect(out.level).toBe(1);
+    expect(out.mid).toBeLessThan(out.before);
+    expect(out.after).toBeLessThan(out.mid);
+  });
+
+  test("it runs out of levels, not of money", async ({ page }) => {
+    // The sink exists because ownership converges; it must therefore have a
+    // ceiling that is reached by LEVELS rather than by being unaffordable.
+    await boot(page);
+    await startCareer(page);
+    const out = await page.evaluate(() => {
+      window.__apex.careerMoney(9999999);
+      for (let i = 0; i < 20; i++) window.__apex.careerFacility(true);
+      return window.__apex.careerFacility();
+    });
+    expect(out.level).toBe(out.max);
+    expect(out.cost).toBeNull();                    // nothing left to buy
+    expect(out.discount).toBeGreaterThan(0.3);
+  });
+});
+
+// ── MY TEAM: the hire's contract ─────────────────────────────────────────────
+// roster[0].left was written at signing and read by NOTHING, so the one
+// relationship the mode is built on was a static number.
+
+test.describe("Career — the hire's contract", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("it expires, and an empty seat blocks the weekend", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "NKM", seed: 4242 }));
+    expect(await page.evaluate(() => window.__apex.careerHire())).toBeNull();  // under contract
+    await goRacing(page);
+    const pending = await page.evaluate(() => {
+      window.__apex.careerSim(24);
+      window.__apex.careerRollover();
+      return window.__apex.careerHire();
+    });
+    expect(pending).not.toBeNull();
+    expect(["renew", "left"]).toContain(pending.kind);
+    // The hub says so, and will not let the season start.
+    await page.evaluate(() => window.__apex.career(true));
+    await expect(page.locator("#cr-go")).toBeDisabled();
+    await expect(page.locator("#cr-go")).toHaveText("SIGN A DRIVER");
+  });
+
+  test("re-signing takes their asking price and clears the block", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "NKM", seed: 4242 }));
+    await goRacing(page);
+    const out = await page.evaluate(() => {
+      window.__apex.careerSim(24);
+      window.__apex.careerRollover();
+      const p = window.__apex.careerHire();
+      if (!p || p.kind !== "renew") return { skipped: true, kind: p && p.kind };
+      window.__apex.careerHire("renew");
+      return { ask: p.ask, salary: window.__apex.career().roster[0].salary,
+               pending: window.__apex.careerHire() };
+    });
+    if (out.skipped) { expect(out.kind).toBe("left"); return; }
+    expect(out.salary).toBe(out.ask);
+    expect(out.pending).toBeNull();
+  });
+
+  test("signing somebody else replaces the seat and its wage", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "NKM", seed: 4242 }));
+    await goRacing(page);
+    const out = await page.evaluate(() => {
+      window.__apex.careerSim(24);
+      window.__apex.careerRollover();
+      window.__apex.careerHire("OKO");
+      const st = window.__apex.careerState();
+      return { code: st.roster[0].code, wages: st.wages,
+               ask: Career.freeAgents().find((a) => a.code === "OKO").ask,
+               pending: window.__apex.careerHire() };
+    });
+    expect(out.code).toBe("OKO");
+    expect(out.wages).toBe(out.ask);
+    expect(out.pending).toBeNull();
+  });
+
+  test("a driver career has no hire to resolve", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    expect(await page.evaluate(() => window.__apex.careerHire())).toBeNull();
+  });
+});
+
+// ── MY TEAM: sponsors ────────────────────────────────────────────────────────
+
+test.describe("Career — sponsors", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("MY TEAM has one and a driver career does not", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    expect(await page.evaluate(() => window.__apex.careerState().sponsor)).toBeNull();
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 7 }));
+    const sp = await page.evaluate(() => window.__apex.careerState().sponsor);
+    expect(sp).not.toBeNull();
+    expect(sp.window).toBeGreaterThan(1);          // a season-long brief, not a weekend one
+    expect(sp.pay).toBeGreaterThan(0);
+    expect(sp.label.length).toBeGreaterThan(10);
+    await expect(page.locator("#cr-left")).toContainText("SPONSOR");
+  });
+
+  test("it is drawn from the seed, so a reload cannot reroll it", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 7 }));
+    const a = await page.evaluate(() => window.__apex.careerState().sponsor.label);
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    expect(await page.evaluate(() => window.__apex.careerState().sponsor.label)).toBe(a);
+  });
+
+  test("a window pays at most once across a whole season", async ({ page }) => {
+    // paidSponsors is what stops a reload double-paying and an unmet window
+    // being retried by replaying the round.
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 7 }));
+    await goRacing(page);
+    const out = await page.evaluate(() => {
+      const rounds = window.__apex.careerSim(24) || [];
+      const paid = rounds.filter((r) => r.sponsorPay > 0);
+      const c = window.__apex.career();
+      return { paidRounds: paid.length, windows: c.paidSponsors.length,
+               unique: new Set(c.paidSponsors).size };
+    });
+    expect(out.windows).toBeGreaterThan(0);
+    expect(out.unique).toBe(out.windows);          // never recorded twice
+    expect(out.paidRounds).toBeLessThanOrEqual(out.windows);
   });
 });

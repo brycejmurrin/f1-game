@@ -1061,7 +1061,10 @@ const AgentView = (function () {
       const p = G.player;
       const rescued = p.rescueLastT != null && (G.raceT - p.rescueLastT) < 0.5;
       let reason = null;
-      if (p.finished) reason = "finished";
+      // Retirement outranks the rest: a car that stopped is not going to finish,
+      // un-spin or be rescued, so an interval that ends here has really ended.
+      if (p.retired) reason = "retired";
+      else if (p.finished) reason = "finished";
       else if (p.wrongWay) reason = "wrong_way";
       else if (rescued) reason = "rescued";
       return { done: reason != null, reason };
@@ -2359,7 +2362,7 @@ const AgentView = (function () {
         act: {
           "rollout({seconds,dt,input,policy,policyHz,samples})":
             "drive an interval, return a digest instead of every frame",
-          "terminal()": "{done, reason} — finished|wrong_way|rescued|null",
+          "terminal()": "{done, reason} — retired|finished|wrong_way|rescued|null",
           "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once",
           "agentHelp()": "this manifest",
         },
@@ -2389,7 +2392,7 @@ const AgentView = (function () {
           "pacenotes": "the road ahead as a co-driver call: dir + severity 1-6 @ distance",
           "rivals[].closingMps": "+ = the gap is shrinking, whichever side they are on",
           "rivals[].pace": "AI skill ~0.92-1.02; a slower car will not hold the position",
-          "terminal.reason": "why the episode ended — finished vs wrong_way vs rescued",
+          "terminal.reason": "why the episode ended — retired vs finished vs wrong_way vs rescued",
           "session.seed": "replay this exact episode with reset(frac, speed, x, seed)",
         },
         // These __apex hooks ALREADY return clean JSON — call them directly, no

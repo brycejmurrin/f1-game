@@ -39,6 +39,7 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **test-coverage-audit.mjs** | Coverage guard (`npm run test:audit`) — every `tests/*.spec.js` must be reachable from at least one `test:<group>` npm script, so a pre-push group run can't silently skip a spec. Exit 1 if any spec is orphaned. |
 | **test-shards.sh** | Runs whole npm test groups concurrently, one port + log per group, with a pass/fail summary. `tools/test-shards.sh smoke api collision`; `WORKERS=N` sets workers per group. |
 
+| **career-economy.mjs** | Measures the CAREER economy against the catalog it buys from — sims a season per starting team through the real `Career.settleRound()` and reports how many median parts a year's income actually affords. `RESEARCH_MULT` is the one knob; re-measure after changing it. Exists because `QUALI_TRIM` shipped as a reasoned guess and was 27% wrong, and the economy is the same class of number. `--years N` follows the arc. | — |
 | **agent.mjs** | The agent toolbelt as a CLI — boots the game headless and calls one agent-view surface (`world`/`track`/`scene`/`rollout`/`help`) with the staging done correctly. `agent.mjs <track> <cmd> [flags]`. | agent-view |
 | **import-models.mjs** | Batch glTF → AX26 model importer. Separate from `assets.mjs bake-model`, which takes one local `.glb` through the game's own `js/render/gltf.js`: real CC0 model PACKS are directories of `.gltf` + sidecar `.bin` + textures, so this repacks them. Gated by `tests/import-models.test.mjs`. | — |
 | **assets.mjs** | Asset bake CLI (AUTHOR-TIME ONLY — never loaded by the game). `bake-synthetic` rebuilds `assets/pack` with no network or deps; `verify` checks the licence allow-list, md5s and size budget. | — |
@@ -75,3 +76,9 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   port (or `:3456`).
 - Anything that edits `js/*`/`css/*` still needs a `?v=N` cache bump (bump-cache).
 - Never write disposable output to `/tmp`; use `artifacts/tmp/` or the standard `scratch/` subtrees.
+- `rtc-e2e.mjs` — a REAL WebRTC handshake between two pages (`npm run rtc:e2e`).
+  Covers the one path nothing else can: the loopback transport has no SDP, and
+  the lobby spec uses a fake transport because a real `RTCPeerConnection` never
+  finishes ICE gathering in a sandboxed CI browser. Deliberately outside every
+  test group — it takes minutes and depends on the host's network stack. Run it
+  by hand after touching `js/net/handshake.js` or `js/net/transport.js`.

@@ -164,7 +164,7 @@
           id: "kit:spa:pit-building", frac: 0.006, side: -1, gap: 9,
           size: [14, 11, 64], garages: 16, required: true,
         });
-        circuitKit.raceControl({
+        circuitKit.raceControl({ style: "lattice",
           id: "kit:spa:race-control", frac: 0.014, side: -1, gap: 45,
           size: [12, 24, 14], required: true,
         });

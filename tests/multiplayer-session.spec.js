@@ -249,6 +249,57 @@ test.describe("multiplayer session", () => {
     expect(out.laps[1].lap).toBe(2);
   });
 
+  test("the guest adopts the host's classification, not its own", async ({ page }) => {
+    // Both peers can see both human cars, but only the host sees every AI
+    // finish first-hand — and two independently-sorted orders disagree exactly
+    // when it matters, in a close finish.
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0, role: "guest" });
+      const n = A.carRoles().length;
+      // A verdict that REVERSES the natural order, so adopting it is visible.
+      const verdict = [];
+      for (let i = n - 1; i >= 0; i--) verdict.push({ i, t: 100 + (n - i), p: 0, lap: 3 });
+      A.netPeerEvent("result", verdict, 1000);
+      for (let t = 1020; t <= 1200; t += 20) A.netTick(t);
+
+      const wantWinner = A.carAt(n - 1).code;
+
+      A.setLap(3);
+      A.finishRace();
+      // The RESULTS SCREEN is the consumer of the classification — fieldState()
+      // deliberately sorts by progress, not by finishing position, so it would
+      // not show whether the verdict was adopted at all.
+      const rows = Array.from(document.querySelectorAll("#results .res-row"))
+        .map((r) => (r.querySelector(".res-name") || {}).textContent || "");
+      return { rows, wantWinner, got: A.net().peerResult, n };
+    });
+    expect(out.got).toBe(true);
+    expect(out.rows.length).toBeGreaterThan(1);
+    // The host said the LAST grid slot finished first; the guest must agree.
+    expect(out.rows[0]).toContain(out.wantWinner);
+  });
+
+  test("the guest flies the host's flags rather than deciding its own", async ({ page }) => {
+    // Debris is generated locally and is NOT replicated, so two peers really do
+    // see different hazards. Left to decide independently they would fly
+    // different flags for the same race.
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0, role: "guest" });
+      const before = A.caution().level;
+      A.netPeerEvent("caution", { level: 2, sector: 1, frac: 0.4, cause: "VSC", total: 7 }, 1000);
+      for (let t = 1020; t <= 1200; t += 20) A.netTick(t);
+      const after = A.caution();
+      return { before, after };
+    });
+    expect(out.after).toBeTruthy();
+    expect(out.after.level).toBe(2);
+    expect(out.after.cause).toBe("VSC");
+  });
+
   test("contact with a rival pushes MY car, and never theirs", async ({ page }) => {
     // The ownership rule under contact. A rival is posed from the wire and
     // re-posed on the next packet, so any separation impulse we apply to it is

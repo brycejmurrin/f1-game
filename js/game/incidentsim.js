@@ -230,7 +230,9 @@ const IncidentSim = (function () {
     // Promote car-car clusters.
     for (const [root, set] of clusters) {
       if (_incidents.length >= MAX_INCIDENTS) break;
-      let idxs = [...set].filter((i) => !_owned.has(i) && cars[i] && !cars[i].finished);
+      // A retirement is parked, not racing: taking one over would hand it back to
+      // Rapier and drive it off the spot retireCar() put it on.
+      let idxs = [...set].filter((i) => !_owned.has(i) && cars[i] && !cars[i].finished && !cars[i].retired);
       if (!idxs.length) continue;
       const relV = maxRelV.get(root) || 0;
       let kind;
@@ -243,7 +245,7 @@ const IncidentSim = (function () {
     // Promote single-car wall launches (R2), skipping any car already taken over
     // by a cluster this tick.
     for (const [i, sev] of wallCand) {
-      if (!_r2 || _owned.has(i) || !cars[i] || cars[i].finished) continue;
+      if (!_r2 || _owned.has(i) || !cars[i] || cars[i].finished || cars[i].retired) continue;
       if (_incidents.length >= MAX_INCIDENTS) break;
       startIncident("r2", [i], sev, dt);
     }

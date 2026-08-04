@@ -90,7 +90,7 @@
       if (circuitKit) {
         circuitKit.raceControl({
           id: "kit:singapore:race-control", frac: 0.58, side: -1, gap: 72,
-          size: [12, 24, 14], style: "tapered", required: true,
+          size: [12, 24, 14], style: "drum", required: true,
         });
         circuitKit.pedestrianBridge({
           id: "kit:singapore:pedestrian-bridge", frac: 0.72,

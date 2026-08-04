@@ -116,7 +116,7 @@ Read both once; do not re-fetch per tick.
   events, min clearance, per-corner min speed, terminal reason), not every frame.
   `policy` is `world => {steer,throttle,brake}`; use `world()`+`act()` for a single
   decision instead.
-- `terminal()` — `{done, reason}`: finished | wrong_way | rescued. Check it
+- `terminal()` — `{done, reason}`: retired | finished | wrong_way | rescued. Check it
   between rollouts: `rescued`/`wrong_way` means the car was picked up and put
   back, so lap timing and any distance you were accumulating are no longer
   comparable. Start a fresh episode with `reset(frac, speed, x, seed)` rather

@@ -26,13 +26,11 @@
  * header — Math.exp/sin/pow/atan2 are all implementation-defined and the
  * driving model uses all four per tick). Discrete facts that state would
  * smear — lap and sector times, race settings, the start tick, results — go
- * over the reliable channel as events instead.
- *
- * The input codec in NetSnapshot is deliberately NOT used by this loop. It
- * remains because it is the seam __apex.carInput() drives and the tests cover,
- * and because a future host-authoritative mode would need exactly it. Under
- * distributed authority nobody ever simulates anybody else's car, so nobody
- * needs anybody else's inputs.
+ * over the reliable channel as events instead. Nothing sends inputs at all:
+ * under distributed authority nobody ever simulates anybody else's car, so
+ * nobody needs anybody else's inputs. The in-memory seam (c.netInput, fed by
+ * __apex.carInput) stays, because that is what a host-authoritative mode would
+ * build on if one is ever wanted.
  */
 "use strict";
 
@@ -47,6 +45,7 @@ const NetPlay = (function () {
     START: "start",                       // host -> guest lights-out tick
     LAP: "lap",                           // completed lap / sector
     RESULT: "result",                     // final classification
+    CAUTION: "caution",                   // host -> guest race control (flags)
     BYE: "bye",                           // clean leave
   };
 
@@ -81,6 +80,36 @@ const NetPlay = (function () {
         if (sameTeam) return sameTeam;
       }
       return cars.find(free) || null;
+    }
+
+    // ---- two humans, two grid boxes ---------------------------------------
+    // gridUp() puts THE local player at P12, and it runs identically on both
+    // peers — so out of the box each player's own car and the rival's car
+    // occupy the same slot, and the rival is posed directly inside you. Found
+    // the moment two real browsers first raced: both peers reported their own
+    // car at the same s, to the metre.
+    //
+    // The rule needs no extra message and no negotiation, which is the point:
+    // the HOST keeps the slot gridUp chose, the GUEST takes the one behind it,
+    // and each peer arranges its own grid to that same pair. Both screens then
+    // agree, because a grid position maps to the same s on both (gridUp's
+    // formula reads only the slot index and track.total, and the track is the
+    // host's choice, so it is the same track).
+    function separateGrid() {
+      const cars = G.cars || [];
+      const at = (pos) => cars.find((c) => c.gridPos === pos);
+      const move = (car, pos) => {
+        const held = at(pos);
+        if (held && held !== car) G.swapGridSlots(car, held);
+      };
+      const hostPos = localCar.gridPos;          // P12 on both peers
+      const guestPos = hostPos + 1;
+      if (role === "host") {
+        move(remoteCar, guestPos);
+      } else {
+        move(localCar, guestPos);                // ...displacing whoever held it
+        move(remoteCar, hostPos);                // ...into the slot we just left
+      }
     }
 
     // ---- posing a rival ---------------------------------------------------
@@ -164,6 +193,7 @@ const NetPlay = (function () {
       opts = opts || {};
       peerLaps = [];
       peerResult = null;
+      resultWaitFrom = null;
       if (!opts.transport && !opts.session) {
         return { ok: false, error: "no_transport", message: "No connection to race over." };
       }
@@ -187,6 +217,7 @@ const NetPlay = (function () {
           if (name === EV.START && d && d.at != null) armStart(d.at, d.hold);
           if (name === EV.LAP && d) peerLaps.push(d);
           if (name === EV.RESULT && d) peerResult = d;
+          if (name === EV.CAUTION && d && G.applyCaution) G.applyCaution(d);
         });
       }
 
@@ -202,6 +233,7 @@ const NetPlay = (function () {
       // driving comes off the wire rather than out of updateCar.
       G.setCarRole(remoteCar, true, false);
       remoteCar.mods = opts.peerMods || remoteCar.mods || null;
+      separateGrid();
 
       interp = NetSnapshot.createInterp({
         total: G.track.total,
@@ -244,8 +276,31 @@ const NetPlay = (function () {
     function reportLap(data) {
       return session ? session.sendEvent(EV.LAP, data) : false;
     }
+    // Race control is the HOST's. Debris is generated locally from each car's
+    // own behaviour and is NOT replicated, so two peers genuinely see different
+    // hazards — left to compute flags independently they would fly different
+    // ones for the same race, which is worse than a slightly stale flag.
+    function reportCaution(data) {
+      return (session && role === "host") ? session.sendEvent(EV.CAUTION, data) : false;
+    }
+
     function reportResult(data) {
       return session ? session.sendEvent(EV.RESULT, data) : false;
+    }
+
+    // The GUEST holds the chequered flag briefly, waiting for the host's
+    // classification. The host owns the order because it is the only peer that
+    // sees every car's finish first-hand — it owns the AI — and a close finish
+    // is exactly where two independently-computed orders disagree. Bounded, so
+    // a host that never sends one cannot hang the results screen forever: past
+    // the deadline the guest publishes its own view rather than nothing.
+    const RESULT_WAIT_MS = 3000;
+    let resultWaitFrom = null;
+    function awaitingResult(now) {
+      if (!active || role !== "guest" || peerResult) return false;
+      const t = now != null ? now : (G.netNow || 0);
+      if (resultWaitFrom == null) resultWaitFrom = t;
+      return (t - resultWaitFrom) < RESULT_WAIT_MS;
     }
 
     function stop(reason) {
@@ -268,8 +323,13 @@ const NetPlay = (function () {
       // Publish the clock the countdown reads, so game.js and the session
       // agree on "now" rather than each calling performance.now() separately.
       G.netNow = now;
+      // pump() can deliver the close that ends this session — onClose calls
+      // stop(), which nulls `session` — so re-check the field rather than
+      // dereferencing it again. Found by the first real two-peer connection:
+      // a loopback session never closes mid-pump, so nothing here could have
+      // caught it.
       session.pump(now);
-      if (!session.alive()) return;             // onClose already handled it
+      if (!session || !session.alive()) return;   // onClose already handled it
 
       // Publish our own car. Only ours — under distributed authority nobody
       // else's position is ours to assert.
@@ -288,9 +348,20 @@ const NetPlay = (function () {
       }
     }
 
+    // ---- who decides what ------------------------------------------------
+    // The authority model as PREDICATES rather than role comparisons spelled
+    // out at each call site. Both are true when racing solo, which is the
+    // property that matters: a game with no session must behave exactly as it
+    // always did, and that should be stated rather than falling out of the
+    // boolean algebra at three separate sites. A third role later (spectator,
+    // dedicated host) changes these two functions instead of every caller.
+    function ownsRaceControl() { return !active || role === "host"; }
+    function ownsClassification() { return !active || role === "host"; }
+
     return {
       start, stop, tick,
-      hostStart, reportLap, reportResult,
+      ownsRaceControl, ownsClassification,
+      hostStart, reportLap, reportResult, reportCaution, awaitingResult,
       peerLaps: () => peerLaps.slice(),
       peerResult: () => peerResult,
       // updateCar() consults this: a car posed from the network must not also

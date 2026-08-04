@@ -60,7 +60,7 @@
         tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         cameraTower, sponsorHoarding,
-        fence, guardrail, tyreWall, groundPatch, modelGroup,
+        fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
         addBox, addCyl, addCone, addPrism, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -294,6 +294,56 @@
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 30, { density: 0.62, hMin: 11, hMax: 18, pineFrac: 0.04, col: EUC, col2: PLANE_D });
       }
+
+      // =====================================================================
+      // 8. THE PÓRTICO — the monumental entrance portal on the approach to the
+      //    paddock. Buenos Aires was a state project of the Perón era and its
+      //    architecture says so: a heavy masonry portal with paired pylons, a
+      //    deep entablature and the circuit's name in relief. This is the one
+      //    structure at the autódromo that could not belong to any European or
+      //    Asian circuit, and the site had nothing like it.
+      // =====================================================================
+      {
+        const a = anchor(K(0.928), -1, 48);
+        const b = [a.r, a.u, a.t];
+        const STONE = [0.84, 0.82, 0.76], STONE_D = [0.72, 0.70, 0.64];
+        const BRONZE = [0.56, 0.46, 0.26];
+        modelGroup("baires-portico", {
+          center: vadd(a.c, a.u, 11), size: [14, 26, 40], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          // Paired pylons each side, the inner one taller — the Peronist civic
+          // idiom is symmetry plus mass, not decoration.
+          for (const t of [-13, -9.5, 9.5, 13]) {
+            const tall = Math.abs(t) < 11;
+            addBox(stage, vadd(vadd(a.c, a.t, t), a.u, tall ? 8.5 : 7.0),
+              [5.5, tall ? 17 : 14, 3.0], (t < 0) === (Math.abs(t) < 11) ? STONE : STONE_D, b);
+          }
+          // Deep entablature spanning the pylons, stepped twice.
+          addBox(stage, vadd(a.c, a.u, 17.6), [6.2, 2.6, 30], STONE, b);
+          addBox(stage, vadd(a.c, a.u, 19.4), [7.0, 1.1, 32], STONE_D, b);
+          addBox(stage, vadd(a.c, a.u, 20.4), [5.0, 0.9, 28], STONE, b);
+          // Name band in relief on the frieze.
+          addBox(stage, vadd(vadd(a.c, a.r, -3.2), a.u, 17.6), [0.4, 1.4, 22], BRONZE, b);
+          // Flanking flag masts — the Argentine celeste is already the crowd
+          // colour on the terraces, so it carries through here.
+          stage._mat = MAT.METAL;
+          for (const t of [-16.5, 16.5]) {
+            addCyl(stage, vadd(a.c, a.t, t), 0.13, 15, [0.90, 0.90, 0.92], 5, b);
+            addBox(stage, vadd(vadd(vadd(a.c, a.t, t + 1.7), a.u, 12.6), a.r, 0),
+              [0.15, 2.0, 3.2], CELESTE, b);
+          }
+          stage._mat = 0;
+        });
+      }
+
+      // THE PARK LAKE. The autódromo sits inside a municipal park built around
+      // water, and the long Curvón runs past it. A flat green outfield gives
+      // none of that away.
+      groundPatch(K(0.655), 1, 74, [40, 0.16, 90], [0.30, 0.42, 0.26],
+        { id: "baires-lake-shore", samples: 8 });
+      waterSurface(K(0.655), 1, 96, [30, 0.18, 74], [0.24, 0.40, 0.44],
+        { id: "baires-park-lake" });
     },
   }
   );

@@ -274,6 +274,37 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   rtc() is the real RTCPeerConnection. Both
                                   deliver only on pump(), so latency and loss
                                   are reproducible rather than wall-clock
+  sdp.js         NetSdp         the invite code's payload as BYTES. A gathered
+                                  data-channel SDP is ~700 B of text and almost
+                                  none of it is information — we only ever
+                                  negotiate one m-line, so every line is either
+                                  a template constant or one of five facts
+                                  (fingerprint, ufrag, pwd, setup role,
+                                  candidates). Packing those is ~90 B, which
+                                  takes the code from ~670 chars to ~240 and is
+                                  what makes it SCANNABLE rather than merely
+                                  pasteable. It never EDITS an SDP — it extracts
+                                  and rebuilds — and packChecked() hands the
+                                  rebuild to a throwaway RTCPeerConnection
+                                  BEFORE a human sees it, falling back to the
+                                  deflated full text if this browser refuses
+                                  our own reconstruction. TCP candidates are
+                                  dropped on purpose
+  qr.js          NetQr          byte-mode, level-L QR ENCODER (versions 1-20,
+                                  standard mask selection). The invite QR holds
+                                  the invite LINK, so the guest scans it with
+                                  their ORDINARY CAMERA APP and lands in the
+                                  lobby with the code already filled in — no
+                                  in-page scanner, and none possible:
+                                  BarcodeDetector is absent on desktop Linux
+                                  Chrome and iOS Safari (measured). Encoder
+                                  only; decoding is an order more code for a
+                                  job the OS already does. Verified by jsQR (a
+                                  devDependency) in tests/net-qr.test.mjs —
+                                  self-consistency proves nothing here, since a
+                                  wrong mask or a transposed format field
+                                  produces a picture that looks exactly right
+                                  and cannot be read
   handshake.js   NetHandshake   signalling with no server: vanilla ICE (gather
                                   fully, so one static string suffices) →
                                   slimmed SDP → deflate → base64url invite
@@ -379,7 +410,12 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   you drive: TEAM & DRIVER, the 8 part categories
                                   + budget, LIVERY. The select screen owns WHERE
                                   you race and links here; race settings own HOW
-  career.js      Career         CAREER core: the apex26.career save + migration,
+  career.js      Career         CAREER core: the apex26.career.<flavour>.0..2
+                                  saves (THREE DRIVER SLOTS + THREE MY TEAM,
+                                  one live) + migration, sponsors (MY TEAM's
+                                  multi-round briefs), the research FACILITY
+                                  (the late-game money sink), the hire's
+                                  contract, EXTRA FUNDS,
                                   the credits economy, contracts, driver/team
                                   development, R&D ownership, round settlement.
                                   Pure rules — no DOM. A plain global (like
@@ -400,6 +436,16 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   simulation off the same LAT_MAX/ACCEL/BRAKE the
                                   driving model uses, so a simulated time and a
                                   driven one are on one scale. Feeds gridUp()
+  reliability.js Reliability    RELIABILITY / DNFs: whether a car reaches the
+                                  flag. Risk is DERIVED (team tier, relieved by
+                                  career team development and by what the player
+                                  spent on the ENGINE + GEARBOX), never a table.
+                                  The whole field's retirements are drawn ONCE at
+                                  the green light from a stateless hash of (seed,
+                                  round, driver) via Career.hash — makeCars()'s
+                                  simRnd() budget is a hard contract, so this
+                                  consumes NOTHING from the sim stream. Ships OFF
+                                  behind the RELIABILITY race setting
   menus.js       Menus          menu/select/pause DOM flows
   scrollfade.js  ScrollFade     "there is more below" edge fade + position indicator
                                   for every menu scroll region (self-initialising)
@@ -416,7 +462,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (92) + tests/*.test.mjs unit suites (26)
+tests/*.spec.js                 Playwright specs (92) + tests/*.test.mjs unit suites (28)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -762,7 +808,7 @@ __apex.trackProfile(n?)       // [{frac,y,k,hw,slope}] — elevation/curvature p
 //    flow === "career". A career IS a championship, so seasonMode stays true.
 __apex.info()                 // + flow ("gp"|"season"|"career"), session
                               //   ("race"|"tt"|"quali"), career (a save exists)
-__apex.career()               // the whole apex26.career save, or null
+__apex.career()               // the whole live career save, or null
 __apex.career({teamId:"haas", seat:1, seed:42})   // start one, skipping the setup
                               //   screen; flavour:"myteam" + hire:"<code>" for MY TEAM
 __apex.careerState()          // compact snapshot — prefer this to reading the save
@@ -771,13 +817,32 @@ __apex.careerSim(n)           // settle n rounds with nobody driving, through th
                               //   SAME settleRound() the driven path uses. Needs a
                               //   track staged; reuses THAT circuit for every round
 __apex.careerRollover()       // force the season rollover -> {champion, offers, history}
-__apex.careerReset()          // wipe the save
+__apex.careerReset()          // wipe the LIVE slot
+__apex.careerSlots()          // all SIX slots (3 driver + 3 my team); a flavour
+                              //   narrows to one set; (flavour, i) SWITCHES to it,
+                              //   saving the career being left first
+__apex.careerSlotDelete("myteam", 0)   // wipe ONE slot, leaving the other five
+__apex.careerFreeMoney(true)  // EXTRA FUNDS cheat — money stops being scarce, but
+                              //   the FITTED CAP does not move
+__apex.careerGrant(5000)      // hand the live career credits
+__apex.careerFacility(true)   // the open-ended research facility (the late-game
+                              //   sink): each level cuts research cost for good
+__apex.careerHire("renew")    // MY TEAM's second seat — no arg reports a pending
+                              //   decision, a free-agent CODE signs somebody else
 __apex.ratings(code?)         // five-axis driver table + overall; no args = the grid.
                               //   Applies in EVERY mode, not just career
 __apex.qualiSim(playerTime?)  // the qualifying model for the loaded track WITHOUT
                               //   running a session (a real weekend is left alone)
 __apex.carAt(i)               // + code, seat, tierV, skill, ratings — the two
-                              //   multipliers that decide AI pace, now observable
+                              //   multipliers that decide AI pace, now observable;
+                              //   + retired/dnf/dnfAt/finPos
+// ── Reliability & retirements (js/game/reliability.js) — ships OFF ──
+__apex.reliability("real")    // the RELIABILITY race setting: off | low | real
+__apex.retirements()          // the armed plan — who stops, why (engine|gearbox|
+                              //   accident) and at what fraction of race distance.
+                              //   Drawn ONCE at the green light; consumes nothing
+                              //   from the sim RNG stream
+__apex.retire(1, "gearbox")   // retire a car NOW (no arg = the player)
 // ── Headless / RL control loop ──
 __apex.headless(true)         // skip render() — physics runs uncapped
 __apex.obs()                  // full debug observation (pos, slip, clearances, scan, reward, gear)
@@ -822,7 +887,7 @@ __apex.survey({stations:24})  // geometry DEFECTS: floating/buried props, props
                               //   scans the whole lap — `stations` is a sample
                               //   COUNT, not a position; it cannot be aimed
 __apex.rollout({seconds:5, policy})  // drive an interval → digest, not frames
-__apex.terminal()             // {done, reason} — finished|wrong_way|rescued
+__apex.terminal()             // {done, reason} — retired|finished|wrong_way|rescued
 ```
 
 Corner data in `world().nextCorner` / `trackInfo({what:"corners"})` is smoothed
@@ -842,7 +907,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-92 Playwright specs + 26 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+92 Playwright specs + 28 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

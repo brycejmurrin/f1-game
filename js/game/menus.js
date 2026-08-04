@@ -77,16 +77,18 @@ function buildTeamCard(t) {
   sub.textContent = t.short + " · " + (t.engine || "") + " engine"
     + (d ? " · #" + d.num + " " + d.name.split(" ").pop().toUpperCase() : "");
   body.append(name, sub);
-  // A right chevron, not the picker's down-caret: this card navigates to another
-  // screen now rather than dropping a sheet open underneath itself.
   const chev = document.createElement("span");
-  chev.className = "tm-chev"; chev.textContent = "\u203A"; chev.setAttribute("aria-hidden", "true");
+  chev.className = "tm-chev"; chev.textContent = "\u2304"; chev.setAttribute("aria-hidden", "true");
   card.append(teamSwatch(t), body, chev);
-  // The card is a summary, not a dialog trigger: it opens the GARAGE, which is
-  // where team, driver, parts and paint all live now. (It used to open the team
-  // picker directly, hence the aria-haspopup/aria-expanded pair that used to be
-  // here — neither is true of a button that navigates.)
-  card.onclick = () => { G.openGarage("select"); };
+  // The card opens the TEAM PICKER. It used to go to the GARAGE, which gave this
+  // screen two controls with one destination — a card describing your team, and
+  // a GARAGE button directly beneath it, both landing in the parts garage. A
+  // card that shows a team should let you change the team; the button below is
+  // the way to the garage. setTeamPicker already supports "select" as a host, so
+  // picking rebuilds this screen rather than the garage.
+  card.setAttribute("aria-haspopup", "listbox");
+  card.setAttribute("aria-expanded", "false");
+  card.onclick = () => { setTeamPicker(true, "select"); };
 }
 
 /* Open/close the team picker. `host` is the screen that opened it (see
@@ -98,6 +100,8 @@ function setTeamPicker(open, host) {
   // title screen — where buildSelect has never run — showed an empty sheet.
   if (open) buildTeamPicker();
   teamPicker().hidden = !open;
+  const card = $("sel-team-card");
+  if (card) card.setAttribute("aria-expanded", open ? "true" : "false");
   if (open) ScrollFadeRefresh();
 }
 
