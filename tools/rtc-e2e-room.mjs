@@ -24,7 +24,11 @@ import { chromium } from "playwright";
 import { spawn } from "node:child_process";
 
 const PORT = 4474;
-const RELAY = (process.argv.find((a) => a.startsWith("--relay=")) || "--relay=ws://127.0.0.1:7448").slice(8);
+// --relays=a,b,c — MULTIPLE relays, which is what reality is. The same Nostr
+// event arrives once per connected relay, so a single-relay test cannot see
+// any bug of the form "handled the same message twice" — and that is exactly
+// the class of bug a real console produced (setRemoteDescription: stable).
+const RELAY = ((process.argv.find((a) => a.startsWith("--relays=")) || process.argv.find((a) => a.startsWith("--relay=")) || "--relay=ws://127.0.0.1:7448").split("=")[1]);
 const PEERS = Number((process.argv.find((a) => a.startsWith("--peers=")) || "--peers=2").slice(8));
 
 const alive = async () => {
@@ -63,7 +67,7 @@ const mk = async (name, teamIdx) => {
   await p.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "domcontentloaded", timeout: 90000 });
   await p.waitForFunction(() => window.__apex != null, { timeout: 90000 });
   await p.evaluate(([relay, ti]) => {
-    localStorage.setItem("apex26.nostrRelays", JSON.stringify([relay]));
+    localStorage.setItem("apex26.nostrRelays", JSON.stringify(relay.split(",")));
     localStorage.setItem("apex26.team", JSON.stringify(ti));
     localStorage.setItem("apex26.driver", "0");
     location.reload();

@@ -268,7 +268,11 @@ const NetNostr = (function () {
             // SUBSCRIPTION MODE — a host that wants several players. Every
             // joiner's answer is handed straight over and the room STAYS OPEN;
             // only cancel, expiry, a dead relay or an explicit stop() ends it.
-            if (onJoiner) { try { onJoiner(from, data); } catch (e) {} return; }
+            // Promise-caught, not try-caught: onJoiner is async, and a plain
+            // try/catch around an async call misses its rejection — which is
+            // exactly how an InvalidStateError reached a real console as
+            // "Uncaught (in promise)".
+            if (onJoiner) { Promise.resolve().then(() => onJoiner(from, data)).catch(() => {}); return; }
             if (handling.has(from)) return;
             if (!reply) { finish({ ok: true, payload: data }); return; }
             // Answering takes seconds (setRemoteDescription plus a full ICE
