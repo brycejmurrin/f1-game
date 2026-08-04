@@ -290,6 +290,41 @@ development cost cap, so a quick team-mate costs you upgrades rather than legali
 through to its deterministic tier hash for an unknown code, so each hire has a
 stable personality without a second table to keep in step with the first.
 
+### The hire has a contract, and it runs
+
+`roster[0].left` was written when they were signed and then **read by nothing at
+all** — the driver could never be renewed, replaced or lost, which made the one
+relationship MY TEAM is built on a static number.
+
+`rolloverHire()` runs at the winter, before offers are drawn. The term ticks down,
+and on expiry it writes a **`pending`** onto the hire rather than resolving it: the
+decision is the player's, and the hub is where they make it.
+
+| Outcome | When | What the player does |
+|---|---|---|
+| `renew` | the default | take `ask`, or sign somebody else |
+| `left` | only after they **outperformed** the car (`pos < expected − 4`), and then only on a seeded 35% draw | sign somebody else |
+
+They can only ever be poached after outperforming. Losing a driver who was beaten
+all year would read as a bug rather than as a story.
+
+What they ask for follows what the seat was worth to them:
+`salary × (1 + clamp((expected − pos) / 8, −0.35, +0.45))`, floored at
+`HIRE_MIN` — beating the car's expectation is worth money, being beaten by it is a
+pay cut, and nobody drives for nothing.
+
+**An unresolved seat blocks the weekend.** `Career.state().hire` is non-null while a
+decision is pending, the hub reads GO RACING as SIGN A DRIVER and disables it: a
+constructor enters two cars, and a season cannot start with one of them empty.
+
+### The winter market is visible
+
+`rolloverMarket()` has always swapped 0–2 seats and the player only ever met the
+*result* — a driver they had raced all year was suddenly somewhere else, with
+nothing to say it had happened, which reads as the game being inconsistent rather
+than as a story. The moves are recorded on `career.moves` and printed on the
+end-of-season sheet, the one screen that sits between two seasons.
+
 ## Objectives and reputation
 
 One objective per round, drawn with `Career.rnd(year, "obj", round)` from a table of

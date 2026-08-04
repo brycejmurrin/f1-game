@@ -381,7 +381,10 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   you race and links here; race settings own HOW
   career.js      Career         CAREER core: the apex26.career.<flavour>.0..2
                                   saves (THREE DRIVER SLOTS + THREE MY TEAM,
-                                  one live) + migration,
+                                  one live) + migration, sponsors (MY TEAM's
+                                  multi-round briefs), the research FACILITY
+                                  (the late-game money sink), the hire's
+                                  contract, EXTRA FUNDS,
                                   the credits economy, contracts, driver/team
                                   development, R&D ownership, round settlement.
                                   Pure rules — no DOM. A plain global (like
@@ -750,6 +753,13 @@ __apex.careerSlots()          // all SIX slots (3 driver + 3 my team); a flavour
                               //   narrows to one set; (flavour, i) SWITCHES to it,
                               //   saving the career being left first
 __apex.careerSlotDelete("myteam", 0)   // wipe ONE slot, leaving the other five
+__apex.careerFreeMoney(true)  // EXTRA FUNDS cheat — money stops being scarce, but
+                              //   the FITTED CAP does not move
+__apex.careerGrant(5000)      // hand the live career credits
+__apex.careerFacility(true)   // the open-ended research facility (the late-game
+                              //   sink): each level cuts research cost for good
+__apex.careerHire("renew")    // MY TEAM's second seat — no arg reports a pending
+                              //   decision, a free-agent CODE signs somebody else
 __apex.ratings(code?)         // five-axis driver table + overall; no args = the grid.
                               //   Applies in EVERY mode, not just career
 __apex.qualiSim(playerTime?)  // the qualifying model for the loaded track WITHOUT
