@@ -107,6 +107,12 @@ spacing, which is the case the standard explicitly allows for. The probe should
 say so rather than implying a defect: keep counting, label it "below house floor"
 (amber), and reserve red for < 24px or overlapping targets.
 
+**Done.** The probe now records two lists: `smallTaps` (under the `--tap` token —
+amber, a house preference) and `tinyTaps` (under WCAG's 24px — red, a real
+defect). The console line reports `tapUnder24` and `tapSoft` separately. The 40
+circuit rows and the 23 race-settings controls the grid used to shout about are
+amber where they belong.
+
 ## 6. Where our harness sits next to the industry
 
 The visual-testing field (Percy, Chromatic, Applitools, BackstopJS, Playwright's
@@ -141,28 +147,46 @@ measured nothing.
    specificity trap. *(cheap, high value)*
 2. **One `.pane-pair` primitive for select + garage + career** — would have made
    the garage fix and the select fix the same fix. *(medium, highest value)*
-3. **Recalibrate the tap-floor finding to WCAG 24px red / house-token amber** —
-   stops the grid crying wolf on 40px list rows. *(trivial)*
+3. ~~**Recalibrate the tap-floor finding to WCAG 24px red / house-token amber**~~
+   — **done**, see §5.
 4. **`svh` as the house cap unit.** *(trivial, prevents a class of iOS bug we
    have not hit yet)*
 5. **Switcher-style intrinsic wrap for the pane pair**, replacing hand-picked
    thresholds. *(medium; prototype on the garage and measure)*
 6. **Six blessed pixel baselines** alongside the geometry audit. *(cheap)*
 
-## What the audit found while this was being written (build 923)
+## What the audit found while this was being written (build 923) — and why it was wrong
 
-120 cells, two real findings — both iPhone portrait, both the class of bug this
-research is about:
+The first calibrated sweep reported two findings, both iPhone portrait: the data
+hub's TELEMETRY and EXPORT tabs clipped by `.dh-tabs` and unreachable at x=409 in
+a 393px viewport, and the career hub's SLOT 3 (y=728) and `#cr-guide-myteam`
+(y=812) sitting past a 659px viewport with "no scrollable ancestor".
 
-- **`#datahub`** — `#dh-tab-telemetry` and `#dh-tab-export` are clipped by
-  `.dh-tabs` (23px and 91px past its right edge) and EXPORT sits at x=409 in a
-  393px viewport with nothing able to scroll to it. A tab strip that overflows
-  and cannot be reached.
-- **`#career`** — `button.cr-slot-main` (SLOT 3) at y=728 and `#cr-guide-myteam`
-  at y=812, in a 659px viewport, with no scrollable ancestor. Two controls a
-  phone player simply cannot press.
+**Both were false positives, and from the same mistake.** The probe decided
+"can this scroll?" by matching against a hardcoded list of the project's known
+scroll regions (`.pane, #sel-body, …`). `.dh-tabs` is a plain
+`overflow-x: auto` strip and `#cr-body` is a plain `overflow-y: auto` div;
+neither is on the list, so content that a swipe brings into view was reported as
+content nobody can reach. Scrolling `#cr-body` to its end moves SLOT 3 from
+y=728 to y=409 — there is 319px of scroll range and both controls are reachable.
 
-Neither is in a screen anyone touched today, which is the argument for the grid.
+Two lessons, both now baked into the tool:
+
+- **Ask the computed style, not a list of names.** `scrollerAncestor` now tests
+  `overflow-x/y` against real `scrollWidth/Height` overflow on every ancestor.
+  A curated list of selectors is a claim about the DOM that goes stale silently,
+  which is precisely the failure mode the audit exists to prevent.
+- **A clipping check must exempt BOTH scroll axes.** The old rule exempted only
+  Y, so every horizontal scroll strip in the app read as a clipping bug.
+
+The honest score for build 923 is therefore **120 cells, zero real findings** —
+which is a weaker headline and a better tool. It is also the third time on this
+task that measurement disagreed with a first reading, after the animated-scroll
+misread and the string-`pageFunction` sweep that measured nothing. The pattern is
+consistent enough to state as a rule: **a finding from a new probe is a claim
+about the probe until something independent confirms it.** The career check above
+was run as a separate script that actually scrolled the container, not as a
+second opinion from the same code.
 
 ---
 

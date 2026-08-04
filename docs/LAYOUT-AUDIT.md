@@ -31,9 +31,10 @@ geometry probe reads the same truth out of the DOM in milliseconds:
 
 | what it asks | why it is the question |
 |---|---|
-| does any visible box escape the thing that clips it | this is "text is cut off", stated in a way a machine can check. Scroll containers are exempt on their scroll axis — that is what scrolling is |
-| is any interactive element outside the viewport | a button you cannot reach is worse than one that looks wrong |
-| is any tap target under 44px | the project's own `--tap` floor; landscape phones deliberately run 40, so this is amber, not red |
+| does any visible box escape the thing that clips it | this is "text is cut off", stated in a way a machine can check. Scroll containers are exempt on **either** axis they scroll — that is what scrolling is |
+| is any interactive element outside the viewport | a button you cannot reach is worse than one that looks wrong. "Reachable" means *some ancestor's computed `overflow` scrolls to it*, asked of the DOM rather than of a list of known pane selectors |
+| is any tap target under 24px | WCAG 2.2 SC 2.5.8 (AA) — a conformance floor, so red |
+| is any tap target under the `--tap` token | the house comfort floor (44, deliberately 40 on landscape phones). Above 24px this is a preference, so amber |
 | is any text ellipsised | not always a bug — often the point — but it is the difference between SUSPENSION and SUSPENSI… |
 | does the document scroll horizontally | always a bug on a fixed-viewport game |
 | for each scroll region: how much is hidden, and how far it stops above the sheet floor | the measurement that caught the action bar stealing a row from the circuit list |
@@ -102,14 +103,40 @@ Two traps worth writing on the wall:
 
 ---
 
+## A finding is a claim about the probe until something else confirms it
+
+Three times on this work a first reading was wrong, and each time the wrongness
+looked exactly like a real bug:
+
+1. A scroll measurement taken while Chromium was still *animating* the wheel
+   scroll — the starved software compositor landed it seconds later. Fixed by
+   `__apex.headless(true)` plus settle-polling.
+2. A sweep that reported 100 clean cells and had measured nothing: in the
+   **JavaScript** Playwright client `page.evaluate("(x) => …", arg)` evaluates the
+   string as an expression and the argument never arrives. Pass a real function.
+3. Two "unreachable control" findings (the data hub's tab strip, the career hub's
+   slot list) that came from asking a hardcoded list of selectors whether an
+   ancestor scrolls, instead of asking the computed style. `#cr-body` has 319px
+   of scroll range; scrolling it moves SLOT 3 from y=728 to y=409.
+
+So: **before fixing a cell the grid turned red, confirm the finding by a route
+that does not run the probe's code** — a script that actually scrolls the
+container, or a screenshot. A probe bug and a layout bug present identically, and
+only one of them is fixed in `css/`.
+
+---
+
 ## Reading the grid
 
 - **green** — nothing clipped, nothing off screen, no horizontal overflow, no
   page errors.
-- **amber** — only sub-44px tap targets. Expected on a landscape phone, where
-  `--tap` is deliberately 40.
-- **red** — the count of real findings. Hover for the list; `audit.json` has the
-  element, its clipper, and how many pixels it escaped by.
+- **amber** — every finding is a control below the house `--tap` floor but at or
+  above WCAG's 24px. Expected on a landscape phone, where `--tap` is deliberately
+  40, and on the circuit list, whose 40px full-width rows carry 24px+ of spacing
+  — the case SC 2.5.8 explicitly allows.
+- **red** — the count of real findings, tap targets under 24px among them. Hover
+  for the list; `audit.json` has the element, its clipper, and how many pixels it
+  escaped by.
 - **skipped** — the screen could not be reached in that viewport. That is a
   finding too, and the reason is in the tooltip.
 

@@ -164,12 +164,15 @@ const PROBE = (rootSel) => {
     if (!c) continue;
     const cr = c.getBoundingClientRect();
     const cs = getComputedStyle(c);
-    // A scroll container legitimately holds content past its box on the SCROLL
-    // axis — that is what scrolling is. Only flag the axis that cannot scroll.
+    // A scroll container legitimately holds content past its box on the axis it
+    // SCROLLS — that is what scrolling is. Both axes count: the data hub's tab
+    // strip is `overflow-x: auto`, and flagging its off-screen tabs as clipped
+    // reported two false findings on a strip that works exactly as designed.
     const canScrollY = /(auto|scroll)/.test(cs.overflowY);
+    const canScrollX = /(auto|scroll)/.test(cs.overflowX);
     const overBottom = r.bottom > cr.bottom + 1, overTop = r.top < cr.top - 1;
     const overRight = r.right > cr.right + 1, overLeft = r.left < cr.left - 1;
-    const bad = (!canScrollY && (overBottom || overTop)) || overRight || overLeft;
+    const bad = (!canScrollY && (overBottom || overTop)) || (!canScrollX && (overRight || overLeft));
     if (bad && r.height > 2 && r.width > 2) {
       out.clipped.push({ el: desc(el), by: desc(c),
         past: { top: px(cr.top - r.top), bottom: px(r.bottom - cr.bottom),
@@ -192,10 +195,25 @@ const PROBE = (rootSel) => {
   const tapFloor = parseFloat(getComputedStyle(document.documentElement)
     .getPropertyValue("--tap")) || 44;
   out.tapFloor = tapFloor;
+  // Two thresholds, because they mean different things. WCAG 2.2 SC 2.5.8 (AA)
+  // is 24x24 CSS px and is a CONFORMANCE floor — under it is a real defect.
+  // 44 (2.5.5 AAA, Apple HIG) and our own `--tap` are house comfort targets, so
+  // a 40px full-width circuit row with 24px of spacing around it is compliant
+  // and merely below our preference. Counting both as one number had the grid
+  // reporting 40 "violations" on a screen that has none.
+  const WCAG_MIN = 24;
+  out.tinyTaps = [];
   out.belowFold = 0;
+  // ANY ancestor that can actually scroll to it, in either axis — not the
+  // project's named `.pane` list. The data hub's tab strip is a plain
+  // `overflow-x: auto` div, so a selector-based check called its last tab
+  // unreachable when a swipe brings it in. Ask the computed style, not a list.
   const scrollerAncestor = (el) => {
     for (let n = el.parentElement; n; n = n.parentElement) {
-      if (n.matches && n.matches(SCROLLERS) && n.scrollHeight - n.clientHeight > 1) return n;
+      const cs = getComputedStyle(n);
+      const scrollsY = /(auto|scroll)/.test(cs.overflowY) && n.scrollHeight - n.clientHeight > 1;
+      const scrollsX = /(auto|scroll)/.test(cs.overflowX) && n.scrollWidth - n.clientWidth > 1;
+      if (scrollsY || scrollsX) return n;
       if (n === root) break;
     }
     return null;
@@ -209,9 +227,12 @@ const PROBE = (rootSel) => {
       else out.offscreen.push({ el: desc(el), box: [px(r.left), px(r.top), px(r.width), px(r.height)],
         text: (el.textContent || "").trim().slice(0, 24) });
     }
-    if (r.height < tapFloor - 0.5 || r.width < tapFloor - 0.5)
-      out.smallTaps.push({ el: desc(el), w: px(r.width), h: px(r.height),
-        text: (el.textContent || "").trim().slice(0, 24) });
+    if (r.height < tapFloor - 0.5 || r.width < tapFloor - 0.5) {
+      const rec = { el: desc(el), w: px(r.width), h: px(r.height),
+        text: (el.textContent || "").trim().slice(0, 24) };
+      out.smallTaps.push(rec);
+      if (r.height < WCAG_MIN - 0.5 || r.width < WCAG_MIN - 0.5) out.tinyTaps.push(rec);
+    }
   }
 
   // TRUNCATED: ellipsised text. Not always a bug — often the point — but it is
@@ -345,7 +366,8 @@ async function sweepViewport([vpName, vpOpts, why]) {
     console.log(`${cell.screen.padEnd(13)} ${vpName.padEnd(28)} ` +
       (cell.skipped ? `SKIPPED: ${cell.skipped}`
         : `clipped ${String(n(cell.clipped)).padStart(2)}  offscreen ${String(n(cell.offscreen)).padStart(2)}` +
-          `  smallTap ${String(n(cell.smallTaps)).padStart(2)}  trunc ${String(n(cell.truncated)).padStart(2)}` +
+          `  tapUnder24 ${String(n(cell.tinyTaps)).padStart(2)}  tapSoft ${String(n(cell.smallTaps)).padStart(2)}` +
+          `  trunc ${String(n(cell.truncated)).padStart(2)}` +
           `  xOverflow ${cell.docOverflowX ? "YES" : "no "}  err ${n(cell.errors)}`));
   }
   await page.close();
@@ -355,28 +377,43 @@ async function sweepViewport([vpName, vpOpts, why]) {
 await browser.close();
 server.close();
 
+// MERGE, don't clobber: a filtered run (--screens / --viewports) must top up the
+// grid rather than replace it with its own twelve cells, or re-running one
+// viewport silently throws the other hundred away.
+let prior = [];
+try { prior = JSON.parse(fs.readFileSync(path.join(OUT, "audit.json"), "utf8")).rows || []; } catch {}
+const key = (r) => r.screen + "|" + r.viewport;
+// Sorted back into the canonical matrix order, so a filtered run's rows land in
+// their own columns instead of appending new ones to the right of the grid.
+const vpOrder = VIEWPORTS.map(([n]) => n), scOrder = SCREENS.map((s) => s.id);
+const rank = (r) => [scOrder.indexOf(r.screen), vpOrder.indexOf(r.viewport)];
+const merged = [...prior.filter((p) => !rows.some((r) => key(r) === key(p))), ...rows]
+  .sort((a, b) => { const [as, av] = rank(a), [bs, bv] = rank(b); return as - bs || av - bv; });
 fs.writeFileSync(path.join(OUT, "audit.json"), JSON.stringify({
   when: null, build: JSON.parse(fs.readFileSync(path.join(ROOT, "version.json"), "utf8")).build,
   viewports: viewports.map(([n, , w]) => ({ name: n, why: w })),
   screens: screens.map((s) => ({ id: s.id, name: s.name })),
-  rows,
+  rows: merged,
 }, null, 2));
-writeIndex(rows);
-const bad = rows.filter((r) => r.skipped || (r.clipped || []).length || (r.offscreen || []).length || r.docOverflowX || (r.errors || []).length);
+writeIndex(merged);
+const bad = rows.filter((r) => r.skipped || (r.clipped || []).length || (r.offscreen || []).length
+  || r.docOverflowX || (r.errors || []).length || (r.tinyTaps || []).length);
 console.log(`\n${rows.length} cells, ${bad.length} with something to look at -> ${path.relative(ROOT, OUT)}/index.html`);
 
 function writeIndex(rows) {
   const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
   const cellHtml = (r) => {
     if (r.skipped) return `<td class="skip" title="${esc(r.skipped)}">skipped</td>`;
-    const issues = (r.clipped || []).length + (r.offscreen || []).length + (r.errors || []).length + (r.docOverflowX ? 1 : 0);
+    const issues = (r.clipped || []).length + (r.offscreen || []).length + (r.errors || []).length
+      + (r.docOverflowX ? 1 : 0) + (r.tinyTaps || []).length;
     const cls = issues ? "bad" : (r.smallTaps || []).length ? "warn" : "ok";
     const detail = [
       ...(r.clipped || []).map((c) => `clipped ${c.el} past ${c.by}`),
       ...(r.offscreen || []).map((c) => `offscreen ${c.el}`),
       ...(r.docOverflowX ? ["horizontal overflow"] : []),
       ...(r.errors || []).map((e) => "error " + e),
-      ...(r.smallTaps || []).slice(0, 4).map((t) => `tap ${t.el} ${t.w}x${t.h}`),
+      ...(r.tinyTaps || []).slice(0, 4).map((t) => `under WCAG 24px: ${t.el} ${t.w}x${t.h}`),
+      ...(r.smallTaps || []).slice(0, 4).map((t) => `below house tap floor ${t.el} ${t.w}x${t.h}`),
     ].join("\n");
     const shot = r.shot ? `<a href="${r.shot}">shot</a>` : "";
     return `<td class="${cls}" title="${esc(detail)}">${issues || "&check;"} ${shot}</td>`;
@@ -400,7 +437,9 @@ function writeIndex(rows) {
 </style>
 <h1>APEX 26 — LAYOUT AUDIT</h1>
 <p>One cell per screen x viewport. Green means nothing clipped, nothing off screen,
-no horizontal overflow and no page errors; amber means only sub-44px tap targets;
-red is the count of real findings — hover a cell for the list.</p>
+no horizontal overflow and no page errors. Amber means every finding is a control
+below the house <code>--tap</code> floor but at or above WCAG 2.2 SC 2.5.8's
+24&times;24 &mdash; a preference, not a defect. Red is the count of real findings,
+tap targets under 24px among them &mdash; hover a cell for the list.</p>
 <table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`);
 }
