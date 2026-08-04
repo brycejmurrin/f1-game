@@ -132,7 +132,10 @@ test.describe("WebGL renderer probes", () => {
     expect(ls.sunColor).toBeDefined();
   });
 
-  test("UBO light count matches lightState after setTimeOfDay — capped at 32", async ({ page }) => {
+  // Titled for what it actually checks. It used to say "UBO light count matches
+  // lightState", but it never read the UBO — and its first assertion was
+  // `numLights >= 0` on a count, which cannot fail. The real content is the cap.
+  test("night raises lights and the shader never receives more than 32", async ({ page }) => {
     await loadRace(page);
     await page.evaluate(() => window.__apex.setTimeOfDay("night"));
     // Wait until night lights are up
@@ -141,8 +144,8 @@ test.describe("WebGL renderer probes", () => {
       { timeout: 3000 }
     );
     const ls = await page.evaluate(() => window.__apex.lightState());
-    expect(ls.numLights).toBeGreaterThanOrEqual(0);
-    // UBO is sized for 32 lights; the shader must never receive more
+    expect(ls.numLights, "night must actually raise floodlights").toBeGreaterThan(0);
+    // The uniform arrays are sized for 32; the shader must never receive more.
     expect(ls.numLights).toBeLessThanOrEqual(32);
   });
 });

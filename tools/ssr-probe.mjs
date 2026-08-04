@@ -72,8 +72,14 @@ const OUT = join(ROOT, "scratch", "captures", "ssr");
 // earlier investigation chase the wrong cause for an hour).
 const ANCHOR_MASK = "    float roadTerm = roadMask * uReflect;";
 const ANCHOR_MIX = "      float mixAmt = clamp(strength * cover, 0.0, carDom ? 0.85 : 0.80);";
-const ANCHOR_COVER = "      float cover  = carDom ? conf : max(conf, 0.30);";
-const ANCHOR_COVER_ALT = "      float cover  = found ? hit : (carDom ? 0.0 : 0.30);";
+// The cover line has been rewritten twice; both older spellings are kept so a
+// checkout from before either change still probes rather than throwing. The
+// live one is first — stageRoot() takes the first that matches.
+const ANCHOR_COVER = "      float cover  = carDom ? conf : 0.60;";
+const ANCHOR_COVER_ALT = [
+  "      float cover  = carDom ? conf : max(conf, 0.30);",
+  "      float cover  = found ? hit : (carDom ? 0.0 : 0.30);",
+];
 
 const PATCHES = {
   gates: (s) => s.replace(ANCHOR_MASK, `    if (carPx < 0.3) {
@@ -112,7 +118,7 @@ ${ANCHOR_MASK}`),
 
 function stageRoot() {
   if (DEBUG === "off") return { root: ROOT, cleanup: () => {} };
-  if (!PATCHES[DEBUG]) throw new Error(`unknown --debug=${DEBUG} (off|gates|hitmiss|hitcol)`);
+  if (!PATCHES[DEBUG]) throw new Error(`unknown --debug=${DEBUG} (off|gates|hitmiss|hitcol|mix)`);
   // Copy only what the page loads — a full-tree copy would drag node_modules,
   // .git and every captured artifact along with it.
   const dir = mkdtempSync(join(tmpdir(), "ssr-probe-"));
@@ -121,8 +127,7 @@ function stageRoot() {
   }
   const file = join(dir, "js/render/shaders/post.js");
   const src = readFileSync(file, "utf8");
-  const anchor = src.includes(ANCHOR_COVER) ? ANCHOR_COVER
-               : src.includes(ANCHOR_COVER_ALT) ? ANCHOR_COVER_ALT : null;
+  const anchor = [ANCHOR_COVER, ...ANCHOR_COVER_ALT].find((a) => src.includes(a)) || null;
   if (DEBUG === "gates" && !src.includes(ANCHOR_MASK)) throw new Error("gates anchor not found in post.js");
   if (DEBUG === "mix" && !src.includes(ANCHOR_MIX)) throw new Error("mix anchor not found in post.js");
   if (DEBUG !== "gates" && DEBUG !== "mix" && !anchor) throw new Error("cover anchor not found in post.js");

@@ -60,7 +60,7 @@ not.
 
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `mb-`, `rs-`, `no-`, `rotate-`,
-`cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`, `foot-`,
+`cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
 `season-`, `pair-`) is one file each and needs no map.
 
 **The `(unprefixed)` row is the one to watch.** 226 rules across nine files, on
@@ -102,10 +102,16 @@ mistakes them for components.
 
 ## Dead classes
 
-Three, out of 516: `dh-leg-swatch`, `dh-sectors`, `foot-end`. Defined in `css/`
-and referenced from neither `index.html` nor any `js/` file. That ratio is the
-real headline of this exercise — the stylesheet is not carrying rot, it was just
-carrying no map.
+**None.** The three this audit originally found — `dh-leg-swatch`, `dh-sectors`
+and `foot-end`, defined in `css/` and referenced from neither `index.html` nor
+any `js/` file — have since been deleted, and `foot-end` was the last member of
+its prefix family, which therefore leaves this map too.
+
+Three out of 516 was the real headline of the exercise, and it survives the
+deletion: the stylesheet was never carrying rot, it was carrying no map.
+`tests/component-inventory.test.mjs` is what keeps that true — it fails if this
+document names a family that has left `css/`, which is exactly how these three
+were noticed going.
 
 ---
 

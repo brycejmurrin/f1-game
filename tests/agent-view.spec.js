@@ -1328,12 +1328,22 @@ test.describe("worldModel()", () => {
     }
   });
 
+  // Kept in sync with js/track/scenery-structures.js by tests/span-kinds.test.mjs.
+  const SPAN_KINDS = ["guardrail", "fence", "tyreWall", "wall",
+                      "bleacher", "scaffoldStand", "terrace", "tieredBowl"];
+
   test("linear furniture is spans, not thousands of segments", async ({ page }) => {
     await load(page);
     const w = await page.evaluate(() => window.__apex.worldModel());
     expect(w.spans.length).toBeLessThan(60);
+    expect(w.spans.length, "a built Monza reported no linear furniture at all").toBeGreaterThan(0);
     for (const s of w.spans) {
-      expect(["guardrail", "fence", "tyreWall", "wall"]).toContain(s.kind);
+      // SOURCE OF TRUTH: every `ctx.noteSpan(...)` call site in
+      // js/track/scenery-structures.js. This list was four kinds long while the
+      // emitters had grown to eight — the grandstand family (bleacher,
+      // scaffoldStand, terrace, tieredBowl) became spans later and nothing here
+      // followed. tests/span-kinds.test.mjs now fails if the two diverge again.
+      expect(SPAN_KINDS).toContain(s.kind);
       expect(["left", "right"]).toContain(s.side);
       expect(s.lengthM).toBeGreaterThan(0);
     }

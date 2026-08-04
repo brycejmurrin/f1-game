@@ -31,7 +31,6 @@ test.describe("GLX instanced draw", () => {
       const graph = __apex.trackGraph && __apex.trackGraph();
       if (!graph) return { skipped: "no graph on the loaded track" };
       const { batches, bakeOnly } = graph.batches();
-      if (!batches.length) return { skipped: "track produced no batches" };
 
       // Take the largest batch — the one an instanced renderer would care about.
       const big = batches.reduce((a, b) => (b.count > a.count ? b : a));
@@ -51,6 +50,11 @@ test.describe("GLX instanced draw", () => {
     });
 
     test.skip(!!r.skipped, r.skipped || "");
+    // NOT a skip. Zero batches is instancing failing completely, which is the
+    // regression this file exists to catch — routing it to test.skip() made the
+    // loudest possible failure report as green. track-graph.test.mjs already
+    // proves Monza produces batches headlessly, so an empty list here is real.
+    expect(r.batches, "a built Monza produced no instanced batches at all").toBeGreaterThan(0);
     expect(r.instances).toBe(r.expected);
     expect(r.hasMatrixBuffer).toBe(true);
     expect(r.colourBufferMatchesPayload).toBe(true);
@@ -67,7 +71,6 @@ test.describe("GLX instanced draw", () => {
       const graph = __apex.trackGraph && __apex.trackGraph();
       if (!graph) return { skipped: "no graph" };
       const { batches } = graph.batches();
-      if (!batches.length) return { skipped: "no batches" };
       const big = batches.reduce((a, b) => (b.count > a.count ? b : a));
       const batch = GLX.createInstancedBatch(big.geo, big.matrices, big.colors, { cellSize: 72 });
 
@@ -81,12 +84,14 @@ test.describe("GLX instanced draw", () => {
       const all = [[1,0,0,1e9],[-1,0,0,1e9],[0,1,0,1e9],[0,-1,0,1e9],[0,0,1,1e9],[0,0,-1,1e9]];
       const every = GLX.cullInstances(batch, all);
 
-      const out = { cells: batch.cells.length, total: batch.instances, none, every };
+      const out = { cells: batch.cells.length, total: batch.instances, none, every,
+                    batches: batches.length };
       GLX.freeInstancedBatch(batch);
       return out;
     });
 
     test.skip(!!r.skipped, r.skipped || "");
+    expect(r.batches, "a built Monza produced no instanced batches at all").toBeGreaterThan(0);
     expect(r.cells).toBeGreaterThan(0);
     expect(r.none, "an empty frustum should cull everything").toBe(0);
     expect(r.every, "a containing frustum should keep every instance").toBe(r.total);
