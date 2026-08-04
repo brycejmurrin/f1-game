@@ -565,7 +565,18 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   }
   #sel-preview-info { flex: 0 0 auto; }
 }
-}
+/* NOTE: there used to be a second `}` here, and it closed `@layer components`
+   two hundred lines early — everything from this point to the marked close at
+   the end of the file was UNLAYERED. Unlayered normal declarations outrank every
+   cascade layer, so these base rules beat the narrow-sheet and portrait
+   overrides above no matter how specific those were made. That is the true cause
+   of the "a container query adds no specificity, so source order decides" notes
+   scattered through this file: source order was never the problem, layer
+   precedence was, and the two IDs and `--sel-map-w` knob added to win those
+   races were fixing the wrong thing. Measured: `#sel-track-preview
+   #sel-preview-elev { display: none }` (two IDs, inside the layer) lost to
+   `#sel-preview-elev { display: block }` (one ID, unlayered), so the elevation
+   strip the phone layout explicitly removes was on screen the whole time. */
 #sel-preview-name { font-size: 15px; font-weight: 800; font-style: italic; color: #fff; letter-spacing: 0.02em; }
 #sel-preview-gp { font-size: 11px; color: var(--red); font-weight: 700; margin-top: 2px; }
 #sel-preview-meta { font-size: 12px; color: var(--dim); margin-top: 6px; line-height: 1.5; }
