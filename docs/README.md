@@ -21,6 +21,7 @@ code but are *not* a description of current behaviour.
 | [RENDER-CLIPPING.md](RENDER-CLIPPING.md) | Near/far planes, depth precision, and the clipping rules. |
 | [TRACK-MIGRATION-CHECKLIST.md](TRACK-MIGRATION-CHECKLIST.md) | Steps for moving a circuit onto the shared track foundation. |
 | [TESTING.md](TESTING.md) | Spec coverage table, fixtures, the test philosophy. |
+| [AUDIT-2026-08.md](AUDIT-2026-08.md) | Open findings from the Aug-2026 repo audit — verified bugs and tooling gaps that are **not** fixed yet. The backlog, not a description of behaviour. |
 | [iOS-OPTIMIZATION.md](iOS-OPTIMIZATION.md) | Mobile/iOS perf and Safari quirks. |
 | [tracks/](tracks/) | Per-circuit reference material. |
 

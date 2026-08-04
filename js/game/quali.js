@@ -137,14 +137,22 @@ function create(G) {
     return G.vTop() * c.tierV * c.skill * dd.ai * QUALI_TRIM;
   }
 
-  // One car's qualifying lap. Deterministic for a given (career seed, round, car).
-  function simLap(c, track, grip, round) {
+  // One car's qualifying lap. Deterministic for a given (seed, round, car).
+  //
+  // The seed is passed in rather than taken from Career.rnd(), which hashes on
+  // `career.seed` with no inCareer() gate. A career save is LOADED AT BOOT (so the
+  // title can offer CONTINUE), so a one-off Grand Prix was drawing its grid off
+  // whichever career happened to be on the device, at whatever round it was
+  // sitting on: delete the career and the same sim seed produced a different
+  // grid, and two players on the same seed never agreed. Career.hash is exported
+  // for exactly this substitution — js/game/reliability.js already does it.
+  function simLap(c, track, grip, round, seed) {
     const base = lapTime(track, capFor(c), grip);
     const r = DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat));
     // Execution: a driver who is not consistent is not slower on average, just
     // less likely to put the whole lap together on the one run that counts.
     const spread = EXEC_SPREAD * (1 - r.consistency / 100);
-    const draw = Career.rnd(round, "quali", c.driverId || c.code) - 0.5;
+    const draw = Career.hash(seed, round, "quali", c.driverId || c.code) - 0.5;
     return base * (1 + draw * 2 * spread);
   }
 
@@ -158,12 +166,17 @@ function create(G) {
     const track = G.track;
     if (!track || !G.cars.length) return null;
     const grip = G.gripMult();
-    const round = Career.active() ? Career.round() : 0;
+    // inCareer(), not active(): active() only says a save exists on disk. In a
+    // career the round and the career's own seed are the identity of the session;
+    // anywhere else the sim seed is, exactly as armReliability() resolves it.
+    const inCareer = Career.inCareer();
+    const round = inCareer ? Career.round() : 0;
+    const seed = inCareer ? Career.data().seed : G.simSeed();
 
     const rows = G.cars.map((c) => ({
       driverId: c.driverId, code: c.code, name: c.name,
       team: c.team && c.team.id, isPlayer: !!c.isPlayer,
-      t: (c.isPlayer && playerTime > 0) ? playerTime : simLap(c, track, grip, round),
+      t: (c.isPlayer && playerTime > 0) ? playerTime : simLap(c, track, grip, round, seed),
       car: c,
     }));
     rows.sort((a, b) => a.t - b.t);

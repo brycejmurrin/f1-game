@@ -1145,14 +1145,31 @@ const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shad
 // build fully isolated from the free-play garage: your career car and your Grand
 // Prix car for the same team are separate objects that can never leak into one
 // another, and career's own build is the only one subject to the R&D gate.
+// inCareer(), NOT Career.data(). data() is "a save exists on disk", and the save
+// is LOADED AT BOOT so the title screen can offer CONTINUE — so this branch used
+// to fire in a Grand Prix and a Time Trial too, for anyone who had ever started a
+// career with that team. That broke the isolation described above in both
+// directions, and the garage UI made it costly: setup-ui gates its rules on
+// G.careerOwned() (Career.owned(), which IS inCareer()-gated), so a GP garage
+// correctly offered FREE BUILD, the flat 600 cr cap and no R&D lock — and then
+// wrote the result straight into career.fitted. Fitting every top option under
+// FREE BUILD therefore maxed out the CAREER car for nothing: no credits spent, no
+// parts researched, the fitted cap bypassed, and nothing ever re-validates a
+// fitted build afterwards (Parts.resolveSetup deliberately trusts this funnel).
+// Merely opening the GP garage was also enough to mutate the save, since
+// buildSetup() deletes unusable categories out of the object it is handed.
+function careerFitted(teamId) {
+  const c = Career.inCareer() ? Career.data() : null;
+  return c && teamId === c.team ? c : null;
+}
 function getTeamParts(teamId) {
-  const c = Career.data();
-  if (c && teamId === c.team) return c.fitted;
+  const c = careerFitted(teamId);
+  if (c) return c.fitted;
   return store.get("parts." + teamId, {});
 }
 function saveTeamParts(teamId, parts) {
-  const c = Career.data();
-  if (c && teamId === c.team) { c.fitted = parts; Career.save(); return; }
+  const c = careerFitted(teamId);
+  if (c) { c.fitted = parts; Career.save(); return; }
   store.set("parts." + teamId, parts);
 }
 

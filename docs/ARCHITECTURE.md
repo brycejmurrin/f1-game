@@ -80,8 +80,11 @@ coherent after the split:
   tier probe.
 - **`TUNE_DEFS` mirror-comment invariants** in `glx.js`/`gfx.js` — comments that
   must track the registry by hand; replace with a checked mapping.
-- **WebGPU lazy-load** — `js/render/webgpu/*` is parsed by every visitor but
-  activated by almost none; load it on opt-in only.
+- **~~WebGPU lazy-load~~ (done)** — `js/render/webgpu/*` and `js/render/three/*`
+  are now DEFERRED: no `<script>` tag, injected by `js/game.js` only when
+  `apex26.gfxBackend` selects one. See `tools/manifest.cjs`'s `DEFERRED` map;
+  `tests/load-order.test.mjs` pins the manifest, game.js's loader table and
+  `sw.js`'s optional precache seed to each other.
 - **`css/*.css` split** — pending committed visual baselines (the visual
   suite has no tracked golden images yet, so a CSS split can't be gated).
 

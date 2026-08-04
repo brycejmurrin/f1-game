@@ -1214,6 +1214,14 @@ function rollover() {
   s.round = 0; s.pts = {}; s.teamPts = {}; s.driverCodes = {};
   career.results = [];
   career.obj = null;
+  // Sponsor windows are indexed WITHIN a season (sponsorAt walks from round 0), so
+  // this has to be cleared with the round counter or year two starts at window 0
+  // with 0 already recorded as paid — and settleSponsor() then returns 0 at every
+  // window for the rest of the career. MY TEAM silently loses its whole second
+  // income stream from season two on, with the hub still showing the brief and
+  // its fee. The within-season double-pay guard this array exists for is
+  // unaffected: it only has to hold until the season ends.
+  career.paidSponsors = [];
   save();
   return { year: career.year, champion: entry.champion, summary: entry,
            offers: career.offers, history: career.history, moves: career.moves };
