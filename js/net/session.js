@@ -41,7 +41,19 @@ const NetSession = (function () {
 
   const DEFAULTS = {
     pingEveryMs: 500,
-    timeoutMs: 2500,                  // silence after which we declare the peer gone
+    // Silence after which we declare the peer gone. 2.5 s was a desktop
+    // number: ten missed pings is a long time on a wire and a short one on a
+    // phone that has just spent a moment on garbage collection.
+    timeoutMs: 6000,
+    // ...and a gap in OUR OWN pumping is not silence from THEM. The game loop
+    // drives pump(), so anything that blocks the main thread — building a
+    // circuit at lights-out, a tab going to the background, a GC pause — stops
+    // us listening, and the first pump afterwards would see the whole stall as
+    // peer silence and hang up on a connection that is perfectly healthy. That
+    // is what happened half a second into a real race: the guest built the
+    // track, came back, and immediately announced RIVAL DISCONNECTED. A gap
+    // longer than this is credited back to the peer instead.
+    stallForgiveMs: 400,
     clockSamples: 8,
   };
 
@@ -165,6 +177,11 @@ const NetSession = (function () {
     }
 
     function pump(now) {
+      // Credit back any time we were not running (see stallForgiveMs). Done
+      // BEFORE the transport pumps, so a packet that arrives on this very pump
+      // still refreshes lastHeardAt to `now` afterwards.
+      const gap = lastNow ? now - lastNow : 0;   // 0 = never pumped, not a stall
+      if (gap > cfg.stallForgiveMs && lastHeardAt != null) lastHeardAt += gap;
       lastNow = now;
       if (transport.pump) transport.pump(now);
 

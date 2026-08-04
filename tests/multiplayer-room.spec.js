@@ -150,6 +150,29 @@ test.describe("the waiting room", () => {
     await expect(page.locator("#carsetup")).toBeHidden();
   });
 
+  test("the host's EDIT RACE is a circuit picker, not a second garage", async ({ page }) => {
+    // #select normally answers two questions at once — which car, which
+    // circuit. In the room the car half is answered by the room itself (each
+    // player owns their own, and the GARAGE button is right there), so leaving
+    // the team card and its GARAGE link on this screen offered a second,
+    // competing place to choose a team.
+    await enterRoom(page, "host");
+    await page.click("#vs-edit-race");
+    await expect(page.locator("#select")).toBeVisible();
+    await expect(page.locator("#sel-tracks")).toBeVisible();
+    await expect(page.locator("#sel-left")).toBeHidden();
+    await expect(page.locator("#sel-setup")).toBeHidden();     // ...and no way into the garage
+    // START does not start anything here — it goes on to laps/weather.
+    await expect(page.locator("#sel-go")).toHaveText("NEXT");
+
+    await page.click("#sel-go");
+    await expect(page.locator("#race-settings")).toBeVisible();
+    await expect(page.locator("#rs-go")).toHaveText("CONFIRM");
+    await page.click("#rs-go");
+    await expect(page.locator("#vs-room")).toBeVisible();
+    expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");
+  });
+
   test("lights-out clears whatever screen the guest was standing on", async ({ page }) => {
     // The guest does not choose WHEN the race starts — the host does. So GO can
     // land while they are in the garage, and it used to leave #carsetup up over

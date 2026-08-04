@@ -141,7 +141,17 @@ function buildTeamPicker() {
 const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refresh(); };
 
 function buildSelect() {
-  els.selTitle.textContent = G.seasonMode ? "SEASON — ROUND " + ((G.season && G.season.round || 0) + 1)
+  // In the VS FRIEND room this screen is ONE question: which circuit. The car
+  // column and its GARAGE button belong to the room (each player owns their own
+  // car and reaches the garage from there), and offering them again here made
+  // the host's "edit race" look like a second, competing place to choose a team.
+  // START does not start anything either — it goes on to laps/weather and then
+  // back to the room, so it says so.
+  const room = !!G.netRoom;
+  if (els.selLeft) els.selLeft.hidden = room;
+  els.selGo.textContent = room ? "NEXT" : "START";
+  els.selTitle.textContent = room ? "THE RACE"
+    : G.seasonMode ? "SEASON — ROUND " + ((G.season && G.season.round || 0) + 1)
     : G.timeTrial ? "TIME TRIAL" : "GRAND PRIX";
   // Track section: interactive circuit picker in GP/TT; read-only NEXT RACE preview in season
   els.selTrackSection.hidden = false;

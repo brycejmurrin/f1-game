@@ -22,7 +22,7 @@ const els = {
   selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"),
   selPreviewRec: $("sel-preview-rec"),
   selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"),
-  selBack: $("sel-back"), selGo: $("sel-go"),
+  selBack: $("sel-back"), selGo: $("sel-go"), selLeft: $("sel-left"),
   customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
   resultsTable: $("results-table"), resMenu: $("res-menu"), resNext: $("res-next"),
@@ -2378,7 +2378,7 @@ const G = {
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   // The waiting room reuses the real menus rather than reimplementing them.
-  setNetRoom, openRaceSetup,
+  setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
   openGarageFrom: (from) => openGarage(from),
   startRace, startWeatherArc, update, wrapS,
 };
@@ -6601,6 +6601,10 @@ $("adv-close").onclick = () => { $("advanced").hidden = true; };
 // js/game/photomode.js (Photomode.create(G) — wired after the G façade).
 
 function buildRaceSettings() {
+  // In the room this screen confirms the host's choice and hands it to the
+  // other player — it does not drop the lights. A button saying RACE! there is
+  // a lie about what the next tap does.
+  $("rs-go").textContent = netRoom ? "CONFIRM" : "RACE!";
   const lapOpts = isTimeTrial() ? [3, 5, 8] : [3, 5, 10, 25, 57];
   const lapsEl = $("rs-laps");
   lapsEl.innerHTML = "";
