@@ -866,19 +866,32 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // View-space normal from depth finite differences (cheap; the road mask +
   // thickness test reject the noisy silhouette cases). No dpdx/dpdy so this is
   // safe below the early returns above.
-  let dpx = ssrViewPos(in.uv + vec2<f32>(texel.x, 0.0)) - P;
-  let dpy = ssrViewPos(in.uv + vec2<f32>(0.0, texel.y)) - P;
+  // 3-TEXEL baseline (GLX build 746): at phone resolution a 1-texel step at a
+  // grazing road angle is quantization-dominated and the normal turns to noise.
+  let nT = texel * 3.0;
+  let dpx = ssrViewPos(in.uv + vec2<f32>(nT.x, 0.0)) - P;
+  let dpy = ssrViewPos(in.uv + vec2<f32>(0.0, nT.y)) - P;
+  // upVS is the ROAD PLANE's normal (game.js builds it from r x t), not world-up:
+  // on a gradient the two differ by the slope, and reflect() doubles that error.
+  let upVSn = normalize(U.upVS.xyz);
   var Nv = normalize(cross(dpx, dpy));
   if (Nv.z < 0.0) { Nv = -Nv; }   // face the eye (view space looks down -z)
-  let upDot = dot(Nv, normalize(U.upVS.xyz));
+  // ...and a ground normal's view-space z is ~0 at grazing incidence, so that
+  // flip is a coin toss and lands DOWN when the camera pitches up, driving upDot
+  // to -1 and collapsing the mask past a few metres.
+  if (dot(Nv, upVSn) < -0.25) { Nv = -Nv; }
+  let upDot = dot(Nv, upVSn);
   // Up-facing road, foreground-weighted, far-field faded (precision/step speckle).
-  let roadMask = smoothstep(0.40, 0.75, upDot)
+  let roadMask = smoothstep(0.25, 0.55, upDot)
                * smoothstep(-2.5, -7.0, P.z)
-               * (1.0 - smoothstep(-22.0, -55.0, P.z));
+               * (1.0 - smoothstep(-22.0, -78.0, P.z));
   if (roadMask <= 0.001) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
 
   let V = normalize(-P);
-  let R = reflect(-V, Nv);         // points up toward the world above the road
+  // Reflect off the smooth road PLANE, not the bumpy per-pixel normal — a bumpy
+  // normal scatters the ray and splits the mirror into hit/miss patches.
+  let Nr = normalize(mix(Nv, upVSn, 0.85));
+  let R = reflect(-V, Nr);         // points up toward the world above the road
 
   // Higher-fidelity march (optimized): 24 steps, fine-grained geometric growth.
   // JITTERED (mirrors the GLX fix): an un-jittered march quantizes the hit at
@@ -911,7 +924,17 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
         let muv = ssrProjUV(mid).xy;
         if (ssrViewPos(muv).z - mid.z > 0.20) { b = mid; } else { a = mid; }
       }
-      hitUV = ssrProjUV(b).xy;
+      let huv = ssrProjUV(b).xy;
+      // GRAZING SELF-REFLECTION REJECT: the reflected ray skims the tarmac and
+      // lands on the ROAD itself, filling the wet mirror with wet-darkened
+      // asphalt. A rough wet surface barely reflects itself at grazing angles.
+      let hP = ssrViewPos(huv);
+      let hdx = ssrViewPos(huv + vec2<f32>(nT.x, 0.0)) - hP;
+      let hdy = ssrViewPos(huv + vec2<f32>(0.0, nT.y)) - hP;
+      var hN = normalize(cross(hdx, hdy));
+      if (hN.z < 0.0) { hN = -hN; }
+      if (dot(hN, upVSn) > 0.55) { continue; }
+      hitUV = huv;
       let e = abs(hitUV - vec2<f32>(0.5)) * 2.0;
       hitEdge = 1.0 - pow(max(e.x, e.y), 4.0);   // screen-edge fade
       found = true;
@@ -919,25 +942,28 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     }
   }
 
-  var reflCol : vec3<f32>;
-  var cover : f32;
-  if (found) {
-    reflCol = textureSampleLevel(sceneTex, sceneSamp, hitUV, 0.0).rgb;
-    cover = hitEdge;
-  } else {
-    // Miss fallback: dim night sky-glow (never a black hole).
-    reflCol = mix(U.reflSkyLo.xyz, U.reflSkyHi.xyz, clamp(R.y, 0.0, 1.0));
-    cover = 1.0;
-  }
+  // Miss fallback: horizon-vs-zenith by the reflection's up-ness, measured
+  // against the ROAD PLANE — R.y is view-space y, which only tracks up while the
+  // camera is level, and an onboard eye pitches with the road.
+  let skyRefl = mix(U.reflSkyHi.xyz, U.reflSkyLo.xyz, clamp(dot(R, upVSn), 0.0, 1.0));
+  // SSR changes WHAT the road mirrors, never HOW MUCH: scaling the substitution
+  // by hit-vs-miss turned reflected CONTENT into a change of SURFACE, which is
+  // the glossy-here/matte-there patching. Hold cover constant and blend the
+  // content by the hit's own screen-edge confidence.
+  let conf = select(0.0, clamp(hitEdge, 0.0, 1.0), found);
+  var reflCol = mix(skyRefl, textureSampleLevel(sceneTex, sceneSamp, hitUV, 0.0).rgb, conf);
+  let cover = 0.60;
   // Soft-clip the reflected HDR colour before it's substituted (caps the mirror
   // at a sane peak while keeping its colour).
   reflCol = reflCol / (1.0 + reflCol * 0.35);
 
   // Fresnel lift toward the horizon + seam fade at the hard upper cutoff.
-  let fres = pow(1.0 - max(dot(Nv, V), 0.0), 3.0);
+  // Off Nr, the same normal the ray used — Nv carries the road's facets and the
+  // depth-derivative noise, and this term swings the amount across 0.55..0.97.
+  let fres = pow(1.0 - max(dot(Nr, V), 0.0), 3.0);
   var amt = roadMask * strength * (0.55 + 0.42 * fres);
   amt = amt * (1.0 - smoothstep(yCut - 0.06, yCut, in.uv.y));
-  amt = clamp(amt * cover, 0.0, 0.94);
+  amt = clamp(amt * cover, 0.0, 0.80);   // road cap 0.94 -> 0.80, matching GLX
   return vec4<f32>(reflCol, amt);
 }`;
 

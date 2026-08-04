@@ -463,6 +463,10 @@
       C.hazeStr.value = hz ? hz.str : 0;
       C.hazeTime.value = F.time || 0;
       C.ssrThick.value = gk("ssrThick", 0.20);
+      // Camera-aware SSR extent (game.js sets these per camera; onboard cams get
+      // a raised top cutoff and a pulled-in near fade).
+      C.ssrTopUV.value = o.ssrTopUV != null ? o.ssrTopUV : 0.62;
+      C.ssrNear.value = o.ssrNear != null ? o.ssrNear : -2.5;
       C.lensDirt.value = dirtTex ? gk("lensDirt", 0.15) : 0;
       // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
       C.reflTexel.value.set(1 / W, 1 / H);
