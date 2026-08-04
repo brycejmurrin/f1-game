@@ -5,6 +5,23 @@
    is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
 /* ---------- touch controls ---------- */
 /* Every control button is the same size, with perfectly centred text. */
+/* Size and SPACING are one system, expressed as variables. They used to be a
+   dozen hand-written constants (76 wide, stacked at 16/100/184/292/384) which
+   agreed only by arithmetic nobody re-did when a control was added — the same
+   coupling that let ACTIVE AERO push the HUD strip onto the BRAKE button. A
+   position is now `--btn-pitch` from its neighbour, so shrinking a button
+   re-spaces the whole stack for free.
+   Landscape shrinks them: vertical space is the scarce axis there (a phone is
+   ~390px tall on its side), and five 76px circles in one column ate two thirds
+   of it. 64px still clears Apple's 44pt minimum target with room to spare. */
+:root {
+  --btn: 76px;                                        /* action button diameter */
+  --btn-gap: 8px;
+  --btn-pitch: calc(var(--btn) + var(--btn-gap));      /* one slot up the column */
+  --btn-edge: 16px;                                    /* inset from the screen edge */
+  --btn-col: calc(var(--btn) + var(--btn-gap));        /* step to a second column */
+  --steer: 84px;                                       /* steering arrow diameter */
+}
 .touchbtn {
   position: fixed;
   z-index: 12;
@@ -12,7 +29,7 @@
   background: rgba(20, 20, 30, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 50%;
-  width: 76px; height: 76px;
+  width: var(--btn); height: var(--btn);
   font-size: 13px;
   display: flex; align-items: center; justify-content: center;
   text-align: center; line-height: 1;
@@ -23,17 +40,17 @@
    takes the right column (DN bottom, UP above) and BOOST/OT move to centre. */
 #btn-throttle { left: calc(16px + var(--sal)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
 #btn-throttle:active { background: rgba(0, 210, 90, 0.75); }
-#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(100px + var(--sab)); background: rgba(180, 35, 35, 0.42); }
+#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); background: rgba(180, 35, 35, 0.42); }
 #btn-brake:active { background: rgba(230, 45, 45, 0.75); }
 
 #btn-boost { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); background: rgba(0, 150, 200, 0.4); }
 #btn-boost.on { background: rgba(0, 200, 90, 0.85); border-color: #aeea00; box-shadow: 0 0 18px rgba(120, 230, 80, 0.7); color: #04210a; }
-#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(100px + var(--sab)); }
+#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
 #btn-ot.armed { background: #aeea00; color: #0a0a0f; border-color: #aeea00; animation: pulse 0.8s infinite; }
 #btn-ot.on { background: var(--red); color: #fff; border-color: var(--red); }
 /* ACTIVE AERO sits one slot further along whichever column OT is in — every
    layout below moves the pair together, so the rule is "AERO is above OT". */
-#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(184px + var(--sab)); font-size: 12px; }
+#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: 12px; }
 #btn-aero.armed { border-color: rgba(125,249,255,0.8); color: #7df9ff; }
 #btn-aero.on { background: #22d3ee; color: #04212b; border-color: #22d3ee; box-shadow: 0 0 18px rgba(34,211,238,0.7); }
 /* No activation zone anywhere on this circuit: the control cannot do anything,
@@ -46,29 +63,29 @@
 .shiftbtn { flex-direction: column; font-size: 15px; line-height: 1.05; }
 .shiftbtn small { font-size: var(--fs-micro); letter-spacing: 0.1em; color: var(--dim); }
 #shift-down { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
-#shift-up   { right: calc(16px + var(--sar)); bottom: calc(108px + var(--sab)); }
+#shift-up   { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
 
 /* steer buttons: CONSOLE layout — both arrows in the bottom-LEFT, side by side,
    so the left thumb steers like a d-pad and the right thumb stays free for the
    action buttons (BRAKE/BOOST/OT). */
-.steerbtn { font-size: 22px; background: rgba(20, 20, 30, 0.55); width: 84px; height: 84px; }
+.steerbtn { font-size: 22px; background: rgba(20, 20, 30, 0.55); width: var(--steer); height: var(--steer); }
 .steerbtn:active { background: rgba(255, 255, 255, 0.18); }
 #btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(16px + var(--sab)); }
-#btn-steer-right { left: calc(108px + var(--sal)); bottom: calc(16px + var(--sab)); }
+#btn-steer-right { left: calc(16px + var(--steer) + var(--btn-gap) + var(--sal)); bottom: calc(16px + var(--sab)); }
 
 /* MANUAL (portrait): right column holds everything, stacked with 8 px gaps —
    shift DN, shift UP, then BOOST and OT above them */
-body.manual #btn-boost { bottom: calc(200px + var(--sab)); }
-body.manual #btn-ot    { bottom: calc(292px + var(--sab)); }
-body.manual #btn-aero  { bottom: calc(384px + var(--sab)); }
+body.manual #btn-boost { bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); }
+body.manual #btn-ot    { bottom: calc(16px + 3 * var(--btn-pitch) + var(--sab)); }
+body.manual #btn-aero  { bottom: calc(16px + 4 * var(--btn-pitch) + var(--sab)); }
 
 /* BUTTON mode (console): arrows are bottom-left; right thumb gets GAS (bottom),
    BRAKE above it, BOOST above that, OT at the top — all at right+16. */
 body.steer-buttons #btn-throttle { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
-body.steer-buttons #btn-brake    { left: auto; right: calc(16px + var(--sar)); bottom: calc(108px + var(--sab)); }
-body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar)); bottom: calc(200px + var(--sab)); }
-body.steer-buttons #btn-ot       { left: auto; right: calc(16px + var(--sar)); bottom: calc(292px + var(--sab)); }
-body.steer-buttons #btn-aero     { left: auto; right: calc(16px + var(--sar)); bottom: calc(384px + var(--sab)); }
+body.steer-buttons #btn-brake    { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
+body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); }
+body.steer-buttons #btn-ot       { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 3 * var(--btn-pitch) + var(--sab)); }
+body.steer-buttons #btn-aero     { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 4 * var(--btn-pitch) + var(--sab)); }
 
 /* TOUCH mode (steer by screen halves, auto-throttle): BRAKE drops to the left
    corner (no GAS); BOOST/OT keep the right corner. */
@@ -85,11 +102,25 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* HUD becomes a short horizontal strip at the very bottom so the big gear
      no longer floats up over the car */
   .hud-bottom { flex-direction: row; align-items: flex-end; gap: 18px; bottom: calc(8px + var(--sab)); }
-  /* Nudge the strip 20px left of centre so OVERTAKE stays clear of BOOST/OT buttons
-     (right:16) which would otherwise overlap the rightmost flex item. */
-  .hud-bottom { left: calc(50% - 20px); }
-  /* In manual mode BOOST/OT move inward to right:100 (x≈668), so shift more. */
-  body.manual .hud-bottom { left: calc(50% - 55px); }
+  /* The strip is BOUNDED by the thumb columns, not nudged away from them. It used
+     to be centred with a hand-tuned offset ("20px left of centre so OVERTAKE
+     clears BOOST/OT") — a constant that silently encodes both the strip's width
+     and the button column's, so it went stale the moment ACTIVE AERO added a
+     sixth item and AERO began overlapping BRAKE on a small landscape phone.
+     Pinning both edges to the columns' real extents (button 76px at 16 = 92,
+     the manual/2-column stacks at 100 = 176) can never go stale that way, and
+     it is what the buttons-mode rule below already did.
+     Measured: the strip wants 467px. An iPhone SE landscape leaves 467 here,
+     383 in manual and 287 in buttons mode — so it also has to COMPACT, and
+     wrap rather than collide when even that is not enough. */
+  .hud-bottom {
+    left: calc(16px + var(--btn) + var(--btn-gap) + var(--sal));
+    right: calc(16px + var(--btn) + var(--btn-gap) + var(--sar));
+    transform: none;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  /* manual: shifts hold the outer column and BOOST/OT/AERO sit inboard at 100 */
   #hud-gearbox { gap: 3px; }
   #hud-gear { font-size: 48px; }
   #hud-tach { width: 92px; height: 13px; }
@@ -98,36 +129,95 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* manual: keep everything on the right — shifts in the outer column, BOOST/OT
      in a second column just inboard (vertical space is too short to stack four).
      Override shift positions so both columns align at the same row heights. */
-  #shift-down { bottom: calc(12px + var(--sab)); }
-  #shift-up   { bottom: calc(96px + var(--sab)); }
-  body.manual #btn-boost { left: auto; right: calc(100px + var(--sar)); bottom: calc(12px + var(--sab)); }
-  body.manual #btn-ot    { left: auto; right: calc(100px + var(--sar)); bottom: calc(96px + var(--sab)); }
-  body.manual #btn-aero  { left: auto; right: calc(100px + var(--sar)); bottom: calc(180px + var(--sab)); }
+  /* Landscape sizing. Everything below is expressed in slots off --btn-pitch,
+     so these positions follow the size automatically. */
+  :root { --btn: 64px; --steer: 72px; }
+  #shift-up   { bottom: calc(12px + var(--btn-pitch) + var(--sab)); }
+  /* ---- THUMB ARC ----
+     The right-hand controls sit on an arc centred on the thumb's pivot, not in
+     a column. Two reasons, both measured rather than felt:
+     REACH. A column puts its top button straight up from the pivot, which is
+     the one direction a thumb extends worst — it sweeps diagonally. On an arc
+     every button is the SAME distance from the pivot, so which control gets the
+     good slot stops being a question at all. That mattered here: AERO is
+     pressed 3-7 times a lap (once per activation zone; Monza has five), more
+     than BOOST or OVERTAKE, and the column had it in the furthest slot with a
+     set-and-forget toggle in the nearest one.
+     HEIGHT. Three 64px buttons stacked span 220px of a ~375px-tall screen. The
+     same three on a 130px arc span 173px and leave the middle of the screen
+     alone.
+     Radii come from the chord between neighbouring CENTRES having to clear
+     button+gap (72px at 64px buttons). Lone trio, 33 degrees apart: r >= 127,
+     so 130. Inner pair 43 apart: r >= 98, so 104 — 78 was tried and put the
+     two shift buttons 57px apart, i.e. overlapping. Outer trio 30 apart needs
+     154, but the inner arc forces it further out to keep 72px between the two
+     arcs as well: 185 gives a worst-case separation of 76px anywhere in the
+     cluster. The literals are
+     cos/sin of each angle — CSS trig functions exist but are needlessly recent
+     for constants that never change. */
+  :root { --arc-pad: 14px; --arc-r: 130px; --arc-ri: 104px; }
+  /* lone trio (tilt + touch): BOOST 12deg, AERO 45deg, OT 78deg */
+  #btn-boost { left: auto; right: calc(var(--arc-pad) + 0.978 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.208 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  #btn-aero  { left: auto; right: calc(var(--arc-pad) + 0.707 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.707 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  #btn-ot    { left: auto; right: calc(var(--arc-pad) + 0.208 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.978 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  /* When the right side ALSO holds pedals or shifts, those take a tight inner
+     arc (they are held continuously, so they get the closest reach) and the
+     discretionary trio moves out to a wider one. */
+  body.manual, body.steer-buttons { --arc-r: 185px; }
+  body.manual #btn-boost, body.steer-buttons #btn-boost { right: calc(var(--arc-pad) + 0.966 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.259 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  body.manual #btn-aero,  body.steer-buttons #btn-aero  { right: calc(var(--arc-pad) + 0.707 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.707 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  body.manual #btn-ot,    body.steer-buttons #btn-ot    { right: calc(var(--arc-pad) + 0.259 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.966 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  /* inner arc: 25deg and 68deg */
+  #shift-down { right: calc(var(--arc-pad) + 0.906 * var(--arc-ri) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.423 * var(--arc-ri) - var(--btn) / 2 + var(--sab)); }
+  #shift-up   { right: calc(var(--arc-pad) + 0.375 * var(--arc-ri) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.927 * var(--arc-ri) - var(--btn) / 2 + var(--sab)); }
+  body.steer-buttons #btn-throttle { left: auto; right: calc(var(--arc-pad) + 0.906 * var(--arc-ri) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.423 * var(--arc-ri) - var(--btn) / 2 + var(--sab)); }
+  body.steer-buttons #btn-brake    { left: auto; right: calc(var(--arc-pad) + 0.375 * var(--arc-ri) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.927 * var(--arc-ri) - var(--btn) / 2 + var(--sab)); }
+  /* The HUD strip clears the arc's widest reach, not a column's. */
+  .hud-bottom { right: calc(var(--arc-pad) + var(--arc-r) + var(--btn-gap) + var(--sar)); }
+  body.manual .hud-bottom, body.steer-buttons .hud-bottom { right: calc(var(--arc-pad) + var(--arc-r) + var(--btn-gap) + var(--sar)); }
+
+  /* The pedals share the left corner. They were left on the
+     portrait 16px inset while everything else in landscape moved to 12, so the
+     two sides of the screen sat 4px out of register — invisible as a number,
+     and exactly what makes a pad read as scattered rather than aligned. */
+  #btn-throttle { bottom: calc(12px + var(--sab)); }
+  #btn-brake    { bottom: calc(12px + var(--btn-pitch) + var(--sab)); }
   /* console steer: arrows bottom-left, side by side (left thumb home) */
-  #btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(12px + var(--sab)); }
-  #btn-steer-right { left: calc(108px + var(--sal)); bottom: calc(12px + var(--sab)); }
-  /* default (tilt) landscape column: BOOST 12, OT 96, AERO 180 */
-  #btn-aero { bottom: calc(180px + var(--sab)); }
-  /* button mode: 2×2 grid on the right — GAS/BOOST bottom-right column,
-     BRAKE/OT second column (landscape has width to spread horizontally) */
-  body.steer-buttons #btn-throttle { left: auto; right: calc(16px + var(--sar));  bottom: calc(12px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
-  body.steer-buttons #btn-brake    { left: auto; right: calc(100px + var(--sar)); bottom: calc(12px + var(--sab)); }
-  body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar));  bottom: calc(100px + var(--sab)); }
-  body.steer-buttons #btn-ot       { left: auto; right: calc(100px + var(--sar)); bottom: calc(100px + var(--sab)); }
-  body.steer-buttons #btn-aero     { left: auto; right: calc(16px + var(--sar));  bottom: calc(188px + var(--sab)); }
-  /* Buttons mode: steer arrows occupy the left 192px, action buttons the right 176px.
-     Pin the HUD strip inside that clear zone so OVERTAKE can't bleed into the buttons. */
+  #btn-steer-left  { left: calc(16px + var(--sal)); bottom: calc(12px + var(--sab)); }
+  #btn-steer-right { left: calc(16px + var(--steer) + var(--btn-gap) + var(--sal)); bottom: calc(12px + var(--sab)); }
+  /* default (tilt) landscape column: BOOST, OT, AERO one slot apart */
+  #btn-ot   { bottom: calc(12px + var(--btn-pitch) + var(--sab)); }
+  #btn-boost { bottom: calc(12px + var(--sab)); }
+  #btn-aero { bottom: calc(12px + 2 * var(--btn-pitch) + var(--sab)); }
+  /* button mode: 2 columns on the right — GAS/BOOST outer, BRAKE/OT inboard,
+     AERO on top of the outer column (landscape has width to spread out). */
+  body.steer-buttons #btn-throttle { background: rgba(0, 170, 70, 0.42); }
+  /* Buttons mode is the only layout with TWO steer arrows on the left, so it is
+     the only one that needs its own left bound. The RIGHT bound is not repeated
+     here: it belongs to the arc, above. Restating it was the bug — this rule
+     came later in the cascade and quietly pinned the strip back to the old
+     column's reach (160px) while the arc extends to 207px, so the strip ran
+     straight under BOOST and AERO. */
   body.steer-buttons .hud-bottom {
-    left: calc(200px + var(--sal));
-    right: calc(180px + var(--sar));
-    transform: none;
-    justify-content: center;
+    left: calc(16px + var(--steer) + var(--btn-gap) + var(--steer) + var(--btn-gap) + var(--sal));
+  }
+  /* Narrow landscape (an iPhone SE is 667 wide): the strip cannot hold its
+     natural 467px between the thumb columns, so tighten the gap and the two
+     widest items rather than let anything cross into a tap target. Below what
+     even this fits, flex-wrap above stacks the strip upward into empty sky —
+     a taller HUD is a fair trade for a readout that never sits under a thumb. */
+  @media (max-width: 740px) {
+    :root { --btn: 58px; --steer: 66px; }
+    .hud-bottom { gap: 8px; }
+    #hud-energy { width: 74px; }
+    #hud-tach { width: 64px; }
+    #hud-gear { font-size: 40px; }
   }
   /* touch: BRAKE left corner, BOOST/OT right corner */
+  /* touch mode differs only in BRAKE dropping to the left corner (no GAS) —
+     BOOST/OT/AERO are the default landscape column above, and repeating them
+     here is how they ended up 4px out of register with it. */
   body.steer-touch #btn-brake { bottom: calc(12px + var(--sab)); }
-  body.steer-touch #btn-boost { right: calc(16px + var(--sar)); bottom: calc(12px + var(--sab)); }
-  body.steer-touch #btn-ot    { right: calc(16px + var(--sar)); bottom: calc(96px + var(--sab)); }
-  body.steer-touch #btn-aero  { right: calc(16px + var(--sar)); bottom: calc(180px + var(--sab)); }
 }
 
 #pausebtn {

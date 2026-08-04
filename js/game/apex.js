@@ -2127,6 +2127,17 @@ const api = {
   // NOT force the flaps open: `xArmed` still gates on 3 s of straight road
   // ahead, so on a corner this returns xOn:false and aeroX stays at 0. That is
   // the mechanic, not a failure — poll aeroX to see the flap actually travel.
+  // ACTIVE AERO usage — "manual" (the driver's switch) or "auto" (the wing takes
+  // every activation zone by itself, as the AI does). No argument reads it.
+  aeroMode(v) {
+    if (v !== undefined) {
+      if (v !== "auto" && v !== "manual") {
+        return { ok: false, error: "bad_mode", message: 'aeroMode must be "auto" or "manual"' };
+      }
+      G.raceAeroMode = v;
+    }
+    return G.raceAeroMode;
+  },
   aero(on) {
     if (!G.player) return null;
     if (on !== undefined) G.player.xOn = !!on;
@@ -2142,6 +2153,7 @@ const api = {
       inZone: !!G.aeroZoneAt(G.player.s || 0),
       zoneAhead: Math.round(G.aeroZoneAhead(G.player.s || 0)),
       zones: G.aeroZones.length,
+      auto: G.raceAeroMode === "auto",
     };
   },
   // The circuit's ACTIVATION ZONES in arc metres — fixed per track, and empty
