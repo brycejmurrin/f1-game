@@ -217,12 +217,11 @@ test.describe("multiplayer session", () => {
       const A = window.__apex;
       A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0 });
       const armed = A.netStartArm(1000, 4000, 0.5);   // lights-out at t=4000
-      // Well before: still counting down, nobody released.
-      A.netTick(2000);
-      const early = A.info().state;
-      // Past the named instant: released.
-      A.netTick(4200);
-      const late = A.info().state;
+      // netTick() only pumps the SESSION; the countdown itself lives in
+      // update(), so the sim has to be stepped for the clock to be read.
+      const at = (t) => { A.netTick(t); A.step(1 / 60, 1); return A.info().state; };
+      const early = at(2000);     // well before: still counting down
+      const late = at(4200);      // past the named instant: released
       return { armed, early, late, cleared: A.net().startPending };
     });
 
