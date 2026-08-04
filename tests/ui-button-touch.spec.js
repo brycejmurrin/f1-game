@@ -278,11 +278,27 @@ test.describe("Race settings — portrait layout", () => {
   test.use({ viewport: PORTRAIT });
 
   test("chips are compact inline and RACE! button is visible", async ({ page }) => {
+    // STOP THE RENDER LOOP BEFORE CLICKING. Playwright's actionability check
+    // waits for two stable animation frames, and this app's rAF-driven render
+    // loop starves them under SwiftShader — so `#sel-go` measured visible,
+    // stable, enabled and hit-testing to itself, and `.click()` still timed out.
+    // `headless(true)` is the idiom the rest of the suite already uses. These
+    // two tests assert DOM geometry, so a scene that does not paint costs them
+    // nothing; it is the whole reason they were the two that hung.
     await page.goto("/");
     await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
+    // START on the select screen goes to the GARAGE now, and the garage's DONE
+    // carries on to race settings. This spec waited on #race-settings straight
+    // after #sel-go and had been timing out ever since the garage was inserted
+    // into the flow — two minutes per run, twice, for a route that no longer
+    // exists. Reaching a screen the way a player reaches it is the point; when
+    // the route moves, the spec's path has to move with it.
     await page.locator("#sel-go").click();
+    await page.locator("#carsetup").waitFor({ state: "visible" });
+    await page.locator("#cs-done").click();
     await page.locator("#race-settings").waitFor({ state: "visible" });
     await page.waitForTimeout(300);
     // RACE! button must be visible without scrolling
@@ -338,9 +354,18 @@ test.describe("Race settings — landscape layout", () => {
   test("fits without scrolling in landscape", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));   // see the portrait twin
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
+    // START on the select screen goes to the GARAGE now, and the garage's DONE
+    // carries on to race settings. This spec waited on #race-settings straight
+    // after #sel-go and had been timing out ever since the garage was inserted
+    // into the flow — two minutes per run, twice, for a route that no longer
+    // exists. Reaching a screen the way a player reaches it is the point; when
+    // the route moves, the spec's path has to move with it.
     await page.locator("#sel-go").click();
+    await page.locator("#carsetup").waitFor({ state: "visible" });
+    await page.locator("#cs-done").click();
     await page.locator("#race-settings").waitFor({ state: "visible" });
     await page.waitForTimeout(300);
     // Panel must not overflow

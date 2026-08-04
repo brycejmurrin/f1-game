@@ -87,6 +87,32 @@ window.SheetShape = (function () {
     (root || document).querySelectorAll(".sheet").forEach(observe);
   }
 
+  /* A SCREEN BECOMING VISIBLE MUST BE MEASURED IN THE SAME TICK.
+     A ResizeObserver fires on the NEXT frame, so between a screen being shown
+     and that callback the sheet carries no `data-shape`/`data-pair` and the CSS
+     falls back to the stacked layout. Visually that is a valid layout — it was
+     made valid on purpose — but it is not the SAME layout, and the difference is
+     observable: in the fallback `#sel-body` is the scroll region, in the pair
+     `#sel-tracks` is. js/game/menunav.js redirects a trackpad gesture to the
+     nearest pane, so for that one frame the wheel scrolled the wrong element,
+     and three menu-keyboard specs caught it.
+     Screens are toggled by their `hidden` attribute, so watching that and
+     classifying immediately closes the gap with no polling and no new contract
+     for the code that opens a screen. */
+  function watchVisibility() {
+    if (typeof MutationObserver !== "function") return;
+    new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.attributeName !== "hidden" || m.target.hidden) continue;
+        m.target.querySelectorAll(".sheet").forEach((el) => {
+          const r = el.getBoundingClientRect();
+          classify(el, r.width, r.height);
+        });
+      }
+    }).observe(document.documentElement,
+      { attributes: true, attributeFilter: ["hidden"], subtree: true });
+  }
+
   function init() {
     if (typeof ResizeObserver === "function") {
       ro = new ResizeObserver((entries) => {
@@ -97,6 +123,7 @@ window.SheetShape = (function () {
       });
     }
     scan();
+    watchVisibility();
     // A screen that builds its sheet later (the data hub) still gets measured.
     if (typeof MutationObserver === "function") {
       new MutationObserver((muts) => {
