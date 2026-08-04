@@ -45,7 +45,7 @@
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, hash, vadd,
         place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid,
-        bush, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
+        bush, palm, acacia, terrace, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
         floodMast: apiFloodMast, floodMastRing, ledFacadeBands, cameraTower, broadcastCompound,
         circuitKit } = api;
@@ -716,8 +716,72 @@
       // Sparse spectator berms of packed dark seating on the desert flats —
       // grandstand() auto-speckles crowds. Fills quiet stretches of the lap.
       grandstandEx(0.68,  1, 26, 46, STAND_CREAM, SEAT_BLUE, { endWalls: true });
-      grandstandEx(0.71,  1, 26, 40, null, null, { livery: "alu" });
+      // Bare bolted aluminium, capped flat and closed at the ends. This was the
+      // one stand on the lap whose options bag set nothing but a colour, so it
+      // shipped the same shell and the same cantilever as the cream truss
+      // heroes at T1 and the main straight, 26 m from the road in a colour
+      // nobody reads at night. A low flat cap and a 9 m shell give it a
+      // silhouette of its own under the floodlights.
+      grandstandEx(0.71,  1, 26, 40, null, null,
+        { livery: "alu", roof: "flat", endWalls: true, h: 9 });
       grandstandEx(0.335, 1, 28, 42, null, null, { livery: "sandstone", roof: "flat" });
+
+      // ── General-admission terracing above the T1 stands ──────────────────
+      // Poured mass-concrete steps in the sandstone family, set well behind the
+      // three T1 grandstands and their light bank. No roof, no back shell: the
+      // form the venue actually uses for GA, and the one open-seating silhouette
+      // Sakhir was missing between its cream shells and its bare desert.
+      terrace(0.018, 0.048, 1, 58,
+        { rows: 6, rise: 1.4, depth: 2.6, step: 9, density: 0.5,
+          conc: [0.76, 0.70, 0.57], concAlt: [0.68, 0.62, 0.50],
+          crowd: [SEAT_BLUE, SEAT, [0.62, 0.58, 0.52], [0.40, 0.30, 0.24]] });
+
+      // ── Date-palm avenues: IRRIGATED ground only ─────────────────────────
+      // This file culled its palms to keep the sand-island read, and that was
+      // right for the open desert — nothing grows out there. But it left the
+      // circuit with no living thing anywhere, and Sakhir's paddock, entrance
+      // road and hospitality terraces are lined with planted date palms that
+      // are watered daily. So they come back, but ONLY on ground the venue
+      // irrigates: the paddock spine and the T4 hospitality terrace. Fronds are
+      // a dusty olive, not oasis green — these are floodlit at night and lit by
+      // a desert sun by day, and a vivid green here would undo the whole palette.
+      const FROND     = [0.26, 0.34, 0.16];
+      const FROND_DRY = [0.32, 0.36, 0.19];
+      // Paddock spine behind the pit complex (left), between the hospitality
+      // row at gap 32-38 and the wind-towers at 46-52.
+      for (let i = 0; i < 10; i++) {
+        const sf = 0.955 + i * 0.009;
+        const k = K(sf), hv = hash(k * 83 + i * 3);
+        palm(k, -1, 42 + (i % 2) * 4, 9 + hv * 4, hv < 0.5 ? FROND : FROND_DRY);
+      }
+      // T4 hospitality terrace (right) — the marquee/hospitality cluster there
+      // sits at gap 44-60, so the avenue runs just inside it.
+      for (let i = 0; i < 7; i++) {
+        const sf = 0.238 + i * 0.007;
+        const k = K(sf), hv = hash(k * 97 + i * 5);
+        palm(k, 1, 36 + (i % 2) * 5, 8.5 + hv * 3.5, hv < 0.45 ? FROND : FROND_DRY);
+      }
+
+      // ── Desert acacia (samr / ghaf) on the open flats ────────────────────
+      // The ONE tree that grows unirrigated in the Gulf interior: a bare trunk
+      // forking low into a single wide, flat, near-horizontal crown. bush() —
+      // all this circuit had — is a ground-hugging blob and reads as scrub from
+      // any distance; the umbrella IS the desert silhouette, and it is the only
+      // thing that gives the flats a vertical scale reference at night. Kept
+      // deliberately thin (one per ~400 m of lap) and pushed 34 m+ out, so the
+      // Sakhir emptiness survives.
+      const ACACIA     = [0.34, 0.36, 0.20];
+      const ACACIA_DRY = [0.40, 0.39, 0.23];
+      for (const [sf, side, dist] of [
+        [0.305, -1, 44], [0.365,  1, 52], [0.455, -1, 38],
+        [0.525,  1, 46], [0.575, -1, 40], [0.655,  1, 42],
+        [0.745, -1, 36], [0.805, -1, 50], [0.875, -1, 40],
+      ]) {
+        const k = K(sf), hv = hash(k * 71 + dist);
+        const th = 5 + hv * 2.5;
+        acacia(k, side, dist, th, hv < 0.5 ? ACACIA : ACACIA_DRY,
+               { spread: th * (1.2 + hv * 0.5), layers: hv > 0.65 ? 2 : 1 });
+      }
 
       // ── Broadcast compound behind the paddock ────────────────────────────
       // Every real F1 venue keeps OB trucks + satellite uplink dishes behind

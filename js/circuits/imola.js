@@ -49,9 +49,10 @@
     scenery: function (api) {
       const { out, MAT, n, px, pz, hw, pyMin, hash, every, place, prop, backdrop,
               groundPatch, waterSurface, modelGroup,
-              groundYAt, onTrack, addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
+              groundYAt, onTrack, addBox, addCyl, addPrism, addFrustum, vadd, anchor,
               seat, foundation,
               along, mountain, tree, pine, hedge, bush,
+              cypress, stonePine, plane, tieredBowl, terrace,
               grandstand, spectatorHill, building, motorhome, tower, billboard, marshalPost, gantry,
               fence, guardrail, tyreWall, wall,
               forestEdge } = api;
@@ -264,7 +265,8 @@
 
       // ---- Rivazza double-left: gravel apron + grass amphitheatre banks ----
       grandstand(0.80, -1, 12, 55, [0.52, 0.55, 0.60], RED);
-      grandstand(0.84, -1, 12, 48, [0.54, 0.57, 0.61], [0.78, 0.30, 0.22]);
+      // (The second Rivazza stand here is now the open concrete terrace() in
+      // the bespoke section below — see "Rivazza's outer bank".)
       terrainPatch("rivazza-gravel-0", 0.79, -1, 6, [32, 55], GRAVEL);
       terrainPatch("rivazza-gravel-1", 0.81, -1, 7, [34, 58], GRAVEL);
       terrainPatch("rivazza-bank-0", 0.80, -1, 18, [40, 62], BANK);
@@ -305,6 +307,50 @@
       // ---- Start/finish overhead gantry ----
       gantry(0.00, 7.5, [0.14, 0.14, 0.17]);
       gantry(0.965, 7.0, [0.18, 0.18, 0.20]);
+
+      // ---- "AUTODROMO ENZO E DINO FERRARI" — the circuit's own name, in the
+      //      circuit's own crimson, on the pit roofline and again over the
+      //      paddock gate. Every permanent venue puts its name where the
+      //      cameras are; without it Imola's pit complex is an anonymous grey
+      //      slab that could be any of forty circuits. Letterforms are a run of
+      //      pale blocks of varying width on a crimson field: at 250 km/h that
+      //      reads as a wordmark, and it costs a fraction of real glyphs.
+      const CRIMSON = [0.72, 0.10, 0.11];
+      const wordmark = (a, y, len, blockH, cols) => {
+        const b = [a.r, a.u, a.t];
+        out._mat = MAT.METAL;
+        addBox(out, vadd(a.c, a.u, y), [0.5, blockH, len], CRIMSON, b);
+        out._mat = 0;
+        // Two words of unequal length, gapped — the shape of the real name.
+        let t = -len / 2 + 2.5;
+        for (let i = 0; t < len / 2 - 2.5; i++) {
+          const w = 0.9 + (i % 4) * 0.55;
+          addBox(out, vadd(vadd(a.c, a.t, t + w / 2), a.u, y),
+                 [0.18, blockH * 0.52, w], cols, b);
+          t += w + ((i % 7 === 6) ? 2.6 : 0.75);   // wider break = word break
+        }
+      };
+      wordmark(anchor(K(0.005), -1, 1), 12.6, 88, 2.6, [0.95, 0.94, 0.90]);
+
+      // Paddock gate portal — two crimson piers carrying the same wordmark, set
+      // well behind the pit block so the footprint never reaches the road.
+      {
+        const g = anchor(K(0.928), -1, 34), gb = [g.r, g.u, g.t];
+        modelGroup("imola-paddock-gate", {
+          center: vadd(g.c, g.u, 5.5), size: [4, 12, 26], basis: gb,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          for (const sg of [-1, 1])
+            addBox(stage, vadd(vadd(g.c, g.t, sg * 10), g.u, 4.6),
+                   [2.2, 9.2, 2.2], STONE3, gb);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(g.c, g.u, 9.9), [1.6, 2.4, 22], CRIMSON, gb);
+          stage._mat = 0;
+          for (let i = 0; i < 11; i++)
+            addBox(stage, vadd(vadd(g.c, g.t, (i - 5) * 1.7), g.u, 9.9),
+                   [0.2, 1.2, 0.75 + (i % 3) * 0.4], [0.95, 0.94, 0.90], gb);
+        });
+      }
 
       // ---- Pit / paddock complex (left of pit straight) ----
       building(K(0.97), -1, 18, 14, 7, 90, { wall: PITWALL, window: WIN_LIT, floor: 4, lit: true });
@@ -399,13 +445,15 @@
         // outer edge of the terrain ribbon, and foundation() only samples the
         // ribbon — so on the far side, where the land has already dropped to the
         // universal floor, a shallow plinth stops short of it.
-        const terrace = (f, w, d) => foundation(out, {
+        // Named `plinth`, not `terrace`: the api now exports a terrace() stand
+        // emitter and a shadowing local const here reads as a call to it.
+        const plinth = (f, w, d) => foundation(out, {
           center: f.p, size: [w * 1.08, d * 1.08], top: f.p[1],
           basis: [r, u, t], col: STONE, ground: f.gy, embed: 4,
         });
         const put = (alongM, outM, rise, w, h, d, col) => {
           const f = footAt(alongM, outM, rise);
-          terrace(f, w, d);
+          plinth(f, w, d);
           addBox(out, vadd(f.p, u, h / 2), [w, h, d], col, [r, u, t]);
           // Roof sits ON the wall box (which spans foot .. foot+h). addPrism
           // anchors at its BASE, so the +1.0 left every village roof hovering.
@@ -424,7 +472,7 @@
         // own position like the huts, and terrace the lift.
         const churchAt = footAt(55, 42, 18);
         const churchFoot = churchAt.p;
-        terrace(churchAt, 18, 28);
+        plinth(churchAt, 18, 28);
         addBox(out, vadd(churchFoot, u, 8), [18, 16, 28], STONE2, [r, u, t]);
         // Nave box is CENTRED at +8 with height 16 → its top face is 16.
         seat.prism(out, vadd(churchFoot, u, 16), [18, 5.5, 28], TERRA, [r, u, t]);
@@ -433,7 +481,7 @@
         const campH = 28;
         // Campanile stands 22 m clear of the nave, past the church's own
         // terrace, so it needs its own plinth down to the land beneath it.
-        terrace({ p: towerFoot, gy: churchAt.gy }, 6, 6);
+        plinth({ p: towerFoot, gy: churchAt.gy }, 6, 6);
         addCyl(out, towerFoot, 1.8, campH, STONE, 8, [r, u, t]);
         addBox(out, vadd(towerFoot, u, campH), [5.5, 2.2, 5.5], STONE2, [r, u, t]);
         // Belfry cap top = campH + half its 2.2 m height, not campH + 2.2.
@@ -522,23 +570,56 @@
       // ====================================================================
 
       // ── Italian cypress — the tall dark columnar spire that flanks Imola's
-      //    wooded hillsides and the memorial park. ──
+      //    wooded hillsides and the memorial park. The local copy of this model
+      //    is gone: the engine now ships cypress() (js/track/scenery-nature.js),
+      //    which is the same cone stack plus an anchored, on-track-guarded,
+      //    noted body and a sunk trunk foot. `slim: 0.93` reproduces the crown
+      //    radii the local version used (1.35 / 1.00 / 0.65) against the
+      //    shared model's slightly fuller 1.45 / 1.10 / 0.70 default.
       const CYP = [0.11, 0.28, 0.15], CYP_D = [0.08, 0.22, 0.12];
-      function cypress(k, side, dist, h) {
-        const a = anchor(k, side, dist);
-        const b = [a.r, a.u, a.t];
-        const col = hash(k * 7 + side) < 0.5 ? CYP : CYP_D;
-        out._mat = MAT.WOOD;
-        addCyl(out, a.c, 0.20, h * 0.16, [0.30, 0.22, 0.14], 5, b);
-        out._mat = MAT.FOLIAGE;
-        addCone(out, vadd(a.c, a.u, h * 0.10), 1.35, h * 0.58, col, 6, b);
-        addCone(out, vadd(a.c, a.u, h * 0.44), 1.00, h * 0.42, col, 6, b);
-        addCone(out, vadd(a.c, a.u, h * 0.70), 0.65, h * 0.32, col, 6, b);
-        out._mat = 0;
-      }
-      // Sparse Italian cypress punctuation only (deciduous hollow owns mid-lap).
+      const cyp = (k, side, dist, h, slim) =>
+        cypress(k, side, dist, h, hash(k * 7 + side) < 0.5 ? CYP : CYP_D,
+                { slim: slim || 0.93 });
+      // Sparse cypress punctuation on the wooded slopes (deciduous hollow owns mid-lap).
       for (const [s0, side, gap, cnt] of [[0.32, -1, 24, 3], [0.52, 1, 26, 2], [0.64, -1, 32, 3], [0.82, -1, 20, 3]]) {
-        for (let i = 0; i < cnt; i++) cypress(K(s0 + i * 0.010), side, gap + (i % 2) * 3, 13 + hash(i * 5 + s0 * 40) * 6);
+        for (let i = 0; i < cnt; i++) cyp(K(s0 + i * 0.010), side, gap + (i % 2) * 3, 13 + hash(i * 5 + s0 * 40) * 6);
+      }
+
+      // ── Cypress AVENUE up the Piratella climb — the one planting that says
+      //    "Emilia-Romagna" from the cockpit rather than "generic green track".
+      //    A rank reads as an avenue only if it is regular: fixed spacing, one
+      //    lateral offset, heights varying by a metre or two and no more. The
+      //    scattered punctuation above deliberately does the opposite.
+      for (let i = 0; i < 14; i++) {
+        cyp(K(0.300 + i * 0.0072), -1, 17, 14.5 + hash(i * 3.1) * 3.5, 0.86);
+      }
+      // Matching short rank flanking the Rivazza exit toward the paddock gate.
+      for (let i = 0; i < 8; i++) {
+        cyp(K(0.862 + i * 0.0068), -1, 15, 13.5 + hash(i * 5.7 + 2) * 3, 0.86);
+      }
+
+      // ── Umbrella pines (pino domestico) in the Parco delle Acque Minerali —
+      //    the hollow the circuit loops through is a public park, and the
+      //    parasol pine is what actually stands in it. Its flared-underside
+      //    mushroom silhouette is the counterpoint to the cypress spires: the
+      //    two together are the Italian park read, which no cone-stack in the
+      //    old library could make.
+      const PINO = [0.16, 0.34, 0.17], PINO_D = [0.12, 0.28, 0.14];
+      for (const [s, side, gap, h] of [
+        [0.452, -1, 20, 17], [0.470,  1, 22, 19], [0.488, -1, 25, 16],
+        [0.506,  1, 24, 18], [0.524, -1, 21, 20], [0.542,  1, 27, 17],
+        [0.372, -1, 26, 18], [0.398,  1, 24, 16],
+      ]) stonePine(K(s), side, gap, h, hash(s * 71) < 0.5 ? PINO : PINO_D,
+                   { lean: 0.35, spread: 1.15 });
+
+      // ── Pollarded plane avenue (platani) along the old-town approach. An
+      //    Italian provincial road is lined with these, cut back to a disc
+      //    every winter — a flat cylinder crown, not a cone, which is exactly
+      //    why the tree()/pine() pair could never make this street.
+      const PLAT = [0.20, 0.38, 0.19];
+      for (let i = 0; i < 9; i++) {
+        plane(K(0.596 + i * 0.0125), -1, 44, 13 + (i % 3) * 1.5, PLAT,
+              { stages: 2, spread: 0.85 });
       }
 
       // ── Ayrton Senna memorial park (Tamburello, s~0.07 L) — bronze figure on
@@ -606,40 +687,35 @@
         }, { required: true });
       })();
 
-      // ── Terraced hillside tifosi bowls at Tosa & Rivazza — bespoke stepped
-      //    crowd walls stacking up the natural banking (cheap slab + speckle). ──
+      // ── Terraced hillside tifosi seating at Tosa & Rivazza. The stepped bowl
+      //    used to be a local model here (and a near-identical one at Monza);
+      //    it is now the shared tieredBowl(), which differs in one way that
+      //    matters: it is a RANGE emitter that walks the arc with along(), so
+      //    the Tosa bank follows the hairpin instead of cutting its chord with
+      //    one 60 m straight box. Options restate Imola's proportions — 5.4 m
+      //    tiers, a 2.8 m first riser, 3.1 m per tier — against the shared
+      //    defaults of 5.6 / 3.0 / 3.3.
       const IM_SHELL_A = [0.53, 0.55, 0.59], IM_SHELL_B = [0.48, 0.50, 0.55];
       const IM_CROWD = [[0.82, 0.24, 0.20], [0.86, 0.84, 0.80], [0.24, 0.42, 0.70], [0.72, 0.62, 0.30]];
-      function tieredBowl(s, side, gap, len, tiers) {
-        const k = K(s);
-        const g0 = anchor(k, side, gap);
-        if (onTrack(g0.c[0], g0.c[2], len * 0.4)) return;
-        for (let t = 0; t < tiers; t++) {
-          const a = anchor(k, side, gap + t * 5.4);
-          const b = [a.r, a.u, a.t];
-          const h = 2.8 + t * 3.1;
-          out._mat = MAT.CONCRETE;
-          addBox(out, vadd(a.c, a.u, h * 0.5), [5.0, h, len], t % 2 ? IM_SHELL_A : IM_SHELL_B, b);
-          out._mat = MAT.FABRIC;
-          addBox(out, vadd(a.c, a.u, h + 0.8), [4.3, 1.5, len], IM_CROWD[t % 4], b);
-          out._mat = 0;
-          addBox(out, vadd(a.c, a.u, h + 1.75), [4.6, 0.3, len + 1], [0.92, 0.90, 0.82], b);
-          const cnt = Math.min(14, Math.floor(len / 6));
-          out._mat = MAT.FABRIC;
-          for (let c = 0; c < cnt; c++) {
-            if (hash(k * 3 + t * 29 + c) < 0.45) continue;
-            const off = (c / (cnt - 1) - 0.5) * (len - 4);
-            addBox(out, vadd(vadd(a.c, a.t, off), a.u, h + 1.25), [1.8, 0.6, 1.2], IM_CROWD[(c + t) % 4], b);
-          }
-          out._mat = 0;
-        }
-        const aR = anchor(k, side, gap + (tiers - 0.5) * 5.4);
-        out._mat = MAT.METAL;
-        addBox(out, vadd(aR.c, aR.u, 2.8 + tiers * 3.1 + 1.5), [6.8, 0.45, len + 2],
-               [0.20, 0.20, 0.24], [aR.r, aR.u, aR.t]);
-        out._mat = 0;
-      }
-      tieredBowl(0.285, -1, 16, 60, 4);   // Tosa hairpin bank — a real built stand, keeps its shell
+      // 60 m of a 4.9 km lap ≈ 0.0122 of a lap.
+      tieredBowl(0.279, 0.291, -1, 16, {   // Tosa hairpin bank — a real built stand, keeps its shell
+        tiers: 4, tierDepth: 5.4, base: 2.8, rise: 3.1, step: 12,
+        shell: [IM_SHELL_A, IM_SHELL_B], crowd: IM_CROWD,
+        fascia: [0.92, 0.90, 0.82], roof: true, roofCol: [0.20, 0.20, 0.24],
+        density: 0.55,
+      });
+
+      // ── Rivazza's outer bank is poured concrete terracing, not a roofed
+      //    stand: an open flight of steps cut into the hillside with the raw
+      //    earth face showing above the top row. That is terrace({cut}) exactly,
+      //    and it replaces one of the two identical grandstand() boxes that
+      //    used to stand here — Imola's period character is open concrete,
+      //    and a second roofed shell was hiding it.
+      terrace(0.826, 0.851, -1, 13, {
+        rows: 6, rise: 1.45, depth: 2.5, step: 9, density: 0.6,
+        conc: [0.72, 0.70, 0.65], concAlt: [0.63, 0.61, 0.57],
+        crowd: IM_CROWD, cut: true, cutCol: [0.50, 0.33, 0.21],
+      });
 
       // Rivazza plunge amphitheatre & Acque Minerali hollow: both are natural
       // hillside terracing, not a flat-ground built stand — tieredBowl's tiers
@@ -720,7 +796,7 @@
           wall: i % 3 === 0 ? STONE3 : (i % 3 === 1 ? TERRA2 : STONE2),
           window: WIN_LIT, floor: 3, roof: true, lit: true,
         });
-        cypress(K(s + 0.005), side, gap + w + 5, 12 + (i % 3) * 2);
+        cyp(K(s + 0.005), side, gap + w + 5, 12 + (i % 3) * 2);
       });
 
       // 4) Tamburello remembrance garden: a low tribute wall behind the Senna

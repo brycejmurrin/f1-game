@@ -51,7 +51,7 @@
     ],
     elevations: [{ s: 0.56, halfM: 300, rise: 8 }],
     scenery: function (api) {
-      const { out, MAT, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane,
+      const { out, MAT, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane, seat, track,
               addBox, addCyl, addPrism, addPyramid, addCone, addFrustum, anchor, vadd, onTrack, hash, every,
               along, runoffApron, bowlSeatWall,
               modelGroup, waterSurface, waterBand, groundPatch,
@@ -265,20 +265,95 @@
       // with Verstappen fans regardless of the stand's own material, so only
       // the structure varies, never the crowd tint.
       // -----------------------------------------------------------------------
+      // MODULAR DUNE DECK — the form grandstandEx structurally cannot make.
+      // Two thirds of Zandvoort's capacity is trucked in and bolted together for
+      // the weekend: a Nussli-style steel frame standing straight on the sand,
+      // seat decks clipped onto it, and NOTHING behind or above — no shell, no
+      // roof, open lattice you can see the dune through. grandstandEx always
+      // emits a 10 m back shell and (bar roof:"none") a slab, so every stand it
+      // makes reads permanent. These read exactly as temporary, which is what
+      // separates a dune circuit from a Tilke campus.
+      const duneDeck = (id, s, side, gap, bays, opts) => {
+        opts = opts || {};
+        const rows = opts.rows || 7, pitch = 6.0, len = bays * pitch;
+        const a = anchor(K(s), side, gap + 4), b = [a.r, a.u, a.t];
+        const IN = -side;                       // +1 along a.r points at the track
+        const topH = 1.4 + rows * 1.32;
+        // Keep the front-face exclusion the grandstandEx call here used to
+        // register, so the dune belt and marram bands still stop short of it.
+        const half = (len / 2) / track.total;
+        recordBarrier(s - half, s + half, side, gap);
+        modelGroup(id, {
+          center: vadd(a.c, a.u, topH * 0.55),
+          size: [14, topH + 4.5, len + 3],
+          basis: b,
+        }, (stage) => {
+          const TUBE = [0.62, 0.64, 0.67], DECK = [0.55, 0.57, 0.60];
+          // Bolted frame: uprights at every bay line, plus one diagonal per bay.
+          stage._mat = MAT.METAL;
+          for (let i = 0; i <= bays; i++) {
+            const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
+            seat.cyl(stage, vadd(p, a.r, IN * -4.2), 0.16, topH, TUBE, 6, b);
+            seat.cyl(stage, vadd(p, a.r, IN * 0.2), 0.16, topH * 0.72, TUBE, 6, b);
+            seat.cyl(stage, vadd(p, a.r, IN * 4.2), 0.16, topH * 0.34, TUBE, 6, b);
+            addBox(stage, vadd(vadd(p, a.r, IN * -2), a.u, topH * 0.5),
+              [4.8, 0.12, 0.12], TUBE, b);
+            addBox(stage, vadd(vadd(p, a.r, IN * 2), a.u, topH * 0.26),
+              [4.8, 0.12, 0.12], TUBE, b);
+          }
+          for (let t = 0; t < rows; t++) {
+            const lat = IN * (4.0 - t * 1.25), y = 1.1 + t * 1.32;
+            // Deck plate + the bright plastic seat bank clipped onto it. Seat
+            // rows stay orange whatever the frame is: the Oranje army is the
+            // constant at this circuit, the structure under it is not.
+            stage._mat = MAT.METAL;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y), [1.3, 0.16, len], DECK, b);
+            stage._mat = MAT.FABRIC;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.16),
+              [1.0, 0.55, len - 1.2], orange, b);
+            for (let j = 0; j * 0.95 < len - 2.5; j++) {
+              const h2 = hash(K(s) * 13 + t * 71 + j * 23);
+              if (h2 < 0.34) continue;
+              seat.box(stage, vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1.2 + j * 0.95),
+                a.u, y + 0.71), [0.55, 0.95, 0.45],
+                h2 > 0.72 ? orange : (h2 > 0.5 ? [0.94, 0.90, 0.82] : [0.20, 0.22, 0.28]), b);
+            }
+          }
+          // Printed vinyl fascia across the front of the frame — the one solid
+          // face on the whole structure, and where the sponsor branding lives.
+          stage._mat = MAT.FABRIC;
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 4.4), a.u, 0.9),
+            [0.12, 1.8, len], opts.fascia || [0.94, 0.92, 0.88], b);
+          // Bolt-on stair tower at one end — always visible on a modular build.
+          stage._mat = MAT.METAL;
+          const st = vadd(vadd(a.c, a.t, len / 2 + 1.2), a.r, IN * -2.5);
+          for (const off of [-1.3, 1.3])
+            seat.cyl(stage, vadd(st, a.t, off), 0.14, topH, TUBE, 5, b);
+          for (let f2 = 0; f2 < rows; f2++)
+            addBox(stage, vadd(st, a.u, 1.1 + f2 * 1.32), [2.6, 0.1, 2.6], DECK, b);
+          stage._mat = 0;
+        });
+      };
+
       grandstandEx(0.01,  1,  16, 36, null, orange,
         { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true }); // main pit straight R (largest, permanent grandstand)
-      grandstandEx(0.05,  1,  14, 28, null, orange,
-        { livery: "alu", roof: "truss" }); // Tarzan hairpin R — bare scaffold deck
+      duneDeck("zandvoort-deck-tarzan", 0.05, 1, 14, 5,
+        { rows: 7, fascia: [0.96, 0.42, 0.02] });   // Tarzan hairpin R
       grandstandEx(0.09, -1,  14, 26, null, orange,
         { livery: "orange", roof: "flat" }); // Tarzan exit L
       grandstandEx(0.135,-1,  28, 40, null, orange,
         { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true }); // Hugenholtz banked L (gap 22→28: steeply banked, roof must clear)
-      grandstandEx(0.18,  1,  16, 32, null, orange,
-        { livery: "alu", roof: "flat" }); // Hugenholtz exit R
+      duneDeck("zandvoort-deck-hugenholtz", 0.18, 1, 16, 5,
+        { rows: 6, fascia: [0.92, 0.90, 0.86] });   // Hugenholtz exit R
       grandstandEx(0.48, -1,  28, 34, null, orange,
         { livery: "orange", roof: "truss" }); // Scheivlak approach L (gap was 28 in previous pass)
+      // Scheivlak R — trucked into the dune for the weekend, so it gets the bare
+      // aluminium family and NO roof. Zandvoort's permanent concrete is confined
+      // to the pit straight and the two banked corners; everything out in the
+      // dunes is scaffold and modular seating, and a cantilever slab here was
+      // the single detail making the mid-lap read like a permanent autodrome.
       grandstandEx(0.53,  1,  18, 28, null, orange,
-        { livery: "steel" }); // Scheivlak R
+        { livery: "alu", roof: "none", endWalls: true });
       // Masterbocht — previously the emptiest stretch of the lap (no stand of
       // any kind between Scheivlak and the Hans Ernst arena). A modern two-tier
       // stand fills the gap and gives the mid-lap sweep a spectator presence.
@@ -288,10 +363,13 @@
         { livery: "alu", roof: "none" }); // Luyendyk approach R (gap 36→42: banked corner clearance) — uncovered temporary bleacher
       grandstandEx(0.915, 1,  28, 80, null, orange,
         { livery: "orange", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true }); // Arie Luyendyk banked R (massive) (gap 22→28: VERY banked, roof overhang)
+      // Luyendyk exit R — the bolt-on extension to the banked stand next door.
+      // A flat deck roof on scaffold, not the neighbour's cantilever: reading as
+      // an ADDITION to the big stand is what makes the big stand look permanent.
       grandstandEx(0.96,  1,  28, 32, null, orange,
-        { livery: "steel" }); // Luyendyk exit R (gap 22→28: post-banked transition)
-      grandstandEx(0.97, -1,  22, 34, null, orange,
-        { livery: "alu", roof: "flat" }); // pit straight L
+        { livery: "scaffold", roof: "flat", pylons: true }); // (gap 22→28: post-banked transition)
+      duneDeck("zandvoort-deck-pitstraight", 0.97, -1, 22, 5,
+        { rows: 6, fascia: [0.16, 0.20, 0.34] });   // pit straight L
 
       // -----------------------------------------------------------------------
       // HERO-SECTOR COASTAL SPECTACLE — five bounded, track-specific layers.
@@ -410,20 +488,43 @@
       }
 
       // -----------------------------------------------------------------------
-      // PIT BUILDING — long low white-grey structure with garage bay accents
+      // PIT BUILDING — deliberately MODEST. Zandvoort's is the smallest pit
+      // complex on the calendar: a two-storey block barely taller than the
+      // grandstand opposite, with the dune sitting right behind it. The details
+      // that make it Zandvoort rather than Anygarage are the anthracite door
+      // rhythm, the cantilevered timing/race-control box perched at the Tarzan
+      // end (the only thing on the building that rises above the roof line) and
+      // the brick-red plinth course the whole thing sits on.
       // -----------------------------------------------------------------------
       (() => {
         const a = anchor(K(0.00), -1, 12), b = [a.r, a.u, a.t];
         modelGroup("pit-building", {
-          center: vadd(a.c, a.u, 3.4),
-          size: [9, 7, 67],
+          center: vadd(a.c, a.u, 4.6),
+          size: [11, 12, 67],
           basis: b,
         }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, 3), [7, 6, 64], [0.86, 0.87, 0.90], b);
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(a.c, a.u, 0.45), [7.6, 0.9, 64.6], [0.52, 0.32, 0.26], b);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 3.4), [7, 5.2, 64], [0.86, 0.87, 0.90], b);
           for (let i = -3; i <= 3; i++)
             addBox(stage, vadd(vadd(a.c, a.u, 3), a.t, i * 8),
                    [7.4, 4, 1.2], [0.30, 0.32, 0.36], b);
+          stage._mat = MAT.METAL;
           addBox(stage, vadd(a.c, a.u, 6.3), [8.5, 0.5, 66], [0.80, 0.81, 0.84], b);
+          // Race control / timing box — cantilevered over the pit lane at the
+          // Tarzan end, glazed on the trackside face.
+          const rc = vadd(vadd(a.c, a.t, 26), a.r, 1.6);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(rc, a.u, 8.2), [9.5, 3.4, 12], [0.90, 0.91, 0.93], b);
+          stage._mat = 0;
+          addBox(stage, vadd(vadd(rc, a.r, -4.7), a.u, 8.4), [0.25, 2.2, 11], [0.30, 0.53, 0.63], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(rc, a.u, 10.1), [10.4, 0.4, 13], [0.78, 0.79, 0.82], b);
+          for (const off of [-5, 5])
+            addCyl(stage, vadd(vadd(vadd(rc, a.t, off), a.r, -4.2), a.u, 0.2), 0.2, 6.4,
+                   [0.46, 0.48, 0.52], 6, b);
+          stage._mat = 0;
         }, { required: true });
       })();
 
@@ -607,7 +708,9 @@
       // -----------------------------------------------------------------------
       // VERSTAPPEN-ORANGE BUNTING — bright capsules on major grandstand fronts
       // -----------------------------------------------------------------------
-      for (const [s, side, buntDist] of [[0.01, 1, 16], [0.135, -1, 28], [0.915, 1, 28], [0.97, -1, 28]]) {
+      // Bunting hangs on the PERMANENT stands only — the modular decks that
+      // replaced the 0.97 and 0.05 stands have no structure to string it from.
+      for (const [s, side, buntDist] of [[0.01, 1, 16], [0.135, -1, 28], [0.915, 1, 28], [0.60, -1, 16]]) {
         const a = anchor(K(s), side, buntDist);
         if (onTrack(a.c[0], a.c[2], 6)) continue;
         const b = [a.r, a.u, a.t];
@@ -673,7 +776,9 @@
           [0.01,  1,  16, 36],   // pit straight main R
           [0.135,-1,  28, 40],   // Hugenholtz banked L (gap updated to match grandstand)
           [0.915, 1,  28, 80],   // Arie Luyendyk massive R (gap updated to match grandstand)
-          [0.865, 1,  42, 36],   // Luyendyk approach R (gap updated to match grandstand)
+          // Masterbocht L, not the 0.865 approach stand: that one is roof:"none",
+          // so a fascia strip at 13.5 m hung in mid-air over an open bleacher.
+          [0.60, -1,  16, 44],
         ]) {
           const k = K(s), a = anchor(k, side, gap + 5);
           const b = [a.r, a.u, a.t];

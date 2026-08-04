@@ -59,16 +59,30 @@
       { frac: 0.660, angleDeg: 3.0, widthM: 130 },   // T12-T13
     ],
     scenery: function (api) {
-      const { out, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
-        tree, bush, ridge, building, grandstandEx, spectatorHill,
-        broadcastCompound, billboard, gantry, marshalPost, tower, motorhome,
+      const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+        palm, bush, ridge, building, grandstandEx, spectatorHill,
+        broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterBand,
+        sponsorHoarding, cameraTower, seat,
         addBox, addCyl, addCone, addPrism } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      const PALM = [0.16, 0.40, 0.18], PALM_D = [0.12, 0.33, 0.15];
+      const PALM_F = [0.16, 0.42, 0.18], PALM_FD = [0.12, 0.34, 0.15];
       const JUNGLE = [0.11, 0.34, 0.14], JUNGLE_L = [0.20, 0.46, 0.20];
       const GRAVEL = [0.68, 0.60, 0.44];
+
+      // A basis tilted by `ar` in the (right, up) plane and then `at` in the
+      // (fwd, up) plane. The twin canopies below are DOUBLY curved surfaces —
+      // a panel that is only tilted one way turns a saddle back into a ramp.
+      const tilt2 = (a, ar, at) => {
+        const cr = Math.cos(ar), sr = Math.sin(ar);
+        const r1 = [a.r[0] * cr + a.u[0] * sr, a.r[1] * cr + a.u[1] * sr, a.r[2] * cr + a.u[2] * sr];
+        const u1 = [a.u[0] * cr - a.r[0] * sr, a.u[1] * cr - a.r[1] * sr, a.u[2] * cr - a.r[2] * sr];
+        const ct = Math.cos(at), st = Math.sin(at);
+        const t2 = [a.t[0] * ct + u1[0] * st, a.t[1] * ct + u1[1] * st, a.t[2] * ct + u1[2] * st];
+        const u2 = [u1[0] * ct - a.t[0] * st, u1[1] * ct - a.t[1] * st, u1[2] * ct - a.t[2] * st];
+        return [r1, u2, t2];
+      };
 
       // =====================================================================
       // 1. PALM PLANTATION — Sepang is carved out of oil palm, and the ordered
@@ -76,24 +90,40 @@
       //    Regular spacing (not hash-scattered) is the point.
       // =====================================================================
       const openArea = (s) => (s >= 0.90 || s <= 0.10) || (s >= 0.30 && s <= 0.40);
-      // Front rank — evenly spaced, both sides.
-      every(16, (k) => {
-        const s = k / n;
-        if (openArea(s)) return;
+      // A plantation is a GRID: identical trees, identical spacing, identical
+      // height, in ranks you can sight down. Every other circuit in the game
+      // hash-scatters its trees precisely so they do NOT line up — here the
+      // regularity is the point, so height and species are fixed per rank and
+      // the only variation is a small deterministic wobble in the trunk lean
+      // that palm() already applies. Rank distances are constant, not jittered.
+      // A full-detail palm() costs ~400 verts, which at plantation density would
+      // spend the entire circuit's budget on trees. Only the FRONT rank — the
+      // one a driver actually resolves — gets them; the ranks behind use a
+      // stripped two-primitive palm whose silhouette (bare trunk, one dense
+      // crown) is all that survives at 40 m anyway.
+      function farPalm(k, side, dist, h, col) {
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], 3.5)) return;
+        const b = [a.r, a.u, a.t];
+        out._mat = MAT.WOOD;
+        addCyl(out, a.c, 0.30, h, [0.42, 0.35, 0.22], 4, b);
+        out._mat = MAT.FOLIAGE;
+        addCone(out, vadd(a.c, a.u, h - 1.2), 3.4, 3.0, col, 5, b);
+        out._mat = 0;
+      }
+      let row = 0;
+      along(0.10, 0.90, 26, (k) => {
+        // Alternate rows step half a pitch outward, so the ranks form the
+        // quincunx an oil-palm estate is actually planted on rather than a
+        // plain square grid.
+        const stagger = (row & 1) ? 7 : 0;
         for (const side of [-1, 1]) {
-          tree(k, side, 20 + ((k / 16) % 3) * 2, 12 + hash(k * 7 + side) * 3,
-            (k % 32 === 0) ? PALM_D : PALM);
+          palm(k, side, 19 + stagger, 12.5, PALM_F);
+          for (let r = 1; r < 4; r++)
+            farPalm(k, side, 19 + stagger + r * 14, 12.5 - (r & 1 ? 0.8 : 0),
+              (r & 1) ? PALM_FD : PALM_F);
         }
-      });
-      // Deeper plantation ranks, offset so the grid reads as rows in depth.
-      every(20, (k) => {
-        const s = k / n;
-        if (openArea(s)) return;
-        for (const side of [-1, 1]) {
-          const h = hash(k * 13 + side);
-          tree(k, side, 38 + (k % 3) * 6, 11 + h * 4, PALM_D);
-          if (h > 0.45) tree(k, side, 58 + (k % 4) * 5, 12 + h * 3, PALM);
-        }
+        row++;
       });
       // Wilder jungle scrub between the plantation and the verge.
       every(24, (k) => {
@@ -109,47 +139,152 @@
       //    enormous fabric hyperbolic-paraboloid roofs over the main grandstand
       //    and paddock, visible from every corner of the site.
       // =====================================================================
-      const pitWall = [0.88, 0.88, 0.86];
-      for (let i = 0; i < 9; i++) {
-        building(K(0.945 + i * 0.007), 1, 15, 16, 9, 11,
-          { wall: pitWall, window: [0.28, 0.32, 0.40], floor: 4.5, roof: true });
-      }
-      // The two great canopies. Each is one atomic hero group so a preflight
-      // foldback can never leave half a roof standing.
-      // Sepang's pit complex sits in the gap BETWEEN the main straight and the
-      // back straight, and that gap is narrow — measured clearance on this side
-      // is only ~46 m at the line. The canopies are sized and set back to fit
-      // inside it; push them further out and the preflight rejects the
-      // footprint for overlapping the other straight.
-      for (const [id, s, len] of [
-        ["sepang-canopy-main", 0.985, 84],
-        ["sepang-canopy-paddock", 0.945, 70],
-      ]) {
-        const a = anchor(K(s), -1, 19);
+      // ── THE TWIN CANOPIES ──
+      // Sepang's roofs are hyperbolic paraboloids: doubly-curved fabric saddles,
+      // two opposite corners pulled UP and two pulled DOWN, stretched between
+      // slim masts. A pair of flat tilted slabs meeting at a ridge — which is
+      // what stood here before — is a tent, and a tent is the one shape these
+      // are famous for not being. So the surface is built properly: a panel
+      // grid sampled off y = H·u·v, each panel individually tilted to the local
+      // gradient in BOTH directions so the warp is visible from any angle.
+      function hyparCanopy(id, s, side, gap, W, L, H, lift, col, required) {
+        const a = anchor(K(s), side, gap);
         const b = [a.r, a.u, a.t];
+        const COLS = 6, ROWS = 9;
         modelGroup(id, {
-          center: vadd(a.c, a.u, 20), size: [14, 16, len + 4], basis: b,
+          center: vadd(a.c, a.u, lift), size: [W * 2 + 6, lift * 2 + H * 2, L * 2 + 6], basis: b,
         }, (stage) => {
-          // Twin sweeping shells: a pair of tilted slabs meeting at a ridge.
-          addBox(stage, vadd(vadd(a.c, a.r, -3.2), a.u, 22), [7, 0.8, len], [0.94, 0.94, 0.92], b);
-          addBox(stage, vadd(vadd(a.c, a.r, 3.2), a.u, 18), [7, 0.8, len], [0.90, 0.90, 0.88], b);
-          addPrism(stage, vadd(a.c, a.u, 23), [3.0, 2.4, len], [0.82, 0.82, 0.84], b);
-          // Support pylons carrying the shells.
-          for (let i = 0; i < 5; i++) {
-            const p = vadd(a.c, a.t, (i - 2) * (len / 5));
-            addCyl(stage, p, 0.6, 20, [0.70, 0.70, 0.72], 8, b);
+          const panelW = (W * 2) / COLS, panelL = (L * 2) / ROWS;
+          for (let i = 0; i < COLS; i++) {
+            for (let j = 0; j < ROWS; j++) {
+              const u = -W + (i + 0.5) * panelW;      // across-track offset
+              const v = -L + (j + 0.5) * panelL;      // along-track offset
+              const y = lift + H * (u * v) / (W * L);
+              // Local surface gradients of y = H·u·v/(W·L).
+              const ar = Math.atan2(H * v, W * L);
+              const at = Math.atan2(H * u, W * L);
+              const p = vadd(vadd(vadd(a.c, a.r, u), a.t, v), a.u, y);
+              // Alternating panel tone: fabric canopies are seamed, and a flat
+              // single colour over 1500 m² reads as plastic.
+              const shade = ((i + j) & 1) ? 1 : 0.94;
+              addBox(stage, p, [panelW * 1.04, 0.35, panelL * 1.04],
+                [col[0] * shade, col[1] * shade, col[2] * shade], tilt2(a, ar, at));
+            }
           }
+          // The two HIGH corners are held up by masts, the two LOW corners are
+          // tied down — that opposition is what makes a saddle stand up.
+          for (const [su, sv] of [[-1, -1], [1, 1]]) {
+            const foot = vadd(vadd(a.c, a.r, su * W * 0.92), a.t, sv * L * 0.92);
+            const top = lift + H * 0.92 * 0.92 + 3;
+            addCyl(stage, foot, 0.65, top, [0.80, 0.80, 0.82], 8, b);
+            addCyl(stage, vadd(foot, a.u, top), 0.30, 4, [0.62, 0.63, 0.66], 6, b);
+          }
+          for (const [su, sv] of [[-1, 1], [1, -1]]) {
+            const foot = vadd(vadd(a.c, a.r, su * W * 0.92), a.t, sv * L * 0.92);
+            const low = lift - H * 0.85;
+            addCyl(stage, foot, 0.5, low, [0.80, 0.80, 0.82], 8, b);
+            // Tie-down stay running back to the ground.
+            addBox(stage, vadd(foot, a.u, low * 0.5), [0.18, low, 0.18], [0.55, 0.56, 0.60], b);
+          }
+          // Perimeter edge beam, following the warped rim.
+          for (let j = 0; j <= ROWS; j++) {
+            const v = -L + j * panelL;
+            for (const su of [-1, 1]) {
+              const u = su * W;
+              const y = lift + H * (u * v) / (W * L);
+              addBox(stage, vadd(vadd(vadd(a.c, a.r, u), a.t, v), a.u, y),
+                [0.5, 0.7, panelL], [0.66, 0.67, 0.70], b);
+            }
+          }
+        }, { required: !!required });
+      }
+      // Main grandstand canopy (spectator side) and paddock canopy (pit side).
+      // They face each other across the straight, which is the view from the
+      // grid — the one image everybody has of this circuit.
+      hyparCanopy("sepang-canopy-main", 0.985, -1, 22, 14, 42, 9, 24,
+        [0.95, 0.95, 0.93], true);
+      hyparCanopy("sepang-canopy-paddock", 0.955, 1, 22, 13, 34, 8, 22,
+        [0.93, 0.94, 0.92], true);
+
+      // The raked seating UNDER the main canopy. Deliberately not grandstandEx:
+      // this stand has no roof and no back shell of its own — the canopy above
+      // is its roof — so it is a bare terrace stepping up toward the masts.
+      {
+        const SEATS = [[0.16, 0.44, 0.26], [0.90, 0.90, 0.86], [0.86, 0.72, 0.14]];
+        let i = 0;
+        along(0.958, 0.020, 9, (k, spacing) => {
+          const seg = spacing * 0.96;
+          for (let t = 0; t < 6; t++) {
+            const a = anchor(k, -1, 12 + t * 3.4);
+            const b = [a.r, a.u, a.t];
+            const h = 2.0 + t * 2.4;
+            addBox(out, vadd(a.c, a.u, h * 0.5), [3.3, h, seg], t & 1 ? [0.86, 0.86, 0.84] : [0.78, 0.79, 0.78], b);
+            addBox(out, vadd(a.c, a.u, h + 0.68), [2.6, 1.35, seg], SEATS[(i + t) % 3], b);
+          }
+          i++;
+        });
+      }
+
+      // The pit terrace itself sits under the paddock canopy, so it is a low
+      // OPEN structure: a deep continuous garage arcade with no roof of its
+      // own, a first-floor gallery, and the tall glazed race-control fin at the
+      // end of the row.
+      {
+        const WHITE = [0.94, 0.94, 0.92], TEAL = [0.10, 0.36, 0.34];
+        const SHUTTER = [0.24, 0.26, 0.28], GLASS = [0.32, 0.46, 0.50];
+        for (let i = 0; i < 5; i++) {
+          const s = 0.955 + i * 0.011;
+          const a = anchor(K(s), 1, 20);
+          const b = [a.r, a.u, a.t];
+          modelGroup(`sepang-pit-bay-${i + 1}`, {
+            center: vadd(a.c, a.u, 8), size: [26, 20, 30], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [17, 0.9, 28], [0.80, 0.80, 0.78], b);
+            addBox(stage, vadd(vadd(a.c, a.r, 1.5), a.u, 3.6), [12, 6.0, 28], WHITE, b);
+            stage._mat = MAT.METAL;
+            for (let d = 0; d < 3; d++)
+              addBox(stage, vadd(vadd(vadd(a.c, a.r, -4.7), a.u, 3.0), a.t, (d - 1) * 9),
+                [0.35, 4.2, 6.4], SHUTTER, b);
+            // Green accent band — Sepang's colour, on everything it owns.
+            addBox(stage, vadd(vadd(a.c, a.r, -4.7), a.u, 6.0), [0.4, 0.7, 28], TEAL, b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(a.c, a.u, 8.6), [12.4, 3.0, 28], GLASS, b);
+            stage._mat = MAT.METAL;
+            // Open gallery walkway over the lane on slim posts.
+            addBox(stage, vadd(vadd(a.c, a.r, -7.5), a.u, 10.4), [6.5, 0.3, 28], WHITE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -10.5), a.u, 11.0), [0.14, 1.0, 28], [0.72, 0.74, 0.76], b);
+            for (let d = 0; d < 3; d++)
+              addCyl(stage, vadd(vadd(a.c, a.r, -10.2), a.t, (d - 1) * 11), 0.16, 10.3,
+                [0.78, 0.78, 0.80], 6, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+        // Race control: a tall narrow FIN, glazed on the track face, capped by
+        // an oversailing louvre hood against the equatorial sun.
+        const a = anchor(K(0.010), 1, 14);
+        const b = [a.r, a.u, a.t];
+        modelGroup("sepang-race-control", {
+          center: vadd(a.c, a.u, 20), size: [12, 46, 14], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 15), [3.6, 30, 11], WHITE, b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(a.c, a.r, -2.0), a.u, 16), [0.6, 26, 9], [0.16, 0.28, 0.30], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -2.2), a.u, 27), [0.3, 5.0, 8.2], [0.90, 0.86, 0.60], b);
+          stage._mat = MAT.METAL;
+          for (let l = 0; l < 4; l++)
+            addBox(stage, vadd(vadd(a.c, a.r, -3.4), a.u, 22 + l * 2.6), [3.4, 0.25, 10], WHITE, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -1.5), a.u, 30.6), [9, 0.6, 13], WHITE, b);
+          addBox(stage, vadd(a.c, a.u, 31.2), [4.0, 0.8, 11], TEAL, b);
+          stage._mat = 0;
         }, { required: true });
       }
-      grandstandEx(0.990, -1, 12, 130, null, null,
-        { livery: "concrete", tiers: 2, suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.940, -1, 12, 92, null, null, { livery: "steel", endWalls: true });
-      tower(K(0.980), 1, 13, 6, 34, { col: [0.92, 0.92, 0.90], cap: true, capCol: [0.10, 0.34, 0.20], mast: 8 });
       gantry(0.0, 9, [0.15, 0.15, 0.18]);
       gantry(0.960, 8.5, [0.15, 0.15, 0.18]);
       for (let i = 0; i < 4; i++) {
-        building(K(0.900 + i * 0.014), 1, 42, 24, 12, 18,
-          { wall: [0.84, 0.84, 0.84], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+        building(K(0.900 + i * 0.014), 1, 46, 24, 12, 18,
+          { wall: [0.86, 0.86, 0.84], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
@@ -163,12 +298,17 @@
       // 3. CORNER STANDS AND RUNOFF — Sepang's tarmac runoff is vast, so the
       //    gravel is limited and the stands sit a long way back.
       // =====================================================================
-      grandstandEx(0.060, 1, 30, 90, null, null,
-        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true });
-      grandstandEx(0.340, -1, 34, 80, null, null, { livery: "concrete", endWalls: true });
-      grandstandEx(0.580, 1, 30, 76, null, null, { livery: "steel", endWalls: true });
-      grandstandEx(0.885, -1, 26, 92, null, null,
-        { livery: "concrete", tiers: 2, roof: "cantilever", endWalls: true });
+      // The satellite stands all carry the same white fabric roof language as
+      // the twin canopies — at Sepang every shelter on the site is a tensioned
+      // white membrane, and steel-grey cantilevers would break that instantly.
+      const TENT_ROOF = [0.94, 0.94, 0.92], TENT_FASCIA = [0.14, 0.42, 0.36];
+      const shelter = (s, side, gap, len, opts) =>
+        grandstandEx(s, side, gap, len, null, null, Object.assign(
+          { roofCol: TENT_ROOF, fasciaCol: TENT_FASCIA }, opts));
+      shelter(0.060, 1, 30, 90, { livery: "alu", tiers: 2, roof: "cantilever", endWalls: true });
+      shelter(0.340, -1, 34, 80, { livery: "concrete", endWalls: true });
+      shelter(0.580, 1, 30, 76, { livery: "alu", endWalls: true });
+      shelter(0.885, -1, 26, 92, { livery: "concrete", tiers: 2, roof: "cantilever", endWalls: true });
       spectatorHill(0.62, 0.70, -1, 20, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
 
       groundPatch(K(0.060), 1, 12, [40, 0.18, 56], GRAVEL,
@@ -228,19 +368,21 @@
       // KLIA's control tower and terminal roofline on the far horizon — the
       // airport is the circuit's immediate neighbour.
       {
+        // At 250 m out the terminal footprint reached back over the far side of
+        // the lap and the whole model was silently dropped; 180 m clears it.
         const k = K(0.42);
-        const a = anchor(k, 1, 250);
+        const a = anchor(k, 1, 180);
         const b = [a.r, a.u, a.t];
         modelGroup("sepang-klia-skyline", {
-          center: vadd(a.c, a.u, 26), size: [40, 56, 200], basis: b,
+          center: vadd(a.c, a.u, 26), size: [40, 56, 120], basis: b,
         }, (stage) => {
           addCyl(stage, a.c, 5, 48, [0.72, 0.74, 0.78], 10, b);
           addBox(stage, vadd(a.c, a.u, 50), [12, 5, 12], [0.66, 0.70, 0.76], b);
-          for (let i = 0; i < 4; i++) {
-            const p = vadd(a.c, a.t, (i - 1.5) * 44);
-            addPrism(stage, vadd(p, a.u, 7), [26, 8, 40], [0.74, 0.76, 0.80], b);
+          for (let i = 0; i < 3; i++) {
+            const p = vadd(a.c, a.t, (i - 1) * 36);
+            addPrism(stage, vadd(p, a.u, 7), [26, 8, 32], [0.74, 0.76, 0.80], b);
           }
-        });
+        }, { required: true });
       }
 
       // =====================================================================
@@ -254,21 +396,37 @@
         addCyl(out, a.c, 0.24, 22, [0.24, 0.24, 0.26], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 22.4), [1.8, 0.7, 3.4], [0.96, 0.94, 0.84], [a.r, a.u, a.t]);
       }
-      // Shaded spectator walkway along the main straight — a long slatted roof
-      // on slim posts, the thing everyone stands under between sessions.
-      {
-        const a = anchor(K(0.020), -1, 34);
+      // Shaded spectator walkway behind the main grandstand — a slatted roof on
+      // slim posts, the thing everyone stands under between sessions. One 90 m
+      // run was silently dropped here (the straight's far side folds under it),
+      // so it is three shorter bays that each clear the preflight.
+      for (const [i, s] of [[0, 0.020], [1, 0.035], [2, 0.050]]) {
+        const a = anchor(K(s), -1, 30);
         const b = [a.r, a.u, a.t];
-        modelGroup("sepang-shade-walk", {
-          center: vadd(a.c, a.u, 3), size: [8, 6, 90], basis: b,
+        modelGroup(`sepang-shade-walk-${i + 1}`, {
+          center: vadd(a.c, a.u, 3), size: [9, 8, 30], basis: b,
         }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, 4.6), [6.4, 0.4, 88], [0.86, 0.84, 0.76], b);
-          for (let i = 0; i < 8; i++) {
-            const p = vadd(a.c, a.t, (i - 3.5) * 12);
-            addCyl(stage, p, 0.18, 4.6, [0.60, 0.60, 0.62], 6, b);
-          }
+          addBox(stage, vadd(a.c, a.u, 4.6), [6.4, 0.35, 28], [0.90, 0.88, 0.82], b);
+          // Slats, not a solid slab: the shadow pattern is the whole character
+          // of a tropical walkway and costs three thin boxes per bay.
+          for (let l = 0; l < 3; l++)
+            addBox(stage, vadd(vadd(a.c, a.r, (l - 1) * 2.2), a.u, 5.0),
+              [0.9, 0.5, 28], [0.72, 0.71, 0.66], b);
+          for (let p = 0; p < 3; p++)
+            addCyl(stage, vadd(a.c, a.t, (p - 1) * 11), 0.18, 4.6, [0.72, 0.72, 0.74], 6, b);
         });
       }
+
+      // Sponsor boards and the broadcast masts. Saturated tropical greens and
+      // reds — the equatorial light here washes everything pale, so the only
+      // strong colour on the circuit has to come from the signage.
+      sponsorHoarding(0.955, 0.075, -1, 8, {
+        h: 1.3, step: 11,
+        palette: [[0.10, 0.52, 0.32], [0.94, 0.93, 0.90], [0.88, 0.16, 0.14], [0.96, 0.80, 0.10]],
+      });
+      cameraTower(K(0.055), -1, 12, { h: 16 });
+      cameraTower(K(0.575), -1, 12, { h: 14 });
+      cameraTower(K(0.878), 1, 12, { h: 15 });
     },
   }
   );

@@ -5,6 +5,11 @@ export const TRACKS = Object.freeze([
   "imola", "interlagos", "jeddah", "madrid", "mexico", "miami",
   "monaco", "montreal", "monza", "qatar", "redbull", "shanghai",
   "silverstone", "singapore", "spa", "suzuka", "vegas", "zandvoort",
+  // Retired / off-calendar circuits (def `classic: true`).
+  "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
+  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
+  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
+  "jacarepagua",
 ]);
 
 export const SHARDS = Object.freeze([
@@ -14,6 +19,10 @@ export const SHARDS = Object.freeze([
   ["mexico", "montreal", "qatar", "redbull"],
   ["shanghai", "silverstone", "singapore", "spa"],
   ["suzuka", "vegas", "zandvoort", "monza"],
+  ["hockenheim", "nurburgring", "catalunya", "sepang"],
+  ["istanbul", "paul_ricard", "portimao", "sochi"],
+  ["mugello", "magny_cours", "estoril", "kyalami"],
+  ["watkins_glen", "indianapolis", "buenos_aires", "jacarepagua"],
 ].map(Object.freeze));
 
 export const CAMERA_FRACTIONS = Object.freeze(Object.fromEntries(Object.entries({
@@ -29,6 +38,16 @@ export const CAMERA_FRACTIONS = Object.freeze(Object.fromEntries(Object.entries(
   silverstone: [0.40, 0.65, 0.97], singapore: [0.35, 0.58, 0.72],
   spa: [0.10, 0.35, 0.70], suzuka: [0.00, 0.30, 0.86],
   vegas: [0.25, 0.66, 0.98], zandvoort: [0.30, 0.55, 0.80],
+  // Retired / off-calendar circuits. Fractions pick the pit straight, a
+  // mid-lap corner and the circuit's signature feature.
+  hockenheim: [0.02, 0.45, 0.88], nurburgring: [0.02, 0.42, 0.78],
+  catalunya: [0.03, 0.50, 0.90], sepang: [0.00, 0.34, 0.88],
+  istanbul: [0.02, 0.40, 0.75], paul_ricard: [0.00, 0.44, 0.72],
+  portimao: [0.04, 0.36, 0.78], sochi: [0.09, 0.43, 0.81],
+  mugello: [0.05, 0.47, 0.88], magny_cours: [0.00, 0.40, 0.58],
+  estoril: [0.02, 0.42, 0.90], kyalami: [0.02, 0.40, 0.70],
+  watkins_glen: [0.02, 0.24, 0.62], indianapolis: [0.00, 0.30, 0.66],
+  buenos_aires: [0.02, 0.38, 0.85], jacarepagua: [0.02, 0.47, 0.88],
 }).map(([track, fractions]) => [track, Object.freeze(fractions)])));
 
 export const SLIDER_GROUPS = Object.freeze([

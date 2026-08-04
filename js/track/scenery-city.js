@@ -182,6 +182,32 @@ const SceneryCity = (function () {
       // Past both guards (mass collision, footprint over track) — this building
       // ships, so record it for the agent world view.
       ctx.note("building", [p.c[0], p.c[1] + h / 2, p.c[2]], [w, h, d], { k, side });
+      // opts.kind opens neonTower()'s MASSING LIBRARY to ordinary building()
+      // callers. Those ~20 forms (tiered / podium / slab / twin / jenga /
+      // cylinder / dome / fin / ziggurat / drum / arch / …) already existed, but
+      // the only path into them was the city generator's STYLES table — so every
+      // hand-placed pit block, paddock and hospitality unit in the fleet came out
+      // as the same setback box, and authors worked around it circuit-side.
+      // Without a kind NOTHING below changes: this branch is purely additive.
+      if (opts.kind) {
+        // neonTower reads its body colour off tone.n (night) / tone.d (day).
+        // building()'s own day path LIFTS a dark night wall to concrete so a
+        // facade tuned for night glow doesn't read as a navy box at noon; do the
+        // same for the delegated form or the two paths disagree in daylight.
+        const wl = opts.wall ? (opts.wall[0] + opts.wall[1] + opts.wall[2]) / 3 : 1;
+        const tone = {
+          n: opts.wall || [0.14, 0.14, 0.17],
+          d: (opts.wall && wl > 0.45) ? opts.wall : [0.46, 0.46, 0.45],
+        };
+        // Match building()'s own facade choice rather than neonTower's default
+        // (a full 1.0 on neon-city tracks): a pit block is not a casino.
+        neonTower(k, side, dist, w, h, d,
+                  opts.windowCol || opts.window || [1.0, 0.88, 0.55],
+                  opts.kind, tone,
+                  opts.neon != null ? opts.neon
+                                    : (theme === "street_night" ? 0.85 : 0.32));
+        return;
+      }
       // Lit windows follow the SESSION (NIGHT), not a baked flag — otherwise a
       // casino marked lit:true glows neon in broad daylight. opts.lit:false can
       // still force a building to stay unlit even at night.

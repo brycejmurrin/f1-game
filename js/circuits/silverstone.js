@@ -56,6 +56,7 @@
               grandstandEx, building, motorhome, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum,
               tower, forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
+              bleacher, broadleafFall, plane,
               groundedSegments, recordBarrier, circuitKit,
               signBoard, seat, addPyramid,
               spectatorHill, cameraTower, sponsorHoarding } = api;
@@ -97,6 +98,16 @@
       const TARMAC = [0.22, 0.22, 0.24];
       // Airfield asphalt apron — former runway concrete, slightly lighter than racing line
       const APRON  = (ATM && ATM.britishOvercast && ATM.britishOvercast.runoff) || [0.48, 0.46, 0.42];
+      // Muted British-summer crowd tones. Saturated primaries here read as a
+      // stripe of coloured blocks rather than people at 20-30 m, which is where
+      // the banks and open bleachers sit — the engine's own CROWD_DAY pack is
+      // similarly damped. Declared up here because the bleacher ranks below
+      // need it before the near-band dressing section does.
+      const CROWD_C = [
+        [0.52, 0.30, 0.28], [0.28, 0.32, 0.46], [0.62, 0.60, 0.56],
+        [0.26, 0.40, 0.30], [0.44, 0.32, 0.42], [0.60, 0.48, 0.30],
+        [0.36, 0.38, 0.42], [0.50, 0.46, 0.38],
+      ];
       // emissive-window tones (bright warm amber for lit interiors)
       const LIT_WIN = [0.95, 0.82, 0.40];  // warm amber — Wing/tower lit windows
       const LIT_COOL = [0.70, 0.85, 0.95]; // cool blue-white — upper control room
@@ -272,14 +283,32 @@
       // bowls, while Hangar Straight itself remains deliberately open. These sat
       // 42-52 m back and read as distant scenery; a second rank at 26-34 m sits
       // BEHIND the front stands above and still reads as a stepped enclosure.
-      for (const [s, side, gap, len] of [
-        [0.105, -1, 34, 44], // Maggotts approach
-        [0.145,  1, 30, 46], // Becketts exit
-        [0.285,  1, 32, 46], // Stowe entry
-        [0.325, -1, 26, 46], // Vale
-        [0.815, -1, 28, 46], // Brooklands approach
-        [0.875, -1, 26, 46], // Luffield/Woodcote
-      ]) stand(s, side, gap, len, {});
+      //
+      // These six are OPEN BLEACHERS, not more roofed shells. The British GP's
+      // general-admission ranks behind the named enclosures are bolted steel
+      // scaffolding with a guard rail and nothing over it — and on a former
+      // airfield that distinction is the whole point of the place: eighteen
+      // shelled boxes in a ring turn the biggest sky on the calendar into a
+      // stadium. bleacher() also costs less than the shell it replaces, which
+      // is what pays for the oaks further down. 5.9 km/lap → 1 m ≈ 1.695e-4.
+      const M = 1 / 5900;
+      for (const [s, side, gap, len, rows] of [
+        [0.105, -1, 34, 44, 8], // Maggotts approach
+        [0.145,  1, 30, 46, 7], // Becketts exit
+        [0.285,  1, 32, 46, 9], // Stowe entry
+        [0.325, -1, 26, 46, 7], // Vale
+        [0.815, -1, 28, 46, 8], // Brooklands approach
+        [0.875, -1, 26, 46, 7], // Luffield/Woodcote
+      ]) bleacher(s - len * M / 2, s + len * M / 2, side, gap, {
+        // step 12, not the 6 m default: a bleacher emits its whole rake per
+        // bay, so the bay count is what this model costs. Twelve metres of
+        // chord on a secondary rank set 26-34 m back is invisible, and the
+        // difference between 6 and 12 here is ~30 k verts on a circuit that is
+        // already the heaviest in the fleet.
+        rows, rise: 0.70, setback: 0.92, density: 0.66, step: 12,
+        frameCol: [0.58, 0.60, 0.64], plankCol: [0.64, 0.65, 0.68],
+        crowd: CROWD_C,
+      });
 
       // 4b. The rest of the named Silverstone enclosures. Every British GP
       // grandstand has a name on the ticket, and the lap was missing most of
@@ -396,6 +425,18 @@
 
       // BRDC clubhouse set back (s≈0.48 R) — pale historical building
       building(k(0.48), 1, 28, 22, 9, 20, { wall: [0.76, 0.76, 0.72], window: [0.18, 0.24, 0.30] });
+      // Formal pollarded avenue on the clubhouse lawn. Everything else growing
+      // at this circuit is a copse, a windbreak or a hedgerow — i.e. landscape
+      // that happened. This is the one PLANTED, cut-back, deliberate row, and
+      // plane()'s crown is a disc rather than a cone precisely because that is
+      // what annual pollarding leaves behind. Two short files flanking the
+      // approach, well inside the clubhouse's own setback.
+      for (let i = 0; i < 4; i++) {
+        plane(k(0.470 + i * 0.0042), 1, 21, 12 + (i % 2) * 1.5, COPSE2,
+              { stages: 2, spread: 0.8 });
+        plane(k(0.470 + i * 0.0042), 1, 39, 12 + ((i + 1) % 2) * 1.5, COPSE2,
+              { stages: 2, spread: 0.8 });
+      }
 
       // ---- Lamp posts along the pit straight and around The Wing ----
       // Double-arm floodlight columns — distinctive at circuits (white/silver poles, twin heads)
@@ -566,36 +607,57 @@
         }
       }
 
-      // ---- Copse corner near-side tree cluster ----
+      // ---- English oak: the named Copse trees, and the hedgerow standards ----
+      // Silverstone's corners are named after the copses (Copse, Chapel,
+      // Cheese) and this is oak country — but every tree on the lap came out
+      // of tree(), whose stacked-cone crown is a conifer-ish blob. The oak is
+      // BROAD and LOW with an irregular outline; broadleafFall builds a crown
+      // from overlapping off-axis lobes, which is that shape (pass a summer
+      // green — the form is what differs from tree(), not the palette).
+      const oak = (kk, side, dist, h, col) =>
+        broadleafFall(kk, side, dist, h, col,
+                      { lobes: 3, spread: 1.35, barkCol: [0.33, 0.30, 0.26] });
       {
         for (let j = 0; j < 4; j++) {
           const kk = (k(0.04) + j) % n;
-          tree(kk, 1, 55 + hash(kk * 7 + j) * 25, 11 + hash(kk * 11 + j) * 6, COPSE);
+          oak(kk, 1, 55 + hash(kk * 7 + j) * 25, 11 + hash(kk * 11 + j) * 6, COPSE);
         }
         for (let j = 0; j < 3; j++) {
           const kk = (k(0.06) + j) % n;
-          tree(kk, 1, 60 + hash(kk * 9 + j) * 18, 10 + hash(kk * 13 + j) * 5, COPSE);
+          oak(kk, 1, 60 + hash(kk * 9 + j) * 18, 10 + hash(kk * 13 + j) * 5, COPSE);
         }
       }
+      // Hedgerow standards — the solitary field oaks left standing when the
+      // hedges were laid, and the one piece of Northamptonshire landscape that
+      // is legible from the car at 200 km/h. Kept in the 20-34 m band beside
+      // the named copses and hedge lines, in ones and twos: a hedgerow oak is
+      // singular by definition, and a rank of them would be an orchard.
+      for (const [s, side, gap, h, alt] of [
+        [0.132,  1, 26, 15, 0], [0.152, -1, 22, 17, 1],   // Chapel / Cheese Copse
+        [0.335,  1, 28, 16, 0], [0.362, -1, 24, 14, 1],   // Vale outfield
+        [0.588, -1, 25, 17, 0], [0.606,  1, 30, 15, 1],   // Farm curve
+        [0.688, -1, 21, 16, 1], [0.704, -1, 32, 18, 0],   // Loop infield wood
+        [0.782,  1, 27, 15, 0], [0.912, -1, 24, 16, 1],   // Brooklands / Woodcote
+      ]) oak(k(s), side, gap, h, alt ? COPSE2 : COPSE);
 
       // ---- Pit control tower near the start gantry ----
       building(k(0.01), 1, 8, 9, 5, 11, { wall: [0.76, 0.75, 0.70], window: [0.26, 0.30, 0.34] });
 
-      // ---- Maggotts/Becketts infield tree cluster ----
+      // ---- Maggotts/Becketts infield oak cluster ----
       {
         const maggFracs = [0.110, 0.120, 0.130];
         const maggDists = [85, 95, 100];
         const maggH = [12, 14, 13];
         for (let i = 0; i < maggFracs.length; i++) {
-          tree(k(maggFracs[i]), 1, maggDists[i], maggH[i], COPSE);
+          oak(k(maggFracs[i]), 1, maggDists[i], maggH[i], COPSE);
         }
       }
 
       // ---- Brooklands section: darker outer trees + banking suggestion ----
       for (let i = 0; i < 5; i++) {
         const s = 0.80 + i * 0.012;
-        tree(k(s), -1, 85 + hash(k(s) * 17) * 20, 11 + hash(k(s) * 19) * 5, [0.16, 0.32, 0.14]);
-        tree(k(s), -1, 65 + hash(k(s) * 23) * 25, 10 + hash(k(s) * 29) * 6, [0.14, 0.30, 0.13]);
+        oak(k(s), -1, 85 + hash(k(s) * 17) * 20, 11 + hash(k(s) * 19) * 5, [0.16, 0.32, 0.14]);
+        oak(k(s), -1, 65 + hash(k(s) * 23) * 25, 10 + hash(k(s) * 29) * 6, [0.14, 0.30, 0.13]);
       }
 
       // ---- Additional outer signage along the main straight ----
@@ -786,14 +848,8 @@
         [0.85, 0.16, 0.14], [0.12, 0.36, 0.70], [0.94, 0.76, 0.10],
         [0.10, 0.52, 0.30], [0.92, 0.92, 0.94], [0.16, 0.18, 0.22],
       ];
-      // Muted British-summer crowd tones. Saturated primaries here read as a
-      // stripe of coloured blocks rather than people at 20-30 m, which is where
-      // these banks sit — the engine's own CROWD_DAY pack is similarly damped.
-      const CROWD_C = [
-        [0.52, 0.30, 0.28], [0.28, 0.32, 0.46], [0.62, 0.60, 0.56],
-        [0.26, 0.40, 0.30], [0.44, 0.32, 0.42], [0.60, 0.48, 0.30],
-        [0.36, 0.38, 0.42], [0.50, 0.46, 0.38],
-      ];
+      // (CROWD_C is declared with the palette at the top of this function — the
+      // bleacher ranks at the stands section need it before this point.)
 
       // hoardingLine()/crowdMound()/tvTower() used to be hand-rolled here.
       // They are now the shared engine models sponsorHoarding()/spectatorHill()/
@@ -1013,7 +1069,7 @@
 
       // silence unused-guard lint helpers (destructured but not called directly)
       void GRASS; void TARMAC; void prop; void tower; void bush;
-      void gantry; void building; void addFrustum; void addPyramid;
+      void gantry; void building; void addFrustum; void addPyramid; void tree;
     },
   }
   );

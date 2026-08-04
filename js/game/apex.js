@@ -16,6 +16,9 @@ const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
         loadCarModel, loadTrack, persistLightTune, refreshLightTunePanel,
         rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
         startRace, startWeatherArc, update, wrapS } = G;
+// Deferred: openCareer is declared below the G literal in game.js, so it arrives
+// as an arrow and must be read through G rather than destructured here.
+const openCareer = (...a) => G.openCareer(...a);
 const { CAM_MODES } = GameTables;
 const { TUNE_DEFS, LT } = LightTune;
 
@@ -150,9 +153,12 @@ const api = {
   // track reflects the ACTIVE race track — null at the menu/select even though a
   // track is loaded for the background flyby (matches the documented contract).
   // sectors: [s1End, s2End] racing-lap fractions; turns: curated FIA turn count.
+  // `flow`/`session` are the real mode state; timeTrial/seasonMode are the older
+  // derived booleans, kept verbatim so existing harnesses do not have to change.
   info: () => ({
     state: G.state, track: (G.state === "race" || G.state === "count") ? (G.track && G.track.def.id) : null,
     n: G.track && G.track.n, total: G.track && G.track.total, timeTrial: G.timeTrial, seasonMode: G.seasonMode,
+    flow: G.flow, session: G.session, career: !!G.career,
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
   }),
@@ -871,6 +877,30 @@ const api = {
     startRace();
     return { track: Tracks.LIST[i].id, timeTrial: true };
   },
+  // ── Career (js/game/career.js + career-ui.js) ──────────────────────────────
+  // career()            -> the whole save, or null
+  // career({flavour, teamId, seat, name, code, num, seed}) -> start a NEW career,
+  //                        skipping the setup screen, and open the hub
+  // career(true)        -> resume the stored career and open the hub
+  // A career is a championship, so info().seasonMode stays true inside one.
+  career(opts) {
+    if (opts === undefined) return Career.data();
+    if (opts === true) { openCareer(); return Career.data(); }
+    Career.start(opts || {});
+    openCareer();
+    return Career.data();
+  },
+  // Compact snapshot for assertions and HUDs — never the whole save.
+  careerState: () => Career.state(),
+  // Set the balance outright. A test that wants to buy a part should not have to
+  // drive twelve races first.
+  careerMoney(n) {
+    const c = Career.data();
+    if (!c) return null;
+    if (n != null) { c.money = Math.max(0, n | 0); Career.save(); }
+    return c.money;
+  },
+  careerReset() { Career.clear(); G.refreshCareerButton(); return true; },
   // Load an optional .glb car model at runtime (team meshes rebuild from it,
   // tinted per livery); resolves false and keeps the procedural car on failure.
   loadCarModel: (url) => loadCarModel(url),
@@ -925,7 +955,18 @@ const api = {
       // Keep the render-interpolation anchors in sync (the render-driven loop
       // snapshots these before each step; a manual pump must too, or a frozen
       // render afterwards lerps toward a stale pre-teleport position).
-      for (let j = 0; j < G.cars.length; j++) { const c = G.cars[j]; c.rPrevS = c.s; c.rPrevX = c.x; }
+      // ALL FOUR, matching the loop: the player renders from WORLD space, so
+      // rPrevPx/rPrevPz drive its drawn position and rPrevHead its drawn heading.
+      // Snapshotting only (s, x) left those two holding whatever the grid or the
+      // previous session put there, so a headless jump()+step()+frozen render put
+      // the car — and with it the whole camera-anchored cockpit rig — somewhere
+      // else entirely, with no error to show for it.
+      for (let j = 0; j < G.cars.length; j++) {
+        const c = G.cars[j];
+        c.rPrevS = c.s; c.rPrevX = c.x;
+        c.rPrevPx = c.px; c.rPrevPz = c.pz;
+        c.rPrevYawVis = c.yawVis; c.rPrevHead = c.head;
+      }
       update(d);
     }
   },
@@ -1024,6 +1065,12 @@ const api = {
     if (!c) return null;
     return {
       id: G.cars.indexOf(c), isPlayer: !!c.isPlayer, team: c.team && c.team.id,
+      code: c.code, seat: c.seat,
+      // The two numbers that decide how fast an AI car is allowed to be, so
+      // "why is this car quick?" is answerable without reading the source.
+      // tierV folds the team's TIER_V together with career team development;
+      // skill is the driver. Both are 1-ish multipliers on vmax.
+      tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6),
       x: +c.x.toFixed(3), speed: +c.speed.toFixed(2),
       prog: +c.prog.toFixed(2), s: +c.s.toFixed(2), lap: c.lap,
       finished: !!c.finished, finishT: c.finishT != null ? +c.finishT.toFixed(2) : null,

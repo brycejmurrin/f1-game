@@ -162,6 +162,27 @@ const TrackSceneryData = (function () {
     cota:        { tree: "broad", fol: [0.32, 0.39, 0.18], lamp: "none" },                 // dry Texas live oak
     montreal:    { tree: "fir",   fol: [0.20, 0.42, 0.23], lamp: "none" },                 // lush island maple/conifer
     albert_park: { tree: "broad", fol: [0.28, 0.46, 0.22], lamp: "none" },                 // tidy Melbourne parkland
+    // ── retired / off-calendar circuits (def `classic: true`) ──
+    // These matter more than they look. Without an entry a circuit falls back to
+    // FURN_DEF[theme] — mid-green broadleaf, and for `modern` a white "post"
+    // lamp — which puts 2020s street lighting on a 1996 pit straight and cancels
+    // the identity the bespoke planting in each scenery() is built around.
+    hockenheim:    { tree: "fir",   fol: [0.11, 0.30, 0.15], lamp: "none" },                          // Hardtwald pine corridor
+    nurburgring:   { tree: "fir",   fol: [0.09, 0.27, 0.14], lamp: "none" },                          // dark Eifel spruce, bluer than Spa
+    catalunya:     { tree: "fir",   fol: [0.16, 0.32, 0.17], lamp: "post",  lc: [0.96, 0.96, 1.0], sparse: true },  // thin Catalan umbrella pine
+    sepang:        { tree: "palm",  fol: [0.16, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.94, 0.72] },  // ordered oil-palm plantation
+    istanbul:      { tree: "fir",   fol: [0.13, 0.30, 0.16], lamp: "post",  lc: [1.0, 0.90, 0.66], sparse: true },  // sparse Thracian hillside pine
+    paul_ricard:   { tree: "fir",   fol: [0.14, 0.30, 0.16], lamp: "none",  sparse: true },           // bleached plateau — planting stays off the runoff
+    portimao:      { tree: "fir",   fol: [0.14, 0.31, 0.16], lamp: "none",  sparse: true },           // thin Algarve pine; the elevation is the view
+    sochi:         { tree: "broad", fol: [0.20, 0.44, 0.20], lamp: "globe", lc: [0.94, 0.96, 1.0] },  // landscaped Olympic-park planting
+    mugello:       { tree: "broad", fol: [0.20, 0.44, 0.20], lamp: "none" },                          // Tuscan broadleaf behind the cypress ranks
+    magny_cours:   { tree: "broad", fol: [0.22, 0.46, 0.22], lamp: "none" },                          // Nivernais poplar and hedgerow
+    indianapolis:  { tree: "broad", fol: [0.22, 0.42, 0.19], lamp: "post",  lc: [0.94, 0.96, 1.0] },  // clipped infield planting + service lighting
+    buenos_aires:  { tree: "broad", fol: [0.30, 0.50, 0.24], lamp: "globe", lc: [1.0, 0.90, 0.68] },  // plátano avenues, city-park globes
+    jacarepagua:   { tree: "palm",  fol: [0.18, 0.44, 0.20], lamp: "post",  lc: [1.0, 0.88, 0.62] },  // Rio coconut palm over restinga
+    estoril:       { tree: "broad", fol: [0.29, 0.36, 0.19], lamp: "none", sparse: true },  // grey-olive cork oak between the parasol pines
+    kyalami:       { tree: "broad", fol: [0.33, 0.38, 0.21], lamp: "none", sparse: true },  // grey-green thorn; sparse keeps the veld open
+    watkins_glen:  { tree: "broad", fol: [0.56, 0.30, 0.13], lamp: "none" },                // turning scarlet-brown — the fall reads or it doesn't
   };
 
   const FURN_DEF = {
@@ -317,6 +338,23 @@ const TrackSceneryData = (function () {
     shanghai:    ["steel", "crimson", "concrete"],
     albert_park: ["steel", "navy", "alu"],
     madrid:      ["terracotta", "concrete", "steel"],
+    // ── retired / off-calendar circuits (def `classic: true`) ──
+    hockenheim:    ["concrete", "crimson", "steel"],        // Motodrom concrete bowl + German-GP red
+    nurburgring:   ["darkSteel", "concrete", "alu"],        // cold Eifel steel and poured concrete
+    catalunya:     ["pastel", "concrete", "terracotta"],    // bleached white render, warm Catalan trim
+    sepang:        ["alu", "teal", "concrete"],             // aluminium under the fabric canopies
+    istanbul:      ["sandstone", "crimson", "concrete"],    // pale stone + Turkish red
+    paul_ricard:   ["alu", "navy", "pastel"],               // clinical: aluminium against the blue runoff
+    portimao:      ["terracotta", "concrete", "alu"],       // Algarve pantile over hillside terracing
+    sochi:         ["alu", "teal", "darkSteel"],            // 2014 Olympic-park metal and glass
+    mugello:       ["crimson", "terracotta", "concrete"],   // Ferrari red over Tuscan clay
+    magny_cours:   ["navy", "alu", "concrete"],             // French blue on a plain 1990s facility
+    indianapolis:  ["alu", "concrete", "darkSteel"],        // bare Speedway bleachers, no colour
+    buenos_aires:  ["concrete", "scaffold", "pastel"],      // 1950s mass concrete + temporary tube
+    jacarepagua:   ["concrete", "alu", "sandstone"],        // sun-bleached coastal concrete
+    estoril:       ["scaffold", "terracotta", "pastel"],    // period tube stands + one masonry terrace
+    kyalami:       ["sandstone", "orange", "concrete"],     // bleached masonry, red-oxide iron, raw terracing
+    watkins_glen:  ["scaffold", "alu", "concrete"],         // club-built timber/steel, no colour at all
   };
 
   return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF, STYLES, THEME_DEF, ATM, COL, STAND_LIVERIES, STAND_SETS, STAND_SET_DEF };

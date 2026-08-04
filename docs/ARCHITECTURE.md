@@ -5,7 +5,7 @@ Playwright is the only `devDependency` (test harness, never shipped). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
 Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track
-**engine** — shared spline/mesh/scenery code), `js/circuits/` (the 24 circuit
+**engine** — shared spline/mesh/scenery code), `js/circuits/` (the 40 circuit
 **data** files), `js/car/` (car geometry, liveries, parts, teams), `js/data/`
 (API clients + data hub), `js/game/` (game subsystems), with `js/mat4.js` and
 the `js/game.js` entry at the root.
@@ -271,7 +271,7 @@ modules — nature (trees/terrain furniture), city (the `STYLES` building
 generator, neon, glass), structures (grandstands, gantries, barriers,
 floodmasts), identity (per-circuit landmark passes) — each instantiated with a
 ctx of the placement helpers and accumulators. Together they serve the
-**96-member `scenery(api)` contract**, frozen by
+**105-member `scenery(api)` contract**, frozen by
 `tests/scenery-api-contract.test.mjs`: a circuit's `scenery(api)` callback can
 destructure any of those 84 names, so removing/renaming one is a breaking
 change the test catches. See [SCENERY-API.md](SCENERY-API.md).
@@ -303,7 +303,7 @@ road/terrain meshes through `TrackMesh`/`TrackSurface`, props through the four
 scenery modules.
 
 ```
-Tracks.LIST -> [ trackDef, ... ]   // 24 circuits. LIST order == the `<script>` load
+Tracks.LIST -> [ trackDef, ... ]   // 40 circuits. LIST order == the `<script>` load
                                    // order in index.html (each circuits/<id>.js registers
                                    // itself as it loads) — it is NOT the real F1 calendar
                                    // order. Check tools/manifest.cjs / index.html.
@@ -550,7 +550,8 @@ speed + rubber-band by difficulty (EASY/NORMAL/HARD). Start: grid 22 (player P12
 default, tier order), five red lights (1 s apart) then out. Race =
 `GAME_LAPS` (3). HUD (DOM): pos/lap/laptime/best, speed km/h, energy bar, OT
 indicator, gaps, minimap canvas 2D. Penalty: 4+ full-off-track shortcuts -> +5 s
-on results screen. Points per Teams.POINTS; SEASON mode = all 24 circuits
+on results screen. Points per Teams.POINTS; SEASON mode = Tracks.SEASON (the 24
+non-`classic` circuits; the 16 retired ones are playable but never a round)
 (`Tracks.LIST.length`) in load order, standings table between races, saved in
 `apex26.season`. localStorage: hiscore N/A, settings (team, difficulty, tilt,
 sound), season.

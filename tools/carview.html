@@ -40,14 +40,11 @@
   <b>Car Viewer</b>
   <div class="row"><span class="k">Team</span><select id="ui-team"></select></div>
   <div class="row"><span class="k">Livery</span><select id="ui-livery"></select></div>
-  <div class="row"><span class="k">Engine</span><select id="ui-engine"></select></div>
-  <div class="row"><span class="k">Aero</span><select id="ui-aero"></select></div>
-  <div class="row"><span class="k">Suspension</span><select id="ui-suspension"></select></div>
-  <div class="row"><span class="k">Brakes</span><select id="ui-brakes"></select></div>
-  <div class="row"><span class="k">Tyres</span><select id="ui-tyres"></select></div>
-  <div class="row"><span class="k">Gearbox</span><select id="ui-gearbox"></select></div>
-  <div class="row"><span class="k">ERS</span><select id="ui-ers"></select></div>
-  <div class="row"><span class="k">Fuel</span><select id="ui-fuel"></select></div>
+  <!-- One row per Parts.CATALOG category, built in JS from PART_CATS. These
+       were eight hardcoded rows, which silently broke the whole viewer the
+       moment a category was added: getElementById returned null and wiring its
+       onchange threw before the car ever built. -->
+  <div id="ui-parts"></div>
   <div class="row"><span class="k">After-fire</span><input id="ui-exhaust-flame" type="checkbox"></div>
   <div class="row"><span class="k">Brake heat</span><input id="ui-brake-glow" type="checkbox"></div>
   <div class="row"><span class="k">ERS deploy</span><input id="ui-ers-deploy" type="checkbox"></div>
@@ -329,8 +326,23 @@
     const cat = Parts.CATALOG.find(c => c.id === catId);
     return cat ? cat.options.filter(o => Parts.isOptionAvailable(o, team)) : [];
   }
+  // Create a select for any category that does not have one yet.
+  function ensurePartRows() {
+    const host = document.getElementById("ui-parts");
+    for (const cat of PART_CATS) {
+      if (document.getElementById("ui-" + cat)) continue;
+      const meta = Parts.CATALOG.find(c => c.id === cat);
+      const row = document.createElement("div"); row.className = "row";
+      const k = document.createElement("span"); k.className = "k";
+      k.textContent = meta ? meta.label : cat.toUpperCase();
+      const sel = document.createElement("select"); sel.id = "ui-" + cat;
+      sel.onchange = e => { S.parts[cat] = e.target.value; rebuild(); };
+      row.append(k, sel); host.appendChild(row);
+    }
+  }
   function buildUI() {
     const team = teamObj();
+    ensurePartRows();
     opt(document.getElementById("ui-team"), Teams.LIST, S.team);
     opt(document.getElementById("ui-livery"), liveryList(team), S.livery || "default");
     for (const cat of PART_CATS) {
@@ -346,8 +358,6 @@
   }
   document.getElementById("ui-team").onchange = e => { S.team = e.target.value; S.livery = null; buildUI(); rebuild(); };
   document.getElementById("ui-livery").onchange = e => { S.livery = e.target.value; rebuild(); };
-  for (const cat of PART_CATS)
-    document.getElementById("ui-" + cat).onchange = e => { S.parts[cat] = e.target.value; rebuild(); };
   document.getElementById("ui-tod").onchange = e => { S.tod = e.target.value; };
   document.getElementById("ui-rig").onchange = e => { S.rig = e.target.value; };
   document.getElementById("ui-refl").oninput = e => { S.refl = parseFloat(e.target.value); };

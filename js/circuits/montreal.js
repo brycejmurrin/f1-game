@@ -60,6 +60,7 @@
       const { out, n, py, pyMin, place, backdrop, wall, grandstandEx,
         building, anchor, addBox, addCyl, addFrustum, vadd, hash,
         fence, tyreWall, hedge, billboard, gantry, marshalPost, bush,
+        scaffoldStand, broadleafFall,
         ferrisWheel, tower, onTrack, forestEdge, cityFront,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch,
         broadcastCompound, cameraTower, sponsorHoarding, circuitKit,
@@ -338,7 +339,17 @@
 
       // Basin-entry spectator hero beat, opposite the water so the long view
       // remains open while the braking zone gains a recognisable event crowd.
-      grandstandEx(0.165, 1, 17, 66, null, null, { livery: "steel", roof: "truss" });
+      // TEMPORARY seating, not a permanent stand: Île Notre-Dame is a public
+      // park 51 weeks a year, and everything outside the pit-straight enclosure
+      // is scaffold tube and plank put up for race week and taken down after.
+      // scaffoldStand() is that structure — visible legs under an open rake —
+      // where grandstandEx would put a permanent shell on parkland.
+      scaffoldStand(0.1575, 0.1725, 1, 17, {
+        rows: 6, rise: 1.10, setback: 1.85, legEvery: 1,
+        tubeCol: [0.66, 0.67, 0.70], deckCol: [0.70, 0.66, 0.58],
+        bench: [[0.30, 0.36, 0.52], [0.80, 0.78, 0.74], [0.72, 0.24, 0.22]],
+        density: 0.6,
+      });
 
       // ── s 0.10 L — Rowing regatta spectator platform overlooking the basin ──
       // A simple concrete deck on stilts — like the permanent grandstand at the
@@ -380,6 +391,41 @@
         density: 0.60, hMin: 7, hMax: 12,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.10
       });
+
+      // ── Maples: Parc Jean-Drapeau's specimen trees, and the one species
+      //    nobody would mistake for anywhere else. forestEdge gives Montreal a
+      //    competent belt of generic broadleaf — the same belt Silverstone,
+      //    Imola and Suzuka get from the same emitter with different colours.
+      //    broadleafFall's crown is built from overlapping OFF-AXIS LOBES
+      //    rather than one stacked cone, which is the maple's actual
+      //    silhouette: broad, low, irregular, and readable in profile against
+      //    the basin water behind it.
+      //
+      //    A June race is green, so most of these are green — but the Crimson
+      //    King Norway maple is purple-red all summer and is planted right
+      //    through Montreal's parks, so the red crowns are in season, not an
+      //    autumn scene dropped into a summer one.
+      const MAPLE_G  = [0.20, 0.42, 0.19];   // sugar maple, high summer
+      const MAPLE_G2 = [0.26, 0.48, 0.22];   // lighter, sunlit crown
+      const MAPLE_R  = [0.36, 0.14, 0.20];   // 'Crimson King' — deep purple-red
+      // [frac, side, gap, height, tone] — placed as SPECIMENS in ones and twos
+      // on the lawns, the way a park plants them, not as a continuous rank.
+      for (const [s, side, gap, h, tone] of [
+        [0.142,  1, 17, 13, 0], [0.151,  1, 22, 15, 1], [0.168,  1, 18, 12, 2],
+        [0.178,  1, 24, 14, 0], [0.243,  1, 19, 13, 1], [0.256,  1, 25, 15, 0],
+        [0.271,  1, 17, 12, 2], [0.288,  1, 22, 14, 0], [0.305,  1, 18, 13, 1],
+        [0.146, -1, 16, 12, 0], [0.164, -1, 21, 14, 1], [0.256, -1, 17, 13, 2],
+        [0.276, -1, 22, 15, 0],
+        [0.392,  1, 17, 13, 1], [0.412,  1, 22, 14, 0], [0.433,  1, 18, 12, 2],
+        [0.596, -1, 16, 13, 0], [0.612, -1, 21, 15, 1], [0.631, -1, 17, 12, 2],
+        [0.648, -1, 23, 14, 0],
+        [0.802, -1, 18, 13, 1], [0.821, -1, 23, 15, 0], [0.845, -1, 17, 12, 2],
+        [0.862,  1, 19, 14, 0], [0.881,  1, 24, 13, 1], [0.898,  1, 18, 12, 0],
+      ]) {
+        broadleafFall(K(s), side, gap, h,
+                      tone === 2 ? MAPLE_R : (tone ? MAPLE_G2 : MAPLE_G),
+                      { lobes: 4, spread: 1.2, barkCol: [0.34, 0.30, 0.26] });
+      }
 
       // Shrub clumps for low-level ground greenery detail
       for (let i = 0; i < 18; i++) {
@@ -789,9 +835,15 @@
       // ===================================================================
       // s 0.66–0.90 — Back stretch through Parc Jean-Drapeau (parkland)
       // ===================================================================
-      // Grandstand midway on the back straight
-      // (increased gap from 11m→14m→18m to clear curve intrusion)
-      grandstandEx(0.74, -1, 18, 64, null, null, { livery: "steel", roof: "truss" });
+      // Midway on the back straight — the second temporary rank (see the basin
+      // entry above). Slightly taller and shallower than that one so the two
+      // read as separate hires rather than one model placed twice.
+      scaffoldStand(0.7327, 0.7473, -1, 18, {
+        rows: 5, rise: 1.22, setback: 2.0, legEvery: 2, awning: true,
+        awningCols: [[0.90, 0.90, 0.88], [0.86, 0.20, 0.18]],
+        tubeCol: [0.60, 0.62, 0.66], deckCol: [0.72, 0.68, 0.60],
+        density: 0.55,
+      });
 
       // Canal / water feature off the right verge — island park internal canal
       {

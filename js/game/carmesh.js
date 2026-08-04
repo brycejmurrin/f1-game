@@ -79,7 +79,7 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
              [[lU(tb),u.vB], [lU(ta),u.vB], [lU(ta),u.vT], [lU(tb),u.vT]]);
     }
   };
-  podDecal(R.titleA, 0.24, 0.84, 0.018);
+  podDecal(R.titleA, 0.32, 0.80, 0.018);   // sits wholly on the PANEL board
   // Engine-cover top → team crest + tail livery graphic (reads from the chase
   // cam; top = toward the tail).
   const cf = anchors ? anchors.coverAt(-0.62) : { x: 0.27, top: 0.81 };
@@ -97,18 +97,23 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
   // upright from chase, hood AND cockpit cameras (all look forward over the nose).
   const nR = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
   const nF = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
-  quad([[-nR.topSide*0.84, nR.top+0.020, 1.72], [nR.topSide*0.84, nR.top+0.020, 1.72],
-        [nF.topSide*0.84, nF.top+0.020, 2.10], [-nF.topSide*0.84, nF.top+0.020, 2.10]], [0, 1, 0.05], R.num);
+  // Corner order matters: quad()'s first PAIR is the texture BOTTOM edge. Every
+  // other horizontal decal (the cover crest, the rear-wing band) lists its FRONT
+  // pair first, so texture-up points rearward. These two nose quads listed the
+  // REAR pair first, which is the opposite convention — so the number and the
+  // nose sponsor rendered 180 degrees out, i.e. upside down on the nose.
+  quad([[-nF.topSide*0.84, nF.top+0.020, 2.10], [nF.topSide*0.84, nF.top+0.020, 2.10],
+        [nR.topSide*0.84, nR.top+0.020, 1.72], [-nR.topSide*0.84, nR.top+0.020, 1.72]], [0, 1, 0.05], R.num);
   // Nose-rear deck (behind the number) → secondary sponsor. The nose crown SLOPES
   // UP toward the bulkhead, so the decal quad follows that slope (rear corners
   // higher than front) — a flat horizontal quad floated/tilted off the surface
   // and read "detached". Corner heights track the crown so it lies painted-on.
   const nsR = anchors ? anchors.noseAt(1.16) : { top: 0.54, topSide: 0.15 };
   const nsF = anchors ? anchors.noseAt(1.66) : { top: 0.48, topSide: 0.14 };
-  quad([[-nsR.topSide*0.82, nsR.top+0.014, 1.16], [nsR.topSide*0.82, nsR.top+0.014, 1.16],
-        [nsF.topSide*0.82, nsF.top+0.014, 1.66], [-nsF.topSide*0.82, nsF.top+0.014, 1.66]], [0, 1, 0.10], R.titleB);
+  quad([[-nsF.topSide*0.82, nsF.top+0.014, 1.66], [nsF.topSide*0.82, nsF.top+0.014, 1.66],
+        [nsR.topSide*0.82, nsR.top+0.014, 1.16], [-nsR.topSide*0.82, nsR.top+0.014, 1.16]], [0, 1, 0.10], R.titleB);
   // Sidepod lower flank → long sponsor strip.
-  podDecal(R.strip, 0.08, 0.30, 0.020);
+  podDecal(R.strip, 0.08, 0.30, 0.020);   // sits wholly on the c2 accent band
   // Rear-wing endplate number boards → the driver number again (classic F1 — the
   // number reads on the nose AND the rear-wing endplates). The board height/pos
   // TRACKS the wing: Car3D.numberBoard(aLvl) is the SAME function the car mesh

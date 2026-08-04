@@ -40,6 +40,11 @@ export const TRACKS = [
   "imola", "interlagos", "jeddah", "madrid", "mexico", "miami",
   "monaco", "montreal", "monza", "qatar", "redbull", "shanghai",
   "silverstone", "singapore", "spa", "suzuka", "vegas", "zandvoort",
+  // Retired / off-calendar circuits (def `classic: true`).
+  "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
+  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
+  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
+  "jacarepagua",
 ];
 
 // 6 evenly spaced lap positions (~every 16.7%): 0, 17, 33, 50, 67, 83%. Enough

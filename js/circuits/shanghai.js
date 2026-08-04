@@ -62,7 +62,7 @@
         place, prop, backdrop, groundYAt, anchor, addBox, addCyl, addCone, seat,
         addFrustum, addPrism, addPyramid, along, every,
         building, motorhome, tower, cityFront, grandstand, grandstandEx, billboard, gantry, marshalPost,
-        wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm,
+        wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm, recordBarrier,
         forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan,
         waterSurface, groundPatch, sailCanopy,
         cameraTower, broadcastCompound, sponsorHoarding } = api;
@@ -115,7 +115,86 @@
       const LAMP_GLOW = [0.98, 0.86, 0.52];
 
       // ================= START / FINISH — PIT BUILDING (s 0.00, L) =================
-      building(K(0.00), -1, 2, 18, 14, 150, { wall: WHITE, window: WIN_LIT, floor: 4 });
+      // The Shanghai paddock building is the one structure on the calendar that
+      // is laid out as a Chinese character: seen from above it traces 上 — a long
+      // base bar of garages along the straight, a spine running back from its
+      // middle out over the artificial lake on columns, and a short cross bar at
+      // the far end. A single building() slab (18 x 14 x 150 m) discarded every
+      // bit of that and read as any other pit lane in the game.
+      //
+      // Built from per-module primitives instead of one modelGroup on purpose:
+      // the pit straight folds back on itself tightly enough here that the
+      // footprint preflight refuses ANY declared group longer than ~35 m at any
+      // clearance (probed), whereas addBox's own per-box guard drops just the
+      // modules that would actually overhang the road.
+      (function pitBuilding() {
+        // ---- base stroke: the garage row, ~40 boxes over ~130 m ----
+        const GAR = 9;
+        for (let i = 0; i < GAR; i++) {
+          const s = 0.004 + (i + 0.5) / GAR * 0.052;
+          const aB = anchor(K(s), -1, 11), bB = [aB.r, aB.u, aB.t];
+          out._mat = MAT.CONCRETE;
+          addBox(out, vadd(aB.c, aB.u, 4.2), [16, 8.4, 15.4], WHITE, bB);
+          // Garage-door rhythm read from the pit lane, plus the deep canopy
+          // overhang that shades every Tilke pit lane.
+          const aD = anchor(K(s), -1, 2.4), bD = [aD.r, aD.u, aD.t];
+          for (const off of [-5.2, 0, 5.2])
+            addBox(out, vadd(vadd(aD.c, aD.u, 2.3), aD.t, off), [0.5, 4.4, 3.8], DARK, bD);
+          out._mat = MAT.METAL;
+          addBox(out, vadd(aD.c, aD.u, 7.0), [8, 0.5, 15.8], [0.84, 0.86, 0.89], bD);
+          out._mat = 0;
+          // Glazed hospitality storey set back above the garage roof.
+          const aG = anchor(K(s), -1, 13), bG = [aG.r, aG.u, aG.t];
+          addBox(out, vadd(aG.c, aG.u, 10.5), [11, 3.8, 14.8], GLASS_HAZE, bG);
+          // Upswept wing roof: four lateral bands lifting as they run AWAY from
+          // the track. Stepped rather than a true ramp — at any distance the
+          // silhouette reads as one rising plane, and each band stays a guarded
+          // box so a fold-back module drops cleanly.
+          out._mat = MAT.METAL;
+          for (const [d, y, w] of [[6, 12.8, 8], [13, 13.9, 8], [20, 15.2, 8], [27, 16.7, 8]]) {
+            const aW = anchor(K(s), -1, d);
+            addBox(out, vadd(aW.c, aW.u, y), [w, 0.55, 15.6], WHITE, [aW.r, aW.u, aW.t]);
+          }
+          out._mat = 0;
+        }
+
+        // ---- the lagoon the spine crosses ----
+        // Two small panels rather than one broad sheet: the pit straight folds
+        // back close enough on the left that the water preflight refuses
+        // anything wider than ~26 m or further out than ~30 m here (probed).
+        waterSurface(K(0.020), -1, 24, [26, 0.18, 40], WATER,
+          { id: "shanghai-pit-lagoon-a" });
+        waterSurface(K(0.040), -1, 24, [20, 0.18, 30], WATER,
+          { id: "shanghai-pit-lagoon-b" });
+
+        // ---- vertical stroke: the spine reaching back over the water ----
+        const sp = anchor(K(0.030), -1, 26), bs = [sp.r, sp.u, sp.t];
+        out._mat = MAT.CONCRETE;
+        addBox(out, vadd(sp.c, sp.u, 12.0), [30, 5.6, 15], [0.88, 0.89, 0.91], bs);
+        out._mat = 0;
+        addBox(out, vadd(sp.c, sp.u, 9.6), [29, 1.8, 15.4], GLASS_HAZE, bs);
+        out._mat = MAT.METAL;
+        addBox(out, vadd(sp.c, sp.u, 15.1), [33, 0.7, 17], WHITE, bs);
+        // Colonnade standing in the lagoon — the spine is a bridge, not a berm.
+        for (const d of [18, 26, 34, 40]) {
+          const aC = anchor(K(0.030), -1, d), bC = [aC.r, aC.u, aC.t];
+          for (const off of [-5.5, 5.5])
+            seat.cyl(out, vadd(aC.c, aC.t, off), 0.5, 9.2, STEEL, 8, bC);
+        }
+        out._mat = 0;
+
+        // ---- short top stroke: the cross bar closing the character ----
+        for (let i = 0; i < 3; i++) {
+          const a = anchor(K(0.016 + i * 0.014), -1, 46), b = [a.r, a.u, a.t];
+          out._mat = MAT.CONCRETE;
+          addBox(out, vadd(a.c, a.u, 5.5), [15, 11, 17], [0.84, 0.86, 0.88], b);
+          out._mat = 0;
+          addBox(out, vadd(a.c, a.u, 7.4), [15.4, 2.4, 16], WIN_TOWER, b);
+          out._mat = MAT.METAL;
+          addBox(out, vadd(a.c, a.u, 11.6), [18, 0.6, 18], WHITE, b);
+          out._mat = 0;
+        }
+      })();
       building(K(0.98), -1, 14, 16, 11, 55,
         { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
 
@@ -288,14 +367,68 @@
         { livery: "crimson", roof: "flat" });
       grandstandEx(0.10,  -1, 45, 28, null, null,
         { livery: "concrete", roof: "truss", pylons: true });
-      grandstandEx(0.115, -1, 42, 26, null, null,
-        { livery: "steel", tiers: 2 });
       grandstandEx(0.13,  1, 72, 26, null, null,
         { livery: "crimson", roof: "cantilever", endWalls: true });
-      grandstandEx(0.064, 1, 112, 28, null, null, { livery: "concrete" });
-      grandstandEx(0.098, 1, 104, 30, null, null, { livery: "steel" });
-      grandstandEx(0.142, -1, 50, 28, null, null,
-        { livery: "crimson", roof: "truss", pylons: true });
+      // Second row, set back 100 m+ behind the front stands. These are overflow
+      // banks, not architecture: uncovered, so the lotus sails below stay the
+      // only canopy the eye finds in the bowl. roof:"none" is also the cheapest
+      // option in the bag, which is how the whole variety pass stays inside
+      // budget on a circuit that fields 26 stands.
+      grandstandEx(0.064, 1, 112, 28, null, null,
+        { livery: "concrete", roof: "none" });
+      grandstandEx(0.098, 1, 104, 30, null, null,
+        { livery: "steel", roof: "none", endWalls: true });
+
+      // LOTUS TERRACE — the venue's petal canopy turned into an actual STAND
+      // rather than a free-standing sail. Open raked seating with NO back shell
+      // and NO roof slab, covered instead by a row of overlapping petal shells
+      // carried on splayed steel Vs. grandstandEx cannot produce this silhouette
+      // at any option setting (its shell + slab are unconditional), and it is
+      // the form the T2/T3 spectator terraces at Shanghai are actually built in.
+      const lotusTerrace = (id, s, side, gap, bays) => {
+        const pitch = 11, len = bays * pitch;
+        const a = anchor(K(s), side, gap + 6), b = [a.r, a.u, a.t];
+        const IN = -side;                     // +1 along a.r points back at the track
+        // The stand this replaces registered its own front face; keep the
+        // exclusion so the perimeter treeline still frames it instead of
+        // growing through the seating.
+        const half = (len / 2) / track.total;
+        recordBarrier(s - half, s + half, side, gap);
+        modelGroup(id, {
+          center: vadd(a.c, a.u, 8),
+          size: [16, 18, len + 6],
+          basis: b,
+        }, (stage) => {
+          for (let t = 0; t < 5; t++) {
+            const lat = IN * (5.0 - t * 2.0), y = t * 1.55;
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y), [2.0, 1.55, len],
+              t % 2 ? CONC : [0.66, 0.68, 0.70], b);
+            stage._mat = MAT.FABRIC;
+            // Spectators, not an empty frame: an unpeopled bespoke stand next to
+            // grandstandEx's packed rake is the one thing this form must avoid.
+            for (let j = 0; j * 1.1 < len - 2; j++) {
+              const h2 = hash(K(s) * 7 + t * 53 + j * 17);
+              if (h2 < 0.42) continue;
+              seat.box(stage, vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1 + j * 1.1),
+                a.u, y + 1.55), [0.6, 1.0, 0.5],
+                h2 > 0.8 ? RED : (h2 > 0.6 ? YELLOW : CROWD), b);
+            }
+          }
+          for (let i = 0; i < bays; i++) {
+            const c = vadd(a.c, a.t, (i - (bays - 1) / 2) * pitch);
+            stage._mat = MAT.METAL;
+            for (const lean of [-1, 1])
+              seat.cyl(stage, vadd(c, a.r, IN * lean * 1.9), 0.28, 11.4, STEEL, 6, b);
+            stage._mat = 0;
+            const hub = vadd(c, a.u, 11.4);
+            addCone(stage, hub, 7.1, 2.6, WHITE, 10, b);          // petal shell
+            addFrustum(stage, vadd(hub, a.u, -0.4), 7.15, 7.15, 0.4, RED, 10, b);  // rim
+          }
+        });
+      };
+      lotusTerrace("shanghai-lotus-t2", 0.115, -1, 42, 3);
+      lotusTerrace("shanghai-lotus-t3", 0.142, -1, 50, 3);
       billboard(K(0.07),  1, 56, 16, 5, YELLOW);
       billboard(K(0.095), 1, 44, 16, 5, RED);
       marshalPost(K(0.08), -1, 14);
@@ -462,8 +595,10 @@
         { livery: "concrete", roof: "truss", pylons: true });
       grandstandEx(0.50, 1, 20, 28, null, null,
         { livery: "steel", roof: "cantilever", endWalls: true });
-      grandstandEx(0.435, 1, 46, 30, null, null, { livery: "crimson" });
-      grandstandEx(0.475, 1, 48, 30, null, null, { livery: "concrete" });
+      grandstandEx(0.435, 1, 46, 30, null, null,
+        { livery: "crimson", roof: "flat", endWalls: true });
+      grandstandEx(0.475, 1, 48, 30, null, null,
+        { livery: "concrete", roof: "none" });
       grandstandEx(0.515, 1, 46, 28, null, null,
         { livery: "steel", roof: "flat" });
       billboard(K(0.46), 1, 12, 16, 4.5, RED);
@@ -541,10 +676,12 @@
       // Same livery/tier/roof rotation as the mid-sector run.
       grandstandEx(0.755, 1, 38, 34, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", endWalls: true });
-      grandstandEx(0.775, 1, 62, 30, null, null, { livery: "steel" });
+      grandstandEx(0.775, 1, 62, 30, null, null,
+        { livery: "steel", roof: "none" });
       grandstandEx(0.80,  1, 38, 34, null, null,
         { livery: "concrete", roof: "truss", pylons: true });
-      grandstandEx(0.823, 1, 62, 30, null, null, { livery: "crimson" });
+      grandstandEx(0.823, 1, 62, 30, null, null,
+        { livery: "crimson", roof: "flat", endWalls: true });
       grandstandEx(0.845, 1, 38, 32, null, null,
         { livery: "steel", roof: "flat", endWalls: true });
       grandstandEx(0.865, 1, 58, 28, null, null,
@@ -567,10 +704,12 @@
       // ================= T14 HAIRPIN GRANDSTAND (s 0.90, L) =================
       grandstandEx(0.88,  -1, 24, 30, null, null,
         { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
-      grandstandEx(0.892, -1, 48, 28, null, null, { livery: "crimson" });
+      grandstandEx(0.892, -1, 48, 28, null, null,
+        { livery: "crimson", roof: "none" });
       grandstandEx(0.905, -1, 28, 32, null, null,
         { livery: "concrete", roof: "truss", pylons: true });
-      grandstandEx(0.918, -1, 52, 28, null, null, { livery: "steel" });
+      grandstandEx(0.918, -1, 52, 28, null, null,
+        { livery: "steel", roof: "flat", pylons: true });
       grandstandEx(0.93,  -1, 30, 28, null, null,
         { livery: "crimson", roof: "flat", endWalls: true });
       // A second lotus-roof family makes the T14 hairpin the visual counterpoint

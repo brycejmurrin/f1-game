@@ -22,8 +22,9 @@
       // cityFront sectors; only the Red Sea waterfront stays open so the
       // corniche landmarks read against the water.
       { kind: "city", s0: 0.05, s1: 0.66, side: 1 },
-      // The bespoke 40 m LED-head rhythm is the circuit's lighting identity;
-      // generic street lamps crowd the wall and clip the fastest curved sweeps.
+      // The bespoke slim-LED-head rhythm (22 m, both sides) is the circuit's
+      // lighting identity — the light tunnel. Generic street lamps crowd the
+      // wall, clip the fastest curved sweeps, and break the rhythm.
       { kind: "lamps", s0: 0, s1: 1 },
       // The Red Sea, marina, and lagoon stay open on the seaward side. Bespoke
       // palms below supply the intentional waterfront planting.
@@ -61,7 +62,7 @@
     scenery: function (api) {
       const { out, MAT, n, pyMin, place, backdrop,
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
-        grandstand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
+        grandstand, grandstandEx, scaffoldStand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
         cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -108,11 +109,17 @@
       };
 
       // Slim cool-white LED head — light-tunnel identity (cheap: thin pole + cap)
-      const ledHead = (k, side, dist) => {
+      // + a short arm reaching over the barrier, which is what actually makes a
+      // row of these read as a TUNNEL rather than a row of posts: the heads
+      // converge over the tarmac in perspective. `col` lets the run carry the
+      // Saudi green/gold accent every few poles.
+      const ledHead = (k, side, dist, col) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 2)) return;
         addCyl(out, a.c, 0.10, 7.5, DARKPOLE, 4, b);
-        addBox(out, vadd(a.c, a.u, 7.5), [0.55, 0.45, 0.55], LED, b);
+        const head = vadd(vadd(a.c, a.u, 7.4), a.r, -side * 1.3);
+        addBox(out, vadd(head, a.r, side * 0.65), [1.5, 0.14, 0.16], DARKPOLE, b);
+        addBox(out, head, [0.62, 0.34, 0.55], col || LED, b);
       };
 
       // Light tower: slim column + cool LED head (taller accents)
@@ -139,21 +146,54 @@
           place(K(s), side, gap + 0.15, [0.12, 0.55, 3.2], stripe);
         }
       });
+      // The wall runs in alternating GREEN and GOLD blocks rather than one
+      // colour or a random speckle. Saudi event dressing colour-blocks its
+      // barriers in long runs, and at 300 km/h a block is the only thing that
+      // registers — a per-panel alternation reads as grey mush. This also
+      // fixes a silent gap: whenever the shared concreteCanyon was present the
+      // local green/gold stripe loop below never ran at all, so the accent
+      // colours the palette defines were emitted on no build that had the
+      // helper. Passing stripeCol/stripeEvery routes them through it instead.
+      const SAUDI_BLOCKS = [
+        [0.00, 0.16, GREEN], [0.16, 0.31, GOLD], [0.31, 0.47, GREEN],
+        [0.53, 0.68, GOLD], [0.68, 0.84, GREEN], [0.84, 1.00, GOLD],
+      ];
       for (const side of [-1, 1]) {
-        canyon(0.00, 0.47, side, 3.50, { h: 1.35 + (side > 0 ? 0.05 : 0.10) });
-        canyon(0.47, 0.53, side, 4.20, { h: 1.40 + (side > 0 ? 0.08 : 0.00) });
-        canyon(0.53, 1.00, side, 3.50, { h: 1.40 + (side > 0 ? 0.08 : 0.00) });
-      }
-
-      // ── 3. Cool-white LED light tunnel — densify both sides ~every 40 m ───
-      if (typeof api.floodMastRing === "function") {
-        api.floodMastRing(40, { dist: 5.5, cool: true });
-      } else {
-        every(40, (k) => {
-          ledHead(k, 1, 5.0 + hash(k * 1.7) * 1.2);
-          ledHead(k, -1, 5.4 + hash(k * 2.3) * 1.4);
+        for (const [b0, b1, accent] of SAUDI_BLOCKS) {
+          canyon(b0, b1, side, 3.50, {
+            h: (b0 < 0.5 ? 1.35 : 1.40) + (side > 0 ? 0.06 : 0.08),
+            stripeCol: accent, stripeEvery: 5,
+          });
+        }
+        // The T13 banked sector keeps its own wider, taller wall.
+        canyon(0.47, 0.53, side, 4.20, {
+          h: 1.40 + (side > 0 ? 0.08 : 0.00),
+          stripeCol: GOLD, stripeEvery: 2,
         });
       }
+
+      // ── 3. Cool-white LED light tunnel ────────────────────────────────────
+      // This used to call floodMastRing(40) — i.e. 310 of the 36 m dual-arm
+      // stadium masts that are QATAR's defining feature, standing 5.5 m off
+      // Jeddah's barriers. Two circuits cannot both own the tall-mast ring, and
+      // it is not what lights this place: the Corniche is lit by hundreds of
+      // slim 7.5 m LED poles hard against the wall, close enough together that
+      // their heads merge into a continuous ceiling of light down the fast
+      // sweeps. That density is the "fastest street circuit in the world"
+      // sensation — a tunnel rushing past — and it is what a Jeddah frame has
+      // that a Qatar frame cannot. Slim heads are ~4x cheaper each, so this
+      // buys nearly twice the pole count for well under half the vertices, and
+      // frees the budget for the green/gold barrier crown below.
+      // Every fifth pole burns Saudi green or gold.
+      let poleI = 0;
+      every(22, (k) => {
+        for (const side of [1, -1]) {
+          const accent = (poleI % 5 === 2) ? [0.24, 1.10, 0.48]
+                       : (poleI % 5 === 4) ? [1.10, 0.88, 0.18] : LED;
+          ledHead(k, side, (side > 0 ? 4.6 : 4.9) + hash(k * 1.7 + side) * 1.0, accent);
+          poleI++;
+        }
+      });
       // Sparse tall flood / tower accents (not the primary tunnel rhythm)
       for (let i = 0; i < 4; i++) {
         floodMast(K(i / 4 + 0.02), (i % 2) ? -1 : 1, 20 + (i % 2) * 6);
@@ -177,6 +217,17 @@
       for (let i = 0; i < 9; i++) {
         palm(K(0.545 + i * 0.012), 1, 13 + (i % 2) * 3,
           6.5 + hash(i * 17 + 4) * 2.5, (i % 3) ? PALMFROND : [0.16, 0.50, 0.22]);
+      }
+      // FORMAL PALM AVENUE on the inland shoulder of the fast north sweeps.
+      // The scattered plantings above read as landscaping; the Corniche's own
+      // planting is a strict double file at even spacing, and regularity is
+      // what the eye picks up at 300 km/h — a metronome of trunks flicking past
+      // a wall. Two staggered ranks, identical pitch, deliberately uniform
+      // height so the row does not dissolve into generic foliage.
+      for (let i = 0; i < 18; i++) {
+        const s = 0.655 + i * 0.0125;
+        palm(K(s), -1, 11.5, 8.4 + (i % 2) * 0.5, PALMFROND);
+        if (i % 2 === 0) palm(K(s + 0.006), -1, 17.5, 7.6, [0.09, 0.38, 0.16]);
       }
 
       // ── Marshal posts ─────────────────────────────────────────────────────
@@ -225,8 +276,19 @@
       // One long low pit building with a lit window band (was five stacked raw
       // place() boxes reading as a row of blocks).
       building(K(0.0), -1, 16, 62, 8, 28, { wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
-      grandstand(0.0,  1, 15, 60, [0.14, 0.15, 0.19], [0.55, 0.45, 0.40]);
-      grandstand(0.02, 1, 15, 50, [0.13, 0.14, 0.18], [0.50, 0.42, 0.46]);
+      // MAIN GRANDSTAND — the only permanent seating on the Corniche, and the
+      // one place the national colours are worn at full size: a deep-green
+      // shell under a gold fascia and roof. Every other night circuit in the
+      // fleet fields grey/steel/sandstone stands, so a green stand behind the
+      // start line is unambiguous even in a thumbnail.
+      const STAND_GREEN = [0.07, 0.30, 0.16];
+      const STAND_GOLD  = [0.72, 0.58, 0.16];
+      grandstandEx(0.0,  1, 15, 60, STAND_GREEN, [0.42, 0.46, 0.40],
+        { tiers: 2, roof: "cantilever", endWalls: true, pylons: true,
+          roofCol: STAND_GOLD, fasciaCol: STAND_GOLD });
+      grandstandEx(0.02, 1, 15, 50, STAND_GREEN, [0.40, 0.44, 0.40],
+        { tiers: 1, roof: "cantilever", endWalls: true,
+          roofCol: STAND_GOLD, fasciaCol: STAND_GOLD });
 
       // ── 2. Open Red Sea corridor — no seaward cityFront on s≈0.05–0.40 ────
       // Keep sea / fountain / mosque; city mass stays inland (L). Thin residual
@@ -289,11 +351,23 @@
       // ── T13 BANKED SECTOR — s 0.50 ───────────────────────────────────────
       floodMast(K(0.49), -1, 22);
       floodMast(K(0.51),  1, 26);
-      grandstand(0.50, 1, 18, 40, [0.14, 0.15, 0.19], [0.52, 0.44, 0.42]);
-      // Packed night-event bowl: flanking stands create a concentrated crowd
-      // wall at T13, with generous setbacks and gaps between each structure.
-      grandstand(0.475, 1, 22, 52, [0.12, 0.13, 0.17], [0.66, 0.38, 0.42]);
-      grandstand(0.525, 1, 22, 52, [0.12, 0.13, 0.17], [0.42, 0.54, 0.68]);
+      // T13 spectator bank. Everything here except the main stand is put up for
+      // race week on a closed public road and taken down after — tube-and-plank
+      // scaffold decks, not shells. Three separate grandstand() slabs read as
+      // permanent stadium architecture (Abu Dhabi's language); one continuous
+      // scaffold run reads as a street race that borrowed a corniche for a
+      // weekend, which is exactly what Jeddah is. Green and gold bench boards.
+      if (typeof scaffoldStand === "function") {
+        scaffoldStand(0.466, 0.534, 1, 17, {
+          rows: 5, rise: 1.25, setback: 1.9, step: 21, density: 0.5, legEvery: 1,
+          tubeCol: [0.66, 0.67, 0.70], deckCol: [0.62, 0.58, 0.50],
+          bench: [[0.08, 0.34, 0.18], [0.74, 0.60, 0.16], [0.86, 0.86, 0.84]],
+        });
+      } else {
+        grandstand(0.50, 1, 18, 40, [0.14, 0.15, 0.19], [0.52, 0.44, 0.42]);
+        grandstand(0.475, 1, 22, 52, [0.12, 0.13, 0.17], [0.66, 0.38, 0.42]);
+        grandstand(0.525, 1, 22, 52, [0.12, 0.13, 0.17], [0.42, 0.54, 0.68]);
+      }
       tyreWall(0.485, 0.515, -1, 3.5, MAGENTA);
 
       // ── CORNICHE LAGOON — folded into the marina band above (s 0.43–0.64).
@@ -318,8 +392,19 @@
       }
 
       // ── FINAL SECTOR GRANDSTAND — s 0.89 R ───────────────────────────────
-      grandstand(0.89, 1, 16, 45, [0.15, 0.15, 0.19], [0.50, 0.43, 0.47]);
-      grandstand(0.925, 1, 22, 58, [0.12, 0.13, 0.17], [0.62, 0.42, 0.50]);
+      // Same temporary scaffold family as T13, with the striped awning that
+      // race-week seating on a hot corniche always carries.
+      if (typeof scaffoldStand === "function") {
+        scaffoldStand(0.876, 0.944, 1, 15, {
+          rows: 4, rise: 1.25, setback: 1.9, step: 21, density: 0.52, legEvery: 1,
+          tubeCol: [0.66, 0.67, 0.70], deckCol: [0.62, 0.58, 0.50],
+          bench: [[0.08, 0.34, 0.18], [0.74, 0.60, 0.16], [0.86, 0.86, 0.84]],
+          awning: true, awningCols: [[0.90, 0.89, 0.85], [0.10, 0.38, 0.20]],
+        });
+      } else {
+        grandstand(0.89, 1, 16, 45, [0.15, 0.15, 0.19], [0.50, 0.43, 0.47]);
+        grandstand(0.925, 1, 22, 58, [0.12, 0.13, 0.17], [0.62, 0.42, 0.50]);
+      }
       lightTower(K(0.90),  1, 11);
       lightTower(K(0.93), -1, 11);
       floodMast(K(0.91), -1, 24);

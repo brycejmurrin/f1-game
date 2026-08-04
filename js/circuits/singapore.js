@@ -81,7 +81,7 @@
       const { out, MAT, n, place, backdrop,
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
               addPrism, addFrustum, grandstand, grandstandEx, sponsorHoarding,
-              gantry, marshalPost, palm, bush,
+              gantry, marshalPost, palm, bush, ds, recordBarrier,
               fence, tyreWall, vadd, hash, cityFront, tower, ferrisWheel, modelGroup,
               overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
@@ -789,16 +789,95 @@
           endWalls: hash(K(s) * 1.7) < 0.4,
         });
       }
-      for (const [s, side, gap, len] of [
-        [0.060, -1, 15, 44], [0.205,  1, 15, 42], [0.290,  1, 16, 44],
-        [0.455, -1, 15, 42], [0.545,  1, 15, 44], [0.815, -1, 16, 46],
+      // ── SCAFFOLD BAY STAND (bespoke — NOT grandstandEx) ─────────────────
+      // Marina Bay's seating is not a grandstand, it is scaffolding. Every
+      // inland stand here is a bolted tube frame stood up on ballast pads for
+      // one week a year: open standards and ledgers, a diagonal in every bay,
+      // aluminium plank decks, a mesh-screened back and NO shell or roof at
+      // all. grandstandEx's back shell plus cantilever roof is a permanent
+      // circuit's silhouette, which on a temporary street venue is precisely
+      // the wrong read — and a shell also hides the thing that makes this
+      // circuit look like itself, which is a lattice lit from underneath.
+      // Built from primitives, local to this closure.
+      const SCAF_TUBE = [0.58, 0.60, 0.64];      // galvanised tube
+      const SCAF_DECK = [0.66, 0.68, 0.71];      // aluminium plank
+      const SCAF_MESH = [0.13, 0.15, 0.18];      // dark safety screen
+      const SCAF_FANS = [
+        [0.86, 0.86, 0.88], [0.72, 0.24, 0.22], [0.30, 0.40, 0.58],
+        [0.84, 0.72, 0.36], [0.50, 0.52, 0.56], [0.78, 0.80, 0.84],
+      ];
+      function scaffoldBay(s, side, gap, len, rows, banner) {
+        const k = K(s);
+        const probe = anchor(k, side, gap);
+        if (onTrack(probe.c[0], probe.c[2], len * 0.4)) return;
+        const half = (len / 2) / (n * ds);
+        recordBarrier(s - half, s + half, side, gap);
+        const a = anchor(k, side, gap + 5.2);
+        const b = [a.r, a.u, a.t];
+        const IN = -side;                          // +a.r * IN faces the track
+        const bays = Math.max(3, Math.round(len / 6.4));
+        const pitch = len / bays;
+        const topH = 2.2 + rows * 1.34;
+        // A diagonal needs its own orthonormal basis — shearing a box across a
+        // non-perpendicular pair produces a twisted brace, not a raking one.
+        const run = 9.0, dl = Math.hypot(run, topH);
+        const dv = [(a.r[0] * run * IN + a.u[0] * topH) / dl,
+                    (a.r[1] * run * IN + a.u[1] * topH) / dl,
+                    (a.r[2] * run * IN + a.u[2] * topH) / dl];
+        const pv = [(-a.r[0] * topH * IN + a.u[0] * run) / dl,
+                    (-a.r[1] * topH * IN + a.u[1] * run) / dl,
+                    (-a.r[2] * topH * IN + a.u[2] * run) / dl];
+        for (let i = 0; i <= bays; i++) {
+          const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
+          out._mat = MAT.CONCRETE;
+          addBox(out, vadd(p, a.u, 0.2), [11.0, 0.4, 1.5], [0.42, 0.43, 0.46], b);  // ballast pad
+          out._mat = MAT.METAL;
+          addCyl(out, vadd(p, a.r, IN * 4.5), 0.13, 2.6, SCAF_TUBE, 5, b);          // front standard
+          addCyl(out, vadd(p, a.r, -IN * 4.5), 0.13, topH + 1.9, SCAF_TUBE, 5, b);  // back standard
+          addBox(out, vadd(p, a.u, topH * 0.5), [0.13, dl, 0.13], SCAF_TUBE, [pv, dv, a.t]);
+          addBox(out, vadd(p, a.u, topH * 0.36), [9.2, 0.11, 0.11], SCAF_TUBE, b);  // ledgers
+          addBox(out, vadd(p, a.u, topH * 0.74), [9.2, 0.11, 0.11], SCAF_TUBE, b);
+          out._mat = 0;
+        }
+        // Aluminium plank decks with a sparse crowd. The crowd is a BANDED run
+        // plus speckle — never one box per seat.
+        for (let t = 0; t < rows; t++) {
+          const lat = IN * (4.0 - t * 1.22), y = 1.4 + t * 1.34;
+          out._mat = MAT.METAL;
+          addBox(out, vadd(vadd(a.c, a.r, lat), a.u, y), [1.22, 0.14, len], SCAF_DECK, b);
+          out._mat = MAT.FABRIC;
+          addBox(out, vadd(vadd(a.c, a.r, lat), a.u, y + 0.5), [0.86, 0.86, len - 2],
+                 SCAF_FANS[t % SCAF_FANS.length], b);
+          const cnt = Math.min(10, Math.floor(len / 8));
+          for (let c = 0; c < cnt; c++) {
+            if (hash(k * 11 + t * 41 + c * 17) < 0.5) continue;
+            const off = (c / Math.max(1, cnt - 1) - 0.5) * (len - 6);
+            addBox(out, vadd(vadd(vadd(a.c, a.r, lat), a.t, off), a.u, y + 1.05),
+                   [0.9, 0.95, 1.5], SCAF_FANS[(c + t * 3) % SCAF_FANS.length], b);
+          }
+          out._mat = 0;
+        }
+        // Mesh safety screen closing the back — a thin dark panel on the rear
+        // standards, not a shell. Reads as screen, occludes nothing.
+        out._mat = MAT.METAL;
+        addBox(out, vadd(vadd(a.c, a.r, -IN * 4.6), a.u, topH * 0.55 + 0.9),
+               [0.1, topH * 1.1, len], SCAF_MESH, b);
+        out._mat = 0;
+        // Printed sponsor fascia across the front of the deck.
+        addBox(out, vadd(vadd(a.c, a.r, IN * 4.9), a.u, 1.5), [0.2, 1.9, len], banner, b);
+        // Uplight wash under the front row — Marina Bay lights everything from
+        // below, and it is what makes the frame read as a lattice at night.
+        addBox(out, vadd(vadd(a.c, a.r, IN * 4.2), a.u, 0.55), [1.4, 0.3, len - 2],
+               [1.10, 0.94, 0.62], b);
+      }
+      // The six inland stands are temporary scaffold; the eleven on the bay
+      // front above stay as the semi-permanent seated ring.
+      for (const [s, side, gap, len, rows, banner] of [
+        [0.060, -1, 15, 44, 7, NEON[1]], [0.205,  1, 15, 42, 6, NEON[2]],
+        [0.290,  1, 16, 44, 7, NEON[0]], [0.455, -1, 15, 42, 6, NEON[3]],
+        [0.545,  1, 15, 44, 7, NEON[1]], [0.815, -1, 16, 46, 8, NEON[2]],
       ]) {
-        const tiers = hash(K(s) * 2.3) < 0.3 ? 2 : 1;
-        grandstandEx(s, side, gap, len, null, null, {
-          livery: SGP_LIV[standIdx++ % SGP_LIV.length], tiers,
-          roof: "cantilever",
-          endWalls: hash(K(s) * 4.1) < 0.5,
-        });
+        scaffoldBay(s, side, gap, len, rows, banner);
       }
       // Apex kerb flashes at the 90-degree corners.
       for (const [s, side] of [[0.09, 1], [0.24, -1], [0.36, 1], [0.48, -1],

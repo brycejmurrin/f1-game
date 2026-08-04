@@ -18,15 +18,21 @@ const Car3D = (function () {
   const SURFACES = Object.freeze({
     custom: 0, paint: 20, carbon: 21, rubber: 22,
     metal: 23, glass: 24,
-    emissive: 25, functionalEmissive: 25, panel: 26,
+    emissive: 25, functionalEmissive: 25, panel: 26, mirror: 27,
   });
   // Livery FINISH -> the surface id the body paint is emitted as. "gloss" (or an
   // absent finish) keeps SURFACES.paint, i.e. the clearcoat + metallic-flake car
   // paint the lit shader has always given bodywork. The two alternatives reuse
   // ids the shader already classifies, so no renderer needs a new branch:
-  //   satin  -> panel  (roughness >= 0.72, specular 0.35 — a flat matte wrap)
-  //   chrome -> metal  (metalness >= 0.78, roughness <= 0.16 — tinted mirror)
-  const FINISH_SURFACE = Object.freeze({ satin: 26, chrome: 23 });
+  //   satin  -> panel   (roughness >= 0.72, specular 0.35 — a flat matte wrap)
+  //   chrome -> mirror  (clearcoat + env lobe + near-zero roughness)
+  // Chrome originally reused `metal`, which looked WORSE than gloss: metalness
+  // kills the diffuse response while the shader's env lobe is gated on
+  // clearcoat, which metal has none of — so the body went dark and flat with
+  // nothing to reflect. `mirror` is its own id so no existing metal part (rims,
+  // halo, heat shields) changes, and a backend that does not classify it simply
+  // renders ordinary paint.
+  const FINISH_SURFACE = Object.freeze({ satin: 26, chrome: 27 });
   const DARK   = [0.05, 0.05, 0.05];
   const CARBON = [0.07, 0.07, 0.08];
   const VISOR  = [0.08, 0.08, 0.09];          // tinted visor
@@ -1039,7 +1045,12 @@ const Car3D = (function () {
     // shoulder and coke-bottle tail. Geometry datums returned here anchor all
     // paint, sponsor, ERS and cooling details below.
     const podGeom = buildSidepodBodywork(out, c1, engStyle, anchors);
-    function addPodFlankSpan(zFront, zRear, yFrac, height, col, surface, proud) {
+    // `fracH` reads `height` as a FRACTION of the pod's height at each station
+    // instead of metres. The pod tapers front-to-rear, so a fixed metre height
+    // covers a different yFrac band at each station — which makes it impossible
+    // to size a band to a decal (whose extent IS in yFrac) or to butt two bands
+    // together without them overlapping and z-fighting somewhere along the pod.
+    function addPodFlankSpan(zFront, zRear, yFrac, height, col, surface, proud, fracH) {
       // Never bridge a detail across a loft crease: each segment follows the
       // same station interval as the underlying sidepod surface.
       const stops = [zFront, ...anchors.podStations.map((p) => p.z)
@@ -1050,10 +1061,12 @@ const Car3D = (function () {
           addSpan(out,
             { z: stops[i], x: side * (a.x + (proud || 0.008)),
               y: a.bottom + (a.top - a.bottom) * yFrac,
-              w: 0.016, h: Math.min(height, (a.top - a.bottom) * 0.78) },
+              w: 0.016, h: fracH ? (a.top - a.bottom) * height
+                                 : Math.min(height, (a.top - a.bottom) * 0.78) },
             { z: stops[i + 1], x: side * (b.x + (proud || 0.008)),
               y: b.bottom + (b.top - b.bottom) * yFrac,
-              w: 0.016, h: Math.min(height, (b.top - b.bottom) * 0.78) },
+              w: 0.016, h: fracH ? (b.top - b.bottom) * height
+                                 : Math.min(height, (b.top - b.bottom) * 0.78) },
             col, null, surface);
         }
       }
@@ -1200,8 +1213,22 @@ const Car3D = (function () {
       }
     }
 
-    addPodFlankSpan(0.46, -0.34, 0.55, 0.18, PANEL);
-    addPodFlankSpan(0.46, -0.34, 0.16, 0.08, c2);
+    // SPONSOR BOARD. The titleA wordmark is podDecal(R.titleA, 0.24, 0.84), so the
+    // board must cover yFrac 0.24..0.84 — centre 0.54, height 0.60 x pod height.
+    // At 0.55/0.18 the decal was TALLER than its board at every station, spilling
+    // the glyph tops and tails onto the body paint. One ink then had to serve a
+    // pale board and the paint at once, which is why 70% of liveries fell back to
+    // a halo. 0.20 m clears 0.60 x pod height front, mid and rear (the helper's
+    // own (top-bottom)*0.78 cap does not bite), so the mark sits WHOLLY on the
+    // board and liverytex can ink it for that one colour.
+    // Sized in POD FRACTIONS so each band tracks the taper and nothing overlaps:
+    // the accent band holds the strip (yFrac 0.08..0.30), the board holds titleA
+    // (0.32..0.80), and the accentC flash below sits at 0.88 with its lower edge
+    // no deeper than 0.8195 at any station. Clean gaps at every station.
+    addPodFlankSpan(0.46, -0.34, 0.56, 0.48, PANEL, null, 0.008, true);
+    // Lower accent band. The `strip` decal (yFrac 0.08..0.30) crosses this, so
+    // liverytex counts c2 among that region's backgrounds.
+    addPodFlankSpan(0.46, -0.34, 0.19, 0.22, c2, null, 0.008, true);
 
     // ERS: a color-coded ENERGY-CELL CONDUIT sweeping up from the sidepod shoulder
     // onto the engine-cover flank. The number of cells + a battery-pack bulge grow with the pack spec, so every
@@ -1394,7 +1421,11 @@ const Car3D = (function () {
     // --- Livery `pod` panel: a bold contrasting block on each sidepod flank,
     // forward of the sponsor board, for the two-tone sidepod look many liveries
     // carry. Proud of the pod skin so it never z-fights. Only when specified. ---
-    if (podC) addPodFlankSpan(0.45, 0.11, 0.60, 0.22, podC, SURFACES.paint, 0.016);
+    // Proud 0.006 keeps the pod panel UNDER the sponsor board (0.008): a board is
+    // applied over the paint, not buried by it. At 0.016 the panel sat proud of
+    // the board and covered it, so on every pod-set livery the sidepod wordmark
+    // was actually sitting on the pod colour while being inked for the board.
+    if (podC) addPodFlankSpan(0.45, 0.11, 0.60, 0.22, podC, SURFACES.paint, 0.006);
 
     // --- Nose number deck: a flat base-paint panel raised proud of the nose
     // crown, carrying the driver-number TEXTURE decal (see carDecalData). Base
@@ -1593,9 +1624,9 @@ const Car3D = (function () {
     // reads the SAME function, so the digit lands exactly on this board). ---
     const nb = numberBoard(aLvl);
     for (const s of [-1, 1]) {
-      const boardP = anchors.podAt(0);
-      addBox(out, s*(boardP.x + 0.012), boardP.bottom + (boardP.top - boardP.bottom) * 0.55,
-             0.0, 0.020, Math.min(0.11, (boardP.top - boardP.bottom) * 0.7), 0.46, PANEL);
+      // (The short PANEL box that used to sit here was a SECOND sponsor board,
+      // overlapping the flank span above at a different height and z range — two
+      // pale panels fighting for the same wordmark. The span is the board now.)
       addBox(out, s*0.527, nb.cy, -2.42, 0.012, nb.h, 0.30, c1);
     }
 
@@ -2014,6 +2045,7 @@ const Car3D = (function () {
   }
 
   return { build, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+           PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, teamStyleOf,
            endplate: endplateGeom, numberBoard, aeroLevelOf };

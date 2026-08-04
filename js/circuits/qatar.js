@@ -55,7 +55,7 @@
         palm, building, fence, wall, mountain, guardrail, tyreWall,
         billboard, marshalPost, gantry, tower, bush, along,
         modelGroup, groundPatch, floodMast, floodMastRing, circuitKit,
-        bankedKerbStrip, sponsorHoarding } = api;
+        bankedKerbStrip, sponsorHoarding, bleacher, acacia } = api;
       const K = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
@@ -120,6 +120,40 @@
       const lightPool = (k, side, gap, r) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
         addCyl(out, vadd(a.c, a.u, 0.05), r, 0.07, POOL, 10, b);
+      };
+      // Arabic-script signage. Every venue in this game signs itself in Latin
+      // block capitals via billboard()/sponsorHoarding(), which is a large part
+      // of why the four floodlit desert/street circuits read as one place.
+      // Arabic is a CONNECTED script: one unbroken baseline stroke with
+      // ascenders rising off it and diacritic dots above and below. That
+      // horizontal-run-plus-verticals shape is legible as Arabic at any
+      // distance and at any resolution, without a glyph atlas — which is the
+      // whole point, since the eye only ever reads the rhythm from a car.
+      // Right-to-left, so the tallest ascender group sits at the RIGHT end.
+      const arabicSign = (k, side, gap, w, h, ink, panel) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        if (typeof api.onTrack === "function" && api.onTrack(a.c[0], a.c[2], 3)) return;
+        const lift = h * 0.5 + 2.2;
+        const c = vadd(a.c, a.u, lift);
+        // Board + posts
+        addBox(out, c, [0.22, h, w], panel, b);
+        for (const dz of [-w * 0.4, w * 0.4])
+          addCyl(out, vadd(a.c, a.t, dz), 0.16, lift - h * 0.4, STEEL, 4, b);
+        // Baseline stroke — the connecting rasm, proud of the panel face.
+        const face = vadd(c, a.r, -side * 0.16);
+        addBox(out, vadd(face, a.u, -h * 0.10), [0.06, h * 0.11, w * 0.86], ink, b);
+        // Ascenders (alif / lam / kaf) — a few tall strokes, uneven spacing.
+        const asc = [0.40, 0.26, 0.05, -0.22, -0.36];
+        for (let i = 0; i < asc.length; i++) {
+          const tall = 0.30 + hash(k * 3.1 + i * 7.7) * 0.34;
+          addBox(out, vadd(vadd(face, a.t, asc[i] * w), a.u, h * (tall * 0.5 - 0.04)),
+                 [0.06, h * tall, w * 0.035], ink, b);
+        }
+        // Diacritic dots — above and below the baseline; this is what stops the
+        // run reading as a plain underline.
+        for (const [dz, dy] of [[0.33, 0.24], [0.12, 0.26], [-0.05, -0.28], [-0.30, 0.22]])
+          addBox(out, vadd(vadd(face, a.t, dz * w), a.u, h * dy),
+                 [0.06, h * 0.09, w * 0.030], ink, b);
       };
       // Lusail's stands are long, low Tilke slabs. The generic grandstand model
       // carries dense individual spectators, which made Qatar's overlapping
@@ -191,14 +225,22 @@
       })();
 
       // ================= 1. FLOODLIGHT RING — primary Qatar identity =========
-      // Continuous cool-white Musco-style masts both sides; denser on S/F.
+      // Lusail's 3,600-lamp Musco installation is the single thing that makes
+      // this venue recognisable from any corner: a continuous ring of masts
+      // TALLER than anything else on the calendar (the real ones stand ~44 m,
+      // against ~30-36 m for the floodlit street circuits). The height is the
+      // read, not the count — a 38 m mast at 34 m out sits inside the same
+      // visual band as Jeddah's and Baku's poles, which is exactly the sameness
+      // this pass exists to break. 46 m puts the lamp bar clearly above every
+      // grandstand roof and every dune on the horizon.
+      const MAST_H = 46, MAST_H_SF = 50;
       if (typeof floodMastRing === "function") {
-        floodMastRing(90, { h: 38, dist: 34, cool: true, pool: true });
+        floodMastRing(90, { h: MAST_H, dist: 34, cool: true, pool: true });
         // Extra densification on the televised start/finish kilometre
         along(0.86, 0.14, 45, (k) => {
           if (typeof floodMast === "function") {
-            floodMast(k, -1, 32, { h: 40, cool: true, pool: true });
-            floodMast(k,  1, 36, { h: 40, cool: true, pool: true });
+            floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: true });
+            floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: true });
           }
         });
       } else {
@@ -336,14 +378,22 @@
         }
       })();
 
-      // Sponsor hoardings along S/F verge
+      // Sponsor hoardings along S/F verge, with an Arabic-script board every
+      // fourth bay. Latin-only signage was a big part of why this straight read
+      // as generic floodlit tarmac.
       (function straightAds() {
         let i = 0;
         along(0.86, 0.12, 28, (k) => {
-          billboard(k, 1, 5, 9, 3.2, AD[i % AD.length]);
+          if (i % 4 === 3) arabicSign(k, 1, 5, 9, 3.2, [0.98, 0.94, 0.66], [0.10, 0.30, 0.20]);
+          else billboard(k, 1, 5, 9, 3.2, AD[i % AD.length]);
           i++;
         });
       })();
+      // Maroon-and-white Arabic welcome boards at the two spectator gates —
+      // Qatar's national colours, and the largest signs on the circuit.
+      arabicSign(K(0.205), 1, 30, 22, 4.6, [0.97, 0.95, 0.90], [0.44, 0.06, 0.18]);
+      arabicSign(K(0.735), -1, 34, 20, 4.2, [0.97, 0.95, 0.90], [0.44, 0.06, 0.18]);
+      arabicSign(K(0.935), 1, 26, 18, 4.0, [0.98, 0.90, 0.40], [0.12, 0.13, 0.17]);
 
       // ================= TURN 1 — North stand + Tilke VVIP canopy ============
       qatarStand("qatar-t1-stand-a", 0.053, 1, 20, 95,
@@ -354,17 +404,17 @@
       marshalPost(K(0.05), -1, 6);
       billboard(K(0.065), 1, 6, 12, 3.8, AD[0]);
 
-      // Dress-pass addition 3: North-grandstand rear concourse and lightbox.
-      // These low white hospitality volumes sit well behind the stand shell,
-      // adding Lusail's modern event architecture rather than trackside clutter.
+      // North-grandstand rear concourse. Two lit volumes and a light bar only —
+      // the third and fourth blocks that used to stand here started to read as
+      // a small town behind T1, which is the one thing Lusail has none of.
       building(K(0.060), 1, 54, 16, 7, 34,
         { wall: WHITE, window: WIN_WARM, floor: 3.0 });
-      building(K(0.078), 1, 58, 13, 6, 24,
-        { wall: [0.86, 0.87, 0.88], window: WIN_COOL, floor: 3.0 });
       {
         const a = anchor(K(0.068), 1, 63), b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, 8.2), [20, 0.30, 42], FLOOD, b);
       }
+      // Arabic entrance signage over the North concourse gate.
+      arabicSign(K(0.064), 1, 44, 16, 3.4, [0.98, 0.92, 0.60], [0.13, 0.14, 0.18]);
 
       // T1 VVIP — white villa + ~60 m branch-style sail canopy (replaces mosque)
       (function t1Vvip() {
@@ -386,21 +436,47 @@
         }, { required: true });
       })();
 
-      // ================= SPARSE PALMS (culled — vert budget for flood ring) ===
-      for (let i = 0; i < 8; i++) {
+      // ================= DESERT THORN + SPARSE PALMS =========================
+      // The other three floodlit circuits in this group are all planted with
+      // date palms — the one silhouette they genuinely share. Lusail sits on
+      // open hamada well outside any irrigated corniche, and what grows there
+      // is samr/acacia: a bare trunk forking low into a wide FLAT crown. The
+      // umbrella against the mast light is a completely different shape from a
+      // palm's radial frond burst, so a single tree in frame says "Qatar, not
+      // Jeddah". Palms stay only where the venue itself planted them (the
+      // paddock approach), which is where they actually are.
+      if (typeof acacia === "function") {
+        for (let i = 0; i < 14; i++) {
+          const k = (K(0.09) + i * Math.round(n * 0.014)) % n;
+          const side = hash(k * 19 + i) < 0.5 ? -1 : 1;
+          const hgt = 4.5 + hash(k * 7 + i) * 2.6;
+          acacia(k, side, 44 + hash(k * 5 + i) * 46, hgt, [0.30, 0.36, 0.20],
+                 { spread: hgt * (1.15 + hash(k * 11 + i) * 0.5), layers: 2 });
+        }
+      }
+      for (let i = 0; i < 5; i++) {
         const k = (K(0.10) + i * Math.round(n * 0.006)) % n;
         palm(k, -1, 48 + hash(k * 5) * 24, 7.5 + hash(k * 9) * 2.5, FROND);
       }
 
-      // ================= T2/T3 PAIRED GRANDSTANDS ============================
-      for (const [i, s] of [0.162, 0.183, 0.204].entries()) {
-        qatarStand(`qatar-t23-stand-${i}`, s, 1, 22, 52,
-          SHELL_STEEL, [0.18, 0.18, 0.21]);
-      }
-      // Small hospitality villa terrace at T2/T3 (replaces fantasy marquees)
-      for (let i = 0; i < 3; i++) {
-        building(K(0.175 + i * 0.018), 1, 48, 11, 6, 16,
-          { wall: WHITE, window: WIN_COOL, floor: 3.0 });
+      // ================= T2/T3 OUTFIELD BLEACHERS ===========================
+      // Lusail's permanent architecture is the main crescent and T1 only; the
+      // outfield seating for a race weekend is bolted aluminium bleachers put
+      // up on the sand and taken down after. Three roofed shell slabs here made
+      // the venue read as a fully built stadium bowl like Abu Dhabi's — the
+      // shared bleacher() is open, raked, roofless and back-lit by the mast
+      // ring behind it, which is what a Qatar outfield actually looks like.
+      // Warm aluminium against the sand, not the pale Tilke grey.
+      if (typeof bleacher === "function") {
+        bleacher(0.152, 0.216, 1, 20, {
+          rows: 6, rise: 0.78, setback: 1.05, step: 17, density: 0.42,
+          frameCol: [0.56, 0.55, 0.54], plankCol: [0.66, 0.63, 0.58],
+        });
+      } else {
+        for (const [i, s] of [0.162, 0.183, 0.204].entries()) {
+          qatarStand(`qatar-t23-stand-${i}`, s, 1, 22, 52,
+            SHELL_STEEL, [0.18, 0.18, 0.21]);
+        }
       }
       guardrail(0.14, 0.24, 1, 4, [0.78, 0.78, 0.80]);
       marshalPost(K(0.19), 1, 6);
@@ -466,32 +542,20 @@
             forest: DUNE, rock: DUNE_N, snow: DUNE_N });
       }
 
-      // ================= DISTANT LUSAIL / DOHA SKYLINE (thinned) =============
-      (function skyline() {
-        const LA = [0.30, 0.33, 0.42], LB = [0.24, 0.27, 0.38];
-        for (const sBase of [0.42, 0.50, 0.58]) {
-          for (let i = 0; i < 7; i++) {
-            const hf = hash(i * 7 + sBase * 30);
-            const wf = hash(i * 3 + sBase * 20);
-            const sFrac = (sBase + (i - 3) * 0.010 + 1) % 1;
-            // Leave the Katara Towers + Lusail Stadium hero landmarks (below)
-            // their own clear stretch of skyline instead of stacking an
-            // anonymous box behind them.
-            if (sFrac > 0.505 && sFrac < 0.535) continue;
-            const dist  = 480 + hash(i * 5 + sBase * 70) * 160;
-            const landmark = hash(i * 4.4 + sBase) > 0.88;
-            const w = 5 + wf * 7;
-            const h = (landmark ? 90 : 40) + hf * 80;
-            const d = w * 1.4;
-            const col = (hash(i * 11 + sBase) > 0.5) ? LA : LB;
-            backdrop(K(sFrac), -1, dist, [w, h, d], col);
-            if (landmark || hash(i * 9.1 + sBase) > 0.55) {
-              const a = anchor(K(sFrac), -1, dist);
-              addBox(out, vadd(a.c, a.u, h + 2), [1.5, 3.8, 1.5], BEACON, [a.r, a.u, a.t]);
-            }
-          }
-        }
-      })();
+      // ================= DISTANT HORIZON — DELIBERATELY EMPTY ================
+      // This used to be a 21-box "Lusail / Doha skyline" of anonymous lit
+      // slabs with beacons on top: the exact generic night-city backdrop that
+      // Jeddah, Baku and Abu Dhabi all also carry, and the reason a Qatar
+      // screenshot was indistinguishable from theirs. Lusail is 20 km out in
+      // open desert — from the circuit there is NO city on the horizon at all,
+      // only the two hero silhouettes below and a lot of sand. Emptiness is
+      // this venue's identity, so the horizon is left empty on purpose. Two
+      // distant aviation beacons alone mark the Doha direction; anything more
+      // and it stops reading as desert.
+      for (const [s, dist] of [[0.455, 900], [0.585, 980]]) {
+        const a = anchor(K(s), -1, dist);
+        addBox(out, vadd(a.c, a.u, 46), [2.0, 5.0, 2.0], BEACON, [a.r, a.u, a.t]);
+      }
 
       // ================= KATARA TOWERS + LUSAIL STADIUM =======================
       // Real Lusail landmarks the brief flags as missing from an otherwise
@@ -560,8 +624,8 @@
       // make the T10 and fast final-sector complexes visibly floodlit heroes.
       if (typeof floodMast === "function") {
         for (const s of [0.63, 0.72, 0.80]) {
-          floodMast(K(s), -1, 38, { h: 41, cool: true, pool: true, arms: 2 });
-          floodMast(K(s),  1, 42, { h: 41, cool: true, pool: true, arms: 2 });
+          floodMast(K(s), -1, 38, { h: MAST_H + 2, cool: true, pool: true, arms: 3 });
+          floodMast(K(s),  1, 42, { h: MAST_H + 2, cool: true, pool: true, arms: 3 });
         }
       }
 
@@ -572,23 +636,22 @@
       }
       marshalPost(K(0.88), 1, 6);
 
-      // ================= TURN 16 GRANDSTAND + PIT ENTRY =====================
-      qatarStand("qatar-t16-stand-a", 0.930, 1, 17, 75,
-        SHELL_CONCRETE, [0.18, 0.18, 0.21]);
-      qatarStand("qatar-t16-stand-b", 0.952, 1, 17, 55,
-        SHELL_CONCRETE, [0.18, 0.18, 0.21]);
+      // ================= TURN 16 OUTFIELD BLEACHERS + PIT ENTRY =============
+      // Same reasoning as T2/T3: temporary open seating, not a built stand.
+      if (typeof bleacher === "function") {
+        bleacher(0.927, 0.961, 1, 15, {
+          rows: 6, rise: 0.78, setback: 1.05, step: 17, density: 0.42,
+          frameCol: [0.54, 0.53, 0.53], plankCol: [0.64, 0.61, 0.57],
+        });
+      } else {
+        qatarStand("qatar-t16-stand-a", 0.930, 1, 17, 75,
+          SHELL_CONCRETE, [0.18, 0.18, 0.21]);
+        qatarStand("qatar-t16-stand-b", 0.952, 1, 17, 55,
+          SHELL_CONCRETE, [0.18, 0.18, 0.21]);
+      }
       tyreWall(0.91, 0.945, 1, 5, [0.90, 0.86, 0.20]);
       marshalPost(K(0.94), -1, 6);
       billboard(K(0.92), 1, 6, 12, 3.6, AD[5]);
-      // Rear hospitality deck completes the authentic T16 spectator campus.
-      building(K(0.942), 1, 50, 15, 7, 38,
-        { wall: WHITE, window: WIN_WARM, floor: 3.1 });
-      {
-        const a = anchor(K(0.942), 1, 58), b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 8.2), [18, 0.45, 42], WHITE, b);
-        addBox(out, vadd(vadd(a.c, a.u, 7.8), a.r, -8.9),
-          [0.24, 0.7, 36], FLOOD, b);
-      }
 
       // Sparse desert scrub only (palms/oasis water culled)
       every(120, (k) => {

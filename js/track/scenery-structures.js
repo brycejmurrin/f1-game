@@ -12,10 +12,10 @@ const SceneryStructures = (function () {
   function create(ctx) {
     const { out, track, def, n, ds, hw, px, py, pz, NIGHT, MAT,
             indexBarrier,
-            addBox, addCyl, addFrustum, RAW, blockAt, recordBarrier,
+            addBox, addCyl, addFrustum, addPrism, RAW, blockAt, recordBarrier,
             groundYAt, onTrack, overheadSpan, hash, cross, norm, vadd,
             anchor, rejBox } = ctx;
-    const { SIGN_SEG, SIGN_DIGIT } = TrackSceneryData;
+    const { SIGN_SEG, SIGN_DIGIT, CROWD_DAY } = TrackSceneryData;
 
     // ---------- linear track furniture (run along the track from s0→s1) ----------
     // Walk nodes from lap-fraction s0 to s1 (wrapping), ~stepM apart. Passes the
@@ -297,6 +297,286 @@ const SceneryStructures = (function () {
       });
     };
 
+    // ---------- open seating: the stand forms grandstandEx is NOT ----------
+    // grandstandEx models one thing: a roofed stand with a back shell. Every
+    // other kind of seating a circuit actually has — a bolted bleacher, rented
+    // scaffolding, mass-concrete terracing, a stepped bowl — was therefore
+    // hand-rolled circuit-side, and the SAME four models were independently
+    // reinvented across 14 files (a bleacher alone in ten). These four are those
+    // implementations generalised: one form each, an options bag so they vary,
+    // and the crowd discipline below baked in so a caller cannot get it wrong.
+    //
+    // All four are RANGE emitters — (s0, s1, side, gap, opts) — and walk the arc
+    // with along(). The hand-rolled versions were mostly point-anchored with a
+    // straight `len` box, which on a corner (a terrace at Curva Grande, a bowl at
+    // Parabolica) cuts the chord instead of following the road.
+
+    // crowdBand(): the ONE crowd primitive these stands share. A crowd is a
+    // continuous banded run plus SPARSE SPECKLE standing proud of it — never one
+    // box per spectator. At the ~1 m seat pitch the hand-rolled versions used,
+    // a single bleacher emitted ~30 bodies per row per bay; that is how Vegas
+    // reached 1.8 M prop verts. At night the individual bodies are invisible
+    // anyway — what the eye picks up is the scatter of phone screens on top of
+    // an unbroken dark mass, which is exactly what the speckle is for.
+    // `len` is the ALONG-TRACK segment this band covers (see along()'s contract).
+    // `side` is the stand's side, so the speckle can always be nudged TOWARD the
+    // track (which is -side along r) rather than into the seating behind it.
+    const CROWD_FALLBACK = [[0.86, 0.30, 0.24], [0.92, 0.90, 0.86],
+                            [0.24, 0.36, 0.62], [0.72, 0.63, 0.30]];
+    const crowdBand = (c, b, side, thick, h, len, pal, dens, seed) => {
+      if (len <= 0.5) return;
+      const cols = (pal && pal.length) ? pal : (CROWD_DAY && CROWD_DAY.length ? CROWD_DAY : CROWD_FALLBACK);
+      const pick = (t) => NIGHT
+        ? (t > 0.945 ? [2.5, 2.3, 1.9] : t > 0.55 ? [0.10, 0.11, 0.14] : [0.15, 0.16, 0.20])
+        : cols[Math.floor(t * cols.length) % cols.length];
+      const prevMat = out._mat;
+      out._mat = MAT.FABRIC;
+      addBox(out, c, [thick, h, len], pick(hash(seed * 1.7)), b);
+      // One speckle head per ~6 m, capped — the same budget monza's tieredBowl
+      // arrived at by hand. Each stands proud of the band (taller, nudged
+      // trackward) so it is never coplanar with it: buried inside it would cost
+      // vertices and show nothing.
+      const cnt = Math.min(16, Math.floor(len / 6));
+      for (let i = 0; i < cnt; i++) {
+        const hp = hash(seed + i * 13.7);
+        if (hp > dens) continue;
+        const off = cnt > 1 ? (i / (cnt - 1) - 0.5) * (len - 2) : 0;
+        addBox(out, vadd(vadd(vadd(c, b[2], off), b[1], h * 0.45),
+                         b[0], -side * thick * 0.25),
+               [thick * 0.9, h * 0.6, Math.min(1.6, len * 0.12)], pick(hp), b);
+      }
+      out._mat = prevMat;
+    };
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+    // bleacher(): open raked seating on a bolted frame — planks on posts, a back
+    // guard rail, and nothing else. No back shell, no roof, no fascia. This is
+    // the single most-duplicated model in the fleet (ten circuit files) and the
+    // reason is that grandstandEx({roof:"none"}) still builds a 12 m shell wall
+    // behind the crowd, which a bleacher does not have.
+    //   opts: { rows, rise, setback, frame:"steel"|"timber", frameCol, plankCol,
+    //           riserCol, crowd (palette), density, rail, step, lift }
+    const bleacher = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const rows = clamp(Math.round(opts.rows || 7), 2, 16);
+      const rise = opts.rise != null ? opts.rise : 0.72;      // per-row height gain
+      const setback = opts.setback != null ? opts.setback : 0.95;   // per-row recede
+      const timber = opts.frame === "timber";
+      const frameCol = opts.frameCol || (timber ? [0.42, 0.33, 0.24] : [0.62, 0.63, 0.66]);
+      const plankCol = opts.plankCol || (timber ? [0.55, 0.50, 0.43] : [0.60, 0.61, 0.64]);
+      const riserCol = opts.riserCol || [plankCol[0] * 0.78, plankCol[1] * 0.78, plankCol[2] * 0.76];
+      const dens = opts.density != null ? clamp(opts.density, 0.05, 1) : 0.62;
+      const step = opts.step || 6;
+      const lift = opts.lift || 0;
+      const depth = rows * setback + 1.0;
+      const topH = lift + 0.6 + rows * rise;
+      ctx.noteSpan("bleacher", s0, s1, side, gap, { h: topH, rows });
+      // A stand is a solid mass — index it so treelines and the roadside scatter
+      // cannot grow through it (the hand-rolled versions never did this).
+      ctx.indexSolid(s0, s1, side, gap, depth);
+      along(s0, s1, step, (k, spacing) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        const seg = spacing * 0.98;   // see along(): a padded constant interpenetrates on curves
+        // Guard the WHOLE rake, not the front-row point: a bleacher creeping
+        // toward the tarmac overhangs the road with its back rows first.
+        if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
+                   [depth, topH, seg], b)) return;
+        const backLat = side * (rows - 0.5) * setback;
+        out._mat = timber ? MAT.WOOD : MAT.METAL;
+        addCyl(out, vadd(a.c, a.u, -0.4), 0.14, 1.4, frameCol, 5, b);                    // front stub leg
+        addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, -0.4), 0.17, topH + 0.6, frameCol, 5, b);   // back leg
+        // Horizontal ledgers every ~2.2 m — what makes a frame read as a frame.
+        for (let y = 1.6; y < topH; y += 2.2)
+          addBox(out, vadd(vadd(a.c, a.r, backLat / 2), a.u, y),
+                 [Math.abs(backLat) + 0.4, 0.12, 0.12], frameCol, b);
+        for (let r = 0; r < rows; r++) {
+          const lat = side * r * setback, y = lift + 0.6 + r * rise;
+          const rc = vadd(vadd(a.c, a.r, lat), a.u, y);
+          out._mat = timber ? MAT.WOOD : MAT.METAL;
+          addBox(out, rc, [setback * 1.05, 0.16, seg], plankCol, b);                     // tread plank
+          addBox(out, vadd(vadd(rc, a.r, -side * setback * 0.46), a.u, -rise * 0.42),
+                 [0.16, rise, seg], riserCol, b);                                        // foot board
+          crowdBand(vadd(rc, a.u, 0.62), b, side, 0.58, 0.95, seg - 0.6,
+                    opts.crowd, dens, k * 13.1 + r * 97.3 + side * 5.7);
+        }
+        if (opts.rail !== false) {
+          out._mat = timber ? MAT.WOOD : MAT.METAL;
+          addBox(out, vadd(vadd(a.c, a.r, backLat), a.u, topH + 0.55),
+                 [0.18, 0.16, seg], frameCol, b);
+        }
+        out._mat = 0;
+      });
+    };
+
+    // scaffoldStand(): rented tube-and-plank temporary seating — the stand a
+    // circuit puts up for race week and takes down after. Scaffold tubes, a
+    // timber deck, benches, and (period circuits) a striped canvas awning
+    // instead of a cantilever roof.
+    //   opts: { rows, rise, setback, tubeCol, deckCol, bench (palette),
+    //           crowd (palette), density, awning, awningCols, step, legEvery }
+    const scaffoldStand = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const rows = clamp(Math.round(opts.rows || 5), 2, 12);
+      const rise = opts.rise != null ? opts.rise : 1.15;
+      const setback = opts.setback != null ? opts.setback : 1.9;
+      const tube = opts.tubeCol || [0.62, 0.63, 0.66];
+      const deck = opts.deckCol || [0.70, 0.66, 0.60];
+      const bench = (opts.bench && opts.bench.length) ? opts.bench
+        : [[0.80, 0.78, 0.74], [0.30, 0.36, 0.52], [0.72, 0.28, 0.24]];
+      const dens = opts.density != null ? clamp(opts.density, 0.05, 1) : 0.58;
+      const step = opts.step || 6;
+      const legEvery = Math.max(1, Math.round(opts.legEvery || 2));
+      const depth = rows * setback + 1.2;
+      const topH = 1.2 + rows * rise;
+      ctx.noteSpan("scaffoldStand", s0, s1, side, gap, { h: topH, rows });
+      ctx.indexSolid(s0, s1, side, gap, depth);
+      let bay = 0;
+      along(s0, s1, step, (k, spacing) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        const seg = spacing * 0.98;
+        if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
+                   [depth, topH, seg], b)) { bay++; return; }
+        for (let r = 0; r < rows; r++) {
+          const lat = side * r * setback, y = 1.2 + r * rise;
+          const rc = vadd(vadd(a.c, a.r, lat), a.u, y);
+          out._mat = MAT.WOOD;
+          addBox(out, rc, [setback * 1.02, 0.18, seg], deck, b);                         // deck plank
+          addBox(out, vadd(rc, a.u, 0.62), [setback * 0.5, 1.05, seg * 0.94],
+                 bench[(bay + r) % bench.length], b);                                    // bench
+          crowdBand(vadd(rc, a.u, 1.55), b, side, 0.55, 0.95, seg - 1.0,
+                    opts.crowd, dens, k * 17.3 + r * 89.1 + side * 3.3);
+          // Legs under every `legEvery`-th bay: the frame reads as a frame only
+          // when the tubes are visible BELOW the rake.
+          if (bay % legEvery === 0) {
+            out._mat = MAT.METAL;
+            addCyl(out, vadd(vadd(a.c, a.r, lat), a.u, -0.4), 0.09, y + 0.4, tube, 4, b);
+          }
+        }
+        out._mat = MAT.METAL;
+        const backLat = side * (rows - 0.5) * setback;
+        addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, -0.4), 0.13, topH + 1.6, tube, 5, b);  // back standard
+        addBox(out, vadd(vadd(a.c, a.r, backLat), a.u, topH + 0.9),
+               [0.11, 0.11, seg], tube, b);                                              // handrail
+        // One leaning ledger per bay reads as the full X-brace at speed.
+        addBox(out, vadd(vadd(a.c, a.r, backLat / 2), a.u, topH * 0.45),
+               [Math.abs(backLat) + 0.6, 0.13, 0.13], tube, b);
+        if (opts.awning) {
+          const aw = (opts.awningCols && opts.awningCols.length) ? opts.awningCols
+            : [[0.88, 0.86, 0.82], [0.80, 0.26, 0.22]];
+          addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, topH + 1.4), 0.10, 2.6, tube, 5, b);
+          out._mat = MAT.FABRIC;
+          addBox(out, vadd(vadd(a.c, a.r, backLat * 0.45), a.u, topH + 3.6),
+                 [Math.abs(backLat) + 1.6, 0.22, seg], aw[bay % aw.length], b);
+        }
+        out._mat = 0;
+        bay++;
+      });
+    };
+
+    // terrace(): mass-concrete stepped terracing — a poured flight of steps with
+    // an open front and no roof at all. The pre-1980s stand, and what a hillside
+    // amphitheatre (Portimão, Buenos Aires, Kyalami) is actually built from.
+    //   opts: { rows, rise, depth, conc, concAlt, crowd (palette), density,
+    //           retainer, backWall, cut (raw earth cut face above the top step),
+    //           cutCol, step }
+    const terrace = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const rows = clamp(Math.round(opts.rows || 6), 2, 16);
+      const rise = opts.rise != null ? opts.rise : 1.5;
+      const dep = opts.depth != null ? opts.depth : 2.6;
+      const conc = opts.conc || [0.72, 0.71, 0.67];
+      const concAlt = opts.concAlt || [0.64, 0.63, 0.59];
+      const dens = opts.density != null ? clamp(opts.density, 0.05, 1) : 0.55;
+      const step = opts.step || 7;
+      const depth = rows * dep + 2.4;
+      const topH = 1.4 + rows * rise;
+      ctx.noteSpan("terrace", s0, s1, side, gap, { h: topH, rows });
+      ctx.indexSolid(s0, s1, side, gap, depth);
+      along(s0, s1, step, (k, spacing) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        const seg = spacing * 0.98;
+        if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
+                   [depth, topH, seg], b)) return;
+        out._mat = MAT.CONCRETE;
+        // Retaining wall holding the first step off the run-off — without it a
+        // terrace on a slope reads as steps floating over the grass.
+        if (opts.retainer !== false)
+          addBox(out, vadd(a.c, a.u, 1.0), [0.9, 2.2, seg], concAlt, b);
+        for (let r = 0; r < rows; r++) {
+          const back = side * (1.0 + r * dep), up = 1.4 + r * rise;
+          const tc = vadd(vadd(a.c, a.r, back), a.u, up);
+          out._mat = MAT.CONCRETE;
+          addBox(out, tc, [dep, rise + 0.3, seg], r & 1 ? conc : concAlt, b);
+          crowdBand(vadd(tc, a.u, rise * 0.5 + 0.6), b, side, dep * 0.6, 1.1, seg - 1.6,
+                    opts.crowd, dens, k * 31.7 + r * 11.3 + side * 7.1);
+        }
+        const topBack = side * (1.0 + rows * dep);
+        if (opts.backWall !== false) {
+          out._mat = MAT.CONCRETE;
+          addBox(out, vadd(vadd(a.c, a.r, topBack), a.u, topH * 0.5),
+                 [0.7, topH, seg], concAlt, b);                                          // plain back wall
+        }
+        // Raw cut face above the top step — a hillside terrace is carved INTO
+        // something, and the exposed soil is what says so.
+        if (opts.cut) {
+          out._mat = 0;
+          addPrism(out, vadd(vadd(a.c, a.r, topBack), a.u, topH),
+                   [6, 3.4, seg], opts.cutCol || [0.52, 0.32, 0.22], b);
+        }
+        out._mat = 0;
+      });
+    };
+
+    // tieredBowl(): a stepped bowl — tiers that climb AND recede in big
+    // concrete steps, each carrying a crowd band and a pale fascia lip, with an
+    // optional cantilever over the top tier. The silhouette of a historic
+    // tribuna (Monza, Imola): far taller and steeper than terrace(), and unlike
+    // grandstandEx it has no back shell to hide behind.
+    //   opts: { tiers, tierDepth, base, rise, shell ([colA,colB]), fascia,
+    //           crowd (palette), density, roof, roofCol, step }
+    const tieredBowl = (s0, s1, side, gap, opts) => {
+      opts = opts || {};
+      const tiers = clamp(Math.round(opts.tiers || 4), 1, 8);
+      const tierDepth = opts.tierDepth != null ? opts.tierDepth : 5.6;
+      const base = opts.base != null ? opts.base : 3.0;    // first tier's riser height
+      const rise = opts.rise != null ? opts.rise : 3.3;    // added per tier
+      const shell = (opts.shell && opts.shell.length === 2) ? opts.shell
+        : [[0.57, 0.58, 0.60], [0.51, 0.52, 0.55]];
+      const fascia = opts.fascia || [0.93, 0.90, 0.80];
+      const dens = opts.density != null ? clamp(opts.density, 0.05, 1) : 0.55;
+      const step = opts.step || 8;
+      const topH = base + (tiers - 1) * rise + 2.0;
+      ctx.noteSpan("tieredBowl", s0, s1, side, gap, { h: topH, tiers });
+      ctx.indexSolid(s0, s1, side, gap, tiers * tierDepth + 2);
+      along(s0, s1, step, (k, spacing) => {
+        const seg = spacing * 0.98;
+        for (let t = 0; t < tiers; t++) {
+          const a = anchor(k, side, gap + t * tierDepth), b = [a.r, a.u, a.t];
+          const h = base + t * rise;
+          if (rejBox(vadd(a.c, a.u, h / 2), [tierDepth * 0.93, h, seg], b)) continue;
+          out._mat = MAT.CONCRETE;
+          addBox(out, vadd(a.c, a.u, h * 0.5), [tierDepth * 0.93, h, seg],
+                 t % 2 ? shell[0] : shell[1], b);                                        // riser
+          crowdBand(vadd(a.c, a.u, h + 0.85), b, side, tierDepth * 0.8, 1.6, seg - 1.0,
+                    opts.crowd, dens, k * 3.1 + t * 31.7 + side * 2.3);
+          out._mat = 0;
+          addBox(out, vadd(a.c, a.u, h + 1.85), [tierDepth * 0.86, 0.32, seg + 0.5],
+                 fascia, b);                                                             // fascia lip
+        }
+        if (opts.roof) {
+          const aR = anchor(k, side, gap + (tiers - 0.5) * tierDepth);
+          const bR = [aR.r, aR.u, aR.t];
+          const ry = base + (tiers - 1) * rise + 2.6;
+          if (!rejBox(vadd(aR.c, aR.u, ry), [tierDepth * 1.3, 0.5, seg + 1], bR)) {
+            out._mat = MAT.METAL;
+            addBox(out, vadd(aR.c, aR.u, ry), [tierDepth * 1.3, 0.5, seg + 1],
+                   opts.roofCol || [0.19, 0.19, 0.23], bR);
+          }
+        }
+        out._mat = 0;
+      });
+    };
+
     // Draw one digit centred at `c`, spanning [w,h] in the (t=horizontal,
     // u=vertical) plane, raised `proud` along r toward the viewer so the
     // segments sit visibly above the panel face instead of z-fighting it.
@@ -418,7 +698,8 @@ const SceneryStructures = (function () {
 
     return { along, wall, fence, guardrail, tyreWall, gantry, flagQuad,
              marshalPost, cameraTower, sponsorHoarding, signDigit, signBoard,
-             ferrisWheel };
+             ferrisWheel,
+             bleacher, scaffoldStand, terrace, tieredBowl };
   }
 
   return { create };

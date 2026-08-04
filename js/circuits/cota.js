@@ -50,7 +50,7 @@
       { frac: 0.8430, angleDeg: 4.0, widthM: 120 },
     ],
     scenery: function (api) {
-      const { out, MAT, n, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, waterSurface, grandstand, grandstandEx, spectatorHill, cameraTower, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop } = api;
+      const { out, MAT, n, ds, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, waterSurface, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, terrace, acacia, plane, cameraTower, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ======================= BESPOKE COTA MODELS =======================
@@ -60,33 +60,17 @@
         [0.90, 0.90, 0.92], [0.26, 0.62, 0.38], [0.82, 0.46, 0.20],
         [0.52, 0.30, 0.66], [0.16, 0.30, 0.52],
       ];
-      // -- Bespoke: raked, PACKED crowd terrace on a slope (the amphitheatre hill) --
-      // Stepped rows of speckled spectator boxes rising away from the track on a
-      // concrete terrace shell — reads as a densely packed hillside grandstand.
-      const crowdBank = (s, side, gap, len, rows, dens) => {
-        const k = K(s), a = anchor(k, side, gap);
-        if (onTrack(a.c[0], a.c[2], 8)) return;
-        const bv = [a.r, a.u, a.t], step = 2.5, rise = 1.7;
-        // terrace shell (concrete wedge) beneath the crowd
-        out._mat = MAT.CONCRETE;
-        // Terrace mass under the seating. Was an addPrism lifted by half the
-        // bank height, but addPrism anchors at its BASE — so the ramp started in
-        // mid-air, and its footprint axes were swapped against the seats (which
-        // spread by `len` along a.t and step by rows*step along a.r), leaving
-        // whole rows over nothing.
-        addBox(out, vadd(a.c, a.u, rows * rise * 0.5),
-               [len, rows * rise, rows * step], [0.40, 0.41, 0.45], [a.t, a.u, a.r]);
-        out._mat = 0;
-        const seats = Math.floor(len / (dens || 2.1));
-        for (let r = 0; r < rows; r++) {
-          const back = r * step, up = r * rise + 1.1;
-          for (let c = 0; c < seats; c++) {
-            const off = (c - seats / 2) * (dens || 2.1) + (hash(k * 7 + r * 13 + c) - 0.5) * 0.7;
-            const p = vadd(vadd(vadd(a.c, a.r, back), a.u, up), a.t, off);
-            addBox(out, p, [0.9, 1.1, 0.8], crowdCols[(r * 5 + c * 3) % crowdCols.length], bv);
-          }
-        }
-      };
+      // COTA's local crowdBank() is gone. It was a point-anchored concrete wedge
+      // with ONE BOX PER SEAT on top — 1150-odd spectator cubes across its five
+      // call sites, ~28 k verts, and a straight `len` mass that chorded across
+      // the T1 climb and the T12 bowl instead of following them. The shared
+      // library now carries the three forms those five calls were actually
+      // reaching for, each a range emitter that walks the arc and each using
+      // the banded-run-plus-speckle crowd discipline rather than a cube per
+      // person. Helper below converts COTA's centre+length authoring into the
+      // (s0, s1) ranges those emitters take.
+      const mFrac = (m) => m / (ds * n);
+      const span = (s, len) => [s - mFrac(len) / 2, s + mFrac(len) / 2];
 
       // -- Bespoke: Austin360 Amphitheater — proscenium shell + PA towers + LED wall + lawn --
       const amphiStage = (s, side, dist) => {
@@ -185,21 +169,40 @@
       grandstandEx(0.11, -1, 18, 60, null, null, { livery: "alu", roof: "none" });
       // T1 amphitheatre upper tier (s≈0.13, L) — uncovered alu
       grandstandEx(0.13, -1, 26, 64, null, null, { livery: "alu", roof: "none" });
-      // Esses outside stand (s≈0.20, L) — infield sandstone family
-      grandstandEx(0.20, -1, 16, 56, null, null, { livery: "sandstone" });
-      // Esses-exit stand (s≈0.24, R) — infield sandstone family
-      grandstandEx(0.24, 1, 18, 54, null, null, { livery: "sandstone" });
-      // Back-straight grandstand (s≈0.46, L) — sandstone family
-      grandstandEx(0.46, -1, 12, 70, null, null, { livery: "sandstone" });
-      // Turn-12 hairpin braking-zone stand (s≈0.625, R) — sandstone family
-      grandstandEx(0.625, 1, 14, 70, null, null, { livery: "sandstone" });
-      // Turn 15 grandstand (s≈0.685, R) — the corner between the T12 hairpin
-      // and the T16-18 sweepers/amphitheatre gets its OWN stand rather than
-      // being folded into the generic T12 (0.625) or back-straight (0.46)
-      // calls that used to be the only cover for this whole sector.
-      grandstandEx(0.685, 1, 14, 55, null, null, { livery: "sandstone" });
-      // Triple-apex sweeper stand (s≈0.83, R) — sandstone family
-      grandstandEx(0.83, 1, 16, 64, null, null, { livery: "sandstone" });
+      // The six infield/back-straight stands below all share the sandstone
+      // family, and until now that colour was the ONLY thing distinguishing
+      // them — six identical shells in one tan, which is precisely the
+      // sameness the livery system was supposed to fix one level up. They are
+      // not the same building in real life either: the pair at the Esses are
+      // small bolt-together blocks, the back straight carries the biggest
+      // covered stand outside the pit complex, and T15 is uncovered. Give each
+      // the roof and deck it actually has.
+      // Esses outside (s≈0.20, L) — low flat-capped block, closed ends.
+      grandstandEx(0.20, -1, 16, 56, null, null,
+        { livery: "sandstone", roof: "flat", endWalls: true, h: 9 });
+      // Esses exit (s≈0.24, R) — open lattice roof on trackside pylons; the
+      // ends stay open so the Esses stay visible through it from the outside.
+      grandstandEx(0.24, 1, 18, 54, null, null,
+        { livery: "sandstone", roof: "truss", pylons: true, h: 11 });
+      // Back straight (s≈0.46, L) — the largest sandstone stand: two rakes
+      // under a cantilever with a glazed suite band, closed at both ends.
+      grandstandEx(0.46, -1, 12, 70, null, null,
+        { livery: "sandstone", tiers: 2, roof: "cantilever", suites: true, endWalls: true, h: 12 });
+      // Turn-12 hairpin braking zone (s≈0.625, R) — deep cantilever carried on
+      // pylons over the crowd, the shape you want above a big stop.
+      grandstandEx(0.625, 1, 14, 70, null, null,
+        { livery: "sandstone", roof: "cantilever", pylons: true, endWalls: true, h: 12 });
+      // Turn 15 (s≈0.685, R) — the corner between the T12 hairpin and the
+      // T16-18 sweepers/amphitheatre gets its OWN stand rather than being
+      // folded into the generic T12 (0.625) or back-straight (0.46) calls that
+      // used to be the only cover here. Uncovered: it is the smallest of the
+      // six and the one a Texas October actually leaves in the sun.
+      grandstandEx(0.685, 1, 14, 55, null, null,
+        { livery: "sandstone", roof: "none", h: 8 });
+      // Triple-apex sweeper (s≈0.83, R) — truss roof plus suites, so it reads
+      // tall and skeletal against the open sky behind the sweepers.
+      grandstandEx(0.83, 1, 16, 64, null, null,
+        { livery: "sandstone", roof: "truss", suites: true, endWalls: true, h: 11 });
       // Extra deep main-straight upper tier behind the front stand (s≈0.02, R far)
       grandstandEx(0.02, 1, 30, 130, null, null, { livery: "darkSteel", roof: "flat" });
 
@@ -244,13 +247,27 @@
       const me2 = anchor(ke, 1, 32);
       addPrism(out, vadd(me2.c, me2.u, 2), [34, 6, 64], scrub, [me2.t, me2.u, me2.r]);
 
-      // ---- Turn-1 amphitheatre crowd hill — PACKED terraced fans on the famous climb ----
+      // ---- Turn-1 amphitheatre crowd hill — PACKED bleachers on the famous climb ----
       // Sits behind/above the stock grandstands, reading as the wall of spectators
       // that lines COTA's Turn-1 hairpin hill. This is the T1 hero — not the tower.
-      crowdBank(0.095, -1, 40, 110, 7, 2.0);
-      crowdBank(0.135, -1, 46, 70, 6, 2.2);
-      // Final-corner / main-straight packed terrace (s≈0.98, R)
-      crowdBank(0.975, 1, 34, 120, 6, 2.2);
+      // BARE ALUMINIUM, uncovered, bolted together for the weekend: no back
+      // shell, no fascia, no roof — planks on a frame with the legs showing
+      // underneath, which is the whole reason grandstandEx (which always builds
+      // a 12 m shell wall behind the crowd) is the wrong model for this hill.
+      const ALU_FRAME = [0.70, 0.71, 0.75], ALU_PLANK = [0.78, 0.79, 0.82];
+      const t1Rake = { rows: 8, rise: 1.45, setback: 2.1, step: 10,
+                       frameCol: ALU_FRAME, plankCol: ALU_PLANK,
+                       crowd: crowdCols, density: 0.62 };
+      bleacher(...span(0.095, 110), -1, 40, t1Rake);
+      bleacher(...span(0.135, 70), -1, 46,
+        Object.assign({}, t1Rake, { rows: 7, density: 0.55 }));
+      // Final-corner / main-straight packed terrace (s≈0.98, R). Not a bleacher:
+      // this end of the straight is the paved Grand Plaza concourse, so it is
+      // poured mass-concrete stepping with a retainer at the front — the one
+      // permanent piece of open seating on the lap.
+      terrace(...span(0.975, 120), 1, 34,
+        { rows: 6, rise: 1.5, depth: 2.5, step: 9, crowd: crowdCols, density: 0.58,
+          conc: [0.74, 0.72, 0.68], concAlt: [0.66, 0.64, 0.60] });
 
       // ---- Turn 1 hill — the real natural grass amphitheatre ----
       // The built crowdBank terraces above are the temporary stands; behind
@@ -359,9 +376,17 @@
       }
 
       // ---- 2026 dress pass: packed hill spectators at COTA's braking heroes ----
-      // Compact banks remain behind their terrace shells and existing barriers.
-      crowdBank(0.112, 1, 48, 54, 4, 2.25);
-      crowdBank(0.642, 1, 40, 72, 5, 2.15);
+      // Compact banks, well behind the existing barriers. Two braking zones,
+      // two different structures: T1's outside is more of the same bolted
+      // aluminium as the hill above it, while the T12 hairpin gets rented
+      // tube-and-plank scaffolding — the stand that goes up for race week and
+      // comes down after, benches instead of moulded seats and the standards
+      // visible right through it.
+      bleacher(...span(0.112, 54), 1, 48,
+        Object.assign({}, t1Rake, { rows: 5, step: 10, density: 0.55 }));
+      scaffoldStand(...span(0.642, 72), 1, 40,
+        { rows: 5, rise: 1.3, setback: 2.0, step: 9, legEvery: 2,
+          crowd: crowdCols, density: 0.55, bench: [white, cotaBlue, redSteel] });
 
       // ---- 2026 dress pass: Texas red/white/blue event ribbons at T12 ----
       // Sparse sponsor-scale boards color the braking-zone bowl without forming
@@ -519,6 +544,43 @@
       // Final sweeper sector (s≈0.84–0.96, both sides)
       forestEdge(0.84, 0.96, -1, 18, { density: 0.45, hMin: 7, hMax: 12, col: oak,   col2: cedar, pineFrac: 0.45 });
       forestEdge(0.84, 0.92,  1, 20, { density: 0.35, hMin: 6, hMax: 10, col: cedar, col2: oak,   pineFrac: 0.35 });
+
+      // ================== TEXAS SPECIES — the two trees that are NOT pines ======
+      // Every tree at this circuit came out of forestEdge()'s pine/broadleaf
+      // mix, which is a temperate-European canopy wearing a muted green. The
+      // Hill Country reads the way it does because of two specific silhouettes
+      // that mix cannot produce, and both just landed in the shared library.
+
+      // Mesquite: a bare trunk forking low into one wide, flat, near-horizontal
+      // crown, scattered so thin you see between every one of them. acacia() is
+      // that form (same subfamily, same umbrella). This is deliberately placed
+      // through s≈0.28–0.42 — the stretch this file's own campground comment
+      // calls "the deadest stretch of the lap" — because open ground with a
+      // dozen flat-topped trees on it IS the landscape, not a lack of one.
+      const MESQUITE = [0.34, 0.40, 0.22], MESQ_D = [0.28, 0.34, 0.19];
+      for (let i = 0; i < 16; i++) {
+        const sf = 0.275 + i * 0.0095;
+        const k = K(sf), h1 = hash(k * 37 + i * 5);
+        const side = h1 < 0.45 ? 1 : -1;
+        // Left side carries the RV field out to ~48 m; sit the mesquite beyond it.
+        const dist = (side < 0 ? 56 : 26) + h1 * 22;
+        const th = 5.5 + h1 * 3;
+        acacia(k, side, dist, th, h1 < 0.5 ? MESQUITE : MESQ_D,
+               { spread: th * (1.15 + h1 * 0.4), layers: h1 > 0.6 ? 2 : 1 });
+      }
+
+      // Live oak: broad, low, and cut back to a disc — a stacked-cylinder crown,
+      // which is what plane() builds and what no cone-stack species can. Real
+      // COTA plants them along the Grand Plaza concourse under the tower, so
+      // that is the only place they go; scattering them round the lap would
+      // undo the open sky the rest of this file works to keep.
+      const LIVE_OAK = [0.26, 0.35, 0.20];
+      for (let i = 0; i < 7; i++) {
+        const sf = 0.752 + i * 0.008;
+        const k = K(sf), h1 = hash(k * 29 + i * 11);
+        plane(k, 1, 20 + (i % 2) * 7, 8 + h1 * 3.5, LIVE_OAK,
+              { stages: h1 > 0.55 ? 2 : 1, spread: 0.85 + h1 * 0.3 });
+      }
 
       // ---- COTA gantries: intentional overheads with validated clearance and feet ----
       const cotaGantry = (s, id, clearance) => {

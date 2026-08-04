@@ -58,7 +58,7 @@
       { frac: 0.6481, angleDeg: 2.5, widthM: 130 },
     ],
     scenery: function (api) {
-      const { out, MAT, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
+      const { out, MAT, seat, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
         addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,
         grandstand, grandstandEx, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
         cityFront, modelGroup, overheadSpan, waterSurface, circuitKit, broadcastCompound, cameraTower } = api;
@@ -133,6 +133,94 @@
       const LED = [0.98, 0.98, 1.0];      // bright white LED facade / pixel lights
       const DARKROCK = [0.16, 0.06, 0.05];
       const NEON = [MAGENTA, CYAN, VIOLET, LIME, WARM, GOLD, ROSE, BLUE, RED];  // expanded palette
+
+      // ── PARKING-LOT BLEACHER ────────────────────────────────────────────
+      // Nothing at this race is built. The Strip stands go up on casino
+      // PARKING LOTS in October and come down in December: a striped asphalt
+      // pad, a jacked scaffold tower frame with X-bracing, bare aluminium
+      // planks, an open back, a bolt-on stair tower at one end — and, because
+      // this is Las Vegas, an LED ribbon down the fascia instead of a sponsor
+      // banner. grandstandEx's back shell and roof describe a permanent stand,
+      // which is the one thing this event has none of.
+      const LOT_ASPHALT = [0.10, 0.10, 0.12];
+      const LOT_STRIPE = [0.86, 0.82, 0.44];
+      const TUBE = [0.62, 0.63, 0.66], PLANK = [0.74, 0.75, 0.78];
+      // Night crowd: mostly dark bodies, a scatter of phone screens, and the
+      // odd neon-lit jacket picking up the ribbon below them.
+      const LOT_FANS = [
+        [0.11, 0.12, 0.16], [0.16, 0.16, 0.21], [0.13, 0.14, 0.18], [0.20, 0.19, 0.24],
+        [0.11, 0.12, 0.16], [2.4, 2.2, 1.9], [0.34, 0.20, 0.30], [0.18, 0.22, 0.32],
+      ];
+      const lotBleacher = (id, s, side, gap, bays, opts) => {
+        opts = opts || {};
+        const rows = opts.rows || 7, pitch = 6.8, len = bays * pitch;
+        const ribbon = opts.ribbon || NEON[Math.round(s * 31) % NEON.length];
+        const k = K(s), a = anchor(k, side, gap + 8), b = [a.r, a.u, a.t];
+        const IN = -side;                       // +1 along a.r faces the track
+        const topH = 2.2 + rows * 1.38;
+        modelGroup(id, {
+          center: vadd(a.c, a.u, (topH + 2.5) / 2),
+          size: [17, topH + 2.5, len + 4], basis: b,
+        }, (stage) => {
+          // The lot itself, stall lines still painted on it.
+          addBox(stage, vadd(a.c, a.u, 0.08), [16, 0.16, len + 3], LOT_ASPHALT, b);
+          for (let i = 0; i * 2.8 < len + 2; i++)
+            addBox(stage, vadd(vadd(a.c, a.t, -len / 2 - 1 + i * 2.8), a.r, IN * 6.6),
+              [3.2, 0.04, 0.14], LOT_STRIPE, b);
+          stage._mat = MAT.METAL;
+          for (let i = 0; i <= bays; i++) {
+            const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
+            seat.cyl(stage, vadd(p, a.r, IN * 5.0), 0.14, 2.2, TUBE, 5, b);
+            seat.cyl(stage, vadd(p, a.r, -IN * 5.0), 0.16, topH, TUBE, 5, b);
+            // Scaffold lifts read as horizontal ledgers; one per 2.4 m.
+            for (let y = 2.2; y < topH; y += 2.4)
+              addBox(stage, vadd(p, a.u, y), [10.2, 0.11, 0.11], TUBE, b);
+          }
+          for (let t = 0; t < rows; t++) {
+            const lat = IN * (4.5 - t * 1.28), y = 1.4 + t * 1.38;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y), [1.28, 0.14, len], PLANK, b);
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.14), [0.9, 0.7, len - 1.4],
+              [0.60, 0.61, 0.64], b);
+            stage._mat = MAT.FABRIC;
+            // Crowd = one continuous dark BAND plus sparse speckle, never one
+            // box per seat. At ~1 m spacing this loop was emitting ~30 bodies
+            // per row on every row of every bleacher, and Vegas is already the
+            // heaviest circuit in the fleet. A night crowd reads as an unbroken
+            // dark mass anyway — the individual bodies were invisible; what the
+            // eye actually picks up is the scatter of phone screens on top of
+            // it, which is what the speckle below is for.
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.80),
+              [0.58, 0.80, len - 2.2], LOT_FANS[0], b);
+            // Speckle stands PROUD of the band — taller, and nudged trackward so
+            // it is never coplanar with it. Buried inside the band it would cost
+            // vertices and show nothing.
+            const cnt = Math.min(13, Math.floor(len / 4.4));
+            for (let j = 0; j < cnt; j++) {
+              const h2 = hash(k * 19 + t * 53 + j * 41);
+              if (h2 < 0.46) continue;
+              seat.box(stage,
+                vadd(vadd(vadd(a.c, a.r, lat + IN * 0.08), a.t,
+                  (j / (cnt - 1) - 0.5) * (len - 4)), a.u, y + 1.06),
+                [0.50, 1.12, 1.5], LOT_FANS[Math.floor(h2 * 53) % LOT_FANS.length], b);
+            }
+            stage._mat = MAT.METAL;
+          }
+          // Bolt-on stair tower at one end — the giveaway that this is rented.
+          {
+            const e = vadd(a.c, a.t, -(len / 2 + 2.0));
+            seat.box(stage, vadd(e, a.r, -IN * 1.5), [7.4, topH, 3.4], [0.30, 0.31, 0.34], b);
+            for (let f = 0; f * 2.4 < topH; f++)
+              addBox(stage, vadd(vadd(e, a.r, -IN * 1.5), a.u, 1.2 + f * 2.4),
+                [7.6, 0.16, 3.6], TUBE, b);
+          }
+          stage._mat = 0;
+          // LED ribbon along the fascia — the stand advertises, like everything
+          // else on this street. Emissive, so it blooms at night.
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 5.4), a.u, 1.6), [0.2, 1.5, len], ribbon, b);
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 5.5), a.u, 0.55), [0.12, 0.3, len],
+            [0.06, 0.06, 0.09], b);
+        });
+      };
 
       // --- Street-circuit furniture: concrete walls, fences, marshal posts ---
       // The engine emits a continuous dark barrier on both edges for street circuits.
@@ -331,9 +419,11 @@
       // Paddock grandstands: temporary multi-tier scaffold decks, not one grey
       // template — livery + tiers from STAND_SETS.vegas (darkSteel/scaffold/alu).
       grandstandEx(0.05, 1, 20, 82, null, null,
-        { livery: "darkSteel", tiers: 2, roof: "truss", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.075, -1, 18, 72, null, null,
-        { livery: "scaffold", tiers: 2, roof: "truss", endWalls: true });
+        { livery: "darkSteel", tiers: 3, roof: "truss", suites: true, endWalls: true, pylons: true });
+      // Facing it across the paddock straight: rented scaffold on the lot,
+      // so the two sides of the same straight are not the same object twice.
+      lotBleacher("vegas-lot-bleacher-paddock", 0.0745, -1, 16, 9,
+        { rows: 8, ribbon: MAGENTA });
       // pit-lane light masts — bright LED headlights (supplement engine's generic posts)
       for (let i = 0; i < 4; i++) {
         const a = anchor(K(0.01 + i * 0.012), 1, 9);
@@ -493,11 +583,12 @@
       // --- s 0.90–0.97: Harmon Ave chicane grandstands + casino backdrop ---
       // Temporary multi-tier decks — livery + tiers from STAND_SETS.vegas.
       grandstandEx(0.965, 1, 16, 70, null, null,
-        { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
-      grandstandEx(0.90, -1, 16, 60, null, null,
-        { livery: "alu", tiers: 2, roof: "truss", endWalls: true });
+        { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+      // The Harmon inside deck is a lot bleacher too — it stands on the
+      // Cosmopolitan/CityCenter service lots, not on a built platform.
+      lotBleacher("vegas-lot-bleacher-harmon", 0.90, -1, 16, 9, { rows: 8, ribbon: CYAN });
       grandstandEx(0.945, 1, 20, 40, null, null,
-        { livery: "scaffold", tiers: 1, roof: "flat" });
+        { livery: "alu", tiers: 1, roof: "none" });
       building(K(0.93), 1, 22, 28, 52, 26, { wall: [0.22, 0.18, 0.24], window: VIOLET, floor: 7, lit: true });
       building(K(0.97), -1, 20, 26, 46, 24, { wall: [0.20, 0.18, 0.22], window: ROSE, floor: 7, lit: true });
       billboard(K(0.94), -1, 18, 18, 11, CYAN);
@@ -579,13 +670,23 @@
         // temporary multi-tier stands along the Strip and at the Sphere — livery
         // + tiers from STAND_SETS.vegas instead of one grey template. Thinned
         // 14→10 stands (some now two-tier) to keep the vertex cost in check.
-        const vegasStandLiveries = ["darkSteel", "scaffold", "alu"];
+        // Every third deck is the bespoke parking-lot bleacher instead of a
+        // grandstandEx shell, so the canyon reads as a mix of rented seating
+        // rather than one repeated silhouette — and the swap is roughly vertex
+        // neutral, which this already-heavy circuit needs it to be.
+        const vegasStandLiveries = ["scaffold", "alu", "crimson"];
         for (let j = 0; j < 10; j++) {
           const s = s0 + (j + 0.35) / 10 * span, side = (j % 2) ? 1 : -1;
+          if (j % 3 === 1) {
+            lotBleacher(`vegas-lot-bleacher-${j}`, s, side, 15, 8,
+              { rows: j > 5 ? 8 : 6 });
+            continue;
+          }
           grandstandEx(s, side, 15, 56, null, null, {
             livery: vegasStandLiveries[j % vegasStandLiveries.length],
             tiers: (j % 3 === 0) ? 2 : 1,
             roof: (j % 2) ? "truss" : "cantilever",
+            endWalls: (j % 4) === 0,
             pylons: true,
           });
         }

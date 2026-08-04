@@ -269,6 +269,162 @@ const SceneryNature = (function () {
       addCone(out, vadd(a.c, a.u, h * 0.70), 1.0 + h * 0.04, h * 0.34, c2, 6, b);
       out._mat = 0;
     };
+    // ---------- species: the silhouettes pine/tree/palm/conifer cannot make ----------
+    // Six species served forty circuits, so a Portuguese hillside, an Argentine
+    // avenue and a Highveld plain all planted the same rounded cone. The five
+    // below are the forms circuit authors kept rewriting locally; each is the
+    // best of those implementations plus an options bag, because a shared model
+    // that renders identically everywhere only moves the sameness up a level.
+    // All follow tree()'s contract: (k, side, dist, h, col, opts), anchored,
+    // on-track guarded, noted, MAT.WOOD trunk + MAT.FOLIAGE crown, base sunk so
+    // a single-point terrain sample cannot float them on a slope.
+
+    // cypress: the columnar dark-green spire of an Italian avenue — a stack of
+    // narrowing cones on a slim trunk, nothing like pine()'s wide tiers.
+    //   opts: { slim (crown-radius scale, default 1), trunkCol }
+    const cypress = (k, side, dist, h, col, opts) => {
+      opts = opts || {};
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      const slim = opts.slim != null ? Math.max(0.4, Math.min(2.2, opts.slim)) : 1;
+      if (onTrack(a.c[0], a.c[2], 1.6 * slim + 0.6)) {
+        console.warn(`[scenery] cypress SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        return;
+      }
+      ctx.note("cypress", [a.c[0], a.c[1] + h / 2, a.c[2]], [3 * slim, h, 3 * slim], { k, side });
+      // Per-instance tone shift: an avenue of one flat green reads as a fence.
+      const dark = hash(k * 7.3 + side * 2.1 + dist) < 0.5;
+      const c = dark ? [col[0] * 0.78, col[1] * 0.82, col[2] * 0.80] : col;
+      out._mat = MAT.WOOD;
+      addCyl(out, vadd(a.c, a.u, -0.4), 0.22, h * 0.18 + 0.4, opts.trunkCol || [0.30, 0.22, 0.14], 5, b);
+      out._mat = MAT.FOLIAGE;
+      addCone(out, vadd(a.c, a.u, h * 0.10), 1.45 * slim, h * 0.58, c, 6, b);
+      addCone(out, vadd(a.c, a.u, h * 0.44), 1.10 * slim, h * 0.42, c, 6, b);
+      addCone(out, vadd(a.c, a.u, h * 0.70), 0.70 * slim, h * 0.32, c, 6, b);   // pointed crown
+      out._mat = 0;
+    };
+
+    // stonePine: the Mediterranean parasol pine — a bare trunk carrying a flared
+    // underside and a shallow dome, i.e. a mushroom, not a spire.
+    //   opts: { lean (0 = upright, 1 = full windswept), spread (crown scale),
+    //           trunkCol }
+    const stonePine = (k, side, dist, h, col, opts) => {
+      opts = opts || {};
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      const spread = opts.spread != null ? Math.max(0.5, Math.min(1.8, opts.spread)) : 1;
+      if (onTrack(a.c[0], a.c[2], h * 0.44 * spread + 0.6)) {
+        console.warn(`[scenery] stonePine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        return;
+      }
+      ctx.note("stonePine", [a.c[0], a.c[1] + h * 0.7, a.c[2]],
+               [h * 0.9 * spread, h, h * 0.9 * spread], { k, side });
+      // The Atlantic wind: the trunk's foot and its crown disagree, which is the
+      // whole read of a coastal pine. `lean` scales that disagreement.
+      const amt = opts.lean != null ? Math.max(0, Math.min(1.5, opts.lean)) : 1;
+      const lean = (hash(k * 13.1 + side * 3.7 + dist) - 0.5) * 0.9 * amt;
+      const foot = vadd(a.c, a.r, lean * 0.6);
+      out._mat = MAT.WOOD;
+      addCyl(out, vadd(foot, a.u, -0.5), 0.20 + h * 0.014, h * 0.66 + 0.5,
+             opts.trunkCol || [0.40, 0.31, 0.23], 5, b);
+      out._mat = MAT.FOLIAGE;
+      const crown = vadd(vadd(foot, a.u, h * 0.60), a.r, lean);
+      addFrustum(out, crown, h * 0.12 * spread, h * 0.44 * spread, h * 0.16, col, 7, b);   // flared underside
+      addCone(out, vadd(crown, a.u, h * 0.16), h * 0.44 * spread, h * 0.22, col, 7, b);    // shallow dome
+      out._mat = 0;
+    };
+
+    // broadleafFall: a turning autumn broadleaf — three overlapping off-axis
+    // lobes rather than one solid cone of colour, so the crown has a shape when
+    // the foliage is a bright non-green. Pass an autumn `col` (or a summer green;
+    // the form is what differs from tree(), not the palette).
+    //   opts: { lobes, spread (crown scale), barkCol }
+    const broadleafFall = (k, side, dist, h, col, opts) => {
+      opts = opts || {};
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      const spread = opts.spread != null ? Math.max(0.5, Math.min(1.8, opts.spread)) : 1;
+      if (onTrack(a.c[0], a.c[2], h * 0.34 * spread + 0.8)) {
+        console.warn(`[scenery] broadleafFall SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        return;
+      }
+      ctx.note("broadleafFall", [a.c[0], a.c[1] + h * 0.6, a.c[2]],
+               [h * 0.68 * spread, h, h * 0.68 * spread], { k, side });
+      const lobes = Math.max(2, Math.min(5, Math.round(opts.lobes || 3)));
+      out._mat = MAT.WOOD;
+      addCyl(out, vadd(a.c, a.u, -0.5), 0.22 + h * 0.012, h * 0.42 + 0.5,
+             opts.barkCol || [0.36, 0.30, 0.24], 5, b);
+      out._mat = MAT.FOLIAGE;
+      // Shade the lower lobes: a single flat autumn colour flattens into a blob.
+      const c2 = [col[0] * 0.82, col[1] * 0.80, col[2] * 0.76];
+      for (let i = 0; i < lobes; i++) {
+        const ang = i * (6.2832 / lobes) + hash(k + i * 1.9 + side) * 1.2, rr = h * 0.16 * spread;
+        const p = vadd(vadd(vadd(a.c, a.u, h * (0.40 + i * 0.09)),
+                            a.r, Math.cos(ang) * rr), a.t, Math.sin(ang) * rr);
+        addFrustum(out, p, h * (0.30 - i * 0.05) * spread, h * (0.34 - i * 0.08) * spread,
+                   h * 0.26, i ? c2 : col, 6, b);
+      }
+      addCone(out, vadd(a.c, a.u, h * 0.76), h * 0.24 * spread, h * 0.30, col, 6, b);
+      out._mat = 0;
+    };
+
+    // acacia: the flat-topped thorn of the African veld — a bare trunk forking
+    // low into one wide, shallow, near-horizontal crown. The umbrella IS the
+    // silhouette; a rounded tree() canopy here reads as European parkland.
+    //   opts: { spread (crown width in metres, default 2.4x h*0.35), layers, barkCol }
+    const acacia = (k, side, dist, h, col, opts) => {
+      opts = opts || {};
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      const spread = opts.spread != null ? Math.max(2, opts.spread) : h * 1.15;
+      if (onTrack(a.c[0], a.c[2], spread * 0.5 + 0.8)) {
+        console.warn(`[scenery] acacia SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        return;
+      }
+      ctx.note("acacia", [a.c[0], a.c[1] + h * 0.8, a.c[2]], [spread, h, spread], { k, side });
+      const bark = opts.barkCol || [0.34, 0.26, 0.18];
+      const layers = Math.max(1, Math.min(3, Math.round(opts.layers || 2)));
+      const c2 = [col[0] * 0.82, col[1] * 0.86, col[2] * 0.80];
+      out._mat = MAT.WOOD;
+      addCyl(out, vadd(a.c, a.u, -0.5), 0.28, h * 0.62 + 0.5, bark, 5, b);
+      for (const dr of [-1, 1])                                    // the low fork
+        addBox(out, vadd(vadd(a.c, a.u, h * 0.68), a.r, dr * spread * 0.22),
+               [spread * 0.44, 0.7, 0.22], bark, b);
+      out._mat = MAT.FOLIAGE;
+      // Flat slabs, not cones: the crown's top and bottom are both near-planar.
+      for (let i = 0; i < layers; i++) {
+        const f = 1 - i * 0.4;
+        addBox(out, vadd(a.c, a.u, h * (0.80 + i * 0.14)),
+               [spread * f, 0.9 - i * 0.2, spread * f], i % 2 ? c2 : col, b);
+      }
+      out._mat = 0;
+    };
+
+    // plane: the pollarded avenue tree (plátano / London plane) — a pale mottled
+    // trunk under a BROAD FLATTENED crown of stacked cylinders. Pollarding is
+    // why it is cylindrical: the crown is cut back to a disc every winter, which
+    // no cone-stack species in this library can express.
+    //   opts: { stages (1-3 crown discs), spread, trunkCol }
+    const plane = (k, side, dist, h, col, opts) => {
+      opts = opts || {};
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      const spread = opts.spread != null ? Math.max(0.5, Math.min(1.8, opts.spread)) : 1;
+      const rad = (4.2 + h * 0.12) * spread;
+      if (onTrack(a.c[0], a.c[2], rad + 0.6)) {
+        console.warn(`[scenery] plane SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        return;
+      }
+      ctx.note("plane", [a.c[0], a.c[1] + h * 0.6, a.c[2]], [rad * 2, h, rad * 2], { k, side });
+      const stages = Math.max(1, Math.min(3, Math.round(opts.stages || 2)));
+      const c2 = [col[0] * 0.80, col[1] * 0.84, col[2] * 0.80];
+      out._mat = MAT.WOOD;
+      // Pale mottled bark is the plane tree's identity — built explicitly rather
+      // than through tree(), whose dark trunk colour is not overridable.
+      addCyl(out, vadd(a.c, a.u, -0.5), 0.42, h * 0.48 + 0.5,
+             opts.trunkCol || [0.72, 0.70, 0.62], 6, b);
+      out._mat = MAT.FOLIAGE;
+      for (let i = 0; i < stages; i++)
+        addCyl(out, vadd(a.c, a.u, h * (0.46 + i * 0.28)), rad * (1 - i * 0.28),
+               h * (0.34 - i * 0.10), i ? c2 : col, 7, b);
+      out._mat = 0;
+    };
+
     // Distant mountain peak (world coords), pyramid so it reads as a summit, with
     // a lower foot skirt so it doesn't look like a floating spike. Simple/clean —
     // use mountain() for organic, colour-zoned, snow-capped summits.
@@ -750,7 +906,9 @@ const SceneryNature = (function () {
       }
     };
 
-    return { anchor, pine, tree, palm, conifer, peak, mountain, ridge,
+    return { anchor, pine, tree, palm, conifer,
+             cypress, stonePine, broadleafFall, acacia, plane,
+             peak, mountain, ridge,
              crowdBank, grandstand, grandstandEx, spectatorHill, bush, hedge, forestEdge,
              canopyR, forestEdgeNow, deferredFoliage };
   }

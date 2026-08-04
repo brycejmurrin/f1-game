@@ -21,24 +21,38 @@ const { buildContext } = require("../tools/verify-track.cjs");
 
 const CONTRACT = [
   "ATM", "COL", "MAT",
-  "addBox", "addCone", "addCyl", "addFrustum", "addMountain", "addPrism", "addPyramid",
+  "acacia", "addBox", "addCone", "addCyl", "addFrustum", "addMountain", "addPrism", "addPyramid",
   "along", "anchor", "backdrop", "bakedModel", "bakedModels", "bankedKerbStrip",
-  "billboard", "bowlSeatWall",
-  "broadcastCompound", "building", "bush", "cameraTower", "cantilever", "circuitKit",
+  "billboard", "bleacher", "bowlSeatWall",
+  "broadcastCompound", "broadleafFall", "building", "bush", "cameraTower", "cantilever", "circuitKit",
   "cityFront", "concreteCanyon", "conifer",
-  "cross", "def", "ds", "every", "fence", "ferrisWheel", "floodMast",
+  "cross", "cypress", "def", "ds", "every", "fence", "ferrisWheel", "floodMast",
   "floodMastRing", "forestEdge", "foundation", "gantry", "grandstand", "grandstandEx",
   "gridshellCanopy",
   "groundPatch", "groundPlane", "groundYAt", "groundedSegments", "guardrail",
   "hash", "hedge", "house", "hw", "landmarkKit", "ledFacadeBands", "lerp",
   "marshalPost", "modelDiagnostics", "modelGroup", "motorhome", "mountain",
   "n", "night", "norm", "onTrack", "out", "overheadSpan", "pal", "palm",
-  "pastelStreetRow", "peak", "pine", "place", "prop", "px", "py", "pyMin",
-  "pz", "recordBarrier", "ridge", "runoffApron", "sailCanopy", "sceneryTheme", "seat",
-  "signBoard", "spectatorHill", "sponsorHoarding", "theme", "tower", "track", "tree",
+  "pastelStreetRow", "peak", "pine", "place", "plane", "prop", "px", "py", "pyMin",
+  "pz", "recordBarrier", "ridge", "runoffApron", "sailCanopy", "scaffoldStand",
+  "sceneryTheme", "seat",
+  "signBoard", "spectatorHill", "sponsorHoarding", "stonePine", "terrace", "theme",
+  "tieredBowl", "tower", "track", "tree",
   "tyreWall",
   "underpassPortal", "upOf", "vadd", "wall", "waterBand", "waterField", "waterSurface",
 ];
+
+// The member COUNT is asserted separately from the deepEqual above it: a paste
+// that drops one name while adding another still satisfies "these are sorted and
+// equal" if BOTH lists are edited together, and the count is the cheap tripwire
+// that says how many things circuits may call. Bump it deliberately.
+const CONTRACT_SIZE = 105;
+
+test("the frozen contract is the size it declares", () => {
+  assert.equal(CONTRACT.length, CONTRACT_SIZE);
+  assert.equal(new Set(CONTRACT).size, CONTRACT_SIZE, "duplicate member in CONTRACT");
+  assert.deepEqual(CONTRACT, [...CONTRACT].sort(), "CONTRACT must stay sorted");
+});
 
 test("buildProps sceneryApi surface matches the frozen contract", () => {
   const Tracks = buildContext();

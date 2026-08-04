@@ -61,16 +61,42 @@
       { frac: 0.800, angleDeg: 3.0, widthM: 120 },   // Europcar
     ],
     scenery: function (api) {
-      const { out, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
+      const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
         pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
-        broadcastCompound, billboard, gantry, marshalPost, tower, motorhome,
+        broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        addBox, addCyl, addCone, addPrism } = api;
+        floodMast, sailCanopy, sponsorHoarding, seat, groundedSegments,
+        addBox, addCyl, addCone } = api;
       const K = (s) => Math.round(s * n) % n;
 
       const PINE = [0.14, 0.31, 0.16], PINE_D = [0.11, 0.25, 0.14];
       const SCRUB = [0.33, 0.38, 0.20], SCRUB_D = [0.27, 0.32, 0.17];
       const GRAVEL = [0.70, 0.62, 0.46];
+      // Everything built here is bleached: sun-baked concrete, white render,
+      // pale ochre stone. Catalunya has no grey steel and no dark timber.
+      const WHITE = [0.93, 0.92, 0.88], BONE = [0.86, 0.84, 0.78];
+      const OCHRE = [0.76, 0.69, 0.55], SHADE = [0.66, 0.63, 0.58];
+
+      // ── The bespoke stand form: an OPEN bleached-concrete terrace ──
+      // Barcelona's crowd sits in uncovered raked concrete under a hard sun,
+      // with fabric shade sails pulled over the back rows. grandstandEx builds
+      // a clad shell with a metal roof — the opposite silhouette — so the
+      // corner bowls are laid out here as bare risers instead.
+      function sunTerrace(s0, s1, side, gap, rows, step) {
+        const SEATS = [[0.86, 0.85, 0.83], [0.72, 0.30, 0.24], [0.90, 0.78, 0.30]];
+        let i = 0;
+        along(s0, s1, step || 9, (k, spacing) => {
+          const seg = spacing * 0.96;
+          for (let t = 0; t < rows; t++) {
+            const a = anchor(k, side, gap + t * 3.6);
+            const b = [a.r, a.u, a.t];
+            const h = 1.8 + t * 2.2;
+            addBox(out, vadd(a.c, a.u, h * 0.5), [3.5, h, seg], t & 1 ? BONE : WHITE, b);
+            addBox(out, vadd(a.c, a.u, h + 0.65), [2.7, 1.3, seg], SEATS[(i + t) % 3], b);
+          }
+          i++;
+        });
+      }
 
       // =====================================================================
       // 1. CATALAN SCRUB + UMBRELLA PINE — sparse, dry, nothing like a forest.
@@ -93,11 +119,14 @@
         bush(k, h < 0.72 ? -1 : 1, 7 + h * 6, h < 0.6 ? SCRUB : SCRUB_D);
         if (h > 0.80) bush(k, h > 0.90 ? -1 : 1, 13 + h * 8, SCRUB_D);
       });
-      every(48, (k) => {
+      // The far rank is deliberately thin: the bleached terraced hillside in
+      // section 6 now carries the outfield, and a dense tree belt in front of
+      // it would put a green wall back on a track that has none.
+      every(64, (k) => {
         const s = k / n;
         if (openInfield(s)) return;
         const h = hash(k * 67 + 17);
-        if (h < 0.55) return;
+        if (h < 0.60) return;
         tree(k, h < 0.5 ? -1 : 1, 40 + h * 26, 9 + h * 6, [0.24, 0.36, 0.19]);
       });
 
@@ -105,36 +134,80 @@
       // 2. PIT COMPLEX AND MAIN GRANDSTAND — the long covered stand down the
       //    whole main straight is Catalunya's most recognisable structure.
       // =====================================================================
-      const pitWall = [0.88, 0.88, 0.86];
-      for (let i = 0; i < 9; i++) {
-        building(K(0.945 + i * 0.007), 1, 15, 16, 9, 11,
-          { wall: pitWall, window: [0.28, 0.32, 0.40], floor: 4.5, roof: true });
+      // The Montmeló pit terrace is a low WHITE building whose facade is almost
+      // entirely horizontal shading: stacked brise-soleil louvres over a
+      // recessed glazed ground floor, carried on slim round columns, with a
+      // thin flat roof slab floating clear of the wall. That louvred facade is
+      // the circuit's architectural signature and no amount of building() boxes
+      // produces it, so the terrace is laid out as six atomic bays here.
+      {
+        const COLUMN = [0.88, 0.87, 0.84], GLASS = [0.30, 0.42, 0.50];
+        for (let i = 0; i < 6; i++) {
+          const s = 0.944 + i * 0.011;
+          const a = anchor(K(s), 1, 20);
+          const b = [a.r, a.u, a.t];
+          modelGroup(`catalunya-pit-bay-${i + 1}`, {
+            center: vadd(a.c, a.u, 8), size: [24, 16, 30], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [16, 0.8, 28], BONE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 2.0), a.u, 4.4), [11, 7.2, 28], WHITE, b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, -3.6), a.u, 3.0), [0.5, 4.6, 27], GLASS, b);
+            stage._mat = MAT.CONCRETE;
+            // Slim columns holding the shade structure off the glass line.
+            for (let d = 0; d < 5; d++)
+              addCyl(stage, vadd(vadd(a.c, a.r, -6.6), a.t, (d - 2) * 6.4),
+                0.24, 10.5, COLUMN, 8, b);
+            // FOUR horizontal louvres — the deep-shadow banding that reads as
+            // Mediterranean from a hundred metres away.
+            for (let l = 0; l < 4; l++)
+              addBox(stage, vadd(vadd(a.c, a.r, -6.2), a.u, 4.4 + l * 1.9),
+                [3.6, 0.28, 29], l & 1 ? BONE : WHITE, b);
+            // Roof slab floating above the louvres on a shadow gap.
+            addBox(stage, vadd(vadd(a.c, a.r, -2.0), a.u, 11.3), [19, 0.55, 30], WHITE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -11.2), a.u, 11.1), [0.7, 0.9, 30], SHADE, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+        // Race control — a white slab with a projecting glazed gallery, capped
+        // by the Catalan senyera stripe the circuit paints on everything.
+        const a = anchor(K(0.985), 1, 13);
+        const b = [a.r, a.u, a.t];
+        modelGroup("catalunya-race-control", {
+          center: vadd(a.c, a.u, 18), size: [10, 44, 12], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 13), [5.0, 26, 7.5], WHITE, b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(a.c, a.r, -2.2), a.u, 24.5), [5.4, 4.6, 9.0],
+            [0.16, 0.24, 0.30], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -2.4), a.u, 24.5), [5.0, 3.6, 8.0],
+            [0.92, 0.86, 0.60], b);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(vadd(a.c, a.r, -2.2), a.u, 27.3), [7.0, 0.6, 10.5], WHITE, b);
+          stage._mat = MAT.METAL;
+          for (let d = 0; d < 4; d++)
+            addBox(stage, vadd(vadd(a.c, a.r, -2.4), a.u, 20.0 + d * 0.7),
+              [5.6, 0.35, 8.4], d & 1 ? [0.86, 0.16, 0.14] : [0.92, 0.78, 0.14], b);
+          addCyl(stage, vadd(a.c, a.u, 27.6), 0.14, 12, [0.42, 0.43, 0.46], 4, b);
+          stage._mat = 0;
+        }, { required: true });
       }
-      tower(K(0.985), 1, 13, 6, 36, { col: [0.92, 0.92, 0.90], cap: true, capCol: [0.80, 0.14, 0.12], mast: 8 });
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.965, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 11, 180, null, null,
         { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.055, -1, 12, 120, null, null, { livery: "steel", endWalls: true });
+      grandstandEx(0.055, -1, 12, 120, null, null, { livery: "alu", endWalls: true });
       {
         const winLit = [0.97, 0.88, 0.54];
         // On the stand's back shell rather than inside the seating bowl.
         const a = anchor(K(0.005), -1, 22);
         addBox(out, vadd(a.c, a.u, 10.4), [0.22, 1.5, 160], winLit, [a.r, a.u, a.t]);
       }
-      // Long tensile roof over the pit lane.
-      {
-        const a = anchor(K(0.980), 1, 18);
-        modelGroup("catalunya-pit-canopy", {
-          center: vadd(a.c, a.u, 10.8), size: [5.6, 1.4, 78], basis: [a.r, a.u, a.t],
-        }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, 11), [5.4, 0.8, 78], [0.88, 0.87, 0.84], [a.r, a.u, a.t]);
-          addBox(stage, vadd(a.c, a.u, 10.2), [4.9, 0.25, 76], [0.94, 0.90, 0.60], [a.r, a.u, a.t]);
-        }, { required: true });
-      }
       for (let i = 0; i < 4; i++) {
         building(K(0.920 + i * 0.014), 1, 40, 24, 12, 18,
-          { wall: [0.82, 0.82, 0.82], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+          { wall: [0.88, 0.87, 0.83], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
@@ -148,13 +221,22 @@
       // 3. THE CORNER STANDS — Catalunya's crowd sits in big freestanding
       //    grandstands at Elf, Repsol, Campsa and the stadium section.
       // =====================================================================
+      // One covered stand at Turn 1; everywhere else the crowd is on open
+      // bleached terracing under shade sails, which is what Barcelona actually
+      // looks like on a test day.
       grandstandEx(0.065, 1, 20, 96, null, null,
-        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true });
-      grandstandEx(0.240, -1, 20, 80, null, null, { livery: "concrete", endWalls: true });
-      grandstandEx(0.505, 1, 22, 84, null, null, { livery: "steel", endWalls: true });
-      grandstandEx(0.690, -1, 20, 90, null, null,
-        { livery: "concrete", tiers: 2, roof: "cantilever", endWalls: true });
-      grandstandEx(0.930, 1, 18, 100, null, null, { livery: "steel", endWalls: true });
+        { livery: "alu", tiers: 2, roof: "cantilever", endWalls: true });
+      sunTerrace(0.222, 0.262, -1, 19, 5);
+      sunTerrace(0.492, 0.522, 1, 21, 5);
+      sunTerrace(0.674, 0.708, -1, 19, 6);
+      sunTerrace(0.916, 0.948, 1, 17, 5);
+      // Fabric shade sails pulled over the back rows of the two biggest
+      // terraces — nothing else here is soft or curved, so they read instantly.
+      for (const [s, side, gap] of [[0.690, -1, 33], [0.932, 1, 30]]) {
+        const a = anchor(K(s), side, gap);
+        sailCanopy(a.c, [a.r, a.u, a.t],
+          { rad: 15, rx: 9, rz: 17, h: 15, col: [0.94, 0.92, 0.86], ribs: 6, thick: 0.4 });
+      }
       spectatorHill(0.30, 0.36, 1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
 
       // Gravel + tyre walls at the heavy-braking corners.
@@ -200,9 +282,9 @@
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
       for (const [extra, count, len, w, hMin, hVar, col] of [
-        [130, 44, 120, 40, 14, 9, [0.28, 0.34, 0.19]],
-        [230, 36, 160, 52, 24, 14, [0.24, 0.31, 0.19]],
-        [360, 28, 210, 66, 40, 24, [0.30, 0.34, 0.30]],
+        [130, 30, 150, 46, 14, 9, [0.42, 0.42, 0.26]],   // bleached near ridges
+        [230, 26, 195, 60, 24, 14, [0.36, 0.37, 0.25]],
+        [360, 22, 240, 74, 40, 24, [0.34, 0.36, 0.32]],  // hazed Montseny massif
       ]) {
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832, h = hash(i * 7 + extra);
@@ -214,34 +296,92 @@
       }
 
       // =====================================================================
-      // 6. BESPOKE IDENTITY — the tall lighting/camera masts around the
-      //    stadium section, and the low white paddock-club block behind T1.
+      // 6. BESPOKE IDENTITY — the tall slim floodlight masts, the white
+      //    paddock-club terraces, the manicured landscaping, and the bleached
+      //    open hillside the whole site is cut into.
       // =====================================================================
+      // Catalunya is one of the few permanent circuits fully lit for night
+      // testing, and the masts are unusually TALL and slim — the vertical
+      // punctuation on an otherwise horizontal, low-slung site. Real masts via
+      // floodMast rather than a hand-rolled pole so they carry lamp heads.
       for (const [s, side, gap] of [
-        [0.030, -1, 26], [0.070, 1, 30], [0.505, 1, 32], [0.690, -1, 30], [0.935, 1, 28],
-      ]) {
-        const a = anchor(K(s), side, gap);
-        addCyl(out, a.c, 0.20, 18, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 18.4), [1.4, 0.6, 2.8], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
-      }
-      // Paddock-club terrace overlooking Turn 1 — a long white two-storey block
-      // with a shaded roof deck, the view every Barcelona test photo uses.
-      {
-        const a = anchor(K(0.045), 1, 52);
+        [0.030, -1, 24], [0.075, 1, 34], [0.245, -1, 30],
+        [0.505, 1, 34], [0.700, -1, 36], [0.935, 1, 34],
+      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3 });
+
+      // The paddock-club terraces: three low white pavilions stepping along the
+      // hillside above Turn 1, each with a shaded roof deck. One 62 m block was
+      // silently rejected here (the T1 arc folds back under it); three short
+      // bays at staggered clearances fit and read as terraces, which is what
+      // they are.
+      for (const [i, s, gap] of [[0, 0.030, 46], [1, 0.045, 34], [2, 0.060, 46]]) {
+        const a = anchor(K(s), 1, gap);
         const b = [a.r, a.u, a.t];
-        modelGroup("catalunya-paddock-club", {
-          center: vadd(a.c, a.u, 6), size: [16, 12, 62], basis: b,
+        modelGroup(`catalunya-paddock-club-${i + 1}`, {
+          center: vadd(a.c, a.u, 7), size: [18, 14, 46], basis: b,
         }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, 4.5), [13, 9, 58], [0.90, 0.90, 0.88], b);
-          addBox(stage, vadd(a.c, a.u, 9.6), [15, 0.5, 60], [0.72, 0.72, 0.74], b);
-          for (const hgt of [3.0, 7.0]) {
-            addBox(stage, vadd(vadd(a.c, a.r, -6.4), a.u, hgt), [0.3, 1.8, 54], [0.40, 0.52, 0.62], b);
-          }
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 4.2), [12, 8.4, 42], WHITE, b);
+          addBox(stage, vadd(a.c, a.u, 8.8), [14.5, 0.5, 44], BONE, b);      // roof deck
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(a.c, a.r, -6.1), a.u, 5.6), [0.35, 2.4, 40],
+            [0.34, 0.46, 0.56], b);
+          stage._mat = MAT.METAL;
+          // Pergola over the deck — every terrace here has one.
+          for (let d = 0; d < 6; d++)
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, -1.5), a.t, (d - 2.5) * 7), a.u, 11.4),
+              [11, 0.18, 0.5], SHADE, b);
+          for (const t of [-1, 1])
+            addCyl(stage, vadd(vadd(a.c, a.r, -6.8), a.t, t * 17), 0.18, 11.3, BONE, 6, b);
+          stage._mat = 0;
         });
       }
-      // Clipped hedging along the pit-straight verge — Catalunya's landscaping
-      // is manicured in a way the rest of the site is not.
+
+      // Manicured landscaping — clipped hedge banding and a rank of columnar
+      // Mediterranean cypress. Catalunya's verges are gardened; the hillside
+      // beyond them is not, and that contrast is worth building.
       hedge(0.955, 0.045, -1, 16, 3.0, [0.18, 0.36, 0.18]);
+      hedge(0.020, 0.075, 1, 15, 2.6, [0.19, 0.37, 0.19]);
+      hedge(0.660, 0.715, -1, 15, 2.6, [0.19, 0.37, 0.19]);
+      {
+        const CYP = [0.13, 0.28, 0.15], CYP_D = [0.10, 0.22, 0.13];
+        for (const [s0, side, gap] of [[0.960, -1, 21], [0.028, 1, 20], [0.680, -1, 21]]) {
+          for (let i = 0; i < 7; i++) {
+            const a = anchor(K(s0 + i * 0.006), side, gap + (i & 1) * 2.5);
+            const b = [a.r, a.u, a.t];
+            const h = 11 + hash(i * 13 + s0 * 100) * 4;
+            addCyl(out, a.c, 0.20, h * 0.2, [0.34, 0.26, 0.18], 5, b);
+            addCone(out, vadd(a.c, a.u, h * 0.12), 1.2, h * 0.62, i & 1 ? CYP : CYP_D, 6, b);
+            addCone(out, vadd(a.c, a.u, h * 0.50), 0.85, h * 0.48, CYP, 6, b);
+          }
+        }
+      }
+
+      // THE BLEACHED HILLSIDE. Montmeló's outfield is dry terraced farmland cut
+      // into pale rock — the opposite of a forest circuit's green wall. Long low
+      // ochre benches stepping up the slope behind the outer runoff read as that
+      // terracing at speed, and they are what stops this track's backdrop being
+      // interchangeable with a German one.
+      for (const [id, s, side, gap] of [
+        ["t1", 0.090, 1, 62], ["repsol", 0.215, -1, 58],
+        ["campsa", 0.470, 1, 62], ["lacaixa", 0.640, -1, 58],
+      ]) {
+        for (let t = 0; t < 3; t++) {
+          groundedSegments({
+            id: `catalunya-terrace-${id}-${t + 1}`,
+            points: [0, 1, 2, 3, 4].map((j) => ({
+              k: K(s + (j - 2) * 0.010), side, dist: gap + t * 16,
+            })),
+            width: 11, height: 2.2 + t * 1.6,
+            color: t & 1 ? OCHRE : [0.71, 0.66, 0.52],
+          });
+        }
+      }
+      // Sponsor boards down the main straight and around Turn 1.
+      sponsorHoarding(0.955, 0.100, -1, 6.5, {
+        h: 1.25, step: 10,
+        palette: [[0.86, 0.16, 0.14], [0.94, 0.93, 0.88], [0.12, 0.32, 0.66], [0.96, 0.78, 0.10]],
+      });
     },
   }
   );

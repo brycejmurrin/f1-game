@@ -39,7 +39,9 @@ const CIRCUITS = [
   "hungaroring", "baku", "mexico", "qatar", "abudhabi",
   // ── retired / off-calendar (classic: true) ──
   "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
-  "paul_ricard",
+  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
+  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
+  "jacarepagua",
 ];
 
 const CIRCUITS_DIR = "js/circuits";
@@ -119,8 +121,10 @@ const FULL = [
   "js/game/particles.js",
   "js/game/atmosphere.js",
   "js/game/store.js",
+  "js/game/career.js",
   "js/game/cam-tune.js",
   "js/game/setup-ui.js",
+  "js/game/career-ui.js",
   "js/game/menus.js",
   "js/game/scrollfade.js",
   "js/game/menunav.js",
@@ -150,6 +154,7 @@ const CSS = [
   "css/tokens.css", "css/components.css", "css/tuner.css", "css/menus.css",
   "css/carsetup.css", "css/hud.css", "css/overlays.css", "css/responsive.css",
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
+  "css/career.css",
   "css/data.css",
 ];
 
@@ -263,6 +268,9 @@ const HARD_EDGES = [
   ["js/game/tables.js", "js/game/hud.js"],      // hud destructures GameTables at eval
   ["js/car/teams.js", "js/game/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
   ["js/game/store.js", "js/game/cam-tune.js"],  // cam-tune destructures GameStore at eval
+  ["js/game/store.js", "js/game/career.js"],    // career destructures GameStore at eval
+  ["js/car/parts.js", "js/game/career.js"],     // Career.start seeds owned/fitted from Parts (call time, keep ordered)
+  ["js/game/career.js", "js/game/career-ui.js"],  // the screen reads the Career rules
 ];
 
 // Named paths for direct single-file consumers (tests/tools that load one

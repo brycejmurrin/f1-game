@@ -54,7 +54,7 @@
       { frac: 0.8572, angleDeg: 4.0, widthM: 140 },   // Blanchimont
     ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, hash, every, place, backdrop, pal,
+      const { out, MAT, seat, n, px, pz, pyMin, hash, every, place, backdrop, pal,
               addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
               mountain, pine, tree, forestEdge, building, motorhome,
               marshalPost, gantry, billboard, fence, guardrail, tyreWall, wall,
@@ -183,6 +183,75 @@
       // any of it.
       broadcastCompound(K(0.755), -1, 45, { vans: 3, dishes: 2, mastH: 9 });
 
+      // --- Ardennes forest terrace: Spa's stands away from the pit straight are
+      //     not the modern concrete-and-cantilever kind — they are open decks of
+      //     creosoted timber planking on galvanised raking frames, roofed with
+      //     dark-green painted corrugated sheet on a lattice truss, sitting
+      //     straight in the treeline. That silhouette (open at the back, sheet
+      //     roof, no shell) is what a grandstandEx call cannot produce, and it is
+      //     also where this circuit's COLOUR comes from: the structure stays
+      //     forest-dark and the crowd supplies the orange/red/yellow.
+      const ARD_TIMBER = [0.46, 0.36, 0.26];   // creosote-dark plank
+      const ARD_STEEL  = [0.62, 0.64, 0.66];   // galvanised frame
+      const ARD_ROOF   = [0.14, 0.24, 0.18];   // dark green painted sheet
+      // Spa's grandstands ARE the Orange Army — the colour a wet Ardennes day
+      // otherwise refuses to supply. Belgian red/yellow/black as the accent.
+      const ARD_FANS = [
+        [0.96, 0.44, 0.06], [0.94, 0.50, 0.10], [0.98, 0.56, 0.14], [0.90, 0.40, 0.05],
+        [0.84, 0.16, 0.14], [0.90, 0.82, 0.22], [0.16, 0.16, 0.18], [0.88, 0.88, 0.86],
+      ];
+      function ardennesTerrace(id, k, side, dist, bays, opts) {
+        opts = opts || {};
+        const rows = opts.rows || 7, pitch = 6.4, len = bays * pitch;
+        const fans = opts.fans || ARD_FANS;
+        const backH = 2.2 + rows * 1.3;
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        const IN = -side;                        // +1 along a.r faces the track
+        modelGroup(id, {
+          center: vadd(a.c, a.u, (backH + 5.4) / 2),
+          size: [15, backH + 5.4, len + 3], basis: b,
+        }, (stage) => {
+          for (let i = 0; i <= bays; i++) {
+            const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
+            stage._mat = MAT.METAL;
+            seat.cyl(stage, vadd(p, a.r, IN * 5.0), 0.15, 2.2, ARD_STEEL, 5, b);
+            seat.cyl(stage, vadd(p, a.r, -IN * 5.0), 0.17, backH + 4.2, ARD_STEEL, 5, b);
+            // Two ties per bay: enough to read as a braced frame at speed
+            // without paying for a full lattice on every division.
+            addBox(stage, vadd(p, a.u, backH * 0.45), [10.2, 0.14, 0.14], ARD_STEEL, b);
+            addBox(stage, vadd(p, a.u, backH + 2.6), [11.4, 0.16, 0.16], ARD_STEEL, b);
+          }
+          for (let t = 0; t < rows; t++) {
+            const lat = IN * (4.5 - t * 1.26), y = 1.2 + t * 1.3;
+            stage._mat = MAT.WOOD;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y), [1.26, 0.2, len], ARD_TIMBER, b);
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.2), [0.95, 0.75, len - 1.4],
+              (t % 2) ? [0.52, 0.41, 0.30] : [0.44, 0.35, 0.26], b);
+            stage._mat = MAT.FABRIC;
+            for (let j = 0; j * 0.92 < len - 3; j++) {
+              const h2 = hash(k * 29 + t * 71 + j * 37);
+              if (h2 < 0.38) continue;
+              seat.box(stage,
+                vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1.5 + j * 0.92), a.u, y + 0.9),
+                [0.52, 0.95, 0.44], fans[Math.floor(h2 * 71) % fans.length], b);
+            }
+          }
+          // Corrugated sheet roof, laid rib by rib so it reads as sheet metal
+          // rather than a slab, pitched back off the top of the frame.
+          stage._mat = MAT.METAL;
+          for (let i = 0; i * 1.5 < len; i++) {
+            const p = vadd(a.c, a.t, -len / 2 + i * 1.5 + 0.75);
+            addBox(stage, vadd(vadd(p, a.r, -IN * 0.4), a.u, backH + 3.3),
+              [11.8, 0.24, 0.8], (i % 2) ? ARD_ROOF : [0.18, 0.28, 0.21], b);
+          }
+          // Rain gutter along the open front — the Ardennes detail that makes
+          // the roof read as a shelter rather than a lid.
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 5.5), a.u, backH + 3.0),
+            [0.34, 0.34, len], [0.50, 0.52, 0.54], b);
+          stage._mat = 0;
+        });
+      }
+
       // --- Grandstands: pit, La Source, Raidillon Gold-4 amphitheatre, Les
       // Combes, Bus Stop, Blanchimont. Six named stands now rotate through
       // STAND_SETS.spa ("darkSteel","steel","concrete") via grandstandEx so
@@ -192,8 +261,11 @@
       // hospitality suites and end walls — the full 2022-era treatment.
       grandstandEx(0.00, 1, 8, 46, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      // La Source hairpin: compact single-tier stand, open truss roof.
-      grandstandEx(0.02, 1, 8, 26, null, null, { livery: "steel", roof: "truss", endWalls: true });
+      // La Source hairpin: compact single-tier stand, open truss roof. Belgian
+      // red — the pit precinct is the one place at Spa with painted structure,
+      // and three shades of grey down the whole lap was the real problem here.
+      grandstandEx(0.02, 1, 8, 26, null, null,
+        { livery: "crimson", roof: "truss", endWalls: true, h: 9 });
       // 2. Raidillon amphitheatre (Gold 4) — stepped SHORT bays climbing the crest
       // at s≈0.07–0.10 R. Kept short + individually re-anchored: a single long
       // stand lays its crowd along ONE node's flat tangent, so on this steep,
@@ -202,10 +274,15 @@
       // Lengthened 18→26 m and given a second deck: the real Gold 4 was rebuilt
       // in 2022 into a much larger dual-bay stand and the old single-tier bays
       // read as undersized against it.
+      // The riser tint is the Orange Army, not a blue accent: Gold 4 is the
+      // bank that turns orange on race day and the structure stays concrete.
       for (const [s, gp] of [[0.070, 8], [0.088, 9], [0.097, 9]]) {
-        grandstandEx(s, 1, gp, 26, GOLD4, [0.20, 0.36, 0.62],
+        grandstandEx(s, 1, gp, 26, GOLD4, [0.96, 0.46, 0.08],
           { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD4 });
       }
+      // The general-admission terrace above the Gold 4 bays: timber planking on
+      // a galvanised frame under green sheet, packed with the orange bank.
+      ardennesTerrace("spa-terrace-raidillon", K(0.105), 1, 16, 7, { rows: 7 });
       billboard(Math.round(n * 0.085) % n, 1, 14, 18, 10, [0.05, 0.06, 0.09]);
       // Stepped banking slabs climbing the R hillside behind/beside the stands.
       place(K(0.072), 1, 22, [10, 2.4, 16], GOLD4);
@@ -215,15 +292,25 @@
       // carried no trackside advertising at all — the inside (L) verge, clear
       // of the Gold 4/Les Combes stands on the R, gets a continuous board run.
       sponsorHoarding(0.10, 0.18, -1, 3, { h: 1.2 });
-      // Les Combes: open tiered box, forest wall directly behind.
-      grandstandEx(0.16, 1, 8, 30, null, null, { livery: "darkSteel", roof: "flat", endWalls: true });
+      // Kemmel inside terrace — the straight ran 560 m with nothing but signage
+      // on the left; a low timber deck answers the Gold 4 bank across the road.
+      ardennesTerrace("spa-terrace-kemmel", K(0.135), -1, 14, 6, { rows: 5 });
+      // Les Combes: open tiered box, forest wall directly behind. Orange for
+      // the corner that empties the Dutch camps at the top of the climb.
+      grandstandEx(0.16, 1, 8, 30, null, null,
+        { livery: "orange", roof: "flat", endWalls: true });
+      // Fagnes/Stavelot high ground and the Bus Stop: two more forest terraces,
+      // so the lap's stands are steel-and-timber structures in a wood rather
+      // than three greys of the same modern shell.
+      ardennesTerrace("spa-terrace-fagnes", K(0.60), -1, 16, 6, { rows: 6 });
+      ardennesTerrace("spa-terrace-busstop", K(0.905), 1, 15, 5, { rows: 6 });
       // Bus Stop chicane: braking-zone stand facing the final complex.
       grandstandEx(0.92, 1, 8, 28, null, null, { livery: "steel", roof: "cantilever", pylons: true, endWalls: true });
       // Blanchimont grandstand — missing from the original file entirely
       // despite the corner carrying real camber and a marshal shelter already
       // dressed here; set back beyond the guardrail and catch fence.
       grandstandEx(0.848, 1, 12, 36, null, null,
-        { livery: "concrete", tiers: 2, roof: "truss", endWalls: true });
+        { livery: "concrete", tiers: 2, roof: "truss" });
 
       // --- Yellow-capped marshal posts dotted around the lap.
       every(120, (k) => {
