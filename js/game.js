@@ -3887,6 +3887,34 @@ function setSetupSpin(on) {
 function setupZoom(mul) {
   setupPreviewDist = clamp(setupPreviewDist * mul, SP_DIST_MIN, SP_DIST_MAX);
 }
+// One discrete step of the on-screen orbit controls (keyboard activation).
+function nudgeSetupCam(dAz, dEl, zoom) {
+  if (dAz) { setupPreviewAz += dAz; setSetupSpin(false); }
+  if (dEl) { setupPreviewEl = clamp(setupPreviewEl + dEl, SP_EL_MIN, SP_EL_MAX); setSetupSpin(false); }
+  if (zoom) setupZoom(zoom);
+}
+// A HELD control, as per-second rates applied by the frame loop. This started as
+// a setInterval and read as a stutter: the render loop saturates the main thread
+// under software GL, so a 55 ms timer was only serviced every ~240 ms. Rates on
+// the frame clock are smooth at any frame rate and correct on a fast machine
+// too, where a fixed timer would instead have moved in visible jumps.
+let spHeld = null;   // {az, el, zoom} — radians/sec, radians/sec, factor/sec
+const SP_RATE = { az: 1.8, el: 1.0, zoom: 2.4 };
+function applyHeldSetupCam(dt) {
+  if (!spHeld) return;
+  if (spHeld.az) { setupPreviewAz += spHeld.az * dt; setSetupSpin(false); }
+  if (spHeld.el) {
+    setupPreviewEl = clamp(setupPreviewEl + spHeld.el * dt, SP_EL_MIN, SP_EL_MAX);
+    setSetupSpin(false);
+  }
+  if (spHeld.zoom) setupZoom(Math.pow(spHeld.zoom, dt));
+}
+function resetSetupCam() {
+  setupPreviewAz = 0.6;
+  setupPreviewEl = SP_EL_DEF;
+  setupPreviewDist = SP_DIST_DEF;
+  setSetupSpin(true);
+}
 const _spLights = [];
 function buildSetupPreviewLights() {
   _spLights.length = 0;
@@ -3926,6 +3954,7 @@ function getSetupPreviewMesh() {
 const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = new Float32Array(16);
 function renderSetupPreview(dt) {
   gfx.resize();
+  applyHeldSetupCam(dt);                               // held on-screen controls
   if (setupPreviewSpin) setupPreviewAz += dt * 0.35;   // slow turntable
   // Pulled back + a touch wider than a "hero shot" distance so the whole
   // ~5.4 m car (nose to rear wing) clears the frustum at any turntable angle.
@@ -6112,6 +6141,7 @@ function openCustomize() {
   const liv = ct.livery || {};
   CZ_LIV_FIELDS.forEach(([domId, key]) => czSetLivField(domId, liv[key] || null));
   czSetFinish(liv.finish);
+  refreshCustomLogoUi(loadCustomLogo());
   czPreview();
   els.customize.hidden = false;
 }
@@ -6136,8 +6166,41 @@ for (const btn of document.querySelectorAll("#cs-view [data-cs-view]")) {
   btn.onclick = () => { setSetupView(btn.dataset.csView); if (soundOn) GameAudio.uiTick(); };
 }
 $("cs-view-spin").onclick = () => { setSetupSpin(!setupPreviewSpin); if (soundOn) GameAudio.uiTick(); };
-$("cs-view-in").onclick  = () => { setupZoom(1 / 1.18); if (soundOn) GameAudio.uiTick(); };
-$("cs-view-out").onclick = () => { setupZoom(1.18); if (soundOn) GameAudio.uiTick(); };
+$("cs-view-reset").onclick = () => { resetSetupCam(); if (soundOn) GameAudio.uiTick(); };
+// Hold a control to move continuously; the frame loop reads spHeld. A camera
+// control that only moves on click is one you have to jab at twenty times to get
+// round the car, so press-and-hold is the primary interaction and the discrete
+// step is what a keyboard activation gets.
+function holdSetupCtl(id, rates, step) {
+  const el = $(id);
+  if (!el) return;
+  const release = () => { if (spHeld === rates) spHeld = null; };
+  el.addEventListener("pointerdown", (e) => {
+    if (!setupPreviewOn) return;
+    e.preventDefault();
+    // Capture so a finger sliding off the chip still releases here. NOT
+    // pointerleave for the release: setPointerCapture fires a boundary event as
+    // it retargets, which would stop the motion on its very first frame.
+    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    // One discrete step up front, THEN the held rate. Without the step a quick
+    // tap moved by whatever fraction of a frame it happened to span — i.e.
+    // visibly nothing — so the buttons only worked if you knew to hold them.
+    step();
+    spHeld = rates;
+    if (soundOn) GameAudio.uiTick();
+  });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(ev, release);
+  window.addEventListener("pointerup", release);
+  // Enter/Space activate as a click with detail 0 and never send a pointerdown,
+  // so the keyboard gets a discrete nudge rather than nothing at all.
+  el.addEventListener("click", (e) => { if (e.detail === 0) step(); });
+}
+holdSetupCtl("cs-view-in",    { zoom: 1 / SP_RATE.zoom }, () => nudgeSetupCam(0, 0, 1 / 1.12));
+holdSetupCtl("cs-view-out",   { zoom: SP_RATE.zoom },     () => nudgeSetupCam(0, 0, 1.12));
+holdSetupCtl("cs-view-left",  { az: -SP_RATE.az },        () => nudgeSetupCam(-0.18, 0, 0));
+holdSetupCtl("cs-view-right", { az: SP_RATE.az },         () => nudgeSetupCam(0.18, 0, 0));
+holdSetupCtl("cs-view-up",    { el: SP_RATE.el },         () => nudgeSetupCam(0, 0.12, 0));
+holdSetupCtl("cs-view-down",  { el: -SP_RATE.el },        () => nudgeSetupCam(0, -0.12, 0));
 {
   const canvas = $("game");
   // Live pointers by id, so a two-finger pinch is separable from a one-finger
@@ -6487,6 +6550,77 @@ if (typeof window !== "undefined" && window.__APEX_DEBUG) {
   window.__APEX = { cars: () => cars, player: () => player, state: () => state, track: () => track };
 }
 
+// MY TEAM's own emblem. Stored as a downscaled data URL under apex26.customLogo
+// so it survives a reload without touching the asset pipeline — LiveryTex takes
+// it through exactly the same slot as the shipped marks.
+const CUSTOM_LOGO_KEY = "customLogo";
+const CUSTOM_LOGO_MAX = 384;      // matches the shipped marks
+function loadCustomLogo() { try { return store.get(CUSTOM_LOGO_KEY, null); } catch (_) { return null; } }
+function applyCustomLogo(dataUrl) {
+  if (typeof LiveryTex === "undefined" || !LiveryTex.setTeamLogo) return;
+  LiveryTex.setTeamLogo("custom", dataUrl || null);
+}
+// Downscale to at most CUSTOM_LOGO_MAX on the long edge before storing: a phone
+// photo is several MB and localStorage would simply throw.
+function readLogoFile(file, done) {
+  const fr = new FileReader();
+  fr.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const sc = Math.min(1, CUSTOM_LOGO_MAX / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * sc));
+      const h = Math.max(1, Math.round(img.height * sc));
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      try { done(c.toDataURL("image/png")); } catch (_) { done(null); }
+    };
+    img.onerror = () => done(null);
+    img.src = fr.result;
+  };
+  fr.onerror = () => done(null);
+  fr.readAsDataURL(file);
+}
+function refreshCustomLogoUi(dataUrl) {
+  const prev = $("cz-logo-prev");
+  if (!prev) return;
+  prev.hidden = !dataUrl;
+  if (dataUrl) prev.src = dataUrl;
+}
+$("cz-logofile").addEventListener("change", (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  readLogoFile(f, (dataUrl) => {
+    if (!dataUrl) return;
+    try { store.set(CUSTOM_LOGO_KEY, dataUrl); } catch (_) {}
+    applyCustomLogo(dataUrl);
+    refreshCustomLogoUi(dataUrl);
+    invalidateDecalTextures("custom");
+    _spMeshKey = "";
+    if (soundOn) GameAudio.uiSelect();
+  });
+  e.target.value = "";       // let the same file be re-picked after a CLEAR
+});
+$("cz-logo-clear").onclick = () => {
+  try { store.set(CUSTOM_LOGO_KEY, null); } catch (_) {}
+  applyCustomLogo(null);
+  refreshCustomLogoUi(null);
+  invalidateDecalTextures("custom");
+  _spMeshKey = "";
+  if (soundOn) GameAudio.uiTick();
+};
+
+// Real team marks (assets/logos/<id>.png). Optional and async: every atlas built
+// before they land uses the hand-drawn vector crest, so this drops those cached
+// textures once the images arrive and the cars repaint with the real emblems.
+if (typeof LiveryTex !== "undefined" && LiveryTex.loadLogos) {
+  LiveryTex.onLogosReady(() => {
+    for (const t of Teams.LIST) invalidateDecalTextures(t.id);
+    _spMeshKey = "";   // force the garage turntable to repaint too
+  });
+  LiveryTex.loadLogos(Teams.LIST.map((t) => t.id));
+  applyCustomLogo(loadCustomLogo());
+}
 syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 migrateSeasonPoints();
 if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
