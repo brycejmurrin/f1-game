@@ -969,11 +969,16 @@ function create(G) {
     $("cr-go").textContent = st.hire ? "SIGN A DRIVER"
       : st.offers ? "SIGN A CONTRACT"
       : Career.seasonDone() ? "END OF SEASON" : "GO RACING";
-    // An empty second seat blocks the weekend outright — there is nothing for
-    // GO RACING to do until the car has a driver in it.
-    $("cr-go").disabled = !!st.hire;
     $("cr-go").hidden = false;
-    $("cr-go").disabled = false;
+    // An empty second seat blocks the weekend outright — there is nothing for GO
+    // RACING to do until the car has a driver in it.
+    //
+    // ORDER MATTERS, and getting it wrong cost nothing visible: this used to sit
+    // ABOVE the `disabled = false` that restores the button after the picker
+    // hides it, so the reset overwrote the rule on the very next line and the
+    // seat never blocked anything. The rule was right, the button just never
+    // heard about it. Set the reset first and let the rule have the last word.
+    $("cr-go").disabled = !!st.hire;
     $("cr-garage").hidden = false;
   }
 
