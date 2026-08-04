@@ -24,7 +24,7 @@
  * Per-pass fbm variants (LIT cloudFBM 2-oct, GODRAY gCloudFBM 3-oct) stay in
  * their shaders: the octave counts are per-pass performance tuning, not copies.
  *
- * Must load BEFORE lit.js/sky.js/fx.js/post.js (see tools/manifest.cjs).
+ * Must load BEFORE lit.js, sky.js, fx.js and post.js in the same directory (see tools/manifest.cjs).
  */
 "use strict";
 

@@ -8,7 +8,7 @@
  * matching the Phase-2 porting philosophy (WGSLChunks.LIT et al).
  *
  * NO build step: plain JS template strings, concatenated at load, assigning one
- * global `WGSLFx`. No imports, no ES modules. Loaded AFTER js/webgpu/wgsl-chunks.js
+ * global `WGSLFx`. No imports, no ES modules. Loaded AFTER js/render/webgpu/wgsl-chunks.js
  * (so `WGSLChunks` is available for concatenation if a leaf is useful — these FX
  * are simple enough that none of the shared math leaves are needed; they are pure
  * geometry quads with radial/atlas falloff, so nothing is concatenated here).

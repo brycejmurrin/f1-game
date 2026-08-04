@@ -210,7 +210,7 @@ $("lt-reset").onclick = () => {
 };
 $("lt-copy").onclick = () => {
   // Export the FULL set (shipped file merged with every local edit, local
-  // winning) as the paste-ready body for js/light-presets.js — replace that
+  // winning) as the paste-ready body for js/game/light-presets.js — replace that
   // file's `window.LightPresets = {…}` literal with this to bake it in.
   const merged = {};
   const F = window.LightPresets || {};

@@ -1,6 +1,6 @@
 /* Apex 26 — SPA circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/tracks.js engine
-   (palette resolved there from `night`, geometry from js/circuits.js or `segs`). */
+   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
+   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(

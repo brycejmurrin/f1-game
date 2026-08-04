@@ -90,7 +90,7 @@ test("all circuit defs load before the tracks engine; game.js loads last", () =>
   const tracksAt = idx.get(MANIFEST.PATHS.TRACKS_ENGINE);
   for (const id of MANIFEST.CIRCUITS) {
     const at = idx.get(`${MANIFEST.CIRCUITS_DIR}/${id}.js`);
-    assert.ok(at !== undefined && at < tracksAt, `${id} circuit def must precede js/tracks.js`);
+    assert.ok(at !== undefined && at < tracksAt, `${id} circuit def must precede js/track/tracks.js`);
   }
   assert.equal(MANIFEST.FULL[MANIFEST.FULL.length - 1], "js/game.js");
 });
