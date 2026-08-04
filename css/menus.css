@@ -182,13 +182,41 @@
 @container sheet (min-width: 620px) {
   #sel-body { display: contents; }
   #sel-inner > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
+  /* PREVIEW BESIDE THE LIST, not above it. Stacked full-width, the preview card
+     is ~190px tall and takes more than half a landscape phone's sheet — the
+     first capture of this layout left the track list 73px high, one and a bit
+     rows, on the shape the game is most played in. It reads as a big picture of
+     a circuit you have not chosen yet.
+     Side by side, the list gets the full height of the sheet and the preview
+     gets a column narrow enough that its map and its facts stack inside it
+     (see the max-width rule below), which is the shape that card was designed
+     for anyway. */
   #sel-track-section {
     grid-column: 1 / -1; grid-row: 2 / 3;
-    display: flex; flex-direction: column; overflow: hidden; min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: calc(var(--pad) * 0.8);
+    overflow: hidden; min-height: 0;
     padding: calc(var(--pad) * 0.25) var(--pad) 0 var(--pad);
   }
-  #sel-tracks { flex: 1 1 auto; min-height: 0; }
+  #sel-circuit-label { grid-column: 1 / -1; grid-row: 1; }
+  #sel-track-preview {
+    grid-column: 1; grid-row: 2;
+    align-self: start; margin-bottom: 0;
+    /* Its own children stack once the column is narrow, so the card keeps the
+       map big instead of shrinking it beside the facts. */
+    flex-wrap: wrap;
+  }
+  #sel-tracks { grid-column: 2; grid-row: 2; min-height: 0; }
   #sel-inner > .sheet-foot { grid-column: 1 / -1; grid-row: 3; }
+}
+
+/* In that side-by-side column the map wants the whole width, with the facts
+   underneath — a 400px column split in half leaves neither of them legible. */
+@container sheet (min-width: 620px) and (max-width: 900px) {
+  #sel-preview-map { width: 100%; }
+  #sel-preview-info { flex: 1 0 100%; }
 }
 
 /* ---------- team card + team picker ----------

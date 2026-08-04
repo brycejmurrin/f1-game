@@ -76,6 +76,7 @@ test.describe("Car setup — nothing shows through from the screen below", () =>
     overlay:  document.getElementById("overlay").hidden,
     select:   document.getElementById("select").hidden,
     carsetup: document.getElementById("carsetup").hidden,
+    "race-settings": document.getElementById("race-settings").hidden,
   }));
 
   // Both routes in, and where each one leads OUT. DONE reads garageReturn: from
