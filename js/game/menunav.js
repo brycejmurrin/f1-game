@@ -85,6 +85,14 @@ window.MenuNav = (function () {
     return dy < 0 ? el.scrollTop > 1 : el.scrollTop < max - 1;
   }
 
+  // A scroll REGION with content to scroll — regardless of where it is parked.
+  // `canScroll` answers "can this move right now"; this answers "is this a pane
+  // that owns the gesture", which is the question containment turns on.
+  function isRegion(el) {
+    return !!(el && el.nodeType === 1 && el.matches && el.matches(SCROLLERS) &&
+      el.scrollHeight - el.clientHeight > 1);
+  }
+
   function panes(layer, dy) {
     const out = [];
     if (canScroll(layer, dy)) out.push(layer);
@@ -138,9 +146,20 @@ window.MenuNav = (function () {
     // If anything from the cursor up to the layer can already take the scroll,
     // this is a normal wheel over a normal list — leave the browser alone. The
     // native path scrolls smoothly and latches; a redirect would be worse.
+    //
+    // A REGION YOU ARE POINTING AT KEEPS THE GESTURE EVEN WHEN IT CANNOT MOVE.
+    // Only `canScroll` used to end this walk, and it goes false the moment a pane
+    // is pinned at either end — so a wheel over the garage's category rail, once
+    // the rail bottomed out, was handed to the option list beside it, and the two
+    // panes read as one. That is what `overscroll-behavior: contain` already
+    // promises for the native path (css/components.css sets it on every .pane);
+    // the redirect was quietly breaking the promise. The redirect exists for
+    // gestures that land on NO scroll region — the sheet head, the stats block,
+    // the circuit map — and that is all it should do.
     const stop = layer.parentNode;
     for (let el = e.target; el && el !== stop; el = el.parentElement) {
       if (canScroll(el, dy)) return;
+      if (isRegion(el)) return;
     }
     const pane = nearestPane(layer, e.clientX, e.clientY, dy);
     if (pane && scrollPane(pane, dy)) e.preventDefault();
@@ -242,6 +261,25 @@ window.MenuNav = (function () {
     if (sc && window.ScrollFade) window.ScrollFade.paint(sc);
   }
 
+  // After a page: if the focused item is no longer inside its pane, move focus to
+  // the item nearest the pane's top edge that IS. Focus only — no scrollIntoView,
+  // which would undo the page we just performed.
+  function keepFocusInView(pane, active, list) {
+    if (!active || !pane.contains(active)) return;
+    const p = pane.getBoundingClientRect();
+    const a = active.getBoundingClientRect();
+    if (a.top >= p.top - 1 && a.bottom <= p.bottom + 1) return;
+    let best = null, bestD = Infinity;
+    for (const el of list) {
+      if (!pane.contains(el)) continue;
+      const b = el.getBoundingClientRect();
+      if (b.top < p.top - 1 || b.bottom > p.bottom + 1) continue;
+      const d = b.top - p.top;
+      if (d < bestD) { bestD = d; best = el; }
+    }
+    if (best) best.focus({ preventScroll: true });
+  }
+
   // Controls that own the arrow keys themselves. A range slider is the one that
   // matters here (the settings and lighting panels are full of them): stealing
   // Left/Right from a focused slider would make it unadjustable by keyboard.
@@ -277,15 +315,31 @@ window.MenuNav = (function () {
     const inLayer = active && layer.contains(active) && list.indexOf(active) >= 0;
 
     if (paging) {
+      // THE REGION HOLDING FOCUS OWNS THESE KEYS. Home and End used to address
+      // the whole layer, so from inside the garage's option list End jumped to
+      // DONE in the sheet foot and Home landed on a preview control outside the
+      // sheet altogether — from a list of twenty parts, neither key could reach
+      // that list's own ends. Scope them to the pane focus is in; fall back to
+      // the layer when it is in none (the head, a foot button).
+      const region = inLayer ? scrollerOf(active, layer) : null;
       if (key === "Home" || key === "End") {
-        focusItem(key === "Home" ? list[0] : list[list.length - 1], layer);
+        const scope = region ? list.filter((el) => region.contains(el)) : list;
+        if (!scope.length) return;
+        focusItem(key === "Home" ? scope[0] : scope[scope.length - 1], layer);
         e.preventDefault();
         return;
       }
       const sign = key === "PageDown" ? 1 : -1;
-      const pane = (inLayer && scrollerOf(active, layer)) ||
+      const pane = region ||
         nearestPane(layer, window.innerWidth / 2, window.innerHeight / 2, sign);
-      if (pane && scrollPane(pane, sign * pane.clientHeight * PAGE_FRAC)) e.preventDefault();
+      if (!pane || !scrollPane(pane, sign * pane.clientHeight * PAGE_FRAC)) return;
+      e.preventDefault();
+      // FOCUS TRAVELS WITH THE PAGE. Paging moved the pane and left focus behind,
+      // stranded off the top or bottom of it — so the row the keyboard was on was
+      // one the player could no longer see, and the next arrow press moved from
+      // there and snapped the pane back. Hand focus to the nearest row the page
+      // just brought on screen.
+      if (region) keepFocusInView(region, active, list);
       return;
     }
 
