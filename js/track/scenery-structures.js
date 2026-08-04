@@ -12,10 +12,10 @@ const SceneryStructures = (function () {
   function create(ctx) {
     const { out, track, def, n, ds, hw, px, py, pz, NIGHT, MAT,
             indexBarrier,
-            addBox, addCyl, addFrustum, RAW, blockAt, recordBarrier,
+            addBox, addCyl, addCone, addFrustum, addPrism, RAW, blockAt, recordBarrier,
             groundYAt, onTrack, overheadSpan, hash, cross, norm, vadd,
             anchor, rejBox } = ctx;
-    const { SIGN_SEG, SIGN_DIGIT } = TrackSceneryData;
+    const { SIGN_SEG, SIGN_DIGIT, CROWD_DAY } = TrackSceneryData;
 
     // ---------- linear track furniture (run along the track from s0→s1) ----------
     // Walk nodes from lap-fraction s0 to s1 (wrapping), ~stepM apart. Passes the

@@ -68,6 +68,7 @@
         ridge, floodMast, tree, bush, hedge,
         billboard, marshalPost, wall, fence, guardrail, tyreWall,
         grandstandEx, cameraTower, broadcastCompound, sponsorHoarding,
+        bankedKerbStrip, runoffApron, anchor: _anchor, along,
       } = api;
 
       const WHITE = [0.92, 0.93, 0.94];
@@ -108,22 +109,68 @@
         }, { required: !!required });
       }
 
-      function ifemaHall(id, frac, side, gap, required) {
+      // ── IFEMA EXHIBITION HALL ───────────────────────────────────────────
+      // Six calls of one recipe framed the whole pit straight, and a row of
+      // six identical sheds is exactly the "every building looks the same"
+      // complaint. The real IFEMA campus was built in phases and its halls do
+      // NOT share a roof: `roof` picks one of three real exhibition-shed
+      // typologies, which is the only part of a big blank box anyone can read
+      // from trackside. Body and entrance stay common so it still reads as one
+      // campus. Hall signage carries the venue's red/gold.
+      //   "sawtooth" — north-light shed: glazed vertical face on every bay
+      //   "vault"    — barrel-vaulted roof run along the hall
+      //   "deck"     — flat roof with rooftop plant and an aerial mast
+      function ifemaHall(id, frac, side, gap, required, opts) {
+        opts = opts || {};
+        const roof = opts.roof || "sawtooth";
+        const sign = opts.sign || MADRID_RED;
         venueGroup(id, frac, side, gap, [36, 25, 82], required, (stage, a) => {
           const b = basis(a);
+          const IN = -side;                       // +a.r * IN faces the track
           addBox(stage, vadd(a.c, a.u, 8), [32, 16, 74], WHITE, b);
           addBox(stage, vadd(a.c, a.u, 12.5), [32.4, 2.2, 74.4], GLASS, b);
-          for (let i = -2; i <= 2; i++) {
-            // Roof bays sit ON the hall (its box spans a.u 0..16). addPrism
-            // anchors at its BASE, so 18 left a 2 m gap under every bay.
-            const roof = vadd(vadd(a.c, a.t, i * 13), a.u, 16);
-            addPrism(stage, roof, [31, 3.2, 11], i % 2 ? STEEL : GLASS, b);
+          if (roof === "vault") {
+            // Barrel vault: two half-cylinders laid ALONG the hall. addCyl
+            // extrudes on its basis "up" slot, so the axis is put on a.t.
+            for (const off of [-8.2, 8.2]) {
+              addCyl(stage, vadd(vadd(vadd(a.c, a.r, off), a.t, -35), a.u, 16),
+                7.6, 70, OFFWHITE, 9, [a.u, a.t, a.r]);
+            }
+            addBox(stage, vadd(a.c, a.u, 16.4), [1.6, 0.8, 72], STEEL, b);   // valley gutter
+          } else if (roof === "deck") {
+            // Flat deck with rooftop plant — the newest halls on the campus.
+            addBox(stage, vadd(a.c, a.u, 16.4), [32.6, 0.8, 74.6], OFFWHITE, b);
+            for (let i = -2; i <= 2; i++) {
+              const p = vadd(vadd(a.c, a.t, i * 14), a.u, 18.4);
+              addBox(stage, vadd(p, a.r, IN * 5), [7, 3.2, 8], STEEL, b);     // AHU plant
+              addBox(stage, vadd(p, a.r, -IN * 7), [4.2, 1.6, 5], CONCRETE, b);
+            }
+            addCyl(stage, vadd(vadd(a.c, a.t, 30), a.u, 16.8), 0.22, 9, STEEL, 5, b);
+          } else {
+            // Sawtooth north-light: a raking bay with a glazed vertical face,
+            // the roof form that says "exhibition shed" at a glance.
+            for (let i = -2; i <= 2; i++) {
+              const p = vadd(vadd(a.c, a.t, i * 13), a.u, 16);
+              addPrism(stage, p, [31, 3.4, 11], i % 2 ? STEEL : OFFWHITE, b);
+              // Glazed face on the shaded flank of each tooth.
+              addBox(stage, vadd(vadd(p, a.t, -4.6), a.u, 1.7),
+                [30, 3.2, 0.35], GLASS, b);
+            }
           }
-          const entrance = vadd(vadd(a.c, a.r, -side * 11), a.u, 6);
+          const entrance = vadd(vadd(a.c, a.r, IN * 11), a.u, 6);
           addBox(stage, entrance, [7, 12, 34], GLASS, b);
+          // Hall signage band above the entrance — the campus wayfinding
+          // colour, and the cheapest way to tell two white sheds apart.
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 14.4), a.u, 13.2),
+            [1.0, 2.2, 26], sign, b);
         });
       }
 
+      // The three decks are the "tendidos" of a bullring, so they are banded
+      // sol/sombra rather than uniform: the lower deck is warm stone, the middle
+      // carries the crowd tone, the top stays white. A flat white nest is what
+      // made 54 identical bays read as one extruded ring.
+      const TENDIDO = [STONE, CROWD, WHITE];
       function monumentalStand(id, frac, side, gap, required) {
         venueGroup(id, frac, side, gap, [22, 22, 34], required, (stage, a) => {
           const b = basis(a);
@@ -134,12 +181,24 @@
             // gap, over the whole overlap. Stepping the depth back reads as an
             // upper tier set in, which is what a real stand does anyway.
             const c = vadd(vadd(a.c, a.r, side * tier * 2.4), a.u, 3.0 + tier * 3.0);
-            addBox(stage, c, [17 - tier * 1.8, 5.6, 31 - tier * 1.6], tier === 1 ? CROWD : WHITE, b);
+            addBox(stage, c, [17 - tier * 1.8, 5.6, 31 - tier * 1.6], TENDIDO[tier], b);
           }
           addPrism(stage, vadd(vadd(a.c, a.r, side * 4.0), a.u, 13.6),
             [18, 3.2, 33], WHITE, b);
-          addBox(stage, vadd(vadd(a.c, a.r, -side * 7.5), a.u, 5.0),
-            [1.0, 10, 33], OFFWHITE, b);
+          // Inner "barrera" wall — the face the driver actually sees from the
+          // banking. It was one blank OFFWHITE slab repeated 54 times; Las
+          // Ventas dresses exactly this face, so it now carries the venue's red
+          // capping band, a gold pinstripe and the dark callejón gate openings.
+          // All of it stays inside the declared bounds (this wall sits at
+          // -side*7.5, well inboard of the ±11 envelope).
+          const wall = vadd(a.c, a.r, -side * 7.5);
+          addBox(stage, vadd(wall, a.u, 5.0), [1.0, 10, 33], OFFWHITE, b);
+          addBox(stage, vadd(wall, a.u, 9.4), [1.15, 1.2, 33], MADRID_RED, b);   // capping band
+          addBox(stage, vadd(wall, a.u, 8.5), [1.2, 0.3, 33], GOLD, b);          // pinstripe
+          for (let gate = -1; gate <= 1; gate++) {
+            addBox(stage, vadd(vadd(wall, a.t, gate * 10.5), a.u, 2.4),
+              [1.25, 4.6, 3.0], ARCADE_DARK, b);                                  // callejón gate
+          }
         });
       }
 
@@ -397,12 +456,15 @@
       // IFEMA's horizontal white exhibition halls frame the pit straight. The
       // real campus is a grid of ~12 giant sheds, so a deeper second rank keeps
       // the venue reading as a campus rather than three isolated boxes.
-      ifemaHall("madrid-ifema-hall", 0.975, 1, 32, true);
-      ifemaHall("madrid-ifema-hall-east", 0.035, 1, 34, false);
-      ifemaHall("madrid-ifema-hall-west", 0.965, -1, 30, false);
-      ifemaHall("madrid-ifema-hall-north", 0.945, -1, 38, false);
-      ifemaHall("madrid-ifema-hall-northeast", 0.008, -1, 52, false);
-      ifemaHall("madrid-ifema-hall-far", 0.075, 1, 42, false);
+      // Roof typology alternates down the row so no two adjacent halls share a
+      // silhouette, and the deep second rank uses the plainest one (a flat deck
+      // reads correctly at distance where a sawtooth just turns to noise).
+      ifemaHall("madrid-ifema-hall", 0.975, 1, 32, true, { roof: "sawtooth", sign: MADRID_RED });
+      ifemaHall("madrid-ifema-hall-east", 0.035, 1, 34, false, { roof: "vault", sign: GOLD });
+      ifemaHall("madrid-ifema-hall-west", 0.965, -1, 30, false, { roof: "deck", sign: MADRID_RED });
+      ifemaHall("madrid-ifema-hall-north", 0.945, -1, 38, false, { roof: "sawtooth", sign: GOLD });
+      ifemaHall("madrid-ifema-hall-northeast", 0.008, -1, 52, false, { roof: "deck", sign: MADRID_RED });
+      ifemaHall("madrid-ifema-hall-far", 0.075, 1, 42, false, { roof: "vault", sign: GOLD });
 
       // IFEMA's glazed south entrance and alternating roof lanterns make the
       // exhibition campus read as a public venue rather than anonymous sheds.
