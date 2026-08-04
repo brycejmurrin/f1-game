@@ -52,6 +52,10 @@ const NetLobby = (function () {
       screen: $("vsfriend"),
       pick: $("vs-pick"), hosting: $("vs-hosting"), joining: $("vs-joining"),
       room: $("vs-room"), roomStep: $("vs-room"),
+      code: $("vs-code"), codeEntry: $("vs-code-entry"),
+      codeHead: $("vs-code-head"), codeHint: $("vs-code-hint"),
+      codeShow: $("vs-code-show"), codeValue: $("vs-code-value"),
+      codeInputWrap: $("vs-code-input"), codeIn: $("vs-code-in"),
       raceSummary: $("vs-race-summary"), raceNote: $("vs-race-note"),
       editRace: $("vs-edit-race"), editCar: $("vs-edit-car"),
       me: $("vs-me"), them: $("vs-them"),
@@ -75,7 +79,7 @@ const NetLobby = (function () {
 
     function show(step) {
       const e = els();
-      for (const k of ["pick", "hosting", "joining", "room"]) if (e[k]) e[k].hidden = (k !== step);
+      for (const k of ["pick", "hosting", "joining", "room", "code"]) if (e[k]) e[k].hidden = (k !== step);
     }
 
     // ---- what we tell the other side about ourselves ----------------------
@@ -642,6 +646,90 @@ const NetLobby = (function () {
       return handOff({ title: "Apex 26 answer", text: code }, code);
     }
 
+    // ---- room codes (the BACKUP path) -------------------------------------
+    // Same handshake, same codes on the wire — a relay carries the two strings
+    // instead of a human. It is hidden unless a relay URL is configured, and it
+    // never replaces the link/QR flow: everything else in this game is static
+    // files that cannot break, and this one depends on a service somebody has
+    // to keep alive. When it fails it must fall back, not fail the lobby.
+    let codeWait = null;                 // cancel token for the polling loop
+
+    function stopCodeWait() {
+      if (codeWait) codeWait.cancelled = true;
+      codeWait = null;
+    }
+
+    function showCodeStep(mode, headline, hint) {
+      const e = els();
+      show("code");
+      if (e.codeHead) e.codeHead.textContent = headline;
+      if (e.codeHint) e.codeHint.textContent = hint || "";
+      if (e.codeShow) e.codeShow.hidden = mode !== "show";
+      if (e.codeInputWrap) e.codeInputWrap.hidden = mode !== "input";
+    }
+
+    // HOST: make a code, publish the invite under it, wait for the answer.
+    async function codeHost() {
+      stopCodeWait();
+      if (!NetRendezvous.configured()) { say(NO_RELAY, true); return { ok: false, error: "not_configured" }; }
+      if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
+      const code = NetRendezvous.makeCode();
+      showCodeStep("show", "Your room code", "Read this to your friend.");
+      const e = els();
+      if (e.codeValue) e.codeValue.textContent = code;
+      say("Preparing… (this can take a few seconds)");
+
+      const invite = await NetHandshake.createInvite(transport, localProfile());
+      if (!invite.ok) { say(invite.message || "Could not create an invite.", true); return invite; }
+      const put = await NetRendezvous.put(code, "offer", invite.code);
+      if (!put.ok) { say(put.message, true); return put; }
+
+      say("Waiting for them to join…");
+      codeWait = { cancelled: false };
+      const got = await NetRendezvous.waitFor(code, "answer", codeWait,
+        (secs) => say("Waiting for them to join… " + secs + "s"));
+      if (!got.ok) {
+        if (got.error !== "cancelled") say(got.message, true);
+        return got;
+      }
+      const acc = await NetHandshake.acceptAnswer(transport, got.payload);
+      if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return acc; }
+      _peerProfile = acc.peer;
+      waitForOpen();
+      return { ok: true, code };
+    }
+
+    // GUEST: fetch the invite the host published, answer it under the same code.
+    async function codeJoin(codeIn) {
+      stopCodeWait();
+      if (!NetRendezvous.configured()) { say(NO_RELAY, true); return { ok: false, error: "not_configured" }; }
+      const e = els();
+      const raw = codeIn != null ? codeIn : (e.codeIn ? e.codeIn.value : "");
+      const code = NetRendezvous.normalise(raw);
+      if (!NetRendezvous.valid(code)) {
+        say("That is not a room code — six letters and numbers.", true);
+        return { ok: false, error: "bad_code" };
+      }
+      if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
+      say("Looking for that room…");
+      const offer = await NetRendezvous.get(code, "offer");
+      if (!offer.ok) { say(offer.message, true); return offer; }
+
+      const res = await NetHandshake.acceptInvite(transport, offer.body.payload, localProfile());
+      if (!res.ok) { say(res.message || "That invite could not be read.", true); return res; }
+      _peerProfile = res.peer;
+      const put = await NetRendezvous.put(code, "answer", res.code);
+      if (!put.ok) { say(put.message, true); return put; }
+      waitForOpen();
+      say("Joining…");
+      return { ok: true, code };
+    }
+
+    // Said out loud rather than hidden: whoever sees this is the person who can
+    // deploy worker/rendezvous.js and paste its URL into NetRendezvous.
+    const NO_RELAY = "Room codes need a relay deployed (worker/rendezvous.js)."
+      + " Use the invite link or QR instead — those need nothing.";
+
     // ---- open / close -----------------------------------------------------
     function open() {
       const e = els();
@@ -681,6 +769,7 @@ const NetLobby = (function () {
     // stale RTCPeerConnection sits there gathering candidates forever.
     function cancel() {
       stopScan();
+      stopCodeWait();
       teardown();
       role = null;
       _peerProfile = null;
@@ -714,6 +803,18 @@ const NetLobby = (function () {
       on("vs-edit-race", () => { if (role === "host" && G.openRaceSetup) G.openRaceSetup(); });
       on("vs-edit-car", () => { if (G.openGarageFrom) G.openGarageFrom("vsfriend"); });
       on("vs-ready", () => setReady(!selfReady));
+      on("vs-code-host", codeHost);
+      on("vs-code-join", () => {
+        showCodeStep("input", "Enter their code", "Six letters and numbers.");
+        const box = $("vs-code-in");
+        if (box) { box.value = ""; box.focus(); }
+      });
+      on("vs-code-go", () => codeJoin());
+      on("vs-code-copy", () => copy(($("vs-code-value") || {}).textContent || ""));
+      on("vs-code-share", () => {
+        const c = ($("vs-code-value") || {}).textContent || "";
+        return handOff({ title: "Apex 26", text: "Race me on Apex 26 — room code " + c }, c);
+      });
       on("vs-start", startFromRoom);
       on("vs-close", cancel);
       // A paste straight into the box runs too, so all four routes in behave
@@ -763,6 +864,7 @@ const NetLobby = (function () {
       wire, open, close, cancel, host, join, makeAnswer, acceptAnswer,
       shareInvite, shareAnswer, canShare,
       scan, stopScan, pasteInto, deliver,
+      codeHost, codeJoin, stopCodeWait,
       // Start watching for the channels to open. Normally called by
       // makeAnswer/acceptAnswer; exported so a test can reach onConnected() —
       // and therefore the waiting room — over a loopback transport, which has

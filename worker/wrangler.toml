@@ -1,0 +1,14 @@
+name = "apex26-rendezvous"
+main = "rendezvous.js"
+compatibility_date = "2025-04-01"
+
+# One Durable Object per room code. SQLite-backed because that is the class
+# available on the Workers FREE plan — the older key-value backend needs a paid
+# plan, and the whole point of this design is that it costs nothing to run.
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

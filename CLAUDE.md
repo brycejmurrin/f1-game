@@ -297,6 +297,38 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   deflated full text if this browser refuses
                                   our own reconstruction. TCP candidates are
                                   dropped on purpose
+  mqtt.js        NetMqtt        just enough MQTT 3.1.1 over WebSocket to use a
+                                  PUBLIC broker as a rendezvous — CONNECT/
+                                  SUBSCRIBE/PUBLISH/PING at QoS 0, written out
+                                  rather than imported (mqtt.js is ~150 KB and
+                                  needs a Node shim stack). RETAINED MESSAGES
+                                  are the whole reason it is MQTT: the broker
+                                  holds a publish for whoever subscribes NEXT,
+                                  which is exactly "host leaves an offer, guest
+                                  collects it a minute later". Several brokers
+                                  from different operators, tried in order
+  rendezvous.js  NetRendezvous  room codes — the BACKUP way in, and the
+                                  only part of the game leaning on someone
+                                  else's server. NOTHING TO DEPLOY: a public
+                                  MQTT broker is the default meeting place, and
+                                  worker/rendezvous.js (one Cloudflare Durable
+                                  Object per code) is an optional upgrade when
+                                  its URL is set. The broker is public, so the
+                                  payload is AES-GCM sealed under a key derived
+                                  from the code and the topic is a HASH of it —
+                                  the operator relays bytes it cannot read, and
+                                  the code is the only secret. A code is
+                                  DISPOSABLE, not an account: nothing stored,
+                                  claimed, squattable or personal, so it avoids
+                                  everything a username system drags in. It
+                                  carries the SAME invite/answer strings the
+                                  manual flow uses, so the relay is a courier
+                                  and never a participant. Every call resolves
+                                  to a typed error, never throws — when the
+                                  relay is down the lobby must fall back to the
+                                  link/QR, which need nothing. Shown even when
+                                  unconfigured: a feature that hides itself on
+                                  an unset URL guarantees nobody discovers it
   qr.js          NetQr          byte-mode, level-L QR ENCODER (versions 1-20,
                                   standard mask selection). The invite QR holds
                                   the invite LINK, so the guest scans it with
@@ -485,7 +517,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (95) + tests/*.test.mjs unit suites (28)
+tests/*.spec.js                 Playwright specs (95) + tests/*.test.mjs unit suites (30)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -930,7 +962,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-95 Playwright specs + 28 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+95 Playwright specs + 30 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for
