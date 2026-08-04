@@ -241,13 +241,20 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body:not(.desktop) .dock .steerbtn,
   body:not(.desktop) .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: 13px; }
   body:not(.desktop) .dock .shiftbtn { font-size: 15px; }
-  /* CENTRES ON THE BOTTOM ROW, not bottom edges. The dock bottom-aligns whole
-     groups, so a 54px tap circle and a 72px pedal sharing a bottom edge have
-     centres 9px apart — BOOST/OT/AERO sat visibly low against GAS, which is the
-     one relationship the eye checks because they are the same shape. Half the
-     size difference brings the bottom of the tap COLUMN onto the pedal's centre
-     line, and it is derived rather than typed so it survives a resize. */
-  body:not(.desktop) #grp-taps { padding-bottom: calc((var(--hold) - var(--tap)) / 2); }
+  /* HELD CONTROLS RIDE HIGHER THAN TAPPED ONES. The pedals, the shift column
+     and the steering arrows are what a thumb rests on for a whole lap, so they
+     sit a little up from the screen edge where the thumb actually lands; the
+     three taps drop to the edge itself, which both separates the two jobs and
+     keeps the tallest group (a 3-high stack) from reaching further up the
+     screen than it has to.
+     This deliberately gives up the AERO/GAS centre-line match that the previous
+     pass introduced — with the taps stacked vertically rather than in a row,
+     the eye reads the two groups as separate columns and no longer looks for a
+     shared row. */
+  body:not(.desktop) #grp-taps { padding-bottom: 0; }
+  body:not(.desktop) #grp-pedals,
+  body:not(.desktop) #grp-shifts,
+  body:not(.desktop) #grp-steer { padding-bottom: 14px; }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
     body:not(.desktop) .dock { --tap: 48px; --hold: 64px; }
