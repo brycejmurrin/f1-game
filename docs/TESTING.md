@@ -281,6 +281,16 @@ off-track specs were tightened this way after several thresholds drifted stale.
 - `modelDiagnostics()` / `geometryDiagnostics()` — required-model outcomes and finite mesh manifests
 - `eyeAt()` / `orbit()` / `view()` — deterministic camera framing for screenshots
 
+**Freeze the render loop before a screenshot, not just the physics.** `park()`/
+`freeze()` stop physics; `frame()` in `js/game.js` keeps redrawing every rAF tick
+regardless (sky/cloud animation continues on purpose). Under SwiftShader that
+redraw never idles, so a `.screenshot()` issued while it is still running queues
+behind an endless render loop instead of a quiet compositor — measured on
+`tests/smoke.spec.js`'s rendering checks, `headless(true)` after the pose settles
+cut solo wall time from 88-96s to 29-32s. `tests/track-helpers.js`'s visual-regression
+capture already does this (`snapCam()` → settle → `headless(true)`); reach for the
+same shape rather than raising a test's timeout budget.
+
 **Read the log ring, not the console.** `__apex.logs({ns: "scenery"})` returns
 structured records; scraping console text ties a spec to a message's exact
 wording and misses anything below the print threshold.
