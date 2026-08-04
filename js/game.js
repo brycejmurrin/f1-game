@@ -2598,7 +2598,7 @@ const G = {
   vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
-  setCautionEnabled,
+  setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
   get netLobby() { return netLobby; },
@@ -3245,7 +3245,8 @@ function updateCar(c, dt, ranked) {
   // --- overtake mode ---
   const ahead = ranked[(c.rank || 1) - 2];
   const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
-  c.otArmed = gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0 && !c.finished && c.speed > 15;
+  c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
+              && !c.finished && c.speed > 15;
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
                       : (c.otArmed && simRnd() < 1 - Math.exp(-0.7 * dt));
   if (fire && c.otArmed) {
@@ -4231,6 +4232,32 @@ function publishCaution() {
     cause: caution.cause, total: caution.total, sectors: caution.sectors,
     sinceT: caution.sinceT,
   });
+}
+
+// OVERTAKE IS NOT AVAILABLE ON LAP 1, and not while the race is neutralised.
+// This is the real rule for 2026's overtake mode (the electrical push that
+// replaced DRS as the proximity-gated overtaking aid): it is enabled once the
+// LEADER completes the opening lap, and it goes away under yellows and behind
+// the safety car. It is the same reasoning DRS always had — the field is at its
+// most bunched exactly when an overtaking aid is least safe, and a start where
+// everyone can push is a start decided by whoever gambles hardest.
+//
+// Note this deliberately does NOT gate ACTIVE AERO. X-mode is not the
+// overtaking aid in 2026 and carries none of its restrictions: every driver
+// gets it on every lap in every approved zone, leader and backmarker alike,
+// with no proximity requirement. Its only limits are the activation zones
+// themselves (see buildAeroZones) — which is why Monaco has none.
+//
+// The LEADER's lap, not each car's own: a field-wide switch is what race
+// control actually throws, and gating per-car would hand a lapped driver the
+// push while the leader still had none. `ranked` is already sorted by progress
+// every frame, so the leader is ranked[0] and this stays O(1) — scanning all
+// 22 cars from inside the per-car update would have been 484 checks a frame for
+// a fact that changes once a race.
+function otEnabled() {
+  if (caution.level !== 0) return false;
+  const leader = ranked[0];
+  return !!leader && leader.lap > 1;
 }
 
 function cautionInfo() {

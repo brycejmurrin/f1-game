@@ -115,3 +115,57 @@ test.describe("active aero — activation zones", () => {
     expect(r.some((p) => !p.inZone), "and some of it is not").toBe(true);
   });
 });
+
+// OVERTAKE'S RULES ARE NOT ACTIVE AERO'S, and the whole point of this block is
+// that the two must not be conflated. Overtake mode is the 2026 successor to
+// DRS as the PROXIMITY-gated overtaking aid, so it inherits DRS's safety
+// restrictions: nothing on the opening lap (it arms once the LEADER completes
+// it) and nothing while the race is neutralised. Active aero inherits none of
+// them — every driver gets it on every lap in every approved zone, leader and
+// backmarker alike, with no proximity requirement at all.
+test.describe("overtake mode — the rules active aero does NOT share", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("stays disabled for the whole opening lap, then arms when the LEADER starts lap 2", async ({ page }) => {
+    await loadTrack(page, "monza");
+    const r = await page.evaluate(() => {
+      window.__apex.headless(true);
+      window.__apex.go();
+      window.__apex.jump(0, 60, 0);
+      window.__apex.setInput({ throttle: true });
+      const trail = [];
+      for (let i = 0; i < 220; i++) {
+        window.__apex.step(1 / 60, 60);        // 1 s of sim per iteration
+        trail.push({ leaderLap: Math.max(...window.__apex.cars().map((c) => c.lap)),
+                     on: window.__apex.carAt().otEnabled });
+      }
+      return trail;
+    });
+    // The gate must never be open while the leader is still on the opening lap,
+    // and must be open once it is not. Stated as an invariant over every sample
+    // rather than as a moment, so it also catches a gate that flickers.
+    for (const s of r) expect(s.on).toBe(s.leaderLap > 1);
+    expect(r.some((s) => !s.on), "the opening lap is covered").toBe(true);
+    expect(r.some((s) => s.on), "and the race gets past it").toBe(true);
+  });
+
+  test("active aero is NOT gated by the opening lap — it arms inside a zone on lap 1", async ({ page }) => {
+    await loadTrack(page, "monza");
+    const r = await page.evaluate(() => {
+      window.__apex.headless(true);
+      window.__apex.go();
+      // Park in the middle of the longest zone, still on the opening lap.
+      const z = window.__apex.aeroZones().sort((a, b) => b.len - a.len)[0];
+      window.__apex.jump(z.midFrac, 60, 0);
+      window.__apex.step(1 / 60, 2);
+      // aero() and carAt() BOTH mean the player; carAt(0) would be cars[0],
+      // which is an AI car and reports its own arming, not yours.
+      return { leaderLap: Math.max(...window.__apex.cars().map((x) => x.lap)),
+               xArmed: window.__apex.aero().xArmed,
+               otEnabled: window.__apex.carAt().otEnabled };
+    });
+    expect(r.leaderLap, "still the opening lap").toBeLessThan(2);
+    expect(r.xArmed, "active aero is available anyway").toBe(true);
+    expect(r.otEnabled, "overtake is not").toBe(false);
+  });
+});

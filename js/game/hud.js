@@ -81,7 +81,14 @@ function updateHud(force) {
   hToggle(els.btnOT, "armed", player.otArmed && player.otT <= 0);
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
   hClass(els.ot, ot);
-  hText(els.ot, player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1) : "OVERTAKE");
+  // "NO OVERTAKE" says WHY the button is dead, and the difference matters: not
+  // yet armed means keep closing on the car ahead, whereas lap 1 or a caution
+  // means nothing you do will arm it. A control that looks merely unlucky when
+  // it is actually switched off is one the player keeps stabbing at.
+  const otOff = G.state === "race" && !G.otEnabled() && player.otT <= 0;
+  hText(els.ot, player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1)
+                : otOff ? "NO OVERTAKE" : "OVERTAKE");
+  hToggle(els.btnOT, "dead", otOff);
   // ACTIVE AERO. Three states worth telling apart at a glance: the flap is OPEN
   // (X-MODE), the road ahead would allow it (armed, so the button is worth
   // pressing), or it is simply unavailable here. `aeroX` is the flap travel,
