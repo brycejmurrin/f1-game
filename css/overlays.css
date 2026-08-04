@@ -43,24 +43,47 @@
 #btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); background: rgba(180, 35, 35, 0.42); }
 #btn-brake:active { background: rgba(230, 45, 45, 0.75); }
 
-#btn-boost { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); background: rgba(0, 150, 200, 0.4); }
-#btn-boost.on { background: rgba(0, 200, 90, 0.85); border-color: #aeea00; box-shadow: 0 0 18px rgba(120, 230, 80, 0.7); color: #04210a; }
+/* BOOST is BLUE, and stays blue. It used to turn lime-green when engaged, which
+   is the same fault the old OT palette had — a control that changes hue with
+   state reads as a different button rather than the same one switched on — and
+   it collided head-on with ACTIVE AERO's green. One hue per control, brightness
+   for state: light at rest, deep with a glow when it is doing something. */
+#btn-boost { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab));
+             background: rgba(125, 208, 250, 0.88); border-color: rgba(190, 234, 255, 0.8); color: #042430; }
+#btn-boost.on { background: rgba(8, 66, 132, 0.95); color: #cfeeff; border-color: #3fb6ff;
+                box-shadow: 0 0 18px rgba(50, 175, 255, 0.8); }
 /* OT is YELLOW and AERO is GREEN, and each DARKENS when it is doing something.
    One hue per control, brightness for state: you can tell what a button is by
    its colour without reading it, and whether it is live without comparing it to
    its neighbour. The old scheme spent three unrelated hues on OT alone (lime
    armed, red active) and cyan on AERO, so every state change looked like a
    different button rather than the same one switched on. */
+/* THE IDLE FILL HAS TO BE NEARLY OPAQUE, and that is not a style choice — it is
+   what the compositing arithmetic demands. Over a near-black page, a translucent
+   fill blends toward black, and blending toward black is exactly how you turn
+   yellow into OLIVE and green into SAGE. Blue survives it (a mid-luminance blue
+   is still obviously blue), which is why BOOST looked right at 0.4 and the first
+   pass at these two, copying that alpha, came out muddy.
+   Yellow and green only read as themselves when they are LIGHT, so idle sits at
+   ~0.88 and keeps just enough transparency to show the track moving underneath.
+   Engaged is the DARK fill plus a coloured glow and a brighter rim. Idle and
+   armed are both light — the difference between them is the glow and the pulse,
+   not the hue, because "armed" is a moment you want noticed, not a new colour to
+   learn. */
 #btn-ot    { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab));
-             background: rgba(240, 220, 110, 0.34); border-color: rgba(245, 228, 130, 0.55); color: #f8efbc; }
-#btn-ot.armed { background: #f0dc63; color: #2b2400; border-color: #f5e588; animation: pulse 0.8s infinite; }
-#btn-ot.on { background: #8a6c05; color: #fff6cf; border-color: #c19a10; box-shadow: 0 0 18px rgba(190, 150, 15, 0.65); }
+             background: rgba(247, 221, 105, 0.88); border-color: rgba(255, 240, 175, 0.8); color: #2e2600; }
+#btn-ot.armed { background: rgba(255, 233, 120, 0.98); color: #2b2400; border-color: #fff6c4;
+                box-shadow: 0 0 18px rgba(250, 205, 40, 0.75); animation: pulse 0.8s infinite; }
+#btn-ot.on { background: rgba(122, 88, 0, 0.96); color: #ffeeae; border-color: #f0c419;
+             box-shadow: 0 0 18px rgba(225, 175, 20, 0.8); }
 /* ACTIVE AERO sits one slot further along whichever column OT is in — every
    layout below moves the pair together, so the rule is "AERO is above OT". */
 #btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: 12px;
-             background: rgba(130, 235, 150, 0.30); border-color: rgba(150, 240, 165, 0.5); color: #d3f7da; }
-#btn-aero.armed { background: #86e29a; color: #06280f; border-color: #a5edb4; }
-#btn-aero.on { background: #1c7539; color: #eaffef; border-color: #2fa055; box-shadow: 0 0 18px rgba(40, 170, 80, 0.65); }
+             background: rgba(130, 240, 165, 0.88); border-color: rgba(180, 250, 205, 0.8); color: #04240f; }
+#btn-aero.armed { background: rgba(150, 250, 182, 0.98); color: #06280f; border-color: #ccffdd;
+                  box-shadow: 0 0 18px rgba(70, 225, 120, 0.7); }
+#btn-aero.on { background: rgba(13, 84, 40, 0.96); color: #d8ffe4; border-color: #35c96c;
+               box-shadow: 0 0 18px rgba(40, 200, 100, 0.8); }
 /* No activation zone anywhere on this circuit: the control cannot do anything,
    so it says so rather than sitting there inviting taps. Faded, not hidden —
    hiding it would reflow the touch-control stack and move every OTHER button
