@@ -203,12 +203,61 @@ test("an unreachable relay is reported, never thrown", async () => {
   assert.equal(res.error, "offline");
 });
 
-test("with no relay configured it says so instead of pretending", async () => {
+test("room codes are available with nothing configured at all", () => {
+  // The point of the public-broker backend: no deploy, no URL, no terminal.
+  // configured() is unconditionally true because the fallback always exists;
+  // usingPrivateRelay() is the one that says WHICH backend will be used.
   NetRendezvous.setUrl(null);
-  assert.equal(NetRendezvous.configured(), false);
-  const res = await NetRendezvous.get("ABCDEF", "offer");
-  assert.equal(res.ok, false);
-  assert.equal(res.error, "not_configured");
-  // Not silence, and not a stack trace: the message names the alternative.
-  assert.match(res.message, /invite link/i);
+  assert.equal(NetRendezvous.configured(), true);
+  assert.equal(NetRendezvous.usingPrivateRelay(), false);
+  NetRendezvous.setUrl("https://example.invalid");
+  assert.equal(NetRendezvous.usingPrivateRelay(), true, "a set URL takes precedence");
+  NetRendezvous.setUrl(null);
+});
+
+// ---------------------------------------------------------------------------
+// The encryption that makes a PUBLIC broker safe to meet on
+// ---------------------------------------------------------------------------
+
+test("the payload round-trips under the room code", async () => {
+  const code = NetRendezvous.makeCode();
+  const secret = "APEX1.s." + "aB3-_x9Zq".repeat(20);
+  const sealed = await NetRendezvous.seal(code, secret);
+  assert.ok(sealed.length > secret.length, "should carry an IV and a tag");
+  assert.equal(await NetRendezvous.open(code, sealed), secret);
+});
+
+test("a wrong code cannot read the payload", async () => {
+  // This is the whole security claim: the broker is public, anyone may
+  // subscribe, and the code is the only secret. If a near-miss decrypted, the
+  // room code would be decoration.
+  const a = NetRendezvous.makeCode();
+  let b = NetRendezvous.makeCode();
+  while (b === a) b = NetRendezvous.makeCode();
+  const sealed = await NetRendezvous.seal(a, "APEX1.s.SECRET");
+  assert.equal(await NetRendezvous.open(b, sealed), null);
+  // Ciphertext tampering fails the GCM tag rather than yielding a mangled SDP.
+  const tampered = sealed.slice();
+  tampered[tampered.length - 1] ^= 0xff;
+  assert.equal(await NetRendezvous.open(a, tampered), null);
+});
+
+test("two seals of the same text differ", async () => {
+  // A fresh IV each time. Identical ciphertext on a public broker would leak
+  // that two people are exchanging the same invite.
+  const code = NetRendezvous.makeCode();
+  const one = await NetRendezvous.seal(code, "same");
+  const two = await NetRendezvous.seal(code, "same");
+  assert.notDeepEqual([...one], [...two]);
+});
+
+test("the topic does not leak the room code", async () => {
+  // Topics on a public broker are enumerable. If the topic contained the code,
+  // watching the namespace would hand out the codes themselves.
+  const code = NetRendezvous.makeCode();
+  const topic = await NetRendezvous.topicFor(code, "offer");
+  assert.ok(!topic.includes(code), `${topic} must not contain ${code}`);
+  assert.ok(topic.endsWith("/offer"));
+  // ...but it must be stable, or the two peers would never meet.
+  assert.equal(await NetRendezvous.topicFor(code.toLowerCase(), "offer"), topic);
 });
