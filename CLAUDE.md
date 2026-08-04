@@ -351,9 +351,9 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Parts system (`js/car/parts.js`)
 
-`Parts.CATALOG` — an **array** of 10 category objects (ordered, not keyed by id):
+`Parts.CATALOG` — an **array** of 11 category objects (ordered, not keyed by id):
 `engine`, `aero`, `suspension`, `brakes`, `tyres`, `ers`, `gearbox`, `fuel`,
-`exhaust`, `floor`. Each
+`exhaust`, `floor`, `cockpit`. Each
 category is `{ id, label, options:[…] }`; each option has
 `{ id, label, cost, desc, speed?, accel?, cornering?, braking?, supplier? }`.
 Budget = 600 cr. `Parts.getMods(setup, teamEngine)` returns
@@ -373,6 +373,11 @@ T-wing), `engine.chimney`, `brakes.scoop`, `ers.conduit`, `fuel.filler`,
 unchanged. EXHAUST and FLOOR took over geometry that used to be hardcoded (the
 tailpipe derived from `engine.twin`, and a fixed five-fence floor edge); both
 still derive exactly that when their recipe leaves the field at its default.
+
+Prefer knobs that change WHAT EXISTS over knobs that scale what is already
+there. A category whose recipe is all scalars gives every team the same part at
+a different size — `tyres.shoulder`, `brakes.discFace` and `suspension.rocker`
+exist because those three read as near-identical across the grid without them.
 
 **SIGNATURE options** (`tag: "SIGNATURE"`, `teams: [id]`) are cost- and
 physics-identical clones of the universal option named in `equivalent` — they buy
