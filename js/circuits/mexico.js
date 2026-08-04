@@ -55,9 +55,9 @@
       { s: 0.520, halfM: 280, rise: -1.6 },
     ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, place, backdrop, groundPlane,
-              addBox, addCyl, addPrism, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,
-              building, motorhome, grandstand, grandstandEx, billboard, tree, hedge, fence, palm, pine,
+      const { out, n, px, pz, pyMin, place, backdrop, groundPlane,
+              addBox, addCyl, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,
+              building, motorhome, grandstandEx, billboard, tree, hedge, fence,
               guardrail, tyreWall, marshalPost, tower, gantry, mountain, wall,
               modelGroup, groundPatch, groundedSegments,
               cityFront, forestEdge, bush,
@@ -139,8 +139,28 @@
       // every winter, which is why it reads as a cylinder and not a cone — and
       // huizache on the dry unirrigated verges. One tree per ~26 m.
       // This is the layer the driver sees; forestEdge is only the mass behind it.
+      // The stands, terraces and hoardings the avenue must not grow through.
+      // forestEdge() walks its candidates outward through clearTreeDist() until
+      // the crown clears every recorded solid; a direct species call has no
+      // such guard — cypress()/plane()/broadleafFall() only test the ROAD — so
+      // the occupied arcs are listed here instead. Each entry is [s0, s1, side]
+      // and covers a stand's full along-track span plus a little margin.
+      const SOLID = [
+        [0.965, 1.000,  1], [0.000, 0.032,  1],   // main grandstand run
+        [0.048, 0.063,  1], [0.048, 0.063, -1],   // named enclosures 1-2
+        [0.108, 0.132,  1],                       // T1 two-deck + rear stand
+        [0.158, 0.172,  1], [0.190, 0.210,  1], [0.190, 0.210, -1],
+        [0.212, 0.268,  1],                       // Esses standing terrace
+        [0.238, 0.252, -1], [0.278, 0.292,  1], [0.338, 0.352, -1],
+        [0.412, 0.428,  1], [0.448, 0.462, -1], [0.513, 0.527,  1],
+        [0.568, 0.582, -1], [0.648, 0.662,  1],
+        [0.888, 0.958,  1], [0.898, 0.912, -1], [0.912, 0.968, -1],
+      ];
+      const blocked = (s, side) => SOLID.some(([a, b, sd]) =>
+        sd === side && (a <= b ? (s >= a && s <= b) : (s >= a || s <= b)));
       const avenue = (s0, s1, side, dist, step) => {
         along(s0, s1, step, (k) => {
+          if (blocked(k / n, side)) return;
           const r = hash(k * 5.7 + side * 3.1);
           const d = dist + hash(k * 8.3 + side) * 4;
           if (r < 0.50) {
@@ -171,8 +191,6 @@
       const BOWL_POP  = [0.92, 0.55, 0.16];   // sparse marigold-orange pop only
       const crowdCols = [BOWL_BLUE, BOWL_GREY, BOWL_BLUE, BOWL_GREY,
                          BOWL_BLUE, BOWL_GREY, BOWL_POP];
-      const bowlSeatWall = (s0, s1, side, gap, opts) =>
-        api.bowlSeatWall(s0, s1, side, gap, Object.assign({ crowdCols }, opts || {}));
       // The local crowd-terrace model that used to live here emitted ONE BOX PER
       // SEAT off a straight `len` chord. Both halves of that were wrong: the
       // chord cut across the winding stadium route, and a stand is not worth a

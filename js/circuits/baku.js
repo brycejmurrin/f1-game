@@ -698,8 +698,13 @@
       // and the old town stay visible OVER the crowd instead of behind a slab
       // — which is the entire reason to have put a stand here.
       // ===================================================================
+      // Confined to the 0.537-0.553 window the rampart and the old-town
+      // cityFront runs were already carved around for a stand here. A terrace
+      // is ~17 m deep (rows x depth), so straying past that window puts its
+      // back steps inside the old-town buildings at 0.51/0.56 — which the
+      // prop-clipping audit picks up immediately as two new severe spots.
       if (typeof terrace === "function") {
-        terrace(0.528, 0.562, 1, 15, {
+        terrace(0.538, 0.552, 1, 15, {
           rows: 6, rise: 1.45, depth: 2.4, step: 16, density: 0.5,
           conc: [0.66, 0.58, 0.44], concAlt: [0.57, 0.50, 0.38],
           backWall: false,   // the rampart IS the back wall

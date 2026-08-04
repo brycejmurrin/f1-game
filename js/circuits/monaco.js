@@ -72,7 +72,7 @@
       { frac: 0.9417, angleDeg: 2.5, widthM: 100 },   // Rascasse
     ],
     scenery: function (api) {
-      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
+      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
       const KR = (s) => TrackSpace.sourceNodeToRacing(def, K(s), n);
       const racingSide = (side) => def.reverse ? -side : side;
@@ -132,6 +132,16 @@
           addPrism(stage, vadd(a.c, a.u, 9.2), [9.4, 3.2, 11.2], [0.32, 0.22, 0.20], b);
         }, { required: true });
       }
+
+      // Sainte Dévote bleacher — the narrow bolted rake wedged between the
+      // barrier and the buildings on the climb out of the corner. No roof and
+      // no shell will fit here; that is precisely what a bleacher is for.
+      bleacher(0.055, 0.078, 1, 7, {
+        rows: 6, rise: 0.68, setback: 0.85,
+        frameCol: [0.70, 0.72, 0.75], plankCol: [0.74, 0.72, 0.68],
+        crowd: [[0.86, 0.84, 0.80], [0.30, 0.36, 0.52], [0.72, 0.28, 0.24], OCHRE],
+        density: 0.62,
+      });
 
       // ── SECTOR 2 — BEAU RIVAGE HILLSIDE CLIMB (s=0.08→0.26) ─────────────
       // The hillside soars steeply on the LEFT (inland rock face). RIGHT side is
@@ -337,7 +347,7 @@
         window: WIN, windowCol: WINLIT, lit: true,
       });
       broadcastCompound(K(0.615), 1, 24, { vans: 3, dishes: 2, mastH: 12 });
-      cameraTower(K(0.625), -1, 14, { h: 16, boom: 1.4 });
+      cameraTower(K(0.625), -1, 26, { h: 16, boom: 1.4 });   // clear of the quay scaffold stand (9-19 m)
 
       // Distant landmark towers behind harbour apartments.
       for (let i = 0; i < 5; i++) {
@@ -579,7 +589,17 @@
 
       // ── PIT WALL & START GRANDSTAND (s=0.03, R) ──────────────────────────
       wall(0.0, 0.06, 1, 1.5, 1.0, [0.66, 0.67, 0.69], 0.6);
-      place(K(0.03), 1, 12, [7, 9, 35], [0.55, 0.56, 0.60]);
+      // This was a 7×9×35 m GREY BOX standing in for the start grandstand.
+      // Monaco's stands are not buildings: the whole circuit is bolted together
+      // out of scaffolding in April and taken apart in June, and the frame is
+      // visible under and behind every rake. scaffoldStand is that structure —
+      // tubes, timber deck, benches, handrail, no shell.
+      scaffoldStand(0.016, 0.048, 1, 9, {
+        rows: 5, rise: 1.1, setback: 1.7, legEvery: 1,
+        tubeCol: [0.74, 0.76, 0.78], deckCol: [0.72, 0.68, 0.60],
+        bench: [[0.86, 0.84, 0.80], [0.30, 0.36, 0.52], [0.72, 0.28, 0.24]],
+        density: 0.66,
+      });
       for (let i = 0; i < 5; i++) {
         const k = (K(0.02) + i * 2) % n;
         place(k, 1, 4, [0.4, 1.1, 5], [0.80, 0.80, 0.82]);
@@ -602,21 +622,46 @@
         palm(k, -1, 6, 7 + hash(k * 5) * 4, [0.24, 0.44, 0.21]);
       }
 
-      // ── CYPRESS ACCENT TREES ──────────────────────────────────────────────
-      {
-        const CYPRESS = [0.16, 0.32, 0.14];
-        for (const [sf, cnt] of [[0.20, 2], [0.80, 3]]) {
-          for (let j = 0; j < cnt; j++) {
-            const k = K(sf + j * 0.012);
-            const side = (j & 1) ? -1 : 1;
-            const dist = 10 + (j & 1) * 3;
-            const a = anchor(k, side, dist);
-            if (!onTrack(a.c[0], a.c[2], 2.8)) {
-              addCyl(out, vadd(a.c, a.u, 0), 1.1, 17, CYPRESS, 5, [a.r, a.u, a.t]);
-            }
-          }
+      // ── MEDITERRANEAN PLANTING ────────────────────────────────────────────
+      // The "cypress" here used to be a 17 m green CYLINDER — no trunk, no
+      // taper, no crown. cypress() is the real columnar spire, and the two
+      // other species below are what the Côte d'Azur actually grows: the
+      // parasol pine that leans off the rock above Beau Rivage, and the
+      // pollarded plane that lines every boulevard on this coast. Between them
+      // they give Monaco a planting silhouette no other circuit has — palms
+      // alone read as any warm-weather venue.
+      const CYPRESS = [0.16, 0.32, 0.14];
+      const PINEGRN = [0.20, 0.36, 0.20];
+      const PLANEGRN = [0.32, 0.46, 0.26];
+      // Casino-garden pair (as before) plus a clump on the free inland verge
+      // between the pastel street row and the Rascasse paddock front — the
+      // 0.80 group used to stand in the swimming pool.
+      for (const [sf, cnt, sd, gap] of [[0.20, 2, 0, 10], [0.832, 3, 1, 8]]) {
+        for (let j = 0; j < cnt; j++) {
+          const k = K(sf + j * 0.012);
+          const side = sd || ((j & 1) ? -1 : 1);
+          cypress(k, side, gap + (j & 1) * 3, 13 + hash(k * 3.7) * 5, CYPRESS,
+                  { slim: 0.75 });
         }
       }
+      // Stone pines on the rock face above the Beau Rivage / Mirabeau climb —
+      // set well back so the crowns break the hillside silhouette rather than
+      // the street wall. `lean` is what makes a coastal pine read as coastal.
+      for (let i = 0; i < 7; i++) {
+        const k = K(0.095 + i * 0.032);
+        stonePine(k, -1, 30 + hash(k * 2.3) * 12, 13 + hash(k * 5.1) * 6, PINEGRN,
+                  { lean: 1.15, spread: 1.05 });
+      }
+      // Boulevard Albert 1er's plane trees along the harbour front. Monaco
+      // pollards them hard every winter, which is why the crown is a stack of
+      // flattened discs and not a cone.
+      // Bounded to the stretch of quay between the scaffold stand that ends at
+      // 0.665 and Grandstand K that starts at 0.733: plane() only guards
+      // against the ROAD, so a stand in the way has to be dodged by hand.
+      along(0.672, 0.728, 28, (k) => {
+        plane(k, -1, 9 + hash(k * 7.9) * 2, 9 + hash(k * 4.1) * 3, PLANEGRN,
+              { stages: 2, spread: 0.62 });
+      });
 
       // ── HILLSIDE SKYLINE TOWERS (far back, dist ≥ 65m) ───────────────────
       // These read as the high-rise Monaco residential towers above the city.
@@ -646,7 +691,16 @@
       // grey box repeated. Grandstand K (harbour side, Tabac→Piscine) is the
       // real long stand along the quay — extended from 48 m to its proper
       // span and recentred off the swimming-pool footprint at s≈0.80.
-      grandstandEx(0.64, -1, 9, 60, null, null, { livery: "pastel", tiers: 1, roof: "cantilever" });
+      // The quay stands between the tunnel exit and Tabac are the ones erected
+      // on the harbour front itself — open scaffolding over the water, with a
+      // striped awning instead of a roof. Grandstand K below stays a
+      // grandstandEx because it is the one structure here that reads permanent.
+      scaffoldStand(0.615, 0.665, -1, 9, {
+        rows: 5, rise: 1.15, setback: 1.8, legEvery: 1, awning: true,
+        awningCols: [[0.90, 0.88, 0.84], [0.72, 0.20, 0.22]],
+        tubeCol: [0.74, 0.76, 0.78], deckCol: [0.72, 0.68, 0.60],
+        bench: [CREAM, [0.28, 0.34, 0.50], TERRA], density: 0.62,
+      });
       grandstandEx(0.76, -1, 9, 180, null, null,
         { livery: "scaffold", tiers: 2, roof: "truss", endWalls: true, pylons: true }); // Grandstand K
       grandstandEx(0.25,  1, 7, 40, null, null, { livery: "alu", tiers: 1, roof: "flat" });

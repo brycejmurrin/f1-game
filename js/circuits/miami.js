@@ -56,9 +56,9 @@
         out, MAT, COL, n, px, pz, pyMin, place, prop, backdrop, grandstandEx,
         building, tower, billboard, palm, bush, fence, wall, guardrail, tyreWall,
         bankedKerbStrip, marshalPost, gantry, anchor, addBox, addCyl, addPrism, addPyramid,
-        addCone, addFrustum, vadd, hash, onTrack, every, cityFront, forestEdge,
+        addCone, addFrustum, vadd, hash, onTrack, every, along, cityFront, forestEdge,
         runoffApron, modelGroup, overheadSpan, waterSurface, groundPatch, recordBarrier,
-        circuitKit,
+        scaffoldStand, bleacher, acacia, circuitKit,
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -528,6 +528,37 @@
       }
       guardrail(0.26, 0.38, 1, 2.8, GREYWHITE);
 
+      // THE MARINA IS NOT A MARINA. Hard Rock has no water: the 2022 "marina"
+      // was a painted vinyl sheet laid over the car park with boats standing on
+      // it, and that is genuinely the most Miami thing on the calendar — so it
+      // is modelled honestly rather than dressed up as a harbour. Two details
+      // carry it: a hard PAINTED EDGE where the blue sheet stops and the
+      // asphalt resumes (real water has no straight white boundary), and a rank
+      // of identical hulls sitting flat on that sheet with no waterline, no
+      // draught and no mooring lines.
+      along(0.265, 0.375, 8, (k) => {
+        place(k, 1, 6.3, [0.45, 0.06, 8], WHITE);        // painted vinyl boundary
+        place(k, 1, 6.9, [0.7, 0.05, 8], [0.34, 0.34, 0.36]);  // asphalt showing through
+      });
+      // Moored rank — one hull repeated at a fixed berth pitch, bows all the
+      // same way. A real harbour never looks this regular; a boat show does.
+      along(0.272, 0.368, 22, (k) => {
+        const a = anchor(k, 1, 26 + (k & 1) * 10), bv = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 9)) return;
+        const L = 15, W = 4.4;
+        modelGroup(`miami-berth-${k}`, {
+          center: vadd(a.c, a.u, 4), size: [W + 1, 9, L + 1], basis: bv,
+        }, (st) => {
+          // Hull sits ON the sheet, not in it — the flat bottom is visible.
+          addBox(st, vadd(a.c, a.u, 1.5), [W, 2.6, L], WHITE, bv);
+          addBox(st, vadd(a.c, a.u, 2.9), [W + 0.2, 0.5, L],
+                 (k % 3 === 0) ? TEAL : ((k % 3 === 1) ? CORAL : PINK), bv);
+          addBox(st, vadd(vadd(a.c, a.t, -1.5), a.u, 4.2), [W * 0.7, 2.2, L * 0.42], GREYWHITE, bv);
+          addBox(st, vadd(vadd(a.c, a.t, -1.5), a.u, 4.9), [W * 0.74, 0.9, L * 0.44], GLASS, bv);
+          addCyl(st, vadd(a.c, a.u, 5.4), 0.14, 4.5, GREYWHITE, 4, bv);
+        });
+      });
+
       // Fewer larger yacht silhouettes (6 boats, not ~50)
       for (let i = 0; i < 6; i++) {
         const k = K(0.275 + i * 0.018);
@@ -584,6 +615,15 @@
         addBox(msc, vadd(a.c, a.u,  2.8), [16.4, 1.0, 76], AQUA, bv);
         }, { required: true });
       }
+
+      // Bare bolted bleachers looking across the vinyl at the boat show. No
+      // roof, no shell, no fascia — just planks on a frame standing on the car
+      // park, which is what general admission at Miami actually is.
+      bleacher(0.284, 0.316, -1, 26, {
+        rows: 8, rise: 0.7, setback: 0.95,
+        frameCol: [0.74, 0.76, 0.80], plankCol: [0.72, 0.73, 0.76],
+        crowd: PASTELS, density: 0.6,
+      });
 
       // Marina promenade palms — placed via forestEdge so no barrier clipping
       forestEdge(0.26, 0.38, 1, 5, {
@@ -726,10 +766,29 @@
       billboard(K(0.50), 1, 11, 18, 9, CORAL);
       billboard(K(0.52), 1, 10, 16, 8, TEAL);
       billboard(K(0.54), 1, 10, 16, 8, PINK);
-      cityFront(0.50, 0.60, 1, 22, {
-        minH: 12, maxH: 28, depth: 20, step: 20,
-        palette: SKY_PAL_RESORT, lit: true, windowCol: WIN_AMBER,
-      });
+      // SOUTH BEACH ART DECO ROW. The Beach Club corridor previously got the
+      // same generic cityFront massing as the other four districts, only in
+      // warmer colours — which is exactly the "livery-only" trap. Ocean Drive's
+      // hotels are low, white, and shaped: stepped ziggurat parapets, vertical
+      // eyebrow fins, chevron and notched cornices. building()'s massing
+      // library carries all four, so the silhouette changes and not just the
+      // paint. Deliberately SHORT (14-22 m) — Art Deco Miami is three storeys.
+      const DECO = [
+        [0.500, "ziggurat", WHITE,            22],
+        [0.518, "fin",      [0.96, 0.86, 0.70], 18],
+        [0.536, "chevron",  [0.86, 0.94, 0.94], 20],
+        [0.554, "setback",  [0.98, 0.82, 0.78], 16],
+        [0.572, "notch",    WHITE,            21],
+        [0.590, "ziggurat", [0.80, 0.92, 0.96], 17],
+      ];
+      for (const [s, kind, wallCol, h] of DECO) {
+        building(K(s), 1, 22, 20, h, 18, {
+          kind, wall: wallCol, window: [0.30, 0.52, 0.60], floor: 4.2,
+          lit: true, windowCol: WIN_AMBER,
+          // The neon eyebrow — the one detail every Ocean Drive photograph has.
+          roof: (K(s) % 2) ? TEAL : PINK,
+        });
+      }
 
       // ===================================================================
       // s 0.635 & 0.685 — FLORIDA TURNPIKE OVERPASSES.
@@ -756,19 +815,27 @@
       // ===================================================================
       // s 0.77–0.85 both — BACK STRAIGHT (DRS zone): grandstands + cityFront
       // ===================================================================
-      const BACK_STANDS = ["alu", "pastel", "teal", "alu"];
-      for (let i = 0; i < 4; i++) {
-        const s = 0.77 + i * 0.025;
-        // gap 20 (was 12) so the chase cam never ends up inside the stand;
-        // shorter so they don't merge into one long wall. Liveries rotate the
-        // Miami stand set; the middle two get a second tier for the DRS-zone
-        // hero read the brief calls for ("dense crowd flecks").
+      // Two roofed hero stands in the middle of the DRS zone, and RENTED
+      // SCAFFOLDING either side of them. Miami is a race meeting held in a car
+      // park: most of its seating is tube-and-plank hired for the weekend and
+      // taken away again, standing on the asphalt with the frame visible under
+      // the rake. grandstandEx cannot say that — it always builds a permanent
+      // back shell — which is why every temporary circuit in the game used to
+      // read as a permanent one.
+      for (let i = 1; i <= 2; i++) {
         const flick = PASTELS[Math.floor(hash(i * 13 + 9) * PASTELS.length) % PASTELS.length];
-        grandstandEx(s, -1, 20, 80, null, flick, {
-          livery: BACK_STANDS[i], tiers: (i === 1 || i === 2) ? 2 : 1,
-          roof: (i % 2) ? "truss" : "cantilever",
+        grandstandEx(0.77 + i * 0.025, -1, 20, 80, null, flick, {
+          livery: i === 1 ? "pastel" : "teal", tiers: 2, roof: "truss",
         });
       }
+      scaffoldStand(0.7626, 0.7774, -1, 20, {
+        rows: 6, tubeCol: [0.72, 0.74, 0.78], deckCol: [0.74, 0.72, 0.66],
+        bench: [TEAL, WHITE, CORAL], crowd: PASTELS, density: 0.6, legEvery: 1,
+      });
+      scaffoldStand(0.8376, 0.8524, -1, 20, {
+        rows: 5, tubeCol: [0.72, 0.74, 0.78], deckCol: [0.74, 0.72, 0.66],
+        bench: [PINK, WHITE, TEAL], crowd: PASTELS, density: 0.55, legEvery: 1,
+      });
       // Back-straight facades on the OUTER (spectator) side only. The +1 side
       // faces the narrow grass median shared with the final straight (~15 m of
       // grass), so no tall buildings go there — it would loom over / appear to
@@ -864,34 +931,39 @@
       }
 
       // ===================================================================
-      // TROPICAL PALM DENSITY LAYERS
+      // CAMPUS PALM ROWS
+      // Hard Rock's palms are PLANTED — evenly spaced ranks down the access
+      // roads and around the lot edges, which is what tells you this is a
+      // landscaped car park and not a jungle. Three every()-driven density
+      // layers used to drop up to six palms per node across most of the lap:
+      // 158 k verts, 15 % of the whole circuit, spent on a scatter that read
+      // as tropical undergrowth. A row is both cheaper and more Miami.
       // ===================================================================
-      every(12, (k) => {
-        const s = k / n;
-        if (s >= 0.26 && s <= 0.38) {
-          const h = hash(k * 41 + 13);
-          palm(k, -1, 14 + h * 8, 8 + h * 4, (h < 0.4) ? PALM_GREEN : PALM_DARK);
-          palm(k,  1, 16 + h * 7, 8 + h * 4, (h < 0.6) ? PALM_GREEN : PALM_DARK);
-          if (h < 0.7) palm(k, (h < 0.35) ? -1 : 1, 20 + h * 5, 7 + h * 3, PALM_GREEN);
-        }
-      });
-      every(16, (k) => {
-        const s = k / n;
-        if (s >= 0.72 && s <= 0.88) {
-          const h = hash(k * 43 + 17);
-          palm(k, -1, 14 + h * 6, 8 + h * 4, (h < 0.5) ? PALM_GREEN : PALM_DARK);
-          palm(k,  1, 15 + h * 5, 7 + h * 3, PALM_GREEN);
-        }
-      });
-      every(25, (k) => {
-        const h = hash(k * 47 + 19);
-        const inTech    = (k / n > 0.60 && k / n < 0.75);
-        const onStretch = (k / n < 0.12 || (k / n > 0.38 && k / n < 0.55));
-        if (inTech || onStretch || h > 0.45) {
-          palm(k, (h < 0.5) ? -1 : 1, 18 + h * 10, 8 + h * 4,
-            (h < 0.5) ? PALM_GREEN : PALM_DARK);
-        }
-      });
+      const palmRow = (s0, s1, side, dist, stepM, hBase) => {
+        along(s0, s1, stepM, (k) => {
+          // Alternating rank offset + species tone: a dead-straight identical
+          // row reads as a fence, a 1.5 m stagger reads as planting.
+          palm(k, side, dist + (k & 1) * 1.5, hBase + hash(k * 29 + side) * 2.5,
+               (k & 1) ? PALM_GREEN : PALM_DARK);
+        });
+      };
+      palmRow(0.26, 0.38,  1, 15, 26, 9.0);    // marina promenade
+      palmRow(0.26, 0.38, -1, 16, 32, 8.5);
+      palmRow(0.72, 0.88, -1, 14, 26, 9.0);    // back-straight campus road
+      palmRow(0.72, 0.88,  1, 16, 34, 8.0);
+      palmRow(0.60, 0.72, -1, 18, 34, 8.5);    // Turnpike service road
+      palmRow(0.38, 0.55,  1, 16, 34, 8.5);    // stadium-lot perimeter
+      // Live oaks between the lots. Every green thing on this circuit was a
+      // palm, so the campus had exactly one silhouette; a low flat crown is the
+      // other tree South Florida actually plants in a parking lot for shade.
+      const LIVE_OAK = [0.22, 0.38, 0.20];
+      // Kept clear of the stadium-lot cityFront (side -1, 24-46 m): a species
+      // call guards against the ROAD only, never against a building already
+      // standing in the band, so the free bands have to be picked by hand.
+      along(0.55, 0.62, 46, (k) => acacia(k, -1, 30 + hash(k * 53) * 10, 7.5, LIVE_OAK,
+                                          { layers: 2, spread: 11 }));
+      along(0.74, 0.86, 52, (k) => acacia(k, 1, 26 + hash(k * 57) * 8, 7.0, LIVE_OAK,
+                                          { layers: 2, spread: 10 }));
 
       // ===================================================================
       // BILLBOARD STRIP — Miami Vice saturated palette
