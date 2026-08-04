@@ -752,7 +752,16 @@ const NetLobby = (function () {
         peerMods: modsFromProfile(firstPeer()),
         // The list form. NetPlay builds one remote slot per entry, so growing
         // the room is a matter of this array getting longer.
-        peers: [..._peers.values()].map((p) => ({ profile: p, mods: modsFromProfile(p) })),
+        //
+        // WITH THE CONNECTION ID, keyed exactly as `sessions` above. NetPlay
+        // files each rival under this id (peerCar) and looks it up on close to
+        // decide whether one guest dropped or the room emptied. Sent without
+        // one, every joiner collapsed onto the `PEER_ONE` fallback while the
+        // sessions stayed keyed "g1"/"g2" — so remoteFor(id) was always null,
+        // the close handler fell through to `stop()`, and ONE guest leaving
+        // ended the race for everybody still driving. Indistinguishable from
+        // correct at two players, which is why it took a third to show up.
+        peers: [..._peers.entries()].map(([id, p]) => ({ id, profile: p, mods: modsFromProfile(p) })),
       });
       clearInterval(pumpTimer);          // the game loop pumps it from here on
       pumpTimer = null;
