@@ -208,39 +208,74 @@ const Car3D = (function () {
     const F = frame(front), R = frame(rear);
     addBlock(out, [F[0], F[1], F[2], F[3], R[0], R[1], R[2], R[3]], col, colFront, surface, frontSurface);
   }
+  // ── Wing element section ────────────────────────────────────────────────────
+  // Chordwise stations from leading to trailing edge, PACKED TOWARD THE LEADING
+  // EDGE: an aerofoil's whole shape happens in its first third, and evenly
+  // spaced stations spend their budget on the flat rear half while leaving the
+  // nose a visible chamfer instead of a curve.
+  const FOIL_T = [0, 0.08, 0.28, 0.60, 1];
+  // Half-thickness distribution, normalised to peak at 1. t^0.5 gives the
+  // square-root nose growth that reads ROUND at four stations; (1-t)^1.1 runs
+  // out to a genuinely sharp trailing edge. Thickness reaching zero at both ends
+  // is also what closes the section without needing cap geometry.
+  const FOIL_PEAK = Math.pow(0.5 / 1.6, 0.5) * Math.pow(1 - 0.5 / 1.6, 1.1);
+  const foilThick = (t) => Math.pow(t, 0.5) * Math.pow(1 - t, 1.1) / FOIL_PEAK;
+  // Camber as a fraction of chord. F1 wings are INVERTED, so the mean line bows
+  // DOWN off the chord line and the suction side is the underside.
+  const FOIL_CAMBER = 0.05;
   // Wing element split into centre + outboard thirds so sweep, taper and tip
   // rise alter the actual planform rather than only stacking more rectangles.
-  function addWingPlanform(out, spec, col, surface) {
+  //
+  // Each element is a CLOSED, CAMBERED SECTION — blunt leading edge, real
+  // underside, sharp trailing edge. It used to be a single double-sided quad per
+  // third: six triangles for a whole wing element, with `thick` doing nothing but
+  // offsetting that sheet upward. That is fine head-on and falls apart the moment
+  // anything looks along the span or watches an element rotate, which is exactly
+  // what ACTIVE AERO made it do — a plank pivoting in mid-air. The section costs
+  // 48 triangles instead of 6 and the whole car is still ~2.2k against a 2.4k
+  // ceiling, so it is bought with headroom that already existed.
+  function addWingFoil(out, spec, col, surface) {
     const half = spec.half, inner = half * 0.34;
     const sweep = spec.sweep || 0, taper = spec.taper == null ? 1 : spec.taper;
     const rise = spec.rise || 0, thick = spec.thick;
-    const segments = [[-half, -inner], [-inner, inner], [inner, half]];
-    for (const segment of segments) {
-      const x0 = segment[0], x1 = segment[1];
-      const shape = (x, rear) => {
-        const edge = Math.max(0, (Math.abs(x) - inner) / Math.max(half - inner, 1e-6));
-        const atTip = Math.abs(Math.abs(x) - half) < 1e-6;
-        const attachedX = atTip && spec.attachHalf != null
-          ? Math.sign(x || 1) * spec.attachHalf
-          : null;
-        return [
-          attachedX != null ? attachedX : (rear ? x * taper : x),
-          (rear ? spec.yTrail : spec.yLead) + rise * edge,
-          (rear ? spec.zTrail : spec.zLead) - sweep * edge,
-        ];
+    const dz = spec.zLead - spec.zTrail, dy = spec.yTrail - spec.yLead;
+    const chord = Math.hypot(dz, dy);
+    const camber = (spec.camber == null ? FOIL_CAMBER : spec.camber) * chord;
+    // Position + half-thickness at spanwise x, chordwise fraction t.
+    const at = (x, t) => {
+      const edge = Math.max(0, (Math.abs(x) - inner) / Math.max(half - inner, 1e-6));
+      const atTip = Math.abs(Math.abs(x) - half) < 1e-6;
+      const attachedX = atTip && spec.attachHalf != null
+        ? Math.sign(x || 1) * spec.attachHalf
+        : null;
+      const xF = attachedX != null ? attachedX : x;
+      const xR = attachedX != null ? attachedX : x * taper;
+      const yF = spec.yLead + rise * edge, yR = spec.yTrail + rise * edge;
+      const zF = spec.zLead - sweep * edge, zR = spec.zTrail - sweep * edge;
+      return {
+        x: xF + (xR - xF) * t,
+        y: yF + (yR - yF) * t - camber * 4 * t * (1 - t),
+        z: zF + (zR - zF) * t,
+        h: thick * 0.5 * foilThick(t),
       };
-      const f0 = shape(x0, false), f1 = shape(x1, false);
-      const r0 = shape(x0, true), r1 = shape(x1, true);
-      // Wings are thin aero skins, not six-faced bars. One double-sided surface
-      // per planform section preserves sweep/taper while avoiding invisible
-      // internal and underside faces in the always-double-sided car draw.
-      const y = thick * 0.5;
-      addQuad(out,
-        [f0[0], f0[1] + y, f0[2]], [f1[0], f1[1] + y, f1[2]],
-        [r1[0], r1[1] + y, r1[2]], [r0[0], r0[1] + y, r0[2]],
-        col, surface);
+    };
+    const segments = [[-half, -inner], [-inner, inner], [inner, half]];
+    for (const [x0, x1] of segments) {
+      for (let i = 0; i < FOIL_T.length - 1; i++) {
+        const t0 = FOIL_T[i], t1 = FOIL_T[i + 1];
+        const a0 = at(x0, t0), b0 = at(x1, t0), b1 = at(x1, t1), a1 = at(x0, t1);
+        const up = (p) => [p.x, p.y + p.h, p.z], dn = (p) => [p.x, p.y - p.h, p.z];
+        // Upper surface wound so the normal points +Y, lower reversed.
+        addQuad(out, up(a0), up(b0), up(b1), up(a1), col, surface);
+        addQuad(out, dn(a0), dn(a1), dn(b1), dn(b0), col, surface);
+      }
     }
   }
+  // Height of a wing element's UPPER surface at chordwise t, measured off its own
+  // chord line — what the nose-clearance check has to respect, since the section
+  // now carries thickness above the mean line where a flat sheet had none.
+  const foilTop = (t, thick, chord) =>
+    thick * 0.5 * foilThick(t) - FOIL_CAMBER * chord * 4 * t * (1 - t);
   // Join a short chain of arbitrary four-corner stations. This keeps low-poly
   // bodywork readable while allowing the sidepod floor and shoulder to follow
   // different curves (a rectangular loft cannot express a real undercut).
@@ -654,8 +689,14 @@ const Car3D = (function () {
       [2.50, 0.092, 2.24, 0.146, 0.98, 0.028],   // flap 1
     ];
     if (a >= 1) els.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.026]);   // flap 2
-    if (a >= 3) els.push([2.20, 0.210, 1.98, 0.282, 0.92, 0.024]);   // flap 3
-    if (a >= 4) els.push([2.08, 0.286, 1.88, 0.358, 0.88, 0.022]);   // flap 4
+    // Flaps 3 and 4 sit 10 mm and 30 mm lower than they first shipped. The stack
+    // was drawn climbing into the nose overhang: at maximum downforce the top
+    // element passed ~21 mm THROUGH the nose underside, which no rotation can
+    // undo because the intersection is at the element's own rest attitude. The
+    // drop is the largest the slot gaps above them will take (flap 3 keeps 11 mm
+    // of daylight to flap 2, which is a slot, not a coincidence).
+    if (a >= 3) els.push([2.20, 0.200, 1.98, 0.272, 0.92, 0.024]);   // flap 3
+    if (a >= 4) els.push([2.08, 0.256, 1.88, 0.328, 0.88, 0.022]);   // flap 4
     return els;
   }
   // How many of them the mesh still bakes. Never the main plane.
@@ -672,59 +713,210 @@ const Car3D = (function () {
   // baked angle. Without it the travel is only the element's natural 12-16 deg,
   // which is accurate but barely reads; with it a downforce wing is visibly
   // steeper AND has real angle to give back when it opens.
-  const Z_BITE = 0.20;
+  //
+  // Per wing, because the two do not do the same job. A 2026 rear wing runs
+  // 30-40 deg of flap in its downforce setting and gives essentially all of it
+  // back in X-mode — that is where the lap time is. The front wing only trims
+  // enough to keep the balance, and is boxed in by the nose above it besides.
+  //
+  // The front is ZERO, and that is a fix rather than a shrug. A front cascade is
+  // designed to nest: each element's trailing edge passes ~12 mm under the
+  // leading edge of the one above it. Adding bite rotates every element steeper
+  // about a hinge near its nose, which swings that trailing edge UP — straight
+  // through its neighbour. Measured at maximum downforce, the shipped 0.20
+  // buried flap 2's trailing edge 15 mm inside flap 3. The cascade's own drawn
+  // attitude already IS the downforce pose; the front's travel comes from
+  // flattening it, not from over-rotating it first.
+  const Z_BITE = { front: 0, rear: 0.34 };
+  // Where each element pivots, as a fraction of its own chord: 0 = leading edge,
+  // 1 = trailing edge.
+  //
+  // This is the thing that makes an opening wing read as opening. Rotating about
+  // the LEADING edge (which is what this did) changes incidence but leaves the
+  // hinge line — the point nearest the element ahead — exactly where it was, so
+  // the SLOT never opens and the whole gesture reads as a plank tilting. A real
+  // DRS/X-mode flap pivots near its TRAILING edge: the leading edge swings up and
+  // away from the element in front of it and daylight appears through the wing,
+  // which is both the mechanism and the visual.
+  //
+  // The rear goes almost fully trailing-edge-pivoted, as the real actuator does.
+  // The front stays near its LEADING edge, which is both what the real hardware
+  // does (a front flap pivots on the slot-gap brackets at its nose, not on an
+  // endplate actuator) and what the packaging allows: the cascade elements are
+  // stacked ~12 mm apart and live under the nose overhang, so a leading edge
+  // that swings has nowhere to swing to — it clashes with the element in front
+  // of it going one way and the bodywork going the other. The front's opening
+  // therefore reads mostly as the trailing edge dropping, which is correct.
+  const HINGE = { front: 0.80, rear: 0.86 };
+  // How much of its own incidence each wing gives up in X-mode. The rear goes to
+  // flat, which is what a 2026 rear wing does and where the straight-line gain
+  // comes from. The front only TRIMS: a front wing that flattened would both
+  // throw the balance to the rear and, at maximum downforce, have to swing its
+  // top flap up through the nose overhang to get there. Trimming is the real
+  // behaviour and it is also the one that fits in the space available.
+  const OPEN_FRAC = { front: 1, rear: 1 };
   // Underside of the NOSE where it overhangs the front wing, as (z, y) samples
   // measured off the built body. This is a hard ceiling: at max downforce the
   // baked top flap already passes within ~12 mm of it, so an unconditional bite
   // swings that element straight through the nose. Outside this z band nothing
   // overhangs the wing, hence the Infinity guards.
   const NOSE_UNDER = [[1.96, Infinity], [2.00, 0.294], [2.10, 0.414], [2.16, Infinity]];
-  const NOSE_GAP = 0.008;        // m of daylight to keep under it
+  const NOSE_GAP = 0.005;        // m of daylight to keep under it
   function noseUnderAt(z) {
     if (z <= NOSE_UNDER[0][0] || z >= NOSE_UNDER[NOSE_UNDER.length - 1][0]) return Infinity;
     for (let i = 1; i < NOSE_UNDER.length; i++) {
       const [z1, y1] = NOSE_UNDER[i], [z0, y0] = NOSE_UNDER[i - 1];
       if (z <= z1) {
-        if (!isFinite(y0)) return y1;
-        if (!isFinite(y1)) return y0;
+        // An Infinity endpoint means "nothing overhangs the wing out here", so a
+        // slice touching one is UNCONSTRAINED — not pinned to whatever its finite
+        // neighbour happened to measure. Pinning it (which is what this did)
+        // invents a 0.294 m ceiling across z 1.96-2.00, and that phantom ceiling
+        // is low enough that the top cascade flap at maximum downforce has no
+        // valid attitude at all: every pose the solver tries "fails", so it falls
+        // back to an unclamped one and the flap ends up drawn through the nose.
+        if (!isFinite(y0) || !isFinite(y1)) return Infinity;
         return y0 + (y1 - y0) * (z - z0) / (z1 - z0);
       }
     }
     return Infinity;
   }
-  // A hinged wing element. The mesh is emitted by the SAME addWingPlanform call
-  // the baked wing used, merely translated so the hinge (the leading edge) is at
-  // the origin — so the angles here are DELTAS from the element's own baked
+  // A hinged wing element. The mesh is emitted by the SAME addWingFoil call
+  // the baked wing used, merely translated so the PIVOT is at the origin — so
+  // the angles here are DELTAS from the element's own baked
   // incidence, not absolute attitudes. That matters: at delta 0 the element is
   // byte-for-byte the one the mesh used to contain. Building it flat and
   // rotating instead (the first attempt) displaced every vertex by up to 172 mm,
-  // because addWingPlanform's rise/sweep/thickness terms are applied in the CAR
+  // because addWingFoil's rise/sweep/thickness terms are applied in the CAR
   // frame and a whole-element rotation drags them off-axis with it.
   //
   // zAngle is the extra bite the closed pose takes on, CLAMPED per element to
   // that element's own headroom under the nose, so a closed wing is as steep as
   // it can be without any part of it entering the bodywork. xAngle is -natural:
   // rotating back by exactly the baked incidence lands the element FLAT.
-  function hinged(id, wing, zLead, yLead, zTrail, yTrail, planform) {
+  // A point on a wing element's section at chordwise t and pose delta d, in
+  // car-local (z, y). `e` is the compact record below, shared by baked and
+  // moveable elements so the clearance maths does not care which is which.
+  function elemPoint(e, d, t) {
+    const ang = e.natural + d, c = Math.cos(ang), s = Math.sin(ang);
+    const u = (t - e.hinge) * e.chord;
+    const mid = e.py + u * s - FOIL_CAMBER * e.chord * 4 * t * (1 - t);
+    const h = e.thick * 0.5 * foilThick(t);
+    return { z: e.pz - u * c, top: mid + h, bot: mid - h };
+  }
+  function elemRecord(le, te, thick, hinge) {
+    const chord = Math.hypot(le[0] - te[0], te[1] - le[1]);
+    return {
+      chord, thick, hinge,
+      natural: Math.atan2(te[1] - le[1], le[0] - te[0]),
+      pz: le[0] + (te[0] - le[0]) * hinge,
+      py: le[1] + (te[1] - le[1]) * hinge,
+    };
+  }
+  // Upper surface height of element `e` at car-local z when posed at delta `d`,
+  // or null if it does not reach that far along the car.
+  function elemTopAt(e, d, z) {
+    const N = 32;
+    let prev = elemPoint(e, d, 0);
+    for (let k = 1; k <= N; k++) {
+      const cur = elemPoint(e, d, k / N);
+      if ((z <= prev.z && z >= cur.z) || (z >= prev.z && z <= cur.z)) {
+        const f = (z - prev.z) / ((cur.z - prev.z) || 1e-9);
+        return prev.top + (cur.top - prev.top) * f;
+      }
+      prev = cur;
+    }
+    return null;
+  }
+  const SLOT_MIN = 0.003;   // m of daylight to keep in a cascade slot
+  function hinged(id, wing, zLead, yLead, zTrail, yTrail, planform, prev) {
     const dz = zLead - zTrail, dy = yTrail - yLead;
     const chord = Math.sqrt(dz * dz + dy * dy);
     const natural = Math.atan2(dy, dz);
-    let bite = Z_BITE;
-    if (wing === "front") {
-      const ceil = noseUnderAt(zLead - chord * Math.cos(natural + bite)) - NOSE_GAP;
-      if (isFinite(ceil)) {
-        const maxSin = Math.max(-1, Math.min(1, (ceil - yLead) / chord));
-        bite = Math.max(0, Math.min(bite, Math.asin(maxSin) - natural));
-      }
+    const thick = planform ? planform.thick : 0;
+    const want = planform && planform.hinge != null ? planform.hinge : HINGE[wing];
+    // The hinge is SEARCHED, not asserted. A pivot far back gives the most
+    // leading-edge swing — the thing that actually opens a slot — but it also
+    // drags the element's whole rear half up toward the nose when it flattens,
+    // and on the top cascade flap at maximum downforce the pivot itself ends up
+    // above the nose underside, so NO angle clears. Walking the pivot forward
+    // trades swing for headroom. Trying the candidates and keeping whichever
+    // yields the most usable travel beats picking one number and discovering per
+    // downforce level which elements it happens to lock solid.
+    let hinge = want, pz = 0, py = 0, best = -1;
+    for (let h = want; h >= 0.14; h -= 0.02) {
+      const r = solvePoses(h);
+      if (!r) continue;
+      const travel = r.bite - r.open;
+      if (travel > best + 1e-6) { best = travel; hinge = h; pz = r.pz; py = r.py; }
     }
+    if (best < 0) {   // nothing clears anywhere — keep the requested pivot
+      pz = zLead + (zTrail - zLead) * want; py = yLead + (yTrail - yLead) * want;
+      hinge = want;
+    }
+    const solved = solvePoses(hinge);
     return Object.assign({
       id, wing,
-      z: zLead, y: yLead,        // hinge = the leading edge, in car-local metres
-      chord, natural,
+      z: pz, y: py,              // PIVOT, in car-local metres — what the draw hangs it at
       le: [zLead, yLead], te: [zTrail, yTrail],   // what buildFlapGeom emits
-      zAngle: bite,              // closed: the baked pose plus whatever bite fits
-      xAngle: -natural,          // open: rotated back to flat
+      chord, natural, hinge,
+      zAngle: solved ? solved.bite : 0,
+      xAngle: solved ? solved.open : -natural,
     }, planform);
+
+    // Solve the two end poses for a candidate pivot, or null if either end
+    // cannot be placed without entering the nose or the element below.
+    function solvePoses(h) {
+      const qz = zLead + (zTrail - zLead) * h, qy = yLead + (yTrail - yLead) * h;
+      const self = { chord, thick, hinge: h, natural, pz: qz, py: qy };
+      // Two things a front element must not enter: the nose overhang above it,
+      // and the element it nests over. Sampled far more finely than the mesh's
+      // own stations — the nose underside ramp and the element cross at a point
+      // with no reason to coincide with a vertex, and testing only FOIL_T steps
+      // straight over it, which is how a 21 mm intersection at maximum
+      // downforce passed a check that was "already sampling the section".
+      // The neighbour matters at the OPEN end: a cascade is stacked with ~12 mm
+      // slots, and rotating one element flat drops its forward half through the
+      // trailing edge of the one ahead. It is posed at ITS pose for the same end
+      // of the travel, since every element is driven off the one blend.
+      const CLEAR_N = 40;
+      // Applies to BOTH wings. noseUnderAt() is Infinity everywhere behind the
+      // nose, so the rear simply never trips that half of the test — there is no
+      // need for the wing to exempt itself, and exempting it was what left the
+      // rear stack unchecked.
+      const clears = (d, prevDelta) => {
+        for (let k = 0; k <= CLEAR_N; k++) {
+          const p = elemPoint(self, d, k / CLEAR_N);
+          const ceil = noseUnderAt(p.z);
+          if (isFinite(ceil) && p.top > ceil - NOSE_GAP) return false;
+          if (prev) {
+            const below = elemTopAt(prev, prevDelta, p.z);
+            if (below != null && p.bot < below + SLOT_MIN) return false;
+          }
+        }
+        return true;
+      };
+      // Back each end off in small steps until it fits. The closed search runs
+      // PAST zero: clamping there quietly asserts that the element's own baked
+      // attitude must be safe, which at maximum downforce it is not. Returning
+      // null when an end cannot be placed at all is what lets the hinge search
+      // above reject this pivot instead of shipping an intersection.
+      const relax = (from, dir, prevDelta) => {
+        for (let i = 0; i <= 120; i++) {
+          const a = from + dir * 0.01 * i;
+          if (clears(a, prevDelta)) return a;
+        }
+        return null;
+      };
+      const bite = relax(Z_BITE[wing], -1, prev ? prev.zAngle : 0);
+      if (bite == null) return null;
+      const open = relax(-natural * OPEN_FRAC[wing], +1, prev ? prev.xAngle : 0);
+      // An element with a placeable closed pose but no placeable open one is
+      // PARKED, not forced open: it holds its downforce attitude. Better one
+      // flap that does not move than one drawn through the bodywork, and the
+      // packaging that causes it is real — the top cascade flap at maximum
+      // downforce genuinely has the nose 20 mm above it.
+      return { bite, open: open == null ? bite : open, pz: qz, py: qy };
+    }
   }
   function aeroFlapsGeom(aLvl, style) {
     const a = aLvl, st = style || AERO_STYLE_DEF;
@@ -735,8 +927,18 @@ const Car3D = (function () {
     const rearTaper = Math.max(0.72, Math.min(1.08, st.rearTaper));
     const els = frontCascade(a), baked = frontBakedCount(a), fwHalf = frontHalf(a);
     const out = [];
+    // Solved in cascade order, each element handed the one it nests over: the
+    // neighbour's own solved poses are what bound this one's travel, so the
+    // chain has to be built bottom-up. A baked neighbour never moves, hence the
+    // zero poses on its record.
     for (let i = baked; i < els.length; i++) {
-      const e = els[i];
+      const e = els[i], p = els[i - 1];
+      const prev = p
+        ? Object.assign(elemRecord([p[0], p[1]], [p[2], p[3]], p[5], i - 1 < baked ? 0 : HINGE.front),
+                        i - 1 < baked ? { zAngle: 0, xAngle: 0 }
+                                      : { zAngle: out[out.length - 1].zAngle,
+                                          xAngle: out[out.length - 1].xAngle })
+        : null;
       out.push(hinged("front" + i, "front", e[0], e[1], e[2], e[3], {
         half: fwHalf * e[4], thick: e[5], taper: frontTaper,
         sweep: frontSweep * (0.75 + i * 0.10),
@@ -747,7 +949,7 @@ const Car3D = (function () {
         // travel WITH it — anchoring it to the top still-baked element instead
         // (an earlier attempt) silently moved it 172 mm on the car at rest.
         upsweep: i === els.length - 1 ? { fwHalf, e } : null,
-      }));
+      }, prev));
     }
     // Rear: the 2026 rule is that every element EXCEPT the bottom mainplane
     // rotates, so on a three-plane wing the top two move and the mainplane is
@@ -758,14 +960,36 @@ const Car3D = (function () {
     // floating 75 mm off its own slot on every DRS-option car.
     const ep = endplateGeom(a), crownY = ep.rear.top - 0.018;
     const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
+    // Chained the same way the front cascade is, and for the same reason: rear
+    // planes are stacked in slots too, and nothing was checking them. With the
+    // elements now sweeping 35 deg instead of a flat sheet tilting, an unchecked
+    // stack is one that quietly passes through itself at some blend nobody looked
+    // at. The mainplane below is structure, so it enters the chain at zero.
+    const rearMain = Object.assign(
+      elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.032, 0),
+      { zAngle: 0, xAngle: 0 });
+    let below = rearMain;
+    const addRear = (id, le, te, thick, sweepMul) => {
+      const el = hinged(id, "rear", le[0], le[1], te[0], te[1], {
+        half: id === "rearTop" ? 0.50 : 0.51, thick, taper: rearTaper,
+        sweep: rearSweep * sweepMul, attachHalf: 0.50, rise: 0,
+      }, below);
+      out.push(el);
+      below = Object.assign(elemRecord(le, te, thick, el.hinge),
+                            { zAngle: el.zAngle, xAngle: el.xAngle });
+    };
     if (a >= 2) {
-      out.push(hinged("rearMid", "rear", -2.34, upperTrailY - 0.170, -2.56, upperTrailY - 0.115, {
-        half: 0.51, thick: 0.030, taper: rearTaper, sweep: rearSweep * 0.9, attachHalf: 0.50, rise: 0,
-      }));
+      addRear("rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.030, 0.9);
     }
-    out.push(hinged("rear", "rear", -2.38, upperTrailY - 0.075, -2.64, upperTrailY, {
-      half: 0.51, thick: 0.035, taper: rearTaper, sweep: rearSweep, attachHalf: 0.50, rise: 0,
-    }));
+    addRear("rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.035, 1);
+    // The proud max-downforce top plane. It used to be BAKED, which put the
+    // topmost element of the tallest wing on the grid among the parts that do
+    // not move — directly contradicting the rule the rest of this function
+    // implements, and leaving the one plane a following car actually sees frozen
+    // while the two beneath it swept. It is an element like any other.
+    if (a >= 4 && !(st.drs || 0)) {
+      addRear("rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.030, 1.1);
+    }
     return out;
   }
   // Geometry for ONE moveable element, in its canonical hinge frame. Built by
@@ -774,7 +998,7 @@ const Car3D = (function () {
   function buildFlapGeom(el, col) {
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     // The element exactly as the wing build emits it...
-    addWingPlanform(out, {
+    addWingFoil(out, {
       zLead: el.le[0], yLead: el.le[1], zTrail: el.te[0], yTrail: el.te[1],
       half: el.half, thick: el.thick, taper: el.taper,
       sweep: el.sweep, rise: el.rise, attachHalf: el.attachHalf,
@@ -789,8 +1013,9 @@ const Car3D = (function () {
                      { z: e[2] - 0.04, x: sgn * (fwHalf + 0.02), y: e[3] + 0.085, w: 0.09, h: e[5] * 1.6 }, col);
       }
     }
-    // ...then moved so its hinge sits at the origin, which is all the draw needs
-    // to rotate it in place. Nothing about the element's own shape is rebuilt.
+    // ...then moved so its PIVOT sits at the origin, which is all the draw needs
+    // to rotate it in place. Nothing about the element's own shape is rebuilt —
+    // the pivot is a point on the chord line, not a re-anchoring of the mesh.
     for (let i = 0; i < out.pos.length; i += 3) {
       out.pos[i + 1] -= el.y;
       out.pos[i + 2] -= el.z;
@@ -799,10 +1024,16 @@ const Car3D = (function () {
   }
   // Mid-chord of a wing's moveable section, car-local metres — what the GARAGE
   // wing views aim at. For the multi-element front it is the group midpoint.
+  // Off the LEADING/TRAILING edges, not off the pivot: the pivot sits at a
+  // different fraction of the chord per wing, so aiming at it would frame the
+  // rear wing off its own trailing edge.
   function aeroFlapAim(aLvl, wing, style) {
     const els = aeroFlapsGeom(aLvl, style).filter((e) => e.wing === wing);
     let y = 0, z = 0;
-    for (const e of els) { y += e.y; z += e.z - e.chord * 0.5; }
+    for (const e of els) {
+      y += (e.le[1] + e.te[1]) * 0.5;
+      z += (e.le[0] + e.te[0]) * 0.5;
+    }
     return [0, y / els.length, z / els.length];
   }
   // The driver-number board on the endplate: a fixed-height board anchored LOW,
@@ -1916,7 +2147,7 @@ const Car3D = (function () {
     const fwBaked = frontBakedCount(aLvl);
     for (let i = 0; i < fwBaked; i++) {
       const e = fwElems[i], half = fwHalf * e[4];
-      addWingPlanform(out, {
+      addWingFoil(out, {
         zLead: e[0], yLead: e[1], zTrail: e[2], yTrail: e[3],
         half, thick: e[5], taper: frontTaper,
         sweep: frontSweep * (0.75 + i * 0.10),
@@ -2035,7 +2266,7 @@ const Car3D = (function () {
       // three planes down so every tip remains captured by the endplate.
       const upperTrailY = crownY - (aLvl >= 4 || aDrs ? 0.075 : 0);
       const rearWing = (zLead, yLead, zTrail, yTrail, half, thick, col, scale) =>
-        addWingPlanform(out, {
+        addWingFoil(out, {
           zLead, yLead, zTrail, yTrail, half, thick,
           taper: rearTaper, sweep: rearSweep * (scale == null ? 1 : scale), rise: 0,
           attachHalf: 0.50,
@@ -2078,10 +2309,9 @@ const Car3D = (function () {
       // suppress it outright via `tvane` so mid-downforce packages can carry one.
       const aTvane = aeroStyle && aeroStyle.tvane != null
         ? (aeroStyle.tvane ? 1 : 0) : (aLvl >= 4 && !aDrs ? 1 : 0);
-      if (aLvl >= 4 && !aDrs) {
-        // Extra proud top element (max-DF look).
-        rearWing(-2.42, crownY - 0.055, -2.66, crownY, 0.50, 0.030, c2, 1.1);
-      }
+      // The extra proud top element of the max-DF look is ACTIVE AERO, drawn by
+      // drawAeroFlaps() — see aeroFlapsGeom's "rearTop". Baking it here left the
+      // highest plane on the car as the only one that could not move.
       if (aTvane) {
         addBox(out, 0, epCY + 0.20, -1.98, 0.34, 0.02, 0.09, c2);     // T-wing (tracks the lowered wing)
         // T-wing mount: a slim central pylon down to the engine-cover ridge — without

@@ -243,6 +243,10 @@ const api = {
   garageCam: () => ({
     on: G.setupPreviewOn, spin: G.setupPreviewSpin,
     az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,
+    // PAN: the rig's translation in car-local metres, [x, y, z]. Orbit alone
+    // cannot express "two metres down the flank", so a framing check that reads
+    // only az/el/dist cannot see half of where the camera is.
+    pan: G.setupPreviewPan.slice(),
   }),
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { G.hideMeshes = Object.assign({}, G.hideMeshes, o || {}); return G.hideMeshes; },

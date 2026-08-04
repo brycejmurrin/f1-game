@@ -283,8 +283,9 @@
 
   let ready = false, frameSeq = 0;
   // Mirrors drawAeroFlaps() in js/game.js: each element is hinged at its own
-  // leading edge and rotated about the car's local X between its closed
-  // incidence (zAngle) and flat (xAngle = 0).
+  // PIVOT (a point on its chord line, near the trailing edge for the rear wing
+  // and mid-chord for the front) and rotated about the car's local X between its
+  // closed incidence (zAngle) and its open one (xAngle).
   function drawFlaps() {
     if (!Car3D.aeroFlaps) return;
     const els = Car3D.aeroFlaps(flapLvl, flapStyle);

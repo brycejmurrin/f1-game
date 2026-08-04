@@ -288,6 +288,53 @@ test.describe("Car setup — preview camera", () => {
     await expect(page.locator("#cs-view-spin")).toHaveAttribute("aria-pressed", "true");
   });
 
+  test("PAN walks the rig along the car, and a preset re-centres it", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openSetup(page);
+    await openCam(page);
+    // Stop the turntable before sampling: it advances the azimuth every frame,
+    // so a baseline taken while it runs makes every later az comparison a race.
+    await page.locator("#cs-view-spin").click();
+    expect((await cam(page)).spin).toBe(false);
+    const start = await cam(page);
+    expect(start.pan).toEqual([0, 0, 0]);
+
+    // Strafe: moves the rig, leaves the orbit geometry alone. Orbit and zoom
+    // can only ever circle one point — pan is the axis they cannot express.
+    await page.locator("#cs-pan-right").click();
+    const right = await cam(page);
+    expect(Math.hypot(right.pan[0], right.pan[2]), "strafe moved the rig").toBeGreaterThan(0.01);
+    expect(right.dist, "strafe is not zoom").toBeCloseTo(start.dist, 5);
+    expect(right.az, "strafe is not orbit").toBeCloseTo(start.az, 5);
+    expect(right.spin, "aiming stops the turntable").toBe(false);
+
+    // Left is the inverse of right, so a round trip returns to centre.
+    await page.locator("#cs-pan-left").click();
+    const back = await cam(page);
+    expect(Math.hypot(back.pan[0], back.pan[2])).toBeLessThan(1e-6);
+
+    // Dolly runs along a different axis than strafe at the same azimuth.
+    await page.locator("#cs-pan-fwd").click();
+    const fwd = await cam(page);
+    const dot = fwd.pan[0] * right.pan[0] + fwd.pan[2] * right.pan[2];
+    expect(Math.abs(dot), "dolly is perpendicular to strafe").toBeLessThan(1e-6);
+
+    // Bounded: mashing it must not fly the camera off into empty space.
+    await page.evaluate(() => {
+      const b = document.getElementById("cs-pan-fwd");
+      for (let i = 0; i < 80; i++) b.click();
+    });
+    const far = await cam(page);
+    expect(Math.abs(far.pan[0])).toBeLessThanOrEqual(2.2 + 1e-6);
+    expect(Math.abs(far.pan[2])).toBeLessThanOrEqual(3.4 + 1e-6);
+
+    // A preset is an absolute framing, so it drops the accumulated pan.
+    await openCam(page);
+    await page.locator('[data-cs-view="side"]').click();
+    expect((await cam(page)).pan).toEqual([0, 0, 0]);
+  });
+
   test("zoom is clamped and drag orbits without touching distance", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);

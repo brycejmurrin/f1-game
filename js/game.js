@@ -2285,6 +2285,7 @@ const G = {
   get setupPreviewAz() { return setupPreviewAz; },
   get setupPreviewEl() { return setupPreviewEl; },
   get setupPreviewDist() { return setupPreviewDist; },
+  get setupPreviewPan() { return setupPreviewPan; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; },
@@ -4259,6 +4260,16 @@ const SP_VIEWS = {
 const SP_ORBIT_DEF = [0, 0.35, -1.0], SP_TGT_DEF = [0, 0.35, 0];
 let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice();
 let setupPreviewMinDist = 0;   // 0 = use the global SP_DIST_MIN
+// PAN — a translation of the whole rig (orbit centre AND look-at) in car-local
+// metres. Orbit and zoom alone can only ever circle the same point, so there is
+// no way to walk along the car and study one end of it up close; you can only
+// back off until the whole car fits. Pan is what makes the preview a camera you
+// move rather than a turntable you watch.
+let setupPreviewPan = [0, 0, 0];
+const _spAim = [0, 0, 0];
+// Bounds are a box around the car (~5.4 m long, ~1.9 m wide), sized so you can
+// reach past either end and either flank but not lose the car off screen.
+const SP_PAN_X = 2.2, SP_PAN_Z = 3.4;
 // Mid-chord of one flap, in car-local metres — what a wing view aims at. Read
 // from the same Car3D anchors the flaps are drawn from, so the framing follows
 // the player's own AERO part instead of a fixed guess.
@@ -4270,6 +4281,10 @@ function setSetupView(name) {
   const v = SP_VIEWS[name];
   if (!v) return;
   setupPreviewAz = v.az; setupPreviewEl = v.el; setupPreviewDist = v.dist;
+  // A preset is an absolute framing, so it also drops any pan the player had
+  // walked in — otherwise "show me the rear wing" shows them the rear wing plus
+  // whatever two metres of offset they were still carrying.
+  setupPreviewPan[0] = setupPreviewPan[1] = setupPreviewPan[2] = 0;
   if (v.aim) {
     // Orbit AND look at the flap itself, so the wing stays centred at every
     // turntable angle instead of swinging out of frame the way a car-centred
@@ -4311,6 +4326,20 @@ function setupZoom(mul) {
   setupPreviewDist = clamp(setupPreviewDist * mul,
     setupPreviewMinDist || SP_DIST_MIN, SP_DIST_MAX);
 }
+// Move the rig sideways / along the car, in the SCREEN's frame rather than the
+// car's: "left" has to mean left as seen, or the control inverts itself as soon
+// as the turntable carries you past the nose. At azimuth `az` the camera's
+// horizontal right vector is (cos az, 0, -sin az) and its forward is
+// (-sin az, 0, -cos az); strafe and dolly ride those.
+function setupPan(strafe, dolly) {
+  if (!strafe && !dolly) return;
+  const ca = Math.cos(setupPreviewAz), sa = Math.sin(setupPreviewAz);
+  setupPreviewPan[0] = clamp(setupPreviewPan[0] + strafe * ca - dolly * sa, -SP_PAN_X, SP_PAN_X);
+  setupPreviewPan[2] = clamp(setupPreviewPan[2] - strafe * sa - dolly * ca, -SP_PAN_Z, SP_PAN_Z);
+  // Panning is aiming. Leaving the turntable running would immediately carry the
+  // camera away from whatever was just framed, exactly as picking a view does.
+  setSetupSpin(false);
+}
 // One discrete step of the on-screen orbit controls (keyboard activation).
 function nudgeSetupCam(dAz, dEl, zoom) {
   if (dAz) { setupPreviewAz += dAz; setSetupSpin(false); }
@@ -4322,8 +4351,8 @@ function nudgeSetupCam(dAz, dEl, zoom) {
 // under software GL, so a 55 ms timer was only serviced every ~240 ms. Rates on
 // the frame clock are smooth at any frame rate and correct on a fast machine
 // too, where a fixed timer would instead have moved in visible jumps.
-let spHeld = null;   // {az, el, zoom} — radians/sec, radians/sec, factor/sec
-const SP_RATE = { az: 1.8, el: 1.0, zoom: 2.4 };
+let spHeld = null;   // {az, el, zoom, strafe, dolly} — per second
+const SP_RATE = { az: 1.8, el: 1.0, zoom: 2.4, pan: 1.5 };
 function applyHeldSetupCam(dt) {
   if (!spHeld) return;
   if (spHeld.az) { setupPreviewAz += spHeld.az * dt; setSetupSpin(false); }
@@ -4332,11 +4361,14 @@ function applyHeldSetupCam(dt) {
     setSetupSpin(false);
   }
   if (spHeld.zoom) setupZoom(Math.pow(spHeld.zoom, dt));
+  if (spHeld.strafe || spHeld.dolly)
+    setupPan((spHeld.strafe || 0) * dt, (spHeld.dolly || 0) * dt);
 }
 function resetSetupCam() {
   setupPreviewAz = 0.6;
   setupPreviewEl = SP_EL_DEF;
   setupPreviewDist = SP_DIST_DEF;
+  setupPreviewPan[0] = setupPreviewPan[1] = setupPreviewPan[2] = 0;
   setSetupSpin(true);
 }
 const _spLights = [];
@@ -4396,9 +4428,12 @@ function renderSetupPreview(dt) {
   // The orbit radius is horizontal, so raising the camera does not walk it away
   // from the car: at el 0 this is the old fixed ring, at el 1.2 it is overhead.
   const spCe = Math.cos(setupPreviewEl), spSe = Math.sin(setupPreviewEl);
-  const eye = [setupPreviewOrbit[0] + Math.sin(setupPreviewAz) * setupPreviewDist * spCe,
-               setupPreviewOrbit[1] + setupPreviewDist * spSe,
-               setupPreviewOrbit[2] + Math.cos(setupPreviewAz) * setupPreviewDist * spCe];
+  // PAN shifts the orbit centre and the look-at together, so strafing tracks
+  // along the car instead of swinging the aim off it — the difference between
+  // "walk down the flank" and "turn your head at the far end of the pit box".
+  const eye = [setupPreviewOrbit[0] + setupPreviewPan[0] + Math.sin(setupPreviewAz) * setupPreviewDist * spCe,
+               setupPreviewOrbit[1] + setupPreviewPan[1] + setupPreviewDist * spSe,
+               setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * setupPreviewDist * spCe];
   M4.perspectiveTo(_spProj, 36 * Math.PI / 180, gfx.aspect, 0.1, 60);
   // The docked #cs-inner panel covers the right portion of the canvas — an
   // on-axis camera centers the car behind it, half-cropped. Shift the
@@ -4410,7 +4445,10 @@ function renderSetupPreview(dt) {
     const panelFrac = clamp(panelEl.getBoundingClientRect().width / canvasEl.clientWidth, 0, 0.85);
     _spProj[8] = panelFrac;   // see mat4 perspectiveTo layout: col2 row0 shifts NDC.x
   }
-  M4.lookAtTo(_spView, eye, setupPreviewTgt, [0, 1, 0]);
+  _spAim[0] = setupPreviewTgt[0] + setupPreviewPan[0];
+  _spAim[1] = setupPreviewTgt[1] + setupPreviewPan[1];
+  _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
+  M4.lookAtTo(_spView, eye, _spAim, [0, 1, 0]);
   M4.mulTo(_spVP, _spProj, _spView);
   gfx.begin({
     // Sun with NO sideways component. The shark fin is a thin blade whose two
@@ -6816,6 +6854,10 @@ holdSetupCtl("cs-view-left",  { az: -SP_RATE.az },        () => nudgeSetupCam(-0
 holdSetupCtl("cs-view-right", { az: SP_RATE.az },         () => nudgeSetupCam(0.18, 0, 0));
 holdSetupCtl("cs-view-up",    { el: SP_RATE.el },         () => nudgeSetupCam(0, 0.12, 0));
 holdSetupCtl("cs-view-down",  { el: -SP_RATE.el },        () => nudgeSetupCam(0, -0.12, 0));
+holdSetupCtl("cs-pan-left",   { strafe: -SP_RATE.pan },   () => setupPan(-0.15, 0));
+holdSetupCtl("cs-pan-right",  { strafe: SP_RATE.pan },    () => setupPan(0.15, 0));
+holdSetupCtl("cs-pan-fwd",    { dolly: SP_RATE.pan },     () => setupPan(0, 0.15));
+holdSetupCtl("cs-pan-back",   { dolly: -SP_RATE.pan },    () => setupPan(0, -0.15));
 $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (soundOn) GameAudio.uiTick(); };
 {
   const canvas = $("game");
