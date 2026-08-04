@@ -312,6 +312,37 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .no-orphan-3 > :last-child:nth-child(3n + 1) { grid-column: 1 / -1; }
 .no-orphan-5 > :last-child:nth-child(5n + 1) { grid-column: 1 / -1; }
 
+/* ---------- classification rows ----------
+   A position, a team colour, a name and a number: the race result, the
+   championship standings, the qualifying sheet and the career hub all show the
+   same shape, and a standings table should not look like a different game
+   depending on which screen it is on.
+
+   These lived twice, scoped to #results-table (css/overlays.css) and to
+   #standings-body (css/track-detail.css) — byte-identical apart from the prefix
+   and a font-size. A third screen needing them is what made the duplication a
+   real problem rather than a tidiness one, so the rules are hoisted here
+   UNSCOPED and each container keeps only what is genuinely its own (its
+   font-size). Podium and player rows are the same three accent colours
+   everywhere: gold/silver/bronze for the top three, the HUD's lime for you. */
+.res-row {
+  display: flex; gap: 10px; padding: 8px 6px;
+  align-items: center; border-radius: var(--r-sm);
+}
+.res-row:nth-child(even) { background: rgba(255, 255, 255, 0.03); }
+.res-row.you { color: #aeea00; font-weight: 700; background: rgba(174, 234, 0, 0.08); padding-left: 5px; }
+/* A podium class already supplies the left rule, so only a non-podium player row
+   draws its own — otherwise P1-and-you would stack two borders. */
+.res-row.you:not(.p1):not(.p2):not(.p3) { border-left: 3px solid #aeea00; }
+.res-row.p1 { color: #ffd700; background: rgba(255, 215, 0, 0.10); border-left: 3px solid #ffd700; padding-left: 5px; }
+.res-row.p2 { color: #c0c0c0; background: rgba(192, 192, 192, 0.07); border-left: 3px solid #c0c0c0; padding-left: 5px; }
+.res-row.p3 { color: #cd9b5a; background: rgba(205, 155, 90, 0.07); border-left: 3px solid #cd9b5a; padding-left: 5px; }
+.res-row.p1 .res-pos, .res-row.p2 .res-pos, .res-row.p3 .res-pos { color: inherit; font-weight: 700; }
+.res-pos { width: 26px; text-align: right; color: var(--dim); }
+.res-swatch { width: 4px; height: 20px; border-radius: var(--r-xs); flex-shrink: 0; }
+.res-name { flex: 1; }
+.res-pts { width: 62px; text-align: right; white-space: nowrap; }
+
 /* ---------- section label ---------- */
 .sel-label {
   color: var(--dim);

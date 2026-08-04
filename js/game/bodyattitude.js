@@ -114,10 +114,11 @@ function update(c, groundY, dt, ygV) {
   const pitchT = clamp(-(c.axEstSm || 0) * PITCH_GAIN, -PITCH_MAX, PITCH_MAX);
   crit(s.p, pitchT, PITCH_OMEGA, dt);
 
-  // roll ← lateral accel. Player: real centripetal speed·yawRate. AI has no
-  // world heading, so use curvature·speed² (negated to lean OUTWARD like the
-  // player — curvature sign is opposite the yaw-rate sign).
-  const aLat = c.isPlayer ? (c.speed || 0) * (c.yawRateCur || 0)
+  // roll ← lateral accel. HUMAN cars: real centripetal speed·yawRate (only they
+  // run the slip model that produces yawRateCur). AI has no world heading, so
+  // use curvature·speed² (negated to lean OUTWARD like a human car — curvature
+  // sign is opposite the yaw-rate sign).
+  const aLat = c.human ? (c.speed || 0) * (c.yawRateCur || 0)
                           : -(c.speed || 0) * (c.speed || 0) * (c.kCur || 0);
   const rollT = clamp(aLat / LAT_MAX, -1, 1) * ROLL_MAX;
   crit(s.r, rollT, ROLL_OMEGA, dt);

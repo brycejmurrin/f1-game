@@ -652,7 +652,27 @@ let skyViewOverride = null;
 // Test-only steer/throttle/brake overrides (null = use real Input). Set via
 // __apex.setInput() so Playwright tests can pump physics at deterministic dt.
 let _testInput = null;
+// A human car with no controls yet (a networked rival before its first input
+// packet lands): coast, don't inherit whatever the local keyboard is doing.
+const NEUTRAL_INPUT = Object.freeze({ steer: 0, throttle: false, brake: false });
+// Where a human car's controls come from. The LOCAL car reads the real Input —
+// returning null here is the signal to do that, which preserves the existing
+// "_testInput ?? Input" precedence exactly. A non-local human car reads the
+// inputs its owner sent us. Same shape as _testInput throughout, so
+// __apex.setInput()/act() can drive either car and the netcode adds no new
+// vocabulary. Edge-triggered controls (shift, overtake) stay explicit at their
+// call sites because Input.consume*() may only be read once per frame.
+function inputOf(c) {
+  if (c.local) return _testInput;              // null => live Input
+  return c.netInput || NEUTRAL_INPUT;
+}
+// The human the AI rubber-bands against — recomputed once per update() rather
+// than per AI car. Null when the field has no human at all.
+let _leadHuman = null;
 let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
+// Shared neutral fallback for a human car with no resolved setup. Frozen and
+// module-scope so updateCar's per-car binding never allocates.
+const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0;
 const MAX_SKID = 120;
@@ -795,11 +815,11 @@ function lerpS(prev, cur, a) {
 // Writes world X/Z into _rp; the caller still samples the road for HEIGHT.
 const _rp = { x: 0, z: 0, world: false };
 function renderPosOf(c, cS, renderX) {
-  if (c.isPlayer && c.px != null && c.rPrevPx !== undefined) {
+  if (c.human && c.px != null && c.rPrevPx !== undefined) {
     _rp.x = c.rPrevPx + (c.px - c.rPrevPx) * renderAlpha;
     _rp.z = c.rPrevPz + (c.pz - c.rPrevPz) * renderAlpha;
     _rp.world = true;
-  } else if (c.isPlayer && c.px != null) {
+  } else if (c.human && c.px != null) {
     _rp.x = c.px; _rp.z = c.pz; _rp.world = true;
   } else {
     _rp.world = false;
@@ -818,7 +838,7 @@ function renderPosOf(c, cS, renderX) {
 // fall back to the arc interpolation unchanged.
 const _pa = { world: false, cS: 0, cX: 0 };
 function playerAnchor(c) {
-  if (c.isPlayer && c.px != null) {
+  if (c.human && c.px != null) {
     const wx = (c.rPrevPx === undefined) ? c.px : c.rPrevPx + (c.px - c.rPrevPx) * renderAlpha;
     const wz = (c.rPrevPz === undefined) ? c.pz : c.rPrevPz + (c.pz - c.rPrevPz) * renderAlpha;
     const tf = trackFrom(wx, wz, c.s);   // read-only; never writes c.s
@@ -884,7 +904,8 @@ const _mFlView = new Float32Array(16), _mFlProj = new Float32Array(16), _mFlVP =
 const _mInvVP = new Float32Array(16);
 const _mInvProj = new Float32Array(16);
 const _sunVS = new Float32Array(3);
-const _upVS = new Float32Array(3);   // world-up expressed in view space (wet-road SSR)
+const _upVS = new Float32Array(3);   // the ROAD PLANE's normal in view space (wet-road SSR)
+const _smpRoad = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // its own scratch: smp/smp2 are live elsewhere in the frame
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
@@ -977,19 +998,50 @@ let playerWheelId = "standard", playerWheelVisual = null;
 // race render by startRace()'s recomputePlayerMods() call.
 let playerVisualKey = "11111111";
 
-function recomputePlayerMods() {
-  const team = player ? player.team : Teams.LIST[teamIdx];
+// Performance multipliers for ONE car, from its team's base stats and its own
+// parts setup. Factored out of recomputePlayerMods because these numbers are a
+// property of a CAR, not of "the player": while exactly one car was ever human
+// a module-level `playerMods` was indistinguishable from a per-car field, but
+// the moment a second human exists the singleton is silently wrong — a remote
+// driver would accelerate, brake and (via muBase) CORNER on the local player's
+// upgrades. Human cars carry the result as c.mods; AI cars have none and keep
+// running on c.tierV * c.skill.
+function modsFor(team, setup) {
   // teamStats() folds in career development; outside career it hands back the
   // team's own literal untouched, so this is the same object it always was.
   const stats = Career.teamStats(team) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
-  const setup = getTeamParts(team.id);
   const mods = Parts.getMods(setup, team);
-  playerMods = {
+  return {
     speed:     Parts.statMult(stats.speed)     * mods.speed,
     accel:     Parts.statMult(stats.accel)     * mods.accel,
     cornering: Parts.statMult(stats.cornering) * mods.cornering,
     braking:   Parts.statMult(stats.braking)   * mods.braking,
   };
+}
+
+// Assign a car's ROLE. Three flags, deliberately not one:
+//   human — driven by a person (local OR remote). Selects the full bicycle
+//           model, a world-space pose, the heavier collision mass, and an input
+//           source instead of the AI driver.
+//   local — the car on THIS screen. Selects Input, the camera, the HUD, audio,
+//           haptics, announcements and the particle FX.
+//   isPlayer — RETAINED as an alias of `local`, because that is exactly what
+//           every consumer outside this file already means by it (results.js's
+//           "you" row, agentview's "self", apex.js's player lookup, the specs,
+//           DEBUG-HOOKS.md). Keeping the name honest there is what lets this
+//           split stay contained to game.js.
+// A plain property, not a getter: these are read for every car on every tick.
+function setCarRole(c, human, local) {
+  c.human = !!human;
+  c.local = !!local;
+  c.isPlayer = !!local;
+}
+
+function recomputePlayerMods() {
+  const team = player ? player.team : Teams.LIST[teamIdx];
+  const setup = getTeamParts(team.id);
+  playerMods = modsFor(team, setup);
+  if (player) player.mods = playerMods;
   const vt = Parts.getVisualTiers(setup, team);
   playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
   playerTyreId = vt._ids ? vt._ids.tyres : "medium";
@@ -1005,6 +1057,22 @@ function recomputePlayerMods() {
 }
 
 // ---------- car setup ----------
+// The AI speed multiplier for one driver. Ratings apply in EVERY mode — the grid
+// has personality in a one-off Grand Prix too, not only in a career, which is
+// where career layers its own development deltas on top.
+//
+// The simRnd() draw is UNCONDITIONAL and comes FIRST. The stream position after
+// makeCars() must be identical whatever the ratings say: move the draw inside a
+// branch and a career's mere existence shifts every subsequent seeded result,
+// silently breaking tests/agent-determinism.spec.js, tests/autopilot.spec.js and
+// the seeded visual baselines. DriverRatings.skill() takes the sample rather than
+// drawing its own for exactly this reason.
+function driverSkill(team, d, di) {
+  const roll = simRnd();
+  const r = DriverRatings.get(d.code, team.tier, Career.devFor(team.id, di));
+  return DriverRatings.skill(r, roll);
+}
+
 function makeCars() {
   cars = [];
   // the custom team only enters the grid when the player has selected it
@@ -1029,7 +1097,13 @@ function makeCars() {
         + (simRnd() - 0.5) * 0.12, -0.85, 0.85);
       idx++;
       cars.push({
-        team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num, isPlayer: isP,
+        team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num,
+        // Role flags — see setCarRole. Today the only human IS the local player,
+        // so all three agree; a networked rival is human without being local.
+        human: isP, local: isP, isPlayer: isP,
+        // Per-car performance multipliers (human cars only — see modsFor).
+        // startRace()'s recomputePlayerMods() refreshes the local player's.
+        mods: isP ? modsFor(team, getTeamParts(team.id)) : null,
         color: team.color, tier: team.tier, seat: di,
         // Baked once here rather than looked up per physics step. Career team
         // development rides along in the same number the tier always contributed,
@@ -1045,7 +1119,7 @@ function makeCars() {
         finished: false, finishT: 0, finPos: 0,
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
-        skill: Math.min(1.0, 0.92 + simRnd() * 0.1),
+        skill: driverSkill(team, d, di),
         aiBrakeT: 0, lane,
       });
     });
@@ -1929,6 +2003,7 @@ const G = {
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
+  setCarRole, modsFor,   // multiplayer seam — see setCarRole
   startRace, startWeatherArc, update, wrapS,
 };
 
@@ -2110,6 +2185,10 @@ function update(dt) {
     ranked[i].rank = i + 1;
   }
 
+  // Leading human, for the AI rubber-band. Once per step, not once per AI car.
+  _leadHuman = null;
+  for (const c of cars) if (c.human && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
+
   for (const c of cars) updateCar(c, dt, ranked);
 
   resolveCollisions(ranked, dt);
@@ -2136,7 +2215,16 @@ function update(dt) {
   // race ends when the player finishes, or shortly after the winner does, or
   // at a hard time cap so it can never hang
   if (resultT === 0) {
-    if (player.finished) resultT = 2.2;
+    // EVERY human home, not just "the" player — with a second driver on track
+    // the race must not end the moment the first of them crosses the line.
+    // Identical to the old `player.finished` whenever there is exactly one.
+    let anyHuman = false, allHumansDone = true;
+    for (const c of cars) {
+      if (!c.human) continue;
+      anyHuman = true;
+      if (!c.finished) { allHumansDone = false; break; }
+    }
+    if (anyHuman && allHumansDone) resultT = 2.2;
     else if (cars.some((c) => c.finished)) resultT = 3.5;
     else if (raceT > 360 * lapsTarget) resultT = 0.1;
   }
@@ -2160,7 +2248,7 @@ function update(dt) {
 // the push is counted twice (shiftLong.prog + next-tick ds).
 function shiftLong(c, d) {
   c.s = wrapS(c.s + d);
-  if (!c.isPlayer) c.prog += d;
+  if (!c.human) c.prog += d;
 }
 
 // Collision feedback when the player is involved, scaled by impact (0..1).
@@ -2221,7 +2309,7 @@ function resolveCollisions(ranked, dt) {
         const penLong = LCAR - Math.abs(dProg);
         const penLat = WCAR - Math.abs(dX);
         if (penLong <= 0 || penLat <= 0) continue;
-        const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
+        const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1, iSum = iA + iB;
         // Closing into a nest at the lateral slop must be rear-end. Least-
         // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
         // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
@@ -2229,7 +2317,7 @@ function resolveCollisions(ranked, dt) {
         // player↔AI touch (e.g. grid pack with throttle held) drained the field.
         const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
         const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-        const forceRear = nestEdge && ((dProg >= 0 && b.isPlayer) || (dProg < 0 && a.isPlayer));
+        const forceRear = nestEdge && ((dProg >= 0 && b.human) || (dProg < 0 && a.human));
         const sideContact = penLat < penLong && !forceRear;
         if (sideContact) {
           // side-by-side contact: separate laterally, scrub a little speed. Mark
@@ -2296,11 +2384,11 @@ function resolveCollisions(ranked, dt) {
       const penLong = LCAR - Math.abs(dProg);
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
-      const iA = a.isPlayer ? 0.5 : 1, iB = b.isPlayer ? 0.5 : 1, iSum = iA + iB;
+      const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1, iSum = iA + iB;
       // Match the relaxation pass for player-as-rear nest-edge contacts.
       const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
       const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-      const forceRear = nestEdge && ((dProg >= 0 && b.isPlayer) || (dProg < 0 && a.isPlayer));
+      const forceRear = nestEdge && ((dProg >= 0 && b.human) || (dProg < 0 && a.human));
       const sideContact = penLat < penLong && !forceRear;
       if (sideContact) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
@@ -2354,12 +2442,22 @@ function updateCar(c, dt, ranked) {
   const k = Tracks.curvature(track, c.s);
   c.kCur = k;   // cache for the render loop's body-lean (avoids a 2nd curvature calc/car/frame)
   const dd = DIFF[difficulty];
+  // This car's own performance multipliers. Every site below that used to read
+  // the module-level `playerMods` reads this instead — see modsFor. AI cars
+  // never reach the branches that use it; the neutral fallback only guards a
+  // human car whose setup failed to resolve.
+  const mods = c.mods || NEUTRAL_MODS;
+  // This car's control source (human cars only — see inputOf).
+  const inp = inputOf(c);
 
   // --- speed targets ---
-  let vmax = VMAX * PACE * (c.isPlayer ? playerMods.speed : c.tierV * c.skill * dd.ai);
+  let vmax = VMAX * PACE * (c.human ? mods.speed : c.tierV * c.skill * dd.ai);
   // asymmetric rubber band — boost only when player is ahead; no artificial slow-down when behind
-  if (!c.isPlayer) {
-    const gap = player.prog - c.prog;
+  // Rubber-band against the LEADING human, not "the" player: with a second
+  // driver on track, banding off whoever happens to be the local car would let
+  // the slower human drag the whole field back. One human => identical.
+  if (!c.human && _leadHuman) {
+    const gap = _leadHuman.prog - c.prog;
     const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
     vmax *= 1 + bandFactor;
   }
@@ -2369,7 +2467,7 @@ function updateCar(c, dt, ranked) {
   // so the AI can pick the open side, commit to a pass, and dig itself out when
   // wedged — instead of grinding to a halt against a car or wall.
   let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false;
-  if (!c.isPlayer) {
+  if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
     // flows through barrier-lined corners instead of treating them as boxed-in).
     const edge = track.street ? hw - 0.8 : hw + 5;
@@ -2405,7 +2503,7 @@ function updateCar(c, dt, ranked) {
   c.otCool = Math.max(0, c.otCool - dt);
   if (c.otT > 0) c.otT -= dt;
   if (c.isPlayer && Input.consumeBoostToggle()) c.boostOn = !c.boostOn;   // BOOST is a toggle
-  const wantBoost = (c.isPlayer ? c.boostOn
+  const wantBoost = (c.human ? c.boostOn
     : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25))
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   if (wantBoost && c.energy > 0) {
@@ -2422,7 +2520,8 @@ function updateCar(c, dt, ranked) {
   const ahead = ranked[(c.rank || 1) - 2];
   const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
   c.otArmed = gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0 && !c.finished && c.speed > 15;
-  const fire = c.isPlayer ? Input.consumeOvertake() : (c.otArmed && simRnd() < 1 - Math.exp(-0.7 * dt));
+  const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
+                      : (c.otArmed && simRnd() < 1 - Math.exp(-0.7 * dt));
   if (fire && c.otArmed) {
     c.otT = OT_TIME; c.otCool = OT_COOL + OT_TIME;
     if (c.isPlayer && soundOn) GameAudio.deployBoost();
@@ -2437,9 +2536,9 @@ function updateCar(c, dt, ranked) {
   // ellipse both scale by it, so easing off the brake actually hands grip back
   // to the front tyres — trail-braking you can modulate, not just stamp/lift.
   let brakeLvl = 1;
-  if (c.isPlayer) {
-    braking = _testInput ? !!_testInput.brake : Input.braking();
-    brakeLvl = _testInput ? 1 : Math.max(0.15, Input.brakeLevel());
+  if (c.human) {
+    braking = inp ? !!inp.brake : Input.braking();
+    brakeLvl = inp ? 1 : Math.max(0.15, Input.brakeLevel());
   } else {
     // AI: brake for upcoming curvature
     const look = clamp(c.speed * 1.7, 30, 160);
@@ -2466,9 +2565,10 @@ function updateCar(c, dt, ranked) {
 
   // --- gearbox (player) ---
   let gearMult = 1, speedCap = vmax + 14 * Math.max(PACE, 0.05);   // ERS overspeed margin — a speed, so it rides the pace scale
-  if (c.isPlayer) {
+  if (c.human) {
     c.shiftT = Math.max(0, c.shiftT - dt);
-    const up = Input.consumeShiftUp(), down = Input.consumeShiftDown();
+    const up = c.local ? Input.consumeShiftUp() : !!inp.shiftUp,
+          down = c.local ? Input.consumeShiftDown() : !!inp.shiftDown;
     if (gearsManual()) {
       if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn) GameAudio.shift(true); }
       if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn) GameAudio.shift(false); }
@@ -2484,14 +2584,14 @@ function updateCar(c, dt, ranked) {
   // car accelerates on its own and braking still takes over below).
   // Suppress auto-throttle while wallT > 0 (just bounced off a wall) so the car
   // doesn't immediately re-pin itself: the player has to steer clear first.
-  const wallPinned = c.isPlayer && (c.wallT || 0) > 0;
-  const onThrottle = c.isPlayer
-    ? (_testInput ? !!_testInput.throttle : ((autoThrottle() && !wallPinned) || Input.throttle()))
+  const wallPinned = c.human && (c.wallT || 0) > 0;
+  const onThrottle = c.human
+    ? (inp ? !!inp.throttle : ((autoThrottle() && !wallPinned) || Input.throttle()))
     : true;
   if (braking) {
     if (c.speed > 0) {
-      c.speed = Math.max(0, c.speed - BRAKE * (c.isPlayer ? playerMods.braking * brakeLvl : 1) * dt);
-    } else if (c.isPlayer && state === "race") {
+      c.speed = Math.max(0, c.speed - BRAKE * (c.human ? mods.braking * brakeLvl : 1) * dt);
+    } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
       c.speed = Math.max(REVERSE_MAX, c.speed - REVERSE_ACCEL * dt);
@@ -2503,7 +2603,7 @@ function updateCar(c, dt, ranked) {
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + COAST_DRAG * dt);
     c.energy = Math.min(1, c.energy + REGEN * dt);
   } else {
-    const a = (ACCEL * PACE * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    const a = (ACCEL * PACE * (c.human ? mods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     c.speed = Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
   }
@@ -2523,7 +2623,7 @@ function updateCar(c, dt, ranked) {
       c.speed = Math.min(vmax * 1.06, c.speed + a * dt);
     }
   }
-  if (c.isPlayer) {
+  if (c.human) {
     const gearSpeed = Math.max(0, c.speed);   // gearbox readout ignores reverse crawl
     if (!gearsManual()) {
       const ng = naturalGear(gearSpeed);
@@ -2594,8 +2694,8 @@ function updateCar(c, dt, ranked) {
 
   // --- lateral ---
   let steer;
-  if (c.isPlayer) {
-    steer = _testInput ? (_testInput.steer ?? 0) : Input.steer();
+  if (c.human) {
+    steer = inp ? (inp.steer ?? 0) : Input.steer();
   }
   else {
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
@@ -2694,7 +2794,7 @@ function updateCar(c, dt, ranked) {
   // No Tracks.project() round-trip means progress can't snap onto the wrong leg at
   // a hairpin and (s, x) can't desync from a world position. c.px/c.pz are kept
   // only as a derived mirror for debug/telemetry. See the constants block.
-  if (c.isPlayer) {
+  if (c.human) {
     if (c.px == null) {   // init world pos from current Frenet state (first frame)
       const w0 = worldFromTrack(c.s, c.x, smp);   // exact inverse of trackFrom
       c.px = w0.x;
@@ -2808,7 +2908,7 @@ function updateCar(c, dt, ranked) {
     // transfer) for an acceleration that isn't actually happening.
     const axEstTarget = braking ? -BRAKE * brakeLvl
       : (onThrottle
-          ? ACCEL * PACE * (c.isPlayer ? playerMods.accel : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
+          ? ACCEL * PACE * (c.human ? mods.accel : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
@@ -2852,7 +2952,7 @@ function updateCar(c, dt, ranked) {
     // the car; it is a pure function of deterministic marble positions and returns
     // 1.0 (a true no-op) off-path. Subtle by construction (≤7% via MARBLE_GRIP_MIN).
     const marbleMu = DebrisWorld.active() ? DebrisWorld.marbleGrip(c) : 1;
-    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult() * playerMods.cornering * bankMu * (1 + vertLoad) * slipFactor * marbleMu;
+    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult() * mods.cornering * bankMu * (1 + vertLoad) * slipFactor * marbleMu;
     const muF = Math.max(0.5, muBase * loadF * FRONT_GRIP);
     const muR = Math.max(0.5, muBase * loadR * (1 - DRIFT * 0.55));
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
@@ -2933,7 +3033,7 @@ function updateCar(c, dt, ranked) {
     }
   }
   // set skid intensity once per frame (used by audio and by visual marks)
-  if (c.isPlayer) {
+  if (c.human) {
     // Squeal from the CAR's own slip, not from the road's curvature. This used to
     // be |k| * speed — so the tyres screamed because the ROAD bent, even if you
     // were driving dead straight through the corner with the tyres perfectly
@@ -2975,7 +3075,7 @@ function updateCar(c, dt, ranked) {
     }
     c.x = into > 0 ? wallR : -wallL;
     xPinned = true;
-    if (c.isPlayer) {
+    if (c.human) {
       // Slide along the barrier instead of stopping dead. Decompose the car's
       // heading into the part running ALONG the wall (kept) and the part driving
       // INTO it (killed): a shallow scrape barely slows you and you keep sliding,
@@ -3051,7 +3151,7 @@ function updateCar(c, dt, ranked) {
     c.wasOnWall = true;
   } else {
     c.wasOnWall = false;
-    if (c.isPlayer) c.wallT = Math.max(0, (c.wallT || 0) - dt);
+    if (c.human) c.wallT = Math.max(0, (c.wallT || 0) - dt);
   }
   // Re-sample at the NEW c.s — the yawVis block below reads the tangent here.
   //
@@ -3063,7 +3163,7 @@ function updateCar(c, dt, ranked) {
   // authority, but fatal now: it would overwrite the car's own integration with a
   // point reconstructed from the road every single frame, quietly putting the car
   // straight back onto the road's rails.
-  if (c.isPlayer && c.px != null) {
+  if (c.human && c.px != null) {
     if (xPinned) {
       const w = worldFromTrack(c.s, c.x, smp);   // exact inverse of trackFrom
       c.px = w.x;
@@ -3079,7 +3179,7 @@ function updateCar(c, dt, ranked) {
   // heading, so they lean from steer input + corner curvature (k>0 curves toward
   // screen-left, nose yaws toward -x — hence the negative sign).
   let yawTarget;
-  if (c.isPlayer && c.head != null) {
+  if (c.human && c.head != null) {
     let psi = Math.atan2(smp.t[0], smp.t[2]) - c.head;   // + = nose turned right (+x)
     while (psi > Math.PI) psi -= 2 * Math.PI;
     while (psi < -Math.PI) psi += 2 * Math.PI;
@@ -3098,7 +3198,7 @@ function updateCar(c, dt, ranked) {
   // Keep the deploy-side player-heading guard: for the player with a real
   // world heading, c.yawVis was already set to psi above — don't re-damp it
   // toward the road (that re-orients the driver to the arc). AI/no-head damp.
-  if (!(c.isPlayer && c.head != null)) c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
+  if (!(c.human && c.head != null)) c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
   // Chassis pitch/roll/heave (brake dive, throttle squat, cornering lean, kerb
   // bob) now live in the C2 visual-suspension springs (js/game/bodyattitude.js),
   // advanced per car in the render loop from axEstSm/speed/yawRateCur/kCur +
@@ -3110,7 +3210,7 @@ function updateCar(c, dt, ranked) {
     const heating = braking && c.speed > 12;
     c.brakeHeat = clamp((c.brakeHeat || 0) + (heating ? dt * 1.6 : -dt * 0.9), 0, 1);
   }
-  if (c.isPlayer) {
+  if (c.human) {
     // Combustion after-fire is a short throttle-lift transient, not a continuous
     // arcade torch. ERS deployment is electric and never feeds this state.
     const lifted = !!c.wasOnThrottle && !onThrottle && c.speed > 8;
@@ -3123,7 +3223,7 @@ function updateCar(c, dt, ranked) {
   // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
   let oldS = c._prevS ?? c.s;
-  if (!c.isPlayer) c.s = wrapS(c.s + c.speed * dt);
+  if (!c.human) c.s = wrapS(c.s + c.speed * dt);
   // Progress is the cumulative arc-length. For the PLAYER, derive it from the
   // actual (signed, wrap-aware) change in s — NOT speed*dt — so prog stays exactly
   // coupled to s, and going backwards (a spin/reverse) correctly DECREASES prog
@@ -3138,7 +3238,7 @@ function updateCar(c, dt, ranked) {
     oldS = wrapS(c.s - ds);
   }
 
-  if (c.isPlayer) {
+  if (c.human) {
     c.prog += ds;
   } else {
     ds = c.speed * dt;
@@ -3210,14 +3310,15 @@ function updateCar(c, dt, ranked) {
   if (isTimeTrial() && c.isPlayer && !c.incidentInvalidLap) Ghost.record(c.lapTime, c.s, c.x);
 
   // --- wrong-way + auto-rescue (player only) ---
-  if (c.isPlayer && state === "race" && !c.finished) {
+  if (c.human && state === "race" && !c.finished) {
     // Moving backwards along the track at speed = going the wrong way. (A slow
     // reverse crawl to recover off a wall is fine and does NOT trip this.)
     if (ds < -0.03 && c.speed > 15) c.wrongT = Math.min(2, (c.wrongT || 0) + dt);
     else c.wrongT = Math.max(0, (c.wrongT || 0) - dt * 2);
     c.wrongWay = c.wrongWay ? c.wrongT > 0.15 : c.wrongT > 0.4;
     if (c.wrongWay && (c.wrongCueT = (c.wrongCueT || 0) - dt) <= 0) {
-      announce("WRONG WAY", 1.0); c.wrongCueT = 1.0;
+      if (c.local) announce("WRONG WAY", 1.0);
+      c.wrongCueT = 1.0;
     }
     // Auto-rescue: stuck off-track, wrong-way, pinned to a wall, or simply
     // crawling/stopped on-track for too long. The last clause is the catch-all
@@ -3251,7 +3352,7 @@ function updateCar(c, dt, ranked) {
     if (stuck && !rescueGrace) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > 3) { rescuePlayer(c); c.rescueT = 0; }
-  } else if (!c.isPlayer && state === "race" && !c.finished) {
+  } else if (!c.human && state === "race" && !c.finished) {
     // Lightweight AI rescue: an AI beached in the grass or pinned against a
     // barrier (and NOT just shuffling in a pack — contactT/unstuckActive exclude
     // that) gets put back on the drivable surface after a few seconds, so it
@@ -3338,8 +3439,12 @@ function rescuePlayer(c) {
   c.boostOn = false; c.deploying = false;
   c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
   c.rescueLastT = raceT;
-  announce("RECOVERED", 1.2);
-  if (soundOn) GameAudio.offtrack();
+  // Cues are for the driver at THIS screen — a rival being recovered elsewhere
+  // on track must not announce itself here.
+  if (c.local) {
+    announce("RECOVERED", 1.2);
+    if (soundOn) GameAudio.offtrack();
+  }
 }
 
 // Record a completed time-trial lap: add it to the track's leaderboard tagged
@@ -3373,7 +3478,7 @@ function coast(c, dt) {
   // camera, anchored to s/x, drives away down the track: the car sits frozen on
   // the line for the ~2 s until the results screen. Heading follows the road
   // because nothing is steering any more.
-  if (c.isPlayer && c.px != null) {
+  if (c.human && c.px != null) {
     const w = worldFromTrack(c.s, c.x, smp);
     c.px = w.x; c.pz = w.z;
     c.head = Math.atan2(smp.t[0], smp.t[2]);
@@ -3899,11 +4004,38 @@ function render(dt) {
     const l = Math.hypot(x, y, z) || 1;
     _sunVS[0] = x/l; _sunVS[1] = y/l; _sunVS[2] = z/l;
   }
-  // World-up (0,1,0) in VIEW space: the second column of mat3(view). Used by the
-  // wet-road screen-space reflection to pick out up-facing road pixels.
+  // The ROAD PLANE's normal in VIEW space. Used by the wet-road SSR to pick out
+  // road pixels AND — the part that matters — as the plane its reflection ray is
+  // flattened onto (post.js: Nr = mix(Nv, upVSn, 0.85)).
+  //
+  // This was world-up (0,1,0), i.e. mat3(view)'s second column, which is only the
+  // road's normal ON THE FLAT. On a gradient θ the two differ by θ, the flatten
+  // carries 0.85 of that error into the reflection normal, and a reflection
+  // DOUBLES angular error — so a 10° climb threw the reflected ray ~17° off. At
+  // grazing incidence that ray only leaves the surface at 2-5°, so being 17° out
+  // either dives it into the tarmac (mirroring asphalt) or throws it clear over
+  // the scene (a miss). That is why the wet road went patchy specifically on
+  // elevation. Sampling the real road normal costs one track sample per frame.
+  //
+  // r is bank-rotated at build time (tracks.js), so n = r × t carries CAMBER too,
+  // not just gradient — the same basis the cockpit rig builds.
   {
-    const l = Math.hypot(_mView[4], _mView[5], _mView[6]) || 1;
-    _upVS[0] = _mView[4]/l; _upVS[1] = _mView[5]/l; _upVS[2] = _mView[6]/l;
+    let nx = 0, ny = 1, nz = 0;
+    if (track && player && player.s != null) {
+      Tracks.sample(track, player.s, _smpRoad);
+      const t = _smpRoad.t, r = _smpRoad.r;
+      const ux = r[1]*t[2] - r[2]*t[1],
+            uy = r[2]*t[0] - r[0]*t[2],
+            uz = r[0]*t[1] - r[1]*t[0];
+      const ul = Math.hypot(ux, uy, uz);
+      if (ul > 1e-6) { nx = ux/ul; ny = uy/ul; nz = uz/ul; }   // else keep world-up
+    }
+    // mat3(view) * n  (column-major: column j is elements 4j..4j+2)
+    const x = _mView[0]*nx + _mView[4]*ny + _mView[8]*nz,
+          y = _mView[1]*nx + _mView[5]*ny + _mView[9]*nz,
+          z = _mView[2]*nx + _mView[6]*ny + _mView[10]*nz;
+    const l = Math.hypot(x, y, z) || 1;
+    _upVS[0] = x/l; _upVS[1] = y/l; _upVS[2] = z/l;
   }
   frame.viewProj = _mVP;
   frame.proj = _mProj;

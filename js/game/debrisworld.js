@@ -713,7 +713,7 @@ function step(dt) {
     _v.y = _smp.p[1] + 0.45;
     _v.z = _smp.p[2] + _smp.r[2] / rl * c.x;
     m.setNextKinematicTranslation(_v);
-    const yaw = (c.isPlayer && c.head != null) ? c.head : Math.atan2(_smp.t[0], _smp.t[2]);
+    const yaw = (c.human && c.head != null) ? c.head : Math.atan2(_smp.t[0], _smp.t[2]);
     _q.x = 0; _q.y = Math.sin(yaw / 2); _q.z = 0; _q.w = Math.cos(yaw / 2);
     m.setNextKinematicRotation(_q);
   }

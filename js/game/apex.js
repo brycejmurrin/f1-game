@@ -589,14 +589,14 @@ const api = {
     const c = (idx <= 0 || !G.cars[idx]) ? (G.player || G.cars[0]) : G.cars[idx];
     if (!c) return false;
     // Derive world position from Frenet coords (s, x) — AI cars don't carry px/pz,
-    // only the player does. This works for all cars.
+    // only HUMAN-driven ones do. This works for all cars.
     const s = ((c.s % G.track.total) + G.track.total) % G.track.total;
     Tracks.sample(G.track, s, smp);
-    const cx = (c.isPlayer && c.px != null) ? c.px : smp.p[0] + smp.r[0] * (c.x || 0);
-    const cz = (c.isPlayer && c.pz != null) ? c.pz : smp.p[2] + smp.r[2] * (c.x || 0);
+    const cx = (c.human && c.px != null) ? c.px : smp.p[0] + smp.r[0] * (c.x || 0);
+    const cz = (c.human && c.pz != null) ? c.pz : smp.p[2] + smp.r[2] * (c.x || 0);
     const cyf = smp.p[1] + h;
-    // Heading basis: player has a real yaw (c.head); AI cars use the track tangent.
-    const hd = (c.isPlayer && c.head != null) ? c.head : Math.atan2(smp.t[0], smp.t[2]);
+    // Heading basis: a human car has a real yaw (c.head); AI uses the tangent.
+    const hd = (c.human && c.head != null) ? c.head : Math.atan2(smp.t[0], smp.t[2]);
     const fwdX = Math.sin(hd), fwdZ = Math.cos(hd);
     const rtX  = Math.cos(hd), rtZ  = -Math.sin(hd);
     const a = az * Math.PI / 180, e = Math.min(85, Math.max(-30, el)) * Math.PI / 180;
@@ -901,6 +901,23 @@ const api = {
     return c.money;
   },
   careerReset() { Career.clear(); G.refreshCareerButton(); return true; },
+  // The five-axis skill table (js/car/driver-ratings.js) with any career
+  // development folded in, plus the derived `overall`. No args = the whole 2026
+  // grid keyed by code. An unknown code resolves through the tier fallback; with
+  // no team to read a tier from it is treated as midfield (tier 2).
+  ratings(code) {
+    const one = (c, tier, teamId, seat) => {
+      const r = DriverRatings.get(c, tier, Career.devFor(teamId, seat));
+      return Object.assign({}, r, { overall: DriverRatings.overall(r) });
+    };
+    if (code) {
+      const car = G.cars.find((x) => x.code === code);
+      return car ? one(code, car.tier, car.team && car.team.id, car.seat) : one(code, 2, null, 0);
+    }
+    const out = {};
+    Teams.LIST.forEach((t) => t.drivers.forEach((d, i) => { out[d.code] = one(d.code, t.tier, t.id, i); }));
+    return out;
+  },
   // Load an optional .glb car model at runtime (team meshes rebuild from it,
   // tinted per livery); resolves false and keeps the procedural car on failure.
   loadCarModel: (url) => loadCarModel(url),
@@ -955,7 +972,18 @@ const api = {
       // Keep the render-interpolation anchors in sync (the render-driven loop
       // snapshots these before each step; a manual pump must too, or a frozen
       // render afterwards lerps toward a stale pre-teleport position).
-      for (let j = 0; j < G.cars.length; j++) { const c = G.cars[j]; c.rPrevS = c.s; c.rPrevX = c.x; }
+      // ALL FOUR, matching the loop: the player renders from WORLD space, so
+      // rPrevPx/rPrevPz drive its drawn position and rPrevHead its drawn heading.
+      // Snapshotting only (s, x) left those two holding whatever the grid or the
+      // previous session put there, so a headless jump()+step()+frozen render put
+      // the car — and with it the whole camera-anchored cockpit rig — somewhere
+      // else entirely, with no error to show for it.
+      for (let j = 0; j < G.cars.length; j++) {
+        const c = G.cars[j];
+        c.rPrevS = c.s; c.rPrevX = c.x;
+        c.rPrevPx = c.px; c.rPrevPz = c.pz;
+        c.rPrevYawVis = c.yawVis; c.rPrevHead = c.head;
+      }
       update(d);
     }
   },
@@ -1060,6 +1088,7 @@ const api = {
       // tierV folds the team's TIER_V together with career team development;
       // skill is the driver. Both are 1-ish multipliers on vmax.
       tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6),
+      ratings: DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat)),
       x: +c.x.toFixed(3), speed: +c.speed.toFixed(2),
       prog: +c.prog.toFixed(2), s: +c.s.toFixed(2), lap: c.lap,
       finished: !!c.finished, finishT: c.finishT != null ? +c.finishT.toFixed(2) : null,
@@ -1477,6 +1506,63 @@ const api = {
       finished: !!c.finished,
       finishT:  c.finishT != null ? +c.finishT.toFixed(2) : null,
     }));
+  },
+
+  // ── Multiplayer seam (js/game.js: setCarRole / inputOf / modsFor) ────────
+  //
+  // carRoles() — who is driving what, for every car on the grid.
+  //   human — driven by a PERSON, local or remote. Selects the full per-axle
+  //           bicycle model, a world-space pose, the heavier collision mass,
+  //           and an input source instead of the AI driver.
+  //   local — the car on THIS screen: Input, camera, HUD, audio, haptics.
+  //   isPlayer — the retained alias of `local`.
+  // vLat/yawRateCur are included because they are the observable signature of
+  // the bicycle model: the AI is kinematic and leaves both at zero forever.
+  carRoles() {
+    return G.cars.map((c, i) => ({
+      id: i, code: c.code, team: c.team && c.team.id,
+      human: !!c.human, local: !!c.local, isPlayer: !!c.isPlayer,
+      hasPose: c.px != null && c.head != null,
+      vLat: +(c.vLat || 0).toFixed(4),
+      yawRateCur: +(c.yawRateCur || 0).toFixed(4),
+      mods: c.mods ? Object.assign({}, c.mods) : null,
+      netInput: c.netInput ? Object.assign({}, c.netInput) : null,
+    }));
+  },
+
+  // carRole(idx, {human?, local?, mods?}) — promote a car to human control
+  // (which is what a networked rival IS) or hand it back to the AI. Omitted
+  // fields are left alone. `mods` sets that car's own part multipliers; pass
+  // null to clear them back to neutral. Returns the car's new role, or false
+  // for a bad index.
+  carRole(idx, o) {
+    const c = G.cars[idx];
+    if (!c) return false;
+    o = o || {};
+    G.setCarRole(c,
+      o.human === undefined ? !!c.human : !!o.human,
+      o.local === undefined ? !!c.local : !!o.local);
+    if (o.mods !== undefined) {
+      c.mods = o.mods
+        ? Object.assign({ speed: 1, accel: 1, cornering: 1, braking: 1 }, o.mods)
+        : null;
+    }
+    if (!c.human) c.netInput = null;   // an AI car drives itself
+    return {
+      id: idx, human: !!c.human, local: !!c.local, isPlayer: !!c.isPlayer,
+      mods: c.mods ? Object.assign({}, c.mods) : null,
+    };
+  },
+
+  // carInput(idx, {steer, throttle, brake, shiftUp?, shiftDown?, overtake?})
+  // — the controls a NON-LOCAL human car drives on, same shape as setInput().
+  // Pass null to clear (the car then coasts). Ignored by the local car, which
+  // reads the real Input, and by AI cars, which drive themselves.
+  carInput(idx, input) {
+    const c = G.cars[idx];
+    if (!c) return false;
+    c.netInput = input || null;
+    return c.netInput ? Object.assign({}, c.netInput) : null;
   },
 
   // aiPlace(idx, frac, speed?, x?) — teleport an AI car (by cars[] index) to

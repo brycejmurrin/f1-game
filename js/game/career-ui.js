@@ -23,6 +23,12 @@ function create(G) {
   // opening the screen and pressing START, and Career.start() is what makes it real.
   let draft = null;
 
+  // Section heading. Uses the shared .sel-label from css/components.css — the same
+  // dim uppercase text with the skewed red tick that #select and the garage use —
+  // so the career pages read as part of the same family rather than a new screen
+  // with its own idea of what a heading looks like. h3, as elsewhere.
+  function head(text) { return el("h3", "sel-label", text); }
+
   function el(tag, cls, text) {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -38,7 +44,7 @@ function create(G) {
     const teams = starterTeams();
     return {
       flavour: "driver",
-      teamId: teams.length ? teams[teams.length - 1].id : "haas",
+      teamId: teams.length ? teams[0].id : "haas",
       seat: 1,                 // the junior seat by default — you are the newcomer
       name: "Your Name", code: "YOU", num: 99,
     };
@@ -50,7 +56,7 @@ function create(G) {
     const left = $("cr-left"), right = $("cr-right");
     left.textContent = ""; right.textContent = "";
 
-    left.appendChild(el("div", "cr-head", "CAREER TYPE"));
+    left.appendChild(head("CAREER TYPE"));
     const flavours = el("div", "cr-flavours");
     for (const [id, label, blurb] of [
       ["driver", "DRIVER", "Sign for a team, hit your targets, earn a better seat."],
@@ -71,7 +77,7 @@ function create(G) {
     left.appendChild(flavours);
 
     if (draft.flavour === "driver") {
-      left.appendChild(el("div", "cr-head", "WHO WILL HAVE YOU"));
+      left.appendChild(head("WHO WILL HAVE YOU"));
       left.appendChild(el("div", "cr-note",
         "Nobody at the front signs a rookie. Beat the car you are given and the offers improve."));
       const grid = el("div", "cr-teamgrid");
@@ -81,8 +87,13 @@ function create(G) {
         const sw = el("span", "cr-teamtile-sw");
         sw.style.background = G.cssCol(t.color);
         sw.style.borderColor = G.cssCol(t.color2);
+        // Salary is a function of tier, so the four tier-3 teams all offer the
+        // same number and a salary-only line reads as a bug. The car rating is
+        // what actually separates them, and it is the thing you are choosing.
+        const car = Math.round((t.stats.speed + t.stats.accel + t.stats.cornering + t.stats.braking) / 4);
         b.append(sw, el("span", "cr-teamtile-name", t.name),
-          el("span", "cr-teamtile-meta", t.engine + " · SALARY " + Career.salaryFor(t, 30) + " cr"));
+          el("span", "cr-teamtile-meta",
+            t.engine + " · CAR " + car + " · " + Career.salaryFor(t, 30) + " cr"));
         b.onclick = () => { draft.teamId = t.id; buildSetupPanes(); if (G.soundOn) GameAudio.uiTick(); };
         grid.appendChild(b);
       }
@@ -90,7 +101,7 @@ function create(G) {
     }
 
     // ---- identity ----
-    right.appendChild(el("div", "cr-head", draft.flavour === "myteam" ? "TEAM PRINCIPAL" : "YOUR DRIVER"));
+    right.appendChild(head(draft.flavour === "myteam" ? "TEAM PRINCIPAL" : "YOUR DRIVER"));
     const form = el("div", "cr-form");
     const addField = (label, value, maxlen, onInput, type) => {
       const wrap = el("label", "cr-field");
@@ -114,7 +125,7 @@ function create(G) {
     if (draft.flavour === "driver") {
       const team = Teams.LIST.find((t) => t.id === draft.teamId);
       if (team) {
-        right.appendChild(el("div", "cr-head", "THE SEAT"));
+        right.appendChild(head("THE SEAT"));
         const seats = el("div", "cr-seats");
         team.drivers.forEach((d, i) => {
           const b = el("button", "cr-seat" + (draft.seat === i ? " active" : ""));
@@ -166,7 +177,7 @@ function create(G) {
       meter("ROUND", (Math.min(st.round + 1, st.rounds)) + " / " + st.rounds));
 
     // ---- left: contract + objectives ----
-    left.appendChild(el("div", "cr-head", "CONTRACT"));
+    left.appendChild(head("CONTRACT"));
     if (c.deal) {
       const card = el("div", "cr-card");
       card.append(
@@ -178,7 +189,7 @@ function create(G) {
       left.appendChild(card);
     }
 
-    left.appendChild(el("div", "cr-head", "THE CAR"));
+    left.appendChild(head("THE CAR"));
     const carCard = el("div", "cr-card");
     const fittedCost = Parts.getCost(c.fitted, team);
     carCard.append(
@@ -189,12 +200,12 @@ function create(G) {
 
     // ---- right: next race + standings ----
     if (Career.seasonDone()) {
-      right.appendChild(el("div", "cr-head", "SEASON COMPLETE"));
+      right.appendChild(head("SEASON COMPLETE"));
       right.appendChild(el("div", "cr-note", "All " + st.rounds + " rounds are done. " +
         "Close out the year to see where you finished."));
     } else {
       const t = Tracks.SEASON[c.season.round];
-      right.appendChild(el("div", "cr-head", "NEXT RACE"));
+      right.appendChild(head("NEXT RACE"));
       const nr = el("div", "cr-card cr-nextrace");
       nr.append(
         el("div", "cr-nr-round", "ROUND " + (c.season.round + 1)),
@@ -206,7 +217,7 @@ function create(G) {
       for (let i = c.season.round + 1; i < Math.min(c.season.round + 5, Tracks.SEASON.length); i++)
         upcoming.push({ n: i + 1, t: Tracks.SEASON[i] });
       if (upcoming.length) {
-        right.appendChild(el("div", "cr-head", "UPCOMING"));
+        right.appendChild(head("UPCOMING"));
         for (const u of upcoming) {
           const r = el("div", "season-upcoming-row");
           r.append(el("span", "sur-rnd", "R" + u.n), el("span", "sur-name", u.t.name),
@@ -219,7 +230,7 @@ function create(G) {
     // Championship snapshot — only once there is something to show.
     const entries = Object.entries(c.season.pts).sort((a, b) => b[1] - a[1]).slice(0, 5);
     if (entries.length) {
-      right.appendChild(el("div", "cr-head", "CHAMPIONSHIP"));
+      right.appendChild(head("CHAMPIONSHIP"));
       entries.forEach(([driverId, pts], i) => {
         const teamId = driverId.split(":")[0];
         const dTeam = Teams.LIST.find((x) => x.id === teamId);

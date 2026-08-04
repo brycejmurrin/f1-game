@@ -1,0 +1,246 @@
+/* net-snapshot.test.mjs — the wire format and the interpolation buffer.
+ *
+ * These are the two places multiplayer fails SILENTLY. A codec that loses a
+ * bit produces a car slightly in the wrong place, not an exception. An
+ * interpolator that mishandles the lap wrap sends a rival sprinting backwards
+ * down the circuit once per lap, which looks like a physics bug and gets
+ * debugged in entirely the wrong file. So both get pinned here, in a suite
+ * that runs in milliseconds.
+ *
+ * Run: node --test tests/net-snapshot.test.mjs   (npm run test:net-unit)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const NetSnapshot = eval(
+  fs.readFileSync(path.join(ROOT, "js/net/snapshot.js"), "utf8") + ";NetSnapshot");
+
+const TAU = Math.PI * 2;
+const car = (o) => Object.assign({
+  s: 0, x: 0, head: 0, speed: 0, gear: 1, lap: 0,
+  deploying: false, offroad: false, onKerb: false, braking: false,
+}, o);
+
+// ---------------------------------------------------------------------------
+// Snapshot codec
+// ---------------------------------------------------------------------------
+
+test("a car round-trips within the stated quantisation", () => {
+  const src = car({ s: 4213.37, x: -3.62, head: 2.1, speed: 82.4, gear: 7, lap: 12,
+                    deploying: true, onKerb: true });
+  const bytes = NetSnapshot.encodeSnapshot(99, [{ id: 5, car: src }]);
+  const out = NetSnapshot.decodeSnapshot(bytes);
+
+  assert.equal(out.tick, 99);
+  assert.equal(out.cars.length, 1);
+  const c = out.cars[0];
+  assert.equal(c.id, 5);
+  // 1 cm of position, 1 cm/s of speed, ~0.006 deg of heading.
+  assert.ok(Math.abs(c.s - src.s) <= 0.01, `s off by ${Math.abs(c.s - src.s)}`);
+  assert.ok(Math.abs(c.x - src.x) <= 0.01);
+  assert.ok(Math.abs(c.speed - src.speed) <= 0.01);
+  assert.ok(Math.abs(c.head - src.head) <= 0.0002);
+  assert.equal(c.gear, 7);
+  assert.equal(c.lap, 12);
+  assert.equal(c.deploying, true);
+  assert.equal(c.onKerb, true);
+  assert.equal(c.offroad, false);
+  assert.equal(c.braking, false);
+});
+
+test("the packet is 13 bytes per car", () => {
+  // Not a micro-optimisation — it is what makes a 20 Hz full-grid broadcast
+  // cost ~5 KB/s, i.e. a non-issue. If this grows, check it was on purpose.
+  const one = NetSnapshot.encodeSnapshot(1, [{ id: 0, car: car({}) }]);
+  const two = NetSnapshot.encodeSnapshot(1, [{ id: 0, car: car({}) }, { id: 1, car: car({}) }]);
+  assert.equal(two.length - one.length, NetSnapshot.CAR_BYTES);
+  assert.equal(NetSnapshot.CAR_BYTES, 13);
+  assert.equal(two.length, 6 + 2 * 13);
+});
+
+test("reverse speed survives the wire", () => {
+  // speed is SIGNED on purpose: the game lets a stopped car crawl backwards
+  // off a wall, and an unsigned field would send it forwards at 650 m/s.
+  const bytes = NetSnapshot.encodeSnapshot(1, [{ id: 0, car: car({ speed: -2.5 }) }]);
+  assert.ok(Math.abs(NetSnapshot.decodeSnapshot(bytes).cars[0].speed + 2.5) <= 0.01);
+});
+
+test("a full 22-car grid still fits comfortably", () => {
+  const entries = [];
+  for (let i = 0; i < 22; i++) entries.push({ id: i, car: car({ s: i * 100, speed: 80 }) });
+  const bytes = NetSnapshot.encodeSnapshot(1234, entries);
+  assert.equal(bytes.length, 6 + 22 * 13);
+  const out = NetSnapshot.decodeSnapshot(bytes);
+  assert.equal(out.cars.length, 22);
+  assert.equal(out.cars[21].id, 21);
+  // 20 Hz of this is ~5.3 KB/s.
+  assert.ok(bytes.length * 20 < 7000);
+});
+
+test("a truncated packet decodes to nothing rather than a garbage car", () => {
+  const bytes = NetSnapshot.encodeSnapshot(1, [{ id: 0, car: car({ s: 500 }) }]);
+  assert.equal(NetSnapshot.decodeSnapshot(bytes.slice(0, bytes.length - 4)), null);
+  assert.equal(NetSnapshot.decodeSnapshot(new Uint8Array(2)), null);
+  assert.equal(NetSnapshot.decodeSnapshot(null), null);
+});
+
+test("a snapshot is not mistaken for an input packet", () => {
+  const snap = NetSnapshot.encodeSnapshot(1, [{ id: 0, car: car({}) }]);
+  const inp = NetSnapshot.encodeInputs(1, [{ steer: 0.5, throttle: true }]);
+  assert.equal(NetSnapshot.decodeInputs(snap), null);
+  assert.equal(NetSnapshot.decodeSnapshot(inp), null);
+  assert.equal(NetSnapshot.packetType(snap), NetSnapshot.TYPE_SNAPSHOT);
+  assert.equal(NetSnapshot.packetType(inp), NetSnapshot.TYPE_INPUT);
+});
+
+// ---------------------------------------------------------------------------
+// Input codec
+// ---------------------------------------------------------------------------
+
+test("inputs round-trip and carry their own tick numbers", () => {
+  // The list is sent tail-first: `tick` is the LAST entry, earlier ones are
+  // the preceding ticks. That redundancy is how a lossy channel survives.
+  const sent = [
+    { steer: -1, throttle: false, brake: true },
+    { steer: 0, throttle: true, brake: false, shiftUp: true },
+    { steer: 0.5, throttle: true, overtake: true, boostOn: true },
+  ];
+  const out = NetSnapshot.decodeInputs(NetSnapshot.encodeInputs(100, sent));
+  assert.equal(out.tick, 100);
+  assert.deepEqual(out.inputs.map((i) => i.tick), [98, 99, 100]);
+  assert.equal(out.inputs[0].brake, true);
+  assert.equal(out.inputs[0].throttle, false);
+  assert.ok(Math.abs(out.inputs[0].steer + 1) < 0.01);
+  assert.equal(out.inputs[1].shiftUp, true);
+  assert.equal(out.inputs[2].overtake, true);
+  assert.equal(out.inputs[2].boostOn, true);
+  assert.ok(Math.abs(out.inputs[2].steer - 0.5) < 0.01);
+});
+
+test("an input packet is 2 bytes per tick", () => {
+  const a = NetSnapshot.encodeInputs(1, [{}]);
+  const b = NetSnapshot.encodeInputs(1, [{}, {}, {}, {}]);
+  assert.equal(b.length - a.length, 6);   // 3 extra ticks x 2 bytes
+});
+
+// ---------------------------------------------------------------------------
+// Interpolation buffer
+// ---------------------------------------------------------------------------
+
+const TOTAL = 5000;   // a 5 km circuit
+
+test("a car is drawn between the two packets bracketing the delayed present", () => {
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 100 });
+  buf.push(1000, car({ s: 100, x: 0, speed: 50 }));
+  buf.push(1100, car({ s: 150, x: 2, speed: 50 }));
+  // now = 1200 => target = 1100... step back to land mid-way between packets.
+  const mid = buf.sample(1150);   // target 1050, halfway
+  assert.ok(Math.abs(mid.s - 125) < 0.001, `expected s=125, got ${mid.s}`);
+  assert.ok(Math.abs(mid.x - 1) < 0.001);
+  assert.equal(mid.extrapolated, false);
+});
+
+test("s interpolation takes the short way round the start/finish line", () => {
+  // THE bug this file exists for. Without wrap handling, a car crossing the
+  // line appears to drive the entire lap backwards, once per lap.
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+  buf.push(0, car({ s: TOTAL - 50, speed: 100 }));
+  buf.push(100, car({ s: 50, speed: 100 }));      // wrapped past the line
+  const mid = buf.sample(50);
+  // Halfway between 4950 and 50 the short way is exactly the line itself.
+  assert.ok(mid.s > TOTAL - 5 || mid.s < 5, `should be near the line, got ${mid.s}`);
+});
+
+test("heading interpolation takes the short way round too", () => {
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+  buf.push(0, car({ head: 0.1 }));
+  buf.push(100, car({ head: TAU - 0.1 }));        // just the other side of 0
+  const mid = buf.sample(50);
+  const nearZero = Math.min(mid.head, TAU - mid.head);
+  assert.ok(nearZero < 0.02, `should pass through 0, got ${mid.head}`);
+});
+
+test("a late packet extrapolates ALONG THE ROAD, and gives up after a bound", () => {
+  // Extrapolating in (s, x) cannot put a car through a barrier — it follows
+  // the centreline by construction. But a guess still goes stale.
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0, maxExtrapMs: 250 });
+  buf.push(0, car({ s: 1000, x: 1.5, speed: 100 }));
+
+  const at100 = buf.sample(100);
+  assert.equal(at100.extrapolated, true);
+  assert.ok(Math.abs(at100.s - 1010) < 0.001, `100 m/s for 0.1 s = +10 m, got ${at100.s}`);
+  assert.equal(at100.x, 1.5, "lateral offset must NOT be extrapolated");
+
+  // Capped: 2 s of silence must not fling the car 200 m up the road.
+  const at2s = buf.sample(2000);
+  assert.ok(Math.abs(at2s.s - 1025) < 0.001, `should cap at 250 ms (+25 m), got ${at2s.s}`);
+});
+
+test("extrapolation wraps at the line rather than running past the track length", () => {
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+  buf.push(0, car({ s: TOTAL - 10, speed: 100 }));
+  const out = buf.sample(200);                     // +20 m, past the line
+  assert.ok(out.s >= 0 && out.s < TOTAL, `s must stay on the track, got ${out.s}`);
+  assert.ok(Math.abs(out.s - 10) < 0.001, `expected to wrap to ~10, got ${out.s}`);
+});
+
+test("out-of-order and duplicate packets are handled, not trusted", () => {
+  // The state channel is unordered and lossy BY DESIGN, so arrival order
+  // means nothing and the same packet may show up twice.
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+  buf.push(200, car({ s: 300 }));
+  buf.push(0, car({ s: 100 }));                    // arrives late, belongs first
+  buf.push(100, car({ s: 200 }));                  // slots into the middle
+  assert.equal(buf.size(), 3);
+  assert.equal(buf.oldest().s, 100);
+  assert.equal(buf.newest().s, 300);
+  assert.ok(Math.abs(buf.sample(100).s - 200) < 0.001, "must have re-sorted by tick");
+
+  assert.equal(buf.push(100, car({ s: 999 })), false, "duplicate tick should be refused");
+  assert.equal(buf.size(), 3);
+});
+
+test("predict() is ahead of sample() — contact must not use the drawn pose", () => {
+  // Remote cars are DRAWN ~100 ms in the past so the motion is smooth. Testing
+  // collisions against that pose would have you hit a rival where they were,
+  // not where they are.
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 100 });
+  buf.push(1000, car({ s: 500, speed: 90 }));
+  const drawn = buf.sample(1100);      // target 1000 — exactly the packet
+  const actual = buf.predict(1100);    // 100 ms on from it
+  assert.ok(actual.s > drawn.s, "predict must lead sample");
+  assert.ok(Math.abs((actual.s - drawn.s) - 9) < 0.01, "90 m/s for 100 ms = 9 m");
+});
+
+test("an empty buffer reports nothing rather than inventing a car", () => {
+  const buf = NetSnapshot.createInterp({ total: TOTAL });
+  assert.equal(buf.sample(0), null);
+  assert.equal(buf.predict(0), null);
+  assert.equal(buf.newest(), null);
+});
+
+test("the buffer is bounded, so a long session cannot grow it without limit", () => {
+  const buf = NetSnapshot.createInterp({ total: TOTAL, keep: 8 });
+  for (let i = 0; i < 200; i++) buf.push(i * 50, car({ s: i }));
+  assert.equal(buf.size(), 8);
+  assert.equal(buf.newest().s, 199, "the newest must always be kept");
+});
+
+test("discrete fields step instead of blending", () => {
+  // Half a gear is not a thing, and a half-set kerb flag would flicker the
+  // rumble on a rival's car.
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+  buf.push(0, car({ gear: 3, lap: 1, onKerb: false }));
+  buf.push(100, car({ gear: 4, lap: 2, onKerb: true }));
+  const early = buf.sample(20), late = buf.sample(80);
+  assert.equal(early.gear, 3);
+  assert.equal(early.lap, 1);
+  assert.equal(early.onKerb, false);
+  assert.equal(late.gear, 4);
+  assert.equal(late.lap, 2);
+  assert.equal(late.onKerb, true);
+});

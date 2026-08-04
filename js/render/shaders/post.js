@@ -717,8 +717,37 @@ void main() {
     // IS up-facing, so assume uUpVS: SSR then fades out on the smooth distance
     // taper below instead of snapping off.
     vec3 upVSn = normalize(uUpVS);
-    vec3 Nv = crvL > 1e-6 ? crv / crvL : upVSn;
+    // ...but crvL > 1e-6 is an ABSOLUTE magnitude, and that is the wrong test.
+    // crvL scales with |dpx|·|dpy|, and at grazing distance those derivatives span
+    // METRES — so the cross product stays large while its DIRECTION is pure depth
+    // quantization noise. The guard therefore almost never fired where it was
+    // needed: measured on a wet straight from the cockpit, upDot collapsed and
+    // smoothstep(0.25, 0.55, upDot) zeroed the road mask across everything past
+    // the first few metres, leaving a narrow glossy strip in front of the car and
+    // matte tarmac for the rest of the frame. Test the CONDITIONING instead — the
+    // sine of the angle between the two derivatives, which is scale-free — so the
+    // fallback fires exactly when the basis is degenerate, at any distance.
+    float sinT = crvL / max(length(dpx) * length(dpy), 1e-12);
+    vec3 Nv = (crvL > 1e-6 && sinT > 0.08) ? crv / crvL : upVSn;
     if (Nv.z < 0.0) Nv = -Nv;                     // face the eye (view space looks down -z)
+    // ...and THAT flip is what actually killed the wet road. A ground normal seen
+    // at grazing incidence is world-up, whose view-space z is ~0 — so "face the
+    // eye" picks its sign off a near-zero component, i.e. essentially at random,
+    // and with the camera pitched up (an uphill, or just the cockpit's look-ahead)
+    // it lands DOWNWARD. upDot then reads -1, smoothstep(0.25, 0.55, upDot)
+    // returns 0, and the road mask collapses across everything past the first few
+    // metres: a narrow glossy strip in front of the car, matte tarmac for the rest
+    // of the frame, and a hard line where the sign flips. MEASURED by rendering
+    // the three roadMask gates to RGB — the road came back cyan (upDot gate 0)
+    // beyond one white band.
+    //
+    // Alignment with up is a DOUBLE-SIDED property of a plane, so don't decide it
+    // from a coin-toss component: re-orient a clearly ground-facing normal upward.
+    // Walls sit at |dot| ~ 0.0-0.1, well inside the dead band, so the road-vs-wall
+    // classification this mask exists for is untouched. Nv itself is re-oriented
+    // (not just upDot) so the flattened reflection normal Nr and the car mask stay
+    // consistent with it.
+    if (dot(Nv, upVSn) < -0.25) Nv = -Nv;
     float upDot = dot(Nv, upVSn);
     // Up-facing AND not the very-near cockpit (z near 0). P.z is negative ahead.
     // Fade out the far field: depth precision + coarse march steps there breed
@@ -750,6 +779,7 @@ void main() {
     float carTerm  = carMask  * uCarReflect;
     float ssrGate  = max(roadTerm, carTerm);
     if (ssrGate > 0.001) {
+      bool carDom = carTerm > roadTerm;   // hoisted: the march needs it too
       vec3 V = normalize(-P);
       // The ROAD reflects off a near-FLAT plane, not its bumpy per-pixel normal.
       // Nv is reconstructed from depth derivatives, so it picks up the road's
@@ -757,11 +787,17 @@ void main() {
       // scatters the reflected ray, so the march hits on-screen scenery in some
       // pixels and shoots off-screen (miss) in others. That is the "patchy, shifts
       // as I drive" wet road: the reflective/matte split wanders with the bumps and
-      // the camera. Reflecting off the smooth road plane (world-up in view space)
-      // keeps every road pixel's ray coherent → one continuous, stable reflection
-      // that still mirrors the real scene. Car paint keeps its true normal (curved
-      // bodywork needs it). 0.85 toward flat: kills the bump scatter while retaining
-      // a little real slope/bank response.
+      // the camera. Reflecting off the smooth road plane keeps every road pixel's
+      // ray coherent → one continuous, stable reflection that still mirrors the
+      // real scene. Car paint keeps its true normal (curved bodywork needs it).
+      // 0.85 toward flat: kills the bump scatter while retaining a little real
+      // slope/bank response.
+      //
+      // upVSn is the ROAD's normal, not world-up (game.js builds it from r × t).
+      // That distinction is the whole elevation story: flattening onto world-up
+      // put this normal a full gradient-angle off the surface it is meant to
+      // approximate, the reflect() doubled it, and on any real climb the ray left
+      // at an angle the road never had.
       vec3 Nr = (carTerm > roadTerm) ? Nv : normalize(mix(Nv, upVSn, 0.85));
       vec3 R = reflect(-V, Nr);                    // points up toward the city
       // Finer refined march: small fixed steps (dense near/mid) so small/distant
@@ -803,7 +839,31 @@ void main() {
             if (ssrViewPos(muv).z - mid.z > 0.20) b = mid; else a = mid;
           }
           vec4 fc = uProj * vec4(b, 1.0);
-          hitUV = fc.xy / fc.w * 0.5 + 0.5;
+          vec2 huv = fc.xy / fc.w * 0.5 + 0.5;
+          // GRAZING SELF-REFLECTION REJECT. From a low onboard eye the reflected
+          // ray leaves the tarmac at the same shallow angle the view ray arrived,
+          // so it skims a metre above the road for tens of metres — and the march
+          // lands on the ROAD ITSELF a short way ahead (measured: the whole
+          // mid-frame band of a wet straight mirrors wet-darkened asphalt). The
+          // wet mirror then fills with tarmac, reads MATTE, and butts against the
+          // analytic sky mirror beside it as a hard-edged patch. Physically a
+          // rough wet surface contributes almost nothing to its own grazing
+          // reflection, so reject a hit whose surface faces the same way the
+          // reflector does and keep marching — the ray climbs and may still find
+          // a barrier, car or tree. Normals are reconstructed on the same 3-texel
+          // baseline as Nv, and the eye-facing flip keeps the up/down distinction
+          // (a roof UNDERSIDE reads down-facing, so real overheads still mirror).
+          if (!carDom) {
+            vec3 hP  = ssrViewPos(huv);
+            vec3 hdx = ssrViewPos(huv + vec2(nT.x, 0.0)) - hP;
+            vec3 hdy = ssrViewPos(huv + vec2(0.0, nT.y)) - hP;
+            vec3 hcr = cross(hdx, hdy);
+            float hcl = length(hcr);
+            vec3 hN  = hcl > 1e-6 ? hcr / hcl : upVSn;
+            if (hN.z < 0.0) hN = -hN;
+            if (dot(hN, upVSn) > 0.55) continue;
+          }
+          hitUV = huv;
           hitDist = length(b - P);
           vec2 e = abs(hitUV - 0.5) * 2.0;
           hit = 1.0 - pow(max(e.x, e.y), 4.0);     // screen-edge fade
@@ -843,8 +903,20 @@ void main() {
       // the ZENITH — matching the lit shader's analytic env mix(horizon,zenith)
       // and physical wet-road reflection. Was mix(zenith,horizon), inverted, so
       // the reflected sky bands ran upside-down vs the road's own paint mirror.
-      vec3 skyRefl = mix(uReflSkyHi, uReflSkyLo, clamp(R.y, 0.0, 1.0));
-      vec3 reflCol = found ? hitCol : skyRefl;
+      // ...but "up-ness" is measured against the surface, and R.y is the ray's
+      // VIEW-space y — those only agree while the camera is level. In the cockpit
+      // the view pitches with the road, so on a climb or a dip R.y drifted off the
+      // real up axis and the fallback picked horizon-vs-zenith from the wrong one:
+      // the miss regions took a sky colour that did not belong to the direction
+      // they were reflecting. Now that a miss substitutes at the same cover as a
+      // hit, that error is fully visible, so measure against the road plane.
+      vec3 skyRefl = mix(uReflSkyHi, uReflSkyLo, clamp(dot(R, upVSn), 0.0, 1.0));
+      // CONFIDENCE in the marched hit, not a boolean. hit already tapers as the
+      // hit approaches the frame border; blending the fallback in over that taper
+      // (instead of swapping colours outright) means a ray that walks off screen
+      // hands over to the sky smoothly rather than at a pixel-wide seam.
+      float conf = found ? clamp(hit, 0.0, 1.0) : 0.0;
+      vec3 reflCol = mix(skyRefl, hitCol, conf);
       // SPECULAR OCCLUSION: the diffuse AO above never touched the reflection
       // terms, so a mirrored wet road / glossy deck inside an occluded crease
       // (under the car, wheel wells, barrier feet) still GLOWED with reflected
@@ -859,22 +931,35 @@ void main() {
       // the whole mirror surface toward white. Compressing here caps the mirror
       // itself at a sane peak while keeping its colour (unlike a post multiply).
       reflCol = reflCol / (1.0 + reflCol * 0.35);
-      bool carDom = carTerm > roadTerm;
-      // A march MISS means "nothing on-screen mirrors here". Car paint falls all
-      // the way through to the lit shader's analytic env mirror (cover 0). The
-      // ROAD used to substitute the dim skyRefl at FULL cover on every miss —
-      // but from a low grazing cockpit eye the march hits in some screen regions
-      // and misses in others, so the bright-hit / dim-miss substitution broke the
-      // wet road into reflective-vs-matte PATCHES. Drop the road's miss cover to
-      // a light tint (0.30): a miss now mostly reveals the lit shader's (boosted)
-      // smooth analytic wet reflection instead of a dim sky patch, so a miss
-      // reads as continuous wet road, not a hole. Still never black.
-      float cover  = found ? hit : (carDom ? 0.0 : 0.30);
+      // SSR changes WHAT the wet road mirrors, never HOW MUCH it mirrors.
+      //
+      // The march hits in some screen regions and misses in others — from a low
+      // grazing onboard eye it alternates over a few pixels (each mirrored tree
+      // is a hit, the sky between them a miss). Scaling the SUBSTITUTION by that
+      // boolean turned a difference in reflected CONTENT into a difference in
+      // SURFACE: hit pixels took a near-full mirror, miss pixels a third of one,
+      // so the tarmac broke into reflective-vs-matte patches with hard edges.
+      // Cover 1.0-vs-0.30 (and 1.0-vs-1.0 before build 734) both did this; the
+      // ratio only set how obvious it was.
+      //
+      // The lit shader already carries the coherent base — envBlend is floored
+      // at wetSheen*0.55 (lit.js) expressly so the analytic sky mirror gives the
+      // wet look wherever the march misses. So hold the road's cover CONSTANT and
+      // let only reflCol vary: hits show the marched scene, misses the sky, both
+      // through the same amount of mirror. Car paint keeps its confidence-scaled
+      // cover — it falls through to the lit shader's env mirror on a miss, which
+      // is already continuous because the env cube covers every direction.
+      float cover  = carDom ? conf : 0.60;
       // Clean DARKER MIRROR: substitute the reflected scene into a darkened base
       // (a real wet mirror shows the scene it reflects, not a wash added on top).
       // Mirror-like: a high base reflectance (so mid/near tarmac mirrors too, not
       // just the grazing band) with a gentle Fresnel lift toward the horizon.
-      float fres = pow(1.0 - max(dot(Nv, V), 0.0), 3.0);
+      // Fresnel off the SAME normal the reflection ray used (Nr), not the bumpy
+      // reconstructed Nv: Nv carries the road's facets and depth-derivative noise,
+      // and this term swings strength across 0.55..0.97, so feeding it Nv sprayed
+      // that noise straight back into the mirror the flattened ray exists to keep
+      // coherent. Car paint's Nr IS Nv, so car behaviour is unchanged.
+      float fres = pow(1.0 - max(dot(Nr, V), 0.0), 3.0);
       // Car SSR reflects the on-screen HDR scene — sharp, bright light sources
       // (neon, lit windows, floodlights) that punch through and bloom like the
       // wet road mirrors them. Strong face-on (the env cube owns the off-screen/

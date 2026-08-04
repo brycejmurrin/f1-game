@@ -351,9 +351,9 @@ const IncidentSim = (function () {
         if (!tf || !fin(tf.s) || !fin(tf.x)) { handbackCar(inc, i, true); continue; }
         const vHoriz = Math.hypot(pose.vx || 0, pose.vz || 0);
         const speed = fin(vHoriz) ? vHoriz : (lg ? lg.speed : 0);
-        // ── WRITE-BACK (window-scoped + guarded). Player authority is
+        // ── WRITE-BACK (window-scoped + guarded). HUMAN-car authority is
         // px/pz/head/(s,x); AI authority is (s,x)/prog. See report. ──
-        if (c.isPlayer) {
+        if (c.human) {
           c.px = px; c.pz = pz; c.head = head;
           c.s = tf.s; c.x = tf.x;
           c.speed = speed; c.vLat = 0;
@@ -421,7 +421,7 @@ const IncidentSim = (function () {
         if (inverted) {
           // Settled on its side/roof → the existing rescue flow (aligns heading,
           // clears slip, restores a modest speed, resets wall/off/rescue timers).
-          if (c.isPlayer && G.rescuePlayer) { try { G.rescuePlayer(c); } catch (e) {} }
+          if (c.human && G.rescuePlayer) { try { G.rescuePlayer(c); } catch (e) {} }
           else rescueAI(c);
         } else {
           // Upright: reconstruct the ROAD position from (s,x) (NOT the body's
