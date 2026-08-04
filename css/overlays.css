@@ -292,6 +292,13 @@ body.hud-hidden #hud-restore { display: block; }
   color: inherit;
 }
 #vsfriend .vs-code:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+/* SHARE and COPY side by side: they are two ways to do the same thing, and
+   stacking them read as two separate steps. Equal basis rather than auto so
+   the pair stays balanced when one label is longer ("SHARE LINK" becomes
+   "COPY LINK" with no share sheet). They wrap on a narrow phone rather than
+   squeezing the text to unreadable. */
+#vsfriend .vs-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#vsfriend .vs-actions > .bigbtn { flex: 1 1 44%; margin: 0; }
 #vsfriend .vs-status {
   margin: 12px 0 0;
   min-height: 1.2em;          /* reserve the line so the sheet doesn't jump */

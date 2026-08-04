@@ -47,7 +47,8 @@ const NetLobby = (function () {
       pick: $("vs-pick"), hosting: $("vs-hosting"), joining: $("vs-joining"),
       invite: $("vs-invite"), inviteIn: $("vs-invite-in"),
       answer: $("vs-answer"), answerIn: $("vs-answer-in"),
-      answerHint: $("vs-answer-hint"), copyAnswer: $("vs-copy-answer"),
+      answerHint: $("vs-answer-hint"), answerActions: $("vs-answer-actions"),
+      shareInvite: $("vs-share-invite"),
       status: $("vs-status"),
     });
 
@@ -289,7 +290,7 @@ const NetLobby = (function () {
       _peerProfile = res.peer;
       if (e.answer) { e.answer.value = res.code; e.answer.hidden = false; }
       if (e.answerHint) e.answerHint.hidden = false;
-      if (e.copyAnswer) e.copyAnswer.hidden = false;
+      if (e.answerActions) e.answerActions.hidden = false;
       waitForOpen();
       say("Send that answer code back, then wait for the race to start.");
       return res;
@@ -310,8 +311,55 @@ const NetLobby = (function () {
     }
 
     async function copy(text) {
-      try { await navigator.clipboard.writeText(text); say("Copied."); }
-      catch (e) { say("Could not copy — select the code and copy it manually.", true); }
+      if (!text) { say("There is nothing to copy yet.", true); return false; }
+      try { await navigator.clipboard.writeText(text); say("Copied."); return true; }
+      catch (e) { say("Could not copy — select the code and copy it manually.", true); return false; }
+    }
+
+    // ---- handing the code to a human --------------------------------------
+    // The invite goes out as a LINK, not a code: opening it drops the guest
+    // straight into joining with the box already filled (see wire()), which
+    // removes the "paste this into the right field" step entirely. The code
+    // rides in the fragment, so it never reaches a server — which matters
+    // because the entire design is that there ISN'T one.
+    //
+    // The ANSWER is shared as bare text on purpose. There is no "open this to
+    // answer" flow — the host pastes it into a box they already have open — so
+    // dressing it as a link would promise a journey that does not exist.
+    //
+    // navigator.share is a progressive enhancement: where it exists this opens
+    // the OS share sheet (Messages, WhatsApp, AirDrop), and where it doesn't we
+    // fall back to the clipboard. The button says which it will do rather than
+    // disappearing, because a control that vanishes reflows the sheet and the
+    // next tap lands on something else.
+    const canShare = () => typeof navigator !== "undefined" && !!navigator.share;
+
+    async function handOff(data, fallbackText) {
+      if (!fallbackText) { say("There is nothing to share yet.", true); return false; }
+      if (canShare()) {
+        try { await navigator.share(data); say("Shared."); return true; }
+        catch (e) {
+          // Closing the share sheet is a decision, not a failure — say nothing
+          // and leave the code on screen.
+          if (e && e.name === "AbortError") return false;
+        }
+      }
+      return copy(fallbackText);
+    }
+
+    function shareInvite() {
+      const e = els();
+      const code = e.invite ? e.invite.value : "";
+      const url = code ? NetHandshake.inviteUrl(code) : null;
+      // No location to build a URL from (a file:// page): share the code itself
+      // rather than the string "null".
+      if (!url) return handOff({ title: "Apex 26", text: code }, code);
+      return handOff({ title: "Apex 26", text: "Race me on Apex 26", url }, url);
+    }
+
+    function shareAnswer() {
+      const code = (els().answer || {}).value || "";
+      return handOff({ title: "Apex 26 answer", text: code }, code);
     }
 
     // ---- open / close -----------------------------------------------------
@@ -323,7 +371,7 @@ const NetLobby = (function () {
       for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
       if (e.answer) e.answer.hidden = true;
       if (e.answerHint) e.answerHint.hidden = true;
-      if (e.copyAnswer) e.copyAnswer.hidden = true;
+      if (e.answerActions) e.answerActions.hidden = true;
       say("");
       e.screen.hidden = false;
       return true;
@@ -358,7 +406,14 @@ const NetLobby = (function () {
       on("vs-accept", () => acceptAnswer());
       on("vs-copy-invite", () => copy(($("vs-invite") || {}).value || ""));
       on("vs-copy-answer", () => copy(($("vs-answer") || {}).value || ""));
+      on("vs-share-invite", shareInvite);
+      on("vs-share-answer", shareAnswer);
       on("vs-close", cancel);
+      // Name the button after what it will actually do on THIS device. With no
+      // share sheet it copies the link, and a button labelled SHARE that
+      // silently copies is a button that has lied.
+      const si = $("vs-share-invite");
+      if (si && !canShare()) si.textContent = "COPY LINK";
       // An invite link puts the code in the fragment, so opening one should
       // drop straight into joining rather than making them find the button.
       const fromUrl = NetHandshake.inviteFromUrl();
@@ -373,6 +428,7 @@ const NetLobby = (function () {
 
     return {
       wire, open, close, cancel, host, join, makeAnswer, acceptAnswer,
+      shareInvite, shareAnswer, canShare,
       localProfile, modsFromProfile, setTransportFactory,
       status: () => ({
         role, statusText,
