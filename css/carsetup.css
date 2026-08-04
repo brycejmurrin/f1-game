@@ -439,4 +439,63 @@
   }
   #cs-inner > .sheet-foot { grid-column: 1; grid-row: 3; }
 }
+
+/* ---------- preview camera bar ----------
+   Overlays the canvas region the sheet leaves for the car (bottom-left), so it
+   never fights the option list for space. #carsetup is pointer-events:none —
+   that is what lets the orbit drag reach the canvas underneath — so this bar
+   has to opt back in, exactly like #cs-inner does.
+   It is positioned against the SAFE BOX (.screen's padding), not the raw
+   viewport, so it clears the home indicator on a notched phone. */
+#cs-view {
+  pointer-events: auto;
+  position: absolute;
+  left: calc(var(--safe-l) + var(--gap));
+  bottom: calc(var(--safe-b) + var(--gap));
+  z-index: 1;
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 4px;
+  /* Never reach under the sheet, which is docked right at up to 54vw — so the
+     bar gets 38vw and wraps to a second row rather than sliding beneath it. */
+  max-width: min(38vw, 420px);
+}
+/* Below this the sheet is the whole screen (its width floor is 430px) and there
+   is no car left to aim a camera at, so the controls would be pointing at
+   nothing. Portrait phones land here. */
+@media (max-width: 700px) {
+  #cs-view { display: none; }
+}
+.cs-view-btn {
+  flex: 0 0 auto; width: auto; margin: 0;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+  padding: 5px 9px; border-radius: var(--r-sm);
+  background: rgba(12,12,16,0.62); color: var(--dim);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(3px);
+  /* Touch targets: the visual chip stays small, the hit area does not. */
+  min-height: 30px;
+}
+.cs-view-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+/* `active` is the codebase's "this one is chosen" class (see AriaState's ON
+   list), so the lit state hangs off it rather than off aria-pressed — that
+   keeps the attribute purely a screen-reader concern. Only SPIN ever takes it;
+   the view chips are momentary jumps, not a selection. */
+.cs-view-btn.active {
+  background: rgba(0,204,136,0.18); color: #0c8;
+  border-color: rgba(0,204,136,0.4);
+}
+.cs-view-grp { display: flex; align-items: center; gap: 4px; }
+.cs-view-zoom { font-size: 13px; padding: 3px 10px; line-height: 1; }
+.cs-view-sep {
+  width: 1px; height: 16px; margin: 0 2px;
+  background: rgba(255,255,255,0.16);
+}
+.cs-view-hint {
+  font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: rgba(255,255,255,0.34); margin-left: 2px;
+}
+/* No mouse = no drag affordance to advertise, and no room for it either. */
+@media (hover: none), (max-width: 560px) {
+  .cs-view-hint { display: none; }
+}
 } /* @layer components */

@@ -667,6 +667,15 @@ const Car3D = (function () {
   function sharkFinPanel(inset, proud) {
     const i = inset != null ? inset : 0.05;
     const p = proud != null ? proud : 0.002;
+    // The BASE edge insets further than the other three. The fin grows straight
+    // out of the engine-cover ridge and the accent pinstripe runs along that
+    // spine, so a wash carried all the way down reads as painted onto the trim
+    // rather than onto the fin. (This does not get the panel CLEAR of the
+    // pinstripe — it runs the fin's whole length a few cm below it, so the
+    // decal legitimately spans both paints, which is what
+    // tests/parts-livery-contrast.spec.js records. It just stops the graphic
+    // sitting ON it.)
+    const vBase = Math.max(i, 0.18);
     const at = (u, v) => {
       // bilinear over the outline: u = 0 leading → 1 trailing, v = 0 base → 1 top.
       const bz = finMix(FIN.baseLE[0], FIN.baseTE[0], u), by = finMix(FIN.baseLE[1], FIN.baseTE[1], u);
@@ -674,7 +683,7 @@ const Car3D = (function () {
       return { x: finMix(FIN.halfBase, FIN.halfTop, v) + p,
                y: finMix(by, ty, v), z: finMix(bz, tz, v) };
     };
-    return [at(i, i), at(1 - i, i), at(1 - i, 1 - i), at(i, 1 - i)];
+    return [at(i, vBase), at(1 - i, vBase), at(1 - i, 1 - i), at(i, 1 - i)];
   }
   // The CREST patch on the fin: an UPRIGHT, axis-aligned SQUARE in the fin's
   // (z, y) plane — not a slice of the planform. The fin's leading edge rakes back

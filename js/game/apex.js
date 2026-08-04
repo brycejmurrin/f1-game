@@ -174,6 +174,13 @@ const api = {
   camState: () => G.dbgCam
     ? { eye: Array.from(G.dbgCam.eye), tgt: Array.from(G.dbgCam.target), fov: G.dbgCam.fov, roll: 0, debug: true }
     : { eye: Array.from(G.camEye), tgt: Array.from(G.camTgt), fov: G.camFov, roll: G.camRoll, debug: false },
+  // The GARAGE preview camera (#carsetup). Read-only: the orbit is driven by the
+  // #cs-view chips, a drag on the canvas, or the wheel. `on` is false whenever
+  // the garage is closed, in which case the rest is just the parked state.
+  garageCam: () => ({
+    on: G.setupPreviewOn, spin: G.setupPreviewSpin,
+    az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,
+  }),
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { G.hideMeshes = Object.assign({}, G.hideMeshes, o || {}); return G.hideMeshes; },
   // Return all track nodes within radius r of world position (wx, wz).
