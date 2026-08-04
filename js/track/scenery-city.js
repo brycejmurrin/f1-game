@@ -72,7 +72,9 @@ const SceneryCity = (function () {
         // Edge neon is meant to stand PROUD of the frame, but frameT * 1.05 put
         // it only 7.5 mm clear — inside one depth unit by 200 m. Give it real air.
         const nBase = vadd(mid, nVec, nSign * (nHalf + 0.40));
-        const gBase = vadd(mid, nVec, nSign * (nHalf + 0.04));
+        // Panes are 0.08 thick, so an offset of 0.04 put their inner face dead
+        // flush with the wall. Same standoff rule as the tower's dface below.
+        const gBase = vadd(mid, nVec, nSign * (nHalf + 0.05 + 0.04));
         const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
         out._mat = MAT.METAL;
         // perf: every other rail
@@ -317,7 +319,14 @@ const SceneryCity = (function () {
       const plH = Math.min(3.2, h * 0.14);
       const plinth = nightLit ? [body[0] * 0.8, body[1] * 0.8, body[2] * 0.9]
                               : [Math.max(body[0] * 1.2, 0.40), Math.max(body[1] * 1.2, 0.40), Math.max(body[2] * 1.2, 0.44)];
-      addBox(out, vadd(p.c, p.u, plH / 2), [w * 1.02, plH, d * 1.02], plinth, b);
+      // The plinth's overhang was a flat 1 % of the building, which on a ~13 m
+      // block lands exactly on the facade panes' outer plane — a coincidence tie
+      // that any FIXED pane standoff can walk into, since one offset is
+      // proportional and the other is not. Floor it at a clearance the panes can
+      // never reach (their outer face is 0.13 m proud) while leaving wide
+      // buildings, where 1 % is already larger, looking exactly as before.
+      const plOut = Math.max(0.22, w * 0.01), pdOut = Math.max(0.22, d * 0.01);
+      addBox(out, vadd(p.c, p.u, plH / 2), [w + 2 * plOut, plH, d + 2 * pdOut], plinth, b);
       // Archetype: favour slender TAPERED + individually-crowned forms over
       // stacked rectangular prisms. Short blocks stay simple; mid/tall ones taper
       // and always get a sculpted crown (never a bare cut-off box top). The crown
@@ -442,16 +451,24 @@ const SceneryCity = (function () {
           // perf: fewer panes per face (was simple 4/4.0, full 7/2.4; rowN 9/5.0)
           const cols = simple ? Math.max(2, Math.min(3, Math.round(faceW / 5.2))) : lod(Math.max(2, Math.min(6, Math.round(faceW / 3.1))), 2);
           const rowN = simple ? lod(Math.max(2, Math.min(6, Math.round(sh / 6.4))), 2) : rows;
-          const gB = vadd(cen, b[nAxis], nSign * (nHalf + 0.03));
+          // Stand every pane's INNER face clear of the wall by a fixed amount,
+          // derived from that pane's own thickness. The single offset of 0.03
+          // could not do that for two different thicknesses: the 0.06 med pane
+          // came out dead flush with the wall face and the 0.08 one sank 10 mm
+          // INTO it. Both tie against the body across the pane's whole area, and
+          // a tower carries hundreds of panes.
+          const PANE_STANDOFF = 0.05;
+          const gBase = (thick) => vadd(cen, b[nAxis], nSign * (nHalf + PANE_STANDOFF + thick / 2));
           const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
           for (let c = 0; c < cols; c++) {
             const cx = (-0.5 + (c + 0.5) / cols) * faceW;
             for (let r = 0; r < rowN; r++) {
-              const ry01 = (r + 0.5) / rowN, ctr = vadd(vadd(gB, b[wAxis], cx), b[1], (-0.5 + ry01) * sh);
+              const ry01 = (r + 0.5) / rowN;
+              const at = (thick) => vadd(vadd(gBase(thick), b[wAxis], cx), b[1], (-0.5 + ry01) * sh);
               // NOTE: out._mat / glassBuf._mat are separate registers — addBox reads
               // whichever buffer object is actually passed as its first argument.
-              if (med) { out._mat = MAT.GLASS; addBox(out, ctr, dim(0.06, (sh / rowN) * 0.42, (faceW / cols) * 0.42), medWin, b); out._mat = 0; }
-              else { const t01 = 0.42 + ry01 * 0.16; glassBuf._mat = MAT.GLASS; addBox(glassBuf, ctr, dim(0.08, (sh / rowN) * 0.62, (faceW / cols) * 0.6), [t01 * 0.40, t01 * 0.47, t01 * 0.62], b); glassBuf._mat = 0; }
+              if (med) { out._mat = MAT.GLASS; addBox(out, at(0.06), dim(0.06, (sh / rowN) * 0.42, (faceW / cols) * 0.42), medWin, b); out._mat = 0; }
+              else { const t01 = 0.42 + ry01 * 0.16; glassBuf._mat = MAT.GLASS; addBox(glassBuf, at(0.08), dim(0.08, (sh / rowN) * 0.62, (faceW / cols) * 0.6), [t01 * 0.40, t01 * 0.47, t01 * 0.62], b); glassBuf._mat = 0; }
             }
           }
         };
