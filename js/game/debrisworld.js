@@ -194,22 +194,26 @@ function setEnabled(on) {
 
 function create(ctx) {
   G = ctx;
-  // DEFAULT OFF ON PHONES, and the reason is worth writing down. Until build
-  // 895 this module had never run on the deployed site AT ALL: the Pages
-  // workflow staged an allow-list of directories and vendor/ was not on it, so
+  // DEFAULT OFF, and the reason is worth writing down. Until build 895 this
+  // module had never run on the deployed site AT ALL: the Pages workflow
+  // staged an allow-list of directories and vendor/ was not on it, so
   // rapier.mjs 404'd, _loadState stuck at -1, and active() was false for every
-  // player. The budget in the header (0.36 ms mean / 1.1 ms p95) was measured
-  // locally, on desktop; no phone had ever executed a line of it.
+  // player. Everyone who has ever played the deployed game has played it with
+  // this off. The budget in the header (0.36 ms mean / 1.1 ms p95) was
+  // measured locally, in the authoring sandbox.
   //
   // Fixing the deploy therefore switched a Rapier WASM side-world — road
   // trimesh, 22 kinematic car mirrors, a debris pool, marbles, breakable
-  // barriers, and IncidentSim on top of it — on for everybody in one build,
-  // and the first phone to see it reported the race running slow. A subsystem
-  // that arrives by accident should not stay by default: desktop keeps what it
-  // was measured on, phones opt in with apex26.debris = "1" or __apex.debris
-  // (true) once there is a real measurement from one.
-  const phone = !!(ctx.gfx && ctx.gfx.isMobile);
-  let opt = phone ? "0" : "1";
+  // barriers, and IncidentSim on top of it, which MOVES CARS — on for
+  // everybody in a single build. The report back was immediate and the same
+  // from both devices: fast before, slow and struggling after. Restricting it
+  // to desktop was not enough, so it is off everywhere.
+  //
+  // This is not a verdict on the physics. It is that a subsystem which arrived
+  // by accident has to be turned on deliberately, after somebody measures it
+  // on a device that has actually run it. apex26.debris = "1", or
+  // __apex.debris(true), does that.
+  let opt = "0";
   try { opt = localStorage.getItem("apex26.debris") || opt; } catch (e) {}
   // Group B disable flags — default ON, read once at boot (any value but "0" is on).
   try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) {}
