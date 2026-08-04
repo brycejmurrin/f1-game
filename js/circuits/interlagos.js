@@ -359,8 +359,15 @@
       // Open steel truss roof for a different silhouette along the same tier
       grandstandEx(0.05, -1, 11,  85, null, [0.18, 0.58, 0.32],
                    { livery: "darkSteel", roof: "truss", pylons: true });
+      // STAND_SETS.interlagos is three greys (concrete/steel/darkSteel), which
+      // is the wrong reading for a circuit whose defining quality is warm, sun-
+      // bleached, decades-old concrete in the tropics. Liveries are looked up by
+      // NAME, not restricted to the circuit's set, so the warm families are
+      // mixed in here directly: sandstone for bleached concrete, terracotta for
+      // the rust-and-paint end of the Arquibancadas. See the report for the
+      // matching STAND_SETS revision.
       grandstandEx(0.09, -1, 12,  90, null, [0.92, 0.82, 0.20],
-                   { livery: "concrete", roof: "flat" });
+                   { livery: "sandstone", roof: "flat" });
       // Steep PACKED upper terraces rising behind the Curva 1 bowl stands
       crowdBank(0.02, -1, 30, 130, 8);
       // Curva do Sol arquibancada — raw concrete terracing under a rusted
@@ -517,8 +524,12 @@
       // Ferradura grandstand — the horseshoe's braking-zone stand, relocated
       // from the old (wrong) 0.71 chord onto the real apex. One of the six
       // grandstands now varied via grandstandEx.
+      // Ferradura sits down in the bowl with the hillside directly behind it, so
+      // it gets the open truss on posts rather than a solid cantilever — the
+      // slope stays visible through the roof, which is the whole point of this
+      // corner. Was the file's one stand still on the default shell.
       grandstandEx(0.4547, 1, 12, 64, null, [0.32, 0.52, 0.36],
-                   { livery: "darkSteel", endWalls: true });
+                   { livery: "terracotta", roof: "truss", pylons: true, endWalls: true });
 
       // ===================================================================
       // SÃO PAULO HIGH-RISE SKYLINE (s=0.48–0.78, R far)
@@ -639,7 +650,7 @@
       grandstandEx(0.8375, -1, 12, 52, null, [0.12, 0.58, 0.30],
                    { livery: "orange", tiers: 2, roof: "cantilever", suites: true });
       grandstandEx(0.849,  -1, 11, 46, null, [0.96, 0.82, 0.16],
-                   { livery: "concrete", roof: "flat", endWalls: true, h: 9 });
+                   { livery: "sandstone", roof: "flat", endWalls: true, h: 9 });
       // The uncovered general-admission terracing that continues the
       // Arquibancadas round toward the climb — bare concrete, no canopy.
       arquibancada("interlagos-arq-subida", 0.86, -1, 16, 6, { rows: 7, roof: false });

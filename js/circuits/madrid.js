@@ -143,14 +143,115 @@
         });
       }
 
+      // ── MADRID STREET BLOCK ─────────────────────────────────────────────
+      // This one function dresses the whole urban sector (≈49 calls), so a
+      // single box-plus-cap-plus-glass-sliver recipe is what made Madrid's
+      // city read as one building repeated down the avenue. Madrid's actual
+      // fabric has three legible types and they alternate along a real street:
+      //   0 "galería"  — continuous projecting balcony bands, the ochre/brick
+      //                  ensanche block; the commonest thing in the city
+      //   1 "ático"    — a rendered slab whose top storey steps back behind a
+      //                  roof terrace with a parapet
+      //   2 "corrala"  — narrower older block, deep window reveals in a
+      //                  masonry face, no glazing ribbon at all
+      // Type is chosen from the block's own id hash, so the street is varied
+      // but deterministic, and every variant costs a handful of boxes: the
+      // bands are CONTINUOUS runs, not one box per window.
+      const RENDER_COLS = [
+        [0.78, 0.66, 0.50],   // ochre render
+        [0.66, 0.42, 0.34],   // Madrid brick red
+        [0.80, 0.76, 0.70],   // pale limestone render
+        [0.70, 0.60, 0.48],   // weathered ochre
+      ];
+      let urbanSeq = 0;
       function urbanBlock(id, frac, side, gap, w, h, d, col) {
+        const seq = urbanSeq++;
+        const hv = hash(seq * 37 + 11);
+        const type = Math.floor(hv * 3) % 3;
+        // Slightly warm the caller's grey toward Madrid render, keeping the
+        // caller's own light/dark intent (the depth ranks stay distinguishable).
+        const rc = RENDER_COLS[(seq + Math.floor(hv * 4)) % RENDER_COLS.length];
+        const wall = [(col[0] * 0.45 + rc[0] * 0.55), (col[1] * 0.45 + rc[1] * 0.55),
+                      (col[2] * 0.45 + rc[2] * 0.55)];
+        const trim = [wall[0] * 1.12 + 0.06, wall[1] * 1.12 + 0.06, wall[2] * 1.12 + 0.06];
         venueGroup(id, frac, side, gap, [w + 2, h + 4, d + 2], false, (stage, a) => {
           const b = basis(a);
-          addBox(stage, vadd(a.c, a.u, h * 0.36), [w, h * 0.72, d], col, b);
-          addBox(stage, vadd(vadd(a.c, a.r, side * 1.2), a.u, h * 0.79),
-            [w * 0.72, h * 0.22, d * 0.82], OFFWHITE, b);
-          addBox(stage, vadd(vadd(a.c, a.r, -side * (w * 0.5 - 0.3)), a.u, h * 0.48),
-            [0.5, h * 0.55, d * 0.88], GLASS, b);
+          const IN = -side;                       // +a.r * IN faces the track
+          const bodyH = h * 0.72;
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(a.c, a.u, bodyH * 0.5), [w, bodyH, d], wall, b);
+          stage._mat = 0;
+
+          if (type === 0) {
+            // Galería: three continuous balcony bands on the street face, each
+            // a slab plus a thin railing — one run per floor, not per window.
+            const bands = 3;
+            for (let i = 0; i < bands; i++) {
+              const y = bodyH * (0.28 + i * 0.22);
+              stage._mat = MAT.CONCRETE;
+              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 + 0.35)), a.u, y),
+                [0.9, 0.22, d * 0.86], trim, b);
+              stage._mat = MAT.METAL;
+              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 + 0.72)), a.u, y + 0.55),
+                [0.12, 0.9, d * 0.86], STEEL, b);
+              stage._mat = 0;
+              // Glazed gallery behind the band — the enclosed balcony Madrid
+              // is full of, and the reason the street face reads as layered.
+              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.1)), a.u, y + 0.95),
+                [0.3, 1.5, d * 0.80], GLASS, b);
+            }
+            // Cornice + mansard-ish attic cap.
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(a.c, a.u, bodyH + 0.25), [w + 0.7, 0.5, d + 0.7], trim, b);
+            addBox(stage, vadd(a.c, a.u, bodyH + 1.6), [w * 0.86, 2.2, d * 0.88],
+              [0.34, 0.30, 0.30], b);
+            stage._mat = 0;
+          } else if (type === 1) {
+            // Ático: top storey stepped back behind an open roof terrace.
+            addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.25)), a.u, bodyH * 0.52),
+              [0.4, bodyH * 0.66, d * 0.86], GLASS, b);
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(a.c, a.u, bodyH + 0.2), [w + 0.6, 0.4, d + 0.6], trim, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -IN * w * 0.16), a.u, bodyH + 1.9),
+              [w * 0.62, 3.0, d * 0.72], OFFWHITE, b);          // set-back top storey
+            // Terrace parapet along the street edge of the setback.
+            addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.4)), a.u, bodyH + 0.9),
+              [0.25, 1.0, d * 0.84], trim, b);
+            stage._mat = 0;
+            addBox(stage, vadd(vadd(a.c, a.r, -IN * w * 0.16), a.u, bodyH + 2.0),
+              [0.3, 2.0, d * 0.66], GLASS, b);
+          } else {
+            // Corrala: older masonry, deep reveals, no ribbon glazing. Two
+            // recessed window bands read as reveals at any distance.
+            stage._mat = MAT.STONE;
+            for (let i = 0; i < 2; i++) {
+              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.45)), a.u,
+                bodyH * (0.36 + i * 0.30)), [0.5, bodyH * 0.16, d * 0.82],
+                ARCADE_DARK, b);
+            }
+            // Ground-floor arcade openings — the shaded street level.
+            for (let bay = -2; bay <= 2; bay++) {
+              addBox(stage, vadd(vadd(vadd(a.c, a.t, bay * (d * 0.17)),
+                a.r, IN * (w * 0.5 - 0.3)), a.u, 2.0),
+                [0.6, 3.2, d * 0.09], ARCADE_DARK, b);
+            }
+            addBox(stage, vadd(a.c, a.u, bodyH + 0.3), [w + 0.9, 0.6, d + 0.9], trim, b);
+            stage._mat = MAT.ROOF;
+            addPrism(stage, vadd(a.c, a.u, bodyH + 0.6), [w, 1.8, d], [0.40, 0.28, 0.24], b);
+            stage._mat = 0;
+          }
+
+          // Rooftop clutter — water tanks, a lift overrun and a chimney stack.
+          // Madrid's skyline is defined by this junk; a clean parapet is what
+          // makes a generated city look generated. Two items, hash-placed.
+          const top = bodyH + (type === 1 ? 3.6 : 2.8);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.t, (hv - 0.5) * d * 0.5), a.u, top + 0.9),
+            [1.8, 1.8, 2.2], [0.62, 0.60, 0.56], b);
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(vadd(a.c, a.t, (0.5 - hv) * d * 0.34), a.u, top + 1.4),
+            [1.1, 2.8, 1.1], trim, b);
+          stage._mat = 0;
         });
       }
 

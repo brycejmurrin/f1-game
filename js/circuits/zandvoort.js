@@ -347,8 +347,13 @@
         { rows: 6, fascia: [0.92, 0.90, 0.86] });   // Hugenholtz exit R
       grandstandEx(0.48, -1,  28, 34, null, orange,
         { livery: "orange", roof: "truss" }); // Scheivlak approach L (gap was 28 in previous pass)
+      // Scheivlak R — trucked into the dune for the weekend, so it gets the bare
+      // aluminium family and NO roof. Zandvoort's permanent concrete is confined
+      // to the pit straight and the two banked corners; everything out in the
+      // dunes is scaffold and modular seating, and a cantilever slab here was
+      // the single detail making the mid-lap read like a permanent autodrome.
       grandstandEx(0.53,  1,  18, 28, null, orange,
-        { livery: "steel" }); // Scheivlak R
+        { livery: "alu", roof: "none", endWalls: true });
       // Masterbocht — previously the emptiest stretch of the lap (no stand of
       // any kind between Scheivlak and the Hans Ernst arena). A modern two-tier
       // stand fills the gap and gives the mid-lap sweep a spectator presence.
@@ -358,8 +363,11 @@
         { livery: "alu", roof: "none" }); // Luyendyk approach R (gap 36→42: banked corner clearance) — uncovered temporary bleacher
       grandstandEx(0.915, 1,  28, 80, null, orange,
         { livery: "orange", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true }); // Arie Luyendyk banked R (massive) (gap 22→28: VERY banked, roof overhang)
+      // Luyendyk exit R — the bolt-on extension to the banked stand next door.
+      // A flat deck roof on scaffold, not the neighbour's cantilever: reading as
+      // an ADDITION to the big stand is what makes the big stand look permanent.
       grandstandEx(0.96,  1,  28, 32, null, orange,
-        { livery: "steel" }); // Luyendyk exit R (gap 22→28: post-banked transition)
+        { livery: "scaffold", roof: "flat", pylons: true }); // (gap 22→28: post-banked transition)
       duneDeck("zandvoort-deck-pitstraight", 0.97, -1, 22, 5,
         { rows: 6, fascia: [0.16, 0.20, 0.34] });   // pit straight L
 

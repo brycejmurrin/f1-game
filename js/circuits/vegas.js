@@ -189,16 +189,19 @@
             // dark mass anyway — the individual bodies were invisible; what the
             // eye actually picks up is the scatter of phone screens on top of
             // it, which is what the speckle below is for.
-            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.86),
-              [0.58, 0.88, len - 2.2], LOT_FANS[0], b);
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.80),
+              [0.58, 0.80, len - 2.2], LOT_FANS[0], b);
+            // Speckle stands PROUD of the band — taller, and nudged trackward so
+            // it is never coplanar with it. Buried inside the band it would cost
+            // vertices and show nothing.
             const cnt = Math.min(13, Math.floor(len / 4.4));
             for (let j = 0; j < cnt; j++) {
               const h2 = hash(k * 19 + t * 53 + j * 41);
               if (h2 < 0.46) continue;
               seat.box(stage,
-                vadd(vadd(vadd(a.c, a.r, lat), a.t, (j / (cnt - 1) - 0.5) * (len - 4)),
-                  a.u, y + 0.94),
-                [0.52, 0.92, 1.5], LOT_FANS[Math.floor(h2 * 53) % LOT_FANS.length], b);
+                vadd(vadd(vadd(a.c, a.r, lat + IN * 0.08), a.t,
+                  (j / (cnt - 1) - 0.5) * (len - 4)), a.u, y + 1.06),
+                [0.50, 1.12, 1.5], LOT_FANS[Math.floor(h2 * 53) % LOT_FANS.length], b);
             }
             stage._mat = MAT.METAL;
           }
