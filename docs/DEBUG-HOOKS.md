@@ -520,11 +520,22 @@ Telemetry for every car, leader first: lateral `x` (and smoothed `xv`), visual
 `yaw`, `prog`ress, `speed`, `lap`, in-contact timer `ct`, `kerb` flag, and `p` =
 is-player. For measuring pack jitter / side-by-side stability.
 
-### `carAt(idx?) → {id, isPlayer, team, x, speed, prog, s, lap, finished, finishT, contactT, wrongWay, rescueT} | null`
+### `carAt(idx?) → {id, isPlayer, team, x, speed, prog, s, lap, finished, finishT, contactT, wrongWay, rescueT, otArmed, otEnabled, xArmed, …} | null`
 Detailed telemetry for one car by index (from the `cars()` list). Called with no
-argument returns the player car. Returns `null` for an out-of-range index. Extends
-`cars()` with fields not worth fetching for the whole field: `team`, `finished`,
-`finishT` (finish timestamp), `contactT` (contact timer), `wrongWay`, `rescueT`.
+argument returns **the player** — note that `carAt(0)` is `cars[0]`, which is an
+AI car, so a probe that means "me" must pass no argument. Returns `null` for an
+out-of-range index. Extends `cars()` with fields not worth fetching for the whole
+field: `team`, `finished`, `finishT` (finish timestamp), `contactT` (contact
+timer), `wrongWay`, `rescueT`.
+
+OVERTAKE fields, alongside the aero ones:
+
+| Field | Meaning |
+|---|---|
+| `otEnabled` | the RACE-WIDE gate, identical for every car: false on the opening lap (until the LEADER starts lap 2) and false under any caution |
+| `otArmed` | that gate AND this car's own gap (<1 s) and cooldown — i.e. can it actually be fired now |
+| `otT` | seconds of push remaining, 0 when not deployed |
+| `otCool` | seconds until it can arm again |
 
 ### `camState() → {eye, tgt, fov, debug}`
 Raw camera geometry: `eye` `[x,y,z]`, `tgt` `[x,y,z]` (look-at point), `fov`
@@ -653,7 +664,7 @@ player isn't initialised yet.
 Toggle the player's ERS boost flag (`player.boostOn`) for tests/screenshots.
 Returns the new boost state, or `false` if no player is loaded.
 
-### `aero(on?) → {xOn, xArmed, aeroX, mode} | null`
+### `aero(on?) → {xOn, xArmed, aeroX, mode, inZone, zoneAhead, zones, auto} | null`
 ACTIVE AERO — the 2026 X-mode / Z-mode moveable wing. No argument reads the
 state; a boolean requests or drops X-mode, exactly like pressing `Z` in-game.
 Returns `null` if no player is loaded.
@@ -662,12 +673,26 @@ Returns `null` if no player is loaded.
 |---|---|
 | `aeroX` | flap TRAVEL, 0 (Z-mode, full downforce) → 1 (X-mode, low drag). **This is what the physics reads.** |
 | `xOn` | the switch: is X-mode requested |
-| `xArmed` | is X-mode available here at all (≈3 s of straight road ahead, not braking, on track, above ~25 m/s) |
+| `xArmed` | is X-mode available here at all (inside an activation zone, not braking, on track, above ~25 m/s) |
 | `mode` | `"X"` once the flap is off its stop, else `"Z"` |
+| `inZone` | standing inside an ACTIVATION ZONE |
+| `zoneAhead` | metres to the next zone, 0 while inside one |
+| `zones` | how many the circuit has; **0 means none at all** (Monaco), and the mode is unavailable rather than merely unarmed |
+| `auto` | the wing is driving itself (see `aeroMode`), and the AERO button is removed from the dock |
 
-Requesting X-mode does NOT force the flaps open — `xArmed` still gates it, so on
-a corner this returns `xOn:false` and `aeroX` stays 0. That is the mechanic, not
-a failure. The flap also travels: it opens over ~0.45 s and shuts in ~0.12 s, so
+Requesting X-mode does NOT force the flaps open — `xArmed` still gates it, so
+outside a zone this returns `xOn:false` and `aeroX` stays 0. That is the
+mechanic, not a failure.
+
+**Availability is a ZONE, not a look-ahead.** The FIA approves fixed zones per
+circuit and the standard ECU refuses to rotate the wings outside one, so a zone
+is a PLACE the HUD can count down to like a DRS board — which a rolling
+"is the road ahead straight" test could never be. See `aeroZones()`.
+
+**None of DRS's restrictions apply.** There is no proximity requirement (leader
+and backmarker can both run X-mode down the same straight), and no opening-lap
+or caution lock. Those belong to OVERTAKE, which is the actual overtaking aid —
+see `carAt()`'s `otEnabled`. The flap also travels: it opens over ~0.45 s and shuts in ~0.12 s, so
 poll `aeroX` rather than assuming the switch took effect on the same tick.
 
 ```js
@@ -687,6 +712,52 @@ X-mode is worth ~+7.5 % top speed and costs ~55 % of the aero-downforce term
 levers that spends cornering grip instead of battery. `aeroX`/`xOn`/`xArmed`
 also appear in `obs()`, `physState()` and `carAt(i)`; `cars()` carries the flap
 travel as the short key `ax`.
+
+### `aeroZones() → [{startFrac, endFrac, midFrac, len}] | null`
+The circuit's fixed ACTIVATION ZONES, in lap fractions plus length in metres.
+`null` before a track is built; an **empty array** on a circuit whose longest
+straight does not clear the three-second minimum — that is Monaco, and it means
+active aero is unavailable there entirely rather than merely unarmed.
+
+**Use `midFrac`, never the average of `startFrac` and `endFrac`.** A zone may
+WRAP the start line, in which case `endFrac < startFrac` and the average lands
+on the opposite side of the circuit. Aiming `jump()` at `midFrac` is the only
+wrap-safe way to stand inside one.
+
+```js
+const z = __apex.aeroZones().sort((a, b) => b.len - a.len)[0];
+__apex.jump(z.midFrac, 60, 0);
+__apex.step(1/60, 2);
+__apex.aero().xArmed;           // → true
+```
+
+### `aeroMode(v?) → "manual" | "auto" | {ok:false, …}`
+Get or set whether the wing drives itself. The same value the pause menu's
+SETTINGS ▸ DRIVING ▸ ACTIVE AERO button writes, so the two cannot disagree — the
+button repaints when this setter runs. On `"auto"` the car takes every zone by
+itself and the on-screen AERO button is **removed from the dock** (not greyed):
+the remaining taps close ranks. Anything other than the two strings returns a
+typed `{ok:false, error:"bad_mode"}`.
+
+### `caution(arg?) → {level, label, sector, frac, total, sectors, sinceT, cause, enabled}`
+Race control's flags — the debris caution layer (`js/game.js`), a READ-ONLY
+race-logic layer over `DebrisWorld.hazards()` that never slows or moves a car.
+
+| `level` | `label` |
+|---|---|
+| 0 | `GREEN` |
+| 1 | `YELLOW` (local, one sector) |
+| 2 | `VSC` |
+| 3 | `SAFETY CAR` |
+
+- `caution({hazards:true})` → the same state plus the live hazard list.
+- `caution(true|false)` or `caution({enabled})` → switch the whole layer. This is
+  the same door as the CAUTIONS row in RACE SETTINGS, so the chips cannot go
+  stale against it, and switching it **off drops any flag already flying** —
+  a caution left up with nothing maintaining it is worse than no flag layer.
+
+A caution also disables OVERTAKE (see `carAt()`'s `otEnabled`). It does **not**
+disable active aero.
 
 ### `setLap(n) → {lap} | false`
 Override the player's lap counter (integer ≥ 0) without resetting lap time or

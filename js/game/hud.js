@@ -105,10 +105,12 @@ function updateHud(force) {
   const noZones = !(G.aeroZones && G.aeroZones.length);
   hToggle(els.btnAero, "on", xOpen);
   hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
-  // The touch button is inert when the circuit has no zone, and when the wing is
-  // driving itself — in both cases pressing it does nothing, and a control that
-  // silently ignores taps is worse than one that says so.
-  hToggle(els.btnAero, "dead", noZones || !!G.raceAeroMode && G.raceAeroMode === "auto");
+  // Faded when the CIRCUIT has no zone: the control exists, this track just
+  // cannot use it, and the struck-through NO AERO ZONE chip beside it says so.
+  // AUTO is not handled here — there the button is removed from the dock
+  // outright (showTouchControls), because the wing driving itself is a control
+  // with no job rather than a control that is temporarily unavailable.
+  hToggle(els.btnAero, "dead", noZones);
   hClass(els.aero, noZones ? "ax-none" : xOpen ? "ax-open"
     : player.xArmed ? "ax-armed" : "ax-off");
   // The TEXT answers "where is the zone", so it keys off position, not arming.

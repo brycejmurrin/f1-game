@@ -2262,7 +2262,18 @@ function showTouchControls(show) {
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
-  if (els.btnAero) els.btnAero.hidden = !t;
+  // ON AUTO THE AERO BUTTON IS REMOVED, not greyed. The wing drives itself, so
+  // the control has no job at all — and a dock of GROUPS can afford to drop it,
+  // because the survivors just close ranks. That was not true of the old
+  // absolutely-positioned stack, where hiding one button left a hole and every
+  // "fix" moved a different control under the player's thumb; it is the reason
+  // #pm-calib is disabled rather than hidden. Flex layout is what makes
+  // removing the right answer here.
+  // NO ZONES (Monaco) is deliberately NOT the same case: there the control still
+  // exists, it is this CIRCUIT that cannot use it, and the struck-through
+  // NO AERO ZONE chip beside a faded button says so. Removing it would silently
+  // suggest the game has no such feature.
+  if (els.btnAero) els.btnAero.hidden = !t || raceAeroMode === "auto";
   els.shiftUp.hidden = !(t && manual);
   els.shiftDown.hidden = !(t && manual);
   const steerBtns = t && steerMode === "buttons";
@@ -7634,9 +7645,14 @@ $("pm-gears").onclick = () => {
 // both answer "how much of the car do you operate yourself?". Takes effect
 // immediately, so a player who flips it mid-race sees it on the next zone; the
 // HUD's AERO button greys out under AUTO (see hud.js hToggle "dead").
+// Also re-lays the dock, because AUTO REMOVES the AERO button rather than
+// greying it and the survivors have to close ranks. Without this the change
+// only appeared at the next steering-mode switch — i.e. it looked broken
+// exactly when a player flipped the setting to see what it did.
 function refreshAeroBtn() {
   const b = $("pm-aero");
   if (b) b.textContent = "ACTIVE AERO: " + (raceAeroMode === "auto" ? "AUTO" : "MANUAL");
+  if (state === "race" || state === "count" || state === "pause") showTouchControls(true);
 }
 $("pm-aero").onclick = () => {
   raceAeroMode = raceAeroMode === "auto" ? "manual" : "auto";

@@ -673,11 +673,39 @@ averaging `startFrac`/`endFrac`.
 Braking or leaving the zone shuts the flap AND drops the switch, and
 `X_CLOSE_RATE` is ~4× `X_OPEN_RATE` — the downforce comes back faster than it
 left. The HUD chip counts the next zone down in metres like a DRS board, and
-reads `NO AERO ZONE` (struck through, button disabled) on a circuit that has
-none.
+reads `NO AERO ZONE` (struck through, button faded) on a circuit that has none.
+
+**MANUAL or AUTO** is a pause-menu setting (SETTINGS ▸ DRIVING, next to GEARS —
+it is a control preference, not a property of the event, which is why it is not
+in RACE SETTINGS). On AUTO the wing takes every zone by itself and the AERO
+button is **removed from the dock**, not greyed: the survivors close ranks,
+which the flex dock can do and the old absolutely-positioned stack could not.
+`store.get("aeroMode")`, `__apex.aeroMode()`, `raceAeroMode` in game.js.
 
 Adding a consumer? Read `c.aeroX` (or `aeroDfMult(c)` for the downforce
 multiplier) — **never `c.xOn`**. The switch is not the wing.
+
+**OVERTAKE IS NOT ACTIVE AERO, and the two sets of rules must not be crossed.**
+Overtake mode is 2026's successor to DRS as the *proximity-gated* overtaking aid,
+so it inherits DRS's safety restrictions; active aero inherits none of them.
+
+| | ACTIVE AERO (X-mode) | OVERTAKE |
+|---|---|---|
+| proximity to the car ahead | **none** — leader and backmarker alike | within `OT_GAP` (1 s) |
+| where | inside an ACTIVATION ZONE only | anywhere |
+| opening lap | **available** | disabled until the LEADER completes lap 1 |
+| under a caution | available | disabled |
+| circuit with no zones | unavailable (Monaco) | available |
+
+`otEnabled()` in game.js is the race-wide gate — it reads `ranked[0].lap` (the
+LEADER's, because a field-wide switch is what race control throws, and it is
+O(1) since `ranked` is already sorted) and `caution.level`. `c.otArmed` folds
+that together with the car's own gap and cooldown. The HUD says `NO OVERTAKE`
+and fades the button while the gate is shut, because "not armed yet" (keep
+closing) and "switched off" (nothing you do will arm it) are different messages.
+`tests/aero-zones.spec.js` pins both halves, driving a REAL opening lap —
+`setLap()` moves only the player's counter, so a teleport cannot exercise a
+leader-based gate.
 
 **The player is a world-space rigid body.** `px`/`pz`/`head` are the authority:
 the car integrates its own position in world metres from tyre forces alone and
@@ -851,9 +879,22 @@ __apex.assetLoad(tier?)       // (re)load the material arrays ("low"|"high"); fa
 __apex.matTex(0..1)           // BAKED MATERIALS blend — the A/B knob for the pack (ships at 0)
 __apex.credits()              // attribution roll for every baked asset
 __apex.aero(true)             // ACTIVE AERO: request/drop X-mode (2026 moveable
-                              //   wing). No arg reads {xOn,xArmed,aeroX,mode};
-                              //   aeroX is the FLAP TRAVEL the physics reads —
-                              //   asking for X on a corner leaves it at 0
+                              //   wing). No arg reads {xOn,xArmed,aeroX,mode,
+                              //   inZone,zoneAhead,zones,auto}; aeroX is the
+                              //   FLAP TRAVEL the physics reads — asking for X
+                              //   outside a zone leaves it at 0
+__apex.aeroZones()            // the circuit's fixed ACTIVATION ZONES; use
+                              //   midFrac, not the average of start/endFrac —
+                              //   a zone may WRAP the start line. Empty on a
+                              //   circuit with no qualifying straight (Monaco)
+__apex.aeroMode("auto")       // MANUAL | AUTO — the same door as pause >
+                              //   SETTINGS > DRIVING. AUTO takes every zone
+                              //   itself and REMOVES the AERO button
+__apex.caution()              // race control's flags {level 0-3, label, sector,
+                              //   frac, total, sectors[3], sinceT, cause,
+                              //   enabled}; caution(true|false) switches the
+                              //   whole layer (the CAUTIONS race setting's door)
+                              //   and switching it off drops any flag flying
 __apex.setPhysics({pace:0.8}) // override physics params
 __apex.probe()                // player telemetry (x, angle, k, hw, speed, s)
 __apex.physState()            // full state (slip, wrongWay, lap, rescueT)
