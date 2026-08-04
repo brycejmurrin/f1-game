@@ -16,12 +16,11 @@ const els = {
   lights: $("lights"), announce: $("announce"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
-  selDriver: $("sel-driver"), selTracks: $("sel-tracks"),
+  selTracks: $("sel-tracks"),
   selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
   selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"),
   selPreviewRec: $("sel-preview-rec"),
   selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"),
-  selCustomize: $("sel-customize"),
   selBack: $("sel-back"), selGo: $("sel-go"),
   customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
@@ -418,11 +417,22 @@ const DEPLOY_A = 3.0;       // extra accel from electric deploy
 const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed band
                                      //   (a vStd() band — pace-normalised, so the
                                      //   taper sits at the same place on the dial)
+// Deploy strength 0..1 for a car holding BOOST (or running OVERTAKE). The taper
+// makes deploy strongest out of slow corners, but it is FLOORED: it used to
+// reach exactly 0 above TAPER_HI, which is only 191 km/h, so on any straight
+// BOOST produced no thrust — and because the drain was gated on `deploy > 0`,
+// it also cost nothing. Holding BOOST at speed did literally nothing, while
+// OVERTAKE (which bypasses the taper) worked and drained. Real ERS deploys all
+// the way down the straight; so does this now, at reduced strength.
+const TAPER_FLOOR = 0.35;
+function deployTaper(c) {
+  if (c.otT > 0) return 1;
+  const t = clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
+  return TAPER_FLOOR + (1 - TAPER_FLOOR) * t;
+}
 function isErsDeploying(c) {
   if (!c || c.energy <= 0 || !(c.boostOn || c.otT > 0)) return false;
-  const taper = c.otT > 0 ? 1 :
-    clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
-  return DEPLOY_A * taper > 0.4;
+  return DEPLOY_A * deployTaper(c) > 0.4;
 }
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
@@ -928,6 +938,8 @@ function partsVisualKey(teamId) {
 // Parts.getVisualTiers() call). Refreshed whenever parts change (below).
 let playerTyreTier = 1, playerBrakesTier = 1, playerTyreId = "medium", playerBrakeId = "standard";
 let playerTyreVisual = null, playerBrakeVisual = null;
+// WHEELS rides along with the other two wheel-facing categories.
+let playerWheelId = "standard", playerWheelVisual = null;
 // Full 8-char cosmetic key for the PLAYER's body/cockpit mesh caches — computed
 // once here (parts only change from the setup screen, which calls this on close)
 // so the render loop reads a cached string instead of rebuilding it via
@@ -952,6 +964,8 @@ function recomputePlayerMods() {
   playerBrakeId = vt._ids ? vt._ids.brakes : "standard";
   playerTyreVisual = vt._visual && vt._visual.tyres || null;
   playerBrakeVisual = vt._visual && vt._visual.brakes || null;
+  playerWheelId = vt._ids ? vt._ids.wheels : "standard";
+  playerWheelVisual = vt._visual && vt._visual.wheels || null;
   // Key on the full set of resolved option ids + the chosen livery (see partsVisualKey).
   playerVisualKey = (vt._ids ? Parts.CATALOG.map((c) => vt._ids[c.id]).join("|")
                              : Parts.CATALOG.map((c) => vt[c.id]).join(""))
@@ -1369,16 +1383,16 @@ function freeWheelPair(m) {
   }
 }
 function getPlayerWheelMeshes() {
-  const key = playerTyreId + ":" + playerBrakeId;
+  const key = playerTyreId + ":" + playerBrakeId + ":" + playerWheelId;
   return putBoundedMesh(wheelMeshCache, wheelMeshOrder, key, () => {
     const band = playerTyreVisual && playerTyreVisual.band || Car3D.TYRE_BAND[playerTyreTier];
     const caliper = playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
     const rim = playerBrakeVisual && playerBrakeVisual.rim;
     const grooved = !!(playerTyreVisual && playerTyreVisual.grooved);
     const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, grooved,
-      playerTyreVisual, playerBrakeVisual);
+      playerTyreVisual, playerBrakeVisual, playerWheelVisual);
     const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, grooved,
-      playerTyreVisual, playerBrakeVisual);
+      playerTyreVisual, playerBrakeVisual, playerWheelVisual);
     return {
       F: gfx.createMesh(front.rotating),
       R: gfx.createMesh(rear.rotating),
@@ -1809,6 +1823,14 @@ const G = {
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
   store, tickUi, scheduleFlybyTrack,
   renderStatBars: (...a) => renderStatBars(...a),   // const initialised below — defer
+  // Same deferred-arrow trick for the garage <-> select plumbing: setup-ui.js is
+  // created before menus.js, and openGarage/openCustomize are declared further
+  // down this file, so none of these can be referenced directly at create time.
+  buildSetup: (...a) => buildSetup(...a),
+  setTeamPicker: (...a) => setTeamPicker(...a),
+  teamSwatch: (...a) => teamSwatch(...a),
+  openGarage: (...a) => openGarage(...a),
+  openCustomize: (...a) => openCustomize(...a),
   // Mutable state + helpers consumed by js/game/photomode.js.
   get photoMode() { return photoMode; }, set photoMode(v) { photoMode = v; },
   get _photoPrevScale() { return _photoPrevScale; }, set _photoPrevScale(v) { _photoPrevScale = v; },
@@ -1858,7 +1880,7 @@ const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 // CAR SETUP panel UI (js/game/setup-ui.js).
 const { buildSetup, openSetup, renderStatBars } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
-const { buildSelect, updateTrackPreview, openTrackDetail } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
 // Photo mode (js/game/photomode.js).
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
@@ -2312,12 +2334,11 @@ function updateCar(c, dt, ranked) {
     : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25))
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   if (wantBoost && c.energy > 0) {
-    const taper = c.otT > 0 ? 1 : clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
-    deploy = DEPLOY_A * taper;
-    // Only drain the battery when deploy actually produces thrust. Above the taper
-    // band (with no OT active) deploy is 0, so holding BOOST there must not silently
-    // waste ERS for zero benefit.
-    if (deploy > 0) c.energy = Math.max(0, c.energy - DRAIN * dt);
+    deploy = DEPLOY_A * deployTaper(c);
+    // Deploy always produces thrust while held (see deployTaper), so it always
+    // costs energy. The battery and the push are the same switch — a BOOST that
+    // drains nothing is a BOOST that does nothing.
+    c.energy = Math.max(0, c.energy - DRAIN * dt);
     c.deploying = deploy > 0.4;
     if (c.energy <= 0) c.boostOn = false;   // auto-release the toggle when drained
   } else c.deploying = false;
@@ -5333,13 +5354,10 @@ $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 // there with nothing else to restore.
 $("pm-howto").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
-// Team picker: opened by the team card on the select screen (js/game/menus.js).
-// Closing without choosing leaves the current team as-is.
-$("tp-close").onclick = () => {
-  $("teampicker").hidden = true;
-  // the card that opened it advertises aria-haspopup, so it owns aria-expanded
-  const card = $("sel-team-card"); if (card) card.setAttribute("aria-expanded", "false");
-};
+// Team picker: opened by the garage's TEAM & DRIVER tab (js/game/setup-ui.js).
+// Closing without choosing leaves the current team as-is. Nothing to rebuild —
+// the garage is still underneath, unchanged.
+$("tp-close").onclick = () => { $("teampicker").hidden = true; };
 // BACK + the tappable circuit preview. Both lookups existed in `els` but no
 // handler was ever attached on this branch — the select screen's BACK button
 // was simply dead (surfaced by the button-walk audit; the wiring lived on an
@@ -5512,13 +5530,21 @@ CZ_LIV_FIELDS.forEach(([domId]) => {
 for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
   btn.onclick = () => { czSetFinish(btn.dataset.czFinish); if (soundOn) GameAudio.uiTick(); };
 }
-els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustomize(); };
-// CAR SETUP is reachable from the select screen AND from the title, so DONE has
-// to go back where it came from. It used to unhide #select unconditionally,
-// which dropped you on the track picker after opening the garage from the menu.
+// The GARAGE is reachable from the title AND from the select screen's car card,
+// so DONE has to go back where it came from. It used to unhide #select
+// unconditionally, which dropped you on the track picker after opening the
+// garage from the menu.
 let garageReturn = "select";
-$("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); garageReturn = "select"; openSetup(); };
-$("mb-garage").onclick = () => { GameAudio.init(); garageReturn = "menu"; openSetup(); };
+// The one way in. Everything that opens the garage goes through here so the
+// return path can never be left stale — including menus.js, via G.openGarage.
+function openGarage(from) {
+  if (from === "menu") GameAudio.init();
+  else if (soundOn) GameAudio.uiSelect();
+  garageReturn = from;
+  openSetup();
+}
+$("sel-setup").onclick = () => openGarage("select");
+$("mb-garage").onclick = () => openGarage("menu");
 $("cs-done").onclick = () => {
   $("carsetup").hidden = true;
   setupPreviewOn = false;
@@ -5559,7 +5585,10 @@ $("cz-save").onclick = () => {
   driverIdx = 0;
   store.set("team", teamIdx); store.set("driver", 0);
   els.customize.hidden = true;
+  // MY TEAM is reachable from the garage now, so refresh that too — saving a
+  // team switches you to it, and the garage is showing its car in 3D.
   buildSelect();
+  if (!$("carsetup").hidden) buildSetup();
   if (soundOn) GameAudio.uiSelect();
 };
 els.resMenu.onclick = () => quitToMenu();

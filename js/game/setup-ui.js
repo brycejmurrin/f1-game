@@ -1,16 +1,20 @@
-/* Apex 26 — the CAR SETUP panel UI for js/game.js: stat bars, category tabs,
-   option rows + credits budget, livery swatches and the inline livery
-   creator. Pure DOM assembly; live state (sound, budget flag, selected team,
+/* Apex 26 — the GARAGE screen UI for js/game.js (#carsetup): everything about
+   WHO you are and WHAT you drive. Stat bars, the tab column (TEAM & DRIVER,
+   the 8 parts categories, LIVERY), option rows + credits budget, livery
+   swatches and the inline livery creator. The select screen owns WHERE you
+   race and links here; race settings own HOW a race runs.
+   Pure DOM assembly; live state (sound, budget flag, selected team/driver,
    livery draft override, preview-mesh key) is reached through the ctx façade
    G handed to SetupUI.create(G); persistence helpers (getTeamParts,
-   getLiveries, …) arrive by destructure. Consumes globals Parts, Teams,
-   GameAudio. Must load BEFORE js/game.js (see index.html). */
+   getLiveries, …) and the shared team-picker/customize openers arrive by
+   destructure or off G. Consumes globals Parts, Teams, GameAudio.
+   Must load BEFORE js/game.js (see index.html). */
 const SetupUI = (function () {
   "use strict";
 
 function create(G) {
 // Stable helpers from the game.js closure.
-const { $, els, cssCol, arrToHex, hexToArr,
+const { $, els, cssCol, store, arrToHex, hexToArr,
         getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
         getCustomLiveries, setCustomLiveries, getLiveries } = G;
 
@@ -81,10 +85,99 @@ function renderStatBars(container, team) {
   }
 }
 
-let csActiveCat = null;   // id of the category tab currently open in CAR SETUP
+let csActiveCat = null;   // id of the tab currently open in the GARAGE
 let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
 let csLivEditId = null;    // id of the custom livery being edited in-place (null = creating new)
+
+// The tabs that are not parts categories. Both render their own options body
+// and return early from buildSetup instead of running the option-row loop.
+const PSEUDO_CATS = ["team", "livery"];
+
+// One tab button, whatever kind. The three kinds (parts / TEAM & DRIVER /
+// LIVERY) were drifting into three near-identical copies of this block, so the
+// activation behaviour now lives in one place. `flagged` paints the "upgraded"
+// accent — a fitted non-default part, or a non-default paint job.
+function pseudoTab(id, label, sub, flagged) {
+  const tab = document.createElement("button");
+  tab.className = "cs-tab" + (csActiveCat === id ? " active" : "") + (flagged ? " upgraded" : "");
+  tab.dataset.csCat = id;
+  const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = label;
+  const cur = document.createElement("span"); cur.className = "cs-tab-cur"; cur.textContent = sub || "";
+  tab.append(lbl, cur);
+  tab.onclick = () => {
+    if (csActiveCat === id) return;
+    csActiveCat = id;
+    if (G.soundOn) GameAudio.uiTick();
+    buildSetup();
+    const t = $("cs-options"); if (t) t.scrollTop = 0;
+  };
+  return tab;
+}
+
+function csLabel(text) {
+  const h = document.createElement("h3");
+  h.className = "sel-label";
+  h.textContent = text;
+  return h;
+}
+
+// TEAM & DRIVER — who the car belongs to.
+//
+// The garage owns this now. It used to exist only on the select screen, so the
+// title-screen GARAGE route could fit parts and choose a paint job but never say
+// whose car it was, while "who you are" sat buried inside a track picker. Both
+// controls write straight to the store on click, exactly as the select screen
+// did — picking here IS picking your entry for the next race.
+function buildTeamOptions(optsEl, team) {
+  optsEl.appendChild(csLabel("TEAM"));
+
+  // The same sheet the select screen used to open (#teampicker), reached from
+  // here instead. It is told who opened it so the right screen gets rebuilt.
+  const card = document.createElement("button");
+  card.className = "team-card";
+  card.id = "cs-team-card";
+  card.setAttribute("aria-haspopup", "dialog");
+  const body = document.createElement("span"); body.className = "tm-body";
+  const name = document.createElement("span"); name.className = "tm-name"; name.textContent = team.name;
+  const sub = document.createElement("span"); sub.className = "tm-sub";
+  sub.textContent = team.short + " · " + (team.engine || "") + " engine";
+  body.append(name, sub);
+  const chev = document.createElement("span");
+  chev.className = "tm-chev"; chev.textContent = "▾"; chev.setAttribute("aria-hidden", "true");
+  card.append(G.teamSwatch(team), body, chev);
+  card.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.setTeamPicker(true, "garage"); };
+  optsEl.appendChild(card);
+
+  optsEl.appendChild(csLabel("DRIVER"));
+  const row = document.createElement("div");
+  row.className = "chip-row"; row.id = "cs-driver";
+  row.setAttribute("role", "group"); row.setAttribute("aria-label", "Driver");
+  team.drivers.forEach((d, i) => {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (i === G.driverIdx ? " active" : "");
+    b.setAttribute("aria-pressed", i === G.driverIdx ? "true" : "false");
+    b.dataset.csDriver = String(i);
+    b.textContent = "#" + d.num + " " + d.name;
+    b.onclick = () => {
+      if (i === G.driverIdx) return;
+      G.driverIdx = i; store.set("driver", i);
+      if (G.soundOn) GameAudio.uiTick();
+      buildSetup();
+    };
+    row.appendChild(b);
+  });
+  optsEl.appendChild(row);
+
+  const editRow = document.createElement("div"); editRow.className = "sel-edit-row";
+  const edit = document.createElement("button");
+  edit.className = "sel-edit"; edit.id = "cs-customize";
+  edit.textContent = "✎ EDIT MY TEAM";
+  edit.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.openCustomize(); };
+  editRow.appendChild(edit);
+  optsEl.appendChild(editRow);
+}
+
 function buildSetup() {
   const team = Teams.LIST[G.teamIdx];
   const parts = getTeamParts(team.id);
@@ -129,8 +222,9 @@ function buildSetup() {
   }
 
   // Which category tab is open — persisted across rebuilds; default to the first.
-  // "livery" is a valid pseudo-category (the paint-job picker).
-  if (!csActiveCat || (csActiveCat !== "livery" && !Parts.CATALOG.some((c) => c.id === csActiveCat))) csActiveCat = Parts.CATALOG[0].id;
+  // PSEUDO_CATS are the tabs that are not parts categories: who the car belongs
+  // to, and what it is painted.
+  if (!csActiveCat || (!PSEUDO_CATS.includes(csActiveCat) && !Parts.CATALOG.some((c) => c.id === csActiveCat))) csActiveCat = Parts.CATALOG[0].id;
   const activeCat = Parts.CATALOG.find((c) => c.id === csActiveCat);
 
   // Resolve the currently-fitted option for a category (respecting supplier lock).
@@ -143,47 +237,34 @@ function buildSetup() {
   // ---- Category tabs (one row, horizontally scrollable) ----
   const tabs = $("cs-tabs");
   tabs.textContent = "";
+  // TEAM leads: it gates which parts are even offered (supplier exclusives, see
+  // Parts.isOptionAvailable) and which liveries exist, so it is genuinely
+  // upstream of everything below it.
+  //
+  // The label is one word because the rail is ~90px wide — "SUSPENSION" already
+  // nearly fills it and .cs-tab-lbl ellipsises, so "TEAM & DRIVER" rendered as
+  // "TEAM & DRI…". The sub-line carries the DRIVER rather than repeating the
+  // team, which the header (#cs-team) is already showing in full.
+  {
+    const d = team.drivers[G.driverIdx] || team.drivers[0];
+    tabs.appendChild(pseudoTab("team", "TEAM", d ? d.name.split(" ").pop() : team.short));
+  }
   for (const cat of Parts.CATALOG) {
     const cur = resolveOpt(cat);
-    const upgraded = cur && cur.id !== Parts.DEFAULTS[cat.id];
-    const tab = document.createElement("button");
-    tab.className = "cs-tab" + (cat.id === csActiveCat ? " active" : "") + (upgraded ? " upgraded" : "");
-    tab.dataset.csCat = cat.id;
-    const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = cat.label;
-    const sub = document.createElement("span"); sub.className = "cs-tab-cur"; sub.textContent = cur ? cur.label : "";
-    tab.append(lbl, sub);
-    tab.onclick = () => {
-      if (csActiveCat === cat.id) return;
-      csActiveCat = cat.id;
-      if (G.soundOn) GameAudio.uiTick();
-      buildSetup();
-      const t = $("cs-options"); if (t) t.scrollTop = 0;
-    };
-    tabs.appendChild(tab);
+    tabs.appendChild(pseudoTab(cat.id, cat.label, cur ? cur.label : "",
+                               cur && cur.id !== Parts.DEFAULTS[cat.id]));
   }
   // LIVERY pseudo-tab (paint jobs) — appended after the parts categories.
   {
     const curLiv = getLiveries(team).find((l) => l.id === getLiveryId(team.id));
-    const painted = getLiveryId(team.id) !== "default";
-    const tab = document.createElement("button");
-    tab.className = "cs-tab" + (csActiveCat === "livery" ? " active" : "") + (painted ? " upgraded" : "");
-    tab.dataset.csCat = "livery";
-    const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = "LIVERY";
-    const sub = document.createElement("span"); sub.className = "cs-tab-cur"; sub.textContent = curLiv ? curLiv.name : "Team";
-    tab.append(lbl, sub);
-    tab.onclick = () => {
-      if (csActiveCat === "livery") return;
-      csActiveCat = "livery";
-      if (G.soundOn) GameAudio.uiTick();
-      buildSetup();
-      const t = $("cs-options"); if (t) t.scrollTop = 0;
-    };
-    tabs.appendChild(tab);
+    tabs.appendChild(pseudoTab("livery", "LIVERY", curLiv ? curLiv.name : "Team",
+                               getLiveryId(team.id) !== "default"));
   }
 
   // ---- Options list for the active category ----
   const optsEl = $("cs-options");
   optsEl.textContent = "";
+  if (csActiveCat === "team")   { buildTeamOptions(optsEl, team);   renderStatBars($("cs-stats-inner"), team); return; }
   if (csActiveCat === "livery") { buildLiveryOptions(optsEl, team); renderStatBars($("cs-stats-inner"), team); return; }
   const curOpt = resolveOpt(activeCat);
   const curCost = curOpt ? (curOpt.cost || 0) : 0;

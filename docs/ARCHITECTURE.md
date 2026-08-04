@@ -522,7 +522,7 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `results.js` | `GameResults` | results + season-end screens, penalties, points |
 | `apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md) |
 | `atmosphere.js` | `Atmosphere` | `applyRaceSettings` — time-of-day/weather scene state, palettes, flood activation |
-| `setup-ui.js` | `SetupUI` | CAR SETUP screen (8 part categories, budget) |
+| `setup-ui.js` | `SetupUI` | GARAGE screen — TEAM & DRIVER, 8 part categories + budget, LIVERY |
 | `menus.js` | `Menus` | menu/select/pause DOM flows |
 | `scrollfade.js` | `ScrollFade` | edge fade + scroll-position indicator on every menu pane (self-initialising, owns no game state) |
 | `menunav.js` | `MenuNav` | desktop menu input (self-initialising): wheel/trackpad gestures that land outside a pane are redirected into the open menu's nearest one, and arrow keys / Home / End / PageUp / PageDown move focus through it |

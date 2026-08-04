@@ -483,6 +483,9 @@ const SceneryNature = (function () {
       const a = anchor(k, side, gap + 5);
       const roofY = 13 + topLift;
       const roofC = vadd(a.c, a.u, roofY);
+      // The roof's own width, so the rear fascia below can be sized from it
+      // rather than from a literal that has to be kept in step by hand.
+      const roofW = roofKind === "truss" ? 12 : (roofKind === "flat" ? 10 : 12);
       if (roofKind !== "none") {
         if (roofKind === "truss") {
           // Open lattice: a thin deck on repeated cross-braces — reads as an
@@ -538,7 +541,15 @@ const SceneryNature = (function () {
       if (roofKind !== "none") {
         const shellTop = cShell[1] + shellH / 2, roofUnder = roofC[1] - 0.4;
         if (roofUnder > shellTop - 0.1) {
-          const oF = side * (hw[k] + gap + 9);
+          // Tuck the fascia's outer face just INSIDE the roof's rather than
+          // dead flush with it. At the old literal gap+9 the 4 m-wide fascia
+          // ended at gap+11 and so did the 12 m roof centred on gap+5 — two
+          // large same-facing faces at zero gap, which fight at any distance
+          // and were the widest-reach instance of it in the fleet. The fascia
+          // is hidden by the roof from trackside, so 8 cm inboard costs
+          // nothing; deriving it from roofW also keeps the "flat" roof (10 m,
+          // where the fascia used to protrude a metre) tidy.
+          const oF = side * (hw[k] + gap + 5 + roofW / 2 - 0.08 - 2);
           addBox(out, [px[k] + r[0] * oF, (shellTop + roofUnder) / 2, pz[k] + r[2] * oF],
                  [4, roofUnder - shellTop + 0.2, len], fasciaCol, [r, u, t]);
         }

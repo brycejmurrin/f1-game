@@ -273,10 +273,18 @@
       });
       // Extra lamp clusters at key braking zones
       for (const [s0, s1, side] of [[0.95, 0.08, 1], [0.52, 0.62, 1], [0.30, 0.44, -1]]) {
-        let kk = K(s0);
-        const kEnd = K(s1), step = Math.max(1, Math.round(50 / ds));
-        for (let iter = 0; iter < n; iter++, kk = (kk + step) % n) {
-          if (kk === kEnd) break;
+        // Walk a COUNTED number of steps across the window. The old loop advanced
+        // by `step` and broke only on kk === kEnd exactly — which a stride that
+        // does not divide the window essentially never hits, so it ran its full
+        // `n` iterations and wrapped the lap `step` times over, restacking lamps
+        // on nodes it had already dressed. Those duplicates were byte-identical,
+        // hence coplanar on every face, and were this circuit's whole z-fight
+        // population as well as thousands of wasted verts.
+        const k0 = K(s0), kEnd = K(s1), step = Math.max(1, Math.round(50 / ds));
+        const arc = ((kEnd - k0) % n + n) % n;
+        const count = Math.floor(arc / step);
+        for (let i = 0; i < count; i++) {
+          const kk = (k0 + i * step) % n;
           const a = anchor(kk, side, 8);
           if (onTrack(a.c[0], a.c[2], 1.5)) continue;
           const b = [a.r, a.u, a.t];

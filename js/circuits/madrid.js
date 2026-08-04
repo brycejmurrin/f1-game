@@ -128,8 +128,13 @@
         venueGroup(id, frac, side, gap, [22, 22, 34], required, (stage, a) => {
           const b = basis(a);
           for (let tier = 0; tier < 3; tier++) {
+            // Depth tapers with the tier as well as width. The tiers overlap
+            // vertically by design (5.6 tall on a 3.0 rise), so leaving all three
+            // at depth 31 put their END faces on one plane -- same facing, zero
+            // gap, over the whole overlap. Stepping the depth back reads as an
+            // upper tier set in, which is what a real stand does anyway.
             const c = vadd(vadd(a.c, a.r, side * tier * 2.4), a.u, 3.0 + tier * 3.0);
-            addBox(stage, c, [17 - tier * 1.8, 5.6, 31], tier === 1 ? CROWD : WHITE, b);
+            addBox(stage, c, [17 - tier * 1.8, 5.6, 31 - tier * 1.6], tier === 1 ? CROWD : WHITE, b);
           }
           addPrism(stage, vadd(vadd(a.c, a.r, side * 4.0), a.u, 13.6),
             [18, 3.2, 33], WHITE, b);
