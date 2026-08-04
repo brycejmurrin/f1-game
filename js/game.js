@@ -1005,6 +1005,22 @@ function recomputePlayerMods() {
 }
 
 // ---------- car setup ----------
+// The AI speed multiplier for one driver. Ratings apply in EVERY mode — the grid
+// has personality in a one-off Grand Prix too, not only in a career, which is
+// where career layers its own development deltas on top.
+//
+// The simRnd() draw is UNCONDITIONAL and comes FIRST. The stream position after
+// makeCars() must be identical whatever the ratings say: move the draw inside a
+// branch and a career's mere existence shifts every subsequent seeded result,
+// silently breaking tests/agent-determinism.spec.js, tests/autopilot.spec.js and
+// the seeded visual baselines. DriverRatings.skill() takes the sample rather than
+// drawing its own for exactly this reason.
+function driverSkill(team, d, di) {
+  const roll = simRnd();
+  const r = DriverRatings.get(d.code, team.tier, Career.devFor(team.id, di));
+  return DriverRatings.skill(r, roll);
+}
+
 function makeCars() {
   cars = [];
   // the custom team only enters the grid when the player has selected it
@@ -1045,7 +1061,7 @@ function makeCars() {
         finished: false, finishT: 0, finPos: 0,
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
-        skill: Math.min(1.0, 0.92 + simRnd() * 0.1),
+        skill: driverSkill(team, d, di),
         aiBrakeT: 0, lane,
       });
     });

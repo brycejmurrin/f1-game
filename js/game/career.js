@@ -34,10 +34,18 @@ const PRIZE_TAIL = 80;    // P16+
 // the entire economy, which is why it is a constant and not scattered per option.
 const RESEARCH_MULT = 3;
 
-// Fitted-cost cap ladder, indexed by budgetLvl. Ownership ALONE would let one good
-// season max the car out and kill the economy dead, so a career is designed to own
-// more parts than it can fit at once — every weekend stays a choice.
-const BUDGET_LADDER = [350, 500, 700, 900];
+// Fitted-cost cap, as a MULTIPLE of what the team's own works car costs, indexed
+// by budgetLvl. Relative rather than flat for two reasons. First, correctness: a
+// FACTORY_PRESETS build runs 570 cr (Haas) to 2035 cr (McLaren), so any single
+// flat number either starts a top team illegally over its own cap or hands a
+// back-marker a fortune. Second, meaning: level 0 is exactly the car your team
+// actually fields, so every upgrade reads as "how much better than the works car
+// am I allowed to run" instead of an arbitrary credit ceiling.
+//
+// Ownership alone would let one good season max the car out and kill the economy
+// dead — this is what keeps a career owning more parts than it can fit at once, so
+// every weekend stays a choice.
+const BUDGET_MULT = [1.0, 1.15, 1.35, 1.6];
 const BUDGET_UPGRADE = [2500, 5000, 9000];   // cost to reach level 1 / 2 / 3
 
 // Team development is stored as stat points and converted to a pace multiplier
@@ -170,6 +178,14 @@ function driverOverride(teamId, seatIdx) {
   return career.driver;
 }
 
+// Per-driver development deltas, or null outside career. DriverRatings owns the
+// base table (it applies in every mode — the grid has personality in a one-off
+// Grand Prix too); career only layers its own drift on top.
+function devFor(teamId, seatIdx) {
+  if (!inCareer()) return null;
+  return career.dev[seasonDriverId(teamId, seatIdx)] || null;
+}
+
 // ---------- team development ----------
 // Neutral outside career. `tdev` is an additive delta in stat points; Teams.LIST is
 // NEVER mutated, so a save can't corrupt the shipped grid.
@@ -205,7 +221,23 @@ function isOwned(teamId, optId) {
   return s ? s.has(optId) : true;
 }
 function researchCost(opt) { return (opt.cost || 0) * RESEARCH_MULT; }
-function budget() { return BUDGET_LADDER[career ? (career.budgetLvl | 0) : 0]; }
+
+// What the team's own works car costs to build — the baseline every career budget
+// is measured against. Memoised per team: Parts.getFactorySetup is already cached,
+// but getCost walks all 12 categories and the garage asks for this on every render.
+const _worksCost = new Map();
+function worksCost(teamId) {
+  if (_worksCost.has(teamId)) return _worksCost.get(teamId);
+  const team = Teams.LIST.find((t) => t.id === teamId);
+  const c = team ? Parts.getCost(Parts.getFactorySetup(team), team) : 0;
+  _worksCost.set(teamId, c);
+  return c;
+}
+function budget() {
+  if (!career) return 0;
+  const lvl = Math.max(0, Math.min(career.budgetLvl | 0, BUDGET_MULT.length - 1));
+  return Math.round(worksCost(career.team) * BUDGET_MULT[lvl]);
+}
 function budgetUpgradeCost() {
   return career && career.budgetLvl < BUDGET_UPGRADE.length ? BUDGET_UPGRADE[career.budgetLvl] : null;
 }
@@ -278,12 +310,12 @@ function state() {
 }
 
 return {
-  PRIZE, RESEARCH_MULT, BUDGET_LADDER, TDEV_MAX, START_MONEY,
+  PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, START_MONEY,
   data, active, inCareer, engage, load, save, clear, start, state, rnd,
-  salaryFor, newDeal, expectedFinish, driverOverride,
+  salaryFor, newDeal, expectedFinish, driverOverride, devFor,
   paceMult, teamStats,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
-  prizeFor, settleRound,
+  prizeFor, settleRound, worksCost,
   round, roundsTotal, seasonDone, trackIndex,
 };
 })();
