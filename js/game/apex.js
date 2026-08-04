@@ -955,7 +955,18 @@ const api = {
       // Keep the render-interpolation anchors in sync (the render-driven loop
       // snapshots these before each step; a manual pump must too, or a frozen
       // render afterwards lerps toward a stale pre-teleport position).
-      for (let j = 0; j < G.cars.length; j++) { const c = G.cars[j]; c.rPrevS = c.s; c.rPrevX = c.x; }
+      // ALL FOUR, matching the loop: the player renders from WORLD space, so
+      // rPrevPx/rPrevPz drive its drawn position and rPrevHead its drawn heading.
+      // Snapshotting only (s, x) left those two holding whatever the grid or the
+      // previous session put there, so a headless jump()+step()+frozen render put
+      // the car — and with it the whole camera-anchored cockpit rig — somewhere
+      // else entirely, with no error to show for it.
+      for (let j = 0; j < G.cars.length; j++) {
+        const c = G.cars[j];
+        c.rPrevS = c.s; c.rPrevX = c.x;
+        c.rPrevPx = c.px; c.rPrevPz = c.pz;
+        c.rPrevYawVis = c.yawVis; c.rPrevHead = c.head;
+      }
       update(d);
     }
   },
