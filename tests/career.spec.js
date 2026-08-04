@@ -1016,3 +1016,145 @@ test.describe("Career — determinism", () => {
     expect(b.briefs).not.toEqual(a.briefs);
   });
 });
+
+// ── reliability & retirements ────────────────────────────────────────────────
+// js/game/reliability.js. The rules that matter here are all invariants rather
+// than magnitudes: OFF must change nothing, ON must be reproducible, a DNF must
+// classify last and score nothing, and NONE of it may move the sim RNG stream.
+
+// A career whose seed is known to retire the player several times over a season
+// (Haas is tier 3, and the draw is a pure function of (seed, round, driverId) —
+// see armReliability in game.js). Any seed works; this one has margin, so the
+// test is asserting the mechanism rather than a coin flip.
+const DNF_SEED = 99;
+
+// Start a career, stage a weekend, then settle a whole season at `level` and
+// report what the reliability model did to it.
+async function reliabilitySeason(page, level, careerSeed) {
+  await boot(page);
+  await page.evaluate((s) => {
+    window.__apex.careerReset();
+    window.__apex.career({ teamId: "haas", seat: 1, seed: s });
+  }, careerSeed);
+  await goRacing(page);
+  return page.evaluate((lvl) => {
+    window.__apex.reliability(lvl);
+    const rounds = window.__apex.careerSim(24);
+    const c = window.__apex.career();
+    return {
+      level: window.__apex.reliability(),
+      // The reason per round, from settleRound()'s return AND from the row it
+      // wrote onto the save. Two different code paths that must agree.
+      settled: rounds.map((r) => r.round + ":" + (r.dnf || "-")),
+      rows: c.results.map((r) => (r.r + 1) + ":" + (r.dnf || "-")),
+      dnfs: rounds.filter((r) => r.dnf).length,
+      // The whole field of the LAST simulated round.
+      fieldOut: window.__apex.fieldState().filter((f) => f.retired).length,
+      stateDnfs: window.__apex.careerState().dnfs,
+    };
+  }, level);
+}
+
+test.describe("Career — reliability", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("OFF is the shipped default and nothing ever retires", async ({ page }) => {
+    await boot(page);
+    expect(await page.evaluate(() => window.__apex.reliability())).toBe("off");
+    const off = await reliabilitySeason(page, "off", DNF_SEED);
+    expect(off.dnfs).toBe(0);
+    expect(off.fieldOut).toBe(0);
+    expect(off.stateDnfs).toBe(0);
+    expect(off.rows.every((r) => r.endsWith(":-"))).toBe(true);
+  });
+
+  test("a seeded season retires the same cars for the same reasons every time", async ({ page }) => {
+    const a = await reliabilitySeason(page, "real", DNF_SEED);
+    const b = await reliabilitySeason(page, "real", DNF_SEED);
+    expect(a.dnfs).toBeGreaterThanOrEqual(2);   // the model actually fired
+    expect(b).toEqual(a);                       // and fired identically
+    expect(a.rows).toEqual(a.settled);          // save row == settleRound() result
+    expect(a.stateDnfs).toBe(a.dnfs);
+  });
+
+  test("a different career seed retires a different set", async ({ page }) => {
+    const a = await reliabilitySeason(page, "real", DNF_SEED);
+    const b = await reliabilitySeason(page, "real", 4242);
+    expect(b.settled).not.toEqual(a.settled);
+  });
+
+  test("a retirement classifies below every finisher and scores no points", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await goRacing(page);
+    const out = await page.evaluate(() => {
+      // Forced rather than waited for: the classification rule is what is under
+      // test, not the probability of reaching it.
+      const gone = [window.__apex.retire(1, "gearbox"), window.__apex.retire(4, "accident")];
+      window.__apex.finishRace();
+      const season = window.__apex.career().season;
+      const rows = [];
+      for (let i = 0; i < 22; i++) {
+        const c = window.__apex.carAt(i);
+        rows.push({ id: c.id, pos: c.finPos, retired: c.retired, why: c.dnf,
+                    pts: season.pts[c.team + ":" + c.seat] || 0 });
+      }
+      return { gone: gone.map((g) => g.idx), reasons: gone.map((g) => g.why), rows };
+    });
+    expect(out.reasons).toEqual(["gearbox", "accident"]);
+    const retired = out.rows.filter((r) => r.retired);
+    const classified = out.rows.filter((r) => !r.retired);
+    expect(retired.map((r) => r.id).sort()).toEqual(out.gone.slice().sort());
+    // Below EVERY finisher, and scoring nothing.
+    const worstFinisher = Math.max(...classified.map((r) => r.pos));
+    for (const r of retired) {
+      expect(r.pos).toBeGreaterThan(worstFinisher);
+      expect(r.pts).toBe(0);
+    }
+    // The cars above them still got what their positions earn: P1 is 25 in
+    // Teams.POINTS, so a shifted index would show up right here.
+    expect(classified.find((r) => r.pos === 1).pts).toBe(25);
+  });
+
+  test("the reliability draw does not move the sim RNG stream", async ({ page }) => {
+    // makeCars() spends exactly one simRnd() per driver via driverSkill(), and the
+    // stream position after it is a hard contract. A reliability draw taken from
+    // simRnd would shift every seeded result that follows — this is the guard.
+    const grid = async (level) => {
+      await boot(page);
+      return page.evaluate((lvl) => {
+        window.__apex.seed(7);
+        window.__apex.reliability(lvl);
+        window.__apex.race("monza");
+        const out = { skills: [], plan: window.__apex.retirements() };
+        for (let i = 0; i < 22; i++) out.skills.push(window.__apex.carAt(i).skill);
+        return out;
+      }, level);
+    };
+    const off = await grid("off");
+    const real = await grid("real");
+    expect(off.skills.length).toBe(22);
+    expect(real.skills).toEqual(off.skills);
+    // ...and the plan is real, so the equality above is not vacuous.
+    expect(off.plan.length).toBe(0);
+    expect(real.plan.length).toBeGreaterThan(0);
+    for (const p of real.plan) {
+      expect(p.at).toBeGreaterThan(0);
+      expect(["engine", "gearbox", "accident"]).toContain(p.why);
+    }
+  });
+
+  test("RELIABILITY is a persisted race setting", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await page.locator("#cr-go").click();
+    const chips = page.locator("#rs-reliab .sel-chip");
+    await expect(chips).toHaveCount(3);
+    await chips.nth(2).click();      // REAL
+    await expect(chips.nth(2)).toHaveAttribute("aria-pressed", "true");
+    expect(await page.evaluate(() => localStorage.getItem("apex26.reliability"))).toContain("real");
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    expect(await page.evaluate(() => window.__apex.reliability())).toBe("real");
+  });
+});

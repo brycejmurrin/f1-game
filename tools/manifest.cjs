@@ -123,6 +123,7 @@ const FULL = [
   "js/game/atmosphere.js",
   "js/game/store.js",
   "js/game/career.js",
+  "js/game/reliability.js",
   "js/game/cam-tune.js",
   "js/game/setup-ui.js",
   "js/game/career-ui.js",
@@ -277,6 +278,9 @@ const HARD_EDGES = [
   ["js/car/parts.js", "js/game/career.js"],     // Career.start seeds owned/fitted from Parts (call time, keep ordered)
   ["js/car/driver-ratings.js", "js/game.js"],   // makeCars reads DriverRatings for every car's skill
   ["js/game/career.js", "js/game/quali.js"],    // quali reads Career.rnd/devFor for its spread
+  ["js/game/career.js", "js/game/reliability.js"],  // reliability draws through Career.hash (call time, keep ordered)
+  ["js/car/parts.js", "js/game/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
+  ["js/game/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval
   ["js/game/career.js", "js/game/career-ui.js"],  // the screen reads the Career rules
 ];
 

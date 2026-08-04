@@ -129,8 +129,15 @@ function mix32(h) {
   h ^= h >>> 16;
   return h >>> 0;
 }
+// The draw with the seed passed in. Exported because js/game/reliability.js needs
+// exactly this construction OUTSIDE a career, where there is no career.seed to
+// hash on and the sim seed stands in for it — one implementation of the finalizer
+// above rather than a second copy that could quietly lose it.
+function hash(seed, ...parts) {
+  return mix32(hash32(seed + ":" + parts.join(":"))) / 4294967296;
+}
 function rnd(...parts) {
-  return mix32(hash32((career ? career.seed : 0) + ":" + parts.join(":"))) / 4294967296;
+  return hash(career ? career.seed : 0, ...parts);
 }
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
@@ -428,7 +435,11 @@ function objectiveMet(o, ctx) {
   switch (o.type) {
     case "finish": return ctx.pos <= o.value;
     case "points": return ctx.pts >= o.value;
-    case "clean": return !(ctx.player.cuts | 0) && !(ctx.player.penalty | 0);
+    // A retirement is not a clean race. Even a mechanical one: the brief asks for
+    // a race completed without incident, and a car in the barriers on lap two has
+    // not completed anything. Paying the bonus for a DNF would make the one round
+    // you did not race the cheapest one to bank.
+    case "clean": return !ctx.player.retired && !(ctx.player.cuts | 0) && !(ctx.player.penalty | 0);
     case "beatMate": return !ctx.mate || ctx.pos < ctx.matePos;
     case "outQualMate": return !ctx.mate || (ctx.player.gridPos || 99) < (ctx.mate.gridPos || 99);
     default: return false;
@@ -474,10 +485,16 @@ function settleRound(order, player) {
   const repDelta = clamp((expectedFinish(team) - pos) * 0.6, -4, 6)
                  + (obj.done ? OBJ_REP : -OBJ_REP);
   career.rep = clamp(career.rep + repDelta, 0, 100);
-  career.results.push({ r: raced, p: pos, pts, obj: obj.done });
+  // The reason, not just the fact: `dnf` is null for a finish and "engine" /
+  // "gearbox" / "accident" for a retirement, so the archive can say WHY a season
+  // came apart. Classification (and therefore prize money) already handles the
+  // cost of it — a retirement is last, and last pays the tail.
+  const dnf = player.retired ? (player.dnf || "mechanical") : null;
+  career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf });
   career.obj = null;          // the next round draws its own brief on demand
   save();
-  return { pos, pts, prize, salary, bonus, wages, obj, money: career.money, rep: career.rep };
+  return { pos, pts, prize, salary, bonus, wages, obj, dnf,
+           money: career.money, rep: career.rep };
 }
 
 // ---------- the grid, as career sees it ----------
@@ -781,6 +798,9 @@ function state() {
     budget: budget(), budgetLvl: career.budgetLvl,
     owned: career.owned.length,
     deal: career.deal, obj: objective(),
+    // Retirements this season, off the same results rows the archive counts wins
+    // and podiums from — a season's reliability record with no second ledger.
+    dnfs: career.results.filter((r) => r.dnf).length,
     // MY TEAM only; null in a driver career, where you are the wage bill.
     roster: career.roster, wages: wageBill(),
     offers: career.offers.length,
@@ -789,9 +809,9 @@ function state() {
 }
 
 return {
-  PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, START_MONEY,
+  PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
   OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX,
-  data, active, inCareer, engage, load, save, clear, start, state, rnd,
+  data, active, inCareer, engage, load, save, clear, start, state, rnd, hash,
   salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats,

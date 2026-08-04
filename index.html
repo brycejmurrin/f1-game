@@ -424,6 +424,13 @@
         <h3 class="sel-label" id="rs-diff-label">DIFFICULTY</h3>
         <div id="rs-diff" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-diff-label"></div>
       </div>
+      <!-- RELIABILITY — whether cars can retire. A standing preference like
+           DIFFICULTY, and OFF by default so no existing save starts losing cars.
+           Hidden in a time trial: there is no race to be retired from. -->
+      <div class="rs-row" id="rs-reliab-section">
+        <h3 class="sel-label" id="rs-reliab-label">RELIABILITY</h3>
+        <div id="rs-reliab" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-reliab-label"></div>
+      </div>
     </div>
     <div class="sheet-foot">
       <button id="rs-cancel" class="bigbtn alt">BACK</button>
@@ -1104,6 +1111,7 @@
 <script crossorigin="anonymous" src="js/game/atmosphere.js?v=842"></script>
 <script crossorigin="anonymous" src="js/game/store.js?v=842"></script>
 <script crossorigin="anonymous" src="js/game/career.js?v=842"></script>
+<script crossorigin="anonymous" src="js/game/reliability.js?v=842"></script>
 <script crossorigin="anonymous" src="js/game/cam-tune.js?v=842"></script>
 <script crossorigin="anonymous" src="js/game/setup-ui.js?v=842"></script>
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=842"></script>

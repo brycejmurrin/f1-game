@@ -5,6 +5,7 @@ whole story. Two front-ends — **DRIVER CAREER** (you are a driver signed to a
 team) and **MY TEAM** (you own the twelfth team) — share one core.
 
 - **Rules and save:** `js/game/career.js` (global `Career`) — no DOM.
+- **Reliability / DNFs:** `js/game/reliability.js` (global `Reliability`).
 - **Screens:** `js/game/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`.
 - **Qualifying:** `js/game/quali.js` (global `Quali`) — `#quali`.
 - **Ratings:** `js/car/driver-ratings.js` (global `DriverRatings`).
@@ -268,6 +269,86 @@ rep += clamp((expectedFinish(team) - finishPos) * 0.6, -4, +6)   // relative to 
 `expectedFinish` already encodes the tier, so beating a bad car raises reputation and
 cruising in a good one does not.
 
+## Reliability and retirements
+
+`js/game/reliability.js` (global `Reliability`) decides whether a car reaches the
+flag. Without it every one of the twenty-two finishes every race forever, which
+makes a championship a pure pace ranking — and a career flat, because a points
+finish in a bad car is only earned if the good cars can break.
+
+**The rating is derived, never authored.** There is no per-team reliability table
+to keep in step with `js/car/teams.js`. Risk is the team `tier` — the number that
+already says how good the car is — relieved by two things a career can actually
+buy:
+
+| Term | Source | Worth |
+|---|---|---|
+| tier | `TIER_RISK[team.tier]` | 4 % (tier 0) → 12 % (tier 4) per race |
+| team development | `Career.paceMult(teamId)`, normalised to ±1 | up to −40 % at full `tdev` |
+| the build | fitted ENGINE + GEARBOX cost, as a fraction of the dearest option | up to −33 %, human cars only |
+
+The third is the R&D economy's grip on this. ENGINE and GEARBOX because those are
+the two components a real car retires from, and cost because cost is exactly what
+`Career.research()` charges — so developing a power unit buys finishes as well as
+lap time, and a `SIGNATURE` clone scores the same as the universal option it
+stands in for (they are cost-identical by construction). AI cars are scored on
+tier alone: an AI runs its team's works car, which is what `tier` already says.
+
+### The draw touches no stream
+
+`makeCars()` spends exactly one `simRnd()` per driver through `driverSkill()`, and
+the stream position after it is a hard contract (see the rule in Driver ratings
+above). So reliability draws from **nothing**: `Reliability.arm()` hashes
+`(seed, "dnf", round, driverId)` through `Career.hash` — the stateless draw `rnd`
+is built on, with the seed passed in, because a Grand Prix has no career seed.
+Inside a career the seed is `career.seed` and the round is `career.season.round`;
+outside one they are `simSeed()` and a per-session race counter, so two Grands
+Prix in a row are not handed the same casualties.
+
+Arming happens once, at the green light (`armReliability` in game.js), and writes
+a plan: `dnfAt`, a fraction of RACE DISTANCE, and `dnfWhy`. `checkRetirements()`
+fires when the car gets there — so a 3-lap blast and a 25-lap race lose their cars
+at the same points of the story. `Reliability.arm()` also CLEARS, which is what
+resets the flags between sessions.
+
+### What a retirement is
+
+`retireCar()` in game.js is the counterpart of `rescuePlayer()`: same job, opposite
+intent. It parks the car as far off the racing line as the circuit allows, on the
+side it was already on, using the same `Tracks.wallAt()` limit the collision pass
+clamps every car to and the same `worldFromTrack` writeback `rescuePlayer` and
+`coast` use. A stopped car is not a new kind of physics.
+
+Then it leaves the field: retirements are excluded from `ranked` in `update()`,
+which is one line doing four jobs — the HUD position stops counting a parked car,
+the AI stops treating it as a blocker, `resolveCollisions` leaves it where it was
+put, and the overtake target walks past it.
+
+`endRace()` classifies `fin.concat(run, out)`, retirements last and ordered among
+themselves by progress, and awards `c.retired ? 0 : Teams.POINTS[i]` — explicit
+rather than relying on a DNF landing outside the ten scoring slots, so every car
+above keeps what its position earns.
+
+### In career
+
+`settleRound()` records `dnf` on the results row (the reason, not just the fact)
+and returns it, so a season's archive can say why it came apart; `Career.state()`
+counts them as `dnfs` and the hub shows it on THE CAR card, next to development
+and the fitted build — the three things that decide it. `__apex.careerSim()` arms
+the same way, or fast-forwarding a season would quietly hand every car a finish.
+
+**A retirement fails the `clean` objective.** Even a mechanical one: the brief asks
+for a race completed without incident, and paying the bonus for a DNF would make
+the one round you did not race the cheapest one to bank.
+
+### The player can switch it off
+
+RELIABILITY is a race setting (`#rs-reliab`) alongside DIFFICULTY, persisted the
+same way — OFF | LOW | REAL. It ships **OFF**: `store.get(k, d)` returns the stored
+value whenever the key exists, so a new default only ever reaches a fresh install,
+and this key is new for every save. OFF is therefore the only default that does
+not start retiring cars in a game somebody was already halfway through.
+
 ## The season rollover
 
 `Career.rollover()` is what makes a career a career rather than a season that stops.
@@ -355,7 +436,12 @@ __apex.careerSim(n)           // settle n rounds WITHOUT driving, through the re
 __apex.careerRollover()       // force the rollover -> {champion, offers, history}
 __apex.ratings(code?)         // five axes + overall; no args = the whole grid
 __apex.qualiSim(playerTime?)  // the lap model for the loaded track, NON-destructive
-__apex.carAt(i)               // + code, seat, tierV, skill, ratings
+__apex.carAt(i)               // + code, seat, tierV, skill, ratings,
+                              //   retired, dnf, dnfAt, finPos
+__apex.reliability("real")    // the RELIABILITY setting — off | low | real
+__apex.retirements()          // the armed plan: who stops, why, and at what
+                              //   fraction of race distance
+__apex.retire(1, "gearbox")   // retire a car NOW (no arg = the player)
 ```
 
 ## Tests
@@ -364,8 +450,11 @@ __apex.carAt(i)               // + code, seat, tierV, skill, ratings
 (and in `test:modes`). They cover the mode axes, the save and its migration, the
 isolation guarantees, the hub flow, a settled round, the R&D garage, MY TEAM's two
 cars and its wage bill, the objectives, the rollover and the contracts, the ratings,
-and the grid. `tests/ui-audit.spec.js` screenshots the career hub, its new-career
-state, qualifying and the offers sheet in both orientations.
+the grid, and RELIABILITY — that OFF changes nothing, that a seeded season retires
+the same cars for the same reasons every time, that a retirement classifies below
+every finisher and scores no points, and that the draw leaves the sim RNG stream
+exactly where it found it. `tests/ui-audit.spec.js` screenshots the career hub, its
+new-career state, qualifying and the offers sheet in both orientations.
 
 Run `npm run test:modes` after any change here, and `npm run test:parts` after
 anything that touches the garage.

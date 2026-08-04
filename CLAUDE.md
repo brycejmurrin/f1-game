@@ -386,6 +386,16 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   simulation off the same LAT_MAX/ACCEL/BRAKE the
                                   driving model uses, so a simulated time and a
                                   driven one are on one scale. Feeds gridUp()
+  reliability.js Reliability    RELIABILITY / DNFs: whether a car reaches the
+                                  flag. Risk is DERIVED (team tier, relieved by
+                                  career team development and by what the player
+                                  spent on the ENGINE + GEARBOX), never a table.
+                                  The whole field's retirements are drawn ONCE at
+                                  the green light from a stateless hash of (seed,
+                                  round, driver) via Career.hash — makeCars()'s
+                                  simRnd() budget is a hard contract, so this
+                                  consumes NOTHING from the sim stream. Ships OFF
+                                  behind the RELIABILITY race setting
   menus.js       Menus          menu/select/pause DOM flows
   scrollfade.js  ScrollFade     "there is more below" edge fade + position indicator
                                   for every menu scroll region (self-initialising)
@@ -725,7 +735,15 @@ __apex.ratings(code?)         // five-axis driver table + overall; no args = the
 __apex.qualiSim(playerTime?)  // the qualifying model for the loaded track WITHOUT
                               //   running a session (a real weekend is left alone)
 __apex.carAt(i)               // + code, seat, tierV, skill, ratings — the two
-                              //   multipliers that decide AI pace, now observable
+                              //   multipliers that decide AI pace, now observable;
+                              //   + retired/dnf/dnfAt/finPos
+// ── Reliability & retirements (js/game/reliability.js) — ships OFF ──
+__apex.reliability("real")    // the RELIABILITY race setting: off | low | real
+__apex.retirements()          // the armed plan — who stops, why (engine|gearbox|
+                              //   accident) and at what fraction of race distance.
+                              //   Drawn ONCE at the green light; consumes nothing
+                              //   from the sim RNG stream
+__apex.retire(1, "gearbox")   // retire a car NOW (no arg = the player)
 // ── Headless / RL control loop ──
 __apex.headless(true)         // skip render() — physics runs uncapped
 __apex.obs()                  // full debug observation (pos, slip, clearances, scan, reward, gear)
@@ -770,7 +788,7 @@ __apex.survey({stations:24})  // geometry DEFECTS: floating/buried props, props
                               //   scans the whole lap — `stations` is a sample
                               //   COUNT, not a position; it cannot be aimed
 __apex.rollout({seconds:5, policy})  // drive an interval → digest, not frames
-__apex.terminal()             // {done, reason} — finished|wrong_way|rescued
+__apex.terminal()             // {done, reason} — retired|finished|wrong_way|rescued
 ```
 
 Corner data in `world().nextCorner` / `trackInfo({what:"corners"})` is smoothed
