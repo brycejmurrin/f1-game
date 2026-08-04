@@ -121,7 +121,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     flex-wrap: wrap;
   }
   /* manual: shifts hold the outer column and BOOST/OT/AERO sit inboard at 100 */
-  body.manual .hud-bottom { right: calc(16px + var(--btn-col) + var(--btn) + var(--btn-gap) + var(--sar)); }
   #hud-gearbox { gap: 3px; }
   #hud-gear { font-size: 48px; }
   #hud-tach { width: 92px; height: 13px; }
@@ -193,11 +192,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* button mode: 2 columns on the right — GAS/BOOST outer, BRAKE/OT inboard,
      AERO on top of the outer column (landscape has width to spread out). */
   body.steer-buttons #btn-throttle { background: rgba(0, 170, 70, 0.42); }
-  /* Buttons mode: steer arrows occupy the left 192px, action buttons the right 176px.
-     Pin the HUD strip inside that clear zone so OVERTAKE can't bleed into the buttons. */
+  /* Buttons mode is the only layout with TWO steer arrows on the left, so it is
+     the only one that needs its own left bound. The RIGHT bound is not repeated
+     here: it belongs to the arc, above. Restating it was the bug — this rule
+     came later in the cascade and quietly pinned the strip back to the old
+     column's reach (160px) while the arc extends to 207px, so the strip ran
+     straight under BOOST and AERO. */
   body.steer-buttons .hud-bottom {
     left: calc(16px + var(--steer) + var(--btn-gap) + var(--steer) + var(--btn-gap) + var(--sal));
-    right: calc(16px + var(--btn-col) + var(--btn) + var(--btn-gap) + var(--sar));
   }
   /* Narrow landscape (an iPhone SE is 667 wide): the strip cannot hold its
      natural 467px between the thumb columns, so tighten the gap and the two
