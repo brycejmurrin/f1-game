@@ -254,6 +254,9 @@ const NetLobby = (function () {
       // pressed start" have to be different messages — they used to be the same
       // one, which is why arriving settings launched the race immediately.
       session.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
+      // Only reaches the game while WE hold the session — once NetPlay owns it,
+      // its own handler does this and the lobby is out of the loop.
+      session.onEvent(NetPlay.EV.QUALI, (d) => { if (d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d); });
       session.sendEvent(NetPlay.EV.HELLO, localProfile());
       if (role === "host") publishSettings();
       openRoom();
@@ -286,6 +289,7 @@ const NetLobby = (function () {
       return session.sendEvent(NetPlay.EV.SETTINGS, {
         track: G.trackIdx,
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
+        quali: !!G.raceQuali,
         difficulty: G.difficulty,
       });
     }
@@ -296,6 +300,7 @@ const NetLobby = (function () {
       if (!d) return;
       if (typeof d.track === "number") G.trackIdx = d.track;
       if (d.laps != null) G.raceLaps = d.laps;
+      if (d.quali != null) G.raceQuali = !!d.quali;
       if (d.weather != null) G.raceWeather = d.weather;
       if (d.tod != null) G.raceTimeOfDay = d.tod;
       if (d.difficulty != null) G.difficulty = d.difficulty;
@@ -361,6 +366,7 @@ const NetLobby = (function () {
         e.raceSummary.innerHTML =
           `<div><dt>Circuit</dt><dd>${track ? (track.name || track.id) : "—"}</dd></div>`
           + `<div><dt>Laps</dt><dd>${G.raceLaps}</dd></div>`
+          + `<div><dt>Grid</dt><dd>${G.raceQuali ? "Qualifying" : "P12 start"}</dd></div>`
           + `<div><dt>Weather</dt><dd>${wx}</dd></div>`
           + `<div><dt>Time</dt><dd>${tod}</dd></div>`;
       }
@@ -395,7 +401,40 @@ const NetLobby = (function () {
 
     // Start the race, THEN bind the session to it: NetPlay needs a built track
     // to find grid slots for the two drivers.
+    // QUALIFYING COMES BEFORE THE HAND-OFF, which is the whole difficulty.
+    //
+    // beginRace() used to build the race and hand the connection to NetPlay in
+    // one breath. A qualifying session happens BEFORE there is a race to hand
+    // over, so with GRID: QUALIFYING the lobby keeps the connection through the
+    // session — it is what carries the two lap times — and finishStart() runs
+    // only when the players leave the sheet for the grid.
     function beginRace() {
+      if (G.raceQuali && G.openQualiForNet) {
+        say("Qualifying…");
+        if (G.setNetRoom) G.setNetRoom(false);
+        try {
+          G.flow = "gp";
+          G.openQualiForNet(finishStart);   // calls back when TO THE GRID is pressed
+        } catch (e) {
+          say("Could not start qualifying: " + (e && e.message), true);
+          return;
+        }
+        close();         // the sheet is the screen now — but the SESSION stays open
+        return;
+      }
+      finishStart();
+    }
+
+    // Our own driven lap, out over the reliable channel. During qualifying the
+    // LOBBY still owns the session — NetPlay has not been handed it yet — so
+    // this is the route, and game.js asks whichever of the two currently holds
+    // the connection.
+    function reportQuali(driverId, t) {
+      if (!session || !(t > 0)) return false;
+      return session.sendEvent(NetPlay.EV.QUALI, { driverId, t: +t.toFixed(3) });
+    }
+
+    function finishStart() {
       say("Starting race…");
       // Out of the room: the game screens go back to behaving normally, or the
       // next visit to the garage would try to return to a lobby that has been
@@ -894,6 +933,10 @@ const NetLobby = (function () {
       // The waiting room. roomChanged() is game.js's way back in after a player
       // returns from the garage or the race settings.
       roomChanged, setReady, startFromRoom, renderRoom,
+      // Our own qualifying lap goes out through whichever of the lobby and
+      // NetPlay currently holds the connection; during the session that is the
+      // lobby, because the hand-off has not happened yet.
+      reportQuali,
       roomState: () => ({
         open: !!(els().roomStep && !els().roomStep.hidden),
         role, selfReady, peerReady, peer: _peerProfile,

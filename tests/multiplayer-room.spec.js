@@ -19,7 +19,7 @@
 import { test, expect } from "./fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
-const EV = { HELLO: "hello", SETTINGS: "settings", READY: "ready", GO: "go" };
+const EV = { HELLO: "hello", SETTINGS: "settings", READY: "ready", GO: "go", QUALI: "quali" };
 
 // Reach the room over a loopback transport. It is open the moment it exists but
 // has no RTCPeerConnection, so the handshake cannot run over it — lobbyWatch()
@@ -192,5 +192,53 @@ test.describe("the waiting room", () => {
       [...document.querySelectorAll(".screen"), document.getElementById("overlay")]
         .filter((el) => el && !el.hidden).map((el) => el.id));
     expect(open).toEqual([]);
+  });
+});
+
+// GRID: QUALIFYING in a friend race. Two humans qualify, so two real laps have
+// to reach one classification — and the lobby has to hold the connection across
+// a session that happens BEFORE there is a race to hand to NetPlay.
+test.describe("qualifying in a friend race", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("the host's GRID choice reaches the guest and is shown", async ({ page }) => {
+    test.slow();
+    await enterRoom(page, "guest");
+    await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
+    await expect(page.locator("#vs-race-summary")).toContainText(/qualifying/i, { timeout: 5000 });
+    expect(await page.evaluate(() => window.__apex.info().raceQuali)).toBe(true);
+  });
+
+  test("GO opens qualifying instead of the grid, and the lobby keeps the session",
+    async ({ page }) => {
+      test.slow();
+      await enterRoom(page, "guest");
+      await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
+      await peerSays(page, EV.GO, {});
+      // The sheet, not the lights.
+      await expect(page.locator("#quali")).toBeVisible({ timeout: 60000 });
+      await expect(page.locator("#vsfriend")).toBeHidden();
+      expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");
+    });
+
+  test("TO THE GRID waits for the rival's lap, then races", async ({ page }) => {
+    // Gridding up without their time would place them wherever the model
+    // guessed — the one thing a qualifying session exists to prevent.
+    test.slow();
+    await enterRoom(page, "guest");
+    await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
+    await peerSays(page, EV.GO, {});
+    await expect(page.locator("#quali")).toBeVisible({ timeout: 60000 });
+
+    await page.locator("#q-sim").click();          // take the modelled time for us
+    await page.locator("#q-go").click();           // ...but they have not driven yet
+    await expect(page.locator("#quali")).toBeVisible();
+    expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");
+
+    // Their lap lands; now the grid can be built from two real times.
+    await peerSays(page, EV.QUALI, { driverId: "peer-driver", t: 62.5 });
+    await page.locator("#q-go").click();
+    await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), { timeout: 60000 });
+    await expect(page.locator("#quali")).toBeHidden();
   });
 });

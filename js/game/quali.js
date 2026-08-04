@@ -150,20 +150,47 @@ function create(G) {
 
   // ---------- running a session ----------
 
-  // Simulate every car, including the player, and RETURN the rows without
-  // storing them. Split from simulate() so a probe (__apex.qualiSim) can read the
-  // model on any track without overwriting a real weekend's classification.
-  // `playerTime` overrides the player's row when they actually drove the lap.
-  function compute(playerTime) {
+  // DRIVEN LAPS BEAT MODELLED ONES, whoever drove them.
+  //
+  // This used to take a single `playerTime` and override the row where
+  // `c.isPlayer`. That is one human by construction, which is right for a solo
+  // weekend and wrong for a friend race: there are two humans on that grid and
+  // both of their laps are real. Nothing in the model cares WHO drove — a time
+  // that was actually set simply replaces the estimate — so the argument is a
+  // map now and the player is just one entry in it.
+  //
+  // Accepts a bare number as "the local player's time" so every existing caller
+  // (and __apex.qualiSim) keeps working unchanged.
+  function drivenMap(driven) {
+    if (!driven) return null;
+    if (typeof driven === "number") {
+      if (!(driven > 0)) return null;
+      const me = G.cars.find((c) => c.isPlayer);
+      return me ? new Map([[me.driverId, driven]]) : null;
+    }
+    if (driven instanceof Map) return driven.size ? driven : null;
+    const m = new Map();
+    for (const k of Object.keys(driven)) if (driven[k] > 0) m.set(k, driven[k]);
+    return m.size ? m : null;
+  }
+
+  // Simulate every car and RETURN the rows without storing them. Split from
+  // simulate() so a probe (__apex.qualiSim) can read the model on any track
+  // without overwriting a real weekend's classification.
+  function compute(driven) {
     const track = G.track;
     if (!track || !G.cars.length) return null;
     const grip = G.gripMult();
     const round = Career.active() ? Career.round() : 0;
+    const real = drivenMap(driven);
 
     const rows = G.cars.map((c) => ({
       driverId: c.driverId, code: c.code, name: c.name,
       team: c.team && c.team.id, isPlayer: !!c.isPlayer,
-      t: (c.isPlayer && playerTime > 0) ? playerTime : simLap(c, track, grip, round),
+      // `human` marks a row somebody actually drove, so the sheet can say so
+      // when there are two of them and "isPlayer" no longer covers it.
+      human: !!(real && real.has(c.driverId)),
+      t: (real && real.get(c.driverId) > 0) ? real.get(c.driverId) : simLap(c, track, grip, round),
       car: c,
     }));
     rows.sort((a, b) => a.t - b.t);
@@ -173,15 +200,16 @@ function create(G) {
   }
 
   // Run the session for real: compute and keep the result as THE classification.
-  function simulate(playerTime) {
-    const rows = compute(playerTime);
+  // `driven` is a time, or a driverId->time map when more than one human drove.
+  function simulate(driven) {
+    const rows = compute(driven);
     if (rows) classification = rows;
     return rows;
   }
 
   // Read-only: the model's times for the current track, classification untouched.
-  function preview(playerTime) {
-    const rows = compute(playerTime);
+  function preview(driven) {
+    const rows = compute(driven);
     return rows ? rows.map(({ car, ...row }) => row) : null;
   }
 

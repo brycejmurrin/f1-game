@@ -758,6 +758,13 @@ let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.lengt
 let flow = "gp";            // "gp" | "season" | "career"
 let session = "race";       // "race" | "tt" (solo against the clock) | "quali"
 const isChampionship = () => flow === "season" || flow === "career";
+// Does the grid come from a qualifying classification? A championship always
+// does; a one-off does when the player asked for it. Both startRace() (which
+// reads quali.order) and the race-settings GO button ask this, and they must
+// agree — a race that qualified and then gridded up P12 would throw the session
+// away, and one that gridded from a classification it never ran would read a
+// stale one.
+const gridFromQuali = () => isChampionship() || (raceQuali && !isTimeTrial());
 // The ONE way `flow` is written. Career's save is loaded at boot and stays loaded,
 // so js/game/career.js has to be told whether its rules apply to the session that
 // is running — otherwise a Grand Prix would quietly inherit the career's team
@@ -776,6 +783,62 @@ let careerSettlement = null;
 const isCareer = () => flow === "career";
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
+// Whether a one-off race decides its grid by QUALIFYING rather than dropping the
+// player at P12. A championship always qualifies — that is what a weekend is —
+// so this is the switch for everything that is not one. A standing preference
+// like DIFFICULTY and RELIABILITY, not a per-race reset: someone who wants to
+// qualify wants to qualify next time too.
+let raceQuali = store.get("raceQuali", false);
+// A friend race has TWO humans on the grid, and both of their qualifying laps
+// are real. The rival's arrives over the wire (NetPlay EV.QUALI) as
+// driverId -> seconds; quali.simulate() takes the map and stops caring which of
+// them is "the player". Cleared with the classification.
+let qualiPeer = null;
+// Everything anyone actually drove, in the one shape the model wants.
+// The rival's driven lap has arrived. Store it, and redraw whatever is showing:
+// if the sheet is up it must now list their real time instead of the model's
+// guess, and if the classification was already built it has to be rebuilt or the
+// grid would be assembled from a lap that has been superseded.
+// Whoever currently holds the connection carries it. NetPlay owns the session
+// once the race is built; before that — which is exactly when qualifying runs —
+// the lobby still does.
+function netReportQuali(driverId, t) {
+  if (netPlay && netPlay.active && netPlay.active() && netPlay.reportQuali) return netPlay.reportQuali(driverId, t);
+  if (netLobby && netLobby.reportQuali) return netLobby.reportQuali(driverId, t);
+  return false;
+}
+
+// A friend race waits for BOTH laps before it will grid up. Racing someone
+// whose qualifying time never arrived would put them wherever the model
+// guessed, which is the one thing a qualifying session is supposed to stop.
+let qualiNetDone = null;          // the lobby's "now finish starting" callback
+function qualiNetWaiting() {
+  if (!qualiNetDone) return false;
+  return !(qualiPeer && qualiPeer.t > 0);
+}
+
+// Stage a qualifying session for a FRIEND race. Same session the solo path
+// runs; the difference is only what happens when it ends — the lobby has to
+// build the race and hand its connection to NetPlay, and it cannot do that
+// until the players leave the sheet.
+function openQualiForNet(done) {
+  qualiNetDone = done || null;
+  openQuali();
+}
+
+function onPeerQuali(d) {
+  qualiPeer = { driverId: d.driverId, t: d.t };
+  if (session !== "quali" && !isQuali()) return;
+  const mine = player && player.best < Infinity ? player.best : 0;
+  quali.simulate(qualiDriven(mine));
+  if (!$("quali").hidden) quali.build();
+}
+function qualiDriven(myTime) {
+  const m = new Map();
+  if (myTime > 0 && player) m.set(player.driverId, myTime);
+  if (qualiPeer && qualiPeer.driverId != null && qualiPeer.t > 0) m.set(qualiPeer.driverId, qualiPeer.t);
+  return m.size ? m : 0;
+}
 let raceWeather = "dry";       // "dry" | "wet" | "rain" | "overcast" | "fog"
 let raceTimeOfDay = "default"; // "default" | "dawn" | "day" | "dusk" | "night"
 let ttRecord = Infinity;    // best lap on the current TT track's leaderboard (seconds)
@@ -2135,7 +2198,7 @@ function startRace() {
   } else {
     Particles.rainShow(false);
   }
-  gridUp(isChampionship() ? quali.order(cars) : null);
+  gridUp(gridFromQuali() ? quali.order(cars) : null);
   recomputePlayerMods();
   // Only a RACE can retire a car. A time trial is you against the clock and
   // qualifying is one flying lap — losing the car to a gearbox there would end
@@ -2282,7 +2345,11 @@ function endRace(forcedOrder) {
   // below — first branch out, before any race classification is built.
   if (isQuali()) {
     cars = qualiField || cars;
-    quali.simulate(player.best < Infinity ? player.best : 0);
+    const myLap = player.best < Infinity ? player.best : 0;
+    // Tell the other player what we set BEFORE building the sheet: their side
+    // needs it to draw the same classification ours will.
+    if (myLap > 0) netReportQuali(player.driverId, myLap);
+    quali.simulate(qualiDriven(myLap));
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
     quali.open();
     return;
@@ -2540,6 +2607,8 @@ const G = {
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
+  onPeerQuali, openQualiForNet,
+  get raceQuali() { return raceQuali; }, set raceQuali(v) { raceQuali = !!v; },
   openGarageFrom: (from) => openGarage(from),
   startRace, startWeatherArc, update, wrapS,
 };
@@ -2641,6 +2710,7 @@ function quitToMenu() {
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
   setFlow("gp"); session = "race";
   quali.clear();   // last weekend's classification is not this one's grid
+  qualiPeer = null;
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -6828,6 +6898,35 @@ function buildRaceSettings() {
   // the event, so it lives in pause > SETTINGS > DRIVING next to GEARS — where
   // it can also be changed mid-race, which is when a player discovers they want
   // it. See refreshAeroBtn.)
+  // Hidden in a time trial (no grid) and FORCED ON in a championship, where the
+  // weekend decides the grid and the choice is not the player's to make. Shown
+  // rather than removed there, because "why did this race qualify" is a
+  // question the screen should answer.
+  const champ = isChampionship();
+  // STILL HIDDEN IN THE ROOM. The plumbing below it is now in place — the model
+  // carries two driven laps, the lobby holds its session across the session and
+  // routes EV.QUALI, and TO THE GRID waits for the rival — but the last spec
+  // does not pass: after the rival's lap lands, the click on #q-go hangs, which
+  // is the signature of a button that is not visible rather than of a rule that
+  // is wrong (the sheet is rebuilt when the lap arrives, and that rebuild looks
+  // like it drops the q-done foot). Shipping the chip before that is understood
+  // would offer a session that can strand two players on a sheet.
+  $("rs-quali-section").hidden = isTimeTrial() || netRoom;
+  const qEl = $("rs-quali");
+  qEl.innerHTML = "";
+  for (const [on, label] of [[false, "P12 START"], [true, "QUALIFYING"]]) {
+    const active = champ ? on : raceQuali === on;
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (active ? " active" : "");
+    b.setAttribute("aria-pressed", active ? "true" : "false");
+    b.disabled = champ;
+    b.textContent = label;
+    b.onclick = () => {
+      raceQuali = on; store.set("raceQuali", on);
+      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
+    };
+    qEl.appendChild(b);
+  }
   // CAUTIONS — the flag layer. Hidden in a time trial for the same reason
   // RELIABILITY is: alone on an empty track there is nothing to caution.
   $("rs-caution-section").hidden = isTimeTrial();
@@ -6922,10 +7021,10 @@ $("rs-go").onclick = () => {
     return;
   }
   if (steerMode === "tilt") enableTilt();
-  // In a championship the weekend starts with qualifying, which is what decides
-  // the grid. A one-off Grand Prix goes straight to the race and keeps its P12
-  // start — that mode is a quick blast, not a weekend.
-  if (isChampionship()) openQuali(); else startRace();
+  // A championship weekend always starts with qualifying, and a one-off does
+  // when GRID is set to QUALIFYING. Otherwise it is straight to the lights from
+  // P12 — a quick blast, which is the point of that mode.
+  if (gridFromQuali()) openQuali(); else startRace();
 };
 
 // ── qualifying ───────────────────────────────────────────────────────────────
@@ -6939,6 +7038,7 @@ function openQuali() {
   // up, so both paths say the same thing.
   state = "menu";
   quali.clear();
+  qualiPeer = null;
   loadTrack(trackIdx);
   makeCars();
   quali.simulate(0);              // provisional: everyone simulated, including you
@@ -6958,11 +7058,26 @@ $("q-drive").onclick = () => {
 };
 $("q-sim").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
-  quali.simulate(0);              // keep the simulated time for the player too
+  // Keep the model's time for us — but a rival who has already driven theirs
+  // does not lose it because we could not be bothered to drive ours.
+  quali.simulate(qualiDriven(0));
   $("quali").classList.add("q-done");
   quali.build();
 };
-$("q-go").onclick = () => { if (soundOn) GameAudio.uiSelect(); closeQualiToGrid(); };
+$("q-go").onclick = () => {
+  if (qualiNetWaiting()) { announce("WAITING FOR YOUR RIVAL'S LAP", 2); return; }
+  if (soundOn) GameAudio.uiSelect();
+  // In a friend race the lobby, not this handler, builds the race: it still
+  // holds the connection and has to hand it to NetPlay once the grid exists.
+  if (qualiNetDone) {
+    const go = qualiNetDone;
+    qualiNetDone = null;
+    quali.close();
+    go();
+    return;
+  }
+  closeQualiToGrid();
+};
 // BACK goes ONE step, to the race settings the weekend was staged from — which
 // has its own BACK to the hub or the select screen, so the two together are a
 // real back-stack rather than a shortcut that skips a screen.

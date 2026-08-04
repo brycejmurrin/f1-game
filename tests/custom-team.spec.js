@@ -144,6 +144,7 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
 
   // Chase and cockpit cameras build the two player-only body cache variants.
   await page.locator("#sel-go").click();
+  await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
   await page.locator("#rs-go").click();
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
   await page.evaluate(() => window.__apex.park(0.1));

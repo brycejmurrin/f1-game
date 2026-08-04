@@ -225,6 +225,10 @@ const api = {
     state: G.state, track: (G.state === "race" || G.state === "count") ? (G.track && G.track.def.id) : null,
     n: G.track && G.track.n, total: G.track && G.track.total, timeTrial: G.timeTrial, seasonMode: G.seasonMode,
     flow: G.flow, session: G.session, career: !!G.career,
+    // GRID: does this race decide its start order by qualifying? A championship
+    // always does; a one-off does when the player asked, and in a friend race
+    // it is the host's choice replicated to the guest.
+    raceQuali: !!G.raceQuali,
     // How many laps THIS session runs. Not always the race length: a time trial
     // runs TT_LAPS and qualifying runs a single flying lap.
     lapsTarget: G.lapsTarget,
