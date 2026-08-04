@@ -1076,6 +1076,7 @@ const NetLobby = (function () {
       // offer belongs to one RTCPeerConnection, so the invite minted above is
       // spent on whoever comes first and the rest are minted on demand.
       if (!NetRendezvous.usingPrivateRelay()) {
+        const answersSeen = new Set();
         const sub = await NetRendezvous.hostRoom({
           code, token: codeWait,
           // The offer already prepared above goes out IMMEDIATELY, exactly as
@@ -1106,8 +1107,19 @@ const NetLobby = (function () {
             return more.ok ? more.code : null;
           },
           onJoiner: async (_who, answer) => {
+            // Each answer ONCE, and only while a handshake is waiting for one.
+            // A repeat (relay quirk, a guest retrying) or an answer landing
+            // after rotation would otherwise be applied to whatever transport
+            // is pending NOW — a fresh stable PC, which throws. Seen in a real
+            // console as an uncaught InvalidStateError.
+            if (answersSeen.has(answer)) return;
+            answersSeen.add(answer);
+            if (!transport || !pendingId) return;   // nothing awaiting an answer
             const acc = await NetHandshake.acceptAnswer(transport, answer);
-            if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return; }
+            if (!acc.ok) {
+              if (acc.error !== "already_answered") say(acc.message || "That answer could not be read.", true);
+              return;
+            }
             if (acc.peer && pendingId) _peers.set(pendingId, acc.peer);
             waitForOpen();
             // NOT rotating here. Minting the next offer means newTransport(),

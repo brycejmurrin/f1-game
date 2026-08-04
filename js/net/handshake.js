@@ -261,6 +261,16 @@ const NetHandshake = (function () {
     if (!build.ok) return build;
     const pc = transport && transport.pc;
     if (!pc) return NO_TRANSPORT;
+    // ONLY while an answer is awaited. setRemoteDescription(answer) on a PC
+    // in "stable" throws InvalidStateError — seen UNCAUGHT in a real console.
+    // Two real ways to get here: the same answer handled twice, or an answer
+    // arriving after the host ROTATED to a fresh transport (which is stable,
+    // having no local offer yet). Neither is an exception-worthy surprise;
+    // both are "this answer is not for this connection", said typed.
+    if (pc.signalingState !== "have-local-offer") {
+      return { ok: false, error: "already_answered",
+               message: "That answer was already used, or arrived too late." };
+    }
     await pc.setRemoteDescription({ type: "answer", sdp: parsed.payload.s });
     return { ok: true, peer: parsed.payload.p || null };
   }
