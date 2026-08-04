@@ -2057,6 +2057,27 @@ const api = {
     return G.netLobby.acceptAnswer(answerCode);
   },
 
+  // lobbyInviteAnother() — mint a FURTHER invite without disturbing the room.
+  // Deliberately not lobbyHost() twice: that calls open(), which clears the
+  // peer maps, so inviting a third player would forget the second.
+  lobbyInviteAnother() {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    return G.netLobby.inviteAnother();
+  },
+  // The two buttons the waiting room ends with. Exposed for tools/rtc-e2e-3p,
+  // which drives the real handshake and cannot click: the actionability check
+  // fights the ~25 s a real ICE exchange takes, so it would end up testing the
+  // buttons rather than the wire. The buttons have their own spec.
+  lobbyReady(v) {
+    if (!G.netLobby) return false;
+    G.netLobby.setReady(v !== false);
+    return true;
+  },
+  lobbyStart() {
+    if (!G.netLobby) return false;
+    return G.netLobby.startFromRoom();
+  },
+
   // lobbyMods(profile) — resolve a peer profile to multipliers, locally.
   lobbyMods(profile) {
     return G.netLobby ? G.netLobby.modsFromProfile(profile) : null;

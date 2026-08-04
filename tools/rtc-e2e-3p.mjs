@@ -129,8 +129,27 @@ log(el(), `\n*** THREE PEERS IN ONE ROOM at ${el()} ***`);
 
 // ---- race ----------------------------------------------------------------
 await Promise.all([A, B, C].map((p) => p.evaluate(() => window.__apex.lobbyReady(true))));
-await A.evaluate(() => window.__apex.lobbyStart());
-log(el(), "start pressed");
+// WAIT for readiness to arrive before pressing start. startFromRoom() refuses
+// unless every peer's READY has actually landed, and these are real
+// connections — saying "ready" and the host KNOWING it are separated by a real
+// round trip. Pressing immediately just gets a silent refusal.
+let readyAll = false;
+for (let i = 0; i < 20 && !readyAll; i++) {
+  const r = await A.evaluate(() => window.__apex.lobbyRoom());
+  readyAll = !!(r && r.selfReady && r.peerReady);
+  if (!readyAll) {
+    const [rb2, rc2] = await Promise.all([
+      B.evaluate(() => window.__apex.lobbyRoom()), C.evaluate(() => window.__apex.lobbyRoom())]);
+    log(`${el()} READY? A=${JSON.stringify(r)}`);
+    log(`${el()}        B=${JSON.stringify(rb2)}`);
+    log(`${el()}        C=${JSON.stringify(rc2)}`);
+    await new Promise((z) => setTimeout(z, 2000));
+  }
+}
+if (!readyAll) await die("not everyone showed as ready to the host");
+const started = await A.evaluate(() => window.__apex.lobbyStart());
+log(el(), "start pressed ->", started);
+if (started === false) await die("the host refused to start with everyone ready");
 
 const upNow = async (p) => (await p.evaluate(() => window.__apex.net())).active;
 const deadline = Date.now() + 120000;
