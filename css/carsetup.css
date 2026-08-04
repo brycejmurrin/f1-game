@@ -525,6 +525,13 @@
    bar stacked three deep on a phone. */
 .cs-view-grp { display: contents; }
 .cs-view-zoom { font-size: 13px; padding: 3px 10px; line-height: 1; }
+/* The arrows repeat while held, so they must not start a text selection or a
+   long-press context menu under the finger. */
+.cs-view-nudge {
+  font-size: 10px; padding: 4px 8px; line-height: 1;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 .cs-view-sep {
   width: 1px; height: 16px; margin: 0 2px;
   background: rgba(255,255,255,0.16);
