@@ -1979,6 +1979,40 @@ __apex.careerSlots("driver", 0).team;   // -> "haas", and it is now live
 A career's **own flavour decides its set** — `career({teamId:"audi", slot:2})` fills
 driver slot 2, and no argument can put a driver career in the MY TEAM set.
 
+### `careerFreeMoney(on?) → boolean`
+EXTRA FUNDS — a deliberate cheat, off by default. Money stops being the
+constraint; **the fitted cap does not move**, so a bottomless balance still cannot
+put more on the car than the rules allow. Stored *outside* the save
+(`apex26.career.freeMoney`) because it is a preference about how you want to play,
+not a fact about one career.
+
+### `careerGrant(n?) → number | null`
+Hand the live career credits; no argument grants `Career.GRANT` (5,000). Returns the
+new balance, or `null` with no career loaded.
+
+### `careerFacility(up?) → {level, max, cost, discount}`
+The open-ended research facility — the money sink that keeps working once the
+catalog is owned. Each level is a permanent cut to what research costs (5% per
+level, capped at 40%). Pass a truthy argument to buy the next level. `cost` is
+`null` at the ceiling.
+
+```js
+__apex.careerMoney(999999);
+__apex.careerFacility(true);      // → { level: 1, max: 8, cost: 4800, discount: 0.05 }
+```
+
+### `careerHire(what?) → {kind, code, name, salary, ask} | null`
+MY TEAM's second seat. No argument reports whether a decision is pending — `null`
+means under contract. `kind` is `"renew"` (they will re-sign at `ask`) or `"left"`
+(a better offer took them; only ever possible after they outperformed the car).
+Pass `"renew"` to take their asking price, or a free-agent **code** to sign somebody
+else. An unresolved seat blocks the weekend: MY TEAM enters two cars.
+
+```js
+__apex.careerHire();          // → { kind: "renew", code: "NKM", salary: 38, ask: 44 }
+__apex.careerHire("renew");   // → null — signed, and the block is cleared
+```
+
 ### `careerSlotDelete(flavour, i) → [{flavour, i, used, …}]`
 Wipe **one** slot, live or not, and return all six. Reloads whatever is left
 afterwards, so the title screen still has something behind it.

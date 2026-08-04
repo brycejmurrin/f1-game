@@ -1654,7 +1654,7 @@ test.describe("Career — the guide", () => {
     expect(body).toContain("+" + c.bonus.toLocaleString() + " cr");
     expect(body).toContain(c.mult + "x the part's price");
     expect(body).toContain(c.cap + "x");
-    expect(body).toContain(c.slots + ", each a whole career");
+    expect(body).toContain(c.slots + " for this mode, " + (c.slots * 2) + " in all");
   });
 
   test("MY TEAM's guide prices the actual driver market", async ({ page }) => {
