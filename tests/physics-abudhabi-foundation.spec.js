@@ -61,10 +61,20 @@ for (const timeOfDay of ["day", "night"]) {
       };
     });
 
-    expect(result.definition.hasElevations).toBe(false);
+    // Yas Marina is NOT flat, and has not been since it was given a real
+    // profile: it climbs away from the pit straight, crests over the north loop
+    // and eases back down through the marina, ~9 m end to end at under 2%
+    // gradient (js/circuits/abudhabi.js `elevations`). This asserted flatness
+    // long after that landed, so the spec failed on the circuit's own intended
+    // shape — the contract worth pinning is the SHAPE, not its absence.
+    expect(result.definition.hasElevations).toBe(true);
     expect(result.definition.sceneryCoordinates).toBe("racing");
     expect(result.definition.dressingExclusions.length).toBeGreaterThanOrEqual(4);
-    expect(result.elevationRange).toBeLessThan(0.1);
+    // Measured 9.24 m. Bounded on both sides: too small means the profile
+    // stopped being applied, too large means it grew into a gradient Yas Marina
+    // does not have.
+    expect(result.elevationRange).toBeGreaterThan(6);
+    expect(result.elevationRange).toBeLessThan(14);
     expect(result.geometry.every((entry) => entry.ok)).toBe(true);
 
     const hardFailures = [

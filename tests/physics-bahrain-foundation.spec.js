@@ -154,11 +154,19 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
   expect(audit.models.invalid).toEqual([]);
   expect(audit.models.suppressed).toEqual([]);
   expect(audit.models.unsafe).toEqual([]);
+  // EXACT, not a subset — the point is that a required model silently vanishing
+  // is caught, and a subset check cannot see that. The cost is that ADDING
+  // required scenery lands here too; that is intended. Update the list and
+  // satisfy yourself the new model is meant to be required, rather than
+  // loosening the assertion.
   expect(audit.models.emitted.filter((entry) => entry.required).map((entry) => entry.id).sort())
     .toEqual([
       "bahrain-back-straight-gantry",
       "bahrain-start-gantry",
+      "kit:bahrain:back-straight-recovery",
+      "kit:bahrain:back-straight-service",
       "kit:bahrain:hospitality",
+      "kit:bahrain:pit-operations",
       "kit:bahrain:service-compound",
     ]);
 
