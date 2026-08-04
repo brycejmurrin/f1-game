@@ -1741,6 +1741,11 @@ const G = {
   get paused() { return paused; }, set paused(v) { paused = v; },
   get raceLaps() { return raceLaps; }, set raceLaps(v) { raceLaps = v; },
   get raceT() { return raceT; }, set raceT(v) { raceT = v; },
+  // The RENDER clock (sky/cloud drift, FLAG cloth wave). It accumulates real
+  // frame dt, so its value depends on how many frames happened to render — which
+  // makes any pixel comparison across runs non-deterministic. Exposed so a
+  // visual-regression capture can pin it; see __apex.renderClock().
+  get skyT() { return _skyT; }, set skyT(v) { _skyT = v; },
   get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
   get renderAlpha() { return renderAlpha; }, set renderAlpha(v) { renderAlpha = v; },

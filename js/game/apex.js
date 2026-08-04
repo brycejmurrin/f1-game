@@ -1039,6 +1039,12 @@ const api = {
   // + one node per placement, plus batches() — the backend-neutral instanced-draw
   // handoff. Returns null before a track is built. Live object, not a copy: read
   // it, do not mutate it.
+  // Get or PIN the render clock (sky/cloud drift, FLAG cloth wave). It normally
+  // accumulates real frame dt, so two runs of the same frozen scene render
+  // different pixels — the reason tests/tracks-visual.spec.js could never hold a
+  // baseline. Setting it makes a capture reproducible; it keeps advancing from
+  // the value you set unless the scene is also headless().
+  renderClock(t) { if (t !== undefined) G.skyT = t; return G.skyT; },
   trackGraph: () => (G.track && G.track.graph) || null,
   tracks: () => Tracks.LIST.map((t, i) => ({ id: t.id, name: t.name, i })),
 
