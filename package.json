@@ -34,7 +34,7 @@
     "test:map":       "node tools/run-playwright.mjs tests/map-hooks.spec.js",
     "test:net":       "node tools/run-playwright.mjs tests/multiplayer-roles.spec.js tests/multiplayer-session.spec.js tests/multiplayer-lobby.spec.js",
     "rtc:e2e":       "node tools/rtc-e2e.mjs",
-    "test:net-unit":  "node --test tests/net-transport.test.mjs tests/net-snapshot.test.mjs tests/net-session.test.mjs",
+    "test:net-unit":  "node --test tests/net-transport.test.mjs tests/net-sdp.test.mjs tests/net-snapshot.test.mjs tests/net-session.test.mjs",
     "test:paths":     "node tools/run-playwright.mjs tests/output-paths.spec.js",
     "test:service-worker": "node --test tests/service-worker.test.mjs",
     "test:webgpu-lifecycle": "node --test tests/webgpu-lifecycle.test.mjs",
