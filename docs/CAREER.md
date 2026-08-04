@@ -5,7 +5,7 @@ whole story. Two front-ends — **DRIVER CAREER** (you are a driver signed to a
 team) and **MY TEAM** (you own the twelfth team) — share one core.
 
 - **Rules and save:** `js/game/career.js` (global `Career`) — no DOM.
-- **Screens:** `js/game/career-ui.js` (global `CareerUI`) — `#career`.
+- **Screens:** `js/game/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`.
 - **Qualifying:** `js/game/quali.js` (global `Quali`) — `#quali`.
 - **Ratings:** `js/car/driver-ratings.js` (global `DriverRatings`).
 - **Persistence + migration:** `GameStore.migrateCareer` in `js/game/store.js`.
@@ -158,6 +158,85 @@ owned ids. `Parts._resolve()` stays career-blind — threading a filter through 
 would mean every caller of `resolveSetup`/`getMods`/`getVisualTiers` had to pass it
 or silently disagree with the others.
 
+## Objectives and reputation
+
+One objective per round, drawn with `Career.rnd(year, "obj", round)` from a table of
+five kinds. Meeting it pays **+150 cr and +2 rep**; missing it costs **2 rep**.
+
+| Type | Met when | Value |
+|---|---|---|
+| `finish` | `pos <= value` | `expectedFinish(team) - 1` — one place better than the contract's own season goal, or a race brief would be easier than the year-long one |
+| `beatMate` | you finish ahead of your team-mate | — |
+| `outQualMate` | you started ahead of your team-mate (`car.gridPos`) | — |
+| `points` | `pts >= value` | 1 |
+| `clean` | no track-limits cuts, no penalty | — |
+
+The save stores four **scalars** — `{round, type, value, done}` — never the sentence.
+Wording comes from `OBJ_LABELS` at render time, because prose in a save can never be
+reworded again without a migration. `round` is load-bearing: `endRace()` advances the
+calendar *before* calling `settleRound()`, so without it there is no telling the brief
+that was live for the race just run from the one for the race to come. `settleRound()`
+recomputes it with `objectiveFor(round - 1)` rather than trusting the cache — the draw
+is pure, so the two can never disagree.
+
+The two comparison briefs are **vacuous, not failed,** with no team-mate. The custom
+team fields one car and that is not the driver's fault.
+
+Reputation has two channels, deliberately different in kind:
+
+```js
+rep += clamp((expectedFinish(team) - finishPos) * 0.6, -4, +6)   // relative to the CAR
+     + (objectiveMet ? +2 : -2)                                   // flat: met or not
+```
+
+`expectedFinish` already encodes the tier, so beating a bad car raises reputation and
+cruising in a good one does not.
+
+## The season rollover
+
+`Career.rollover()` is what makes a career a career rather than a season that stops.
+Order matters — development and the market are drawn against the season that just
+finished and hash on the year that just finished, so `year++` and the standings reset
+come last.
+
+1. **Archive** into `career.history`: year, team, driver pos/pts, constructor pos/pts,
+   champion, wins, podiums. **Capped at 10 entries** — this is localStorage.
+2. **Driver development.** Each grid driver drifts by `growth + form + noise`:
+   `growth = (1 - experience/100) * 6 - 1.5` (experience is the age proxy — a rookie
+   gains ~+2.7 a year, a 100-rated veteran loses 1.5), `form = clamp((tierFinish(team)
+   - champPos) * 0.25, ±3)`, `noise = ±2` from `rnd(year, "dev", driverId)`. Pace takes
+   the whole drift, craft and consistency half. Per-axis deltas, clamped **±12**.
+   Experience is bumped +4 a year against its **own ±40 cap**, because it is cumulative:
+   at ±12 a rookie would stall four seasons in and freeze the growth term forever.
+3. **Team development.** `tdev = clamp(round(tdev * 0.5 + shove), ±8)`, where
+   `shove = clamp((expectedConstructorPos - actualPos) * 0.5, ±2)`. Without the halving
+   a team that gets ahead compounds forever and the grid ossifies after three seasons.
+4. **Driver market.** 0–2 swaps a year (`rnd(year, "mkt", "n")`), each trading a top
+   team's weakest driver for the best in the midfield, and stopping early when nobody
+   has earned the move. Only deltas are stored, in `career.seats`; `career.dev` entries
+   are swapped with them, because development follows the **driver** and `dev` is keyed
+   by seat.
+5. **Offers.** `marketValue = 0.5 * rep + 0.5 * (championship percentile * 100)`. A team
+   talks once that clears `92 - tier * 18`, so tier 0 wants essentially a champion and
+   tier 4 will take anyone. Your own team always offers first — an empty list would
+   strand a career with nothing to press. Deal length is `1 + floor(mv / 40)`, capped at 3.
+
+`rollover()` **mutates `career.season` in place** and never reassigns it. `openCareer()`
+does `season = c.season`, and that shared identity is the whole reason `buildResults` /
+`buildStandings` / the HUD work in career with no career-specific branch. Swapping in a
+fresh object orphans game.js's alias: the next race writes its points into a dead object
+while the standings still render the stale one, which looks entirely fine.
+
+`Career.acceptOffer(i)` rewrites `deal`/`team`/`seat`. **Moving** re-seeds `owned`/`fitted`
+from the new team's factory preset — you do not take the old team's parts with you, and
+that is also what re-opens the R&D economy for a second season instead of arriving with
+a maxed car. **Renewing** leaves the garage alone; loyalty is not a punishment.
+
+`career.seats` reaches the grid through the existing `Career.driverOverride(teamId, seat)`
+that `makeCars()` already calls — one path, not two. The gate moved: it used to return
+early for `flavour !== "driver"`, and now it defers to an ungated `seatDriver()` so a
+market swap applies in MY TEAM as well, while the player's own seat still outranks it.
+
 ## Qualifying
 
 A `session`, not a game state. The player's flying lap **is** a time trial: one car,
@@ -192,6 +271,9 @@ __apex.career(true)           // resume and open the hub
 __apex.careerState()          // compact snapshot
 __apex.careerMoney(n)         // get/set the balance
 __apex.careerReset()          // wipe the save
+__apex.careerSim(n)           // settle n rounds WITHOUT driving, through the real
+                              //   settleRound(). Needs a track + grid staged
+__apex.careerRollover()       // force the rollover -> {champion, offers, history}
 __apex.ratings(code?)         // five axes + overall; no args = the whole grid
 __apex.qualiSim(playerTime?)  // the lap model for the loaded track, NON-destructive
 __apex.carAt(i)               // + code, seat, tierV, skill, ratings
