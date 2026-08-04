@@ -263,11 +263,27 @@ function create(G) {
       const team = Teams.LIST.find((t) => t.id === r.team);
       const row = document.createElement("div");
       const podium = r.pos === 1 ? " p1" : r.pos === 2 ? " p2" : r.pos === 3 ? " p3" : "";
-      row.className = "res-row" + podium + (r.isPlayer ? " you" : "");
+      // A DRIVEN lap is marked. compute() has always worked out r.human — a
+      // real time substituted for a simulated one — and then thrown it away
+      // here, so three rivals' actual laps were drawn identically to the
+      // eighteen the model guessed. On a sheet whose whole job is "who was
+      // quick", not saying which times are real is the one thing it must not
+      // leave out. `you` still marks the local player, exactly as before.
+      const driven = r.human && !r.isPlayer ? " q-real" : "";
+      row.className = "res-row" + podium + (r.isPlayer ? " you" : "") + driven;
       const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = r.pos;
       const sw = document.createElement("span"); sw.className = "res-swatch";
       sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
-      const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = r.code + "  " + r.name;
+      const nm = document.createElement("span"); nm.className = "res-name";
+      nm.textContent = r.code + "  " + r.name;
+      if (driven) {
+        // Text, not only a colour: the sheet is read at a glance and a tint
+        // alone says nothing to anyone who cannot see it.
+        const tag = document.createElement("span");
+        tag.className = "q-real-tag";
+        tag.textContent = " DRIVEN";
+        nm.appendChild(tag);
+      }
       const tm = document.createElement("span"); tm.className = "res-pts q-time";
       // Pole shows an absolute lap time; everyone else shows the gap to it, which
       // is the number that actually says something about the session.

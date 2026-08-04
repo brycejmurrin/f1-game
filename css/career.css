@@ -264,6 +264,17 @@
    differently on purpose — the gaps are dimmed to keep the eye on the leader. */
 .res-row:not(.p1) .q-time { color: var(--dim); }
 .res-row.you .q-time { color: inherit; font-weight: 800; }
+/* A lap somebody actually DROVE, as opposed to one the model produced. Only
+   ever set on another human — your own row is already marked `you`. The tag
+   carries the meaning and the tint only reinforces it, because a colour on its
+   own says nothing to a player who cannot distinguish it. */
+.res-row.q-real .res-name { color: #7CFC7C; }
+.res-row.q-real .q-real-tag {
+  margin-left: 0.5em;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+}
 
 #q-foot { display: flex; flex-wrap: wrap; gap: var(--gap); align-items: center; }
 #q-foot #q-go { margin-left: auto; }
