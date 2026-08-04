@@ -74,13 +74,22 @@ const NetHandshake = (function () {
     return dec().decode(await new Response(stream).arrayBuffer());
   }
 
-  // ---- SDP slimming --------------------------------------------------------
-  // Drop the lines a peer can regenerate or safely default. This is lossy by
-  // design and ONLY the lines listed here are dropped — anything unrecognised
-  // is preserved, so a browser that adds new attributes still round-trips.
-  const DROPPABLE = /^a=(extmap|rtcp-fb|ssrc|msid|rtpmap|fmtp|rtcp-mux-only|ice-options)/;
-  function slimSdp(sdp) {
-    return sdp.split(/\r\n|\n/).filter((l) => l && !DROPPABLE.test(l)).join("\n");
+  // ---- SDP normalisation ---------------------------------------------------
+  // PRESERVE THE SDP VERBATIM. An earlier version stripped "regenerable"
+  // attributes (rtpmap, fmtp, extmap, ssrc, msid, rtcp-fb) to shorten the
+  // paste. That was wrong twice over: every one of those is an AUDIO/VIDEO
+  // attribute that never appears in a data-channel-only offer, so it removed
+  // nothing — while the rejoin dropped the trailing line terminator, leaving
+  // the last line (typically a=max-message-size) unterminated. Chrome then
+  // refused the whole description with "Invalid SDP line", which is how this
+  // was found: on a real connection, because no loopback test can reach it.
+  //
+  // Deflate already does the size work, so there is nothing to buy back here.
+  // All this does now is normalise line endings to the CRLF the format
+  // requires, and guarantee the terminator.
+  function normaliseSdp(sdp) {
+    const lines = String(sdp || "").split(/\r\n|\n|\r/).filter((l) => l.length);
+    return lines.length ? lines.join("\r\n") + "\r\n" : "";
   }
 
   // ---- code encode / decode ------------------------------------------------
@@ -177,7 +186,7 @@ const NetHandshake = (function () {
     const code = await encodeCode({
       v: MAGIC, b: await localBuild(), k: "offer",
       p: profile || null,
-      s: slimSdp(pc.localDescription.sdp),
+      s: normaliseSdp(pc.localDescription.sdp),
     });
     return { ok: true, code, url: inviteUrl(code) };
   }
@@ -203,7 +212,7 @@ const NetHandshake = (function () {
     const out = await encodeCode({
       v: MAGIC, b: await localBuild(), k: "answer",
       p: profile || null,
-      s: slimSdp(pc.localDescription.sdp),
+      s: normaliseSdp(pc.localDescription.sdp),
     });
     return { ok: true, code: out, peer: parsed.payload.p || null };
   }
@@ -240,7 +249,7 @@ const NetHandshake = (function () {
 
   return {
     MAGIC,
-    encodeCode, decodeCode, slimSdp,
+    encodeCode, decodeCode, normaliseSdp,
     localBuild, checkBuild, waitForIce,
     createInvite, acceptInvite, acceptAnswer,
     inviteUrl, inviteFromUrl,

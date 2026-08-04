@@ -1,7 +1,10 @@
 /* net-snapshot.test.mjs — the wire format and the interpolation buffer.
  *
  * These are the two places multiplayer fails SILENTLY. A codec that loses a
- * bit produces a car slightly in the wrong place, not an exception. An
+ * bit produces a car slightly in the wrong place, not an exception.
+ *
+ * There is no input codec to test: under distributed authority nobody ever
+ * simulates anybody else's car, so nothing needs anybody else's inputs. An
  * interpolator that mishandles the lap wrap sends a rival sprinting backwards
  * down the circuit once per lap, which looks like a physics bug and gets
  * debugged in entirely the wrong file. So both get pinned here, in a suite
@@ -88,45 +91,6 @@ test("a truncated packet decodes to nothing rather than a garbage car", () => {
   assert.equal(NetSnapshot.decodeSnapshot(null), null);
 });
 
-test("a snapshot is not mistaken for an input packet", () => {
-  const snap = NetSnapshot.encodeSnapshot(1, [{ id: 0, car: car({}) }]);
-  const inp = NetSnapshot.encodeInputs(1, [{ steer: 0.5, throttle: true }]);
-  assert.equal(NetSnapshot.decodeInputs(snap), null);
-  assert.equal(NetSnapshot.decodeSnapshot(inp), null);
-  assert.equal(NetSnapshot.packetType(snap), NetSnapshot.TYPE_SNAPSHOT);
-  assert.equal(NetSnapshot.packetType(inp), NetSnapshot.TYPE_INPUT);
-});
-
-// ---------------------------------------------------------------------------
-// Input codec
-// ---------------------------------------------------------------------------
-
-test("inputs round-trip and carry their own tick numbers", () => {
-  // The list is sent tail-first: `tick` is the LAST entry, earlier ones are
-  // the preceding ticks. That redundancy is how a lossy channel survives.
-  const sent = [
-    { steer: -1, throttle: false, brake: true },
-    { steer: 0, throttle: true, brake: false, shiftUp: true },
-    { steer: 0.5, throttle: true, overtake: true, boostOn: true },
-  ];
-  const out = NetSnapshot.decodeInputs(NetSnapshot.encodeInputs(100, sent));
-  assert.equal(out.tick, 100);
-  assert.deepEqual(out.inputs.map((i) => i.tick), [98, 99, 100]);
-  assert.equal(out.inputs[0].brake, true);
-  assert.equal(out.inputs[0].throttle, false);
-  assert.ok(Math.abs(out.inputs[0].steer + 1) < 0.01);
-  assert.equal(out.inputs[1].shiftUp, true);
-  assert.equal(out.inputs[2].overtake, true);
-  assert.equal(out.inputs[2].boostOn, true);
-  assert.ok(Math.abs(out.inputs[2].steer - 0.5) < 0.01);
-});
-
-test("an input packet is 2 bytes per tick", () => {
-  const a = NetSnapshot.encodeInputs(1, [{}]);
-  const b = NetSnapshot.encodeInputs(1, [{}, {}, {}, {}]);
-  assert.equal(b.length - a.length, 6);   // 3 extra ticks x 2 bytes
-});
-
 // ---------------------------------------------------------------------------
 // Interpolation buffer
 // ---------------------------------------------------------------------------
@@ -204,22 +168,9 @@ test("out-of-order and duplicate packets are handled, not trusted", () => {
   assert.equal(buf.size(), 3);
 });
 
-test("predict() is ahead of sample() — contact must not use the drawn pose", () => {
-  // Remote cars are DRAWN ~100 ms in the past so the motion is smooth. Testing
-  // collisions against that pose would have you hit a rival where they were,
-  // not where they are.
-  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 100 });
-  buf.push(1000, car({ s: 500, speed: 90 }));
-  const drawn = buf.sample(1100);      // target 1000 — exactly the packet
-  const actual = buf.predict(1100);    // 100 ms on from it
-  assert.ok(actual.s > drawn.s, "predict must lead sample");
-  assert.ok(Math.abs((actual.s - drawn.s) - 9) < 0.01, "90 m/s for 100 ms = 9 m");
-});
-
 test("an empty buffer reports nothing rather than inventing a car", () => {
   const buf = NetSnapshot.createInterp({ total: TOTAL });
   assert.equal(buf.sample(0), null);
-  assert.equal(buf.predict(0), null);
   assert.equal(buf.newest(), null);
 });
 

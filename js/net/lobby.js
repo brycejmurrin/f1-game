@@ -100,14 +100,42 @@ const NetLobby = (function () {
     function setTransportFactory(fn) { makeTransport = fn || ((o) => NetTransport.rtc(o)); }
 
     function newTransport(asRole) {
+      // Always start from nothing. A previous attempt that timed out leaves a
+      // dead RTCPeerConnection behind, and reusing it is how the lobby ended up
+      // reporting "WebRTC is unavailable" on a device that had just
+      // successfully generated an invite.
+      teardown();
       role = asRole;
       transport = makeTransport({ role: asRole, name: asRole });
       if (!transport) {
         say("This browser cannot do WebRTC, so it cannot race a friend.", true);
         return null;
       }
-      transport.onClose(() => say("Connection closed.", true));
+      transport.onClose(() => {
+        // A drop AFTER connecting must also stop the lobby's pump, or a 40 Hz
+        // timer runs forever holding the whole peer connection alive.
+        clearInterval(pumpTimer); pumpTimer = null; session = null;
+        say("Connection closed.", true);
+      });
       return transport;
+    }
+
+    // No live connection is NOT the same as no WebRTC support, and telling a
+    // player the wrong one sends them looking for a browser problem that does
+    // not exist.
+    function noConnectionMsg() {
+      return NetTransport.supported()
+        ? "That attempt has ended. Tap HOST A RACE or JOIN A FRIEND to start over."
+        : "This browser cannot do WebRTC, so it cannot race a friend.";
+    }
+
+    function teardown() {
+      clearInterval(pollTimer);
+      clearInterval(pumpTimer);
+      pumpTimer = null;
+      session = null;
+      if (transport) { try { transport.close(); } catch (e) {} }
+      transport = null;
     }
 
     // Poll for the DataChannels opening. There is no event that means "the
@@ -122,15 +150,27 @@ const NetLobby = (function () {
         if (transport.status === "open") {
           clearInterval(pollTimer);
           onConnected();
-        } else if (Date.now() - started > CONNECT_TIMEOUT_MS) {
+          return;
+        }
+        // Surface the ICE/connection state while we wait. This is the only
+        // window into a handshake that cannot be reproduced in any test here,
+        // so when it stalls the player can say WHERE rather than just "it
+        // didn't work".
+        const st = transport.stats ? transport.stats() : null;
+        const secs = Math.round((Date.now() - started) / 1000);
+        if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")");
+
+        if (Date.now() - started > CONNECT_TIMEOUT_MS) {
           clearInterval(pollTimer);
-          // Be honest about the most likely cause. Without a TURN relay some
-          // networks genuinely cannot be traversed, and telling someone to
-          // "try again" forever is worse than saying so.
-          say("Could not connect. Some home/mobile networks block direct connections — "
-            + "try again, or both switch to a different network.", true);
-          try { transport.close(); } catch (e) {}
-          transport = null;
+          const last = st ? " Last state: " + st.ice + "/" + st.connection + "." : "";
+          // Honest about the most likely cause: without a TURN relay some
+          // networks genuinely cannot be traversed. Saying "try again" forever
+          // would be worse than saying so.
+          say("Could not connect after " + secs + "s." + last
+            + " Some home/mobile networks block direct connections — try again on the"
+            + " same Wi-Fi, or both switch networks.", true);
+          teardown();
+          show("pick");            // leave the lobby usable, not dead
         }
       }, 250);
     }
@@ -235,6 +275,7 @@ const NetLobby = (function () {
       const e = els();
       const code = e.inviteIn ? e.inviteIn.value : "";
       if (!code.trim()) { say("Paste their invite code first.", true); return; }
+      if (!transport) { say(noConnectionMsg(), true); return; }
       say("Reading invite…");
       const res = await NetHandshake.acceptInvite(transport, code, localProfile());
       if (!res.ok) { say(res.message || "That invite could not be read.", true); return; }
@@ -250,6 +291,7 @@ const NetLobby = (function () {
       const e = els();
       const code = e.answerIn ? e.answerIn.value : "";
       if (!code.trim()) { say("Paste their answer code first.", true); return; }
+      if (!transport) { say(noConnectionMsg(), true); return; }
       say("Reading answer…");
       const res = await NetHandshake.acceptAnswer(transport, code);
       if (!res.ok) { say(res.message || "That answer could not be read.", true); return; }
@@ -286,12 +328,7 @@ const NetLobby = (function () {
     // Abandoning the lobby must tear the half-built connection down, or a
     // stale RTCPeerConnection sits there gathering candidates forever.
     function cancel() {
-      clearInterval(pollTimer);
-      clearInterval(pumpTimer);
-      pumpTimer = null;
-      session = null;
-      if (transport) { try { transport.close(); } catch (err) {} }
-      transport = null;
+      teardown();
       role = null;
       _peerProfile = null;
       close();
