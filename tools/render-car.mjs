@@ -32,11 +32,11 @@
 //   columns = tod) — for comparing how a part/livery reads across lighting.
 //
 // Options:
-//   --team=mclaren        team id (js/teams.js). Default: mclaren
-//   --livery=mcl_gulf     livery id (js/liveries.js). Default: team default
+//   --team=mclaren        team id (js/car/teams.js). Default: mclaren
+//   --livery=mcl_gulf     livery id (js/car/liveries.js). Default: team default
 //   --num=4               driver number override
 //   --engine= --aero= --brakes= --gearbox= --ers= --tyres= --suspension= --fuel=
-//                         force a part option id (see js/parts.js) to inspect its look
+//                         force a part option id (see js/car/parts.js) to inspect its look
 //   --tod=day             day|dusk|dawn|night|void. Default: day (per-shot presets may override)
 //   --rig=3point          lighting rig: studio|3point|rim|topdown|none (reflection tests)
 //   --plight=x,y,z,r,g,b,i,rad   add a point light (repeatable) — watch specular/reflections
@@ -103,7 +103,7 @@ const GROUPS = {
 //  - Part-detail presets (engine/suspension/brakes/tyres/ers/gearbox/fuel) use a
 //    CLOSE distance + a `look` target offset toward the actual part instead of
 //    the car's dead centre — front axle z=+1.7, rear axle z=-1.6 (see
-//    js/car3d.js:1162-1163) — so a close shot fills the frame with that part
+//    js/car/car3d.js:1162-1163) — so a close shot fills the frame with that part
 //    instead of cropping both ends of the car. They also dial the light rig
 //    down (lower --intensity) since a close-up otherwise catches a hot,
 //    distracting specular blowout off the bodywork that the wider stock views

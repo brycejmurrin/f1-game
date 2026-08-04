@@ -1,7 +1,7 @@
 // @ts-check
 // Elevation + banking ("berm") tracks. The slope-gravity fix (descents must not
 // overspeed past VMAX, climbs must not act as an invisible wall) and the passive
-// road-following yaw were verified on Spa/Bahrain only; this now sweeps all 24
+// road-following yaw were verified on Spa/Bahrain only; this now sweeps every
 // circuits (every track carries elevation data) so a regression on any one is
 // caught. For each track it:
 //   - finds the steepest descent and asserts gravity never pushes past top speed

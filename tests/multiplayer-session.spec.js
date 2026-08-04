@@ -288,8 +288,17 @@ test.describe("multiplayer session", () => {
       A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0, role: "guest" });
       const n = A.carRoles().length;
       // A verdict that REVERSES the natural order, so adopting it is visible.
+      //
+      // Keyed by driverId, not by grid index. The two peers' cars[] arrays are
+      // not the same length or in the same order — makeCars() drops the custom
+      // team unless the local player selected it — so an index means a
+      // different car on each screen, and adopting one silently reorders the
+      // wrong cars. Which is precisely what a close finish looks like when the
+      // classification goes wrong, and precisely where nobody would notice.
       const verdict = [];
-      for (let i = n - 1; i >= 0; i--) verdict.push({ i, t: 100 + (n - i), p: 0, lap: 3 });
+      for (let i = n - 1; i >= 0; i--) {
+        verdict.push({ d: A.carAt(i).driverId, t: 100 + (n - i), p: 0, lap: 3 });
+      }
       A.netPeerEvent("result", verdict, 1000);
       for (let t = 1020; t <= 1200; t += 20) A.netTick(t);
 

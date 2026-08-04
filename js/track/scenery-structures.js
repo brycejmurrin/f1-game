@@ -41,7 +41,7 @@ const SceneryStructures = (function () {
       along(s0, s1, 6, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], a / 2)) {
-          console.warn(`[scenery] wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          Log.warn("scenery", `wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
         // One model per (thickness, height, colour) — i.e. per wall SPAN, however
@@ -85,7 +85,7 @@ const SceneryStructures = (function () {
       along(s0, s1, 5, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
-          console.warn(`[scenery] fence SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          Log.warn("scenery", `fence SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
         // Post is fixed for a given fence height; the mesh panel spans to the
@@ -141,7 +141,7 @@ const SceneryStructures = (function () {
       along(s0, s1, 4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
-          console.warn(`[scenery] guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          Log.warn("scenery", `guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
         // Two models, not one: the post is fully fixed, while the rail's length
@@ -202,7 +202,7 @@ const SceneryStructures = (function () {
       along(s0, s1, 3.4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.0)) {
-          console.warn(`[scenery] tyreWall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          Log.warn("scenery", `tyreWall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
         // Same split as guardrail: fixed tyre stack, length-scaled conveyor cap.
@@ -350,7 +350,7 @@ const SceneryStructures = (function () {
       const st = (opts && opts.style) || kitOf("marshal", "hut");
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
       if (onTrack(p.c[0], p.c[2], 3)) {
-        console.warn(`[scenery] marshalPost SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        Log.warn("scenery", `marshalPost SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
         return;
       }
       ctx.note("marshalPost", [p.c[0], p.c[1] + 1.2, p.c[2]], [1.2, 2.4, 1.2], { k, side });
@@ -426,7 +426,7 @@ const SceneryStructures = (function () {
       // Full-footprint guard: the tower is a ~2.6 m square mass rising the whole
       // height, so test the box, never a single point.
       if (rejBox(vadd(p.c, p.u, h / 2), [legR * 2 + 0.6, h, legR * 2 + 0.6], b)) {
-        console.warn(`[scenery] cameraTower SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        Log.warn("scenery", `cameraTower SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
         return;
       }
       const cst = opts.style || kitOf("camera", "lattice");
@@ -821,7 +821,7 @@ const SceneryStructures = (function () {
     const signBoard = (k, side, gap, kind, value) => {
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
       if (onTrack(p.c[0], p.c[2], 1.5)) {
-        console.warn(`[scenery] signBoard SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        Log.warn("scenery", `signBoard SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
         return;
       }
       ctx.note("signBoard", [p.c[0], p.c[1] + 1, p.c[2]], [2.5, 2, 0.3], { k, side, board: kind, value });

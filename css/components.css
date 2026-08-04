@@ -159,6 +159,84 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   font-size: clamp(13px, 3.6vh, 20px);
   padding: clamp(7px, 1.8vh, 14px) 16px;
 }
+/* ---------- pane-pair: the LIST/DETAIL primitive ----------
+   #select, #carsetup and #career are all the same canonical layout — Material
+   calls it list-detail, and every adaptive UI framework ships one — and this
+   project had written it three times, in three files, with three sets of
+   hand-picked numbers. That is why fixing the garage taught us nothing about the
+   select screen, and why the "action bar steals a row from the list" bug had to
+   be found and fixed separately in each of them.
+   What every copy actually said, once the incidental differences are stripped:
+
+     - the columns live on the SHEET, never in a `@container` block, because the
+       sheet IS the query container and a container query cannot style its own
+       container
+     - every direct child spans both columns by default, so the narrow layout is
+       the plain single-column stack it always was
+     - when the pair is on, the body goes `display: contents` so the two panes
+       become grid items of the sheet itself
+     - the DETAIL pane spans the body row AND the foot row, i.e. down to the
+       sheet floor, because the action bar only ever holds buttons that belong
+       under the LIST pane
+     - the foot row is `min-content`, NOT `auto`: an auto track's growth limit is
+       max-content, and a scroller spanning into it hands over its entire content
+       height (a 24-row list once turned a 76px bar into 358px)
+
+   ON/OFF is an attribute, not a container query, for one reason: a query
+   condition cannot take a custom property, so `@container sheet (min-width:
+   400px)` and `(min-width: 620px)` are two different blocks and the shared body
+   would have to be duplicated into both — which is the exact problem being
+   solved. js/game/sheetshape.js already runs one ResizeObserver over every
+   sheet; it reads `--pair-at` and writes `data-pair`. Attributes also carry
+   specificity, which container queries do not — the tie that cost this project
+   two debugging sessions.
+   Screens tune it with four properties and nothing else:
+     --pair-at     the sheet width at which the pair turns on (default 620px)
+     --pair-split  the SIDE column's track      (default minmax(0, 42%))
+     --pair-main   the MAIN column's track      (default minmax(0, 1fr))
+     --pair-gap    the gutter between the panes (default 0.8 * --pad)
+
+   THE SLOTS ARE NAMED BY POSITION, NOT BY ROLE. `.pair-side` is the narrow
+   column with the action bar under it; `.pair-main` is the wide one that runs to
+   the sheet floor. In the canonical list-detail the side IS the list — the
+   garage's category rail, the career hub's left pane — but #select inverts it:
+   its side is the circuit PREVIEW and its main is the circuit LIST, because the
+   list is what needs the height and the preview is what needs a bounded column.
+   Naming the slots list/detail would have made that screen read as a mistake.
+
+   THE UNMEASURED STATE MUST BE A VALID LAYOUT, not a race the observer has to
+   win. `data-pair` is absent for the frame between a screen being shown and the
+   first ResizeObserver callback, so whatever the screen looks like WITHOUT the
+   attribute has to work at every width — including widths where the pair would
+   be on. #select assumed the opposite (its scroller was keyed on
+   `max-width: 619px`, i.e. "wide means split"), so in that frame a wide sheet
+   was stacked AND had no scroller, and a ~350px preview card plus the list
+   spilled past it: four clipped elements on a landscape phone, three on most
+   desktops, on every single run.
+
+   ONE RULE FOR SCREENS USING IT: gate the screen's own STACKED-layout
+   declarations with `:not([data-pair="on"])`. These placement rules are class-
+   and attribute-based (0,3,0) and a plain `#id` rule is (1,0,0), so an ungated
+   `#x-body { display: flex }` silently wins and you get a flex column laid out
+   inside two grid tracks — measured on the garage: the rail rendered 402px wide
+   in a 115px track and the option list came out 10px tall. Use `:not(... "on")`
+   rather than `[data-pair="off"]`, so the stack is also what an unmeasured sheet
+   gets in the first frame, or if the script never loads. */
+.pane-pair {
+  grid-template-columns: var(--pair-split, minmax(0, 42%)) var(--pair-main, minmax(0, 1fr));
+  grid-template-rows: auto minmax(0, 1fr) min-content;
+  column-gap: var(--pair-gap, calc(var(--pad) * 0.8));
+}
+.pane-pair > .sheet-head,
+.pane-pair > .sheet-body,
+.pane-pair > .sheet-foot { grid-column: 1 / -1; }
+
+.pane-pair[data-pair="on"] > .sheet-body { display: contents; }
+.pane-pair[data-pair="on"] > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
+.pane-pair[data-pair="on"] .pair-side   { grid-column: 1; grid-row: 2; min-height: 0; }
+.pane-pair[data-pair="on"] .pair-main { grid-column: 2; grid-row: 2 / 4; min-height: 0; }
+.pane-pair[data-pair="on"] > .sheet-foot { grid-column: 1; grid-row: 3; }
+
 /* ---------- pane: a scroll region ---------- */
 .pane {
   overflow-y: auto;
@@ -630,5 +708,32 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #cz-logo-prev {
   width: 28px; height: 28px; object-fit: contain;
   background: rgba(255,255,255,0.08); border-radius: 4px; padding: 2px;
+}
+/* ---------- foldables: a guard, not a layout ----------
+   A `.screen` centres its sheet in the viewport. On a dual-screen or folded
+   device the viewport spans BOTH panels, so a centred sheet lands on the hinge —
+   the circuit list cut in half by hardware, which no amount of responsive sizing
+   fixes because the gap is physical.
+   This does not attempt a two-segment layout; it keeps the sheet inside ONE
+   segment. `env(viewport-segment-*)` gives each segment's edges, so the sheet is
+   capped at the width of the first one and pushed to its start. Everything else
+   about the screen is unchanged, and on a device with a single segment (every
+   phone, tablet and desktop) the query simply does not match.
+   Chrome shipped the Viewport Segments API from the 125 origin trial and its
+   DevTools can emulate a fold, so this is testable without the hardware. */
+@media (horizontal-viewport-segments: 2) {
+  .screen > .sheet, .dh-card {
+    max-width: calc(env(viewport-segment-right 0 0) - env(viewport-segment-left 0 0));
+  }
+  .screen { justify-items: start; }
+}
+/* Folded the other way — a hinge running across, not down — the scarce axis is
+   height, and a sheet centred over the crease has its middle rows in the fold.
+   Same treatment on the other axis: keep it in the top segment. */
+@media (vertical-viewport-segments: 2) {
+  .screen > .sheet, .dh-card {
+    max-height: calc(env(viewport-segment-bottom 0 0) - env(viewport-segment-top 0 0));
+  }
+  .screen { align-items: start; }
 }
 } /* @layer components */

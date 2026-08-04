@@ -161,15 +161,26 @@
 #select { z-index: 25; background: rgba(6, 6, 10, 0.92); }
 #sel-inner { --sheet-w: 1020px; }
 /* Portrait / narrow: the body is the scroller and the track list keeps its own
-   cap below, so the two never fight. */
-#sel-body { display: flex; flex-direction: column; gap: var(--gap); }
-.sel-section { min-width: 0; }
-@container sheet (max-width: 619px) {
-  #sel-body {
-    overflow-y: auto; overflow-x: hidden;
-    overscroll-behavior-y: contain; scrollbar-gutter: stable; touch-action: pan-y;
-  }
+   cap below, so the two never fight.
+   Gated on `:not([data-pair="on"])` — the `.pane-pair` contract. An ungated
+   `#sel-body` rule is (1,0,0) and beats the primitive's (0,3,0), so the body
+   stayed a flex column while the sheet was already two grid tracks. Measured:
+   four clipped elements on a landscape phone and three on every desktop, the
+   moment this screen was put on the primitive. */
+/* THE SCROLLER FOLLOWS THE PAIR, NOT THE WIDTH. This used to be
+   `@container sheet (max-width: 619px)`, which assumed a sheet wider than that
+   always had its panes split — true once the observer has run, false in the
+   frame before it. In that frame a wide sheet is stacked AND has no scroller, so
+   a ~350px preview card plus the list overflowed a 240px body row and spilled
+   past the sheet: four clipped elements on a landscape phone, three on most
+   desktops, every run. Keying the scroller on `:not([data-pair="on"])` makes the
+   unmeasured state a VALID layout instead of a race the observer has to win. */
+#sel-inner:not([data-pair="on"]) > #sel-body {
+  display: flex; flex-direction: column; gap: var(--gap);
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior-y: contain; scrollbar-gutter: stable; touch-action: pan-y;
 }
+.sel-section { min-width: 0; }
 
 /* The car's spec strip: the four numbers that change when you swap team or fit
    parts. Numbers only — the bar chart belongs on CAR SETUP, the screen where
@@ -215,14 +226,10 @@
    PERCENT for the preview column, not fr: the map canvas carries an intrinsic
    520px width, and an fr track takes content into account, so the preview kept
    resolving WIDER than the list it is meant to be narrower than. */
-#sel-inner {
-  grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) min-content;
-  column-gap: calc(var(--pad) * 0.8);
-}
-#sel-inner > .sheet-head,
-#sel-inner > .sheet-body,
-#sel-inner > .sheet-foot { grid-column: 1 / -1; }
+/* The columns, the spans and the foot placement come from `.pane-pair`
+   (css/components.css) — the shared list-detail primitive #carsetup and #career
+   also use. These happen to be its defaults, so only the threshold is set. */
+#sel-inner { --pair-at: 620px; }
 
 /* COLUMNS ARE FOR A WIDE SHEET; A TALL ONE GETS BANDS. Gating the two-column
    split on width alone put an upright iPad (810px sheet, 1170px tall) into
@@ -244,63 +251,51 @@
    `:not([data-shape="tall"])` rather than `[data-shape="wide"]` so an unmeasured
    sheet — the attribute is written on the first ResizeObserver callback, after
    the screen is shown — lands on columns, the layout it had before. */
-@container sheet (min-width: 620px) {
-  #sel-inner:not([data-shape="tall"]) > #sel-body { display: contents; }
-  #sel-inner:not([data-shape="tall"]) > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
-  /* PREVIEW BESIDE THE LIST, not above it. Stacked full-width, the preview card
-     is ~190px tall and takes more than half a landscape phone's sheet — the
-     first capture of this layout left the track list 73px high, one and a bit
-     rows, on the shape the game is most played in. It reads as a big picture of
-     a circuit you have not chosen yet.
-     Side by side, the list gets the full height of the sheet and the preview
-     gets a column narrow enough that its map and its facts stack inside it
-     (see the max-width rule below), which is the shape that card was designed
-     for anyway.
-
-     THE LIST RUNS TO THE SHEET FLOOR. The columns live on the sheet itself now
-     and the list spans the body row AND the foot row, exactly as the garage's
-     option list does (css/carsetup.css). The action bar holds BACK and START,
-     both under the preview column; running its row the full width cut the list
-     off 49px above the floor on a landscape phone and 76px on a desktop, for a
-     bar with nothing in it on that side.
-     The foot row is min-content, NOT auto: an auto track's growth limit is
-     max-content, and with the list spanning into that row the list's own
-     max-content — twenty-four circuit rows — became the limit, so the bar grew
-     to eat a third of the sheet. min-content takes the FOOT's height; the list,
-     a scroll container with min-height 0, contributes nothing to it. */
-  #sel-inner:not([data-shape="tall"]) #sel-track-preview,
-  #sel-inner:not([data-shape="tall"]) #sel-preview-map { min-width: 0; }
-  /* THE MAP YIELDS, THE FACTS DO NOT. The map's height comes from its 520:300
-     ratio against a full-width column, which ignores how much height the column
-     has: on a 343px-tall landscape phone that is 176px of map, the name/GP/chip
-     rows want 90 more, and the card has ~215 — so the chip row, which wraps to a
-     second line as soon as a circuit has a fourth fact, hung below the card and
-     was clipped mid-chip. T1 SLOWEST, the one red chip, was the casualty.
-     Capping the map at half the card leaves the facts their room; object-fit
-     keeps the outline undistorted when the cap is what binds. Two IDs because
-     the base width is a custom property precisely so container-query rules can
-     beat it without depending on source order. */
-  #sel-inner:not([data-shape="tall"]) #sel-track-preview #sel-preview-map {
-    max-height: 50%; object-fit: contain;
-  }
-  #sel-inner:not([data-shape="tall"]) > #sel-body > #sel-track-section {
-    grid-column: 1; grid-row: 2;
-    min-height: 0; overflow: hidden;
-    display: flex; flex-direction: column;
-    padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
-  }
-  /* The label sits at the top; the card takes the rest of the column and centres
-     itself in it, so a pane taller than the card has its spare height split
-     above and below rather than pooled at the bottom. */
-  #sel-inner:not([data-shape="tall"]) #sel-track-section > #sel-track-preview {
-    margin-block: auto;
-  }
-  #sel-inner:not([data-shape="tall"]) > #sel-body > #sel-tracks {
-    grid-column: 2; grid-row: 2 / 4; min-height: 0;
-    padding-right: var(--pad); padding-bottom: calc(var(--pad) * 0.5);
-  }
-  #sel-inner:not([data-shape="tall"]) > .sheet-foot { grid-column: 1; grid-row: 3; }
+/* WHAT ONLY THIS SCREEN WANTS WHEN THE PANES SPLIT. The placement itself — body
+   to `display: contents`, preview into column 1, list spanning the body row AND
+   the foot row down to the sheet floor, BACK/START under the preview — is
+   `.pane-pair`'s, and is no longer written here.
+   Keyed on `[data-pair="on"]`, not on a second copy of the 620px threshold: two
+   sources of truth for one decision disagree for a frame, because a container
+   query applies the instant a screen is shown while the attribute waits on a
+   ResizeObserver callback. The garage lost five buttons off the bottom of its
+   sheet exactly that way.
+   And `:not([data-shape="tall"])` throughout, because a TALL sheet takes the
+   band layout below instead — the second axis this screen has and the other two
+   do not. */
+#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview,
+#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-preview-map { min-width: 0; }
+/* THE MAP YIELDS, THE FACTS DO NOT. The map's height comes from its 520:300
+   ratio against a full-width column, which ignores how much height the column
+   has: on a 343px-tall landscape phone that is 176px of map, the name/GP/chip
+   rows want 90 more, and the card has ~215 — so the chip row, which wraps to a
+   second line as soon as a circuit has a fourth fact, hung below the card and
+   was clipped mid-chip. T1 SLOWEST, the one red chip, was the casualty.
+   Capping the map at half the card leaves the facts their room; object-fit
+   keeps the outline undistorted when the cap is what binds. */
+#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview #sel-preview-map {
+  max-height: 50%; object-fit: contain;
 }
+#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section {
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
+}
+/* The label sits at the top; the card takes the rest of the column and centres
+   itself in it, so a pane taller than the card has its spare height split
+   above and below rather than pooled at the bottom. */
+#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section > #sel-track-preview {
+  margin-block: auto;
+}
+#sel-inner[data-pair="on"]:not([data-shape="tall"]) > #sel-body > #sel-tracks {
+  padding-right: var(--pad); padding-bottom: calc(var(--pad) * 0.5);
+}
+/* A TALL SHEET TAKES THE BANDS, so the pair's placement has to be handed back:
+   the panes return to normal flow inside the body (the band rules below set that
+   up) and the action bar spans the full width again, because in that shape there
+   is no left column for it to sit under. Higher specificity than the primitive's
+   (1,2,0 against 0,3,0) — see the note in css/components.css. */
+#sel-inner[data-shape="tall"] > .sheet-foot { grid-column: 1 / -1; grid-row: auto; }
 
 /* ---------- A TALL WIDE SHEET: TOP AND BOTTOM, NOT LEFT AND RIGHT ----
    An upright tablet has width to give the map and height to give the list, so

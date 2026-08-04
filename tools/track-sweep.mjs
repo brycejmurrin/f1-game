@@ -7,7 +7,7 @@
 // docs/tracks/<id>.md claims (corner counts, elevation, wall issues) against
 // live data, or spotting an outlier circuit at a glance.
 //
-//   node tools/track-sweep.mjs                     # all 24 circuits
+//   node tools/track-sweep.mjs                     # every circuit
 //   node tools/track-sweep.mjs spa monza vegas      # just these
 //   node tools/track-sweep.mjs --raw > out.json     # full trackProfile/wallStats, not just the summary
 //

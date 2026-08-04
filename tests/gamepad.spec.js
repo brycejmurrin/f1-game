@@ -1,5 +1,5 @@
 // @ts-check
-// Gamepad input tests for js/input.js (W3C Gamepad API, "standard" mapping).
+// Gamepad input tests for js/game/input.js (W3C Gamepad API, "standard" mapping).
 //
 // These mock navigator.getGamepads() with a synthetic pad snapshot, call the
 // once-per-frame Input.poll(), then read the public Input surface the game loop

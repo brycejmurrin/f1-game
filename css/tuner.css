@@ -107,8 +107,15 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 #lighting-inner .adv-help, #camtune-inner .adv-help { display: none; }        /* hidden unless "Show explanations" is on… */
 #lighting-inner.lt-show-help .adv-help,
 #camtune-inner.lt-show-help .adv-help { display: block; }   /* …then every row explains itself */
+/* The whole label is the switch — clicking the text toggles the box — so the
+   LABEL is the tap target, and at 11px type it came out 342x16. Sixteen pixels
+   fails WCAG 2.2 SC 2.5.8 (24x24) on the height axis, which matters more here
+   than the small type suggests: these panels are used mid-session, one-handed,
+   on a phone. min-height buys the target without moving anything, since the row
+   already centres its contents and had ~12px of margin to spend. */
 .lt-help-toggle {
   display: flex; align-items: center; gap: 7px; margin: 8px 0 4px;
+  min-height: 24px;
   font-size: 11px; opacity: 0.8; cursor: pointer;
 }
 .lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
@@ -321,7 +328,13 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   #lt-profile, #ct-profile { font-size: 10px; }
   .lt-preview-row { gap: 3px; margin: 2px 0; }
   .lt-preview-lbl { width: 46px; font-size: var(--fs-micro); }
-  .lt-preview-row .opt-btn { padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; }
+  /* min-height, not more padding: the short-panel branch squeezes these to 23px
+     tall, one pixel under WCAG 2.2 SC 2.5.8's 24, and a landscape phone is
+     precisely where they get tapped. 24 is the floor, and the row has the pixel
+     to give — the panel does not get shorter for it. */
+  .lt-preview-row .opt-btn {
+    padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; min-height: 24px;
+  }
   .lt-help-toggle { margin: 4px 0 2px; font-size: 10px; }
   /* Short panel: one scrolling STRIP, so back to flex — a single row that pans
      sideways can never orphan anything, and the grid above is for the layouts

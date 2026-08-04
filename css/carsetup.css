@@ -168,7 +168,14 @@
    affordance cannot mark — half the tabs were simply invisible with nothing to
    say so. A wrapping grid shows all of them, and if it ever runs out of room it
    scrolls VERTICALLY, which does get the fade. */
-#cs-body {
+/* Gated on `:not([data-pair="on"])` because this is the STACKED layout, and an
+   ID rule (1,0,0) would otherwise beat `.pane-pair[data-pair="on"] > .sheet-body`
+   (0,3,0) and keep the body a flex column while the sheet was already laid out
+   as two grid columns — measured: the rail rendered 402px wide inside a 115px
+   track and the option list came out 10px tall. `:not(... "on")` rather than
+   `[data-pair="off"]` so the stack is also what an unmeasured sheet gets, in the
+   first frame before the observer runs or if the script never loads at all. */
+#cs-inner:not([data-pair="on"]) > #cs-body {
   display: flex; flex-direction: column;
   gap: var(--gap); min-height: 0;
 }
@@ -412,33 +419,11 @@
 /* DONE is the only action; centre it in the pinned bar. */
 #carsetup .sheet-foot { justify-content: center; }
 
-/* Columns live on the sheet itself, so they cannot sit in a `@container sheet`
-   block — #cs-inner IS that container, and such a rule would resolve against a
-   non-existent outer one. Declared here instead, with every direct child
-   spanning both columns so the narrow layout is unchanged; the rail/list split
-   only takes effect once #cs-body dissolves in the wide block below. */
-#cs-inner {
-  grid-template-columns: minmax(112px, 27%) minmax(0, 1fr);
-  column-gap: var(--gap);
-}
-#cs-inner > .sheet-head,
-#cs-inner > .sheet-body,
-#cs-inner > .sheet-foot { grid-column: 1 / -1; }
-
-/* ================= LAYOUT: container queries on the sheet =================
-   Not media queries. What the panel can afford is a function of the width it
-   was given (which already accounts for the safe area and for the room the car
-   preview needs), never of the device. */
-
-/* Two stat columns as soon as label+bar+number fits twice over. */
-@container sheet (min-width: 380px) {
-  #cs-stats-inner { grid-template-columns: 1fr 1fr; }
-}
-
-/* Wide enough for a two-pane setup: a compact header band across the top, the
-   categories as a vertical rail on the LEFT, and the option list filling the
-   full panel height on the RIGHT — so half a dozen options are readable at once
-   instead of the two that fitted under a stacked header on a landscape phone.
+/* THE COLUMNS COME FROM `.pane-pair` (css/components.css) — the shared
+   list-detail primitive. This screen used to spell the whole thing out itself,
+   as did #select and #career, which is why the same "action bar steals a row
+   from the list" bug had to be found three times. All that is left here is what
+   is genuinely this screen's: where the pair turns on, and how wide the rail is.
 
    400, not 440. The sheet has a 430px FLOOR (--cs-sheet-w), which after its
    border leaves 428px of container — four pixels under the old threshold. So the
@@ -450,6 +435,27 @@
    the same floor and got the same thing. Everything from the floor up now gets
    the rail; a portrait phone (~367px of container) still gets the grid, which is
    the right answer there — it has the height to spend and no width. */
+#cs-inner {
+  --pair-at: 400px;
+  --pair-split: minmax(112px, 27%);
+  --pair-gap: var(--gap);
+}
+
+/* ================= LAYOUT: container queries on the sheet =================
+   Not media queries. What the panel can afford is a function of the width it
+   was given (which already accounts for the safe area and for the room the car
+   preview needs), never of the device. */
+
+/* Two stat columns as soon as label+bar+number fits twice over. */
+@container sheet (min-width: 380px) {
+  #cs-stats-inner { grid-template-columns: 1fr 1fr; }
+}
+
+/* The rest of what a wide garage does — the header band flattening, and the
+   padding each pane takes over from the shared .sheet-body. The PLACEMENT of the
+   two panes is `.pane-pair`'s job and is no longer written here; this block is
+   the same 400px threshold expressed as a container query because these rules
+   are about the header, not the pair. */
 @container sheet (min-width: 400px) {
   #cs-header {
     flex-flow: row wrap; align-items: center;
@@ -466,34 +472,32 @@
   #cs-budget { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #cs-stats-inner { flex: 1 1 100%; order: 3; }   /* stats get their own row */
 
-  /* Same split as the select screen, for the same reason: DONE only ever sits
-     under the category rail, so a full-width action bar was stealing a row of
-     options from the list beside it. #cs-body goes `display: contents` (the
-     trick #cs-budget-wrap already uses above) so both panes become grid items
-     of the sheet, and the option list spans the body row AND the foot row —
-     full sheet height to scroll in. Each pane then carries the padding the
-     shared .sheet-body used to provide. */
-  #cs-body { display: contents; }
-  #cs-inner > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
-  #cs-tabs {
-    grid-column: 1; grid-row: 2;
-    max-height: none; min-height: 0;
-    grid-template-columns: minmax(0, 1fr);
-    padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
-    /* Rows exactly as tall as a tab, packed from the top. Left to stretch, the
-       nine categories divided up whatever height the rail had and each tab came
-       out a couple of px shorter than its own two lines of text. The rail is a
-       .pane, so when they no longer fit it scrolls — which is the honest answer,
-       and it now has an indicator saying so. */
-    grid-auto-rows: min-content;
-    align-content: start;
-  }
-  #cs-options {
-    grid-column: 2; grid-row: 2 / 4;
-    min-height: 0;
-    padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5) 0;
-  }
-  #cs-inner > .sheet-foot { grid-column: 1; grid-row: 3; }
+}
+
+/* ONE SOURCE OF TRUTH FOR "IS THE PAIR ON": the attribute, never the width.
+   These rules used to live in the `@container sheet (min-width: 400px)` block
+   above, which was the same threshold expressed a second way — and the two can
+   disagree for a frame, because the container query applies the instant the
+   screen is shown while `data-pair` waits on a ResizeObserver callback. In that
+   window the rail had its `max-height: 48%` cap removed (a pair rule) while the
+   body was still a stacked flex column (no pair), so fourteen categories grew to
+   their full 658px inside a 544px sheet and five of them ended up unreachable
+   below its bottom edge. Measured, on desktop-narrow-860x560.
+   Anything that is only true WHEN THE PANES SPLIT belongs here. */
+#cs-inner[data-pair="on"] #cs-tabs {
+  max-height: none;
+  grid-template-columns: minmax(0, 1fr);
+  padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
+  /* Rows exactly as tall as a tab, packed from the top. Left to stretch, the
+     nine categories divided up whatever height the rail had and each tab came
+     out a couple of px shorter than its own two lines of text. The rail is a
+     .pane, so when they no longer fit it scrolls — which is the honest answer,
+     and it now has an indicator saying so. */
+  grid-auto-rows: min-content;
+  align-content: start;
+}
+#cs-inner[data-pair="on"] #cs-options {
+  padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5) 0;
 }
 
 /* ---------- preview controls (bottom-left) ----------

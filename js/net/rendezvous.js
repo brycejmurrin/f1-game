@@ -239,6 +239,26 @@ const NetRendezvous = (function () {
     });
   }
 
+  // HOST A ROOM several people can walk into, rather than trade one string with
+  // one person. Resolves as soon as it is listening, with a stop() — the room
+  // stays open and onJoiner fires per arrival.
+  //
+  // PUBLIC RELAY ONLY. The private mailbox is genuinely a mailbox: two fixed
+  // slots with a single-writer rule on `offer` that exists to stop a second
+  // host stealing somebody's guest, and per-joiner slots there are a different
+  // change with its own failure modes. A configured private relay therefore
+  // still hosts ONE guest, and says so rather than silently taking one player.
+  function hostRoom(o) {
+    if (usingPrivateRelay()) {
+      return Promise.resolve({ ok: false, error: "not_supported",
+        message: "Room codes on a private relay take one guest. Use the invite link for the others." });
+    }
+    return NetNostr.exchange({
+      code: o.code, mintOffer: o.mintOffer, onJoiner: o.onJoiner,
+      token: o.token, onTick: o.onTick,
+    });
+  }
+
   // The private relay keeps the put/get shape (it really is a mailbox); the
   // public one is a live swap. swap() is the interface the lobby uses, and it
   // hides which of the two is underneath.
@@ -294,7 +314,7 @@ const NetRendezvous = (function () {
 
   return {
     ALPHABET, CODE_LEN, POLL_TIMEOUT_MS, STORE_KEY, DEFAULT_URL, TOPIC,
-    configured, usingPrivateRelay, setUrl, baseUrl, swap,
+    configured, usingPrivateRelay, setUrl, baseUrl, swap, hostRoom,
     // Exported for the tests: the crypto is what makes a public broker safe to
     // use, and "it encrypted something" is not the same claim as "the wrong
     // code cannot read it".

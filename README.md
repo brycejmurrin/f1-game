@@ -134,7 +134,7 @@ sensors require a secure context.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module contract.
 Plain script-tag IIFE modules, grouped by domain: `js/render/` (WebGL2/WebGPU
 renderers + shaders), `js/track/` (the spline → mesh track engine),
-`js/circuits/` (the 40 circuit data files), `js/car/` (procedural car geometry,
+`js/circuits/` (the 40 circuit data files: 24 season rounds + 16 retired), `js/car/` (procedural car geometry,
 liveries, the 12-category upgrade catalog, the 2026 grid), `js/data/`
 (Jolpica/OpenF1 clients + the data hub UI), `js/game/` (input, audio, HUD,
 cameras, lighting, …), with `js/game.js` as the entry (loop, physics, AI, race
@@ -142,17 +142,26 @@ logic). Load order is defined in `tools/manifest.cjs`.
 
 ## Testing & development
 
-The project ships a **Playwright test suite** with 97 specs covering physics
-regression, AI behaviour, UI screens, and visual regression, plus 32 `node --test`
-unit suites for the pure-logic modules (netcode, load order, docs integrity,
-geometry audits):
+The project ships a **Playwright test suite** (99 specs) plus 33 `node --test`
+unit suites, covering physics regression, AI behaviour, geometry audits, UI
+screens, multiplayer, career and visual regression. The whole thing is ~40
+minutes of software rendering, so the workflow is: ask which groups a change
+needs, run those in the background, tail the log.
 
 ```sh
-npm run test:fast                            # quick subset: smoke + api + collision + offtrack + parts-physics + steering (~3 min)
-npx playwright test                          # run all specs
-npx playwright test tests/autopilot.spec.js  # single file
-node tools/verify-track.cjs --all           # headless build check for all 40 circuits (no browser needed)
+node tools/pick-tests.mjs                    # which test:<group>s does this change need?
+node tools/test-bg.mjs smoke api collision   # start them in the background
+tail -f artifacts/logs/smoke.log             # watch one live
+node tools/test-bg.mjs --status              # running / how each ended
+
+npm run test:tiny                            # start here: page loads, __apex responds
+npm run test:fast                            # quick subset (~3 min)
+npm test -- tests/autopilot.spec.js          # single file
+node tools/verify-track.cjs --all            # headless build check, all 40 circuits (no browser)
 ```
+
+`docs/TESTING.md` is the full reference: every group, every spec, the fixtures
+and the philosophy.
 
 Development server (pick either):
 
@@ -161,7 +170,7 @@ python3 -m http.server 3456
 npx serve -l 3456 .
 ```
 
-Active development branch: `claude/f1-game-project-26h3ng`.
+Active development branch: `claude/project-cleanup-tests-k7mqb6`.
 
 A debug scripting API — `window.__apex` — is available at runtime (devtools
 console or headless harness). Full reference in

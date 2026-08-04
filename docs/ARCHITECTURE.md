@@ -17,6 +17,7 @@ a script tag AND a manifest entry. The abbreviated sketch below is a subset;
 consult the manifest for the full, current order:
 
 ```
+js/log.js                -> Log        (levelled logging; loads FIRST)
 js/mat4.js               -> M4, V3
 js/render/shaders/*      -> GLXChunks, GLXShaders   (pure data, before glx.js)
 js/render/glx.js + glx/* -> GLX        (default WebGL2 renderer + its passes)
@@ -89,6 +90,31 @@ coherent after the split:
   suite has no tracked golden images yet, so a CSS split can't be gated).
 
 ---
+
+## js/log.js — `Log`
+
+Levelled, namespaced logging with a retained ring buffer. Loads FIRST in
+`tools/manifest.cjs`, so any module can log at evaluation time.
+
+```
+Log.error/warn/info/debug/trace(ns, ...args)   ns from Log.NAMESPACES
+Log.enabled(ns, level)                -> bool   (guard hot-path debug calls)
+Log.level(spec?)                      -> resolved thresholds; a string applies one
+Log.persist(spec|null)                -> remember it across reloads
+Log.records({ns, level, since, limit}) -> [{id, t, ns, level, msg}]
+Log.clear() / Log.sink(fn|null) / Log.time(ns, label) -> end()
+```
+
+Two independent thresholds: the CONSOLE level (default `warn`) decides what a
+human sees, the BUFFER level (default `info`) decides what is retained for
+`__apex.logs()`. Retention is never lower than the console level — the ring is
+what you read after the fact, so it cannot hold less than what printed.
+
+Configured by `Log.level()`, `?log=<spec>`, or `apex26.logLevel`; specs are
+`"debug"`, `"scenery:debug"`, `"buffer:trace"`, comma-separated. Records are
+flattened to strings at emit time so a diagnostic never keeps a mesh alive.
+Every host lookup is feature-detected — the track engine also runs in a Node VM
+with no `localStorage` and no `location`.
 
 ## js/mat4.js — `M4`, `V3`
 

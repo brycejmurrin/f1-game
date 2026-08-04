@@ -159,7 +159,7 @@ const GLX = (function () {
     gl.shaderSource(sh, src);
     gl.compileShader(sh);
     if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-      console.error("GLX shader compile failed:\n" + gl.getShaderInfoLog(sh) + "\n" + src);
+      Log.error("gfx", "GLX shader compile failed:\n" + gl.getShaderInfoLog(sh) + "\n" + src);
       gl.deleteShader(sh);
       return null;
     }
@@ -175,7 +175,7 @@ const GLX = (function () {
     gl.attachShader(prog, fs);
     gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-      console.error("GLX program link failed: " + gl.getProgramInfoLog(prog));
+      Log.error("gfx", "GLX program link failed: " + gl.getProgramInfoLog(prog));
       return null;
     }
     return prog;

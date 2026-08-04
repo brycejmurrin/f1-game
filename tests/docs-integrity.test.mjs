@@ -73,6 +73,56 @@ test("live docs reference only files that exist", () => {
     "a doc points at a path that no longer exists — update the doc, or add a placeholder if it is illustrative");
 });
 
+// Source files that are ALLOWED to name a path that does not resolve, with the
+// reason. Keep this list short and justified — everything else is drift.
+const SOURCE_EXEMPT = new Map([
+  // A forward reference: tools/bake-elevation.mjs GENERATES this file, and the
+  // manifest records where it would slot in. It is legitimately absent until
+  // someone bakes a profile.
+  ["js/track/circuit-elevations.js", /bake-elevation|manifest\.cjs|track\/tracks\.js|docs-integrity/],
+  // Synthetic fixture HTML fed to the service worker under test — a string it
+  // must rewrite, not a file it must find.
+  ["css/style.css", /service-worker\.test\.mjs|docs-integrity\.test\.mjs/],
+  // Fake package.json scripts inside the coverage-audit's own fixtures.
+  ["tests/alpha.spec.js", /test-coverage-audit\.test\.mjs|docs-integrity/],
+  ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],
+]);
+
+test("source comments reference only files that exist", () => {
+  // A file MOVE is invisible to every reviewer of the diff that caused it: the
+  // comment in the file that points at the old location does not appear in it.
+  // The js/ -> js/<domain>/ reorganisation left 29 such pointers behind across
+  // js/, tools/ and tests/ — each one sending a reader (or an agent) to a path
+  // that has not existed for months. This is the only thing that catches them.
+  const roots = ["js", "tools", "tests"];
+  const files = [];
+  (function walk(dir) {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== "node_modules") walk(rel); }
+      else if (/\.(js|mjs|cjs)$/.test(e.name)) files.push(rel);
+    }
+  })(roots[0]);
+  for (const r of roots.slice(1)) (function walk(dir) {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== "node_modules") walk(rel); }
+      else if (/\.(js|mjs|cjs)$/.test(e.name)) files.push(rel);
+    }
+  })(r);
+
+  const broken = [];
+  for (const file of files) {
+    for (const p of brokenPathsIn(file)) {
+      const exempt = SOURCE_EXEMPT.get(p);
+      if (exempt && exempt.test(file)) continue;
+      broken.push(`${file} -> ${p}`);
+    }
+  }
+  assert.deepEqual(broken, [],
+    "a source comment points at a path that no longer exists — update it, or add a justified SOURCE_EXEMPT entry");
+});
+
 test("skills reference only files that exist", () => {
   const broken = [];
   for (const doc of SKILL_DOCS)
@@ -172,7 +222,7 @@ test("every npm test:* group names specs that exist", () => {
   const missing = [];
   for (const [name, cmd] of Object.entries(pkg.scripts)) {
     if (!name.startsWith("test:")) continue;
-    for (const m of cmd.matchAll(/tests\/[A-Za-z0-9_*-]+\.(?:spec\.js|test\.mjs)/g)) {
+    for (const m of cmd.matchAll(/tests\/[A-Za-z0-9_*-]+\.(?:spec\.js|test\.(?:mjs|cjs))/g)) {
       const ref = m[0];
       if (ref.includes("*")) {                       // glob: at least one match must exist
         const re = new RegExp("^" + path.basename(ref).replace(/\*/g, ".*") + "$");
