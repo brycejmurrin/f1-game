@@ -505,6 +505,22 @@ Six more expose the ACTIVE AERO trade, which is otherwise applied deep inside
 | `aeroLoad` | HOW MUCH WING this car carries, 0..1 (`Parts.aeroLoad`) — 0 = `minimal`, 1 = `ground_effect`, 0.5 for a car with no parts (every AI) |
 | `xVmaxGain` / `xDfLoss` | the two halves of the trade for THIS car, interpolated by `aeroLoad` |
 
+Six more cover the ERS part's grip on the battery and the overtake window:
+
+| Field | Meaning |
+|---|---|
+| `ersDeploy` / `ersRegen` | the ERS option's two axes, 0..1 (`Parts.ersProfile`); 0.5 for a car with no parts |
+| `drain` | energy/s while boosting — LOWER with better deployment, so the press lasts longer |
+| `regen` | energy/s recovered — higher with better recovery |
+| `otTime` / `otCool` | the overtake push and its lockout, both scaled by deployment |
+
+Measured end to end: boost lasts 3.8 s on `harvest` and 7.1 s on `overcharge`;
+recharge runs 5.4 s down to 4.0 s. Note BOOST is a TOGGLE — `setBoost(true)`,
+not `setInput({boost:true})`, which is silently ignored. And do not measure boost
+duration by running the battery flat: the car reaches a corner, and below half
+`vmax` the throttle branch REGENERATES while boost drains, so energy asymptotes
+and never empties. Measure the drop over one second at speed.
+
 The trade is not one pair of constants: a big wing has more drag to shed and
 more downforce to lose, so both halves scale with the aero part (+5.5 % → +15.5 %
 of top speed, 42 % → 78 % of the aero load). Do not assert a literal against

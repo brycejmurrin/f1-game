@@ -1411,3 +1411,70 @@ test.describe("Parts module — statMult()", () => {
     expect(m).toBeCloseTo(0.925, 2);
   });
 });
+
+// THE ERS PART RUNS THE BATTERY. Its options have always DESCRIBED battery
+// behaviour — "harvests extra energy under braking", "maximum recovery window",
+// "immediate deployment" — while moving nothing but speed and accel like every
+// other part, so the descriptions were simply false. Two 0..1 axes now come off
+// the bias the catalog already encodes (deploy <- accel, regen <- speed) and
+// drive BOOST duration, recharge rate and the OVERTAKE window.
+test.describe("ERS parts drive the battery and overtake", () => {
+  test("deployment and recovery both scale with the ERS option", async ({ page }) => {
+    const rows = [];
+    for (const ers of ["harvest", "standard", "overcharge"]) {
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+      const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
+      await page.evaluate(([e, id]) => {
+        const key = "apex26.parts." + id;
+        const cur = JSON.parse(localStorage.getItem(key) || "{}");
+        cur.ers = e; localStorage.setItem(key, JSON.stringify(cur));
+        localStorage.setItem("apex26.team", "0");
+        localStorage.setItem("apex26.unlimitedBudget", "true");
+      }, [ers, teamId]);
+      await page.reload();
+      await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+      await page.evaluate(() => window.__apex.race("monza"));
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 40_000 });
+      rows.push(await page.evaluate(() => {
+        const A = window.__apex;
+        A.headless(true); A.go(); A.jump(0.1, 60, 0); A.step(1 / 60, 2);
+        const ps = A.physState();
+        // BOOST measured over ONE SECOND at speed. Running the battery to empty
+        // does not work: the car reaches the first corner, and below half vmax
+        // the throttle branch REGENERATES while boost drains, so energy
+        // asymptotes instead of emptying.
+        A.reset(0.1, 60, 0); A.setEnergy(1); A.setInput({ throttle: true });
+        A.setBoost(true);                       // BOOST is a toggle, not a setInput key
+        const e0 = A.carAt().energy;
+        A.step(1 / 60, 60);
+        const perSec = e0 - A.carAt().energy;
+        A.setBoost(false); A.clearInput();
+        return { deploy: ps.ersDeploy, regen: ps.ersRegen, drain: ps.drain,
+                 rgn: ps.regen, otTime: ps.otTime, otCool: ps.otCool, perSec };
+      }));
+    }
+    const [harvest, standard, over] = rows;
+    // The part must reach the physics at all — identical numbers would let every
+    // other assertion below "pass" on a setup that never got through.
+    expect(harvest.deploy).toBeLessThan(standard.deploy);
+    expect(standard.deploy).toBeLessThan(over.deploy);
+
+    // DEPLOYMENT buys a longer press (lower drain) and a longer, sooner overtake.
+    expect(over.drain).toBeLessThan(standard.drain);
+    expect(standard.drain).toBeLessThan(harvest.drain);
+    expect(over.otTime).toBeGreaterThan(harvest.otTime);
+    expect(over.otCool).toBeLessThan(harvest.otCool);
+    // and it shows up in the battery actually draining slower while boosting
+    expect(over.perSec).toBeLessThan(harvest.perSec);
+    expect(over.perSec).toBeGreaterThan(0);      // boost engaged at all
+
+    // RECOVERY is its own axis: the recovery-biased part out-regenerates the
+    // deployment-biased one even though it is the cheaper part.
+    expect(harvest.rgn).toBeGreaterThan(0);
+    expect(over.rgn).toBeGreaterThan(standard.rgn);
+
+    // And the spread is worth having: >1.5x on boost duration end to end.
+    expect(harvest.perSec / over.perSec).toBeGreaterThan(1.5);
+  });
+});

@@ -427,6 +427,15 @@ const api = {
       aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),
       xVmaxGain: +G.xVmaxGain(G.player).toFixed(4),
       xDfLoss: +G.xDfLoss(G.player).toFixed(4),
+      // THE ERS PART'S TWO AXES and what they buy. deploy runs BOOST duration
+      // (a lower drain is a longer press) and the OVERTAKE window; regen runs
+      // recharge. Both 0..1 from Parts.ersProfile, 0.5 for a car with no parts.
+      ersDeploy: +(G.player.ersDeploy != null ? G.player.ersDeploy : 0.5).toFixed(3),
+      ersRegen: +(G.player.ersRegen != null ? G.player.ersRegen : 0.5).toFixed(3),
+      drain: +G.drainFor(G.player).toFixed(4),
+      regen: +G.regenFor(G.player).toFixed(4),
+      otTime: +G.otTimeFor(G.player).toFixed(2),
+      otCool: +G.otCoolFor(G.player).toFixed(2),
     };
   },
   // Driving-boundary stats for the current track (both sides, all nodes): the

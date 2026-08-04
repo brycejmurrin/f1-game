@@ -696,6 +696,37 @@ const Parts = (function () {
     }
     return { lo, hi };
   })();
+  // WHAT THE ERS OPTION IS FOR, as two 0..1 axes. The category's descriptions
+  // have always promised battery behaviour — "harvests extra energy under
+  // braking", "maximum recovery window", "immediate deployment" — while the
+  // options only ever moved speed and accel like every other part, so none of it
+  // was true. These two read the bias already encoded in the option's own stats:
+  //   deploy <- accel   (deploy, mgu_k_max, overtake_focus, full_attack: high)
+  //   regen  <- speed   (harvest, thermal_max: high, and low on accel)
+  // which is exactly how the catalog already separates them. Normalised against
+  // the ERS category's own spans so a new option re-scales rather than clips.
+  const ERS_SPAN = (function () {
+    const cat = CATALOG.find((c) => c.id === "ers");
+    const span = (k) => {
+      let lo = Infinity, hi = -Infinity;
+      for (const o of cat.options) {
+        const v = o[k] !== undefined ? o[k] : 1;
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+      return { lo, hi };
+    };
+    return { deploy: span("accel"), regen: span("speed") };
+  })();
+  function ersProfile(setup, team) {
+    const opt = resolveSetup(setup, team).options.ers;
+    const at = (k, span) => {
+      const v = opt && opt[k] !== undefined ? opt[k] : 1;
+      return span.hi > span.lo ? Math.max(0, Math.min(1, (v - span.lo) / (span.hi - span.lo))) : 0.5;
+    };
+    return { deploy: at("accel", ERS_SPAN.deploy), regen: at("speed", ERS_SPAN.regen) };
+  }
+
   function aeroLoad(setup, team) {
     const opt = resolveSetup(setup, team).options.aero;
     const w = opt && opt.cornering !== undefined ? opt.cornering : 1;
@@ -726,6 +757,6 @@ const Parts = (function () {
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable,
     getFactorySetup, factoryKey,
-    getMods, getCost, getVisualTiers, statMult, aeroLoad,
+    getMods, getCost, getVisualTiers, statMult, aeroLoad, ersProfile,
   };
 })();
