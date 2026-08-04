@@ -1071,9 +1071,12 @@ const NetLobby = (function () {
       // offer belongs to one RTCPeerConnection, so the invite minted above is
       // spent on whoever comes first and the rest are minted on demand.
       if (!NetRendezvous.usingPrivateRelay()) {
-        let first = invite.code;
         const sub = await NetRendezvous.hostRoom({
           code, token: codeWait,
+          // The offer already prepared above goes out IMMEDIATELY, exactly as
+          // the two-party path did. Waiting for a peer-join event before
+          // saying anything is what broke this.
+          mine: invite.code,
           // The room stays open, so a failure after it opens has nowhere else
           // to go. Without this a host whose relays were all unreachable was
           // told NOTHING and watched a spinner — the console knew, the player
@@ -1088,9 +1091,11 @@ const NetLobby = (function () {
             : "Waiting for them to join… (code " + code + ")"),
           // The first arrival gets the invite already prepared; everyone after
           // gets a fresh transport and a fresh offer.
+          // Only called to REPLACE an offer somebody has taken, never per
+          // arrival — minting is a whole RTCPeerConnection plus an ICE gather,
+          // and doing that on every join is what got us rate-limited.
           mintOffer: async () => {
-            if (first) { const c = first; first = null; return c; }
-            if (sessions.size >= MAX_GUESTS) return null;      // room full: ignore them
+            if (sessions.size >= MAX_GUESTS) return null;      // room full
             if (!newTransport("host")) return null;
             const more = await NetHandshake.createInvite(transport, localProfile());
             return more.ok ? more.code : null;
@@ -1100,6 +1105,9 @@ const NetLobby = (function () {
             if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return; }
             if (acc.peer && pendingId) _peers.set(pendingId, acc.peer);
             waitForOpen();
+            // That offer is spent — it belongs to the connection just accepted
+            // — so put a fresh one on the table for whoever comes next.
+            if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) {} }
           },
         });
         if (!sub.ok) { say(sub.message || "Could not open that room.", true); return sub; }
