@@ -1,0 +1,115 @@
+// circuit-def-fields — every field authored in js/circuits/<id>.js must either
+// survive the copy into Tracks.LIST, or be named here as deliberately
+// engine-only.
+//
+// WHY THIS EXISTS. `Tracks.LIST` is built by an explicit field-by-field copy of
+// each authored def (js/track/tracks.js, `const def = {…}`). That is a good
+// design — it keeps the built def a known shape rather than whatever a circuit
+// file happened to set — but it has one failure mode, and the failure is
+// SILENT: author a new field, read it off the built def, and it is `undefined`
+// forever. Every consumer has a sensible fallback, so nothing throws, nothing
+// logs, and the circuit simply renders as though the field had never been
+// written.
+//
+// It has bitten twice. Once for `pal` (fixed, and documented in
+// js/game/atmosphere.js). Then for FIVE more at once — sunAzimBias,
+// sceneryTheme, sceneryThemeOverrides, ownPitStraight, undulate — which sat
+// inert long enough that:
+//   - six circuits' hand-tuned sun geography did nothing,
+//   - Qatar silently fell back to `desert` and Albert Park to `permanent`,
+//   - Singapore's theme overrides were never applied,
+//   - and Monza's `ownPitStraight` opt-out did not opt out, so the generic
+//     7-box pit fallback kept landing on the Tribuna Centrale — the exact bug
+//     the field had been added to fix.
+//
+// Prose cannot hold this line: the whole trap is that the authored side and the
+// copying side are 2,000 lines apart and neither one is wrong on its own. So
+// this asserts it instead. A new authored field fails here until it is either
+// copied through or explicitly declared engine-only below.
+import test from "node:test";
+import assert from "node:assert/strict";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const { buildContext } = require(path.join(ROOT, "tools/verify-track.cjs"));
+
+// Fields the ENGINE consumes off the AUTHORED def and deliberately does not
+// carry onto the built one. Each needs a reason, because "add it to the
+// allow-list" is the easy way to reintroduce exactly the bug above — the
+// question to answer is "is this read off `d`, or off `def`?".
+const ENGINE_ONLY = {
+  segs: "the authored centreline; consumed by centerline() into def.points",
+  baseHW: "half-width input to centerline()/applyHwZones, not read after build",
+  pal: "raw palette input; built into def.palette by dayPal/nightPal",
+};
+
+test("every field a circuit authors survives the copy into Tracks.LIST", () => {
+  const Tracks = buildContext();
+  const ctx = Tracks._vmContext;
+  const raw = ctx.TrackDefs;
+  assert.ok(Array.isArray(raw) && raw.length, "circuits must register on TrackDefs");
+
+  const missing = new Map();   // field -> [circuit ids]
+  for (const d of raw) {
+    const built = Tracks.LIST.find((t) => t.id === d.id);
+    assert.ok(built, `${d.id} authored but absent from Tracks.LIST`);
+    for (const key of Object.keys(d)) {
+      if (Object.prototype.hasOwnProperty.call(ENGINE_ONLY, key)) continue;
+      // `hasOwnProperty`, not truthiness: a field copied through as `false`,
+      // `0` or `null` is copied. Only ABSENCE is the bug.
+      if (Object.prototype.hasOwnProperty.call(built, key)) continue;
+      if (!missing.has(key)) missing.set(key, []);
+      missing.get(key).push(d.id);
+    }
+  }
+
+  if (missing.size) {
+    const lines = [...missing].map(([k, ids]) =>
+      `  ${k}  — authored in ${ids.length} circuit(s): ${ids.slice(0, 6).join(", ")}` +
+      (ids.length > 6 ? ", …" : ""));
+    assert.fail(
+      "circuit def field(s) dropped by the Tracks.LIST copy:\n" + lines.join("\n") +
+      "\n\nEither copy it through in js/track/tracks.js (`const def = {…}`), or — if" +
+      "\nthe engine only reads it off the AUTHORED def — add it to ENGINE_ONLY in" +
+      "\nthis file with the reason. Do not add it to ENGINE_ONLY to make this pass:" +
+      "\nif anything reads it off the BUILT def it will be undefined at runtime," +
+      "\nsilently, and the circuit will render as though you never wrote it.");
+  }
+});
+
+// The five that were actually dropped, pinned by value. The test above is the
+// general guard; this one states the specific thing that was broken, so a
+// regression reads as "Qatar lost its theme again" rather than as an abstract
+// coverage failure.
+test("the five once-dropped fields carry their authored values", () => {
+  const Tracks = buildContext();
+  const at = (id) => Tracks.LIST.find((t) => t.id === id);
+
+  // Hand-tuned sun geography — inert in all six circuits while uncopied.
+  for (const id of ["bahrain", "monza", "qatar", "silverstone", "spa", "suzuka"]) {
+    assert.equal(typeof at(id).sunAzimBias, "number",
+      `${id} authors sunAzimBias; it must reach the built def`);
+  }
+
+  // Qatar fell back to `desert`, Albert Park to `permanent`.
+  assert.equal(at("qatar").sceneryTheme, "night-event");
+  assert.equal(at("albert_park").sceneryTheme, "park");
+  assert.equal(at("singapore").sceneryTheme, "street");
+
+  // Singapore's overrides were always undefined at the consumer.
+  assert.ok(at("singapore").sceneryThemeOverrides,
+    "singapore authors sceneryThemeOverrides; it must reach the built def");
+
+  // The generic 7-box pit fallback landed on Monza's Tribuna Centrale without
+  // this, which is the thing the field exists to prevent.
+  assert.equal(at("monza").ownPitStraight, true);
+  assert.equal(at("spa").ownPitStraight, false, "unset must copy as false, not undefined");
+
+  // No circuit currently opts out of undulation, but the hatch must be
+  // reachable: buildCenterline reads `def.undulate !== false` off the BUILT def.
+  assert.ok(Object.prototype.hasOwnProperty.call(at("monza"), "undulate"),
+    "undulate must exist on the built def for the opt-out to be takeable");
+});
