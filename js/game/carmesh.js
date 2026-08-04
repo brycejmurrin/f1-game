@@ -98,12 +98,20 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
   const fp = Car3D.sharkFinPanel ? Car3D.sharkFinPanel()
     : [{ x: 0.023, y: 0.655, z: -0.82 }, { x: 0.023, y: 0.655, z: -1.56 },
        { x: 0.023, y: 0.945, z: -1.56 }, { x: 0.023, y: 0.945, z: -0.82 }];
+  // The fin decals are lit by SUN + HEMISPHERE AMBIENT only (glx.drawDecal
+  // uploads no point lights), so a normal of exactly ±X collects nothing from a
+  // sun with no sideways component and almost nothing from the sky term — a
+  // white team mark rendered as ~70% grey. Tilting the normal up puts it back:
+  // the sun contribution then depends only on n.y, which is IDENTICAL for both
+  // flanks, so the two faces still match exactly. The quads stay where they are;
+  // only the shading normal leans.
+  const FIN_N = 0.78, FIN_NY = 0.62;      // normalised: 0.78² + 0.62² ≈ 1
   const face = (c, region) => {
     const v = (i, s) => [s * c[i].x, c[i].y, c[i].z];
     // +x face reads front→back; the −x face mirrors (and reverses winding) so the
     // mark is upright on both flanks.
-    quad([v(0, 1), v(1, 1), v(2, 1), v(3, 1)], [1, 0, 0], region);
-    quad([v(1, -1), v(0, -1), v(3, -1), v(2, -1)], [-1, 0, 0], region);
+    quad([v(0, 1), v(1, 1), v(2, 1), v(3, 1)], [FIN_N, FIN_NY, 0], region);
+    quad([v(1, -1), v(0, -1), v(3, -1), v(2, -1)], [-FIN_N, FIN_NY, 0], region);
   };
   face(fp, R.fin);
   // The crest gets its own UPRIGHT SQUARE patch rather than a slice of the panel
