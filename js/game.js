@@ -431,7 +431,12 @@ function deployTaper(c) {
   return TAPER_FLOOR + (1 - TAPER_FLOOR) * t;
 }
 function isErsDeploying(c) {
-  if (!c || c.energy <= 0 || !(c.boostOn || c.otT > 0)) return false;
+  if (!c) return false;
+  // OVERTAKE deploys for FREE (see the deploy block), so it counts as deploying
+  // on a flat battery too — gating this on energy would drop the ERS lamp, the
+  // engine note and the tail-light flash for exactly the 4 s the car is at its
+  // loudest. BOOST alone still needs charge.
+  if (!(c.otT > 0) && (c.energy <= 0 || !c.boostOn)) return false;
   return DEPLOY_A * deployTaper(c) > 0.4;
 }
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
@@ -2508,14 +2513,24 @@ function updateCar(c, dt, ranked) {
   const wantBoost = (c.human ? c.boostOn
     : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25))
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
-  if (wantBoost && c.energy > 0) {
+  // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
+  // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
+  // It is already rationed by its own OT_GAP / OT_COOL window, which is what
+  // makes it a tactical move rather than a second BOOST — the energy bar was a
+  // second, redundant limiter, and at DRAIN 0.20 for OT_TIME 4 s a single press
+  // emptied 80% of the battery, so using the overtake button left you slower for
+  // the rest of the lap than if you had never pressed it.
+  const otFree = c.otT > 0;
+  if (otFree || (wantBoost && c.energy > 0)) {
     deploy = DEPLOY_A * deployTaper(c);
-    // Deploy always produces thrust while held (see deployTaper), so it always
-    // costs energy. The battery and the push are the same switch — a BOOST that
-    // drains nothing is a BOOST that does nothing.
-    c.energy = Math.max(0, c.energy - DRAIN * dt);
+    // BOOST alone still pays: deploy always produces thrust while held (see
+    // deployTaper), so it always costs energy. The battery and the push are the
+    // same switch — a BOOST that drains nothing is a BOOST that does nothing.
+    if (!otFree) {
+      c.energy = Math.max(0, c.energy - DRAIN * dt);
+      if (c.energy <= 0) c.boostOn = false;   // auto-release the toggle when drained
+    }
     c.deploying = deploy > 0.4;
-    if (c.energy <= 0) c.boostOn = false;   // auto-release the toggle when drained
   } else c.deploying = false;
 
   // --- overtake mode ---
