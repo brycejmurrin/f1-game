@@ -64,7 +64,7 @@ function buildResults(order) {
       row.append(pos, sw, nm, pt);
       els.resultsTable.appendChild(row);
     });
-    els.resNext.textContent = season.round >= Tracks.LIST.length ? "FINISH SEASON" : "NEXT ROUND";
+    els.resNext.textContent = season.round >= Tracks.SEASON.length ? "FINISH SEASON" : "NEXT ROUND";
   } else {
     els.resNext.textContent = "RACE AGAIN";
   }
@@ -153,8 +153,8 @@ function buildStandings() {
   body.textContent = "";
   if (!season) return;
   const round = season.round;
-  G.$("standings-title").textContent = round >= Tracks.LIST.length
-    ? "FINAL CHAMPIONSHIP" : "CHAMPIONSHIP — AFTER ROUND " + round + " / " + Tracks.LIST.length;
+  G.$("standings-title").textContent = round >= Tracks.SEASON.length
+    ? "FINAL CHAMPIONSHIP" : "CHAMPIONSHIP — AFTER ROUND " + round + " / " + Tracks.SEASON.length;
 
   // Driver standings — all cars sorted by pts
   const drHead = document.createElement("div");
@@ -201,8 +201,8 @@ function buildStandings() {
   });
 
   // Next round info
-  if (round < Tracks.LIST.length) {
-    const nextTrack = Tracks.LIST[round];
+  if (round < Tracks.SEASON.length) {
+    const nextTrack = Tracks.SEASON[round];
     const info = document.createElement("div");
     info.style.cssText = "margin-top:12px;font-size:12px;color:#9a9aa5;text-align:center";
     info.textContent = "NEXT: ROUND " + (round + 1) + " — " + nextTrack.name + " (" + nextTrack.gp + ")";

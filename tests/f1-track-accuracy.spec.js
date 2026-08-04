@@ -18,9 +18,14 @@ const REFERENCE = JSON.parse(fs.readFileSync(
   new URL("./data/f1-circuit-reference.geojson", import.meta.url),
   "utf8",
 ));
-// GeoJSON line order is not a race-direction guarantee. Monaco's source line is
-// opposite the clockwise Grand Prix lap, so orient that reference explicitly.
-const RACE_DIRECTION_OVERRIDES = { "mc-1929": "CW" };
+// GeoJSON line order is not a race-direction guarantee. Where the source line
+// runs opposite the real Grand Prix lap, orient the reference explicitly — the
+// matching circuit def then carries `reverse: true` so the game drives it the
+// right way round and the two still agree here.
+const RACE_DIRECTION_OVERRIDES = {
+  "mc-1929": "CW",   // Monaco
+  "fr-1969": "CW",   // Paul Ricard
+};
 
 // game circuit id → bacinger/f1-circuits feature id
 const CIRCUIT_MAP = {
@@ -32,6 +37,14 @@ const CIRCUIT_MAP = {
   qatar: "qa-2004", redbull: "at-1969", shanghai: "cn-2004",
   silverstone: "gb-1948", singapore: "sg-2008", spa: "be-1925",
   suzuka: "jp-1962", vegas: "us-2023", zandvoort: "nl-1948",
+  // Retired / off-calendar circuits (def `classic: true`) — same upstream
+  // dataset, so they are held to the same shape and direction bar.
+  hockenheim: "de-1932", nurburgring: "de-1927", catalunya: "es-1991",
+  sepang: "my-1999", istanbul: "tr-2005", paul_ricard: "fr-1969",
+  portimao: "pt-2008", sochi: "ru-2014", mugello: "it-1914",
+  magny_cours: "fr-1960", estoril: "pt-1972", kyalami: "za-1961",
+  watkins_glen: "us-1956", indianapolis: "us-1909", buenos_aires: "ar-1952",
+  jacarepagua: "br-1977",
 };
 
 function normalise(pairs) {

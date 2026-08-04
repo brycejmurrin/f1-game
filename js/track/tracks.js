@@ -2195,6 +2195,9 @@ const Tracks = (function () {
     const def = {
       id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
       night: d.night, theme: d.theme, lengthKm: d.lengthKm,
+      // Retired / off-calendar circuit: playable everywhere, but NOT a
+      // championship round (see SEASON below).
+      classic: !!d.classic,
       palette: (d.night ? nightPal : dayPal)(d.pal || {}),
       street: !!d.street, banked: !!d.banked, bankZones: d.bankZones || null, bridges: d.bridges || null,
       barrierGap: d.barrierGap || null,
@@ -2245,6 +2248,20 @@ const Tracks = (function () {
     if (def.hwZones) applyHwZones(def.points, def.hwZones, d.baseHW);
     return def;
   });
+
+  // THE CHAMPIONSHIP CALENDAR. `LIST` is every playable circuit; `SEASON` is the
+  // subset that forms a season. They used to be the same array, which meant
+  // `season.round` doubled as a LIST index — so any circuit added to the game
+  // silently became a championship round. Classics are excluded here instead, and
+  // season code indexes SEASON (via seasonIndex) rather than LIST.
+  const SEASON = LIST.filter((t) => !t.classic);
+
+  // LIST index of a season round (0-based). -1 once the calendar is exhausted,
+  // which is the same signal `round >= SEASON.length` gives the callers.
+  function seasonIndex(round) {
+    const t = SEASON[round];
+    return t ? LIST.indexOf(t) : -1;
+  }
 
   // world -> track projection (project) and the barrier-derived driving
   // boundary (wallAt) live in js/track/spline.js — destructured above.
@@ -2335,5 +2352,5 @@ const Tracks = (function () {
     return keepGeometry;
   }
 
-  return { LIST, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry };
+  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry };
 })();

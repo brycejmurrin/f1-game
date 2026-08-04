@@ -334,7 +334,7 @@ const Car3D = (function () {
   // Wheel: smooth-shaded tyre tread (shared ring verts, radial normals) + flat
   // 2026-style cover disc + hub on both faces.
   function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
-                    grooved, tyreStyle, fixedOut, brakeStyle) {
+                    grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
     const RC = rimColor || RIM;
     const SEG = 18;
     const x0 = cx - w/2, x1 = cx + w/2;
@@ -498,7 +498,40 @@ const Car3D = (function () {
                          [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP, SURFACES.metal);   // single face (cull-off → opaque both sides)
       }
       // rim of the hub cap (thin bright ring), then the proud wheel-nut cap.
-      addBox(out, ss[0] + dir * 0.032, cy, cz, 0.026, hcR * 0.42, hcR * 0.42, NUT, SURFACES.metal);
+      const nutCol = (wheelStyle && wheelStyle.nut) || NUT;
+      addBox(out, ss[0] + dir * 0.032, cy, cz, 0.026, hcR * 0.42, hcR * 0.42, nutCol, SURFACES.metal);
+      // Rim SPOKES: straight blades from the hub out to the rim, proud of the
+      // cover so they read whether or not the cover is cut open.
+      const spokeN = Math.max(0, Math.min(8, Math.round((wheelStyle && wheelStyle.spokes) || 0)));
+      for (let k = 0; k < spokeN; k++) {
+        const a = (k / spokeN) * Math.PI * 2 + 0.4;
+        const uy = Math.cos(a), uz = Math.sin(a), py = -Math.sin(a), pz = Math.cos(a);
+        const hw = 0.018, ri = hcR * 1.05, ro = rimR * 0.92, xs2 = ss[0] + dir * 0.024;
+        const P = (rad, sgn) => [xs2, cy + uy * rad + py * hw * sgn, cz + uz * rad + pz * hw * sgn];
+        addQuad(out, P(ri, 1), P(ro, 1), P(ro, -1), P(ri, -1), HUBCAP, SURFACES.metal);
+      }
+      // Rim TAPE: a coloured band around the rim shoulder — the cheapest way to
+      // tell two otherwise identical wheels apart at racing speed.
+      if (wheelStyle && wheelStyle.tape) {
+        const tr = rimR * 1.02, tc = (wheelStyle.nut) || bandColor;
+        for (let k = 0; k < 20; k++) {
+          const a0 = (k / 20) * Math.PI * 2, a1 = ((k + 1) / 20) * Math.PI * 2;
+          const A = (rad, a) => [ss[0] + dir * 0.010, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+          addQuad(out, A(tr, a0), A(tr + 0.022, a0), A(tr + 0.022, a1), A(tr, a1), tc, SURFACES.metal);
+        }
+      }
+      // Cover DISH: a recessed inner face, so the wheel reads concave or flat
+      // from the side rather than always being a flat disc.
+      const dish = Math.max(0, Math.min(2, Math.round((wheelStyle && wheelStyle.dish) || 0)));
+      if (dish > 0) {
+        const dr = rimR * (dish === 2 ? 0.80 : 0.88), dx = ss[0] + dir * (0.012 * dish);
+        for (let k = 0; k < 16; k++) {
+          const a0 = (k / 16) * Math.PI * 2, a1 = ((k + 1) / 16) * Math.PI * 2;
+          addTri(out, [dx, cy, cz],
+                 [dx, cy + dr * Math.cos(a0), cz + dr * Math.sin(a0)],
+                 [dx, cy + dr * Math.cos(a1), cz + dr * Math.sin(a1)], HUBCAP, SURFACES.metal);
+        }
+      }
     }
     // Brake caliper: a compact monobloc clamped at the TOP of the disc (12 o'clock)
     // where a covered-wheel caliper actually peeks out above the cover. Straddles
@@ -543,18 +576,18 @@ const Car3D = (function () {
   // A single wheel centred on the origin, axle along X — so the render layer can
   // spin it about X (∝ speed) and steer the fronts about Y, then translate it to
   // each corner. Used only for the player car (AI keep the baked static wheels).
-  function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle) {
+  function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle) {
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor,
-      grooved, tyreStyle, null, brakeStyle);
+      grooved, tyreStyle, null, brakeStyle, wheelStyle);
     return out;
   }
-  function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle) {
+  function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle) {
     const rotating = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     const fixed = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     const width = w || 0.34;
     addWheel(rotating, 0, 0, 0, 0.34, width, bandColor, caliperColor, rimColor,
-      grooved, tyreStyle, fixed, brakeStyle);
+      grooved, tyreStyle, fixed, brakeStyle, wheelStyle);
     // Upright and hub carrier give the wishbones/caliper a visible termination.
     addBox(fixed, 0, 0, 0, width * 0.72, 0.12, 0.12, [0.18, 0.18, 0.20], SURFACES.metal);
     return { rotating, fixed };
@@ -682,6 +715,12 @@ const Car3D = (function () {
   // COCKPIT: the halo and its furniture. haloBlade thickens the hoop into an
   // aero section, haloWing adds the upper flap many cars carry, camPods sets the
   // T-cam pod count. All default to the shipped cockpit.
+  // WHEELS: rim furniture. spokes shows through an open cover, tape is a
+  // coloured band around the rim, dish sets how far the cover face is recessed,
+  // nut recolours the centre-lock. All default to the shipped wheel.
+  function buildWheelParts(recipe) {
+    return mergeRecipe({ spokes: 0, tape: 0, dish: 0, nut: null }, recipe);
+  }
   function buildCockpitParts(recipe) {
     return mergeRecipe({ haloBlade: 0, haloWing: 0, camPods: 0, screen: 0 }, recipe);
   }
@@ -700,6 +739,7 @@ const Car3D = (function () {
       exhaust: buildExhaustParts(recipe("exhaust")),
       floor: buildFloorParts(recipe("floor")),
       cockpit: buildCockpitParts(recipe("cockpit")),
+      wheels: buildWheelParts(recipe("wheels")),
     };
   }
   // Resolve the continuous 0..4 downforce level from a getVisualTiers() object.
@@ -916,6 +956,7 @@ const Car3D = (function () {
     const exhStyle = design.exhaust;
     const floorStyle = design.floor;
     const cockpitStyle = design.cockpit;
+    const wheelStyle = design.wheels;
     // Per-team chassis identity (opts.teamId): nose profile, airbox scale,
     // dorsal fin, mirror style, sidepod-inlet aspect. Absent → shared default
     // silhouette, byte-identical to before.
@@ -1022,6 +1063,13 @@ const Car3D = (function () {
     // rear cut so underfloor choices remain legible from normal 3/4 cameras.
     const floorEdge = Math.max(0.72, Math.min(1.35, aeroStyle.floorEdge));
     const floorCut = Math.max(0, Math.min(0.24, aeroStyle.floorCut));
+    // Half-width of the VISIBLE floor edge at a given z — the line the two spans
+    // below trace. The FLOOR recipe's furniture anchors to this, so it always
+    // sits on the car's outline instead of hiding under the sidepod.
+    const floorEdgeAt = (z) => {
+      const t = Math.max(0, Math.min(1, (0.78 - z) / 2.36));
+      return (0.70 - 0.16 * Math.max(0, t - 0.5) * 2) * floorEdge;
+    };
     for (const side of [-1, 1]) {
       addSpan(out,
         { z: 0.78, x: side * 0.69 * floorEdge, y: 0.105 + rideDY, w: 0.045, h: 0.035 },
@@ -1221,29 +1269,44 @@ const Car3D = (function () {
       } else {
         addBox(out, s*inlet.x, inlet.y, inlet.z, inlet.width * 0.70, inlet.height * 0.68, 0.05, INTAKE);
       }
-      // Floor-edge fences: count and height come from the FLOOR recipe. The
-      // shipped array is 5 fences on a 0.36 m pitch from z 0.42, which is what
-      // the default recipe reproduces exactly.
+      // FLOOR furniture hangs off the VISIBLE floor-edge line — the same span the
+      // aero floorEdge draws above — NOT the sidepod bottom. Anchored to the pod
+      // it sat under the bodywork overhang, so a floor package changed nothing a
+      // player could ever see; every piece here now breaks the car's outline.
       const fenceN = Math.max(0, Math.min(6, Math.round(floorStyle.fences)));
       const fenceH = Math.max(0.6, Math.min(1.6, floorStyle.fenceH));
       for (let i = 0; i < fenceN; i++) {
         const fz = 0.42 - i * 0.36;
-        const fp = anchors.podAt(fz);
-        addBox(out, s*(fp.x + 0.012), fp.bottom + 0.025 * fenceH, fz,
-               0.014, 0.05 * fenceH, 0.13, CARBON);
+        const ex = floorEdgeAt(fz);
+        // A swept blade standing up and OUTBOARD of the edge, tall enough that
+        // its crown clears the edge span and reads from a 3/4 camera.
+        addSpan(out,
+          { z: fz + 0.075, x: s * (ex + 0.012), y: 0.140 + rideDY + 0.048 * fenceH,
+            w: 0.016, h: 0.095 * fenceH },
+          { z: fz - 0.075, x: s * (ex + 0.034), y: 0.156 + rideDY + 0.052 * fenceH,
+            w: 0.013, h: 0.105 * fenceH },
+          CARBON);
       }
-      // Floor-edge lip: a thin outward return along the whole floor edge.
+      // Floor EDGE WING: a chord extending past the floor edge, so the package
+      // changes the car's silhouette in plan view. Painted in the livery accent
+      // — the shape only reads if it is not another black-on-black detail.
       const edgeLip = Math.max(0, Math.min(1, floorStyle.edgeLip || 0));
       if (edgeLip > 0) {
-        const lipF = anchors.podAt(0.50), lipR = anchors.podAt(-1.10);
-        addSpan(out, { z: 0.50, x: s*(lipF.x + 0.020), y: lipF.bottom + 0.004, w: 0.030 * edgeLip + 0.010, h: 0.012 },
-                     { z: -1.10, x: s*(lipR.x + 0.020), y: lipR.bottom + 0.004, w: 0.036 * edgeLip + 0.010, h: 0.012 },
-                CARBON);
+        const ef = floorEdgeAt(0.50), er = floorEdgeAt(-1.10);
+        addSpan(out,
+          { z: 0.50, x: s * (ef + 0.028 + 0.050 * edgeLip), y: 0.122 + rideDY,
+            w: 0.050 + 0.070 * edgeLip, h: 0.016 },
+          { z: -1.10, x: s * (er + 0.028 + 0.050 * edgeLip), y: 0.148 + rideDY,
+            w: 0.040 + 0.060 * edgeLip, h: 0.014 },
+          accentC, null, SURFACES.paint);
       }
-      // Titanium skid blocks under the plank — the bits that throw sparks.
+      // Titanium skid blocks, moved OUTBOARD onto the floor edge underside: a
+      // bright metal strip under the dark floor, which is what actually catches
+      // the light (and the sparks) at a low camera angle.
       const skids = Math.max(0, Math.min(2, Math.round(floorStyle.skid || 0)));
       for (let i = 0; i < skids; i++) {
-        addBox(out, s * 0.22, 0.046 + rideDY, 0.30 - i * 1.10, 0.10, 0.014, 0.26,
+        const sz = 0.30 - i * 1.10;
+        addBox(out, s * (floorEdgeAt(sz) - 0.11), 0.056 + rideDY, sz, 0.17, 0.018, 0.30,
                [0.62, 0.60, 0.56], SURFACES.metal);
       }
     }
@@ -1913,9 +1976,9 @@ const Car3D = (function () {
       const grooved = !!(tyreStyle && tyreStyle.grooved);
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
-          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle);
+          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle, wheelStyle);
         addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38,
-          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle);
+          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle, wheelStyle);
       }
     }
 

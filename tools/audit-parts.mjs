@@ -37,6 +37,7 @@ const CAT_VIEW = {
   exhaust:    { az: 10,  el: 12, dist: 4.6, tod: "dusk" },
   floor:      { az: 118, el: 4,  dist: 5.4, tod: "day" },
   cockpit:    { az: 148, el: 26, dist: 3.9, tod: "day" },
+  wheels:     { az: 92,  el: 10, dist: 4.4, tod: "day" },
 };
 const cats = arg("cats", Object.keys(CAT_VIEW).join(",")).split(",")
   .map((value) => assertSafePathToken(value.trim(), "category")).filter(Boolean);

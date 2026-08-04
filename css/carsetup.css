@@ -170,6 +170,15 @@
    read as overlapping garbage exactly when it was long enough to matter. */
 #cs-options > * { flex: 0 0 auto; }
 
+/* ---------- TEAM & DRIVER tab ----------
+   The identity controls reuse the select screen's .team-card / .sel-chip /
+   .sel-label / .sel-edit classes (css/menus.css) so the two screens cannot
+   drift apart. Only the vertical rhythm is respecified: #cs-options is a flex
+   column, and the margin rule that spaces these on the select screen is scoped
+   `#sel-left .sel-label + *`, so it does not reach in here. */
+#cs-options > .sel-label:not(:first-child) { margin-top: calc(var(--gap) * 0.6); }
+#cs-options > .sel-edit-row { margin-top: calc(var(--gap) * 0.4); }
+
 /* ---------- category tabs ---------- */
 .cs-tab {
   display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;

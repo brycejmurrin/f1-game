@@ -196,10 +196,13 @@
 }
 
 /* ---------- team card + team picker ----------
-   The card is the whole TEAM control on the select screen; the twelve-way
-   choice lives in its own sheet (#teampicker). One large target instead of a
-   four-row grid of 60px chips. */
-#teampicker { --sheet-w: 760px; z-index: 26; }
+   The card is the YOUR CAR summary on the select screen (tap to open the
+   garage); the twelve-way team choice lives in its own sheet (#teampicker),
+   opened from the garage's TEAM & DRIVER tab. One large target instead of a
+   four-row grid of 60px chips.
+   z-index clears #carsetup (35, css/carsetup.css) — the picker is opened FROM
+   the garage now, and at 26 it opened behind it. */
+#teampicker { --sheet-w: 760px; z-index: 36; }
 .team-card, .team-tile {
   display: flex; align-items: center; gap: var(--gap);
   width: 100%; text-align: left; cursor: pointer;
@@ -386,6 +389,16 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 .trb { display: inline-block; font-size: var(--fs-micro); letter-spacing: 0.08em; padding: 1px 5px; border-radius: var(--r-xs); margin-left: 5px; vertical-align: middle; font-weight: 700; }
 .trb-night { background: rgba(129,140,248,0.15); color: #818cf8; border: 1px solid rgba(129,140,248,0.3); }
 .trb-street { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+.trb-classic { background: rgba(180,150,90,0.14); color: #c8a862; border: 1px solid rgba(180,150,90,0.32); }
+/* Section header inside the picker list (CURRENT SEASON / CLASSIC CIRCUITS).
+   Sticky so the group stays identifiable while the list scrolls under it. */
+.track-group-head {
+  position: sticky; top: 0; z-index: 1;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+  color: var(--dim); padding: 7px 12px 5px;
+  background: var(--surf-1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
 
 /* ---------- race settings ---------- */
 .rs-row { margin-bottom: var(--gap); }

@@ -56,6 +56,7 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **menu-fit.mjs** | Audits every menu screen for cramped/clipped layout at a given viewport. | — |
 | **track-accuracy-validator.mjs** | Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests. | new-track |
 | **refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data. Tests never call it and never touch the network. | new-track |
+| **import-circuit-path.mjs** | Projects a `bacinger/f1-circuits` (ODbL) GeoJSON feature into a `CircuitPaths` entry for `js/track/geo-paths.js`; `--self-check` regenerates the committed traces and diffs them so the projection can't silently drift. | new-track |
 | **fixture-consumer-audit.mjs** | Asserts every spec that needs the shared fixtures actually imports them (so nothing silently bypasses the API mocks). | — |
 | **output-paths.mjs** | Path-containment helpers enforcing the `artifacts/` vs `scratch/` output contract; `tests/output-paths.spec.js` gates it. | — |
 | **lighting-campaign/** | Batch lighting-sweep runner + its captures, driven by `tests/lighting-campaign.test.mjs`. | lighting-tuner |

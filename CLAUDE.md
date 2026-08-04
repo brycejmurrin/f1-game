@@ -291,7 +291,10 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   prefer render({what}) and scene({visible})
                                   (docs/AGENT-WORLD-API.md)
   atmosphere.js  Atmosphere     applyRaceSettings — time-of-day/weather scene state
-  setup-ui.js    SetupUI        CAR SETUP screen
+  setup-ui.js    SetupUI        GARAGE screen (#carsetup) — WHO you are and WHAT
+                                  you drive: TEAM & DRIVER, the 8 part categories
+                                  + budget, LIVERY. The select screen owns WHERE
+                                  you race and links here; race settings own HOW
   menus.js       Menus          menu/select/pause DOM flows
   scrollfade.js  ScrollFade     "there is more below" edge fade + position indicator
                                   for every menu scroll region (self-initialising)
@@ -308,7 +311,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (84) + tests/*.test.mjs unit suites (22)
+tests/*.spec.js                 Playwright specs (85) + tests/*.test.mjs unit suites (22)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -351,9 +354,9 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Parts system (`js/car/parts.js`)
 
-`Parts.CATALOG` — an **array** of 11 category objects (ordered, not keyed by id):
+`Parts.CATALOG` — an **array** of 12 category objects (ordered, not keyed by id):
 `engine`, `aero`, `suspension`, `brakes`, `tyres`, `ers`, `gearbox`, `fuel`,
-`exhaust`, `floor`, `cockpit`. Each
+`exhaust`, `floor`, `cockpit`, `wheels`. Each
 category is `{ id, label, options:[…] }`; each option has
 `{ id, label, cost, desc, speed?, accel?, cornering?, braking?, supplier? }`.
 Budget = 600 cr. `Parts.getMods(setup, teamEngine)` returns
@@ -674,7 +677,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-84 Playwright specs + 22 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+85 Playwright specs + 22 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for
