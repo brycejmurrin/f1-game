@@ -2628,6 +2628,7 @@ const G = {
   vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  aeroDfMult,
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
@@ -3357,6 +3358,12 @@ function updateCar(c, dt, ranked) {
   // Low drag is worth top speed. This is the ONLY thrust-side effect — no
   // engine power is added, so X-mode out of a slow corner does nothing at all.
   vmax *= 1 + X_VMAX_GAIN * c.aeroX;
+  // Stashed for physState(): the two halves of the active-aero trade are
+  // computed deep inside the per-car update and were otherwise unobservable, so
+  // "does the wing actually do anything?" could only be answered by reading this
+  // function. Driving the car to measure it does not work — full lock at 78 m/s
+  // puts it 30 m into a field, which closes the flaps and measures nothing.
+  c._vmaxNow = vmax;
 
   // --- gearbox (player) ---
   let gearMult = 1, speedCap = vmax + 14 * Math.max(PACE, 0.05);   // ERS overspeed margin — a speed, so it rides the pace scale
@@ -3745,6 +3752,7 @@ function updateCar(c, dt, ranked) {
     // fully open). Carrying X-mode into a fast corner is therefore a genuine
     // loss of grip at exactly the speed where aero load is doing the most work.
     const aeroGrip = 1 + DOWNFORCE * aeroDfMult(c) * Math.min(1, (Math.abs(c.speed) / vTop())) ** 2;
+    c._aeroGrip = aeroGrip;          // see c._vmaxNow — the other half of the trade
     const offDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
     const surfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, offDepth);
     // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar

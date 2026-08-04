@@ -169,3 +169,48 @@ test.describe("overtake mode — the rules active aero does NOT share", () => {
     expect(r.otEnabled, "overtake is not").toBe(false);
   });
 });
+
+// THE TRADE ITSELF: top speed bought with downforce, in the numbers the model
+// actually applies. Both halves were unobservable until physState() carried
+// them — the constants live deep inside updateCar, and you cannot measure them
+// by DRIVING: full lock at 78 m/s puts the car 30 m into a field, which drops
+// xArmed and closes the flaps, so the "X-mode" sample is not X-mode at all.
+// (That is exactly how the first attempt at this test lied.)
+test.describe("active aero — downforce traded for top speed", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("X-mode buys X_VMAX_GAIN of vmax and gives up X_DF_LOSS of the aero load", async ({ page }) => {
+    await loadTrack(page, "monza");
+    const r = await page.evaluate(() => {
+      const A = window.__apex;
+      A.headless(true); A.go();
+      const zone = A.aeroZones().slice().sort((a, b) => b.len - a.len)[0];
+      const read = (wantX) => {
+        A.reset(zone.midFrac, 70, 0);
+        A.setInput({ throttle: true });
+        // the flap TRAVELS (~0.45 s open): sample after it has arrived
+        for (let i = 0; i < 60; i++) { A.aero(wantX); A.step(1 / 60, 1); }
+        const ps = A.physState();
+        A.clearInput();
+        return { aeroX: ps.aeroX, vmaxNow: ps.vmaxNow, aeroGrip: ps.aeroGrip,
+                 aeroDf: ps.aeroDf, onTrack: Math.abs(ps.x) < 8 };
+      };
+      return { z: read(false), x: read(true) };
+    });
+    // The measurement is only meaningful with the car on the road and the flaps
+    // where they were asked to be.
+    expect(r.z.onTrack && r.x.onTrack, "both samples taken on track").toBe(true);
+    expect(r.z.aeroX).toBe(0);
+    expect(r.x.aeroX).toBe(1);
+
+    // TOP SPEED: +X_VMAX_GAIN (0.075), exactly — it is a plain multiplier.
+    expect(r.x.vmaxNow / r.z.vmaxNow).toBeCloseTo(1.075, 3);
+    // DOWNFORCE: the aero-load term keeps 1 - X_DF_LOSS (0.55) of itself.
+    expect(r.z.aeroDf).toBeCloseTo(1, 3);
+    expect(r.x.aeroDf).toBeCloseTo(0.45, 3);
+    // And the grip the car actually gets must FALL, not merely be scaled on
+    // paper: the aero term is what multiplies lateral grip.
+    expect(r.x.aeroGrip).toBeLessThan(r.z.aeroGrip);
+    expect(r.z.aeroGrip).toBeGreaterThan(1);
+  });
+});

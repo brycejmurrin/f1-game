@@ -411,6 +411,15 @@ const api = {
       slipFactor: +Math.sqrt(Math.max(0, 1 - axFrac * axFrac)).toFixed(3),
       aeroX: +(G.player.aeroX || 0).toFixed(3),
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
+      // THE ACTIVE-AERO TRADE, both halves, as the model actually applies them.
+      // vmaxNow carries the X_VMAX_GAIN multiplier; aeroGrip is the aero-load
+      // grip term (1 + DOWNFORCE x aeroDfMult x (v/vTop)^2) at the CURRENT
+      // speed, so it falls as the flaps open and is worth most where aero load
+      // is doing the most work. aeroDf is the multiplier on its own: 1 shut,
+      // 1 - X_DF_LOSS fully open.
+      vmaxNow: +(G.player._vmaxNow || 0).toFixed(3),
+      aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
+      aeroDf: +G.aeroDfMult(G.player).toFixed(3),
     };
   },
   // Driving-boundary stats for the current track (both sides, all nodes): the

@@ -43,15 +43,25 @@
 #btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); background: rgba(180, 35, 35, 0.42); }
 #btn-brake:active { background: rgba(230, 45, 45, 0.75); }
 
-/* BOOST is BLUE, and stays blue. It used to turn lime-green when engaged, which
-   is the same fault the old OT palette had — a control that changes hue with
-   state reads as a different button rather than the same one switched on — and
-   it collided head-on with ACTIVE AERO's green. One hue per control, brightness
-   for state: light at rest, deep with a glow when it is doing something. */
+/* BOOST IS THE BATTERY, so it is GREEN and its colour IS the charge. `--e` is
+   written each frame by hud.js from player.energy (0..1) and mixed between a
+   flat grey-green at empty and a vivid green at full, so the button answers
+   "is there anything left?" without the eye leaving it for the energy bar.
+   That is the one thing a static colour could never say, and it is the whole
+   reason this control gets the treatment rather than OT or AERO — those two
+   are gated on the world (a gap, a zone), and the world is not a quantity you
+   carry around.
+   State still runs on brightness, as everywhere else: charged is light, and
+   DEPLOYING is the deep fill with a glow. */
 #btn-boost { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab));
-             background: rgba(198, 230, 250, 0.82); border-color: rgba(232, 245, 255, 0.75); color: #10323f; }
-#btn-boost.on { background: rgba(8, 66, 132, 0.95); color: #cfeeff; border-color: #3fb6ff;
-                box-shadow: 0 0 18px rgba(50, 175, 255, 0.8); }
+             --e: 1;
+             background: color-mix(in oklab, rgba(96, 232, 130, 0.9) calc(var(--e) * 100%),
+                                             rgba(176, 190, 182, 0.5));
+             border-color: color-mix(in oklab, rgba(190, 250, 208, 0.85) calc(var(--e) * 100%),
+                                               rgba(200, 210, 205, 0.4));
+             color: #04240f; }
+#btn-boost.on { background: rgba(13, 84, 40, 0.96); color: #d8ffe4; border-color: #35c96c;
+                box-shadow: 0 0 20px rgba(40, 200, 100, 0.85); }
 /* OT is YELLOW and AERO is GREEN, and each DARKENS when it is doing something.
    One hue per control, brightness for state: you can tell what a button is by
    its colour without reading it, and whether it is live without comparing it to
@@ -78,14 +88,18 @@
                 box-shadow: 0 0 20px rgba(250, 195, 20, 0.85); animation: pulse 0.8s infinite; }
 #btn-ot.on { background: rgba(122, 88, 0, 0.96); color: #ffeeae; border-color: #f0c419;
              box-shadow: 0 0 18px rgba(225, 175, 20, 0.8); }
-/* ACTIVE AERO sits one slot further along whichever column OT is in — every
-   layout below moves the pair together, so the rule is "AERO is above OT". */
+/* ACTIVE AERO is BLUE. Green belongs to BOOST now, and the two must not share a
+   hue: they are the only pair that can be lit at the same moment, and telling
+   "I have charge" from "the wing is open" at a glance is the entire point of
+   one-hue-per-control.
+   It sits one slot further along whichever column OT is in — every layout below
+   moves the pair together, so the rule is "AERO is above OT". */
 #btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: 12px;
-             background: rgba(203, 246, 218, 0.82); border-color: rgba(232, 253, 240, 0.75); color: #0d3320; }
-#btn-aero.armed { background: rgba(45, 226, 108, 1); color: #04240f; border-color: #a8f5c6;
-                  box-shadow: 0 0 20px rgba(45, 220, 105, 0.8); }
-#btn-aero.on { background: rgba(13, 84, 40, 0.96); color: #d8ffe4; border-color: #35c96c;
-               box-shadow: 0 0 18px rgba(40, 200, 100, 0.8); }
+             background: rgba(200, 230, 252, 0.82); border-color: rgba(233, 245, 255, 0.75); color: #0d2b3d; }
+#btn-aero.armed { background: rgba(38, 165, 245, 1); color: #04202e; border-color: #b3e2ff;
+                  box-shadow: 0 0 20px rgba(40, 165, 245, 0.8); }
+#btn-aero.on { background: rgba(8, 62, 120, 0.96); color: #d6efff; border-color: #3fb6ff;
+               box-shadow: 0 0 18px rgba(50, 175, 255, 0.8); }
 /* No activation zone anywhere on this circuit: the control cannot do anything,
    so it says so rather than sitting there inviting taps. Faded, not hidden —
    hiding it would reflow the touch-control stack and move every OTHER button
