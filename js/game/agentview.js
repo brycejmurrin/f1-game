@@ -743,6 +743,14 @@ const AgentView = (function () {
         cannot.push({ id: "deploy_ers", why: "energy " + r2(energy) + " is below 0.05" });
       }
 
+      if (p.xArmed) {
+        can.push({ id: "active_aero_x_mode",
+                   why: "straight road ahead; X-mode trades downforce for ~+7.5% top speed" });
+      } else {
+        cannot.push({ id: "active_aero_x_mode",
+                      why: "not armed here — needs ~3 s of straight road ahead and no braking" });
+      }
+
       const wallR = Tracks.wallAt(G.track, p.s, 1);
       const wallL = -Tracks.wallAt(G.track, p.s, -1);
       const clearR = wallR - p.x, clearL = p.x - wallL;
@@ -916,6 +924,18 @@ const AgentView = (function () {
           boostRemainingS: r1(p.otT || 0),
           cooldownS: r1(p.otCool || 0),
           note: "overtake arms within ~1 s of the car ahead; 4 s boost, then 16 s cooldown",
+        },
+        // ACTIVE AERO is the third straight-line lever and the only one that is
+        // not a battery: it costs cornering grip, not charge. `flap` is the
+        // travel 0..1 that the physics reads; `armed` is whether the road ahead
+        // is straight enough for the switch to do anything at all.
+        aero: {
+          mode: (p.aeroX || 0) > 0.05 ? "X" : "Z",
+          flap: r2(p.aeroX || 0),
+          requested: !!p.xOn,
+          armed: !!p.xArmed,
+          note: "X-mode = low drag, ~+7.5% top speed, ~45% less aero downforce. "
+              + "Arms only with ~3 s of straight road ahead and shuts under braking",
         },
         grip: {
           slipFactor: r2(slipFactor),

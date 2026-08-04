@@ -485,7 +485,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (93) + tests/*.test.mjs unit suites (28)
+tests/*.spec.js                 Playwright specs (94) + tests/*.test.mjs unit suites (28)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -592,6 +592,40 @@ axis of the traction circle. Braking or accelerating consumes longitudinal grip;
 `slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip. Trail-braking
 rotates the car; hard braking mid-corner understeers. Exposed via `physState()`
 fields `axEstSm`, `axFrac`, `slipFactor`.
+
+**ACTIVE AERO (X-mode / Z-mode)** is the THIRD straight-line lever, next to
+BOOST (spends the battery) and OVERTAKE (a free, proximity-gated push). It adds
+NO thrust and spends NO energy — it trades **downforce for drag**, the 2026
+moveable-wing rules. Z-mode (the default) is flaps shut and full downforce;
+X-mode is flaps open, `X_VMAX_GAIN` (+7.5 %) on top speed and `X_COAST_CUT` off
+the coast drag, paid for with `X_DF_LOSS` (55 %) of the `DOWNFORCE` aero-load
+term. Nothing else in the grip model changes.
+
+`c.aeroX` is the FLAP TRAVEL (0..1) and is what every consumer reads — physics,
+HUD and the wings' own moveable ELEMENTS. Per the 2026 rules every element
+except each mainplane rotates, and both wings actuate together: at the default
+downforce level that is the front cascade's top two flaps plus the rear wing's
+top two planes — four elements, all driven by the one `aeroX`. They are NOT
+baked into the car mesh; `Car3D.aeroFlaps()` hands them out as canonical hinged
+specs (leading edge at the origin) and `drawAeroFlaps` places them, so the car
+at rest is geometrically identical to the old fixed wing. `Car3D.buildFlapGeom`
+runs the SAME `addWingPlanform` emitter the baked wing uses and both read one
+table, so they cannot drift apart. Closed = the element's own incidence plus
+`Z_BITE`, CLAMPED per element against the measured nose underside (`NOSE_UNDER`)
+so nothing ever swings into the bodywork; open = flat. `X_OPEN_RATE` is set by
+the FIA's 400 ms transition cap, not by feel. The GARAGE turntable shares the
+same draw, so its ACTIVE AERO button shows the real geometry at real angles. `c.xOn` is the switch and
+`c.xArmed` whether the road allows it at all: `xStraightAhead()` requires
+`X_STRAIGHT_T` **seconds** of road ahead under `X_K_MAX` curvature, so the window
+shrinks as you speed up, exactly like the FIA's "any straight longer than three
+seconds". Braking or leaving that window shuts the flap AND drops the switch, and
+`X_CLOSE_RATE` is ~4× `X_OPEN_RATE` — the downforce comes back faster than it
+left. The AI needs no separate close-before-the-corner rule: its braking scan
+looks 1.7 s ahead and the arming scan 3 s, so X-mode has already un-armed by the
+time it decides to brake.
+
+Adding a consumer? Read `c.aeroX` (or `aeroDfMult(c)` for the downforce
+multiplier) — **never `c.xOn`**. The switch is not the wing.
 
 **The player is a world-space rigid body.** `px`/`pz`/`head` are the authority:
 the car integrates its own position in world metres from tyre forces alone and
@@ -764,6 +798,10 @@ __apex.assets()               // baked-pack state {supported,pack,uploaded,tier,
 __apex.assetLoad(tier?)       // (re)load the material arrays ("low"|"high"); false = unload
 __apex.matTex(0..1)           // BAKED MATERIALS blend — the A/B knob for the pack (ships at 0)
 __apex.credits()              // attribution roll for every baked asset
+__apex.aero(true)             // ACTIVE AERO: request/drop X-mode (2026 moveable
+                              //   wing). No arg reads {xOn,xArmed,aeroX,mode};
+                              //   aeroX is the FLAP TRAVEL the physics reads —
+                              //   asking for X on a corner leaves it at 0
 __apex.setPhysics({pace:0.8}) // override physics params
 __apex.probe()                // player telemetry (x, angle, k, hw, speed, s)
 __apex.physState()            // full state (slip, wrongWay, lap, rescueT)
@@ -892,7 +930,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-93 Playwright specs + 28 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+94 Playwright specs + 28 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

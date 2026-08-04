@@ -42,6 +42,9 @@ const Input = (function () {
   // edge-triggered: overtake (X / OT tap), boost toggle (Space / BOOST tap)
   let overtakePressed = false;
   let boostTogglePressed = false;
+  // edge-triggered ACTIVE AERO toggle (Z key / d-pad up / AERO tap). Named for
+  // the modes it swaps between: Z-mode (downforce) and X-mode (low drag).
+  let aeroTogglePressed = false;
   // edge-triggered gear shifts (manual mode)
   let shiftUpPressed = false;
   let shiftDownPressed = false;
@@ -366,6 +369,9 @@ const Input = (function () {
       case "KeyX":
         if (down && !e.repeat) overtakePressed = true;
         break;
+      case "KeyZ":
+        if (down && !e.repeat) aeroTogglePressed = true;
+        break;
       case "KeyE":
         if (down && !e.repeat) shiftUpPressed = true; break;
       case "KeyQ": case "ShiftLeft":
@@ -535,6 +541,7 @@ const Input = (function () {
   //   btn 14/15 d-pad left/right        btn 6 LT / btn 1 B  brake
   //   btn 2 X  boost toggle             btn 3 Y  overtake
   //   btn 4 LB shift down               btn 5 RB shift up
+  //   btn 12 d-pad up  active aero (X-mode) toggle
   //   btn 8 View/Back  camera           btn 9 Menu/Start  pause
   function pollGamepad() {
     // Skip the whole poll when nothing is connected. navigator.getGamepads()
@@ -567,6 +574,7 @@ const Input = (function () {
     // edge-triggered actions reuse the same latches the keyboard sets.
     if (btnEdge(pad, 2)) boostTogglePressed = true;
     if (btnEdge(pad, 3)) overtakePressed = true;
+    if (btnEdge(pad, 12)) aeroTogglePressed = true;
     if (btnEdge(pad, 5)) shiftUpPressed = true;
     if (btnEdge(pad, 4)) shiftDownPressed = true;
     if (btnEdge(pad, 8)) cameraCyclePressed = true;
@@ -639,6 +647,12 @@ const Input = (function () {
   function consumeOvertake() {
     const v = overtakePressed;
     overtakePressed = false;
+    return v;
+  }
+
+  function consumeAeroToggle() {
+    const v = aeroTogglePressed;
+    aeroTogglePressed = false;
     return v;
   }
 
@@ -728,6 +742,7 @@ const Input = (function () {
     wireHold("btn-brake", function (v) { btnBrake = v; });
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
+    wireTap("btn-aero", function () { aeroTogglePressed = true; });
     wireTap("shift-up", function () { shiftUpPressed = true; });
     wireTap("shift-down", function () { shiftDownPressed = true; });
     wireHold("btn-steer-left", function (v) { btnSteerLeft = v; });
@@ -764,6 +779,7 @@ const Input = (function () {
     oeInit = false; oePrev = 0; oeDPrev = 0;
     overtakePressed = false;
     boostTogglePressed = false;
+    aeroTogglePressed = false;
     shiftUpPressed = false;
     shiftDownPressed = false;
     cameraCyclePressed = false;
@@ -808,6 +824,7 @@ const Input = (function () {
     brakeLevel,
     consumeBoostToggle,
     consumeOvertake,
+    consumeAeroToggle,
     consumeShiftUp,
     consumeShiftDown,
     consumeCameraCycle,

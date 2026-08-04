@@ -86,6 +86,17 @@
 #hud-ot.ot-armed { color: #0a0a0f; background: #aeea00; animation: pulse 0.8s infinite; }
 #hud-ot.ot-active { color: #fff; background: var(--red); }
 #hud-ot.ot-cool { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); opacity: 0.5; }
+/* ACTIVE AERO readout — deliberately COOL (cyan) where OVERTAKE is hot (red/
+   lime), because the two are different currencies: OT spends a proximity
+   window, X-mode spends cornering grip. Same chip metrics as #hud-ot so the
+   pair stacks evenly in the bottom strip. */
+#hud-aero {
+  font-size: 13px; font-weight: 800; font-style: italic;
+  padding: 5px 10px; border-radius: var(--r-sm);
+}
+#hud-aero.ax-off { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); }
+#hud-aero.ax-armed { color: #7df9ff; border: 1px solid rgba(125,249,255,0.55); }
+#hud-aero.ax-open { color: #04212b; background: #22d3ee; box-shadow: 0 0 14px rgba(34,211,238,0.55); }
 @keyframes pulse { 50% { opacity: 0.55; } }
 #minimap {
   position: absolute;

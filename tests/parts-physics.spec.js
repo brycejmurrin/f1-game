@@ -723,7 +723,11 @@ test.describe("Parts module — visual recipes", () => {
         const expectedY = crownY - (level >= 4 || style.drs ? 0.075 : 0)
           + 0.035 * 0.5;
         const expectedZ = -2.64 - sweep;
-        const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
+        // buildComplete, not build: the wing's top elements are ACTIVE AERO and are
+        // drawn separately so they can rotate, so the render mesh no longer holds
+        // them. buildComplete merges them back at their CLOSED pose, which is
+        // vertex-for-vertex the wing this test was written against.
+        const mesh = Car3D.buildComplete([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
           noWheels: true,
           parts: { aero: 1, _visual: { aero: style } },
         });
@@ -782,7 +786,11 @@ test.describe("Parts module — visual recipes", () => {
         const expectedY = element[3] + style.frontRise * (0.65 + planformIndex * 0.12)
           + element[5] * 0.5;
         const expectedZ = element[2] - style.frontSweep * (0.75 + planformIndex * 0.10);
-        const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
+        // buildComplete, not build: the wing's top elements are ACTIVE AERO and are
+        // drawn separately so they can rotate, so the render mesh no longer holds
+        // them. buildComplete merges them back at their CLOSED pose, which is
+        // vertex-for-vertex the wing this test was written against.
+        const mesh = Car3D.buildComplete([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
           noWheels: true,
           parts: { aero: 1, _visual: { aero: style } },
         });

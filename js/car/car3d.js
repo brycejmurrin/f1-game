@@ -624,6 +624,187 @@ const Car3D = (function () {
       rear: profile(-2.69, cy + 0.015, sy),
     };
   }
+  // ACTIVE AERO — the wing's OWN top elements, made moveable.
+  //
+  // These are NOT extra parts laid over the wing (the first cut of this was, and
+  // it looked exactly like what it was: a bolt-on). The top FW_MOVEABLE flaps of
+  // the front cascade and the top plane of the rear wing are LEFT OUT of the
+  // baked car mesh entirely and drawn instead as separate meshes that rotate —
+  // so the car at rest is geometrically identical to before, and X-mode rotates
+  // the real elements flat.
+  //
+  // Each spec is canonical: hinge at the ORIGIN with the chord running back
+  // along -z at zero incidence. `zAngle` is the element's own natural incidence
+  // (so drawing at zAngle reproduces the baked pose exactly) and `xAngle` is 0 —
+  // "open" means aligned with the airflow, not merely less steep.
+  const FW_MOVEABLE = 2;
+  const AERO_STYLE_DEF = { frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
+                           rearSweep: 0.03, rearTaper: 0.98 };
+  // The front cascade table — the SINGLE definition, consumed both by the build
+  // (for the elements it still bakes) and by aeroFlapsGeom (for the ones it
+  // does not). [zLead, yLead, zTrail, yTrail, chordWMul, thick].
+  // NB aLvl is NOT an integer — several catalog options use fractional levels
+  // (1.15, 3.25, 3.6 …) and the wing build compares them raw. Truncating here
+  // silently gave those options a different endplate height and half-span than
+  // the mesh they were merged into.
+  function frontCascade(aLvl) {
+    const a = aLvl;
+    const els = [
+      [2.72, 0.048, 2.40, 0.086, 1.00, 0.032],   // main plane (structure, never moves)
+      [2.50, 0.092, 2.24, 0.146, 0.98, 0.028],   // flap 1
+    ];
+    if (a >= 1) els.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.026]);   // flap 2
+    if (a >= 3) els.push([2.20, 0.210, 1.98, 0.282, 0.92, 0.024]);   // flap 3
+    if (a >= 4) els.push([2.08, 0.286, 1.88, 0.358, 0.88, 0.022]);   // flap 4
+    return els;
+  }
+  // How many of them the mesh still bakes. Never the main plane.
+  function frontBakedCount(aLvl) {
+    const n = frontCascade(aLvl).length;
+    return n - Math.min(FW_MOVEABLE, n - 1);
+  }
+  function frontHalf(aLvl) {
+    // Same comparisons the build uses, on the RAW level: `aLvl === 1` is false
+    // for 1.15, which is exactly the distinction a truncation destroys.
+    return 0.92 * (aLvl <= 0 ? 0.74 : (aLvl === 1 ? 0.88 : 1.0));
+  }
+  // Extra incidence the CLOSED (Z-mode) pose takes on top of the element's own
+  // baked angle. Without it the travel is only the element's natural 12-16 deg,
+  // which is accurate but barely reads; with it a downforce wing is visibly
+  // steeper AND has real angle to give back when it opens.
+  const Z_BITE = 0.20;
+  // Underside of the NOSE where it overhangs the front wing, as (z, y) samples
+  // measured off the built body. This is a hard ceiling: at max downforce the
+  // baked top flap already passes within ~12 mm of it, so an unconditional bite
+  // swings that element straight through the nose. Outside this z band nothing
+  // overhangs the wing, hence the Infinity guards.
+  const NOSE_UNDER = [[1.96, Infinity], [2.00, 0.294], [2.10, 0.414], [2.16, Infinity]];
+  const NOSE_GAP = 0.008;        // m of daylight to keep under it
+  function noseUnderAt(z) {
+    if (z <= NOSE_UNDER[0][0] || z >= NOSE_UNDER[NOSE_UNDER.length - 1][0]) return Infinity;
+    for (let i = 1; i < NOSE_UNDER.length; i++) {
+      const [z1, y1] = NOSE_UNDER[i], [z0, y0] = NOSE_UNDER[i - 1];
+      if (z <= z1) {
+        if (!isFinite(y0)) return y1;
+        if (!isFinite(y1)) return y0;
+        return y0 + (y1 - y0) * (z - z0) / (z1 - z0);
+      }
+    }
+    return Infinity;
+  }
+  // A hinged wing element. The mesh is emitted by the SAME addWingPlanform call
+  // the baked wing used, merely translated so the hinge (the leading edge) is at
+  // the origin — so the angles here are DELTAS from the element's own baked
+  // incidence, not absolute attitudes. That matters: at delta 0 the element is
+  // byte-for-byte the one the mesh used to contain. Building it flat and
+  // rotating instead (the first attempt) displaced every vertex by up to 172 mm,
+  // because addWingPlanform's rise/sweep/thickness terms are applied in the CAR
+  // frame and a whole-element rotation drags them off-axis with it.
+  //
+  // zAngle is the extra bite the closed pose takes on, CLAMPED per element to
+  // that element's own headroom under the nose, so a closed wing is as steep as
+  // it can be without any part of it entering the bodywork. xAngle is -natural:
+  // rotating back by exactly the baked incidence lands the element FLAT.
+  function hinged(id, wing, zLead, yLead, zTrail, yTrail, planform) {
+    const dz = zLead - zTrail, dy = yTrail - yLead;
+    const chord = Math.sqrt(dz * dz + dy * dy);
+    const natural = Math.atan2(dy, dz);
+    let bite = Z_BITE;
+    if (wing === "front") {
+      const ceil = noseUnderAt(zLead - chord * Math.cos(natural + bite)) - NOSE_GAP;
+      if (isFinite(ceil)) {
+        const maxSin = Math.max(-1, Math.min(1, (ceil - yLead) / chord));
+        bite = Math.max(0, Math.min(bite, Math.asin(maxSin) - natural));
+      }
+    }
+    return Object.assign({
+      id, wing,
+      z: zLead, y: yLead,        // hinge = the leading edge, in car-local metres
+      chord, natural,
+      le: [zLead, yLead], te: [zTrail, yTrail],   // what buildFlapGeom emits
+      zAngle: bite,              // closed: the baked pose plus whatever bite fits
+      xAngle: -natural,          // open: rotated back to flat
+    }, planform);
+  }
+  function aeroFlapsGeom(aLvl, style) {
+    const a = aLvl, st = style || AERO_STYLE_DEF;
+    const frontSweep = Math.max(-0.08, Math.min(0.22, st.frontSweep));
+    const frontTaper = Math.max(0.72, Math.min(1.08, st.frontTaper));
+    const frontRise = Math.max(-0.03, Math.min(0.16, st.frontRise));
+    const rearSweep = Math.max(-0.06, Math.min(0.20, st.rearSweep));
+    const rearTaper = Math.max(0.72, Math.min(1.08, st.rearTaper));
+    const els = frontCascade(a), baked = frontBakedCount(a), fwHalf = frontHalf(a);
+    const out = [];
+    for (let i = baked; i < els.length; i++) {
+      const e = els[i];
+      out.push(hinged("front" + i, "front", e[0], e[1], e[2], e[3], {
+        half: fwHalf * e[4], thick: e[5], taper: frontTaper,
+        sweep: frontSweep * (0.75 + i * 0.10),
+        rise: frontRise * (0.65 + i * 0.12),
+        attachHalf: fwHalf + 0.03,
+        // The bold outboard upsweep hangs off the TOP element's trailing edge.
+        // That element is always one of the moveable ones, so the kick has to
+        // travel WITH it — anchoring it to the top still-baked element instead
+        // (an earlier attempt) silently moved it 172 mm on the car at rest.
+        upsweep: i === els.length - 1 ? { fwHalf, e } : null,
+      }));
+    }
+    // Rear: the 2026 rule is that every element EXCEPT the bottom mainplane
+    // rotates, so on a three-plane wing the top two move and the mainplane is
+    // structure. Below aLvl 2 the wing only has two planes, so only the top one
+    // moves — still "all but the mainplane".
+    // The slot height depends on `drs` as well as the level — the build reserves
+    // it with (aLvl >= 4 || aDrs), so dropping drs here would leave the plane
+    // floating 75 mm off its own slot on every DRS-option car.
+    const ep = endplateGeom(a), crownY = ep.rear.top - 0.018;
+    const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
+    if (a >= 2) {
+      out.push(hinged("rearMid", "rear", -2.34, upperTrailY - 0.170, -2.56, upperTrailY - 0.115, {
+        half: 0.51, thick: 0.030, taper: rearTaper, sweep: rearSweep * 0.9, attachHalf: 0.50, rise: 0,
+      }));
+    }
+    out.push(hinged("rear", "rear", -2.38, upperTrailY - 0.075, -2.64, upperTrailY, {
+      half: 0.51, thick: 0.035, taper: rearTaper, sweep: rearSweep, attachHalf: 0.50, rise: 0,
+    }));
+    return out;
+  }
+  // Geometry for ONE moveable element, in its canonical hinge frame. Built by
+  // the SAME planform emitter the baked wing uses, so a flap drawn at its zAngle
+  // is the element the mesh would otherwise have contained.
+  function buildFlapGeom(el, col) {
+    const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+    // The element exactly as the wing build emits it...
+    addWingPlanform(out, {
+      zLead: el.le[0], yLead: el.le[1], zTrail: el.te[0], yTrail: el.te[1],
+      half: el.half, thick: el.thick, taper: el.taper,
+      sweep: el.sweep, rise: el.rise, attachHalf: el.attachHalf,
+    }, col, SURFACES.paint);
+    // ...plus, on the top element, the outboard upsweep that flicks off its
+    // trailing edge into the endplate — same two spans the wing build used to
+    // emit, so the flick travels with the flap rather than being left behind.
+    if (el.upsweep) {
+      const { fwHalf, e } = el.upsweep;
+      for (const sgn of [-1, 1]) {
+        addSpan(out, { z: e[2], x: sgn * (fwHalf * e[4] - 0.05), y: e[3], w: 0.16, h: e[5] * 1.5 },
+                     { z: e[2] - 0.04, x: sgn * (fwHalf + 0.02), y: e[3] + 0.085, w: 0.09, h: e[5] * 1.6 }, col);
+      }
+    }
+    // ...then moved so its hinge sits at the origin, which is all the draw needs
+    // to rotate it in place. Nothing about the element's own shape is rebuilt.
+    for (let i = 0; i < out.pos.length; i += 3) {
+      out.pos[i + 1] -= el.y;
+      out.pos[i + 2] -= el.z;
+    }
+    return out;
+  }
+  // Mid-chord of a wing's moveable section, car-local metres — what the GARAGE
+  // wing views aim at. For the multi-element front it is the group midpoint.
+  function aeroFlapAim(aLvl, wing, style) {
+    const els = aeroFlapsGeom(aLvl, style).filter((e) => e.wing === wing);
+    let y = 0, z = 0;
+    for (const e of els) { y += e.y; z += e.z - e.chord * 0.5; }
+    return [0, y / els.length, z / els.length];
+  }
   // The driver-number board on the endplate: a fixed-height board anchored LOW,
   // its bottom a small gap above the plate base. The plate base barely moves with
   // DF (~0.46 → 0.51) while the top shoots up, so a low anchor reads grounded on
@@ -1026,6 +1207,12 @@ const Car3D = (function () {
     const gbStyle = design.gearbox;
     const fuelStyle = design.fuel;
     const aeroStyle = design.aero;
+    // ACTIVE AERO bookkeeping: the top wing elements are deliberately NOT baked
+    // into this mesh (see aeroFlapsGeom). Record exactly what they need so no
+    // consumer has to re-derive the level/style/colour and risk disagreeing with
+    // the wing this build actually produced. buildComplete() below is the "whole
+    // car" view for anything that wants the elements merged back in.
+    out.flapInfo = null;   // filled in once wingC/aLvl are resolved, below
     const exhStyle = design.exhaust;
     const floorStyle = design.floor;
     const cockpitStyle = design.cockpit;
@@ -1688,6 +1875,9 @@ const Car3D = (function () {
     const aeroT = tier("aero");
     const aLvl = aeroStyle && aeroStyle.lvl != null
       ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
+    // Everything buildComplete() needs to merge the moveable elements back in,
+    // taken from the values THIS build resolved rather than re-derived.
+    out.flapInfo = { aLvl, style: aeroStyle, col: wingC };
 
     // rear-wing endplate driver-number BOARD — placed by numberBoard(aLvl) so it
     // sits low on the plate at every downforce level (the game.js number decal
@@ -1718,17 +1908,13 @@ const Car3D = (function () {
     // separated by a visible slot gap. The outer thirds sweep UP boldly into tall
     // arched endplates that flick outboard (2026-style outwash). Element count +
     // span + endplate/canard size grow with aLvl. Half-span reaches fwHalf.
-    const fwSpan = aLvl <= 0 ? 0.74 : (aLvl === 1 ? 0.88 : 1.0);
-    const fwHalf = 0.92 * fwSpan;                 // half-span (endplate sits just outside)
-    // [zLead, yLead, zTrail, yTrail, chordWMul, thick, colour] — stacked front→back.
-    const fwElems = [
-      [2.72, 0.048, 2.40, 0.086, 1.00, 0.032, c1],   // main plane (wide, near-flat, team base)
-      [2.50, 0.092, 2.24, 0.146, 0.98, 0.028, wingC], // flap 1 (livery `wing` colour, else c2)
-    ];
-    if (aLvl >= 1) fwElems.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.026, wingC]); // flap 2
-    if (aLvl >= 3) fwElems.push([2.20, 0.210, 1.98, 0.282, 0.92, 0.024, wingC]); // flap 3
-    if (aLvl >= 4) fwElems.push([2.08, 0.286, 1.88, 0.358, 0.88, 0.022, wingC]); // flap 4 (max DF)
-    for (let i = 0; i < fwElems.length; i++) {
+    const fwHalf = frontHalf(aLvl);               // half-span (endplate sits just outside)
+    // Element table lives in frontCascade() so the ACTIVE-AERO code and this
+    // build agree by construction. The top FW_MOVEABLE flaps are NOT baked —
+    // drawAeroFlaps() draws them so they can rotate (see aeroFlapsGeom).
+    const fwElems = frontCascade(aLvl);
+    const fwBaked = frontBakedCount(aLvl);
+    for (let i = 0; i < fwBaked; i++) {
       const e = fwElems[i], half = fwHalf * e[4];
       addWingPlanform(out, {
         zLead: e[0], yLead: e[1], zTrail: e[2], yTrail: e[3],
@@ -1736,15 +1922,11 @@ const Car3D = (function () {
         sweep: frontSweep * (0.75 + i * 0.10),
         rise: frontRise * (0.65 + i * 0.12),
         attachHalf: fwHalf + 0.03,
-      }, e[6], SURFACES.paint);
+      }, i === 0 ? c1 : wingC, SURFACES.paint);
     }
-    // Bold outboard upsweep: the top flap kicks sharply upward as it meets the
-    // endplate — a much more pronounced flick than a flat trailing edge.
-    const topE = fwElems[fwElems.length - 1];
-    for (const s of [-1, 1]) {
-      addSpan(out, { z: topE[2], x: s * (fwHalf * topE[4] - 0.05), y: topE[3], w: 0.16, h: topE[5] * 1.5 },
-                   { z: topE[2] - 0.04, x: s * (fwHalf + 0.02),    y: topE[3] + 0.085, w: 0.09, h: topE[5] * 1.6 }, topE[6]);
-    }
+    // The bold outboard upsweep is emitted with the TOP element instead (see
+    // aeroFlapsGeom's `upsweep`), because that element is ACTIVE AERO: the kick
+    // is part of the flap and has to rotate with it.
     // Endplate PROFILE (`plate`): 0 slim low-drag fence · 1 the shipped outwash
     // flick · 2 a tall arched footplate with a bridging spar over its crown. The
     // front wing is the first thing a chase camera sees, so this is the loudest
@@ -1860,12 +2042,13 @@ const Car3D = (function () {
         }, col, SURFACES.paint);
       rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
         0.51, 0.032, c1, 0.8);
-      if (aLvl >= 2) {
-        rearWing(-2.34, upperTrailY - 0.170, -2.56, upperTrailY - 0.115,
-          0.51, 0.030, wingC, 0.9);
-      }
-      rearWing(-2.38, upperTrailY - 0.075, -2.64, upperTrailY,
-        0.51, 0.035, wingC, 1.0);
+      // The middle plane is ACTIVE AERO as well — see aeroFlapsGeom's "rearMid".
+      // Only the mainplane above stays baked, which is exactly the 2026 rule:
+      // every rear element except the bottom mainplane rotates.
+      // The TOP rear plane is ACTIVE AERO and is drawn by drawAeroFlaps(), not
+      // baked here — see aeroFlapsGeom's "rear" entry, which reproduces exactly
+      // the rearWing(-2.38, upperTrailY - 0.075, -2.64, upperTrailY, …) element
+      // this line used to emit.
       // Wing mount. Default: slim pylons sweeping UP and BACK from the rear crash
       // structure to the underside of the main plane — this is what visually hangs
       // the wing off the car (previously the mount sat above the plane, so the
@@ -2114,11 +2297,41 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+  // The WHOLE car in its REFERENCE pose: the baked mesh plus the moveable wing
+  // elements merged in at delta 0 — each element exactly where the fixed wing
+  // used to have it, vertex for vertex, at every downforce level. build() alone
+  // is the RENDER mesh (the elements are drawn separately so they can rotate);
+  // this is the geometric one, and it is what a question like "does the wing
+  // reach its endplates" or "how many triangles is this car" is really asking.
+  //
+  // Deliberately NOT the runtime closed pose, which carries Z_BITE on top: that
+  // is an attitude, and rotating an element about its own hinge cannot change
+  // the span, taper or endplate attachment this view exists to check.
+  function buildComplete(color, color2, opts) {
+    const out = build(color, color2, opts);
+    const info = out.flapInfo;
+    if (!info) return out;
+    for (const el of aeroFlapsGeom(info.aLvl, info.style)) {
+      const g = buildFlapGeom(el, info.col);
+      const base = out.pos.length / 3;
+      for (let i = 0; i < g.pos.length; i += 3) {
+        // delta 0: undo only the hinge translation buildFlapGeom applied.
+        out.pos.push(g.pos[i], g.pos[i + 1] + el.y, g.pos[i + 2] + el.z);
+        out.nrm.push(g.nrm[i], g.nrm[i + 1], g.nrm[i + 2]);
+        out.col.push(g.col[i], g.col[i + 1], g.col[i + 2]);
+      }
+      if (g.mat) for (const m of g.mat) out.mat.push(m);
+      for (const k of g.idx) out.idx.push(base + k);
+    }
+    return out;
+  }
+
+  return { build, buildComplete, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, teamStyleOf,
            endplate: endplateGeom, numberBoard,
+           aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
            sharkFin: FIN, sharkFinPanel, sharkFinBadge,
            aeroLevelOf };
 })();

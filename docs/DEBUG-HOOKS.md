@@ -649,6 +649,41 @@ player isn't initialised yet.
 Toggle the player's ERS boost flag (`player.boostOn`) for tests/screenshots.
 Returns the new boost state, or `false` if no player is loaded.
 
+### `aero(on?) → {xOn, xArmed, aeroX, mode} | null`
+ACTIVE AERO — the 2026 X-mode / Z-mode moveable wing. No argument reads the
+state; a boolean requests or drops X-mode, exactly like pressing `Z` in-game.
+Returns `null` if no player is loaded.
+
+| Field | Meaning |
+|---|---|
+| `aeroX` | flap TRAVEL, 0 (Z-mode, full downforce) → 1 (X-mode, low drag). **This is what the physics reads.** |
+| `xOn` | the switch: is X-mode requested |
+| `xArmed` | is X-mode available here at all (≈3 s of straight road ahead, not braking, on track, above ~25 m/s) |
+| `mode` | `"X"` once the flap is off its stop, else `"Z"` |
+
+Requesting X-mode does NOT force the flaps open — `xArmed` still gates it, so on
+a corner this returns `xOn:false` and `aeroX` stays 0. That is the mechanic, not
+a failure. The flap also travels: it opens over ~0.45 s and shuts in ~0.12 s, so
+poll `aeroX` rather than assuming the switch took effect on the same tick.
+
+```js
+__apex.aero(true);              // request X-mode
+__apex.act({throttle:true}, 1/60, 60);
+__apex.aero();                  // → {xOn:true, xArmed:true, aeroX:1, mode:"X"}
+```
+
+Both wings move, and so does more than one element on each: per the 2026 rules
+every wing element except the mainplane rotates. At the default downforce level
+`aeroX` swings four — the front cascade's top two flaps (23 deg / 26 deg) and
+the rear wing's top two planes (26 deg / 28 deg) — on every car on track, in
+cockpit view, and on the GARAGE turntable (the ACTIVE AERO button there).
+
+X-mode is worth ~+7.5 % top speed and costs ~55 % of the aero-downforce term
+(`DOWNFORCE` in `js/game.js`) — it is the only one of the three straight-line
+levers that spends cornering grip instead of battery. `aeroX`/`xOn`/`xArmed`
+also appear in `obs()`, `physState()` and `carAt(i)`; `cars()` carries the flap
+travel as the short key `ax`.
+
 ### `setLap(n) → {lap} | false`
 Override the player's lap counter (integer ≥ 0) without resetting lap time or
 sector state. Useful for triggering end-of-race logic (`n = lapsTarget`) and
