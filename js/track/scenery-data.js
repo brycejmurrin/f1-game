@@ -226,6 +226,34 @@ const TrackSceneryData = (function () {
     miami:     { neon: [NC.pink, NC.cyan, NC.teal, NC.orange, NC.purple], bias: 0.44, fh: [11, 30], bh: [28, 68],
                  kinds: ["setback", "podium", "slab", "cylinder", "twin", "dome", "chevron", "drum", "hall"], neonKinds: ["clad", "screen"], tone: { n: [0.15, 0.14, 0.18], d: [0.58, 0.60, 0.64] },
                  dayPal: [DC.cream, DC.white, DC.peach, DC.pink, DC.aqua, DC.mint, DC.lemon] },
+    // ── The six circuits that used to fall through to THEME_DEF.modern ──
+    // A missing STYLES entry is not neutral: every "modern"/"street_*" circuit
+    // without one drew the SAME generic cool-glass city, so six venues on three
+    // continents shared one skyline. These are all low-rise, none of them a
+    // downtown, and the point of each is what the buildings are MADE of.
+    // Catalan industrial park: Montmelo is warehouses and low render, not glass.
+    catalunya:   { neon: [NC.gold, NC.red, NC.white, NC.orange], bias: 0.14, fh: [8, 18], bh: [14, 30],
+                 kinds: ["hall", "slab", "podium", "setback", "chevron", "fin"], neonKinds: [], tone: { n: [0.20, 0.19, 0.17], d: [0.80, 0.78, 0.70] },
+                 dayPal: [DC.white, DC.cream, DC.sand, DC.terra, DC.ochre, DC.stone, DC.tan] },
+    // Estoril: Atlantic resort town — whitewash and terracotta, low and bright.
+    estoril:     { neon: [NC.white, NC.gold, NC.teal, NC.rose], bias: 0.12, fh: [8, 16], bh: [12, 26],
+                 kinds: ["setback", "chevron", "hall", "podium", "dome", "tiered"], neonKinds: [], tone: { n: [0.21, 0.20, 0.18], d: [0.86, 0.82, 0.72] },
+                 dayPal: [DC.white, DC.cream, DC.peach, DC.terra, DC.sand, DC.paleblue, DC.pink] },
+    // Speedway apron: red brick, steel sheds, water towers. Midwest, not modern.
+    indianapolis:{ neon: [NC.white, NC.red, NC.gold, NC.blue], bias: 0.10, fh: [7, 15], bh: [11, 24],
+                 kinds: ["hall", "slab", "chevron", "drum", "setback", "cross"], neonKinds: [], tone: { n: [0.19, 0.16, 0.15], d: [0.66, 0.52, 0.44] },
+                 dayPal: [DC.brick, DC.white, DC.steel, DC.terra, DC.stone, DC.concrete, DC.paleblue] },
+    // Rio: saturated render over the Barra flats, nothing corporate anywhere.
+    jacarepagua: { neon: [NC.green, NC.gold, NC.cyan, NC.white], bias: 0.16, fh: [8, 20], bh: [14, 34],
+                 kinds: ["setback", "slab", "podium", "hall", "chevron", "tiered"], neonKinds: [], tone: { n: [0.18, 0.19, 0.17], d: [0.78, 0.74, 0.64] },
+                 dayPal: [DC.cream, DC.white, DC.paleblue, DC.peach, DC.steel, DC.aqua, DC.coral] },
+    // No paul_ricard entry on purpose: Le Castellet excludes the city generator
+    // lap-wide ({kind:"city", s0:0, s1:1}) because a procedural skyline around
+    // an airfield plateau is wrong. A STYLES entry there would be dead config.
+    // Olympic Park: monumental civic slabs and arena drums, widely spaced.
+    sochi:       { neon: [NC.white, NC.blue, NC.red, NC.gold, NC.cyan], bias: 0.24, fh: [12, 30], bh: [22, 52],
+                 kinds: ["drum", "cross", "slab", "dome", "podium", "arch", "cylinder"], neonKinds: ["clad"], tone: { n: [0.15, 0.16, 0.19], d: [0.70, 0.71, 0.74] },
+                 dayPal: [DC.white, DC.paleblue, DC.steel, DC.bluglass, DC.stone, DC.concrete, DC.greyblue] },
   };
 
   const THEME_DEF = {
