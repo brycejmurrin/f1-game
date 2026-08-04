@@ -423,6 +423,16 @@ backend, HDR/MSAA/render scale, plus `info`, `assets`, `lightTune`,
 errors — and downloads it as `apex-diag.json`. `diag({download:false})` logs
 without downloading. See [CONSOLE-RECIPES.md](CONSOLE-RECIPES.md).
 
+For a rendering complaint from a device you cannot reach, four keys carry most
+of the answer:
+
+| Key | Reads |
+|---|---|
+| `canvas` | CSS size vs backing-store size vs DPR. A backing store far below `css × dpr` **is** the blur, whatever else is true |
+| `perf` | PerfGov's `scale`/`fps`/`auto` and `tier`/`tierFloor`/`crashStrikes`. `tierFloor > 0` means features are withheld **on purpose** because this device crashed before — a shed feature, not a renderer fault |
+| `glCaps` | `colorFloat`/`colorHalf` (absent sheds the HDR post chain), `maxFragUnif`, and `lost` — a lost context explains a black screen that reads like a shader bug |
+| `stored` | the `apex26.*` overrides on that device: `lightTune`, `camTune`, `gfxBackend`, `debris`, `gfxHigh`, `resMode`, `forceMobileTier`, `envProbeOff`. Any of these beats every shipped default and lives only there, which is the exact shape of a bug that reproduces for one person and nobody else |
+
 ### `save(data, filename) → bytes`
 Hand a file out of the browser. Objects are JSON-stringified; strings and Blobs
 pass through. This is the reliable way to get state out of a real device —
@@ -1234,17 +1244,6 @@ race. Strikes now expire when the build number changes (`js/game/perf.js`);
 ```js
 __apex.safeMode();        // { strikes: 2, tierFloor: 4, tier: 4 }
 __apex.safeMode(false);   // forget the crash history, lift the floor now
-```
-
-### `diag() → {…}`
-Everything needed to explain a rendering complaint from a device you cannot
-reach: build, canvas CSS size vs backing-store size vs DPR, render scale, fps,
-PerfGov tier/floor/strikes, the WebGL renderer string and the float-target
-extensions, the live lighting values, and which `apex26.*` overrides are stored
-on that device. A backing store far below `css × dpr` **is** the blur; a
-`tierFloor > 0` means features are being withheld on purpose.
-```js
-__apex.diag();
 ```
 
 ### `f1api → F1API | null`
