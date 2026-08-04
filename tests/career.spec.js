@@ -1011,9 +1011,51 @@ test.describe("Career — determinism", () => {
   });
 
   test("a different seed produces a different career", async ({ page }) => {
-    const a = await seasonRun(page, 4242);
-    const b = await seasonRun(page, 777);
-    expect(b.briefs).not.toEqual(a.briefs);
+    // Read the brief sequence straight off Career.rnd rather than racing for it.
+    // seasonRun() stages a weekend and simulates 24 rounds, so doing it twice ran
+    // past the 120 s timeout — and this claim is about the DRAW, which needs no
+    // car on track. It also exercises the rnd finalizer directly: before that fix
+    // a whole season could come back as one brief repeated.
+    await boot(page);
+    const briefs = (seed) => page.evaluate((s) => {
+      window.__apex.careerReset();
+      window.__apex.career({ teamId: "haas", seat: 1, seed: s });
+      const out = [];
+      for (let r = 0; r < 24; r++) {
+        const o = Career.objectiveFor(r);
+        out.push(o.type + ":" + o.value);
+      }
+      return out;
+    }, seed);
+    const a = await briefs(4242);
+    const b = await briefs(777);
+    expect(a.length).toBe(24);
+    expect(b).not.toEqual(a);
+    // …and the same seed still reproduces itself, cheaply.
+    expect(await briefs(4242)).toEqual(a);
+  });
+
+  test("a season draws a spread of briefs, not one kind repeated", async ({ page }) => {
+    // The regression guard for the Career.rnd finalizer. FNV-1a alone left 100% of
+    // seasons missing at least one objective kind, because every key ends in the
+    // part that varies and FNV's last multiply barely disturbs the high bits —
+    // exactly the end h/2^32 reads. A uniform draw misses a kind ~2.4% of the time.
+    await boot(page);
+    const kinds = await page.evaluate(() => {
+      const seen = [];
+      for (let seed = 1; seed <= 40; seed++) {
+        window.__apex.careerReset();
+        window.__apex.career({ teamId: "haas", seat: 1, seed });
+        const s = new Set();
+        for (let r = 0; r < 24; r++) s.add(Career.objectiveFor(r).type);
+        seen.push(s.size);
+      }
+      return seen;
+    });
+    // Over 40 seasons almost all should see every kind; none should be stuck on one.
+    expect(Math.min(...kinds)).toBeGreaterThan(1);
+    const full = kinds.filter((n) => n >= 4).length;
+    expect(full).toBeGreaterThan(kinds.length * 0.7);
   });
 });
 
