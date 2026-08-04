@@ -720,8 +720,10 @@ test.describe("Parts module — visual recipes", () => {
         const ep = Car3D.endplate(level);
         const sweep = Math.max(-0.06, Math.min(0.20, style.rearSweep));
         const crownY = ep.rear.top - 0.018;
-        const expectedY = crownY - (level >= 4 || style.drs ? 0.075 : 0)
-          + 0.035 * 0.5;
+        // The trailing edge of the aerofoil section closes to zero thickness ON
+        // the chord line, so the tip vertex sits exactly at yTrail — the old
+        // flat sheet floated its single surface up by thick/2 instead.
+        const expectedY = crownY - (level >= 4 || style.drs ? 0.075 : 0);
         const expectedZ = -2.64 - sweep;
         // buildComplete, not build: the wing's top elements are ACTIVE AERO and are
         // drawn separately so they can rotate, so the render mesh no longer holds
@@ -771,11 +773,14 @@ test.describe("Parts module — visual recipes", () => {
     await load(page);
     const detached = await page.evaluate(() => {
       const aero = Parts.CATALOG.find((category) => category.id === "aero");
+      // Mirrors frontCascade() minus the mainplane. Flaps 3 and 4 sit 10 mm
+      // and 30 mm lower than they first shipped — the stack used to climb INTO
+      // the nose overhang (21 mm through it at max downforce).
       const elements = [
         [2.50, 0.092, 2.24, 0.146, 0.98, 0.028],
         [2.34, 0.148, 2.10, 0.212, 0.95, 0.026],
-        [2.20, 0.210, 1.98, 0.282, 0.92, 0.024],
-        [2.08, 0.286, 1.88, 0.358, 0.88, 0.022],
+        [2.20, 0.200, 1.98, 0.272, 0.92, 0.024],
+        [2.08, 0.256, 1.88, 0.328, 0.88, 0.022],
       ];
       return aero.options.flatMap((option) => {
         const style = option.visual, level = style.lvl;
@@ -783,8 +788,9 @@ test.describe("Parts module — visual recipes", () => {
         const element = elements[topIndex], planformIndex = topIndex + 1;
         const span = level <= 0 ? 0.74 : level === 1 ? 0.88 : 1;
         const endplateX = 0.92 * span + 0.03;
-        const expectedY = element[3] + style.frontRise * (0.65 + planformIndex * 0.12)
-          + element[5] * 0.5;
+        // Zero-thickness trailing edge, as above: the tip vertex is on the
+        // chord line at yTrail plus the tip rise.
+        const expectedY = element[3] + style.frontRise * (0.65 + planformIndex * 0.12);
         const expectedZ = element[2] - style.frontSweep * (0.75 + planformIndex * 0.10);
         // buildComplete, not build: the wing's top elements are ACTIVE AERO and are
         // drawn separately so they can rotate, so the render mesh no longer holds

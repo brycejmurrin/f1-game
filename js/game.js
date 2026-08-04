@@ -1436,7 +1436,12 @@ function teamDecalState(team, usePlayerSetup) {
   if (c && c.rev === rev) return c;
   const setup = usePlayerSetup ? getTeamParts(team.id) : Parts.getFactorySetup(team);
   const parts = Parts.getVisualTiers(setup, team);
-  const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2, parts, rev };
+  // aero: the resolved RECIPE, resolved once here for every flap consumer.
+  // parts.aero is the tier NUMBER — passing that to Car3D.aeroFlaps() NaN'd
+  // every flap vertex and made the moveable wings invisible (see aeroStyleOf).
+  const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
+                  aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
+                  parts, rev };
   _aeroLevelCache.set(key, state);
   return state;
 }
@@ -1605,7 +1610,7 @@ function drawCockpitRig(c, base, dt, paint) {
   // this build at all, hence "front" only.
   if (!carModelBuf) {
     const aSt = teamDecalState(c.team, c.isPlayer);
-    drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, base, paint, aSt.parts && aSt.parts.aero, "front");
+    drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, base, paint, aSt.aero, "front");
   }
   // Forward decal: the driver number on the nose plate ahead of the driver (the
   // nose is identical to the chase build, so this lands exactly on the plate).
@@ -2293,7 +2298,7 @@ const G = {
   // a null style tests a car nobody is driving.
   setupFlapArgs: () => {
     const aSt = teamDecalState(Teams.LIST[teamIdx], true);
-    return { aLvl: aSt.val, style: (aSt.parts && aSt.parts.aero) || null };
+    return { aLvl: aSt.val, style: aSt.aero || null };
   },
   setSetupAero: (on) => setSetupAero(on),
   get setupPreviewXOn() { return setupPreviewXOn; },
@@ -4286,7 +4291,7 @@ const SP_PAN_X = 2.2, SP_PAN_Z = 3.4;
 // the player's own AERO part instead of a fixed guess.
 function flapAimPoint(which) {
   const aSt = teamDecalState(Teams.LIST[teamIdx], true);
-  return Car3D.aeroFlapAim(aSt.val, which, aSt.parts && aSt.parts.aero);
+  return Car3D.aeroFlapAim(aSt.val, which, aSt.aero);
 }
 function setSetupView(name) {
   const v = SP_VIEWS[name];
@@ -4511,7 +4516,7 @@ function renderSetupPreview(dt) {
   {
     const aSt = teamDecalState(Teams.LIST[teamIdx], true);
     drawAeroFlaps(Teams.LIST[teamIdx], aSt.val, setupPreviewAeroX, MAT_REFLECT_X, spMat,
-      aSt.parts && aSt.parts.aero);
+      aSt.aero);
   }
   drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false,
     carDecalNum(Teams.LIST[teamIdx], null), false, true);
@@ -5602,7 +5607,7 @@ function render(dt) {
     // a loaded GLB body, whose wings are somebody else's geometry.
     if (!carModelBuf) {
       const aSt = teamDecalState(c.team, c.isPlayer);
-      drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.parts && aSt.parts.aero);
+      drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
     }
     // Rear LED: FIA rain-light strobe in the wet (~4 Hz, 55% duty), and STEADY
     // at night — a car's rear/vertical faces receive none of the downward-aimed
