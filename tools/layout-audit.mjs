@@ -144,7 +144,10 @@ const PROBE = (rootSel) => {
   };
 
   const out = {
-    viewport: { w: vw, h: vh, dpr: devicePixelRatio },
+    // NOT `viewport`: the cell already carries the viewport's NAME, and
+    // Object.assign(cell, probe) would overwrite it with this box — which is
+    // exactly what happened, leaving every row keyed "[object Object]".
+    box: { w: vw, h: vh, dpr: devicePixelRatio },
     bodyClass: [...document.body.classList].join(" "),
     rootPresent: !!root && visible(root),
     clipped: [], offscreen: [], smallTaps: [], truncated: [], scrollers: [],
