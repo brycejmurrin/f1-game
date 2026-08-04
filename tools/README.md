@@ -85,6 +85,10 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   (`npm run rtc:e2e-3p`, or `rtc:e2e-3p-relay` to force every pair through
   TURN — the leg a developer never exercises and a phone behind
   carrier-grade NAT always does).
+- `turn-local.cjs` — a TURN server on localhost, which is what makes that relay
+  mode testable at all: on one machine ICE forms a direct pair instantly and
+  TURN is never touched. Needs `npm i --no-save node-turn` — a test fixture,
+  deliberately not a dependency. See its header for a known, unattributed drop.
   Covers the one path nothing else can: the loopback transport has no SDP, and
   the lobby spec uses a fake transport because a real `RTCPeerConnection` never
   finishes ICE gathering in a sandboxed CI browser. Deliberately outside every
