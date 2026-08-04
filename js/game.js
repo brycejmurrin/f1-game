@@ -418,11 +418,22 @@ const DEPLOY_A = 3.0;       // extra accel from electric deploy
 const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed band
                                      //   (a vStd() band — pace-normalised, so the
                                      //   taper sits at the same place on the dial)
+// Deploy strength 0..1 for a car holding BOOST (or running OVERTAKE). The taper
+// makes deploy strongest out of slow corners, but it is FLOORED: it used to
+// reach exactly 0 above TAPER_HI, which is only 191 km/h, so on any straight
+// BOOST produced no thrust — and because the drain was gated on `deploy > 0`,
+// it also cost nothing. Holding BOOST at speed did literally nothing, while
+// OVERTAKE (which bypasses the taper) worked and drained. Real ERS deploys all
+// the way down the straight; so does this now, at reduced strength.
+const TAPER_FLOOR = 0.35;
+function deployTaper(c) {
+  if (c.otT > 0) return 1;
+  const t = clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
+  return TAPER_FLOOR + (1 - TAPER_FLOOR) * t;
+}
 function isErsDeploying(c) {
   if (!c || c.energy <= 0 || !(c.boostOn || c.otT > 0)) return false;
-  const taper = c.otT > 0 ? 1 :
-    clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
-  return DEPLOY_A * taper > 0.4;
+  return DEPLOY_A * deployTaper(c) > 0.4;
 }
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
@@ -2316,12 +2327,11 @@ function updateCar(c, dt, ranked) {
     : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25))
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   if (wantBoost && c.energy > 0) {
-    const taper = c.otT > 0 ? 1 : clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
-    deploy = DEPLOY_A * taper;
-    // Only drain the battery when deploy actually produces thrust. Above the taper
-    // band (with no OT active) deploy is 0, so holding BOOST there must not silently
-    // waste ERS for zero benefit.
-    if (deploy > 0) c.energy = Math.max(0, c.energy - DRAIN * dt);
+    deploy = DEPLOY_A * deployTaper(c);
+    // Deploy always produces thrust while held (see deployTaper), so it always
+    // costs energy. The battery and the push are the same switch — a BOOST that
+    // drains nothing is a BOOST that does nothing.
+    c.energy = Math.max(0, c.energy - DRAIN * dt);
     c.deploying = deploy > 0.4;
     if (c.energy <= 0) c.boostOn = false;   // auto-release the toggle when drained
   } else c.deploying = false;
