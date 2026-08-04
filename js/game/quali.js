@@ -37,10 +37,39 @@ const Quali = (function () {
 // simulation well under a frame even on a slow phone.
 const STEP = 4;
 
-// A flying lap is not a race stint: tyres are fresh, the car is light, and the
-// driver is taking one committed run at it. Race pace sits a few percent off
-// qualifying pace, and this is the factor that separates them.
-const QUALI_TRIM = 1.035;
+// The one calibration constant: it scales the straight-line ceiling the model
+// integrates against, so it sets where the simulated field sits relative to a lap
+// actually driven in this game.
+//
+// MEASURED, and the guess it replaced was 27% out. This shipped at 1.035, reasoned
+// from "a flying lap is a few percent quicker than a race stint" — but a
+// quasi-steady model drives the theoretical friction limit, and the AI does not: it
+// carries margin, brakes early, and does not take the optimal line. That gap is
+// what this closes, and it is far larger than the quali-versus-race delta the
+// original figure was reasoning about.
+//
+// Calibrated by letting the game's own AI race and comparing its BEST CLEAN LAP
+// (best of several — any single lap may be traffic-affected, and a qualifying lap
+// has no traffic) against what this model predicted for that same car:
+//
+//     1.035 -> model at 0.83 of the driven lap    (17% optimistic: pole unreachable)
+//     0.89  -> 0.895
+//     0.82  -> 0.930
+//     0.75  -> 0.976   <- here, and the fit now agrees with itself
+//
+// A ratio near 0.97 is the target: the simulated pole sits just inside the best lap
+// the AI actually manages, so a player matching AI pace qualifies mid-field and
+// pole is achievable but has to be earned. Above 1.0 would hand out free poles.
+//
+// The spread across circuits is sd 0.012-0.03, and THAT is the load-bearing result:
+// the model's shape is right — it reads track character on its own — so one
+// constant calibrates every circuit rather than each needing a reference lap.
+//
+// The response is sublinear (much of a lap is cornering-limited by
+// sqrt(latMax/k), which this does not scale), so do not solve for it
+// algebraically. Re-measure with artifacts/tmp/quali-calibrate.mjs — it reads this
+// constant and reports the fit — whenever the driving model changes.
+const QUALI_TRIM = 0.75;
 
 // How far a driver's one-lap execution can stray, before consistency scales it.
 // ±0.6% on a 90 s lap is a little over half a second — enough that the order is
