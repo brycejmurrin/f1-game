@@ -344,10 +344,14 @@
       //    work — which is precisely what Magny-Cours looked like on television.
       // =====================================================================
       {
-        const a = anchor(K(0.34), 1, 130);
+        // 46 m, not the 130 m this used to sit at: past ~60 m on this side the
+        // lap has come back round and the footprint lands on tarmac, so the
+        // whole farm was being dropped and the "only structures for miles"
+        // were nothing at all.
+        const a = anchor(K(0.34), 1, 46);
         const b = [a.r, a.u, a.t];
         modelGroup("magny-cours-ferme", {
-          center: vadd(a.c, a.u, 8), size: [36, 20, 62], basis: b,
+          center: vadd(a.c, a.u, 8), size: [36, 20, 62], basis: b, required: true,
         }, (stage) => {
           const stone = [0.80, 0.78, 0.70];
           stage._mat = MAT.STONE;
@@ -414,7 +418,7 @@
       // in the same pale render and blue trim as the pit garages. The circuit's
       // real reason for existing, sat right there in the field behind it.
       for (let i = 0; i < 4; i++) {
-        const a = anchor(K(0.062 + i * 0.016), 1, 66 + (i % 2) * 22);
+        const a = anchor(K(0.062 + i * 0.016), 1, 30 + (i % 2) * 16);
         const b = [a.r, a.u, a.t];
         modelGroup(`magny-cours-technopole-${i + 1}`, {
           center: vadd(a.c, a.u, 4), size: [26, 12, 40], basis: b,

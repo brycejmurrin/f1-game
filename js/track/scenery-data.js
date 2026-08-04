@@ -163,9 +163,16 @@ const TrackSceneryData = (function () {
     montreal:    { tree: "fir",   fol: [0.20, 0.42, 0.23], lamp: "none" },                 // lush island maple/conifer
     albert_park: { tree: "broad", fol: [0.28, 0.46, 0.22], lamp: "none" },                 // tidy Melbourne parkland
     // ── retired / off-calendar circuits (def `classic: true`) ──
+    // These matter more than they look. Without an entry a circuit falls back to
+    // FURN_DEF[theme] — mid-green broadleaf, and for `modern` a white "post"
+    // lamp — which puts 2020s street lighting on a 1996 pit straight and cancels
+    // the identity the bespoke planting in each scenery() is built around.
     indianapolis:  { tree: "broad", fol: [0.22, 0.42, 0.19], lamp: "post",  lc: [0.94, 0.96, 1.0] },  // clipped infield planting + service lighting
     buenos_aires:  { tree: "broad", fol: [0.30, 0.50, 0.24], lamp: "globe", lc: [1.0, 0.90, 0.68] },  // plátano avenues, city-park globes
     jacarepagua:   { tree: "palm",  fol: [0.18, 0.44, 0.20], lamp: "post",  lc: [1.0, 0.88, 0.62] },  // Rio coconut palm over restinga
+    estoril:       { tree: "broad", fol: [0.29, 0.36, 0.19], lamp: "none", sparse: true },  // grey-olive cork oak between the parasol pines
+    kyalami:       { tree: "broad", fol: [0.33, 0.38, 0.21], lamp: "none", sparse: true },  // grey-green thorn; sparse keeps the veld open
+    watkins_glen:  { tree: "broad", fol: [0.56, 0.30, 0.13], lamp: "none" },                // turning scarlet-brown — the fall reads or it doesn't
   };
 
   const FURN_DEF = {
@@ -325,6 +332,9 @@ const TrackSceneryData = (function () {
     indianapolis:  ["alu", "concrete", "darkSteel"],        // bare Speedway bleachers, no colour
     buenos_aires:  ["concrete", "scaffold", "pastel"],      // 1950s mass concrete + temporary tube
     jacarepagua:   ["concrete", "alu", "sandstone"],        // sun-bleached coastal concrete
+    estoril:       ["scaffold", "terracotta", "pastel"],    // period tube stands + one masonry terrace
+    kyalami:       ["sandstone", "orange", "concrete"],     // bleached masonry, red-oxide iron, raw terracing
+    watkins_glen:  ["scaffold", "alu", "concrete"],         // club-built timber/steel, no colour at all
   };
 
   return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF, STYLES, THEME_DEF, ATM, COL, STAND_LIVERIES, STAND_SETS, STAND_SET_DEF };
