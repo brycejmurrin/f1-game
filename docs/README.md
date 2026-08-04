@@ -62,6 +62,7 @@ describe paths not taken or plans only partly implemented.
 | [research/CIRCUIT-BRIEFING-DESIGN.md](research/CIRCUIT-BRIEFING-DESIGN.md) | Circuit-briefing feature design. |
 | [research/CIRCUIT-BRIEFING-UI-RESEARCH.md](research/CIRCUIT-BRIEFING-UI-RESEARCH.md) | Circuit-briefing UI research. |
 | [CONSOLE-RECIPES.md](CONSOLE-RECIPES.md) | Driving the deployed game from DevTools: `__apex.diag()`, browser gotchas, ready-made blocks. |
+| [LAYOUT-AUDIT.md](LAYOUT-AUDIT.md) | The screen x viewport matrix, and how `tools/layout-audit.mjs` measures every cell of it instead of trusting one screenshot. |
 | [research/RENDERING-IMPROVEMENTS.md](research/RENDERING-IMPROVEMENTS.md) | Renderer/geometry audit, measured budgets, ranked opportunities. |
 | [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md) | External model/texture/normal-map ingestion: CC0 asset APIs, a `MAT`-indexed texture array, offline bake tool. |
 | [research/EXTERNAL-MODEL-SOURCES.md](research/EXTERNAL-MODEL-SOURCES.md) | Where 3D models can come from (Poly Pizza / Sketchfab / Poly Haven / OSM), and why the bake must be offline. |
