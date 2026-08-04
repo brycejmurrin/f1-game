@@ -420,6 +420,13 @@ const api = {
       vmaxNow: +(G.player._vmaxNow || 0).toFixed(3),
       aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
       aeroDf: +G.aeroDfMult(G.player).toFixed(3),
+      // HOW BIG THE TRADE IS FOR THIS CAR. Both spans are scaled by the aero
+      // PART (Parts.aeroLoad, 0 = the smallest wing in the catalog, 1 = the
+      // biggest), because a big wing has more drag to shed and more downforce
+      // to lose. A car with no parts sits at 0.5.
+      aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),
+      xVmaxGain: +G.xVmaxGain(G.player).toFixed(4),
+      xDfLoss: +G.xDfLoss(G.player).toFixed(4),
     };
   },
   // Driving-boundary stats for the current track (both sides, all nodes): the
