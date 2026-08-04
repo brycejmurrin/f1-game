@@ -2570,11 +2570,11 @@ const AgentView = (function () {
       };
     }
 
-    // World XZ of a car. Only the player carries px/pz — AI cars live in (s, x)
-    // and have to be rebuilt through the Frenet frame, the same way carOrbit()
-    // does it in apex.js.
+    // World XZ of a car. Only HUMAN-driven cars carry px/pz — AI cars live in
+    // (s, x) and have to be rebuilt through the Frenet frame, the same way
+    // carOrbit() does it in apex.js.
     function carWorld(c) {
-      if (c.isPlayer && c.px != null) return [c.px, c.pz];
+      if (c.human && c.px != null) return [c.px, c.pz];
       Tracks.sample(G.track, c.s, scr);
       const rl = Math.hypot(scr.r[0], scr.r[2]) || 1;
       return [scr.p[0] + scr.r[0] / rl * c.x, scr.p[2] + scr.r[2] / rl * c.x];
