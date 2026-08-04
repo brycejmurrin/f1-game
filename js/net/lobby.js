@@ -1074,6 +1074,15 @@ const NetLobby = (function () {
         let first = invite.code;
         const sub = await NetRendezvous.hostRoom({
           code, token: codeWait,
+          // The room stays open, so a failure after it opens has nowhere else
+          // to go. Without this a host whose relays were all unreachable was
+          // told NOTHING and watched a spinner — the console knew, the player
+          // did not.
+          onFail: (r) => {
+            if (!r || r.error === "cancelled" || r.error === "stopped") return;
+            codeRoom = null;
+            say(r.message || "The room service went away. Use the invite link or QR instead.", true);
+          },
           onTick: () => say(sessions.size
             ? "In the room: " + (sessions.size + 1) + ". Still open (code " + code + ")"
             : "Waiting for them to join… (code " + code + ")"),

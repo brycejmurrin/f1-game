@@ -95,7 +95,7 @@ const NetNostr = (function () {
     // send/reply are the two-party pair this started as. mintOffer+onJoiner are
     // SUBSCRIPTION mode: a host that stays in the room and answers each arrival
     // with an offer of its own, rather than resolving on the first one.
-    const { code, send, reply, token, onTick, mintOffer, onJoiner } = opts;
+    const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail } = opts;
     if (!available()) {
       return { ok: false, error: "unsupported",
                message: "This browser cannot reach the room service." };
@@ -119,8 +119,25 @@ const NetNostr = (function () {
     const leave = () => { if (room) { try { room.leave(); } catch (e) {} room = null; } };
 
     return new Promise((resolve) => {
-      let done = false;
-      const finish = (r) => { if (done) return; done = true; clearInterval(tick); leave(); resolve(r); };
+      let done = false;        // torn down: room left, nothing more can happen
+      let settled = false;     // the promise has been answered
+      // SUBSCRIPTION MODE RESOLVES EARLY and the room stays open, so "answered"
+      // and "finished" stopped being the same event. Conflating them switched
+      // off every failure detector below — the relay-health probe and the join
+      // timeout both bail on `done` — so a host whose relays were all dead was
+      // told nothing and sat on a spinner forever. Reported from a real
+      // console: damus rate-limiting and nos.social timing out, with the page
+      // showing no error at all.
+      const finish = (r) => {
+        if (done) return;
+        done = true;
+        clearInterval(tick);
+        leave();
+        if (!settled) { settled = true; resolve(r); return; }
+        // Already answered, so the only way to report this is the callback the
+        // caller gave us.
+        if (onFail) { try { onFail(r); } catch (e) {} }
+      };
 
       const tick = setInterval(() => {
         if (token && token.cancelled) finish({ ok: false, error: "cancelled", message: "" });
@@ -217,12 +234,41 @@ const NetNostr = (function () {
             // RTCPeerConnection, so handing the same string to two people has
             // them both answering the same connection and one of them losing.
             // Targeted, so nobody else in the room even sees it.
+            //
+            // ONCE PER PEER, AND ONE AT A TIME. Both guards are load-bearing
+            // and neither was here at first:
+            //
+            //   onPeerJoin is a SETTER that REPLAYS for peers already in the
+            //   room, and a peer re-announces when a relay socket drops and
+            //   reconnects — which is the normal state of a public relay, not
+            //   an edge case. Minting per fire means a fresh
+            //   RTCPeerConnection, a full ICE gather and a post EVERY TIME,
+            //   where the old two-party path posted one short string once.
+            //   That is how a room ends up being told "you are noting too
+            //   much" by the relay, i.e. rate-limited by our own doing.
+            //
+            //   And minting is async: two fires interleaved would both call
+            //   through to the lobby, which swaps the pending transport under
+            //   the other one, so an arriving answer gets applied to the wrong
+            //   connection.
+            const served = new Set();
+            let minting = null;
             room.onPeerJoin = async (id) => {
-              if (done) return;
-              let offer = null;
-              try { offer = await mintOffer(id); } catch (e) { offer = null; }
-              if (!offer || done) return;
-              try { post(offer, id); } catch (e) {}
+              if (done || served.has(id)) return;
+              served.add(id);
+              const prev = minting;
+              minting = (async () => {
+                try { await prev; } catch (e) {}
+                if (done) return;
+                let offer = null;
+                try { offer = await mintOffer(id); } catch (e) { offer = null; }
+                // A refusal (room full, no transport) must not be remembered as
+                // served, or a later retry by the same peer is ignored forever.
+                if (!offer) { served.delete(id); return; }
+                if (done) return;
+                try { post(offer, id); } catch (e) {}
+              })();
+              await minting;
             };
           } else if (send) {
             // Post on join AND immediately: whoever is already in the room gets
@@ -239,10 +285,11 @@ const NetNostr = (function () {
           }
           // Subscription mode has nothing to wait for: hand back the way to
           // stop, and let the lobby decide when the room closes.
-          if (onJoiner && !done) {
-            done = true;
-            clearInterval(tick);
-            resolve({ ok: true, subscribed: true, stop: () => { clearInterval(tick); leave(); } });
+          if (onJoiner && !settled) {
+            // settled, NOT done: the room is open and the relay probe, the join
+            // timeout and the cancellation tick all have to keep running.
+            settled = true;
+            resolve({ ok: true, subscribed: true, stop: () => finish({ ok: false, error: "stopped", message: "" }) });
           }
         }).catch(() => finish({ ok: false, error: "relay",
           message: "Could not reach the room service. Use the invite link instead." }));
