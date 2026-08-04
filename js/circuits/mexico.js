@@ -57,10 +57,11 @@
     scenery: function (api) {
       const { out, MAT, n, px, pz, pyMin, place, backdrop, groundPlane,
               addBox, addCyl, addPrism, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,
-              building, motorhome, grandstand, billboard, tree, hedge, fence, palm, pine,
+              building, motorhome, grandstand, grandstandEx, billboard, tree, hedge, fence, palm, pine,
               guardrail, tyreWall, marshalPost, tower, gantry, mountain, wall,
               modelGroup, groundPatch, groundedSegments,
               cityFront, forestEdge, bush,
+              terrace, tieredBowl, broadleafFall, plane, acacia,
               cameraTower, sponsorHoarding, broadcastCompound, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
       // Lap sectors where dressingExclusions leaves the generic city generator
@@ -84,6 +85,15 @@
       const PARKGRN  = [0.34, 0.52, 0.26];
       const STONE    = [0.68, 0.60, 0.44];
       const fiesta   = [PINK, ORANGE, GREEN, [0.98, 0.82, 0.10]];
+      // Mexico City's jacarandas — planted across the capital in the 1920s and
+      // in violet flower through the spring race window. No other circuit on
+      // the calendar has a non-green treeline, so this is the cheapest possible
+      // way to make an ordinary park corridor unmistakably Mexico City.
+      const JACARANDA = [0.46, 0.36, 0.74];
+      const JAC2      = [0.54, 0.44, 0.80];
+      // Huizache (Acacia farnesiana) — native, flat-crowned, and what actually
+      // grows on the dry unirrigated edges of the Magdalena Mixhuca park.
+      const HUIZACHE  = [0.36, 0.44, 0.26];
 
       // ── Papel-picado banner strip along a stand front ────────────────────────
       const banners = (s, side, gap) => {
@@ -140,29 +150,12 @@
                          BOWL_BLUE, BOWL_GREY, BOWL_POP];
       const bowlSeatWall = (s0, s1, side, gap, opts) =>
         api.bowlSeatWall(s0, s1, side, gap, Object.assign({ crowdCols }, opts || {}));
-      // Bounded crowd terrace. The old single-point guard let the long tangent
-      // chord sweep across a nearby bend; the complete group is now preflighted.
-      const crowdBank = (s, side, gap, len, rows) => {
-        const k = K(s), a = anchor(k, side, gap);
-        const bv = [a.r, a.u, a.t], step = 2.4, rise = 1.9, seats = Math.max(6, Math.floor(len / 3.2));
-        modelGroup(`mexico-crowd-bank-${k}-${side}`, {
-          center: vadd(vadd(a.c, a.r, side * rows * step / 2), a.u, rows * rise / 2),
-          size: [rows * step + 2, rows * rise + 3, len + 2],
-          basis: bv,
-        }, (stage) => {
-          stage._mat = MAT.CONCRETE;
-          addPrism(stage, vadd(vadd(a.c, a.r, side * rows * step / 2), a.u, rows * rise * 0.5),
-                   [rows * step, rows * rise, len], [0.50, 0.49, 0.52], bv);
-          stage._mat = MAT.FABRIC;
-          for (let r = 0; r < rows; r++)
-            for (let c = 0; c < seats; c++) {
-              const off = (c - (seats - 1) / 2) * 3.2;
-              const p = vadd(vadd(vadd(a.c, a.r, side * r * step), a.u, r * rise + 1.2), a.t, off);
-              addBox(stage, p, [0.9, 1.1, 0.8], crowdCols[(r * 5 + c * 3) % crowdCols.length], bv);
-            }
-          stage._mat = 0;
-        });
-      };
+      // The local crowd-terrace model that used to live here emitted ONE BOX PER
+      // SEAT off a straight `len` chord. Both halves of that were wrong: the
+      // chord cut across the winding stadium route, and a stand is not worth a
+      // box per spectator. The shared terrace()/tieredBowl() range emitters walk
+      // the arc and carry crowdBand's banded-run-plus-speckle budget, so the
+      // Foro Sol rim below is both cheaper and actually follows the road.
       // Short, atomic upper-deck segments follow the winding stadium route.
       // Their roofs remain legitimate architecture but never chord across tarmac.
       const boundedStand = (s, side, gap, len, col, crowd, required) => {

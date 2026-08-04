@@ -53,7 +53,7 @@
       { frac: 0.6097, angleDeg: 3.5, widthM: 90 },
     ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, grandstandEx, spectatorHill, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
+      const { out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, broadleafFall, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Alpine-green atmosphere pack (cool sky + lush grass); keep runoff greener
@@ -150,6 +150,10 @@
         [0.10, 0.14, 0.40], [0.14, 0.18, 0.46], [0.18, 0.22, 0.50],
         [0.20, 0.20, 0.24],
       ];
+      // The shared open-seating models are RANGE emitters (s0, s1) so they can
+      // follow the arc; every stand in this file is authored as centre + length
+      // in metres. Convert once here.
+      const rbSpan = (s, len) => { const h = (len / 2) / (ds * n); return [s - h, s + h]; };
       tyreWall(0.08, 0.13, 1, 6.5, rbRed);    // outside Turn 1 (Niki Lauda)
       tyreWall(0.20, 0.25, 1, 6.5, rbYel);    // outside Turn 3 (Remus) crest
       tyreWall(0.32, 0.37, -1, 6.5, rbRed);   // outside Turn 4 (Schlossgold)
@@ -354,7 +358,17 @@
       grandstandEx(0.34, -1, 9, 26, shell, rbRed, { roof: "cantilever" });
       grandstandEx(0.36, -1, 8, 24, shell, rbNavy, { roof: "flat" });
       grandstandEx(0.50, -1, 8, 26, null, null, { livery: "steel", roof: "flat" });
-      grandstandEx(0.62, 1, 8, 22, null, null, { livery: "alu", roof: "none" });
+      // Two of Spielberg's small stands used to be grandstandEx({roof:"none"}),
+      // which still builds a 12 m back shell — a grey wall standing in the
+      // middle of a Styrian meadow, and the same shell mass as the roofed
+      // hero stands 100 m away. Both are temporary structures in reality, and
+      // the shared library now models both forms without a shell. This one is
+      // out in the pasture section: rented tube-and-plank, benches on a timber
+      // deck, the standards visible right through it.
+      scaffoldStand(...rbSpan(0.62, 22), 1, 8,
+        { rows: 5, rise: 1.25, setback: 1.9, step: 8, legEvery: 1,
+          crowd: RB_HILL_CROWD, density: 0.55,
+          bench: [[0.85, 0.85, 0.88], rbNavy, rbRed] });
       // Final sector dropping into the stadium bowl.
       grandstandEx(0.70, 1, 8, 26, shell, rbNavy, { roof: "cantilever" });
       grandstandEx(0.72, -1, 8, 28, shell, rbRed, { tiers: 2, roof: "truss", pylons: true, h: 12 });
@@ -363,7 +377,13 @@
       grandstandEx(0.86, -1, 8, 26, shell, rbRed, { tiers: 2, roof: "cantilever", suites: true, h: 12 });
       grandstandEx(0.88, 1, 8, 34, shell, rbNavy, { tiers: 2, roof: "truss", pylons: true, suites: true, h: 13 });
       grandstandEx(0.92, 1, 9, 28, shell, rbRed, { roof: "flat" });
-      grandstandEx(0.95, 1, 10, 22, null, null, { livery: "alu", roof: "none" });
+      // ...and this one closes the stadium bowl: bolted bare-aluminium planks on
+      // a steel frame, no shell and no roof, so the hillside stays visible over
+      // the top of it instead of being walled off by a sixth grey box.
+      bleacher(...rbSpan(0.95, 22), 1, 10,
+        { rows: 7, rise: 1.2, setback: 1.6, step: 8,
+          frameCol: [0.70, 0.71, 0.75], plankCol: [0.78, 0.79, 0.82],
+          crowd: RB_HILL_CROWD, density: 0.58 });
 
       // Emissive grandstand fascia strips — bright warm accent on roof slab
       // underside so stands read lit from the trackside camera at dusk/night.
