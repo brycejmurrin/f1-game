@@ -385,3 +385,206 @@ test.describe("Driver ratings", () => {
     expect(gpAfter).toBe(gpBefore);
   });
 });
+
+// ── the garage as an R&D tree (phase 4) ──────────────────────────────────────
+
+test.describe("Career — the garage", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  // The garage is opened from the hub, and its rows are rebuilt on every mutation.
+  async function openGarage(page) {
+    await page.locator("#cr-garage").click();
+    await expect(page.locator("#carsetup")).toBeVisible();
+  }
+  // The first unowned row in the open category, or null. Rows are <button>s, and
+  // the canvas renders behind the sheet, so click through evaluate() — Playwright's
+  // actionability check can spin on a live-rendering page (see menu-survey.spec.js).
+  const firstLocked = () => {
+    const r = document.querySelector("#cs-options .cs-opt.locked");
+    return r ? { id: r.dataset.csOpt, cat: r.dataset.csCat, cost: r.querySelector(".cs-opt-cost").innerText } : null;
+  };
+
+  test("FREE BUILD is hidden in career and offered outside it", async ({ page }) => {
+    await boot(page);
+    await page.locator("#mb-race").click();
+    await page.locator("#sel-setup").click();
+    await expect(page.locator("#cs-unlimited")).toBeVisible();
+    await page.locator("#cs-done").click();
+
+    await startCareer(page);
+    await openGarage(page);
+    // An unlimited-budget cheat would hand away the economy the mode is built on.
+    await expect(page.locator("#cs-unlimited")).toBeHidden();
+  });
+
+  test("the header reports the balance and the fitted cap, not the flat budget", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await openGarage(page);
+    const txt = await page.locator("#cs-budget").innerText();
+    expect(txt).toContain("BALANCE");
+    expect(txt).toContain("FITTED");
+    expect(txt).not.toContain("BUDGET:");
+  });
+
+  test("an unresearched part lists as locked, quoting a research price", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await openGarage(page);
+    const row = await page.evaluate(firstLocked);
+    expect(row).not.toBeNull();
+    // A locked row quotes what BUYING costs, not what fitting would charge.
+    expect(row.cost).toMatch(/RESEARCH/);
+  });
+
+  test("with no money a locked row refuses, and the car is unchanged", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await page.evaluate(() => window.__apex.careerMoney(0));
+    await openGarage(page);
+    const row = await page.evaluate(firstLocked);
+    expect(row).not.toBeNull();
+    const before = await page.evaluate((r) => JSON.stringify(window.__apex.career().fitted[r.cat]), row);
+    await page.evaluate((r) => document.querySelector(`.cs-opt[data-cs-opt="${r.id}"]`).click(), row);
+    const after = await page.evaluate((r) => JSON.stringify(window.__apex.career().fitted[r.cat]), row);
+    expect(after).toBe(before);
+    const owned = await page.evaluate((r) => window.__apex.career().owned.includes(r.id), row);
+    expect(owned).toBe(false);
+  });
+
+  test("researching deducts exactly cost x RESEARCH_MULT and unlocks the part", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await page.evaluate(() => window.__apex.careerMoney(99999));
+    await openGarage(page);
+    const row = await page.evaluate(firstLocked);
+    expect(row).not.toBeNull();
+    const before = await page.evaluate(() => window.__apex.careerState().money);
+    const price = await page.evaluate((r) => {
+      const cat = Parts.CATALOG.find((c) => c.id === r.cat);
+      return Career.researchCost(cat.options.find((o) => o.id === r.id));
+    }, row);
+    await page.evaluate((r) => document.querySelector(`.cs-opt[data-cs-opt="${r.id}"]`).click(), row);
+    const after = await page.evaluate(() => window.__apex.careerState().money);
+    expect(before - after).toBe(price);
+    const owned = await page.evaluate((r) => window.__apex.career().owned.includes(r.id), row);
+    expect(owned).toBe(true);
+  });
+
+  test("nothing the career garage does touches the free-play build", async ({ page }) => {
+    // The isolation guarantee: getTeamParts/saveTeamParts branch on the career, so
+    // your career car and your Grand Prix car for the same team never meet.
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.parts.haas", JSON.stringify({ engine: "stock", aero: "low" }));
+    });
+    await boot(page);
+    await startCareer(page, { teamId: "haas", seat: 1, seed: 3 });
+    await page.evaluate(() => window.__apex.careerMoney(99999));
+    await openGarage(page);
+    const row = await page.evaluate(firstLocked);
+    if (row) await page.evaluate((r) => document.querySelector(`.cs-opt[data-cs-opt="${r.id}"]`).click(), row);
+    const free = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.parts.haas")));
+    expect(free).toEqual({ engine: "stock", aero: "low" });
+  });
+});
+
+// ── objectives, contracts and the rollover (phase 5) ─────────────────────────
+
+test.describe("Career — the season arc", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  // careerSim needs a track and a grid loaded, so stage one weekend first.
+  async function staged(page, opts) {
+    await boot(page);
+    await startCareer(page, opts || { teamId: "haas", seat: 1, seed: 4242 });
+    await goRacing(page);
+  }
+
+  test("every round carries an objective with a readable brief", async ({ page }) => {
+    await staged(page);
+    const obj = await page.evaluate(() => window.__apex.careerState().obj);
+    expect(obj).not.toBeNull();
+    expect(typeof obj.type).toBe("string");
+    // Stored as scalars; the sentence is derived, never persisted.
+    expect(typeof obj).toBe("object");
+    expect(JSON.stringify(obj)).not.toMatch(/[a-z] [a-z]+ [a-z]+ [a-z]+ [a-z]+/);
+  });
+
+  test("careerSim settles rounds through the real path", async ({ page }) => {
+    await staged(page);
+    const before = await page.evaluate(() => window.__apex.careerState());
+    const rounds = await page.evaluate(() => window.__apex.careerSim(5));
+    expect(Array.isArray(rounds)).toBe(true);
+    expect(rounds.length).toBe(5);
+    const after = await page.evaluate(() => window.__apex.careerState());
+    expect(after.round).toBe(before.round + 5);
+    // Prize money and salary really landed — this is the same settleRound the
+    // driven path uses, not a shortcut that skips the economy.
+    expect(after.money).toBeGreaterThan(before.money);
+    const pts = await page.evaluate(() => Object.keys(window.__apex.career().season.pts).length);
+    expect(pts).toBeGreaterThan(0);
+  });
+
+  test("a full season rolls over: archived, year up, standings cleared, money kept", async ({ page }) => {
+    await staged(page);
+    await page.evaluate(() => window.__apex.careerSim(30));      // past the flag
+    expect(await page.evaluate(() => window.__apex.careerState().round))
+      .toBe(await page.evaluate(() => window.__apex.careerState().rounds));
+
+    const before = await page.evaluate(() => window.__apex.careerState());
+    const out = await page.evaluate(() => window.__apex.careerRollover());
+    expect(out).not.toBeNull();
+    const after = await page.evaluate(() => window.__apex.careerState());
+    expect(after.year).toBe(before.year + 1);
+    expect(after.round).toBe(0);
+    expect(after.seasons).toBe(before.seasons + 1);
+    expect(after.money).toBe(before.money);                       // credits carry over
+    const pts = await page.evaluate(() => Object.keys(window.__apex.career().season.pts).length);
+    expect(pts).toBe(0);
+  });
+
+  test("the rollover mutates the championship in place, keeping game.js's alias", async ({ page }) => {
+    // The trap this guards: openCareer does `season = c.season`, and buildResults /
+    // buildStandings / the HUD all read that alias. Reassigning career.season at
+    // rollover would orphan it — the next season's points would go into a dead
+    // object while the standings kept rendering the stale one, which looks fine.
+    await staged(page);
+    await page.evaluate(() => { window.__apex.career().season.__tag = "same-object"; });
+    await page.evaluate(() => window.__apex.careerSim(30));
+    await page.evaluate(() => window.__apex.careerRollover());
+    const tag = await page.evaluate(() => window.__apex.career().season.__tag);
+    expect(tag).toBe("same-object");
+  });
+
+  test("the season ends with contract offers, and taking one moves you", async ({ page }) => {
+    await staged(page);
+    await page.evaluate(() => window.__apex.careerSim(30));
+    const out = await page.evaluate(() => window.__apex.careerRollover());
+    expect(Array.isArray(out.offers)).toBe(true);
+    expect(out.offers.length).toBeGreaterThan(0);
+    for (const o of out.offers) expect(typeof o.teamId).toBe("string");
+
+    const moved = await page.evaluate(() => {
+      const c = window.__apex.career();
+      const target = c.offers.findIndex((o) => o.teamId !== c.team);
+      if (target < 0) return { skipped: true };
+      const from = c.team;
+      Career.acceptOffer(target);
+      return { skipped: false, from, to: window.__apex.career().team };
+    });
+    if (!moved.skipped) expect(moved.to).not.toBe(moved.from);
+  });
+
+  test("the whole arc is deterministic for a fixed seed", async ({ page }) => {
+    const arc = async (seed) => {
+      await staged(page, { teamId: "haas", seat: 1, seed });
+      await page.evaluate(() => window.__apex.careerSim(30));
+      const out = await page.evaluate(() => window.__apex.careerRollover());
+      return JSON.stringify({ champ: out.champion, offers: out.offers.map((o) => o.teamId) });
+    };
+    const a = await arc(777);
+    await page.evaluate(() => window.__apex.careerReset());
+    const b = await arc(777);
+    expect(b).toEqual(a);
+  });
+});
