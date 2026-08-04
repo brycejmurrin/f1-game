@@ -285,21 +285,103 @@ segment rather than centring it across both. A handful of lines that turn a
 broken screen into a merely unoptimised one, and DevTools can emulate it, so it
 is testable without the hardware.
 
-## 14. Ranked, second pass
+## 14. What "use a framework" can and cannot mean here
 
-1. **Write the seven-axis table into `docs/LAYOUT-AUDIT.md`.** Every bug so far
-   was an axis/mechanism mismatch, and the table is the whole fix. *(trivial,
-   highest value per keystroke)*
-2. **`.pane-pair` primitive** — still the biggest structural win, and now easier:
-   `data-shape` supplies the tall/wide input the primitive needs. *(medium)*
-3. **Safe-area assertion in the audit probe.** The one axis we claim to handle
+Asked to take advantage of available components or frameworks, the honest first
+answer is what is **ruled out by the architecture, not by taste**. This project
+is `"use strict"` IIFE files loaded by `<script>` tags, no build step, static on
+GitHub Pages, with exactly one ES-module island (vendored three.js). So:
+
+| candidate | verdict |
+|---|---|
+| React / Vue / Svelte | out — needs a build, and a rewrite of every screen |
+| Tailwind | out — its whole value is a build-time scan; the CDN build is explicitly not for production |
+| Material Web (`@material/web`) | out — ES modules, realistically a bundler |
+| Open Props | *possible* (one `<link>`, no build), but it is a token library and `css/tokens.css` already is ours |
+| **Open Props UI** | usable as a **source**, not a dependency — it is explicitly copy-and-paste, no install |
+| **Every Layout** | patterns to copy, already cited in §3 |
+| **the platform** | **the actual answer** — see below |
+
+The framework worth adopting is the web platform, and the case is measurable.
+
+**The layering evidence.** `css/` carries a hand-maintained `z-index` ladder of
+**25 distinct values across 49 declarations**, topping out at 9000; 54 sites
+toggle `.hidden` to show or hide an overlay; ESC is handled in two files;
+no overlay traps focus. `<dialog>.showModal()` supplies the **top layer**
+(which no `z-index` can reorder, and which no `overflow: hidden` or transformed
+ancestor can clip), `::backdrop`, ESC-to-close, focus containment and an inert
+background — all of it deleting code rather than adding it. It would also have
+prevented a bug hit while writing this: forcing `hidden = false` on `#pmsettings`
+desynced that screen's own state and made every subsequent panel button a no-op.
+
+That migration is real work — 12 `.screen.dim` modals — but it is **incremental**:
+one helper that opens a screen, screens converted one at a time, each verified by
+its row in the audit grid.
+
+**The adaptivity evidence** is §15.
+
+## 15. `.pane-pair`: the primitive, and what building it taught
+
+Idea #2 is now built (`css/components.css`). `#select`, `#carsetup` and `#career`
+were three hand-rolled copies of one canonical list-detail layout, and the copies
+had each rediscovered the same bugs separately. What they actually shared, once
+the incidental numbers were stripped out: columns declared on the **sheet** (a
+container query cannot style its own container), children spanning both by
+default, `display: contents` on the body when split, the detail pane spanning the
+body row **and** the foot row, and a `min-content` foot track.
+
+Screens now set four custom properties — `--pair-at`, `--pair-split`,
+`--pair-detail`, `--pair-gap` — and nothing else. `#carsetup` and `#career` are
+migrated and measured clean; `#select` is not, because it carries a second axis
+(`data-shape` decides bands versus columns) and composing the two attributes is a
+design decision worth taking deliberately rather than as the tail of a long
+change. Everything it needs is listed at the end of §16.
+
+**Why an attribute and not a container query.** A query condition cannot take a
+custom property, so `(min-width: 400px)` and `(min-width: 620px)` are two
+different blocks and the shared body would have to be duplicated into both —
+exactly the duplication being removed. `js/game/sheetshape.js` already ran one
+ResizeObserver over every sheet; it now reads `--pair-at` and writes `data-pair`.
+Attributes also carry specificity, which container queries do not.
+
+Two things this cost, both worth writing down:
+
+- **A class-based primitive loses to the ID rules it replaces.**
+  `.pane-pair[data-pair="on"] > .sheet-body` is (0,3,0); `#cs-body` is (1,0,0).
+  The body stayed a flex column while the sheet was already two grid tracks —
+  the rail rendered 402px wide inside a 115px track and the option list came out
+  **10px tall**. Screens must gate their stacked-layout rules with
+  `:not([data-pair="on"])`, and `:not(...)` rather than `[data-pair="off"]` so an
+  unmeasured sheet still stacks.
+- **Do not leave two sources of truth for one threshold.** The `@container sheet
+  (min-width: 400px)` block still held pair-dependent rules after the attribute
+  took over the decision. The two agree eventually but not instantly — the query
+  applies the frame a screen is shown, the attribute waits on an observer — and
+  in that window the rail lost its height cap while the body was still stacked,
+  so fourteen categories grew past the sheet and five were unreachable below it.
+  Anything true only *when the panes split* belongs on `[data-pair="on"]`.
+
+## 16. Ranked, second pass
+
+1. ~~**Write the seven-axis table into `docs/LAYOUT-AUDIT.md`**~~ — **done**.
+2. ~~**`.pane-pair` primitive**~~ — **built**, and `#carsetup` + `#career` are on
+   it (§15). **`#select` is the one left**: it needs `data-shape="tall"` to win
+   over `[data-pair="on"]` (it already does on specificity — `#sel-inner[data-shape]`
+   is (1,1,0) against the primitive's (0,3,0)), plus one rule returning the foot
+   to `grid-column: 1 / -1` in the band layout, and its `:not([data-shape="tall"])`
+   column extras moved off the container query onto `[data-pair="on"]`.
+3. **Migrate the `.screen.dim` modals to `<dialog>.showModal()`** — the platform
+   answer from §14. Deletes the z-index ladder, and supplies ESC, focus
+   containment and an inert background that none of them have today.
+   *(incremental: one helper, one screen at a time, each verified by its grid row)*
+4. **Safe-area assertion in the audit probe.** The one axis we claim to handle
    and never verify, on the orientation the game is played in. *(cheap)*
-4. **Cost out `container-type: size` on the sheet** — if it can have a definite
+5. **Cost out `container-type: size` on the sheet** — if it can have a definite
    height, `sheetshape.js` deletes itself. *(cheap to investigate)*
-5. **Foldable guard** — one media query, turns broken into unoptimised. *(cheap)*
-6. **`svh` as the house cap unit**, and **six blessed pixel baselines** — carried
+6. **Foldable guard** — one media query, turns broken into unoptimised. *(cheap)*
+7. **`svh` as the house cap unit**, and **six blessed pixel baselines** — carried
    over from the first pass, both still worth doing. *(trivial / cheap)*
-7. **`any-hover` for hybrid devices**, sparingly. *(low priority, easy to get
+8. **`any-hover` for hybrid devices**, sparingly. *(low priority, easy to get
    wrong)*
 
 ## What the audit found while this was being written (build 923) — and why it was wrong

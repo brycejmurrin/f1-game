@@ -36,6 +36,29 @@
 window.SheetShape = (function () {
   const TALL_ON = 1.05, TALL_OFF = 0.95;
 
+  /* THE SECOND ANSWER: is the LIST/DETAIL pair on?
+   * `.pane-pair` (css/components.css) is the shared list-detail layout, and the
+   * only thing the three screens using it disagree about is the width at which
+   * it turns on — 400px for the garage, 620px for select and career. A container
+   * query cannot take a custom property in its condition, so expressing that in
+   * CSS alone means duplicating the whole block per threshold, which is the
+   * duplication the primitive exists to remove. The sheet declares `--pair-at`
+   * and this reads it.
+   * Hysteresis again, and for a sharper reason than the shape: a sheet sitting
+   * exactly on its threshold would otherwise toggle between one and two columns
+   * on every observer callback. */
+  const PAIR_HYST = 8;
+
+  function classifyPair(el, w) {
+    const raw = getComputedStyle(el).getPropertyValue("--pair-at");
+    const at = parseFloat(raw);
+    if (!at) { if (el.dataset.pair) delete el.dataset.pair; return; }
+    const was = el.dataset.pair === "on";
+    const now = was ? w >= at - PAIR_HYST : w >= at;
+    const next = now ? "on" : "off";
+    if (el.dataset.pair !== next) el.dataset.pair = next;
+  }
+
   function classify(el, w, h) {
     if (!w || !h) return; // display:none — keep the last answer rather than guess
     const ratio = h / w;
@@ -43,6 +66,7 @@ window.SheetShape = (function () {
     const now = was === "tall" ? (ratio <= TALL_OFF ? "wide" : "tall")
       : (ratio >= TALL_ON ? "tall" : "wide");
     if (now !== was) el.dataset.shape = now;
+    classifyPair(el, w);
   }
 
   let ro = null;
