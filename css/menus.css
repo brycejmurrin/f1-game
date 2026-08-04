@@ -21,7 +21,10 @@
   z-index: 20;
   display: grid;
   align-content: center; justify-items: center;
-  gap: 2px;
+  /* The brand block and the button column are two SEPARATE things; 2px between
+     them read as one run-on block, which is why the disclaimer looked like a
+     caption on the CAREER button rather than the last line of the small print. */
+  gap: clamp(20px, 4vh, 40px);
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
   /* in oklab so the red wash stays red through its falloff instead of
      sagging grey, and .grain (css/components.css) dithers what is left */
@@ -35,8 +38,21 @@
   color: var(--text);
   text-shadow: 0 0 36px rgba(225, 6, 0, 0.75), 0 2px 12px rgba(0, 0, 0, 0.8);
 }
-#title::after { content: ""; display: block; height: 5px; width: 70%; margin: 4px auto 0; background: var(--red); transform: skewX(-30deg); box-shadow: 0 0 14px rgba(225,6,0,0.6); }
-#subtitle { color: rgba(242, 242, 245, 0.72); margin: 6px 0 14px; font-size: 14px; letter-spacing: 0.04em; }
+/* The accent rule UNDERLINES THE WORDMARK. It was `width: 70%; margin: 4px auto
+   0` — 70% of the h1, centred inside it — so it began and ended under arbitrary
+   letters, and in the left-aligned compositions it lined up with neither edge of
+   the title. The h1 is a shrink-to-fit flex item, so 100% IS the width of the
+   text: the rule now spans the wordmark exactly and inherits its alignment,
+   centred or left, without a second rule per layout. */
+#title::after {
+  content: ""; display: block;
+  height: 4px; width: 100%;
+  margin: 10px 0 0;
+  background: var(--red);
+  transform: skewX(-30deg);
+  box-shadow: 0 0 14px rgba(225, 6, 0, 0.6);
+}
+#subtitle { color: rgba(242, 242, 245, 0.72); margin: 10px 0 0; font-size: 14px; letter-spacing: 0.04em; }
 /* THREE TIERS, by how much of your evening the thing costs.
    HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
    the four one-sitting modes, 2x2. SECONDARY is the rooms: half-height, two
@@ -92,9 +108,16 @@
    the loose elements did. */
 #menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: inherit; }
 #menu-brand { align-items: center; }
-#menu-meta { margin-top: 14px; }
-#audiostate { color: var(--dim); font-size: 12px; min-height: 16px; }
-#disclaimer { color: var(--dim); font-size: 11px; margin-top: 8px; }
+/* The small print is ONE step below the wordmark — near enough to belong to it,
+   far enough not to read as a third title line. The step is a stated margin
+   rather than whatever the audio line happened to reserve: #audiostate is empty
+   until tilt is granted (or denied), and its `min-height: 16px` used to hold a
+   phantom band open between the subtitle and the disclaimer, which is what left
+   the disclaimer floating in the middle of nothing on a desktop. */
+#menu-meta { margin-top: 16px; gap: 6px; }
+#audiostate { color: var(--dim); font-size: 12px; }
+#audiostate:empty { display: none; }
+#disclaimer { color: var(--dim); font-size: 11px; margin: 0; }
 
 /* Landscape: branding left, buttons right — a phone held sideways has width to
    spend and no height at all. Two columns, everything vertically centred, and
@@ -109,7 +132,11 @@
    row 2. The old layout ran the button column through all four branding rows,
    and a grid distributes a spanning item's excess height across the rows it
    covers — which is what pushed the subtitle 230px below the title. */
-@media (orientation: landscape) and (max-height: 560px) {
+/* max-height 599, not 560: the large-screen composition in css/responsive.css
+   starts at min-height 600, and the 40px between the two used to fall through to
+   the PORTRAIT stack — so a short, wide desktop window (say 1000x580) got a
+   phone's vertical menu laid out sideways. The two branches now meet exactly. */
+@media (orientation: landscape) and (max-height: 599px) {
   #overlay {
     grid-template-columns: auto auto;
     justify-content: center; align-content: center; justify-items: start;
@@ -118,10 +145,10 @@
   #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
   #menu-buttons { grid-column: 2; grid-row: 1; align-self: center; width: auto; }
   #title { font-size: clamp(26px, 7.5vw, 48px); }
-  #subtitle { margin: 4px 0 0; font-size: 12px; }
-  #menu-meta { margin-top: 8px; }
-  #audiostate { font-size: 10px; min-height: 0; }
-  #disclaimer { font-size: 10px; margin-top: 6px; }
+  #subtitle { margin: 8px 0 0; font-size: 12px; }
+  #menu-meta { margin-top: 12px; gap: 4px; }
+  #audiostate { font-size: 10px; }
+  #disclaimer { font-size: 10px; }
   /* the group is what gets the width now; the buttons fill their cell */
   #menu-hero, #menu-primary, #menu-secondary { width: min(46vw, 300px); }
   #menu-hero .bigbtn { padding-block: 10px; }

@@ -2238,11 +2238,58 @@ function showTouchControls(show) {
   const steerBtns = t && steerMode === "buttons";
   els.btnSteerLeft.hidden = !steerBtns;
   els.btnSteerRight.hidden = !steerBtns;
-  // manual mode => shifts take the right column, boost/OT move to centre (CSS).
-  // button/touch modes => boost/OT pull in next to the steering thumb (CSS).
   document.body.classList.toggle("manual", manual);
   document.body.classList.toggle("steer-buttons", steerBtns);
   document.body.classList.toggle("steer-touch", t && steerMode === "touch");
+  layoutDocks(steerBtns, manual);
+}
+
+// Fill the two thumb docks. This is the ONE thing the flex bar cannot express
+// on its own: a control genuinely changes SIDE between modes — the throttle is
+// a left-thumb pedal in tilt mode and a right-thumb one in buttons mode, where
+// the arrows own the left — and CSS cannot move an element to a different
+// parent. Everything else (spacing, wrapping, centring, never overlapping) is
+// the flex row's job, and there is deliberately not one coordinate here.
+//
+// It moves GROUPS, never single buttons. A dock is a wrapping flex row, so a
+// dock holding five loose buttons breaks them apart wherever the width runs
+// out — which is how a DN button ended up sitting above its own UP. A group is
+// indivisible and carries its own shape (pedals and shifts are vertical pairs,
+// steer and taps are rows), so wrapping can only ever reorder whole groups and
+// a pair can never come apart or invert.
+//
+// Lists are in VISUAL left-to-right order, which for a normal flex row is just
+// DOM order. Each thumb's home is the screen edge it sits at, so what is held
+// continuously goes OUTERMOST — leftmost on the left, rightmost on the right —
+// and the discretionary taps sit inboard of it.
+function layoutDocks(steerBtns, manual) {
+  const left = $("dock-left"), right = $("dock-right");
+  if (!left || !right) return;
+  const pedals = $("grp-pedals"), shifts = $("grp-shifts"),
+        steer = $("grp-steer"), taps = $("grp-taps");
+  const L = [], R = [];
+  if (steerBtns) {
+    L.push(steer);            // arrows own the left thumb...
+    R.push(taps, pedals);     // ...so the pedals come right, GAS at the corner
+  } else {
+    L.push(pedals);           // tilt/touch: the pedal column is the left thumb
+    R.push(taps);             // the three taps sit inboard...
+    if (manual) R.push(shifts);   // ...of the shift column at the corner
+  }
+  // An empty group must not hold a gap in the dock. Hiding it is the whole
+  // reason `hidden` on every child is not enough: a flex parent of hidden
+  // children is still a flex item with the dock's own gap around it.
+  for (const g of [pedals, shifts, steer, taps]) {
+    if (!g) continue;
+    g.hidden = !(L.includes(g) || R.includes(g)) ||
+               ![...g.children].some((b) => !b.hidden);
+  }
+  for (const [dock, list] of [[left, L], [right, R]]) {
+    // Append unconditionally: it both moves a group that changed side and
+    // rewrites the order, so a mode switch can never leave yesterday's sequence
+    // half-applied.
+    for (const el of list) if (el) dock.appendChild(el);
+  }
 }
 
 // THE CLASSIFICATION IS THE HOST'S. Both peers can see both human cars, but
@@ -2455,7 +2502,9 @@ const G = {
   get setupPreviewPan() { return setupPreviewPan; },
   get setupPreviewAeroX() { return setupPreviewAeroX; },
   get raceAeroMode() { return raceAeroMode; },
-  set raceAeroMode(v) { raceAeroMode = v; store.set("aeroMode", v); },
+  // Repaint the pause-menu button too: __apex.aeroMode() and the button are two
+  // doors onto one value, and a stale label is a lie about the car's behaviour.
+  set raceAeroMode(v) { raceAeroMode = v; store.set("aeroMode", v); refreshAeroBtn(); },
   get aeroZones() { return aeroZones; },
   aeroZoneAt: (s) => aeroZoneAt(s),
   aeroZoneAhead: (s) => aeroZoneAhead(s),
@@ -6833,21 +6882,10 @@ function buildRaceSettings() {
   }
   // RELIABILITY — same idiom, same persistence, and hidden alongside DIFFICULTY
   // in a time trial for the same reason: neither has anything to act on there.
-  // ACTIVE AERO applies in a time trial too — it is a lap-time tool, which is
-  // exactly the distinction that hides RELIABILITY there.
-  const aeroEl = $("rs-aero");
-  aeroEl.innerHTML = "";
-  for (const [id, label] of [["manual", "MANUAL"], ["auto", "AUTO"]]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceAeroMode === id ? " active" : "");
-    b.setAttribute("aria-pressed", raceAeroMode === id ? "true" : "false");
-    b.textContent = label;
-    b.onclick = () => {
-      raceAeroMode = id; store.set("aeroMode", id);
-      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
-    };
-    aeroEl.appendChild(b);
-  }
+  // (ACTIVE AERO used to sit here. It is a CONTROL preference, not a property of
+  // the event, so it lives in pause > SETTINGS > DRIVING next to GEARS — where
+  // it can also be changed mid-race, which is when a player discovers they want
+  // it. See refreshAeroBtn.)
   // Hidden in a time trial (no grid) and FORCED ON in a championship, where the
   // weekend decides the grid and the choice is not the player's to make. Shown
   // rather than removed there, because "why did this race qualify" is a
@@ -7518,6 +7556,25 @@ $("pm-gears").onclick = () => {
   if (player && !gearsManual()) player.gear = naturalGear(player.speed);
   showTouchControls(true);
 };
+
+// ACTIVE AERO: MANUAL / AUTO. Same shape as GEARS and for the same reason —
+// both answer "how much of the car do you operate yourself?". Takes effect
+// immediately, so a player who flips it mid-race sees it on the next zone; the
+// HUD's AERO button greys out under AUTO (see hud.js hToggle "dead").
+function refreshAeroBtn() {
+  const b = $("pm-aero");
+  if (b) b.textContent = "ACTIVE AERO: " + (raceAeroMode === "auto" ? "AUTO" : "MANUAL");
+}
+$("pm-aero").onclick = () => {
+  raceAeroMode = raceAeroMode === "auto" ? "manual" : "auto";
+  store.set("aeroMode", raceAeroMode);
+  refreshAeroBtn();
+  // Dropping out of AUTO must not leave the wing latched open — the switch is
+  // the player's again from this instant.
+  if (raceAeroMode !== "auto" && player) player.xOn = false;
+  if (soundOn) GameAudio.uiTick();
+};
+refreshAeroBtn();
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && state === "race") setPaused(true);
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
@@ -7629,7 +7686,18 @@ Input.init(canvas, { onPause: () => {
   if (paused && els.pmsettings && !els.pmsettings.hidden) { closeSettings(); return; }
   setPaused(!paused);
 } });
-if (!Input.touchControlsNeeded()) { document.body.classList.add("desktop"); els.subtitle.textContent = "2026 grid · " + Tracks.LIST.length + " real circuits"; }
+// The subtitle is DERIVED on both paths. It used to be hardcoded "24 real
+// circuits" in index.html and rewritten on desktop only, from Tracks.LIST.length
+// — which counts the 16 retired classics too, so the same build claimed 24
+// circuits on a phone and 40 on a desktop. Both now read the championship
+// calendar (Tracks.SEASON), and the desktop, which has the room, names the
+// classics rather than silently folding them into the season count.
+if (!Input.touchControlsNeeded()) document.body.classList.add("desktop");
+{
+  const rounds = Tracks.SEASON.length, classics = Tracks.LIST.length - rounds;
+  els.subtitle.textContent = "2026 grid · " + rounds + " real circuits · "
+    + (Input.touchControlsNeeded() ? "tilt to steer" : classics + " classics");
+}
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
 $("pm-steer").textContent = steerLabel();
