@@ -104,10 +104,12 @@ function migrateSeasonPoints(season) {
 }
 
 // ---------- career save ----------
-// One active career, under `apex26.career`. Versioned from the start: the shape
-// will grow, and a stored save has to survive that. Migrations are a ladder — one
-// function per version step, each taking the save from v(i) to v(i+1) — so a save
-// written by any past build climbs to the current shape one rung at a time.
+// THREE careers, under `apex26.career.0..2` (js/game/career.js owns the slots and
+// which one is live; the single-save `apex26.career` of the first build migrates
+// into slot 0). Versioned from the start: the shape will grow, and a stored save
+// has to survive that. Migrations are a ladder — one function per version step,
+// each taking the save from v(i) to v(i+1) — so a save written by any past build
+// climbs to the current shape one rung at a time.
 const CAREER_V = 1;
 const CAREER_MIGRATIONS = [
   // v0 -> v1: the first shipped shape. A v0 save predates `v` entirely.
@@ -115,7 +117,15 @@ const CAREER_MIGRATIONS = [
 ];
 
 // Fill in every optional key so the rest of the code never guards for undefined,
-// and climb the migration ladder. Persists, and returns the save.
+// and climb the migration ladder.
+//
+// PURE — it mutates the save it is handed and returns it, but it does NOT write.
+// It used to end in `store.set("career", career)`, which was correct when there
+// was one save under one key and wrong the moment there were three: reading slot
+// 0 wrote it back to the LEGACY key, so the key slot migration had just cleared
+// came straight back on the same boot, and every later boot resurrected it again.
+// A stale duplicate under the old name is exactly what an older build would find
+// and load. Career.save() is the one thing that persists, and it knows the slot.
 function migrateCareer(career) {
   if (!career || typeof career !== "object") return null;
   let v = career.v | 0;
@@ -144,7 +154,6 @@ function migrateCareer(career) {
   career.offers = Array.isArray(career.offers) ? career.offers : [];
   career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
   career.budgetLvl = career.budgetLvl | 0;
-  store.set("career", career);
   return career;
 }
 

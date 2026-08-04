@@ -122,6 +122,55 @@ test.describe("Qualifying — the grid", () => {
     expect(gridPos).toBe(qPos);
     expect(await page.evaluate(() => window.__apex.info().session)).toBe("race");
   });
+
+  test("every round of a season qualifies, not just the first", async ({ page }) => {
+    // The results screen's NEXT ROUND went straight to startRace(), so rounds
+    // 2..24 were never qualified for — and gridUp() lined them up on round 1's
+    // classification, which Quali.order() remapped onto the new cars by driverId.
+    // A stale grid that looks like a real one is the reason this checks the SHEET
+    // rather than the order it produces.
+    await toQuali(page);
+    await page.locator("#q-sim").click();
+    const r1 = await page.evaluate(codes);
+    await page.locator("#q-go").click();
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
+    await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
+    await expect(page.locator("#results")).toBeVisible({ timeout: 10_000 });
+    await page.locator("#res-next").click();
+    // Round 2 opens its own session rather than reusing round 1's grid.
+    await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
+    expect(await page.evaluate(() => window.__apex.info().session)).toBe("quali");
+    // A different circuit, so a different order: the sheet is genuinely re-run.
+    await page.locator("#q-sim").click();
+    const r2 = await page.evaluate(codes);
+    expect(r2.length).toBe(r1.length);
+    expect(r2).not.toEqual(r1);
+  });
+
+  test("a qualifying grid never leaks into the Grand Prix that follows it", async ({ page }) => {
+    // gridUp() accepts any preOrder whose length matches the field, and the
+    // classification outlived quitToMenu() — so the next Grand Prix lined up on a
+    // season's qualifying order and silently lost the P12 start that mode exists
+    // for. Read as: qualify, quit, then start a plain GP and check the climb.
+    await toQuali(page);
+    await page.locator("#q-sim").click();
+    await page.locator("#q-go").click();
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
+    await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
+    await expect(page.locator("#results")).toBeVisible({ timeout: 10_000 });
+    await page.locator("#res-menu").click();          // quitToMenu()
+    await expect(page.locator("#overlay")).toBeVisible();
+    await page.locator("#mb-race").click();
+    await page.locator("#sel-go").click();
+    await page.locator("#rs-go").click();
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
+    const info = await page.evaluate(() => ({
+      flow: window.__apex.info().flow,
+      pos: window.__apex.fieldState().find((c) => c.isPlayer).pos,
+    }));
+    expect(info.flow).toBe("gp");
+    expect(info.pos).toBe(12);   // the fun climb, not somebody else's grid
+  });
 });
 
 // ── the lap-time model ───────────────────────────────────────────────────────
