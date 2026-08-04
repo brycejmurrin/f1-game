@@ -83,7 +83,12 @@ const LiveryTex = (function () {
   const INK_DARK = [0.06, 0.06, 0.08], INK_LIGHT = [0.97, 0.97, 0.98];
   // Text on this car is legible below about 4.5:1; under 3:1 it disappears at
   // racing distance. Marks that cannot reach the target get a halo instead.
-  const INK_TARGET = 4.5, INK_FLOOR = 3.0;
+  // 4.5 is the WCAG threshold for *body* text on a screen you are staring at.
+  // These are bold marks on a car moving past at speed, and a mark that lands
+  // just over the line — dark-on-crimson at 4.50 on Audi's titanium livery —
+  // reads as legible-but-muddy. 6.5 haloes those too: 17% of marks get an
+  // outline rather than 4%, and the rest stay clean.
+  const INK_TARGET = 6.5, INK_FLOOR = 3.0;
   // Pick the ink with the best WORST-CASE contrast over every paint the mark can
   // land on. A sidepod wordmark can straddle the base paint AND a livery's pod
   // panel, so inking it against c1 alone is how a mark ends up invisible on the
@@ -826,10 +831,29 @@ const LiveryTex = (function () {
     // that pale board at 1.4:1, which is the faint sidepod text. It is part of
     // the background set now, so the ink (or its halo) has to clear it too.
     const board = (typeof Car3D !== "undefined" && Car3D.PANEL_COL) || [0.82, 0.82, 0.86];
-    const podBg = pod ? [c1, pod, board] : [c1, board];
-    const ink = inkFor(c1);                   // crest / fin / number: base paint
+    // The sponsor board now covers the whole titleA/titleB rect (car3d.js sizes
+    // the flank span to yFrac 0.24..0.84 to match podDecal), so the wordmark sits
+    // on ONE surface and inks for it alone — ~12.6:1 on every livery instead of
+    // the compromise between board and paint that forced a halo on 70% of them.
+    const podBg = [board];
+    // The `strip` decal sits wholly on the c2 accent band (car3d sizes that band
+    // to yFrac 0.08..0.30 to match), so it inks for c2 alone.
+    const stripBg = [c2];
+    // The nose NUMBER sits over the c2 crown stripe (the addLoft accent running
+    // z 1.60..2.66) as well as the base paint, so it is inked for both.
+    const ink = inkOn([c1, c2]);             // nose / endplate number
+    // The engine-cover crest is BISECTED by the shark fin, which is painted c2 —
+    // the mark genuinely spans two colours, so it is inked for both and takes a
+    // halo when they disagree. (Verified by the mesh probe in
+    // tests/parts-livery-contrast.spec.js, which reads what is actually behind
+    // each decal rather than trusting this list.)
+    const inkCrest = inkOn([c1, c2]);
+    // The SHARK FIN is painted c2, not c1 (see the sharkFin block in car3d.js),
+    // so inking its motif for the body put a white crest on a white fin at
+    // 1.00:1 on any livery whose accent is pale — Ferrari's default among them.
+    const inkFin = inkOn([c2]);
     const inkPod = inkOn(podBg);              // sidepod wordmarks
-    const inkStrip = inkOn(pod ? [pod] : [c1]); // the low strip sits inside the panel
+    const inkStrip = inkOn(stripBg);
     // A mark that cannot reach INK_TARGET on its background gets a halo rather
     // than being left to vanish; below INK_FLOOR it would be invisible outright.
     const haloIf = (i) => (i.worst < INK_TARGET ? haloFor(i) : null);
@@ -852,11 +876,14 @@ const LiveryTex = (function () {
 
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe);
-    drawCrest(ctx, teamId, REGIONS.crest, ink, accent);
+    drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent);
     // Shark-fin panel: the SAME tail graphic + a BARE motif (disc/shield stripped)
     // so the fin reads as a painted tail, not a floating badge.
     drawTailGraphic(ctx, teamId, REGIONS.fin, c1, c2, stripe);
-    drawCrest(ctx, teamId, REGIONS.fin, ink, accent, true);
+    // Accent has to separate from the FIN's ink here, not the body's.
+    const finAccent = contrast(accent, inkFin) >= 2.0 ? accent
+      : (contrast(c1, inkFin) >= 2.0 ? c1 : haloFor(inkFin));
+    drawCrest(ctx, teamId, REGIONS.fin, inkFin, finAccent, true);
 
     // Sponsor wordmarks.
     const names = SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];

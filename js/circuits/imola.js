@@ -49,7 +49,7 @@
     scenery: function (api) {
       const { out, MAT, n, px, pz, hw, pyMin, hash, every, place, prop, backdrop,
               groundPatch, waterSurface, modelGroup,
-              groundYAt, onTrack, addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
+              groundYAt, onTrack, addBox, addCyl, addPrism, addFrustum, vadd, anchor,
               seat, foundation,
               along, mountain, tree, pine, hedge, bush,
               cypress, stonePine, plane, tieredBowl, terrace,

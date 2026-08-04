@@ -67,9 +67,11 @@ function seasonRoster() {
   }));
   return roster;
 }
-// Mutates + persists the passed season object (no-op on null); returns it so
-// game.js can do `season = GameStore.migrateSeasonPoints(season)`.
-function migrateSeasonPoints(season) {
+// Remap a championship's points onto stable driver ids. PURE: mutates the passed
+// object and returns it, but never touches localStorage — career owns a championship
+// of the same shape nested inside its OWN save, and running the persisting variant
+// over it would overwrite the standalone `apex26.season` with career's standings.
+function remapPoints(season) {
   if (!season) return season;
   const oldPts = season.pts && typeof season.pts === "object" ? season.pts : {};
   const roster = seasonRoster();
@@ -89,10 +91,56 @@ function migrateSeasonPoints(season) {
   season.pts = nextPts;
   season.driverCodes = codes;
   season.teamPts = season.teamPts && typeof season.teamPts === "object" ? season.teamPts : {};
+  return season;
+}
+
+// Mutates + PERSISTS the standalone season save (no-op on null); returns it so
+// game.js can do `season = GameStore.migrateSeasonPoints(season)`.
+function migrateSeasonPoints(season) {
+  if (!season) return season;
+  remapPoints(season);
   store.set("season", season);
   return season;
 }
 
+// ---------- career save ----------
+// One active career, under `apex26.career`. Versioned from the start: the shape
+// will grow, and a stored save has to survive that. Migrations are a ladder — one
+// function per version step, each taking the save from v(i) to v(i+1) — so a save
+// written by any past build climbs to the current shape one rung at a time.
+const CAREER_V = 1;
+const CAREER_MIGRATIONS = [
+  // v0 -> v1: the first shipped shape. A v0 save predates `v` entirely.
+  (c) => { c.season = c.season || { round: 0, pts: {}, teamPts: {}, driverCodes: {} }; },
+];
+
+// Fill in every optional key so the rest of the code never guards for undefined,
+// and climb the migration ladder. Persists, and returns the save.
+function migrateCareer(career) {
+  if (!career || typeof career !== "object") return null;
+  let v = career.v | 0;
+  while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); v++; }
+  career.v = CAREER_V;
+  career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
+  career.year = career.year | 0 || 2026;
+  career.money = Number(career.money) || 0;
+  career.rep = Math.max(0, Math.min(100, Number(career.rep) || 0));
+  career.seat = career.seat | 0;
+  career.driver = career.driver && typeof career.driver === "object"
+    ? career.driver : { name: "Your Name", code: "YOU", num: 99 };
+  career.seed = career.seed | 0;
+  career.season = remapPoints(career.season || { round: 0, pts: {}, teamPts: {}, driverCodes: {} });
+  career.owned = Array.isArray(career.owned) ? career.owned : [];
+  career.fitted = career.fitted && typeof career.fitted === "object" ? career.fitted : {};
+  career.results = Array.isArray(career.results) ? career.results : [];
+  career.history = Array.isArray(career.history) ? career.history : [];
+  career.dev = career.dev && typeof career.dev === "object" ? career.dev : {};
+  career.tdev = career.tdev && typeof career.tdev === "object" ? career.tdev : {};
+  store.set("career", career);
+  return career;
+}
+
 return { store, ttBoard, ttBoardAdd, TT_BOARD_MAX,
-         hexToRgb, rgbToHex, seasonDriverId, seasonRoster, migrateSeasonPoints };
+         hexToRgb, rgbToHex, seasonDriverId, seasonRoster,
+         remapPoints, migrateSeasonPoints, migrateCareer, CAREER_V };
 })();

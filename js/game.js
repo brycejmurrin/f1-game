@@ -575,8 +575,25 @@ function buildStudioRig() {
 let headlessMode = false;  // skip render() when true (headless control loop)
 const { CAM_MODES } = GameTables;  // player camera modes (see js/game/tables.js)
 let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.length - 1);
-let seasonMode = false;
-let timeTrial = false;      // solo run against the clock, no AI
+// The game mode, on TWO axes. `flow` is what the run is FOR and survives a whole
+// championship; `session` is what this one visit to the track IS. They are genuinely
+// independent — a career weekend qualifies and then races, so a single flat enum
+// cannot say "career" and "qualifying" at once.
+// `seasonMode` and `timeTrial` are no longer state: they are DERIVED views handed
+// out through the G façade, so every downstream module and the __apex.info()
+// contract keep their exact meaning. CAREER is a championship too — same 24-round
+// calendar, same points, same standings — it just carries a save across seasons.
+let flow = "gp";            // "gp" | "season" | "career"
+let session = "race";       // "race" | "tt" (solo against the clock) | "quali"
+const isChampionship = () => flow === "season" || flow === "career";
+// The ONE way `flow` is written. Career's save is loaded at boot and stays loaded,
+// so js/game/career.js has to be told whether its rules apply to the session that
+// is running — otherwise a Grand Prix would quietly inherit the career's team
+// development and its garage. Funnelling every write through here means that flag
+// can never drift out of step with the mode.
+function setFlow(v) { flow = v; Career.engage(v === "career"); }
+const isTimeTrial = () => session === "tt";
+const isCareer = () => flow === "career";
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
 let raceWeather = "dry";       // "dry" | "wet" | "rain" | "overcast" | "fog"
@@ -874,8 +891,21 @@ let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
 const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
 
 // ---------- parts / player mods ----------
-function getTeamParts(teamId) { return store.get("parts." + teamId, {}); }
-function saveTeamParts(teamId, parts) { store.set("parts." + teamId, parts); }
+// The single funnel every parts consumer goes through (setup-ui, recomputePlayerMods,
+// makeCars, partsVisualKey, renderStatBars). Branching HERE is what keeps a career
+// build fully isolated from the free-play garage: your career car and your Grand
+// Prix car for the same team are separate objects that can never leak into one
+// another, and career's own build is the only one subject to the R&D gate.
+function getTeamParts(teamId) {
+  const c = Career.data();
+  if (c && teamId === c.team) return c.fitted;
+  return store.get("parts." + teamId, {});
+}
+function saveTeamParts(teamId, parts) {
+  const c = Career.data();
+  if (c && teamId === c.team) { c.fitted = parts; Career.save(); return; }
+  store.set("parts." + teamId, parts);
+}
 
 // ---------- liveries (custom paint jobs) ----------
 function getLiveryId(teamId) { return store.get("livery." + teamId, "default"); }
@@ -949,7 +979,9 @@ let playerVisualKey = "11111111";
 
 function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
-  const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
+  // teamStats() folds in career development; outside career it hands back the
+  // team's own literal untouched, so this is the same object it always was.
+  const stats = Career.teamStats(team) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
   const setup = getTeamParts(team.id);
   const mods = Parts.getMods(setup, team);
   playerMods = {
@@ -983,9 +1015,13 @@ function makeCars() {
     const ti = Teams.LIST.indexOf(team);
     const factoryParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
     const savedParts = ti === teamIdx ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
-    team.drivers.forEach((d, di) => {
+    team.drivers.forEach((dSeat, di) => {
       const isP = ti === teamIdx && di === driverIdx;
       const resolvedParts = isP ? savedParts : factoryParts;
+      // In a driver career YOU take one of the team's two real seats; the driver
+      // you replaced steps aside and your team-mate stays put as the benchmark
+      // every objective is measured against. Null outside career.
+      const d = Career.driverOverride(team.id, di) || dSeat;
       // Spread the field's preferred lanes evenly across the track width (with a
       // little jitter) so the AI fan out instead of all stacking on the racing
       // line. Used as a fraction of half-width in updateCar.
@@ -994,7 +1030,12 @@ function makeCars() {
       idx++;
       cars.push({
         team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num, isPlayer: isP,
-        color: team.color, tier: team.tier,
+        color: team.color, tier: team.tier, seat: di,
+        // Baked once here rather than looked up per physics step. Career team
+        // development rides along in the same number the tier always contributed,
+        // so the per-car update below is unchanged in shape. paceMult() is exactly
+        // 1 outside career, making GP/TT bit-identical.
+        tierV: TIER_V[team.tier] * Career.paceMult(team.id),
         fuelId: resolvedParts.ids.fuel,
         fuelVisual: resolvedParts.visual.fuel,
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
@@ -1628,7 +1669,7 @@ function snapGameCam() {
 function startRace() {
   loadTrack(trackIdx);
   makeCars();
-  if (timeTrial) {
+  if (isTimeTrial()) {
     cars = [player];          // solo against the clock — no AI on track
     lapsTarget = raceLaps;
     const board = ttBoard(track.def.id);
@@ -1704,13 +1745,13 @@ function endRace(forcedOrder) {
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
   if (soundOn) GameAudio.finish();
-  if (timeTrial) { buildTTResults(); els.results.hidden = false; return; }
+  if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
   // classification: finished by time(+penalty), rest by progress
   const fin = cars.filter((c) => c.finished).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
   const run = cars.filter((c) => !c.finished).sort((a, b) => b.prog - a.prog);
   const order = forcedOrder || fin.concat(run);
   order.forEach((c, i) => { c.finPos = i + 1; });
-  if (seasonMode) {
+  if (isChampionship()) {
     order.forEach((c, i) => {
       const pts = Teams.POINTS[i] || 0;
       season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;
@@ -1718,7 +1759,12 @@ function endRace(forcedOrder) {
       season.teamPts[c.team.id] = (season.teamPts[c.team.id] || 0) + pts;
     });
     season.round++;
-    store.set("season", season);
+    // In career `season` IS career.season (same object, same shape — which is what
+    // lets buildResults/buildStandings/the HUD work in career untouched). Persist
+    // through the career save, or this would overwrite the standalone SEASON save
+    // with career's standings.
+    if (isCareer()) { Career.save(); Career.settleRound(order, player); }
+    else store.set("season", season);
   }
   dbgCam = null;
   buildResults(order);
@@ -1744,11 +1790,23 @@ const G = {
   get cars() { return cars; },
   get player() { return player; },
   get season() { return season; }, set season(v) { season = v; },
-  get seasonMode() { return seasonMode; }, set seasonMode(v) { seasonMode = v; },
+  // flow/session are the authority; seasonMode/timeTrial are DERIVED views kept so
+  // the __apex.info() contract and every module that reads them are unchanged.
+  // __apex.race()/tt() write the legacy names to mean "leave whatever mode this is",
+  // which is exactly what the setters below do.
+  get flow() { return flow; }, set flow(v) { setFlow(v); },
+  get session() { return session; }, set session(v) { session = v; },
+  // The career SAVE lives in js/game/career.js, which owns it outright — this is a
+  // read-through so there is exactly one copy, never a stale mirror in a closure.
+  get career() { return Career.data(); },
+  openCareer: (...a) => openCareer(...a),
+  get seasonMode() { return isChampionship(); },
+  set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   get ttNewRecord() { return ttNewRecord; },
   get ttSessionTs() { return ttSessionTs; },
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
-  get timeTrial() { return timeTrial; }, set timeTrial(v) { timeTrial = v; },
+  get timeTrial() { return isTimeTrial(); },
+  set timeTrial(v) { session = v ? "tt" : "race"; },
   get lapsTarget() { return lapsTarget; },
   get ranked() { return ranked; },
   get sectorLast() { return sectorLast; },
@@ -1831,6 +1889,10 @@ const G = {
   teamSwatch: (...a) => teamSwatch(...a),
   openGarage: (...a) => openGarage(...a),
   openCustomize: (...a) => openCustomize(...a),
+  // Career plumbing — same deferred-arrow reason as the block above.
+  openRaceSettings: (...a) => openRaceSettings(...a),
+  refreshCareerButton: (...a) => refreshCareerButton(...a),
+  updateTrackPreview: (...a) => updateTrackPreview(...a),
   // Mutable state + helpers consumed by js/game/photomode.js.
   get photoMode() { return photoMode; }, set photoMode(v) { photoMode = v; },
   get _photoPrevScale() { return _photoPrevScale; }, set _photoPrevScale(v) { _photoPrevScale = v; },
@@ -1881,6 +1943,9 @@ const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 const { buildSetup, openSetup, renderStatBars } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
+// CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
+// and the save live in js/game/career.js, which is a plain global and needs no ctx.
+const careerUi = CareerUI.create(G);
 // Photo mode (js/game/photomode.js).
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
@@ -1926,9 +1991,19 @@ function quitToMenu() {
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
   if (soundOn) GameAudio.startMusic(-1);
+  // Back at the title screen no session is running, so drop back to the neutral
+  // mode. Every entry point (#mb-race/#mb-tt/#mb-season/#mb-career) sets flow and
+  // session for itself, so this only stops a half-finished career leaking into the
+  // next thing the player presses. The championship SAVES are untouched — what
+  // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
+  setFlow("gp"); session = "race";
+  // …and drop the career championship alias with it, so STANDINGS on the title
+  // screen describes the standalone season again.
+  season = store.get("season", null);
   // Show standings button when an active season is in progress
   const hasSeason = season && season.round > 0 && season.round < Tracks.SEASON.length;
   $("mb-standings").hidden = !hasSeason;
+  refreshCareerButton();
 }
 
 
@@ -2281,7 +2356,7 @@ function updateCar(c, dt, ranked) {
   const dd = DIFF[difficulty];
 
   // --- speed targets ---
-  let vmax = VMAX * PACE * (c.isPlayer ? playerMods.speed : TIER_V[c.tier] * c.skill * dd.ai);
+  let vmax = VMAX * PACE * (c.isPlayer ? playerMods.speed : c.tierV * c.skill * dd.ai);
   // asymmetric rubber band — boost only when player is ahead; no artificial slow-down when behind
   if (!c.isPlayer) {
     const gap = player.prog - c.prog;
@@ -3116,8 +3191,8 @@ function updateCar(c, dt, ranked) {
       c.lastLap = lapDone;
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
-      if (c.isPlayer && timeTrial) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
-    } else if (c.isPlayer && timeTrial) {
+      if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
+    } else if (c.isPlayer && isTimeTrial()) {
       Ghost.startLap();
     }
     c.incidentInvalidLap = false;   // the new lap starts clean
@@ -3132,7 +3207,7 @@ function updateCar(c, dt, ranked) {
   }
   // Skip ghost recording while the current lap is incident-invalidated (a
   // takeover jumps s/x — recording it would corrupt the ghost trace).
-  if (timeTrial && c.isPlayer && !c.incidentInvalidLap) Ghost.record(c.lapTime, c.s, c.x);
+  if (isTimeTrial() && c.isPlayer && !c.incidentInvalidLap) Ghost.record(c.lapTime, c.s, c.x);
 
   // --- wrong-way + auto-rescue (player only) ---
   if (c.isPlayer && state === "race" && !c.finished) {
@@ -4712,7 +4787,7 @@ function render(dt) {
   // lit body program every car.
   for (let i = 0; i < _shadowCount; i++) gfx.drawShadow(_shadowMats[i], 2.4, 5.8);
   // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
-  if (timeTrial && player && (state === "race" || state === "count")) {
+  if (isTimeTrial() && player && (state === "race" || state === "count")) {
     const g = Ghost.at(player.lapTime);
     // Skip the ghost while it overlaps the player — at the lap start it sits on
     // your exact grid position, and in the cockpit/onboard cams its bodywork
@@ -5319,21 +5394,25 @@ if (gfx.isMobile) {
 
 
 $("mb-race").onclick = () => {
-  seasonMode = false; timeTrial = false;
+  setFlow("gp"); session = "race";
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
 $("mb-tt").onclick = () => {
-  seasonMode = false; timeTrial = true;
+  setFlow("gp"); session = "tt";
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
 $("mb-season").onclick = () => {
-  seasonMode = true; timeTrial = false;
+  setFlow("season"); session = "race";
+  // Re-read the STANDALONE save. In career `season` is an alias of the career
+  // championship (see openCareer), so without this a player who opened a career
+  // and then pressed SEASON would carry on the career's points here.
+  season = store.get("season", null);
   if (!season || season.round >= Tracks.SEASON.length) {
     season = { round: 0, pts: {}, teamPts: {}, driverCodes: {} };
     store.set("season", season);
@@ -5344,6 +5423,37 @@ $("mb-season").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
+// CAREER. Unlike the other three entry points this one does not go to #select:
+// the calendar decides where you race, so the hub replaces that whole screen.
+// A save with no career yet opens the hub in its new-career state.
+function openCareer() {
+  setFlow("career"); session = "race";
+  const c = Career.data() || Career.load();
+  if (c) {
+    season = c.season;               // the SAME object — see endRace()
+    trackIdx = Career.trackIndex();
+    // Career owns WHO you drive for; the garage's team/driver pickers do not apply
+    // while a contract is running, so point the existing indices at the contract.
+    const ti = Teams.LIST.findIndex((t) => t.id === c.team);
+    if (ti >= 0) { teamIdx = ti; store.set("team", ti); }
+    driverIdx = c.seat;
+    recomputePlayerMods();
+  }
+  careerUi.openHub();
+  els.overlay.hidden = true;
+  if (soundOn) GameAudio.uiSelect();
+  scheduleFlybyTrack();
+}
+// The title-screen button reads CONTINUE once a career exists, so the player can
+// tell at a glance whether pressing it resumes or starts something.
+function refreshCareerButton() {
+  const btn = $("mb-career");
+  if (!btn) return;
+  const c = Career.data() || Career.load();
+  const label = btn.querySelector(".mb-label");
+  if (label) label.textContent = c ? "CONTINUE CAREER" : "CAREER";
+}
+$("mb-career").onclick = () => openCareer();
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
 $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };
@@ -5410,7 +5520,7 @@ $("adv-close").onclick = () => { $("advanced").hidden = true; };
 // js/game/photomode.js (Photomode.create(G) — wired after the G façade).
 
 function buildRaceSettings() {
-  const lapOpts = timeTrial ? [3, 5, 8] : [3, 5, 10, 25, 57];
+  const lapOpts = isTimeTrial() ? [3, 5, 8] : [3, 5, 10, 25, 57];
   const lapsEl = $("rs-laps");
   lapsEl.innerHTML = "";
   for (const n of lapOpts) {
@@ -5441,7 +5551,7 @@ function buildRaceSettings() {
   // DIFFICULTY — a race setting like the rest, so it is built here rather than
   // on the select screen. Unlike laps/weather/time it PERSISTS (store), because
   // it is a standing preference rather than a per-race choice.
-  $("rs-diff-section").hidden = timeTrial;      // no AI to rate in a time trial
+  $("rs-diff-section").hidden = isTimeTrial();  // no AI to rate in a time trial
   const diffEl = $("rs-diff");
   diffEl.innerHTML = "";
   for (const d of ["easy", "normal", "hard"]) {
@@ -5454,18 +5564,27 @@ function buildRaceSettings() {
   }
 }
 
-els.selGo.onclick = () => {
-  if (soundOn) GameAudio.uiSelect();
-  raceLaps = timeTrial ? TT_LAPS : GAME_LAPS;
+// RACE SETTINGS is reachable from #select and (in career) from #career, so it
+// records which screen to restore on cancel — the same return-path pattern
+// openGarage(from)/garageReturn uses, and for the same reason: unhiding #select
+// unconditionally used to drop the player on the wrong screen.
+let rsReturn = "select";
+function openRaceSettings(from) {
+  rsReturn = from || "select";
+  raceLaps = isTimeTrial() ? TT_LAPS : GAME_LAPS;
   raceWeather = "dry";
   raceTimeOfDay = "default";
   buildRaceSettings();
-  els.select.hidden = true;
+  $(rsReturn).hidden = true;
   $("race-settings").hidden = false;
+}
+els.selGo.onclick = () => {
+  if (soundOn) GameAudio.uiSelect();
+  openRaceSettings("select");
 };
 $("rs-cancel").onclick = () => {
   $("race-settings").hidden = true;
-  els.select.hidden = false;
+  $(rsReturn).hidden = false;
 };
 $("rs-go").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
@@ -5548,7 +5667,9 @@ $("mb-garage").onclick = () => openGarage("menu");
 $("cs-done").onclick = () => {
   $("carsetup").hidden = true;
   setupPreviewOn = false;
-  recomputePlayerMods(); buildSelect();
+  recomputePlayerMods();
+  if (garageReturn === "career") { careerUi.openHub(); return; }
+  buildSelect();
   if (garageReturn === "menu") els.overlay.hidden = false;
   else els.select.hidden = false;
 };
@@ -5593,7 +5714,15 @@ $("cz-save").onclick = () => {
 };
 els.resMenu.onclick = () => quitToMenu();
 els.resNext.onclick = () => {
-  if (seasonMode) {
+  // Career never jumps straight into the next round: the weekend is one step of a
+  // longer loop, and the hub is where you spend what you just earned.
+  if (isCareer()) {
+    els.results.hidden = true;
+    trackIdx = Career.trackIndex();
+    openCareer();
+    return;
+  }
+  if (isChampionship()) {
     if (season.round >= Tracks.SEASON.length) {
       if (els.resNext.textContent !== "MAIN MENU") {
         // First click: build champion panel, stay on results screen
@@ -5648,7 +5777,7 @@ function setPaused(p) {
   if (!p) { closeLightTuner(false); closeCamTuner(false); }
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
-  if (els.pmStandings) els.pmStandings.hidden = !(seasonMode && season && season.round > 0);
+  if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && season && season.round > 0);
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; }
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
@@ -5821,6 +5950,8 @@ if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx 
 if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
 { const hasSeason = season && season.round > 0 && season.round < Tracks.SEASON.length;
   $("mb-standings").hidden = !hasSeason; }
+Career.load();            // resolve + migrate the career save once at boot
+refreshCareerButton();
 // Pause key: when the settings sub-menu is open it acts as a BACK to the pause
 // menu; otherwise it toggles pause as usual.
 Input.init(canvas, { onPause: () => {

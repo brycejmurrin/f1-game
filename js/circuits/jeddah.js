@@ -218,6 +218,17 @@
         palm(K(0.545 + i * 0.012), 1, 13 + (i % 2) * 3,
           6.5 + hash(i * 17 + 4) * 2.5, (i % 3) ? PALMFROND : [0.16, 0.50, 0.22]);
       }
+      // FORMAL PALM AVENUE on the inland shoulder of the fast north sweeps.
+      // The scattered plantings above read as landscaping; the Corniche's own
+      // planting is a strict double file at even spacing, and regularity is
+      // what the eye picks up at 300 km/h — a metronome of trunks flicking past
+      // a wall. Two staggered ranks, identical pitch, deliberately uniform
+      // height so the row does not dissolve into generic foliage.
+      for (let i = 0; i < 18; i++) {
+        const s = 0.655 + i * 0.0125;
+        palm(K(s), -1, 11.5, 8.4 + (i % 2) * 0.5, PALMFROND);
+        if (i % 2 === 0) palm(K(s + 0.006), -1, 17.5, 7.6, [0.09, 0.38, 0.16]);
+      }
 
       // ── Marshal posts ─────────────────────────────────────────────────────
       for (const [s, side] of [[0.06, -1], [0.13, 1], [0.34, -1], [0.49, 1],

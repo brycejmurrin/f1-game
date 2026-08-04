@@ -1069,7 +1069,7 @@
 
       // silence unused-guard lint helpers (destructured but not called directly)
       void GRASS; void TARMAC; void prop; void tower; void bush;
-      void gantry; void building; void addFrustum; void addPyramid;
+      void gantry; void building; void addFrustum; void addPyramid; void tree;
     },
   }
   );
