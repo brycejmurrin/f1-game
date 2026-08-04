@@ -252,15 +252,21 @@ const NetLobby = (function () {
     let pumpTimer = null;
 
     // ---- the four buttons -------------------------------------------------
+    // host/join/makeAnswer/acceptAnswer all RETURN their result as well as
+    // rendering it. The DOM is the player's view of the handshake, not the
+    // only way to reach it — without a return value the sole way to drive this
+    // is clicking buttons and scraping textareas, which is exactly the kind of
+    // test that fights actionability instead of exercising WebRTC.
     async function host() {
       show("hosting");
-      if (!newTransport("host")) return;
+      if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       say("Preparing invite… (this can take a few seconds)");
       const res = await NetHandshake.createInvite(transport, localProfile());
-      if (!res.ok) { say(res.message || "Could not create an invite.", true); return; }
+      if (!res.ok) { say(res.message || "Could not create an invite.", true); return res; }
       const e = els();
       if (e.invite) e.invite.value = res.code;
       say("Send that invite code to your friend.");
+      return res;
     }
 
     function join() {
@@ -271,32 +277,36 @@ const NetLobby = (function () {
       say("Paste the invite code they sent you.");
     }
 
-    async function makeAnswer() {
+    async function makeAnswer(codeIn) {
       const e = els();
-      const code = e.inviteIn ? e.inviteIn.value : "";
-      if (!code.trim()) { say("Paste their invite code first.", true); return; }
-      if (!transport) { say(noConnectionMsg(), true); return; }
+      const code = codeIn != null ? codeIn : (e.inviteIn ? e.inviteIn.value : "");
+      if (codeIn != null && e.inviteIn) e.inviteIn.value = codeIn;
+      if (!code.trim()) { say("Paste their invite code first.", true); return { ok: false, error: "empty" }; }
+      if (!transport) { say(noConnectionMsg(), true); return { ok: false, error: "no_transport" }; }
       say("Reading invite…");
       const res = await NetHandshake.acceptInvite(transport, code, localProfile());
-      if (!res.ok) { say(res.message || "That invite could not be read.", true); return; }
+      if (!res.ok) { say(res.message || "That invite could not be read.", true); return res; }
       _peerProfile = res.peer;
       if (e.answer) { e.answer.value = res.code; e.answer.hidden = false; }
       if (e.answerHint) e.answerHint.hidden = false;
       if (e.copyAnswer) e.copyAnswer.hidden = false;
       waitForOpen();
       say("Send that answer code back, then wait for the race to start.");
+      return res;
     }
 
-    async function acceptAnswer() {
+    async function acceptAnswer(codeIn) {
       const e = els();
-      const code = e.answerIn ? e.answerIn.value : "";
-      if (!code.trim()) { say("Paste their answer code first.", true); return; }
-      if (!transport) { say(noConnectionMsg(), true); return; }
+      const code = codeIn != null ? codeIn : (e.answerIn ? e.answerIn.value : "");
+      if (codeIn != null && e.answerIn) e.answerIn.value = codeIn;
+      if (!code.trim()) { say("Paste their answer code first.", true); return { ok: false, error: "empty" }; }
+      if (!transport) { say(noConnectionMsg(), true); return { ok: false, error: "no_transport" }; }
       say("Reading answer…");
       const res = await NetHandshake.acceptAnswer(transport, code);
-      if (!res.ok) { say(res.message || "That answer could not be read.", true); return; }
+      if (!res.ok) { say(res.message || "That answer could not be read.", true); return res; }
       _peerProfile = res.peer;
       waitForOpen();
+      return res;
     }
 
     async function copy(text) {
@@ -358,7 +368,13 @@ const NetLobby = (function () {
     return {
       wire, open, close, cancel, host, join, makeAnswer, acceptAnswer,
       localProfile, modsFromProfile, setTransportFactory,
-      status: () => ({ role, statusText, connected: !!transport && transport.status === "open" }),
+      status: () => ({
+        role, statusText,
+        connected: !!transport && transport.status === "open",
+        // The live ICE/connection state — the only window into a handshake
+        // that no in-process test can reproduce.
+        wire: transport && transport.stats ? transport.stats() : null,
+      }),
     };
   }
 
