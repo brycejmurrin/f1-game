@@ -35,12 +35,19 @@
   background: transparent;
   pointer-events: none;
   place-items: stretch end;
+  /* The sheet's width, as a variable, because the preview camera bar has to
+     know it too — it is positioned against the OTHER edge of the same box and
+     must stop before the sheet starts. Hard-coding a second guess at this
+     (38vw) is what put the TOP chip underneath the panel on a notched phone:
+     the bar starts after the safe-area inset, so "38% of the viewport" is not
+     38% of the room it actually has. */
+  --cs-sheet-w: min(100%, max(430px, 54vw), 500px);
 }
 #cs-inner {
   pointer-events: auto;
   /* Never wider than the safe box, never wider than 500px, and on a landscape
      screen it gives up whatever the car needs (~46% of the viewport). */
-  width: min(100%, max(430px, 54vw), 500px);
+  width: var(--cs-sheet-w);
 }
 /* THE CAR IS THE HERO, and on a wide screen the panel was still taking 500px of
    a 1440px viewport for a list of radio buttons. Give the sheet a smaller share
@@ -49,7 +56,7 @@
    left half. Capped, not proportional: past ~1600px the panel does not need to
    keep growing, it just needs to stop crowding. */
 @media (min-width: 1100px) {
-  #cs-inner { width: min(38vw, 460px); }
+  #carsetup { --cs-sheet-w: min(38vw, 460px); }
 }
 
 /* ---------- header ---------- */
@@ -453,11 +460,13 @@
   left: calc(var(--safe-l) + var(--gap));
   bottom: calc(var(--safe-b) + var(--gap));
   z-index: 1;
+  /* Bounded by BOTH edges rather than by a max-width: left of the safe box,
+     right of wherever the sheet actually starts. The row then wraps inside the
+     room the car has instead of sliding under the panel. */
+  right: calc(var(--safe-r) + var(--cs-sheet-w) + var(--gap));
   display: flex; flex-wrap: wrap; align-items: center;
   gap: 4px;
-  /* Never reach under the sheet, which is docked right at up to 54vw — so the
-     bar gets 38vw and wraps to a second row rather than sliding beneath it. */
-  max-width: min(38vw, 420px);
+  justify-content: flex-start;
 }
 /* Below this the sheet is the whole screen (its width floor is 430px) and there
    is no car left to aim a camera at, so the controls would be pointing at
@@ -484,7 +493,12 @@
   background: rgba(0,204,136,0.18); color: #0c8;
   border-color: rgba(0,204,136,0.4);
 }
-.cs-view-grp { display: flex; align-items: center; gap: 4px; }
+/* `contents` keeps the span as the chips' DOM PARENT — which is the whole point
+   of it, since AriaState groups by parent — while taking its box out of the
+   layout so the chips wrap as one continuous run. As real flex items the groups
+   could not break internally, so SPIN was stranded on a row of its own and the
+   bar stacked three deep on a phone. */
+.cs-view-grp { display: contents; }
 .cs-view-zoom { font-size: 13px; padding: 3px 10px; line-height: 1; }
 .cs-view-sep {
   width: 1px; height: 16px; margin: 0 2px;
@@ -497,5 +511,20 @@
 /* No mouse = no drag affordance to advertise, and no room for it either. */
 @media (hover: none), (max-width: 560px) {
   .cs-view-hint { display: none; }
+}
+/* Phone-sized car area: the sheet has a 430px floor, so on a landscape handset
+   the bar has ~250px to work with — and less again on a notched one, where the
+   safe-area inset eats another 59px. Shrink the chips so that wraps to two rows
+   instead of three. */
+@media (max-width: 1000px) {
+  #cs-view { gap: 3px; }
+  .cs-view-btn {
+    font-size: 9px; letter-spacing: 0.05em;
+    padding: 4px 7px; min-height: 26px;
+  }
+  .cs-view-zoom { font-size: 12px; padding: 2px 8px; }
+  /* The dividers cost width and, once the row wraps, land at arbitrary places
+     in it — they read as separators of nothing. */
+  .cs-view-sep { display: none; }
 }
 } /* @layer components */

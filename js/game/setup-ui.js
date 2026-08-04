@@ -390,7 +390,8 @@ function buildLiveryOptions(container, team) {
     const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
-                     noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", halo: "", finish: "gloss" };
+                     noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", logo: "",
+                     halo: "", finish: "gloss" };
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -444,6 +445,7 @@ function buildLiveryOptions(container, team) {
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
+          logo: liv.logo ? arrToHex(liv.logo) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = liv.id;
@@ -485,6 +487,7 @@ function buildLiveryOptions(container, team) {
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
+          logo: liv.logo ? arrToHex(liv.logo) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = null;   // create-new: never overwrites the stock scheme
@@ -556,7 +559,10 @@ function buildLiveryCreator(container, team) {
   // picks: the fin is one flat colour, so an art colour equal to it disappears.
   // NONE on FIN ART keeps the automatic choice, which contrasts the fin paint.
   wrap.appendChild(colorRow("TAIL FIN", "fin", true));
-  wrap.appendChild(colorRow("FIN ART", "finArt", true));
+  // Three separate things people kept conflating: the fin PLATE, the abstract
+  // brush-stroke graphic painted on it, and the team EMBLEM sitting on top.
+  wrap.appendChild(colorRow("TAIL GRAPHIC", "finArt", true));
+  wrap.appendChild(colorRow("TEAM LOGO", "logo", true));
   wrap.appendChild(colorRow("HALO", "halo", true));
   // FINISH is the paint MATERIAL rather than a colour, so it is a 3-way choice
   // instead of a colour well: gloss (the clearcoat car paint every livery has
@@ -613,6 +619,7 @@ function buildLiveryCreator(container, team) {
     if (d.wing) liv.wing = hexToArr(d.wing);
     if (d.fin)  liv.fin  = hexToArr(d.fin);
     if (d.finArt) liv.finArt = hexToArr(d.finArt);
+    if (d.logo) liv.logo = hexToArr(d.logo);
     if (d.halo) liv.halo = hexToArr(d.halo);
     if (d.finish && d.finish !== "gloss") liv.finish = d.finish;
     const existing = getCustomLiveries(team.id);
@@ -651,6 +658,7 @@ function livePreviewDraft(team, d) {
   G.livDraftOverride = { teamId: team.id, liv: { c1: hexToArr(d.c1), c2: hexToArr(d.c2), stripe: d.stripe ? hexToArr(d.stripe) : null, accent: d.accent ? hexToArr(d.accent) : null,
     nose: d.nose ? hexToArr(d.nose) : null, pod: d.pod ? hexToArr(d.pod) : null, wing: d.wing ? hexToArr(d.wing) : null, halo: d.halo ? hexToArr(d.halo) : null,
     fin: d.fin ? hexToArr(d.fin) : null, finArt: d.finArt ? hexToArr(d.finArt) : null,
+    logo: d.logo ? hexToArr(d.logo) : null,
     noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null,
     finish: d.finish && d.finish !== "gloss" ? d.finish : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
