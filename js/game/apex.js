@@ -27,6 +27,12 @@ const { TUNE_DEFS, LT } = LightTune;
 // are the layer an LLM agent reads. See docs/AGENT-WORLD-API.md.
 const agentView = AgentView.create(G);
 
+// The far end of a netLoopback() session — the in-page stand-in for the other
+// player's browser. Held here so netPeerSend()/netPeerClose() can drive it from
+// a test, which is what makes the game side of multiplayer testable without
+// signalling, a second browser, or a network.
+let _netPeer = null;
+
 const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
   jump(frac, speed, lateral) {
@@ -1563,6 +1569,87 @@ const api = {
     if (!c) return false;
     c.netInput = input || null;
     return c.netInput ? Object.assign({}, c.netInput) : null;
+  },
+
+  // ── Multiplayer session (js/net/netplay.js) ─────────────────────────────
+  //
+  // net() — the session snapshot: role, which grid slots the two drivers hold,
+  // clock sync, buffered packets. { active:false } when racing solo.
+  net() {
+    return G.netPlay ? G.netPlay.status() : { active: false };
+  },
+
+  // netLoopback({latencyMs, jitterMs, loss, role, peer}) — start a session
+  // against an IN-PAGE peer, with no signalling and no second browser. This is
+  // how the game side of multiplayer is tested at all: the far endpoint is
+  // held here and driven by netPeerSend/netPeerClose below, so a test can post
+  // a rival at an exact position and assert what the game does with it.
+  netLoopback(o) {
+    o = o || {};
+    if (!G.netPlay) return { ok: false, error: "no_netplay", message: "NetPlay is not available." };
+    const pair = NetTransport.loopback({
+      latencyMs: o.latencyMs != null ? o.latencyMs : 0,
+      jitterMs: o.jitterMs || 0,
+      loss: o.loss || 0,
+    });
+    _netPeer = pair[1];
+    // Both endpoints must be pumped from the same moment for the loopback's
+    // wire clock to line up (see js/net/transport.js). A test passes its own
+    // t0 so the whole session runs on a virtual clock it controls.
+    const t0 = o.nowMs != null ? o.nowMs : performance.now();
+    pair[0].pump(t0); _netPeer.pump(t0);
+    const res = G.netPlay.start({
+      transport: pair[0],
+      role: o.role === "guest" ? "guest" : "host",
+      peerProfile: o.peer || null,
+      interpDelayMs: o.interpDelayMs,
+    });
+    if (!res.ok) _netPeer = null;
+    return res;
+  },
+
+  // netPeerSend({s, x, head, speed, gear, lap, ...}) — publish one car state AS
+  // THE REMOTE PEER. Fields default to the rival's current values, so a test
+  // can move one axis at a time.
+  netPeerSend(st, atMs) {
+    if (!_netPeer || !G.netPlay) return false;
+    const status = G.netPlay.status();
+    const cur = G.cars[status.remoteId] || {};
+    const car = Object.assign({
+      s: cur.s || 0, x: cur.x || 0, head: cur.head || 0, speed: cur.speed || 0,
+      gear: cur.gear || 1, lap: cur.lap || 0,
+      deploying: false, offroad: false, onKerb: false, braking: false,
+    }, st || {});
+    const now = atMs != null ? atMs : performance.now();
+    _netPeer.pump(now);
+    const ok = _netPeer.send("state", NetSnapshot.encodeSnapshot(Math.round(now), [
+      { id: status.remoteId, car },
+    ]));
+    return ok ? { sent: car, at: Math.round(now) } : false;
+  },
+
+  // netPeerClose() — the rival's connection drops. The game must hand their
+  // car back to the AI rather than leave a driverless obstacle on track.
+  netPeerClose() {
+    if (!_netPeer) return false;
+    try { _netPeer.close(); } catch (e) {}
+    _netPeer = null;
+    return true;
+  },
+
+  // netTick(nowMs?) — pump the session by hand. The game loop already calls
+  // this every frame, but a test must not depend on rAF actually running at a
+  // useful rate: driving it explicitly is what makes latency, loss and
+  // interpolation reproducible here, the same way step() does for physics.
+  netTick(nowMs) {
+    if (!G.netPlay) return false;
+    G.netPlay.tick(nowMs != null ? nowMs : performance.now());
+    return G.netPlay.status();
+  },
+
+  netStop() {
+    _netPeer = null;
+    return G.netPlay ? G.netPlay.stop("local") : false;
   },
 
   // aiPlace(idx, frac, speed?, x?) — teleport an AI car (by cars[] index) to

@@ -2006,7 +2006,8 @@ const G = {
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
   GAME_LAPS, TT_LAPS, LONG_GRIP,
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
-  camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  announce, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  get netPlay() { return netPlay; },
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
@@ -2045,6 +2046,9 @@ DebrisWorld.create(G);
 // exceptions). Inert (owns() is a Set read) unless a flag is on AND the debris
 // side-world is live. DEFAULT ON per feature (apex26.r2Airborne/r3Contact/c1Pileup).
 const incidentSim = IncidentSim.create(G);
+// Two-player racing (js/net/netplay.js). Wholly inert until a session starts:
+// owns() is an identity check against a null, and tick() returns immediately.
+const netPlay = NetPlay.create(G);
 // C2 visual suspension (js/game/bodyattitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
@@ -2443,6 +2447,10 @@ function updateCar(c, dt, ranked) {
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
   // fallback-guarded; outside the window this early-out is never taken.
   if (incidentSim.owns(c)) { c._prevS = c.s; return; }
+  // Same contract for a networked rival: its owner is integrating it on their
+  // machine and we replicate the result, so running the driving model here
+  // would only fight the pose NetPlay writes. See js/net/netplay.js.
+  if (netPlay.owns(c)) { c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
@@ -3568,7 +3576,7 @@ function applyLightTune(fromApplyRace) {
     v = clamp(v, d.min, d.max);
     if (LT[d.id] !== v) { LT[d.id] = v; if (d.rebuild) rebuilt = true; if (d.reinitRain) reinit = true; if (_APPLY_RACE_IDS.has(d.id)) reapply = true; }
   }
-  if (rebuilt && track) track._lights = null;
+  if (rebuilt && track) { track._lights = null; track._alwaysLights = null; }
   // Skip the reapply when applyRaceSettings itself invoked us (it derives from
   // the fresh LT values right after this returns) — re-entering ran the whole
   // sky/ambient/fog derivation twice per track/time/weather transition.
@@ -3590,7 +3598,7 @@ function setLightTune(id, v) {
     if (v === ltFallback(id)) delete prof[id]; else prof[id] = v;
     if (!Object.keys(prof).length) delete _ltStore[key];
   }
-  if (d.rebuild && track) track._lights = null;   // re-bake per-track light records next frame
+  if (d.rebuild && track) { track._lights = null; track._alwaysLights = null; }   // re-bake per-track light records next frame
   if (d.reinitRain && isWetRoad()) initRainDrops();   // re-seed the rain field with the new count/length
   if (_APPLY_RACE_IDS.has(id) && track && state !== "menu" && state !== "select") applyRaceSettings();
   return true;
@@ -3605,8 +3613,8 @@ const _wheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive:
 const _ersLightOpts = { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 };
 const _flameOpts = { emissive: 1.0, roughness: 1, specular: 0, alpha: 1, noAlphaWrite: true };
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
-function setFrameLights(eye, scale, fwd) {
-  LightTune.setFrameLights(frame, track, cars, eye, scale, fwd, gfx.mobileTier);
+function setFrameLights(eye, scale, fwd, srcSet) {
+  LightTune.setFrameLights(frame, track, cars, eye, scale, fwd, gfx.mobileTier, srcSet);
 }
 function appendCarTailLights() {
   LightTune.appendCarTailLights(frame, track, cars, player);
@@ -4397,6 +4405,20 @@ function render(dt) {
     setFrameLights(camEye, floodScale, _lightFwd);
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     if (_floodActive) appendCarTailLights();
+  } else if (track.hasAlwaysLamps) {
+    // ALWAYS-ON FIXTURES in a bright session. A circuit can register lamps that
+    // burn regardless of the hour (lampPost({always:true}) — Monaco's tunnel
+    // luminaires). Those live in a SEPARATE baked set, so a day race lights the
+    // one place the sun cannot reach without switching the whole circuit's
+    // street lighting on. Same cull, same knobs; no twilight ramp and no car
+    // tail-lights, both of which are after-dark cues.
+    if (!track._alwaysLights || track._alwaysLights.length === 0)
+      track._alwaysLights = buildTrackLights(track, true);
+    if (track._alwaysLights.length) {
+      const _al = LT.lampLevel;
+      _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
+      setFrameLights(camEye, [_al, _al, _al], _lightFwd, track._alwaysLights);
+    } else frame.lights = null;
   } else {
     frame.lights = null;
   }
@@ -5201,7 +5223,11 @@ function tickBody(now) {
   if (!paused && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll();   // refresh gamepad state once per frame (before the paused gate
                   // so the Start/Menu button can also un-pause)
-  if (paused) {
+  // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
+  // because a shared world cannot be stopped by one player opening a menu: the
+  // rival keeps driving whatever this screen is doing. Inert solo.
+  netPlay.tick(now);
+  if (paused && !netPlay.active()) {
     // LIGHTING / CAMERA TUNER live preview: keep RENDERING (physics stays
     // paused) while either panel is open so every slider change shows on the
     // held frame — a camera angle is unjudgeable on a frozen picture.

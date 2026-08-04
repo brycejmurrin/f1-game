@@ -41,8 +41,10 @@ npm run test:audio      # engine/sfx audio smoke
 npm run test:modes      # season + time-trial + career game modes
 npm run test:career     # career only: mode axes, the save, the hub, a round
 npm run test:map        # minimap hooks
-npm run test:net        # multiplayer car roles: human (person-driven) vs local
-                        #   (this screen), the per-car input seam, per-car parts
+npm run test:net        # multiplayer: car roles (human vs local), the per-car
+                        #   input seam, per-car parts, and the SESSION — rival
+                        #   posing, extrapolation, loss, hand-back to AI. Driven
+                        #   on a virtual clock (netTick/step), never on rAF
 npm run test:net-unit   # js/net wire: loopback transport (latency/jitter/loss,
                         #   deterministic via a seeded rnd), invite-code codec,
                         #   snapshot quantisation + interpolation, clock sync.
@@ -222,7 +224,7 @@ js/track/        — track ENGINE (shared code) —
                                   city palettes/styles) — data only, no placement logic
   scenery-nature.js / scenery-city.js / scenery-structures.js / scenery-identity.js
                  Scenery*.create(ctx)   the buildProps split; together they serve the
-                                  106-member scenery(api) contract frozen by
+                                  107-member scenery(api) contract frozen by
                                   tests/scenery-api-contract.test.mjs
 
 js/circuits/     — circuit DATA —
@@ -293,6 +295,18 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   typed JSON events, and a heartbeat, so
                                   an abandoned car can be handed back to the AI
                                   instead of standing still on track
+  netplay.js     NetPlay        the game side (NetPlay.create(G)). AUTHORITY:
+                                  each peer fully owns its own car; the host
+                                  additionally owns the AI and race control. So
+                                  your own car is NEVER corrected — no rollback,
+                                  no reconciliation, no host advantage — at the
+                                  cost of the two screens disagreeing by ~1 m
+                                  under heavy contact. A rival is POSED from
+                                  replicated state, so updateCar() early-outs on
+                                  netPlay.owns(c), exactly as it already does
+                                  for an incident-sim takeover. tick() also runs
+                                  through the paused gate: one player opening a
+                                  menu cannot stop a shared world
 
 js/game/         — game modules (each created with the G ctx façade from game.js) —
   tables.js      GameTables     static game data (CAM_MODES, DIFF, gears, paints)
@@ -376,7 +390,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (88) + tests/*.test.mjs unit suites (26)
+tests/*.spec.js                 Playwright specs (89) + tests/*.test.mjs unit suites (26)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -742,7 +756,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-88 Playwright specs + 26 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+89 Playwright specs + 26 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

@@ -72,7 +72,7 @@
       { frac: 0.9417, angleDeg: 2.5, widthM: 100 },   // Rascasse
     ],
     scenery: function (api) {
-      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
+      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
       const K = (s) => Math.round(s * n) % n;
       const KR = (s) => TrackSpace.sourceNodeToRacing(def, K(s), n);
       const racingSide = (side) => def.reverse ? -side : side;
@@ -290,42 +290,263 @@
       }
 
       // ── SECTOR 4 — TUNNEL (s=0.51→0.585) ───────────────────────────────
+      // The one piece of Monaco that is not a street: ~250 m bored under the
+      // headland, and the only place on the calendar where the driver loses the
+      // sky. What it needs, in order of how much each one is missed:
+      //
+      //   1. LIGHT. The old build put its ceiling strip at height 6.0 while the
+      //      roof slab occupied 5.8→7.0 — the strip was buried INSIDE the slab,
+      //      and it was a raw addBox over the centreline, so the on-road guard
+      //      dropped every one of them anyway (only overheadSpan may cross the
+      //      road). Net effect: a pitch-black lid. Real Monaco runs continuous
+      //      luminaire lines the whole length, and they are the single thing
+      //      that makes a tunnel read as a tunnel rather than as a dark room.
+      //   2. A VAULT. One flat centred slab can only be a lid. `overheadSpan`
+      //      now takes a lateral `offset`, so the soffit is built as three
+      //      descending bands per side — crown, mid, springing — that step down
+      //      to meet the wall cornice.
+      //   3. WALLS with courses: sooty plinth, washed upper panel, cable tray,
+      //      pilaster ribs, delineator studs, emergency doors, livery panels.
+      //      A single 6.4 m grey slab per side is what made it read as a duct.
+      //   4. MASS OVERHEAD. The roof used to stop dead at the sky, so from the
+      //      harbour side the tunnel was a floating deck. The headland (and the
+      //      Fairmont sitting on it) now sits on top of it.
+      //
+      // Everything crossing the road clears 5.3 m at its lowest (the audits'
+      // over-road ceiling is 5.0 m); everything else is a guarded addBox kept
+      // outside hw so the road-footprint test drops nothing.
       {
         const tunS = K(0.51), tunE = K(0.585);
         const tunLen = ((tunE - tunS) + n) % n;
         const step = Math.max(2, Math.round(8.0 / ds));
-        const DARK = [0.26, 0.25, 0.30];
-        for (let i = 0; i < tunLen; i += step) {
+        const dz = ds * step;                    // station pitch (~8 m)
+        // Tunnel palette — sooty concrete, not the flat slate the lid used.
+        const VAULT   = [0.25, 0.24, 0.26];      // springing course, darkest
+        const VAULT2  = [0.31, 0.30, 0.32];      // mid haunch
+        const VAULT3  = [0.38, 0.37, 0.39];      // crown, washed by the lamps
+        const WALLHI  = [0.60, 0.58, 0.54];      // upper wall panel
+        const WALLLO  = [0.17, 0.17, 0.19];      // tyre-soot plinth
+        const DUCT    = [0.40, 0.41, 0.43];      // cable tray
+        const RIB     = [0.29, 0.28, 0.30];      // pilaster
+        // Albedos ABOVE white are the scenery's "this surface IS a light source"
+        // tag (see the emissive branch in js/render/shaders/lit.js): they read
+        // as bright fittings under daylight ambient AND bloom once floodEmit
+        // ramps at dusk/night. Nothing else can light a day-session tunnel —
+        // point lights only feed the shader when the session is dark.
+        const LUM     = [1.36, 1.30, 1.08];      // luminaire line
+        const STUD    = [1.12, 1.02, 0.66];      // wall-base delineator
+        const EXITGRN = [0.30, 1.24, 0.52];      // emergency-exit sign
+        const KERB    = [0.44, 0.43, 0.41];      // service kerb over the verge
+        const ROCK    = [0.42, 0.40, 0.35];      // headland above the bore
+        const SCRUB   = [0.34, 0.40, 0.29];
+        // Armco livery inside the tunnel — Monaco's barriers carry advertising
+        // the whole way through, and a colour every 8 m is what gives the run
+        // its rhythm at 290 km/h.
+        const LIVERY = [[0.82, 0.16, 0.18], [0.10, 0.26, 0.62], [0.94, 0.90, 0.30],
+                        [0.92, 0.92, 0.94], [0.14, 0.52, 0.32]];
+
+        const lastStation = Math.floor((tunLen - 1) / step);
+        let si = 0;
+        for (let i = 0; i < tunLen; i += step, si++) {
           const k = (tunS + i) % n;
           const r = [track.rx[k], track.ry[k], track.rz[k]];
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
+          const b = [r, u, t];
+          const base = [px[k], py[k], pz[k]];
           const cw = hw[k] * 2 + 5;
+          const lat = (o, h) => vadd([px[k] + r[0] * o, py[k], pz[k] + r[2] * o], u, h);
+
+          // ── VAULT ────────────────────────────────────────────────────────
+          // Crown highest, springing lowest, so the soffit steps DOWN toward the
+          // walls and the section reads as an arch from the cockpit. Band depths
+          // differ (1.06 / 1.02 / 1.10) so no two bands share a front/back plane
+          // — same-facing coplanar pairs are exactly what the z-fighting ratchet
+          // in tests/coplanar-faces.test.mjs exists to catch.
           overheadSpan({
-            id: `monaco-tunnel-roof-${k}`, frac: k / n, clearance: 5.8,
-            thickness: 1.2, depth: ds * step * 1.05, span: cw,
-            color: DARK, supports: false, required: true,
+            id: `monaco-tunnel-roof-${k}`, frac: k / n, clearance: 6.45,
+            thickness: 1.35, depth: dz * 1.06, span: cw * 0.34,
+            color: VAULT3, supports: false, required: true,
           });
           for (const sd of [-1, 1]) {
-            const o = sd * (hw[k] + 1.5);
-            addBox(out, vadd([px[k] + r[0] * o, py[k], pz[k] + r[2] * o], u, 3.2), [1.4, 6.4, ds * step * 1.05], [0.30, 0.29, 0.33], [r, u, t]);
+            const side = sd < 0 ? "l" : "r";
+            overheadSpan({
+              id: `monaco-tunnel-haunch-${side}-${k}`, frac: k / n, clearance: 6.05,
+              thickness: 1.75, depth: dz * 1.02, span: cw * 0.28, offset: sd * cw * 0.26,
+              color: VAULT2, supports: false, required: true,
+            });
+            overheadSpan({
+              id: `monaco-tunnel-springing-${side}-${k}`, frac: k / n, clearance: 5.55,
+              thickness: 2.25, depth: dz * 1.10, span: cw * 0.32, offset: sd * cw * 0.44,
+              color: VAULT, supports: false, required: true,
+            });
+            // ── LUMINAIRE LINE ───────────────────────────────────────────
+            // Continuous, recessed into the crown (top 6.55 > the crown soffit
+            // at 6.45, so the trough is let into the vault rather than floating
+            // under it) and hanging 0.85 m proud — the bright line a driver
+            // actually sees streaming overhead.
+            overheadSpan({
+              id: `monaco-tunnel-lamp-${side}-${k}`, frac: k / n, clearance: 5.70,
+              thickness: 0.90, depth: dz * 0.99, span: cw * 0.075, offset: sd * cw * 0.155,
+              color: LUM, supports: false, required: true,
+            });
+            // …and the light it actually casts. Registered every OTHER station
+            // (16 m) per side so the pair of runs stays well inside the shader's
+            // 32-light budget while still reading as a continuous ceiling.
+            // `always` because a tunnel's lamps are on at noon — and this bore is
+            // in permanent shadow, so without it the one part of Monaco the sun
+            // never reaches would be the one part with no light at all. Aimed
+            // straight DOWN the vault (the default near-lane aim is for a mast
+            // standing beside the road, and would rake these into the wall).
+            if (si % 2 === 0) {
+              lampPost({
+                id: `monaco-tunnel-luminaire-${side}-${k}`, k, side: sd,
+                pos: lat(sd * cw * 0.155, 5.66), aim: [-u[0], -u[1], -u[2]],
+                kind: "fluor", always: true, energy: 0.62, radius: 21,
+              });
+            }
           }
-          if (i % (step * 2) === 0) {
-            addBox(out, vadd([px[k], py[k], pz[k]], u, 6.0), [cw * 0.6, 0.2, ds * step * 0.6],
-                   [0.94, 0.92, 0.80], [r, u, t]);
+
+          // ── SIDE WALLS ───────────────────────────────────────────────────
+          // Inner faces sit at hw+1.35..1.45 — clear of the armco run (which
+          // ends at hw+1.31) and comfortably outside hw, so nothing here meets
+          // the road-footprint guard. Each course is set a few centimetres
+          // proud of the one above it: that reveal is what stops three stacked
+          // boxes reading as one flat slab (and keeps their faces off a shared
+          // plane).
+          // (Outer faces are pulled in to ~hw+2.35: they are buried in the
+          // headland and never drawn, but Monaco's streets run so close in world
+          // space that the hairpin hotel's wall sections land within millimetres
+          // of the tunnel's back face and z-fight it.)
+          for (const sd of [-1, 1]) {
+            addBox(out, lat(sd * (hw[k] + 1.92), 0.61),  [0.99, 1.22, dz * 1.12], WALLLO, b);
+            addBox(out, lat(sd * (hw[k] + 1.89), 2.95),  [0.88, 3.30, dz * 1.02], WALLHI, b);
+            addBox(out, lat(sd * (hw[k] + 1.88), 5.08),  [1.06, 0.96, dz * 1.07], VAULT,  b);
+            // Cable tray / service duct running the length at shoulder height.
+            addBox(out, lat(sd * (hw[k] + 1.30), 3.95),  [0.34, 0.30, dz * 1.01], DUCT,   b);
+            // Delineator stud on the plinth nosing — the reflector run that
+            // gives the wall a speed cue in an otherwise featureless bore.
+            addBox(out, lat(sd * (hw[k] + 1.36), 1.42),  [0.10, 0.13, 0.34],      STUD,   b);
+            // Livery panel on the armco face.
+            addBox(out, lat(sd * (hw[k] + 1.34), 0.46),  [0.06, 0.58, dz * 0.72],
+                   LIVERY[(si + (sd < 0 ? 0 : 2)) % LIVERY.length], b);
+            // Service kerb over the verge: inside a bore the ground beside the
+            // road is a poured footway, not the khaki runoff the terrain ribbon
+            // was showing through. Runs road-edge → wall face (hw+0.30 to
+            // hw+1.40) so no strip of verge is left visible between the two.
+            addBox(out, lat(sd * (hw[k] + 0.85), 0.15),  [1.10, 0.30, dz * 1.03], KERB,   b);
+            // Pilaster rib every other station, starting above the armco.
+            if (si % 2 === 0)
+              addBox(out, lat(sd * (hw[k] + 1.28), 3.25), [0.36, 4.70, 0.52],     RIB,    b);
+            // Emergency exit + sign every ~48 m.
+            if (si % 6 === 3) {
+              addBox(out, lat(sd * (hw[k] + 1.38), 1.95), [0.14, 2.10, 1.05], [0.26, 0.28, 0.30], b);
+              addBox(out, lat(sd * (hw[k] + 1.34), 1.95), [0.07, 1.90, 0.86], [0.19, 0.21, 0.23], b);
+              addBox(out, lat(sd * (hw[k] + 1.36), 3.34), [0.09, 0.30, 0.78], EXITGRN, b);
+            }
+          }
+
+          // ── OVERBURDEN ───────────────────────────────────────────────────
+          // The headland the bore runs through, in two rock courses standing on
+          // the vault's flat 7.80 m deck: from the harbour the tunnel now reads
+          // as a rock spur with a road through it instead of a floating deck.
+          //
+          // Courses are 4 stations long and CENTRED two stations downstream of
+          // the station that emits them, so the run starts flush with the entry
+          // portal. Centring them on the emitting station instead hangs 16 m of
+          // rock out over the open approach road — which, on the run down from
+          // Portier, is the first thing you see.
+          if (si % 4 === 0 && si + 4 <= lastStation) {
+            const kc = (k + step * 2) % n;
+            const ridge = 3.0 + hash(k * 5.1) * 2.6;
+            overheadSpan({
+              id: `monaco-tunnel-overburden-${k}`, frac: kc / n, clearance: 7.80,
+              thickness: 5.20, depth: dz * 4.06, span: cw * 1.04,
+              color: ROCK, supports: false, required: true,
+            });
+            overheadSpan({
+              id: `monaco-tunnel-headland-${k}`, frac: kc / n, clearance: 13.00,
+              thickness: ridge, depth: dz * 4.02, span: cw * (0.66 + hash(k * 2.7) * 0.22),
+              color: hash(k * 1.9) > 0.62 ? SCRUB : ROCK, supports: false, required: true,
+            });
           }
         }
-        for (const frac of [0.51, 0.585]) {
+
+        // ── PORTALS ───────────────────────────────────────────────────────
+        // Both mouths get the same frame: jamb piers standing on the verge, a
+        // projecting architrave over the opening, and stepped rock above it so
+        // the bore is cut INTO something. The entry mouth previously had a bare
+        // lintel with open sky behind it, which is what made it read as a
+        // concrete overpass on the approach.
+        const tunnelPortal = (frac, tag) => {
           const k = K(frac);
           const r = [track.rx[k], track.ry[k], track.rz[k]];
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
+          const b = [r, u, t];
+          const cw = hw[k] * 2 + 5;
+          out._mat = MAT.STONE;
+          for (const sd of [-1, 1]) {
+            const c = [px[k] + r[0] * sd * (hw[k] + 2.6), py[k], pz[k] + r[2] * sd * (hw[k] + 2.6)];
+            // Pier depth is deliberately NOT the architrave's 2.60: matching it
+            // put the two front faces on one plane, same-facing, and they fought.
+            addBox(out, vadd(c, u, 4.70), [2.60, 9.40, 3.12], STONE, b);
+            addBox(out, vadd(c, u, 9.70), [3.20, 0.80, 3.56], [0.70, 0.68, 0.62], b);
+          }
+          out._mat = 0;
           overheadSpan({
-            id: `monaco-tunnel-portal-${k}`, frac: k / n, clearance: 6.2,
-            thickness: 1.4, depth: 1.8, span: hw[k] * 2 + 7,
-            color: [0.32, 0.31, 0.36], supports: false, required: true,
+            id: `monaco-tunnel-portal-${tag}-arch`, frac: k / n, clearance: 8.00,
+            thickness: 1.70, depth: 2.60, span: cw * 1.10,
+            color: [0.72, 0.70, 0.64], supports: false, required: true,
           });
-        }
+          overheadSpan({
+            id: `monaco-tunnel-portal-${tag}-face`, frac: k / n, clearance: 9.70,
+            thickness: 4.20, depth: 2.00, span: cw * 0.98,
+            color: ROCK, supports: false, required: true,
+          });
+          overheadSpan({
+            id: `monaco-tunnel-portal-${tag}-crest`, frac: k / n, clearance: 13.90,
+            thickness: 3.20, depth: 1.60, span: cw * 0.72,
+            color: SCRUB, supports: false, required: true,
+          });
+          // Height-limit plate hung under the architrave — what the eye uses to
+          // judge the mouth's scale on the run down from Portier.
+          overheadSpan({
+            id: `monaco-tunnel-portal-${tag}-sign`, frac: k / n, clearance: 6.90,
+            thickness: 0.55, depth: 0.30, span: cw * 0.13,
+            color: [0.94, 0.92, 0.86], supports: false, required: true,
+          });
+          // ── PORTAL FLOODLIGHTS ─────────────────────────────────────────
+          // Twin cowled floods on each pier, raked up the portal face, plus a
+          // brighter transition light just inside the mouth. The transition
+          // lamps are the real ones: a driver's eyes cannot adapt across a
+          // 250 m bore in the time it takes to reach it, so tunnels run their
+          // entry zone far brighter than the middle and taper it down. That
+          // gradient is what stops the mouth reading as a black rectangle.
+          for (const sd of [-1, 1]) {
+            const c = [px[k] + r[0] * sd * (hw[k] + 2.6), py[k], pz[k] + r[2] * sd * (hw[k] + 2.6)];
+            const head = vadd(vadd(c, r, -sd * 1.15), u, 8.30);
+            addBox(out, vadd(head, u, 0.55), [0.34, 1.10, 0.34], [0.22, 0.22, 0.25], b);   // stalk
+            addBox(out, head, [1.15, 0.62, 0.85], [0.34, 0.35, 0.37], b);                  // cowl
+            addBox(out, vadd(head, u, -0.30), [0.98, 0.16, 0.70], [1.24, 1.26, 1.34], b);  // lens
+            lampPost({
+              id: `monaco-tunnel-portal-${tag}-flood-${sd < 0 ? "l" : "r"}`, k, side: sd,
+              pos: vadd(head, u, -0.30), aim: [-u[0] * 0.72 + r[0] * sd * 0.69,
+                                               -u[1] * 0.72 + r[1] * sd * 0.69,
+                                               -u[2] * 0.72 + r[2] * sd * 0.69],
+              kind: "halide", always: true, energy: 0.85, radius: 26,
+            });
+            // Transition-zone luminaire, hung inside the reveal.
+            lampPost({
+              id: `monaco-tunnel-portal-${tag}-mouth-${sd < 0 ? "l" : "r"}`, k, side: sd,
+              pos: vadd([px[k] + r[0] * sd * cw * 0.16, py[k], pz[k] + r[2] * sd * cw * 0.16], u, 5.55),
+              aim: [-u[0], -u[1], -u[2]],
+              kind: "fluor", always: true, energy: 1.30, radius: 27,
+            });
+          }
+        };
+        tunnelPortal(0.51, "entry");
+        tunnelPortal(0.585, "exit");
       }
 
       // ── SECTOR 5 — HARBOUR FRONT (s=0.585→0.98) ─────────────────────────
@@ -819,38 +1040,11 @@
         if (!onTrack(a3.c[0], a3.c[2], 12)) megaYacht(a3, 0.8, [0.94, 0.90, 0.82]);
       }
 
-      // ── MONACO TUNNEL PORTAL — ornate stone arch mouth ──────────────────
-      // A decorative arched portal facade at the harbour-side tunnel exit,
-      // built from a keystone arch of stepped stone voussoir boxes over the
-      // road, faced with cream ashlar piers.
-      {
-        const k = K(0.585);
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const t = [track.tx[k], track.ty[k], track.tz[k]];
-        const u = upOf(track, k);
-        const base = [px[k], py[k], pz[k]];
-        const b = [r, u, t];
-        const span = hw[k] * 2 + 6;
-        out._mat = MAT.STONE;
-        // Twin ashlar piers flanking the mouth
-        for (const sd of [-1, 1]) {
-          const pc = vadd(base, r, sd * (hw[k] + 2.6));
-          addBox(out, vadd(pc, u, 4.4), [2.4, 8.8, 3.0], CREAM, b);
-          addBox(out, vadd(pc, u, 9.0), [3.0, 0.8, 3.4], STONE, b);   // cornice cap
-        }
-        // Typed overhead crown: explicit clearance keeps the portal intentional.
-        overheadSpan({
-          id: "monaco-ornate-portal-crown", frac: k / n, clearance: 8.0,
-          thickness: 2.8, depth: 3.2, span: span * 0.92,
-          color: DUSTY, supports: false, required: true,
-        });
-        overheadSpan({
-          id: "monaco-ornate-portal-rock", frac: k / n, clearance: 11.0,
-          thickness: 5.0, depth: 4.0, span: span * 1.1,
-          color: [0.34, 0.40, 0.30], supports: false, required: true,
-        });
-        out._mat = 0;
-      }
+      // (The old "ornate stone arch mouth" block that stood here duplicated the
+      // s=0.585 exit portal — same ashlar piers at hw+2.6, a second crown and a
+      // second rock band. It is now one shared tunnelPortal() called at both
+      // mouths, up in the SECTOR 4 block, so the entry gets the same treatment
+      // and the exit stops emitting two of everything.)
 
       // ── TIERED PASTEL HILLSIDE TERRACES (Beau Rivage climb, L) ───────────
       // Stepped apartment terraces that rise and set back up the rock face —
