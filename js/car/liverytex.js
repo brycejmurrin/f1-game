@@ -820,7 +820,13 @@ const LiveryTex = (function () {
     // exactly where the strip and the bottom of the primary wordmark sit — inking
     // those against the base paint is how a mark ends up unreadable on the panel.
     const pod = colors.pod || null;
-    const podBg = pod ? [c1, pod] : [c1];     // the mark straddles both
+    // The sidepod carries a physical sponsor BOARD — a fixed pale panel the car
+    // mesh paints under the wordmark — and the ink logic never knew about it.
+    // On any dark livery the ink resolves LIGHT for the paint and then lands on
+    // that pale board at 1.4:1, which is the faint sidepod text. It is part of
+    // the background set now, so the ink (or its halo) has to clear it too.
+    const board = (typeof Car3D !== "undefined" && Car3D.PANEL_COL) || [0.82, 0.82, 0.86];
+    const podBg = pod ? [c1, pod, board] : [c1, board];
     const ink = inkFor(c1);                   // crest / fin / number: base paint
     const inkPod = inkOn(podBg);              // sidepod wordmarks
     const inkStrip = inkOn(pod ? [pod] : [c1]); // the low strip sits inside the panel
