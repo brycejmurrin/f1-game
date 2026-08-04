@@ -5,6 +5,23 @@
    is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
 /* ---------- touch controls ---------- */
 /* Every control button is the same size, with perfectly centred text. */
+/* Size and SPACING are one system, expressed as variables. They used to be a
+   dozen hand-written constants (76 wide, stacked at 16/100/184/292/384) which
+   agreed only by arithmetic nobody re-did when a control was added — the same
+   coupling that let ACTIVE AERO push the HUD strip onto the BRAKE button. A
+   position is now `--btn-pitch` from its neighbour, so shrinking a button
+   re-spaces the whole stack for free.
+   Landscape shrinks them: vertical space is the scarce axis there (a phone is
+   ~390px tall on its side), and five 76px circles in one column ate two thirds
+   of it. 64px still clears Apple's 44pt minimum target with room to spare. */
+:root {
+  --btn: 76px;                                        /* action button diameter */
+  --btn-gap: 8px;
+  --btn-pitch: calc(var(--btn) + var(--btn-gap));      /* one slot up the column */
+  --btn-edge: 16px;                                    /* inset from the screen edge */
+  --btn-col: calc(var(--btn) + var(--btn-gap));        /* step to a second column */
+  --steer: 84px;                                       /* steering arrow diameter */
+}
 .touchbtn {
   position: fixed;
   z-index: 12;
@@ -12,7 +29,7 @@
   background: rgba(20, 20, 30, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 50%;
-  width: 76px; height: 76px;
+  width: var(--btn); height: var(--btn);
   font-size: 13px;
   display: flex; align-items: center; justify-content: center;
   text-align: center; line-height: 1;
@@ -23,52 +40,101 @@
    takes the right column (DN bottom, UP above) and BOOST/OT move to centre. */
 #btn-throttle { left: calc(16px + var(--sal)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
 #btn-throttle:active { background: rgba(0, 210, 90, 0.75); }
-#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(100px + var(--sab)); background: rgba(180, 35, 35, 0.42); }
+#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); background: rgba(180, 35, 35, 0.42); }
 #btn-brake:active { background: rgba(230, 45, 45, 0.75); }
 
-#btn-boost { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); background: rgba(0, 150, 200, 0.4); }
-#btn-boost.on { background: rgba(0, 200, 90, 0.85); border-color: #aeea00; box-shadow: 0 0 18px rgba(120, 230, 80, 0.7); color: #04210a; }
-#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(100px + var(--sab)); }
-#btn-ot.armed { background: #aeea00; color: #0a0a0f; border-color: #aeea00; animation: pulse 0.8s infinite; }
-#btn-ot.on { background: var(--red); color: #fff; border-color: var(--red); }
-/* ACTIVE AERO sits one slot further along whichever column OT is in — every
-   layout below moves the pair together, so the rule is "AERO is above OT". */
-#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(184px + var(--sab)); font-size: 12px; }
-#btn-aero.armed { border-color: rgba(125,249,255,0.8); color: #7df9ff; }
-#btn-aero.on { background: #22d3ee; color: #04212b; border-color: #22d3ee; box-shadow: 0 0 18px rgba(34,211,238,0.7); }
+/* BOOST IS THE BATTERY, so it is GREEN and its colour IS the charge. `--e` is
+   written each frame by hud.js from player.energy (0..1) and mixed between a
+   flat grey-green at empty and a vivid green at full, so the button answers
+   "is there anything left?" without the eye leaving it for the energy bar.
+   That is the one thing a static colour could never say, and it is the whole
+   reason this control gets the treatment rather than OT or AERO — those two
+   are gated on the world (a gap, a zone), and the world is not a quantity you
+   carry around.
+   State still runs on brightness, as everywhere else: charged is light, and
+   DEPLOYING is the deep fill with a glow. */
+#btn-boost { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab));
+             --e: 1;
+             background: color-mix(in oklab, rgba(96, 232, 130, 0.9) calc(var(--e) * 100%),
+                                             rgba(176, 190, 182, 0.5));
+             border-color: color-mix(in oklab, rgba(190, 250, 208, 0.85) calc(var(--e) * 100%),
+                                               rgba(200, 210, 205, 0.4));
+             color: #04240f; }
+#btn-boost.on { background: rgba(13, 84, 40, 0.96); color: #d8ffe4; border-color: #35c96c;
+                box-shadow: 0 0 20px rgba(40, 200, 100, 0.85); }
+/* OT is YELLOW and AERO is GREEN, and each DARKENS when it is doing something.
+   One hue per control, brightness for state: you can tell what a button is by
+   its colour without reading it, and whether it is live without comparing it to
+   its neighbour. The old scheme spent three unrelated hues on OT alone (lime
+   armed, red active) and cyan on AERO, so every state change looked like a
+   different button rather than the same one switched on. */
+/* THE IDLE FILL HAS TO BE NEARLY OPAQUE, and that is not a style choice — it is
+   what the compositing arithmetic demands. Over a near-black page, a translucent
+   fill blends toward black, and blending toward black is exactly how you turn
+   yellow into OLIVE and green into SAGE. Blue survives it (a mid-luminance blue
+   is still obviously blue), which is why BOOST looked right at 0.4 and the first
+   pass at these two, copying that alpha, came out muddy.
+   Yellow and green only read as themselves when they are LIGHT, so idle stays
+   light and keeps just enough transparency to show the track moving underneath.
+   IDLE IS PALE, ARMED IS SATURATED. Both used to be light versions of the same
+   colour, separated only by a glow — which meant the difference between "you
+   cannot use this" and "use this NOW" was the smallest difference on the screen.
+   Washing idle toward white costs nothing (you never need to read it quickly:
+   its whole message is "not yet") and buys the armed state a step in SATURATION
+   on top of the glow and the pulse. Engaged is then the dark fill. */
+#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab));
+             background: rgba(251, 241, 186, 0.82); border-color: rgba(255, 251, 220, 0.75); color: #3a3208; }
+#btn-ot.armed { background: rgba(255, 210, 26, 1); color: #2b2400; border-color: #ffe98a;
+                box-shadow: 0 0 20px rgba(250, 195, 20, 0.85); animation: pulse 0.8s infinite; }
+#btn-ot.on { background: rgba(122, 88, 0, 0.96); color: #ffeeae; border-color: #f0c419;
+             box-shadow: 0 0 18px rgba(225, 175, 20, 0.8); }
+/* ACTIVE AERO is BLUE. Green belongs to BOOST now, and the two must not share a
+   hue: they are the only pair that can be lit at the same moment, and telling
+   "I have charge" from "the wing is open" at a glance is the entire point of
+   one-hue-per-control.
+   It sits one slot further along whichever column OT is in — every layout below
+   moves the pair together, so the rule is "AERO is above OT". */
+#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: 12px;
+             background: rgba(200, 230, 252, 0.82); border-color: rgba(233, 245, 255, 0.75); color: #0d2b3d; }
+#btn-aero.armed { background: rgba(38, 165, 245, 1); color: #04202e; border-color: #b3e2ff;
+                  box-shadow: 0 0 20px rgba(40, 165, 245, 0.8); }
+#btn-aero.on { background: rgba(8, 62, 120, 0.96); color: #d6efff; border-color: #3fb6ff;
+               box-shadow: 0 0 18px rgba(50, 175, 255, 0.8); }
 /* No activation zone anywhere on this circuit: the control cannot do anything,
    so it says so rather than sitting there inviting taps. Faded, not hidden —
    hiding it would reflow the touch-control stack and move every OTHER button
    under the player's thumbs (the same reason #pm-calib is disabled, not hidden). */
-#btn-aero.dead { opacity: 0.3; pointer-events: none; }
+/* Also OVERTAKE on lap 1 and under a caution — same idea, same treatment: the
+   control cannot do anything, so it stops inviting taps. */
+.touchbtn.dead { opacity: 0.3; pointer-events: none; }
 
 /* gear shift buttons: right column, stacked (DN bottom, UP above) with 8 px gaps */
 .shiftbtn { flex-direction: column; font-size: 15px; line-height: 1.05; }
 .shiftbtn small { font-size: var(--fs-micro); letter-spacing: 0.1em; color: var(--dim); }
 #shift-down { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
-#shift-up   { right: calc(16px + var(--sar)); bottom: calc(108px + var(--sab)); }
+#shift-up   { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
 
 /* steer buttons: CONSOLE layout — both arrows in the bottom-LEFT, side by side,
    so the left thumb steers like a d-pad and the right thumb stays free for the
    action buttons (BRAKE/BOOST/OT). */
-.steerbtn { font-size: 22px; background: rgba(20, 20, 30, 0.55); width: 84px; height: 84px; }
+.steerbtn { font-size: 22px; background: rgba(20, 20, 30, 0.55); width: var(--steer); height: var(--steer); }
 .steerbtn:active { background: rgba(255, 255, 255, 0.18); }
 #btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(16px + var(--sab)); }
-#btn-steer-right { left: calc(108px + var(--sal)); bottom: calc(16px + var(--sab)); }
+#btn-steer-right { left: calc(16px + var(--steer) + var(--btn-gap) + var(--sal)); bottom: calc(16px + var(--sab)); }
 
 /* MANUAL (portrait): right column holds everything, stacked with 8 px gaps —
    shift DN, shift UP, then BOOST and OT above them */
-body.manual #btn-boost { bottom: calc(200px + var(--sab)); }
-body.manual #btn-ot    { bottom: calc(292px + var(--sab)); }
-body.manual #btn-aero  { bottom: calc(384px + var(--sab)); }
+body.manual #btn-boost { bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); }
+body.manual #btn-ot    { bottom: calc(16px + 3 * var(--btn-pitch) + var(--sab)); }
+body.manual #btn-aero  { bottom: calc(16px + 4 * var(--btn-pitch) + var(--sab)); }
 
 /* BUTTON mode (console): arrows are bottom-left; right thumb gets GAS (bottom),
    BRAKE above it, BOOST above that, OT at the top — all at right+16. */
 body.steer-buttons #btn-throttle { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
-body.steer-buttons #btn-brake    { left: auto; right: calc(16px + var(--sar)); bottom: calc(108px + var(--sab)); }
-body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar)); bottom: calc(200px + var(--sab)); }
-body.steer-buttons #btn-ot       { left: auto; right: calc(16px + var(--sar)); bottom: calc(292px + var(--sab)); }
-body.steer-buttons #btn-aero     { left: auto; right: calc(16px + var(--sar)); bottom: calc(384px + var(--sab)); }
+body.steer-buttons #btn-brake    { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
+body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); }
+body.steer-buttons #btn-ot       { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 3 * var(--btn-pitch) + var(--sab)); }
+body.steer-buttons #btn-aero     { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 4 * var(--btn-pitch) + var(--sab)); }
 
 /* TOUCH mode (steer by screen halves, auto-throttle): BRAKE drops to the left
    corner (no GAS); BOOST/OT keep the right corner. */
@@ -85,49 +151,252 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* HUD becomes a short horizontal strip at the very bottom so the big gear
      no longer floats up over the car */
   .hud-bottom { flex-direction: row; align-items: flex-end; gap: 18px; bottom: calc(8px + var(--sab)); }
-  /* Nudge the strip 20px left of centre so OVERTAKE stays clear of BOOST/OT buttons
-     (right:16) which would otherwise overlap the rightmost flex item. */
-  .hud-bottom { left: calc(50% - 20px); }
-  /* In manual mode BOOST/OT move inward to right:100 (x≈668), so shift more. */
-  body.manual .hud-bottom { left: calc(50% - 55px); }
-  #hud-gearbox { gap: 3px; }
-  #hud-gear { font-size: 48px; }
-  #hud-tach { width: 92px; height: 13px; }
-  #hud-speed { font-size: 26px; }
-  #hud-energy { width: 112px; }
+  /* The strip is BOUNDED by the thumb columns, not nudged away from them. It used
+     to be centred with a hand-tuned offset ("20px left of centre so OVERTAKE
+     clears BOOST/OT") — a constant that silently encodes both the strip's width
+     and the button column's, so it went stale the moment ACTIVE AERO added a
+     sixth item and AERO began overlapping BRAKE on a small landscape phone.
+     Pinning both edges to the columns' real extents (button 76px at 16 = 92,
+     the manual/2-column stacks at 100 = 176) can never go stale that way, and
+     it is what the buttons-mode rule below already did.
+     Measured: the strip wants 467px. An iPhone SE landscape leaves 467 here,
+     383 in manual and 287 in buttons mode — so it also has to COMPACT, and
+     wrap rather than collide when even that is not enough. */
+  .hud-bottom {
+    left: calc(16px + var(--btn) + var(--btn-gap) + var(--sal));
+    right: calc(16px + var(--btn) + var(--btn-gap) + var(--sar));
+    transform: none;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  /* Landscape sizes the readouts DOWN. Portrait can afford a 58px gear because
+     the screen is tall and the HUD owns the bottom third; landscape has ~390px
+     of height total and the road is the thing you are actually looking at. */
+  #hud-gearbox { gap: 2px; padding: 3px 6px; }
+  #hud-gear { font-size: 36px; min-width: 34px; }
+  #hud-tach { width: 76px; height: 10px; }
+  #hud-speed { font-size: 20px; }
+  #hud-energy { width: 88px; height: 11px; }
+  .hud-unit { font-size: 9px; margin-left: 2px; }
   /* manual: keep everything on the right — shifts in the outer column, BOOST/OT
      in a second column just inboard (vertical space is too short to stack four).
      Override shift positions so both columns align at the same row heights. */
-  #shift-down { bottom: calc(12px + var(--sab)); }
-  #shift-up   { bottom: calc(96px + var(--sab)); }
-  body.manual #btn-boost { left: auto; right: calc(100px + var(--sar)); bottom: calc(12px + var(--sab)); }
-  body.manual #btn-ot    { left: auto; right: calc(100px + var(--sar)); bottom: calc(96px + var(--sab)); }
-  body.manual #btn-aero  { left: auto; right: calc(100px + var(--sar)); bottom: calc(180px + var(--sab)); }
+  /* ---- THE BOTTOM BAR ----
+     Touch devices only (body.desktop has no touch controls at all — measured:
+     a desktop race shows the pause button and nothing else — and its cluster
+     has room to stay a row).
+     Nothing here has a coordinate. The bar is one flex row of three: left dock,
+     cluster, right dock, spaced apart. Siblings in a flex row cannot overlap,
+     so the class of bug that produced every previous version of this file —
+     a per-mode constant restated in a second place and going stale — is gone
+     by construction rather than by another round of tuning.
+     Two consequences worth having: on DESKTOP both docks are empty, so
+     space-between leaves the cluster dead centre with no desktop-specific rule;
+     and at any width or in fullscreen the layout simply reflows, because there
+     is no pixel constant left to be wrong. */
+  /* NOT gated on touch. The bar itself is right for every device — on desktop
+     both docks are simply empty, and space-between then leaves the cluster dead
+     centre with no desktop-specific rule, which is what the paragraph above
+     always claimed. Gating it meant desktop never got the bar OR the grid
+     cluster below, and quietly kept the old end-to-end row: gear, speed, energy,
+     OVERTAKE and AERO strung across 500px of screen and clipped at the bottom
+     edge. Only the DOCK CONTENTS (.dock/.dock-grp/.touchbtn sizing) are
+     touch-only, because only they are about thumbs. */
+  #hud-dock {
+    position: absolute;
+    left: calc(12px + var(--sal));
+    right: calc(12px + var(--sar));
+    bottom: calc(10px + var(--sab));
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 12px;
+    pointer-events: none;          /* the middle must pass drags to the canvas */
+  }
+  body:not(.desktop) .dock {
+    display: flex; gap: 8px;
+    /* wrap-reverse so an overflowing dock grows UPWARD into empty sky rather
+       than pushing the bottom row off the screen. */
+    flex-wrap: wrap-reverse;
+    /* flex-START, and it means the BOTTOM. wrap-reverse inverts the cross axis,
+       so `flex-end` here resolves to visually top — which is what left the
+       three tap buttons hovering ~100px above the shift column instead of
+       sitting level with it. The two properties have to be read together. */
+    align-items: flex-start;
+    pointer-events: auto;
+  }
+  body:not(.desktop) #dock-right { justify-content: flex-end; }
+  /* ---- GROUPS, NOT LOOSE BUTTONS ----
+     A dock is a wrapping flex row, so a dock holding five loose buttons breaks
+     them apart wherever the width runs out — which is how a DN button ended up
+     above its own UP. Each group carries its own axis and is indivisible, so
+     wrapping can only ever reorder whole groups.
+     Pedals and shifts are COLUMNS because that is where those controls are in
+     a real car and where a thumb expects them: brake above gas, up above down.
+     Steer and the three taps are ROWS. */
+  body:not(.desktop) .dock-grp { display: flex; gap: 8px; pointer-events: auto; }
+  body:not(.desktop) .dock-grp.col { flex-direction: column; align-items: center; }
+  body:not(.desktop) .dock-grp.row { flex-direction: row; align-items: flex-end; }
+  /* `display:flex` above outranks the UA's [hidden] rule, so restate it — an
+     empty group left visible still holds the dock's gap open. */
+  body:not(.desktop) .dock-grp[hidden] { display: none; }
+  /* Buttons live in the flow now, not at fixed coordinates. */
+  body:not(.desktop) .dock .touchbtn {
+    position: static; inset: auto; margin: 0;
+  }
+  /* SIZE IS HIERARCHY, and it is the other half of why this reads as a control
+     pad rather than scattered circles. What you HOLD is big; what you TAP is
+     small. Five identical circles have no visual grouping, so the eye finds no
+     structure however neatly they are placed.
+     The two sizes are VARIABLES because the alignment rule below has to do
+     arithmetic on them; as literals repeated in two media queries they went
+     stale the moment either one moved. */
+  body:not(.desktop) .dock { --tap: 54px; --hold: 72px; }
+  body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: 10px; }
+  body:not(.desktop) .dock .pedal,
+  body:not(.desktop) .dock .steerbtn,
+  body:not(.desktop) .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: 13px; }
+  body:not(.desktop) .dock .shiftbtn { font-size: 15px; }
+  /* HELD CONTROLS RIDE HIGHER THAN TAPPED ONES. The pedals, the shift column
+     and the steering arrows are what a thumb rests on for a whole lap, so they
+     sit a little up from the screen edge where the thumb actually lands; the
+     three taps drop to the edge itself, which both separates the two jobs and
+     keeps the tallest group (a 3-high stack) from reaching further up the
+     screen than it has to.
+     This deliberately gives up the AERO/GAS centre-line match that the previous
+     pass introduced — with the taps stacked vertically rather than in a row,
+     the eye reads the two groups as separate columns and no longer looks for a
+     shared row. */
+  body:not(.desktop) #grp-taps { padding-bottom: 0; }
+  body:not(.desktop) #grp-pedals,
+  body:not(.desktop) #grp-shifts,
+  body:not(.desktop) #grp-steer { padding-bottom: 14px; }
+  /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
+  @media (max-width: 700px) {
+    body:not(.desktop) .dock { --tap: 48px; --hold: 64px; }
+    body:not(.desktop) .dock .touchbtn { font-size: 9px; }
+    body:not(.desktop) .dock .pedal,
+    body:not(.desktop) .dock .steerbtn,
+    body:not(.desktop) .dock .shiftbtn { font-size: 12px; }
+  }
+
+  /* ---- THE INSTRUMENT CLUSTER ----
+     The readouts were one 467px-wide ROW — gear, speed, energy, OVERTAKE, AERO
+     laid end to end — which is why they kept wrapping and fighting the buttons
+     for the same band of screen. Stacking them into two columns fixed the width
+     and traded it straight back for HEIGHT: three rows, ~135px on a 393px-tall
+     landscape phone, a third of the screen spent on five small numbers.
+     THREE COLUMNS, TWO ROWS is the shape that fits the axis actually available.
+     Landscape is short and wide, so the cluster should be too: the gear block is
+     already 65px tall on its own, and everything else fits BESIDE it in that
+     same 65px instead of below it. ~65px tall, ~300px wide.
+       [ GEAR ][ speed  ][ OVERTAKE ]
+       [ +tach][ energy ][ AERO     ]
+     Columns are ordered by how often they are read: gear and speed change every
+     corner, the two status chips a few times a lap. The chips share the right
+     column because they are the same kind of thing — a state you can act on —
+     and AERO sits low where the right thumb's AERO button is, so the readout and
+     its control are on the same side of the screen. */
+  .hud-bottom {
+    position: static; transform: none; left: auto; right: auto; bottom: auto;
+    display: grid;
+    grid-template-columns: auto auto auto;
+    grid-template-areas:
+      "gear speed  ot"
+      "gear energy aero";
+    align-items: center; justify-items: center;
+    gap: 3px 8px;
+    min-width: 0;                  /* may shrink before it pushes a dock */
+    pointer-events: none;
+  }
+  /* Every margin here is a leftover from the old vertical stack, and in a grid
+     each one is pure added height. */
+  #hud-ot { grid-area: ot; margin: 0; }
+  #hud-aero { grid-area: aero; margin: 0; }
+  #hud-gearbox { grid-area: gear; margin: 0; align-self: stretch; justify-content: center; }
+  #hud-speed { grid-area: speed; }
+  #hud-energy { grid-area: energy; margin: 0; }
+  /* The AERO chip's text is a live COUNTDOWN — "AERO 240m", "NO AERO ZONE" —
+     so it changes width every frame. Wrapping it to two lines made the whole
+     cluster jump a row taller and back as the car approached a zone. */
+  #hud-ot,
+  #hud-aero {
+    white-space: nowrap; font-size: 11px; padding: 3px 7px;
+  }
+
+  /* ---- DESKTOP: THE SAME PARTS, LAID OUT FLAT ----
+     The phone stacks into three columns because the width between two thumb
+     docks is the scarce thing there. A desktop has no docks and 1400px of
+     empty bottom edge, so the same compact block just looks like a phone HUD
+     marooned in the middle of a monitor. One ROW instead: gear, speed, a long
+     energy bar, then the two chips — wider, and about 25px flatter, which is
+     25px more road.
+     The gearbox flattens too: the tach moves BESIDE the numeral rather than
+     under it, so the tallest element in the cluster stops setting the height.
+     Gated on width as well as on `desktop`, because a desktop browser dragged
+     narrow needs the phone's compact block, not a row that will not fit. */
+  @media (min-width: 1100px) {
+    body.desktop .hud-bottom {
+      /* The energy bar is a PROPORTION, not a number — it wants to be long
+         enough to read a quarter-full at a glance and no longer. Stretched to
+         300px it was the widest thing in the cluster, which made the least
+         urgent readout the most prominent one. */
+      grid-template-columns: auto auto minmax(140px, 190px) auto auto;
+      grid-template-areas: "gear speed energy ot aero";
+      gap: 0 20px;
+    }
+    body.desktop #hud-gearbox {
+      flex-direction: row; align-items: center; gap: 12px;
+      padding: 7px 16px; align-self: center;
+    }
+    body.desktop #hud-gear { font-size: 58px; min-width: 44px; }
+    body.desktop #hud-tach { width: 172px; height: 18px; }
+    body.desktop #hud-energy { width: auto; justify-self: stretch; height: 18px; }
+    body.desktop #hud-speed { font-size: 42px; }
+    body.desktop .hud-unit { font-size: 13px; margin-left: 4px; }
+    body.desktop #hud-ot, body.desktop #hud-aero { font-size: 15px; padding: 8px 14px; }
+  }
   /* console steer: arrows bottom-left, side by side (left thumb home) */
-  #btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(12px + var(--sab)); }
-  #btn-steer-right { left: calc(108px + var(--sal)); bottom: calc(12px + var(--sab)); }
-  /* default (tilt) landscape column: BOOST 12, OT 96, AERO 180 */
-  #btn-aero { bottom: calc(180px + var(--sab)); }
-  /* button mode: 2×2 grid on the right — GAS/BOOST bottom-right column,
-     BRAKE/OT second column (landscape has width to spread horizontally) */
-  body.steer-buttons #btn-throttle { left: auto; right: calc(16px + var(--sar));  bottom: calc(12px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
-  body.steer-buttons #btn-brake    { left: auto; right: calc(100px + var(--sar)); bottom: calc(12px + var(--sab)); }
-  body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar));  bottom: calc(100px + var(--sab)); }
-  body.steer-buttons #btn-ot       { left: auto; right: calc(100px + var(--sar)); bottom: calc(100px + var(--sab)); }
-  body.steer-buttons #btn-aero     { left: auto; right: calc(16px + var(--sar));  bottom: calc(188px + var(--sab)); }
-  /* Buttons mode: steer arrows occupy the left 192px, action buttons the right 176px.
-     Pin the HUD strip inside that clear zone so OVERTAKE can't bleed into the buttons. */
+  #btn-steer-left  { left: calc(16px + var(--sal)); bottom: calc(12px + var(--sab)); }
+  #btn-steer-right { left: calc(16px + var(--steer) + var(--btn-gap) + var(--sal)); bottom: calc(12px + var(--sab)); }
+  /* default (tilt) landscape column: BOOST, OT, AERO one slot apart */
+  #btn-ot   { bottom: calc(12px + var(--btn-pitch) + var(--sab)); }
+  #btn-boost { bottom: calc(12px + var(--sab)); }
+  #btn-aero { bottom: calc(12px + 2 * var(--btn-pitch) + var(--sab)); }
+  /* button mode: 2 columns on the right — GAS/BOOST outer, BRAKE/OT inboard,
+     AERO on top of the outer column (landscape has width to spread out). */
+  body.steer-buttons #btn-throttle { background: rgba(0, 170, 70, 0.42); }
+  /* Buttons mode is the only layout with TWO steer arrows on the left, so it is
+     the only one that needs its own left bound. The RIGHT bound is not repeated
+     here: it belongs to the arc, above. Restating it was the bug — this rule
+     came later in the cascade and quietly pinned the strip back to the old
+     column's reach (160px) while the arc extends to 207px, so the strip ran
+     straight under BOOST and AERO. */
   body.steer-buttons .hud-bottom {
-    left: calc(200px + var(--sal));
-    right: calc(180px + var(--sar));
-    transform: none;
-    justify-content: center;
+    left: calc(16px + var(--steer) + var(--btn-gap) + var(--steer) + var(--btn-gap) + var(--sal));
+  }
+  /* Narrow landscape (an iPhone SE is 667 wide): the strip cannot hold its
+     natural 467px between the thumb columns, so tighten the gap and the two
+     widest items rather than let anything cross into a tap target. Below what
+     even this fits, flex-wrap above stacks the strip upward into empty sky —
+     a taller HUD is a fair trade for a readout that never sits under a thumb. */
+  /* Small landscape (an iPhone SE is 667 wide): shrink the controls a notch.
+     The cluster no longer needs compacting — stacking it took it from 467px to
+     ~170px, which fits between the docks on every phone. */
+  @media (max-width: 740px) {
+    :root { --ped: 64px; --act: 48px; }
+    /* An iPhone SE landscape leaves ~323px between the docks in tilt+manual,
+       the widest mode — one notch further down than the sizes above. */
+    #hud-gear { font-size: 30px; }
+    #hud-tach { width: 64px; }
+    body:not(.desktop) #hud-energy { width: 74px; }
+    body:not(.desktop) #hud-speed { font-size: 18px; }
+    body:not(.desktop) #hud-ot,
+    body:not(.desktop) #hud-aero { font-size: 10px; padding: 3px 6px; }
   }
   /* touch: BRAKE left corner, BOOST/OT right corner */
+  /* touch mode differs only in BRAKE dropping to the left corner (no GAS) —
+     BOOST/OT/AERO are the default landscape column above, and repeating them
+     here is how they ended up 4px out of register with it. */
   body.steer-touch #btn-brake { bottom: calc(12px + var(--sab)); }
-  body.steer-touch #btn-boost { right: calc(16px + var(--sar)); bottom: calc(12px + var(--sab)); }
-  body.steer-touch #btn-ot    { right: calc(16px + var(--sar)); bottom: calc(96px + var(--sab)); }
-  body.steer-touch #btn-aero  { right: calc(16px + var(--sar)); bottom: calc(180px + var(--sab)); }
 }
 
 #pausebtn {
@@ -272,7 +541,9 @@ body.hud-hidden #hud-restore { display: block; }
   display: flex; align-items: center; justify-content: center;
   background: var(--bg);
 }
-} /* @layer overlays */
+/* NOTE: the layer's closing brace used to be HERE, so everything below — the
+   whole VS FRIEND lobby — was unlayered, and unlayered rules outrank every
+   cascade layer in the project. See tests/css-layers.test.mjs. */
 
 /* ── VS FRIEND lobby ────────────────────────────────────────────────────────
    The invite/answer codes are a few hundred characters of base64 — a full
@@ -507,3 +778,4 @@ body.hud-hidden #hud-restore { display: block; }
 /* Failure here is usually NAT traversal, which the player can act on only if
    we say so plainly — hence a distinct state rather than the same grey text. */
 #vsfriend .vs-status.vs-error { color: #ff8a80; opacity: 1; }
+} /* @layer overlays */

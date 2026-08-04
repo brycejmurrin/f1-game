@@ -225,6 +225,10 @@ const api = {
     state: G.state, track: (G.state === "race" || G.state === "count") ? (G.track && G.track.def.id) : null,
     n: G.track && G.track.n, total: G.track && G.track.total, timeTrial: G.timeTrial, seasonMode: G.seasonMode,
     flow: G.flow, session: G.session, career: !!G.career,
+    // GRID: does this race decide its start order by qualifying? A championship
+    // always does; a one-off does when the player asked, and in a friend race
+    // it is the host's choice replicated to the guest.
+    raceQuali: !!G.raceQuali,
     // How many laps THIS session runs. Not always the race length: a time trial
     // runs TT_LAPS and qualifying runs a single flying lap.
     lapsTarget: G.lapsTarget,
@@ -407,6 +411,31 @@ const api = {
       slipFactor: +Math.sqrt(Math.max(0, 1 - axFrac * axFrac)).toFixed(3),
       aeroX: +(G.player.aeroX || 0).toFixed(3),
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
+      // THE ACTIVE-AERO TRADE, both halves, as the model actually applies them.
+      // vmaxNow carries the X_VMAX_GAIN multiplier; aeroGrip is the aero-load
+      // grip term (1 + DOWNFORCE x aeroDfMult x (v/vTop)^2) at the CURRENT
+      // speed, so it falls as the flaps open and is worth most where aero load
+      // is doing the most work. aeroDf is the multiplier on its own: 1 shut,
+      // 1 - X_DF_LOSS fully open.
+      vmaxNow: +(G.player._vmaxNow || 0).toFixed(3),
+      aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
+      aeroDf: +G.aeroDfMult(G.player).toFixed(3),
+      // HOW BIG THE TRADE IS FOR THIS CAR. Both spans are scaled by the aero
+      // PART (Parts.aeroLoad, 0 = the smallest wing in the catalog, 1 = the
+      // biggest), because a big wing has more drag to shed and more downforce
+      // to lose. A car with no parts sits at 0.5.
+      aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),
+      xVmaxGain: +G.xVmaxGain(G.player).toFixed(4),
+      xDfLoss: +G.xDfLoss(G.player).toFixed(4),
+      // THE ERS PART'S TWO AXES and what they buy. deploy runs BOOST duration
+      // (a lower drain is a longer press) and the OVERTAKE window; regen runs
+      // recharge. Both 0..1 from Parts.ersProfile, 0.5 for a car with no parts.
+      ersDeploy: +(G.player.ersDeploy != null ? G.player.ersDeploy : 0.5).toFixed(3),
+      ersRegen: +(G.player.ersRegen != null ? G.player.ersRegen : 0.5).toFixed(3),
+      drain: +G.drainFor(G.player).toFixed(4),
+      regen: +G.regenFor(G.player).toFixed(4),
+      otTime: +G.otTimeFor(G.player).toFixed(2),
+      otCool: +G.otCoolFor(G.player).toFixed(2),
     };
   },
   // Driving-boundary stats for the current track (both sides, all nodes): the
@@ -1333,6 +1362,14 @@ const api = {
       contactT: +(c.contactT || 0).toFixed(3),
       wrongWay: !!c.wrongWay, rescueT: +(c.rescueT || 0).toFixed(2),
       energy: +(c.energy || 0).toFixed(3), boostOn: !!c.boostOn,
+      // OVERTAKE, alongside the aero fields below. It was unobservable: xArmed
+      // has been here since active aero landed but its older sibling never was,
+      // so "can this car use overtake right now, and why not" could only be
+      // answered by reading game.js. otEnabled is the RACE-WIDE gate (lap 1,
+      // and any caution) and is the same for every car; otArmed folds that
+      // together with this car's own proximity and cooldown.
+      otArmed: !!c.otArmed, otT: +(c.otT || 0).toFixed(2),
+      otCool: +(c.otCool || 0).toFixed(2), otEnabled: !!G.otEnabled(),
       aeroX: +(c.aeroX || 0).toFixed(3), xOn: !!c.xOn, xArmed: !!c.xArmed,
       brakeHeat: +(c.brakeHeat || 0).toFixed(2), gear: c.gear || 1,
     };
@@ -1497,7 +1534,13 @@ const api = {
   //   { level (0 GREEN·1 YELLOW·2 VSC·3 SC), label, sector, frac, total,
   //     sectors[3], sinceT, cause, enabled }.
   //   caution({hazards:true}) → the same state plus the live DebrisWorld.hazards().
+  //   caution(true|false) or caution({enabled}) → switch the whole layer, the
+  //     SAME door the CAUTIONS race setting uses (so the chips cannot go stale
+  //     against it). Turning it off drops any flag already flying.
   caution(arg) {
+    if (typeof arg === "boolean") G.setCautionEnabled(arg);
+    else if (arg && typeof arg === "object" && arg.enabled !== undefined)
+      G.setCautionEnabled(!!arg.enabled);
     const st = G.cautionInfo ? G.cautionInfo() : { level: 0, label: "GREEN", enabled: false };
     if (arg && typeof arg === "object" && arg.hazards)
       return Object.assign(st, { hazards: DebrisWorld.hazards() });
@@ -2127,6 +2170,17 @@ const api = {
   // NOT force the flaps open: `xArmed` still gates on 3 s of straight road
   // ahead, so on a corner this returns xOn:false and aeroX stays at 0. That is
   // the mechanic, not a failure — poll aeroX to see the flap actually travel.
+  // ACTIVE AERO usage — "manual" (the driver's switch) or "auto" (the wing takes
+  // every activation zone by itself, as the AI does). No argument reads it.
+  aeroMode(v) {
+    if (v !== undefined) {
+      if (v !== "auto" && v !== "manual") {
+        return { ok: false, error: "bad_mode", message: 'aeroMode must be "auto" or "manual"' };
+      }
+      G.raceAeroMode = v;
+    }
+    return G.raceAeroMode;
+  },
   aero(on) {
     if (!G.player) return null;
     if (on !== undefined) G.player.xOn = !!on;
@@ -2142,6 +2196,7 @@ const api = {
       inZone: !!G.aeroZoneAt(G.player.s || 0),
       zoneAhead: Math.round(G.aeroZoneAhead(G.player.s || 0)),
       zones: G.aeroZones.length,
+      auto: G.raceAeroMode === "auto",
     };
   },
   // The circuit's ACTIVATION ZONES in arc metres — fixed per track, and empty

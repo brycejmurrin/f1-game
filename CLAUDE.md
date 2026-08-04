@@ -532,7 +532,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (97) + tests/*.test.mjs unit suites (32)
+tests/*.spec.js                 Playwright specs (98) + tests/*.test.mjs unit suites (33)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -585,6 +585,27 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 ---
 
 ## Parts system (`js/car/parts.js`)
+
+**THE ERS PART RUNS THE BATTERY.** Every category moves the four stats
+(`speed`→`vmax`, `accel`→`ACCEL`, `cornering`→`LAT_MAX`, `braking`→`BRAKE`), and
+all twelve have real spread — but ERS's options *describe* battery behaviour
+("harvests extra energy under braking", "maximum recovery window", "immediate
+deployment") and for a long time did none of it. `Parts.ersProfile(setup, team)`
+returns two 0..1 axes read from the bias the catalog already encodes
+(`deploy` ← the option's `accel`, `regen` ← its `speed`), and they drive
+`drainFor`/`regenFor`/`otTimeFor`/`otCoolFor` in game.js. Deriving rather than
+authoring new fields keeps the SIGNATURE clones consistent for free, since they
+copy those stats. Measured:
+
+| ERS part | deploy / regen | boost lasts | recharge | OT push / cooldown |
+|---|---|---|---|---|
+| `harvest` | 0.00 / 0.43 | 3.8 s | 5.4 s | 3.2 s / 14.0 s |
+| `standard` | 0.22 / 0.29 | 4.3 s | 5.9 s | 3.6 s / 12.9 s |
+| `overcharge` | 1.00 / 1.00 | 7.1 s | 4.0 s | 5.2 s / 9.0 s |
+
+A car with no parts — every AI — sits at the midpoint of both axes.
+`physState()` reports `ersDeploy`, `ersRegen`, `drain`, `regen`, `otTime`,
+`otCool`.
 
 `Parts.CATALOG` — an **array** of 12 category objects (ordered, not keyed by id):
 `engine`, `aero`, `suspension`, `brakes`, `tyres`, `ers`, `gearbox`, `fuel`,
@@ -655,9 +676,32 @@ fields `axEstSm`, `axFrac`, `slipFactor`.
 BOOST (spends the battery) and OVERTAKE (a free, proximity-gated push). It adds
 NO thrust and spends NO energy — it trades **downforce for drag**, the 2026
 moveable-wing rules. Z-mode (the default) is flaps shut and full downforce;
-X-mode is flaps open, `X_VMAX_GAIN` (+7.5 %) on top speed and `X_COAST_CUT` off
-the coast drag, paid for with `X_DF_LOSS` (55 %) of the `DOWNFORCE` aero-load
-term. Nothing else in the grip model changes.
+X-mode is flaps open, `xVmaxGain(c)` on top speed and `xCoastCut(c)` off the
+coast drag, paid for with `xDfLoss(c)` of the `DOWNFORCE` aero-load term.
+Nothing else in the grip model changes.
+
+**THE SIZE OF THE TRADE IS THE AERO PART'S.** All three were single constants,
+which gave a Monza-spec sliver and a maximum-downforce floor exactly the same
+deal — backwards, because a big wing has more drag to shed AND more downforce to
+lose. `Parts.aeroLoad(setup, team)` reads the resolved aero option's own
+`cornering` and normalises it against the catalog's span (0 = `minimal`,
+1 = `ground_effect`; derived from the catalog, so a new option re-scales the axis
+rather than clipping). The car carries it as `c.aeroLoad`, and each constant
+became a `_LO`/`_HI` pair interpolated by it. **A car with no parts — every AI —
+sits at the midpoint**, so the grid is one well-defined thing rather than
+whatever the catalog default is this month. Measured end to end:
+
+| aero part | load | top speed | downforce given up | net grip at 70 m/s |
+|---|---|---|---|---|
+| `minimal` | 0.00 | +5.5 % | 42 % | −16.0 % |
+| `medium` | 0.41 | +9.6 % | 57 % | −21.4 % |
+| `ground_effect` | 1.00 | +15.5 % | 78 % | −27.3 % |
+
+The big-wing car has the LOWEST base top speed and the biggest gain from opening,
+so X-mode partly buys back the straight-line speed the wing costs — which is the
+real trade, and the reason the two ends are worth choosing between.
+`physState()` reports `aeroLoad`, `xVmaxGain`, `xDfLoss`, `vmaxNow`, `aeroGrip`
+and `aeroDf`, so none of this has to be read out of `updateCar` again.
 
 `c.aeroX` is the FLAP TRAVEL (0..1) and is what every consumer reads — physics,
 HUD and the wings' own moveable ELEMENTS. Per the 2026 rules every element
@@ -690,11 +734,39 @@ averaging `startFrac`/`endFrac`.
 Braking or leaving the zone shuts the flap AND drops the switch, and
 `X_CLOSE_RATE` is ~4× `X_OPEN_RATE` — the downforce comes back faster than it
 left. The HUD chip counts the next zone down in metres like a DRS board, and
-reads `NO AERO ZONE` (struck through, button disabled) on a circuit that has
-none.
+reads `NO AERO ZONE` (struck through, button faded) on a circuit that has none.
+
+**MANUAL or AUTO** is a pause-menu setting (SETTINGS ▸ DRIVING, next to GEARS —
+it is a control preference, not a property of the event, which is why it is not
+in RACE SETTINGS). On AUTO the wing takes every zone by itself and the AERO
+button is **removed from the dock**, not greyed: the survivors close ranks,
+which the flex dock can do and the old absolutely-positioned stack could not.
+`store.get("aeroMode")`, `__apex.aeroMode()`, `raceAeroMode` in game.js.
 
 Adding a consumer? Read `c.aeroX` (or `aeroDfMult(c)` for the downforce
 multiplier) — **never `c.xOn`**. The switch is not the wing.
+
+**OVERTAKE IS NOT ACTIVE AERO, and the two sets of rules must not be crossed.**
+Overtake mode is 2026's successor to DRS as the *proximity-gated* overtaking aid,
+so it inherits DRS's safety restrictions; active aero inherits none of them.
+
+| | ACTIVE AERO (X-mode) | OVERTAKE |
+|---|---|---|
+| proximity to the car ahead | **none** — leader and backmarker alike | within `OT_GAP` (1 s) |
+| where | inside an ACTIVATION ZONE only | anywhere |
+| opening lap | **available** | disabled until the LEADER completes lap 1 |
+| under a caution | available | disabled |
+| circuit with no zones | unavailable (Monaco) | available |
+
+`otEnabled()` in game.js is the race-wide gate — it reads `ranked[0].lap` (the
+LEADER's, because a field-wide switch is what race control throws, and it is
+O(1) since `ranked` is already sorted) and `caution.level`. `c.otArmed` folds
+that together with the car's own gap and cooldown. The HUD says `NO OVERTAKE`
+and fades the button while the gate is shut, because "not armed yet" (keep
+closing) and "switched off" (nothing you do will arm it) are different messages.
+`tests/aero-zones.spec.js` pins both halves, driving a REAL opening lap —
+`setLap()` moves only the player's counter, so a teleport cannot exercise a
+leader-based gate.
 
 **The player is a world-space rigid body.** `px`/`pz`/`head` are the authority:
 the car integrates its own position in world metres from tyre forces alone and
@@ -872,9 +944,22 @@ __apex.assetLoad(tier?)       // (re)load the material arrays ("low"|"high"); fa
 __apex.matTex(0..1)           // BAKED MATERIALS blend — the A/B knob for the pack (ships at 0)
 __apex.credits()              // attribution roll for every baked asset
 __apex.aero(true)             // ACTIVE AERO: request/drop X-mode (2026 moveable
-                              //   wing). No arg reads {xOn,xArmed,aeroX,mode};
-                              //   aeroX is the FLAP TRAVEL the physics reads —
-                              //   asking for X on a corner leaves it at 0
+                              //   wing). No arg reads {xOn,xArmed,aeroX,mode,
+                              //   inZone,zoneAhead,zones,auto}; aeroX is the
+                              //   FLAP TRAVEL the physics reads — asking for X
+                              //   outside a zone leaves it at 0
+__apex.aeroZones()            // the circuit's fixed ACTIVATION ZONES; use
+                              //   midFrac, not the average of start/endFrac —
+                              //   a zone may WRAP the start line. Empty on a
+                              //   circuit with no qualifying straight (Monaco)
+__apex.aeroMode("auto")       // MANUAL | AUTO — the same door as pause >
+                              //   SETTINGS > DRIVING. AUTO takes every zone
+                              //   itself and REMOVES the AERO button
+__apex.caution()              // race control's flags {level 0-3, label, sector,
+                              //   frac, total, sectors[3], sinceT, cause,
+                              //   enabled}; caution(true|false) switches the
+                              //   whole layer (the CAUTIONS race setting's door)
+                              //   and switching it off drops any flag flying
 __apex.setPhysics({pace:0.8}) // override physics params
 __apex.probe()                // player telemetry (x, angle, k, hw, speed, s)
 __apex.physState()            // full state (slip, wrongWay, lap, rescueT)
@@ -1003,7 +1088,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-97 Playwright specs + 32 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+98 Playwright specs + 33 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

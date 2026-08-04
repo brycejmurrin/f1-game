@@ -97,6 +97,13 @@ function makeGpuHarness() {
     Math,
     Proxy,
     Date: { now: () => now },
+    // WGX arms a stall watchdog around its boot self-test (SELFTEST_BUDGET_MS)
+    // and clears it on the way out. Without timers in the sandbox the module
+    // throws `setTimeout is not defined` and every test here fails before it
+    // asserts anything. `unref()` so a watchdog that somehow outlives its race
+    // cannot hold the test runner open.
+    setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); if (t.unref) t.unref(); return t; },
+    clearTimeout: (t) => clearTimeout(t),
     window: { devicePixelRatio: 1 },
     localStorage: { getItem: () => null, setItem() {} },
     location: { reload() {} },

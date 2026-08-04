@@ -487,10 +487,11 @@ test.describe("Career — the garage", () => {
     const tap = (id) => page.evaluate((i) => document.getElementById(i).click(), id);
     await boot(page);
     await tap("mb-race");
-    await tap("sel-setup");
+    await tap("sel-go");
     await expect(page.locator("#carsetup")).toBeVisible();
     await expect(page.locator("#cs-unlimited")).toBeVisible();
     await tap("cs-done");
+    await tap("rs-cancel");   // DONE lands on RACE SETTINGS now; back out to the menu
 
     await startCareer(page);
     await tap("cr-garage");
@@ -1797,6 +1798,7 @@ test.describe("Career — the settlement", () => {
     await page.locator("#res-menu").click();
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
+    await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
     await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });

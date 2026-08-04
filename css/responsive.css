@@ -32,11 +32,19 @@ body.desktop #pm-calib { display: none !important; }
   #sel-stats .cs-stat-label { width: 84px; }
   #sel-stats .cs-stat-bar-wrap { display: block; }
   #sel-stats .cs-stat-val { width: 30px; text-align: right; font-size: 12px; }
-  /* Main menu: branding left, buttons right — as ONE centred composition.
-     Content-sized columns, centred as a pair. `1fr 1fr` split the whole screen
-     between them, so the wider the display the further apart they drifted: on
-     1920x1080 the title sat hard against the left edge with ~630px of nothing
-     before the buttons. */
+}
+
+/* Main menu on a large LANDSCAPE screen: branding left, buttons right — as ONE
+   centred composition. Content-sized columns, centred as a pair. `1fr 1fr` split
+   the whole screen between them, so the wider the display the further apart they
+   drifted: on 1920x1080 the title sat hard against the left edge with ~630px of
+   nothing before the buttons.
+   ORIENTATION is part of the condition now. Side-by-side is a shape for a screen
+   with spare WIDTH; on a large PORTRAIT screen (an upright iPad, a rotated
+   monitor) it put the pair in the middle of a tall window with hundreds of
+   pixels of black above and below, so that case keeps the stack and only grows
+   — see the portrait block below. */
+@media (min-width: 900px) and (min-height: 600px) and (orientation: landscape) {
   #overlay {
     grid-template-columns: auto auto;
     justify-content: center; align-content: center; justify-items: start;
@@ -57,9 +65,35 @@ body.desktop #pm-calib { display: none !important; }
     grid-column: 2; grid-row: 1; align-self: center;
     gap: 12px; width: auto; justify-items: stretch;
   }
-  #menu-primary, #menu-secondary { width: 320px; gap: 10px; }
+  /* ONE width for all THREE tiers, and it scales with the display. #menu-hero
+     was left out of this rule, so it kept the phone's `min(78vw, 340px)` while
+     the tiers under it were pinned at 320px — the CAREER button overhung the
+     column by 20px on every desktop, which is what made the right edge of the
+     menu look ragged. A fixed 320 was also the whole menu on a 1920 screen:
+     ~17% of the width, with the composition adrift in the middle of it. */
+  #menu-hero, #menu-primary, #menu-secondary { width: clamp(320px, 24vw, 420px); gap: 10px; }
   #menu-buttons .bigbtn { width: 100%; }
   #menu-buttons .minibtn { font-size: 12px; padding: 9px 8px; }
+  /* Small print scales too. At a flat 11/12px it read as a stray line of text
+     dropped near the title rather than a caption belonging to it. */
+  #subtitle { font-size: clamp(14px, 1.05vw, 18px); }
+  #audiostate, #disclaimer { font-size: clamp(11px, 0.8vw, 14px); }
+}
+
+/* ---------- LARGE PORTRAIT (iPad upright, a rotated monitor) ---------- */
+/* Keeps the stacked composition — a tall screen has height to spend, not width —
+   but not the phone's SIZES. A 340px button column centred in an 834px iPad left
+   the menu as a small island with ~250px of dead space either side, and the type
+   was sized for a screen a third as wide. */
+@media (orientation: portrait) and (min-width: 700px) {
+  #title { font-size: clamp(56px, 10vw, 120px); }
+  #subtitle { font-size: clamp(15px, 1.8vw, 22px); }
+  #audiostate, #disclaimer { font-size: clamp(12px, 1.3vw, 16px); }
+  #menu-hero, #menu-primary, #menu-secondary { width: min(66vw, 520px); }
+  #menu-buttons { gap: 14px; }
+  #menu-buttons .bigbtn { font-size: clamp(20px, 2.4vw, 28px); }
+  #menu-buttons .minibtn { font-size: clamp(13px, 1.5vw, 18px); }
+  .mb-sub { font-size: clamp(10px, 1.1vw, 13px); }
 }
 
 /* Scale up HUD readouts on large screens so they're legible at arm's length. */
@@ -72,6 +106,14 @@ body.desktop #pm-calib { display: none !important; }
   #hud-gear  { font-size: 68px; }
   #hud-tach  { width: 150px; height: 18px; }
   #hud-energy { width: 150px; height: 16px; }
+  /* The chips scale with the rest of the cluster. Landscape sizes them for a
+     phone (11px), and desktop now shares that grid — at arm's length on a 27"
+     monitor an 11px countdown is the one readout you cannot actually read. */
+  #hud-ot, #hud-aero { font-size: 15px; padding: 6px 12px; }
+  /* 10px off the bottom is a phone's budget, spent because a phone has no
+     height to spare. A monitor does, and at this size the cluster hugging the
+     edge reads as something that fell off the screen. */
+  #hud-dock { bottom: calc(22px + var(--sab)); }
   #minimap { width: 140px; height: 140px; }
 }
 

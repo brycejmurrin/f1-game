@@ -59,6 +59,21 @@
  *     when the CAR ENV REFLECTION tuner (carEnvCube) is turned up. No mip chain — the
  *     probe is sampled at LOD 0 (WebGPU has no generateMipmap; the paint is glossy).
  *   - Instancing (Phase 5) needs game.js to supply instance data (out of scope).
+ *   - The GLX methods with NO WGX counterpart are listed, as explicit
+ *     `undefined`, at the bottom of the returned object — see the comment there.
+ *     They MUST stay listed: game.js installs this backend by copying its
+ *     property descriptors onto GLX, so anything omitted here silently inherits
+ *     GLX's implementation and runs against a WebGL context that was never
+ *     initialised.
+ *
+ * BOOT SELF-TEST (see _selfTest at the end of create()): WebGPU reports a bad
+ * shader or pipeline ASYNCHRONOUSLY — createRenderPipeline() returns a
+ * live-looking object and the draw is silently dropped — so a backend can
+ * "initialise" perfectly and then render an all-black world. Before returning,
+ * create() therefore checks every shader module's compilation info, forces the
+ * base lit pipeline inside a validation error scope, and renders + READS BACK a
+ * pixel through the real blit pipeline. Any proven failure returns null and the
+ * caller falls back to GLX; a check that cannot be RUN is skipped, never fatal.
  *
  * NO build step, no ES modules: "use strict" IIFE assigning one global `WGX`.
  * WGSL lives as inline template strings (js/webgpu/wgsl-chunks.js).
@@ -108,21 +123,37 @@ const WGX = (function () {
   const SSAO_FORMAT  = "rgba8unorm";    // AO half-res (composite samples .r)
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
+  // ── the WGSL source module (js/render/webgpu/wgsl-chunks.js) ──
+  // Resolved defensively, because this file used to dereference WGSLChunks at
+  // IIFE-EVAL time: a missing/failed wgsl-chunks.js threw HERE, which left the
+  // `const WGX` binding permanently in its temporal dead zone — and a TDZ
+  // binding makes even `typeof WGX` THROW in gfx.js rather than report
+  // "undefined". That only stayed survivable because Gfx.create() wraps
+  // everything in try/catch. A missing dependency is exactly the failure that
+  // hit vendor/ in production, so it must degrade the documented way instead:
+  // WGX still exists, and WGX.create() returns null so the caller uses GLX.
+  const _Chunks = (function () {
+    try { if (typeof WGSLChunks !== "undefined" && WGSLChunks) return WGSLChunks; } catch (_) {}
+    try { if (typeof window !== "undefined" && window.WGSLChunks) return window.WGSLChunks; } catch (_) {}
+    return null;
+  })();
+  const _CH = _Chunks || {};   // sizes below fall back to 0 when absent; create() refuses first
+
   // ── uniform sizes / layout (must match WGSLChunks.LIT struct comments) ──
-  const FRAME_BYTES = WGSLChunks.FRAME_UNIFORM_BYTES;   // 464
+  const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 464
   const FRAME_FLOATS = FRAME_BYTES / 4;                 // 116
-  const LIGHT_STRIDE = WGSLChunks.LIGHT_STRIDE_BYTES;   // 64
-  const MAX_LIGHTS = WGSLChunks.MAX_LIGHTS;             // 32
+  const LIGHT_STRIDE = _CH.LIGHT_STRIDE_BYTES | 0;      // 64
+  const MAX_LIGHTS = _CH.MAX_LIGHTS | 0;                // 32
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 2048
   const LIGHT_FLOATS = LIGHT_BYTES / 4;                 // 512
-  const DRAW_USED_BYTES = WGSLChunks.DRAW_UNIFORM_BYTES; // 112
+  const DRAW_USED_BYTES = _CH.DRAW_UNIFORM_BYTES | 0;   // 112
   const DRAW_FLOATS = DRAW_USED_BYTES / 4;              // 28
   // Dynamic uniform-buffer offsets must be a multiple of
   // minUniformBufferOffsetAlignment (<=256 on all adapters); 256 is always a
   // valid multiple, so we stride slots at 256 B.
   const DRAW_STRIDE = 256;
   const MAX_DRAWS = 4096;                               // per-frame draw slots
-  const BLIT_BYTES = WGSLChunks.BLIT_UNIFORM_BYTES;     // 16
+  const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 16
 
   // ── shadow map (Phase 3) ──
   const SHADOW_SIZE = MOBILE_TIER ? 1024 : 2048;        // sun depth-map resolution
@@ -148,6 +179,18 @@ const WGX = (function () {
     arrayStride: 40,
     attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }],
   };
+
+  // ── Refusal bookkeeping ─────────────────────────────────────────────────────
+  // Every path that makes create() return null records WHY, both on the console
+  // and on WGX.lastFailure, so "the RENDERER button says WEBGPU but the game is
+  // running WebGL2" is a question with an answer instead of a mystery. (The
+  // fallback itself is silent by design — the player never sees a broken frame.)
+  let _lastFailure = null;
+  function _fail(reason) {
+    _lastFailure = { reason: String(reason), at: Date.now() };
+    try { console.warn("WGX unavailable (" + _lastFailure.reason + ") — falling back to WebGL2"); } catch (_) {}
+    return null;
+  }
 
   function toF32(a) { return a instanceof Float32Array ? a : new Float32Array(a); }
 
@@ -203,24 +246,30 @@ const WGX = (function () {
    */
   async function create(canvas, opts) {
     if (typeof navigator === "undefined" || !navigator.gpu) return null;
+    // No WGSL sources -> no renderer. Refuse BEFORE touching the canvas, so the
+    // GLX fallback can still attach a webgl2 context to it.
+    if (!_Chunks || !_Chunks.LIT || !_Chunks.SKY || !_Chunks.BLIT || !_Chunks.SHADOW) {
+      _fail("wgsl-chunks missing");
+      return null;
+    }
 
     let adapter, device, ctx, format;
     try {
       adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-      if (!adapter) return null;
+      if (!adapter) return _fail("no adapter");
       device = await adapter.requestDevice();
-      if (!device) return null;
-    } catch (_) {
-      return null;
+      if (!device) return _fail("no device");
+    } catch (e) {
+      return _fail("device request threw: " + ((e && e.message) || e));
     }
 
     try {
       ctx = canvas.getContext("webgpu");
-      if (!ctx) return null;
+      if (!ctx) return _fail("canvas has no webgpu context");
       format = navigator.gpu.getPreferredCanvasFormat();
       ctx.configure({ device, format, alphaMode: "opaque" });
-    } catch (_) {
-      return null;
+    } catch (e) {
+      return _fail("context configure threw: " + ((e && e.message) || e));
     }
 
     // Device-lost recovery. An unexpected loss (memory pressure, GPU reset) on
@@ -236,6 +285,20 @@ const WGX = (function () {
       try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) {}
       try { location.reload(); } catch (_) {}
     });
+
+    // Uncaptured GPU errors. WebGPU does NOT throw on an invalid pipeline or
+    // bind group — createRenderPipeline() returns a live-looking object and the
+    // error surfaces here, asynchronously. That is precisely how this backend
+    // could initialise "successfully" and then draw nothing, so the boot
+    // self-test below treats anything caught here during init as fatal.
+    let _bootError = null;
+    try {
+      device.onuncapturederror = function (ev) {
+        const msg = (ev && ev.error && ev.error.message) || "gpu error";
+        if (!_bootError) _bootError = msg;
+        try { console.warn("WGX GPU error:", msg); } catch (_) {}
+      };
+    } catch (_) {}
 
     // ── state ──
     let width = 0, height = 0, aspect = 1, renderScale = 1;
@@ -300,7 +363,7 @@ const WGX = (function () {
     let shadowEncoder = null, shadowPass = null, _shadowSlot = 0;
     // Dynamic per-frame CAR shadow map (GLX parity — see carShadowBegin).
     let carShadowTex = null, carShadowView = null, carShadowUBO = null, carShadowG0BindGroup = null;
-    let _carShadowArmed = false;
+    let _carShadowArmed = false, _carArms = 0;
     const carShadowLVPData = new Float32Array(16);
 
     // Blocker map objects.
@@ -545,8 +608,7 @@ const WGX = (function () {
       // SILENTLY: this catch once hid a real init bug, and by the time create()
       // returns null the canvas may already hold a webgpu context, which makes
       // the GLX fallback's getContext("webgl2") fail too (blank "needs WebGL2").
-      try { console.warn("WGX init failed, falling back to WebGL2:", (e && e.message) || e); } catch (_) {}
-      return null;
+      return _fail("init threw: " + ((e && e.message) || e));
     }
 
     // ── Phase-4 post-processing pipelines (size-independent; targets/BGs are
@@ -1948,6 +2010,7 @@ const WGX = (function () {
     // through the same carShadowBegin/castShadow/carShadowEnd sequence as GLX.
     function carShadowBegin(lightVP) {
       if (_lost || !carShadowView || MOBILE_TIER) return;
+      _carArms++;   // lifetime arm count, mirroring GLX SHD.carArms (debug only)
       _shadowLightVP = null;   // castShadowChunked must NOT frustum-cull with stale static planes
       _mul4(carShadowLVPData, Z01, (lightVP && lightVP.length >= 16) ? lightVP : IDENT);
       device.queue.writeBuffer(carShadowUBO, 0, carShadowLVPData);
@@ -2109,6 +2172,170 @@ const WGX = (function () {
       litPass.drawIndexed(mesh.count);
     }
 
+    // ── Boot self-test ─────────────────────────────────────────────────────────
+    // The failure this closes: WebGPU reports almost nothing by throwing. A WGSL
+    // error, a mismatched bind-group layout or an unsupported target format all
+    // produce a live-LOOKING device and an INVALID pipeline whose draws are
+    // silently dropped — so create() would hand game.js a backend that renders a
+    // black frame forever, with the RENDERER button insisting WEBGPU is fine.
+    // GLX cannot do this (compile/link failures are synchronous and checked), so
+    // it needs no equivalent.
+    //
+    // Returns null when the backend is proven able to render, or a REASON string
+    // when it is proven unable. It never refuses merely because a check could not
+    // be run: an API that is absent (the node test harness, an exotic
+    // implementation) is skipped, because inability to check is not evidence of
+    // breakage. The bias everywhere else is to REFUSE — a false refusal costs the
+    // opt-in renderer, a false acceptance costs the player their game.
+    async function _selfTest() {
+      // 1) Shader compilation. Errors arrive as compilation MESSAGES, not throws.
+      const mods = [["lit", litModule], ["sky", skyModule], ["blit", blitModule],
+                    ["shadow", shadowModule]];
+      for (let i = 0; i < mods.length; i++) {
+        const name = mods[i][0], mod = mods[i][1];
+        if (!mod || typeof mod.getCompilationInfo !== "function") continue;
+        let info = null;
+        try { info = await mod.getCompilationInfo(); } catch (_) { continue; }
+        const msgs = (info && info.messages) || [];
+        for (let j = 0; j < msgs.length; j++) {
+          const m = msgs[j];
+          if (m && m.type === "error") {
+            return name + " shader compile error: " + ((m.message || "").slice(0, 200));
+          }
+        }
+      }
+
+      const scoped = typeof device.pushErrorScope === "function" &&
+                     typeof device.popErrorScope === "function";
+
+      // 2) Force the BASE lit pipeline. It is normally built lazily on the first
+      //    draw() — i.e. long after create() could still refuse — so the one
+      //    pipeline every single frame depends on would otherwise never be
+      //    validated while refusing was still possible.
+      if (scoped) device.pushErrorScope("validation");
+      let litErr = null;
+      try { _litPipeline({}); } catch (e) { litErr = (e && e.message) || String(e); }
+      if (scoped) {
+        const gpuErr = await device.popErrorScope();
+        if (!litErr && gpuErr) litErr = (gpuErr.message || "invalid lit pipeline");
+      }
+      if (litErr) return "lit pipeline: " + String(litErr).slice(0, 200);
+
+      // 3) RENDER AND READ BACK. Clear a 1×1 HDR source to white, run the real
+      //    blit/tonemap pipeline over a small target, copy it to a mappable
+      //    buffer and look at the pixel. This exercises shader + pipeline + bind
+      //    group + sampler + rasteriser + fragment output on the actual device;
+      //    a dropped draw leaves the pass's black clear behind and is caught.
+      const canRead = typeof GPUMapMode !== "undefined" &&
+        typeof Uint8Array !== "undefined" &&
+        ((GPUTextureUsage && GPUTextureUsage.COPY_SRC) | 0) > 0 &&
+        ((GPUBufferUsage && GPUBufferUsage.MAP_READ) | 0) > 0 &&
+        typeof device.createCommandEncoder === "function" &&
+        blitPipeline && typeof blitPipeline.getBindGroupLayout === "function";
+      if (!canRead) return _bootError ? ("gpu error during init: " + _bootError) : null;
+
+      let src = null, dst = null, buf = null, reason = null;
+      if (scoped) device.pushErrorScope("validation");
+      try {
+        src = device.createTexture({
+          size: [1, 1], format: SCENE_FORMAT,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        // 4×4 keeps copyTextureToBuffer's 256-byte row alignment trivially legal.
+        dst = device.createTexture({
+          size: [4, 4], format: format,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+        });
+        buf = device.createBuffer({ size: 256 * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+        const enc = device.createCommandEncoder();
+        if (typeof enc.copyTextureToBuffer !== "function" || typeof buf.mapAsync !== "function" ||
+            typeof buf.getMappedRange !== "function") {
+          throw { _skip: true };   // implementation without readback — cannot check
+        }
+        device.queue.writeBuffer(blitUBO, 0, new Float32Array([1, 0, 0, 0]));   // exposure = 1
+        const bg = device.createBindGroup({
+          layout: blitPipeline.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: src.createView() },
+            { binding: 1, resource: linearSampler },
+            { binding: 2, resource: { buffer: blitUBO } },
+          ],
+        });
+        const p0 = enc.beginRenderPass({ colorAttachments: [{ view: src.createView(),
+          clearValue: { r: 1, g: 1, b: 1, a: 1 }, loadOp: "clear", storeOp: "store" }] });
+        p0.end();
+        const p1 = enc.beginRenderPass({ colorAttachments: [{ view: dst.createView(),
+          clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: "clear", storeOp: "store" }] });
+        p1.setPipeline(blitPipeline);
+        p1.setBindGroup(0, bg);
+        p1.draw(3);
+        p1.end();
+        enc.copyTextureToBuffer({ texture: dst }, { buffer: buf, bytesPerRow: 256, rowsPerImage: 4 }, [4, 4, 1]);
+        device.queue.submit([enc.finish()]);
+        await buf.mapAsync(GPUMapMode.READ);
+        const px = new Uint8Array(buf.getMappedRange().slice(0, 4));
+        buf.unmap();
+        // ACES(1,1,1) ≈ 0.81 → ~200/255 in every 8-bit swapchain format, and the
+        // >8 threshold is channel-order agnostic (bgra8unorm vs rgba8unorm).
+        if (!(px[0] > 8 || px[1] > 8 || px[2] > 8)) reason = "smoke test rendered black";
+      } catch (e) {
+        if (!(e && e._skip)) reason = "smoke test threw: " + (((e && e.message) || String(e)).slice(0, 200));
+      }
+      if (scoped) {
+        const gpuErr = await device.popErrorScope();
+        if (!reason && gpuErr) reason = "smoke test validation: " + String(gpuErr.message || "error").slice(0, 200);
+      }
+      try { if (src) src.destroy(); if (dst) dst.destroy(); if (buf) buf.destroy(); } catch (_) {}
+      if (reason) return reason;
+      // Anything the device reported asynchronously while we were booting.
+      if (_bootError) return "gpu error during init: " + _bootError;
+      return null;
+    }
+
+    // BUDGET. The self-test is AWAITED and game.js awaits Gfx.create(), so every
+    // millisecond it spends is a millisecond of blocked boot on a blank screen.
+    // Two of its steps carry no bound of their own: forcing the lit pipeline (a
+    // real shader compile) and buf.mapAsync (resolves only when the submitted
+    // work completes). Measured on Chromium's bundled SwiftShader (CPU Vulkan),
+    // those cost 9-56 s ON TOP of the 3-9 s create() already spends there.
+    //
+    // Two guards, because they catch different stalls:
+    //   • the setTimeout arm ends an ASYNC stall (a mapAsync that never
+    //     resolves) without waiting for it;
+    //   • the ELAPSED check is what makes the outcome deterministic, because a
+    //     timer cannot fire while a SYNCHRONOUS createRenderPipeline is blocking
+    //     the main thread — without it the same machine accepts or refuses
+    //     depending on load, which is the worst possible property for a
+    //     renderer-selection decision.
+    // Overrunning REFUSES rather than proceeds. A device that cannot compile one
+    // pipeline and blit 16 pixels inside the budget will not hold a frame rate
+    // either (the measured SwiftShader case goes on to lose the device outright,
+    // see the device.lost handler above). The cost of a false refusal is the
+    // opt-in backend — the game still runs, on GLX; the cost of a false
+    // acceptance is the player's game. Abandoned promises settle harmlessly:
+    // nothing else reads their result.
+    const SELFTEST_BUDGET_MS = 8000;
+    let _stTimer = null;
+    const _stT0 = Date.now();
+    let _stReason = await Promise.race([
+      _selfTest().catch(function (e) {
+        return "self-test threw: " + (((e && e.message) || String(e)).slice(0, 200));
+      }),
+      new Promise(function (res) {
+        _stTimer = setTimeout(function () { res("self-test stalled past " + SELFTEST_BUDGET_MS + " ms"); },
+                              SELFTEST_BUDGET_MS);
+      }),
+    ]);
+    try { if (_stTimer !== null) clearTimeout(_stTimer); } catch (_) {}
+    const _stMs = Date.now() - _stT0;
+    if (!_stReason && _stMs > SELFTEST_BUDGET_MS) {
+      _stReason = "self-test took " + _stMs + " ms (budget " + SELFTEST_BUDGET_MS + " ms)";
+    }
+    if (_stReason) {
+      try { if (typeof device.destroy === "function") device.destroy(); } catch (_) {}
+      return _fail(_stReason);
+    }
+
     const noop = function () {};
 
     return {
@@ -2162,12 +2389,65 @@ const WGX = (function () {
       envProbeReady() { return _envProbeLive; },
       envProbeReset,
 
+      // ── Cull-test helpers (GLX parity) ──
+      // The agent world view calls GLX.makeFrustumPlanes/aabbInFrustum directly
+      // so its "what is on screen" answer runs the SAME test the draw path runs.
+      // These are the identical Gribb–Hartmann helpers already used above by
+      // drawChunked, exported in GLX's shape (six fresh Float32Array(4) planes,
+      // inside = a*x+b*y+c*z+d >= 0) — GLX allocates a fresh set for exactly
+      // this caller rather than sharing the per-frame scratch, so do the same.
+      makeFrustumPlanes(viewProj) {
+        const p = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
+                   new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+        _extractPlanes(viewProj, p);
+        return p;
+      },
+      aabbInFrustum: _aabbInFrustum,
+      aabbDist2: _aabbDist2,
+
+      // ── NOT IMPLEMENTED — declared, and declared ABSENT ────────────────────
+      // These are the GLX methods WGX has no counterpart for. They are listed
+      // here as explicit `undefined` because of HOW this backend is installed:
+      // game.js does
+      //     Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend))
+      // so every name the backend does NOT define keeps GLX's own function —
+      // and GLX's functions run against `gl`/`SHD`/`CHK`, which stay null when
+      // GLX.init() was never called. A caller's feature test
+      // (`if (gfx.lampShadowBegin)`) then PASSES and the call dies inside GLX.
+      // game.js:5385 is the live example: its comment says "WGX has no
+      // lampShadowBegin", but before this list it inherited one, and every night
+      // frame threw inside SHD (null) — aborting tickBody before present().
+      // A descriptor whose value is undefined overwrites the inherited one, so
+      // the feature test tells the truth again. Restoring any of these means
+      // implementing it here and deleting the line.
+      drawParticles: undefined,          // js/game/particles.js:208 (guarded)
+      lampShadowBegin: undefined,        // js/game.js:5386 (guarded) / 5423
+      lampShadowEnd: undefined,          // js/game.js:5429
+      createTextureArray: undefined,     // js/render/assets.js:56 — baked pack stays off
+      setMaterialMaps: undefined,        // js/render/assets.js:56/194
+      materialMapState: undefined,       // js/game/apex.js assets() (guarded)
+      gpuTimer: undefined,               // js/game/apex.js:1391 (guarded) -> {supported:false}
+      gpuMs: undefined,                  // js/game/apex.js:1393 (guarded)
+      createInstancedBatch: undefined,   // TrackGraph.batches() consumer — GLX only
+      cullInstances: undefined,
+      drawInstanced: undefined,
+      freeInstancedBatch: undefined,
+      castShadowInstanced: undefined,
+      // Debug introspection GLX exposes; answered honestly rather than left to
+      // GLX's version, which reads its null shadow module.
+      carShadowState: () => ({ enabled: !!carShadowView && !MOBILE_TIER, arms: _carArms }),
+      lampShadowState: () => ({ enabled: false, arms: 0, idx: -1 }),
+
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",
     };
   }
 
-  return { create };
+  // lastFailure(): why the most recent create() returned null ({reason, at}), or
+  // null if it never refused. The RENDERER control reports the STORED preference,
+  // not the live backend, so this is currently the only way to tell "WebGPU is
+  // selected" from "WebGPU is running".
+  return { create, lastFailure: () => _lastFailure };
 })();
 
 // No-build global export.

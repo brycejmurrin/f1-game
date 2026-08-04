@@ -588,6 +588,15 @@ const TLX = (function () {
         // attribute is undefined-read territory on strict GL drivers.
         g.setAttribute("mat", new THREE.BufferAttribute(
           new Float32Array(data.mat && data.mat.length === verts ? data.mat : verts), 1));
+        // Road track-space coords (arc-length s, signed lateral x, half-width),
+        // GLX attribute location 4 (glx.js:435-468). tsl-lit's roadMarkings()
+        // paints the edge lines and the dashed centre line analytically from
+        // these, so a road mesh WITHOUT them renders as bare tarmac — which is
+        // exactly what this backend did until now. ALWAYS present, zero-filled
+        // for every non-road mesh: hw = 0 makes roadMarkings() a no-op, and a
+        // missing attribute is undefined-read territory (same rule as `mat`).
+        g.setAttribute("trk", new THREE.BufferAttribute(
+          new Float32Array(data.trk && data.trk.length === pos.length ? data.trk : verts * 3), 3));
         if (data.idx && data.idx.length) {
           g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
         }

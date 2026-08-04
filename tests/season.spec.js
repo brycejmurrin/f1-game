@@ -7,9 +7,24 @@ const LANDSCAPE = { width: 844, height: 390 };
 async function startSeasonRace(page, laps) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+  // Nothing below asserts a pixel — this spec is about round progression, points
+  // and panel visibility — so stop drawing the 3D scene that sits behind every
+  // menu. Under SwiftShader that is pure CPU: it halves the load average of a
+  // two-worker run. headlessMode is a plain flag gating render(), settable from
+  // the title screen; physics, DOM and every hook below behave identically.
+  await page.evaluate(() => window.__apex.headless(true));
   await page.locator("#mb-season").click();
-  // Accept defaults in select screen
+  // SELECT no longer leads straight to RACE SETTINGS: a season weekend goes
+  // through the GARAGE first (team, parts, livery), and RACE! only exists on the
+  // sheet after it. This helper missed that when the step was added — the
+  // migration test lower down was updated and this was not — so every test using
+  // it sat on #rs-go for 209 retries and died at the 120 s timeout, reporting
+  // "element is not visible" about a button on a screen that had not opened yet.
   await page.locator("#sel-go").click();
+  await page.locator("#carsetup").waitFor({ state: "visible" });
+  await page.locator("#cs-done").click();
+  await page.locator("#carsetup").waitFor({ state: "hidden" });
+  await page.locator("#race-settings").waitFor({ state: "visible" });
   if (laps != null) {
     await page.locator("#rs-laps .sel-chip").filter({ hasText: new RegExp(`^${laps}(?: \\(FULL\\))?$`) }).click();
   }
@@ -120,11 +135,12 @@ test.describe("Season — standings panel", () => {
     });
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    await page.evaluate(() => window.__apex.headless(true));   // see startSeasonRace
     await page.locator("#mb-season").click();
     await page.locator("#select").waitFor({ state: "visible" });
     // MY TEAM lives in the garage's TEAM tab now, so editing the custom team
     // mid-season is a trip through the garage and back.
-    await page.locator("#sel-setup").click();
+    await page.locator("#sel-go").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();
     await page.locator("#cs-customize").click();
@@ -132,7 +148,7 @@ test.describe("Season — standings panel", () => {
     await page.locator("#cz-save").click();
     await page.locator("#cs-done").click();
     await page.locator("#carsetup").waitFor({ state: "hidden" });
-    await page.locator("#sel-go").click();
+    await page.locator("#race-settings").waitFor({ state: "visible" });
     await page.locator("#rs-go").click();
     await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
     await page.locator("#q-sim").click();

@@ -27,7 +27,10 @@ const _hudSty = new WeakMap();   // el -> { prop: lastVal }
 const _hudCls = new WeakMap();   // el -> last className
 const _hudTog = new WeakMap();   // el -> { cls: lastBool }
 function hText(el, v) { if (!el) return; if (_hudTxt.get(el) !== v) { _hudTxt.set(el, v); el.textContent = v; } }
-function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m) { m = {}; _hudSty.set(el, m); } if (m[prop] !== v) { m[prop] = v; el.style[prop] = v; } }
+// Custom properties need setProperty — `el.style["--e"] = x` is silently a
+// no-op, which is the kind of failure that looks like a broken stylesheet.
+function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m) { m = {}; _hudSty.set(el, m); }
+  if (m[prop] !== v) { m[prop] = v; if (prop.charCodeAt(0) === 45) el.style.setProperty(prop, v); else el.style[prop] = v; } }
 function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 
@@ -77,11 +80,25 @@ function updateHud(force) {
   hToggle(els.tach, "redline", player.rpm > MAX_RPM * 0.92);
   // toggle-button states
   hToggle(els.btnBoost, "on", player.boostOn);
+  // THE BOOST BUTTON IS THE BATTERY. Its colour is mixed from the charge, so a
+  // flat pack reads as a washed-out button and a full one as vivid green — you
+  // can tell what pressing it will buy you without looking away at the bar.
+  // Quantised to 20 steps because hStyle only writes on CHANGE, and a raw float
+  // changes every single frame: that would be a style write per frame per
+  // button, which is exactly what this HUD's write-caching exists to avoid.
+  hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
   hToggle(els.btnOT, "on", player.otT > 0);
   hToggle(els.btnOT, "armed", player.otArmed && player.otT <= 0);
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
   hClass(els.ot, ot);
-  hText(els.ot, player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1) : "OVERTAKE");
+  // "NO OVERTAKE" says WHY the button is dead, and the difference matters: not
+  // yet armed means keep closing on the car ahead, whereas lap 1 or a caution
+  // means nothing you do will arm it. A control that looks merely unlucky when
+  // it is actually switched off is one the player keeps stabbing at.
+  const otOff = G.state === "race" && !G.otEnabled() && player.otT <= 0;
+  hText(els.ot, player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1)
+                : otOff ? "NO OVERTAKE" : "OVERTAKE");
+  hToggle(els.btnOT, "dead", otOff);
   // ACTIVE AERO. Three states worth telling apart at a glance: the flap is OPEN
   // (X-MODE), the road ahead would allow it (armed, so the button is worth
   // pressing), or it is simply unavailable here. `aeroX` is the flap travel,
@@ -98,12 +115,22 @@ function updateHud(force) {
   const noZones = !(G.aeroZones && G.aeroZones.length);
   hToggle(els.btnAero, "on", xOpen);
   hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
+  // Faded when the CIRCUIT has no zone: the control exists, this track just
+  // cannot use it, and the struck-through NO AERO ZONE chip beside it says so.
+  // AUTO is not handled here — there the button is removed from the dock
+  // outright (showTouchControls), because the wing driving itself is a control
+  // with no job rather than a control that is temporarily unavailable.
   hToggle(els.btnAero, "dead", noZones);
   hClass(els.aero, noZones ? "ax-none" : xOpen ? "ax-open"
     : player.xArmed ? "ax-armed" : "ax-off");
+  // The TEXT answers "where is the zone", so it keys off position, not arming.
+  // Keying it off xArmed showed "AERO 0m" to a car standing INSIDE a zone but
+  // too slow to arm — a distance readout of zero, which reads as "the zone is
+  // right here" rather than "you are in it". Whether the mode is available is
+  // the CLASS's job (ax-armed lights the chip), so the two never contradict.
   hText(els.aero, noZones ? "NO AERO ZONE"
     : xOpen ? "X-MODE"
-    : player.xArmed ? "AERO ZONE"
+    : dz === 0 ? "AERO ZONE"
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
     : "Z-MODE");
   if (timeTrial) {

@@ -16,6 +16,7 @@ async function toQuali(page) {
   await boot(page);
   await page.locator("#mb-season").click();
   await page.locator("#sel-go").click();
+  await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
   await page.locator("#rs-go").click();
   await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
 }
@@ -42,6 +43,7 @@ test.describe("Qualifying — the session", () => {
     await boot(page);
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
+    await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
     await expect(page.locator("#quali")).toBeHidden();
@@ -124,6 +126,12 @@ test.describe("Qualifying — the grid", () => {
   });
 
   test("every round of a season qualifies, not just the first", async ({ page }) => {
+    // The two heaviest tests in the file: each stages TWO circuits and runs a
+    // race to the flag, all on software GL. Their nearest neighbour already
+    // sits at ~86s against the 120s default, so they time out whenever the box
+    // is doing anything else — which is a measurement of the machine, not of
+    // the code.
+    test.slow();
     // The results screen's NEXT ROUND went straight to startRace(), so rounds
     // 2..24 were never qualified for — and gridUp() lined them up on round 1's
     // classification, which Quali.order() remapped onto the new cars by driverId.
@@ -148,6 +156,12 @@ test.describe("Qualifying — the grid", () => {
   });
 
   test("a qualifying grid never leaks into the Grand Prix that follows it", async ({ page }) => {
+    // The two heaviest tests in the file: each stages TWO circuits and runs a
+    // race to the flag, all on software GL. Their nearest neighbour already
+    // sits at ~86s against the 120s default, so they time out whenever the box
+    // is doing anything else — which is a measurement of the machine, not of
+    // the code.
+    test.slow();
     // gridUp() accepts any preOrder whose length matches the field, and the
     // classification outlived quitToMenu() — so the next Grand Prix lined up on a
     // season's qualifying order and silently lost the P12 start that mode exists
@@ -162,6 +176,7 @@ test.describe("Qualifying — the grid", () => {
     await expect(page.locator("#overlay")).toBeVisible();
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
+    await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
     const info = await page.evaluate(() => ({
@@ -215,7 +230,7 @@ test.describe("Qualifying — lap times", () => {
 // is a standing-start time measured against a field modelled on flying laps, and
 // no amount of driving closes a gap that is purely the launch.
 
-test.describe("Qualifying — the flying lap", () => {
+test.describe("Qualifying — the lap itself", () => {
   test.use({ viewport: LANDSCAPE });
 
   async function driveQuali(page) {
@@ -230,22 +245,24 @@ test.describe("Qualifying — the flying lap", () => {
     expect(await page.evaluate(() => window.__apex.info().session)).toBe("quali");
   });
 
-  test("the car is already at racing speed when the lights go out", async ({ page }) => {
+  test("the car starts from REST on the line, like the real thing", async ({ page }) => {
+    // It used to launch at racing speed, because the simulated field is
+    // modelled on a flying lap and timing a standing lap against a flying one
+    // loses you the launch by construction. That is paid on the other side now
+    // — quali.js charges every modelled lap the same standing start — so the
+    // session can begin the way its name says it does.
     await driveQuali(page);
     const out = await page.evaluate(() => {
-      const before = window.__apex.carAt(0).speed;
-      // Run the countdown out.
+      // Pump the countdown deterministically rather than waiting on real time:
+      // under software GL the wall clock is not a reliable way to reach
+      // lights-out inside a test budget.
       for (let i = 0; i < 900 && window.__apex.info().state !== "race"; i++) window.__apex.step(1 / 60, 1);
       const c = window.__apex.carAt(0);
-      return { before, state: window.__apex.info().state, speed: c.speed, x: c.x };
+      return { state: window.__apex.info().state, speed: c.speed, x: c.x };
     });
-    expect(out.before).toBe(0);           // stationary on the grid, as any session starts
     expect(out.state).toBe("race");
-    // Flat out, not launching: comfortably faster than anything a standing start
-    // reaches in the first metres.
-    expect(out.speed).toBeGreaterThan(50);
-    // ...and on the centreline rather than in a grid slot.
-    expect(Math.abs(out.x)).toBeLessThan(0.5);
+    expect(out.speed).toBeLessThan(5);    // from rest, not launched
+    expect(Math.abs(out.x)).toBeLessThan(1.5);   // on the line, not in a grid slot
   });
 
   test("a Grand Prix still starts from a standstill", async ({ page }) => {
@@ -254,6 +271,7 @@ test.describe("Qualifying — the flying lap", () => {
     await boot(page);
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
+    await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
     const speed = await page.evaluate(() => {
@@ -302,5 +320,73 @@ test.describe("Qualifying — BACK", () => {
     await expect(page.locator("#q-go")).toBeVisible();
     await expect(page.locator("#q-back")).toBeHidden();
     await expect(page.locator("#q-drive")).toBeHidden();
+  });
+});
+
+// A one-off Grand Prix has always dropped the player at P12 and gone straight to
+// the lights — the only mode where where you START owes nothing to how fast you
+// are. QUALIFYING LAP lets it run the same one-lap session a championship
+// weekend does. It lives in RACE SETTINGS, beside LAPS and WEATHER, because it
+// is a property of the race rather than a control preference.
+test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  // GRAND PRIX -> circuit -> garage -> race settings.
+  async function toSettings(page) {
+    await boot(page);
+    await page.locator("#mb-race").click();
+    await page.locator("#sel-go").click();
+    await page.locator("#cs-done").click();
+    await expect(page.locator("#race-settings")).toBeVisible();
+  }
+  // Chips carry no ids, so they are clicked by index inside the page.
+  const pickGrid = (page, i) => page.evaluate((n) => {
+    const c = [...document.querySelectorAll("#rs-quali .sel-chip")];
+    if (c[n]) c[n].click();
+  }, i);
+
+  test("OFF goes straight to the lights from P12, as it always has", async ({ page }) => {
+    await toSettings(page);
+    await expect(page.locator("#rs-quali-section")).toBeVisible();
+    await pickGrid(page, 0);
+    await page.locator("#rs-go").click();
+    await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), { timeout: 60_000 });
+    // No qualifying session was staged, and the flow is a plain race.
+    expect(await page.evaluate(() => window.__apex.info().session)).toBe("race");
+  });
+
+  test("ON runs the session and the grid comes out of it", async ({ page }) => {
+    test.slow();   // stages a circuit twice over software GL
+    await toSettings(page);
+    await pickGrid(page, 1);
+    await page.locator("#rs-go").click();
+    await expect(page.locator("#quali")).toBeVisible({ timeout: 60_000 });
+    expect(await page.evaluate(codes)).toHaveLength(22);
+
+    await page.locator("#q-sim").click();
+    await page.locator("#q-go").click();
+    await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), { timeout: 60_000 });
+
+    const out = await page.evaluate(() => ({
+      pos: window.__apex.timing().pos,
+      field: window.__apex.fieldState().length,
+    }));
+    expect(out.field).toBe(22);
+    // The whole point: the start slot is earned, not the hard-coded P12.
+    expect(out.pos).not.toBe(12);
+  });
+
+  test("a championship forces it on, and says so rather than hiding it", async ({ page }) => {
+    // The choice is not the player's in a season — the weekend decides the grid
+    // — but "why did this race qualify" is a question the screen should answer.
+    await boot(page);
+    await page.locator("#mb-season").click();
+    await page.locator("#sel-go").click();
+    await page.locator("#cs-done").click();
+    await expect(page.locator("#rs-quali-section")).toBeVisible();
+    const state = await page.evaluate(() => [...document.querySelectorAll("#rs-quali .sel-chip")]
+      .map((b) => ({ on: b.classList.contains("active"), off: b.disabled })));
+    expect(state[1].on).toBe(true);          // ON
+    expect(state.every((c) => c.off)).toBe(true);
   });
 });

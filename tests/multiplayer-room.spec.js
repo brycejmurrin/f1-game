@@ -19,7 +19,7 @@
 import { test, expect } from "./fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
-const EV = { HELLO: "hello", SETTINGS: "settings", READY: "ready", GO: "go" };
+const EV = { HELLO: "hello", SETTINGS: "settings", READY: "ready", GO: "go", QUALI: "quali" };
 
 // Reach the room over a loopback transport. It is open the moment it exists but
 // has no RTCPeerConnection, so the handshake cannot run over it — lobbyWatch()
@@ -160,8 +160,8 @@ test.describe("the waiting room", () => {
     await page.click("#vs-edit-race");
     await expect(page.locator("#select")).toBeVisible();
     await expect(page.locator("#sel-tracks")).toBeVisible();
-    await expect(page.locator("#sel-left")).toBeHidden();
-    await expect(page.locator("#sel-setup")).toBeHidden();     // ...and no way into the garage
+    await expect(page.locator("#sel-left")).toHaveCount(0);
+    await expect(page.locator("#sel-setup")).toHaveCount(0);   // ...and no way into the garage
     // START does not start anything here — it goes on to laps/weather.
     await expect(page.locator("#sel-go")).toHaveText("NEXT");
 
@@ -192,5 +192,64 @@ test.describe("the waiting room", () => {
       [...document.querySelectorAll(".screen"), document.getElementById("overlay")]
         .filter((el) => el && !el.hidden).map((el) => el.id));
     expect(open).toEqual([]);
+  });
+});
+
+// GRID: QUALIFYING in a friend race. Two humans qualify, so two real laps have
+// to reach one classification — and the lobby has to hold the connection across
+// a session that happens BEFORE there is a race to hand to NetPlay.
+test.describe("qualifying in a friend race", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("the host's GRID choice reaches the guest and is shown", async ({ page }) => {
+    test.slow();
+    await enterRoom(page, "guest");
+    await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
+    await expect(page.locator("#vs-race-summary")).toContainText(/qualifying/i, { timeout: 5000 });
+    expect(await page.evaluate(() => window.__apex.info().raceQuali)).toBe(true);
+  });
+
+  test("GO opens qualifying instead of the grid, and the lobby keeps the session",
+    async ({ page }) => {
+      test.slow();
+      await enterRoom(page, "guest");
+      await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
+      await peerSays(page, EV.GO, {});
+      // The sheet, not the lights.
+      await expect(page.locator("#quali")).toBeVisible({ timeout: 60000 });
+      await expect(page.locator("#vsfriend")).toBeHidden();
+      expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");
+    });
+
+  test("TO THE GRID waits for the rival's lap, then races", async ({ page }) => {
+    // Gridding up without their time would place them wherever the model
+    // guessed — the one thing a qualifying session exists to prevent.
+    test.slow();
+    await enterRoom(page, "guest");
+    await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
+    await peerSays(page, EV.GO, {});
+    await expect(page.locator("#quali")).toBeVisible({ timeout: 60000 });
+
+    // DOM clicks, not Playwright's: this sheet sits under a dimmed overlay and
+    // its foot buttons swap visibility as the session progresses, so the
+    // actionability check spins on them (career.spec.js keeps a `tap` helper
+    // for the same reason). What is under test is the RULE, not whether a
+    // synthetic pointer can reach the button.
+    const tap = (id) => page.evaluate((i) => document.getElementById(i).click(), id);
+    await tap("q-sim");                            // take the modelled time for us
+    // ...but they have not driven yet, so the way out says so and is disabled.
+    // It used to be an announce() banner instead, which covered the sheet foot
+    // — the button it was describing — so the click hung on a hit-target check
+    // and the whole thing read as a broken rule rather than a bad instrument.
+    await expect(page.locator("#q-go")).toBeDisabled();
+    await expect(page.locator("#q-go")).toContainText(/waiting/i);
+    expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");
+
+    // Their lap lands; now the grid can be built from two real times.
+    await peerSays(page, EV.QUALI, { driverId: "peer-driver", t: 62.5 });
+    await expect(page.locator("#q-go")).toBeEnabled({ timeout: 10000 });
+    await tap("q-go");
+    await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), { timeout: 60000 });
+    await expect(page.locator("#quali")).toBeHidden();
   });
 });

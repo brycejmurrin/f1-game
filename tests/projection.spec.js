@@ -13,6 +13,7 @@ async function startLiveRace(page) {
   await page.goto("/");
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
+  await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
   await page.locator("#rs-go").click();
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,

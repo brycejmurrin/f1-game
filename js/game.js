@@ -22,7 +22,7 @@ const els = {
   selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"),
   selPreviewRec: $("sel-preview-rec"),
   selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"),
-  selBack: $("sel-back"), selGo: $("sel-go"), selLeft: $("sel-left"),
+  selBack: $("sel-back"), selGo: $("sel-go"),
   customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
   resultsTable: $("results-table"), resMenu: $("res-menu"), resNext: $("res-next"),
@@ -248,6 +248,15 @@ let difficulty = store.get("difficulty", "normal");
 // what every existing player gets. OFF is therefore the only choice that does not
 // silently start retiring cars in a game somebody was already halfway through.
 let raceReliability = store.get("reliability", "off");
+// ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
+// "auto". Inside an activation zone X-mode has no cost and no downside, so the
+// optimal play is unconditionally "on" — which is exactly what the AI does, in
+// one line. Manual therefore asks the player to keep pace with cars that pay no
+// attention tax, and anyone who forgets concedes X_VMAX_GAIN of top speed on
+// every straight. AUTO hands the player the same deal the AI gets. It stays
+// OPT-IN because pressing the button is the mechanic, and taking that away by
+// default would remove the one thing there is to do with the system.
+let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
@@ -351,9 +360,33 @@ const DOWNFORCE = 0.65;     // extra grip fraction at VMAX (0 = no wings)
 // Leaving the zone (or touching the brake) SLAMS the flap shut — X_CLOSE_RATE is deliberately several times
 // X_OPEN_RATE, so the downforce comes back faster than it left. Both directions
 // sit inside the FIA's 400 ms transition cap.
-const X_VMAX_GAIN = 0.075;  // top-speed gain at full X-mode (~+19 km/h at pace 1)
-const X_DF_LOSS = 0.55;     // fraction of the DOWNFORCE term X-mode gives up
-const X_COAST_CUT = 0.35;   // fraction of COAST_DRAG X-mode sheds while coasting
+// THE TRADE SCALES WITH THE WING, because that is the only way it can mean
+// anything. A single pair of constants gave a Monza-spec sliver and a
+// maximum-downforce floor exactly the same +7.5%/-55%, which is backwards: a
+// big wing has more drag to shed AND more downforce to lose, a small one has
+// neither. So the aero PART now picks where on each span the car sits, via
+// Parts.aeroLoad() (0 = `minimal`, 1 = `ground_effect`).
+//
+// It also matters MORE than it did. The old numbers made X-mode a rounding
+// error you could ignore for a whole race; at the top of the range it is now
+// worth ~+15.5% of top speed and costs ~78% of the aero load, which is a real
+// decision on every zone rather than a free press.
+//
+// A car with no parts (every AI) sits at the MIDPOINT of each span, so the
+// grid's behaviour stays a single well-defined thing rather than inheriting
+// whatever the catalog default happens to be this month.
+const X_VMAX_GAIN_LO = 0.055;  // top-speed gain at full X-mode, smallest wing
+const X_VMAX_GAIN_HI = 0.155;  // ...and the biggest (more drag to shed)
+const X_DF_LOSS_LO = 0.42;     // fraction of the DOWNFORCE term given up, smallest wing
+const X_DF_LOSS_HI = 0.78;     // ...and the biggest (more downforce to lose)
+const X_COAST_CUT_LO = 0.28;   // fraction of COAST_DRAG shed while coasting, smallest wing
+const X_COAST_CUT_HI = 0.55;   // ...and the biggest
+// Where THIS car sits on those spans, 0..1. Defaults to the midpoint so a car
+// that never had parts resolved behaves like the old single constant did.
+function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }
+function xVmaxGain(c) { return lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
+function xDfLoss(c) { return lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
+function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c)); }
 // The FIA caps the transition between the two wing positions at 400 ms, so the
 // OPENING rate is set by that regulation, not by feel: 2.6/s = 385 ms of travel.
 // Closing is deliberately faster (still inside the cap) — see X_CLOSE_RATE.
@@ -553,8 +586,30 @@ function isErsDeploying(c) {
   if (!(c.otT > 0) && (c.energy <= 0 || !c.boostOn)) return false;
   return DEPLOY_A * deployTaper(c) > 0.4;
 }
-const DRAIN = 0.20, REGEN = 0.115;   // energy per second
-const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
+// THE ERS PART RUNS THE BATTERY, which until now it did not. The category's
+// options have always DESCRIBED battery behaviour — "harvests extra energy under
+// braking", "maximum recovery window", "immediate deployment" — while doing
+// nothing but move speed and accel like every other part, so the descriptions
+// were simply false. Parts.ersProfile() reads the bias the catalog already
+// encodes in each option's own stats (deploy <- accel, regen <- speed) and hands
+// back two 0..1 axes; deriving them rather than authoring new fields means the
+// SIGNATURE clones, which copy those stats, stay consistent for free.
+//
+// deploy buys BOOST DURATION (a lower drain) and a longer, sooner OVERTAKE.
+// regen buys RECHARGE. A car with no parts — every AI — sits at the midpoint.
+const DRAIN_LO = 0.14, DRAIN_HI = 0.26;    // energy/s while boosting: best -> worst deploy
+const REGEN_LO = 0.085, REGEN_HI = 0.155;  // energy/s recovered: worst -> best regen
+const OT_TIME_LO = 3.2, OT_TIME_HI = 5.2;  // overtake push, seconds
+const OT_COOL_LO = 9, OT_COOL_HI = 14;     // ...and its lockout, best -> worst deploy
+const OT_GAP = 1.0;
+function ersDeployOf(c) { return c && c.ersDeploy != null ? c.ersDeploy : 0.5; }
+function ersRegenOf(c) { return c && c.ersRegen != null ? c.ersRegen : 0.5; }
+// Better deployment DRAINS SLOWER — the same press lasts longer rather than
+// pushing harder, because the push itself is what BOOST already scales.
+function drainFor(c) { return lerp(DRAIN_HI, DRAIN_LO, ersDeployOf(c)); }
+function regenFor(c) { return lerp(REGEN_LO, REGEN_HI, ersRegenOf(c)); }
+function otTimeFor(c) { return lerp(OT_TIME_LO, OT_TIME_HI, ersDeployOf(c)); }
+function otCoolFor(c) { return lerp(OT_COOL_HI, OT_COOL_LO, ersDeployOf(c)); }
 
 // -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
 // The real system does NOT ask "is the road ahead straight enough right now".
@@ -636,7 +691,7 @@ function xStraightAhead(c) { return !!aeroZoneAt(wrapS(c.s)); }
 // 1 - X_DF_LOSS with the flaps fully open. Nothing else in the grip model
 // changes: mechanical grip, kerbs, weather and the friction ellipse are
 // untouched, so opening the wing costs you exactly the wing.
-function aeroDfMult(c) { return 1 - X_DF_LOSS * (c && c.aeroX || 0); }
+function aeroDfMult(c) { return 1 - xDfLoss(c) * (c && c.aeroX || 0); }
 
 // ── seeded simulation randomness ────────────────────────────────────────────
 // Everything that FEEDS THE SIMULATION draws from here, never Math.random(), so
@@ -718,6 +773,17 @@ let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 // — no writes to speed/px/pz/head/(s,x). DEFAULT ON; disable apex26.caution="0".
 let _cautionOn = true;
 try { _cautionOn = (localStorage.getItem("apex26.caution") || "1") !== "0"; } catch (e) {}
+// Written by the CAUTIONS race setting and by __apex.caution({enabled}). Turning
+// it OFF must also DROP a flag that is already flying — otherwise the HUD keeps
+// showing a safety car that nothing is maintaining any more. resetCaution() is
+// declared later, so this is a function declaration (hoisted) rather than a
+// const, and the guard lets it be called before the race loop exists.
+function setCautionEnabled(on) {
+  _cautionOn = !!on;
+  try { localStorage.setItem("apex26.caution", _cautionOn ? "1" : "0"); } catch (e) {}
+  if (!_cautionOn) resetCaution();
+  return _cautionOn;
+}
 // level: 0 GREEN · 1 local YELLOW (sector) · 2 VSC · 3 SAFETY CAR.
 let caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
 // Last flag state broadcast to a networked guest, so only CHANGES are sent.
@@ -792,6 +858,13 @@ let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.lengt
 let flow = "gp";            // "gp" | "season" | "career"
 let session = "race";       // "race" | "tt" (solo against the clock) | "quali"
 const isChampionship = () => flow === "season" || flow === "career";
+// Does the grid come from a qualifying classification? A championship always
+// does; a one-off does when the player asked for it. Both startRace() (which
+// reads quali.order) and the race-settings GO button ask this, and they must
+// agree — a race that qualified and then gridded up P12 would throw the session
+// away, and one that gridded from a classification it never ran would read a
+// stale one.
+const gridFromQuali = () => isChampionship() || (raceQuali && !isTimeTrial());
 // The ONE way `flow` is written. Career's save is loaded at boot and stays loaded,
 // so js/game/career.js has to be told whether its rules apply to the session that
 // is running — otherwise a Grand Prix would quietly inherit the career's team
@@ -810,6 +883,80 @@ let careerSettlement = null;
 const isCareer = () => flow === "career";
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
+// Whether a one-off race decides its grid by QUALIFYING rather than dropping the
+// player at P12. A championship always qualifies — that is what a weekend is —
+// so this is the switch for everything that is not one. A standing preference
+// like DIFFICULTY and RELIABILITY, not a per-race reset: someone who wants to
+// qualify wants to qualify next time too.
+let raceQuali = store.get("raceQuali", false);
+// A friend race has TWO humans on the grid, and both of their qualifying laps
+// are real. The rival's arrives over the wire (NetPlay EV.QUALI) as
+// driverId -> seconds; quali.simulate() takes the map and stops caring which of
+// them is "the player". Cleared with the classification.
+let qualiPeer = null;
+// Everything anyone actually drove, in the one shape the model wants.
+// The rival's driven lap has arrived. Store it, and redraw whatever is showing:
+// if the sheet is up it must now list their real time instead of the model's
+// guess, and if the classification was already built it has to be rebuilt or the
+// grid would be assembled from a lap that has been superseded.
+// Whoever currently holds the connection carries it. NetPlay owns the session
+// once the race is built; before that — which is exactly when qualifying runs —
+// the lobby still does.
+function netReportQuali(driverId, t) {
+  if (netPlay && netPlay.active && netPlay.active() && netPlay.reportQuali) return netPlay.reportQuali(driverId, t);
+  if (netLobby && netLobby.reportQuali) return netLobby.reportQuali(driverId, t);
+  return false;
+}
+
+// A friend race waits for BOTH laps before it will grid up. Racing someone
+// whose qualifying time never arrived would put them wherever the model
+// guessed, which is the one thing a qualifying session is supposed to stop.
+let qualiNetDone = null;          // the lobby's "now finish starting" callback
+function qualiNetWaiting() {
+  if (!qualiNetDone) return false;
+  return !(qualiPeer && qualiPeer.t > 0);
+}
+
+// Say WHY the grid is not available yet, on the button itself.
+//
+// This used to be an announce() banner. That is the wrong instrument twice
+// over: the banner is a full-width overlay across the middle of the screen, so
+// it physically covers the sheet foot — the very button it is talking about —
+// and it fades, so a player who looks away has no way to find out why nothing
+// happened. A disabled button with its reason written on it cannot cover
+// itself, cannot expire, and cannot be clicked by mistake.
+function refreshQualiGate() {
+  const b = $("q-go");
+  if (!b) return;
+  const waiting = qualiNetWaiting();
+  b.disabled = waiting;
+  b.textContent = waiting ? "WAITING FOR THEIR LAP…" : "TO THE GRID";
+}
+
+// Stage a qualifying session for a FRIEND race. Same session the solo path
+// runs; the difference is only what happens when it ends — the lobby has to
+// build the race and hand its connection to NetPlay, and it cannot do that
+// until the players leave the sheet.
+function openQualiForNet(done) {
+  qualiNetDone = done || null;
+  openQuali();
+  refreshQualiGate();
+}
+
+function onPeerQuali(d) {
+  qualiPeer = { driverId: d.driverId, t: d.t };
+  if (session !== "quali" && !isQuali()) return;
+  const mine = player && player.best < Infinity ? player.best : 0;
+  quali.simulate(qualiDriven(mine));
+  if (!$("quali").hidden) quali.build();
+  refreshQualiGate();
+}
+function qualiDriven(myTime) {
+  const m = new Map();
+  if (myTime > 0 && player) m.set(player.driverId, myTime);
+  if (qualiPeer && qualiPeer.driverId != null && qualiPeer.t > 0) m.set(qualiPeer.driverId, qualiPeer.t);
+  return m.size ? m : 0;
+}
 let raceWeather = "dry";       // "dry" | "wet" | "rain" | "overcast" | "fog"
 let raceTimeOfDay = "default"; // "default" | "dawn" | "day" | "dusk" | "night"
 let ttRecord = Infinity;    // best lap on the current TT track's leaderboard (seconds)
@@ -888,6 +1035,8 @@ let _leadHuman = null;
 // converted it into. Null solo, and cleared the moment the race starts.
 let netStart = null;
 let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
+let playerAeroLoad = 0.5;   // 0..1 wing size — how far active aero trades (see xVmaxGain)
+let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/otTimeFor)
 // Shared neutral fallback for a human car with no resolved setup. Frozen and
 // module-scope so updateCar's per-car binding never allocates.
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
@@ -1367,6 +1516,15 @@ function recomputePlayerMods() {
   const setup = getTeamParts(team.id);
   playerMods = modsFor(team, setup);
   if (player) player.mods = playerMods;
+  // How much wing this car is carrying (0..1), which sets how much active aero
+  // trades — see X_VMAX_GAIN_LO/HI. Cached here rather than resolved per physics
+  // step: it only changes when the parts do.
+  playerAeroLoad = Parts.aeroLoad(setup, team);
+  if (player) player.aeroLoad = playerAeroLoad;
+  // The ERS part's two axes — deployment and recovery — which run the battery
+  // and the overtake window (see drainFor/regenFor/otTimeFor).
+  playerErs = Parts.ersProfile(setup, team);
+  if (player) { player.ersDeploy = playerErs.deploy; player.ersRegen = playerErs.regen; }
   const vt = Parts.getVisualTiers(setup, team);
   playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
   playerTyreId = vt._ids ? vt._ids.tyres : "medium";
@@ -1434,6 +1592,11 @@ function makeCars() {
         // Per-car performance multipliers (human cars only — see modsFor).
         // startRace()'s recomputePlayerMods() refreshes the local player's.
         mods: isP ? modsFor(team, getTeamParts(team.id)) : null,
+        // Only a human car carries parts, so only a human car has a wing size;
+        // an AI stays at the midpoint of every active-aero span (aeroLoadOf).
+        aeroLoad: isP ? Parts.aeroLoad(getTeamParts(team.id), team) : null,
+        ersDeploy: isP ? Parts.ersProfile(getTeamParts(team.id), team).deploy : null,
+        ersRegen: isP ? Parts.ersProfile(getTeamParts(team.id), team).regen : null,
         color: team.color, tier: team.tier, seat: di,
         // Baked once here rather than looked up per physics step. Career team
         // development rides along in the same number the tier always contributed,
@@ -2146,11 +2309,17 @@ function armReliability(field) {
   return field;
 }
 
-// Put the player on a flying lap: at the line, on the racing side, already at
-// the speed the qualifying model assumes. Written in TRACK coordinates and
-// pushed back out to world space through worldFromTrack, exactly as
-// rescuePlayer() and retireCar() do — a moving start is not a new kind of
-// physics, it is the existing placement with speed left in.
+// Put the player on the LINE, AT REST — a standing qualifying lap.
+//
+// This used to launch at racing speed, because the simulated field is modelled
+// on a flying lap and timing a driven lap from a standstill against it would
+// lose you the launch every weekend by construction. The answer to that is not
+// to fake the player's start, though: it is to charge the MODEL the same
+// standing start (see STANDING_LOSS in js/game/quali.js), so both sides of the
+// comparison begin from rest and the two remain on one scale.
+//
+// Written in TRACK coordinates and pushed back out through worldFromTrack,
+// exactly as rescuePlayer() and retireCar() do.
 function launchFlyingLap() {
   if (!player || !track) return;
   // The player's OWN top speed — the identical expression updateCar() uses for a
@@ -2163,25 +2332,20 @@ function launchFlyingLap() {
   //
   // Then capped by what the road at the line will actually take, so a circuit
   // whose start/finish sits in a corner does not launch the car into a wall.
-  const mods = playerMods;
-  const flat = VMAX * PACE * mods.speed;
-  const k = Math.abs(Tracks.curvature(track, player.s));
-  const corner = k > 1e-5 ? Math.sqrt(LAT_MAX * gripMult() / k) : flat;
-  const v = Math.min(flat, corner);
   Tracks.sample(track, player.s, smp);
   player.x = 0;                       // on the line, not on the grid slot
   player.xVis = 0;
   const w = worldFromTrack(player.s, player.x, smp);
   player.px = w.x; player.pz = w.z;
   player.head = Math.atan2(smp.t[0], smp.t[2]);
-  player.speed = v;
+  player.speed = 0;               // standing start, like the real thing
   player.vLat = 0; player.yawRateCur = 0; player.yawVis = 0; player.steerVis = 0;
   // Seed the render-interpolation anchors, or the first frame smears the car
   // across the track from wherever the grid slot was.
   player.rPrevPx = player.px; player.rPrevPz = player.pz;
   player.rPrevS = player.s; player.rPrevX = player.x;
   player.rPrevHead = player.head; player.rPrevYawVis = 0;
-  announce("FLYING LAP", 1.6);
+  announce("QUALIFYING LAP", 1.6);
 }
 
 function startRace() {
@@ -2223,7 +2387,7 @@ function startRace() {
   } else {
     Particles.rainShow(false);
   }
-  gridUp(isChampionship() ? quali.order(cars) : null);
+  gridUp(gridFromQuali() ? quali.order(cars) : null);
   recomputePlayerMods();
   // Only a RACE can retire a car. A time trial is you against the clock and
   // qualifying is one flying lap — losing the car to a gearbox there would end
@@ -2268,17 +2432,75 @@ function showTouchControls(show) {
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
-  if (els.btnAero) els.btnAero.hidden = !t;
+  // ON AUTO THE AERO BUTTON IS REMOVED, not greyed. The wing drives itself, so
+  // the control has no job at all — and a dock of GROUPS can afford to drop it,
+  // because the survivors just close ranks. That was not true of the old
+  // absolutely-positioned stack, where hiding one button left a hole and every
+  // "fix" moved a different control under the player's thumb; it is the reason
+  // #pm-calib is disabled rather than hidden. Flex layout is what makes
+  // removing the right answer here.
+  // NO ZONES (Monaco) is deliberately NOT the same case: there the control still
+  // exists, it is this CIRCUIT that cannot use it, and the struck-through
+  // NO AERO ZONE chip beside a faded button says so. Removing it would silently
+  // suggest the game has no such feature.
+  if (els.btnAero) els.btnAero.hidden = !t || raceAeroMode === "auto";
   els.shiftUp.hidden = !(t && manual);
   els.shiftDown.hidden = !(t && manual);
   const steerBtns = t && steerMode === "buttons";
   els.btnSteerLeft.hidden = !steerBtns;
   els.btnSteerRight.hidden = !steerBtns;
-  // manual mode => shifts take the right column, boost/OT move to centre (CSS).
-  // button/touch modes => boost/OT pull in next to the steering thumb (CSS).
   document.body.classList.toggle("manual", manual);
   document.body.classList.toggle("steer-buttons", steerBtns);
   document.body.classList.toggle("steer-touch", t && steerMode === "touch");
+  layoutDocks(steerBtns, manual);
+}
+
+// Fill the two thumb docks. This is the ONE thing the flex bar cannot express
+// on its own: a control genuinely changes SIDE between modes — the throttle is
+// a left-thumb pedal in tilt mode and a right-thumb one in buttons mode, where
+// the arrows own the left — and CSS cannot move an element to a different
+// parent. Everything else (spacing, wrapping, centring, never overlapping) is
+// the flex row's job, and there is deliberately not one coordinate here.
+//
+// It moves GROUPS, never single buttons. A dock is a wrapping flex row, so a
+// dock holding five loose buttons breaks them apart wherever the width runs
+// out — which is how a DN button ended up sitting above its own UP. A group is
+// indivisible and carries its own shape (pedals and shifts are vertical pairs,
+// steer and taps are rows), so wrapping can only ever reorder whole groups and
+// a pair can never come apart or invert.
+//
+// Lists are in VISUAL left-to-right order, which for a normal flex row is just
+// DOM order. Each thumb's home is the screen edge it sits at, so what is held
+// continuously goes OUTERMOST — leftmost on the left, rightmost on the right —
+// and the discretionary taps sit inboard of it.
+function layoutDocks(steerBtns, manual) {
+  const left = $("dock-left"), right = $("dock-right");
+  if (!left || !right) return;
+  const pedals = $("grp-pedals"), shifts = $("grp-shifts"),
+        steer = $("grp-steer"), taps = $("grp-taps");
+  const L = [], R = [];
+  if (steerBtns) {
+    L.push(steer);            // arrows own the left thumb...
+    R.push(taps, pedals);     // ...so the pedals come right, GAS at the corner
+  } else {
+    L.push(pedals);           // tilt/touch: the pedal column is the left thumb
+    R.push(taps);             // the three taps sit inboard...
+    if (manual) R.push(shifts);   // ...of the shift column at the corner
+  }
+  // An empty group must not hold a gap in the dock. Hiding it is the whole
+  // reason `hidden` on every child is not enough: a flex parent of hidden
+  // children is still a flex item with the dock's own gap around it.
+  for (const g of [pedals, shifts, steer, taps]) {
+    if (!g) continue;
+    g.hidden = !(L.includes(g) || R.includes(g)) ||
+               ![...g.children].some((b) => !b.hidden);
+  }
+  for (const [dock, list] of [[left, L], [right, R]]) {
+    // Append unconditionally: it both moves a group that changed side and
+    // rewrites the order, so a mode switch can never leave yesterday's sequence
+    // half-applied.
+    for (const el of list) if (el) dock.appendChild(el);
+  }
 }
 
 // THE CLASSIFICATION IS THE HOST'S. Both peers can see both human cars, but
@@ -2323,9 +2545,14 @@ function endRace(forcedOrder) {
   // below — first branch out, before any race classification is built.
   if (isQuali()) {
     cars = qualiField || cars;
-    quali.simulate(player.best < Infinity ? player.best : 0);
+    const myLap = player.best < Infinity ? player.best : 0;
+    // Tell the other player what we set BEFORE building the sheet: their side
+    // needs it to draw the same classification ours will.
+    if (myLap > 0) netReportQuali(player.driverId, myLap);
+    quali.simulate(qualiDriven(myLap));
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
     quali.open();
+    refreshQualiGate();
     return;
   }
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
@@ -2486,6 +2713,10 @@ const G = {
   get setupPreviewDist() { return setupPreviewDist; },
   get setupPreviewPan() { return setupPreviewPan; },
   get setupPreviewAeroX() { return setupPreviewAeroX; },
+  get raceAeroMode() { return raceAeroMode; },
+  // Repaint the pause-menu button too: __apex.aeroMode() and the button are two
+  // doors onto one value, and a stale label is a lie about the car's behaviour.
+  set raceAeroMode(v) { raceAeroMode = v; store.set("aeroMode", v); refreshAeroBtn(); },
   get aeroZones() { return aeroZones; },
   aeroZoneAt: (s) => aeroZoneAt(s),
   aeroZoneAhead: (s) => aeroZoneAhead(s),
@@ -2567,6 +2798,8 @@ const G = {
   vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor, otCoolFor,
+  setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
   get netLobby() { return netLobby; },
@@ -2576,6 +2809,8 @@ const G = {
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
+  onPeerQuali, openQualiForNet,
+  get raceQuali() { return raceQuali; }, set raceQuali(v) { raceQuali = !!v; },
   openGarageFrom: (from) => openGarage(from),
   startRace, startWeatherArc, update, wrapS,
 };
@@ -2677,6 +2912,7 @@ function quitToMenu() {
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
   setFlow("gp"); session = "race";
   quali.clear();   // last weekend's classification is not this one's grid
+  qualiPeer = null;
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -2772,8 +3008,14 @@ function update(dt) {
     }
     const lit = Math.min(5, Math.floor(countT));
     if (lit > lightsLit) {
+      // Light EVERY lamp up to `lit`, not just the newest. countT can advance
+      // by more than one second in a frame — a networked countdown is pinned to
+      // a shared instant rather than accumulated from dt, so a peer that was
+      // busy building its circuit rejoins the sequence part-way through — and
+      // lighting only children[lit-1] left the earlier lamps dark forever. The
+      // guest saw an unlit gantry and then, abruptly, a green track.
+      for (let i = lightsLit; i < lit; i++) els.lights.children[i].classList.add("on");
       lightsLit = lit;
-      els.lights.children[lit - 1].classList.add("on");
       if (soundOn) GameAudio.lightOn(lit - 1);
       if (lit === 1) Input.calibrate();
       // all five lit — hold for a randomised beat, as in real F1, so the
@@ -2788,17 +3030,12 @@ function update(dt) {
       announce("LIGHTS OUT!", 1.4);
       if (soundOn) GameAudio.lightsOut();
       cars.forEach((c) => { c.lapStart = 0; });
-      // QUALIFYING IS ONE LAP, SO IT MUST BE A FLYING ONE. The session used to
-      // run two — a standing out-lap to build speed, then the lap that counted.
-      // Cutting it to one without this would time you from a standstill while
-      // the entire simulated field is modelled on a flying lap, and no amount of
-      // driving would close a gap that is purely the launch: you would qualify
-      // last every weekend by construction.
-      //
-      // So the car is already at racing speed as the lights go out. The launch
-      // speed is the model's own straight-line ceiling for THIS car (the same
-      // number quali.js integrates against), so a driven lap and a simulated one
-      // start from the same place and stay on one scale.
+      // ONE STANDING LAP, from the line. It used to launch at racing speed
+      // because the simulated field is modelled on a flying lap, and timing a
+      // standing lap against a flying one loses you the launch by construction.
+      // That is fixed on the other side now — quali.js charges every modelled
+      // lap the same standing start — so both begin from rest and stay on one
+      // scale, and the session reads like the thing it is named after.
       if (isQuali()) launchFlyingLap();
     }
     return;
@@ -3194,11 +3431,11 @@ function updateCar(c, dt, ranked) {
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
   // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
-  // It is already rationed by its own OT_GAP / OT_COOL window, which is what
+  // It is already rationed by its own OT_GAP / cooldown window, which is what
   // makes it a tactical move rather than a second BOOST — the energy bar was a
-  // second, redundant limiter, and at DRAIN 0.20 for OT_TIME 4 s a single press
-  // emptied 80% of the battery, so using the overtake button left you slower for
-  // the rest of the lap than if you had never pressed it.
+  // second, redundant limiter, and at a ~0.2/s drain over a ~4 s push a single
+  // press emptied 80% of the battery, so using the overtake button left you
+  // slower for the rest of the lap than if you had never pressed it.
   const otFree = c.otT > 0;
   if (otFree || (wantBoost && c.energy > 0)) {
     deploy = DEPLOY_A * deployTaper(c);
@@ -3206,7 +3443,7 @@ function updateCar(c, dt, ranked) {
     // deployTaper), so it always costs energy. The battery and the push are the
     // same switch — a BOOST that drains nothing is a BOOST that does nothing.
     if (!otFree) {
-      c.energy = Math.max(0, c.energy - DRAIN * dt);
+      c.energy = Math.max(0, c.energy - drainFor(c) * dt);
       if (c.energy <= 0) c.boostOn = false;   // auto-release the toggle when drained
     }
     c.deploying = deploy > 0.4;
@@ -3215,11 +3452,12 @@ function updateCar(c, dt, ranked) {
   // --- overtake mode ---
   const ahead = ranked[(c.rank || 1) - 2];
   const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
-  c.otArmed = gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0 && !c.finished && c.speed > 15;
+  c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
+              && !c.finished && c.speed > 15;
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
                       : (c.otArmed && simRnd() < 1 - Math.exp(-0.7 * dt));
   if (fire && c.otArmed) {
-    c.otT = OT_TIME; c.otCool = OT_COOL + OT_TIME;
+    c.otT = otTimeFor(c); c.otCool = otCoolFor(c) + c.otT;
     if (c.isPlayer && soundOn) GameAudio.deployBoost();
   }
   if (c.isPlayer && c.otArmed && !c.wasArmed && soundOn) GameAudio.overtakeReady();
@@ -3269,7 +3507,10 @@ function updateCar(c, dt, ranked) {
   // already un-armed by the time the AI decides to brake for a corner.
   c.xArmed = !c.offroad && !braking && vStd(c.speed) > X_MIN_SPEED
     && !c.finished && state === "race" && xStraightAhead(c);
-  if (c.human) {
+  if (c.human && raceAeroMode === "auto") {
+    // Same rule the AI runs: take every zone the circuit offers.
+    c.xOn = c.xArmed;
+  } else if (c.human) {
     if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
     else c.xOn = !!(inp && inp.aero);
   } else {
@@ -3292,7 +3533,13 @@ function updateCar(c, dt, ranked) {
   }
   // Low drag is worth top speed. This is the ONLY thrust-side effect — no
   // engine power is added, so X-mode out of a slow corner does nothing at all.
-  vmax *= 1 + X_VMAX_GAIN * c.aeroX;
+  vmax *= 1 + xVmaxGain(c) * c.aeroX;
+  // Stashed for physState(): the two halves of the active-aero trade are
+  // computed deep inside the per-car update and were otherwise unobservable, so
+  // "does the wing actually do anything?" could only be answered by reading this
+  // function. Driving the car to measure it does not work — full lock at 78 m/s
+  // puts it 30 m into a field, which closes the flaps and measures nothing.
+  c._vmaxNow = vmax;
 
   // --- gearbox (player) ---
   let gearMult = 1, speedCap = vmax + 14 * Math.max(PACE, 0.05);   // ERS overspeed margin — a speed, so it rides the pace scale
@@ -3327,19 +3574,19 @@ function updateCar(c, dt, ranked) {
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
       c.speed = Math.max(REVERSE_MAX, c.speed - REVERSE_ACCEL * dt);
     }
-    c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
+    c.energy = Math.min(1, c.energy + regenFor(c) * 1.6 * dt);
   } else if (!onThrottle) {
     // coasting: gentle engine-braking/drag both ways (don't snap reverse to 0).
     // X-mode sheds part of that drag — a lift-and-coast in the low-drag wing
     // carries further, which is the whole point of opening it.
-    const cd = COAST_DRAG * (1 - X_COAST_CUT * (c.aeroX || 0));
+    const cd = COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0));
     if (c.speed > 0) c.speed = Math.max(0, c.speed - cd * dt);
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
-    c.energy = Math.min(1, c.energy + REGEN * dt);
+    c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   } else {
     const a = (ACCEL * PACE * (c.human ? mods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     c.speed = Math.min(speedCap, c.speed + a * dt);
-    if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
+    if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   }
   // --- slope gravity: climbs gently bleed speed, descents gently feed it back.
   // slopeSin is the road tangent's vertical component (+uphill / -downhill).
@@ -3681,6 +3928,7 @@ function updateCar(c, dt, ranked) {
     // fully open). Carrying X-mode into a fast corner is therefore a genuine
     // loss of grip at exactly the speed where aero load is doing the most work.
     const aeroGrip = 1 + DOWNFORCE * aeroDfMult(c) * Math.min(1, (Math.abs(c.speed) / vTop())) ** 2;
+    c._aeroGrip = aeroGrip;          // see c._vmaxNow — the other half of the trade
     const offDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
     const surfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, offDepth);
     // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar
@@ -4198,6 +4446,32 @@ function publishCaution() {
     cause: caution.cause, total: caution.total, sectors: caution.sectors,
     sinceT: caution.sinceT,
   });
+}
+
+// OVERTAKE IS NOT AVAILABLE ON LAP 1, and not while the race is neutralised.
+// This is the real rule for 2026's overtake mode (the electrical push that
+// replaced DRS as the proximity-gated overtaking aid): it is enabled once the
+// LEADER completes the opening lap, and it goes away under yellows and behind
+// the safety car. It is the same reasoning DRS always had — the field is at its
+// most bunched exactly when an overtaking aid is least safe, and a start where
+// everyone can push is a start decided by whoever gambles hardest.
+//
+// Note this deliberately does NOT gate ACTIVE AERO. X-mode is not the
+// overtaking aid in 2026 and carries none of its restrictions: every driver
+// gets it on every lap in every approved zone, leader and backmarker alike,
+// with no proximity requirement. Its only limits are the activation zones
+// themselves (see buildAeroZones) — which is why Monaco has none.
+//
+// The LEADER's lap, not each car's own: a field-wide switch is what race
+// control actually throws, and gating per-car would hand a lapped driver the
+// push while the leader still had none. `ranked` is already sorted by progress
+// every frame, so the leader is ranked[0] and this stays O(1) — scanning all
+// 22 cars from inside the per-car update would have been 484 checks a frame for
+// a fact that changes once a race.
+function otEnabled() {
+  if (caution.level !== 0) return false;
+  const leader = ranked[0];
+  return !!leader && leader.lap > 1;
 }
 
 function cautionInfo() {
@@ -6857,6 +7131,55 @@ function buildRaceSettings() {
   }
   // RELIABILITY — same idiom, same persistence, and hidden alongside DIFFICULTY
   // in a time trial for the same reason: neither has anything to act on there.
+  // (ACTIVE AERO used to sit here. It is a CONTROL preference, not a property of
+  // the event, so it lives in pause > SETTINGS > DRIVING next to GEARS — where
+  // it can also be changed mid-race, which is when a player discovers they want
+  // it. See refreshAeroBtn.)
+  // Hidden in a time trial (no grid) and FORCED ON in a championship, where the
+  // weekend decides the grid and the choice is not the player's to make. Shown
+  // rather than removed there, because "why did this race qualify" is a
+  // question the screen should answer.
+  const champ = isChampionship();
+  // STILL HIDDEN IN THE ROOM. The plumbing below it is now in place — the model
+  // carries two driven laps, the lobby holds its session across the session and
+  // routes EV.QUALI, and TO THE GRID waits for the rival — but the last spec
+  // does not pass: after the rival's lap lands, the click on #q-go hangs, which
+  // is the signature of a button that is not visible rather than of a rule that
+  // is wrong (the sheet is rebuilt when the lap arrives, and that rebuild looks
+  // like it drops the q-done foot). Shipping the chip before that is understood
+  // would offer a session that can strand two players on a sheet.
+  $("rs-quali-section").hidden = isTimeTrial();
+  const qEl = $("rs-quali");
+  qEl.innerHTML = "";
+  for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
+    const active = champ ? on : raceQuali === on;
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (active ? " active" : "");
+    b.setAttribute("aria-pressed", active ? "true" : "false");
+    b.disabled = champ;
+    b.textContent = label;
+    b.onclick = () => {
+      raceQuali = on; store.set("raceQuali", on);
+      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
+    };
+    qEl.appendChild(b);
+  }
+  // CAUTIONS — the flag layer. Hidden in a time trial for the same reason
+  // RELIABILITY is: alone on an empty track there is nothing to caution.
+  $("rs-caution-section").hidden = isTimeTrial();
+  const cauEl = $("rs-caution");
+  cauEl.innerHTML = "";
+  for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (_cautionOn === on ? " active" : "");
+    b.setAttribute("aria-pressed", _cautionOn === on ? "true" : "false");
+    b.textContent = label;
+    b.onclick = () => {
+      setCautionEnabled(on);
+      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
+    };
+    cauEl.appendChild(b);
+  }
   $("rs-reliab-section").hidden = isTimeTrial();
   const relEl = $("rs-reliab");
   relEl.innerHTML = "";
@@ -6910,7 +7233,13 @@ function openRaceSettings(from) {
 }
 els.selGo.onclick = () => {
   if (soundOn) GameAudio.uiSelect();
-  openRaceSettings("select");
+  // The garage is a STEP now, not a side door. #select asks where you race and
+  // nothing else; START goes on to the garage, and the garage's DONE carries on
+  // to the race settings. In the VS FRIEND room it is skipped — the room has
+  // its own GARAGE button because each player owns their own car, and the host
+  // coming here is only editing the shared race.
+  if (netRoom) { openRaceSettings("select"); return; }
+  openGarage("select");
 };
 $("rs-cancel").onclick = () => {
   $("race-settings").hidden = true;
@@ -6929,10 +7258,10 @@ $("rs-go").onclick = () => {
     return;
   }
   if (steerMode === "tilt") enableTilt();
-  // In a championship the weekend starts with qualifying, which is what decides
-  // the grid. A one-off Grand Prix goes straight to the race and keeps its P12
-  // start — that mode is a quick blast, not a weekend.
-  if (isChampionship()) openQuali(); else startRace();
+  // A championship weekend always starts with qualifying, and a one-off does
+  // when GRID is set to QUALIFYING. Otherwise it is straight to the lights from
+  // P12 — a quick blast, which is the point of that mode.
+  if (gridFromQuali()) openQuali(); else startRace();
 };
 
 // ── qualifying ───────────────────────────────────────────────────────────────
@@ -6946,6 +7275,7 @@ function openQuali() {
   // up, so both paths say the same thing.
   state = "menu";
   quali.clear();
+  qualiPeer = null;
   loadTrack(trackIdx);
   makeCars();
   quali.simulate(0);              // provisional: everyone simulated, including you
@@ -6965,11 +7295,29 @@ $("q-drive").onclick = () => {
 };
 $("q-sim").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
-  quali.simulate(0);              // keep the simulated time for the player too
+  // Keep the model's time for us — but a rival who has already driven theirs
+  // does not lose it because we could not be bothered to drive ours.
+  quali.simulate(qualiDriven(0));
   $("quali").classList.add("q-done");
   quali.build();
+  refreshQualiGate();
 };
-$("q-go").onclick = () => { if (soundOn) GameAudio.uiSelect(); closeQualiToGrid(); };
+$("q-go").onclick = () => {
+  // Guarded as well as disabled: the button is the only way out of this sheet,
+  // and a stale enabled state would grid up without the rival's lap.
+  if (qualiNetWaiting()) { refreshQualiGate(); return; }
+  if (soundOn) GameAudio.uiSelect();
+  // In a friend race the lobby, not this handler, builds the race: it still
+  // holds the connection and has to hand it to NetPlay once the grid exists.
+  if (qualiNetDone) {
+    const go = qualiNetDone;
+    qualiNetDone = null;
+    quali.close();
+    go();
+    return;
+  }
+  closeQualiToGrid();
+};
 // BACK goes ONE step, to the race settings the weekend was staged from — which
 // has its own BACK to the hub or the select screen, so the two together are a
 // real back-stack rather than a shortcut that skips a screen.
@@ -7201,7 +7549,6 @@ function openGarage(from) {
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
   openSetup();
 }
-$("sel-setup").onclick = () => openGarage("select");
 $("mb-garage").onclick = () => openGarage("menu");
 $("cs-done").onclick = () => {
   $("carsetup").hidden = true;
@@ -7216,9 +7563,13 @@ $("cs-done").onclick = () => {
     return;
   }
   if (garageReturn === "career") { careerUi.openHub(); return; }
+  // Reached from the circuit picker's START, so DONE goes FORWARD to the race
+  // settings, not back to a screen whose question is already answered. Race
+  // settings' own BACK still returns to #select, so the circuit stays two taps
+  // away if you change your mind.
+  if (garageReturn === "select") { openRaceSettings("select"); return; }
   buildSelect();
-  if (garageReturn === "menu") els.overlay.hidden = false;
-  else els.select.hidden = false;
+  els.overlay.hidden = false;   // only the title screen's GARAGE button gets here
 };
 $("cs-unlimited").onclick = () => {
   unlimitedBudget = !unlimitedBudget;
@@ -7473,6 +7824,30 @@ $("pm-gears").onclick = () => {
   if (player && !gearsManual()) player.gear = naturalGear(player.speed);
   showTouchControls(true);
 };
+
+// ACTIVE AERO: MANUAL / AUTO. Same shape as GEARS and for the same reason —
+// both answer "how much of the car do you operate yourself?". Takes effect
+// immediately, so a player who flips it mid-race sees it on the next zone; the
+// HUD's AERO button greys out under AUTO (see hud.js hToggle "dead").
+// Also re-lays the dock, because AUTO REMOVES the AERO button rather than
+// greying it and the survivors have to close ranks. Without this the change
+// only appeared at the next steering-mode switch — i.e. it looked broken
+// exactly when a player flipped the setting to see what it did.
+function refreshAeroBtn() {
+  const b = $("pm-aero");
+  if (b) b.textContent = "ACTIVE AERO: " + (raceAeroMode === "auto" ? "AUTO" : "MANUAL");
+  if (state === "race" || state === "count" || state === "pause") showTouchControls(true);
+}
+$("pm-aero").onclick = () => {
+  raceAeroMode = raceAeroMode === "auto" ? "manual" : "auto";
+  store.set("aeroMode", raceAeroMode);
+  refreshAeroBtn();
+  // Dropping out of AUTO must not leave the wing latched open — the switch is
+  // the player's again from this instant.
+  if (raceAeroMode !== "auto" && player) player.xOn = false;
+  if (soundOn) GameAudio.uiTick();
+};
+refreshAeroBtn();
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && state === "race") setPaused(true);
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
@@ -7584,7 +7959,18 @@ Input.init(canvas, { onPause: () => {
   if (paused && els.pmsettings && !els.pmsettings.hidden) { closeSettings(); return; }
   setPaused(!paused);
 } });
-if (!Input.touchControlsNeeded()) { document.body.classList.add("desktop"); els.subtitle.textContent = "2026 grid · " + Tracks.LIST.length + " real circuits"; }
+// The subtitle is DERIVED on both paths. It used to be hardcoded "24 real
+// circuits" in index.html and rewritten on desktop only, from Tracks.LIST.length
+// — which counts the 16 retired classics too, so the same build claimed 24
+// circuits on a phone and 40 on a desktop. Both now read the championship
+// calendar (Tracks.SEASON), and the desktop, which has the room, names the
+// classics rather than silently folding them into the season count.
+if (!Input.touchControlsNeeded()) document.body.classList.add("desktop");
+{
+  const rounds = Tracks.SEASON.length, classics = Tracks.LIST.length - rounds;
+  els.subtitle.textContent = "2026 grid · " + rounds + " real circuits · "
+    + (Input.touchControlsNeeded() ? "tilt to steer" : classics + " classics");
+}
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
 $("pm-steer").textContent = steerLabel();
