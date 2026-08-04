@@ -569,6 +569,27 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Parts system (`js/car/parts.js`)
 
+**THE ERS PART RUNS THE BATTERY.** Every category moves the four stats
+(`speed`→`vmax`, `accel`→`ACCEL`, `cornering`→`LAT_MAX`, `braking`→`BRAKE`), and
+all twelve have real spread — but ERS's options *describe* battery behaviour
+("harvests extra energy under braking", "maximum recovery window", "immediate
+deployment") and for a long time did none of it. `Parts.ersProfile(setup, team)`
+returns two 0..1 axes read from the bias the catalog already encodes
+(`deploy` ← the option's `accel`, `regen` ← its `speed`), and they drive
+`drainFor`/`regenFor`/`otTimeFor`/`otCoolFor` in game.js. Deriving rather than
+authoring new fields keeps the SIGNATURE clones consistent for free, since they
+copy those stats. Measured:
+
+| ERS part | deploy / regen | boost lasts | recharge | OT push / cooldown |
+|---|---|---|---|---|
+| `harvest` | 0.00 / 0.43 | 3.8 s | 5.4 s | 3.2 s / 14.0 s |
+| `standard` | 0.22 / 0.29 | 4.3 s | 5.9 s | 3.6 s / 12.9 s |
+| `overcharge` | 1.00 / 1.00 | 7.1 s | 4.0 s | 5.2 s / 9.0 s |
+
+A car with no parts — every AI — sits at the midpoint of both axes.
+`physState()` reports `ersDeploy`, `ersRegen`, `drain`, `regen`, `otTime`,
+`otCool`.
+
 `Parts.CATALOG` — an **array** of 12 category objects (ordered, not keyed by id):
 `engine`, `aero`, `suspension`, `brakes`, `tyres`, `ers`, `gearbox`, `fuel`,
 `exhaust`, `floor`, `cockpit`, `wheels`. Each

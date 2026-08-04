@@ -532,8 +532,30 @@ function isErsDeploying(c) {
   if (!(c.otT > 0) && (c.energy <= 0 || !c.boostOn)) return false;
   return DEPLOY_A * deployTaper(c) > 0.4;
 }
-const DRAIN = 0.20, REGEN = 0.115;   // energy per second
-const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
+// THE ERS PART RUNS THE BATTERY, which until now it did not. The category's
+// options have always DESCRIBED battery behaviour — "harvests extra energy under
+// braking", "maximum recovery window", "immediate deployment" — while doing
+// nothing but move speed and accel like every other part, so the descriptions
+// were simply false. Parts.ersProfile() reads the bias the catalog already
+// encodes in each option's own stats (deploy <- accel, regen <- speed) and hands
+// back two 0..1 axes; deriving them rather than authoring new fields means the
+// SIGNATURE clones, which copy those stats, stay consistent for free.
+//
+// deploy buys BOOST DURATION (a lower drain) and a longer, sooner OVERTAKE.
+// regen buys RECHARGE. A car with no parts — every AI — sits at the midpoint.
+const DRAIN_LO = 0.14, DRAIN_HI = 0.26;    // energy/s while boosting: best -> worst deploy
+const REGEN_LO = 0.085, REGEN_HI = 0.155;  // energy/s recovered: worst -> best regen
+const OT_TIME_LO = 3.2, OT_TIME_HI = 5.2;  // overtake push, seconds
+const OT_COOL_LO = 9, OT_COOL_HI = 14;     // ...and its lockout, best -> worst deploy
+const OT_GAP = 1.0;
+function ersDeployOf(c) { return c && c.ersDeploy != null ? c.ersDeploy : 0.5; }
+function ersRegenOf(c) { return c && c.ersRegen != null ? c.ersRegen : 0.5; }
+// Better deployment DRAINS SLOWER — the same press lasts longer rather than
+// pushing harder, because the push itself is what BOOST already scales.
+function drainFor(c) { return lerp(DRAIN_HI, DRAIN_LO, ersDeployOf(c)); }
+function regenFor(c) { return lerp(REGEN_LO, REGEN_HI, ersRegenOf(c)); }
+function otTimeFor(c) { return lerp(OT_TIME_LO, OT_TIME_HI, ersDeployOf(c)); }
+function otCoolFor(c) { return lerp(OT_COOL_HI, OT_COOL_LO, ersDeployOf(c)); }
 
 // -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
 // The real system does NOT ask "is the road ahead straight enough right now".
@@ -960,6 +982,7 @@ let _leadHuman = null;
 let netStart = null;
 let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
 let playerAeroLoad = 0.5;   // 0..1 wing size — how far active aero trades (see xVmaxGain)
+let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/otTimeFor)
 // Shared neutral fallback for a human car with no resolved setup. Frozen and
 // module-scope so updateCar's per-car binding never allocates.
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
@@ -1417,6 +1440,10 @@ function recomputePlayerMods() {
   // step: it only changes when the parts do.
   playerAeroLoad = Parts.aeroLoad(setup, team);
   if (player) player.aeroLoad = playerAeroLoad;
+  // The ERS part's two axes — deployment and recovery — which run the battery
+  // and the overtake window (see drainFor/regenFor/otTimeFor).
+  playerErs = Parts.ersProfile(setup, team);
+  if (player) { player.ersDeploy = playerErs.deploy; player.ersRegen = playerErs.regen; }
   const vt = Parts.getVisualTiers(setup, team);
   playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
   playerTyreId = vt._ids ? vt._ids.tyres : "medium";
@@ -1487,6 +1514,8 @@ function makeCars() {
         // Only a human car carries parts, so only a human car has a wing size;
         // an AI stays at the midpoint of every active-aero span (aeroLoadOf).
         aeroLoad: isP ? Parts.aeroLoad(getTeamParts(team.id), team) : null,
+        ersDeploy: isP ? Parts.ersProfile(getTeamParts(team.id), team).deploy : null,
+        ersRegen: isP ? Parts.ersProfile(getTeamParts(team.id), team).regen : null,
         color: team.color, tier: team.tier, seat: di,
         // Baked once here rather than looked up per physics step. Career team
         // development rides along in the same number the tier always contributed,
@@ -2661,7 +2690,7 @@ const G = {
   vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
-  aeroDfMult, xVmaxGain, xDfLoss,
+  aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor, otCoolFor,
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
@@ -3288,11 +3317,11 @@ function updateCar(c, dt, ranked) {
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
   // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
-  // It is already rationed by its own OT_GAP / OT_COOL window, which is what
+  // It is already rationed by its own OT_GAP / cooldown window, which is what
   // makes it a tactical move rather than a second BOOST — the energy bar was a
-  // second, redundant limiter, and at DRAIN 0.20 for OT_TIME 4 s a single press
-  // emptied 80% of the battery, so using the overtake button left you slower for
-  // the rest of the lap than if you had never pressed it.
+  // second, redundant limiter, and at a ~0.2/s drain over a ~4 s push a single
+  // press emptied 80% of the battery, so using the overtake button left you
+  // slower for the rest of the lap than if you had never pressed it.
   const otFree = c.otT > 0;
   if (otFree || (wantBoost && c.energy > 0)) {
     deploy = DEPLOY_A * deployTaper(c);
@@ -3300,7 +3329,7 @@ function updateCar(c, dt, ranked) {
     // deployTaper), so it always costs energy. The battery and the push are the
     // same switch — a BOOST that drains nothing is a BOOST that does nothing.
     if (!otFree) {
-      c.energy = Math.max(0, c.energy - DRAIN * dt);
+      c.energy = Math.max(0, c.energy - drainFor(c) * dt);
       if (c.energy <= 0) c.boostOn = false;   // auto-release the toggle when drained
     }
     c.deploying = deploy > 0.4;
@@ -3314,7 +3343,7 @@ function updateCar(c, dt, ranked) {
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
                       : (c.otArmed && simRnd() < 1 - Math.exp(-0.7 * dt));
   if (fire && c.otArmed) {
-    c.otT = OT_TIME; c.otCool = OT_COOL + OT_TIME;
+    c.otT = otTimeFor(c); c.otCool = otCoolFor(c) + c.otT;
     if (c.isPlayer && soundOn) GameAudio.deployBoost();
   }
   if (c.isPlayer && c.otArmed && !c.wasArmed && soundOn) GameAudio.overtakeReady();
@@ -3431,7 +3460,7 @@ function updateCar(c, dt, ranked) {
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
       c.speed = Math.max(REVERSE_MAX, c.speed - REVERSE_ACCEL * dt);
     }
-    c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
+    c.energy = Math.min(1, c.energy + regenFor(c) * 1.6 * dt);
   } else if (!onThrottle) {
     // coasting: gentle engine-braking/drag both ways (don't snap reverse to 0).
     // X-mode sheds part of that drag — a lift-and-coast in the low-drag wing
@@ -3439,11 +3468,11 @@ function updateCar(c, dt, ranked) {
     const cd = COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0));
     if (c.speed > 0) c.speed = Math.max(0, c.speed - cd * dt);
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
-    c.energy = Math.min(1, c.energy + REGEN * dt);
+    c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   } else {
     const a = (ACCEL * PACE * (c.human ? mods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     c.speed = Math.min(speedCap, c.speed + a * dt);
-    if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + REGEN * dt);
+    if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   }
   // --- slope gravity: climbs gently bleed speed, descents gently feed it back.
   // slopeSin is the road tangent's vertical component (+uphill / -downhill).
