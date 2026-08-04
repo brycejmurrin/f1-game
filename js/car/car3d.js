@@ -692,7 +692,7 @@ const Car3D = (function () {
   // vertical and square whatever the surface under it is doing. Sized and placed
   // to sit inside the outline with clearance on all four sides (the fin is a full
   // 0.35 m tall through this z range, and the crown is flat from z −1.15 back).
-  const FIN_BADGE = Object.freeze({ z0: -1.26, z1: -1.47, y0: 0.745, y1: 0.955 });
+  const FIN_BADGE = Object.freeze({ z0: -1.235, z1: -1.465, y0: 0.725, y1: 0.955 });
   function sharkFinBadge(proud) {
     const p = proud != null ? proud : 0.0022;   // just outside the graphic panel
     const B = FIN_BADGE, at = (z, y) => ({ x: finXAt(z, y, p), y, z });

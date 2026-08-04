@@ -775,7 +775,11 @@ const LiveryTex = (function () {
     for (const id of ids) {
       const img = new Image();
       _logosPending++;
-      img.onload = () => { LOGOS[id] = img; done(); };
+      img.onload = () => {
+        img._avg = avgColour(img);
+        LOGOS[id] = img;
+        done();
+      };
       img.onerror = done;
       img.src = base + "assets/logos/" + id + ".png" + v;
     }
@@ -793,14 +797,49 @@ const LiveryTex = (function () {
   // SHORT, which is the canonical list in this file.
   try { loadLogos(Object.keys(SHORT)); } catch (_) {}
 
+  // Mean colour of a mark's opaque pixels — what it "reads as" from a distance.
+  // Sampled at low resolution once per image; buildAtlas uses it to decide
+  // whether the mark separates from the paint it is about to land on.
+  function avgColour(img) {
+    try {
+      const n = 32, c = document.createElement("canvas");
+      c.width = c.height = n;
+      const cx = c.getContext("2d", { willReadFrequently: true });
+      cx.drawImage(img, 0, 0, n, n);
+      const d = cx.getImageData(0, 0, n, n).data;
+      let r = 0, g = 0, b = 0, w = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const a = d[i + 3] / 255;
+        if (a < 0.35) continue;
+        r += d[i] * a; g += d[i + 1] * a; b += d[i + 2] * a; w += a;
+      }
+      return w ? [r / w / 255, g / w / 255, b / w / 255] : null;
+    } catch (_) { return null; }
+  }
   // Draw a loaded mark to fit `R`, preserving its aspect. `tint` (the livery
   // `logo` colour) recolours it to a flat silhouette via an offscreen pass.
-  function drawLogoImage(ctx, img, R, tint) {
-    const pad = 0.06, bw = R.w * (1 - pad * 2), bh = R.h * (1 - pad * 2);
+  function drawLogoImage(ctx, img, R, tint, halo) {
+    const pad = 0.015, bw = R.w * (1 - pad * 2), bh = R.h * (1 - pad * 2);
     const sc = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
     const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
     const x = R.x + (R.w - w) / 2, y = R.y + (R.h - h) / 2;
-    if (!tint) { ctx.drawImage(img, x, y, w, h); return; }
+    if (!tint) {
+      // Halo, not a recolour: filling every opaque pixel with one colour turns a
+      // hollow mark into a blob — Audi's four rings became a white sausage and
+      // Ferrari's shield a black shape. A shadow in the contrast ink separates
+      // the real artwork from the paint without touching its colours.
+      if (halo) {
+        ctx.save();
+        ctx.shadowColor = css(halo);
+        ctx.shadowBlur = Math.max(4, w * 0.085);
+        // Each pass deepens the halo; a mark whose own colour matches the car
+        // (Audi's black rings on a black car) needs a strong one to read at all.
+        for (let i = 0; i < 5; i++) ctx.drawImage(img, x, y, w, h);
+        ctx.restore();
+      }
+      ctx.drawImage(img, x, y, w, h);
+      return;
+    }
     const off = document.createElement("canvas");
     off.width = Math.max(1, Math.round(w)); off.height = Math.max(1, Math.round(h));
     const oc = off.getContext("2d");
@@ -1002,8 +1041,15 @@ const LiveryTex = (function () {
 
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe);
-    if (LOGOS[teamId]) drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo);
-    else drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent, false, logo, c1);
+    // A mark that cannot separate from the paint is silhouetted in the contrast
+    // ink instead — Audi's black rings and Cadillac's black crest both sit on
+    // black cars, where the real artwork is invisible.
+    const markHalo = (img, bg, ink) =>
+      (img && img._avg && contrast(img._avg, bg) < 2.6 ? ink : null);
+    if (LOGOS[teamId]) {
+      drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo,
+                    markHalo(LOGOS[teamId], c1, inkCrest));
+    } else drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent, false, logo, c1);
     // Shark-fin panel: the SAME tail graphic + a BARE motif (disc/shield stripped)
     // so the fin reads as a painted tail, not a floating badge.
     // The wash + motif strokes are the accent colour, and the FIN IS ITS OWN
@@ -1021,8 +1067,10 @@ const LiveryTex = (function () {
     // Accent has to separate from the FIN's ink here, not the body's.
     const finAccent = contrast(accent, inkFin) >= 2.0 ? accent
       : (contrast(c1, inkFin) >= 2.0 ? c1 : haloFor(inkFin));
-    if (LOGOS[teamId]) drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo);
-    else drawCrest(ctx, teamId, REGIONS.finBadge, inkFin, finAccent, true, logo, finPaint);
+    if (LOGOS[teamId]) {
+      drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo,
+                    markHalo(LOGOS[teamId], finPaint, inkFin));
+    } else drawCrest(ctx, teamId, REGIONS.finBadge, inkFin, finAccent, true, logo, finPaint);
 
     // Sponsor wordmarks.
     const names = SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
