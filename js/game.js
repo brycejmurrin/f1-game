@@ -1152,6 +1152,11 @@ function gridUp(preOrder) {
     return o;
   })();
   order.forEach((c, i) => {
+    // Where this car STARTED. The only record of it: `order` is discarded here and
+    // the classification at the flag is built from finishing times. Career's
+    // "out-qualify your team-mate" objective is what reads it, and it is correct
+    // for both branches above — the qualifying grid and the tier-sorted fallback.
+    c.gridPos = i + 1;
     c.s = wrapS(track.total - 14 - i * 8);
     c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
     c.xVis = c.x;   // reset smoothed render position so the grid doesn't slide

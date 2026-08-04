@@ -136,6 +136,14 @@ function migrateCareer(career) {
   career.history = Array.isArray(career.history) ? career.history : [];
   career.dev = career.dev && typeof career.dev === "object" ? career.dev : {};
   career.tdev = career.tdev && typeof career.tdev === "object" ? career.tdev : {};
+  // The rollover's three: grid overrides the driver market writes, the contract
+  // offers waiting to be signed, and the current round's objective. Fills, not a
+  // migration step — a save from before any of them existed is still a valid v1
+  // save, it just has nothing in them yet.
+  career.seats = career.seats && typeof career.seats === "object" ? career.seats : {};
+  career.offers = Array.isArray(career.offers) ? career.offers : [];
+  career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
+  career.budgetLvl = career.budgetLvl | 0;
   store.set("career", career);
   return career;
 }
