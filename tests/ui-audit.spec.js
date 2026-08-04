@@ -387,14 +387,34 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await shot(page, `${orient}-28-datahub-telemetry`);
     });
 
-    // #career is one sheet in two states, and they share no layout: the new-career
-    // setup is a form, the hub is a dashboard. Both are shot.
-    test("29 career setup", async ({ page }) => {
+    // #career is one sheet in THREE states that share no layout: CAREER MODES is
+    // two columns of save slots, the new-career setup is a form, the hub is a
+    // dashboard. All three are shot.
+    test("29 career modes", async ({ page }) => {
       await page.goto("/");
       await waitReady(page);
       await page.locator("#mb-career").click();
       await page.locator("#career").waitFor({ state: "visible" });
-      await shot(page, `${orient}-29-career-setup`);
+      await shot(page, `${orient}-29-career-modes`);
+    });
+
+    test("29b career setup", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-career").click();
+      await page.locator("#career").waitFor({ state: "visible" });
+      // An empty driver slot is the way into the form.
+      await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
+      await shot(page, `${orient}-29b-career-setup`);
+    });
+
+    test("29c career guide", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-career").click();
+      await page.locator("#cr-guide-myteam").click();
+      await page.locator("#career-guide").waitFor({ state: "visible" });
+      await shot(page, `${orient}-29c-career-guide-myteam`);
     });
 
     test("30 career hub", async ({ page }) => {

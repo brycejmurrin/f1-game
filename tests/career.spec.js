@@ -92,7 +92,9 @@ test.describe("Career — save", () => {
     const after = await page.evaluate(() => window.__apex.careerState());
     expect(after.team).toBe(before.team);
     expect(after.money).toBe(before.money);
-    await expect(page.locator("#mb-career .mb-label")).toHaveText("CONTINUE CAREER");
+    // One door, always the same words — see the modes-screen block below.
+    await expect(page.locator("#mb-career .mb-label")).toHaveText("CAREER MODES");
+    await expect(page.locator("#mb-career-sub")).toContainText("HAAS");
   });
 
   test("a save with no version field migrates instead of being discarded", async ({ page }) => {
@@ -222,6 +224,8 @@ test.describe("Career — hub", () => {
     await boot(page);
     await page.locator("#mb-career").click();
     await expect(page.locator("#career")).toBeVisible();
+    // CAREER MODES first now; an empty driver slot is what opens the form.
+    await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
     await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
     await expect(page.locator("#cr-go")).toHaveText("START CAREER");
     // Only teams that would actually sign a rookie are offered.
@@ -520,6 +524,8 @@ test.describe("Career — MY TEAM", () => {
     await boot(page);
     await page.evaluate(() => document.getElementById("mb-career").click());
     await expect(page.locator("#career")).toBeVisible();
+    await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
     // Switch to MY TEAM and the left column becomes the driver market.
     await page.evaluate(() => {
       const b = [...document.querySelectorAll(".cr-flavour")].find((x) => x.innerText.includes("MY TEAM"));
