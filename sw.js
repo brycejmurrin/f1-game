@@ -43,6 +43,11 @@ async function precacheAssetLists() {
     "vendor/three-0.184.0/three.core.min.js",
     "vendor/three-0.184.0/three.tsl.min.js",
     "vendor/three-0.184.0/addons/tsl/display/BloomNode.js",
+    // The QR reader (js/net/scan.js) injects this ON DEMAND the first time
+    // someone scans an answer code, so the tag parser below never sees it.
+    // OPTIONAL for the same reason as three.js: most sessions never scan, and
+    // an install must not fail over 257 KB they will not run.
+    "vendor/jsqr-1.4.0/jsQR.js",
     // Self-hosted fonts (referenced from css/tokens.css @font-face, so the tag
     // parser below never sees them). Immutable vendored assets — no ?v=. Seeded
     // as OPTIONAL: font-display:swap means a missed precache just falls back to

@@ -2360,6 +2360,9 @@ const G = {
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
+  // The waiting room reuses the real menus rather than reimplementing them.
+  setNetRoom, openRaceSetup,
+  openGarageFrom: (from) => openGarage(from),
   startRace, startWeatherArc, update, wrapS,
 };
 
@@ -6450,7 +6453,11 @@ $("tp-close").onclick = () => { $("teampicker").hidden = true; };
 // handler was ever attached on this branch — the select screen's BACK button
 // was simply dead (surfaced by the button-walk audit; the wiring lived on an
 // unmerged branch).
-els.selBack.onclick = () => { els.select.hidden = true; els.overlay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
+els.selBack.onclick = () => {
+  els.select.hidden = true;
+  if (netRoom) $("vsfriend").hidden = false; else els.overlay.hidden = false;
+  if (soundOn) GameAudio.uiSelect();
+};
 els.selPreviewMap.onclick = openTrackDetail;
 $("track-detail-close").onclick = () => { $("track-detail").hidden = true; };
 // ── SETTINGS sub-menu ── keeps the pause screen down to RESUME/RESTART/QUIT;
@@ -6563,11 +6570,32 @@ function buildRaceSettings() {
 // openGarage(from)/garageReturn uses, and for the same reason: unhiding #select
 // unconditionally used to drop the player on the wrong screen.
 let rsReturn = "select";
+// True while two connected players are sitting in the VS FRIEND waiting room.
+// It changes what the TERMINAL action of #select / #race-settings / #carsetup
+// means: normally those screens end in a race, but in the room they end by
+// returning to the lobby with a choice made. Reusing the real screens is what
+// gives the room custom teams, liveries and the parts budget for nothing.
+let netRoom = false;
+function setNetRoom(on) { netRoom = !!on; }
+// The host picking the race: the ordinary #select screen (circuit + team),
+// which chains to #race-settings on START and lands back in the lobby.
+function openRaceSetup() {
+  $("vsfriend").hidden = true;
+  buildSelect();
+  els.select.hidden = false;
+  if (soundOn) GameAudio.uiSelect();
+}
 function openRaceSettings(from) {
   rsReturn = from || "select";
-  raceLaps = isTimeTrial() ? TT_LAPS : GAME_LAPS;
-  raceWeather = "dry";
-  raceTimeOfDay = "default";
+  // Defaults on every visit is right when this screen is the last step before
+  // a race. In the VS FRIEND room the host may come back to change one thing,
+  // and resetting the other three would silently undo choices the guest has
+  // already been shown.
+  if (!netRoom) {
+    raceLaps = isTimeTrial() ? TT_LAPS : GAME_LAPS;
+    raceWeather = "dry";
+    raceTimeOfDay = "default";
+  }
   buildRaceSettings();
   $(rsReturn).hidden = true;
   $("race-settings").hidden = false;
@@ -6583,6 +6611,15 @@ $("rs-cancel").onclick = () => {
 $("rs-go").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   $("race-settings").hidden = true;
+  // In a VS FRIEND waiting room this screen is the host CHOOSING the race, not
+  // starting it — the other player is still picking a car, and lights-out is
+  // the room's START button. So confirm here and go back, publishing the choice
+  // so the guest sees it immediately.
+  if (netRoom) {
+    $("vsfriend").hidden = false;
+    netLobby.roomChanged("race");
+    return;
+  }
   if (steerMode === "tilt") enableTilt();
   // In a championship the weekend starts with qualifying, which is what decides
   // the grid. A one-off Grand Prix goes straight to the race and keeps its P12
@@ -6625,6 +6662,20 @@ $("q-sim").onclick = () => {
   quali.build();
 };
 $("q-go").onclick = () => { if (soundOn) GameAudio.uiSelect(); closeQualiToGrid(); };
+// BACK goes ONE step, to the race settings the weekend was staged from — which
+// has its own BACK to the hub or the select screen, so the two together are a
+// real back-stack rather than a shortcut that skips a screen.
+//
+// `session` has to come back with it. openQuali() set it to "quali", and leaving
+// the sheet without undoing that would leave the flow claiming a qualifying
+// session is running while the player sits in a menu.
+$("q-back").onclick = () => {
+  if (soundOn) GameAudio.uiSelect();
+  quali.close();
+  quali.clear();          // nothing was run; the next visit draws its own sheet
+  session = "race";
+  $("race-settings").hidden = false;
+};
 
 // ---- customize my team ----
 // Optional extra-paint rows: DOM colour-input id -> livery key. Saved onto the
@@ -6844,6 +6895,14 @@ $("cs-done").onclick = () => {
   $("carsetup").hidden = true;
   setupPreviewOn = false;
   recomputePlayerMods();
+  // Back to the waiting room, and tell the other player what you are driving —
+  // a room that only synced on START would have two people spend a minute each
+  // choosing a car neither can see.
+  if (garageReturn === "vsfriend") {
+    $("vsfriend").hidden = false;
+    netLobby.roomChanged("car");
+    return;
+  }
   if (garageReturn === "career") { careerUi.openHub(); return; }
   buildSelect();
   if (garageReturn === "menu") els.overlay.hidden = false;

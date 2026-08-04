@@ -380,6 +380,72 @@ body.hud-hidden #hud-restore { display: block; }
   font-size: 0.78rem;
   background: rgba(255, 255, 255, 0.14);
 }
+/* ---- the waiting room ---- */
+/* A definition list, because that is what this is: four labelled facts about
+   the race. Grid rather than the default dl flow so label and value sit on one
+   line and the column stays narrow. */
+#vsfriend .vs-summary { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+#vsfriend .vs-summary > div {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+#vsfriend .vs-summary dt {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+#vsfriend .vs-summary dd { margin: 0; font-size: 0.86rem; }
+
+#vsfriend .vs-driver {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.8rem;
+}
+#vsfriend .vs-who { flex: 0 0 auto; opacity: 0.6; width: 3.2em; }
+#vsfriend .vs-car { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#vsfriend .vs-swatch { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 2px; }
+/* "choosing" and "READY" occupy the same slot, so the row does not jump width
+   when someone commits. */
+#vsfriend .vs-ready {
+  flex: 0 0 auto;
+  width: 5.2em;
+  text-align: right;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+#vsfriend .vs-ready.on { opacity: 1; color: #7CFC7C; }
+#vsfriend #vs-start[disabled] { opacity: 0.4; filter: saturate(0.3); }
+
+/* The viewfinder. Sized on HEIGHT first: this appears on a landscape phone with
+   ~390px to spend, and a preview that needs scrolling is a preview you cannot
+   aim. object-fit: cover so the frame is filled rather than letterboxed — the
+   decoder reads the video element's own pixels, not what CSS shows, so cropping
+   here costs nothing. */
+#vsfriend .vs-scan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+#vsfriend .vs-scan video {
+  width: min(320px, 90%);
+  height: min(240px, 46vh);
+  object-fit: cover;
+  border-radius: 8px;
+  background: #000;
+  transform: scaleX(-1);        /* a mirrored preview is what people expect */
+}
+#vsfriend .vs-scan > .bigbtn { width: auto; margin: 0; }
 #vsfriend .vs-raw > summary {
   cursor: pointer;
   font-size: 0.76rem;

@@ -270,7 +270,7 @@
 /* The pre-session state offers DRIVE or SIMULATE; the post-session state has a
    classification and only TO THE GRID. JS flips this class rather than rebuilding
    the foot, so focus is never yanked out from under a keyboard user. */
-#quali.q-done #q-drive, #quali.q-done #q-sim { display: none; }
+#quali.q-done #q-drive, #quali.q-done #q-sim, #quali.q-done #q-back { display: none; }
 #quali:not(.q-done) #q-go { display: none; }
 }
 

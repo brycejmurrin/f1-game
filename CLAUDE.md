@@ -44,7 +44,14 @@ npm run test:map        # minimap hooks
 npm run test:net        # multiplayer: car roles (human vs local), the per-car
                         #   input seam, per-car parts, and the SESSION — rival
                         #   posing, extrapolation, loss, hand-back to AI. Driven
-                        #   on a virtual clock (netTick/step), never on rAF
+                        #   on a virtual clock (netTick/step), never on rAF.
+                        #   Plus the lobby and the CAMERA SCAN, which runs a real
+                        #   getUserMedia against a Y4M of a real QR that Chromium
+                        #   plays as a webcam (tests/qr-camera.js). Two cameras,
+                        #   two spec files: one always showing the code (does it
+                        #   decode), one showing nothing (cancel/close teardown,
+                        #   which against a decoding camera would pass for the
+                        #   wrong reason)
 npm run test:net-unit   # js/net wire: loopback transport (latency/jitter/loss,
                         #   deterministic via a seeded rnd), invite-code codec,
                         #   snapshot quantisation + interpolation, clock sync.
@@ -305,6 +312,22 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   wrong mask or a transposed format field
                                   produces a picture that looks exactly right
                                   and cannot be read
+  scan.js        NetScan        reading a QR with the device CAMERA, so the
+                                  answer stops being a copy/paste. Two transfers
+                                  are unavoidable — each side must learn the
+                                  other's DTLS fingerprint, and
+                                  generateCertificate() takes no seed — so the
+                                  second one is scanned instead of typed.
+                                  Carries a VENDORED jsQR (Apache-2.0,
+                                  vendor/jsqr-1.4.0, injected ON DEMAND and
+                                  never in the boot path) because
+                                  BarcodeDetector exists on neither iOS Safari
+                                  nor desktop Linux Chrome, which is exactly the
+                                  iOS-to-desktop pairing this is for. stop()
+                                  kills every track and is wired to decode,
+                                  cancel, lobby close and page-hide: a camera
+                                  outliving its screen is a privacy bug nothing
+                                  on screen would reveal
   handshake.js   NetHandshake   signalling with no server: vanilla ICE (gather
                                   fully, so one static string suffices) →
                                   slimmed SDP → deflate → base64url invite
@@ -462,7 +485,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (92) + tests/*.test.mjs unit suites (28)
+tests/*.spec.js                 Playwright specs (95) + tests/*.test.mjs unit suites (28)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -907,7 +930,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-92 Playwright specs + 28 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+95 Playwright specs + 28 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

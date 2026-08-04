@@ -352,3 +352,22 @@ test.describe("Race settings — landscape layout", () => {
     await page.screenshot({ path: galleryPath("ui-button-touch", "race-settings-landscape.png") });
   });
 });
+
+// HOW TO PLAY is the one screen a new player opens to find out what the game
+// IS, and it listed RACE, SEASON and TIME TRIAL only — so the long game and the
+// only way to play against another person were both invisible from it. This is
+// the guard that a mode added later gets a line here too.
+test("HOW TO PLAY names every way to play", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+  await page.locator("#mb-help").click();
+  await expect(page.locator("#howtoplay")).toBeVisible();
+  const body = await page.locator("#howtoplay .sheet-body").innerText();
+  for (const mode of ["RACE", "SEASON", "TIME TRIAL", "CAREER", "QUALIFYING", "RACE A FRIEND"])
+    expect(body).toContain(mode);
+  // The title screen's own buttons are the list it has to keep up with.
+  const buttons = await page.evaluate(() =>
+    [...document.querySelectorAll("#menu-hero button, #menu-primary button")]
+      .map((b) => b.innerText.trim()).filter(Boolean));
+  expect(buttons.length).toBeGreaterThan(3);
+});

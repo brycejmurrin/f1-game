@@ -51,10 +51,17 @@ const NetLobby = (function () {
     const els = () => ({
       screen: $("vsfriend"),
       pick: $("vs-pick"), hosting: $("vs-hosting"), joining: $("vs-joining"),
+      room: $("vs-room"), roomStep: $("vs-room"),
+      raceSummary: $("vs-race-summary"), raceNote: $("vs-race-note"),
+      editRace: $("vs-edit-race"), editCar: $("vs-edit-car"),
+      me: $("vs-me"), them: $("vs-them"),
+      ready: $("vs-ready"), start: $("vs-start"),
       invite: $("vs-invite"), inviteIn: $("vs-invite-in"),
       answer: $("vs-answer"), answerIn: $("vs-answer-in"),
       answerHint: $("vs-answer-hint"), answerActions: $("vs-answer-actions"),
-      answerWait: $("vs-answer-wait"),
+      answerWait: $("vs-answer-wait"), answerRaw: $("vs-answer-raw"),
+      answerQrWrap: $("vs-answer-qr-wrap"), answerQr: $("vs-answer-qr"),
+      scan: $("vs-scan"), scanVideo: $("vs-scan-video"),
       status: $("vs-status"),
     });
 
@@ -68,7 +75,7 @@ const NetLobby = (function () {
 
     function show(step) {
       const e = els();
-      for (const k of ["pick", "hosting", "joining"]) if (e[k]) e[k].hidden = (k !== step);
+      for (const k of ["pick", "hosting", "joining", "room"]) if (e[k]) e[k].hidden = (k !== step);
     }
 
     // ---- what we tell the other side about ourselves ----------------------
@@ -231,22 +238,52 @@ const NetLobby = (function () {
       clearInterval(pumpTimer);
       pumpTimer = setInterval(() => { if (session) session.pump(performance.now()); }, 25);
 
-      session.onEvent(NetPlay.EV.HELLO, (p) => { _peerProfile = _peerProfile || p; });
+      // The LATEST hello wins, not the first: a profile is re-sent every time
+      // someone changes team or livery in the waiting room, and keeping the
+      // first would race the rival's car in whatever they happened to be
+      // driving when the connection opened.
+      session.onEvent(NetPlay.EV.HELLO, (p) => { _peerProfile = p || _peerProfile; renderRoom(); });
       session.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest") applySettings(d); });
+      session.onEvent(NetPlay.EV.READY, (d) => { peerReady = !!(d && d.ready); renderRoom(); });
+      // GO is separate from SETTINGS on purpose. Settings now change LIVE while
+      // both players sit in the room, so "the host chose a track" and "the host
+      // pressed start" have to be different messages — they used to be the same
+      // one, which is why arriving settings launched the race immediately.
+      session.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
       session.sendEvent(NetPlay.EV.HELLO, localProfile());
+      if (role === "host") publishSettings();
+      openRoom();
+    }
 
-      if (role === "host") {
-        // The host owns the race setup: somebody has to, and splitting it
-        // between two people is a negotiation with no natural winner.
-        session.sendEvent(NetPlay.EV.SETTINGS, {
-          track: G.trackIdx,
-          laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
-          difficulty: G.difficulty,
-        });
-        beginRace();
-      } else {
-        say("Waiting for the host to pick the race…");
-      }
+    // ---- the waiting room -------------------------------------------------
+    // Both players sit here until the host starts. The host owns the race; each
+    // player owns their own car. Nothing here reimplements a picker: the
+    // buttons open the game's real #select / #race-settings / #carsetup
+    // screens, which is how custom teams, liveries and the parts budget come
+    // along for free rather than as a second, poorer copy.
+    let peerReady = false;
+    let selfReady = false;
+
+    function openRoom() {
+      selfReady = false;
+      peerReady = false;
+      show("room");
+      // The lobby is a dialog over the menu, and the room is where both players
+      // now wait — so it must survive the screens it opens.
+      if (G.setNetRoom) G.setNetRoom(true);
+      renderRoom();
+      say(role === "host"
+        ? "Pick the race, then start when you are both ready."
+        : "The host is picking the race. Choose your car.");
+    }
+
+    function publishSettings() {
+      if (!session || role !== "host") return false;
+      return session.sendEvent(NetPlay.EV.SETTINGS, {
+        track: G.trackIdx,
+        laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
+        difficulty: G.difficulty,
+      });
     }
 
     // Guest: adopt the host's race setup wholesale. Any track/laps/weather the
@@ -258,13 +295,108 @@ const NetLobby = (function () {
       if (d.weather != null) G.raceWeather = d.weather;
       if (d.tod != null) G.raceTimeOfDay = d.tod;
       if (d.difficulty != null) G.difficulty = d.difficulty;
+      renderRoom();
+    }
+
+    // Called by game.js when a player comes back from the garage or the race
+    // settings, so the other side sees the change without anyone pressing
+    // anything. A room that only updates on START would let two people spend a
+    // minute each choosing a car neither can see.
+    function roomChanged(what) {
+      if (!session) return false;
+      if (what === "car") session.sendEvent(NetPlay.EV.HELLO, localProfile());
+      else publishSettings();
+      // Changing your mind un-readies you — otherwise READY means "I was happy
+      // with something else".
+      if (selfReady) setReady(false);
+      renderRoom();
+      return true;
+    }
+
+    function setReady(v) {
+      selfReady = !!v;
+      if (session) session.sendEvent(NetPlay.EV.READY, { ready: selfReady });
+      renderRoom();
+    }
+
+    const TEAM_OF = (p) => (p && p.team && Teams.LIST.find((t) => t.id === p.team)) || null;
+
+    // team.color is an [r,g,b] triple in 0..1 — the renderer's format, not CSS.
+    // Handed to a style attribute raw it silently produces nothing.
+    function css(rgb) {
+      if (!Array.isArray(rgb)) return "#888";
+      const b = rgb.map((v) => Math.max(0, Math.min(255, Math.round(v * 255))));
+      return `rgb(${b[0]},${b[1]},${b[2]})`;
+    }
+
+    function driverLine(profile, label, ready) {
+      const team = TEAM_OF(profile);
+      const seat = profile ? (profile.driver || 0) : 0;
+      const d = team && team.drivers ? team.drivers[seat] : null;
+      // THREE-LETTER codes for both, the way a timing screen does it. Full
+      // names spend the column on "Scuderia Ferrari HP" and then truncate the
+      // driver — who is the part that says which of the two cars is theirs.
+      // The full text stays as a tooltip rather than being lost.
+      const who = team ? `${team.short} · ${d ? (d.code || d.name) : "—"}` : "choosing a car…";
+      const full = team ? `${team.name}${d ? " · " + d.name : ""}` : "still choosing";
+      const swatch = team ? `<span class="vs-swatch" style="background:${css(team.color)}"></span>` : "";
+      return `<span class="vs-who">${label}</span>${swatch}`
+        + `<span class="vs-car" title="${full}">${who}</span>`
+        + `<span class="vs-ready ${ready ? "on" : ""}">${ready ? "READY" : "choosing"}</span>`;
+    }
+
+    function renderRoom() {
+      const e = els();
+      if (!e.roomStep || e.roomStep.hidden) return;
+      const host = role === "host";
+      const track = (Tracks.LIST && Tracks.LIST[G.trackIdx]) || null;
+      const wx = G.raceWeather === "wet" ? "Wet" : G.raceWeather === "dry" ? "Dry" : "Mixed";
+      const tod = G.raceTimeOfDay && G.raceTimeOfDay !== "default"
+        ? G.raceTimeOfDay.charAt(0).toUpperCase() + G.raceTimeOfDay.slice(1) : "Default";
+      if (e.raceSummary) {
+        e.raceSummary.innerHTML =
+          `<div><dt>Circuit</dt><dd>${track ? (track.name || track.id) : "—"}</dd></div>`
+          + `<div><dt>Laps</dt><dd>${G.raceLaps}</dd></div>`
+          + `<div><dt>Weather</dt><dd>${wx}</dd></div>`
+          + `<div><dt>Time</dt><dd>${tod}</dd></div>`;
+      }
+      if (e.editRace) e.editRace.hidden = !host;
+      if (e.raceNote) {
+        e.raceNote.textContent = host ? "" : "The host chooses the circuit and conditions.";
+        e.raceNote.hidden = host;
+      }
+      if (e.me) e.me.innerHTML = driverLine(localProfile(), "You", selfReady);
+      if (e.them) e.them.innerHTML = driverLine(_peerProfile, "Them", peerReady);
+      if (e.ready) {
+        e.ready.textContent = selfReady ? "NOT READY" : "READY";
+        e.ready.setAttribute("aria-pressed", selfReady ? "true" : "false");
+      }
+      if (e.start) {
+        // Only the host can start, and only once both have said they are done
+        // choosing — a race that begins while someone is still in the garage
+        // puts them on the grid in a car they did not pick.
+        e.start.hidden = !host;
+        e.start.disabled = !(selfReady && peerReady);
+      }
+    }
+
+    function startFromRoom() {
+      if (role !== "host" || !session) return false;
+      if (!(selfReady && peerReady)) { say("Both drivers need to be ready.", true); return false; }
+      publishSettings();
+      session.sendEvent(NetPlay.EV.GO, {});
       beginRace();
+      return true;
     }
 
     // Start the race, THEN bind the session to it: NetPlay needs a built track
     // to find grid slots for the two drivers.
     function beginRace() {
       say("Starting race…");
+      // Out of the room: the game screens go back to behaving normally, or the
+      // next visit to the garage would try to return to a lobby that has been
+      // replaced by a Grand Prix.
+      if (G.setNetRoom) G.setNetRoom(false);
       try {
         // A friend race is a one-off Grand Prix, never a championship round
         // or a time trial. flow/session are the authority (game.js:587).
@@ -335,11 +467,13 @@ const NetLobby = (function () {
       const res = await NetHandshake.acceptInvite(transport, code, localProfile());
       if (!res.ok) { say(res.message || "That invite could not be read.", true); return res; }
       _peerProfile = res.peer;
-      if (e.answer) { e.answer.value = res.code; e.answer.hidden = false; }
+      if (e.answer) e.answer.value = res.code;
       if (e.answerHint) e.answerHint.hidden = false;
       if (e.answerActions) e.answerActions.hidden = false;
+      if (e.answerRaw) e.answerRaw.hidden = false;
       // Step 2's placeholder prose is replaced by step 2 itself.
       if (e.answerWait) e.answerWait.hidden = true;
+      drawAnswerQr(res.code);
       waitForOpen();
       say("Send that answer code back, then wait for the race to start.");
       return res;
@@ -357,6 +491,72 @@ const NetLobby = (function () {
       _peerProfile = res.peer;
       waitForOpen();
       return res;
+    }
+
+    // ---- getting a code IN, by any route ----------------------------------
+    // Scan, paste button, paste event and invite link all land here, and all
+    // four then behave identically: fill the box and RUN. Requiring a separate
+    // confirming tap after a scan would be asking the player to agree with what
+    // the camera just did.
+    //
+    // The invite QR carries a full URL, so a scan of it yields a link rather
+    // than a code — unwrap it, and accept a bare code just as happily.
+    function codeFrom(text) {
+      const raw = String(text || "").trim();
+      if (!raw) return "";
+      return NetHandshake.inviteFromUrl(raw) || raw;
+    }
+
+    function deliver(kind, text) {
+      const code = codeFrom(text);
+      if (!code) return false;
+      const e = els();
+      const box = kind === "invite" ? e.inviteIn : e.answerIn;
+      if (box) box.value = code;
+      return kind === "invite" ? makeAnswer(code) : acceptAnswer(code);
+    }
+
+    let scanner = null;
+
+    function stopScan() {
+      if (scanner) { scanner.stop(); scanner = null; }
+      const e = els();
+      if (e.scan) e.scan.hidden = true;
+    }
+
+    // kind: "invite" (guest reading the host's screen) | "answer" (host reading
+    // the guest's). Same camera, same decoder, different destination.
+    async function scan(kind) {
+      const e = els();
+      if (!e.scan || !e.scanVideo) return { ok: false, error: "no_ui" };
+      if (!NetScan.supported()) {
+        say("This browser cannot use the camera — paste the code instead.", true);
+        return { ok: false, error: "unsupported" };
+      }
+      stopScan();
+      e.scan.hidden = false;
+      say("Point the camera at their code…");
+      scanner = NetScan.create();
+      const res = await scanner.start(e.scanVideo, (text) => {
+        stopScan();
+        say("Got it.");
+        deliver(kind, text);
+      });
+      if (!res.ok) { stopScan(); say(res.message || "Could not start the camera.", true); }
+      return res;
+    }
+
+    // One tap instead of focus-select-paste-submit, which is the whole of the
+    // remaining friction when the two players are not in the same room.
+    async function pasteInto(kind) {
+      let text = "";
+      try { text = await navigator.clipboard.readText(); }
+      catch (err) {
+        say("Could not read the clipboard — paste into the box instead.", true);
+        return { ok: false, error: "denied" };
+      }
+      if (!codeFrom(text)) { say("There is no code on the clipboard.", true); return { ok: false, error: "empty" }; }
+      return deliver(kind, text);
     }
 
     async function copy(text) {
@@ -404,16 +604,27 @@ const NetLobby = (function () {
     // No in-page scanner anywhere. BarcodeDetector is absent on desktop Linux
     // Chrome and on iOS Safari (measured), so scanning ourselves would serve a
     // minority while the OS camera serves nearly everyone.
-    function drawQr(code) {
-      const wrap = $("vs-qr-wrap"), canvas = $("vs-qr");
+    // Draw `payload` into `canvas`, revealing `wrap` only if it actually
+    // encoded. A code too long for any version, or a page with no location to
+    // build a URL from, hides the QR rather than showing an unreadable one —
+    // the text code beside it still works.
+    function paintQr(wrap, canvas, payload) {
       if (!wrap || !canvas) return false;
-      const url = code ? NetHandshake.inviteUrl(code) : null;
-      // A code too long to encode, or a page with no location to build a URL
-      // from, hides the QR rather than showing an unreadable one — the text
-      // code below it still works.
-      const ok = !!(url && NetQr.draw(canvas, url, { px: 320 }));
+      const ok = !!(payload && NetQr.draw(canvas, payload, { px: 320 }));
       wrap.hidden = !ok;
       return ok;
+    }
+
+    function drawQr(code) {
+      return paintQr($("vs-qr-wrap"), $("vs-qr"),
+        code ? NetHandshake.inviteUrl(code) : null);
+    }
+    // The answer QR carries the RAW CODE, not a link. There is no "open this to
+    // answer" journey — the host scans it from the very page holding their peer
+    // connection, and following a URL would throw that connection away.
+    function drawAnswerQr(code) {
+      const e = els();
+      return paintQr(e.answerQrWrap, e.answerQr, code || null);
     }
 
     function shareInvite() {
@@ -438,13 +649,15 @@ const NetLobby = (function () {
       _peerProfile = null;
       show("pick");
       for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
-      if (e.answer) e.answer.hidden = true;
       if (e.answerHint) e.answerHint.hidden = true;
       if (e.answerActions) e.answerActions.hidden = true;
+      if (e.answerRaw) e.answerRaw.hidden = true;
       if (e.answerWait) e.answerWait.hidden = false;
       // Reopening must not show the PREVIOUS session's QR — it would point a
       // camera at a peer connection that no longer exists.
       if ($("vs-qr-wrap")) $("vs-qr-wrap").hidden = true;
+      if (e.answerQrWrap) e.answerQrWrap.hidden = true;
+      stopScan();
       // Re-fold the raw code: it is the fallback, and an open disclosure from
       // last time makes the sheet open on three lines of base64.
       const raw = document.querySelector("#vs-hosting .vs-raw");
@@ -456,6 +669,10 @@ const NetLobby = (function () {
 
     function close() {
       clearInterval(pollTimer);
+      // Leaving the screen with the camera still running is the failure this
+      // module is most careful about — close() is also the SUCCESS path, since
+      // the race starts by closing the lobby.
+      stopScan();
       const e = els();
       if (e.screen) e.screen.hidden = true;
     }
@@ -463,6 +680,7 @@ const NetLobby = (function () {
     // Abandoning the lobby must tear the half-built connection down, or a
     // stale RTCPeerConnection sits there gathering candidates forever.
     function cancel() {
+      stopScan();
       teardown();
       role = null;
       _peerProfile = null;
@@ -485,7 +703,39 @@ const NetLobby = (function () {
       on("vs-copy-answer", () => copy(($("vs-answer") || {}).value || ""));
       on("vs-share-invite", shareInvite);
       on("vs-share-answer", shareAnswer);
+      on("vs-scan-invite", () => scan("invite"));
+      on("vs-scan-answer", () => scan("answer"));
+      on("vs-paste-invite", () => pasteInto("invite"));
+      on("vs-paste-answer", () => pasteInto("answer"));
+      on("vs-scan-cancel", () => { stopScan(); say(""); });
+      // The room opens the game's REAL screens. They return here because
+      // openGarage/openRaceSettings already take a return target, and game.js
+      // routes it back to this dialog while a session is in the room.
+      on("vs-edit-race", () => { if (role === "host" && G.openRaceSetup) G.openRaceSetup(); });
+      on("vs-edit-car", () => { if (G.openGarageFrom) G.openGarageFrom("vsfriend"); });
+      on("vs-ready", () => setReady(!selfReady));
+      on("vs-start", startFromRoom);
       on("vs-close", cancel);
+      // A paste straight into the box runs too, so all four routes in behave
+      // the same. Deferred a tick because the value is not in the textarea yet
+      // while the paste event is being dispatched.
+      const onPaste = (id, kind) => {
+        const box = $(id);
+        if (box) box.addEventListener("paste", () => setTimeout(() => deliver(kind, box.value), 0));
+      };
+      onPaste("vs-invite-in", "invite");
+      onPaste("vs-answer-in", "answer");
+      // A camera must not outlive the tab being backgrounded — on a phone that
+      // is someone walking away with the light still on.
+      document.addEventListener("visibilitychange", () => { if (document.hidden) stopScan(); });
+      // No camera, no SCAN button. Unlike the settings grid, this row is built
+      // before the screen is ever shown, so nothing reflows under a thumb.
+      if (!NetScan.supported()) {
+        for (const id of ["vs-scan-invite", "vs-scan-answer"]) {
+          const b = $(id);
+          if (b) b.hidden = true;
+        }
+      }
       // Name the button after what it will actually do on THIS device. With no
       // share sheet it copies the link, and a button labelled SHARE that
       // silently copies is a button that has lied. SHARE LINK and COPY CODE
@@ -512,6 +762,19 @@ const NetLobby = (function () {
     return {
       wire, open, close, cancel, host, join, makeAnswer, acceptAnswer,
       shareInvite, shareAnswer, canShare,
+      scan, stopScan, pasteInto, deliver,
+      // Start watching for the channels to open. Normally called by
+      // makeAnswer/acceptAnswer; exported so a test can reach onConnected() —
+      // and therefore the waiting room — over a loopback transport, which has
+      // no SDP for the handshake to work with but IS open.
+      watchForOpen: waitForOpen,
+      // The waiting room. roomChanged() is game.js's way back in after a player
+      // returns from the garage or the race settings.
+      roomChanged, setReady, startFromRoom, renderRoom,
+      roomState: () => ({
+        open: !!(els().roomStep && !els().roomStep.hidden),
+        role, selfReady, peerReady, peer: _peerProfile,
+      }),
       localProfile, modsFromProfile, setTransportFactory,
       failureMsg,
       status: () => ({

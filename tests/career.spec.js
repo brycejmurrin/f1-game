@@ -1213,29 +1213,60 @@ const DNF_SEED = 99;
 
 // Start a career, stage a weekend, then settle a whole season at `level` and
 // report what the reliability model did to it.
-async function reliabilitySeason(page, level, careerSeed) {
+// STAGE ONCE, SETTLE MANY. Booting the page and staging a weekend (track load
+// plus a qualifying sheet) is the expensive half of these tests, and the two
+// that compare a season against another season were paying it twice: 95s and
+// 87s of a 120s budget when the suite was otherwise idle, and 156s and 147s —
+// both over — the moment they ran inside the whole test:modes group. A test
+// that only passes when nothing else is running is a test that will fail on
+// somebody's laptop.
+//
+// careerSim() reads the staged track and grid, and careerReset()+career() swap
+// the SAVE without touching either, so any number of seasons can be settled off
+// one staging.
+async function stageReliability(page) {
   await boot(page);
-  await page.evaluate((s) => {
+  await page.evaluate(() => {
     window.__apex.careerReset();
-    window.__apex.career({ teamId: "haas", seat: 1, seed: s });
-  }, careerSeed);
+    window.__apex.career({ teamId: "haas", seat: 1, seed: 1 });
+  });
   await goRacing(page);
-  return page.evaluate((lvl) => {
-    window.__apex.reliability(lvl);
-    const rounds = window.__apex.careerSim(24);
-    const c = window.__apex.career();
-    return {
-      level: window.__apex.reliability(),
-      // The reason per round, from settleRound()'s return AND from the row it
-      // wrote onto the save. Two different code paths that must agree.
-      settled: rounds.map((r) => r.round + ":" + (r.dnf || "-")),
-      rows: c.results.map((r) => (r.r + 1) + ":" + (r.dnf || "-")),
-      dnfs: rounds.filter((r) => r.dnf).length,
-      // The whole field of the LAST simulated round.
-      fieldOut: window.__apex.fieldState().filter((f) => f.retired).length,
-      stateDnfs: window.__apex.careerState().dnfs,
-    };
-  }, level);
+}
+
+// Settle one whole season, in the browser, off the already-staged weekend.
+const RELIABILITY_SEASON = `(level, careerSeed) => {
+  window.__apex.careerReset();
+  window.__apex.career({ teamId: "haas", seat: 1, seed: careerSeed });
+  window.__apex.reliability(level);
+  const rounds = window.__apex.careerSim(24);
+  const c = window.__apex.career();
+  return {
+    level: window.__apex.reliability(),
+    // The reason per round, from settleRound()'s return AND from the row it
+    // wrote onto the save. Two different code paths that must agree.
+    settled: rounds.map((r) => r.round + ":" + (r.dnf || "-")),
+    rows: c.results.map((r) => (r.r + 1) + ":" + (r.dnf || "-")),
+    dnfs: rounds.filter((r) => r.dnf).length,
+    // The whole field of the LAST simulated round.
+    fieldOut: window.__apex.fieldState().filter((f) => f.retired).length,
+    stateDnfs: window.__apex.careerState().dnfs,
+  };
+}`;
+
+// One season, staging included — for the tests that only need one.
+async function reliabilitySeason(page, level, careerSeed) {
+  await stageReliability(page);
+  return page.evaluate(
+    ([body, lvl, sd]) => eval("(" + body + ")")(lvl, sd),
+    [RELIABILITY_SEASON, level, careerSeed]);
+}
+// TWO seasons off ONE staging — the whole point of the split above.
+async function reliabilityTwice(page, level, seedA, seedB) {
+  await stageReliability(page);
+  return page.evaluate(([body, lvl, a, b]) => {
+    const run = eval("(" + body + ")");
+    return { a: run(lvl, a), b: run(lvl, b) };
+  }, [RELIABILITY_SEASON, level, seedA, seedB]);
 }
 
 test.describe("Career — reliability", () => {
@@ -1252,8 +1283,7 @@ test.describe("Career — reliability", () => {
   });
 
   test("a seeded season retires the same cars for the same reasons every time", async ({ page }) => {
-    const a = await reliabilitySeason(page, "real", DNF_SEED);
-    const b = await reliabilitySeason(page, "real", DNF_SEED);
+    const { a, b } = await reliabilityTwice(page, "real", DNF_SEED, DNF_SEED);
     expect(a.dnfs).toBeGreaterThanOrEqual(2);   // the model actually fired
     expect(b).toEqual(a);                       // and fired identically
     expect(a.rows).toEqual(a.settled);          // save row == settleRound() result
@@ -1261,8 +1291,7 @@ test.describe("Career — reliability", () => {
   });
 
   test("a different career seed retires a different set", async ({ page }) => {
-    const a = await reliabilitySeason(page, "real", DNF_SEED);
-    const b = await reliabilitySeason(page, "real", 4242);
+    const { a, b } = await reliabilityTwice(page, "real", DNF_SEED, 4242);
     expect(b.settled).not.toEqual(a.settled);
   });
 
