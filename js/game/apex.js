@@ -1318,7 +1318,12 @@ const api = {
     const c = typeof idx === "number" ? G.cars[idx] : G.cars.find((x) => x.isPlayer);
     if (!c) return null;
     return {
-      id: G.cars.indexOf(c), isPlayer: !!c.isPlayer, team: c.team && c.team.id,
+      // `id` is this screen's cars[] index and is NOT comparable across peers —
+      // the grid differs in length and order between two browsers in the same
+      // race. driverId ("redbull:1") is content-derived and is the key results,
+      // qualifying and the netcode agree on, so it is exposed alongside.
+      id: G.cars.indexOf(c), driverId: c.driverId,
+      isPlayer: !!c.isPlayer, team: c.team && c.team.id,
       code: c.code, seat: c.seat,
       // The two numbers that decide how fast an AI car is allowed to be, so
       // "why is this car quick?" is answerable without reading the source.
@@ -1926,7 +1931,10 @@ const api = {
   // netPeerSend({s, x, head, speed, gear, lap, ...}) — publish one car state AS
   // THE REMOTE PEER. Fields default to the rival's current values, so a test
   // can move one axis at a time.
-  netPeerSend(st, atMs) {
+  // wireId overrides the id stamped on the packet, so a test can post a car
+  // this peer holds no slot for and assert it is DROPPED rather than posed over
+  // whichever car that number happened to name.
+  netPeerSend(st, atMs, wireId) {
     if (!_netPeer || !G.netPlay) return false;
     const status = G.netPlay.status();
     const cur = G.cars[status.remoteId] || {};
@@ -1937,8 +1945,13 @@ const api = {
     }, st || {});
     const now = atMs != null ? atMs : performance.now();
     _netPeer.pump(now);
+    // The WIRE id, not the cars[] index. A real peer stamps its packets with
+    // G.wireId — the same number on every screen, which an index is not — so
+    // the fake peer must too, or onState has no slot to route it to.
+    const wire = wireId != null ? wireId
+      : (status.remotes && status.remotes.length ? status.remotes[0].wire : status.remoteId);
     const ok = _netPeer.send("state", NetSnapshot.encodeSnapshot(Math.round(now), [
-      { id: status.remoteId, car },
+      { id: wire, car },
     ]));
     return ok ? { sent: car, at: Math.round(now) } : false;
   },

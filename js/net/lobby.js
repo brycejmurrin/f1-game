@@ -287,9 +287,18 @@ const NetLobby = (function () {
     // The first (and today only) peer, for the callers and specs that ask about
     // "the other player" in the singular.
     const firstPeer = () => (_peers.size ? [..._peers.values()][0] : null);
+    // Everyone we have heard from AT ALL, by either route. Readiness is not
+    // conditional on a profile having arrived: READY and HELLO are separate
+    // events and either can land first, so keying "who is in the room" off
+    // _peers alone left a peer that had said READY but not yet HELLO invisible,
+    // and START stayed disabled with both players saying they were done.
+    const peerIds = () => new Set([..._peers.keys(), ..._ready.keys()]);
     // Everyone has to be ready, and there has to BE somebody: an empty room
     // where nobody has said anything must not read as unanimous consent.
-    const peersReady = () => _peers.size > 0 && [..._peers.keys()].every((k) => _ready.get(k));
+    const peersReady = () => {
+      const ids = [...peerIds()];
+      return ids.length > 0 && ids.every((k) => _ready.get(k));
+    };
     let selfReady = false;
 
     function openRoom() {

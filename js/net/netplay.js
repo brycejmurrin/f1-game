@@ -289,7 +289,13 @@ const NetPlay = (function () {
       // One profile today, an array when the room grows. Written as a list here
       // so that the only thing Phase C has to change is where the list comes
       // from, not what start() does with it.
-      const joining = opts.peers || (peerProfile ? [{ profile: peerProfile, mods: opts.peerMods }] : []);
+      // ALWAYS at least one joiner, even with no profile. A session opened
+      // without one is normal — the lobby knows who the peer is, but
+      // __apex.netLoopback and any caller that just wants a rival do not, and
+      // pickRemoteSlot(null) has always answered that with the any-free-car
+      // arm. Gating the list on peerProfile made those sessions fail no_slot,
+      // which is the whole multiplayer-session suite.
+      const joining = opts.peers || [{ profile: peerProfile, mods: opts.peerMods }];
       for (const j of joining) {
         const car = pickRemoteSlot(j.profile);
         if (!car) continue;

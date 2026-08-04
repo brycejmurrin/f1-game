@@ -31,7 +31,7 @@
     "test:agent": "node tools/run-playwright.mjs tests/agent-view.spec.js tests/agent-drive-bench.spec.js tests/agent-determinism.spec.js",
     "test:agent-contract": "node --test tests/agentview-api-contract.test.mjs",
     "test:map": "node tools/run-playwright.mjs tests/map-hooks.spec.js",
-    "test:net": "node tools/run-playwright.mjs tests/multiplayer-roles.spec.js tests/multiplayer-session.spec.js tests/multiplayer-lobby.spec.js tests/multiplayer-scan.spec.js tests/multiplayer-scan-cancel.spec.js tests/multiplayer-room.spec.js tests/multiplayer-seats.spec.js",
+    "test:net": "node tools/run-playwright.mjs tests/multiplayer-roles.spec.js tests/multiplayer-session.spec.js tests/multiplayer-lobby.spec.js tests/multiplayer-scan.spec.js tests/multiplayer-scan-cancel.spec.js tests/multiplayer-room.spec.js tests/multiplayer-seats.spec.js tests/multiplayer-npeer.spec.js",
     "rtc:e2e": "node tools/rtc-e2e.mjs",
     "test:net-unit": "node --test tests/net-transport.test.mjs tests/net-rendezvous.test.mjs tests/net-trystero-api.test.mjs tests/net-sdp.test.mjs tests/net-qr.test.mjs tests/net-snapshot.test.mjs tests/net-session.test.mjs",
     "test:paths": "node tools/run-playwright.mjs tests/output-paths.spec.js",
