@@ -256,6 +256,10 @@ const NetRendezvous = (function () {
     return NetNostr.exchange({
       code: o.code, mintOffer: o.mintOffer, onJoiner: o.onJoiner,
       token: o.token, onTick: o.onTick,
+      // A room that resolves early can still fail LATER — dead relays, the
+      // code expiring — and after the promise is answered this callback is the
+      // only way to say so.
+      onFail: o.onFail,
     });
   }
 

@@ -95,7 +95,7 @@ const NetNostr = (function () {
     // send/reply are the two-party pair this started as. mintOffer+onJoiner are
     // SUBSCRIPTION mode: a host that stays in the room and answers each arrival
     // with an offer of its own, rather than resolving on the first one.
-    const { code, send, reply, token, onTick, mintOffer, onJoiner } = opts;
+    const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail } = opts;
     if (!available()) {
       return { ok: false, error: "unsupported",
                message: "This browser cannot reach the room service." };
@@ -119,8 +119,25 @@ const NetNostr = (function () {
     const leave = () => { if (room) { try { room.leave(); } catch (e) {} room = null; } };
 
     return new Promise((resolve) => {
-      let done = false;
-      const finish = (r) => { if (done) return; done = true; clearInterval(tick); leave(); resolve(r); };
+      let done = false;        // torn down: room left, nothing more can happen
+      let settled = false;     // the promise has been answered
+      // SUBSCRIPTION MODE RESOLVES EARLY and the room stays open, so "answered"
+      // and "finished" stopped being the same event. Conflating them switched
+      // off every failure detector below — the relay-health probe and the join
+      // timeout both bail on `done` — so a host whose relays were all dead was
+      // told nothing and sat on a spinner forever. Reported from a real
+      // console: damus rate-limiting and nos.social timing out, with the page
+      // showing no error at all.
+      const finish = (r) => {
+        if (done) return;
+        done = true;
+        clearInterval(tick);
+        leave();
+        if (!settled) { settled = true; resolve(r); return; }
+        // Already answered, so the only way to report this is the callback the
+        // caller gave us.
+        if (onFail) { try { onFail(r); } catch (e) {} }
+      };
 
       const tick = setInterval(() => {
         if (token && token.cancelled) finish({ ok: false, error: "cancelled", message: "" });
@@ -239,10 +256,11 @@ const NetNostr = (function () {
           }
           // Subscription mode has nothing to wait for: hand back the way to
           // stop, and let the lobby decide when the room closes.
-          if (onJoiner && !done) {
-            done = true;
-            clearInterval(tick);
-            resolve({ ok: true, subscribed: true, stop: () => { clearInterval(tick); leave(); } });
+          if (onJoiner && !settled) {
+            // settled, NOT done: the room is open and the relay probe, the join
+            // timeout and the cancellation tick all have to keep running.
+            settled = true;
+            resolve({ ok: true, subscribed: true, stop: () => finish({ ok: false, error: "stopped", message: "" }) });
           }
         }).catch(() => finish({ ok: false, error: "relay",
           message: "Could not reach the room service. Use the invite link instead." }));
