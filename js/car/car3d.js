@@ -631,6 +631,17 @@ const Car3D = (function () {
       line: 1, filler: 0,
     }, recipe);
   }
+  // EXHAUST: `pipes` null = derive the tip count from the engine's own plumbing
+  // (the shipped behaviour); a recipe may state it outright. bore/flare/wastegate/
+  // wrap default to the values that reproduce today's tailpipe exactly.
+  function buildExhaustParts(recipe) {
+    return mergeRecipe({ pipes: null, bore: 1, flare: 0, wastegate: 0, wrap: 0 }, recipe);
+  }
+  // FLOOR: the five evenly-spaced edge fences that used to be hardcoded, plus
+  // skid blocks and an edge lip. fences 5 / fenceH 1 is the shipped array.
+  function buildFloorParts(recipe) {
+    return mergeRecipe({ fences: 5, fenceH: 1, skid: 0, edgeLip: 0 }, recipe);
+  }
   function buildPartRecipes(T, accent) {
     const tier = (id) => T[id] != null ? T[id] : 1;
     const recipe = (id) => T._visual && T._visual[id] || null;
@@ -643,6 +654,8 @@ const Car3D = (function () {
       ers: buildErsParts(recipe("ers"), tier("ers"), accent),
       gearbox: buildGearboxParts(recipe("gearbox"), tier("gearbox")),
       fuel: buildFuelParts(recipe("fuel"), tier("fuel")),
+      exhaust: buildExhaustParts(recipe("exhaust")),
+      floor: buildFloorParts(recipe("floor")),
     };
   }
   // Resolve the continuous 0..4 downforce level from a getVisualTiers() object.
@@ -856,6 +869,8 @@ const Car3D = (function () {
     const gbStyle = design.gearbox;
     const fuelStyle = design.fuel;
     const aeroStyle = design.aero;
+    const exhStyle = design.exhaust;
+    const floorStyle = design.floor;
     // Per-team chassis identity (opts.teamId): nose profile, airbox scale,
     // dorsal fin, mirror style, sidepod-inlet aspect. Absent → shared default
     // silhouette, byte-identical to before.
@@ -1161,9 +1176,30 @@ const Car3D = (function () {
       } else {
         addBox(out, s*inlet.x, inlet.y, inlet.z, inlet.width * 0.70, inlet.height * 0.68, 0.05, INTAKE);
       }
-      for (const fz of [0.42, 0.06, -0.30, -0.66, -1.02]) {
+      // Floor-edge fences: count and height come from the FLOOR recipe. The
+      // shipped array is 5 fences on a 0.36 m pitch from z 0.42, which is what
+      // the default recipe reproduces exactly.
+      const fenceN = Math.max(0, Math.min(6, Math.round(floorStyle.fences)));
+      const fenceH = Math.max(0.6, Math.min(1.6, floorStyle.fenceH));
+      for (let i = 0; i < fenceN; i++) {
+        const fz = 0.42 - i * 0.36;
         const fp = anchors.podAt(fz);
-        addBox(out, s*(fp.x + 0.012), fp.bottom + 0.025, fz, 0.014, 0.05, 0.13, CARBON);
+        addBox(out, s*(fp.x + 0.012), fp.bottom + 0.025 * fenceH, fz,
+               0.014, 0.05 * fenceH, 0.13, CARBON);
+      }
+      // Floor-edge lip: a thin outward return along the whole floor edge.
+      const edgeLip = Math.max(0, Math.min(1, floorStyle.edgeLip || 0));
+      if (edgeLip > 0) {
+        const lipF = anchors.podAt(0.50), lipR = anchors.podAt(-1.10);
+        addSpan(out, { z: 0.50, x: s*(lipF.x + 0.020), y: lipF.bottom + 0.004, w: 0.030 * edgeLip + 0.010, h: 0.012 },
+                     { z: -1.10, x: s*(lipR.x + 0.020), y: lipR.bottom + 0.004, w: 0.036 * edgeLip + 0.010, h: 0.012 },
+                CARBON);
+      }
+      // Titanium skid blocks under the plank — the bits that throw sparks.
+      const skids = Math.max(0, Math.min(2, Math.round(floorStyle.skid || 0)));
+      for (let i = 0; i < skids; i++) {
+        addBox(out, s * 0.22, 0.046 + rideDY, 0.30 - i * 1.10, 0.10, 0.014, 0.26,
+               [0.62, 0.60, 0.56], SURFACES.metal);
       }
     }
     // --- Sidepod cooling CHIMNEYS (engine recipe `chimney`, 0..3): squat stacks
@@ -1347,10 +1383,34 @@ const Car3D = (function () {
     // --- Exhaust outlet poking from the tail cap --- per ENGINE option: a lone
     // slim pipe at low spec, a fat central tailpipe flanked by two extra tips
     // for engine recipes with the `twin` flag.
-    const exhTwin = engStyle ? !!engStyle.twin : tier("engine") === 2;
-    const exhR = engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
-                          : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07);
+    // The EXHAUST recipe owns the tailpipe; `pipes` null defers to the engine's
+    // own plumbing so a car with no exhaust part fitted is unchanged.
+    const exhTwin = exhStyle.pipes != null ? exhStyle.pipes >= 3
+      : (engStyle ? !!engStyle.twin : tier("engine") === 2);
+    const exhBore = Math.max(0.7, Math.min(1.5, exhStyle.bore));
+    const exhR = (engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
+                          : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07)) * exhBore;
     addBox(out, 0, 0.40, -2.12, exhR, exhR, 0.16, [0.16, 0.16, 0.17], SURFACES.metal);
+    // Megaphone flare: the bore opens out over the last few centimetres.
+    const exhFlare = Math.max(0, Math.min(1, exhStyle.flare || 0));
+    if (exhFlare > 0) {
+      addLoft(out, -2.16, 0, 0.40, exhR * 2, exhR * 2,
+              -2.23, 0, 0.40, exhR * 2 * (1 + 0.55 * exhFlare), exhR * 2 * (1 + 0.55 * exhFlare),
+              [0.18, 0.18, 0.19], SURFACES.metal);
+    }
+    // Heat wrap: a pale bandage band around the primary, just ahead of the tip.
+    if (exhStyle.wrap) {
+      addBox(out, 0, 0.40, -2.04, exhR * 1.18, exhR * 1.18, 0.06,
+             [0.72, 0.70, 0.66], SURFACES.panel);
+    }
+    // Wastegate stacks: short pipes venting up and out above the primary.
+    const exhGates = Math.max(0, Math.min(2, Math.round(exhStyle.wastegate || 0)));
+    for (let i = 0; i < exhGates; i++) {
+      const s = i === 0 ? -1 : 1;
+      addSpan(out, { z: -2.02, x: s * 0.075, y: 0.47, w: 0.036, h: 0.036 },
+                   { z: -2.16, x: s * 0.095, y: 0.53, w: 0.030, h: 0.030 },
+              [0.20, 0.20, 0.22], null, SURFACES.metal);
+    }
     // Heat-glazed tailpipe mouth: a dark bore tinted by the fuel blend; transient
     // after-fire is rendered separately from live throttle state.
     // signature colour (green biofuel, violet quali mix, …), read racing behind it.

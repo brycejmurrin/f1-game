@@ -10,16 +10,17 @@ async function load(page) {
 }
 
 test.describe("Parts module — catalog structure", () => {
-  test("has exactly 8 categories", async ({ page }) => {
+  test("has exactly 10 categories", async ({ page }) => {
     await load(page);
     const count = await page.evaluate(() => Parts.CATALOG.length);
-    expect(count).toBe(8);
+    expect(count).toBe(10);
   });
 
   test("category IDs are correct", async ({ page }) => {
     await load(page);
     const ids = await page.evaluate(() => Parts.CATALOG.map((c) => c.id));
-    expect(ids).toEqual(["engine", "aero", "suspension", "brakes", "tyres", "ers", "gearbox", "fuel"]);
+    expect(ids).toEqual(["engine", "aero", "suspension", "brakes", "tyres", "ers",
+      "gearbox", "fuel", "exhaust", "floor"]);
   });
 
   test("GEARBOX category exists with F1 Spec option", async ({ page }) => {
@@ -1185,6 +1186,8 @@ test.describe("Parts module — visual recipes", () => {
         // tier 1 leaves the ERS strip unlit, so `led: null` is the inert recipe.
         ers: { led: null, pack: 1, cells: 3 },
         fuel: { cap: [0.55, 0.52, 0.6], flame: [1.15, 0.42, 0.14], line: 1 },
+        exhaust: { pipes: null, bore: 1, flare: 0, wastegate: 0, wrap: 0 },
+        floor: { fences: 5, fenceH: 1, skid: 0, edgeLip: 0 },
       };
       // The conduit hangs off the lit ERS strip, so probing it needs a lit pack.
       const ACTIVE = Object.assign({}, NEUTRAL, { ers: { led: [0.15, 0.55, 1.6], pack: 1, cells: 3 } });
@@ -1200,6 +1203,9 @@ test.describe("Parts module — visual recipes", () => {
       const KNOBS = [
         ["aero", "plate", 2], ["aero", "casc", 3], ["aero", "swan", 1], ["aero", "tvane", 1],
         ["engine", "chimney", 3], ["brakes", "scoop", 2], ["ers", "conduit", 2], ["fuel", "filler", 2],
+        ["exhaust", "pipes", 3], ["exhaust", "bore", 1.3], ["exhaust", "flare", 1],
+        ["exhaust", "wastegate", 2], ["exhaust", "wrap", 1],
+        ["floor", "fences", 0], ["floor", "fenceH", 1.45], ["floor", "skid", 2], ["floor", "edgeLip", 1],
       ];
       for (const [cat, knob, value] of KNOBS) {
         out.inert[`${cat}.${knob}`] = differs(build(cat, NEUTRAL[cat]), bare);

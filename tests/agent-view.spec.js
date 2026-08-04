@@ -1076,7 +1076,7 @@ test.describe("carView()", () => {
   test("reports the full parts spec and its effect", async ({ page }) => {
     await load(page);
     const c = await page.evaluate(() => window.__apex.carView());
-    expect(c.parts.chosen.length).toBe(8);
+    expect(c.parts.chosen.length).toBe(await page.evaluate(() => Parts.CATALOG.length));
     const cats = c.parts.chosen.map((p) => p.category);
     expect(cats).toContain("engine");
     expect(cats).toContain("aero");
@@ -1225,7 +1225,7 @@ test.describe("carView({detail:\"parts\"})", () => {
     expect(c.partCount).toBeGreaterThan(12);
     // the parts SPEC must survive alongside the part GEOMETRY — two `parts`
     // keys in one literal silently dropped the spec
-    expect(c.parts.chosen.length).toBe(8);
+    expect(c.parts.chosen.length).toBe(await page.evaluate(() => Parts.CATALOG.length));
     const byName = Object.fromEntries(c.partGeometry.map((p) => [p.name, p]));
     for (const n of ["chassis", "frontWing", "rearAssembly", "wheels", "cockpit"]) {
       expect(byName[n], n + " missing").toBeTruthy();
@@ -1254,7 +1254,7 @@ test.describe("carView({detail:\"parts\"})", () => {
     await load(page);
     const c = await page.evaluate(() => window.__apex.carView());
     expect(c.partGeometry).toBeUndefined();
-    expect(c.parts.chosen.length).toBe(8);   // the spec is always present
+    expect(c.parts.chosen.length).toBe(await page.evaluate(() => Parts.CATALOG.length));   // the spec is always present
     expect(c.geometry).toBeTruthy();
   });
 

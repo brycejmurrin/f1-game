@@ -1,6 +1,6 @@
 // @ts-check
 // Tests for car setup UI catalog rendering:
-// - All 8 categories appear as tabs in the setup panel
+// - All 10 categories appear as tabs in the setup panel
 // - GEARBOX and FUEL options are visible and selectable via the active tab
 // - Factory/supplier-exclusive parts only appear for the matching team engine
 // - Part descriptions update when an option is selected
@@ -36,12 +36,13 @@ function opt(page, optId) {
 test.describe("Car setup catalog — all categories render", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("all 8 category labels are visible", async ({ page }) => {
+  test("all 10 category labels are visible", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openSetup(page);
 
-    for (const id of ["engine", "aero", "suspension", "brakes", "tyres", "ers", "gearbox", "fuel"]) {
+    for (const id of ["engine", "aero", "suspension", "brakes", "tyres", "ers",
+                      "gearbox", "fuel", "exhaust", "floor"]) {
       await expect(page.locator(`#cs-tabs [data-cs-cat="${id}"]`)).toBeVisible();
     }
     await page.screenshot({ path: galleryPath("parts-catalog", "catalog-all-categories.png") });
