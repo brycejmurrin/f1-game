@@ -326,9 +326,9 @@
       // Steel/concrete liveries + a truss roof break the pair apart without
       // introducing a third colour family this close to the twin-wing stand.
       grandstandEx(0.032, -1, 20, 28, null, null,
-        { livery: "steel", roof: "cantilever", endWalls: true });
+        { livery: "darkSteel", roof: "cantilever", endWalls: true });
       grandstandEx(0.052, -1, 24, 28, null, null,
-        { livery: "concrete", roof: "flat", pylons: true });
+        { livery: "alu", roof: "flat", pylons: true });
       billboard(K(0.045), -1, 14, 16, 4.5, YELLOW);
 
       // ================= SNAIL T1–3 — coiling pale runoff (cockpit-readable) =================
@@ -362,11 +362,11 @@
       // Rotate STAND_SETS.shanghai (steel/crimson/concrete) with mixed
       // tiers/roofs/suites instead of one grey box repeated eight times.
       grandstandEx(0.05,  1, 95, 30, null, null,
-        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+        { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
       grandstandEx(0.085, 1, 85, 28, null, null,
         { livery: "crimson", roof: "flat" });
       grandstandEx(0.10,  -1, 45, 28, null, null,
-        { livery: "concrete", roof: "truss", pylons: true });
+        { livery: "alu", roof: "truss", pylons: true });
       grandstandEx(0.13,  1, 72, 26, null, null,
         { livery: "crimson", roof: "cantilever", endWalls: true });
       // Second row, set back 100 m+ behind the front stands. These are overflow
@@ -375,9 +375,9 @@
       // option in the bag, which is how the whole variety pass stays inside
       // budget on a circuit that fields 26 stands.
       grandstandEx(0.064, 1, 112, 28, null, null,
-        { livery: "concrete", roof: "none" });
+        { livery: "alu", roof: "none" });
       grandstandEx(0.098, 1, 104, 30, null, null,
-        { livery: "steel", roof: "none", endWalls: true });
+        { livery: "darkSteel", roof: "none", endWalls: true });
 
       // LOTUS TERRACE — the venue's petal canopy turned into an actual STAND
       // rather than a free-standing sail. Open raked seating with NO back shell
@@ -588,19 +588,19 @@
       // runs). Rotate the shanghai STAND_SETS livery family with tier/roof/
       // suite variety so the run reads as a proper stadium build-up.
       grandstandEx(0.42, 1, 22, 30, null, null,
-        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+        { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
       grandstandEx(0.45, 1, 20, 34, null, null,
         { livery: "crimson", roof: "flat" });
       grandstandEx(0.48, 1, 22, 30, null, null,
-        { livery: "concrete", roof: "truss", pylons: true });
+        { livery: "alu", roof: "truss", pylons: true });
       grandstandEx(0.50, 1, 20, 28, null, null,
-        { livery: "steel", roof: "cantilever", endWalls: true });
+        { livery: "darkSteel", roof: "cantilever", endWalls: true });
       grandstandEx(0.435, 1, 46, 30, null, null,
         { livery: "crimson", roof: "flat", endWalls: true });
       grandstandEx(0.475, 1, 48, 30, null, null,
-        { livery: "concrete", roof: "none" });
+        { livery: "alu", roof: "none" });
       grandstandEx(0.515, 1, 46, 28, null, null,
-        { livery: "steel", roof: "flat" });
+        { livery: "darkSteel", roof: "flat" });
       billboard(K(0.46), 1, 12, 16, 4.5, RED);
       marshalPost(K(0.45), 1, 12);
 
@@ -677,15 +677,15 @@
       grandstandEx(0.755, 1, 38, 34, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", endWalls: true });
       grandstandEx(0.775, 1, 62, 30, null, null,
-        { livery: "steel", roof: "none" });
+        { livery: "darkSteel", roof: "none" });
       grandstandEx(0.80,  1, 38, 34, null, null,
-        { livery: "concrete", roof: "truss", pylons: true });
+        { livery: "alu", roof: "truss", pylons: true });
       grandstandEx(0.823, 1, 62, 30, null, null,
         { livery: "crimson", roof: "flat", endWalls: true });
       grandstandEx(0.845, 1, 38, 32, null, null,
-        { livery: "steel", roof: "flat", endWalls: true });
+        { livery: "darkSteel", roof: "flat", endWalls: true });
       grandstandEx(0.865, 1, 58, 28, null, null,
-        { livery: "concrete", roof: "cantilever" });
+        { livery: "alu", roof: "cantilever" });
 
       // Sail canopy motif carried onto the back straight's stand run.
       sailRow(0.750, 0.870, 1, 50, 4, { rx: 15, rz: 9, h: 15, col: [0.88, 0.89, 0.91] });
@@ -703,13 +703,13 @@
 
       // ================= T14 HAIRPIN GRANDSTAND (s 0.90, L) =================
       grandstandEx(0.88,  -1, 24, 30, null, null,
-        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+        { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
       grandstandEx(0.892, -1, 48, 28, null, null,
         { livery: "crimson", roof: "none" });
       grandstandEx(0.905, -1, 28, 32, null, null,
-        { livery: "concrete", roof: "truss", pylons: true });
+        { livery: "alu", roof: "truss", pylons: true });
       grandstandEx(0.918, -1, 52, 28, null, null,
-        { livery: "steel", roof: "flat", pylons: true });
+        { livery: "darkSteel", roof: "flat", pylons: true });
       grandstandEx(0.93,  -1, 30, 28, null, null,
         { livery: "crimson", roof: "flat", endWalls: true });
       // A second lotus-roof family makes the T14 hairpin the visual counterpoint

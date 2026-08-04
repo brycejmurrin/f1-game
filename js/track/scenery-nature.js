@@ -12,7 +12,7 @@ const SceneryNature = (function () {
   "use strict";
 
   function create(ctx) {
-    const { out, track, n, hw, px, py, pz, NIGHT, MAT,
+    const { out, track, n, hw, px, py, pz, NIGHT, MAT, def, theme,
             clearTreeDist,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             addMountain, emit, RAW, rejBox, recordBarrier, groundYAt,
@@ -577,7 +577,28 @@ const SceneryNature = (function () {
     const grandstandEx = (s, side, gap, len, shell, crowd, opts) => {
       opts = opts || {};
       const lib = TrackSceneryData.STAND_LIVERIES || {};
-      const liv = (opts.livery && lib[opts.livery]) || null;
+      // STAND_SETS is the per-circuit stand FAMILY. It documented itself as the
+      // rotation grandstandEx uses, but nothing read it — the table was dead
+      // config and circuits hand-copied its values into local arrays instead.
+      // It is now the FALLBACK, and only the fallback: an explicit opts.livery
+      // or a positional `shell` colour still wins, so the 221 of 226 call sites
+      // that specify one are untouched. In practice this governs the handful of
+      // calls that ask for a stand without saying what colour it is, which is
+      // exactly what a house style is for.
+      // Picked by HASH off the node index, not by a sequential cursor: a cursor
+      // would mean inserting one stand recolours every stand after it on that
+      // circuit, so an author adding a bleacher at Turn 2 silently repaints the
+      // main grandstand. Hashing off k keeps every other stand where it was.
+      let liveryName = opts.livery;
+      if (!liveryName && !shell) {
+        const set = (TrackSceneryData.STAND_SETS || {})[def && def.id]
+          || TrackSceneryData.STAND_SET_DEF;
+        if (set && set.length) {
+          const kk = Math.round(s * n) % n;
+          liveryName = set[Math.floor(hash(kk * 2.7 + side * 1.9) * set.length) % set.length];
+        }
+      }
+      const liv = (liveryName && lib[liveryName]) || null;
       shell = shell || (liv && liv.shell) || null;
       crowd = crowd || (liv && liv.crowd) || null;
       const roofKind = opts.roof || "cantilever";
@@ -863,6 +884,23 @@ const SceneryNature = (function () {
       const treeCol = opts.col2 || [0.20, 0.40, 0.16];
       const pineFrac = opts.pineFrac != null ? opts.pineFrac : 0.55;
       // density 0..1 → step 7m (sparse) … 3m (dense). Default ~medium-dense.
+      //
+      // WHAT THIS KNOB ACTUALLY DOES. along() quantises to whole nodes
+      // (`step = max(1, round(stepM / ds))`) and every circuit resamples to
+      // ds = 4.00 m, so this maps to exactly TWO reachable spacings:
+      //   density > 0.25  → stepM < 6 m  → 1 node  → trees every 4 m
+      //   density <= 0.25 → stepM >= 6 m → 2 nodes → trees every 8 m
+      // Anything from 0.26 to 1.0 is the same treeline. Measured, not guessed:
+      // 0.86 and 0.42 emit identical geometry.
+      //
+      // 4 m spacing is TIGHTER THAN THE CANOPY. A 30 m pine's canopyR is ~3.5 m,
+      // so adjacent crowns overlap by ~3 m — and because this emitter alternates
+      // pine/tree, the clip audit sees two DIFFERENT models interpenetrating and
+      // counts every one. A dense belt is therefore worth tens of severe clip
+      // spots by construction. That is accepted: real mixed woodland has
+      // interlocking canopies, and thinning to 8 m to satisfy the metric costs
+      // half the trees for a small fraction of the spots (measured on
+      // hockenheim: 180 k props for 20 spots). Baseline it, don't thin it.
       const dens = opts.density != null ? Math.max(0.05, Math.min(1, opts.density)) : 0.7;
       const step = 7 - dens * 4;
       ctx.along(s0, s1, step, (k) => {

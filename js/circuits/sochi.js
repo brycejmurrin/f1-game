@@ -327,7 +327,7 @@
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, 1, 12, 150, null, null,
-        { livery: "alu", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
+        { livery: "teal", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
       // Olympic-park civic architecture: crossed perpendicular slabs on a broad
       // footprint, monumental rather than commercial. The circuit threads through
       // a set of buildings that were never designed for it.
