@@ -347,8 +347,10 @@ const LiveryTex = (function () {
       ctx.fill();
     }
     // prancing horse silhouette (rearing on hind legs, facing left, tail up).
-    // In bare mode paint it in ink so it reads on the team-colour fin.
-    ctx.fillStyle = bare ? css(ink) : css([0.05, 0.05, 0.06]);
+    // In bare mode paint it in ink so it reads on the team-colour fin. On the
+    // shield it is black — through brandMark, so a livery `logo` colour reaches
+    // the horse here too and not only on the fin.
+    ctx.fillStyle = bare ? css(ink) : css(brandMark([0.05, 0.05, 0.06]));
     ctx.beginPath();
     ctx.moveTo(f.X(0.40), f.Y(0.20));                              // ear
     ctx.lineTo(f.X(0.36), f.Y(0.13));                              // pointed ear tip
@@ -381,7 +383,7 @@ const LiveryTex = (function () {
     const f = fit(R, 0.08);
     ctx.save();
     // comet swoosh: thick tail on the left, tapering as it sweeps up to the right.
-    ctx.fillStyle = css(BRAND.papaya);
+    ctx.fillStyle = css(brandMark(BRAND.papaya));
     ctx.beginPath();
     ctx.moveTo(f.X(0.06), f.Y(0.70));                              // tail bottom
     ctx.quadraticCurveTo(f.X(0.05), f.Y(0.58), f.X(0.20), f.Y(0.56)); // rounded tail cap
@@ -392,7 +394,7 @@ const LiveryTex = (function () {
     ctx.closePath();
     ctx.fill();
     // lower speed streak beneath, echoing the swoosh
-    ctx.fillStyle = cssA(BRAND.papaya, 0.75);
+    ctx.fillStyle = cssA(brandMark(BRAND.papaya), 0.75);
     ctx.beginPath();
     ctx.moveTo(f.X(0.10), f.Y(0.82));
     ctx.quadraticCurveTo(f.X(0.50), f.Y(0.72), f.X(0.80), f.Y(0.50));
@@ -419,8 +421,8 @@ const LiveryTex = (function () {
     // bulls only showed where the tail wash happened to cross them. `ink` is
     // already chosen for the fin paint, so its polarity picks the brand colour
     // that reads: dark ink = pale fin → red bulls; light ink = dark fin → gold.
-    const red = css(!bare ? BRAND.rbRed
-      : (lum(ink) < 0.5 ? BRAND.rbRed : BRAND.rbGold));
+    const red = css(brandMark(!bare ? BRAND.rbRed
+      : (lum(ink) < 0.5 ? BRAND.rbRed : BRAND.rbGold)));
     drawBull(ctx, f, 0.02, 0.16, 0.5, 0.62, +1, red);   // left bull, head to right
     drawBull(ctx, f, 0.48, 0.16, 0.5, 0.62, -1, red);   // right bull, head to left
     ctx.restore();
@@ -490,7 +492,7 @@ const LiveryTex = (function () {
       ctx.fill();
     }
     // bold front-facing bull head with sweeping horns
-    ctx.fillStyle = css(BRAND.rbRed);
+    ctx.fillStyle = css(brandMark(BRAND.rbRed));
     ctx.beginPath();
     ctx.moveTo(f.X(0.16), f.Y(0.22));                              // left horn tip
     ctx.quadraticCurveTo(f.X(0.30), f.Y(0.16), f.X(0.42), f.Y(0.28)); // horn to brow
@@ -520,7 +522,7 @@ const LiveryTex = (function () {
     ctx.fillRect(f.X(0.14), f.Y(0.1), f.S(0.2), f.S(0.8));   // left post
     ctx.fillRect(f.X(0.66), f.Y(0.1), f.S(0.2), f.S(0.8));   // right post
     // bold diagonal cross-member (industrial girder look), in red accent
-    ctx.fillStyle = css(BRAND.haasRed);
+    ctx.fillStyle = css(brandMark(BRAND.haasRed));
     ctx.beginPath();
     ctx.moveTo(f.X(0.30), f.Y(0.34));
     ctx.lineTo(f.X(0.70), f.Y(0.54));
@@ -636,7 +638,7 @@ const LiveryTex = (function () {
     ctx.save();
     if (bare) {
       // Crown bars, enlarged and centred (no shield/wreath beneath them).
-      ctx.fillStyle = css(BRAND.cadGold);
+      ctx.fillStyle = css(brandMark(BRAND.cadGold));
       for (let i = 0; i < 4; i++) {
         ctx.fillRect(f.X(0.29 + i * 0.115), f.Y(0.28), f.S(0.055), f.S(0.16));
       }
@@ -656,7 +658,7 @@ const LiveryTex = (function () {
       return;
     }
     // laurel wreath — two arcs of leaves either side of the shield
-    ctx.fillStyle = css(BRAND.cadGold);
+    ctx.fillStyle = css(brandMark(BRAND.cadGold));
     for (let s = -1; s <= 1; s += 2) {
       for (let i = 0; i < 5; i++) {
         const t = i / 4;
@@ -673,7 +675,7 @@ const LiveryTex = (function () {
       }
     }
     // gold shield frame
-    ctx.fillStyle = css(BRAND.cadGold);
+    ctx.fillStyle = css(brandMark(BRAND.cadGold));
     shield();
     ctx.fill();
     // inner shield, quartered
@@ -688,7 +690,7 @@ const LiveryTex = (function () {
     ctx.fillRect(f.X(0.26), f.Y(0.16), f.S(0.24), f.S(0.39));
     ctx.fillRect(f.X(0.5), f.Y(0.55), f.S(0.24), f.S(0.41));
     // crown bars across the top band
-    ctx.fillStyle = css(BRAND.cadGold);
+    ctx.fillStyle = css(brandMark(BRAND.cadGold));
     for (let i = 0; i < 4; i++) {
       ctx.fillRect(f.X(0.31 + i * 0.11), f.Y(0.19), f.S(0.05), f.S(0.1));
     }
@@ -723,10 +725,24 @@ const LiveryTex = (function () {
     cadillac: crestCadillac,
   };
 
-  function drawCrest(ctx, teamId, R, ink, accent, bare) {
+  // A livery's `logo` colour, live only for the duration of one drawCrest call.
+  // Most crests paint their mark in `ink`, but several are drawn in a baked
+  // BRAND colour (McLaren's papaya swoosh, the bulls, Haas's girder, Cadillac's
+  // crest) — an override that only replaced `ink` would recolour half the grid
+  // and silently skip the rest. brandMark() is applied at the FOREGROUND mark
+  // sites only; backing plates and discs (Ferrari's yellow shield, the Red Bull
+  // sun disc, the Racing Bulls plate) keep their own colour so the mark still
+  // has something to sit on. Those are skipped in `bare` (shark-fin) mode
+  // anyway, which is where a hand-picked logo colour matters most.
+  let _logoInk = null;
+  function brandMark(c) { return _logoInk || c; }
+  function drawCrest(ctx, teamId, R, ink, accent, bare, logo) {
+    _logoInk = logo || null;
     const fn = CRESTS[teamId];
-    if (fn) fn(ctx, R, ink, accent, bare);
-    else crestGeneric(ctx, R, ink, accent, teamId);
+    try {
+      if (fn) fn(ctx, R, logo || ink, accent, bare);
+      else crestGeneric(ctx, R, logo || ink, accent, teamId);
+    } finally { _logoInk = null; }
   }
 
   // Per-team livery GRAPHIC backdrop painted behind the crest — an accent wash +
@@ -835,6 +851,11 @@ const LiveryTex = (function () {
     // gets exactly today's look (fin = c2, art auto-picked to read on it).
     const finPaint = colors.fin || c2;
     const finArt = colors.finArt || null;
+    // The team CREST itself, wherever it is drawn (engine cover + shark fin).
+    // Distinct from `finArt`, which is the abstract tail wash behind it — one is
+    // the mark, the other is the paint job it sits on. Absent = the automatic
+    // ink, which is chosen to contrast whatever paint the crest lands on.
+    const logo = colors.logo || null;
 
     // Each region is inked against the paint IT lands on, not against c1 for all
     // of them. A livery that sets `pod` repaints the lower sidepod, which is
@@ -893,7 +914,7 @@ const LiveryTex = (function () {
 
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe);
-    drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent);
+    drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent, false, logo);
     // Shark-fin panel: the SAME tail graphic + a BARE motif (disc/shield stripped)
     // so the fin reads as a painted tail, not a floating badge.
     // The wash + motif strokes are the accent colour, and the FIN IS ITS OWN
@@ -911,7 +932,7 @@ const LiveryTex = (function () {
     // Accent has to separate from the FIN's ink here, not the body's.
     const finAccent = contrast(accent, inkFin) >= 2.0 ? accent
       : (contrast(c1, inkFin) >= 2.0 ? c1 : haloFor(inkFin));
-    drawCrest(ctx, teamId, REGIONS.finBadge, inkFin, finAccent, true);
+    drawCrest(ctx, teamId, REGIONS.finBadge, inkFin, finAccent, true, logo);
 
     // Sponsor wordmarks.
     const names = SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
