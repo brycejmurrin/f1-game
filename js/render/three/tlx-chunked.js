@@ -141,6 +141,13 @@
       const aNrm = attrOrZero(data.nrm, vCount * 3, 3);
       const aCol = attrOrZero(data.col, vCount * 3, 3);
       const aMat = attrOrZero(data.mat, vCount, 1);
+      // NO `trk` attribute here, deliberately. Only the ROAD carries track
+      // coords, and the chunked path is the city props/glass — millions of
+      // vertices, the one buffer this whole subsystem exists to keep small.
+      // tsl-lit's `chunked` material variant therefore compiles without the
+      // attribute read and without roadMarkings(); see its buildFragment note.
+      // Chunked meshes must only ever be drawn through drawChunked /
+      // castShadowChunked, which is what binds that variant.
       // Attributes built: normals/colours/materials are baked into the typed
       // attribute arrays and never read again. Drop the source refs so ~half
       // the raw JS arrays can be GC'd before the bucket index arrays are built
