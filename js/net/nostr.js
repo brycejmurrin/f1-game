@@ -109,18 +109,30 @@ const NetNostr = (function () {
   // — that is the nature of free infrastructure — which is why the list is
   // overridable at runtime and why room codes are the BACKUP path: the invite
   // link and QR need no third party at all and must stay the way in.
-  // Ordered by what was MEASURED from a real browser, not by reputation.
-  // relay.damus.io answered 503 four times running and relay.nostr.band timed
-  // out, so both are gone — a relay that fails is worse than absent, because
-  // Trystero keeps reconnecting to it and the console fills with noise that
-  // hides the real problem. The rest connected.
+  // THE CRITERION IS NOT POPULARITY, it is whether a relay accepts events from
+  // an UNKNOWN pubkey. Trystero signs with an ephemeral key generated per
+  // session, so any relay gating on a web of trust, a paid account or a
+  // whitelist rejects us permanently — offchain.pub answers "Policy violated
+  // and pubkey is not in our web of trust", and no amount of retrying will
+  // ever change that. A well-known relay is worth nothing here if it does not
+  // take anonymous traffic, which is increasingly how the good ones survive
+  // spam.
+  //
+  // Everything here was measured from a real browser, not chosen by
+  // reputation. Removed after failing: relay.damus.io (503 repeatedly),
+  // relay.nostr.band (handshake timeout), offchain.pub (web-of-trust gate),
+  // and Trystero's own draw for this appId, two of which had dead DNS.
+  //
+  // They will all rot eventually — free infrastructure does — which is why the
+  // list is overridable at runtime and why room codes are the BACKUP way in.
+  // The invite link and QR need no third party and have worked throughout.
   const RELAYS = [
     "wss://nos.lol",
     "wss://relay.primal.net",
-    "wss://offchain.pub",
     "wss://nostr.mom",
     "wss://relay.snort.social",
     "wss://nostr-pub.wellorder.net",
+    "wss://relay.mostr.pub",
   ];
 
   // localStorage apex26.nostrRelays = ["wss://…", …] overrides the list above,
