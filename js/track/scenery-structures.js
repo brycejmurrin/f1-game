@@ -54,12 +54,32 @@ const SceneryStructures = (function () {
           { kind: "wall", k, side });
       });
     };
+    // ── TRACKSIDE FURNITURE FORMS ────────────────────────────────────────────
+    // fence / guardrail / tyreWall / marshalPost / billboard / gantry /
+    // cameraTower / sponsorHoarding were ~870 calls of geometry that was
+    // byte-identical on all 40 circuits, varying only by tint. Each now takes a
+    // trailing `opts` with a `style`, and EVERY emitter keeps its current
+    // geometry as the default style — a call that passes nothing is unchanged,
+    // which is what makes 870 call sites safe to leave alone.
+    //
+    // The per-circuit assignment lives in TrackSceneryData.KIT (see
+    // scenery-data.js), resolved once per build like FURN and BARRIER already
+    // are. Style goes into the ctx.instance model KEY, so a circuit still
+    // collapses to one model per form — only the loaded track's models exist,
+    // so per-circuit variety costs nothing at runtime.
+    // kitOf is built once in tracks.js and shared across the scenery modules,
+    // so every emitter resolves the circuit's furniture row the same way.
+    const kitOf = ctx.kitOf;
+
     // Catch / debris fence: posts + a pale mesh panel (reads as see-through wire).
-    const fence = (s0, s1, side, gap, h, col) => {
+    //   opts: { style: "mesh"(default) | "leaning" | "panelled" | "hoarding"
+    //                | "palisade" | "chainlink", postCol }
+    const fence = (s0, s1, side, gap, h, col, opts) => {
       // Geometry-only registration: a catch fence is solid to scenery but must
       // not move the driving limit (it stands behind the runoff by design).
       // Until this existed, fences were the ONLY barrier class no guard could
       // see — and they are the obstacle in most surviving canopy intersections.
+      const st = (opts && opts.style) || kitOf("fence", "mesh");
       ctx.noteSpan("fence", s0, s1, side, gap, { h });
       indexBarrier(s0, s1, side, gap);
       along(s0, s1, 5, (k, spacing) => {
@@ -71,18 +91,51 @@ const SceneryStructures = (function () {
         // Post is fixed for a given fence height; the mesh panel spans to the
         // next post, so only it takes the along-track scale.
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
-        ctx.instance(`fence-post|${h}`, place,                                  // post, base sunk
-          (rec) => rec.cyl([0, -0.4, 0], 0.13, h + 0.4, [0.28, 0.28, 0.30], 5),
+        const postCol = (opts && opts.postCol) || [0.28, 0.28, 0.30];
+        ctx.instance(`fence-post|${h}|${st}|${postCol.join(",")}`, place,       // post, base sunk
+          (rec) => {
+            rec.cyl([0, -0.4, 0], 0.13, h + 0.4, postCol, 5);
+            // A leaning catch fence cants its top third back over the track,
+            // which is what a real debris fence does and what makes it read as
+            // a catch fence rather than a garden boundary.
+
+          },
           { kind: "fence", k, side });
         const meshCol = col || [0.72, 0.74, 0.78];
-        ctx.instance(`fence-mesh|${h}|${meshCol.join(",")}`,
-          Object.assign({ s: [1, 1, spacing] }, place),
-          (rec) => rec.box([0, h * 0.55, 0], [0.05, h * 0.9, 1], meshCol),      // mesh
+        const span = Object.assign({ s: [1, 1, spacing] }, place);
+        ctx.instance(`fence-mesh|${h}|${st}|${meshCol.join(",")}`, span,
+          (rec) => {
+            if (st === "chainlink") {
+              // Posts + top and bottom rail only, NO mesh panel. Deliberately
+              // the cheapest form in the set — it is the lever for buying back
+              // vertex budget on the heavy circuits.
+              rec.box([0, h * 0.95, 0], [0.07, 0.07, 1], meshCol);
+            } else if (st === "panelled") {
+              for (const f of [0.30, 0.90])
+                rec.box([0, h * f, 0], [0.09, 0.14, 1], meshCol);
+            } else if (st === "hoarding") {
+              // Solid printed sheet — street circuits screen the public road.
+              rec.box([0, h * 0.52, 0], [0.09, h * 0.95, 1], meshCol);
+              rec.box([0, h * 1.00, 0], [0.14, 0.10, 1], postCol);
+            } else if (st === "palisade") {
+              for (let i = 0; i < 3; i++)
+                rec.box([0, h * 0.55, (i - 1) * 0.30], [0.06, h * 0.9, 0.09], meshCol);
+              rec.box([0, h * 0.95, 0], [0.08, 0.07, 1], postCol);
+            } else if (st === "leaning") {
+              rec.box([0, h * 0.50, 0], [0.05, h * 0.80, 1], meshCol);
+              rec.box([-side * h * 0.09, h * 0.95, 0], [h * 0.20, 0.05, 1], meshCol);
+            } else {
+              rec.box([0, h * 0.55, 0], [0.05, h * 0.9, 1], meshCol);           // mesh (default)
+            }
+          },
           { kind: "fence", k, side });
       });
     };
     // Armco guardrail: a waist-high steel rail on posts (open-circuit edge).
-    const guardrail = (s0, s1, side, gap, col) => {
+    //   opts: { style: "armco"(default) | "doubleArmco" | "wArmco" | "jersey"
+    //                | "cable" | "safer", postCol }
+    const guardrail = (s0, s1, side, gap, col, opts) => {
+      const st = (opts && opts.style) || kitOf("rail", "armco");
       ctx.noteSpan("guardrail", s0, s1, side, gap);
       recordBarrier(s0, s1, side, gap);
       along(s0, s1, 4, (k, spacing) => {
@@ -98,18 +151,52 @@ const SceneryStructures = (function () {
         // spacing — and a node scale on a combined model would stretch the
         // post's radius with the rail's length (radScale takes max(|sx|,|sz|)).
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
-        ctx.instance("guardrail-post", place,                                   // post, base sunk
-          (rec) => rec.cyl([0, -0.35, 0], 0.09, 1.05, [0.5, 0.5, 0.52], 4),
-          { kind: "guardrail", k, side });
+        const postCol = (opts && opts.postCol) || [0.5, 0.5, 0.52];
+        // A jersey barrier has no posts at all — it is a poured profile.
+        if (st !== "jersey")
+          ctx.instance(`guardrail-post|${st}|${postCol.join(",")}`, place,      // post, base sunk
+            (rec) => rec.cyl([0, -0.35, 0], 0.09, st === "doubleArmco" ? 1.45 : 1.05, postCol, 4),
+            { kind: "guardrail", k, side });
         const railCol = col || [0.82, 0.82, 0.85];
-        ctx.instance(`guardrail-rail|${railCol.join(",")}`,
+        ctx.instance(`guardrail-rail|${st}|${railCol.join(",")}`,
           Object.assign({ s: [1, 1, spacing] }, place),
-          (rec) => rec.box([0, 0.7, 0], [0.18, 0.45, 1], railCol),
+          (rec) => {
+            if (st === "doubleArmco") {                    // old European two-rail
+              rec.box([0, 0.62, 0], [0.18, 0.38, 1], railCol);
+              rec.box([0, 1.16, 0], [0.18, 0.38, 1], railCol);
+            } else if (st === "wArmco") {                  // the W cross-section
+              // TWO boxes, not three: the proud centre rib is what reads as a W
+              // profile, and this emitter runs 127 times across 38 circuits, so
+              // a third box costs more than it shows.
+              rec.box([0, 0.72, 0], [0.20, 0.44, 1], railCol);
+              rec.box([-0.07, 0.72, 0], [0.09, 0.16, 1], railCol);
+            } else if (st === "jersey") {                  // poured concrete profile
+              rec.box([0, 0.26, 0], [0.60, 0.52, 1], railCol);
+              rec.box([0, 0.72, 0], [0.30, 0.46, 1], railCol);
+            } else if (st === "cable") {                   // 1970s wire rope
+              // Thin BOXES, not cylinders: a cyl's axis is vertical, so it
+              // cannot run along the track, and the [1,1,spacing] node scale
+              // would inflate its radius (radScale takes max(|sx|,|sz|)).
+              for (const y of [0.58, 0.95])
+                rec.box([0, y, 0], [0.07, 0.07, 1], railCol);
+            } else if (st === "safer") {                   // smooth tube over foam
+              rec.box([0, 0.70, 0], [0.34, 0.62, 1], railCol);
+              rec.box([0, 1.04, 0], [0.38, 0.10, 1], postCol);
+            } else {
+              rec.box([0, 0.7, 0], [0.18, 0.45, 1], railCol);                   // armco (default)
+            }
+          },
           { kind: "guardrail", k, side });
       });
     };
     // Stacked-tyre barrier with a coloured conveyor-belt cap.
-    const tyreWall = (s0, s1, side, gap, capCol) => {
+    //   opts: { style: "stack"(default) | "double" | "pyramid" | "tecpro"
+    //                | "airfence", tyreCol }
+    // BUDGET NOTE: "double" and "pyramid" are 2x and 3x the tyre count. They
+    // belong on circuits with measured headroom, never in KIT_DEF — this
+    // emitter runs 142 times across 38 circuits.
+    const tyreWall = (s0, s1, side, gap, capCol, opts) => {
+      const st = (opts && opts.style) || kitOf("tyre", "stack");
       ctx.noteSpan("tyreWall", s0, s1, side, gap);
       recordBarrier(s0, s1, side, gap);
       along(s0, s1, 3.4, (k, spacing) => {
@@ -120,13 +207,39 @@ const SceneryStructures = (function () {
         }
         // Same split as guardrail: fixed tyre stack, length-scaled conveyor cap.
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
-        ctx.instance("tyre-stack", place,                                       // base sunk
-          (rec) => rec.cyl([0, -0.35, 0], 1.0, 1.25, [0.10, 0.10, 0.11], 7),
-          { kind: "tyreWall", k, side });
+        const tyre = (opts && opts.tyreCol) || [0.10, 0.10, 0.11];
         const cap = capCol || [0.9, 0.9, 0.92];
-        ctx.instance(`tyre-cap|${cap.join(",")}`,
+        ctx.instance(`tyre-stack|${st}|${tyre.join(",")}`, place,               // base sunk
+          (rec) => {
+            if (st === "tecpro") {
+              // Rented TecPro: rectangular polyethylene block modules with a
+              // strap band. Squarer and lighter than a tyre stack — the modern
+              // street-circuit barrier, and visibly not a pile of tyres.
+              rec.box([0, 0.20, 0], [1.5, 1.2, 1.6], cap);
+              rec.box([0, 0.86, 0], [1.5, 0.14, 1.6], tyre);
+            } else if (st === "airfence") {
+              rec.frustum([0, -0.35, 0], 1.05, 0.72, 1.45, cap, 8);
+            } else if (st === "pyramid") {
+              rec.cyl([0, -0.35, 0], 1.0, 1.25, tyre, 7);
+              rec.cyl([side * 1.75, -0.35, 0], 1.0, 1.25, tyre, 7);
+              rec.cyl([side * 0.88, 0.90, 0], 0.95, 1.10, tyre, 7);
+            } else if (st === "double") {
+              rec.cyl([0, -0.35, 0], 1.0, 1.25, tyre, 7);
+              rec.cyl([side * 1.85, -0.35, 0], 1.0, 1.25, tyre, 7);
+            } else {
+              rec.cyl([0, -0.35, 0], 1.0, 1.25, tyre, 7);                       // stack (default)
+            }
+          },
+          { kind: "tyreWall", k, side });
+        ctx.instance(`tyre-cap|${st}|${cap.join(",")}`,
           Object.assign({ s: [1, 1, spacing] }, place),
-          (rec) => rec.box([0, 0.95, 0], [2.0, 0.3, 1], cap),
+          (rec) => {
+            if (st === "tecpro") rec.box([0, 0.98, 0], [1.7, 0.16, 1], tyre);
+            else if (st === "airfence") rec.box([0, 1.14, 0], [1.5, 0.14, 1], tyre);
+            else if (st === "pyramid") rec.box([side * 0.88, 2.05, 0], [2.0, 0.3, 1], cap);
+            else if (st === "double") rec.box([side * 0.92, 0.95, 0], [3.8, 0.3, 1], cap);
+            else rec.box([0, 0.95, 0], [2.0, 0.3, 1], cap);                     // stack (default)
+          },
           { kind: "tyreWall", k, side });
       });
     };
@@ -135,7 +248,13 @@ const SceneryStructures = (function () {
     // span the racing line so cars pass under — emit via RAW, same pattern as
     // underpassPortal, or the footprint guard silently drops the span and leaves
     // two lonely posts that no longer straddle the track.
-    const gantry = (s, h, col) => {
+    //   opts: { style: "box"(default) | "truss" | "portal" | "cantilever"
+    //                | "scaffold", lightCol }
+    // The beam itself always goes through overheadSpan/RAW — a guarded emitter
+    // would silently drop the span and leave two lonely masts that no longer
+    // straddle the track. Style changes the MASTS and the beam dressing.
+    const gantry = (s, h, col, opts) => {
+      const st = (opts && opts.style) || kitOf("gantry", "box");
       const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
       ctx.note("gantry", [(aL.c[0] + aR.c[0]) / 2, aL.c[1] + h / 2,
@@ -151,8 +270,38 @@ const SceneryStructures = (function () {
       // Solved per leg, since the two verges need not be at the same height.
       const uy = Math.max(0.5, u[1]);
       const legH = (aC) => (h - 0.45) + (py[k] - aC[1]) / uy + 0.3;   // +0.3 into the beam
-      addCyl(out, aL.c, 0.3, legH(aL.c), c, 6, b);
-      addCyl(out, aR.c, 0.3, legH(aR.c), c, 6, [aR.r, u, aR.t]);
+      // Mast form. Height stays SOLVED per leg in every style — that is what
+      // keeps the mast meeting its beam where the verge runs below the road.
+      const mast = (aC, basis) => {
+        const L = legH(aC);
+        if (st === "truss") {
+          // Four slim uprights on a square, X-braced — a real lattice mast.
+          for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
+            addCyl(out, vadd(vadd(aC, basis[0], dr * 0.55), basis[2], dt * 0.55),
+              0.11, L, c, 4, basis);
+          for (let i = 0; i < Math.max(2, Math.floor(L / 3)); i++)
+            addBox(out, vadd(aC, basis[1], (i + 0.5) * (L / Math.max(2, Math.floor(L / 3)))),
+              [1.3, 0.10, 1.3], c, basis);
+        } else if (st === "portal") {
+          addBox(out, vadd(aC, basis[1], L / 2), [1.5, L, 1.1], c, basis);      // solid leg
+          addBox(out, vadd(aC, basis[1], L - 1.2), [2.2, 1.0, 1.5], c, basis);  // haunch
+        } else if (st === "scaffold") {
+          for (const dt of [-0.5, 0.5])
+            addCyl(out, vadd(aC, basis[2], dt), 0.09, L, c, 4, basis);
+          for (let i = 0; i < Math.max(2, Math.floor(L / 2.2)); i++)
+            addBox(out, vadd(aC, basis[1], (i + 0.5) * (L / Math.max(2, Math.floor(L / 2.2)))),
+              [0.16, 0.10, 1.3], c, basis);
+        } else if (st === "cantilever") {
+          addCyl(out, aC, 0.42, L, c, 8, basis);                                 // single fat mast
+          addBox(out, vadd(vadd(aC, basis[1], L * 0.72), basis[0], 0),
+            [1.0, 0.5, 0.9], c, basis);                                          // boom root
+        } else {
+          addCyl(out, aC, 0.3, L, c, 6, basis);                                  // box (default)
+        }
+      };
+      // A cantilever gantry hangs from ONE side — that is its whole silhouette.
+      mast(aL.c, b);
+      if (st !== "cantilever") mast(aR.c, [aR.r, u, aR.t]);
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       // Span legs: half-width + 1.5 m clearance each side + 1 m past each mast.
       overheadSpan({
@@ -195,7 +344,10 @@ const SceneryStructures = (function () {
       push(false); push(true);   // both windings → visible from either side
     };
     // Marshal post / flag bunker: a small orange-roofed box with a pole.
-    const marshalPost = (k, side, gap) => {
+    //   opts: { style: "hut"(default) | "cabin" | "container" | "kiosk"
+    //                | "bunker" | "tent" | "tower", roofCol }
+    const marshalPost = (k, side, gap, opts) => {
+      const st = (opts && opts.style) || kitOf("marshal", "hut");
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
       if (onTrack(p.c[0], p.c[2], 3)) {
         console.warn(`[scenery] marshalPost SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
@@ -211,9 +363,44 @@ const SceneryStructures = (function () {
       // cloth (MAT.FLAG vertex wave, not a rigid primitive) and the beacon is
       // emissive — both are their own node kinds in a full graph, and keeping
       // them out here also preserves the original emission ORDER exactly.
-      ctx.instance(`marshalPost|${side}`, { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
-        rec.box([0, 1.1, 0], [2.2, 3.0, 2.2], [0.85, 0.86, 0.88]);   // base sunk 0.4
-        rec.box([0, 2.7, 0], [2.5, 0.4, 2.5], [0.95, 0.55, 0.08]);
+      // The pole is common to every form — the flag has to fly from something.
+      const roof = (opts && opts.roofCol) || [0.95, 0.55, 0.08];
+      ctx.instance(`marshalPost|${st}|${side}|${roof.join(",")}`,
+        { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
+        if (st === "cabin") {                          // timber lean-to, open front
+          rec.box([0, 1.0, 0], [2.0, 2.8, 2.6], [0.52, 0.40, 0.28]);
+          rec.prism([0, 2.7, 0], [2.6, 1.0, 2.8], roof);
+          rec.box([-side * 1.0, 0.9, 0], [0.12, 0.9, 2.6], [0.40, 0.31, 0.22]);
+        } else if (st === "container") {               // shipping container
+          rec.box([0, 1.0, 0], [2.4, 2.6, 5.4], [0.28, 0.44, 0.40]);
+          rec.box([0, 1.0, 0], [2.5, 1.0, 5.5], [0.22, 0.37, 0.34]);   // rib band
+          rec.box([-side * 1.2, 1.0, 1.4], [0.10, 2.0, 1.8], roof);
+        } else if (st === "kiosk") {                   // glazed booth, thin canopy
+          for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
+            rec.cyl([dr * 0.95, -0.35, dt * 0.95], 0.07, 2.9, [0.55, 0.56, 0.60], 4);
+          rec.box([0, 1.5, 0], [1.9, 1.5, 1.9], [0.32, 0.44, 0.52]);
+          rec.box([0, 2.6, 0], [2.6, 0.16, 2.6], roof);
+        } else if (st === "bunker") {                  // half-buried concrete cell
+          rec.box([0, 0.55, 0], [3.0, 1.9, 3.0], [0.70, 0.70, 0.67]);
+          rec.box([-side * 1.5, 0.95, 0], [0.14, 0.5, 2.2], [0.12, 0.13, 0.15]);
+          rec.box([0, 1.6, 0], [3.4, 0.3, 3.4], roof);
+          rec.box([side * 1.9, 0.25, 0], [1.6, 1.0, 3.4], [0.44, 0.40, 0.28]);
+        } else if (st === "tent") {                    // fabric awning on poles
+          for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
+            rec.cyl([dr * 1.1, -0.35, dt * 1.1], 0.06, 2.7, [0.60, 0.61, 0.64], 4);
+          rec.mat(MAT.FABRIC);
+          rec.prism([0, 2.6, 0], [2.8, 0.8, 2.8], roof);
+          rec.mat(0);
+        } else if (st === "tower") {                   // raised platform + ladder
+          for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
+            rec.cyl([dr * 1.0, -0.35, dt * 1.0], 0.09, 3.6, [0.46, 0.47, 0.50], 4);
+          rec.box([0, 3.3, 0], [2.6, 0.2, 2.6], [0.62, 0.63, 0.66]);
+          rec.box([0, 3.9, 0], [2.6, 0.9, 0.10], roof);
+          rec.box([side * 1.3, 1.6, 0], [0.10, 3.4, 0.6], [0.46, 0.47, 0.50]);
+        } else {                                       // hut (default)
+          rec.box([0, 1.1, 0], [2.2, 3.0, 2.2], [0.85, 0.86, 0.88]);   // base sunk 0.4
+          rec.box([0, 2.7, 0], [2.5, 0.4, 2.5], roof);
+        }
         rec.cyl([side * 1.4, -0.35, 0], 0.08, 4.35, [0.4, 0.4, 0.42], 4);   // base sunk
       }, { kind: "marshalPost", k, side });
       const polePos = vadd(p.c, p.r, side * 1.4);
@@ -242,18 +429,32 @@ const SceneryStructures = (function () {
         console.warn(`[scenery] cameraTower SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
         return;
       }
-      for (const sr of [-1, 1]) for (const st of [-1, 1]) {
-        const foot = vadd(vadd(p.c, p.r, sr * legR), p.t, st * legR);
-        addCyl(out, vadd(foot, p.u, h / 2 - 0.4), 0.13, h + 0.8, col, 4, b);
-      }
-      // X-bracing every ~3 m — what makes a lattice read as a lattice.
-      const bays = Math.max(1, Math.round(h / 3));
-      for (let i = 1; i < bays; i++) {
-        const y = (i / bays) * h;
-        for (const sr of [-1, 1])
-          addBox(out, vadd(vadd(p.c, p.r, sr * legR), p.u, y), [0.1, 0.12, legR * 2], col, b);
-        for (const st of [-1, 1])
-          addBox(out, vadd(vadd(p.c, p.t, st * legR), p.u, y), [legR * 2, 0.12, 0.1], col, b);
+      const cst = opts.style || kitOf("camera", "lattice");
+      if (cst === "monopole") {
+        // One tapered shaft — the modern broadcast mast. Cheapest form here.
+        addFrustum(out, vadd(p.c, p.u, -0.4), 0.46, 0.24, h + 0.8, col, 8, b);
+      } else if (cst === "scaffold") {
+        // Tube-and-clamp: two standards per side plus ledgers, temporary look.
+        for (const sr of [-1, 1]) for (const st of [-1, 1])
+          addCyl(out, vadd(vadd(vadd(p.c, p.r, sr * legR * 0.7), p.t, st * legR * 0.7),
+            p.u, h / 2 - 0.4), 0.09, h + 0.8, col, 4, b);
+        for (let i = 1; i < Math.max(2, Math.round(h / 2.2)); i++)
+          addBox(out, vadd(p.c, p.u, (i / Math.max(2, Math.round(h / 2.2))) * h),
+            [legR * 1.5, 0.09, legR * 1.5], col, b);
+      } else {
+        for (const sr of [-1, 1]) for (const st of [-1, 1]) {
+          const foot = vadd(vadd(p.c, p.r, sr * legR), p.t, st * legR);
+          addCyl(out, vadd(foot, p.u, h / 2 - 0.4), 0.13, h + 0.8, col, 4, b);
+        }
+        // X-bracing every ~3 m — what makes a lattice read as a lattice.
+        const bays = Math.max(1, Math.round(h / 3));
+        for (let i = 1; i < bays; i++) {
+          const y = (i / bays) * h;
+          for (const sr of [-1, 1])
+            addBox(out, vadd(vadd(p.c, p.r, sr * legR), p.u, y), [0.1, 0.12, legR * 2], col, b);
+          for (const st of [-1, 1])
+            addBox(out, vadd(vadd(p.c, p.t, st * legR), p.u, y), [legR * 2, 0.12, 0.1], col, b);
+        }
       }
       // Platform + rail
       addBox(out, vadd(p.c, p.u, h), [3.0, 0.2, 3.0], [0.52, 0.54, 0.58], b);
@@ -276,6 +477,7 @@ const SceneryStructures = (function () {
       const h = opts.h != null ? opts.h : 1.15;
       const step = opts.step || 9;
       const postCol = opts.postCol || [0.24, 0.25, 0.28];
+      const hst = opts.style || kitOf("hoarding", "panel");
       const pal = (opts.palette && opts.palette.length) ? opts.palette : [
         [0.86, 0.16, 0.14], [0.94, 0.92, 0.90], [0.10, 0.34, 0.72],
         [0.96, 0.76, 0.06], [0.12, 0.52, 0.30], [0.16, 0.17, 0.20],
@@ -288,11 +490,33 @@ const SceneryStructures = (function () {
         const panel = spacing * 0.92;
         const c = vadd(p.c, p.u, 0.45 + h / 2);
         if (rejBox(c, [0.16, h, panel], b)) return;
-        addBox(out, c, [0.16, h, panel], pal[idx % pal.length], b);
-        // Two stubby posts holding the board clear of the ground.
-        for (const st of [-1, 1])
-          addBox(out, vadd(vadd(p.c, p.t, st * panel * 0.36), p.u, 0.22),
-                 [0.13, 0.9, 0.14], postCol, b);
+        const col = pal[idx % pal.length];
+        if (hst === "banner") {                       // fabric slung between masts
+          out._mat = MAT.FABRIC;
+          addBox(out, vadd(c, p.u, 0.35), [0.08, h * 1.15, panel * 0.94], col, b);
+          out._mat = 0;
+          for (const st of [-1, 1])
+            addCyl(out, vadd(vadd(p.c, p.t, st * panel * 0.47), p.u, 0.5), 0.07, h + 1.4, postCol, 4, b);
+        } else if (hst === "barrierTop") {            // bolted to the armco, no posts
+          addBox(out, vadd(c, p.u, 0.35), [0.14, h * 0.9, panel], col, b);
+        } else if (hst === "double") {                // two-tier board
+          addBox(out, c, [0.16, h, panel], col, b);
+          addBox(out, vadd(c, p.u, h * 0.92), [0.16, h * 0.8, panel], pal[(idx + 1) % pal.length], b);
+          for (const st of [-1, 1])
+            addBox(out, vadd(vadd(p.c, p.t, st * panel * 0.36), p.u, 0.22),
+                   [0.13, 0.9, 0.14], postCol, b);
+        } else if (hst === "led") {                   // continuous emissive ribbon
+          const lit = NIGHT ? [Math.min(1.4, col[0] * 1.35 + 0.1), Math.min(1.4, col[1] * 1.35 + 0.1),
+                               Math.min(1.4, col[2] * 1.35 + 0.1)] : col;
+          addBox(out, c, [0.12, h, panel], lit, b);
+          addBox(out, vadd(c, p.u, h * 0.56), [0.2, 0.12, panel], postCol, b);
+        } else {
+          addBox(out, c, [0.16, h, panel], col, b);
+          // Two stubby posts holding the board clear of the ground.
+          for (const st of [-1, 1])
+            addBox(out, vadd(vadd(p.c, p.t, st * panel * 0.36), p.u, 0.22),
+                   [0.13, 0.9, 0.14], postCol, b);
+        }
         idx++;
       });
     };
