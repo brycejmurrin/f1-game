@@ -673,6 +673,17 @@ let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 // — no writes to speed/px/pz/head/(s,x). DEFAULT ON; disable apex26.caution="0".
 let _cautionOn = true;
 try { _cautionOn = (localStorage.getItem("apex26.caution") || "1") !== "0"; } catch (e) {}
+// Written by the CAUTIONS race setting and by __apex.caution({enabled}). Turning
+// it OFF must also DROP a flag that is already flying — otherwise the HUD keeps
+// showing a safety car that nothing is maintaining any more. resetCaution() is
+// declared later, so this is a function declaration (hoisted) rather than a
+// const, and the guard lets it be called before the race loop exists.
+function setCautionEnabled(on) {
+  _cautionOn = !!on;
+  try { localStorage.setItem("apex26.caution", _cautionOn ? "1" : "0"); } catch (e) {}
+  if (!_cautionOn) resetCaution();
+  return _cautionOn;
+}
 // level: 0 GREEN · 1 local YELLOW (sector) · 2 VSC · 3 SAFETY CAR.
 let caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
 // Last flag state broadcast to a networked guest, so only CHANGES are sent.
@@ -2519,6 +2530,7 @@ const G = {
   vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  setCautionEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
   get netLobby() { return netLobby; },
@@ -6816,6 +6828,22 @@ function buildRaceSettings() {
   // the event, so it lives in pause > SETTINGS > DRIVING next to GEARS — where
   // it can also be changed mid-race, which is when a player discovers they want
   // it. See refreshAeroBtn.)
+  // CAUTIONS — the flag layer. Hidden in a time trial for the same reason
+  // RELIABILITY is: alone on an empty track there is nothing to caution.
+  $("rs-caution-section").hidden = isTimeTrial();
+  const cauEl = $("rs-caution");
+  cauEl.innerHTML = "";
+  for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (_cautionOn === on ? " active" : "");
+    b.setAttribute("aria-pressed", _cautionOn === on ? "true" : "false");
+    b.textContent = label;
+    b.onclick = () => {
+      setCautionEnabled(on);
+      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
+    };
+    cauEl.appendChild(b);
+  }
   $("rs-reliab-section").hidden = isTimeTrial();
   const relEl = $("rs-reliab");
   relEl.innerHTML = "";

@@ -45,14 +45,22 @@
 
 #btn-boost { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); background: rgba(0, 150, 200, 0.4); }
 #btn-boost.on { background: rgba(0, 200, 90, 0.85); border-color: #aeea00; box-shadow: 0 0 18px rgba(120, 230, 80, 0.7); color: #04210a; }
-#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
-#btn-ot.armed { background: #aeea00; color: #0a0a0f; border-color: #aeea00; animation: pulse 0.8s infinite; }
-#btn-ot.on { background: var(--red); color: #fff; border-color: var(--red); }
+/* OT is YELLOW and AERO is GREEN, and each DARKENS when it is doing something.
+   One hue per control, brightness for state: you can tell what a button is by
+   its colour without reading it, and whether it is live without comparing it to
+   its neighbour. The old scheme spent three unrelated hues on OT alone (lime
+   armed, red active) and cyan on AERO, so every state change looked like a
+   different button rather than the same one switched on. */
+#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab));
+             background: rgba(240, 220, 110, 0.34); border-color: rgba(245, 228, 130, 0.55); color: #f8efbc; }
+#btn-ot.armed { background: #f0dc63; color: #2b2400; border-color: #f5e588; animation: pulse 0.8s infinite; }
+#btn-ot.on { background: #8a6c05; color: #fff6cf; border-color: #c19a10; box-shadow: 0 0 18px rgba(190, 150, 15, 0.65); }
 /* ACTIVE AERO sits one slot further along whichever column OT is in — every
    layout below moves the pair together, so the rule is "AERO is above OT". */
-#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: 12px; }
-#btn-aero.armed { border-color: rgba(125,249,255,0.8); color: #7df9ff; }
-#btn-aero.on { background: #22d3ee; color: #04212b; border-color: #22d3ee; box-shadow: 0 0 18px rgba(34,211,238,0.7); }
+#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: 12px;
+             background: rgba(130, 235, 150, 0.30); border-color: rgba(150, 240, 165, 0.5); color: #d3f7da; }
+#btn-aero.armed { background: #86e29a; color: #06280f; border-color: #a5edb4; }
+#btn-aero.on { background: #1c7539; color: #eaffef; border-color: #2fa055; box-shadow: 0 0 18px rgba(40, 170, 80, 0.65); }
 /* No activation zone anywhere on this circuit: the control cannot do anything,
    so it says so rather than sitting there inviting taps. Faded, not hidden —
    hiding it would reflow the touch-control stack and move every OTHER button
