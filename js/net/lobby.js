@@ -51,6 +51,11 @@ const NetLobby = (function () {
     const els = () => ({
       screen: $("vsfriend"),
       pick: $("vs-pick"), hosting: $("vs-hosting"), joining: $("vs-joining"),
+      room: $("vs-room"), roomStep: $("vs-room"),
+      raceSummary: $("vs-race-summary"), raceNote: $("vs-race-note"),
+      editRace: $("vs-edit-race"), editCar: $("vs-edit-car"),
+      me: $("vs-me"), them: $("vs-them"),
+      ready: $("vs-ready"), start: $("vs-start"),
       invite: $("vs-invite"), inviteIn: $("vs-invite-in"),
       answer: $("vs-answer"), answerIn: $("vs-answer-in"),
       answerHint: $("vs-answer-hint"), answerActions: $("vs-answer-actions"),
@@ -70,7 +75,7 @@ const NetLobby = (function () {
 
     function show(step) {
       const e = els();
-      for (const k of ["pick", "hosting", "joining"]) if (e[k]) e[k].hidden = (k !== step);
+      for (const k of ["pick", "hosting", "joining", "room"]) if (e[k]) e[k].hidden = (k !== step);
     }
 
     // ---- what we tell the other side about ourselves ----------------------
@@ -233,22 +238,52 @@ const NetLobby = (function () {
       clearInterval(pumpTimer);
       pumpTimer = setInterval(() => { if (session) session.pump(performance.now()); }, 25);
 
-      session.onEvent(NetPlay.EV.HELLO, (p) => { _peerProfile = _peerProfile || p; });
+      // The LATEST hello wins, not the first: a profile is re-sent every time
+      // someone changes team or livery in the waiting room, and keeping the
+      // first would race the rival's car in whatever they happened to be
+      // driving when the connection opened.
+      session.onEvent(NetPlay.EV.HELLO, (p) => { _peerProfile = p || _peerProfile; renderRoom(); });
       session.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest") applySettings(d); });
+      session.onEvent(NetPlay.EV.READY, (d) => { peerReady = !!(d && d.ready); renderRoom(); });
+      // GO is separate from SETTINGS on purpose. Settings now change LIVE while
+      // both players sit in the room, so "the host chose a track" and "the host
+      // pressed start" have to be different messages — they used to be the same
+      // one, which is why arriving settings launched the race immediately.
+      session.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
       session.sendEvent(NetPlay.EV.HELLO, localProfile());
+      if (role === "host") publishSettings();
+      openRoom();
+    }
 
-      if (role === "host") {
-        // The host owns the race setup: somebody has to, and splitting it
-        // between two people is a negotiation with no natural winner.
-        session.sendEvent(NetPlay.EV.SETTINGS, {
-          track: G.trackIdx,
-          laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
-          difficulty: G.difficulty,
-        });
-        beginRace();
-      } else {
-        say("Waiting for the host to pick the race…");
-      }
+    // ---- the waiting room -------------------------------------------------
+    // Both players sit here until the host starts. The host owns the race; each
+    // player owns their own car. Nothing here reimplements a picker: the
+    // buttons open the game's real #select / #race-settings / #carsetup
+    // screens, which is how custom teams, liveries and the parts budget come
+    // along for free rather than as a second, poorer copy.
+    let peerReady = false;
+    let selfReady = false;
+
+    function openRoom() {
+      selfReady = false;
+      peerReady = false;
+      show("room");
+      // The lobby is a dialog over the menu, and the room is where both players
+      // now wait — so it must survive the screens it opens.
+      if (G.setNetRoom) G.setNetRoom(true);
+      renderRoom();
+      say(role === "host"
+        ? "Pick the race, then start when you are both ready."
+        : "The host is picking the race. Choose your car.");
+    }
+
+    function publishSettings() {
+      if (!session || role !== "host") return false;
+      return session.sendEvent(NetPlay.EV.SETTINGS, {
+        track: G.trackIdx,
+        laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
+        difficulty: G.difficulty,
+      });
     }
 
     // Guest: adopt the host's race setup wholesale. Any track/laps/weather the
@@ -260,13 +295,108 @@ const NetLobby = (function () {
       if (d.weather != null) G.raceWeather = d.weather;
       if (d.tod != null) G.raceTimeOfDay = d.tod;
       if (d.difficulty != null) G.difficulty = d.difficulty;
+      renderRoom();
+    }
+
+    // Called by game.js when a player comes back from the garage or the race
+    // settings, so the other side sees the change without anyone pressing
+    // anything. A room that only updates on START would let two people spend a
+    // minute each choosing a car neither can see.
+    function roomChanged(what) {
+      if (!session) return false;
+      if (what === "car") session.sendEvent(NetPlay.EV.HELLO, localProfile());
+      else publishSettings();
+      // Changing your mind un-readies you — otherwise READY means "I was happy
+      // with something else".
+      if (selfReady) setReady(false);
+      renderRoom();
+      return true;
+    }
+
+    function setReady(v) {
+      selfReady = !!v;
+      if (session) session.sendEvent(NetPlay.EV.READY, { ready: selfReady });
+      renderRoom();
+    }
+
+    const TEAM_OF = (p) => (p && p.team && Teams.LIST.find((t) => t.id === p.team)) || null;
+
+    // team.color is an [r,g,b] triple in 0..1 — the renderer's format, not CSS.
+    // Handed to a style attribute raw it silently produces nothing.
+    function css(rgb) {
+      if (!Array.isArray(rgb)) return "#888";
+      const b = rgb.map((v) => Math.max(0, Math.min(255, Math.round(v * 255))));
+      return `rgb(${b[0]},${b[1]},${b[2]})`;
+    }
+
+    function driverLine(profile, label, ready) {
+      const team = TEAM_OF(profile);
+      const seat = profile ? (profile.driver || 0) : 0;
+      const d = team && team.drivers ? team.drivers[seat] : null;
+      // THREE-LETTER codes for both, the way a timing screen does it. Full
+      // names spend the column on "Scuderia Ferrari HP" and then truncate the
+      // driver — who is the part that says which of the two cars is theirs.
+      // The full text stays as a tooltip rather than being lost.
+      const who = team ? `${team.short} · ${d ? (d.code || d.name) : "—"}` : "choosing a car…";
+      const full = team ? `${team.name}${d ? " · " + d.name : ""}` : "still choosing";
+      const swatch = team ? `<span class="vs-swatch" style="background:${css(team.color)}"></span>` : "";
+      return `<span class="vs-who">${label}</span>${swatch}`
+        + `<span class="vs-car" title="${full}">${who}</span>`
+        + `<span class="vs-ready ${ready ? "on" : ""}">${ready ? "READY" : "choosing"}</span>`;
+    }
+
+    function renderRoom() {
+      const e = els();
+      if (!e.roomStep || e.roomStep.hidden) return;
+      const host = role === "host";
+      const track = (Tracks.LIST && Tracks.LIST[G.trackIdx]) || null;
+      const wx = G.raceWeather === "wet" ? "Wet" : G.raceWeather === "dry" ? "Dry" : "Mixed";
+      const tod = G.raceTimeOfDay && G.raceTimeOfDay !== "default"
+        ? G.raceTimeOfDay.charAt(0).toUpperCase() + G.raceTimeOfDay.slice(1) : "Default";
+      if (e.raceSummary) {
+        e.raceSummary.innerHTML =
+          `<div><dt>Circuit</dt><dd>${track ? (track.name || track.id) : "—"}</dd></div>`
+          + `<div><dt>Laps</dt><dd>${G.raceLaps}</dd></div>`
+          + `<div><dt>Weather</dt><dd>${wx}</dd></div>`
+          + `<div><dt>Time</dt><dd>${tod}</dd></div>`;
+      }
+      if (e.editRace) e.editRace.hidden = !host;
+      if (e.raceNote) {
+        e.raceNote.textContent = host ? "" : "The host chooses the circuit and conditions.";
+        e.raceNote.hidden = host;
+      }
+      if (e.me) e.me.innerHTML = driverLine(localProfile(), "You", selfReady);
+      if (e.them) e.them.innerHTML = driverLine(_peerProfile, "Them", peerReady);
+      if (e.ready) {
+        e.ready.textContent = selfReady ? "NOT READY" : "READY";
+        e.ready.setAttribute("aria-pressed", selfReady ? "true" : "false");
+      }
+      if (e.start) {
+        // Only the host can start, and only once both have said they are done
+        // choosing — a race that begins while someone is still in the garage
+        // puts them on the grid in a car they did not pick.
+        e.start.hidden = !host;
+        e.start.disabled = !(selfReady && peerReady);
+      }
+    }
+
+    function startFromRoom() {
+      if (role !== "host" || !session) return false;
+      if (!(selfReady && peerReady)) { say("Both drivers need to be ready.", true); return false; }
+      publishSettings();
+      session.sendEvent(NetPlay.EV.GO, {});
       beginRace();
+      return true;
     }
 
     // Start the race, THEN bind the session to it: NetPlay needs a built track
     // to find grid slots for the two drivers.
     function beginRace() {
       say("Starting race…");
+      // Out of the room: the game screens go back to behaving normally, or the
+      // next visit to the garage would try to return to a lobby that has been
+      // replaced by a Grand Prix.
+      if (G.setNetRoom) G.setNetRoom(false);
       try {
         // A friend race is a one-off Grand Prix, never a championship round
         // or a time trial. flow/session are the authority (game.js:587).
@@ -578,6 +708,13 @@ const NetLobby = (function () {
       on("vs-paste-invite", () => pasteInto("invite"));
       on("vs-paste-answer", () => pasteInto("answer"));
       on("vs-scan-cancel", () => { stopScan(); say(""); });
+      // The room opens the game's REAL screens. They return here because
+      // openGarage/openRaceSettings already take a return target, and game.js
+      // routes it back to this dialog while a session is in the room.
+      on("vs-edit-race", () => { if (role === "host" && G.openRaceSetup) G.openRaceSetup(); });
+      on("vs-edit-car", () => { if (G.openGarageFrom) G.openGarageFrom("vsfriend"); });
+      on("vs-ready", () => setReady(!selfReady));
+      on("vs-start", startFromRoom);
       on("vs-close", cancel);
       // A paste straight into the box runs too, so all four routes in behave
       // the same. Deferred a tick because the value is not in the textarea yet
@@ -626,6 +763,18 @@ const NetLobby = (function () {
       wire, open, close, cancel, host, join, makeAnswer, acceptAnswer,
       shareInvite, shareAnswer, canShare,
       scan, stopScan, pasteInto, deliver,
+      // Start watching for the channels to open. Normally called by
+      // makeAnswer/acceptAnswer; exported so a test can reach onConnected() —
+      // and therefore the waiting room — over a loopback transport, which has
+      // no SDP for the handshake to work with but IS open.
+      watchForOpen: waitForOpen,
+      // The waiting room. roomChanged() is game.js's way back in after a player
+      // returns from the garage or the race settings.
+      roomChanged, setReady, startFromRoom, renderRoom,
+      roomState: () => ({
+        open: !!(els().roomStep && !els().roomStep.hidden),
+        role, selfReady, peerReady, peer: _peerProfile,
+      }),
       localProfile, modsFromProfile, setTransportFactory,
       failureMsg,
       status: () => ({

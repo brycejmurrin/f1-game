@@ -40,8 +40,10 @@ const NetPlay = (function () {
   const INTERP_DELAY_MS = 100;            // how far in the past rivals are drawn
 
   const EV = {
-    HELLO: "hello",                       // profile exchange
-    SETTINGS: "settings",                 // host -> guest race setup
+    HELLO: "hello",                       // profile exchange — re-sent on every change
+    SETTINGS: "settings",                 // host -> guest race setup (live, in the room)
+    READY: "ready",                       // either way: I am done choosing
+    GO: "go",                             // host -> guest: leave the room, build the race
     START: "start",                       // host -> guest lights-out tick
     LAP: "lap",                           // completed lap / sector
     RESULT: "result",                     // final classification

@@ -1870,6 +1870,34 @@ const api = {
   },
   lobbyFakeConnected() { return !!_lobbyPeer; },
 
+  // lobbyWatch() — start the lobby's connect-watcher by hand. A loopback
+  // transport is open the moment it exists but has no RTCPeerConnection, so
+  // the handshake cannot run over it; this reaches onConnected() — and so the
+  // WAITING ROOM — without one.
+  lobbyWatch() {
+    if (!G.netLobby) return false;
+    G.netLobby.watchForOpen();
+    return true;
+  },
+
+  // lobbyPeerEvent(type, data) — send a lobby event AS THE OTHER PLAYER, the
+  // counterpart to netPeerEvent for the pre-race session. This is how a test
+  // plays the second person: their HELLO, their READY, the host's SETTINGS.
+  lobbyPeerEvent(type, data) {
+    if (!_lobbyPeer) return false;
+    const now = performance.now();
+    _lobbyPeer.pump(now);
+    const ok = _lobbyPeer.send("event", JSON.stringify({ t: type, d: data }));
+    _lobbyPeer.pump(now);
+    return ok;
+  },
+
+  // lobbyRoom() — the waiting room's state: who is ready, what the peer is
+  // driving, and whether the room is even open.
+  lobbyRoom() {
+    return G.netLobby ? G.netLobby.roomState() : null;
+  },
+
   // ── Driving the REAL handshake from a test ──────────────────────────────
   // These exist because the WebRTC path is the one part of multiplayer that no
   // in-process test can reach: the loopback transport has no SDP at all, and
