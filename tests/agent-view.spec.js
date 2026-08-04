@@ -1539,9 +1539,15 @@ test.describe("agentHelp()", () => {
     expect(notes).toContain("null");
     // the static/dynamic model note replaces the old whenToUse block
     expect(Object.keys(h.model).length).toBeGreaterThan(2);
-    // it is a manifest, not documentation — keep it cheap. It now maps the whole
+    // It is a manifest, not documentation — keep it cheap. It now maps the whole
     // toolkit (read hooks + control verbs), so a little larger, still bounded.
-    expect(JSON.stringify(h).length).toBeLessThan(5500);
+    //
+    // 6 KB, not the old 5500: measured 5474, and a ceiling seven bytes above the
+    // artefact is not a budget, it is a tripwire that fires on adding a word.
+    // What this has to stop is the manifest turning INTO the documentation —
+    // another whole section, not another clause — and 6 KB says that where 5500
+    // only said "you edited it".
+    expect(JSON.stringify(h).length).toBeLessThan(6000);
   });
 });
 

@@ -5,6 +5,13 @@ import { test, expect } from "@playwright/test";
 // you race, so it no longer carries the team editor. Opens the garage, saves,
 // and closes it again, leaving the caller back on the select screen exactly
 // where the old one-line #sel-customize click did.
+//
+// Getting back to #select is now two steps, not one. The garage is a STEP in
+// the flow rather than a side door: #select START -> garage -> garage DONE
+// goes FORWARD to RACE SETTINGS, which hides #select behind it. So DONE alone
+// leaves the caller on a screen where #sel-go has no box at all, and the next
+// click waits out the full timeout against a button that is right there in the
+// DOM. RACE SETTINGS' own BACK is what returns to the circuit picker.
 async function saveMyTeam(page, edit) {
   await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
@@ -16,6 +23,8 @@ async function saveMyTeam(page, edit) {
   await page.locator("#customize").waitFor({ state: "hidden" });
   await page.locator("#cs-done").click();
   await page.locator("#carsetup").waitFor({ state: "hidden" });
+  await page.locator("#rs-cancel").click();
+  await page.locator("#select").waitFor({ state: "visible" });
 }
 
 const LANDSCAPE = { width: 844, height: 390 };
@@ -83,7 +92,8 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   await page.waitForFunction(() => window.__customAtlases().length > 0);
   const firstTextureId = await page.evaluate(() => window.__customAtlases()[0]);
 
-  await page.locator("#cs-done").click();
+  await page.locator("#cs-done").click();      // garage DONE goes on to RACE SETTINGS...
+  await page.locator("#rs-cancel").click();    // ...and its BACK is the way to #select
   await saveMyTeam(page, () => page.locator("#cz-color").fill("#123456"));
 
   await page.locator("#sel-go").click();
@@ -104,6 +114,12 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
 });
 
 test("custom-team save frees every cached car-body mesh variant", async ({ page }) => {
+  // The longest single flow in the suite: two full trips through the garage and
+  // the custom-team editor, with a real race and two camera builds in between,
+  // all under SwiftShader. It measured 132 s against the 120 s default — and
+  // that default expiring mid-click reports as "the TEAM tab is not clickable",
+  // which reads like a UI defect and is not one. Give it room to be slow.
+  test.setTimeout(240_000);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
 
@@ -156,14 +172,23 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   await page.locator("#pm-quit").click();
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
+
+  // Freeze the set built for the OLD paint. What the save has to release is
+  // exactly this set — not "everything ever created", because saving repaints
+  // the car and the garage promptly builds a body for the NEW colour. Counting
+  // created-vs-freed at the end therefore always trails by the live mesh
+  // (measured: 3 created, 2 freed) and would report a working invalidation as a
+  // leak.
+  const stale = await page.evaluate(() => window.__customTeamMeshProbe.customMeshes.length);
+  expect(stale, "the race never built the chase + cockpit custom bodies").toBeGreaterThanOrEqual(2);
+
   await saveMyTeam(page, () => page.locator("#cz-color").fill("#123456"));
 
-  const counts = await page.evaluate(() => ({
-    created: window.__customTeamMeshProbe.customMeshes.length,
-    freed: window.__customTeamMeshProbe.freedMeshes.size,
-  }));
-  expect(counts.created).toBeGreaterThanOrEqual(2);
-  expect(counts.freed).toBe(counts.created);
+  const leaked = await page.evaluate((n) => {
+    const p = window.__customTeamMeshProbe;
+    return p.customMeshes.slice(0, n).filter((m) => !p.freedMeshes.has(m)).length;
+  }, stale);
+  expect(leaked, "a cached custom-team body mesh outlived the paint it was built for").toBe(0);
 });
 
 test("custom livery actions are independent keyboard buttons", async ({ page }) => {

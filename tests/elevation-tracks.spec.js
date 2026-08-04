@@ -165,6 +165,26 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
       page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
       await startRace(page, id);
       const r = await page.evaluate(() => {
+        // Reference flat-out top speed (measured, not a hardcoded VMAX) so the
+        // descent-overspeed check below is relative and survives a PACE/VMAX retune.
+        //
+        // MEASURED FIRST, BEFORE THE SCAN, because it has to be taken in clean
+        // air. The scan below steps 300 times — five seconds of real racing —
+        // and by the end of it the field has left the grid and is spread across
+        // the start line, which is exactly where this run begins. Taken after
+        // the scan on Monaco (shortest lap, densest pack) the player was jumped
+        // into the middle of the traffic and shoved 66 m BACKWARDS on the first
+        // tick: flatMax came out at 20.3 m/s, a first-corner speed rather than a
+        // top speed, and the descent below then "overspeeded" a reference that
+        // was never a top speed at all. Run here, nobody has moved yet and the
+        // start line is ahead of the whole grid.
+        let finite = true;
+        window.__apex.jump(0.0, 40, 0);
+        window.__apex.setInput({ steer: 0, throttle: true });
+        let flatMax = 0;
+        for (let i = 0; i < 180; i++) { window.__apex.step(1 / 60, 1); flatMax = Math.max(flatMax, window.__apex.physState().speed); }
+        window.__apex.clearInput();
+
         // Scan the lap for the steepest descent and climb (road pitch via slope).
         let dnAt = 0, dn = 0, upAt = 0, up = 0;
         for (let i = 0; i < 300; i++) {
@@ -174,14 +194,6 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
           if (s < dn) { dn = s; dnAt = f; }
           if (s > up) { up = s; upAt = f; }
         }
-
-        // Reference flat-out top speed (measured, not a hardcoded VMAX) so the
-        // descent-overspeed check below is relative and survives a PACE/VMAX retune.
-        let finite = true;
-        window.__apex.jump(0.0, 40, 0);
-        window.__apex.setInput({ steer: 0, throttle: true });
-        let flatMax = 0;
-        for (let i = 0; i < 180; i++) { window.__apex.step(1 / 60, 1); flatMax = Math.max(flatMax, window.__apex.physState().speed); }
 
         // Descent at top speed: gravity must not push meaningfully past the flat
         // top speed (start AT it so we measure overspeed, not deceleration).
@@ -231,6 +243,12 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
       expect(r.finite).toBe(true);
       expect(r.dn).toBeLessThan(0);                 // the track really does descend
       expect(r.up).toBeGreaterThan(0);              // and climb
+      // The reference must be a TOP speed — i.e. the car actually accelerated
+      // away from the 40 m/s it was launched at. Anything at or below that means
+      // the run was blocked (traffic, a barrier) and the ratio below would be
+      // comparing a real descent against a first-corner speed. Fail here, where
+      // the cause is legible, rather than one line down where it is not.
+      expect(r.flatMax, "flat-out reference run never accelerated — it was blocked").toBeGreaterThan(41);
       expect(r.maxV).toBeLessThan(r.flatMax * 1.35); // no descent runaway past flat top speed (gravity adds a little downhill, but doesn't run away)
       // Climbs freely (gravity isn't an invisible wall). The gain is modest on
       // tracks whose only grade is a shallow recovery (e.g. Bahrain's dip), large
