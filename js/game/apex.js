@@ -974,6 +974,28 @@ const api = {
     return c.money;
   },
   careerReset() { Career.clear(); G.refreshCareerButton(); return true; },
+  // ── Extra funds (a deliberate cheat) ──────────────────────────────────────
+  // Money stops being the constraint; the FITTED CAP does not move, so even a
+  // bottomless balance cannot put more on the car than the rules allow. Stored
+  // outside the save (`apex26.career.freeMoney`) — a preference about how you
+  // want to play, not a fact about one career.
+  careerFreeMoney(on) { return Career.freeMoney(on); },
+  // Hand the live career credits. No argument grants Career.GRANT.
+  careerGrant(n) { return Career.grant(n); },
+  // The open-ended research facility: the money sink that keeps working once the
+  // catalog is owned. Each level is a permanent cut to what research costs.
+  careerFacility(up) {
+    if (up) Career.upgradeFacility();
+    return { level: Career.facility(), max: Career.FACILITY_MAX,
+             cost: Career.facilityCost(), discount: Career.facilityDiscount() };
+  },
+  // MY TEAM's second seat. No argument reports whether a decision is pending;
+  // "renew" takes the driver's asking price, a free-agent CODE signs them.
+  careerHire(what) {
+    if (what === "renew") Career.renewHire(1);
+    else if (typeof what === "string") Career.hireDriver(what, 1);
+    return Career.hirePending();
+  },
   // ── Career SLOTS ──────────────────────────────────────────────────────────
   // SIX saves: three DRIVER slots and three MY TEAM slots, in separate sets
   // (`apex26.career.<flavour>.0..2`). A slot's address is both halves — an index

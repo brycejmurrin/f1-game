@@ -1669,3 +1669,248 @@ test.describe("Career — the guide", () => {
     expect(body).toContain(start.toLocaleString() + " cr");
   });
 });
+
+// ── the economy, made visible ────────────────────────────────────────────────
+// settleRound() computed prize money, salary, the points bonus, the brief and
+// the wage bill every round and the driven path threw all of it away. These pin
+// that it reaches the screen, and that the numbers on it are the ones the rules
+// actually applied.
+
+test.describe("Career — the settlement", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("a career round shows what it paid, and the total is the new balance", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    const before = await page.evaluate(() => window.__apex.careerState().money);
+    await goRacing(page);
+    await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
+    await expect(page.locator("#results")).toBeVisible({ timeout: 10_000 });
+    const box = page.locator(".res-settle");
+    await expect(box).toBeVisible();
+    await expect(box).toContainText("ROUND SETTLED");
+    // The total is the balance the save actually holds — not a number computed
+    // twice and allowed to drift.
+    const after = await page.evaluate(() => window.__apex.careerState().money);
+    await expect(box.locator(".total .res-settle-v")).toHaveText(after.toLocaleString() + " cr");
+    expect(after).not.toBe(before);
+  });
+
+  test("a Grand Prix never inherits a career round's earnings panel", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await goRacing(page);
+    await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
+    await expect(page.locator(".res-settle")).toBeVisible();
+    await page.locator("#res-menu").click();
+    await page.locator("#mb-race").click();
+    await page.locator("#sel-go").click();
+    await page.locator("#rs-go").click();
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
+    await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
+    await expect(page.locator("#results")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".res-settle")).toHaveCount(0);
+  });
+});
+
+// ── extra funds ──────────────────────────────────────────────────────────────
+
+test.describe("Career — extra funds", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("off by default, and the grant adds exactly what it says", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    expect(await page.evaluate(() => window.__apex.careerFreeMoney())).toBe(false);
+    const out = await page.evaluate(() => {
+      const before = window.__apex.careerState().money;
+      const after = window.__apex.careerGrant();
+      return { before, after, grant: Career.GRANT };
+    });
+    expect(out.after).toBe(out.before + out.grant);
+  });
+
+  test("unlimited money does NOT raise the fitted cap", async ({ page }) => {
+    // The whole point: money stops being the constraint, the cap does not move.
+    // If this ever fails, the cheat has eaten the rule the mode is built on.
+    await boot(page);
+    await startCareer(page);
+    const out = await page.evaluate(() => {
+      const capBefore = window.__apex.careerState().budget;
+      window.__apex.careerFreeMoney(true);
+      const st = window.__apex.careerState();
+      // Research everything the catalog has; free money should permit it...
+      let bought = 0;
+      for (const cat of Parts.CATALOG)
+        for (const o of cat.options) if (o.cost && Career.research(o)) bought++;
+      return { capBefore, capAfter: window.__apex.careerState().budget,
+               money: window.__apex.careerState().money, bought, owned: st.owned };
+    });
+    expect(out.bought).toBeGreaterThan(20);      // the cheat really did buy them
+    expect(out.money).toBeGreaterThan(0);        // ...and cost nothing
+    expect(out.capAfter).toBe(out.capBefore);    // but the cap is untouched
+  });
+
+  test("the toggle survives a reload and is not part of the save", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    await page.evaluate(() => window.__apex.careerFreeMoney(true));
+    // Not in the career object — it is a preference, not a fact about a career.
+    expect(await page.evaluate(() => window.__apex.career().freeMoney)).toBeUndefined();
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    expect(await page.evaluate(() => window.__apex.careerFreeMoney())).toBe(true);
+  });
+});
+
+// ── the facility ─────────────────────────────────────────────────────────────
+
+test.describe("Career — the facility", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("each level permanently cuts what research costs", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    const out = await page.evaluate(() => {
+      const opt = Parts.CATALOG.find((c) => c.id === "engine").options.find((o) => o.cost);
+      const before = Career.researchCost(opt);
+      window.__apex.careerMoney(999999);
+      const f1 = window.__apex.careerFacility(true);
+      const mid = Career.researchCost(opt);
+      window.__apex.careerFacility(true);
+      return { before, mid, after: Career.researchCost(opt), level: f1.level };
+    });
+    expect(out.level).toBe(1);
+    expect(out.mid).toBeLessThan(out.before);
+    expect(out.after).toBeLessThan(out.mid);
+  });
+
+  test("it runs out of levels, not of money", async ({ page }) => {
+    // The sink exists because ownership converges; it must therefore have a
+    // ceiling that is reached by LEVELS rather than by being unaffordable.
+    await boot(page);
+    await startCareer(page);
+    const out = await page.evaluate(() => {
+      window.__apex.careerMoney(9999999);
+      for (let i = 0; i < 20; i++) window.__apex.careerFacility(true);
+      return window.__apex.careerFacility();
+    });
+    expect(out.level).toBe(out.max);
+    expect(out.cost).toBeNull();                    // nothing left to buy
+    expect(out.discount).toBeGreaterThan(0.3);
+  });
+});
+
+// ── MY TEAM: the hire's contract ─────────────────────────────────────────────
+// roster[0].left was written at signing and read by NOTHING, so the one
+// relationship the mode is built on was a static number.
+
+test.describe("Career — the hire's contract", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("it expires, and an empty seat blocks the weekend", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "NKM", seed: 4242 }));
+    expect(await page.evaluate(() => window.__apex.careerHire())).toBeNull();  // under contract
+    await goRacing(page);
+    const pending = await page.evaluate(() => {
+      window.__apex.careerSim(24);
+      window.__apex.careerRollover();
+      return window.__apex.careerHire();
+    });
+    expect(pending).not.toBeNull();
+    expect(["renew", "left"]).toContain(pending.kind);
+    // The hub says so, and will not let the season start.
+    await page.evaluate(() => window.__apex.career(true));
+    await expect(page.locator("#cr-go")).toBeDisabled();
+    await expect(page.locator("#cr-go")).toHaveText("SIGN A DRIVER");
+  });
+
+  test("re-signing takes their asking price and clears the block", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "NKM", seed: 4242 }));
+    await goRacing(page);
+    const out = await page.evaluate(() => {
+      window.__apex.careerSim(24);
+      window.__apex.careerRollover();
+      const p = window.__apex.careerHire();
+      if (!p || p.kind !== "renew") return { skipped: true, kind: p && p.kind };
+      window.__apex.careerHire("renew");
+      return { ask: p.ask, salary: window.__apex.career().roster[0].salary,
+               pending: window.__apex.careerHire() };
+    });
+    if (out.skipped) { expect(out.kind).toBe("left"); return; }
+    expect(out.salary).toBe(out.ask);
+    expect(out.pending).toBeNull();
+  });
+
+  test("signing somebody else replaces the seat and its wage", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "NKM", seed: 4242 }));
+    await goRacing(page);
+    const out = await page.evaluate(() => {
+      window.__apex.careerSim(24);
+      window.__apex.careerRollover();
+      window.__apex.careerHire("OKO");
+      const st = window.__apex.careerState();
+      return { code: st.roster[0].code, wages: st.wages,
+               ask: Career.freeAgents().find((a) => a.code === "OKO").ask,
+               pending: window.__apex.careerHire() };
+    });
+    expect(out.code).toBe("OKO");
+    expect(out.wages).toBe(out.ask);
+    expect(out.pending).toBeNull();
+  });
+
+  test("a driver career has no hire to resolve", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    expect(await page.evaluate(() => window.__apex.careerHire())).toBeNull();
+  });
+});
+
+// ── MY TEAM: sponsors ────────────────────────────────────────────────────────
+
+test.describe("Career — sponsors", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("MY TEAM has one and a driver career does not", async ({ page }) => {
+    await boot(page);
+    await startCareer(page);
+    expect(await page.evaluate(() => window.__apex.careerState().sponsor)).toBeNull();
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 7 }));
+    const sp = await page.evaluate(() => window.__apex.careerState().sponsor);
+    expect(sp).not.toBeNull();
+    expect(sp.window).toBeGreaterThan(1);          // a season-long brief, not a weekend one
+    expect(sp.pay).toBeGreaterThan(0);
+    expect(sp.label.length).toBeGreaterThan(10);
+    await expect(page.locator("#cr-left")).toContainText("SPONSOR");
+  });
+
+  test("it is drawn from the seed, so a reload cannot reroll it", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 7 }));
+    const a = await page.evaluate(() => window.__apex.careerState().sponsor.label);
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    expect(await page.evaluate(() => window.__apex.careerState().sponsor.label)).toBe(a);
+  });
+
+  test("a window pays at most once across a whole season", async ({ page }) => {
+    // paidSponsors is what stops a reload double-paying and an unmet window
+    // being retried by replaying the round.
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 7 }));
+    await goRacing(page);
+    const out = await page.evaluate(() => {
+      const rounds = window.__apex.careerSim(24) || [];
+      const paid = rounds.filter((r) => r.sponsorPay > 0);
+      const c = window.__apex.career();
+      return { paidRounds: paid.length, windows: c.paidSponsors.length,
+               unique: new Set(c.paidSponsors).size };
+    });
+    expect(out.windows).toBeGreaterThan(0);
+    expect(out.unique).toBe(out.windows);          // never recorded twice
+    expect(out.paidRounds).toBeLessThanOrEqual(out.windows);
+  });
+});

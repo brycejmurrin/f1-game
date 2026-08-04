@@ -339,6 +339,7 @@ function start(opts) {
     money: START_MONEY[flavour],
     rep: START_REP[flavour],
     budgetLvl: 0,
+    facility: 0,          // the open-ended research facility
     season: { round: 0, pts: {}, teamPts: {}, driverCodes: {} },
     results: [],
     owned: Object.values(factory),
@@ -346,6 +347,7 @@ function start(opts) {
     deal: null,             // filled by contract() below
     offers: [],
     dev: {}, tdev: {}, seats: {},
+    moves: [],            // what the winter market did, for the season summary
     obj: null,
     history: [],
     // MY TEAM only. You own the team and drive one of its two cars; `roster` is
@@ -356,18 +358,25 @@ function start(opts) {
   if (flavour === "myteam") {
     const hired = FREE_AGENTS.find((a) => a.code === o.hire) || FREE_AGENTS[FREE_AGENTS.length - 3];
     career.roster = [{ name: hired.name, code: hired.code, num: hired.num,
-                       tier: hired.tier, salary: hired.ask, left: 1 }];
+                       tier: hired.tier, salary: hired.ask, left: 1, pending: null }];
   }
   career.deal = newDeal(team, 1);
   return save();
 }
 
 // ---------- contract ----------
-// Salary rises with reputation and falls with the quality of the car you are given:
-// a back-marker has to pay you more to sign, which is both true to life and the
-// mechanism that stops an early career being unwinnable.
+// Salary rises with reputation and RISES as the car gets worse: a back-marker has
+// to pay more to get anyone to sign, and that is the mechanism that stops an
+// early career being unwinnable.
+//
+// The tier term used to read `(4 - team.tier) * 15`, which is the opposite of
+// what the sentence above describes — tier 0 is the BEST car, so the best seat
+// paid the most and the worst paid the least. tools/career-economy.mjs is what
+// caught it: a tier-4 season earned 4.0-4.8k against a tier-3 season's 5.8-7.5k,
+// so the slowest cars on the grid also earned ~35% less to fix themselves with.
+// The mode already hands them the disadvantage; the economy was compounding it.
 function salaryFor(team, rep) {
-  return Math.round(20 + rep * 1.2 + (4 - team.tier) * 15);
+  return Math.round(20 + rep * 1.2 + team.tier * 15);
 }
 function newDeal(team, years) {
   return {
@@ -481,7 +490,12 @@ function isOwned(teamId, optId) {
   const s = owned(teamId);
   return s ? s.has(optId) : true;
 }
-function researchCost(opt) { return (opt.cost || 0) * RESEARCH_MULT; }
+// The facility's discount lands HERE rather than at the point of sale, so the
+// garage's RESEARCH price and what the balance is actually charged can never
+// disagree — the row shows the number the player pays.
+function researchCost(opt) {
+  return Math.round((opt.cost || 0) * RESEARCH_MULT * (1 - facilityDiscount()));
+}
 
 // What the team's own works car costs to build — the baseline every career budget
 // is measured against. Memoised per team: Parts.getFactorySetup is already cached,
@@ -508,12 +522,41 @@ function budgetUpgradeCost() {
   return career && career.budgetLvl < BUDGET_UPGRADE.length ? BUDGET_UPGRADE[career.budgetLvl] : null;
 }
 
+// ---------- extra funds ----------
+// A deliberate cheat, and stored OUTSIDE the save (`apex26.career.freeMoney`)
+// because it is a preference about how you want to play, not a fact about one
+// career — turning it on should not be something you have to redo per slot, and
+// deleting a career should not silently re-arm the economy.
+//
+// The career garage hides FREE BUILD precisely because an unlimited parts budget
+// would hand away the economy the mode is built on. This is the same trade made
+// explicit and reversible instead of hidden: money stops being scarce, the
+// FITTED CAP does not move, and every other rule stands. So an unlimited balance
+// still cannot put more on the car than the cap allows — which is the constraint
+// that actually makes a weekend a choice.
+const GRANT = 5000;
+function freeMoney(on) {
+  if (on !== undefined) store.set("career.freeMoney", !!on);
+  return !!store.get("career.freeMoney", false);
+}
+// Hand yourself credits. Returns the new balance, or null with no career loaded.
+function grant(n) {
+  if (!career) return null;
+  career.money += Math.max(0, Math.round(Number(n) || GRANT));
+  save();
+  return career.money;
+}
+// What a purchase actually costs the balance. Zero under free money, so the
+// ownership and cap rules below run completely unchanged — there is no second
+// code path for a cheated career to diverge down.
+const charge = (cost) => (freeMoney() ? 0 : cost);
+
 // Buy an option outright. Returns false when it cannot be afforded or is already
 // owned, so the caller can play the existing budget-reject animation.
 function research(opt) {
   if (!career || !opt) return false;
   if (career.owned.indexOf(opt.id) >= 0) return false;
-  const cost = researchCost(opt);
+  const cost = charge(researchCost(opt));
   if (cost > career.money) return false;
   career.money -= cost;
   career.owned.push(opt.id);
@@ -521,10 +564,127 @@ function research(opt) {
   return true;
 }
 function upgradeBudget() {
-  const cost = budgetUpgradeCost();
-  if (!career || cost == null || cost > career.money) return false;
+  const cost = charge(budgetUpgradeCost());
+  if (!career || budgetUpgradeCost() == null || cost > career.money) return false;
   career.money -= cost;
   career.budgetLvl++;
+  save();
+  return true;
+}
+
+// ---------- MY TEAM: sponsors ----------
+// A driver is paid a salary; an owner is paid by SPONSORS. That is the second
+// income the two modes should not share, and it is the one thing MY TEAM had
+// nothing of — it started with more money and then earned exactly like a driver.
+//
+// A sponsor is a MULTI-ROUND brief. The per-round objective already asks "how
+// did this weekend go"; a sponsor asks "how is the season going", which is the
+// question a team principal is actually judged on. Deliberately built out of the
+// same parts as the round objective rather than a second system: a type, a
+// value, and a pure draw off the career seed.
+const SPONSOR_KINDS = [
+  // Every one is measured over a WINDOW of consecutive rounds, so a single lucky
+  // weekend cannot pay it and a single bad one does not sink it.
+  { type: "points", window: 5, value: (t) => Math.max(2, 14 - t.tier * 2), pay: 600 },
+  { type: "finishes", window: 4, value: () => 3, pay: 450 },
+  { type: "double", window: 6, value: () => 2, pay: 800 },
+  { type: "clean", window: 4, value: () => 4, pay: 400 },
+];
+const SPONSOR_LABELS = {
+  points: (v, w) => "Score " + v + " points across " + w + " rounds",
+  finishes: (v, w) => "Finish " + v + " of the next " + w + " rounds in the points",
+  double: (v, w) => "Get BOTH cars home in the points " + v + " times in " + w + " rounds",
+  clean: (v, w) => "Keep it clean — no retirements, no penalties — for " + w + " rounds",
+};
+function sponsorLabel(sp) {
+  const f = sp && SPONSOR_LABELS[sp.type];
+  return f ? f(sp.value, sp.window) : "";
+}
+
+// The deal running right now, drawn once per window and pure in (seed, year,
+// windowIndex) so it survives a reload and cannot be rerolled.
+function sponsor() {
+  if (!inCareer() || career.flavour !== "myteam") return null;
+  const team = Teams.LIST.find((t) => t.id === career.team) || { tier: 2 };
+  // Which window we are in. Windows tile the season from round 0.
+  const round = career.season.round;
+  let start = 0, idx = 0, kind = null;
+  while (start <= round) {
+    const i = Math.floor(rnd(career.year, "spon", idx) * SPONSOR_KINDS.length);
+    kind = SPONSOR_KINDS[Math.min(i, SPONSOR_KINDS.length - 1)];
+    if (start + kind.window > round) break;
+    start += kind.window;
+    idx++;
+  }
+  if (!kind) return null;
+  const value = kind.value(team);
+  // Progress is read off the results the season already recorded — no second
+  // ledger to keep in step, and a settled round counts the moment it settles.
+  const rows = (career.results || []).filter((r) => r.r >= start && r.r < start + kind.window);
+  let done = 0;
+  for (const r of rows) {
+    if (kind.type === "points") done += r.pts || 0;
+    else if (kind.type === "finishes") done += (r.pts || 0) > 0 ? 1 : 0;
+    else if (kind.type === "double") done += r.double ? 1 : 0;
+    else if (kind.type === "clean") done += (!r.dnf && r.clean) ? 1 : 0;
+  }
+  const need = kind.type === "points" ? value : kind.type === "clean" ? kind.window : value;
+  return {
+    type: kind.type, value, window: kind.window, pay: kind.pay,
+    start, end: start + kind.window - 1, idx,
+    done, need, met: done >= need,
+    roundsLeft: Math.max(0, start + kind.window - 1 - round),
+    label: sponsorLabel({ type: kind.type, value, window: kind.window }),
+  };
+}
+// Paid ONCE, at the round that closes the window, and only if it was met.
+// `career.paidSponsors` records which windows have paid so a reload cannot
+// double-pay and an unmet window cannot be retried by replaying the round.
+function settleSponsor() {
+  const sp = sponsor();
+  if (!sp || career.season.round - 1 < sp.end) return 0;
+  career.paidSponsors = career.paidSponsors || [];
+  if (career.paidSponsors.indexOf(sp.idx) >= 0) return 0;
+  career.paidSponsors.push(sp.idx);
+  if (!sp.met) return 0;
+  career.money += sp.pay;
+  return sp.pay;
+}
+
+// ---------- the facility: the sink that does not run out ----------
+// Ownership only ever grows and the budget ladder stops at three, so a
+// successful career converged on owning the whole catalog with nothing left to
+// spend on — the mode had no end game. FACILITY is an open-ended track that
+// keeps buying something real: each level is a permanent slice off what research
+// costs, so late money still converts into progress rather than sitting there.
+//
+// Priced to stay meaningful against a maxed-out career rather than to be
+// finished: the cost grows geometrically while the discount grows linearly and
+// is capped, so it is always affordable-in-principle and never trivialises the
+// catalog.
+const FACILITY_MAX = 8;
+const FACILITY_BASE = 3000;
+const FACILITY_STEP = 1.6;          // each level costs 1.6x the last
+const FACILITY_DISCOUNT = 0.05;     // per level, off research cost
+const FACILITY_DISCOUNT_MAX = 0.40;
+
+function facility() { return career ? clamp(career.facility | 0, 0, FACILITY_MAX) : 0; }
+function facilityCost() {
+  const lvl = facility();
+  return lvl >= FACILITY_MAX ? null
+    : Math.round(FACILITY_BASE * Math.pow(FACILITY_STEP, lvl) / 50) * 50;
+}
+// What the facility takes off a research bill, 0..FACILITY_DISCOUNT_MAX.
+function facilityDiscount() {
+  return Math.min(FACILITY_DISCOUNT_MAX, facility() * FACILITY_DISCOUNT);
+}
+function upgradeFacility() {
+  const raw = facilityCost();
+  if (!career || raw == null) return false;
+  const cost = charge(raw);
+  if (cost > career.money) return false;
+  career.money -= cost;
+  career.facility = facility() + 1;
   save();
   return true;
 }
@@ -644,10 +804,21 @@ function settleRound(order, player) {
   // came apart. Classification (and therefore prize money) already handles the
   // cost of it — a retirement is last, and last pays the tail.
   const dnf = player.retired ? (player.dnf || "mechanical") : null;
-  career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf });
+  // Two extra facts the SPONSOR windows read. Recorded here rather than derived
+  // later because the cars are live right now and will not be by the time the
+  // window closes: `double` is both your cars in the points (MY TEAM only), and
+  // `clean` is the same test the round objective uses.
+  const matePts = mate ? (Teams.POINTS[order.indexOf(mate)] || 0) : 0;
+  const dbl = career.flavour === "myteam" && pts > 0 && matePts > 0;
+  const cleanRun = !player.retired && !(player.cuts | 0) && !(player.penalty | 0);
+  career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf,
+                        double: dbl, clean: cleanRun });
   career.obj = null;          // the next round draws its own brief on demand
+  // A sponsor pays after the round is on the books, because that round is what
+  // closes its window.
+  const sponsorPay = settleSponsor();
   save();
-  return { pos, pts, prize, salary, bonus, wages, obj, dnf,
+  return { pos, pts, prize, salary, bonus, wages, obj, dnf, sponsorPay,
            money: career.money, rep: career.rep };
 }
 
@@ -770,6 +941,11 @@ const TOP_TIER = 1;      // tier 0-1: the seats worth taking
 const MID_TIER = 3;      // tier 2-3: where the climbers are
 
 function rolloverMarket() {
+  // The moves are RECORDED, not just made. The market has always swapped seats
+  // and the player never learned about it — the grid simply looked different
+  // next year, which reads as the game being inconsistent rather than as a
+  // story. `career.moves` is what the season summary prints.
+  career.moves = [];
   const swaps = Math.floor(rnd(career.year, "mkt", "n") * 3);   // 0, 1 or 2
   for (let i = 0; i < swaps; i++) {
     // Recomputed each pass: a swap changes who the weakest top-team driver is, so
@@ -783,6 +959,12 @@ function rolloverMarket() {
     // Nobody has earned the move — a swap that downgrades the top team is a bug,
     // not a story, and this is also the natural stop after the first trade.
     if (!top || !mid || rate(mid) <= rate(top)) break;
+    career.moves.push({
+      code: mid.driver.code, name: mid.driver.name,
+      from: mid.team.id, fromName: mid.team.name,
+      to: top.team.id, toName: top.team.name,
+      out: top.driver.code, outName: top.driver.name,
+    });
     swapSeats(top, mid);
   }
 }
@@ -795,6 +977,73 @@ function swapSeats(a, b) {
   const da = career.dev[a.id], db = career.dev[b.id];
   if (db) career.dev[a.id] = db; else delete career.dev[a.id];
   if (da) career.dev[b.id] = da; else delete career.dev[b.id];
+}
+
+// ---------- MY TEAM: the hire's contract ----------
+// A hired driver is on a deal like anyone else. At the end of a season theirs
+// ticks down, and when it expires one of three things happens — they ask for
+// more, they walk, or they re-sign at the same money. Which one is not a die
+// roll: it follows what the seat was actually worth to them.
+const HIRE_MIN = 12;          // nobody drives for nothing
+const HIRE_RAISE_MAX = 0.45;  // the steepest ask a good year can produce
+
+// What a driver thinks the seat is worth next year, from what THEY did in it.
+// Beating the car's expectation is worth money; being beaten by it is a pay cut.
+function hireAsk(hire, pos, expected) {
+  const beat = clamp((expected - pos) / 8, -0.35, HIRE_RAISE_MAX);
+  return Math.max(HIRE_MIN, Math.round((hire.salary || HIRE_MIN) * (1 + beat)));
+}
+
+// Runs at the rollover, before offers are drawn. Writes `pending` onto the hire
+// rather than resolving it: the DECISION is the player's, and the hub is where
+// they make it. A hire with nothing pending is simply under contract.
+function rolloverHire(dStand) {
+  if (career.flavour !== "myteam" || !career.roster || !career.roster[0]) return;
+  const hire = career.roster[0];
+  if (hire.left > 0) hire.left--;
+  if (hire.left > 0) { hire.pending = null; return; }
+  const team = Teams.LIST.find((t) => t.id === career.team);
+  const id = seasonDriverId(career.team, 1);
+  const rowOf = dStand.find((r) => r.id === id);
+  const pos = rowOf ? rowOf.pos : dStand.length;
+  const expected = team ? tierFinish(team) : 12;
+  // A driver who had a genuinely good year in a startup team gets looked at by
+  // the rest of the grid, and sometimes simply goes. Deterministic off the
+  // career seed, and only ever possible when they OUTPERFORMED — losing a driver
+  // who was beaten all year would read as a bug rather than a story.
+  const poached = pos < expected - 4
+    && rnd(career.year, "hire", "poach") < 0.35;
+  hire.pending = poached
+    ? { kind: "left", ask: 0 }
+    : { kind: "renew", ask: hireAsk(hire, pos, expected) };
+}
+
+// Take the pending offer: pay the new figure and re-sign for a year.
+function renewHire(years) {
+  const hire = career.roster && career.roster[0];
+  if (!hire || !hire.pending || hire.pending.kind !== "renew") return false;
+  hire.salary = hire.pending.ask;
+  hire.left = clamp(years | 0 || 1, 1, 3);
+  hire.pending = null;
+  save();
+  return true;
+}
+// Sign somebody else from the market. The seat is empty either way once a
+// contract has expired, so this is also how a "left" is resolved.
+function hireDriver(code, years) {
+  if (career.flavour !== "myteam") return false;
+  const a = FREE_AGENTS.find((x) => x.code === code);
+  if (!a) return false;
+  career.roster = [{ name: a.name, code: a.code, num: a.num, tier: a.tier,
+                     salary: a.ask, left: clamp(years | 0 || 1, 1, 3), pending: null }];
+  save();
+  return true;
+}
+// Whether the seat needs a decision before the season can start.
+function hirePending() {
+  const hire = career.roster && career.roster[0];
+  return hire && hire.pending ? Object.assign({ code: hire.code, name: hire.name,
+    salary: hire.salary }, hire.pending) : null;
 }
 
 // ---------- contracts ----------
@@ -928,6 +1177,10 @@ function rollover() {
   // being allowed to drive your own car, and counting to zero only ever showed
   // "Seasons left 0" on the hub for the rest of the save.
   if (career.flavour !== "myteam" && career.deal && career.deal.left > 0) career.deal.left--;
+  // YOUR HIRE'S contract does run. `left` was written when they were signed and
+  // then read by nothing at all — the driver could never be renewed, replaced or
+  // lost, which made the one relationship MY TEAM is built on a static number.
+  rolloverHire(dStand);
   career.offers = makeOffers(mv);
 
   career.year++;
@@ -942,7 +1195,7 @@ function rollover() {
   career.obj = null;
   save();
   return { year: career.year, champion: entry.champion, summary: entry,
-           offers: career.offers, history: career.history };
+           offers: career.offers, history: career.history, moves: career.moves };
 }
 
 // ---------- calendar ----------
@@ -961,14 +1214,17 @@ function state() {
     team: career.team, teamName: team ? team.name : career.team,
     money: career.money, rep: career.rep,
     budget: budget(), budgetLvl: career.budgetLvl,
+    facility: facility(), facilityCost: facilityCost(),
+    facilityDiscount: facilityDiscount(),
     owned: career.owned.length,
     deal: career.deal, obj: objective(),
     // Retirements this season, off the same results rows the archive counts wins
     // and podiums from — a season's reliability record with no second ledger.
     dnfs: career.results.filter((r) => r.dnf).length,
     // MY TEAM only; null in a driver career, where you are the wage bill.
-    roster: career.roster, wages: wageBill(),
-    offers: career.offers.length,
+    roster: career.roster, wages: wageBill(), hire: hirePending(),
+    sponsor: sponsor(),
+    offers: career.offers.length, moves: (career.moves || []).length,
     seasons: career.history.length,
     slot: slotIdx, slotFlavour,
     slotsUsed: slots(career.flavour).filter((s) => s.used).length,
@@ -981,12 +1237,16 @@ return {
   OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX,
   SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, anySave, firstFree,
   data, active, inCareer, engage, load, save, clear, start, state, rnd, hash,
+  GRANT, freeMoney, grant,
+  sponsor, sponsorLabel, settleSponsor,
+  FACILITY_MAX, facility, facilityCost, facilityDiscount, upgradeFacility,
+  renewHire, hireDriver, hirePending, HIRE_MIN,
   salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
   objective, objectiveFor, objectiveLabel, prizeFor, settleRound, worksCost,
-  driverStandings, teamStandings, rollover, offers, acceptOffer, marketValue,
+  driverStandings, teamStandings, rollover, offers, acceptOffer, marketValue, offerBar,
   round, roundsTotal, seasonDone, trackIndex,
 };
 })();

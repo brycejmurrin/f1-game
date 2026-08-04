@@ -615,6 +615,10 @@ const isQuali = () => session === "quali";
 // The full field as it was before startRace() narrowed `cars` to the lone
 // qualifying car — Quali.simulate() needs every car to build a classification.
 let qualiField = null;
+// What the last career round paid, straight off Career.settleRound(). Null
+// outside career and cleared at the top of every classification, so a Grand Prix
+// can never inherit a career weekend's earnings panel.
+let careerSettlement = null;
 const isCareer = () => flow === "career";
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
@@ -1916,6 +1920,7 @@ function endRace(forcedOrder) {
     return;
   }
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
+  careerSettlement = null;   // whatever the last career round paid is not this race's news
   // classification: finished by time(+penalty), still running by progress, and
   // RETIREMENTS below both — ordered among themselves by how far they got, which
   // is the only thing that separates two cars that never saw the flag.
@@ -1966,7 +1971,12 @@ function endRace(forcedOrder) {
     // lets buildResults/buildStandings/the HUD work in career untouched). Persist
     // through the career save, or this would overwrite the standalone SEASON save
     // with career's standings.
-    if (isCareer()) { Career.save(); Career.settleRound(order, player); }
+    // KEEP the settlement. It was being computed and thrown away: prize money,
+    // salary, the points bonus, the brief and the wage bill all resolved here and
+    // the player saw only a changed balance on the next screen. buildResults()
+    // renders it, which is the one place the economy is legible at the moment it
+    // actually moves.
+    if (isCareer()) { Career.save(); careerSettlement = Career.settleRound(order, player); }
     else store.set("season", season);
   }
   dbgCam = null;
@@ -2002,6 +2012,7 @@ const G = {
   // The career SAVE lives in js/game/career.js, which owns it outright — this is a
   // read-through so there is exactly one copy, never a stale mirror in a closure.
   get career() { return Career.data(); },
+  get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
   openCareerSlots: (...a) => openCareerSlots(...a),
   get seasonMode() { return isChampionship(); },
