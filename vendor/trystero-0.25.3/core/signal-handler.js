@@ -1,7 +1,7 @@
-import { all, candidateType, fromJson, genId, mkErr, resetTimer, selfId, toJson, topicPath } from "./utils.mjs";
-import { sha1 } from "./crypto.mjs";
-import { offerTtl } from "./offer-pool.mjs";
-import { getConnectedPeerHealth } from "./shared-peer.mjs";
+import { all, candidateType, fromJson, genId, mkErr, resetTimer, selfId, toJson, topicPath } from "./utils.js";
+import { sha1 } from "./crypto.js";
+import { offerTtl } from "./offer-pool.js";
+import { getConnectedPeerHealth } from "./shared-peer.js";
 //#region src/signal-handler.ts
 const offerPostAnswerTtlMs = 23333;
 const offerIdSize = 12;

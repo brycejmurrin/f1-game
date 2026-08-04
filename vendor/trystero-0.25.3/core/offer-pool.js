@@ -1,4 +1,4 @@
-import { all, alloc, noOp, resetTimer } from "./utils.mjs";
+import { all, alloc, noOp, resetTimer } from "./utils.js";
 //#region src/offer-pool.ts
 const offerTtl = 57333;
 const offerLeaseTtlMs = 18e4;

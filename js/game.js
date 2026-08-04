@@ -22,7 +22,7 @@ const els = {
   selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"),
   selPreviewRec: $("sel-preview-rec"),
   selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"),
-  selBack: $("sel-back"), selGo: $("sel-go"),
+  selBack: $("sel-back"), selGo: $("sel-go"), selLeft: $("sel-left"),
   customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
   resultsTable: $("results-table"), resMenu: $("res-menu"), resNext: $("res-next"),
@@ -2117,7 +2117,7 @@ function startRace() {
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
   skidActive = 0; skidIdx = 0; skidFrameT = 0; _skidBatchDirty = true;
   Particles.clear();   // no stale smoke/spray teleporting into the new session
-  els.overlay.hidden = true; els.select.hidden = true; els.results.hidden = true;
+  clearMenuScreens();
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
@@ -2451,7 +2451,7 @@ const G = {
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   // The waiting room reuses the real menus rather than reimplementing them.
-  setNetRoom, openRaceSetup,
+  setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
   openGarageFrom: (from) => openGarage(from),
   startRace, startWeatherArc, update, wrapS,
 };
@@ -2505,6 +2505,28 @@ function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) +
 // Convert between an <input type=color> hex string and a [r,g,b] 0..1 array.
 function hexToArr(h) { const n = parseInt(String(h).slice(1), 16) || 0; return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; }
 function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16)).slice(-2); return "#" + f(a[0]) + f(a[1]) + f(a[2]); }
+
+// Every menu layer, gone. Until multiplayer, startRace() could name the three
+// screens a race is reachable FROM (#overlay, #select, #results), because the
+// player pressing GO was standing on one of them. In a VS FRIEND race the HOST
+// owns lights-out, so the guest can be anywhere when it lands — in the garage,
+// in the waiting room, reading the rules — and each of those stayed up over a
+// running race with the HUD and the pedals showing through it.
+//
+// So this asks the DOM which layers exist instead of keeping a list that the
+// next screen silently falls off. `.screen` is what every full-screen menu and
+// modal is marked with; #overlay (the title screen) and the two tuner panels
+// predate the class and are named individually.
+function clearMenuScreens() {
+  for (const el of document.querySelectorAll(".screen")) el.hidden = true;
+  for (const id of ["overlay", "lighting", "camtune"]) { const el = $(id); if (el) el.hidden = true; }
+  // The garage's 3D turntable keeps rendering while #carsetup is up; a race
+  // starting under it must stop that, or the preview draws over the track.
+  setupPreviewOn = false;
+  // Nothing to go back TO any more — the room this came from is now a race.
+  netRoom = false;
+  garageReturn = "select";
+}
 
 function quitToMenu() {
   PerfGov.sentinelArm(false);   // deliberate exit — not a crash
@@ -6652,6 +6674,10 @@ $("adv-close").onclick = () => { $("advanced").hidden = true; };
 // js/game/photomode.js (Photomode.create(G) — wired after the G façade).
 
 function buildRaceSettings() {
+  // In the room this screen confirms the host's choice and hands it to the
+  // other player — it does not drop the lights. A button saying RACE! there is
+  // a lie about what the next tap does.
+  $("rs-go").textContent = netRoom ? "CONFIRM" : "RACE!";
   const lapOpts = isTimeTrial() ? [3, 5, 8] : [3, 5, 10, 25, 57];
   const lapsEl = $("rs-laps");
   lapsEl.innerHTML = "";

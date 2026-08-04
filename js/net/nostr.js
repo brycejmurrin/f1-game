@@ -100,8 +100,16 @@ const NetNostr = (function () {
     let mod;
     try { mod = await load(); }
     catch (e) {
-      return { ok: false, error: "no_module",
-               message: "Could not load the room service. Use the invite link instead." };
+      // Carry the ACTUAL failure. "Could not load the room service" on its own
+      // is unreportable — it cannot distinguish a 404 from a MIME rejection
+      // from a blocked network, and those need completely different fixes.
+      // Reported from a real device, and the message left nothing to go on:
+      // the truth was a plain 404, because the deploy workflow never staged
+      // vendor/. Naming the exception would have pointed straight at it.
+      const why = (e && (e.message || String(e))) || "unknown";
+      return { ok: false, error: "no_module", detail: why,
+               message: "Could not load the room service (" + why.slice(0, 90) + ")."
+                      + " Use the invite link or QR instead." };
     }
 
     let room = null;

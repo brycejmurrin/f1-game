@@ -1,4 +1,4 @@
-import { all, alloc, candidateType, resetTimer, toError } from "./utils.mjs";
+import { all, alloc, candidateType, resetTimer, toError } from "./utils.js";
 //#region src/peer.ts
 const iceTimeout = 15e3;
 const disconnectedCloseDelayMs = 5e3;

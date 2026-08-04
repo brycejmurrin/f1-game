@@ -1,5 +1,5 @@
-import { genId, mkErr, resetTimer, selfId, toError, toErrorMessage, toHex } from "./utils.mjs";
-import { hashWith } from "./crypto.mjs";
+import { genId, mkErr, resetTimer, selfId, toError, toErrorMessage, toHex } from "./utils.js";
+import { hashWith } from "./crypto.js";
 //#region src/handshake.ts
 const overlapRoomPasswordErr = mkErr("incorrect password for overlapping room");
 const createPasswordHandshake = (password, appId, roomId) => {

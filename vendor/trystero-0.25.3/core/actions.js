@@ -1,5 +1,5 @@
-import { all, entries, genId, libName, mkErr, resetTimer, toError, toErrorMessage } from "./utils.mjs";
-import { createActionWireManager } from "./action-wire.mjs";
+import { all, entries, genId, libName, mkErr, resetTimer, toError, toErrorMessage } from "./utils.js";
+import { createActionWireManager } from "./action-wire.js";
 //#region src/actions.ts
 const requestHandlerBufferMs = 500;
 const makeActionError = (kind, message) => {

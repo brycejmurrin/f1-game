@@ -1,4 +1,4 @@
-import { decodeBytes, encodeBytes, libName, toHex } from "./utils.mjs";
+import { decodeBytes, encodeBytes, libName, toHex } from "./utils.js";
 //#region src/crypto.ts
 const algo = "AES-GCM";
 const strToSha1 = {};

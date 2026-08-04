@@ -166,6 +166,39 @@ test("silence is detected, and reported once", () => {
   assert.ok(closes.filter((c) => c === "timeout").length <= 1, "timeout must fire at most once");
 });
 
+test("a stall in OUR loop is not silence from THEM", () => {
+  // Reported from a real race, half a second after lights-out: the guest built
+  // the circuit — several seconds of blocked main thread on a phone, during
+  // which nothing pumps — and the first pump afterwards saw the whole stall as
+  // peer silence and announced RIVAL DISCONNECTED, handing a perfectly healthy
+  // rival back to the AI. The same shape covers a backgrounded tab and a GC
+  // pause. A gap in our own pumping says nothing about the other end.
+  const p = pair({ latency: 20 });
+  const closes = [];
+  p.a.onClose((why) => closes.push(why));
+  p.advance(600);
+  assert.equal(p.a.alive(), true, "talking before the stall");
+
+  // Both peers freeze for 10 s — far past timeoutMs — then resume together,
+  // exactly as two paused game loops do.
+  const t = p.now();
+  const after = t + 10000;
+  p.a.pump(after);
+  p.b.pump(after);
+  assert.equal(p.a.alive(), true, "a shared stall must not read as a disconnect");
+  assert.deepEqual(closes, []);
+
+  // ...and the connection carries on working.
+  for (let i = 1; i < 400; i++) { p.a.pump(after + i); p.b.pump(after + i); }
+  assert.equal(p.a.alive(), true, "still alive after the stall");
+
+  // The forgiveness must NOT make a real disconnect undetectable: once we are
+  // pumping normally again, silence still kills.
+  p.b.close();
+  for (let i = 400; i < 1500; i++) p.a.pump(after + i * 10);
+  assert.equal(p.a.alive(), false, "a genuine silence must still be caught");
+});
+
 test("a slow connect is never mistaken for a disconnect", () => {
   // The death clock only starts once the peer has actually been heard from.
   // Otherwise a session that takes 3 s to establish would kill itself.

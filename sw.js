@@ -52,8 +52,8 @@ async function precacheAssetLists() {
     // the importmap for the room-code path only. OPTIONAL for the same reason
     // as three.js: most sessions never open a room code, and an install must
     // not fail over ~170 KB they will not run.
-    "vendor/trystero-0.25.3/nostr/index.mjs",
-    "vendor/trystero-0.25.3/core/index.mjs",
+    "vendor/trystero-0.25.3/nostr/index.js",
+    "vendor/trystero-0.25.3/core/index.js",
     "vendor/trystero-0.25.3/noble-secp256k1.js",
     // Self-hosted fonts (referenced from css/tokens.css @font-face, so the tag
     // parser below never sees them). Immutable vendored assets — no ?v=. Seeded
