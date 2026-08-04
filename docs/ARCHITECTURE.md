@@ -4,6 +4,11 @@ Pure JS/CSS/HTML, **no build step**. The **runtime has zero dependencies**;
 Playwright is the only `devDependency` (test harness, never shipped). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
+> This file is the module **contract** — what each module is and what it may
+> assume. For an assessment of how the project is built, what the no-build-step
+> bet costs, and the register of known defects (fixed and deferred), see
+> [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md).
+
 Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track
 **engine** — shared spline/mesh/scenery code), `js/circuits/` (the 40 circuit
 **data** files), `js/car/` (car geometry, liveries, parts, teams), `js/data/`

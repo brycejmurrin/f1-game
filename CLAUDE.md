@@ -595,6 +595,9 @@ index.html                      shell — script tags, DOM structure, cache-bust
 tools/manifest.cjs              load-order single source of truth (script tags must match)
 tests/*.spec.js                 Playwright specs (101) + tests/*.test.mjs unit suites (37)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
+                 ARCHITECTURE-REVIEW.md is the standing assessment + defect
+                   register: what the no-build-step bet costs, why asserted
+                   invariants hold and prose ones drift, and what is deferred
 ```
 
 ---
