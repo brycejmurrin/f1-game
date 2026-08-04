@@ -4468,14 +4468,24 @@ function render(dt) {
     // the eye makes that entire class of clipping impossible: whatever moves
     // the camera moves the cockpit with it. (Shadow above still uses the real
     // animated tmpMat at the car's true position.)
+    //
+    // The offset MUST be subtracted along the rig's own axes — it is the exact
+    // inverse of the basisMat below. Subtracting it on WORLD axes instead
+    // (sF.x/sF.z for forward, +Y for up) only inverts the basis when the road is
+    // FLAT: sF is the full 3-D tangent, so on a gradient θ the 0.99 m up-offset
+    // leaks into forward and the eye creeps to rig z = FWD·cos²θ + UP·sinθ. At
+    // ~4° of climb that closes the proven 0.39 m eye-to-fascia gap past the 0.3 m
+    // near plane and the plane eats the wheel face — the instrument slab (LEDs,
+    // LCD, digits, buttons) is 3-12 mm thin and sits at the driver-facing extreme,
+    // so it vanished whole while the 25-62 mm body boxes behind it kept drawing.
+    // Downhill the same term pushed the wheel ~15 cm too far away instead.
     if (c.isPlayer && cockpitRigOnly) {
       const sR = smp2.r, sF = smp2.t;
       _cockU[0] = sR[1]*sF[2] - sR[2]*sF[1];
       _cockU[1] = sR[2]*sF[0] - sR[0]*sF[2];
       _cockU[2] = sR[0]*sF[1] - sR[1]*sF[0];
-      _cockP[0] = camEye[0] - sF[0] * COCKPIT_EYE_FWD;
-      _cockP[1] = camEye[1] - COCKPIT_EYE_UP;
-      _cockP[2] = camEye[2] - sF[2] * COCKPIT_EYE_FWD;
+      for (let i = 0; i < 3; i++)
+        _cockP[i] = camEye[i] - _cockU[i] * COCKPIT_EYE_UP - sF[i] * COCKPIT_EYE_FWD;
       basisMat(sR, _cockU, sF, _cockP, _cockMat);
       drawCockpitRig(c, _cockMat, dt, paint);
       continue;
