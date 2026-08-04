@@ -54,6 +54,9 @@ const NetLobby = (function () {
     const transports = new Map();
     let transport = null;                  // the pending one, mid-handshake
     let nextGuestId = 0;
+    // The open room-code subscription, if one is running — held so closing the
+    // lobby can stop it. A room nobody is watching still holds relay sockets.
+    let codeRoom = null;
     // A guest has exactly one peer — the host — and calls it PEER_ONE. A host
     // mints an id per guest. Asymmetric on purpose: only the host ever needs to
     // tell several peers apart.
@@ -986,6 +989,11 @@ const NetLobby = (function () {
     function stopCodeWait() {
       if (codeWait) codeWait.cancelled = true;
       codeWait = null;
+      // A subscription keeps the Nostr room — and its relay sockets — open
+      // until told otherwise. Cancelling the wait has to close it too, or the
+      // lobby leaks a websocket per room the player ever opened.
+      if (codeRoom && codeRoom.stop) { try { codeRoom.stop(); } catch (e) {} }
+      codeRoom = null;
     }
 
     function showCodeStep(mode, headline, hint) {
@@ -1013,9 +1021,40 @@ const NetLobby = (function () {
 
       say("Waiting for them to join…");
       codeWait = { cancelled: false };
-      // One exchange, not a post and a poll: on the public relay both peers
-      // meet in a live room and swap strings, and the private mailbox backend
-      // is made to look the same from here.
+
+      // PUBLIC RELAY: stay in the room and take everyone who arrives, up to the
+      // cap. Each joiner gets a connection and an offer of its OWN — one SDP
+      // offer belongs to one RTCPeerConnection, so the invite minted above is
+      // spent on whoever comes first and the rest are minted on demand.
+      if (!NetRendezvous.usingPrivateRelay()) {
+        let first = invite.code;
+        const sub = await NetRendezvous.hostRoom({
+          code, token: codeWait,
+          onTick: () => say(sessions.size
+            ? "In the room: " + (sessions.size + 1) + ". Still open (code " + code + ")"
+            : "Waiting for them to join… (code " + code + ")"),
+          // The first arrival gets the invite already prepared; everyone after
+          // gets a fresh transport and a fresh offer.
+          mintOffer: async () => {
+            if (first) { const c = first; first = null; return c; }
+            if (sessions.size >= MAX_GUESTS) return null;      // room full: ignore them
+            if (!newTransport("host")) return null;
+            const more = await NetHandshake.createInvite(transport, localProfile());
+            return more.ok ? more.code : null;
+          },
+          onJoiner: async (_who, answer) => {
+            const acc = await NetHandshake.acceptAnswer(transport, answer);
+            if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return; }
+            if (acc.peer && pendingId) _peers.set(pendingId, acc.peer);
+            waitForOpen();
+          },
+        });
+        if (!sub.ok) { say(sub.message || "Could not open that room.", true); return sub; }
+        codeRoom = sub;
+        return { ok: true, code, subscribed: true };
+      }
+
+      // PRIVATE RELAY: a mailbox with two slots, so one guest. Unchanged.
       const got = await NetRendezvous.swap({
         code, mine: invite.code, slot: "offer", want: "answer",
         token: codeWait,
