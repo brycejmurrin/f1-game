@@ -53,14 +53,29 @@ const measure = (page, ctrl, hud, W, H, ins) => page.evaluate(([c, h, w, ht, i])
         || parseFloat(cs.opacity) === 0) return null;
     const b = el.getBoundingClientRect();
     if (!b.width || !b.height) return null;
-    return { id, x: b.x, y: b.y, r: b.right, b: b.bottom };
+    // Round buttons are compared as CIRCLES, not as boxes. The controls are
+    // border-radius:50%, and they sit on an arc — i.e. diagonally offset from
+    // each other — where two bounding rects can overlap while the circles they
+    // contain are comfortably apart. Testing rects there fails a layout that is
+    // visually and physically fine, and would have forced the arc back into a
+    // column for no reason.
+    const rad = parseFloat(cs.borderRadius) || 0;
+    const round = rad >= b.width * 0.45;
+    return { id, x: b.x, y: b.y, r: b.right, b: b.bottom,
+             round, cx: b.x + b.width / 2, cy: b.y + b.height / 2, rr: b.width / 2 };
   };
   const vis = c.map(box).filter(Boolean), hb = h.map(box).filter(Boolean);
   const hit = (a, d) => !(a.r <= d.x + 0.5 || d.r <= a.x + 0.5 || a.b <= d.y + 0.5 || d.b <= a.y + 0.5);
+  // Two circles touch only when their centres are closer than the sum of radii.
+  const clash = (a, d) => (a.round && d.round)
+    ? Math.hypot(a.cx - d.cx, a.cy - d.cy) < a.rr + d.rr - 0.5
+    : hit(a, d);
   const overlaps = [], hudClash = [];
   for (let x = 0; x < vis.length; x++)
     for (let y = x + 1; y < vis.length; y++)
-      if (hit(vis[x], vis[y])) overlaps.push(`${vis[x].id}+${vis[y].id}`);
+      if (clash(vis[x], vis[y])) overlaps.push(`${vis[x].id}+${vis[y].id}`);
+  // HUD readouts keep the CONSERVATIVE rect test against buttons: a number
+  // drawn across a circle's bounding corner is still a number you cannot read.
   for (const a of hb) for (const d of vis) if (hit(a, d)) hudClash.push(`${a.id}+${d.id}`);
   const unsafe = vis.filter((e) => e.x < i.sal - 0.5 || e.r > w - i.sar + 0.5
                                 || e.y < i.sat - 0.5 || e.b > ht - i.sab + 0.5)

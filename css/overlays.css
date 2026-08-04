@@ -133,12 +133,51 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* Landscape sizing. Everything below is expressed in slots off --btn-pitch,
      so these positions follow the size automatically. */
   :root { --btn: 64px; --steer: 72px; }
-  #shift-down { right: calc(16px + var(--sar)); bottom: calc(12px + var(--sab)); }
   #shift-up   { bottom: calc(12px + var(--btn-pitch) + var(--sab)); }
-  body.manual #btn-boost { left: auto; right: calc(16px + var(--btn-col) + var(--sar)); bottom: calc(12px + var(--sab)); }
-  body.manual #btn-ot    { left: auto; right: calc(16px + var(--btn-col) + var(--sar)); bottom: calc(12px + var(--btn-pitch) + var(--sab)); }
-  body.manual #btn-aero  { left: auto; right: calc(16px + var(--btn-col) + var(--sar)); bottom: calc(12px + 2 * var(--btn-pitch) + var(--sab)); }
-  /* The pedals share the right-hand column's baseline. They were left on the
+  /* ---- THUMB ARC ----
+     The right-hand controls sit on an arc centred on the thumb's pivot, not in
+     a column. Two reasons, both measured rather than felt:
+     REACH. A column puts its top button straight up from the pivot, which is
+     the one direction a thumb extends worst — it sweeps diagonally. On an arc
+     every button is the SAME distance from the pivot, so which control gets the
+     good slot stops being a question at all. That mattered here: AERO is
+     pressed 3-7 times a lap (once per activation zone; Monza has five), more
+     than BOOST or OVERTAKE, and the column had it in the furthest slot with a
+     set-and-forget toggle in the nearest one.
+     HEIGHT. Three 64px buttons stacked span 220px of a ~375px-tall screen. The
+     same three on a 130px arc span 173px and leave the middle of the screen
+     alone.
+     Radii come from the chord between neighbouring CENTRES having to clear
+     button+gap (72px at 64px buttons). Lone trio, 33 degrees apart: r >= 127,
+     so 130. Inner pair 43 apart: r >= 98, so 104 — 78 was tried and put the
+     two shift buttons 57px apart, i.e. overlapping. Outer trio 30 apart needs
+     154, but the inner arc forces it further out to keep 72px between the two
+     arcs as well: 185 gives a worst-case separation of 76px anywhere in the
+     cluster. The literals are
+     cos/sin of each angle — CSS trig functions exist but are needlessly recent
+     for constants that never change. */
+  :root { --arc-pad: 14px; --arc-r: 130px; --arc-ri: 104px; }
+  /* lone trio (tilt + touch): BOOST 12deg, AERO 45deg, OT 78deg */
+  #btn-boost { left: auto; right: calc(var(--arc-pad) + 0.978 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.208 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  #btn-aero  { left: auto; right: calc(var(--arc-pad) + 0.707 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.707 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  #btn-ot    { left: auto; right: calc(var(--arc-pad) + 0.208 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.978 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  /* When the right side ALSO holds pedals or shifts, those take a tight inner
+     arc (they are held continuously, so they get the closest reach) and the
+     discretionary trio moves out to a wider one. */
+  body.manual, body.steer-buttons { --arc-r: 185px; }
+  body.manual #btn-boost, body.steer-buttons #btn-boost { right: calc(var(--arc-pad) + 0.966 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.259 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  body.manual #btn-aero,  body.steer-buttons #btn-aero  { right: calc(var(--arc-pad) + 0.707 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.707 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  body.manual #btn-ot,    body.steer-buttons #btn-ot    { right: calc(var(--arc-pad) + 0.259 * var(--arc-r) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.966 * var(--arc-r) - var(--btn) / 2 + var(--sab)); }
+  /* inner arc: 25deg and 68deg */
+  #shift-down { right: calc(var(--arc-pad) + 0.906 * var(--arc-ri) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.423 * var(--arc-ri) - var(--btn) / 2 + var(--sab)); }
+  #shift-up   { right: calc(var(--arc-pad) + 0.375 * var(--arc-ri) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.927 * var(--arc-ri) - var(--btn) / 2 + var(--sab)); }
+  body.steer-buttons #btn-throttle { left: auto; right: calc(var(--arc-pad) + 0.906 * var(--arc-ri) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.423 * var(--arc-ri) - var(--btn) / 2 + var(--sab)); }
+  body.steer-buttons #btn-brake    { left: auto; right: calc(var(--arc-pad) + 0.375 * var(--arc-ri) - var(--btn) / 2 + var(--sar)); bottom: calc(var(--arc-pad) + 0.927 * var(--arc-ri) - var(--btn) / 2 + var(--sab)); }
+  /* The HUD strip clears the arc's widest reach, not a column's. */
+  .hud-bottom { right: calc(var(--arc-pad) + var(--arc-r) + var(--btn-gap) + var(--sar)); }
+  body.manual .hud-bottom, body.steer-buttons .hud-bottom { right: calc(var(--arc-pad) + var(--arc-r) + var(--btn-gap) + var(--sar)); }
+
+  /* The pedals share the left corner. They were left on the
      portrait 16px inset while everything else in landscape moved to 12, so the
      two sides of the screen sat 4px out of register — invisible as a number,
      and exactly what makes a pad read as scattered rather than aligned. */
@@ -153,11 +192,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   #btn-aero { bottom: calc(12px + 2 * var(--btn-pitch) + var(--sab)); }
   /* button mode: 2 columns on the right — GAS/BOOST outer, BRAKE/OT inboard,
      AERO on top of the outer column (landscape has width to spread out). */
-  body.steer-buttons #btn-throttle { left: auto; right: calc(16px + var(--sar)); bottom: calc(12px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
-  body.steer-buttons #btn-brake    { left: auto; right: calc(16px + var(--btn-col) + var(--sar)); bottom: calc(12px + var(--sab)); }
-  body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar)); bottom: calc(12px + var(--btn-pitch) + var(--sab)); }
-  body.steer-buttons #btn-ot       { left: auto; right: calc(16px + var(--btn-col) + var(--sar)); bottom: calc(12px + var(--btn-pitch) + var(--sab)); }
-  body.steer-buttons #btn-aero     { left: auto; right: calc(16px + var(--sar)); bottom: calc(12px + 2 * var(--btn-pitch) + var(--sab)); }
+  body.steer-buttons #btn-throttle { background: rgba(0, 170, 70, 0.42); }
   /* Buttons mode: steer arrows occupy the left 192px, action buttons the right 176px.
      Pin the HUD strip inside that clear zone so OVERTAKE can't bleed into the buttons. */
   body.steer-buttons .hud-bottom {
