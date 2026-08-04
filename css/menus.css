@@ -228,12 +228,25 @@
    split on width alone put an upright iPad (810px sheet, 1170px tall) into
    side-by-side, where the preview column is only as wide as 42% of the sheet —
    so the map, whose size is its column's width, stayed small while 750px of that
-   column sat empty underneath it. Portrait keeps the stacked layout below and
-   spends the width on the map instead. */
-@media (orientation: landscape) {
+   column sat empty underneath it. A tall sheet gets bands instead and spends the
+   width on the map.
+
+   THE SHAPE COMES FROM THE SHEET, NOT THE WINDOW. This used to read
+   `@media (orientation: landscape)`, which is a different question: a portrait
+   VIEWPORT does not give you a portrait SHEET. On a rotated 1080x1920 monitor
+   css/responsive.css caps #sel-inner at 720px tall, so a landscape-shaped sheet
+   sat in a portrait window, took the band branch meant for an upright tablet,
+   and left the circuit list two pixels of height. js/game/sheetshape.js measures
+   the sheet itself and writes data-shape="tall"|"wide"; CSS cannot ask, because
+   height/aspect-ratio queries need `container-type: size` and a size container
+   may not size itself from its contents, which this one does.
+
+   `:not([data-shape="tall"])` rather than `[data-shape="wide"]` so an unmeasured
+   sheet — the attribute is written on the first ResizeObserver callback, after
+   the screen is shown — lands on columns, the layout it had before. */
 @container sheet (min-width: 620px) {
-  #sel-body { display: contents; }
-  #sel-inner > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
+  #sel-inner:not([data-shape="tall"]) > #sel-body { display: contents; }
+  #sel-inner:not([data-shape="tall"]) > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
   /* PREVIEW BESIDE THE LIST, not above it. Stacked full-width, the preview card
      is ~190px tall and takes more than half a landscape phone's sheet — the
      first capture of this layout left the track list 73px high, one and a bit
@@ -255,7 +268,8 @@
      max-content — twenty-four circuit rows — became the limit, so the bar grew
      to eat a third of the sheet. min-content takes the FOOT's height; the list,
      a scroll container with min-height 0, contributes nothing to it. */
-  #sel-track-preview, #sel-preview-map { min-width: 0; }
+  #sel-inner:not([data-shape="tall"]) #sel-track-preview,
+  #sel-inner:not([data-shape="tall"]) #sel-preview-map { min-width: 0; }
   /* THE MAP YIELDS, THE FACTS DO NOT. The map's height comes from its 520:300
      ratio against a full-width column, which ignores how much height the column
      has: on a 343px-tall landscape phone that is 176px of map, the name/GP/chip
@@ -266,8 +280,10 @@
      keeps the outline undistorted when the cap is what binds. Two IDs because
      the base width is a custom property precisely so container-query rules can
      beat it without depending on source order. */
-  #sel-track-preview #sel-preview-map { max-height: 50%; object-fit: contain; }
-  #sel-track-section {
+  #sel-inner:not([data-shape="tall"]) #sel-track-preview #sel-preview-map {
+    max-height: 50%; object-fit: contain;
+  }
+  #sel-inner:not([data-shape="tall"]) > #sel-body > #sel-track-section {
     grid-column: 1; grid-row: 2;
     min-height: 0; overflow: hidden;
     display: flex; flex-direction: column;
@@ -276,16 +292,17 @@
   /* The label sits at the top; the card takes the rest of the column and centres
      itself in it, so a pane taller than the card has its spare height split
      above and below rather than pooled at the bottom. */
-  #sel-track-section > #sel-track-preview { margin-block: auto; }
-  #sel-tracks {
+  #sel-inner:not([data-shape="tall"]) #sel-track-section > #sel-track-preview {
+    margin-block: auto;
+  }
+  #sel-inner:not([data-shape="tall"]) > #sel-body > #sel-tracks {
     grid-column: 2; grid-row: 2 / 4; min-height: 0;
     padding-right: var(--pad); padding-bottom: calc(var(--pad) * 0.5);
   }
-  #sel-inner > .sheet-foot { grid-column: 1; grid-row: 3; }
-}
+  #sel-inner:not([data-shape="tall"]) > .sheet-foot { grid-column: 1; grid-row: 3; }
 }
 
-/* ---------- PORTRAIT ON A WIDE SHEET: TOP AND BOTTOM, NOT LEFT AND RIGHT ----
+/* ---------- A TALL WIDE SHEET: TOP AND BOTTOM, NOT LEFT AND RIGHT ----
    An upright tablet has width to give the map and height to give the list, so
    the preview becomes a BAND across the top and the list takes everything under
    it down to the action bar. The map is the reason the card exists and it is
@@ -293,20 +310,30 @@
    iPad instead of the 300 it got as a 42% column, with the facts beside it
    rather than under it. The action bar stays full width here — in this shape
    there is no left column for it to sit under. */
-@media (orientation: portrait) {
-  @container sheet (min-width: 620px) {
-    #sel-body { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; }
-    /* THE BAND IS CAPPED AT HALF THE BODY, AND THE MAP YIELDS INSIDE IT.
-       A portrait VIEWPORT does not guarantee a portrait SHEET: on a rotated
-       1080x1920 monitor css/responsive.css caps #sel-inner at 720px tall, so the
-       sheet is landscape-shaped inside a portrait window. Sized purely by its
-       content, the full-width map band came out 710px of that 720 and left the
-       circuit list TWO PIXELS. Capping the section and letting the map shrink
-       inside it (object-fit keeps the outline true when the cap binds) means the
-       list always gets the other half, whatever shape the sheet turns out to be. */
-    #sel-track-section {
+@container sheet (min-width: 620px) {
+  #sel-inner[data-shape="tall"] > #sel-body {
+    display: flex; flex-direction: column; gap: var(--gap); min-height: 0;
+  }
+    /* THE BAND IS STILL CAPPED, AND THE MAP STILL YIELDS INSIDE IT.
+       This branch is now reached only by a sheet MEASURED taller than it is
+       wide (js/game/sheetshape.js), not by a portrait window — the rotated
+       1080x1920 monitor, whose sheet css/responsive.css caps at 720px tall, is
+       correctly `wide` and takes the columns above. The cap stays anyway: a
+       genuinely tall sheet sized purely by its content still lets a full-width
+       map band eat the list, and object-fit keeps the outline true when the cap
+       binds. Belt and braces, on the branch where the braces are cheap. */
+       THE BAND IS A DEFINITE HEIGHT, NOT A CAP. `flex: 0 1 auto` plus
+       `max-height: 52%` gave the section no height of its own — it sized to its
+       content, and its content is a card whose map is capped at a PERCENTAGE of
+       that same content-derived height. That circle resolves small: measured on
+       an upright iPad the map came out 743x74, a full-width smear about as tall
+       as one row of the list under it, on the one layout that exists to make the
+       map big. `flex: 0 0 52%` gives the band a real number, so the card fills
+       it and `calc(100% - 9.5rem)` below finally subtracts from something. Same
+       52 % of the body either way — the list still gets the other half. */
+    #sel-inner[data-shape="tall"] #sel-track-section {
       display: flex; flex-direction: column;
-      flex: 0 1 auto; min-height: 0; max-height: 52%;
+      flex: 0 0 52%; min-height: 0;
     }
     /* The card FILLS the capped band, which gives it a definite height, and the
        map is capped at that height minus the room the caption needs. A share of
@@ -316,17 +343,20 @@
        them. Subtracting a constant leaves the caption whole at every band size
        and lets the map have the rest; where the map's own 520:300 height is
        smaller than the cap, the cap simply does not bind. */
-    #sel-track-preview { flex: 1 1 auto; min-height: 0; }
-    #sel-track-preview #sel-preview-map { max-height: calc(100% - 9.5rem); }
+    #sel-inner[data-shape="tall"] #sel-track-preview { flex: 1 1 auto; min-height: 0; }
+    #sel-inner[data-shape="tall"] #sel-track-preview #sel-preview-map {
+      max-height: calc(100% - 9.5rem);
+    }
     /* The card keeps the wide-sheet shape it already has — map across the top,
        facts under it — and in a full-width band that makes the map ~765px on an
        iPad instead of the ~300 it got as a 42% column. Nothing to set here: the
-       card's own wide-sheet rule below is not gated to landscape, so the map is
-       already 100% of the card. */
+       card's own wide-sheet rule below is not shape-gated, so the map is already
+       100% of the card. */
     /* The list is the rest of the sheet, and it scrolls. Without flex: 1 it
        sizes to content and the sheet's body row leaves it short. */
-    #sel-tracks { flex: 1 1 auto; min-height: 0; max-height: none; }
-  }
+    #sel-inner[data-shape="tall"] > #sel-body > #sel-tracks {
+      flex: 1 1 auto; min-height: 0; max-height: none;
+    }
 }
 
 /* ---------- team card + team picker ----------
