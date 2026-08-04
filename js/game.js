@@ -1924,6 +1924,7 @@ const G = {
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
+  setCarRole, modsFor,   // multiplayer seam — see setCarRole
   startRace, startWeatherArc, update, wrapS,
 };
 

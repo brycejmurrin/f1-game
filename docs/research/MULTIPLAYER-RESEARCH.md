@@ -1,8 +1,29 @@
 # Multiplayer — feasibility investigation
 
-> **Status: investigation only.** Nothing here has been implemented. This is a
-> read of the existing codebase against the requirements of network play, a
-> ranked set of options, and a staged plan with the cheap wins first.
+> **Status: direction chosen; Phase 0 has LANDED.** This document is the survey
+> that preceded the decision — it deliberately keeps the full option space, so
+> the reasoning stays checkable. What was actually chosen, and what is built:
+>
+> **Chosen:** two-player **contact** racing over WebRTC with **no backend** —
+> manual offer/answer code paste for signalling, distributed authority (each
+> peer fully owns its own car; the host additionally owns the AI and race
+> control). That is option **C** in §1 at 2 players, on the zero-infrastructure
+> signalling path in §5. §4's recommendation to ship no-contact first was NOT
+> taken; contact is in scope from the start.
+>
+> **Built:** the §3.1 role split (`human` / `local`), the per-car input seam,
+> and per-car part multipliers — see `tests/multiplayer-roles.spec.js` and
+> `__apex.carRoles/carRole/carInput`. Networking itself is not built yet.
+>
+> One correction to §3.1 below, found while implementing it: the audit of
+> "what breaks with two humans" **missed `playerMods`**, a module-level
+> singleton of the local player's part multipliers that was read inside the
+> human branch — including unconditionally by `muBase`, the lateral-grip term.
+> A second human would have accelerated, braked and *cornered* on the local
+> player's upgrades. It is now per-car (`c.mods`). The lesson generalises: the
+> `isPlayer` audit caught branches keyed on the flag, but not singletons that
+> the flag's branches happened to *read*. Anything module-scoped and named
+> `player*` deserves the same scrutiny.
 
 The question is not "can this game do multiplayer" — it can. The question is
 **which multiplayer**, because three very different features get called that

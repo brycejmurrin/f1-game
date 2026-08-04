@@ -822,6 +822,46 @@ track tangent, and returns the car's new state.
 __apex.aiPlace(3, 0.6, 50, 2);
 ```
 
+### `carRoles() → [{id, code, team, human, local, isPlayer, hasPose, vLat, yawRateCur, mods, netInput}, …]`
+Who is driving what. Cars carry **two** independent role flags, because
+"the player" was really two things:
+
+| flag | meaning | selects |
+|---|---|---|
+| `human` | driven by a PERSON — local **or** remote | the full per-axle bicycle model, a world-space pose (`px`/`pz`/`head`), the heavier collision mass, and an input source instead of the AI driver |
+| `local` | the car on **this** screen | `Input`, the camera, the HUD, audio, haptics, announcements, particle FX |
+
+`isPlayer` is the retained alias of `local` — that is what every consumer
+already meant by it. In single player one car is both; a networked rival is
+`human` without being `local`.
+
+`vLat`/`yawRateCur` are included because they are the observable signature of
+the bicycle model: an AI car is kinematic and leaves both at exactly zero
+however hard it corners. `mods` is that car's own part multipliers (see
+`carRole`); AI cars have `null` and run on tier × skill instead.
+
+### `carRole(idx, {human?, local?, mods?}) → {id, human, local, isPlayer, mods} | false`
+Promote a car to human control — which is what a networked rival *is* — or hand
+it back to the AI. Omitted fields are left alone. `mods` sets that car's own
+`{speed, accel, cornering, braking}` multipliers (missing keys default to 1);
+pass `null` to clear. Demoting to AI also clears any fed input.
+
+```js
+// make car #4 a second human driver, on someone else's upgrades
+__apex.carRole(4, { human: true, local: false, mods: { cornering: 1.2 } });
+```
+
+### `carInput(idx, {steer, throttle, brake, shiftUp?, shiftDown?, overtake?} | null) → input | false`
+The controls a **non-local** human car drives on — same shape as `setInput()`.
+Pass `null` to clear, after which the car coasts rather than inheriting the
+local controls. Ignored by the local car (which reads the real `Input`) and by
+AI cars (which drive themselves).
+
+```js
+__apex.carInput(4, { steer: 0.3, throttle: true });
+__apex.step(1 / 60, 60);
+```
+
 ---
 
 ## Timing & field

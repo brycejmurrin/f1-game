@@ -1443,6 +1443,63 @@ const api = {
     }));
   },
 
+  // ── Multiplayer seam (js/game.js: setCarRole / inputOf / modsFor) ────────
+  //
+  // carRoles() — who is driving what, for every car on the grid.
+  //   human — driven by a PERSON, local or remote. Selects the full per-axle
+  //           bicycle model, a world-space pose, the heavier collision mass,
+  //           and an input source instead of the AI driver.
+  //   local — the car on THIS screen: Input, camera, HUD, audio, haptics.
+  //   isPlayer — the retained alias of `local`.
+  // vLat/yawRateCur are included because they are the observable signature of
+  // the bicycle model: the AI is kinematic and leaves both at zero forever.
+  carRoles() {
+    return G.cars.map((c, i) => ({
+      id: i, code: c.code, team: c.team && c.team.id,
+      human: !!c.human, local: !!c.local, isPlayer: !!c.isPlayer,
+      hasPose: c.px != null && c.head != null,
+      vLat: +(c.vLat || 0).toFixed(4),
+      yawRateCur: +(c.yawRateCur || 0).toFixed(4),
+      mods: c.mods ? Object.assign({}, c.mods) : null,
+      netInput: c.netInput ? Object.assign({}, c.netInput) : null,
+    }));
+  },
+
+  // carRole(idx, {human?, local?, mods?}) — promote a car to human control
+  // (which is what a networked rival IS) or hand it back to the AI. Omitted
+  // fields are left alone. `mods` sets that car's own part multipliers; pass
+  // null to clear them back to neutral. Returns the car's new role, or false
+  // for a bad index.
+  carRole(idx, o) {
+    const c = G.cars[idx];
+    if (!c) return false;
+    o = o || {};
+    G.setCarRole(c,
+      o.human === undefined ? !!c.human : !!o.human,
+      o.local === undefined ? !!c.local : !!o.local);
+    if (o.mods !== undefined) {
+      c.mods = o.mods
+        ? Object.assign({ speed: 1, accel: 1, cornering: 1, braking: 1 }, o.mods)
+        : null;
+    }
+    if (!c.human) c.netInput = null;   // an AI car drives itself
+    return {
+      id: idx, human: !!c.human, local: !!c.local, isPlayer: !!c.isPlayer,
+      mods: c.mods ? Object.assign({}, c.mods) : null,
+    };
+  },
+
+  // carInput(idx, {steer, throttle, brake, shiftUp?, shiftDown?, overtake?})
+  // — the controls a NON-LOCAL human car drives on, same shape as setInput().
+  // Pass null to clear (the car then coasts). Ignored by the local car, which
+  // reads the real Input, and by AI cars, which drive themselves.
+  carInput(idx, input) {
+    const c = G.cars[idx];
+    if (!c) return false;
+    c.netInput = input || null;
+    return c.netInput ? Object.assign({}, c.netInput) : null;
+  },
+
   // aiPlace(idx, frac, speed?, x?) — teleport an AI car (by cars[] index) to
   // the given lap fraction. Cannot move the player car; use jump() for that.
   // Returns the car's new state, or false on invalid input.
