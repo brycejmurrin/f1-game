@@ -190,6 +190,7 @@ const GLX = (function () {
 
   function init(canvasEl) {
     canvas = canvasEl;
+    watchCanvasSize();
     gl = canvas.getContext("webgl2", {
       // antialias:true makes the BROWSER allocate its own multisampled backbuffer
       // (Apple GPUs round the request up to 4×) — pure waste on the post path,
@@ -394,14 +395,17 @@ const GLX = (function () {
   // read it when the browser tells us it moved and cache it in between.
   let cssW = 0, cssH = 0, cssDirty = true;
   const markCssDirty = () => { cssDirty = true; };
-  if (typeof window !== "undefined" && window.addEventListener) {
+  // Wired from init(), NOT at IIFE eval: `canvas` is still null up here, so an
+  // observer attached at module scope would silently observe nothing.
+  function watchCanvasSize() {
+    if (typeof window === "undefined" || !window.addEventListener) return;
     window.addEventListener("resize", markCssDirty);
     window.addEventListener("orientationchange", markCssDirty);
-    // Covers the cases a window resize never fires for: a CSS/layout change that
-    // moves the canvas alone (entering photo mode, a rotated phone that keeps the
-    // same window size). Feature-detected — no ResizeObserver just means we fall
-    // back to the two listeners above, which is what this always had.
-    if (typeof ResizeObserver === "function") {
+    // Covers what a window resize never fires for: a layout change that moves
+    // the canvas alone (entering photo mode, a rotated phone that keeps the same
+    // window size). Feature-detected — without it the two listeners above still
+    // cover the common cases, and cssSize()'s zero-guard covers first layout.
+    if (typeof ResizeObserver === "function" && canvas) {
       try { new ResizeObserver(markCssDirty).observe(canvas); } catch (_) {}
     }
   }

@@ -12,7 +12,7 @@
 //    budget, the PCSS rig, and the TOD exposure table.
 import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
-import { KNOBS, FREEZE_FLICKER } from "../tools/ab-lighting.mjs";
+import { KNOBS, FREEZE_FLICKER, FREEZE_FLICKER_FILE } from "../tools/ab-lighting.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
@@ -63,9 +63,12 @@ test("A/B knob catalog matches the source exactly (1 hit per knob)", () => {
   // The flicker-freeze patch is applied with a silent .includes() guard in the
   // variant server — a stale string just stops freezing (noisy night A/Bs)
   // without any error, so it must be pinned here like the knobs.
-  const game = srcCache["js/game.js"] || readFileSync(ROOT + "js/game.js", "utf8");
-  const nFF = game.split(FREEZE_FLICKER[0]).length - 1;
-  if (nFF !== 1) problems.push(`FREEZE_FLICKER: "${FREEZE_FLICKER[0].slice(0, 60)}..." found ${nFF}x in js/game.js`);
+  // Read the file the harness actually patches, not a hardcoded one: the flicker
+  // moved to js/game/lighting.js with the LightTune extraction, and pinning
+  // js/game.js here meant this guard reported the failure it could not fix.
+  const ff = srcCache[FREEZE_FLICKER_FILE] || readFileSync(ROOT + FREEZE_FLICKER_FILE, "utf8");
+  const nFF = ff.split(FREEZE_FLICKER[0]).length - 1;
+  if (nFF !== 1) problems.push(`FREEZE_FLICKER: "${FREEZE_FLICKER[0].slice(0, 60)}..." found ${nFF}x in ${FREEZE_FLICKER_FILE}`);
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
