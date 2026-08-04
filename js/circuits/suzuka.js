@@ -662,12 +662,12 @@
       stand(0.00, -1, 15, 52, { livery: "navy", tiers: 2, roof: "cantilever",
         suites: true, endWalls: true, pylons: true }); // Main grandstand — clear of the curved pit approach; navy base under the Honda crown accent
       stand(0.15,  1, 15, 28, { livery: "steel", roof: "truss" });         // Esses — compact bank on the rising outside
-      stand(0.28, -1, 9, 28,  { livery: "concrete", roof: "flat" });      // Degner entry
+      stand(0.28, -1, 9, 28,  { livery: "orange", roof: "flat" });      // Degner entry
       stand(0.45,  1, 9, 38,  { livery: "navy", tiers: 2, endWalls: true }); // Hairpin
       stand(0.94,  1, 9, 35,  { livery: "steel", roof: "truss", endWalls: true });  // Casio Triangle right
       stand(0.94, -1, 9, 35,  { livery: "navy", roof: "truss", endWalls: true });   // Casio Triangle left
-      stand(0.50,  1, 8, 24,  { livery: "concrete" });                    // Mid-circuit flex stand
-      stand(0.875, 1, 18, 24, { livery: "concrete", endWalls: true }); // 130R exit crowd
+      stand(0.50,  1, 8, 24,  { livery: "orange" });                    // Mid-circuit flex stand
+      stand(0.875, 1, 18, 24, { livery: "orange", endWalls: true }); // 130R exit crowd
 
       // ── The two OPEN banks. Suzuka's outfield seating away from the main
       //    stands is bolted steel bleacher, not a shelled grandstand — the

@@ -251,6 +251,25 @@ function create(G) {
       left.appendChild(teamCard);
     }
 
+    // CAREER RECORD is a card at the foot of this column, not a fourth button in
+    // the action bar. At 844x390 the sheet's left column is ~370px wide and four
+    // buttons at the shared `.sheet-foot .bigbtn` 110px floor need ~440px, so a
+    // fourth wraps the bar and costs a button's height out of a 390px-tall
+    // screen. A card also states what it opens, which a fourth exit cannot.
+    left.appendChild(head("CAREER RECORD"));
+    const rec = careerTotals();
+    const recBtn = el("button", "cr-card cr-record");
+    recBtn.id = "cr-history";
+    recBtn.append(
+      el("span", "cr-record-line",
+        rec.seasons + (rec.seasons === 1 ? " season" : " seasons")
+        + " · " + rec.wins + (rec.wins === 1 ? " win" : " wins")
+        + " · " + rec.podiums + (rec.podiums === 1 ? " podium" : " podiums")
+        + (rec.titles ? " · " + rec.titles + (rec.titles === 1 ? " title" : " titles") : "")),
+      el("span", "cr-record-cta", "SEASON BY SEASON"));
+    recBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openHistory(); };
+    left.appendChild(recBtn);
+
     // ---- right: next race + standings ----
     if (st.offers) {
       right.appendChild(head("A SEAT TO SIGN"));
@@ -367,6 +386,110 @@ function create(G) {
   function openOffers() { buildOffers(); $("career-offers").hidden = false; }
   function closeOffers() { $("career-offers").hidden = true; }
 
+  // ---------- career history (#career-history) ----------
+  // The record of everything a career has achieved: the running totals, then the
+  // years behind them. career.history is the archive rollover() writes — one
+  // entry per finished season, capped at ten, carrying year/team, the driver and
+  // constructor championship positions and points, the champion, wins, podiums.
+
+  // DERIVED on demand, never stored. A totals block on the save would be another
+  // rung on the migration ladder for numbers that are a sum over data already
+  // there — and a total written once is a total that goes stale, which no
+  // migration can put right after the fact.
+  function careerTotals() {
+    const c = Career.data();
+    const hist = (c && c.history) || [];
+    const live = (c && c.results) || [];
+    const me = c ? GameStore.seasonDriverId(c.team, c.seat) : "";
+    const t = {
+      // The year in progress counts: you are living a season, not waiting for one.
+      seasons: hist.length + 1,
+      // Starts is the one figure the archive does not record. A season only
+      // reaches it once seasonDone() is true, so an archived year ran the whole
+      // calendar; the running year contributes exactly the rounds settled so far.
+      // Only __apex.careerRollover() can archive a short season, and it is a hook.
+      starts: hist.length * Career.roundsTotal() + live.length,
+      wins: live.filter((r) => r.p === 1).length,
+      podiums: live.filter((r) => r.p <= 3).length,
+      points: (c && c.season.pts[me]) || 0,
+      titles: 0, cTitles: 0,
+      best: 0, bestYear: 0,
+      teams: [],
+    };
+    for (const h of hist) {
+      t.wins += h.wins || 0;
+      t.podiums += h.podiums || 0;
+      t.points += h.pts || 0;
+      if (h.pos === 1) t.titles++;
+      if (h.cPos === 1) t.cTitles++;
+      // Best is over FINISHED seasons only — a championship still being run has
+      // no final position, and a mid-season standing is not a career best.
+      if (h.pos && (!t.best || h.pos < t.best)) { t.best = h.pos; t.bestYear = h.year; }
+      if (t.teams.indexOf(h.team) < 0) t.teams.push(h.team);
+    }
+    if (c && t.teams.indexOf(c.team) < 0) t.teams.push(c.team);
+    return t;
+  }
+
+  function teamName(id) {
+    const t = Teams.LIST.find((x) => x.id === id);
+    return t ? t.name : String(id).toUpperCase();
+  }
+
+  function buildHistory() {
+    const c = Career.data();
+    const body = $("ch-body");
+    body.textContent = "";
+    if (!c) return;
+    const t = careerTotals();
+
+    body.appendChild(head("CAREER TOTALS"));
+    const card = el("div", "cr-card");
+    card.append(
+      row("Seasons", t.seasons + " · " + c.year + " in progress"),
+      row("Race starts", String(t.starts)),
+      row("Wins", String(t.wins)),
+      row("Podiums", String(t.podiums)),
+      row("Points", String(t.points)),
+      row("Championships", t.titles + " drivers' · " + t.cTitles + " constructors'"),
+      row("Best championship", t.best ? "P" + t.best + " in " + t.bestYear : "no season finished yet"),
+      row("Teams driven for", t.teams.map(teamName).join(", ")));
+    body.appendChild(card);
+
+    body.appendChild(head("SEASON BY SEASON"));
+    if (!c.history.length) {
+      // An empty box would read as a broken screen. A first season genuinely has
+      // no archive, and saying so is the honest answer to "what have I done".
+      body.appendChild(el("div", "cr-note",
+        c.year + " is your first season and it is still running — there is nothing "
+        + "archived yet. Finish the calendar and close the year out, and it lands here."));
+    } else {
+      // The cap is only worth mentioning once it has started throwing years away —
+      // "the last 10 seasons" over a list of two reads as a limit you have hit.
+      if (c.history.length >= Career.HISTORY_MAX)
+        body.appendChild(el("div", "cr-note",
+          "This is localStorage, so the archive keeps the last " + Career.HISTORY_MAX +
+          " seasons — anything older has rolled off."));
+      // Newest first: the year you just closed out is the one you came to read.
+      for (const h of c.history.slice().reverse()) {
+        const team = Teams.LIST.find((x) => x.id === h.team);
+        // Podium classes are the shared gold/silver/bronze from css/components.css,
+        // so a title-winning year lights up without a vocabulary of its own.
+        const r = el("div", "res-row" + (h.pos >= 1 && h.pos <= 3 ? " p" + h.pos : ""));
+        const sw = el("span", "res-swatch");
+        sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
+        r.append(el("span", "res-pos", "P" + h.pos), sw,
+          el("span", "res-name", h.year + " · " + teamName(h.team)),
+          el("span", "res-pts", h.pts + " pts"));
+        body.appendChild(r);
+      }
+    }
+    ScrollFade.refresh();
+  }
+
+  function openHistory() { buildHistory(); $("career-history").hidden = false; }
+  function closeHistory() { $("career-history").hidden = true; }
+
   function row(k, v) {
     const r = el("div", "cr-row");
     r.append(el("span", "cr-row-k", k), el("span", "cr-row-v", v));
@@ -427,8 +550,14 @@ function create(G) {
     build();
     if (G.soundOn) GameAudio.uiSelect();
   };
+  // History is read-only, so BACK simply drops the modal — nothing behind it can
+  // have changed and rebuilding the hub would only throw away its scroll position.
+  $("ch-back").onclick = () => {
+    closeHistory();
+    if (G.soundOn) GameAudio.uiSelect();
+  };
 
-  return { build, openHub, close, openOffers, closeOffers };
+  return { build, openHub, close, openOffers, closeOffers, openHistory, closeHistory };
 }
 
 return { create, STARTER_TIER_MIN };

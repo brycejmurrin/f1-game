@@ -454,17 +454,17 @@
       grandstandEx(0.00, -1, 14, 90, null, null,             // Brabham — hero main stand
         { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.07, -1, 14, 60, null, null,              // Fangio — pit-straight extension
-        { livery: "navy", roof: "flat" });
+        { livery: "pastel", roof: "flat" });
       grandstandEx(0.04,  1, 14, 55, null, null,               // Hill — Turn 1-2 sweep
         { livery: "alu", roof: "truss", pylons: true });
       grandstandEx(0.12,  1, 16, 48, null, null,               // Waite — Turn 3 exit
         { livery: "steel", roof: "cantilever" });
       grandstandEx(0.30, -1, 16, 50, null, null,               // lakeside spectator bank
-        { livery: "navy", roof: "flat" });
+        { livery: "pastel", roof: "flat" });
       grandstandEx(0.55, -1, 16, 55, null, null,               // Ricciardo — Lakeside Drive
         { livery: "steel", roof: "truss", endWalls: true });
       grandstandEx(0.62,  1, 14, 60, null, null,               // Webber — spectator grandstand
-        { livery: "navy", tiers: 2, roof: "cantilever", suites: true });
+        { livery: "pastel", tiers: 2, roof: "cantilever", suites: true });
       grandstandEx(0.66,  1, 16, 45, null, null,               // adjoining spectator bank
         { livery: "alu", roof: "flat" });
       grandstandEx(0.78, -1, 14, 45, null, null,               // chicane complex
@@ -472,7 +472,7 @@
       grandstandEx(0.90,  1, 18, 50, null, null,               // fan-hill grandstand
         { livery: "alu", roof: "cantilever", pylons: true });
       grandstandEx(0.95, -1, 16, 48, null, null,               // pit-approach bank
-        { livery: "navy", roof: "flat" });
+        { livery: "pastel", roof: "flat" });
       grandstandEx(0.20,  1, 16, 46, null, null,               // fast-section stand
         { livery: "steel", roof: "cantilever" });
       grandstandEx(0.45, -1, 16, 44, null, null,               // lakeside bank

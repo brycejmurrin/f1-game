@@ -19,6 +19,15 @@ async function waitTabLoaded(page) {
   await page.waitForTimeout(300);
 }
 
+// A championship weekend opens with QUALIFYING, so #rs-go lands on the sheet
+// rather than on track: SIMULATE takes the modelled lap, TO THE GRID starts the
+// race. Season and career both; only a one-off Grand Prix still goes straight in.
+async function qualiToGrid(page) {
+  await page.locator("#quali").waitFor({ state: "visible", timeout: 20_000 });
+  await page.locator("#q-sim").click();
+  await page.locator("#q-go").click();
+}
+
 async function shot(page, name) {
   await page.waitForTimeout(300);
   await page.screenshot({ path: galleryPath("ui-audit", `${name}.png`), fullPage: false });
@@ -194,6 +203,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#sel-go").click();
       await page.locator("#race-settings").waitFor({ state: "visible" });
       await page.locator("#rs-go").click();
+      await qualiToGrid(page);
       await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, { timeout: 10_000 });
       await page.evaluate(() => window.__apex.park(0));
       await page.waitForTimeout(200);
@@ -273,6 +283,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#sel-go").click();
       await page.locator("#race-settings").waitFor({ state: "visible" });
       await page.locator("#rs-go").click();
+      await qualiToGrid(page);
       await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, { timeout: 10_000 });
       await page.evaluate(() => window.__apex.park(0));
       await page.waitForTimeout(200);
@@ -374,6 +385,54 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.waitForFunction(() => !document.querySelector(".dh-spinner"), { timeout: 10_000 }).catch(() => {});
       await page.waitForTimeout(600);
       await shot(page, `${orient}-28-datahub-telemetry`);
+    });
+
+    // #career is one sheet in two states, and they share no layout: the new-career
+    // setup is a form, the hub is a dashboard. Both are shot.
+    test("29 career setup", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-career").click();
+      await page.locator("#career").waitFor({ state: "visible" });
+      await shot(page, `${orient}-29-career-setup`);
+    });
+
+    test("30 career hub", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      // Started through the hook: the shot is of the hub, not of filling the form in.
+      await page.evaluate(() => window.__apex.career({ teamId: "haas", seat: 1, seed: 4242 }));
+      await page.locator("#career").waitFor({ state: "visible" });
+      await shot(page, `${orient}-30-career-hub`);
+    });
+
+    test("31 qualifying sheet", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-season").click();
+      await page.locator("#select").waitFor({ state: "visible" });
+      await page.locator("#sel-go").click();
+      await page.locator("#race-settings").waitFor({ state: "visible" });
+      await page.locator("#rs-go").click();
+      // Before the session: the modelled field, with DRIVE MY LAP still on offer.
+      await page.locator("#quali").waitFor({ state: "visible", timeout: 20_000 });
+      await shot(page, `${orient}-31-quali`);
+    });
+
+    test("32 career offers", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => {
+        window.__apex.career({ teamId: "haas", seat: 1, seed: 4242 });
+        window.__apex.careerRollover();   // archive the year, put seats on the table
+      });
+      await page.locator("#career").waitFor({ state: "visible" });
+      // The foot still reads GO RACING — the hub was built before the rollover, and
+      // only the debug hook can roll over without rebuilding it. The handler is not
+      // stale: pending offers outrank everything else in it.
+      await page.locator("#cr-go").click();
+      await page.locator("#career-offers").waitFor({ state: "visible" });
+      await shot(page, `${orient}-32-career-offers`);
     });
   });
 }
