@@ -201,6 +201,7 @@
     const l = (S.livery && list.find(x => x.id === S.livery)) || list[0];
     return { c1: S.colors ? S.colors[0] : l.c1, c2: S.colors ? S.colors[1] : l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
+             fin: l.fin || null, finArt: l.finArt || null,
              noseStripe: l.noseStripe || null };
   }
   function driverNum(team) {

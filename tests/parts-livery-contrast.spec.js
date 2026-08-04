@@ -239,7 +239,8 @@ test.describe("Livery atlas — ink contrast", () => {
     // and names the region rather than shipping an invisible mark.
     const INKED_FOR = {
       // the shark fin rises through the cover crest, so that mark spans both
-      crest: ["c1", "c2"], fin: ["c2"], wing: ["wing"],
+      // fin/finBadge: the fin plate is painted `fin`, which defaults to c2
+      crest: ["c1", "c2"], fin: ["c2"], finBadge: ["c2"], wing: ["wing"],
       titleA: ["board"], titleB: ["board"], strip: ["c2"],
       // the c2 crown stripe runs under the nose number
       num: ["c1", "c2"],

@@ -632,6 +632,63 @@ const Car3D = (function () {
     const ep = endplateGeom(aLvl), h = 0.20;
     return { cy: ep.cy - ep.sy * 0.5 + 0.05 + h * 0.5, h };
   }
+  // Shark-fin PLANFORM — SINGLE SOURCE OF TRUTH, same deal as the endplate above:
+  // the fin mesh (the sharkFin part below) AND the fin livery decal in
+  // js/game/carmesh.js both read it, so the tail graphic lands on the fin at
+  // every corner instead of on a rectangle that only roughly overlaps it.
+  // The outline lives in the fin's own (z, y) plane — a raked leading edge and a
+  // base that follows the engine-cover ridge down — plus the half-width at the
+  // base and at the top (the fin TAPERS, so a decal at one flat x floats off the
+  // top edge).
+  const FIN = Object.freeze({
+    baseLE: [-0.65, 0.7935], topLE: [-1.15, 0.97],
+    topTE:  [-1.65, 0.97],   baseTE: [-1.70, 0.6197],
+    halfBase: 0.022, halfTop: 0.014,
+  });
+  const finMix = (a, b, t) => a + (b - a) * t;
+  // Half-width of the fin's flank at a point ON it, plus `proud`. The fin tapers
+  // from halfBase at the engine-cover ridge to halfTop at the crown, so a decal
+  // pinned at one flat x lies on the surface at the bottom and floats a whole
+  // centimetre off it at the top.
+  function finXAt(z, y, proud) {
+    const u = (z - FIN.baseLE[0]) / (FIN.baseTE[0] - FIN.baseLE[0]);   // along the base edge
+    const yBase = finMix(FIN.baseLE[1], FIN.baseTE[1], Math.max(0, Math.min(1, u)));
+    const v = Math.max(0, Math.min(1, (y - yBase) / (FIN.topLE[1] - yBase)));
+    return finMix(FIN.halfBase, FIN.halfTop, v) + proud;
+  }
+  // The livery-GRAPHIC panel on the fin's flank, as the four corners
+  // [frontBottom, rearBottom, rearTop, frontTop] of the +x face ({x,y,z} each).
+  // It follows the whole swept outline, so the painted tail covers the fin the
+  // way a real one does. That means it is a sheared trapezoid — fine for an
+  // abstract wash and motif strokes, WRONG for a badge, which is why the crest
+  // gets its own upright patch below instead of riding on this one.
+  // `inset` pulls it in from the outline (fraction of each edge) so the graphic
+  // stops short of the fin's edges; `proud` lifts it off the surface.
+  function sharkFinPanel(inset, proud) {
+    const i = inset != null ? inset : 0.05;
+    const p = proud != null ? proud : 0.002;
+    const at = (u, v) => {
+      // bilinear over the outline: u = 0 leading → 1 trailing, v = 0 base → 1 top.
+      const bz = finMix(FIN.baseLE[0], FIN.baseTE[0], u), by = finMix(FIN.baseLE[1], FIN.baseTE[1], u);
+      const tz = finMix(FIN.topLE[0],  FIN.topTE[0],  u), ty = finMix(FIN.topLE[1],  FIN.topTE[1],  u);
+      return { x: finMix(FIN.halfBase, FIN.halfTop, v) + p,
+               y: finMix(by, ty, v), z: finMix(bz, tz, v) };
+    };
+    return [at(i, i), at(1 - i, i), at(1 - i, 1 - i), at(i, 1 - i)];
+  }
+  // The CREST patch on the fin: an UPRIGHT, axis-aligned SQUARE in the fin's
+  // (z, y) plane — not a slice of the planform. The fin's leading edge rakes back
+  // half a metre over its height and its base drops away rearward, so a badge
+  // mapped onto the outline leans and squashes with it; a logo has to stay
+  // vertical and square whatever the surface under it is doing. Sized and placed
+  // to sit inside the outline with clearance on all four sides (the fin is a full
+  // 0.35 m tall through this z range, and the crown is flat from z −1.15 back).
+  const FIN_BADGE = Object.freeze({ z0: -1.26, z1: -1.47, y0: 0.745, y1: 0.955 });
+  function sharkFinBadge(proud) {
+    const p = proud != null ? proud : 0.0022;   // just outside the graphic panel
+    const B = FIN_BADGE, at = (z, y) => ({ x: finXAt(z, y, p), y, z });
+    return [at(B.z0, B.y0), at(B.z1, B.y0), at(B.z1, B.y1), at(B.z0, B.y1)];
+  }
   function mergeRecipe(defaults, recipe) {
     return Object.assign(defaults, recipe || {});
   }
@@ -943,6 +1000,7 @@ const Car3D = (function () {
     const noseC = liv.nose || null;
     const podC  = liv.pod  || null;
     const wingC = liv.wing || c2;   // flap colour (front + rear) — c2 keeps today's look
+    const finC  = liv.fin  || c2;   // shark-fin plate — c2 keeps today's look
     const haloTint = liv.halo || null;
     // Parts-driven visual identity: `_visual` contains the resolved parametric
     // recipe for every category; coarse tiers remain neutral fallbacks.
@@ -1598,10 +1656,13 @@ const Car3D = (function () {
     // of the cover instead of resting flat on top of it. Behind the driver —
     // skipped in the cockpit build.
     if (!ckpt) {
+      const fb = FIN.halfBase, ft = FIN.halfTop;
       addBlock(out, [
-        [-0.022, 0.7935, -0.65], [0.022, 0.7935, -0.65], [0.014, 0.97, -1.15], [-0.014, 0.97, -1.15],
-        [-0.022, 0.6197, -1.70], [0.022, 0.6197, -1.70], [0.014, 0.97, -1.65], [-0.014, 0.97, -1.65],
-      ], c2);
+        [-fb, FIN.baseLE[1], FIN.baseLE[0]], [fb, FIN.baseLE[1], FIN.baseLE[0]],
+        [ft, FIN.topLE[1], FIN.topLE[0]],    [-ft, FIN.topLE[1], FIN.topLE[0]],
+        [-fb, FIN.baseTE[1], FIN.baseTE[0]], [fb, FIN.baseTE[1], FIN.baseTE[0]],
+        [ft, FIN.topTE[1], FIN.topTE[0]],    [-ft, FIN.topTE[1], FIN.topTE[0]],
+      ], finC);
     }
 
     // --- Driver number: now a TEXTURE decal on the nose-top plate (see
@@ -2048,5 +2109,7 @@ const Car3D = (function () {
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, teamStyleOf,
-           endplate: endplateGeom, numberBoard, aeroLevelOf };
+           endplate: endplateGeom, numberBoard,
+           sharkFin: FIN, sharkFinPanel, sharkFinBadge,
+           aeroLevelOf };
 })();

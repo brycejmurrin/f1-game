@@ -13,6 +13,12 @@
    nose?:[r,g,b] optional painted NOSE-TIP cap — a distinct-colour nose cone.
    pod?:[r,g,b]  optional bold SIDEPOD panel — the two-tone sidepod look.
    wing?:[r,g,b] optional FRONT+REAR WING flap colour (defaults to c2 = today's look).
+   fin?:[r,g,b]  optional SHARK-FIN paint — the dorsal tail plate on the teams
+     whose chassis style fits one (defaults to c2 = today's look).
+   finArt?:[r,g,b] optional TAIL-GRAPHIC colour on that fin — the accent wash and
+     the motif strokes of the painted tail. When absent it is chosen automatically
+     to separate from the fin's own paint (the fin is one flat colour, so an art
+     colour equal to it is invisible), which is what every livery got before.
    halo?:[r,g,b] optional cockpit-HALO hoop tint (defaults to brushed titanium).
      All four are additive and fully optional — a livery without them renders
      exactly as before.
@@ -404,7 +410,7 @@ const Liveries = (function () {
     // Optional extra paint carried on the team (custom "My Team" defines these via
     // the MY TEAM panel). Additive: absent -> exact same default shape as before.
     const ex = team.livery;
-    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo", "finish"]) if (ex[k]) def[k] = ex[k];
+    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "halo", "finish"]) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 
