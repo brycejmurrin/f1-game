@@ -123,21 +123,30 @@ test("a throwing message handler cannot take down the transport", () => {
 // ICE configuration
 // ---------------------------------------------------------------------------
 
-test("a TURN relay ships by default, because STUN alone leaves people out", () => {
-  // STUN gets roughly 75-90% of pairs connected; symmetric NAT needs a relay,
-  // and "both sides found an address but the link was blocked" is exactly the
-  // failure seen on real devices. Open Relay publishes static credentials meant
-  // to be embedded client-side, so this costs nothing and needs no deployment.
-  const turn = NetTransport.OPEN_RELAY || [];
-  assert.ok(turn.length, "there must be a default relay");
-  const urls = turn.flatMap((s) => (Array.isArray(s.urls) ? s.urls : [s.urls]));
-  assert.ok(urls.every((u) => u.startsWith("turn:")), "these must be relays, not STUN");
-  // 443 and a TCP variant are what get through a corporate firewall; a relay
-  // only reachable on an exotic UDP port helps nobody behind one.
-  assert.ok(urls.some((u) => u.includes(":443")), "needs a 443 endpoint");
-  assert.ok(urls.some((u) => u.includes("transport=tcp")), "needs a TCP fallback");
-  for (const s of turn) {
-    assert.ok(s.username && s.credential, "static credentials, or it cannot be used from a static site");
+test("no DEAD relay ships, and a credentials URL becomes iceServers", async () => {
+  // Open Relay's embeddable static credentials were retired by Metered — the
+  // shipped config gathered ZERO relay candidates on a real device while STUN
+  // worked, which is worse than shipping nothing: it looks like a relay exists
+  // and diagnosis chases the wrong thing. So the contract flips: nothing
+  // static ships, and a Metered-style credentials URL (apex26.turnApi) is
+  // fetched and merged instead — the model the operator actually offers.
+  assert.equal(NetTransport.OPEN_RELAY, undefined, "the dead static relay must be gone");
+
+  // The fetch path, driven with stubs: a credentials URL configured, the
+  // endpoint answering the documented {iceServers: [...]} shape.
+  const turnServer = { urls: ["turn:relay.example:443?transport=tcp"], username: "u", credential: "c" };
+  global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://app.example/api/turn?apiKey=x" : null) };
+  global.fetch = async () => ({ json: async () => ({ iceServers: [turnServer] }) });
+  try {
+    await NetTransport.prefetchIce();
+    const list = NetTransport.iceServers({});
+    assert.ok(list.some((s2) => s2.username === "u"), "fetched credentials must be merged");
+    const urls = list.flatMap((s2) => (Array.isArray(s2.urls) ? s2.urls : [s2.urls]));
+    assert.ok(urls.some((u) => u.startsWith("turn:")), "the merged entry is a relay");
+    assert.ok(urls.some((u) => u.startsWith("stun:")), "STUN still present");
+  } finally {
+    delete global.localStorage;
+    delete global.fetch;
   }
 });
 

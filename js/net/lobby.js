@@ -256,7 +256,9 @@ const NetLobby = (function () {
       return "Could not connect after " + secs + "s" + last + "."
         + " Both sides found an address but the direct link was blocked, which"
         + " usually means one of the networks needs a relay to get through."
-        + (st && st.turn ? "" : " Racing over the same Wi-Fi is the reliable fix.");
+        + (st && st.turn ? "" : " Racing over the same Wi-Fi is the reliable fix"
+          + " — no relay is configured (the free one this game once shipped was"
+          + " retired by its operator; see apex26.turnApi).");
     }
 
     // Poll for the DataChannels opening. There is no event that means "the
@@ -1217,6 +1219,11 @@ const NetLobby = (function () {
 
     // ---- open / close -----------------------------------------------------
     function open() {
+      // Start fetching relay credentials NOW if a credentials URL is
+      // configured — connecting comes seconds later, and the fetch usually
+      // wins that race, so the first connection attempt already carries relay
+      // candidates. Fire-and-forget: no relay configured is a normal state.
+      try { if (NetTransport.prefetchIce) NetTransport.prefetchIce(); } catch (e) {}
       const e = els();
       if (!e.screen) return false;
       _peers.clear(); _ready.clear();
