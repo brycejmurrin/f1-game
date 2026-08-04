@@ -747,6 +747,13 @@ let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.lengt
 let flow = "gp";            // "gp" | "season" | "career"
 let session = "race";       // "race" | "tt" (solo against the clock) | "quali"
 const isChampionship = () => flow === "season" || flow === "career";
+// Does the grid come from a qualifying classification? A championship always
+// does; a one-off does when the player asked for it. Both startRace() (which
+// reads quali.order) and the race-settings GO button ask this, and they must
+// agree — a race that qualified and then gridded up P12 would throw the session
+// away, and one that gridded from a classification it never ran would read a
+// stale one.
+const gridFromQuali = () => isChampionship() || (raceQuali && !isTimeTrial());
 // The ONE way `flow` is written. Career's save is loaded at boot and stays loaded,
 // so js/game/career.js has to be told whether its rules apply to the session that
 // is running — otherwise a Grand Prix would quietly inherit the career's team
@@ -765,6 +772,12 @@ let careerSettlement = null;
 const isCareer = () => flow === "career";
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
+// Whether a one-off race decides its grid by QUALIFYING rather than dropping the
+// player at P12. A championship always qualifies — that is what a weekend is —
+// so this is the switch for everything that is not one. A standing preference
+// like DIFFICULTY and RELIABILITY, not a per-race reset: someone who wants to
+// qualify wants to qualify next time too.
+let raceQuali = store.get("raceQuali", false);
 let raceWeather = "dry";       // "dry" | "wet" | "rain" | "overcast" | "fog"
 let raceTimeOfDay = "default"; // "default" | "dawn" | "day" | "dusk" | "night"
 let ttRecord = Infinity;    // best lap on the current TT track's leaderboard (seconds)
@@ -2124,7 +2137,7 @@ function startRace() {
   } else {
     Particles.rainShow(false);
   }
-  gridUp(isChampionship() ? quali.order(cars) : null);
+  gridUp(gridFromQuali() ? quali.order(cars) : null);
   recomputePlayerMods();
   // Only a RACE can retire a car. A time trial is you against the clock and
   // qualifying is one flying lap — losing the car to a gearbox there would end
@@ -6778,6 +6791,32 @@ function buildRaceSettings() {
     };
     aeroEl.appendChild(b);
   }
+  // Hidden in a time trial (no grid) and FORCED ON in a championship, where the
+  // weekend decides the grid and the choice is not the player's to make. Shown
+  // rather than removed there, because "why did this race qualify" is a
+  // question the screen should answer.
+  const champ = isChampionship();
+  // Hidden in the VS FRIEND room for now: a two-player qualifying session needs
+  // the quali model to carry a SECOND human time (compute() takes one), and it
+  // needs the lobby to hold the session across the session rather than handing
+  // it to NetPlay the moment the race is built. Offering a chip that silently
+  // does nothing is worse than not offering it.
+  $("rs-quali-section").hidden = isTimeTrial() || netRoom;
+  const qEl = $("rs-quali");
+  qEl.innerHTML = "";
+  for (const [on, label] of [[false, "P12 START"], [true, "QUALIFYING"]]) {
+    const active = champ ? on : raceQuali === on;
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (active ? " active" : "");
+    b.setAttribute("aria-pressed", active ? "true" : "false");
+    b.disabled = champ;
+    b.textContent = label;
+    b.onclick = () => {
+      raceQuali = on; store.set("raceQuali", on);
+      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
+    };
+    qEl.appendChild(b);
+  }
   $("rs-reliab-section").hidden = isTimeTrial();
   const relEl = $("rs-reliab");
   relEl.innerHTML = "";
@@ -6856,10 +6895,10 @@ $("rs-go").onclick = () => {
     return;
   }
   if (steerMode === "tilt") enableTilt();
-  // In a championship the weekend starts with qualifying, which is what decides
-  // the grid. A one-off Grand Prix goes straight to the race and keeps its P12
-  // start — that mode is a quick blast, not a weekend.
-  if (isChampionship()) openQuali(); else startRace();
+  // A championship weekend always starts with qualifying, and a one-off does
+  // when GRID is set to QUALIFYING. Otherwise it is straight to the lights from
+  // P12 — a quick blast, which is the point of that mode.
+  if (gridFromQuali()) openQuali(); else startRace();
 };
 
 // ── qualifying ───────────────────────────────────────────────────────────────

@@ -81,6 +81,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#mb-race").click();
       await page.locator("#select").waitFor({ state: "visible" });
       await page.locator("#sel-go").click();
+      await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
       await page.locator("#race-settings").waitFor({ state: "visible" });
       await shot(page, `${orient}-05-race-settings`);
     });
@@ -201,6 +202,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#mb-season").click();
       await page.locator("#select").waitFor({ state: "visible" });
       await page.locator("#sel-go").click();
+      await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
       await page.locator("#race-settings").waitFor({ state: "visible" });
       await page.locator("#rs-go").click();
       await qualiToGrid(page);
@@ -281,6 +283,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#mb-season").click();
       await page.locator("#select").waitFor({ state: "visible" });
       await page.locator("#sel-go").click();
+      await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
       await page.locator("#race-settings").waitFor({ state: "visible" });
       await page.locator("#rs-go").click();
       await qualiToGrid(page);
@@ -432,6 +435,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#mb-season").click();
       await page.locator("#select").waitFor({ state: "visible" });
       await page.locator("#sel-go").click();
+      await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
       await page.locator("#race-settings").waitFor({ state: "visible" });
       await page.locator("#rs-go").click();
       // Before the session: the modelled field, with DRIVE MY LAP still on offer.

@@ -16,9 +16,10 @@ async function goToRace(page) {
   await page.goto("/");
   // Dismiss any overlay — the RACE button lives in the main menu
   await page.locator("#mb-race").click();
-  // Leave team/track at their defaults and continue to the race-settings screen
+  // Leave the circuit at its default; START opens the GARAGE...
   await page.locator("#sel-go").click();
-  // Race settings (laps / weather / time of day) — accept defaults and start
+  // ...and DONE carries on to the race settings, which we accept as they are.
+  await page.locator("#cs-done").click();
   await page.locator("#rs-go").click();
   await waitForTrack(page);
 }
