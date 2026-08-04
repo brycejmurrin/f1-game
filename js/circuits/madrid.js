@@ -244,19 +244,19 @@
           if (type === 0) {
             // Galería: three continuous balcony bands on the street face, each
             // a slab plus a thin railing — one run per floor, not per window.
-            // NOTHING here projects past the block's own w × d envelope: the
-            // deeper city ranks already sit close enough that even a 0.8 m
-            // overhang pushed two of them from a grazing contact into a severe
-            // interpenetration. Madrid's galerías are enclosed and near-flush
-            // anyway, so the band reads from its colour and railing line.
+            // The band STRADDLES the street face — 0.2 m into the wall, 0.7 m
+            // proud. Burying it flush instead (tried) leaves a 0.9 m-deep box
+            // fully embedded in the body, which is worse interpenetration than
+            // the overhang it was meant to avoid; a balcony that projects a
+            // little is both the honest shape and the cleaner solid.
             const bands = 3;
             for (let i = 0; i < bands; i++) {
               const y = bodyH * (0.28 + i * 0.22);
               stage._mat = MAT.CONCRETE;
-              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.45)), a.u, y),
+              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 + 0.25)), a.u, y),
                 [0.9, 0.22, d * 0.86], trim, b);
               stage._mat = MAT.METAL;
-              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.06)), a.u, y + 0.55),
+              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 + 0.62)), a.u, y + 0.55),
                 [0.12, 0.9, d * 0.86], STEEL, b);
               stage._mat = 0;
               // Glazed gallery behind the band — the enclosed balcony Madrid
@@ -305,6 +305,54 @@
             stage._mat = 0;
           }
 
+          // Rooftop clutter — a water tank and a chimney stack. Madrid's
+          // skyline is defined by this junk; a clean parapet is what makes a
+          // generated city look generated.
+          // Height is CLAMPED to the block's original silhouette (the old
+          // recipe topped out at h*0.90). The deep city ranks here sit close
+          // enough that growing a block in any axis turns a graze into a
+          // severe clip, so a block with no headroom simply gets no clutter.
+          const roofTop = bodyH + (type === 1 ? 3.4 : 2.7);
+          const headroom = h * 0.90 - roofTop;
+          if (headroom > 1.2) {
+            const ch = Math.min(2.6, headroom);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.t, (hv - 0.5) * d * 0.5), a.u, roofTop + ch * 0.35),
+              [1.8, ch * 0.7, 2.2], [0.62, 0.60, 0.56], b);
+            stage._mat = MAT.STONE;
+            addBox(stage, vadd(vadd(a.c, a.t, (0.5 - hv) * d * 0.34), a.u, roofTop + ch * 0.5),
+              [1.1, ch, 1.1], trim, b);
+            stage._mat = 0;
+          }
+        });
+      }
+
+      function avenueOffice(id, frac, side, gap, h) {
+        venueGroup(id, frac, side, gap, [20, h + 5, 32], false, (stage, a) => {
+          const b = basis(a);
+          addBox(stage, vadd(a.c, a.u, h * 0.5), [17, h, 29], OFFWHITE, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -side * 8.7), a.u, h * 0.56),
+            [0.7, h * 0.72, 26], DARK_GLASS, b);
+          for (let bay = -2; bay <= 2; bay++) {
+            const col = vadd(vadd(a.c, a.t, bay * 5.1), a.r, -side * 9.3);
+            addBox(stage, vadd(col, a.u, 3.4), [0.65, 6.8, 0.65], STEEL, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, -side * 10.0), a.u, 7.1),
+            [3.0, 0.7, 29], WHITE, b);
+        });
+      }
+
+      function monumentalArcade(id, frac, side) {
+        venueGroup(id, frac, side, 35, [20, 18, 36], false, (stage, a) => {
+          const b = basis(a);
+          addBox(stage, vadd(a.c, a.u, 4.5), [17, 9, 33], MADRID_RED, b);
+          for (let bay = -3; bay <= 3; bay++) {
+            const opening = vadd(vadd(a.c, a.t, bay * 4.2), a.r, -side * 8.7);
+            addBox(stage, vadd(opening, a.u, 4.3), [0.7, 5.4, 2.4], ARCADE_DARK, b);
+          }
+          addBox(stage, vadd(a.c, a.u, 9.5), [18, 1.0, 34], WHITE, b);
+          addBox(stage, vadd(a.c, a.u, 12.0), [15, 4.0, 31], CROWD, b);
+          addPrism(stage, vadd(a.c, a.u, 15.0), [17, 2.2, 34], WHITE, b);
         });
       }
 

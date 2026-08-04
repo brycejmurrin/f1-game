@@ -131,6 +131,29 @@
         addBox(out, vadd(p.c, p.u, 8.2), [1.0, 0.5, 0.6], [0.98, 0.94, 0.74], [p.r, p.u, p.t]);
       };
 
+      // ── Jacaranda / plane avenue ─────────────────────────────────────────────
+      // Magdalena Mixhuca's near planting, as Mexico City actually plants a
+      // street: jacaranda in violet flower (broadleafFall's off-axis lobes are
+      // the only crown in the library that keeps a shape at a non-green
+      // colour), heavily pollarded plane — the crown is cut back to a disc
+      // every winter, which is why it reads as a cylinder and not a cone — and
+      // huizache on the dry unirrigated verges. One tree per ~26 m.
+      // This is the layer the driver sees; forestEdge is only the mass behind it.
+      const avenue = (s0, s1, side, dist, step) => {
+        along(s0, s1, step, (k) => {
+          const r = hash(k * 5.7 + side * 3.1);
+          const d = dist + hash(k * 8.3 + side) * 4;
+          if (r < 0.50) {
+            broadleafFall(k, side, d, 8 + r * 8, r < 0.25 ? JACARANDA : JAC2,
+                          { lobes: 3, spread: 1.05 });
+          } else if (r < 0.84) {
+            plane(k, side, d, 9 + r * 5, PARKGRN, { stages: 2, spread: 0.9 });
+          } else {
+            acacia(k, side, d, 6 + r * 3, HUIZACHE, { layers: 2 });
+          }
+        });
+      };
+
       // ── Kerb accent strips ────────────────────────────────────────────────────
       const kerb = (s, side, len) => {
         const k = K(s);
@@ -250,18 +273,23 @@
       // ════════════════════════════════════════════════════════════════════════
       hedge(0.04, 0.14, 1, 13, 3.2, TREEGRN);
       hedge(0.04, 0.12, -1, 16, 2.8, PARKGRN);
-      forestEdge(0.04, 0.14, 1, 17, { density: 0.92, hMin: 8, hMax: 15, col: TREEGRN, col2: PARKGRN, pineFrac: 0.25 });
-      forestEdge(0.04, 0.14, -1, 20, { density: 0.72, hMin: 7, hMax: 13, col: PARKGRN, col2: TREEGRN, pineFrac: 0.20 });
-      // Second rank behind the near treeline (depth without city walls)
-      forestEdge(0.05, 0.13, 1, 30, { density: 0.55, hMin: 9, hMax: 16, col: TREEGRN, col2: PARKGRN, pineFrac: 0.35 });
+      // ONE backdrop rank per shoulder, and a sparse one. The corridor used to
+      // carry up to three overlapping forestEdge ranks a side at density 0.9,
+      // which across the whole lap was 385 k verts — 28 % of the circuit, spent
+      // on the most interchangeable thing on it. The rank that the driver
+      // actually sees is the jacaranda avenue in front of it.
+      forestEdge(0.04, 0.14,  1, 26, { density: 0.30, hMin: 9, hMax: 16, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
+      forestEdge(0.04, 0.14, -1, 28, { density: 0.26, hMin: 8, hMax: 15, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
+      avenue(0.04, 0.14,  1, 14, 26);
+      avenue(0.04, 0.14, -1, 17, 30);
 
-      // Mid-lap park densify (T1 → Horquilla approach) — Mixhuca before skyline
-      forestEdge(0.14, 0.30, 1, 22, { density: 0.78, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
-      forestEdge(0.14, 0.28, -1, 22, { density: 0.50, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
-      forestEdge(0.30, 0.48, 1, 22, { density: 0.62, hMin: 7, hMax: 12, col: TREEGRN, col2: PARKGRN, pineFrac: 0.20 });
-      // L side had nothing from 0.28→0.50 (forestEdge above only ran R) — the
-      // flattest, emptiest stretch of the lap. Mirror the same treeline.
-      forestEdge(0.28, 0.50, -1, 22, { density: 0.62, hMin: 7, hMax: 12, col: PARKGRN, col2: TREEGRN, pineFrac: 0.20 });
+      // Mid-lap park (T1 → Horquilla approach) — Mixhuca before skyline
+      forestEdge(0.14, 0.30,  1, 26, { density: 0.28, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
+      forestEdge(0.14, 0.50, -1, 26, { density: 0.24, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
+      forestEdge(0.30, 0.48,  1, 26, { density: 0.24, hMin: 7, hMax: 12, col: TREEGRN, col2: PARKGRN, pineFrac: 0.20 });
+      avenue(0.14, 0.30,  1, 15, 32);
+      avenue(0.16, 0.50, -1, 16, 36);
+      avenue(0.30, 0.48,  1, 15, 34);
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.12  TURN 1 GRANDSTAND
@@ -357,11 +385,10 @@
                  { wall: [0.86, 0.86, 0.84], window: [0.40, 0.46, 0.50], floor: 2 });
       }
       // Park trees both sides of the sports facility section — denser toward stadium
-      forestEdge(0.48, 0.60, 1, 22, { density: 0.82, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
-      forestEdge(0.60, 0.68, 1, 11, { density: 0.82, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
-      forestEdge(0.48, 0.60, -1, 22, { density: 0.68, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
-      forestEdge(0.60, 0.68, -1, 24, { density: 0.68, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
-      forestEdge(0.62, 0.70, 1, 14, { density: 0.70, hMin: 8, hMax: 14, col: TREEGRN, col2: PARKGRN, pineFrac: 0.25 });
+      forestEdge(0.48, 0.68,  1, 26, { density: 0.32, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
+      forestEdge(0.48, 0.68, -1, 26, { density: 0.28, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
+      avenue(0.48, 0.68,  1, 13, 26);
+      avenue(0.50, 0.68, -1, 14, 30);
 
       // Palacio de los Deportes — the landmark copper geodesic dome that sits in
       // this very sports park. A wide, low hyperbolic-paraboloid roof clad in
@@ -426,41 +453,55 @@
       groundPatch(K(0.785),  1, 28, [36, 0.6, 36], DIRT,
                   { id: "foro-infield-right", samples: 6 });
 
-      // Continuous eye-height seat wall — BOTH sides, spanning the bowl only
-      // (entry/exit apertures left open so the corridor brightens in/out)
-      bowlSeatWall(0.73, 0.86, -1, 10, { h: 6.2, thick: 3.6, shell: CONCRETE, step: 8 });
-      bowlSeatWall(0.73, 0.86,  1, 10, { h: 6.2, thick: 3.6, shell: CONCRETE, step: 8 });
-      // Upper continuous bank behind the eye wall (taller enclosure silhouette)
-      bowlSeatWall(0.735, 0.855, -1, 22, { h: 9.5, thick: 4.2, shell: [0.66, 0.64, 0.62], step: 10 });
-      bowlSeatWall(0.735, 0.855,  1, 22, { h: 9.5, thick: 4.2, shell: [0.66, 0.64, 0.62], step: 10 });
-
-      // The route bends sharply inside Foro Sol. Short bounded tiers follow that
-      // shape; the old 70 m tangent stands chorded across the road at 3.92 m.
-      for (const s of [0.75, 0.78, 0.81, 0.84]) {
-        boundedStand(s, -1, 30, 24, [0.66, 0.64, 0.62], BOWL_BLUE, s === 0.78);
-        boundedStand(s, -1, 50, 26, [0.58, 0.56, 0.54], BOWL_GREY, false);
-        if (s !== 0.75) boundedStand(s, 1, 30, 24, [0.66, 0.64, 0.62], BOWL_GREY, s === 0.78);
-        if (s === 0.78 || s === 0.84) boundedStand(s, 1, 36, 26, [0.58, 0.56, 0.54], BOWL_BLUE, false);
+      // ── THE BOWL ITSELF ─────────────────────────────────────────────────
+      // Foro Sol is a BASEBALL STADIUM the circuit drives through, and what
+      // that means on camera is a steep stepped rake of navy bucket seats
+      // rising on BOTH sides of the car with no roof and no back shell to hide
+      // behind — the one place in Formula 1 where the crowd is above you on
+      // both hands at once. bowlSeatWall (a flat slab with a crowd stripe
+      // painted down its face) could give the enclosure but not the STEP;
+      // tieredBowl's tiers climb AND recede, which is the whole silhouette.
+      // Seats are Estadio GNP Seguros navy, not a fiesta rainbow: the marigold
+      // is one entry in seven so it reads as the occasional pop a broadcast
+      // catches, never as a colour scheme.
+      const SEAT_NAVY = [
+        BOWL_BLUE, [0.21, 0.30, 0.56], BOWL_BLUE, [0.28, 0.39, 0.66],
+        BOWL_BLUE, BOWL_GREY, BOWL_POP,
+      ];
+      const BOWL_SHELL = [[0.62, 0.61, 0.60], [0.54, 0.54, 0.55]];
+      for (const side of [-1, 1]) {
+        tieredBowl(0.728, 0.858, side, 9, {
+          tiers: 4, tierDepth: 5.2, base: 3.6, rise: 3.1,
+          shell: BOWL_SHELL, fascia: [0.90, 0.89, 0.84],
+          crowd: SEAT_NAVY, density: 0.66, step: 9,
+        });
       }
-
-      // Packed upper terraces cresting the rim (both sides)
-      for (const s of [0.755, 0.805, 0.845]) {
-        crowdBank(s, -1, 34, 28, 6);
-        if (s === 0.845) crowdBank(s, 1, 34, 28, 6);
+      // Outer upper deck: poured concrete terracing carried on the bowl's back,
+      // with its own retaining wall. terrace() rather than another tieredBowl
+      // so the rim reads as a DIFFERENT structure stacked on the lower bowl —
+      // shallower steps, flat risers, a plain wall closing the top.
+      for (const side of [-1, 1]) {
+        terrace(0.734, 0.852, side, 32, {
+          rows: 5, rise: 1.9, depth: 2.8,
+          conc: [0.68, 0.67, 0.64], concAlt: [0.58, 0.57, 0.56],
+          crowd: SEAT_NAVY, density: 0.5, step: 10,
+        });
       }
+      // Roofed press/suite boxes crowning the rim at the two ends only — the
+      // stadium's only covered seating, and what keeps the bowl from reading as
+      // a single unbroken step profile all the way round.
+      boundedStand(0.744, -1, 52, 26, [0.60, 0.59, 0.58], BOWL_BLUE, false);
+      boundedStand(0.842, -1, 52, 26, [0.60, 0.59, 0.58], BOWL_GREY, false);
       // Entry/exit end caps stay behind the bright apertures.
       boundedStand(0.715, -1, 36, 20, [0.58, 0.56, 0.54], BOWL_GREY, false);
       boundedStand(0.875, -1, 36, 20, [0.58, 0.56, 0.54], BOWL_BLUE, false);
       boundedStand(0.875,  1, 36, 20, [0.58, 0.56, 0.54], BOWL_GREY, false);
 
-      // Sparse outer upper decks complete the bowl silhouette without filling
-      // the bright entry/exit apertures or tightening the driver's sightline.
-      boundedStand(0.835, -1, 44, 20, [0.56, 0.55, 0.54], BOWL_BLUE, false);
-
-      // Foro Sol floodlight masts — ring the outer rim
+      // Foro Sol floodlight masts — set outside the upper terrace (which now
+      // reaches ~48 m) so they stand on the rim rather than inside the seating.
       for (const s of [0.74, 0.77, 0.80, 0.83, 0.85]) {
-        lightMast(K(s), -1, 31, 52);
-        if (s >= 0.80) lightMast(K(s), 1, 31, 52);
+        lightMast(K(s), -1, 50, 52);
+        if (s >= 0.80) lightMast(K(s), 1, 50, 52);
       }
 
       // Foro Sol scoreboard / jumbotron at the far end of the stadium (s≈0.80)
@@ -481,16 +522,8 @@
         banners(s, -1, 9); banners(s, 1, 9);
       }
 
-      // Crowd-block accents on the outer tier fronts — grey/blue like the rest
-      // of the bowl, with one sparse marigold pop rather than a rainbow cycle.
-      // Short panels keep each footprint local to the winding stadium and
-      // safely behind the shell.
-      for (const [s, side, ci] of [
-        [0.748, -1, 0], [0.772, 1, 1], [0.798, -1, 0],
-        [0.822, 1, 1], [0.846, -1, 6],   // ci=6 → BOWL_POP, the one marigold pop
-      ]) {
-        place(K(s), side, 33, [0.8, 4.5, 12], crowdCols[ci]);
-      }
+      // (The painted crowd-block accents that used to sit at 33 m are gone —
+      // that band is now the upper terrace, which carries real crowd bands.)
 
       // Interior fencing at trackside (safety fence inside stadium) — bowl only
       fence(0.735, 0.855, -1, 10, 3.8, [0.82, 0.84, 0.88]);
@@ -504,7 +537,7 @@
       // Mexican flag colours on the stadium outer wall fascia (visible from outside)
       for (const side of [-1, 1]) {
         const points = [];
-        along(0.73, 0.86, 18, (k) => points.push({ k, side, dist: 31 }));
+        along(0.73, 0.86, 18, (k) => points.push({ k, side, dist: 30.4 }));
         groundedSegments({
           id: `foro-outer-fascia-${side}`,
           points, width: 1.0, height: 20,
@@ -522,7 +555,8 @@
         floor: 3, roof: [0.88, 0.24, 0.44],
       });
       // Soft park trees just past the exit gap (not walling it shut)
-      forestEdge(0.89, 0.94, -1, 17, { density: 0.55, hMin: 7, hMax: 12, col: PARKGRN, col2: TREEGRN, pineFrac: 0.2 });
+      forestEdge(0.89, 0.94, -1, 22, { density: 0.24, hMin: 7, hMax: 12, col: PARKGRN, col2: TREEGRN, pineFrac: 0.2 });
+      avenue(0.89, 0.94, -1, 15, 28);
 
       // ════════════════════════════════════════════════════════════════════════
       // s=0.92  PERALTADA / ESTADIO STAND
@@ -534,8 +568,14 @@
         boundedStand(s, 1, 14, 24, SEATS, PINK, false);
         boundedStand(s, 1, 32, 26, CONCRETE, GREEN, false);
       }
-      // Packed upper terrace behind the banked Peraltada/Estadio stand
-      crowdBank(0.92, 1, 40, 110, 7);
+      // Packed upper terrace behind the banked Peraltada/Estadio stand. This
+      // follows the banking round instead of chording a 110 m tangent across
+      // the fastest corner on the lap, which is what the local model did.
+      terrace(0.892, 0.952, 1, 46, {
+        rows: 6, rise: 1.7, depth: 2.7, crowd: crowdCols,
+        conc: [0.70, 0.69, 0.66], concAlt: [0.60, 0.59, 0.57],
+        density: 0.58, step: 10,
+      });
       // Taller floodlights flanking the Peraltada
       lightMast(K(0.90), 1, 32, 44);
       lightMast(K(0.94), 1, 32, 44);
@@ -632,23 +672,24 @@
         [0.905, -1, 11, 52, ORANGE], [0.945,  1, 10, 54, PINK],
       ]) grandstand(s, side, gap, len, SEATS, crowd);
       // Packed standing terraces behind the Esses and the Peraltada banking.
-      bowlSeatWall(0.215, 0.265,  1, 20, { h: 5.4, thick: 3.4, shell: CONCRETE, step: 9 });
-      bowlSeatWall(0.915, 0.965, -1, 20, { h: 5.6, thick: 3.4, shell: CONCRETE, step: 9 });
+      // Stepped concrete, not a flat eye-height slab: the general-admission
+      // terracing at Hermanos Rodríguez is poured steps, and the step profile
+      // is what separates it from the ticketed stands either side of it.
+      terrace(0.215, 0.265,  1, 20, { rows: 4, rise: 1.6, depth: 2.6,
+        crowd: crowdCols, density: 0.6, step: 9 });
+      terrace(0.915, 0.965, -1, 20, { rows: 4, rise: 1.6, depth: 2.6,
+        crowd: crowdCols, density: 0.6, step: 9 });
 
       // ── Magdalena Mixhuca park corridor: a real avenue, not a thin hedge ────
       // The DRS straight and the run down to the stadium are lined with mature
       // park trees on both shoulders. Second and third ranks at 13/22 m fill
       // the band between the fence and the first treeline.
-      for (const [s0, s1, side] of [
-        [0.055, 0.14,  1], [0.055, 0.14, -1],
-        [0.60, 0.70,  1], [0.60, 0.70, -1],
-        [0.89, 0.94, -1], [0.89, 0.94,  1],
-      ]) {
-        forestEdge(s0, s1, side, 13, { density: 0.55, hMin: 7, hMax: 12,
-          col: TREEGRN, col2: PARKGRN, pineFrac: 0.18 });
-        forestEdge(s0, s1, side, 22, { density: 0.45, hMin: 8, hMax: 14,
-          col: PARKGRN, col2: TREEGRN, pineFrac: 0.24 });
-      }
+      // (The second and third forestEdge ranks that used to run here — twelve
+      // more full-band treelines at 13 m and 22 m on top of everything above —
+      // are what made this circuit's foliage both the heaviest and the least
+      // distinctive in the fleet. The avenue() calls in each section replace
+      // them with roughly a tenth of the geometry and a Mexican species mix.)
+      avenue(0.60, 0.70, -1, 15, 30);
       // Shrub clumps in the strip between the fence line (5.5 m) and the first
       // treeline — the only band on this circuit with nothing else in it.
       every(26, (k) => {

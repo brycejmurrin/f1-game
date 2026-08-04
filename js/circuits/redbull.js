@@ -654,6 +654,23 @@
       hayBale(K(0.47), -1, 22);
       hayBale(K(0.565), 1, 24);
       hayBale(K(0.605), -1, 22);
+      // Field-boundary broadleaf along the same pasture stretch. Every tree at
+      // this circuit came out of a forestEdge() pine mix, so the meadow floor
+      // and the mountain slope grew the SAME conifer — but a Styrian valley
+      // floor is beech and maple standing alone at the field edges, and the
+      // pines start where the ground tilts. broadleafFall()'s off-axis lobe
+      // crown is that form (summer green passed in; the shape is the point,
+      // not the palette). Deliberately sparse and hedge-line-aligned: this is
+      // the boundary between two fields, not another treeline.
+      const MEADOW_LEAF = [0.24, 0.42, 0.18], MEADOW_LEAF_L = [0.31, 0.48, 0.22];
+      for (let i = 0; i < 13; i++) {
+        const sf = 0.395 + i * 0.019;
+        const k = K(sf), hv = hash(k * 61 + i * 7);
+        const side = hv < 0.48 ? 1 : -1;
+        broadleafFall(k, side, 24 + hv * 20, 9 + hv * 5,
+                      hv < 0.5 ? MEADOW_LEAF : MEADOW_LEAF_L,
+                      { lobes: hv > 0.6 ? 3 : 2, spread: 0.85 + hv * 0.35 });
+      }
 
       // =======================================================================
       // 2026 SCENERY DRESS PASS — six bounded, hero-sector additions
