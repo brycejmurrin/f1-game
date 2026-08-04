@@ -1272,7 +1272,18 @@ const Tracks = (function () {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
-      const o = side * (hw[k] + dist);
+      // prop() places by CLEARANCE — it passes gap + sz[0]/2 — so two props at
+      // the same station with the same gap land their inner faces on exactly the
+      // same plane whatever their size. Same plane, same facing, zero gap: they
+      // flicker against each other at any distance, and roadside props sit close
+      // enough to the car to be very visible. Break the tie with a sub-decimetre
+      // nudge keyed to the BOX SIZE as well as the station, so two differently
+      // sized props at one station separate (two identical ones are a duplicate,
+      // not a tie). Always OUTWARD, so nothing moves nearer the track, and
+      // blockAt/indexSolidAt below keep the unnudged `dist` — the driving limit
+      // does not move and stays conservative.
+      const jitter = hash(k * 7.7 + sz[0] * 3.1 + sz[1] * 5.3 + sz[2] * 1.9) * 0.09;
+      const o = side * (hw[k] + dist + jitter);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       // skip if this prop would overlap a parallel stretch of track
       if (onTrack(cx, cz, sz[0] / 2 + 1.5)) {

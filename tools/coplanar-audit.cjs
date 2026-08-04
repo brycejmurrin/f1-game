@@ -278,7 +278,10 @@ function main() {
   const env = buildContext();
   const ids = argv.includes("--all")
     ? env.Tracks.LIST.map((d) => d.id)
-    : argv.filter((a) => !a.startsWith("--") && isNaN(Number(a)));
+    // Skip any token consumed as a flag's VALUE, or `--site scenery-city.js:109`
+    // is read as a track id.
+    : argv.filter((a, i) => !a.startsWith("--") && isNaN(Number(a)) &&
+                            !(i > 0 && argv[i - 1].startsWith("--")));
 
   const out = [];
   for (const id of ids) {
@@ -323,8 +326,16 @@ function main() {
       }
     }
     if (argv.includes("--raw")) {
-      console.log("\nraw stacks (first 3 hits):");
-      for (const { h, at } of rawHits.slice(0, 3)) {
+      // --site <substr> narrows the dump to one call site, which is the only way
+      // to look at a bucket that is not the biggest one.
+      const si = argv.indexOf("--site");
+      const want2 = si >= 0 ? argv[si + 1] : null;
+      let sel = rawHits;
+      if (want2) sel = rawHits.filter(({ h, at }) =>
+        (site(at.get(primKey(h.a))) + site(at.get(primKey(h.b)))).includes(want2));
+      sel = sel.slice().sort((p, q) => q.h.area - p.h.area);
+      console.log(`\nraw stacks (top ${Math.min(3, sel.length)} by area of ${sel.length}):`);
+      for (const { h, at } of sel.slice(0, 3)) {
         const ext = (p) => `${p.name} [${p.minX.toFixed(1)},${p.minY.toFixed(1)},${p.minZ.toFixed(1)}]` +
           `..[${p.maxX.toFixed(1)},${p.maxY.toFixed(1)},${p.maxZ.toFixed(1)}] q=${p.q}`;
         console.log(`  area ${h.area.toFixed(1)} gap ${(h.gap * 1000).toFixed(2)}mm`);

@@ -100,8 +100,18 @@
             const ang = i / seg * 6.2832;
             rim.push(vadd(vadd(hub, a.t, Math.cos(ang) * radius), a.u, Math.sin(ang) * radius));
           }
+          // Spring the spokes off the hub's SURFACE (its box below is 3.5 m), not
+          // its centre. From the centre all 16 pile through each other inside the
+          // hub, coplanar in the wheel plane at the same thickness -- the High
+          // Roller is the tallest thing on the circuit, so that knot flickers in
+          // frame for most of the lap. r = 2.0 leaves 0.77 m between neighbours.
+          const HUB_R = 2.0;
           for (let i = 0; i < seg; i++) {
-            strut(hub, rim[i], 0.28, [0.34, 0.36, 0.42]);
+            const d = [rim[i][0] - hub[0], rim[i][1] - hub[1], rim[i][2] - hub[2]];
+            const L = Math.hypot(d[0], d[1], d[2]) || 1;
+            const root = [hub[0] + d[0] / L * HUB_R, hub[1] + d[1] / L * HUB_R,
+                          hub[2] + d[2] / L * HUB_R];
+            strut(root, rim[i], 0.28, [0.34, 0.36, 0.42]);
             strut(rim[i], rim[(i + 1) % seg], 0.38, [0.82, 0.90, 1.00]);
             const cabCol = [CYAN, MAGENTA, GOLD, LIME][i % 4];
             addBox(stage, vadd(rim[i], a.u, -1.2), [2.4, 2.2, 2.4], cabCol, [a.r, a.u, a.t]);
