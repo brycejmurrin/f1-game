@@ -254,7 +254,7 @@ const NetRendezvous = (function () {
         message: "Room codes on a private relay take one guest. Use the invite link for the others." });
     }
     return NetNostr.exchange({
-      code: o.code, mintOffer: o.mintOffer, onJoiner: o.onJoiner,
+      code: o.code, send: o.mine, mintOffer: o.mintOffer, onJoiner: o.onJoiner,
       token: o.token, onTick: o.onTick,
       // A room that resolves early can still fail LATER — dead relays, the
       // code expiring — and after the promise is answered this callback is the
