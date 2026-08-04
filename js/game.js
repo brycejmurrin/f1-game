@@ -4390,7 +4390,16 @@ function updateCar(c, dt, ranked) {
     // be reached by a car stuck in the run-off — it idles along at the floor
     // forever, above the gate, and never counts as beached. Measured: a wrong-way
     // car sat at 10.8 m/s and x = -10.9 while its rescue timer decayed back to 0.
-    const beached = c.offroad && c.speed < GRASS_V * 0.6 + 1.5;
+    //
+    // PACE-SCALED, exactly like the floor it sits above. The floor itself is
+    // `GRASS_V * 0.6 * max(PACE, 0.05)` (see the grass-drag clause), so a bare
+    // `GRASS_V * 0.6 + 1.5` only clears it at PACE = 1 — the one setting the
+    // invariant above was measured at. Above ~1.14 the floor climbs past the
+    // gate and a beached car is never rescued; below ~0.57 the gate climbs past
+    // ordinary run-off speeds and a driver in full control is teleported to
+    // x = 0 after 3 s. Both are precisely the bugs this comment says were
+    // fixed, reintroduced through the OVERALL SPEED slider.
+    const beached = c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5;
     const stuck = beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
     // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
     // stuck conditions. Only applies once a rescue has actually happened —
