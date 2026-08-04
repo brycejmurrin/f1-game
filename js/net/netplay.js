@@ -45,6 +45,7 @@ const NetPlay = (function () {
     READY: "ready",                       // either way: I am done choosing
     GO: "go",                             // host -> guest: leave the room, build the race
     START: "start",                       // host -> guest lights-out tick
+    ARMED: "armed",                       // guest -> host: my circuit is built, name the moment
     LAP: "lap",                           // completed lap / sector
     RESULT: "result",                     // final classification
     CAUTION: "caution",                   // host -> guest race control (flags)
@@ -217,6 +218,13 @@ const NetPlay = (function () {
           if (eventLog.length > 32) eventLog.shift();
           if (name === EV.BYE) { lastReason = "bye"; stop("bye"); }
           if (name === EV.START && d && d.at != null) armStart(d.at, d.hold);
+          // The guest's circuit is up. If the host was already holding for it
+          // (hostStart ran first, which is the normal order), name the moment
+          // now — this is the earliest instant both sides can act on one.
+          if (name === EV.ARMED && role === "host") {
+            peerArmed = true;
+            if (armDeadline) nameTheMoment();
+          }
           if (name === EV.LAP && d) peerLaps.push(d);
           if (name === EV.RESULT && d) peerResult = d;
           if (name === EV.CAUTION && d && G.applyCaution) G.applyCaution(d);
@@ -243,7 +251,13 @@ const NetPlay = (function () {
       });
       lastPublish = -Infinity;
       lastReason = null;
+      peerArmed = false;
+      armDeadline = 0;
       active = true;
+      // start() is called straight after startRace(), so reaching this line IS
+      // "my circuit is built and my loop is about to run again". That is the
+      // fact the host needs before it can name lights-out.
+      if (role === "guest") { try { session.sendEvent(EV.ARMED, {}); } catch (e) {} }
       return { ok: true, role, localId: G.cars.indexOf(localCar), remoteId: G.cars.indexOf(remoteCar) };
     }
 
@@ -254,14 +268,44 @@ const NetPlay = (function () {
     // before it matters — arming it at the moment of lights-out instead would
     // release the host first by half a round trip, every single race.
     const START_LEAD_MS = 2500;
+    // How long the host will wait for the guest to say its circuit is built
+    // before starting anyway. Long, because it is a ceiling on a pathological
+    // case, not a normal wait: a phone building a street circuit is the slow
+    // end of legitimate, and starting without them is strictly worse than
+    // making the host wait a few more seconds.
+    const ARM_WAIT_MS = 20000;
+    let armDeadline = 0;                  // host: when to stop waiting for ARMED
+    let peerArmed = false;
 
     function armStart(atPeerMs, hold) {
       const at = session ? session.peerToLocal(atPeerMs) : atPeerMs;
       G.netStart = { at, hold, now: () => (G.netNow != null ? G.netNow : performance.now()) };
     }
 
+    // The moment cannot be named until BOTH sides can act on it.
+    //
+    // hostStart() used to fire the instant the host's own race was up, two and
+    // a half seconds ahead. But the guest only arms when it PUMPS the event,
+    // and pump() runs on the game loop — which on the guest is blocked solid
+    // building the circuit. On a phone that build outlasts the lead, so the
+    // named instant was already in the past when it finally arrived: countT
+    // began past the end of the sequence, the guest skipped the whole
+    // countdown, and only the host ever saw the lights. Reported from a real
+    // desktop-hosts-iPhone-joins race.
+    //
+    // So the guest reports when its circuit is built (start() is called after
+    // startRace(), which is exactly that moment) and the host names the
+    // instant only then. The lead is now measured from a point both sides have
+    // reached, instead of from one side's optimism.
     function hostStart() {
       if (role !== "host" || !session) return false;
+      if (!peerArmed) { armDeadline = performance.now() + ARM_WAIT_MS; return true; }
+      return nameTheMoment();
+    }
+
+    function nameTheMoment() {
+      if (role !== "host" || !session) return false;
+      armDeadline = 0;
       const at = performance.now() + START_LEAD_MS;
       // The hold is the host's to roll: two independent draws would release
       // one driver before the other, which is the whole thing being fixed.
@@ -332,6 +376,11 @@ const NetPlay = (function () {
       // caught it.
       session.pump(now);
       if (!session || !session.alive()) return;   // onClose already handled it
+
+      // Host waiting on the guest's circuit (see hostStart). Checked after the
+      // pump, so an ARMED that arrived on this very tick has already been
+      // handled and this only fires when the guest really has gone quiet.
+      if (armDeadline && now >= armDeadline) nameTheMoment();
 
       // Publish our own car. Only ours — under distributed authority nobody
       // else's position is ours to assert.

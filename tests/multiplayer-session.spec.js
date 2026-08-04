@@ -232,6 +232,35 @@ test.describe("multiplayer session", () => {
     expect(out.cleared).toBe(false);
   });
 
+  test("a peer that arrives late still sees the lights, not just the green", async ({ page }) => {
+    // Reported from a desktop-hosts / iPhone-joins race: the host saw the
+    // lights go out and the guest saw nothing at all.
+    //
+    // The guest arms only when it PUMPS the start event, and pump() rides the
+    // game loop — which is blocked solid building the circuit. On a phone that
+    // build outlasts the host's lead, so the named instant is already in the
+    // past on arrival and countT begins part-way through (or past the end of)
+    // the sequence. The gantry then lit only the newest lamp, so every lamp
+    // before it stayed dark for good.
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0 });
+      // Arm at t=1000 for an instant only 1.2 s out, with 5 s of lights to
+      // fit into it — i.e. we join the sequence already three lights down.
+      A.netStartArm(1000, 2200, 0.5);
+      A.netTick(1400); A.step(1 / 60, 1);
+      const lit = () => [...document.querySelectorAll("#lights > *")]
+        .filter((e) => e.classList.contains("on")).length;
+      const partWay = lit();
+      A.netTick(2400); A.step(1 / 60, 1);
+      return { partWay, state: A.info().state };
+    });
+    // Every lamp up to the current count, not just the last one.
+    expect(out.partWay).toBeGreaterThanOrEqual(3);
+    expect(out.state).toBe("race");
+  });
+
   test("a lap time reaches the rival over the reliable channel", async ({ page }) => {
     // Lap times decide the RESULT, so they cannot ride the lossy channel.
     await race(page);

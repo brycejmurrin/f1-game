@@ -17,7 +17,7 @@ async function openSetup(page) {
   });
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-setup").click();
+  await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 
@@ -76,18 +76,21 @@ test.describe("Car setup — nothing shows through from the screen below", () =>
     overlay:  document.getElementById("overlay").hidden,
     select:   document.getElementById("select").hidden,
     carsetup: document.getElementById("carsetup").hidden,
+    "race-settings": document.getElementById("race-settings").hidden,
   }));
 
-  // Both routes in, and both routes back out: DONE returns you where you came
-  // from (garageReturn), so the two paths differ on the way out, not the way in.
+  // Both routes in, and where each one leads OUT. DONE reads garageReturn: from
+  // the title screen it goes back to the menu, and from the circuit picker it
+  // goes FORWARD to the race settings — the garage is a step on the way to a
+  // race now, not a side door off it.
   for (const [route, enter, backTo] of [
     ["GARAGE from the title", "#mb-garage", "overlay"],
-    ["SETUP from the track picker", "#sel-setup", "select"],
+    ["START from the track picker", "#sel-go", "race-settings"],
   ]) {
     test(`${route}: no screen is left visible behind the panel`, async ({ page }) => {
       await page.goto("/");
       await waitReady(page);
-      if (enter === "#sel-setup") {
+      if (enter === "#sel-go") {
         await page.locator("#mb-race").click();
         await page.locator("#select").waitFor({ state: "visible" });
       }
@@ -187,17 +190,12 @@ test.describe("Garage — TEAM tab owns team, driver and MY TEAM", () => {
     await page.locator("#cs-done").click();
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
-    await expect(page.locator("#sel-team-card")).toContainText(surname);
-    // ...the card opens the TEAM PICKER (it is the team summary), and the
-    // GARAGE button beside it is the way back in. They used to share one
-    // destination, which is why tapping your own team landed you in the parts
-    // garage.
-    await page.locator("#sel-team-card").click();
-    await expect(page.locator("#teampicker")).toBeVisible();
-    await page.locator("#tp-close").click();
-    await expect(page.locator("#carsetup")).toBeHidden();
-    await page.locator("#sel-setup").click();
+    // The team summary lives in the GARAGE now — the select screen asks where
+    // you race and nothing else, and START is the way in.
+    await page.locator("#sel-go").click();
     await expect(page.locator("#carsetup")).toBeVisible();
+    await page.locator('#cs-tabs [data-cs-cat="team"]').click();
+    await expect(page.locator("#cs-driver .sel-chip.active")).toContainText(surname);
   });
 });
 

@@ -1,7 +1,9 @@
-/* Apex 26 — the select-screen UI for js/game.js: the YOUR CAR summary card, the
-   track picker with live preview map + elevation canvases, and the fullscreen
-   circuit-detail modal. The screen answers WHERE you race; who you are and what
-   you drive belong to the garage (js/game/setup-ui.js), which the card links to.
+/* Apex 26 — the select-screen UI for js/game.js: the track picker with its live
+   preview map + elevation canvases, and the fullscreen circuit-detail modal.
+   The screen answers WHERE you race and nothing else — who you are and what you
+   drive belong to the garage (js/game/setup-ui.js), which START opens on the
+   way to the race. It used to carry a YOUR CAR summary card and a GARAGE button
+   as well, and won at neither job.
    Also owns the shared team-picker sheet (#teampicker) that the garage opens.
    Pure DOM; live selection state comes through the ctx façade G handed to
    Menus.create(G). Consumes globals Teams, Tracks, TrackMaps.
@@ -38,11 +40,10 @@ const vt = (fn) => {
   setTimeout(run, 60);
 };
 
-// ---- team card + full-screen team picker ----------------------------------
-// The select screen shows ONE read-only card summarising the car you will take
-// out — team, engine and driver — and tapping it opens the GARAGE, which is
-// where the choice actually lives. The twelve-way team choice itself is this
-// sheet, opened from the garage's TEAM & DRIVER tab.
+// ---- full-screen team picker ----------------------------------------------
+// The twelve-way team choice, opened from the garage's TEAM & DRIVER tab. It
+// used to be reachable from a summary card on the select screen too; that card
+// is gone, and the garage is the one place a team is chosen.
 const teamPicker = () => $("teampicker");
 // Which screen opened the picker, so picking a team rebuilds the right one.
 // The sheet is shared; without this, choosing a team in the garage would
@@ -59,38 +60,6 @@ function teamSwatch(t) {
   return sw;
 }
 
-function buildTeamCard(t) {
-  const card = $("sel-team-card");
-  if (!card) return;
-  card.textContent = "";
-  card.className = "team-card";
-  const body = document.createElement("span");
-  body.className = "tm-body";
-  const name = document.createElement("span");
-  name.className = "tm-name"; name.textContent = t.name;
-  // The driver joins the sub-line. The chip row that used to sit under this
-  // card moved into the garage, so this card is now the only thing on the
-  // select screen that says who is driving.
-  const d = t.drivers[G.driverIdx] || t.drivers[0];
-  const sub = document.createElement("span");
-  sub.className = "tm-sub";
-  sub.textContent = t.short + " · " + (t.engine || "") + " engine"
-    + (d ? " · #" + d.num + " " + d.name.split(" ").pop().toUpperCase() : "");
-  body.append(name, sub);
-  const chev = document.createElement("span");
-  chev.className = "tm-chev"; chev.textContent = "\u2304"; chev.setAttribute("aria-hidden", "true");
-  card.append(teamSwatch(t), body, chev);
-  // The card opens the TEAM PICKER. It used to go to the GARAGE, which gave this
-  // screen two controls with one destination — a card describing your team, and
-  // a GARAGE button directly beneath it, both landing in the parts garage. A
-  // card that shows a team should let you change the team; the button below is
-  // the way to the garage. setTeamPicker already supports "select" as a host, so
-  // picking rebuilds this screen rather than the garage.
-  card.setAttribute("aria-haspopup", "listbox");
-  card.setAttribute("aria-expanded", "false");
-  card.onclick = () => { setTeamPicker(true, "select"); };
-}
-
 /* Open/close the team picker. `host` is the screen that opened it (see
    pickerHost); omit it on close so the last host survives the rebuild. */
 function setTeamPicker(open, host) {
@@ -100,8 +69,6 @@ function setTeamPicker(open, host) {
   // title screen — where buildSelect has never run — showed an empty sheet.
   if (open) buildTeamPicker();
   teamPicker().hidden = !open;
-  const card = $("sel-team-card");
-  if (card) card.setAttribute("aria-expanded", open ? "true" : "false");
   if (open) ScrollFadeRefresh();
 }
 
@@ -141,14 +108,12 @@ function buildTeamPicker() {
 const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refresh(); };
 
 function buildSelect() {
-  // In the VS FRIEND room this screen is ONE question: which circuit. The car
-  // column and its GARAGE button belong to the room (each player owns their own
-  // car and reaches the garage from there), and offering them again here made
-  // the host's "edit race" look like a second, competing place to choose a team.
-  // START does not start anything either — it goes on to laps/weather and then
-  // back to the room, so it says so.
+  // ONE QUESTION: WHERE. The car summary and its GARAGE button that used to
+  // share this screen are gone (index.html) — WHO and WHAT are chosen in the
+  // garage, which START now opens on the way to the race. So the only thing
+  // that differs between modes here is what the screen is called and what the
+  // foot button promises next.
   const room = !!G.netRoom;
-  if (els.selLeft) els.selLeft.hidden = room;
   els.selGo.textContent = room ? "NEXT" : "START";
   els.selTitle.textContent = room ? "THE RACE"
     : G.seasonMode ? "SEASON — ROUND " + ((G.season && G.season.round || 0) + 1)
@@ -156,12 +121,6 @@ function buildSelect() {
   // Track section: interactive circuit picker in GP/TT; read-only NEXT RACE preview in season
   els.selTrackSection.hidden = false;
   if (els.selCircuitLabel) els.selCircuitLabel.textContent = G.seasonMode ? "NEXT RACE" : "CIRCUIT";
-  const team = Teams.LIST[G.teamIdx];
-  buildTeamCard(team);
-  // The DRIVER chip row used to be here. It lives in the garage's TEAM & DRIVER
-  // tab now — this screen is about WHERE you race; the card above summarises
-  // who is driving and opens the garage to change it.
-  renderStatBars($("sel-stats"), team);
   if (G.seasonMode) {
     // Non-interactive preview of the upcoming season circuit
     els.selTracks.textContent = "";

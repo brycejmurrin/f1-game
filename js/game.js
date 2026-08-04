@@ -22,7 +22,7 @@ const els = {
   selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"),
   selPreviewRec: $("sel-preview-rec"),
   selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"),
-  selBack: $("sel-back"), selGo: $("sel-go"), selLeft: $("sel-left"),
+  selBack: $("sel-back"), selGo: $("sel-go"),
   customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
   resultsTable: $("results-table"), resMenu: $("res-menu"), resNext: $("res-next"),
@@ -2722,8 +2722,14 @@ function update(dt) {
     }
     const lit = Math.min(5, Math.floor(countT));
     if (lit > lightsLit) {
+      // Light EVERY lamp up to `lit`, not just the newest. countT can advance
+      // by more than one second in a frame — a networked countdown is pinned to
+      // a shared instant rather than accumulated from dt, so a peer that was
+      // busy building its circuit rejoins the sequence part-way through — and
+      // lighting only children[lit-1] left the earlier lamps dark forever. The
+      // guest saw an unlit gantry and then, abruptly, a green track.
+      for (let i = lightsLit; i < lit; i++) els.lights.children[i].classList.add("on");
       lightsLit = lit;
-      els.lights.children[lit - 1].classList.add("on");
       if (soundOn) GameAudio.lightOn(lit - 1);
       if (lit === 1) Input.calibrate();
       // all five lit — hold for a randomised beat, as in real F1, so the
@@ -6872,7 +6878,13 @@ function openRaceSettings(from) {
 }
 els.selGo.onclick = () => {
   if (soundOn) GameAudio.uiSelect();
-  openRaceSettings("select");
+  // The garage is a STEP now, not a side door. #select asks where you race and
+  // nothing else; START goes on to the garage, and the garage's DONE carries on
+  // to the race settings. In the VS FRIEND room it is skipped — the room has
+  // its own GARAGE button because each player owns their own car, and the host
+  // coming here is only editing the shared race.
+  if (netRoom) { openRaceSettings("select"); return; }
+  openGarage("select");
 };
 $("rs-cancel").onclick = () => {
   $("race-settings").hidden = true;
@@ -7163,7 +7175,6 @@ function openGarage(from) {
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
   openSetup();
 }
-$("sel-setup").onclick = () => openGarage("select");
 $("mb-garage").onclick = () => openGarage("menu");
 $("cs-done").onclick = () => {
   $("carsetup").hidden = true;
@@ -7178,9 +7189,13 @@ $("cs-done").onclick = () => {
     return;
   }
   if (garageReturn === "career") { careerUi.openHub(); return; }
+  // Reached from the circuit picker's START, so DONE goes FORWARD to the race
+  // settings, not back to a screen whose question is already answered. Race
+  // settings' own BACK still returns to #select, so the circuit stays two taps
+  // away if you change your mind.
+  if (garageReturn === "select") { openRaceSettings("select"); return; }
   buildSelect();
-  if (garageReturn === "menu") els.overlay.hidden = false;
-  else els.select.hidden = false;
+  els.overlay.hidden = false;   // only the title screen's GARAGE button gets here
 };
 $("cs-unlimited").onclick = () => {
   unlimitedBudget = !unlimitedBudget;
@@ -7546,7 +7561,18 @@ Input.init(canvas, { onPause: () => {
   if (paused && els.pmsettings && !els.pmsettings.hidden) { closeSettings(); return; }
   setPaused(!paused);
 } });
-if (!Input.touchControlsNeeded()) { document.body.classList.add("desktop"); els.subtitle.textContent = "2026 grid · " + Tracks.LIST.length + " real circuits"; }
+// The subtitle is DERIVED on both paths. It used to be hardcoded "24 real
+// circuits" in index.html and rewritten on desktop only, from Tracks.LIST.length
+// — which counts the 16 retired classics too, so the same build claimed 24
+// circuits on a phone and 40 on a desktop. Both now read the championship
+// calendar (Tracks.SEASON), and the desktop, which has the room, names the
+// classics rather than silently folding them into the season count.
+if (!Input.touchControlsNeeded()) document.body.classList.add("desktop");
+{
+  const rounds = Tracks.SEASON.length, classics = Tracks.LIST.length - rounds;
+  els.subtitle.textContent = "2026 grid · " + rounds + " real circuits · "
+    + (Input.touchControlsNeeded() ? "tilt to steer" : classics + " classics");
+}
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
 $("pm-steer").textContent = steerLabel();

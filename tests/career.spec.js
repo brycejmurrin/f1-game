@@ -426,10 +426,11 @@ test.describe("Career — the garage", () => {
     const tap = (id) => page.evaluate((i) => document.getElementById(i).click(), id);
     await boot(page);
     await tap("mb-race");
-    await tap("sel-setup");
+    await tap("sel-go");
     await expect(page.locator("#carsetup")).toBeVisible();
     await expect(page.locator("#cs-unlimited")).toBeVisible();
     await tap("cs-done");
+    await tap("rs-cancel");   // DONE lands on RACE SETTINGS now; back out to the menu
 
     await startCareer(page);
     await tap("cr-garage");
