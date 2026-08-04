@@ -60,6 +60,8 @@ const NetPlay = (function () {
     let lastPublish = -Infinity;
     let peerProfile = null;
     let lastReason = null;
+    let peerLaps = [];                    // lap/sector times the rival reported
+    let peerResult = null;                // their final classification, if sent
     const eventLog = [];                  // recent inbound events, for status()
 
     const _smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 8 };
@@ -160,6 +162,8 @@ const NetPlay = (function () {
 
     function start(opts) {
       opts = opts || {};
+      peerLaps = [];
+      peerResult = null;
       if (!opts.transport && !opts.session) {
         return { ok: false, error: "no_transport", message: "No connection to race over." };
       }
@@ -180,6 +184,9 @@ const NetPlay = (function () {
           eventLog.push({ type: name, data: d });
           if (eventLog.length > 32) eventLog.shift();
           if (name === EV.BYE) { lastReason = "bye"; stop("bye"); }
+          if (name === EV.START && d && d.at != null) armStart(d.at, d.hold);
+          if (name === EV.LAP && d) peerLaps.push(d);
+          if (name === EV.RESULT && d) peerResult = d;
         });
       }
 
@@ -206,6 +213,41 @@ const NetPlay = (function () {
       return { ok: true, role, localId: G.cars.indexOf(localCar), remoteId: G.cars.indexOf(remoteCar) };
     }
 
+    // ---- synchronised lights-out -----------------------------------------
+    // The host names a moment on ITS clock; both sides convert it onto their
+    // own and drive the countdown to that instant. A LEAD of a couple of
+    // seconds means the message has landed and both clocks are agreed well
+    // before it matters — arming it at the moment of lights-out instead would
+    // release the host first by half a round trip, every single race.
+    const START_LEAD_MS = 2500;
+
+    function armStart(atPeerMs, hold) {
+      const at = session ? session.peerToLocal(atPeerMs) : atPeerMs;
+      G.netStart = { at, hold, now: () => (G.netNow != null ? G.netNow : performance.now()) };
+    }
+
+    function hostStart() {
+      if (role !== "host" || !session) return false;
+      const at = performance.now() + START_LEAD_MS;
+      // The hold is the host's to roll: two independent draws would release
+      // one driver before the other, which is the whole thing being fixed.
+      const hold = 0.2 + Math.random() * 1.8;
+      session.sendEvent(EV.START, { at: session.localToPeer(at), hold });
+      G.netStart = { at, hold, now: () => (G.netNow != null ? G.netNow : performance.now()) };
+      return true;
+    }
+
+    // ---- race events ------------------------------------------------------
+    // Lap and sector times are authored by whoever OWNS the car — nobody else
+    // is in a position to time it — and sent reliably, because a dropped lap
+    // time is a wrong result rather than a momentary glitch.
+    function reportLap(data) {
+      return session ? session.sendEvent(EV.LAP, data) : false;
+    }
+    function reportResult(data) {
+      return session ? session.sendEvent(EV.RESULT, data) : false;
+    }
+
     function stop(reason) {
       if (!active) return false;
       active = false;
@@ -223,6 +265,9 @@ const NetPlay = (function () {
     // else the browser felt like doing.
     function tick(now) {
       if (!active || !session) return;
+      // Publish the clock the countdown reads, so game.js and the session
+      // agree on "now" rather than each calling performance.now() separately.
+      G.netNow = now;
       session.pump(now);
       if (!session.alive()) return;             // onClose already handled it
 
@@ -245,6 +290,9 @@ const NetPlay = (function () {
 
     return {
       start, stop, tick,
+      hostStart, reportLap, reportResult,
+      peerLaps: () => peerLaps.slice(),
+      peerResult: () => peerResult,
       // updateCar() consults this: a car posed from the network must not also
       // be simulated locally, or the two fight every frame.
       owns: (c) => active && c != null && c === remoteCar,
@@ -263,6 +311,9 @@ const NetPlay = (function () {
         net: session ? session.stats() : null,
         buffered: interp ? interp.size() : 0,
         events: eventLog.length,
+        peerLaps: peerLaps.length,
+        peerResult: !!peerResult,
+        startPending: !!G.netStart,
       }),
       EV,
     };

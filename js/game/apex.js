@@ -1769,6 +1769,30 @@ const api = {
     return G.netLobby ? G.netLobby.modsFromProfile(profile) : null;
   },
 
+  // netStartArm(nowMs, atMs, hold) — arm a synchronised lights-out directly,
+  // as the START event does. Lets a test assert that both grids are released
+  // at an absolute INSTANT rather than after an equal delay, which is the
+  // difference between fair and merely simultaneous-looking.
+  netStartArm(nowMs, atMs, hold) {
+    if (!G.netPlay || !G.netPlay.active()) return { ok: false, error: "no_session" };
+    G.netNow = nowMs;
+    G.netStart = { at: atMs, hold: hold != null ? hold : 0.5, now: () => G.netNow };
+    G.state = "count";
+    G.countT = 0;
+    return { ok: true, at: atMs, hold: G.netStart.hold };
+  },
+
+  // netPeerEvent(type, data, atMs?) — send a reliable EVENT as the remote peer
+  // (lap times, results, settings), the counterpart to netPeerSend's state.
+  netPeerEvent(type, data, atMs) {
+    if (!_netPeer) return false;
+    const now = atMs != null ? atMs : performance.now();
+    _netPeer.pump(now);
+    return _netPeer.send("event", JSON.stringify({ t: type, d: data }));
+  },
+
+  netPeerLaps() { return G.netPlay ? G.netPlay.peerLaps() : []; },
+
   // netTick(nowMs?) — pump the session by hand. The game loop already calls
   // this every frame, but a test must not depend on rAF actually running at a
   // useful rate: driving it explicitly is what makes latency, loss and

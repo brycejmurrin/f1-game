@@ -208,6 +208,48 @@ test.describe("multiplayer session", () => {
     expect(out.last).toBeGreaterThan(out.first + out.total * 0.04);
   });
 
+  test("both grids are released at the same moment, not the same delay", async ({ page }) => {
+    // Without this the two sides count down on their own clocks and are
+    // released however far apart the handshake happened to take. netStart
+    // names an absolute instant instead, so lights-out is a shared event.
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0 });
+      const armed = A.netStartArm(1000, 4000, 0.5);   // lights-out at t=4000
+      // Well before: still counting down, nobody released.
+      A.netTick(2000);
+      const early = A.info().state;
+      // Past the named instant: released.
+      A.netTick(4200);
+      const late = A.info().state;
+      return { armed, early, late, cleared: A.net().startPending };
+    });
+
+    expect(out.armed.ok).toBe(true);
+    expect(out.early).toBe("count");
+    expect(out.late).toBe("race");
+    // Consumed, so a second race cannot inherit a stale start time.
+    expect(out.cleared).toBe(false);
+  });
+
+  test("a lap time reaches the rival over the reliable channel", async ({ page }) => {
+    // Lap times decide the RESULT, so they cannot ride the lossy channel.
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      A.netLoopback({ nowMs: 1000, latencyMs: 20, loss: 0.9, interpDelayMs: 0 });
+      A.netPeerEvent("lap", { lap: 1, time: 81.23, code: "XYZ" }, 1000);
+      A.netPeerEvent("lap", { lap: 2, time: 80.11, code: "XYZ" }, 1020);
+      for (let t = 1040; t <= 1400; t += 20) A.netTick(t);
+      return { laps: A.netPeerLaps(), count: A.net().peerLaps };
+    });
+    // 90% loss on the STATE channel must not touch these.
+    expect(out.count).toBe(2);
+    expect(out.laps[0].time).toBeCloseTo(81.23, 2);
+    expect(out.laps[1].lap).toBe(2);
+  });
+
   test("contact with a rival pushes MY car, and never theirs", async ({ page }) => {
     // The ownership rule under contact. A rival is posed from the wire and
     // re-posed on the next packet, so any separation impulse we apply to it is

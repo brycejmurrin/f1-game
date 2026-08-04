@@ -678,6 +678,10 @@ function inputOf(c) {
 // The human the AI rubber-bands against — recomputed once per update() rather
 // than per AI car. Null when the field has no human at all.
 let _leadHuman = null;
+// Set by NetPlay while a session's countdown is pending: {at, hold, now()}.
+// `at` is lights-out on OUR clock; now() reads the same clock the session
+// converted it into. Null solo, and cleared the moment the race starts.
+let netStart = null;
 let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
 // Shared neutral fallback for a human car with no resolved setup. Frozen and
 // module-scope so updateCar's per-car binding never allocates.
@@ -2067,6 +2071,7 @@ const G = {
   getTeamParts, getLiveryId,   // lobby: the profile it sends is ids, never resolved numbers
   get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
   get netPlay() { return netPlay; },
+  get netStart() { return netStart; }, set netStart(v) { netStart = v; },
   get netLobby() { return netLobby; },
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
@@ -2230,7 +2235,18 @@ function update(dt) {
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
   if (state === "count") {
-    countT += dt;
+    // In a session the countdown is driven by the SHARED clock rather than by
+    // accumulated dt, and the random hold is dictated by the host. Both matter
+    // for fairness: accumulating dt independently lets the two grids drift
+    // apart by however long the handshake took, and an independently rolled
+    // hold would give one driver lights-out before the other. netStart pins
+    // the exact moment both cars are released. Solo, this branch never runs.
+    if (netStart) {
+      startHold = netStart.hold;
+      countT = (5 + startHold) - (netStart.at - netStart.now()) / 1000;
+    } else {
+      countT += dt;
+    }
     const lit = Math.min(5, Math.floor(countT));
     if (lit > lightsLit) {
       lightsLit = lit;
@@ -2239,12 +2255,13 @@ function update(dt) {
       if (lit === 1) Input.calibrate();
       // all five lit — hold for a randomised beat, as in real F1, so the
       // start can't be timed and lights-out is a genuine reaction moment.
-      if (lit === 5) startHold = 0.2 + simRnd() * 1.8;
+      if (lit === 5 && !netStart) startHold = 0.2 + simRnd() * 1.8;
     }
     if (lightsLit === 5 && countT > 5 + startHold) {
       state = "race"; raceT = 0;
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
+      netStart = null;              // consumed; never carry it into the next race
       announce("LIGHTS OUT!", 1.4);
       if (soundOn) GameAudio.lightsOut();
       cars.forEach((c) => { c.lapStart = 0; });
@@ -3412,6 +3429,12 @@ function updateCar(c, dt, ranked) {
       c.lastLap = lapDone;
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
+      // Tell the rival about our lap. Times are authored by whoever OWNS the
+      // car — nobody else can time it — and go over the reliable channel,
+      // because a dropped lap time is a wrong RESULT, not a momentary glitch.
+      if (c.local && netPlay.active()) {
+        netPlay.reportLap({ lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code });
+      }
       if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
     } else if (c.isPlayer && isTimeTrial()) {
       Ghost.startLap();
@@ -5723,7 +5746,12 @@ $("mb-race").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
-$("mb-vs").onclick = () => {
+// Guarded, unlike its neighbours, and deliberately: a merge that took the
+// other side of index.html once dropped this button's markup, and an
+// unguarded handler assignment on a null element threw during boot and took
+// the ENTIRE game down — menu, renderer and all — for one missing optional
+// screen. Cheap insurance against a whole-app outage.
+if ($("mb-vs")) $("mb-vs").onclick = () => {
   // Two drivers, no server: the lobby does the whole handshake by having the
   // players paste codes to each other. It starts the race itself once both
   // sides agree on the setup, so there is no select screen in between.

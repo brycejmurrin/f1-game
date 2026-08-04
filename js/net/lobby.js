@@ -199,6 +199,11 @@ const NetLobby = (function () {
       pumpTimer = null;
       session = null;                    // owned by NetPlay now
       if (!started.ok) { say(started.message || "Could not start the session.", true); return; }
+      // Host names the instant of lights-out; the guest receives it as an
+      // event and both drive their countdown to the same moment. Without this
+      // each side counts down on its own clock and the grids are released
+      // however far apart the handshake happened to take.
+      if (role === "host") G.netPlay.hostStart();
       close();
     }
 
