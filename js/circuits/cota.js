@@ -270,10 +270,10 @@
           conc: [0.74, 0.72, 0.68], concAlt: [0.66, 0.64, 0.60] });
 
       // ---- Turn 1 hill — the real natural grass amphitheatre ----
-      // The built crowdBank terraces above are the temporary stands; behind
-      // and above them the actual hill is informal grass-bank viewing, which
-      // is what makes T1 famous. Set further back (gap 58) than the crowdBank
-      // terraces so it reads as the hillside rising behind the built seating.
+      // The bleachers above are the built, temporary stands; behind and above
+      // them the actual hill is informal grass-bank viewing, which is what
+      // makes T1 famous. Set further back (gap 58) than the bleachers so it
+      // reads as the hillside rising behind the built seating.
       spectatorHill(0.088, 0.118, -1, 58, { rows: 5, rise: 1.3, depth: 2.2, density: 0.55, grass: dryGrass });
 
       // ---- Austin360 Amphitheater + Observation Tower (T16–18, s≈0.76–0.80, R) ----
