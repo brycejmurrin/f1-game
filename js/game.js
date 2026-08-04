@@ -178,6 +178,15 @@ let difficulty = store.get("difficulty", "normal");
 // what every existing player gets. OFF is therefore the only choice that does not
 // silently start retiring cars in a game somebody was already halfway through.
 let raceReliability = store.get("reliability", "off");
+// ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
+// "auto". Inside an activation zone X-mode has no cost and no downside, so the
+// optimal play is unconditionally "on" — which is exactly what the AI does, in
+// one line. Manual therefore asks the player to keep pace with cars that pay no
+// attention tax, and anyone who forgets concedes X_VMAX_GAIN of top speed on
+// every straight. AUTO hands the player the same deal the AI gets. It stays
+// OPT-IN because pressing the button is the mechanic, and taking that away by
+// default would remove the one thing there is to do with the system.
+let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
@@ -2362,6 +2371,8 @@ const G = {
   get setupPreviewDist() { return setupPreviewDist; },
   get setupPreviewPan() { return setupPreviewPan; },
   get setupPreviewAeroX() { return setupPreviewAeroX; },
+  get raceAeroMode() { return raceAeroMode; },
+  set raceAeroMode(v) { raceAeroMode = v; store.set("aeroMode", v); },
   get aeroZones() { return aeroZones; },
   aeroZoneAt: (s) => aeroZoneAt(s),
   aeroZoneAhead: (s) => aeroZoneAhead(s),
@@ -3139,7 +3150,10 @@ function updateCar(c, dt, ranked) {
   // already un-armed by the time the AI decides to brake for a corner.
   c.xArmed = !c.offroad && !braking && vStd(c.speed) > X_MIN_SPEED
     && !c.finished && state === "race" && xStraightAhead(c);
-  if (c.human) {
+  if (c.human && raceAeroMode === "auto") {
+    // Same rule the AI runs: take every zone the circuit offers.
+    c.xOn = c.xArmed;
+  } else if (c.human) {
     if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
     else c.xOn = !!(inp && inp.aero);
   } else {
@@ -6722,6 +6736,21 @@ function buildRaceSettings() {
   }
   // RELIABILITY — same idiom, same persistence, and hidden alongside DIFFICULTY
   // in a time trial for the same reason: neither has anything to act on there.
+  // ACTIVE AERO applies in a time trial too — it is a lap-time tool, which is
+  // exactly the distinction that hides RELIABILITY there.
+  const aeroEl = $("rs-aero");
+  aeroEl.innerHTML = "";
+  for (const [id, label] of [["manual", "MANUAL"], ["auto", "AUTO"]]) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (raceAeroMode === id ? " active" : "");
+    b.setAttribute("aria-pressed", raceAeroMode === id ? "true" : "false");
+    b.textContent = label;
+    b.onclick = () => {
+      raceAeroMode = id; store.set("aeroMode", id);
+      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
+    };
+    aeroEl.appendChild(b);
+  }
   $("rs-reliab-section").hidden = isTimeTrial();
   const relEl = $("rs-reliab");
   relEl.innerHTML = "";

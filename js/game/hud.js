@@ -98,12 +98,20 @@ function updateHud(force) {
   const noZones = !(G.aeroZones && G.aeroZones.length);
   hToggle(els.btnAero, "on", xOpen);
   hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
-  hToggle(els.btnAero, "dead", noZones);
+  // The touch button is inert when the circuit has no zone, and when the wing is
+  // driving itself — in both cases pressing it does nothing, and a control that
+  // silently ignores taps is worse than one that says so.
+  hToggle(els.btnAero, "dead", noZones || !!G.raceAeroMode && G.raceAeroMode === "auto");
   hClass(els.aero, noZones ? "ax-none" : xOpen ? "ax-open"
     : player.xArmed ? "ax-armed" : "ax-off");
+  // The TEXT answers "where is the zone", so it keys off position, not arming.
+  // Keying it off xArmed showed "AERO 0m" to a car standing INSIDE a zone but
+  // too slow to arm — a distance readout of zero, which reads as "the zone is
+  // right here" rather than "you are in it". Whether the mode is available is
+  // the CLASS's job (ax-armed lights the chip), so the two never contradict.
   hText(els.aero, noZones ? "NO AERO ZONE"
     : xOpen ? "X-MODE"
-    : player.xArmed ? "AERO ZONE"
+    : dz === 0 ? "AERO ZONE"
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
     : "Z-MODE");
   if (timeTrial) {
