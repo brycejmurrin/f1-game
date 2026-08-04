@@ -1951,6 +1951,11 @@ const G = {
   get livDraftOverride() { return livDraftOverride; }, set livDraftOverride(v) { livDraftOverride = v; },
   get _spMeshKey() { return _spMeshKey; }, set _spMeshKey(v) { _spMeshKey = v; },
   get setupPreviewOn() { return setupPreviewOn; }, set setupPreviewOn(v) { setupPreviewOn = v; },
+  // Read-only garage-camera state for __apex.garageCam().
+  get setupPreviewSpin() { return setupPreviewSpin; },
+  get setupPreviewAz() { return setupPreviewAz; },
+  get setupPreviewEl() { return setupPreviewEl; },
+  get setupPreviewDist() { return setupPreviewDist; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; },
@@ -3641,6 +3646,53 @@ function camVantage(mode, s, x, spd, now, extra) {
 // on player.px/track. This is the same ring-of-lamps energy math, anchored at
 // the world origin instead of the player's track position.
 let setupPreviewOn = false, setupPreviewAz = 0.6;
+// Preview CAMERA state. The turntable used to be the only way to see the car:
+// one fixed height, one fixed distance, spinning left whether you wanted it to
+// or not, so inspecting the part you just bought meant waiting for it to come
+// back around. az/el/dist are now a real orbit the player drives (drag on the
+// canvas, wheel/pinch to zoom, preset chips in #cs-view), and SPIN is a toggle
+// over the top of it rather than the whole interaction.
+// Defaults reproduce the previous framing exactly: eye y 2.0 at dist 8.5 over a
+// target at y 0.35 is an elevation of atan2(1.65, 8.5).
+const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.5;
+let setupPreviewEl = SP_EL_DEF, setupPreviewDist = SP_DIST_DEF;
+let setupPreviewSpin = true;
+// Orbit limits: never underneath the floor plane, never past straight down, and
+// close enough to read a decal without clipping into the nose.
+const SP_EL_MIN = -0.12, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15;
+// az 0 = ahead of the nose (+Z), PI = behind the wing; see the eye vector below.
+// Distances are per-view because the car is 5.4 m long and 1.9 m wide, and the
+// sheet takes the right ~40% of the canvas: head-on it fits close, broadside it
+// does not. SIDE and TOP get the extra pull-back their aspect actually needs
+// rather than one nominal distance that crops the nose off two of the five.
+const SP_VIEWS = {
+  hero:  { az: Math.PI * 0.78, el: 0.30, dist: 8.5 },   // rear three-quarter
+  front: { az: 0,              el: 0.20, dist: 8.2 },
+  side:  { az: Math.PI * 0.5,  el: 0.10, dist: 11.2 },
+  rear:  { az: Math.PI,        el: 0.22, dist: 8.4 },
+  top:   { az: Math.PI * 0.5,  el: 1.20, dist: 11.5 },
+};
+function setSetupView(name) {
+  const v = SP_VIEWS[name];
+  if (!v) return;
+  setupPreviewAz = v.az; setupPreviewEl = v.el; setupPreviewDist = v.dist;
+  // Picking a view means "hold it there" — leaving the turntable running would
+  // immediately rotate away from the angle that was just asked for.
+  setSetupSpin(false);
+}
+function setSetupSpin(on) {
+  setupPreviewSpin = !!on;
+  const b = $("cs-view-spin");
+  // `active` drives the lit style (and is what AriaState reads); the attribute
+  // is set here too so the state is correct before AriaState's observer fires.
+  if (b) {
+    b.classList.toggle("active", setupPreviewSpin);
+    b.setAttribute("aria-pressed", String(setupPreviewSpin));
+  }
+}
+function setupZoom(mul) {
+  setupPreviewDist = clamp(setupPreviewDist * mul, SP_DIST_MIN, SP_DIST_MAX);
+}
 const _spLights = [];
 function buildSetupPreviewLights() {
   _spLights.length = 0;
@@ -3680,10 +3732,15 @@ function getSetupPreviewMesh() {
 const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = new Float32Array(16);
 function renderSetupPreview(dt) {
   gfx.resize();
-  setupPreviewAz += dt * 0.35;   // slow turntable
+  if (setupPreviewSpin) setupPreviewAz += dt * 0.35;   // slow turntable
   // Pulled back + a touch wider than a "hero shot" distance so the whole
   // ~5.4 m car (nose to rear wing) clears the frustum at any turntable angle.
-  const eye = [Math.sin(setupPreviewAz) * 8.5, 2.0, Math.cos(setupPreviewAz) * 8.5 - 1.0];
+  // The orbit radius is horizontal, so raising the camera does not walk it away
+  // from the car: at el 0 this is the old fixed ring, at el 1.2 it is overhead.
+  const spCe = Math.cos(setupPreviewEl), spSe = Math.sin(setupPreviewEl);
+  const eye = [Math.sin(setupPreviewAz) * setupPreviewDist * spCe,
+               0.35 + setupPreviewDist * spSe,
+               Math.cos(setupPreviewAz) * setupPreviewDist * spCe - 1.0];
   M4.perspectiveTo(_spProj, 36 * Math.PI / 180, gfx.aspect, 0.1, 60);
   // The docked #cs-inner panel covers the right portion of the canvas — an
   // on-axis camera centers the car behind it, half-cropped. Shift the
@@ -5825,6 +5882,68 @@ CZ_LIV_FIELDS.forEach(([domId]) => {
 for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
   btn.onclick = () => { czSetFinish(btn.dataset.czFinish); if (soundOn) GameAudio.uiTick(); };
 }
+
+// ---- garage preview camera ----
+// The chips in #cs-view, plus orbit-by-drag and zoom on the canvas itself. All
+// of it is gated on setupPreviewOn, so none of these listeners can touch the
+// camera during a race — the canvas is shared with the track render and, on
+// touch, with the steering.
+for (const btn of document.querySelectorAll("#cs-view [data-cs-view]")) {
+  btn.onclick = () => { setSetupView(btn.dataset.csView); if (soundOn) GameAudio.uiTick(); };
+}
+$("cs-view-spin").onclick = () => { setSetupSpin(!setupPreviewSpin); if (soundOn) GameAudio.uiTick(); };
+$("cs-view-in").onclick  = () => { setupZoom(1 / 1.18); if (soundOn) GameAudio.uiTick(); };
+$("cs-view-out").onclick = () => { setupZoom(1.18); if (soundOn) GameAudio.uiTick(); };
+{
+  const canvas = $("game");
+  // Live pointers by id, so a two-finger pinch is separable from a one-finger
+  // orbit without a separate touch-event path.
+  const spPtr = new Map();
+  let spPinch = 0;
+  const pinchGap = () => {
+    const p = [...spPtr.values()];
+    return p.length >= 2 ? Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) : 0;
+  };
+  if (canvas) {
+    canvas.addEventListener("pointerdown", (e) => {
+      if (!setupPreviewOn) return;
+      spPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      spPinch = pinchGap();
+      // Taking hold of the car is itself the instruction to stop the turntable —
+      // dragging against a rotation that keeps adding to your input is horrible.
+      if (spPtr.size === 1) setSetupSpin(false);
+    });
+    window.addEventListener("pointermove", (e) => {
+      if (!setupPreviewOn || !spPtr.has(e.pointerId)) return;
+      const p = spPtr.get(e.pointerId);
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX; p.y = e.clientY;
+      if (spPtr.size >= 2) {
+        // Pinch: the gap between the two fingers drives distance directly.
+        const gap = pinchGap();
+        if (spPinch > 0 && gap > 0) setupZoom(spPinch / gap);
+        spPinch = gap;
+        return;
+      }
+      // Drag: horizontal spins, vertical raises/lowers. Scaled by viewport width
+      // so the same swipe travels the same arc on a phone and on a desktop.
+      const span = Math.max(1, canvas.clientWidth);
+      setupPreviewAz -= dx * (Math.PI * 1.6) / span;
+      setupPreviewEl = clamp(setupPreviewEl + dy * (Math.PI * 0.9) / span, SP_EL_MIN, SP_EL_MAX);
+    });
+    const release = (e) => {
+      spPtr.delete(e.pointerId);
+      spPinch = pinchGap();
+    };
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    canvas.addEventListener("wheel", (e) => {
+      if (!setupPreviewOn) return;
+      e.preventDefault();
+      setupZoom(e.deltaY > 0 ? 1.1 : 1 / 1.1);
+    }, { passive: false });
+  }
+}
 // The GARAGE is reachable from the title AND from the select screen's car card,
 // so DONE has to go back where it came from. It used to unhide #select
 // unconditionally, which dropped you on the track picker after opening the
@@ -5836,6 +5955,14 @@ function openGarage(from) {
   if (from === "menu") GameAudio.init();
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
+  // Fresh camera every visit: a garage that reopened on the last angle someone
+  // dragged to — nose-down, zoomed into a wheel — reads as broken rather than
+  // as remembered. The turntable is the front door; the controls are there for
+  // anyone who wants off it.
+  setupPreviewAz = 0.6;
+  setupPreviewEl = SP_EL_DEF;
+  setupPreviewDist = SP_DIST_DEF;
+  setSetupSpin(true);
   openSetup();
 }
 $("sel-setup").onclick = () => openGarage("select");

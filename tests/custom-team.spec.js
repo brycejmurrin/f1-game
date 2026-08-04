@@ -26,19 +26,39 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   await page.goto("/");
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
 
+  // Every atlas is tagged with the team it was built FOR. getCarDecalTexture
+  // calls LiveryTex.buildAtlas(teamId, …) as the argument to createTexture, so
+  // the id captured here is always the team of the very next texture.
+  //
+  // This used to just take createdTextureIds[0] and assume it was the custom
+  // team's. It is not: the first #sel-setup happens BEFORE cz-save selects the
+  // custom team, so the preview builds an atlas for whichever team was already
+  // fitted (McLaren by default) and that one is id 1. invalidateDecalTextures
+  // ("custom") then correctly frees only the custom atlas, and the assertion
+  // failed looking for McLaren's. It could only ever pass on a machine fast
+  // enough that no frame drew before cz-save ran.
   await page.evaluate(() => {
     const createdTextureIds = [];
     const freedTextureIds = [];
+    const teamOfTexture = {};
     const textureIds = new WeakMap();
     let nextTextureId = 1;
+    let pendingTeam = null;
     const createTexture = GLX.createTexture;
     const freeTexture = GLX.freeTexture;
+    const buildAtlas = LiveryTex.buildAtlas;
 
+    LiveryTex.buildAtlas = function (teamId, ...rest) {
+      pendingTeam = teamId;
+      return buildAtlas.call(this, teamId, ...rest);
+    };
     GLX.createTexture = function (source) {
       const texture = createTexture(source);
       const id = nextTextureId++;
       textureIds.set(texture, id);
       createdTextureIds.push(id);
+      teamOfTexture[id] = pendingTeam;
+      pendingTeam = null;
       return texture;
     };
     GLX.freeTexture = function (texture) {
@@ -46,7 +66,10 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
       if (id !== undefined) freedTextureIds.push(id);
       return freeTexture(texture);
     };
-    window.__customTeamTextureProbe = { createdTextureIds, freedTextureIds };
+    window.__customTeamTextureProbe = { createdTextureIds, freedTextureIds, teamOfTexture };
+    window.__customAtlases = () =>
+      window.__customTeamTextureProbe.createdTextureIds
+        .filter((id) => window.__customTeamTextureProbe.teamOfTexture[id] === "custom");
   });
 
   await page.locator("#mb-race").click();
@@ -57,23 +80,27 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
 
   await page.locator("#sel-setup").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
-  await page.waitForFunction(() => window.__customTeamTextureProbe.createdTextureIds.length > 0);
-  const firstTextureId = await page.evaluate(() => window.__customTeamTextureProbe.createdTextureIds[0]);
+  await page.waitForFunction(() => window.__customAtlases().length > 0);
+  const firstTextureId = await page.evaluate(() => window.__customAtlases()[0]);
 
   await page.locator("#cs-done").click();
   await saveMyTeam(page, () => page.locator("#cz-color").fill("#123456"));
 
   await page.locator("#sel-setup").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
-  await page.waitForFunction(
-    () => window.__customTeamTextureProbe.createdTextureIds.length > 1,
-    { timeout: 45_000 }
-  );
+  await page.waitForFunction(() => window.__customAtlases().length > 1, { timeout: 45_000 });
 
   const probe = await page.evaluate(() => window.__customTeamTextureProbe);
-  const secondTextureId = probe.createdTextureIds[probe.createdTextureIds.length - 1];
+  const customIds = await page.evaluate(() => window.__customAtlases());
+  const secondTextureId = customIds[customIds.length - 1];
+  // The custom team's atlas from before the save is released...
   expect(probe.freedTextureIds).toContain(firstTextureId);
+  // ...and replaced by a new one, rather than the car keeping stale colours.
   expect(secondTextureId).not.toBe(firstTextureId);
+  // Guard the guard: if the tagging ever silently stopped working, every id
+  // would drop out of __customAtlases and the two asserts above would be
+  // comparing undefined to undefined.
+  expect(probe.teamOfTexture[firstTextureId]).toBe("custom");
 });
 
 test("custom-team save frees every cached car-body mesh variant", async ({ page }) => {

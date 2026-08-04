@@ -193,3 +193,90 @@ test.describe("Garage — TEAM tab owns team, driver and MY TEAM", () => {
     await expect(page.locator("#carsetup")).toBeVisible();
   });
 });
+
+// The garage preview used to be a fixed turntable: one height, one distance,
+// spinning left whether or not you wanted it to. #cs-view drives a real orbit
+// over the top of it, and __apex.garageCam() is how that state is observed —
+// asserting on rendered pixels here would be brittle for no extra truth.
+test.describe("Car setup — preview camera", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  const cam = (page) => page.evaluate(() => window.__apex.garageCam());
+
+  test("the camera bar exposes a stable data-cs-view per preset", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openSetup(page);
+    const ids = await page.locator("#cs-view [data-cs-view]").evaluateAll(
+      (els) => els.map((e) => e.dataset.csView));
+    expect(ids).toEqual(["hero", "front", "side", "rear", "top"]);
+  });
+
+  test("the turntable runs on open and a preset both stops it and re-aims", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openSetup(page);
+    const opened = await cam(page);
+    expect(opened.on).toBe(true);
+    expect(opened.spin).toBe(true);
+
+    await page.locator('[data-cs-view="side"]').click();
+    const side = await cam(page);
+    // Picking a view that keeps rotating away from itself is the bug this guards.
+    expect(side.spin).toBe(false);
+    expect(side.az).toBeCloseTo(Math.PI * 0.5, 5);
+    // SIDE is pulled further back than the default: the car is broadside on and
+    // the sheet takes the right of the canvas, so a nominal distance crops it.
+    expect(side.dist).toBeGreaterThan(opened.dist);
+
+    await page.locator('[data-cs-view="top"]').click();
+    expect((await cam(page)).el).toBeGreaterThan(1);
+
+    // SPIN is a toggle, and says so for a screen reader.
+    await page.locator("#cs-view-spin").click();
+    expect((await cam(page)).spin).toBe(true);
+    await expect(page.locator("#cs-view-spin")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("zoom is clamped and drag orbits without touching distance", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openSetup(page);
+    await page.locator('[data-cs-view="front"]').click();
+    const start = await cam(page);
+
+    // Real clicks for the wiring...
+    await page.locator("#cs-view-in").click();
+    expect((await cam(page)).dist).toBeLessThan(start.dist);
+    await page.locator("#cs-view-out").click();
+    await page.locator("#cs-view-out").click();
+    expect((await cam(page)).dist).toBeGreaterThan(start.dist);
+
+    // ...and a burst through the DOM for the clamps. Same onclick handler, but
+    // without paying Playwright's per-click actionability round-trip 70 times —
+    // which took this test from seconds to over its whole timeout budget.
+    const mash = (id, n) => page.evaluate(([i, k]) => {
+      const b = document.getElementById(i);
+      for (let x = 0; x < k; x++) b.click();
+    }, [id, n]);
+    // Never let the camera end up inside the car or in the next postcode.
+    await mash("cs-view-in", 30);
+    expect((await cam(page)).dist).toBeGreaterThan(4);
+    await mash("cs-view-out", 40);
+    expect((await cam(page)).dist).toBeLessThan(16);
+
+    // Drag across the car region: azimuth moves, distance does not, and taking
+    // hold of the car stops the turntable fighting the drag.
+    await page.locator("#cs-view-spin").click();
+    expect((await cam(page)).spin).toBe(true);
+    const before = await cam(page);
+    await page.mouse.move(180, 200);
+    await page.mouse.down();
+    for (let x = 180; x <= 380; x += 40) await page.mouse.move(x, 200);
+    await page.mouse.up();
+    const after = await cam(page);
+    expect(after.spin).toBe(false);
+    expect(Math.abs(after.az - before.az)).toBeGreaterThan(0.15);
+    expect(after.dist).toBeCloseTo(before.dist, 5);
+  });
+});

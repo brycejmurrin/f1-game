@@ -239,8 +239,15 @@ test.describe("Livery atlas — ink contrast", () => {
     // and names the region rather than shipping an invisible mark.
     const INKED_FOR = {
       // the shark fin rises through the cover crest, so that mark spans both
-      // fin/finBadge: the fin plate is painted `fin`, which defaults to c2
-      crest: ["c1", "c2"], fin: ["c2"], finBadge: ["c2"], wing: ["wing"],
+      // The fin plate is painted `fin`, which defaults to c2.
+      // `fin` carries only the abstract tail WASH, and its panel spans the
+      // whole swept fin — whose base runs a few cm above the engine-cover
+      // spine, where the accent pinstripe lives. So like the cover crest it
+      // genuinely sits on two paints. That is fine here and only here: the wash
+      // has no legibility requirement (its edges are faded to transparent
+      // exactly where the trim is), and the MOTIF — the mark that has to read —
+      // lives on `finBadge`, an upright square wholly on the fin's own paint.
+      crest: ["c1", "c2"], fin: ["c2", "accent"], finBadge: ["c2"], wing: ["wing"],
       titleA: ["board"], titleB: ["board"], strip: ["c2"],
       // the c2 crown stripe runs under the nose number
       num: ["c1", "c2"],
