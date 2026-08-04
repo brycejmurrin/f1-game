@@ -208,6 +208,48 @@ test.describe("multiplayer session", () => {
     expect(out.last).toBeGreaterThan(out.first + out.total * 0.04);
   });
 
+  test("contact with a rival pushes MY car, and never theirs", async ({ page }) => {
+    // The ownership rule under contact. A rival is posed from the wire and
+    // re-posed on the next packet, so any separation impulse we apply to it is
+    // thrown away a frame later. If the push were split 50/50 the pair would
+    // stay overlapping frame after frame; the car we own has to absorb all of
+    // it. This asserts both halves: mine moves, theirs does not.
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      const s = A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0 });
+      const me = s.localId;
+
+      // Park the rival square on top of the local car: same arc position, a
+      // lateral offset well inside the ~2 m car width.
+      const meCar = A.carAt(me);
+      A.netPeerSend({ s: meCar.s, x: meCar.x + 0.6, head: meCar.head || 0, speed: 0 }, 1000);
+      A.netTick(1010);
+
+      const rival0 = A.carAt(s.remoteId), mine0 = A.carAt(me);
+      const gap0 = Math.abs(mine0.x - rival0.x);
+
+      // Resolve contact WITHOUT another packet arriving, so any movement of
+      // the rival could only have come from our own collision pass.
+      let T = 1010;
+      for (let i = 0; i < 20; i++) { T += 16; A.step(1 / 60, 1); A.netTick(T); }
+
+      const rival1 = A.carAt(s.remoteId), mine1 = A.carAt(me);
+      return {
+        gap0, gap1: Math.abs(mine1.x - rival1.x),
+        rivalMoved: Math.abs(rival1.x - rival0.x),
+        myMove: Math.abs(mine1.x - mine0.x),
+      };
+    });
+
+    expect(out.gap0).toBeLessThan(1.2);                 // genuinely overlapped
+    // The rival is immovable locally — its owner decides where it goes.
+    expect(out.rivalMoved).toBeLessThan(0.001);
+    // ...so the whole separation lands on my car, and they come apart.
+    expect(out.myMove).toBeGreaterThan(0.05);
+    expect(out.gap1).toBeGreaterThan(out.gap0);
+  });
+
   test("the local car is still driven locally, with no correction", async ({ page }) => {
     // Multiplayer must not touch the car the player is actually steering: same
     // seed, same inputs, same trajectory whether or not a session is running.

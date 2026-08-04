@@ -2327,6 +2327,21 @@ function resolveCollisions(ranked, dt) {
         const penLat = WCAR - Math.abs(dX);
         if (penLong <= 0 || penLat <= 0) continue;
         const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1, iSum = iA + iB;
+        // SEPARATION shares, which are NOT the momentum masses above. A car posed
+        // from the network cannot be moved by us: its owner integrates it and we
+        // re-pose it from their next packet, so any push we apply is discarded a
+        // frame later. Splitting 50/50 with a car whose half is thrown away leaves
+        // the pair still overlapping, frame after frame — so the car we DO own
+        // absorbs the whole correction. That is the ownership rule made concrete:
+        // contact moves YOUR car, based on where you see the other one.
+        //
+        // The SPEED exchange deliberately keeps iA/iB. Both cars are real and both
+        // genuinely slow down; treating the rival as a wall there would scrub double
+        // the speed off the local car for an impact its owner is already absorbing
+        // on their own machine.
+        const netA = netPlay.owns(a), netB = netPlay.owns(b);
+        const sA = netA ? 0 : (netB ? 1 : iA / iSum);
+        const sB = netB ? 0 : (netA ? 1 : iB / iSum);
         // Closing into a nest at the lateral slop must be rear-end. Least-
         // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
         // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
@@ -2342,8 +2357,8 @@ function resolveCollisions(ranked, dt) {
           // stops fighting the push (the cause of the side-by-side vibration).
           const sgn = dX >= 0 ? 1 : -1;
           const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
-          a.x += sgn * corr * (iA / iSum);
-          b.x -= sgn * corr * (iB / iSum);
+          a.x += sgn * corr * sA;
+          b.x -= sgn * corr * sB;
           // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr
           // side contact was draining speed without separating the cars.
           if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
@@ -2354,8 +2369,8 @@ function resolveCollisions(ranked, dt) {
           // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
           const sgn = dProg >= 0 ? 1 : -1;
           const corr = Math.max(penLong - 0.05, 0) * 0.4;
-          shiftLong(a, sgn * corr * (iA / iSum));
-          shiftLong(b, -sgn * corr * (iB / iSum));
+          shiftLong(a, sgn * corr * sA);
+          shiftLong(b, -sgn * corr * sB);
           const relV = sgn >= 0 ? b.speed - a.speed : a.speed - b.speed;   // >0 means the rear car is closing
           if (relV > 0) {
             const jImp = 0.5 * relV / iSum;   // soft momentum exchange (was 1.15)
@@ -2402,6 +2417,21 @@ function resolveCollisions(ranked, dt) {
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1, iSum = iA + iB;
+      // SEPARATION shares, which are NOT the momentum masses above. A car posed
+      // from the network cannot be moved by us: its owner integrates it and we
+      // re-pose it from their next packet, so any push we apply is discarded a
+      // frame later. Splitting 50/50 with a car whose half is thrown away leaves
+      // the pair still overlapping, frame after frame — so the car we DO own
+      // absorbs the whole correction. That is the ownership rule made concrete:
+      // contact moves YOUR car, based on where you see the other one.
+      //
+      // The SPEED exchange deliberately keeps iA/iB. Both cars are real and both
+      // genuinely slow down; treating the rival as a wall there would scrub double
+      // the speed off the local car for an impact its owner is already absorbing
+      // on their own machine.
+      const netA = netPlay.owns(a), netB = netPlay.owns(b);
+      const sA = netA ? 0 : (netB ? 1 : iA / iSum);
+      const sB = netB ? 0 : (netA ? 1 : iB / iSum);
       // Match the relaxation pass for player-as-rear nest-edge contacts.
       const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
       const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
@@ -2411,14 +2441,14 @@ function resolveCollisions(ranked, dt) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
         if (c <= 0) continue;
         const sgn = dX >= 0 ? 1 : -1;
-        a.x += sgn * c * (iA / iSum);
-        b.x -= sgn * c * (iB / iSum);
+        a.x += sgn * c * sA;
+        b.x -= sgn * c * sB;
       } else {
         const c = Math.max(penLong - SLOP, 0) * 0.6;
         if (c <= 0) continue;
         const sgn = dProg >= 0 ? 1 : -1;
-        shiftLong(a, sgn * c * (iA / iSum));
-        shiftLong(b, -sgn * c * (iB / iSum));
+        shiftLong(a, sgn * c * sA);
+        shiftLong(b, -sgn * c * sB);
       }
     }
   }
