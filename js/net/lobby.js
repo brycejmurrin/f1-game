@@ -43,7 +43,25 @@ const NetLobby = (function () {
 
   function create(G) {
     const $ = (id) => document.getElementById(id);
-    let transport = null;
+    // CONNECTED transports, one per guest, keyed by the id the host minted for
+    // that invite. `transport` below is the one currently being NEGOTIATED —
+    // there is at most one at a time, because invites are sequential: you
+    // invite, they connect, you invite the next. That is a real simplification
+    // and not a limitation of the wire: with several offers outstanding, a
+    // pasted answer has to be matched to the offer that produced it, and the
+    // one thing a person pasting a code cannot tell you is which invite it
+    // answers.
+    const transports = new Map();
+    let transport = null;                  // the pending one, mid-handshake
+    let nextGuestId = 0;
+    // A guest has exactly one peer — the host — and calls it PEER_ONE. A host
+    // mints an id per guest. Asymmetric on purpose: only the host ever needs to
+    // tell several peers apart.
+    const mintGuestId = () => "g" + (++nextGuestId);
+    let pendingId = null;
+    // Four players: a fixed grid, and a phone in landscape. The cap is here
+    // rather than in the wire because the wire does not care.
+    const MAX_GUESTS = 3;
     let role = null;
     let pollTimer = null;
     let statusText = "";
@@ -59,7 +77,7 @@ const NetLobby = (function () {
       raceSummary: $("vs-race-summary"), raceNote: $("vs-race-note"),
       editRace: $("vs-edit-race"), editCar: $("vs-edit-car"),
       me: $("vs-me"), them: $("vs-them"),
-      ready: $("vs-ready"), start: $("vs-start"),
+      ready: $("vs-ready"), start: $("vs-start"), inviteMore: $("vs-invite-more"),
       invite: $("vs-invite"), inviteIn: $("vs-invite-in"),
       answer: $("vs-answer"), answerIn: $("vs-answer-in"),
       answerHint: $("vs-answer-hint"), answerActions: $("vs-answer-actions"),
@@ -118,25 +136,51 @@ const NetLobby = (function () {
     function setTransportFactory(fn) { makeTransport = fn || ((o) => NetTransport.rtc(o)); }
 
     function newTransport(asRole) {
-      // Always start from nothing. A previous attempt that timed out leaves a
-      // dead RTCPeerConnection behind, and reusing it is how the lobby ended up
-      // reporting "WebRTC is unavailable" on a device that had just
-      // successfully generated an invite.
-      teardown();
+      // Drop only the PENDING attempt, not the connections already made. A
+      // previous attempt that timed out leaves a dead RTCPeerConnection behind
+      // and reusing it is how the lobby ended up reporting "WebRTC is
+      // unavailable" on a device that had just successfully generated an
+      // invite — but tearing down everything here would have dropped the
+      // guests already in the room the moment the host invited another.
+      dropPending();
       role = asRole;
+      pendingId = asRole === "host" ? mintGuestId() : PEER_ONE;
       transport = makeTransport({ role: asRole, name: asRole });
       if (!transport) {
         say("This browser cannot do WebRTC, so it cannot race a friend.", true);
         return null;
       }
+      const id = pendingId;
       transport.onClose(() => {
-        // A drop AFTER connecting must also stop the lobby's pump, or a 40 Hz
-        // timer runs forever holding the whole peer connection alive.
-        clearInterval(pumpTimer); pumpTimer = null;
-        sessions.clear(); session = null;
-        say("Connection closed.", true);
+        // One guest dropping is not the room ending. Close that peer's session
+        // and leave the rest connected; only the LAST connection going away
+        // stops the pump, or a 40 Hz timer runs forever holding a peer
+        // connection alive. For a guest, losing the host is always the end.
+        transports.delete(id);
+        const s = sessions.get(id);
+        if (s) { try { s.close(); } catch (e) {} }
+        sessions.delete(id);
+        _peers.delete(id); _ready.delete(id);
+        session = [...sessions.values()][0] || null;
+        if (!sessions.size) {
+          clearInterval(pumpTimer); pumpTimer = null;
+          say("Connection closed.", true);
+        } else {
+          say("A player left.");
+        }
+        renderRoom();
       });
       return transport;
+    }
+
+    // Throw away an in-flight handshake without touching anybody connected.
+    function dropPending() {
+      clearInterval(pollTimer);
+      if (transport && !transports.has(pendingId)) {
+        try { transport.close(); } catch (e) {}
+      }
+      transport = null;
+      pendingId = null;
     }
 
     // No live connection is NOT the same as no WebRTC support, and telling a
@@ -148,14 +192,21 @@ const NetLobby = (function () {
         : "This browser cannot do WebRTC, so it cannot race a friend.";
     }
 
+    // Everything: every connected guest AND the pending attempt. Leaving the
+    // lobby has to close all of them or the peer connections outlive the screen.
     function teardown() {
       clearInterval(pollTimer);
       clearInterval(pumpTimer);
       pumpTimer = null;
+      for (const s of sessions.values()) { try { s.close(); } catch (e) {} }
       sessions.clear();
       session = null;
+      for (const t of transports.values()) { try { t.close(); } catch (e) {} }
+      transports.clear();
       if (transport) { try { transport.close(); } catch (e) {} }
       transport = null;
+      pendingId = null;
+      nextGuestId = 0;
     }
 
     // "It didn't work" is not an answer a player can act on, and the two ways
@@ -204,18 +255,23 @@ const NetLobby = (function () {
       clearInterval(pollTimer);
       const started = Date.now();
       say("Connecting…");
+      // Capture the transport and id being watched: by the time this fires the
+      // host may have moved on to inviting somebody else, and polling "the
+      // current pending one" would then connect the wrong session.
+      const watched = transport;
+      const watchedId = pendingId;
       pollTimer = setInterval(() => {
-        if (!transport) { clearInterval(pollTimer); return; }
-        if (transport.status === "open") {
+        if (!watched || transport !== watched) { clearInterval(pollTimer); return; }
+        if (watched.status === "open") {
           clearInterval(pollTimer);
-          onConnected();
+          onConnected(watchedId, watched);
           return;
         }
         // Surface the ICE/connection state while we wait. This is the only
         // window into a handshake that cannot be reproduced in any test here,
         // so when it stalls the player can say WHERE rather than just "it
         // didn't work".
-        const st = transport.stats ? transport.stats() : null;
+        const st = watched.stats ? watched.stats() : null;
         const secs = Math.round((Date.now() - started) / 1000);
         if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")");
 
@@ -227,8 +283,12 @@ const NetLobby = (function () {
         if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
           clearInterval(pollTimer);
           say(failureMsg(st, secs), true);
-          teardown();
-          show("pick");            // leave the lobby usable, not dead
+          // Only this attempt. A host whose SECOND invite fails still has its
+          // first guest sitting in the room, and dropping them for somebody
+          // else's bad network would be its own bug.
+          dropPending();
+          if (sessions.size) { show("room"); renderRoom(); }
+          else { teardown(); show("pick"); }   // leave the lobby usable, not dead
         }
       }, 250);
     }
@@ -238,10 +298,17 @@ const NetLobby = (function () {
     // session is opened here and pumped on a short interval of its own; once
     // the race is up, NetPlay adopts the same session and the game loop takes
     // over pumping it at frame rate.
-    function onConnected() {
+    function onConnected(id, t) {
+      id = id != null ? id : PEER_ONE;
+      t = t || transport;
       say("Connected.");
-      session = NetSession.create({ transport });
-      sessions.set(SELF_ONE, session);
+      transports.set(id, t);
+      if (transport === t) { transport = null; pendingId = null; }
+      const made = NetSession.create({ transport: t });
+      sessions.set(id, made);
+      // The first connection, not the most recent — `session` means "the one
+      // most callers mean", and on a guest it is the only one there is.
+      session = [...sessions.values()][0];
       clearInterval(pumpTimer);
       // Every session, not "the" session: a host with three guests has three
       // connections and all of them have to be pumped or the quiet ones look
@@ -255,27 +322,30 @@ const NetLobby = (function () {
       // someone changes team or livery in the waiting room, and keeping the
       // first would race the rival's car in whatever they happened to be
       // driving when the connection opened.
-      session.onEvent(NetPlay.EV.HELLO, (p) => {
-        const from = (p && p.from) || PEER_ONE;
-        if (p) _peers.set(from, p);
+      // Filed under the id of the CONNECTION it arrived on, never a `from` in
+      // the payload. With three guests every profile would otherwise collide
+      // into one slot — and a peer that can name itself is a peer that can name
+      // somebody else.
+      made.onEvent(NetPlay.EV.HELLO, (p) => {
+        if (p) _peers.set(id, p);
         // Learning what they picked is the moment a clash becomes knowable.
         resolveSeatClash();
         renderRoom();
       });
-      session.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest") applySettings(d); });
-      session.onEvent(NetPlay.EV.READY, (d) => {
-        _ready.set((d && d.from) || PEER_ONE, !!(d && d.ready));
+      made.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest") applySettings(d); });
+      made.onEvent(NetPlay.EV.READY, (d) => {
+        _ready.set(id, !!(d && d.ready));
         renderRoom();
       });
       // GO is separate from SETTINGS on purpose. Settings now change LIVE while
       // both players sit in the room, so "the host chose a track" and "the host
       // pressed start" have to be different messages — they used to be the same
       // one, which is why arriving settings launched the race immediately.
-      session.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
+      made.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
       // Only reaches the game while WE hold the session — once NetPlay owns it,
       // its own handler does this and the lobby is out of the loop.
-      session.onEvent(NetPlay.EV.QUALI, (d) => { if (d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d); });
-      session.sendEvent(NetPlay.EV.HELLO, localProfile());
+      made.onEvent(NetPlay.EV.QUALI, (d) => { if (d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d); });
+      made.sendEvent(NetPlay.EV.HELLO, localProfile());
       if (role === "host") publishSettings();
       openRoom();
     }
@@ -543,6 +613,15 @@ const NetLobby = (function () {
               ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k)))).join("")
           : row(driverLine(null, "Them", false));
       }
+      if (e.inviteMore) {
+        // Only the host invites, and only while there is room. Disabled rather
+        // than hidden at the cap so the reason is visible — the same reasoning
+        // the garage uses for a taken seat.
+        e.inviteMore.hidden = !host;
+        const full = sessions.size >= MAX_GUESTS;
+        e.inviteMore.disabled = full;
+        e.inviteMore.textContent = full ? "ROOM FULL (4 PLAYERS)" : "INVITE ANOTHER";
+      }
       if (e.ready) {
         e.ready.textContent = selfReady ? "NOT READY" : "READY";
         e.ready.setAttribute("aria-pressed", selfReady ? "true" : "false");
@@ -684,6 +763,22 @@ const NetLobby = (function () {
       say(scannable
         ? "Send them the link, or have them scan the code."
         : "Send that invite code to your friend.");
+      return res;
+    }
+
+    // Invite a further player WITHOUT disturbing the ones already here. The
+    // room stays up; only the invite step is shown again, and the connections
+    // already made keep running because newTransport() no longer tears them
+    // down. Sequential by design — see the note on `transports`.
+    async function inviteAnother() {
+      if (role !== "host") return { ok: false, error: "not_host" };
+      if (sessions.size >= MAX_GUESTS) {
+        say("That is four players — the grid is full.", true);
+        return { ok: false, error: "room_full" };
+      }
+      const res = await host();
+      // host() shows the invite step; the room is one BACK away and everybody
+      // in it is still connected.
       return res;
     }
 
@@ -1058,6 +1153,7 @@ const NetLobby = (function () {
       on("vs-edit-race", () => { if (role === "host" && G.openRaceSetup) G.openRaceSetup(); });
       on("vs-edit-car", () => { if (G.openGarageFrom) G.openGarageFrom("vsfriend"); });
       on("vs-ready", () => setReady(!selfReady));
+      on("vs-invite-more", inviteAnother);
       on("vs-code-host", codeHost);
       on("vs-code-join", () => {
         showCodeStep("input", "Enter their code", "Six letters and numbers.");
@@ -1128,6 +1224,8 @@ const NetLobby = (function () {
       // The waiting room. roomChanged() is game.js's way back in after a player
       // returns from the garage or the race settings.
       roomChanged, setReady, startFromRoom, renderRoom,
+      // Mint a further invite without disturbing the room. Host only, capped.
+      inviteAnother,
       // Every seat somebody ELSE is in. Built from the profiles the room
       // already exchanges (EV.HELLO, re-sent on every garage exit), so this
       // adds no wire traffic — it only reads what was always being sent.
@@ -1145,12 +1243,16 @@ const NetLobby = (function () {
       failureMsg,
       status: () => ({
         role, statusText,
-        connected: !!transport && transport.status === "open",
+        // How many are actually IN, not whether a handshake is in flight.
+        connected: transports.size > 0,
+        guests: transports.size,
+        pending: !!transport,
         // The live ICE/connection state and the CANDIDATE TYPES — the only
         // window into a handshake that no in-process test can reproduce, and
         // the difference between "this network blocks STUN" and "these two
         // networks need a relay", which look identical from the outside.
-        wire: transport && transport.stats ? transport.stats() : null,
+        wire: transport && transport.stats ? transport.stats()
+          : ([...transports.values()][0] || {}).stats ? [...transports.values()][0].stats() : null,
       }),
     };
   }
