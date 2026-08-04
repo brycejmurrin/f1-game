@@ -1,6 +1,23 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
 
+// MY TEAM moved into the GARAGE's TEAM tab — the select screen is about WHERE
+// you race, so it no longer carries the team editor. Opens the garage, saves,
+// and closes it again, leaving the caller back on the select screen exactly
+// where the old one-line #sel-customize click did.
+async function saveMyTeam(page, edit) {
+  await page.locator("#sel-setup").click();
+  await page.locator("#carsetup").waitFor({ state: "visible" });
+  await page.locator('#cs-tabs [data-cs-cat="team"]').click();
+  await page.locator("#cs-customize").click();
+  await page.locator("#customize").waitFor({ state: "visible" });
+  if (edit) await edit();
+  await page.locator("#cz-save").click();
+  await page.locator("#customize").waitFor({ state: "hidden" });
+  await page.locator("#cs-done").click();
+  await page.locator("#carsetup").waitFor({ state: "hidden" });
+}
+
 const LANDSCAPE = { width: 844, height: 390 };
 
 test.use({ viewport: LANDSCAPE });
@@ -36,9 +53,7 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   await page.locator("#select").waitFor({ state: "visible" });
 
   // Save the default custom team once so it is selected for the setup preview.
-  await page.locator("#sel-customize").click();
-  await page.locator("#customize").waitFor({ state: "visible" });
-  await page.locator("#cz-save").click();
+  await saveMyTeam(page);
 
   await page.locator("#sel-setup").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
@@ -46,10 +61,7 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   const firstTextureId = await page.evaluate(() => window.__customTeamTextureProbe.createdTextureIds[0]);
 
   await page.locator("#cs-done").click();
-  await page.locator("#sel-customize").click();
-  await page.locator("#customize").waitFor({ state: "visible" });
-  await page.locator("#cz-color").fill("#123456");
-  await page.locator("#cz-save").click();
+  await saveMyTeam(page, () => page.locator("#cz-color").fill("#123456"));
 
   await page.locator("#sel-setup").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
@@ -100,8 +112,8 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   });
 
   await page.locator("#mb-race").click();
-  await page.locator("#sel-customize").click();
-  await page.locator("#cz-save").click();
+  await page.locator("#select").waitFor({ state: "visible" });
+  await saveMyTeam(page);
 
   // Chase and cockpit cameras build the two player-only body cache variants.
   await page.locator("#sel-go").click();
@@ -115,9 +127,8 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   await page.locator("#pausebtn").click();
   await page.locator("#pm-quit").click();
   await page.locator("#mb-race").click();
-  await page.locator("#sel-customize").click();
-  await page.locator("#cz-color").fill("#123456");
-  await page.locator("#cz-save").click();
+  await page.locator("#select").waitFor({ state: "visible" });
+  await saveMyTeam(page, () => page.locator("#cz-color").fill("#123456"));
 
   const counts = await page.evaluate(() => ({
     created: window.__customTeamMeshProbe.customMeshes.length,

@@ -16,12 +16,11 @@ const els = {
   lights: $("lights"), announce: $("announce"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
-  selDriver: $("sel-driver"), selTracks: $("sel-tracks"),
+  selTracks: $("sel-tracks"),
   selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
   selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"),
   selPreviewRec: $("sel-preview-rec"),
   selTrackSection: $("sel-track-section"), selCircuitLabel: $("sel-circuit-label"),
-  selCustomize: $("sel-customize"),
   selBack: $("sel-back"), selGo: $("sel-go"),
   customize: $("customize"),
   results: $("results"), resultsTitle: $("results-title"),
@@ -1824,6 +1823,14 @@ const G = {
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
   store, tickUi, scheduleFlybyTrack,
   renderStatBars: (...a) => renderStatBars(...a),   // const initialised below — defer
+  // Same deferred-arrow trick for the garage <-> select plumbing: setup-ui.js is
+  // created before menus.js, and openGarage/openCustomize are declared further
+  // down this file, so none of these can be referenced directly at create time.
+  buildSetup: (...a) => buildSetup(...a),
+  setTeamPicker: (...a) => setTeamPicker(...a),
+  teamSwatch: (...a) => teamSwatch(...a),
+  openGarage: (...a) => openGarage(...a),
+  openCustomize: (...a) => openCustomize(...a),
   // Mutable state + helpers consumed by js/game/photomode.js.
   get photoMode() { return photoMode; }, set photoMode(v) { photoMode = v; },
   get _photoPrevScale() { return _photoPrevScale; }, set _photoPrevScale(v) { _photoPrevScale = v; },
@@ -1873,7 +1880,7 @@ const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 // CAR SETUP panel UI (js/game/setup-ui.js).
 const { buildSetup, openSetup, renderStatBars } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
-const { buildSelect, updateTrackPreview, openTrackDetail } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
 // Photo mode (js/game/photomode.js).
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
@@ -5347,13 +5354,10 @@ $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 // there with nothing else to restore.
 $("pm-howto").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("htp-close").onclick = () => { els.howtoplay.hidden = true; };
-// Team picker: opened by the team card on the select screen (js/game/menus.js).
-// Closing without choosing leaves the current team as-is.
-$("tp-close").onclick = () => {
-  $("teampicker").hidden = true;
-  // the card that opened it advertises aria-haspopup, so it owns aria-expanded
-  const card = $("sel-team-card"); if (card) card.setAttribute("aria-expanded", "false");
-};
+// Team picker: opened by the garage's TEAM & DRIVER tab (js/game/setup-ui.js).
+// Closing without choosing leaves the current team as-is. Nothing to rebuild —
+// the garage is still underneath, unchanged.
+$("tp-close").onclick = () => { $("teampicker").hidden = true; };
 // BACK + the tappable circuit preview. Both lookups existed in `els` but no
 // handler was ever attached on this branch — the select screen's BACK button
 // was simply dead (surfaced by the button-walk audit; the wiring lived on an
@@ -5526,13 +5530,21 @@ CZ_LIV_FIELDS.forEach(([domId]) => {
 for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
   btn.onclick = () => { czSetFinish(btn.dataset.czFinish); if (soundOn) GameAudio.uiTick(); };
 }
-els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustomize(); };
-// CAR SETUP is reachable from the select screen AND from the title, so DONE has
-// to go back where it came from. It used to unhide #select unconditionally,
-// which dropped you on the track picker after opening the garage from the menu.
+// The GARAGE is reachable from the title AND from the select screen's car card,
+// so DONE has to go back where it came from. It used to unhide #select
+// unconditionally, which dropped you on the track picker after opening the
+// garage from the menu.
 let garageReturn = "select";
-$("sel-setup").onclick = () => { if (soundOn) GameAudio.uiSelect(); garageReturn = "select"; openSetup(); };
-$("mb-garage").onclick = () => { GameAudio.init(); garageReturn = "menu"; openSetup(); };
+// The one way in. Everything that opens the garage goes through here so the
+// return path can never be left stale — including menus.js, via G.openGarage.
+function openGarage(from) {
+  if (from === "menu") GameAudio.init();
+  else if (soundOn) GameAudio.uiSelect();
+  garageReturn = from;
+  openSetup();
+}
+$("sel-setup").onclick = () => openGarage("select");
+$("mb-garage").onclick = () => openGarage("menu");
 $("cs-done").onclick = () => {
   $("carsetup").hidden = true;
   setupPreviewOn = false;
@@ -5573,7 +5585,10 @@ $("cz-save").onclick = () => {
   driverIdx = 0;
   store.set("team", teamIdx); store.set("driver", 0);
   els.customize.hidden = true;
+  // MY TEAM is reachable from the garage now, so refresh that too — saving a
+  // team switches you to it, and the garage is showing its car in 3D.
   buildSelect();
+  if (!$("carsetup").hidden) buildSetup();
   if (soundOn) GameAudio.uiSelect();
 };
 els.resMenu.onclick = () => quitToMenu();

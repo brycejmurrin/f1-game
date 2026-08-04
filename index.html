@@ -273,21 +273,21 @@
     <div class="sheet-head"><h2 id="select-title">SELECT</h2></div>
 
     <div class="sheet-body" id="sel-body">
-      <!-- WHO YOU ARE: team, driver, the resulting car, and how hard the AI is.
-           One scrolling column; the actions below it never move. -->
+      <!-- WHAT YOU ARE TAKING OUT: a summary of the car, and the way through
+           to the garage where it is configured. One scrolling column. -->
       <div id="sel-left" class="pane">
         <section class="sel-section">
-          <h3 class="sel-label" id="sel-team-label">TEAM</h3>
-          <!-- One big card instead of a 12-chip grid: the grid was four rows of
-               small targets that pushed DRIVER, the car stats and DIFFICULTY off
-               a landscape phone. Tapping the card opens the full picker below. -->
-          <button id="sel-team-card" aria-haspopup="dialog" aria-labelledby="sel-team-label"></button>
-          <h3 class="sel-label" id="sel-driver-label">DRIVER</h3>
-          <div id="sel-driver" class="chip-row" role="group" aria-labelledby="sel-driver-label"></div>
+          <h3 class="sel-label" id="sel-team-label">YOUR CAR</h3>
+          <!-- A read-only summary of the car you are taking out — team, engine,
+               driver — that opens the GARAGE, where all of it is chosen. The
+               team picker, DRIVER chips and MY TEAM all used to live in this
+               column; a screen for choosing a CIRCUIT was also the only place
+               to say who you were, and the column could not fit both on a
+               landscape phone. -->
+          <button id="sel-team-card" aria-labelledby="sel-team-label"></button>
           <div id="sel-stats" class="cs-stats"></div>
           <div class="sel-edit-row">
-            <button id="sel-customize" class="sel-edit">&#9998; MY TEAM</button>
-            <button id="sel-setup" class="sel-edit">&#9881; CAR SETUP</button>
+            <button id="sel-setup" class="sel-edit">&#128295; GARAGE</button>
           </div>
         </section>
       </div>
@@ -457,7 +457,7 @@
   <div id="cs-inner" class="sheet">
     <div id="cs-header" class="sheet-head">
       <div id="cs-titlebar">
-        <h2>CAR SETUP</h2>
+        <h2>GARAGE</h2>
         <div id="cs-team"></div>
       </div>
       <div id="cs-budget-wrap">
