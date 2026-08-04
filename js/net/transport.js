@@ -190,13 +190,23 @@ const NetTransport = (function () {
   // candidates while STUN worked, which is worse than shipping nothing,
   // because it looks like a relay exists and diagnosis chases the wrong thing.
   //
+  // RE-MEASURED from a clean browser since, because the vendor's own docs still
+  // publish staticauth.openrelay.metered.ca (for Nextcloud/Matrix) and reading
+  // them would suggest the host is alive. It is not: a Trickle-ICE gather
+  // against it yields ONE host candidate and two `code=701 host lookup received
+  // error` lines — the name does not resolve. The docs are stale; the host is
+  // dead. Do not put it back on the strength of that page.
+  //
   // So: no static TURN is shipped. A relay comes from ONE of
-  //   apex26.turnApi — a credentials URL (Metered-style: returns
-  //     {iceServers|iceServers:[…]} or a bare array), fetched by prefetchIce()
-  //     when the lobby opens and merged here once it arrives. The free tier is
-  //     50 GB/month on an account the game's OWNER controls — the model the
-  //     operator actually offers, rather than freeloading on credentials they
-  //     retired.
+  //   apex26.turnApi — a credentials URL, fetched by prefetchIce() when the
+  //     lobby opens and merged here once it arrives. Metered's shape is
+  //     https://<app>.metered.live/api/v1/turn/credentials?apiKey=<KEY>, and it
+  //     responds with a BARE ARRAY — hence the Array.isArray branch below;
+  //     {iceServers:[…]} / {ice_servers:[…]} are accepted too so a
+  //     self-hosted endpoint can use the more obvious shape. Free tier is
+  //     20 GB/month (the vendor says so twice on the Open Relay page) on an
+  //     account the game's OWNER controls — the model the operator actually
+  //     offers, rather than freeloading on credentials they retired.
   //   apex26.turn — a single static server you run yourself.
   let fetchedIce = null;
   let fetchingIce = null;
