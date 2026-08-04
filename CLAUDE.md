@@ -39,7 +39,7 @@ npm run test:scenery    # props/terrain over road + f1-track-accuracy
 npm run test:webgl      # webgl-probes + lighting-ab
 npm run test:audio      # engine/sfx audio smoke
 npm run test:modes      # season + time-trial + career game modes
-npm run test:career     # career only: mode axes, the save, the hub, a round
+npm run test:career     # career + qualifying: mode axes, the save, the hub, the grid
 npm run test:map        # minimap hooks
 npm run test:net        # multiplayer: car roles (human vs local), the per-car
                         #   input seam, per-car parts, and the SESSION — rival
@@ -379,6 +379,13 @@ js/game/         — game modules (each created with the G ctx façade from game
   career-ui.js   CareerUI       the CAREER screen (#career): new-career setup
                                   and the season hub. Replaces #select in
                                   career — the calendar owns WHERE you race
+  quali.js       Quali          ONE-LAP QUALIFYING (#quali). A `session`, not a
+                                  game state: the player's flying lap reuses the
+                                  time-trial path, and the rest of the field is
+                                  MODELLED — a quasi-steady forward/backward lap
+                                  simulation off the same LAT_MAX/ACCEL/BRAKE the
+                                  driving model uses, so a simulated time and a
+                                  driven one are on one scale. Feeds gridUp()
   menus.js       Menus          menu/select/pause DOM flows
   scrollfade.js  ScrollFade     "there is more below" edge fade + position indicator
                                   for every menu scroll region (self-initialising)
@@ -761,7 +768,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-89 Playwright specs + 26 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+90 Playwright specs + 26 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

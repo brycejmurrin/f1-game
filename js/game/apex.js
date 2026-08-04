@@ -914,6 +914,10 @@ const api = {
     return c.money;
   },
   careerReset() { Career.clear(); G.refreshCareerButton(); return true; },
+  // The qualifying model's times for the loaded track, fastest first, WITHOUT
+  // running a session — a real weekend's classification is left alone. Pass a
+  // lap time to substitute it for the player's row.
+  qualiSim: (playerTime) => G.qualiSim(playerTime),
   // The five-axis skill table (js/car/driver-ratings.js) with any career
   // development folded in, plus the derived `overall`. No args = the whole 2026
   // grid keyed by code. An unknown code resolves through the tier fallback; with

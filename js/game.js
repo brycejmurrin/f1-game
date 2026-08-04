@@ -598,6 +598,10 @@ const isChampionship = () => flow === "season" || flow === "career";
 // can never drift out of step with the mode.
 function setFlow(v) { flow = v; Career.engage(v === "career"); }
 const isTimeTrial = () => session === "tt";
+const isQuali = () => session === "quali";
+// The full field as it was before startRace() narrowed `cars` to the lone
+// qualifying car — Quali.simulate() needs every car to build a classification.
+let qualiField = null;
 const isCareer = () => flow === "career";
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
@@ -1134,12 +1138,19 @@ function makeCars() {
   player = cars.find((c) => c.isPlayer);
 }
 
-function gridUp() {
-  // grid order: by tier then random-ish; player at P12 for a fun climb
-  const order = cars.slice().sort((a, b) => (a.tier - b.tier) || (simRnd() - 0.5));
-  const pi = order.indexOf(player);
-  order.splice(pi, 1);
-  order.splice(Math.min(11, order.length), 0, player);
+// `preOrder` is an explicit grid, fastest first — a qualifying classification.
+// Without one the old behaviour stands: sort by tier, then drop the player into
+// P12 for a climb. GP keeps that on purpose; only a session that actually held a
+// qualifying hour has earned the right to say where everyone starts.
+function gridUp(preOrder) {
+  const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
+    // grid order: by tier then random-ish; player at P12 for a fun climb
+    const o = cars.slice().sort((a, b) => (a.tier - b.tier) || (simRnd() - 0.5));
+    const pi = o.indexOf(player);
+    o.splice(pi, 1);
+    o.splice(Math.min(11, o.length), 0, player);
+    return o;
+  })();
   order.forEach((c, i) => {
     c.s = wrapS(track.total - 14 - i * 8);
     c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
@@ -1750,7 +1761,16 @@ function snapGameCam() {
 function startRace() {
   loadTrack(trackIdx);
   makeCars();
-  if (isTimeTrial()) {
+  // A qualifying lap is a time trial with the rest of the field simulated: one
+  // car on track, the existing lap-timing and validity path, and no new game
+  // state. Two laps — a standing out-lap, then the flying one that counts, the
+  // same reason TT_LAPS exists. The AI field is built BEFORE cars is narrowed,
+  // so the classification can still see every car.
+  if (isQuali()) {
+    qualiField = cars;
+    cars = [player];
+    lapsTarget = 2;
+  } else if (isTimeTrial()) {
     cars = [player];          // solo against the clock — no AI on track
     lapsTarget = raceLaps;
     const board = ttBoard(track.def.id);
@@ -1768,7 +1788,7 @@ function startRace() {
   } else {
     Particles.rainShow(false);
   }
-  gridUp();
+  gridUp(quali.order(cars));
   recomputePlayerMods();
   resultT = 0;
   camRoll = 0; camSlipSm = 0;
@@ -1826,6 +1846,16 @@ function endRace(forcedOrder) {
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
   if (soundOn) GameAudio.finish();
+  // Qualifying ends in its own sheet: the player's flying lap is measured
+  // against the simulated field and becomes the grid. Mirrors the TT return
+  // below — first branch out, before any race classification is built.
+  if (isQuali()) {
+    cars = qualiField || cars;
+    quali.simulate(player.best < Infinity ? player.best : 0);
+    $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
+    quali.open();
+    return;
+  }
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
   // classification: finished by time(+penalty), rest by progress
   const fin = cars.filter((c) => c.finished).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
@@ -1977,6 +2007,8 @@ const G = {
   openCustomize: (...a) => openCustomize(...a),
   // Career plumbing — same deferred-arrow reason as the block above.
   openRaceSettings: (...a) => openRaceSettings(...a),
+  // Read-only qualifying model for the CURRENT track (__apex.qualiSim).
+  qualiSim: (playerTime) => quali.preview(playerTime || 0),
   refreshCareerButton: (...a) => refreshCareerButton(...a),
   updateTrackPreview: (...a) => updateTrackPreview(...a),
   // Mutable state + helpers consumed by js/game/photomode.js.
@@ -2010,6 +2042,11 @@ const G = {
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
   GAME_LAPS, TT_LAPS, LONG_GRIP,
+  // The friction-circle constants, for js/game/quali.js: it runs a quasi-steady
+  // lap simulation off the SAME numbers the driving model uses, so a simulated
+  // qualifying time and a driven one are on one scale by construction.
+  LAT_MAX, ACCEL, BRAKE,
+  vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
   get netPlay() { return netPlay; },
@@ -2034,6 +2071,9 @@ const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwa
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
 // and the save live in js/game/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
+// QUALIFYING (js/game/quali.js) — the flying lap plus the simulated field it is
+// measured against. Holds the classification between the session and the grid.
+const quali = Quali.create(G);
 // Photo mode (js/game/photomode.js).
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
@@ -5822,8 +5862,43 @@ $("rs-go").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   $("race-settings").hidden = true;
   if (steerMode === "tilt") enableTilt();
-  startRace();
+  // In a championship the weekend starts with qualifying, which is what decides
+  // the grid. A one-off Grand Prix goes straight to the race and keeps its P12
+  // start — that mode is a quick blast, not a weekend.
+  if (isChampionship()) openQuali(); else startRace();
 };
+
+// ── qualifying ───────────────────────────────────────────────────────────────
+// The sheet opens BEFORE the session with the field already simulated, so the
+// player can see what they have to beat and choose whether to drive it or take
+// the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
+function openQuali() {
+  session = "quali";
+  quali.clear();
+  loadTrack(trackIdx);
+  makeCars();
+  quali.simulate(0);              // provisional: everyone simulated, including you
+  $("quali").classList.remove("q-done");
+  quali.open();
+}
+function closeQualiToGrid() {
+  quali.close();
+  session = "race";
+  startRace();                    // gridUp() reads quali.order()
+}
+$("q-drive").onclick = () => {
+  if (soundOn) GameAudio.uiSelect();
+  quali.close();
+  session = "quali";
+  startRace();                    // one out-lap + one flying lap, alone
+};
+$("q-sim").onclick = () => {
+  if (soundOn) GameAudio.uiSelect();
+  quali.simulate(0);              // keep the simulated time for the player too
+  $("quali").classList.add("q-done");
+  quali.build();
+};
+$("q-go").onclick = () => { if (soundOn) GameAudio.uiSelect(); closeQualiToGrid(); };
 
 // ---- customize my team ----
 // Optional extra-paint rows: DOM colour-input id -> livery key. Saved onto the

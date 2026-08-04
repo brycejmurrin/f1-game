@@ -16,6 +16,18 @@ async function startCareer(page, opts) {
   await page.evaluate((o) => window.__apex.career(o), opts || { teamId: "haas", seat: 1, seed: 4242 });
 }
 
+// From the hub to the grid. A career weekend now qualifies first, so #rs-go
+// opens the qualifying sheet rather than starting the race; SIMULATE takes the
+// modelled time and TO THE GRID starts it.
+async function goRacing(page) {
+  await page.locator("#cr-go").click();
+  await page.locator("#rs-go").click();
+  await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
+  await page.locator("#q-sim").click();
+  await page.locator("#q-go").click();
+  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
+}
+
 // ── mode axes ────────────────────────────────────────────────────────────────
 
 test.describe("Career — mode", () => {
@@ -177,9 +189,7 @@ test.describe("Career — isolation", () => {
     });
     // Go racing through the hub — __apex.race() is explicitly a Grand Prix and
     // would switch the flow back to gp.
-    await page.locator("#cr-go").click();
-    await page.locator("#rs-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15_000 });
+    await goRacing(page);
     const merc = await page.evaluate(() => {
       for (let i = 0; i < 24; i++) {
         const c = window.__apex.carAt(i);
@@ -252,9 +262,7 @@ test.describe("Career — a round", () => {
     await startCareer(page);
     const money0 = await page.evaluate(() => window.__apex.careerState().money);
 
-    await page.locator("#cr-go").click();
-    await page.locator("#rs-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15_000 });
+    await goRacing(page);
     await page.evaluate(() => window.__apex.park(0.9));
     await page.evaluate(() => window.__apex.finishRace());
     await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
@@ -272,9 +280,7 @@ test.describe("Career — a round", () => {
   test("the player takes the contracted seat on the grid", async ({ page }) => {
     await boot(page);
     await startCareer(page, { teamId: "haas", seat: 1, code: "ZZZ", name: "Test Driver", seed: 3 });
-    await page.locator("#cr-go").click();
-    await page.locator("#rs-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15_000 });
+    await goRacing(page);
     const grid = await page.evaluate(() => window.__apex.fieldState().map((c) => c.code));
     expect(grid).toContain("ZZZ");
     expect(grid).not.toContain("BEA");   // the driver you replaced
@@ -357,9 +363,7 @@ test.describe("Driver ratings", () => {
       window.__apex.career().dev["haas:0"] = { pace: 9 };   // OCO is haas seat 0
     });
     // Inside the career the delta is live…
-    await page.locator("#cr-go").click();
-    await page.locator("#rs-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15_000 });
+    await goRacing(page);
     const inCareer = await page.evaluate(() => {
       for (let i = 0; i < 24; i++) {
         const c = window.__apex.carAt(i);

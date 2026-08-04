@@ -13,11 +13,15 @@ async function startSeasonRace(page, laps) {
   if (laps != null) {
     await page.locator("#rs-laps .sel-chip").filter({ hasText: new RegExp(`^${laps}(?: \\(FULL\\))?$`) }).click();
   }
-  // Accept race settings
+  // Accept race settings. A championship weekend now opens with QUALIFYING —
+  // SIMULATE takes the modelled time, TO THE GRID starts the race from it.
   await page.locator("#rs-go").click();
+  await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
+  await page.locator("#q-sim").click();
+  await page.locator("#q-go").click();
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
-    { timeout: 10_000 }
+    { timeout: 20_000 }
   );
 }
 
@@ -130,7 +134,10 @@ test.describe("Season — standings panel", () => {
     await page.locator("#carsetup").waitFor({ state: "hidden" });
     await page.locator("#sel-go").click();
     await page.locator("#rs-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+    await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
+    await page.locator("#q-sim").click();
+    await page.locator("#q-go").click();
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
     await page.evaluate(() => {
       window.__apex.park(0.9);
       window.__apex.finishRace();
