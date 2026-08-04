@@ -436,7 +436,7 @@
       // 5. PARK STRUCTURES — Villa Reale, paddock buildings, ornamental lakes
       // =====================================================================
       // Villa Reale — cream neoclassical block in the park (s~0.62 R far).
-      building(K(0.62), 1, 70, 64, 24, 30, { wall: [0.87, 0.81, 0.67], window: [0.70, 0.64, 0.50], floor: 6 });
+      building(K(0.62), 1, 70, 64, 24, 30, { kind: "podium", wall: [0.87, 0.81, 0.67], window: [0.70, 0.64, 0.50], floor: 6 });
       // ── Lit window bands on Villa Reale for night-ready depth ──
       {
         const aVR = anchor(K(0.62), 1, 70 + 32);  // face of building
@@ -445,8 +445,8 @@
         addBox(out, vadd(aVR.c, aVR.u, 17), [0.28, 1.4, 62], winVR, [aVR.r, aVR.u, aVR.t]);
       }
       // Two flanking wings.
-      building(K(0.605), 1, 72, 30, 16, 22, { wall: [0.85, 0.79, 0.65], window: [0.68, 0.62, 0.48] });
-      building(K(0.635), 1, 72, 30, 16, 22, { wall: [0.85, 0.79, 0.65], window: [0.68, 0.62, 0.48] });
+      building(K(0.605), 1, 72, 30, 16, 22, { kind: "slab", wall: [0.85, 0.79, 0.65], window: [0.68, 0.62, 0.48] });
+      building(K(0.635), 1, 72, 30, 16, 22, { kind: "slab", wall: [0.85, 0.79, 0.65], window: [0.68, 0.62, 0.48] });
 
       // Paddock / hospitality buildings behind the pits (left, s~0.97–0.02).
       // Modern containerized/modular hospitality modules, white/light grey with dark windows.

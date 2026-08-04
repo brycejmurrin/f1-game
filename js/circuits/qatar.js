@@ -296,7 +296,7 @@
         }, { required: true });
       })();
       building(K(0.01), -1, 17, 13, 8, 160,
-        { wall: [0.90, 0.90, 0.88], window: WIN_COOL, floor: 3.2 });
+        { kind: "slab", wall: [0.90, 0.90, 0.88], window: WIN_COOL, floor: 3.2 });
       // Horizontal banding stripe along the pit face (Tilke language).
       // These band the PIT BUILDING emitted just above — but were anchored via
       // along() at 1.2 m off the TRACK edge, 16 m inboard of that facade and up
@@ -341,7 +341,7 @@
         const s = (0.98 + i * 0.018) % 1;
         const hf = hash(i * 11 + 7);
         building(K(s), -1, 42 + (i % 2) * 8, 12 + hf * 4, 6 + hf * 3, 18 + hf * 8,
-          { wall: WHITE, window: WIN_COOL, floor: 3.0 });
+          { kind: "hall", wall: WHITE, window: WIN_COOL, floor: 3.0 });
         // Soft white roof canopy ledge
         const a = anchor(K(s), -1, 46 + (i % 2) * 8), b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, 8 + hf * 3), [14, 0.55, 16], WHITE, b);
@@ -408,7 +408,7 @@
       // the third and fourth blocks that used to stand here started to read as
       // a small town behind T1, which is the one thing Lusail has none of.
       building(K(0.060), 1, 54, 16, 7, 34,
-        { wall: WHITE, window: WIN_WARM, floor: 3.0 });
+        { kind: "hall", wall: WHITE, window: WIN_WARM, floor: 3.0 });
       {
         const a = anchor(K(0.068), 1, 63), b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, 8.2), [20, 0.30, 42], FLOOD, b);
@@ -419,7 +419,7 @@
       // T1 VVIP — white villa + ~60 m branch-style sail canopy (replaces mosque)
       (function t1Vvip() {
         building(K(0.048), -1, 36, 18, 9, 32,
-          { wall: WHITE, window: WIN_COOL, floor: 3.4 });
+          { kind: "dome", wall: WHITE, window: WIN_COOL, floor: 3.4 });
         building(K(0.058), -1, 40, 14, 7, 24,
           { wall: [0.91, 0.91, 0.89], window: WIN_WARM, floor: 3.2 });
         const a = anchor(K(0.052), -1, 48), b = [a.r, a.u, a.t];

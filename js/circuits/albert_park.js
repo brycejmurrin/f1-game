@@ -844,7 +844,7 @@
         addBox(out, vadd(a.c, a.u, 2.0), [4, 4, 13], [0.90, 0.90, 0.92], [a.r, a.u, a.t]);
         addBox(out, vadd(vadd(a.c, a.u, 1.6), a.t, 8), [3.6, 3.2, 4], [0.30, 0.32, 0.40], [a.r, a.u, a.t]);
       }
-      building(k(0.04), 1, 48, 20, 12, 30, { wall: [0.82, 0.84, 0.86], window: [0.30, 0.38, 0.50], floor: 3 });
+      building(k(0.04), 1, 48, 20, 12, 30, { kind: "podium", wall: [0.82, 0.84, 0.86], window: [0.30, 0.38, 0.50], floor: 3 });
       {
         const ap = anchor(k(0.01), -1, 22);
         addCyl(out, ap.c, 0.18, 18, [0.28, 0.32, 0.38], 4, [ap.r, ap.u, ap.t]);

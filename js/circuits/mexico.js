@@ -276,6 +276,7 @@
       for (const s of [0.014, 0.034, 0.054]) {
         const k = K(s), warm = hash(k * 107) > 0.5;
         building(k, -1, 40, 12, 8 + hash(k * 109) * 3, 18, {
+          kind: "hall",
           wall: warm ? [0.78, 0.30, 0.25] : [0.24, 0.42, 0.60],
           window: [0.56, 0.62, 0.68], floor: 2,
         });
@@ -409,7 +410,7 @@
       for (const s of [0.510, 0.530, 0.550, 0.570, 0.590]) {
         const k = K(s);
         building(k, -1, 28 + hash(k) * 32, 24, 9 + hash(k * 3) * 5, 20,
-                 { wall: [0.86, 0.86, 0.84], window: [0.40, 0.46, 0.50], floor: 2 });
+                 { kind: "podium", wall: [0.86, 0.86, 0.84], window: [0.40, 0.46, 0.50], floor: 2 });
       }
       // Park trees both sides of the sports facility section — denser toward stadium
       forestEdge(0.48, 0.68,  1, 26, { density: 0.32, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });

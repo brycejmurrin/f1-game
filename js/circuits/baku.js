@@ -681,8 +681,11 @@
           [0.54, 1, 36, 12, 12, 12],
           [0.56, 1, 22, 14,  8, 16],
         ];
-        for (const [s, side, dist, w, h, d] of oldCityData) {
-          building(K(s), side, dist, w, h, d, { wall: STONE, window: WIN_WARM, floor: 3, lit: true });
+        for (const [i, [s, side, dist, w, h, d]] of oldCityData.entries()) {
+          building(K(s), side, dist, w, h, d, {
+            kind: ["hall", "arch", "dome", "chevron", "drum"][i % 5],
+            wall: STONE, window: WIN_WARM, floor: 3, lit: true,
+          });
         }
       }
 

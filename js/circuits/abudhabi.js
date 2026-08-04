@@ -458,9 +458,9 @@
       // ===================================================================
       // s 0.62 R mid — MARINA HOTEL cluster (sightline target from yacht basin)
       // ===================================================================
-      building(K(0.62), 1, 28, 48, 52, 28, { wall: [0.20, 0.22, 0.30], lit: true, windowCol: WIN_EMI, floor: 6 });
-      building(K(0.60), 1, 34, 30, 32, 22, { wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_WARM, floor: 5 });
-      building(K(0.64), 1, 34, 30, 36, 22, { wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 5 });
+      building(K(0.62), 1, 28, 48, 52, 28, { kind: "cylinder", wall: [0.20, 0.22, 0.30], lit: true, windowCol: WIN_EMI, floor: 6 });
+      building(K(0.60), 1, 34, 30, 32, 22, { kind: "spire", wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_WARM, floor: 5 });
+      building(K(0.64), 1, 34, 30, 36, 22, { kind: "notch", wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 5 });
       {
         const aH = anchor(K(0.62), 1, 28 + 24);
         addBox(out, vadd(aH.c, aH.u, 54), [50, 7, 30], WIN_EMI, [aH.r, aH.u, aH.t]);
@@ -686,9 +686,9 @@
 
       // Second hotel group at s 0.44 R (Radisson / Abu Dhabi circuit area)
       // Using lit:true for proper night window glow
-      building(K(0.44), 1, 36, 42, 48, 28, { wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 6 });
-      building(K(0.45), 1, 37, 28, 34, 20, { wall: [0.16, 0.18, 0.26], lit: true, windowCol: WIN_WARM, floor: 5 });
-      building(K(0.43), 1, 42, 32, 28, 22, { wall: [0.15, 0.17, 0.24], lit: true, windowCol: WIN_EMI, floor: 5 });
+      building(K(0.44), 1, 36, 42, 48, 28, { kind: "cylinder", wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 6 });
+      building(K(0.45), 1, 37, 28, 34, 20, { kind: "fin", wall: [0.16, 0.18, 0.26], lit: true, windowCol: WIN_WARM, floor: 5 });
+      building(K(0.43), 1, 42, 32, 28, 22, { kind: "twin", wall: [0.15, 0.17, 0.24], lit: true, windowCol: WIN_EMI, floor: 5 });
       place(K(0.44), 1, 30, [46, 3.2, 8], [1.0, 0.84, 0.48]);
       // Lit crown highlights on Radisson towers
       {

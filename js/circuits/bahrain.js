@@ -458,7 +458,7 @@
       marshalPost(K(0.50), -1, 26);
       // Desert accessory buildings: sandy compound structures (e.g. TV compound)
       building(K(0.50), -1, 44, 16, 8, 22,
-        { wall: [0.72, 0.67, 0.56], window: WIN_WARM, lit: true, floor: 2 });
+        { kind: "hall", wall: [0.72, 0.67, 0.56], window: WIN_WARM, lit: true, floor: 2 });
       // Desert backdrop slab behind open section — fills the distant horizon
       backdrop(K(0.50), -1, 140, [260, 15, 12], SAND);
 
@@ -483,11 +483,11 @@
       // Gap 40+ keeps inner face well clear of fences at s 0.62.
       for (let i = 0; i < 3; i++) {
         building((K(0.62) + i * 4) % n, -1, 42 + i * 6, 10, 6 + hash(i) * 3, 14,
-          { wall: [0.88, 0.87, 0.82], window: WIN_COOL, lit: true, floor: 3 });
+          { kind: "podium", wall: [0.88, 0.87, 0.82], window: WIN_COOL, lit: true, floor: 3 });
       }
       // Mid-circuit desert compound: sandy-coloured infrastructure block
       building(K(0.55), -1, 42, 14, 8, 20,
-        { wall: [0.68, 0.62, 0.50], window: WIN_WARM, lit: true, floor: 2 });
+        { kind: "hall", wall: [0.68, 0.62, 0.50], window: WIN_WARM, lit: true, floor: 2 });
 
       // ================= BACK STRAIGHT (s 0.68–0.90) =================
       // The long back straight has grandstands on the right and desert on the left.
@@ -521,9 +521,9 @@
       });
       // Back straight desert buildings (R/L far): sandy compound structures
       building(K(0.72), -1, 48, 14, 10, 22,
-        { wall: [0.72, 0.67, 0.56], window: WIN_WARM, lit: true, floor: 2 });
+        { kind: "hall", wall: [0.72, 0.67, 0.56], window: WIN_WARM, lit: true, floor: 2 });
       building(K(0.90), -1, 46, 12, 8, 18,
-        { wall: [0.70, 0.65, 0.54], window: WIN_COOL, lit: true, floor: 2 });
+        { kind: "hall", wall: [0.70, 0.65, 0.54], window: WIN_COOL, lit: true, floor: 2 });
       // Desert backdrop slabs along the back straight left (desert) side
       backdrop(K(0.75), -1, 130, [300, 16, 13], SAND_DARK);
       backdrop(K(0.85), -1, 150, [260, 18, 13], SAND);
@@ -542,7 +542,7 @@
       // ================= PIT ENTRY (s 0.93–0.99, L) =================
       // Second pit building: media/control centre with cool lit windows
       building(K(0.95), -1, 2, 14, 10, 56,
-        { wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 4 });
+        { kind: "slab", wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 4 });
       wall(0.92, 0.99, -1, 4, 1.0, [0.85, 0.85, 0.85]);
 
       // ================= PADDOCK / HOSPITALITY ROW (s 0.985–0.97, L) =================
@@ -554,7 +554,7 @@
       }
       // Taller paddock office block: media/comms tower complex
       building(K(0.97), -1, 68, 22, 24, 28,
-        { wall: [0.78, 0.76, 0.70], window: WIN_COOL, lit: true, floor: 6, setback: true });
+        { kind: "fin", wall: [0.78, 0.76, 0.70], window: WIN_COOL, lit: true, floor: 6 });
       tower(K(0.95), -1, 88, 5, 40,
         { col: TOWER_PALE, seg: 6, cap: true, capCol: FLOOD, mast: 6 });
       // Pit-lane furniture

@@ -162,7 +162,8 @@
           const h = 14 + hash(k * 9.1 + sd) * 12;
           const gap = 2 + hash(k * 2.7) * 2;   // 2–4 m
           building(k, sd, gap, w, h, 10,
-            { wall: CANYON[i % CANYON.length], window: WIN, floor: 3.5 + hv,
+            { kind: ["tiered", "notch", "chevron", "podium"][i % 4],
+              wall: CANYON[i % CANYON.length], window: WIN, floor: 3.5 + hv,
               lit: true, windowCol: WINLIT });
         }
       }
@@ -1115,8 +1116,8 @@
         [0.226, -1, 9, 16, 27, 14, [0.93, 0.88, 0.78]],
       ]) {
         building(K(sf), side, gap, w, h, d, {
-          wall: col, window: WIN, floor: 4.6, lit: true,
-          windowCol: WINLIT, setback: true,
+          kind: side > 0 ? "tiered" : "chevron",
+          wall: col, window: WIN, floor: 4.6, lit: true, windowCol: WINLIT,
         });
       }
 

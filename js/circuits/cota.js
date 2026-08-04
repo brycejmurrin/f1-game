@@ -208,14 +208,14 @@
 
       // ---- Pit/paddock building cluster (s≈0.97–0.05, L) ----
       // long low pit garage block flanking the main straight
-      building(K(0.97), -1, 12, 24, 8, 120, { wall: [0.84, 0.84, 0.86], window: glass, floor: 2, roof: [0.55, 0.56, 0.60] });
+      building(K(0.97), -1, 12, 24, 8, 120, { kind: "hall", wall: [0.84, 0.84, 0.86], window: glass, floor: 2 });
       // paddock hospitality / team motorhomes behind the pits — was a generic
       // office-block building() under a "motorhomes" comment; motorhome() is
       // the purpose-built two-tier team-unit body.
       motorhome(K(0.99), -1, 40, 30, 8, 60, { wall: [0.88, 0.88, 0.90], window: glass });
       motorhome(K(0.04), -1, 38, 26, 7, 44, { wall: [0.80, 0.80, 0.83], window: glass });
       // race-control / media tower at pit exit (s≈0.05, L) — set back 16m so inner face clear
-      building(K(0.05), -1, 16, 16, 18, 22, { wall: cotaBlue, window: glass, floor: 5, roof: darkSteel });
+      building(K(0.05), -1, 16, 16, 18, 22, { kind: "notch", wall: cotaBlue, window: glass, floor: 5 });
 
       // ---- 2026 dress pass: deeper paddock support campus (s≈0.01–0.04, L far) ----
       // Low team hospitality and scrutineering blocks sit behind the existing pit

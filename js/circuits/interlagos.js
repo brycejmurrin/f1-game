@@ -280,7 +280,7 @@
       // Distinctive tall slab control tower with stacked window bands (not a
       // generic frustum tower) — the circuit's most recognisable built landmark.
       pitTower(0.0, 1, 14);
-      building(kpit, 1, 8, 14, 16, 32, { wall: [0.62, 0.62, 0.64],
+      building(kpit, 1, 8, 14, 16, 32, { kind: "notch", wall: [0.62, 0.62, 0.64],
                window: [0.24, 0.32, 0.40], floor: 3.6 });
 
       // Long low pit garages running down the pit straight — shuttered bays and
@@ -470,7 +470,7 @@
       for (let i = 0; i < 3; i++) {
         const s = 0.14 + (i / 3) * 0.10;
         building(K(s), -1, 95 + i * 12, 12, 20 + hash(K(s) * 11 + i) * 14, 12,
-          { wall: FAV[(i * 3) % FAV.length], window: LIT_WIN, floor: 3.0, lit: false });
+          { kind: "jenga", wall: FAV[(i * 3) % FAV.length], window: LIT_WIN, floor: 3.0, lit: false });
       }
 
       // ===================================================================

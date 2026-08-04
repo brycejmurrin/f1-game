@@ -452,11 +452,11 @@
       // Strip-canyon foreground — so they replace what used to be two generic
       // ad billboards at the T1 approach.
       // Fontainebleau: a dark blue-glass mega-tower (the real one is ~68 storeys).
-      building(K(0.03), -1, 52, 34, 128, 30, { wall: [0.07, 0.08, 0.13], window: [0.10, 0.22, 0.42], floor: 11, lit: true });
+      building(K(0.03), -1, 52, 34, 128, 30, { kind: "notch", wall: [0.07, 0.08, 0.13], window: [0.10, 0.22, 0.42], floor: 11, lit: true });
       place(K(0.03), -1, 20, [10, 1.0, 26], [0.15, 0.30, 0.55]);   // cool blue base uplight
       // Resorts World: the huge LED marquee facade is the real landmark here,
       // not another neon ad board — a bright emissive screen on the tower face.
-      building(K(0.062), -1, 60, 30, 90, 26, { wall: [0.14, 0.14, 0.18], window: LED, floor: 15, lit: true });
+      building(K(0.062), -1, 60, 30, 90, 26, { kind: "screen", wall: [0.14, 0.14, 0.18], window: LED, floor: 15, lit: true });
       place(K(0.062), -1, 44, [2.5, 16, 30], LED);                // giant LED megascreen
 
       // --- s 0.05–0.28: T1-T5 (Koval Ln / Sands Ave back-of-house) ---
@@ -465,8 +465,8 @@
       const BOH_WALL = [0.16, 0.17, 0.20];   // flat concrete-grey, no warm cast
       const BOH_WIN  = [0.30, 0.38, 0.48];   // cool dim office glass, not neon
       // Prominent hotel towers either side of the start/finish straight approach
-      building(K(0.10), -1, 22, 30, 46, 30, { wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
-      building(K(0.14), 1, 20, 26, 40, 26, { wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      building(K(0.10), -1, 22, 30, 46, 30, { kind: "twin", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      building(K(0.14), 1, 20, 26, 40, 26, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
       // cityFront fills the T3-T8 sector with a continuous but LOW, dim street-wall.
       // Start at 0.12 (after the two explicit buildings at s 0.10/0.14) to avoid
       // duplicate geometry on the same nodes. Gap 52 safely clears T3 apex.

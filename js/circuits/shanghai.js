@@ -196,7 +196,7 @@
         }
       })();
       building(K(0.98), -1, 14, 16, 11, 55,
-        { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
+        { kind: "slab", wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
 
       // =================================================================================
       // TWIN WING BRIDGES — Shanghai's pit-straight gateway.
@@ -256,10 +256,10 @@
       // race-control and hospitality blocks. The previous migration reduced
       // this whole area to one low stand, leaving the pit straight anonymous.
       building(K(0.042), -1, 70, 20, 28, 34, {
-        wall: CONC, window: WIN_TOWER, floor: 5, lit: true,
+        kind: "cylinder", wall: CONC, window: WIN_TOWER, floor: 5, lit: true,
       });
       building(K(0.072), -1, 76, 20, 20, 38, {
-        wall: [0.82, 0.84, 0.86], window: WIN_LIT, floor: 4, lit: true,
+        kind: "notch", wall: [0.82, 0.84, 0.86], window: WIN_LIT, floor: 4, lit: true,
       });
 
       // Start gantry over the line.
