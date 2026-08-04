@@ -168,9 +168,13 @@ const NetTransport = (function () {
     if (!PC) return null;                      // caller falls back / reports
 
     const ep = makeEndpoint(opts.name || "rtc");
-    const pc = new PC({
-      iceServers: opts.iceServers || [{ urls: "stun:stun.l.google.com:19302" }],
-    });
+    // Construction can throw on a locked-down or policy-restricted browser.
+    // Report that as "unavailable" like a missing API rather than letting it
+    // escape into a click handler, where it would kill the UI silently.
+    let pc;
+    try {
+      pc = new PC({ iceServers: opts.iceServers || [{ urls: "stun:stun.l.google.com:19302" }] });
+    } catch (e) { return null; }
     const chans = {};
     let inbox = [];
     let openCount = 0;

@@ -35,12 +35,19 @@
   background: transparent;
   pointer-events: none;
   place-items: stretch end;
+  /* The sheet's width, as a variable, because the preview camera bar has to
+     know it too — it is positioned against the OTHER edge of the same box and
+     must stop before the sheet starts. Hard-coding a second guess at this
+     (38vw) is what put the TOP chip underneath the panel on a notched phone:
+     the bar starts after the safe-area inset, so "38% of the viewport" is not
+     38% of the room it actually has. */
+  --cs-sheet-w: min(100%, max(430px, 54vw), 500px);
 }
 #cs-inner {
   pointer-events: auto;
   /* Never wider than the safe box, never wider than 500px, and on a landscape
      screen it gives up whatever the car needs (~46% of the viewport). */
-  width: min(100%, max(430px, 54vw), 500px);
+  width: var(--cs-sheet-w);
 }
 /* THE CAR IS THE HERO, and on a wide screen the panel was still taking 500px of
    a 1440px viewport for a list of radio buttons. Give the sheet a smaller share
@@ -49,7 +56,7 @@
    left half. Capped, not proportional: past ~1600px the panel does not need to
    keep growing, it just needs to stop crowding. */
 @media (min-width: 1100px) {
-  #cs-inner { width: min(38vw, 460px); }
+  #carsetup { --cs-sheet-w: min(38vw, 460px); }
 }
 
 /* ---------- header ---------- */
@@ -263,6 +270,31 @@
 }
 .cs-opt.exclusive.active .cs-opt-dot { border-color: #e6c02a; background: radial-gradient(circle,#fff 0 3px,#e6c02a 4px); }
 
+/* ---------- R&D-locked rows (career) ---------- */
+/* Not-yet-yours, but still a row you read and press: this is the catalogue of what
+   the car could become, so it must stay legible. Hence a RECESSED surface (--surf-1
+   under --edge, the same language the pressed buttons use) rather than the flat
+   opacity fade .over-budget gets — dimming a locked row the same way would make
+   "you have not bought this" and "this will not fit" indistinguishable, and they
+   are the two different refusals the click can give you. Full opacity, dropped
+   contrast: the name still reads, the stat chips still compare. */
+.cs-opt.locked {
+  background: var(--surf-1);
+  border-color: rgba(255,255,255,0.06);
+  box-shadow: var(--edge);
+}
+.cs-opt.locked .cs-opt-name { color: var(--dim); }
+.cs-opt.locked .cs-opt-dot { border-style: dashed; border-color: rgba(255,255,255,0.18); }
+/* The pill is a PRICE tag, not the spec number the other rows carry there, so it
+   gets a chip shape and the buy colour instead of plain dim text. */
+.cs-opt-cost.research {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.06em;
+  padding: 3px 7px; border-radius: var(--r-sm);
+  background: color-mix(in oklab, var(--red) 18%, transparent);
+  border: 1px solid color-mix(in oklab, var(--red) 45%, transparent);
+  color: color-mix(in oklab, var(--red) 55%, #fff);
+}
+
 /* ---------- livery rows ---------- */
 /* paint-job swatch (two-tone, optional centre racing stripe) in the LIVERY tab */
 .cs-liv-swatch {
@@ -453,11 +485,13 @@
   left: calc(var(--safe-l) + var(--gap));
   bottom: calc(var(--safe-b) + var(--gap));
   z-index: 1;
+  /* Bounded by BOTH edges rather than by a max-width: left of the safe box,
+     right of wherever the sheet actually starts. The row then wraps inside the
+     room the car has instead of sliding under the panel. */
+  right: calc(var(--safe-r) + var(--cs-sheet-w) + var(--gap));
   display: flex; flex-wrap: wrap; align-items: center;
   gap: 4px;
-  /* Never reach under the sheet, which is docked right at up to 54vw — so the
-     bar gets 38vw and wraps to a second row rather than sliding beneath it. */
-  max-width: min(38vw, 420px);
+  justify-content: flex-start;
 }
 /* Below this the sheet is the whole screen (its width floor is 430px) and there
    is no car left to aim a camera at, so the controls would be pointing at
@@ -484,7 +518,12 @@
   background: rgba(0,204,136,0.18); color: #0c8;
   border-color: rgba(0,204,136,0.4);
 }
-.cs-view-grp { display: flex; align-items: center; gap: 4px; }
+/* `contents` keeps the span as the chips' DOM PARENT — which is the whole point
+   of it, since AriaState groups by parent — while taking its box out of the
+   layout so the chips wrap as one continuous run. As real flex items the groups
+   could not break internally, so SPIN was stranded on a row of its own and the
+   bar stacked three deep on a phone. */
+.cs-view-grp { display: contents; }
 .cs-view-zoom { font-size: 13px; padding: 3px 10px; line-height: 1; }
 .cs-view-sep {
   width: 1px; height: 16px; margin: 0 2px;
@@ -497,5 +536,20 @@
 /* No mouse = no drag affordance to advertise, and no room for it either. */
 @media (hover: none), (max-width: 560px) {
   .cs-view-hint { display: none; }
+}
+/* Phone-sized car area: the sheet has a 430px floor, so on a landscape handset
+   the bar has ~250px to work with — and less again on a notched one, where the
+   safe-area inset eats another 59px. Shrink the chips so that wraps to two rows
+   instead of three. */
+@media (max-width: 1000px) {
+  #cs-view { gap: 3px; }
+  .cs-view-btn {
+    font-size: 9px; letter-spacing: 0.05em;
+    padding: 4px 7px; min-height: 26px;
+  }
+  .cs-view-zoom { font-size: 12px; padding: 2px 8px; }
+  /* The dividers cost width and, once the row wraps, land at arbitrary places
+     in it — they read as separators of nothing. */
+  .cs-view-sep { display: none; }
 }
 } /* @layer components */

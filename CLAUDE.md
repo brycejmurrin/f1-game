@@ -39,7 +39,7 @@ npm run test:scenery    # props/terrain over road + f1-track-accuracy
 npm run test:webgl      # webgl-probes + lighting-ab
 npm run test:audio      # engine/sfx audio smoke
 npm run test:modes      # season + time-trial + career game modes
-npm run test:career     # career only: mode axes, the save, the hub, a round
+npm run test:career     # career + qualifying: mode axes, the save, the hub, the grid
 npm run test:map        # minimap hooks
 npm run test:net        # multiplayer: car roles (human vs local), the per-car
                         #   input seam, per-car parts, and the SESSION — rival
@@ -312,6 +312,20 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   for an incident-sim takeover. tick() also runs
                                   through the paused gate: one player opening a
                                   menu cannot stop a shared world
+  lobby.js       NetLobby       the VS FRIEND screen. The two code pastes ARE
+                                  the signalling server — the one thing WebRTC
+                                  cannot start without, and the one thing two
+                                  people already have between them. Opens the
+                                  session ITSELF (the guest learns which race to
+                                  load from the host, so the session must exist
+                                  before a track does) and hands it to NetPlay
+                                  once the race is up. The profile it sends is
+                                  part IDS, never resolved multipliers — a peer
+                                  declaring {cornering: 9} would simply be
+                                  faster. Its transport factory is injectable:
+                                  an RTCPeerConnection whose ICE never completes
+                                  spins forever, so a test that builds one HANGS
+                                  rather than fails (__apex.lobbyFake)
 
 js/game/         — game modules (each created with the G ctx façade from game.js) —
   tables.js      GameTables     static game data (CAM_MODES, DIFF, gears, paints)
@@ -379,6 +393,13 @@ js/game/         — game modules (each created with the G ctx façade from game
   career-ui.js   CareerUI       the CAREER screen (#career): new-career setup
                                   and the season hub. Replaces #select in
                                   career — the calendar owns WHERE you race
+  quali.js       Quali          ONE-LAP QUALIFYING (#quali). A `session`, not a
+                                  game state: the player's flying lap reuses the
+                                  time-trial path, and the rest of the field is
+                                  MODELLED — a quasi-steady forward/backward lap
+                                  simulation off the same LAT_MAX/ACCEL/BRAKE the
+                                  driving model uses, so a simulated time and a
+                                  driven one are on one scale. Feeds gridUp()
   menus.js       Menus          menu/select/pause DOM flows
   scrollfade.js  ScrollFade     "there is more below" edge fade + position indicator
                                   for every menu scroll region (self-initialising)
@@ -395,7 +416,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (89) + tests/*.test.mjs unit suites (26)
+tests/*.spec.js                 Playwright specs (91) + tests/*.test.mjs unit suites (26)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -761,7 +782,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-89 Playwright specs + 26 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+91 Playwright specs + 26 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

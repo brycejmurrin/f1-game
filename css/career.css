@@ -107,6 +107,15 @@
 .cr-row-k { color: var(--dim); }
 .cr-row-v { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
 
+/* The round's brief. It is the one line on the hub that changes between visits,
+   so it gets its own weight instead of being a .cr-row value — right-aligned in a
+   key/value pair, "Clean race — no track limits, no penalty" wraps into a ragged
+   column and reads as an afterthought. */
+.cr-obj-line {
+  font-size: 13px; font-weight: 700; font-style: italic; line-height: 1.35;
+  padding-bottom: 4px; border-bottom: 1px solid var(--edge);
+}
+
 .cr-nextrace { align-items: flex-start; gap: 2px; }
 .cr-nr-round { font-size: 10px; letter-spacing: 0.14em; color: var(--red); font-weight: 800; }
 .cr-nr-name { font-size: 18px; font-weight: 800; font-style: italic; }
@@ -178,6 +187,40 @@
    foot sits inside and clipped it. Sizing comes from the shared
    `.sheet-foot .bigbtn` rule; only the wrap and the divider inset are new. */
 #cr-foot { flex-wrap: wrap; padding-right: calc(var(--pad) * 0.9); }
+
+/* ---------- end of season (#career-offers) ---------- */
+/* A .dim modal over #career (z-index 25), the same relationship #quali has to the
+   screen that opened it — the hub is still where you are, this is the decision on
+   top of it. 30 matches #results/#standings, the other "the session is over" sheets.
+   The summary card is a plain .cr-card and the headings are .sel-label: nothing
+   here needs a vocabulary of its own, only the offer rows are new. */
+#career-offers { z-index: 30; --sheet-w: 620px; }
+
+/* An offer is a TILE, not a list row: it is a commitment of one to three seasons
+   and the tap target has to say so. Same grid as .cr-teamtile — colour bar, name,
+   meta under it — plus a STAY/MOVE tag, which is the thing a player actually scans
+   for. Selection state is deliberately absent: clicking one signs it, there is no
+   in-between state to show. */
+.co-offer {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto; column-gap: 10px; align-items: center;
+  width: 100%; text-align: left; margin-bottom: 6px;
+  min-height: var(--tap); padding: 10px calc(var(--pad) * 0.6);
+  background: var(--surf-1); border: 1px solid var(--edge); border-radius: var(--r-sm);
+  color: inherit; font: inherit; cursor: pointer;
+}
+.co-offer:hover, .co-offer:focus-visible { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+.co-offer-sw { grid-row: 1 / 3; width: 10px; height: 34px; border-radius: 2px; border: 2px solid transparent; }
+.co-offer-team { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-offer-terms { grid-column: 2 / 4; font-size: 10px; color: var(--dim); letter-spacing: 0.04em; }
+/* MOVE is the red one: leaving is the decision with consequences (a new works car,
+   a garage reseeded), staying is the safe default and reads as such. */
+.co-offer-tag {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.14em;
+  padding: 2px 6px; border-radius: 999px;
+  background: var(--red); color: #fff;
+}
+.co-offer.staying .co-offer-tag { background: rgba(255, 255, 255, 0.14); color: var(--dim); }
 
 /* ---------- qualifying (#quali) ---------- */
 /* A .dim modal, unlike #career — it lays over whatever screen sent you here and

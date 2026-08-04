@@ -183,8 +183,9 @@ const NetHandshake = (function () {
   }
 
   async function acceptInvite(transport, code, profile, opts) {
-    const pc = transport && transport.pc;
-    if (!pc) return { ok: false, error: "no_transport", message: "WebRTC is unavailable in this browser." };
+    // Validate the CODE before the connection. Nothing here needs a peer
+    // connection, and "that code is incomplete" is a far more actionable thing
+    // to tell someone than a generic transport error they cannot act on.
     const parsed = await decodeCode(code);
     if (!parsed.ok) return parsed;
     if (parsed.payload.k !== "offer") {
@@ -192,6 +193,8 @@ const NetHandshake = (function () {
     }
     const build = checkBuild(await localBuild(), parsed.payload.b);
     if (!build.ok) return build;
+    const pc = transport && transport.pc;
+    if (!pc) return { ok: false, error: "no_transport", message: "WebRTC is unavailable in this browser." };
 
     await pc.setRemoteDescription({ type: "offer", sdp: parsed.payload.s });
     const answer = await pc.createAnswer();
@@ -206,15 +209,15 @@ const NetHandshake = (function () {
   }
 
   async function acceptAnswer(transport, code) {
-    const pc = transport && transport.pc;
-    if (!pc) return { ok: false, error: "no_transport", message: "WebRTC is unavailable in this browser." };
-    const parsed = await decodeCode(code);
+    const parsed = await decodeCode(code);          // code first — see acceptInvite
     if (!parsed.ok) return parsed;
     if (parsed.payload.k !== "answer") {
       return { ok: false, error: "wrong_code_kind", message: "That is an invite code, not an answer code." };
     }
     const build = checkBuild(await localBuild(), parsed.payload.b);
     if (!build.ok) return build;
+    const pc = transport && transport.pc;
+    if (!pc) return { ok: false, error: "no_transport", message: "WebRTC is unavailable in this browser." };
     await pc.setRemoteDescription({ type: "answer", sdp: parsed.payload.s });
     return { ok: true, peer: parsed.payload.p || null };
   }

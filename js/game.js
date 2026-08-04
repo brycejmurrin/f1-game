@@ -598,6 +598,10 @@ const isChampionship = () => flow === "season" || flow === "career";
 // can never drift out of step with the mode.
 function setFlow(v) { flow = v; Career.engage(v === "career"); }
 const isTimeTrial = () => session === "tt";
+const isQuali = () => session === "quali";
+// The full field as it was before startRace() narrowed `cars` to the lone
+// qualifying car — Quali.simulate() needs every car to build a classification.
+let qualiField = null;
 const isCareer = () => flow === "career";
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
@@ -674,6 +678,10 @@ function inputOf(c) {
 // The human the AI rubber-bands against — recomputed once per update() rather
 // than per AI car. Null when the field has no human at all.
 let _leadHuman = null;
+// Set by NetPlay while a session's countdown is pending: {at, hold, now()}.
+// `at` is lights-out on OUR clock; now() reads the same clock the session
+// converted it into. Null solo, and cleared the moment the race starts.
+let netStart = null;
 let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
 // Shared neutral fallback for a human car with no resolved setup. Frozen and
 // module-scope so updateCar's per-car binding never allocates.
@@ -956,7 +964,7 @@ function resolveLivery(team) {
     const l = livDraftOverride.liv;
     return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
-             fin: l.fin || null, finArt: l.finArt || null,
+             fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null,
              noseStripe: l.noseStripe || null, finish: l.finish || null };
   }
   const c = _livResolveCache.get(team.id);
@@ -966,7 +974,7 @@ function resolveLivery(team) {
   // — additive, so an unmodified livery still resolves to today's exact object shape.
   const val = liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
-                      fin: liv.fin || null, finArt: liv.finArt || null,
+                      fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null,
                       noseStripe: liv.noseStripe || null, finish: liv.finish || null }
                   : { c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
@@ -1084,13 +1092,18 @@ function makeCars() {
   cars = [];
   // the custom team only enters the grid when the player has selected it
   const grid = Teams.LIST.filter((t, ti) => !t.custom || ti === teamIdx);
-  const total = grid.reduce((s, t) => s + t.drivers.length, 0);
+  // Counted through the same accessor the loop below iterates, or MY TEAM's second
+  // car would be missing from the lane spread it feeds.
+  const total = grid.reduce((s, t) => s + Career.gridDrivers(t).length, 0);
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
     const factoryParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
     const savedParts = ti === teamIdx ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
-    team.drivers.forEach((dSeat, di) => {
+    // MY TEAM enters TWO cars — you and the driver you hired — where the custom
+    // team ships with one. gridDrivers() returns team.drivers unchanged in every
+    // other case, so free play and driver careers are untouched.
+    Career.gridDrivers(team).forEach((dSeat, di) => {
       const isP = ti === teamIdx && di === driverIdx;
       const resolvedParts = isP ? savedParts : factoryParts;
       // In a driver career YOU take one of the team's two real seats; the driver
@@ -1134,13 +1147,25 @@ function makeCars() {
   player = cars.find((c) => c.isPlayer);
 }
 
-function gridUp() {
-  // grid order: by tier then random-ish; player at P12 for a fun climb
-  const order = cars.slice().sort((a, b) => (a.tier - b.tier) || (simRnd() - 0.5));
-  const pi = order.indexOf(player);
-  order.splice(pi, 1);
-  order.splice(Math.min(11, order.length), 0, player);
+// `preOrder` is an explicit grid, fastest first — a qualifying classification.
+// Without one the old behaviour stands: sort by tier, then drop the player into
+// P12 for a climb. GP keeps that on purpose; only a session that actually held a
+// qualifying hour has earned the right to say where everyone starts.
+function gridUp(preOrder) {
+  const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
+    // grid order: by tier then random-ish; player at P12 for a fun climb
+    const o = cars.slice().sort((a, b) => (a.tier - b.tier) || (simRnd() - 0.5));
+    const pi = o.indexOf(player);
+    o.splice(pi, 1);
+    o.splice(Math.min(11, o.length), 0, player);
+    return o;
+  })();
   order.forEach((c, i) => {
+    // Where this car STARTED. The only record of it: `order` is discarded here and
+    // the classification at the flag is built from finishing times. Career's
+    // "out-qualify your team-mate" objective is what reads it, and it is correct
+    // for both branches above — the qualifying grid and the tier-sorted fallback.
+    c.gridPos = i + 1;
     c.s = wrapS(track.total - 14 - i * 8);
     c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
     c.xVis = c.x;   // reset smoothed render position so the grid doesn't slide
@@ -1750,7 +1775,16 @@ function snapGameCam() {
 function startRace() {
   loadTrack(trackIdx);
   makeCars();
-  if (isTimeTrial()) {
+  // A qualifying lap is a time trial with the rest of the field simulated: one
+  // car on track, the existing lap-timing and validity path, and no new game
+  // state. Two laps — a standing out-lap, then the flying one that counts, the
+  // same reason TT_LAPS exists. The AI field is built BEFORE cars is narrowed,
+  // so the classification can still see every car.
+  if (isQuali()) {
+    qualiField = cars;
+    cars = [player];
+    lapsTarget = 2;
+  } else if (isTimeTrial()) {
     cars = [player];          // solo against the clock — no AI on track
     lapsTarget = raceLaps;
     const board = ttBoard(track.def.id);
@@ -1768,7 +1802,7 @@ function startRace() {
   } else {
     Particles.rainShow(false);
   }
-  gridUp();
+  gridUp(quali.order(cars));
   recomputePlayerMods();
   resultT = 0;
   camRoll = 0; camSlipSm = 0;
@@ -1826,6 +1860,16 @@ function endRace(forcedOrder) {
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
   if (soundOn) GameAudio.finish();
+  // Qualifying ends in its own sheet: the player's flying lap is measured
+  // against the simulated field and becomes the grid. Mirrors the TT return
+  // below — first branch out, before any race classification is built.
+  if (isQuali()) {
+    cars = qualiField || cars;
+    quali.simulate(player.best < Infinity ? player.best : 0);
+    $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
+    quali.open();
+    return;
+  }
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
   // classification: finished by time(+penalty), rest by progress
   const fin = cars.filter((c) => c.finished).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
@@ -1977,7 +2021,14 @@ const G = {
   openCustomize: (...a) => openCustomize(...a),
   // Career plumbing — same deferred-arrow reason as the block above.
   openRaceSettings: (...a) => openRaceSettings(...a),
+  // Read-only qualifying model for the CURRENT track (__apex.qualiSim).
+  qualiSim: (playerTime) => quali.preview(playerTime || 0),
   refreshCareerButton: (...a) => refreshCareerButton(...a),
+  // The R&D gate for the garage LISTING: the option ids the team on screen may fit,
+  // or null. Career.owned() answers "career rules apply AND this is the career
+  // team" by itself, so outside a career this is a no-op the garage can ignore.
+  // Read per rebuild rather than held, so a part researched mid-session shows up.
+  careerOwned: () => Career.owned(Teams.LIST[teamIdx] && Teams.LIST[teamIdx].id),
   updateTrackPreview: (...a) => updateTrackPreview(...a),
   // Mutable state + helpers consumed by js/game/photomode.js.
   get photoMode() { return photoMode; }, set photoMode(v) { photoMode = v; },
@@ -2010,9 +2061,18 @@ const G = {
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
   GAME_LAPS, TT_LAPS, LONG_GRIP,
+  // The friction-circle constants, for js/game/quali.js: it runs a quasi-steady
+  // lap simulation off the SAME numbers the driving model uses, so a simulated
+  // qualifying time and a driven one are on one scale by construction.
+  LAT_MAX, ACCEL, BRAKE,
+  vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  getTeamParts, getLiveryId,   // lobby: the profile it sends is ids, never resolved numbers
+  get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
   get netPlay() { return netPlay; },
+  get netStart() { return netStart; }, set netStart(v) { netStart = v; },
+  get netLobby() { return netLobby; },
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
@@ -2034,6 +2094,9 @@ const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwa
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
 // and the save live in js/game/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
+// QUALIFYING (js/game/quali.js) — the flying lap plus the simulated field it is
+// measured against. Holds the classification between the session and the grid.
+const quali = Quali.create(G);
 // Photo mode (js/game/photomode.js).
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
@@ -2054,6 +2117,9 @@ const incidentSim = IncidentSim.create(G);
 // Two-player racing (js/net/netplay.js). Wholly inert until a session starts:
 // owns() is an identity check against a null, and tick() returns immediately.
 const netPlay = NetPlay.create(G);
+// The VS FRIEND lobby (js/net/lobby.js) — owns the #vsfriend screen and the
+// two code pastes that stand in for a signalling server.
+const netLobby = NetLobby.create(G);
 // C2 visual suspension (js/game/bodyattitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
@@ -2169,7 +2235,18 @@ function update(dt) {
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
   if (state === "count") {
-    countT += dt;
+    // In a session the countdown is driven by the SHARED clock rather than by
+    // accumulated dt, and the random hold is dictated by the host. Both matter
+    // for fairness: accumulating dt independently lets the two grids drift
+    // apart by however long the handshake took, and an independently rolled
+    // hold would give one driver lights-out before the other. netStart pins
+    // the exact moment both cars are released. Solo, this branch never runs.
+    if (netStart) {
+      startHold = netStart.hold;
+      countT = (5 + startHold) - (netStart.at - netStart.now()) / 1000;
+    } else {
+      countT += dt;
+    }
     const lit = Math.min(5, Math.floor(countT));
     if (lit > lightsLit) {
       lightsLit = lit;
@@ -2178,12 +2255,13 @@ function update(dt) {
       if (lit === 1) Input.calibrate();
       // all five lit — hold for a randomised beat, as in real F1, so the
       // start can't be timed and lights-out is a genuine reaction moment.
-      if (lit === 5) startHold = 0.2 + simRnd() * 1.8;
+      if (lit === 5 && !netStart) startHold = 0.2 + simRnd() * 1.8;
     }
     if (lightsLit === 5 && countT > 5 + startHold) {
       state = "race"; raceT = 0;
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
+      netStart = null;              // consumed; never carry it into the next race
       announce("LIGHTS OUT!", 1.4);
       if (soundOn) GameAudio.lightsOut();
       cars.forEach((c) => { c.lapStart = 0; });
@@ -2326,6 +2404,21 @@ function resolveCollisions(ranked, dt) {
         const penLat = WCAR - Math.abs(dX);
         if (penLong <= 0 || penLat <= 0) continue;
         const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1, iSum = iA + iB;
+        // SEPARATION shares, which are NOT the momentum masses above. A car posed
+        // from the network cannot be moved by us: its owner integrates it and we
+        // re-pose it from their next packet, so any push we apply is discarded a
+        // frame later. Splitting 50/50 with a car whose half is thrown away leaves
+        // the pair still overlapping, frame after frame — so the car we DO own
+        // absorbs the whole correction. That is the ownership rule made concrete:
+        // contact moves YOUR car, based on where you see the other one.
+        //
+        // The SPEED exchange deliberately keeps iA/iB. Both cars are real and both
+        // genuinely slow down; treating the rival as a wall there would scrub double
+        // the speed off the local car for an impact its owner is already absorbing
+        // on their own machine.
+        const netA = netPlay.owns(a), netB = netPlay.owns(b);
+        const sA = netA ? 0 : (netB ? 1 : iA / iSum);
+        const sB = netB ? 0 : (netA ? 1 : iB / iSum);
         // Closing into a nest at the lateral slop must be rear-end. Least-
         // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
         // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
@@ -2341,8 +2434,8 @@ function resolveCollisions(ranked, dt) {
           // stops fighting the push (the cause of the side-by-side vibration).
           const sgn = dX >= 0 ? 1 : -1;
           const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
-          a.x += sgn * corr * (iA / iSum);
-          b.x -= sgn * corr * (iB / iSum);
+          a.x += sgn * corr * sA;
+          b.x -= sgn * corr * sB;
           // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr
           // side contact was draining speed without separating the cars.
           if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
@@ -2353,8 +2446,8 @@ function resolveCollisions(ranked, dt) {
           // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
           const sgn = dProg >= 0 ? 1 : -1;
           const corr = Math.max(penLong - 0.05, 0) * 0.4;
-          shiftLong(a, sgn * corr * (iA / iSum));
-          shiftLong(b, -sgn * corr * (iB / iSum));
+          shiftLong(a, sgn * corr * sA);
+          shiftLong(b, -sgn * corr * sB);
           const relV = sgn >= 0 ? b.speed - a.speed : a.speed - b.speed;   // >0 means the rear car is closing
           if (relV > 0) {
             const jImp = 0.5 * relV / iSum;   // soft momentum exchange (was 1.15)
@@ -2401,6 +2494,21 @@ function resolveCollisions(ranked, dt) {
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
       const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1, iSum = iA + iB;
+      // SEPARATION shares, which are NOT the momentum masses above. A car posed
+      // from the network cannot be moved by us: its owner integrates it and we
+      // re-pose it from their next packet, so any push we apply is discarded a
+      // frame later. Splitting 50/50 with a car whose half is thrown away leaves
+      // the pair still overlapping, frame after frame — so the car we DO own
+      // absorbs the whole correction. That is the ownership rule made concrete:
+      // contact moves YOUR car, based on where you see the other one.
+      //
+      // The SPEED exchange deliberately keeps iA/iB. Both cars are real and both
+      // genuinely slow down; treating the rival as a wall there would scrub double
+      // the speed off the local car for an impact its owner is already absorbing
+      // on their own machine.
+      const netA = netPlay.owns(a), netB = netPlay.owns(b);
+      const sA = netA ? 0 : (netB ? 1 : iA / iSum);
+      const sB = netB ? 0 : (netA ? 1 : iB / iSum);
       // Match the relaxation pass for player-as-rear nest-edge contacts.
       const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
       const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
@@ -2410,14 +2518,14 @@ function resolveCollisions(ranked, dt) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
         if (c <= 0) continue;
         const sgn = dX >= 0 ? 1 : -1;
-        a.x += sgn * c * (iA / iSum);
-        b.x -= sgn * c * (iB / iSum);
+        a.x += sgn * c * sA;
+        b.x -= sgn * c * sB;
       } else {
         const c = Math.max(penLong - SLOP, 0) * 0.6;
         if (c <= 0) continue;
         const sgn = dProg >= 0 ? 1 : -1;
-        shiftLong(a, sgn * c * (iA / iSum));
-        shiftLong(b, -sgn * c * (iB / iSum));
+        shiftLong(a, sgn * c * sA);
+        shiftLong(b, -sgn * c * sB);
       }
     }
   }
@@ -3321,6 +3429,12 @@ function updateCar(c, dt, ranked) {
       c.lastLap = lapDone;
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
+      // Tell the rival about our lap. Times are authored by whoever OWNS the
+      // car — nobody else can time it — and go over the reliable channel,
+      // because a dropped lap time is a wrong RESULT, not a momentary glitch.
+      if (c.local && netPlay.active()) {
+        netPlay.reportLap({ lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code });
+      }
       if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
     } else if (c.isPlayer && isTimeTrial()) {
       Ghost.startLap();
@@ -5632,6 +5746,20 @@ $("mb-race").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
+// Guarded, unlike its neighbours, and deliberately: a merge that took the
+// other side of index.html once dropped this button's markup, and an
+// unguarded handler assignment on a null element threw during boot and took
+// the ENTIRE game down — menu, renderer and all — for one missing optional
+// screen. Cheap insurance against a whole-app outage.
+if ($("mb-vs")) $("mb-vs").onclick = () => {
+  // Two drivers, no server: the lobby does the whole handshake by having the
+  // players paste codes to each other. It starts the race itself once both
+  // sides agree on the setup, so there is no select screen in between.
+  // flow/session are the authority now; seasonMode/timeTrial are derived views.
+  setFlow("gp"); session = "race";
+  netLobby.open();
+  if (soundOn) GameAudio.uiSelect();
+};
 $("mb-tt").onclick = () => {
   setFlow("gp"); session = "tt";
   buildSelect();
@@ -5822,8 +5950,43 @@ $("rs-go").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   $("race-settings").hidden = true;
   if (steerMode === "tilt") enableTilt();
-  startRace();
+  // In a championship the weekend starts with qualifying, which is what decides
+  // the grid. A one-off Grand Prix goes straight to the race and keeps its P12
+  // start — that mode is a quick blast, not a weekend.
+  if (isChampionship()) openQuali(); else startRace();
 };
+
+// ── qualifying ───────────────────────────────────────────────────────────────
+// The sheet opens BEFORE the session with the field already simulated, so the
+// player can see what they have to beat and choose whether to drive it or take
+// the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
+function openQuali() {
+  session = "quali";
+  quali.clear();
+  loadTrack(trackIdx);
+  makeCars();
+  quali.simulate(0);              // provisional: everyone simulated, including you
+  $("quali").classList.remove("q-done");
+  quali.open();
+}
+function closeQualiToGrid() {
+  quali.close();
+  session = "race";
+  startRace();                    // gridUp() reads quali.order()
+}
+$("q-drive").onclick = () => {
+  if (soundOn) GameAudio.uiSelect();
+  quali.close();
+  session = "quali";
+  startRace();                    // one out-lap + one flying lap, alone
+};
+$("q-sim").onclick = () => {
+  if (soundOn) GameAudio.uiSelect();
+  quali.simulate(0);              // keep the simulated time for the player too
+  $("quali").classList.add("q-done");
+  quali.build();
+};
+$("q-go").onclick = () => { if (soundOn) GameAudio.uiSelect(); closeQualiToGrid(); };
 
 // ---- customize my team ----
 // Optional extra-paint rows: DOM colour-input id -> livery key. Saved onto the
@@ -5831,7 +5994,8 @@ $("rs-go").onclick = () => {
 const CZ_LIV_FIELDS = [
   ["cz-stripe", "stripe"], ["cz-nosestripe", "noseStripe"], ["cz-detail", "accent"],
   ["cz-nose", "nose"], ["cz-pod", "pod"], ["cz-wing", "wing"],
-  ["cz-fin", "fin"], ["cz-finart", "finArt"], ["cz-halo", "halo"],
+  ["cz-fin", "fin"], ["cz-finart", "finArt"], ["cz-logo", "logo"],
+  ["cz-halo", "halo"],
 ];
 // The custom team's paint FINISH ("gloss" = the default clearcoat car paint, so
 // it is never written to ct.livery). Held here rather than read off the DOM so
@@ -6296,5 +6460,9 @@ requestAnimationFrame(tick);
 //   __apex.jump(0.5, 60, 2)        -> 50% of lap, 60 m/s, 2 m right of centre
 // The __apex dev/test API lives in js/game/apex.js (ApexApi.create(G)).
 window.__apex = ApexApi.create(G);
+
+// Lobby buttons + the #vs= invite-link handler. Last, so every element it
+// binds to exists and the G facade is fully built.
+netLobby.wire();
 
 })();

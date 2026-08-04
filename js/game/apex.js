@@ -32,6 +32,56 @@ const agentView = AgentView.create(G);
 // a test, which is what makes the game side of multiplayer testable without
 // signalling, a second browser, or a network.
 let _netPeer = null;
+// The far end of a faked lobby connection — see lobbyFake().
+let _lobbyPeer = null;
+
+// One career round settled with nobody driving — see careerSim() below for why.
+// Kept out of the api literal because it needs two passes over the field and a
+// map back onto the live cars.
+function simCareerRound() {
+  const rows = G.qualiSim(0);
+  const live = G.cars;
+  const season = G.season;
+  if (!rows || !rows.length || !live.length || !G.player || !season) return null;
+  const byId = new Map(live.map((c) => [c.driverId, c]));
+  const round = Career.round();
+
+  const grid = [];
+  for (let i = 0; i < rows.length; i++) {
+    const car = byId.get(rows[i].driverId);
+    if (!car) continue;
+    car.gridPos = i + 1;
+    const rt = DriverRatings.get(car.code, car.tier, Career.devFor(car.team && car.team.id, car.seat));
+    // Race day is not qualifying. Pace order is a strong prior; craft is how much
+    // of it survives first-lap contact and a long run, so a racer moves forward
+    // and a qualifying specialist goes backwards.
+    const swing = (Career.rnd(round, "race", car.driverId) - 0.5) * 10 * (1 - rt.craft / 200);
+    // A simulated weekend still has to be able to FAIL a clean-race brief, or that
+    // objective would be free money every time the season is fast-forwarded.
+    car.cuts = Career.rnd(round, "cuts", car.driverId) * 100 < (100 - rt.awareness) ? 2 : 0;
+    car.penalty = 0;
+    grid.push({ car, key: i + swing });
+  }
+  if (grid.length !== live.length) return null;   // a partial map is not a result
+  grid.sort((a, b) => a.key - b.key);
+  const order = grid.map((g) => g.car);
+
+  // The championship award, exactly as endRace() does it — settleRound() reads
+  // the standings it leaves behind, so a shortcut here would settle against a
+  // season that never happened.
+  order.forEach((car, i) => {
+    const pts = Teams.POINTS[i] || 0;
+    car.finPos = i + 1;
+    season.pts[car.driverId] = (season.pts[car.driverId] || 0) + pts;
+    season.driverCodes[car.driverId] = car.code;
+    season.teamPts[car.team.id] = (season.teamPts[car.team.id] || 0) + pts;
+  });
+  season.round++;
+  Career.save();
+  const settled = Career.settleRound(order, G.player);
+  if (!settled) return null;
+  return Object.assign({ round: round + 1, podium: order.slice(0, 3).map((c) => c.code) }, settled);
+}
 
 const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
@@ -914,6 +964,41 @@ const api = {
     return c.money;
   },
   careerReset() { Career.clear(); G.refreshCareerButton(); return true; },
+  // Settle `n` whole rounds WITHOUT driving them. The qualifying model supplies
+  // the pace order, a ratings-weighted draw turns it into a race result, and the
+  // result goes through the same championship award + Career.settleRound() the
+  // driven path uses — so the economy, the objectives and the standings are
+  // genuinely exercised rather than poked. A full season is 24 real races
+  // otherwise, which is not a test anyone will run.
+  //
+  // Needs a track and a grid loaded, because the quali model reads both: stage
+  // one weekend first (the hub -> race settings -> TO THE GRID path, or
+  // tests/career.spec.js's goRacing helper). Every round is simulated on THAT
+  // circuit — the per-round variation comes from the seeded draw, not from
+  // rebuilding twenty-four tracks headlessly.
+  careerSim(n) {
+    if (!Career.data()) return null;
+    const out = [];
+    for (let i = 0; i < Math.max(1, n | 0); i++) {
+      if (Career.seasonDone()) break;
+      const r = simCareerRound();
+      if (!r) break;
+      out.push(r);
+    }
+    return out;
+  },
+  // Force the season rollover: archive the year, develop the grid, run the driver
+  // market and put the contract offers on the table. Returns what the end-of-season
+  // sheet reads.
+  careerRollover() {
+    const out = Career.rollover();
+    if (out) G.refreshCareerButton();
+    return out;
+  },
+  // The qualifying model's times for the loaded track, fastest first, WITHOUT
+  // running a session — a real weekend's classification is left alone. Pass a
+  // lap time to substitute it for the player's row.
+  qualiSim: (playerTime) => G.qualiSim(playerTime),
   // The five-axis skill table (js/car/driver-ratings.js) with any career
   // development folded in, plus the derived `overall`. No args = the whole 2026
   // grid keyed by code. An unknown code resolves through the tier fallback; with
@@ -1643,6 +1728,70 @@ const api = {
     _netPeer = null;
     return true;
   },
+
+  // lobby() — the VS FRIEND screen's state, plus the two profile helpers.
+  // localProfile() is what we'd send a peer; modsFromProfile() is how a peer's
+  // declared setup becomes performance numbers. They are separate on purpose:
+  // the wire carries part IDS and the multipliers are always recomputed
+  // locally, so a tampered peer cannot simply declare itself faster.
+  lobby(o) {
+    if (!G.netLobby) return { available: false };
+    if (o && o.open) G.netLobby.open();
+    if (o && o.cancel) G.netLobby.cancel();
+    return Object.assign({ available: true }, G.netLobby.status(), {
+      profile: G.netLobby.localProfile(),
+      shown: !!(document.getElementById("vsfriend") && !document.getElementById("vsfriend").hidden),
+    });
+  },
+
+  // lobbyFake(on) — make the lobby build LOOPBACK endpoints instead of real
+  // RTCPeerConnections. Necessary, not merely convenient: an RTCPeerConnection
+  // whose ICE never completes (a sandboxed CI browser, a locked-down network)
+  // spins indefinitely, so a test that builds one does not fail — it HANGS,
+  // which is far worse. The far endpoint is kept here so the connection can be
+  // completed on demand via lobbyFakeConnect().
+  lobbyFake(on) {
+    if (!G.netLobby) return false;
+    if (!on) { _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false; }
+    G.netLobby.setTransportFactory((o) => {
+      const pair = NetTransport.loopback({ latencyMs: 0 });
+      _lobbyPeer = pair[1];
+      // Loopback endpoints report "open" immediately; the lobby polls for that,
+      // so a fake connection completes the moment it is asked to.
+      return Object.assign(pair[0], { role: o && o.role });
+    });
+    return true;
+  },
+  lobbyFakeConnected() { return !!_lobbyPeer; },
+
+  // lobbyMods(profile) — resolve a peer profile to multipliers, locally.
+  lobbyMods(profile) {
+    return G.netLobby ? G.netLobby.modsFromProfile(profile) : null;
+  },
+
+  // netStartArm(nowMs, atMs, hold) — arm a synchronised lights-out directly,
+  // as the START event does. Lets a test assert that both grids are released
+  // at an absolute INSTANT rather than after an equal delay, which is the
+  // difference between fair and merely simultaneous-looking.
+  netStartArm(nowMs, atMs, hold) {
+    if (!G.netPlay || !G.netPlay.active()) return { ok: false, error: "no_session" };
+    G.netNow = nowMs;
+    G.netStart = { at: atMs, hold: hold != null ? hold : 0.5, now: () => G.netNow };
+    G.state = "count";
+    G.countT = 0;
+    return { ok: true, at: atMs, hold: G.netStart.hold };
+  },
+
+  // netPeerEvent(type, data, atMs?) — send a reliable EVENT as the remote peer
+  // (lap times, results, settings), the counterpart to netPeerSend's state.
+  netPeerEvent(type, data, atMs) {
+    if (!_netPeer) return false;
+    const now = atMs != null ? atMs : performance.now();
+    _netPeer.pump(now);
+    return _netPeer.send("event", JSON.stringify({ t: type, d: data }));
+  },
+
+  netPeerLaps() { return G.netPlay ? G.netPlay.peerLaps() : []; },
 
   // netTick(nowMs?) — pump the session by hand. The game loop already calls
   // this every frame, but a test must not depend on rAF actually running at a

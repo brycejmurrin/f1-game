@@ -31,8 +31,8 @@ window.ScrollFade = (function () {
   // Overlays whose [hidden] flip is what first gives their regions a box. The
   // data hub (#datahub) and track detail (#track-detail) are toggled by the
   // hidden attribute like the rest.
-  const SCREENS = "#select,#career,#teampicker,#carsetup,#howtoplay,#advanced,#pmsettings," +
-    "#lighting,#camtune,#audioset,#results,#standings,#race-settings,#customize,#pausemenu," +
+  const SCREENS = "#select,#career,#career-offers,#teampicker,#carsetup,#howtoplay,#advanced,#pmsettings," +
+    "#lighting,#camtune,#audioset,#results,#quali,#standings,#race-settings,#customize,#pausemenu," +
     "#datahub,#track-detail";
 
   const EDGE = 2;              // px of slack: sub-pixel layout must not flicker
