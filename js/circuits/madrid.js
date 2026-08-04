@@ -68,7 +68,7 @@
         ridge, floodMast, tree, bush, hedge,
         billboard, marshalPost, wall, fence, guardrail, tyreWall,
         grandstandEx, cameraTower, broadcastCompound, sponsorHoarding,
-        bankedKerbStrip, runoffApron,
+        runoffApron,
       } = api;
 
       const WHITE = [0.92, 0.93, 0.94];
@@ -620,18 +620,17 @@
       // the circuit's single most-quoted fact) but nothing trackside said so:
       // from the car the bowl read as an ordinary flat corner with a white
       // stand ring behind it. These three layers are what makes a banked
-      // section legible, and all of them inherit the track basis, so they
-      // tilt WITH the road rather than needing a hand-built angle.
-      //   1. a red/white kerb ribbon on the tilted surface — the reference
-      //      edge the eye uses to read a bank angle at all
-      //   2. a paved apron at the bottom of the bank where cars run wide
-      //   3. raked buttress fins on the outside, so the bowl reads as a
+      // section legible, and both inherit the track basis, so they tilt WITH
+      // the road rather than needing a hand-built angle.
+      //   1. a paved apron at the bottom of the bank where cars run wide
+      //   2. raked buttress fins on the outside, so the bowl reads as a
       //      built structure rather than a painted corner
-      // `safer:false` on the ribbon: this circuit already runs open armco
-      // through 0.54-0.86, and the strip's own SAFER rail sits at the same
-      // 4.8 m stand-off, so enabling it would double the barrier.
-      bankedKerbStrip(0.705, 0.815,  1, { safer: false, step: 5.0 });
-      bankedKerbStrip(0.705, 0.815, -1, { safer: false, step: 5.0 });
+      // NOT bankedKerbStrip(): the shared ribbon is tuned for the shallow
+      // bowls that use it (zandvoort/miami/qatar). Measured on THIS bank —
+      // 13.5°, a 24% grade, on a 180° hairpin with hw 9 — it lands its kerb
+      // boxes ~2 m over the racing line (measure-props-over-road 1.03 → 1.97,
+      // isolated by removing each layer in turn). The apron and the fins carry
+      // the same read without touching the road.
       // Aprons are laid in SHORT bays. runoffApron emits one rigid box along a
       // single node's tangent, and this is the tightest, most steeply banked
       // arc on the lap — a 30 m bay chorded straight across it and put paving

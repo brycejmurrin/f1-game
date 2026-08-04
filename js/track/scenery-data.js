@@ -142,7 +142,7 @@ const TrackSceneryData = (function () {
     singapore: { tree: "palm",  fol: [0.16, 0.46, 0.20], lamp: "arm",   lc: [0.85, 0.95, 1.0] },
     baku:      { tree: "palm",  fol: [0.30, 0.42, 0.20], lamp: "globe", lc: [1.0, 0.82, 0.50] },  // Caspian boulevard palms
     jeddah:    { tree: "palm",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },
-    madrid:    { tree: "broad", fol: [0.30, 0.40, 0.18], lamp: "post",  lc: [1.0, 0.90, 0.66] },
+    madrid:    { tree: "broad", fol: [0.40, 0.45, 0.27], lamp: "post",  lc: [1.0, 0.90, 0.66] },   // olive, not northern green
     miami:     { tree: "palm",  fol: [0.20, 0.48, 0.22], lamp: "post",  lc: [1.0, 0.78, 0.85] },
     shanghai:  { tree: "broad", fol: [0.24, 0.42, 0.22], lamp: "post",  lc: [0.90, 0.96, 1.0] },
     mexico:    { tree: "broad", fol: [0.32, 0.44, 0.18], lamp: "post",  lc: [1.0, 0.86, 0.55] },
@@ -321,7 +321,7 @@ const TrackSceneryData = (function () {
     suzuka:      ["navy", "orange", "steel"],                 // Honda crown orange; navy no longer clashes with Silverstone
     zandvoort:   ["orange", "alu", "scaffold"],               // Oranje army; two-thirds of capacity is trucked in
     redbull:     ["crimson", "steel", "alu"],
-    hungaroring: ["sandstone", "alu", "crimson"],           // dusty bowl, plain 80s stands, Magyar red
+    hungaroring: ["concrete", "sandstone", "steel"],        // poured 1986 terracing; alu reads as steel at distance
     montreal:    ["alu", "steel", "teal"],                    // teal is the park's own colour (COL.basinTeal)
     interlagos:  ["concrete", "sandstone", "terracotta"],     // sun-bleached tropical concrete, not three greys
     mexico:      ["navy", "concrete", "steel"],             // Foro Sol blue buckets
@@ -337,7 +337,7 @@ const TrackSceneryData = (function () {
     abudhabi:    ["darkSteel", "teal", "sandstone"],
     shanghai:    ["crimson", "alu", "darkSteel"],             // China red against modern steel
     albert_park: ["steel", "pastel", "alu"],                  // temporary park build, pale Melbourne palette
-    madrid:      ["terracotta", "concrete", "steel"],
+    madrid:      ["crimson", "sandstone", "terracotta"],    // the file hardcodes these at its own call sites
     // ── retired / off-calendar circuits (def `classic: true`) ──
     hockenheim:    ["concrete", "darkSteel", "crimson"],        // Motodrom concrete bowl, German-GP red accents
     nurburgring:   ["darkSteel", "concrete", "alu"],        // cold Eifel steel and poured concrete
