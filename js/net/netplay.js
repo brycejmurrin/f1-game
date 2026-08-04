@@ -63,6 +63,12 @@ const NetPlay = (function () {
     let lastPublish = -Infinity;
     let peerProfile = null;
     let lastReason = null;
+    // Which arm of pickRemoteSlot's fallback chain last fired: null when the
+    // rival got the seat they actually asked for, "team" or "any" when they
+    // did not. The seat-exclusivity rule in js/net/lobby.js is supposed to make
+    // the fallbacks unreachable — recording it is how a test can tell that it
+    // DID, rather than that the collision merely happened not to occur.
+    let lastSlotFallback = null;
     let peerLaps = [];                    // lap/sector times the rival reported
     let peerResult = null;                // their final classification, if sent
     const eventLog = [];                  // recent inbound events, for status()
@@ -77,12 +83,14 @@ const NetPlay = (function () {
     function pickRemoteSlot(profile) {
       const cars = G.cars || [];
       const free = (c) => c && !c.local;
+      lastSlotFallback = null;
       if (profile) {
         const exact = cars.find((c) => free(c) && c.team && c.team.id === profile.team && c.seat === profile.driver);
         if (exact) return exact;
         const sameTeam = cars.find((c) => free(c) && c.team && c.team.id === profile.team);
-        if (sameTeam) return sameTeam;
+        if (sameTeam) { lastSlotFallback = "team"; return sameTeam; }
       }
+      lastSlotFallback = "any";
       return cars.find(free) || null;
     }
 
@@ -443,6 +451,7 @@ const NetPlay = (function () {
         active, role, reason: lastReason,
         localId: localCar ? G.cars.indexOf(localCar) : -1,
         remoteId: remoteCar ? G.cars.indexOf(remoteCar) : -1,
+        slotFallback: lastSlotFallback,
         net: session ? session.stats() : null,
         buffered: interp ? interp.size() : 0,
         events: eventLog.length,

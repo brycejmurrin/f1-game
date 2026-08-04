@@ -246,7 +246,12 @@ const NetLobby = (function () {
       // someone changes team or livery in the waiting room, and keeping the
       // first would race the rival's car in whatever they happened to be
       // driving when the connection opened.
-      session.onEvent(NetPlay.EV.HELLO, (p) => { _peerProfile = p || _peerProfile; renderRoom(); });
+      session.onEvent(NetPlay.EV.HELLO, (p) => {
+        _peerProfile = p || _peerProfile;
+        // Learning what they picked is the moment a clash becomes knowable.
+        resolveSeatClash();
+        renderRoom();
+      });
       session.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest") applySettings(d); });
       session.onEvent(NetPlay.EV.READY, (d) => { peerReady = !!(d && d.ready); renderRoom(); });
       // GO is separate from SETTINGS on purpose. Settings now change LIVE while
@@ -313,7 +318,11 @@ const NetLobby = (function () {
     // minute each choosing a car neither can see.
     function roomChanged(what) {
       if (!session) return false;
-      if (what === "car") session.sendEvent(NetPlay.EV.HELLO, localProfile());
+      // Resolve BEFORE announcing: a seat can be claimed while you are still in
+      // the garage, and what goes on the wire should be the seat you end up in
+      // rather than the one you are about to be moved out of. When it fires it
+      // sends the hello itself, so this must not send a second.
+      if (what === "car") { if (!resolveSeatClash()) session.sendEvent(NetPlay.EV.HELLO, localProfile()); }
       else publishSettings();
       // Changing your mind un-readies you — otherwise READY means "I was happy
       // with something else".
@@ -334,6 +343,97 @@ const NetLobby = (function () {
         out.push({ team: _peerProfile.team, driver: _peerProfile.driver || 0 });
       }
       return out;
+    }
+
+    // ---- seat exclusivity -------------------------------------------------
+    // The garage can only grey out a seat it has ALREADY been told about, so
+    // two people picking the same driver in the same instant gets through. The
+    // room settles it afterwards, and the rule is a RANK rather than
+    // `if (role === "guest")`: you yield to anyone ranked below you. Host is 0
+    // and a guest is 1 today; when the room grows past two a guest becomes
+    // 1 + join order and host-wins turns into join-order-wins with this line
+    // unchanged, which is the whole reason it is written this way.
+    function seatRank() { return role === "host" ? 0 : 1; }
+
+    // Seats we would have to move OUT of, as opposed to peerSeats(), which is
+    // every other player and is what the garage greys out. The two differ on
+    // purpose: you may not PICK a seat someone else is in whatever your rank,
+    // but you only YIELD one to somebody who outranks you.
+    function blockingSeats() {
+      return seatRank() === 0 ? [] : peerSeats();
+    }
+
+    const heldBy = (list, teamId, seat) =>
+      list.some((s) => s.team === teamId && s.driver === seat);
+
+    const seatName = (teamId, seat) => {
+      const t = Teams.LIST.find((x) => x.id === teamId);
+      const d = t && t.drivers ? t.drivers[seat] : null;
+      return { driver: d ? d.name : "that seat", team: t ? t.short : "" };
+    };
+
+    // Where a yielding player goes. The team-mate seat first — they chose that
+    // team for a reason and exclusivity is per SEAT, so it is nearly always
+    // free — then the first free seat anywhere, walking Teams.LIST in order so
+    // both screens would reach the same answer. With two players step one
+    // always succeeds; step two is what makes three and four work with no
+    // second rule.
+    function firstFreeSeat(preferTeamId, blocked) {
+      const pref = Teams.LIST.find((t) => t.id === preferTeamId);
+      if (pref && pref.drivers) {
+        for (let i = 0; i < pref.drivers.length; i++) {
+          if (!heldBy(blocked, pref.id, i)) return { team: pref.id, driver: i };
+        }
+      }
+      for (const t of Teams.LIST) {
+        // Never move somebody INTO a custom team. makeCars() only puts one on
+        // the grid for the player who selected it (js/game.js:1424), so the
+        // other screens have no such car to pose them in.
+        if (t.custom || !t.drivers) continue;
+        for (let i = 0; i < t.drivers.length; i++) {
+          if (!heldBy(blocked, t.id, i)) return { team: t.id, driver: i };
+        }
+      }
+      return null;
+    }
+
+    // Returns true if it MOVED us. Runs on every hello, so the no-clash path
+    // has to be cheap and silent.
+    function resolveSeatClash() {
+      if (!session) return false;
+      const blocked = blockingSeats();
+      if (!blocked.length) return false;
+      const mine = localProfile();
+      if (!heldBy(blocked, mine.team, mine.driver)) return false;
+      const move = firstFreeSeat(mine.team, blocked);
+      // Every seat on the grid spoken for is not reachable with four players
+      // and twenty-odd seats, but silently leaving two cars in one is exactly
+      // the failure this function exists to end — so leave the clash standing
+      // and say so rather than pretending it resolved.
+      if (!move) { say("Every seat is taken. Pick another car.", true); return false; }
+
+      const ti = Teams.LIST.findIndex((t) => t.id === move.team);
+      if (ti < 0) return false;
+      const was = seatName(mine.team, mine.driver);
+      const now = seatName(move.team, move.driver);
+      G.teamIdx = ti; G.store.set("team", ti);
+      G.driverIdx = move.driver; G.store.set("driver", move.driver);
+
+      // Announced, never silent. #vs-status is already role="status"
+      // aria-live="polite", so this reaches a screen reader too. A notice, not
+      // an error: nothing failed, somebody was simply quicker.
+      say(was.driver + " was taken — you're driving " + now.driver
+        + (now.team ? " (" + now.team + ")" : "") + ".");
+      session.sendEvent(NetPlay.EV.HELLO, localProfile());
+      // Your READY was for a car you are no longer in — the same reasoning
+      // roomChanged() uses when you change your own mind.
+      if (selfReady) setReady(false);
+      // The garage lays OVER the room rather than replacing it, so the chips
+      // can be on screen while this happens; repaint them under the player.
+      const garage = $("carsetup");
+      if (garage && !garage.hidden && G.buildSetup) G.buildSetup();
+      renderRoom();
+      return true;
     }
 
     const TEAM_OF = (p) => (p && p.team && Teams.LIST.find((t) => t.id === p.team)) || null;
