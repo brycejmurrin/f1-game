@@ -58,6 +58,19 @@
 @media (min-width: 1100px) {
   #carsetup { --cs-sheet-w: min(38vw, 460px); }
 }
+/* A MOUSE ALWAYS GETS THE TWO-PANE PANEL. Below 1100px the sheet falls back to a
+   430px floor, and 430 is four pixels under the width the rail needs — so a
+   desktop window narrower than ~815px, or a maximised one at 125%+ browser zoom
+   (the same thing measured in CSS pixels), quietly served the phone's stacked
+   layout: categories in a wrapping grid on top, options squeezed under them.
+   That trade buys vertical room a phone needs and a desktop does not. Floor the
+   sheet at 460px here — the same width a 1440px screen gives it — so the rail is
+   what a desktop gets at every window size it can realistically have. Scoped to
+   body.desktop (set from `pointer: coarse` in game.js), so a touch device's own
+   width ladder is untouched. */
+@media (max-width: 1099px) {
+  body.desktop #carsetup { --cs-sheet-w: min(100%, max(460px, 54vw), 500px); }
+}
 
 /* ---------- header ---------- */
 /* .sheet-head is a space-between row; the setup header is a stack of three
