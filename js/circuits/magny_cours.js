@@ -61,7 +61,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard,
-        addBox, addCyl, addCone, addPrism, addFrustum } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       const LEAF = [0.19, 0.44, 0.20], LEAF_D = [0.14, 0.35, 0.17];
@@ -457,6 +457,13 @@
       cameraTower(K(0.172), 1, 28, { h: 15 });
       cameraTower(K(0.580), -1, 30, { h: 17 });
       cameraTower(K(0.920), -1, 26, { h: 15 });
+      // FIELD BOUNDARIES. Nievre farmland is divided by hedgerow and poplar
+      // windbreak, not by open space — the field colours already laid down need
+      // edges, or the outfield reads as one continuous mown lawn.
+      for (const [s0, s1] of [[0.1, 0.38], [0.52, 0.91]]) {
+        for (const side of [-1, 1])
+          forestEdge(s0, s1, side, 26, { density: 0.44, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      }
     },
   }
   );

@@ -79,8 +79,8 @@
         px, pz, pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        sponsorHoarding, cameraTower, seat,
-        addBox, addCyl, addPrism } = api;
+        sponsorHoarding, cameraTower, seat, forestEdge, terrace, bleacher,
+        addBox, addCyl, addPrism, addCone } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // A basis rotated by `ang` in the (right, up) plane. Hockenheim's pit roof
@@ -107,6 +107,28 @@
       //    stadium isn't.
       // =====================================================================
       const inStadium = (s) => s >= 0.78 || s <= 0.06;
+      // THE HARDTWALD WALL. Hockenheim is the forest circuit and was one of the
+      // only ones in the fleet never calling forestEdge() — its trees were four
+      // scattered every() passes, which gives a wood you can see daylight
+      // through in every direction. The real thing is a CORRIDOR: a continuous
+      // unbroken wall of pine right up to the verge, both sides, for the whole
+      // forest section. That wall is the reason this circuit felt fast, and it
+      // is what the scattered ranks below then add depth and variation to.
+      // Deferred like every treeline, so it sees the finished barrier set.
+      for (const [s0, s1] of [[0.065, 0.315], [0.345, 0.430], [0.495, 0.775]]) {
+        for (const side of [-1, 1]) {
+          forestEdge(s0, s1, side, 7.5, {
+            density: 0.86, hMin: 16, hMax: 30, pineFrac: 0.82,
+            col: PINE, col2: LEAF_D,
+          });
+          // A second wall set back behind the first, taller and darker, so the
+          // corridor has depth instead of being one flat green cutout.
+          forestEdge(s0, s1, side, 26, {
+            density: 0.62, hMin: 22, hMax: 36, pineFrac: 0.9,
+            col: PINE_D, col2: PINE_D,
+          });
+        }
+      }
       every(20, (k) => {
         const s = k / n;
         if (inStadium(s)) return;

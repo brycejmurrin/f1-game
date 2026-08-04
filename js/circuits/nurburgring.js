@@ -71,7 +71,7 @@
         px, pz, pine, tree, bush, ridge, mountain, building, grandstandEx,
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
-        bowlSeatWall, cameraTower, sponsorHoarding, seat,
+        bowlSeatWall, cameraTower, sponsorHoarding, seat, forestEdge,
         addBox, addCyl, addCone, addPrism, addFrustum } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -115,6 +115,24 @@
       // 1. EIFEL CONIFER FOREST — spruce ranks walling the back half of the lap.
       // =====================================================================
       const openArena = (s) => (s >= 0.94 || s <= 0.20);
+      // The spruce WALL. Like Hockenheim this circuit never called forestEdge(),
+      // so its forest was scattered every() passes with daylight through them in
+      // every direction. The Eifel plantation is the opposite of that: dense,
+      // dark, uniform, and right up against the armco, so the back half of the
+      // lap runs through a green trench. The scattered ranks that follow then
+      // break up the wall's edge rather than being the whole wood.
+      for (const [s0, s1] of [[0.205, 0.615], [0.640, 0.935]]) {
+        for (const side of [-1, 1]) {
+          forestEdge(s0, s1, side, 8, {
+            density: 0.88, hMin: 15, hMax: 27, pineFrac: 0.88,
+            col: FIR, col2: LEAF_D,
+          });
+          forestEdge(s0, s1, side, 25, {
+            density: 0.66, hMin: 20, hMax: 34, pineFrac: 0.94,
+            col: FIR_D, col2: FIR_D,
+          });
+        }
+      }
       every(20, (k) => {
         const s = k / n;
         if (openArena(s)) return;

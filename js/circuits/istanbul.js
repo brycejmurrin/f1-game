@@ -65,7 +65,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         sponsorHoarding, cameraTower, seat, groundedSegments,
-        addBox, addCyl, addPrism } = api;
+        addBox, addCyl, addPrism, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       const PINE = [0.13, 0.30, 0.15], PINE_D = [0.10, 0.24, 0.13];
@@ -419,6 +419,13 @@
         h: 1.3, step: 10,
         palette: [TURK_RED, [0.94, 0.92, 0.88], [0.14, 0.30, 0.58], [0.94, 0.76, 0.10]],
       });
+      // THRACIAN PINE BELT, set well back so the long sightlines this circuit
+      // is built on survive. The scattered ranks alone left the middle distance
+      // empty between the verge scrub and the ridgelines.
+      for (const [s0, s1] of [[0.1, 0.32], [0.48, 0.91]]) {
+        for (const side of [-1, 1])
+          forestEdge(s0, s1, side, 20, { density: 0.42, hMin: 9, hMax: 17, pineFrac: 0.72, col: PINE, col2: PINE_D });
+      }
     },
   }
   );

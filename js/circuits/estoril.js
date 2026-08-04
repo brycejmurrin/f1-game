@@ -65,7 +65,7 @@
         tree, bush, ridge, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, billboard, gantry, marshalPost, motorhome, waterBand,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        addBox, addCyl, addFrustum } = api;
+        addBox, addCyl, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Estoril's three materials are limewash, terracotta and rust-primed
@@ -423,6 +423,12 @@
         const a = anchor(K(s), side, gap);
         addCyl(out, a.c, 0.19, 16, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 16.4), [1.3, 0.6, 2.6], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
+      }
+      // MARITIME PINE. Estoril sits behind the coast on sandy ground carrying
+      // stands of wind-shaped pine — low, and thinned by the Atlantic wind.
+      for (const [s0, s1] of [[0.12, 0.32], [0.48, 0.9]]) {
+        for (const side of [-1, 1])
+          forestEdge(s0, s1, side, 20, { density: 0.46, hMin: 8, hMax: 14, pineFrac: 0.82, col: PINE, col2: PINE_D });
       }
     },
   }
