@@ -5890,7 +5890,7 @@ $("as-src-all").onclick = () => { setMusicSrc("all"); if (soundOn) GameAudio.uiT
 $("as-src-builtin").onclick = () => { setMusicSrc("builtin"); if (soundOn) GameAudio.uiTick(); };
 $("as-src-user").onclick = () => { setMusicSrc("user"); if (soundOn) GameAudio.uiTick(); };
 $("as-src-spotify").onclick = () => { setMusicSrc("spotify"); if (soundOn) GameAudio.uiTick(); };
-$("pm-spotify").onclick = () => {
+$("as-sp-open").onclick = () => {
   if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.openPanel) SpotifyMusic.openPanel();
 };
 $("as-close").onclick = () => { $("audioset").hidden = true; };

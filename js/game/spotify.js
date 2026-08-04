@@ -1060,7 +1060,7 @@ window.SpotifyMusic = (function () {
       }
     }
     // The pause-menu entry is only useful once there is something to control.
-    const pm = el("pm-spotify");
+    const pm = el("as-sp-open");
     if (pm) pm.disabled = !available() || state !== "connected";
   }
 
