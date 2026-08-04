@@ -752,7 +752,7 @@ void main() {
   // Car3D surface ids occupy 20..26, above TrackGeom's 0..15 material range.
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
   int surfaceId = int(vMat + 0.5);
-  bool classifiedCar = surfaceId >= 20 && surfaceId <= 26;
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 27;
   bool paintSurface = surfaceId == 20;
   bool carbonSurface = surfaceId == 21;
   bool rubberSurface = surfaceId == 22;
@@ -760,15 +760,23 @@ void main() {
   bool glassSurface = surfaceId == 24;
   bool emissiveSurface = surfaceId == 25;
   bool panelSurface = surfaceId == 26;
-  float carPaint = classifiedCar ? (paintSurface ? uCarPaint : 0.0) : uCarPaint;
+  // MIRROR: a chrome livery finish. Paint-like (it keeps the clearcoat and the
+  // env lobe, which is what actually makes a mirror) but metallic and nearly
+  // smooth, so the body reflects its surroundings instead of going matte-dark.
+  bool mirrorSurface = surfaceId == 27;
+  float carPaint = classifiedCar ? ((paintSurface || mirrorSurface) ? uCarPaint : 0.0) : uCarPaint;
   float clearcoat = classifiedCar
-    ? (paintSurface ? uClearcoat : (glassSurface ? uClearcoat * 0.45 : 0.0))
+    ? (paintSurface ? uClearcoat
+      : (mirrorSurface ? max(uClearcoat, 0.85)
+      : (glassSurface ? uClearcoat * 0.45 : 0.0)))
     : uClearcoat;
   float metalness = classifiedCar
-    ? (metalSurface ? max(uMetalness, 0.78) : (carbonSurface ? 0.08 : 0.0))
+    ? (metalSurface ? max(uMetalness, 0.78)
+      : (mirrorSurface ? max(uMetalness, 0.55)
+      : (carbonSurface ? 0.08 : 0.0)))
     : uMetalness;
   float specular = classifiedCar
-    ? (rubberSurface ? 0.18 : (metalSurface ? 1.0 : (carbonSurface ? 0.48 : (panelSurface ? 0.35 : uSpecular))))
+    ? (rubberSurface ? 0.18 : ((metalSurface || mirrorSurface) ? 1.0 : (carbonSurface ? 0.48 : (panelSurface ? 0.35 : uSpecular))))
     : uSpecular;
   float emissive = classifiedCar
     ? (emissiveSurface ? max(uEmissive, 1.0) : (paintSurface ? uEmissive : 0.0))
@@ -864,6 +872,7 @@ void main() {
   if (glassSurface) rough = min(rough, 0.13);
   if (emissiveSurface) rough = max(rough, 0.32);
   if (panelSurface) rough = max(rough, 0.72);
+  if (mirrorSurface) rough = min(rough, 0.09);
   // Repair patches read glossier: fold the patch mask into roughness (max
   // +-0.08) before the specular AA below widens it.
   if (uDetail > 0.0) rough = clamp(rough + (patchM - 0.5) * 0.16 * min(uDetail * 4.0, 1.0), 0.04, 1.0);

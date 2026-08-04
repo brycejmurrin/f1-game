@@ -61,7 +61,7 @@
 //   node tools/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night  # 3x3 grid
 
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -166,7 +166,28 @@ const OUTARG = arg('out', null);
 const OUT    = OUTARG != null
   ? resolve(HERE, OUTARG)
   : resolveRepoDefault(ROOT, 'scratch', 'renders', 'cars', TEAM);
-const EXE    = process.env.PW_CHROMIUM;  // unset → Playwright's bundled chromium
+// Browser: PW_CHROMIUM wins, else Playwright's bundled build, else a Chromium
+// already installed under PLAYWRIGHT_BROWSERS_PATH. Sandboxes that preinstall
+// the browser (and set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD) have no bundled build,
+// and the bare "run npx playwright install" error sends you chasing a download
+// that is deliberately disabled there.
+function findChromium() {
+  if (process.env.PW_CHROMIUM) return process.env.PW_CHROMIUM;
+  const root = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  if (!root || !existsSync(root)) return undefined;
+  const dirs = readdirSync(root).filter((d) => d.startsWith('chromium-')).sort().reverse();
+  for (const d of dirs) {
+    for (const rel of ['chrome-linux/chrome', 'chrome-mac/Chromium.app/Contents/MacOS/Chromium']) {
+      const exe = resolve(root, d, rel);
+      if (existsSync(exe)) return exe;
+    }
+  }
+  return undefined;
+}
+const EXE    = findChromium();
+// SwiftShader renders on the CPU, so a loaded box can take tens of seconds to
+// present a frame. These were fixed 15 s and aborted the whole sheet.
+const WAIT_MS = Math.max(15_000, (parseFloat(arg('wait', '90')) || 90) * 1000);
 
 const PART_CATS = ['engine', 'aero', 'brakes', 'gearbox', 'ers', 'tyres', 'suspension', 'fuel'];
 const parts = {};
@@ -226,8 +247,8 @@ try {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   page.on('pageerror', e => console.log('PAGEERR', e.message));
   await page.goto(pageUrl, { waitUntil: 'load' });
-  const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, { timeout: 15000 }).then(() => true).catch(() => false);
-  if (!ok) { console.error('carview did not become ready — is the server running and the car building?'); process.exit(2); }
+  const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, { timeout: WAIT_MS }).then(() => true).catch(() => false);
+  if (!ok) { console.error(`carview did not become ready in ${WAIT_MS / 1000}s — is the server running and the car building? (--wait=SECONDS to allow longer)`); process.exit(2); }
 
   let renderedTod = TOD, firstShot = true;
   for (const s of shotDefs) {
@@ -239,7 +260,14 @@ try {
     // SwiftShader can spend far longer than a fixed delay compiling or rebuilding
     // the dusk/night reflection probe. Eight completed post-change frames covers
     // that slow path and gives the browser compositor a presented canvas.
-    await page.waitForFunction((before) => window.CARVIEW.frame >= before + 8, frame, { timeout: 15_000 });
+    // A slow renderer must not abort the sheet: if eight frames do not land in
+    // time, fall back to a wall-clock settle and carry on rather than throwing
+    // away every shot after this one.
+    await page.waitForFunction((before) => window.CARVIEW.frame >= before + 8, frame, { timeout: WAIT_MS })
+      .catch(async () => {
+        console.log(`  (slow frame settle — falling back to a timed wait)`);
+        await page.waitForTimeout(3_000);
+      });
     // Chromium's screenshot compositor can still expose the discarded/blank
     // WebGL back buffer during the first capture or while an env probe changes.
     // A one-time/tod-change settle covers that compositor boundary; subsequent
