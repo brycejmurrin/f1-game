@@ -18,15 +18,21 @@ const Car3D = (function () {
   const SURFACES = Object.freeze({
     custom: 0, paint: 20, carbon: 21, rubber: 22,
     metal: 23, glass: 24,
-    emissive: 25, functionalEmissive: 25, panel: 26,
+    emissive: 25, functionalEmissive: 25, panel: 26, mirror: 27,
   });
   // Livery FINISH -> the surface id the body paint is emitted as. "gloss" (or an
   // absent finish) keeps SURFACES.paint, i.e. the clearcoat + metallic-flake car
   // paint the lit shader has always given bodywork. The two alternatives reuse
   // ids the shader already classifies, so no renderer needs a new branch:
-  //   satin  -> panel  (roughness >= 0.72, specular 0.35 — a flat matte wrap)
-  //   chrome -> metal  (metalness >= 0.78, roughness <= 0.16 — tinted mirror)
-  const FINISH_SURFACE = Object.freeze({ satin: 26, chrome: 23 });
+  //   satin  -> panel   (roughness >= 0.72, specular 0.35 — a flat matte wrap)
+  //   chrome -> mirror  (clearcoat + env lobe + near-zero roughness)
+  // Chrome originally reused `metal`, which looked WORSE than gloss: metalness
+  // kills the diffuse response while the shader's env lobe is gated on
+  // clearcoat, which metal has none of — so the body went dark and flat with
+  // nothing to reflect. `mirror` is its own id so no existing metal part (rims,
+  // halo, heat shields) changes, and a backend that does not classify it simply
+  // renders ordinary paint.
+  const FINISH_SURFACE = Object.freeze({ satin: 26, chrome: 27 });
   const DARK   = [0.05, 0.05, 0.05];
   const CARBON = [0.07, 0.07, 0.08];
   const VISOR  = [0.08, 0.08, 0.09];          // tinted visor
@@ -2014,6 +2020,7 @@ const Car3D = (function () {
   }
 
   return { build, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+           PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, teamStyleOf,
            endplate: endplateGeom, numberBoard, aeroLevelOf };
