@@ -594,12 +594,20 @@ const Parts = (function () {
     };
   }
 
-  function isOptionAvailable(opt, team) {
+  // `owned` (a Set of fittable option ids, or null) is the career R&D gate and is
+  // deliberately NOT threaded into _resolve/resolveSetup/getMods/getCost/
+  // getVisualTiers: ownership is enforced on WRITE, at the getTeamParts funnel in
+  // game.js, not on read. Threading it through resolution would oblige every caller
+  // to pass it — and any that forgot would silently disagree with the rest — while
+  // putting career save state on the physics path. The argument exists only so the
+  // garage can grey out the rows a career has not researched yet.
+  function isOptionAvailable(opt, team, owned) {
     const ctx = teamContext(team);
     const suppliers = opt.suppliers || (opt.supplier ? [opt.supplier] : null);
     const teams = opt.teams || (opt.team ? [opt.team] : null);
     if (suppliers && suppliers.indexOf(ctx.engine) < 0) return false;
     if (teams && teams.indexOf(ctx.id) < 0) return false;
+    if (owned && !owned.has(opt.id)) return false;
     return true;
   }
 

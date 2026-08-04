@@ -2010,6 +2010,11 @@ const G = {
   // Read-only qualifying model for the CURRENT track (__apex.qualiSim).
   qualiSim: (playerTime) => quali.preview(playerTime || 0),
   refreshCareerButton: (...a) => refreshCareerButton(...a),
+  // The R&D gate for the garage LISTING: the option ids the team on screen may fit,
+  // or null. Career.owned() answers "career rules apply AND this is the career
+  // team" by itself, so outside a career this is a no-op the garage can ignore.
+  // Read per rebuild rather than held, so a part researched mid-session shows up.
+  careerOwned: () => Career.owned(Teams.LIST[teamIdx] && Teams.LIST[teamIdx].id),
   updateTrackPreview: (...a) => updateTrackPreview(...a),
   // Mutable state + helpers consumed by js/game/photomode.js.
   get photoMode() { return photoMode; }, set photoMode(v) { photoMode = v; },
