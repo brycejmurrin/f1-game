@@ -79,16 +79,22 @@ const SCREENS = [
       await p.click("#mb-help"); await p.waitForSelector("#howtoplay:not([hidden])", { timeout: 15000 }); } },
   { id: "settings", name: "Settings", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 }); } },
+  // The garage owns the team card now (#cs-team-card, TEAM tab) — the select
+  // screen's #sel-team-card is gone. Reaching a screen by the route a player
+  // takes is the point; when the route moves, the audit's own path has to move.
   { id: "teampicker", name: "Team picker", root: "#teampicker", open: async (p) => {
       await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
       await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
         (t.find((e) => /TEAM/i.test(e.textContent)) || t[0])?.click(); });
       await p.waitForTimeout(400);
-      await p.click("#sel-team-card");
+      await p.click("#cs-team-card");
       await p.waitForSelector("#teampicker:not([hidden])", { timeout: 15000 }); } },
+  // START on the select screen goes to the GARAGE, not to race settings — the
+  // garage is a step on the way now, and its DONE carries on to the settings.
   { id: "racesettings", name: "Race settings", root: "#race-settings", open: async (p) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
-      await p.click("#sel-go");
+      await p.click("#sel-go"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
+      await p.click("#cs-done");
       await p.waitForSelector("#race-settings:not([hidden])", { timeout: 15000 }); } },
   { id: "results", name: "Results", root: "#results", open: async (p) => {
       await p.evaluate(async () => { await window.__apex.race("monza"); });
@@ -111,7 +117,7 @@ const SCREENS = [
 // ------------------------------------------------------------------ the probe
 // Runs in the page. Everything here is geometry — no screenshots, no judgement
 // calls that depend on colour or style, so a result can be diffed build to build.
-const PROBE = `(rootSel) => {
+const PROBE = (rootSel) => {
   const vw = innerWidth, vh = innerHeight;
   const root = document.querySelector(rootSel);
   const px = (n) => Math.round(n);
@@ -126,7 +132,7 @@ const PROBE = `(rootSel) => {
   };
   const desc = (el) => el.id ? "#" + el.id
     : (el.className && typeof el.className === "string"
-        ? el.tagName.toLowerCase() + "." + el.className.trim().split(/\\s+/).slice(0, 2).join(".")
+        ? el.tagName.toLowerCase() + "." + el.className.trim().split(/\s+/).slice(0, 2).join(".")
         : el.tagName.toLowerCase());
   // The nearest ancestor that CLIPS: overflow hidden/auto/scroll in either axis.
   const clipper = (el) => {
@@ -165,17 +171,42 @@ const PROBE = `(rootSel) => {
       out.clipped.push({ el: desc(el), by: desc(c),
         past: { top: px(cr.top - r.top), bottom: px(r.bottom - cr.bottom),
                 left: px(cr.left - r.left), right: px(r.right - cr.right) },
-        text: (el.textContent || "").trim().replace(/\\s+/g, " ").slice(0, 40) });
+        text: (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40) });
     }
   }
 
   // OFFSCREEN / SMALL TAPS: only things a player is meant to hit.
+  //
+  // A row scrolled below the fold of a LIST is not off screen, it is the list —
+  // the first run of this probe called 35 circuit rows a finding on a phone and
+  // buried the real ones. Only a control with no scrollable ancestor, which
+  // therefore nothing can bring into view, counts as unreachable. The rest are
+  // counted separately as `belowFold`, which is information, not a defect.
+  //
+  // The tap floor is the project's own `--tap` token, not a hard 44: the density
+  // ladder in css/tokens.css drops it to 40 on a landscape phone deliberately,
+  // and a probe that argues with a design decision every run gets ignored.
+  const tapFloor = parseFloat(getComputedStyle(document.documentElement)
+    .getPropertyValue("--tap")) || 44;
+  out.tapFloor = tapFloor;
+  out.belowFold = 0;
+  const scrollerAncestor = (el) => {
+    for (let n = el.parentElement; n; n = n.parentElement) {
+      if (n.matches && n.matches(SCROLLERS) && n.scrollHeight - n.clientHeight > 1) return n;
+      if (n === root) break;
+    }
+    return null;
+  };
   for (const el of root.querySelectorAll(FOCUSABLE)) {
     if (!visible(el)) continue;
     const r = el.getBoundingClientRect();
-    if (r.right < -0.5 || r.bottom < -0.5 || r.left > vw + 0.5 || r.top > vh + 0.5)
-      out.offscreen.push({ el: desc(el), box: [px(r.left), px(r.top), px(r.width), px(r.height)] });
-    if (r.height < 44 || r.width < 44)
+    const off = r.right < -0.5 || r.bottom < -0.5 || r.left > vw + 0.5 || r.top > vh + 0.5;
+    if (off) {
+      if (scrollerAncestor(el)) out.belowFold++;
+      else out.offscreen.push({ el: desc(el), box: [px(r.left), px(r.top), px(r.width), px(r.height)],
+        text: (el.textContent || "").trim().slice(0, 24) });
+    }
+    if (r.height < tapFloor - 0.5 || r.width < tapFloor - 0.5)
       out.smallTaps.push({ el: desc(el), w: px(r.width), h: px(r.height),
         text: (el.textContent || "").trim().slice(0, 24) });
   }
@@ -200,7 +231,7 @@ const PROBE = `(rootSel) => {
   }
   out.sheet = sheet === root ? null : { el: desc(sheet), w: px(sr.width), h: px(sr.height) };
   return out;
-}`;
+};
 
 // ------------------------------------------------------------------ the runner
 const argv = process.argv.slice(2);
