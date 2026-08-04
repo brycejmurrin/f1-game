@@ -67,8 +67,9 @@
         px, pz, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, prop,
-        floodMast, cameraTower, sponsorHoarding,
-        addBox, addCyl, addCone, addPrism } = api;
+        floodMast, cameraTower, sponsorHoarding, signDigit,
+        bleacher, scaffoldStand, seat, groundedSegments,
+        addBox, addCyl, addCone, addPrism, addFrustum } = api;
       const K = (s) => Math.round(s * n) % n;
 
       const LEAF = [0.22, 0.44, 0.20], LEAF_D = [0.16, 0.36, 0.17];
@@ -138,6 +139,57 @@
       }
 
       // =====================================================================
+      // 2b. THE SCORING PYLON — the black obelisk opposite the start line,
+      //     carrying the running order as three columns of illuminated car
+      //     numbers. It is the second thing anyone recognises about this place
+      //     after the Pagoda, and no other circuit on the calendar has one.
+      //     The numbers are real digits (signDigit), not a texture-ish stripe —
+      //     a blank black slab reads as an office block, and the whole point of
+      //     the pylon is that it is COVERED in numerals.
+      // =====================================================================
+      {
+        const a = anchor(K(0.030), -1, 24);
+        const b = [a.r, a.u, a.t];
+        const AMBER = [1.0, 0.74, 0.12], PANEL = [0.07, 0.07, 0.08];
+        // Car numbers as they'd sit mid-race — arbitrary but plausible, and
+        // stable per build because they're a fixed table, not a hash.
+        const ORDER = [[1, 16], [4, 63], [55, 81], [44, 14], [23, 22],
+                       [27, 31], [10, 77], [18, 24], [20, 3]];
+        modelGroup("indy-scoring-pylon", {
+          center: vadd(a.c, a.u, 17), size: [9, 40, 11], basis: b,
+        }, (stage) => {
+          // Poured base the shaft grows out of.
+          addBox(stage, vadd(a.c, a.u, 1.1), [7.6, 2.2, 9.0], [0.78, 0.78, 0.76], b);
+          addBox(stage, vadd(a.c, a.u, 2.5), [8.4, 0.6, 9.8], [0.86, 0.86, 0.84], b);
+          // Tapered black shaft — square section, narrowing with height, which
+          // is what makes it an obelisk rather than a tower.
+          addFrustum(stage, vadd(a.c, a.u, 17), 4.3, 3.2, 29, PANEL, 4, b);
+          // Number panels down the track-facing face. Three columns, nine rows.
+          const proud = 0.06;
+          for (let r = 0; r < ORDER.length; r++) {
+            const y = 27.5 - r * 2.55;
+            // Row backing so the digits sit on a recessed dark field.
+            addBox(stage, vadd(vadd(a.c, a.r, proud * 6), a.u, y),
+              [0.25, 2.05, 7.6], [0.03, 0.03, 0.04], b);
+            for (let cIdx = 0; cIdx < 3; cIdx++) {
+              const num = ORDER[r][cIdx % 2] + (cIdx === 2 ? 40 : 0);
+              const digs = String(num % 100).padStart(2, "0").split("").map(Number);
+              const colC = vadd(vadd(vadd(a.c, a.r, proud * 6), a.u, y),
+                a.t, (cIdx - 1) * 2.5);
+              digs.forEach((d, i) => {
+                const dc = vadd(colC, a.t, (i - 0.5) * 0.78);
+                signDigit(dc, a.r, a.u, a.t, 0.62, 1.42, -proud, AMBER, d);
+              });
+            }
+          }
+          // Cap and beacon.
+          addBox(stage, vadd(a.c, a.u, 31.8), [5.2, 0.9, 6.0], [0.80, 0.80, 0.82], b);
+          addCyl(stage, vadd(a.c, a.u, 34.0), 0.28, 3.6, [0.86, 0.86, 0.88], 6, b);
+          addCyl(stage, vadd(a.c, a.u, 36.2), 0.42, 0.7, AMBER, 8, b);
+        }, { required: true });
+      }
+
+      // =====================================================================
       // 3. PIT LANE — the Speedway's pit boxes are open-fronted stalls under
       //    one long flat roof on slim posts, NOT the enclosed garage blocks
       //    every road course uses. Built from primitives for that reason.
@@ -174,10 +226,47 @@
         }
       }
 
-      // Garage / paddock area in the infield behind the pits.
-      for (let i = 0; i < 5; i++) {
-        building(K(0.905 + i * 0.014), -1, 42, 26, 10, 20,
-          { wall: [0.84, 0.84, 0.84], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+      // GASOLINE ALLEY — the garage rows behind the pits, and nothing like the
+      // glazed paddock block of a modern circuit. They are long, low, white
+      // clapboard-and-block sheds with a raised MONITOR ROOF running the ridge
+      // (a clerestory vent strip on a stepped-up spine), roll-up doors down one
+      // flank, and a service alley between the rows. Five building() boxes with
+      // a window band read as an office park; the monitor roof is the tell.
+      for (let row = 0; row < 3; row++) {
+        const a = anchor(K(0.906 + row * 0.020), -1, 40 + row * 20);
+        const b = [a.r, a.u, a.t];
+        modelGroup(`indy-gasoline-alley-${row + 1}`, {
+          center: vadd(a.c, a.u, 5), size: [18, 12, 68], basis: b,
+        }, (stage) => {
+          const WALL = [0.88, 0.88, 0.86], TRIM = [0.66, 0.16, 0.15];
+          // The shed itself.
+          addBox(stage, vadd(a.c, a.u, 3.4), [15, 6.8, 64], WALL, b);
+          // Low-pitch roof deck, then the monitor spine standing proud of it.
+          addBox(stage, vadd(a.c, a.u, 7.0), [15.8, 0.5, 65], [0.74, 0.74, 0.72], b);
+          addBox(stage, vadd(a.c, a.u, 8.6), [5.6, 2.8, 60], WALL, b);
+          addBox(stage, vadd(a.c, a.u, 10.2), [6.6, 0.45, 61], [0.70, 0.70, 0.68], b);
+          // Clerestory glazing in the monitor — the vent strip that lights the
+          // shop floor, and the reason these buildings have a silhouette.
+          for (const sgn of [-1, 1])
+            addBox(stage, vadd(vadd(a.c, a.r, sgn * 2.7), a.u, 8.7),
+              [0.25, 1.7, 57], [0.42, 0.48, 0.52], b);
+          // Roll-up doors down the alley flank, with a red header band above.
+          addBox(stage, vadd(vadd(a.c, a.r, -7.4), a.u, 6.2), [0.4, 0.9, 64], TRIM, b);
+          for (let d = 0; d < 13; d++) {
+            const p = vadd(a.c, a.t, (d - 6) * 4.8);
+            addBox(stage, vadd(vadd(p, a.r, -7.5), a.u, 2.4),
+              [0.35, 4.4, 3.5], d & 1 ? [0.72, 0.72, 0.74] : [0.64, 0.64, 0.66], b);
+            // Bay number stencilled over each door.
+            signDigit(vadd(vadd(p, a.r, -7.8), a.u, 5.4), a.r, a.u, a.t,
+              0.5, 0.9, 0.1, [0.20, 0.20, 0.22], (row * 13 + d) % 10);
+          }
+        });
+      }
+      // Service alley hardstanding between the rows, so the gap between sheds
+      // reads as paved yard rather than the outfield grass showing through.
+      for (const [id, s, gap] of [["a", 0.916, 52], ["b", 0.916, 72]]) {
+        groundPatch(K(s), -1, gap, [12, 0.16, 66], [0.56, 0.56, 0.55],
+          { id: `indy-alley-${id}`, samples: 8 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
@@ -205,9 +294,45 @@
         { id: "indy-infield-gravel-c", samples: 6 });
       marshalPost(K(0.655), -1, 9);
 
-      grandstandEx(0.300, -1, 22, 70, null, null, { livery: "scaffold", endWalls: true });
-      grandstandEx(0.520, 1, 22, 66, null, null, { livery: "scaffold", endWalls: true });
-      grandstandEx(0.680, -1, 22, 62, null, null, { livery: "alu", endWalls: true });
+      // Infield seating is TEMPORARY — bolted aluminium bleachers and rented
+      // scaffold that go up for race week, not the permanent concrete wall of
+      // the oval. grandstandEx would give all three the same roofed shell as
+      // the main straight and erase exactly that contrast, which is the whole
+      // reason the road course looks like a different venue from the oval.
+      bleacher(0.292, 0.309, -1, 22, {
+        rows: 8, step: 8, density: 0.44,
+        plankCol: [0.66, 0.67, 0.70], frameCol: [0.58, 0.59, 0.62],
+        crowd: [[0.30, 0.42, 0.66], [0.86, 0.86, 0.84], [0.72, 0.20, 0.18]],
+      });
+      scaffoldStand(0.512, 0.528, 1, 22, {
+        rows: 6, step: 9, density: 0.40,
+        bench: [[0.30, 0.42, 0.66], [0.82, 0.80, 0.76]],
+        crowd: [[0.86, 0.86, 0.84], [0.30, 0.42, 0.66], [0.72, 0.20, 0.18]],
+      });
+      bleacher(0.673, 0.688, -1, 22, {
+        rows: 6, step: 8, density: 0.36,
+        plankCol: [0.72, 0.72, 0.74], frameCol: [0.62, 0.63, 0.66],
+        crowd: [[0.72, 0.20, 0.18], [0.86, 0.86, 0.84], [0.30, 0.42, 0.66]],
+      });
+
+      // BRICKYARD CROSSING — four holes of the Speedway's golf course really do
+      // sit inside this infield, which is a genuinely strange thing to see from
+      // a racing car and unique to Indianapolis. Mown green, pale sand bunkers,
+      // a flagstick, and the trees that separate the fairways.
+      for (const [id, s, side, gap] of [
+        ["1", 0.345, 1, 44], ["2", 0.430, -1, 48],
+        ["3", 0.570, 1, 46], ["4", 0.628, -1, 42],
+      ]) {
+        groundPatch(K(s), side, gap, [26, 0.16, 30], [0.30, 0.52, 0.22],
+          { id: `indy-green-${id}`, samples: 8 });
+        groundPatch(K(s), side, gap + 17, [11, 0.14, 14], [0.84, 0.79, 0.62],
+          { id: `indy-bunker-${id}`, samples: 6 });
+        const a = anchor(K(s), side, gap + 4);
+        const b = [a.r, a.u, a.t];
+        addCyl(out, vadd(a.c, a.u, 1.1), 0.05, 2.4, [0.94, 0.94, 0.92], 4, b);
+        addBox(out, vadd(vadd(a.c, a.u, 2.0), a.t, 0.5), [0.06, 0.5, 0.9],
+          [0.90, 0.16, 0.14], b);
+      }
 
       // Sparse infield planting — the Speedway's golf course and service roads
       // occupy the middle, so a few ornamental clumps only.
@@ -266,6 +391,12 @@
       // Broadcast platforms at the show corners.
       cameraTower(K(0.115), 1, 30, { h: 18 });
       cameraTower(K(0.500), -1, 26, { h: 15 });
+
+      // THE SNAKE PIT — the infield mound inside the banked Turn 1, where the
+      // Speedway's crowd stands rather than sits. Dense, informal, and on the
+      // opposite side of the track from all that permanent concrete seating.
+      spectatorHill(0.085, 0.150, -1, 26,
+        { rows: 4, rise: 1.2, depth: 2.0, density: 0.66, step: 8 });
     },
   }
   );

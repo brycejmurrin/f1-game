@@ -1471,7 +1471,7 @@ const Tracks = (function () {
             crowdBank, grandstand, grandstandEx, spectatorHill, bush, hedge, forestEdge,
             cypress, stonePine, broadleafFall, acacia, plane,
             along, wall, fence, guardrail, tyreWall, gantry, marshalPost,
-            signBoard, sponsorHoarding, cameraTower, ferrisWheel,
+            signBoard, signDigit, sponsorHoarding, cameraTower, ferrisWheel,
             bleacher, scaffoldStand, terrace, tieredBowl,
             building, house, motorhome, tower, billboard, cityFront,
             streetLamp, neonSign, neonTower,
@@ -1871,6 +1871,9 @@ const Tracks = (function () {
         // structures
         building, house, motorhome, tower, grandstand, grandstandEx, billboard,
         gantry, marshalPost, cameraTower, cityFront,
+        // seven-segment numerals on an arbitrary face. Takes raw basis vectors
+        // rather than (k, side), so — like addBox — it needs no reverse remap.
+        signDigit,
         // shared identity-pass toolkit
         underpassPortal, floodMast, floodMastRing, ledFacadeBands,
         concreteCanyon, sailCanopy, gridshellCanopy, runoffApron,
