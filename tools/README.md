@@ -7,6 +7,8 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | Tool | Does | Paired skill |
 |---|---|---|
 | **verify-track.cjs** | Headless build guard — loads the track defs + engine in a VM (file list from `manifest.cjs` `TRACK_VM`), runs `buildRoad/Terrain/Props/Gate`, fails on any THROW. `verify-track.cjs <id>` or `--all`. The fast pre-push check for any `js/circuits/*` or `js/track/*` edit. | debug-tracks |
+| **.vt-warn.cjs** | `verify-track.cjs` with `console.warn` un-silenced, so a scenery callback's warnings reach stderr instead of the VM's stub. Same usage. Diagnostic variant, not part of any gate. | debug-tracks |
+| **ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR counterpart to the lighting probes. | webgl-debug |
 | **manifest.cjs** | The **load-order single source of truth** — every `js/` file in dependency order, `HARD_EDGES` (eval-time load dependencies), and `TRACK_VM` (the subset verify-track/VM tests load). `index.html` script tags must match it; `tests/load-order.test.mjs` (`npm run test:tooling`) asserts they do. Adding a file = script tag + manifest entry. | check-changes |
 | **extract-module.mjs** | Assists further `game.js` extractions — moves a block into a new `js/game/` module with the `Module.create(G)` boilerplate and updates the manifest + script tags. | — |
 | **apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON. `apex-eval.mjs '__apex.corners()'`. | playwright-probe |
