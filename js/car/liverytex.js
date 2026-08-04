@@ -28,7 +28,13 @@ const LiveryTex = (function () {
     wing:   { x: 40,  y: 520, w: 620, h: 150 },  // rear-wing sponsor band
     num:    { x: 700, y: 420, w: 284, h: 284 },  // large car number
     strip:  { x: 40,  y: 720, w: 944, h: 130 },  // long thin sponsor strip (sidepod lower)
-    fin:    { x: 40,  y: 856, w: 430, h: 160 },  // shark-fin tail: painted motif (no badge) + graphic
+    fin:    { x: 40,  y: 856, w: 430, h: 160 },  // shark-fin tail: the painted graphic, stretched over the whole swept fin
+    // The fin's crest rides on its OWN square region, mapped to an upright square
+    // patch on the fin (Car3D.sharkFinBadge). It cannot share the `fin` rect: that
+    // one is stretched over the fin's raked, tapering outline, which shears and
+    // squashes anything with a recognisable shape. Square region → square patch →
+    // undistorted badge, whatever the surface under it is doing.
+    finBadge: { x: 500, y: 856, w: 160, h: 160 },
   };
 
   // Primary driver number per team.
@@ -407,9 +413,14 @@ const LiveryTex = (function () {
       ctx.beginPath(); ctx.arc(cx, cy, f.S(0.3), 0, Math.PI * 2); ctx.fill();
     }
     // two red bulls charging toward each other (horns meeting at centre top).
-    // Keep the bulls red on the gold disc, but on the bare fin use the gold so
-    // the silhouette pops against the (usually dark) team paint.
-    const red = css(bare ? BRAND.rbGold : BRAND.rbRed);
+    // Keep the bulls red on the gold disc. On the BARE fin there is no disc, so
+    // the silhouette has to hold against the fin's own paint — and the fin is
+    // painted c2, which for Red Bull itself is the gold. Gold-on-gold is why the
+    // bulls only showed where the tail wash happened to cross them. `ink` is
+    // already chosen for the fin paint, so its polarity picks the brand colour
+    // that reads: dark ink = pale fin → red bulls; light ink = dark fin → gold.
+    const red = css(!bare ? BRAND.rbRed
+      : (lum(ink) < 0.5 ? BRAND.rbRed : BRAND.rbGold));
     drawBull(ctx, f, 0.02, 0.16, 0.5, 0.62, +1, red);   // left bull, head to right
     drawBull(ctx, f, 0.48, 0.16, 0.5, 0.62, -1, red);   // right bull, head to left
     ctx.restore();
@@ -819,6 +830,11 @@ const LiveryTex = (function () {
     const c1 = colors.c1 || [0.1, 0.1, 0.12];
     const c2 = colors.c2 || [0.9, 0.9, 0.92];
     const stripe = colors.stripe || null;
+    // The shark fin is its own paintable panel: `fin` is the plate colour and
+    // `finArt` the tail graphic on it. Both optional — a livery that sets neither
+    // gets exactly today's look (fin = c2, art auto-picked to read on it).
+    const finPaint = colors.fin || c2;
+    const finArt = colors.finArt || null;
 
     // Each region is inked against the paint IT lands on, not against c1 for all
     // of them. A livery that sets `pod` repaints the lower sidepod, which is
@@ -847,11 +863,12 @@ const LiveryTex = (function () {
     // halo when they disagree. (Verified by the mesh probe in
     // tests/parts-livery-contrast.spec.js, which reads what is actually behind
     // each decal rather than trusting this list.)
-    const inkCrest = inkOn([c1, c2]);
-    // The SHARK FIN is painted c2, not c1 (see the sharkFin block in car3d.js),
-    // so inking its motif for the body put a white crest on a white fin at
-    // 1.00:1 on any livery whose accent is pale — Ferrari's default among them.
-    const inkFin = inkOn([c2]);
+    const inkCrest = inkOn([c1, finPaint]);
+    // The SHARK FIN is painted `fin` (c2 unless the livery picks one — see the
+    // sharkFin block in car3d.js), not c1, so inking its motif for the body put a
+    // white crest on a white fin at 1.00:1 on any livery whose accent is pale —
+    // Ferrari's default among them.
+    const inkFin = inkOn([finPaint]);
     const inkPod = inkOn(podBg);              // sidepod wordmarks
     const inkStrip = inkOn(stripBg);
     // A mark that cannot reach INK_TARGET on its background gets a halo rather
@@ -879,11 +896,22 @@ const LiveryTex = (function () {
     drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent);
     // Shark-fin panel: the SAME tail graphic + a BARE motif (disc/shield stripped)
     // so the fin reads as a painted tail, not a floating badge.
-    drawTailGraphic(ctx, teamId, REGIONS.fin, c1, c2, stripe);
+    // The wash + motif strokes are the accent colour, and the FIN IS ITS OWN
+    // PANEL — so handing this the body's accent (`stripe`, else c2) painted Red
+    // Bull's yellow slashes onto its yellow fin, and the only yellow you could
+    // see was the part that overhung onto the bodywork. A livery can name the
+    // colour outright (`finArt`); otherwise take the first candidate that
+    // actually separates from the paint it lands on.
+    const finWash = finArt || [stripe, c1, accent, inkFin].filter(Boolean)
+      .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
+    drawTailGraphic(ctx, teamId, REGIONS.fin, c1, finPaint, finWash);
+    // The BARE motif (disc/shield stripped) goes in the square badge region, which
+    // the car maps to an upright square on the fin — so it reads as a painted tail
+    // rather than a floating badge, without inheriting the fin's rake.
     // Accent has to separate from the FIN's ink here, not the body's.
     const finAccent = contrast(accent, inkFin) >= 2.0 ? accent
       : (contrast(c1, inkFin) >= 2.0 ? c1 : haloFor(inkFin));
-    drawCrest(ctx, teamId, REGIONS.fin, inkFin, finAccent, true);
+    drawCrest(ctx, teamId, REGIONS.finBadge, inkFin, finAccent, true);
 
     // Sponsor wordmarks.
     const names = SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];

@@ -87,11 +87,32 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
   quad([[-cf.x*0.72, cf.top+0.008, -0.62], [cf.x*0.72, cf.top+0.008, -0.62],
         [cr.x*0.72, cr.top+0.008, -1.28], [-cr.x*0.72, cr.top+0.008, -1.28]], [0, 1, 0.06], R.crest);
   // Shark-fin flanks → the SAME tail graphic (the big vertical rear canvas — the
-  // "tail wrap" à la a real F1 shark fin). Fin is ~0.03 wide on x=0; sit the decal
-  // just proud of each face. Front→back reading, mirrored per side.
-  const fX = 0.023, fyB = 0.655, fyT = 0.945, fzF = -0.82, fzR = -1.56;
-  quad([[fX, fyB, fzF], [fX, fyB, fzR], [fX, fyT, fzR], [fX, fyT, fzF]], [1, 0, 0], R.fin);
-  quad([[-fX, fyB, fzR], [-fX, fyB, fzF], [-fX, fyT, fzF], [-fX, fyT, fzR]], [-1, 0, 0], R.fin);
+  // "tail wrap" à la a real F1 shark fin). The corners come from
+  // Car3D.sharkFinPanel(), the SAME planform the fin mesh is built from, so the
+  // decal follows the raked leading edge, the base sloping down the engine-cover
+  // ridge, AND the fin's width taper. It used to be an axis-aligned rectangle
+  // (y 0.655..0.945, z -0.82..-1.56 at a flat x 0.023) laid over a swept
+  // trapezoid: its front-top corner cleared the leading edge by ~0.09 m and its
+  // front-bottom edge hung ~0.11 m below the fin, so the accent wash and a third
+  // of the motif floated in the air beside the cover instead of painting the fin.
+  const fp = Car3D.sharkFinPanel ? Car3D.sharkFinPanel()
+    : [{ x: 0.023, y: 0.655, z: -0.82 }, { x: 0.023, y: 0.655, z: -1.56 },
+       { x: 0.023, y: 0.945, z: -1.56 }, { x: 0.023, y: 0.945, z: -0.82 }];
+  const face = (c, region) => {
+    const v = (i, s) => [s * c[i].x, c[i].y, c[i].z];
+    // +x face reads front→back; the −x face mirrors (and reverses winding) so the
+    // mark is upright on both flanks.
+    quad([v(0, 1), v(1, 1), v(2, 1), v(3, 1)], [1, 0, 0], region);
+    quad([v(1, -1), v(0, -1), v(3, -1), v(2, -1)], [-1, 0, 0], region);
+  };
+  face(fp, R.fin);
+  // The crest gets its own UPRIGHT SQUARE patch rather than a slice of the panel
+  // above. Sharing the planform quad is what made every fin badge look squished
+  // and leaned-over: that quad is a sheared trapezoid (the leading edge rakes back
+  // 0.50 m and the front edge is barely half the height of the rear one), so the
+  // bilinear UVs dragged the logo with it. A square region on a square patch is
+  // distortion-free no matter what the surface under it is doing.
+  if (Car3D.sharkFinBadge && R.finBadge) face(Car3D.sharkFinBadge(), R.finBadge);
   // Nose-top plate → big driver NUMBER (top of the digit toward the nose tip).
   // The nose block is IDENTICAL in the chase and cockpit builds, so this reads
   // upright from chase, hood AND cockpit cameras (all look forward over the nose).
