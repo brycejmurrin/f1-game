@@ -247,7 +247,7 @@
       // Main pit building: long cream facade representing the real Bahrain pit lane
       // complex — wide, 3-storey cream structure with warm amber lit offices.
       building(K(0.00), -1,  2, 16, 14, 80,
-        { wall: PIT_CREAM, window: WIN_WARM, lit: true, floor: 4, setback: true });
+        { kind: "slab", wall: PIT_CREAM, window: WIN_WARM, lit: true, floor: 4, setback: true });
       // Pit wall + start gantry
       wall(0.97, 0.04, -1, 3, 1.1, [0.85, 0.85, 0.85]);
       overheadSpan({
@@ -264,7 +264,7 @@
         { roof: "cantilever", endWalls: true, pylons: true });
       // Second pit-side building: timing/media centre with cool lit windows
       building(K(0.01), -1, 2, 10, 9, 40,
-        { wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 3 });
+        { kind: "hall", wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 3 });
 
       // ── Sakhir Tower ─────────────────────────────────────────────────────
       // The real Sakhir Tower stands over Turn 1's braking zone, not by the

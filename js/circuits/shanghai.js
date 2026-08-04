@@ -772,8 +772,8 @@
       }
 
       // ================= PIT ENTRY BUILDINGS (s 0.96, R) =================
-      building(K(0.96), 1, 2, 12,  9, 50, { wall: [0.86, 0.87, 0.88], window: WIN_LIT, floor: 3 });
-      building(K(0.94), 1, 2, 10,  7, 34, { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 2 });
+      building(K(0.96), 1, 2, 12,  9, 50, { kind: "hall", wall: [0.86, 0.87, 0.88], window: WIN_LIT, floor: 3 });
+      building(K(0.94), 1, 2, 10,  7, 34, { kind: "slab", wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 2 });
 
       // Low commercial strips — kept short so they don't fight the marsh/Pudong read
       cityFront(0.92, 0.965, 1, 48, {

@@ -270,7 +270,7 @@
       }
       for (let i = 0; i < 4; i++) {
         building(K(0.925 + i * 0.013), 1, 66, 24, 12, 18,
-          { wall: [0.84, 0.80, 0.74], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+          { kind: "chevron", wall: [0.84, 0.80, 0.74], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
@@ -340,7 +340,7 @@
         const k = K(0.20);
         for (let i = 0; i < 8; i++) {
           building(k, -1, 260 + i * 26, 18, 30 + (i % 3) * 10, 18,
-            { wall: [0.66 + i * 0.012, 0.66 + i * 0.012, 0.70], window: [0.54, 0.56, 0.60] });
+            { kind: "slab", wall: [0.66 + i * 0.012, 0.66 + i * 0.012, 0.70], window: [0.54, 0.56, 0.60] });
         }
       }
 

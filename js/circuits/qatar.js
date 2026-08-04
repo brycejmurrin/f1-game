@@ -421,7 +421,7 @@
         building(K(0.048), -1, 36, 18, 9, 32,
           { kind: "dome", wall: WHITE, window: WIN_COOL, floor: 3.4 });
         building(K(0.058), -1, 40, 14, 7, 24,
-          { wall: [0.91, 0.91, 0.89], window: WIN_WARM, floor: 3.2 });
+          { kind: "arch", wall: [0.91, 0.91, 0.89], window: WIN_WARM, floor: 3.2 });
         const a = anchor(K(0.052), -1, 48), b = [a.r, a.u, a.t];
         modelGroup("qatar-t1-vvip-canopy", {
           center: vadd(a.c, a.u, 8.3), size: [62, 17, 38], basis: b,

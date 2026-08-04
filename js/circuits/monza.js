@@ -229,7 +229,7 @@
       for (let i = 0; i < 8; i++) {
         const s = 0.965 + i * 0.0085;
         building(K(s), 1, 14, 16, 9, 11,
-          { wall: pitWall, window: [0.30, 0.34, 0.40], floor: 4.5, roof: true });
+          { kind: "chevron", wall: pitWall, window: [0.30, 0.34, 0.40], floor: 4.5, roof: true });
       }
       // New permanent tensile roofing structure over the pit building.
       // Atomic hero group: preflight the complete 72 m footprint before emitting
@@ -453,7 +453,7 @@
       for (let i = 0; i < 4; i++) {
         const s = 0.93 + i * 0.022;
         building(K(s), -1, 40, 24, 12, 18,
-          { wall: [0.80, 0.80, 0.82], window: [0.32, 0.36, 0.44], floor: 4.5, roof: true });
+          { kind: "hall", wall: [0.80, 0.80, 0.82], window: [0.32, 0.36, 0.44], floor: 4.5, roof: true });
       }
       // ── Lit window bands on paddock hospitality buildings ──
       {
@@ -499,7 +499,7 @@
       const kmilan = K(0.96);
       for (let i = 0; i < 7; i++) {
         building(kmilan, 1, 210 + i * 28, 16, 36 + i * 10, 16,
-          { wall: [0.62 + i * 0.015, 0.66 + i * 0.015, 0.72 + i * 0.015], window: [0.52, 0.56, 0.62] });
+          { kind: "spire", wall: [0.62 + i * 0.015, 0.66 + i * 0.015, 0.72 + i * 0.015], window: [0.52, 0.56, 0.62] });
       }
       // ── Milan skyline lit windows (warm night-ready haze) ──
       {
@@ -874,7 +874,7 @@
       // 11b. Abandoned oval control hut above the surviving Sopraelevata tiers.
       // A faded scoring panel and concrete stair ribs make the ruin read as
       // motorsport archaeology rather than a generic retaining wall.
-      building(K(0.545), -1, 94, 13, 9, 10, {
+      building(K(0.545), -1, 94, 13, 9, 10, { kind: "hall",
         wall: [0.57, 0.55, 0.51], window: [0.28, 0.30, 0.29], floor: 4.5,
       });
       billboard(K(0.545), -1, 91, 12, 4.5, [0.72, 0.68, 0.58]);

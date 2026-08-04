@@ -275,7 +275,7 @@
       // ── PIT BUILDING + MAIN GRANDSTAND — s 0.00 ──────────────────────────
       // One long low pit building with a lit window band (was five stacked raw
       // place() boxes reading as a row of blocks).
-      building(K(0.0), -1, 16, 62, 8, 28, { wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
+      building(K(0.0), -1, 16, 62, 8, 28, { kind: "hall", wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
       // MAIN GRANDSTAND — the only permanent seating on the Corniche, and the
       // one place the national colours are worn at full size: a deep-green
       // shell under a gold fascia and roof. Every other night circuit in the

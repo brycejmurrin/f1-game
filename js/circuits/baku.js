@@ -225,7 +225,7 @@
       {
         const k = K(0.02);
         // Central palace body via building() — gap=42 keeps it well behind facade row
-        building(k, 1, 42, 52, 22, 30, { wall: SAND, window: WIN_WARM, floor: 4.5, lit: true });
+        building(k, 1, 42, 52, 22, 30, { kind: "dome", wall: SAND, window: WIN_WARM, floor: 4.5, lit: true });
         // Decorative base plinth (uplit, slightly wider than body, very low)
         const aBase = anchor(k, 1, 68);
         addBox(out, vadd(aBase.c, aBase.u, 1.5), [58, 3, 32], SAND_LIT, [aBase.r, aBase.u, aBase.t]);
@@ -258,7 +258,7 @@
       // START/FINISH — pit complex (R), grandstands (L), gantries
       // ===================================================================
       for (let i = 0; i < 5; i++)
-        building(K(0.95 + i * 0.012), 1, 5, 16, 9, 14, { wall: [0.20, 0.21, 0.26], window: WIN_COOL, floor: 3, lit: true });
+        building(K(0.95 + i * 0.012), 1, 5, 16, 9, 14, { kind: "hall", wall: [0.20, 0.21, 0.26], window: WIN_COOL, floor: 3, lit: true });
       wall(0.94, 0.02, 1, 1.0, 1.0, [0.85, 0.85, 0.88], 0.4);
       grandstand(0.985, -1, 4, 70, [0.42, 0.36, 0.40], [0.50, 0.30, 0.34]);
       grandstand(0.05, -1, 4, 60, [0.42, 0.36, 0.40], [0.46, 0.30, 0.36]);
@@ -641,7 +641,7 @@
         const k = K(0.50);
 
         // Main palace structure (gap=20 to clear the castle wall at gap=1.5)
-        building(k, 1, 20, 22, 10, 28, { wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
+        building(k, 1, 20, 22, 10, 28, { kind: "arch", wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
 
         // Crenellated parapet: merlons at y=10 (top of 10m building)
         const a = anchor(k, 1, 20);
@@ -661,7 +661,7 @@
         addBox(out, vadd(vadd(a.c, a.t,  13), a.u, 19.5), [1.0, 0.8, 1.0], WIN_WARM, b);
 
         // Flanking wing building (east)
-        building(K(0.505), 1, 14, 12, 7, 16, { wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
+        building(K(0.505), 1, 14, 12, 7, 16, { kind: "chevron", wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
 
         // Ornamental archway detail on main facade
         addBox(out, vadd(a.c, a.u, 4), [20, 3, 1.5], [0.82, 0.76, 0.64], b);

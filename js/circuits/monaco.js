@@ -221,7 +221,7 @@
         const k = K(0.21);
         const HOTEL = [0.92, 0.88, 0.82];
         building(k, 1, 3.5, 22, 40, 18,
-          { wall: HOTEL, window: WIN, floor: 5, lit: true, windowCol: WINLIT, setback: true });
+          { kind: "tiered", wall: HOTEL, window: WIN, floor: 5, lit: true, windowCol: WINLIT, setback: true });
         // Ochre mansard / cornice strip + secondary wing toward the square
         const a = anchor(k, 1, 3.5 + 11);
         if (!onTrack(a.c[0], a.c[2], 12)) {
@@ -283,11 +283,11 @@
       {
         const k = K(0.40);
         building(k, 1, 4, 20, 48, 30,
-          { wall: [0.90, 0.88, 0.82], window: WIN, floor: 6, lit: true, windowCol: WINLIT, setback: true });
+          { kind: "notch", wall: [0.90, 0.88, 0.82], window: WIN, floor: 6, lit: true, windowCol: WINLIT, setback: true });
         building(K(0.385), 1, 5, 22, 40, 18,
-          { wall: CREAM, window: WIN, floor: 6, lit: true, windowCol: WINLIT });
+          { kind: "chevron", wall: CREAM, window: WIN, floor: 6, lit: true, windowCol: WINLIT });
         building(K(0.415), 1, 5, 22, 42, 18,
-          { wall: [0.88, 0.84, 0.76], window: WIN, floor: 6, lit: true, windowCol: WINLIT });
+          { kind: "podium", wall: [0.88, 0.84, 0.76], window: WIN, floor: 6, lit: true, windowCol: WINLIT });
       }
 
       // ── SECTOR 4 — TUNNEL (s=0.51→0.585) ───────────────────────────────
@@ -1147,7 +1147,7 @@
       // pavilions crown the tunnel shoulders, preserving the road opening.
       for (const [sf, side] of [[0.515, -1], [0.575, 1]]) {
         const k = K(sf);
-        building(k, side, 12, 22, 28, 24, {
+        building(k, side, 12, 22, 28, 24, { kind: "tiered",
           wall: [0.82, 0.80, 0.75], window: WIN, floor: 4.5,
           lit: true, windowCol: WINLIT, setback: true,
         });

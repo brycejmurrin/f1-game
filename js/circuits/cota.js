@@ -221,7 +221,7 @@
       // Low team hospitality and scrutineering blocks sit behind the existing pit
       // lane buildings, adding depth without closing the driver's main-straight view.
       motorhome(K(0.012), -1, 72, 24, 7, 38, { wall: white, window: glass });
-      building(K(0.035), -1, 70, 20, 6, 34, {
+      building(K(0.035), -1, 70, 20, 6, 34, { kind: "hall",
         wall: [0.72, 0.74, 0.78], window: litWin, floor: 2, roof: cotaBlue,
       });
 

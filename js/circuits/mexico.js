@@ -258,7 +258,7 @@
 
       // Pit garage units
       for (const s of [0.005, 0.02, 0.035, 0.05]) {
-        building(K(s), -1, 2.5, 7, 5, 14, { wall: [0.93, 0.93, 0.95], window: [0.22, 0.26, 0.30], floor: 2 });
+        building(K(s), -1, 2.5, 7, 5, 14, { kind: "hall", wall: [0.93, 0.93, 0.95], window: [0.22, 0.26, 0.30], floor: 2 });
       }
       // Paddock motorhomes — was a generic office-block building() under a
       // "motorhomes" comment; motorhome() is the purpose-built swap.
