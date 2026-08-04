@@ -82,11 +82,20 @@ const die = async (msg) => { log(`\n*** ${msg} ***`); await b.close(); stopSrv()
 // Distinct seats, so nothing is decided by the seat-clash rule and a car can be
 // told apart by who is driving it. Teams.LIST: 1 = Ferrari, 3 = Red Bull,
 // 6 = Haas.
-const seat = async (p, team, driver) => p.evaluate(([t, d]) => {
+// --relay forces ICE to use TURN only, which is the leg a developer never
+// exercises and a player behind carrier-grade NAT always does: on one machine
+// (or most home networks) a direct host pair forms instantly and the relay path
+// is never touched. Needs outbound access to the TURN server, so it will fail
+// in a sandbox that blocks it — that is a real answer about the environment,
+// not a flaky test.
+const RELAY = process.argv.includes("--relay");
+if (RELAY) log("ICE: RELAY ONLY — every pair must go through TURN");
+const seat = async (p, team, driver) => p.evaluate(([t, d, relay]) => {
   localStorage.setItem("apex26.team", JSON.stringify(t));
   localStorage.setItem("apex26.driver", JSON.stringify(d));
+  if (relay) localStorage.setItem("apex26.iceRelayOnly", "true");
   location.reload();
-}, [team, driver]);
+}, [team, driver, RELAY]);
 await Promise.all([seat(A, 1, 0), seat(B, 3, 0), seat(C, 6, 0)]);
 for (const p of [A, B, C]) {
   await p.waitForFunction(() => window.__apex != null, { timeout: 90000 });

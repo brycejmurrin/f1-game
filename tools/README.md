@@ -81,7 +81,10 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   thing that can test the multi-peer path: the loopback transport has no SDP
   and the lobby specs use a fake one, so `test:net` cannot see it. Checks that
   a second invite does not drop the first guest, and that guest B can see
-  guest C — which is only possible via the host relay. Run by hand.
+  guest C — which is only possible via the host relay. Run by hand
+  (`npm run rtc:e2e-3p`, or `rtc:e2e-3p-relay` to force every pair through
+  TURN — the leg a developer never exercises and a phone behind
+  carrier-grade NAT always does).
   Covers the one path nothing else can: the loopback transport has no SDP, and
   the lobby spec uses a fake transport because a real `RTCPeerConnection` never
   finishes ICE gathering in a sandboxed CI browser. Deliberately outside every
