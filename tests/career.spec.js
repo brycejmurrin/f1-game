@@ -1593,7 +1593,9 @@ test.describe("Career — new and deleted", () => {
     }
     expect(await page.evaluate(() => window.__apex.career())).toBeNull();
     await expect(page.locator(".cr-slot.empty")).toHaveCount(6);
-    await expect(page.locator("#mb-career-sub")).toHaveText("");   // overlay is hidden, but the text is set
+    // With nothing saved the button advertises the two modes rather than sitting
+    // blank — there is no career to name, but there is still something to say.
+    await expect(page.locator("#mb-career-sub")).toHaveText("DRIVER CAREER  ·  MY TEAM");
     await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
     await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
   });
