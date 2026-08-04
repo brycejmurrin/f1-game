@@ -587,7 +587,8 @@ test.describe("Career — MY TEAM", () => {
     const grid = await page.evaluate(() => window.__apex.fieldState());
     const mine = grid.filter((c) => c.team === "custom");
     expect(mine.length).toBe(1);
-
+  });
+});
 
 // ── objectives, contracts and the rollover ───────────────────────────────────
 // The long game. Most of these fast-forward through __apex.careerSim(), which
