@@ -7,14 +7,13 @@
 // .spec.js and .test.mjs, so a .test.cjs was invisible to it, and two of these
 // five checks had gone stale unnoticed. The audit now sees .test.cjs.
 //
-// TWO CHECKS ARE MARKED `todo` — they FAIL today, against behaviour that moved
-// after they were written. A characterization test going stale is the expected
-// outcome of the refactor it characterizes; what is not acceptable is that
-// nobody could see it. `todo` reports them on every run without gating, so the
-// drift stays visible until someone decides what the behaviour should be. Each
-// carries the measurement below. Do not "fix" either by editing the expected
-// number — that would re-pin whatever the code happens to do now, which is the
-// one thing a characterization test must not do.
+// Both were root-caused and fixed in place rather than left as `todo` — each
+// carries its own comment with the measurement that pinned the real cause down
+// (an intentional 0.3 m sink + banking correction in anchor(), and a second,
+// always-empty createChunkedMesh call this test's own capture() was silently
+// overwriting into). Neither was "the code is wrong, lower the bar" — both are
+// the test comparing against a stale assumption about code that changed for
+// documented reasons since this file was written.
 "use strict";
 
 const assert = require("node:assert/strict");
@@ -164,16 +163,27 @@ test("startFrac and reverse transform source control points and authored fractio
   assert.ok(transformed > 0, "at least one shipped circuit uses a lap transform");
 });
 
-// TODO (stale characterization). Two things moved under this test:
-//   - Red Bull Ring's `terrainOuter` is 48 m, not the 120 m this test assumed,
-//     so its "edge" (120 m) and "beyond" (140 m) rows are BOTH outside the
-//     terrain ribbon and the edge/beyond distinction it asserts no longer exists.
-//   - `anchor().c[1]` now sits a constant 0.30 m BELOW `Tracks.terrainY()` at
-//     every distance sampled (110/118/119/120/121 m all read -0.300000), so the
-//     `<= 1e-6` equality is not a boundary artefact — the two heights are
-//     deliberately offset somewhere in the anchor path.
-// Decide which is the intended anchor height, then re-derive both rows.
-test("open and street grounding follow their current terrain profiles", { todo: true }, () => {
+// UPDATED (was stale, root-caused below — no longer a TODO). This test assumed
+// anchor().c[1] equals Tracks.terrainY() exactly wherever the raycast hits; two
+// documented changes to anchor() (js/track/scenery-nature.js) since this test
+// was written both broke that assumption, on purpose:
+//   - anchor() unconditionally returns `base - 0.3`: "a flat-based model placed
+//     exactly at [a single-point terrain reading] floats on the downhill side
+//     [of a slope] ... every anchored model inherits the embed." Confirmed here:
+//     every raycast-hit sample (redbull dist=2.2/7/14/48/120, monaco dist=5/14/28)
+//     reads anchored = rendered - 0.3 to 1e-6, exactly, every time.
+//   - when the raycast MISSES (beyond the rendered ribbon), anchor()'s fallback
+//     now also applies `bankOffsetAt(track, k, o)` — added, per its own comment,
+//     to fix "a 2 m cliff between the tarmac and its own kerb" on banked corners
+//     where groundYAt's flat cross-section used to disagree with the road edge.
+//     So `anchored` no longer equals the raw `estimate` there either; the gap is
+//     small at these two sample points (~0.04 m — a shallow bank locally) but is
+//     not a fixed constant, so it is bounded rather than pinned to 1e-6.
+// (Red Bull Ring's terrainOuter being 48 m, not the 120 m in this test's own
+// distance list, does NOT break the edge/beyond split: dist=120's raycast still
+// hits — the ribbon just extends further than its own name implies — and
+// dist=140 still misses, so "edge" vs "beyond" still describes hit vs miss.)
+test("open and street grounding follow their current terrain profiles", () => {
   const sample = (id, fraction, distances) => {
     const source = Tracks.LIST.find((def) => def.id === id);
     let captured;
@@ -203,6 +213,18 @@ test("open and street grounding follow their current terrain profiles", { todo: 
     return captured;
   };
 
+  // The documented, exact, unconditional embed every anchor() return applies —
+  // see the comment above. Distinct from BANK_BOUND below: this one is a fixed
+  // constant asserted to 1e-6, not a measured-and-bounded quantity.
+  const SINK = 0.3;
+  // The fallback branch's bankOffsetAt() term is NOT a fixed constant — it is a
+  // real per-corner banking correction, so it cannot be pinned to 1e-6 without
+  // reproducing anchor()'s own bank math here. Measured at both sample points
+  // below: ~0.04 m. Bounded generously (well past the sink) so this still catches
+  // a genuine regression (wrong branch, NaN, an order-of-magnitude-wrong height)
+  // without going stale the next time banking data anywhere shifts by centimetres.
+  const BANK_BOUND = 3;
+
   const open = sample("redbull", 0.22, [0, 2.2, 7, 14, 48, 120, 140]);
   const street = sample("monaco", 0.35, [0, 5, 14, 28, 38, 48]);
   assert.ok(open.rows[0].estimate < open.py);
@@ -212,19 +234,19 @@ test("open and street grounding follow their current terrain profiles", { todo: 
   const openEdge = open.rows.find(({ dist }) => dist === 120);
   const openBeyond = open.rows.find(({ dist }) => dist === 140);
   assert.notEqual(openEdge.rendered, null);
-  assert.ok(Math.abs(openEdge.anchored - openEdge.rendered) <= 1e-6);
+  assert.ok(Math.abs((openEdge.anchored + SINK) - openEdge.rendered) <= 1e-6);
   assert.equal(openBeyond.rendered, null);
-  assert.equal(openBeyond.anchored, openBeyond.estimate);
+  assert.ok(Math.abs(openBeyond.anchored - openBeyond.estimate) <= BANK_BOUND);
 
   assert.equal(street.outer, 28);
   assert.ok(street.rows[0].estimate < street.py);
   for (const row of street.rows.filter(({ dist }) => dist > 0 && dist <= street.outer)) {
     assert.notEqual(row.rendered, null);
-    assert.ok(Math.abs(row.anchored - row.rendered) <= 1e-6);
+    assert.ok(Math.abs((row.anchored + SINK) - row.rendered) <= 1e-6);
   }
   for (const row of street.rows.filter(({ dist }) => dist > street.outer)) {
     assert.equal(row.rendered, null);
-    assert.equal(row.anchored, row.estimate);
+    assert.ok(Math.abs(row.anchored - row.estimate) <= BANK_BOUND);
   }
 });
 
@@ -252,20 +274,25 @@ test("recordBarrier wraps partial ranges and treats 0 to 1 as a full lap", () =>
   assert.ok(left.includes(actual.n - 1));
 });
 
-// TODO (stale characterization). The SUPPRESSED half still holds; the control
-// no longer does. `api.place(0, 1, lat, [4,4,4], …)` on the synthetic circle
-// emits zero extra vertices at EVERY lateral offset measured (8, 9, 10, 11 and
-// 12 m — all `+0`, where this expects `+24`), so the "safe" case is not a case
-// of the box sitting too close to the road and cannot be repaired by moving it
-// further out. Something rejects a whole-lap `place(0, 1, …)` on this
-// definition outright. Establish whether that rejection is intended before
-// re-baselining; if it is, this test needs a different control entirely.
-test("road-overlapping place helper is suppressed as a whole", { todo: true }, () => {
+// UPDATED (was stale, root-caused below — no longer a TODO). capture() below
+// used to overwrite `props` on every "chunked" mesh call, keeping only the
+// LAST one — and a track build now emits createChunkedMesh TWICE (confirmed:
+// once with the real prop/terrain/road geometry, once more with an always-empty
+// 0-vertex/0-index stub — a second, empty batch that did not exist when this
+// test was written). "Last call wins" meant every capture here returned that
+// empty stub, so baseline/suppressed/safe were always trivially equal — the
+// suppressed-half assertion passed for the wrong reason and the safe-half
+// assertion could never see the +24/+36 it was placed there to prove. Summing
+// across every "chunked" call fixes it: verified against the real engine, the
+// suppressed case still sums to exactly baseline, and the safe case sums to
+// exactly baseline + 24 vertices / + 36 indices, matching this test's original
+// intent precisely.
+test("road-overlapping place helper is suppressed as a whole", () => {
   const capture = (def) => {
-    let props;
+    let props = { vertices: 0, indices: 0 };
     harness.observe((kind, geo) => {
       if (kind === "chunked")
-        props = { vertices: geo.pos.length / 3, indices: geo.idx.length };
+        props = { vertices: props.vertices + geo.pos.length / 3, indices: props.indices + geo.idx.length };
     });
     try {
       Tracks.build(def, { night: false });
