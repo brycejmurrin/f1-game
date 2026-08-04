@@ -230,7 +230,7 @@ test.describe("Qualifying — lap times", () => {
 // is a standing-start time measured against a field modelled on flying laps, and
 // no amount of driving closes a gap that is purely the launch.
 
-test.describe("Qualifying — the flying lap", () => {
+test.describe("Qualifying — the lap itself", () => {
   test.use({ viewport: LANDSCAPE });
 
   async function driveQuali(page) {
@@ -245,22 +245,24 @@ test.describe("Qualifying — the flying lap", () => {
     expect(await page.evaluate(() => window.__apex.info().session)).toBe("quali");
   });
 
-  test("the car is already at racing speed when the lights go out", async ({ page }) => {
+  test("the car starts from REST on the line, like the real thing", async ({ page }) => {
+    // It used to launch at racing speed, because the simulated field is
+    // modelled on a flying lap and timing a standing lap against a flying one
+    // loses you the launch by construction. That is paid on the other side now
+    // — quali.js charges every modelled lap the same standing start — so the
+    // session can begin the way its name says it does.
     await driveQuali(page);
     const out = await page.evaluate(() => {
-      const before = window.__apex.carAt(0).speed;
-      // Run the countdown out.
+      // Pump the countdown deterministically rather than waiting on real time:
+      // under software GL the wall clock is not a reliable way to reach
+      // lights-out inside a test budget.
       for (let i = 0; i < 900 && window.__apex.info().state !== "race"; i++) window.__apex.step(1 / 60, 1);
       const c = window.__apex.carAt(0);
-      return { before, state: window.__apex.info().state, speed: c.speed, x: c.x };
+      return { state: window.__apex.info().state, speed: c.speed, x: c.x };
     });
-    expect(out.before).toBe(0);           // stationary on the grid, as any session starts
     expect(out.state).toBe("race");
-    // Flat out, not launching: comfortably faster than anything a standing start
-    // reaches in the first metres.
-    expect(out.speed).toBeGreaterThan(50);
-    // ...and on the centreline rather than in a grid slot.
-    expect(Math.abs(out.x)).toBeLessThan(0.5);
+    expect(out.speed).toBeLessThan(5);    // from rest, not launched
+    expect(Math.abs(out.x)).toBeLessThan(1.5);   // on the line, not in a grid slot
   });
 
   test("a Grand Prix still starts from a standstill", async ({ page }) => {
@@ -323,9 +325,10 @@ test.describe("Qualifying — BACK", () => {
 
 // A one-off Grand Prix has always dropped the player at P12 and gone straight to
 // the lights — the only mode where where you START owes nothing to how fast you
-// are. The GRID setting lets it run the same one-lap session a championship
-// weekend does.
-test.describe("GRID: a one-off race can qualify", () => {
+// are. QUALIFYING LAP lets it run the same one-lap session a championship
+// weekend does. It lives in RACE SETTINGS, beside LAPS and WEATHER, because it
+// is a property of the race rather than a control preference.
+test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
   test.use({ viewport: LANDSCAPE });
 
   // GRAND PRIX -> circuit -> garage -> race settings.
@@ -342,7 +345,7 @@ test.describe("GRID: a one-off race can qualify", () => {
     if (c[n]) c[n].click();
   }, i);
 
-  test("P12 START goes straight to the lights, as it always has", async ({ page }) => {
+  test("OFF goes straight to the lights from P12, as it always has", async ({ page }) => {
     await toSettings(page);
     await expect(page.locator("#rs-quali-section")).toBeVisible();
     await pickGrid(page, 0);
@@ -352,7 +355,7 @@ test.describe("GRID: a one-off race can qualify", () => {
     expect(await page.evaluate(() => window.__apex.info().session)).toBe("race");
   });
 
-  test("QUALIFYING runs the session and the grid comes out of it", async ({ page }) => {
+  test("ON runs the session and the grid comes out of it", async ({ page }) => {
     test.slow();   // stages a circuit twice over software GL
     await toSettings(page);
     await pickGrid(page, 1);
@@ -383,7 +386,7 @@ test.describe("GRID: a one-off race can qualify", () => {
     await expect(page.locator("#rs-quali-section")).toBeVisible();
     const state = await page.evaluate(() => [...document.querySelectorAll("#rs-quali .sel-chip")]
       .map((b) => ({ on: b.classList.contains("active"), off: b.disabled })));
-    expect(state[1].on).toBe(true);          // QUALIFYING
+    expect(state[1].on).toBe(true);          // ON
     expect(state.every((c) => c.off)).toBe(true);
   });
 });

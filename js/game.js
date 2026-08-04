@@ -673,6 +673,17 @@ let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 // — no writes to speed/px/pz/head/(s,x). DEFAULT ON; disable apex26.caution="0".
 let _cautionOn = true;
 try { _cautionOn = (localStorage.getItem("apex26.caution") || "1") !== "0"; } catch (e) {}
+// Written by the CAUTIONS race setting and by __apex.caution({enabled}). Turning
+// it OFF must also DROP a flag that is already flying — otherwise the HUD keeps
+// showing a safety car that nothing is maintaining any more. resetCaution() is
+// declared later, so this is a function declaration (hoisted) rather than a
+// const, and the guard lets it be called before the race loop exists.
+function setCautionEnabled(on) {
+  _cautionOn = !!on;
+  try { localStorage.setItem("apex26.caution", _cautionOn ? "1" : "0"); } catch (e) {}
+  if (!_cautionOn) resetCaution();
+  return _cautionOn;
+}
 // level: 0 GREEN · 1 local YELLOW (sector) · 2 VSC · 3 SAFETY CAR.
 let caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
 // Last flag state broadcast to a networked guest, so only CHANGES are sent.
@@ -806,6 +817,22 @@ function qualiNetWaiting() {
   return !(qualiPeer && qualiPeer.t > 0);
 }
 
+// Say WHY the grid is not available yet, on the button itself.
+//
+// This used to be an announce() banner. That is the wrong instrument twice
+// over: the banner is a full-width overlay across the middle of the screen, so
+// it physically covers the sheet foot — the very button it is talking about —
+// and it fades, so a player who looks away has no way to find out why nothing
+// happened. A disabled button with its reason written on it cannot cover
+// itself, cannot expire, and cannot be clicked by mistake.
+function refreshQualiGate() {
+  const b = $("q-go");
+  if (!b) return;
+  const waiting = qualiNetWaiting();
+  b.disabled = waiting;
+  b.textContent = waiting ? "WAITING FOR THEIR LAP…" : "TO THE GRID";
+}
+
 // Stage a qualifying session for a FRIEND race. Same session the solo path
 // runs; the difference is only what happens when it ends — the lobby has to
 // build the race and hand its connection to NetPlay, and it cannot do that
@@ -813,6 +840,7 @@ function qualiNetWaiting() {
 function openQualiForNet(done) {
   qualiNetDone = done || null;
   openQuali();
+  refreshQualiGate();
 }
 
 function onPeerQuali(d) {
@@ -821,6 +849,7 @@ function onPeerQuali(d) {
   const mine = player && player.best < Infinity ? player.best : 0;
   quali.simulate(qualiDriven(mine));
   if (!$("quali").hidden) quali.build();
+  refreshQualiGate();
 }
 function qualiDriven(myTime) {
   const m = new Map();
@@ -2119,11 +2148,17 @@ function armReliability(field) {
   return field;
 }
 
-// Put the player on a flying lap: at the line, on the racing side, already at
-// the speed the qualifying model assumes. Written in TRACK coordinates and
-// pushed back out to world space through worldFromTrack, exactly as
-// rescuePlayer() and retireCar() do — a moving start is not a new kind of
-// physics, it is the existing placement with speed left in.
+// Put the player on the LINE, AT REST — a standing qualifying lap.
+//
+// This used to launch at racing speed, because the simulated field is modelled
+// on a flying lap and timing a driven lap from a standstill against it would
+// lose you the launch every weekend by construction. The answer to that is not
+// to fake the player's start, though: it is to charge the MODEL the same
+// standing start (see STANDING_LOSS in js/game/quali.js), so both sides of the
+// comparison begin from rest and the two remain on one scale.
+//
+// Written in TRACK coordinates and pushed back out through worldFromTrack,
+// exactly as rescuePlayer() and retireCar() do.
 function launchFlyingLap() {
   if (!player || !track) return;
   // The player's OWN top speed — the identical expression updateCar() uses for a
@@ -2136,25 +2171,20 @@ function launchFlyingLap() {
   //
   // Then capped by what the road at the line will actually take, so a circuit
   // whose start/finish sits in a corner does not launch the car into a wall.
-  const mods = playerMods;
-  const flat = VMAX * PACE * mods.speed;
-  const k = Math.abs(Tracks.curvature(track, player.s));
-  const corner = k > 1e-5 ? Math.sqrt(LAT_MAX * gripMult() / k) : flat;
-  const v = Math.min(flat, corner);
   Tracks.sample(track, player.s, smp);
   player.x = 0;                       // on the line, not on the grid slot
   player.xVis = 0;
   const w = worldFromTrack(player.s, player.x, smp);
   player.px = w.x; player.pz = w.z;
   player.head = Math.atan2(smp.t[0], smp.t[2]);
-  player.speed = v;
+  player.speed = 0;               // standing start, like the real thing
   player.vLat = 0; player.yawRateCur = 0; player.yawVis = 0; player.steerVis = 0;
   // Seed the render-interpolation anchors, or the first frame smears the car
   // across the track from wherever the grid slot was.
   player.rPrevPx = player.px; player.rPrevPz = player.pz;
   player.rPrevS = player.s; player.rPrevX = player.x;
   player.rPrevHead = player.head; player.rPrevYawVis = 0;
-  announce("FLYING LAP", 1.6);
+  announce("QUALIFYING LAP", 1.6);
 }
 
 function startRace() {
@@ -2232,7 +2262,18 @@ function showTouchControls(show) {
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
-  if (els.btnAero) els.btnAero.hidden = !t;
+  // ON AUTO THE AERO BUTTON IS REMOVED, not greyed. The wing drives itself, so
+  // the control has no job at all — and a dock of GROUPS can afford to drop it,
+  // because the survivors just close ranks. That was not true of the old
+  // absolutely-positioned stack, where hiding one button left a hole and every
+  // "fix" moved a different control under the player's thumb; it is the reason
+  // #pm-calib is disabled rather than hidden. Flex layout is what makes
+  // removing the right answer here.
+  // NO ZONES (Monaco) is deliberately NOT the same case: there the control still
+  // exists, it is this CIRCUIT that cannot use it, and the struck-through
+  // NO AERO ZONE chip beside a faded button says so. Removing it would silently
+  // suggest the game has no such feature.
+  if (els.btnAero) els.btnAero.hidden = !t || raceAeroMode === "auto";
   els.shiftUp.hidden = !(t && manual);
   els.shiftDown.hidden = !(t && manual);
   const steerBtns = t && steerMode === "buttons";
@@ -2341,6 +2382,7 @@ function endRace(forcedOrder) {
     quali.simulate(qualiDriven(myLap));
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
     quali.open();
+    refreshQualiGate();
     return;
   }
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
@@ -2586,6 +2628,7 @@ const G = {
   vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
   get netLobby() { return netLobby; },
@@ -2816,17 +2859,12 @@ function update(dt) {
       announce("LIGHTS OUT!", 1.4);
       if (soundOn) GameAudio.lightsOut();
       cars.forEach((c) => { c.lapStart = 0; });
-      // QUALIFYING IS ONE LAP, SO IT MUST BE A FLYING ONE. The session used to
-      // run two — a standing out-lap to build speed, then the lap that counted.
-      // Cutting it to one without this would time you from a standstill while
-      // the entire simulated field is modelled on a flying lap, and no amount of
-      // driving would close a gap that is purely the launch: you would qualify
-      // last every weekend by construction.
-      //
-      // So the car is already at racing speed as the lights go out. The launch
-      // speed is the model's own straight-line ceiling for THIS car (the same
-      // number quali.js integrates against), so a driven lap and a simulated one
-      // start from the same place and stay on one scale.
+      // ONE STANDING LAP, from the line. It used to launch at racing speed
+      // because the simulated field is modelled on a flying lap, and timing a
+      // standing lap against a flying one loses you the launch by construction.
+      // That is fixed on the other side now — quali.js charges every modelled
+      // lap the same standing start — so both begin from rest and stay on one
+      // scale, and the session reads like the thing it is named after.
       if (isQuali()) launchFlyingLap();
     }
     return;
@@ -3237,7 +3275,8 @@ function updateCar(c, dt, ranked) {
   // --- overtake mode ---
   const ahead = ranked[(c.rank || 1) - 2];
   const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
-  c.otArmed = gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0 && !c.finished && c.speed > 15;
+  c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
+              && !c.finished && c.speed > 15;
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
                       : (c.otArmed && simRnd() < 1 - Math.exp(-0.7 * dt));
   if (fire && c.otArmed) {
@@ -4223,6 +4262,32 @@ function publishCaution() {
     cause: caution.cause, total: caution.total, sectors: caution.sectors,
     sinceT: caution.sinceT,
   });
+}
+
+// OVERTAKE IS NOT AVAILABLE ON LAP 1, and not while the race is neutralised.
+// This is the real rule for 2026's overtake mode (the electrical push that
+// replaced DRS as the proximity-gated overtaking aid): it is enabled once the
+// LEADER completes the opening lap, and it goes away under yellows and behind
+// the safety car. It is the same reasoning DRS always had — the field is at its
+// most bunched exactly when an overtaking aid is least safe, and a start where
+// everyone can push is a start decided by whoever gambles hardest.
+//
+// Note this deliberately does NOT gate ACTIVE AERO. X-mode is not the
+// overtaking aid in 2026 and carries none of its restrictions: every driver
+// gets it on every lap in every approved zone, leader and backmarker alike,
+// with no proximity requirement. Its only limits are the activation zones
+// themselves (see buildAeroZones) — which is why Monaco has none.
+//
+// The LEADER's lap, not each car's own: a field-wide switch is what race
+// control actually throws, and gating per-car would hand a lapped driver the
+// push while the leader still had none. `ranked` is already sorted by progress
+// every frame, so the leader is ranked[0] and this stays O(1) — scanning all
+// 22 cars from inside the per-car update would have been 484 checks a frame for
+// a fact that changes once a race.
+function otEnabled() {
+  if (caution.level !== 0) return false;
+  const leader = ranked[0];
+  return !!leader && leader.lap > 1;
 }
 
 function cautionInfo() {
@@ -6899,10 +6964,10 @@ function buildRaceSettings() {
   // is wrong (the sheet is rebuilt when the lap arrives, and that rebuild looks
   // like it drops the q-done foot). Shipping the chip before that is understood
   // would offer a session that can strand two players on a sheet.
-  $("rs-quali-section").hidden = isTimeTrial() || netRoom;
+  $("rs-quali-section").hidden = isTimeTrial();
   const qEl = $("rs-quali");
   qEl.innerHTML = "";
-  for (const [on, label] of [[false, "P12 START"], [true, "QUALIFYING"]]) {
+  for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
     const active = champ ? on : raceQuali === on;
     const b = document.createElement("button");
     b.className = "sel-chip" + (active ? " active" : "");
@@ -6914,6 +6979,22 @@ function buildRaceSettings() {
       buildRaceSettings(); if (soundOn) GameAudio.uiTick();
     };
     qEl.appendChild(b);
+  }
+  // CAUTIONS — the flag layer. Hidden in a time trial for the same reason
+  // RELIABILITY is: alone on an empty track there is nothing to caution.
+  $("rs-caution-section").hidden = isTimeTrial();
+  const cauEl = $("rs-caution");
+  cauEl.innerHTML = "";
+  for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (_cautionOn === on ? " active" : "");
+    b.setAttribute("aria-pressed", _cautionOn === on ? "true" : "false");
+    b.textContent = label;
+    b.onclick = () => {
+      setCautionEnabled(on);
+      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
+    };
+    cauEl.appendChild(b);
   }
   $("rs-reliab-section").hidden = isTimeTrial();
   const relEl = $("rs-reliab");
@@ -7035,9 +7116,12 @@ $("q-sim").onclick = () => {
   quali.simulate(qualiDriven(0));
   $("quali").classList.add("q-done");
   quali.build();
+  refreshQualiGate();
 };
 $("q-go").onclick = () => {
-  if (qualiNetWaiting()) { announce("WAITING FOR YOUR RIVAL'S LAP", 2); return; }
+  // Guarded as well as disabled: the button is the only way out of this sheet,
+  // and a stale enabled state would grid up without the rival's lap.
+  if (qualiNetWaiting()) { refreshQualiGate(); return; }
   if (soundOn) GameAudio.uiSelect();
   // In a friend race the lobby, not this handler, builds the race: it still
   // holds the connection and has to hand it to NetPlay once the grid exists.
@@ -7561,9 +7645,14 @@ $("pm-gears").onclick = () => {
 // both answer "how much of the car do you operate yourself?". Takes effect
 // immediately, so a player who flips it mid-race sees it on the next zone; the
 // HUD's AERO button greys out under AUTO (see hud.js hToggle "dead").
+// Also re-lays the dock, because AUTO REMOVES the AERO button rather than
+// greying it and the survivors have to close ranks. Without this the change
+// only appeared at the next steering-mode switch — i.e. it looked broken
+// exactly when a player flipped the setting to see what it did.
 function refreshAeroBtn() {
   const b = $("pm-aero");
   if (b) b.textContent = "ACTIVE AERO: " + (raceAeroMode === "auto" ? "AUTO" : "MANUAL");
+  if (state === "race" || state === "count" || state === "pause") showTouchControls(true);
 }
 $("pm-aero").onclick = () => {
   raceAeroMode = raceAeroMode === "auto" ? "manual" : "auto";

@@ -230,14 +230,25 @@ test.describe("qualifying in a friend race", () => {
     await peerSays(page, EV.GO, {});
     await expect(page.locator("#quali")).toBeVisible({ timeout: 60000 });
 
-    await page.locator("#q-sim").click();          // take the modelled time for us
-    await page.locator("#q-go").click();           // ...but they have not driven yet
-    await expect(page.locator("#quali")).toBeVisible();
+    // DOM clicks, not Playwright's: this sheet sits under a dimmed overlay and
+    // its foot buttons swap visibility as the session progresses, so the
+    // actionability check spins on them (career.spec.js keeps a `tap` helper
+    // for the same reason). What is under test is the RULE, not whether a
+    // synthetic pointer can reach the button.
+    const tap = (id) => page.evaluate((i) => document.getElementById(i).click(), id);
+    await tap("q-sim");                            // take the modelled time for us
+    // ...but they have not driven yet, so the way out says so and is disabled.
+    // It used to be an announce() banner instead, which covered the sheet foot
+    // — the button it was describing — so the click hung on a hit-target check
+    // and the whole thing read as a broken rule rather than a bad instrument.
+    await expect(page.locator("#q-go")).toBeDisabled();
+    await expect(page.locator("#q-go")).toContainText(/waiting/i);
     expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");
 
     // Their lap lands; now the grid can be built from two real times.
     await peerSays(page, EV.QUALI, { driverId: "peer-driver", t: 62.5 });
-    await page.locator("#q-go").click();
+    await expect(page.locator("#q-go")).toBeEnabled({ timeout: 10000 });
+    await tap("q-go");
     await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), { timeout: 60000 });
     await expect(page.locator("#quali")).toBeHidden();
   });

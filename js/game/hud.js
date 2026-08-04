@@ -81,7 +81,14 @@ function updateHud(force) {
   hToggle(els.btnOT, "armed", player.otArmed && player.otT <= 0);
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
   hClass(els.ot, ot);
-  hText(els.ot, player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1) : "OVERTAKE");
+  // "NO OVERTAKE" says WHY the button is dead, and the difference matters: not
+  // yet armed means keep closing on the car ahead, whereas lap 1 or a caution
+  // means nothing you do will arm it. A control that looks merely unlucky when
+  // it is actually switched off is one the player keeps stabbing at.
+  const otOff = G.state === "race" && !G.otEnabled() && player.otT <= 0;
+  hText(els.ot, player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1)
+                : otOff ? "NO OVERTAKE" : "OVERTAKE");
+  hToggle(els.btnOT, "dead", otOff);
   // ACTIVE AERO. Three states worth telling apart at a glance: the flap is OPEN
   // (X-MODE), the road ahead would allow it (armed, so the button is worth
   // pressing), or it is simply unavailable here. `aeroX` is the flap travel,
@@ -98,10 +105,12 @@ function updateHud(force) {
   const noZones = !(G.aeroZones && G.aeroZones.length);
   hToggle(els.btnAero, "on", xOpen);
   hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
-  // The touch button is inert when the circuit has no zone, and when the wing is
-  // driving itself — in both cases pressing it does nothing, and a control that
-  // silently ignores taps is worse than one that says so.
-  hToggle(els.btnAero, "dead", noZones || !!G.raceAeroMode && G.raceAeroMode === "auto");
+  // Faded when the CIRCUIT has no zone: the control exists, this track just
+  // cannot use it, and the struck-through NO AERO ZONE chip beside it says so.
+  // AUTO is not handled here — there the button is removed from the dock
+  // outright (showTouchControls), because the wing driving itself is a control
+  // with no job rather than a control that is temporarily unavailable.
+  hToggle(els.btnAero, "dead", noZones);
   hClass(els.aero, noZones ? "ax-none" : xOpen ? "ax-open"
     : player.xArmed ? "ax-armed" : "ax-off");
   // The TEXT answers "where is the zone", so it keys off position, not arming.

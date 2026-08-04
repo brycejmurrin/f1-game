@@ -1337,6 +1337,14 @@ const api = {
       contactT: +(c.contactT || 0).toFixed(3),
       wrongWay: !!c.wrongWay, rescueT: +(c.rescueT || 0).toFixed(2),
       energy: +(c.energy || 0).toFixed(3), boostOn: !!c.boostOn,
+      // OVERTAKE, alongside the aero fields below. It was unobservable: xArmed
+      // has been here since active aero landed but its older sibling never was,
+      // so "can this car use overtake right now, and why not" could only be
+      // answered by reading game.js. otEnabled is the RACE-WIDE gate (lap 1,
+      // and any caution) and is the same for every car; otArmed folds that
+      // together with this car's own proximity and cooldown.
+      otArmed: !!c.otArmed, otT: +(c.otT || 0).toFixed(2),
+      otCool: +(c.otCool || 0).toFixed(2), otEnabled: !!G.otEnabled(),
       aeroX: +(c.aeroX || 0).toFixed(3), xOn: !!c.xOn, xArmed: !!c.xArmed,
       brakeHeat: +(c.brakeHeat || 0).toFixed(2), gear: c.gear || 1,
     };
@@ -1501,7 +1509,13 @@ const api = {
   //   { level (0 GREEN·1 YELLOW·2 VSC·3 SC), label, sector, frac, total,
   //     sectors[3], sinceT, cause, enabled }.
   //   caution({hazards:true}) → the same state plus the live DebrisWorld.hazards().
+  //   caution(true|false) or caution({enabled}) → switch the whole layer, the
+  //     SAME door the CAUTIONS race setting uses (so the chips cannot go stale
+  //     against it). Turning it off drops any flag already flying.
   caution(arg) {
+    if (typeof arg === "boolean") G.setCautionEnabled(arg);
+    else if (arg && typeof arg === "object" && arg.enabled !== undefined)
+      G.setCautionEnabled(!!arg.enabled);
     const st = G.cautionInfo ? G.cautionInfo() : { level: 0, label: "GREEN", enabled: false };
     if (arg && typeof arg === "object" && arg.hazards)
       return Object.assign(st, { hazards: DebrisWorld.hazards() });

@@ -43,21 +43,56 @@
 #btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); background: rgba(180, 35, 35, 0.42); }
 #btn-brake:active { background: rgba(230, 45, 45, 0.75); }
 
-#btn-boost { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); background: rgba(0, 150, 200, 0.4); }
-#btn-boost.on { background: rgba(0, 200, 90, 0.85); border-color: #aeea00; box-shadow: 0 0 18px rgba(120, 230, 80, 0.7); color: #04210a; }
-#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
-#btn-ot.armed { background: #aeea00; color: #0a0a0f; border-color: #aeea00; animation: pulse 0.8s infinite; }
-#btn-ot.on { background: var(--red); color: #fff; border-color: var(--red); }
+/* BOOST is BLUE, and stays blue. It used to turn lime-green when engaged, which
+   is the same fault the old OT palette had — a control that changes hue with
+   state reads as a different button rather than the same one switched on — and
+   it collided head-on with ACTIVE AERO's green. One hue per control, brightness
+   for state: light at rest, deep with a glow when it is doing something. */
+#btn-boost { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab));
+             background: rgba(198, 230, 250, 0.82); border-color: rgba(232, 245, 255, 0.75); color: #10323f; }
+#btn-boost.on { background: rgba(8, 66, 132, 0.95); color: #cfeeff; border-color: #3fb6ff;
+                box-shadow: 0 0 18px rgba(50, 175, 255, 0.8); }
+/* OT is YELLOW and AERO is GREEN, and each DARKENS when it is doing something.
+   One hue per control, brightness for state: you can tell what a button is by
+   its colour without reading it, and whether it is live without comparing it to
+   its neighbour. The old scheme spent three unrelated hues on OT alone (lime
+   armed, red active) and cyan on AERO, so every state change looked like a
+   different button rather than the same one switched on. */
+/* THE IDLE FILL HAS TO BE NEARLY OPAQUE, and that is not a style choice — it is
+   what the compositing arithmetic demands. Over a near-black page, a translucent
+   fill blends toward black, and blending toward black is exactly how you turn
+   yellow into OLIVE and green into SAGE. Blue survives it (a mid-luminance blue
+   is still obviously blue), which is why BOOST looked right at 0.4 and the first
+   pass at these two, copying that alpha, came out muddy.
+   Yellow and green only read as themselves when they are LIGHT, so idle stays
+   light and keeps just enough transparency to show the track moving underneath.
+   IDLE IS PALE, ARMED IS SATURATED. Both used to be light versions of the same
+   colour, separated only by a glow — which meant the difference between "you
+   cannot use this" and "use this NOW" was the smallest difference on the screen.
+   Washing idle toward white costs nothing (you never need to read it quickly:
+   its whole message is "not yet") and buys the armed state a step in SATURATION
+   on top of the glow and the pulse. Engaged is then the dark fill. */
+#btn-ot    { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab));
+             background: rgba(251, 241, 186, 0.82); border-color: rgba(255, 251, 220, 0.75); color: #3a3208; }
+#btn-ot.armed { background: rgba(255, 210, 26, 1); color: #2b2400; border-color: #ffe98a;
+                box-shadow: 0 0 20px rgba(250, 195, 20, 0.85); animation: pulse 0.8s infinite; }
+#btn-ot.on { background: rgba(122, 88, 0, 0.96); color: #ffeeae; border-color: #f0c419;
+             box-shadow: 0 0 18px rgba(225, 175, 20, 0.8); }
 /* ACTIVE AERO sits one slot further along whichever column OT is in — every
    layout below moves the pair together, so the rule is "AERO is above OT". */
-#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: 12px; }
-#btn-aero.armed { border-color: rgba(125,249,255,0.8); color: #7df9ff; }
-#btn-aero.on { background: #22d3ee; color: #04212b; border-color: #22d3ee; box-shadow: 0 0 18px rgba(34,211,238,0.7); }
+#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: 12px;
+             background: rgba(203, 246, 218, 0.82); border-color: rgba(232, 253, 240, 0.75); color: #0d3320; }
+#btn-aero.armed { background: rgba(45, 226, 108, 1); color: #04240f; border-color: #a8f5c6;
+                  box-shadow: 0 0 20px rgba(45, 220, 105, 0.8); }
+#btn-aero.on { background: rgba(13, 84, 40, 0.96); color: #d8ffe4; border-color: #35c96c;
+               box-shadow: 0 0 18px rgba(40, 200, 100, 0.8); }
 /* No activation zone anywhere on this circuit: the control cannot do anything,
    so it says so rather than sitting there inviting taps. Faded, not hidden —
    hiding it would reflow the touch-control stack and move every OTHER button
    under the player's thumbs (the same reason #pm-calib is disabled, not hidden). */
-#btn-aero.dead { opacity: 0.3; pointer-events: none; }
+/* Also OVERTAKE on lap 1 and under a caution — same idea, same treatment: the
+   control cannot do anything, so it stops inviting taps. */
+.touchbtn.dead { opacity: 0.3; pointer-events: none; }
 
 /* gear shift buttons: right column, stacked (DN bottom, UP above) with 8 px gaps */
 .shiftbtn { flex-direction: column; font-size: 15px; line-height: 1.05; }
@@ -145,7 +180,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      space-between leaves the cluster dead centre with no desktop-specific rule;
      and at any width or in fullscreen the layout simply reflows, because there
      is no pixel constant left to be wrong. */
-  body:not(.desktop) #hud-dock {
+  /* NOT gated on touch. The bar itself is right for every device — on desktop
+     both docks are simply empty, and space-between then leaves the cluster dead
+     centre with no desktop-specific rule, which is what the paragraph above
+     always claimed. Gating it meant desktop never got the bar OR the grid
+     cluster below, and quietly kept the old end-to-end row: gear, speed, energy,
+     OVERTAKE and AERO strung across 500px of screen and clipped at the bottom
+     edge. Only the DOCK CONTENTS (.dock/.dock-grp/.touchbtn sizing) are
+     touch-only, because only they are about thumbs. */
+  #hud-dock {
     position: absolute;
     left: calc(12px + var(--sal));
     right: calc(12px + var(--sar));
@@ -188,18 +231,30 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* SIZE IS HIERARCHY, and it is the other half of why this reads as a control
      pad rather than scattered circles. What you HOLD is big; what you TAP is
      small. Five identical circles have no visual grouping, so the eye finds no
-     structure however neatly they are placed. */
-  body:not(.desktop) .dock .touchbtn { width: 54px; height: 54px; font-size: 10px; }
+     structure however neatly they are placed.
+     The two sizes are VARIABLES because the alignment rule below has to do
+     arithmetic on them; as literals repeated in two media queries they went
+     stale the moment either one moved. */
+  body:not(.desktop) .dock { --tap: 54px; --hold: 72px; }
+  body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: 10px; }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
-  body:not(.desktop) .dock .shiftbtn { width: 72px; height: 72px; font-size: 13px; }
+  body:not(.desktop) .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: 13px; }
   body:not(.desktop) .dock .shiftbtn { font-size: 15px; }
+  /* CENTRES ON THE BOTTOM ROW, not bottom edges. The dock bottom-aligns whole
+     groups, so a 54px tap circle and a 72px pedal sharing a bottom edge have
+     centres 9px apart — BOOST/OT/AERO sat visibly low against GAS, which is the
+     one relationship the eye checks because they are the same shape. Half the
+     size difference brings the row of small circles onto the big one's centre
+     line, and it is derived rather than typed so it survives a resize. */
+  body:not(.desktop) #grp-taps { padding-bottom: calc((var(--hold) - var(--tap)) / 2); }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
-    body:not(.desktop) .dock .touchbtn { width: 48px; height: 48px; font-size: 9px; }
+    body:not(.desktop) .dock { --tap: 48px; --hold: 64px; }
+    body:not(.desktop) .dock .touchbtn { font-size: 9px; }
     body:not(.desktop) .dock .pedal,
     body:not(.desktop) .dock .steerbtn,
-    body:not(.desktop) .dock .shiftbtn { width: 64px; height: 64px; font-size: 12px; }
+    body:not(.desktop) .dock .shiftbtn { font-size: 12px; }
   }
 
   /* ---- THE INSTRUMENT CLUSTER ----
@@ -219,7 +274,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      column because they are the same kind of thing — a state you can act on —
      and AERO sits low where the right thumb's AERO button is, so the readout and
      its control are on the same side of the screen. */
-  body:not(.desktop) .hud-bottom {
+  .hud-bottom {
     position: static; transform: none; left: auto; right: auto; bottom: auto;
     display: grid;
     grid-template-columns: auto auto auto;
@@ -233,17 +288,50 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   }
   /* Every margin here is a leftover from the old vertical stack, and in a grid
      each one is pure added height. */
-  body:not(.desktop) #hud-ot { grid-area: ot; margin: 0; }
-  body:not(.desktop) #hud-aero { grid-area: aero; margin: 0; }
-  body:not(.desktop) #hud-gearbox { grid-area: gear; margin: 0; align-self: stretch; justify-content: center; }
-  body:not(.desktop) #hud-speed { grid-area: speed; }
-  body:not(.desktop) #hud-energy { grid-area: energy; margin: 0; }
+  #hud-ot { grid-area: ot; margin: 0; }
+  #hud-aero { grid-area: aero; margin: 0; }
+  #hud-gearbox { grid-area: gear; margin: 0; align-self: stretch; justify-content: center; }
+  #hud-speed { grid-area: speed; }
+  #hud-energy { grid-area: energy; margin: 0; }
   /* The AERO chip's text is a live COUNTDOWN — "AERO 240m", "NO AERO ZONE" —
      so it changes width every frame. Wrapping it to two lines made the whole
      cluster jump a row taller and back as the car approached a zone. */
-  body:not(.desktop) #hud-ot,
-  body:not(.desktop) #hud-aero {
+  #hud-ot,
+  #hud-aero {
     white-space: nowrap; font-size: 11px; padding: 3px 7px;
+  }
+
+  /* ---- DESKTOP: THE SAME PARTS, LAID OUT FLAT ----
+     The phone stacks into three columns because the width between two thumb
+     docks is the scarce thing there. A desktop has no docks and 1400px of
+     empty bottom edge, so the same compact block just looks like a phone HUD
+     marooned in the middle of a monitor. One ROW instead: gear, speed, a long
+     energy bar, then the two chips — wider, and about 25px flatter, which is
+     25px more road.
+     The gearbox flattens too: the tach moves BESIDE the numeral rather than
+     under it, so the tallest element in the cluster stops setting the height.
+     Gated on width as well as on `desktop`, because a desktop browser dragged
+     narrow needs the phone's compact block, not a row that will not fit. */
+  @media (min-width: 1100px) {
+    body.desktop .hud-bottom {
+      /* The energy bar is a PROPORTION, not a number — it wants to be long
+         enough to read a quarter-full at a glance and no longer. Stretched to
+         300px it was the widest thing in the cluster, which made the least
+         urgent readout the most prominent one. */
+      grid-template-columns: auto auto minmax(140px, 190px) auto auto;
+      grid-template-areas: "gear speed energy ot aero";
+      gap: 0 20px;
+    }
+    body.desktop #hud-gearbox {
+      flex-direction: row; align-items: center; gap: 12px;
+      padding: 7px 16px; align-self: center;
+    }
+    body.desktop #hud-gear { font-size: 58px; min-width: 44px; }
+    body.desktop #hud-tach { width: 172px; height: 18px; }
+    body.desktop #hud-energy { width: auto; justify-self: stretch; height: 18px; }
+    body.desktop #hud-speed { font-size: 42px; }
+    body.desktop .hud-unit { font-size: 13px; margin-left: 4px; }
+    body.desktop #hud-ot, body.desktop #hud-aero { font-size: 15px; padding: 8px 14px; }
   }
   /* console steer: arrows bottom-left, side by side (left thumb home) */
   #btn-steer-left  { left: calc(16px + var(--sal)); bottom: calc(12px + var(--sab)); }

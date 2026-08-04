@@ -82,21 +82,23 @@
   padding: 5px 10px; border-radius: var(--r-sm);
   margin-bottom: 6px;
 }
+/* The chip is the READOUT for the button of the same name, so it carries the
+   button's hue — OT yellow, AERO green — and darkens with it. A cyan readout
+   sitting above a green button reads as two unrelated systems, which is what
+   made the old palette hard to learn: the state you were in and the control
+   you press for it were never the same colour. */
 #hud-ot.ot-off { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); }
-#hud-ot.ot-armed { color: #0a0a0f; background: #aeea00; animation: pulse 0.8s infinite; }
-#hud-ot.ot-active { color: #fff; background: var(--red); }
+#hud-ot.ot-armed { color: #2b2400; background: #ffd21a; animation: pulse 0.8s infinite; }
+#hud-ot.ot-active { color: #ffeeae; background: #7e5c00; box-shadow: 0 0 14px rgba(225,175,20,0.55); }
 #hud-ot.ot-cool { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); opacity: 0.5; }
-/* ACTIVE AERO readout — deliberately COOL (cyan) where OVERTAKE is hot (red/
-   lime), because the two are different currencies: OT spends a proximity
-   window, X-mode spends cornering grip. Same chip metrics as #hud-ot so the
-   pair stacks evenly in the bottom strip. */
+/* Same chip metrics as #hud-ot so the pair stacks evenly in the cluster. */
 #hud-aero {
   font-size: 13px; font-weight: 800; font-style: italic;
   padding: 5px 10px; border-radius: var(--r-sm);
 }
 #hud-aero.ax-off { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); }
-#hud-aero.ax-armed { color: #7df9ff; border: 1px solid rgba(125,249,255,0.55); }
-#hud-aero.ax-open { color: #04212b; background: #22d3ee; box-shadow: 0 0 14px rgba(34,211,238,0.55); }
+#hud-aero.ax-armed { color: #04240f; background: #2de26c; }
+#hud-aero.ax-open { color: #d8ffe4; background: #0d5428; box-shadow: 0 0 14px rgba(40,200,100,0.55); }
 /* A circuit with no qualifying straight has no activation zone and therefore no
    active aero at all — Monaco. Struck through, because the difference between
    "not here, yet" and "not on this track" is the difference between waiting and

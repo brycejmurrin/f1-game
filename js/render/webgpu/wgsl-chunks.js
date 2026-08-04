@@ -328,6 +328,16 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // orange-peel/flake live UNDER the lacquer, so they must not roughen the mirror
   // shell (GLX LIT_FS js/glx.js:431).
   let Ngeo = N;
+  // Screen-space derivatives of that geometric normal, for the clearcoat lobe's
+  // specular-AA widening in [Block 2] far below. They are taken HERE, at uniform
+  // control flow, because WGSL forbids dpdx/dpdy inside a non-uniform branch:
+  // taking them inside the clearcoat branch is a hard COMPILE ERROR
+  // ("'dpdx' must only be called from uniform control flow") which invalidates
+  // the whole lit pipeline — and WebGPU reports that asynchronously, so the
+  // backend still "initialises" and then draws an all-black world. Ngeo is a
+  // let-binding and never reassigned, so the value is what it was there.
+  let ccDx = dpdx(Ngeo);
+  let ccDy = dpdy(Ngeo);
   // [Block 3a] Car-paint ORANGE-PEEL micro-normal (mirrors GLX LIT_FS js/glx.js:432-452).
   // Coarse waviness + fine flake wobble perturb N so the sun streak / sky reflection
   // shimmer live on the panels. GLX keys this to OBJECT space (vObjPos); WGSL has no
@@ -539,7 +549,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // Specular AA (GLX parity): widen the fixed lobe by the geometric-normal
     // variance so the streak stops strobing on tight curvature; flat panels
     // keep the crisp 0.035. Capped so silhouette edges can't matte it out.
-    let ccDx = dpdx(Ngeo); let ccDy = dpdy(Ngeo);
+    // ccDx/ccDy are hoisted to uniform control flow (see where Ngeo is bound).
     let ccSaaVar = dot(ccDx, ccDx) + dot(ccDy, ccDy);
     let ccA = min(sqrt(0.035 * 0.035 + ccSaaVar * 0.25), 0.30);
     let Dc = D_GGX(NoHg, ccA);
