@@ -517,7 +517,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (95) + tests/*.test.mjs unit suites (30)
+tests/*.spec.js                 Playwright specs (96) + tests/*.test.mjs unit suites (30)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -962,7 +962,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-95 Playwright specs + 30 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+96 Playwright specs + 30 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

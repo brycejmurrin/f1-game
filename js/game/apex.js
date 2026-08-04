@@ -247,7 +247,47 @@ const api = {
     // cannot express "two metres down the flank", so a framing check that reads
     // only az/el/dist cannot see half of where the camera is.
     pan: G.setupPreviewPan.slice(),
+    // ACTIVE AERO in the garage: the switch and the FLAP TRAVEL it eases toward.
+    // Separate fields on purpose — the button label follows the switch, so a
+    // preview whose blend never moves still reads "X-MODE" while showing a car
+    // that has not changed at all.
+    xOn: G.setupPreviewXOn, aeroX: G.setupPreviewAeroX,
   }),
+  // GARAGE ACTIVE AERO, drivable without a frame loop. The preview eases inside
+  // the rAF render, and a headless page composites no frames at all, so the
+  // whole garage animation was unobservable from a test — which is exactly how
+  // "the wings do not move" reached a player instead of a spec. No argument
+  // reads the state; garageStep(dt) advances the ease by dt seconds.
+  garageAero(on) {
+    if (!G.setupPreviewOn) return null;
+    if (on !== undefined) G.setSetupAero(!!on);
+    return { xOn: G.setupPreviewXOn, aeroX: +G.setupPreviewAeroX.toFixed(4),
+             mode: G.setupPreviewAeroX > 0.05 ? "X" : "Z" };
+  },
+  // The resolved (level, style) the garage hands drawAeroFlaps, plus the pose
+  // pair each element ends up with. An element whose closed and open angles are
+  // EQUAL has been parked by the clearance solver and will never appear to move,
+  // which is invisible from the outside unless something reports it.
+  garageFlaps() {
+    if (!G.setupPreviewOn) return null;
+    const a = G.setupFlapArgs();
+    const els = Car3D.aeroFlaps(a.aLvl, a.style);
+    const deg = (r) => +(r * 180 / Math.PI).toFixed(2);
+    return {
+      aLvl: a.aLvl, style: a.style ? Object.keys(a.style).length : 0,
+      elements: els.map((e) => ({
+        id: e.id, wing: e.wing, hinge: +e.hinge.toFixed(2),
+        closed: deg(e.zAngle), open: deg(e.xAngle), travel: deg(e.zAngle - e.xAngle),
+        parked: Math.abs(e.zAngle - e.xAngle) < 1e-6,
+      })),
+    };
+  },
+  garageStep(dt, n) {
+    if (!G.setupPreviewOn) return null;
+    const step = dt == null ? 1 / 60 : dt;
+    for (let i = 0; i < (n == null ? 1 : n); i++) G.stepSetupAero(step);
+    return this.garageAero();
+  },
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { G.hideMeshes = Object.assign({}, G.hideMeshes, o || {}); return G.hideMeshes; },
   // Return all track nodes within radius r of world position (wx, wz).

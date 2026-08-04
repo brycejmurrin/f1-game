@@ -2286,6 +2286,17 @@ const G = {
   get setupPreviewEl() { return setupPreviewEl; },
   get setupPreviewDist() { return setupPreviewDist; },
   get setupPreviewPan() { return setupPreviewPan; },
+  get setupPreviewAeroX() { return setupPreviewAeroX; },
+  stepSetupAero: (dt) => stepSetupAero(dt),
+  // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
+  // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
+  // a null style tests a car nobody is driving.
+  setupFlapArgs: () => {
+    const aSt = teamDecalState(Teams.LIST[teamIdx], true);
+    return { aLvl: aSt.val, style: (aSt.parts && aSt.parts.aero) || null };
+  },
+  setSetupAero: (on) => setSetupAero(on),
+  get setupPreviewXOn() { return setupPreviewXOn; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; },
@@ -4251,8 +4262,8 @@ const SP_VIEWS = {
   // VERTICAL fov and the docked sheet leaves ~60% of the canvas, so the usable
   // width at the target is ~0.62*dist. A 1.66 m front wing therefore needs ~4.5 m
   // to sit in frame with margin, and the narrower 1.0 m rear wing ~3.6 m.
-  wingFront: { az: Math.PI * 0.30, el: 0.34, dist: 4.5, aim: "front", minDist: 2.4 },
-  wingRear:  { az: Math.PI * 0.72, el: 0.36, dist: 3.6, aim: "rear",  minDist: 2.0 },
+  wingFront: { az: Math.PI * 0.30, el: 0.34, dist: 3.6, aim: "front", minDist: 2.0 },
+  wingRear:  { az: Math.PI * 0.72, el: 0.36, dist: 2.8, aim: "rear",  minDist: 1.8 },
 };
 // The point the preview camera ORBITS and LOOKS AT. The defaults reproduce the
 // previous hard-coded numbers exactly (eye was offset -1.0 in z from a target at
@@ -4310,8 +4321,38 @@ function setSetupSpin(on) {
     b.setAttribute("aria-pressed", String(setupPreviewSpin));
   }
 }
+// Ease the garage flaps at the SAME asymmetric rates the car uses on track (see
+// X_OPEN_RATE / X_CLOSE_RATE) — the snap-shut is half the character of the
+// system, and a garage that opened and closed at one speed would missell it.
+// Its own function so the frame loop and __apex.garageStep() cannot drift: the
+// preview animation was previously reachable ONLY from inside the rAF render,
+// which made it untestable, and an untested animation is one you find out about
+// from a player.
+function stepSetupAero(dt) {
+  const want = setupPreviewXOn ? 1 : 0;
+  const rate = want > setupPreviewAeroX ? X_OPEN_RATE : X_CLOSE_RATE;
+  const step = rate * Math.min(dt, 1 / 20);
+  setupPreviewAeroX = clamp(setupPreviewAeroX + Math.sign(want - setupPreviewAeroX) * step,
+                            Math.min(setupPreviewAeroX, want), Math.max(setupPreviewAeroX, want));
+}
 function setSetupAero(on) {
+  const was = setupPreviewXOn;
   setupPreviewXOn = !!on;
+  // Switching X-mode ON from the untouched turntable AIMS at the rear wing.
+  // The flaps rotate about the car's X axis, so the turntable's own three-quarter
+  // sweep and the FRONT/REAR presets all look very nearly along that axis, where
+  // a 36-degree sweep projects to almost nothing. Pressing the button and seeing
+  // the car not move is the single most common way to conclude this feature is
+  // broken — and it is what happened. `spin` is the "I have not aimed anything"
+  // state, so a player who HAS chosen an angle keeps it.
+  // The threshold is DISTANCE, not just the turntable. At the whole-car framing
+  // (8.5 m) the rear wing's 135 mm of travel projects to about TEN PIXELS on a
+  // landscape phone — the motion is real and simply cannot be seen, which is
+  // indistinguishable from a broken feature and was reported as one. The wing
+  // preset sits at 2.8 m, where the same travel is ~30 px and the slot visibly
+  // opens. A player already close in on something has aimed deliberately, so
+  // they keep their shot.
+  if (setupPreviewXOn && !was && (setupPreviewSpin || setupPreviewDist > 5)) setSetupView("wingRear");
   const b = $("cs-aero");
   if (b) {
     // `active` drives the lit style (and is what AriaState reads); the attribute
@@ -4412,17 +4453,7 @@ function renderSetupPreview(dt) {
   gfx.resize();
   applyHeldSetupCam(dt);                               // held on-screen controls
   if (setupPreviewSpin) setupPreviewAz += dt * 0.35;   // slow turntable
-  // Ease the garage flaps at the SAME asymmetric rates the car uses on track
-  // (see X_OPEN_RATE / X_CLOSE_RATE) — the snap-shut is half the character of
-  // the system, and a garage that opened and closed at one speed would missell
-  // it. dt is clamped so a stalled frame can't jump the whole travel.
-  {
-    const want = setupPreviewXOn ? 1 : 0;
-    const rate = want > setupPreviewAeroX ? X_OPEN_RATE : X_CLOSE_RATE;
-    const step = rate * Math.min(dt, 1 / 20);
-    setupPreviewAeroX = clamp(setupPreviewAeroX + Math.sign(want - setupPreviewAeroX) * step,
-                              Math.min(setupPreviewAeroX, want), Math.max(setupPreviewAeroX, want));
-  }
+  stepSetupAero(dt);
   // Pulled back + a touch wider than a "hero shot" distance so the whole
   // ~5.4 m car (nose to rear wing) clears the frustum at any turntable angle.
   // The orbit radius is horizontal, so raising the camera does not walk it away
