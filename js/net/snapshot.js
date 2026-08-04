@@ -248,6 +248,13 @@ const NetSnapshot = (function () {
 
     return {
       push, sample,
+      // Where the rival actually IS, as opposed to where it is DRAWN. Contact
+      // must be resolved against this: sample() deliberately returns the pose
+      // delayMs in the past, and hitting a car where it was 100 ms ago is a
+      // phantom collision at one end and a missed one at the other. Same code
+      // path, just without the delay — so it extrapolates along the road and is
+      // bounded exactly as sample() is.
+      predict: (nowMs) => sample(nowMs + delayMs),
       size: () => samples.length,
       newest: () => (samples.length ? samples[samples.length - 1] : null),
       oldest: () => (samples.length ? samples[0] : null),

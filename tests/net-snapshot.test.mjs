@@ -168,6 +168,21 @@ test("out-of-order and duplicate packets are handled, not trusted", () => {
   assert.equal(buf.size(), 3);
 });
 
+test("predict() leads sample() by exactly the interpolation delay", () => {
+  // Contact must NOT be resolved against the drawn pose: sample() is
+  // deliberately delayMs in the past, so a rival you are side by side with is
+  // drawn a car length behind where they are. predict() is the same read
+  // without the delay. This was exported but never implemented — anything that
+  // called it threw — which is why it is pinned here.
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 100 });
+  buf.push(1000, car({ s: 100, speed: 50 }));
+  buf.push(1200, car({ s: 110, speed: 50 }));
+  // At now=1200: sample targets 1100 (mid-way, s=105); predict targets 1200.
+  assert.ok(Math.abs(buf.sample(1200).s - 105) < 0.001);
+  assert.ok(Math.abs(buf.predict(1200).s - 110) < 0.001);
+  assert.ok(buf.predict(1200).s > buf.sample(1200).s, "predict must LEAD sample");
+});
+
 test("an empty buffer reports nothing rather than inventing a car", () => {
   const buf = NetSnapshot.createInterp({ total: TOTAL });
   assert.equal(buf.sample(0), null);

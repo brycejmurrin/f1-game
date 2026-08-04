@@ -274,6 +274,37 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   rtc() is the real RTCPeerConnection. Both
                                   deliver only on pump(), so latency and loss
                                   are reproducible rather than wall-clock
+  sdp.js         NetSdp         the invite code's payload as BYTES. A gathered
+                                  data-channel SDP is ~700 B of text and almost
+                                  none of it is information — we only ever
+                                  negotiate one m-line, so every line is either
+                                  a template constant or one of five facts
+                                  (fingerprint, ufrag, pwd, setup role,
+                                  candidates). Packing those is ~90 B, which
+                                  takes the code from ~670 chars to ~240 and is
+                                  what makes it SCANNABLE rather than merely
+                                  pasteable. It never EDITS an SDP — it extracts
+                                  and rebuilds — and packChecked() hands the
+                                  rebuild to a throwaway RTCPeerConnection
+                                  BEFORE a human sees it, falling back to the
+                                  deflated full text if this browser refuses
+                                  our own reconstruction. TCP candidates are
+                                  dropped on purpose
+  qr.js          NetQr          byte-mode, level-L QR ENCODER (versions 1-20,
+                                  standard mask selection). The invite QR holds
+                                  the invite LINK, so the guest scans it with
+                                  their ORDINARY CAMERA APP and lands in the
+                                  lobby with the code already filled in — no
+                                  in-page scanner, and none possible:
+                                  BarcodeDetector is absent on desktop Linux
+                                  Chrome and iOS Safari (measured). Encoder
+                                  only; decoding is an order more code for a
+                                  job the OS already does. Verified by jsQR (a
+                                  devDependency) in tests/net-qr.test.mjs —
+                                  self-consistency proves nothing here, since a
+                                  wrong mask or a transposed format field
+                                  produces a picture that looks exactly right
+                                  and cannot be read
   handshake.js   NetHandshake   signalling with no server: vanilla ICE (gather
                                   fully, so one static string suffices) →
                                   slimmed SDP → deflate → base64url invite
@@ -431,7 +462,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (91) + tests/*.test.mjs unit suites (26)
+tests/*.spec.js                 Playwright specs (91) + tests/*.test.mjs unit suites (28)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -838,7 +869,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-91 Playwright specs + 26 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+91 Playwright specs + 28 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

@@ -1069,6 +1069,34 @@ function setCarRole(c, human, local) {
   c.isPlayer = !!local;
 }
 
+// Swap where two cars START. Multiplayer needs this and nothing else does:
+// gridUp() places THE local player at P12, and it runs on both peers, so two
+// humans would otherwise line up in the SAME grid box — each player would find
+// the rival posed inside their own car. NetPlay separates them after the grid
+// is formed rather than teaching gridUp about a session that does not exist
+// yet when it runs.
+//
+// Swapping (rather than assigning a position) is what keeps every other car on
+// a distinct slot: the displaced car takes the one being vacated.
+function swapGridSlots(a, b) {
+  if (!a || !b || a === b) return false;
+  for (const k of ["s", "x", "xVis", "gridPos", "prog", "lap"]) {
+    const t = a[k]; a[k] = b[k]; b[k] = t;
+  }
+  // The world pose is the authority for a human car (see the physics notes in
+  // CLAUDE.md), so it has to be rebuilt from the new (s, x) — and the render
+  // anchors pinned with it, or the car visibly slides from its old box to its
+  // new one over the first frame.
+  for (const c of [a, b]) {
+    const w = worldFromTrack(c.s, c.x, smp);
+    c.px = w.x; c.pz = w.z;
+    c.rPrevPx = c.px; c.rPrevPz = c.pz;
+    c.rPrevS = c.s; c.rPrevX = c.x;
+    c._prevS = c.s;
+  }
+  return true;
+}
+
 function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   const setup = getTeamParts(team.id);
@@ -1904,6 +1932,34 @@ function showTouchControls(show) {
   document.body.classList.toggle("steer-touch", t && steerMode === "touch");
 }
 
+// THE CLASSIFICATION IS THE HOST'S. Both peers can see both human cars, but
+// only the host sees every AI finish first-hand, and two independently-sorted
+// orders disagree exactly when it matters — a close finish. Early returns so
+// every "keep our own order" reason is one visible line rather than a nest.
+function netOrder(order) {
+  if (!netPlay.active()) return order;
+  if (netPlay.ownsClassification()) {
+    // Indices are stable: both grids are built from the same settings.
+    netPlay.reportResult(order.map((c) => ({
+      i: cars.indexOf(c), t: c.finishT, p: c.penalty, lap: c.lap,
+    })));
+    return order;
+  }
+  const verdict = netPlay.peerResult();
+  if (!verdict || !verdict.length) return order;          // never arrived
+  const byIdx = verdict.map((e) => cars[e.i]).filter(Boolean);
+  // Only adopt an order accounting for the WHOLE grid; a partial one would
+  // silently drop cars off the results screen.
+  if (byIdx.length !== cars.length) return order;
+  verdict.forEach((e) => {
+    const c = cars[e.i];
+    if (!c) return;
+    if (e.t != null) c.finishT = e.t;
+    if (e.p != null) c.penalty = e.p;
+  });
+  return byIdx;
+}
+
 function endRace(forcedOrder) {
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
   state = "results";
@@ -1931,34 +1987,9 @@ function endRace(forcedOrder) {
   const fin = cars.filter((c) => c.finished && !c.retired).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
   const run = cars.filter((c) => !c.finished && !c.retired).sort((a, b) => b.prog - a.prog);
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
-  let order = forcedOrder || fin.concat(run, out);
-  // THE CLASSIFICATION IS THE HOST'S. Both peers can see both human cars, but
-  // only the host sees every AI finish first-hand, and two independently-sorted
-  // orders disagree exactly when it matters — a close finish. Indices are
-  // stable because both grids are built from the same settings.
-  if (netPlay.active()) {
-    if (netPlay.role() === "host") {
-      netPlay.reportResult(order.map((c) => ({
-        i: cars.indexOf(c), t: c.finishT, p: c.penalty, lap: c.lap,
-      })));
-    } else {
-      const verdict = netPlay.peerResult();
-      if (verdict && verdict.length) {
-        const byIdx = verdict.map((e) => cars[e.i]).filter(Boolean);
-        // Only adopt a classification that accounts for the whole grid; a
-        // partial one would silently drop cars off the results screen.
-        if (byIdx.length === cars.length) {
-          verdict.forEach((e) => {
-            const c = cars[e.i];
-            if (!c) return;
-            if (e.t != null) c.finishT = e.t;
-            if (e.p != null) c.penalty = e.p;
-          });
-          order = byIdx;
-        }
-      }
-    }
-  }
+  // THE CLASSIFICATION IS THE HOST'S — see netOrder(), which is the inline
+  // block that used to live here, unchanged in behaviour.
+  const order = netOrder(forcedOrder || fin.concat(run, out));
   order.forEach((c, i) => { c.finPos = i + 1; });
   if (isChampionship()) {
     order.forEach((c, i) => {
@@ -2172,15 +2203,13 @@ const G = {
   vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
-  getTeamParts, getLiveryId,   // lobby: the profile it sends is ids, never resolved numbers
-  get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
   get netLobby() { return netLobby; },
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
-  setCarRole, modsFor,   // multiplayer seam — see setCarRole
+  setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   startRace, startWeatherArc, update, wrapS,
 };
 
@@ -2466,6 +2495,34 @@ function shiftLong(c, d) {
   if (!c.human) c.prog += d;
 }
 
+// Collision masses AND separation shares for one pair.
+//
+// The two are NOT the same, and that is the whole point. `iA`/`iB` are the
+// momentum masses: a human car is "heavier" (0.5) so the AI cannot shove it
+// around, and between two humans they are equal so neither out-muscles the
+// other. The SPEED exchange uses those, because both cars are real and both
+// genuinely slow down.
+//
+// `sA`/`sB` are how much of the POSITIONAL correction each car absorbs, and a
+// car posed from the network takes none of it. Its owner integrates it on
+// their machine and we re-pose it from their next packet, so any push we apply
+// is discarded a frame later — splitting 50/50 with a car whose half is thrown
+// away leaves the pair still overlapping, frame after frame. The car we own
+// absorbs all of it. That is the ownership rule made concrete: contact moves
+// YOUR car, based on where you see the other one.
+//
+// Returns a shared scratch object; every call site destructures it immediately,
+// so nothing aliases across a pair and the relaxation loop stays allocation-free.
+const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
+function sepShares(a, b) {
+  const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1;
+  const netA = netPlay.owns(a), netB = netPlay.owns(b);
+  _sep.iA = iA; _sep.iB = iB; _sep.iSum = iA + iB;
+  _sep.sA = netA ? 0 : (netB ? 1 : iA / _sep.iSum);
+  _sep.sB = netB ? 0 : (netA ? 1 : iB / _sep.iSum);
+  return _sep;
+}
+
 // Collision feedback when the player is involved, scaled by impact (0..1).
 function collideFx(a, b, impact) {
   if (!a.isPlayer && !b.isPlayer) return;
@@ -2524,22 +2581,7 @@ function resolveCollisions(ranked, dt) {
         const penLong = LCAR - Math.abs(dProg);
         const penLat = WCAR - Math.abs(dX);
         if (penLong <= 0 || penLat <= 0) continue;
-        const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1, iSum = iA + iB;
-        // SEPARATION shares, which are NOT the momentum masses above. A car posed
-        // from the network cannot be moved by us: its owner integrates it and we
-        // re-pose it from their next packet, so any push we apply is discarded a
-        // frame later. Splitting 50/50 with a car whose half is thrown away leaves
-        // the pair still overlapping, frame after frame — so the car we DO own
-        // absorbs the whole correction. That is the ownership rule made concrete:
-        // contact moves YOUR car, based on where you see the other one.
-        //
-        // The SPEED exchange deliberately keeps iA/iB. Both cars are real and both
-        // genuinely slow down; treating the rival as a wall there would scrub double
-        // the speed off the local car for an impact its owner is already absorbing
-        // on their own machine.
-        const netA = netPlay.owns(a), netB = netPlay.owns(b);
-        const sA = netA ? 0 : (netB ? 1 : iA / iSum);
-        const sB = netB ? 0 : (netA ? 1 : iB / iSum);
+        const { iA, iB, iSum, sA, sB } = sepShares(a, b);
         // Closing into a nest at the lateral slop must be rear-end. Least-
         // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
         // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
@@ -2614,22 +2656,7 @@ function resolveCollisions(ranked, dt) {
       const penLong = LCAR - Math.abs(dProg);
       const penLat = WCAR - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) continue;
-      const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1, iSum = iA + iB;
-      // SEPARATION shares, which are NOT the momentum masses above. A car posed
-      // from the network cannot be moved by us: its owner integrates it and we
-      // re-pose it from their next packet, so any push we apply is discarded a
-      // frame later. Splitting 50/50 with a car whose half is thrown away leaves
-      // the pair still overlapping, frame after frame — so the car we DO own
-      // absorbs the whole correction. That is the ownership rule made concrete:
-      // contact moves YOUR car, based on where you see the other one.
-      //
-      // The SPEED exchange deliberately keeps iA/iB. Both cars are real and both
-      // genuinely slow down; treating the rival as a wall there would scrub double
-      // the speed off the local car for an impact its owner is already absorbing
-      // on their own machine.
-      const netA = netPlay.owns(a), netB = netPlay.owns(b);
-      const sA = netA ? 0 : (netB ? 1 : iA / iSum);
-      const sB = netB ? 0 : (netA ? 1 : iB / iSum);
+      const { iA, iB, iSum, sA, sB } = sepShares(a, b);
       // Match the relaxation pass for player-as-rear nest-edge contacts.
       const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
       const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
@@ -3661,7 +3688,7 @@ function updateCaution(dt) {
   // hazards; left to decide independently they would fly different flags for
   // the same race. The guest adopts what the host sends (applyCaution) and
   // computes nothing of its own.
-  if (netPlay.active() && netPlay.role() === "guest") return;
+  if (!netPlay.ownsRaceControl()) return;
   if (!_cautionOn || !DebrisWorld.active() || state !== "race") {
     if (caution.level !== 0) resetCaution();
     return;
@@ -3713,7 +3740,7 @@ function applyCaution(d) {
 // perhaps a handful of times a race, and the reliable channel is not the place
 // for a steady drip of unchanged state.
 function publishCaution() {
-  if (!netPlay.active() || netPlay.role() !== "host") return;
+  if (!netPlay.active() || !netPlay.ownsRaceControl()) return;
   const key = caution.level + "|" + caution.sector + "|" + caution.cause;
   if (key === _cautionSent) return;
   _cautionSent = key;

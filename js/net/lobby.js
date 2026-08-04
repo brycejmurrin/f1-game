@@ -47,7 +47,8 @@ const NetLobby = (function () {
       pick: $("vs-pick"), hosting: $("vs-hosting"), joining: $("vs-joining"),
       invite: $("vs-invite"), inviteIn: $("vs-invite-in"),
       answer: $("vs-answer"), answerIn: $("vs-answer-in"),
-      answerHint: $("vs-answer-hint"), copyAnswer: $("vs-copy-answer"),
+      answerHint: $("vs-answer-hint"), answerActions: $("vs-answer-actions"),
+      answerWait: $("vs-answer-wait"),
       status: $("vs-status"),
     });
 
@@ -265,7 +266,10 @@ const NetLobby = (function () {
       if (!res.ok) { say(res.message || "Could not create an invite.", true); return res; }
       const e = els();
       if (e.invite) e.invite.value = res.code;
-      say("Send that invite code to your friend.");
+      const scannable = drawQr(res.code);
+      say(scannable
+        ? "Send them the link, or have them scan the code."
+        : "Send that invite code to your friend.");
       return res;
     }
 
@@ -289,7 +293,9 @@ const NetLobby = (function () {
       _peerProfile = res.peer;
       if (e.answer) { e.answer.value = res.code; e.answer.hidden = false; }
       if (e.answerHint) e.answerHint.hidden = false;
-      if (e.copyAnswer) e.copyAnswer.hidden = false;
+      if (e.answerActions) e.answerActions.hidden = false;
+      // Step 2's placeholder prose is replaced by step 2 itself.
+      if (e.answerWait) e.answerWait.hidden = true;
       waitForOpen();
       say("Send that answer code back, then wait for the race to start.");
       return res;
@@ -310,8 +316,75 @@ const NetLobby = (function () {
     }
 
     async function copy(text) {
-      try { await navigator.clipboard.writeText(text); say("Copied."); }
-      catch (e) { say("Could not copy — select the code and copy it manually.", true); }
+      if (!text) { say("There is nothing to copy yet.", true); return false; }
+      try { await navigator.clipboard.writeText(text); say("Copied."); return true; }
+      catch (e) { say("Could not copy — select the code and copy it manually.", true); return false; }
+    }
+
+    // ---- handing the code to a human --------------------------------------
+    // The invite goes out as a LINK, not a code: opening it drops the guest
+    // straight into joining with the box already filled (see wire()), which
+    // removes the "paste this into the right field" step entirely. The code
+    // rides in the fragment, so it never reaches a server — which matters
+    // because the entire design is that there ISN'T one.
+    //
+    // The ANSWER is shared as bare text on purpose. There is no "open this to
+    // answer" flow — the host pastes it into a box they already have open — so
+    // dressing it as a link would promise a journey that does not exist.
+    //
+    // navigator.share is a progressive enhancement: where it exists this opens
+    // the OS share sheet (Messages, WhatsApp, AirDrop), and where it doesn't we
+    // fall back to the clipboard. The button says which it will do rather than
+    // disappearing, because a control that vanishes reflows the sheet and the
+    // next tap lands on something else.
+    const canShare = () => typeof navigator !== "undefined" && !!navigator.share;
+
+    async function handOff(data, fallbackText) {
+      if (!fallbackText) { say("There is nothing to share yet.", true); return false; }
+      if (canShare()) {
+        try { await navigator.share(data); say("Shared."); return true; }
+        catch (e) {
+          // Closing the share sheet is a decision, not a failure — say nothing
+          // and leave the code on screen.
+          if (e && e.name === "AbortError") return false;
+        }
+      }
+      return copy(fallbackText);
+    }
+
+    // The QR carries the invite LINK, not the code, and that distinction is the
+    // whole feature: a link scanned by the guest's ordinary camera app opens
+    // the game with the joining step showing and the code already filled in. A
+    // QR of the bare code would just show them 240 characters to retype.
+    //
+    // No in-page scanner anywhere. BarcodeDetector is absent on desktop Linux
+    // Chrome and on iOS Safari (measured), so scanning ourselves would serve a
+    // minority while the OS camera serves nearly everyone.
+    function drawQr(code) {
+      const wrap = $("vs-qr-wrap"), canvas = $("vs-qr");
+      if (!wrap || !canvas) return false;
+      const url = code ? NetHandshake.inviteUrl(code) : null;
+      // A code too long to encode, or a page with no location to build a URL
+      // from, hides the QR rather than showing an unreadable one — the text
+      // code below it still works.
+      const ok = !!(url && NetQr.draw(canvas, url, { px: 320 }));
+      wrap.hidden = !ok;
+      return ok;
+    }
+
+    function shareInvite() {
+      const e = els();
+      const code = e.invite ? e.invite.value : "";
+      const url = code ? NetHandshake.inviteUrl(code) : null;
+      // No location to build a URL from (a file:// page): share the code itself
+      // rather than the string "null".
+      if (!url) return handOff({ title: "Apex 26", text: code }, code);
+      return handOff({ title: "Apex 26", text: "Race me on Apex 26", url }, url);
+    }
+
+    function shareAnswer() {
+      const code = (els().answer || {}).value || "";
+      return handOff({ title: "Apex 26 answer", text: code }, code);
     }
 
     // ---- open / close -----------------------------------------------------
@@ -323,7 +396,15 @@ const NetLobby = (function () {
       for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
       if (e.answer) e.answer.hidden = true;
       if (e.answerHint) e.answerHint.hidden = true;
-      if (e.copyAnswer) e.copyAnswer.hidden = true;
+      if (e.answerActions) e.answerActions.hidden = true;
+      if (e.answerWait) e.answerWait.hidden = false;
+      // Reopening must not show the PREVIOUS session's QR — it would point a
+      // camera at a peer connection that no longer exists.
+      if ($("vs-qr-wrap")) $("vs-qr-wrap").hidden = true;
+      // Re-fold the raw code: it is the fallback, and an open disclosure from
+      // last time makes the sheet open on three lines of base64.
+      const raw = document.querySelector("#vs-hosting .vs-raw");
+      if (raw) raw.open = false;
       say("");
       e.screen.hidden = false;
       return true;
@@ -348,11 +429,30 @@ const NetLobby = (function () {
       const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
       on("vs-host", host);
       on("vs-join", join);
-      on("vs-make-answer", makeAnswer);
-      on("vs-accept", acceptAnswer);
+      // Called with NO argument on purpose. Both take an optional code so a
+      // test can drive the handshake without scraping textareas — and wiring
+      // them as bare handlers passes the CLICK EVENT as that code, which is not
+      // null, so the textarea is ignored and code.trim() throws on a MouseEvent.
+      // The visible symptom is the opposite of a crash: pasting junk silently
+      // does nothing instead of explaining itself.
+      on("vs-make-answer", () => makeAnswer());
+      on("vs-accept", () => acceptAnswer());
       on("vs-copy-invite", () => copy(($("vs-invite") || {}).value || ""));
       on("vs-copy-answer", () => copy(($("vs-answer") || {}).value || ""));
+      on("vs-share-invite", shareInvite);
+      on("vs-share-answer", shareAnswer);
       on("vs-close", cancel);
+      // Name the button after what it will actually do on THIS device. With no
+      // share sheet it copies the link, and a button labelled SHARE that
+      // silently copies is a button that has lied. SHARE LINK and COPY CODE
+      // stay distinct even then, because they hand over different things.
+      const si = $("vs-share-invite");
+      if (si && !canShare()) si.textContent = "COPY LINK";
+      // The answer is the same string either way, so without a share sheet the
+      // two buttons would be one button twice. Decided once here, at boot,
+      // before the screen is ever shown — not a reflow under someone's thumb.
+      const sa = $("vs-share-answer");
+      if (sa && !canShare()) sa.hidden = true;
       // An invite link puts the code in the fragment, so opening one should
       // drop straight into joining rather than making them find the button.
       const fromUrl = NetHandshake.inviteFromUrl();
@@ -367,6 +467,7 @@ const NetLobby = (function () {
 
     return {
       wire, open, close, cancel, host, join, makeAnswer, acceptAnswer,
+      shareInvite, shareAnswer, canShare,
       localProfile, modsFromProfile, setTransportFactory,
       status: () => ({
         role, statusText,

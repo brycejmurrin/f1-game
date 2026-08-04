@@ -1887,6 +1887,16 @@ const api = {
     return G.netLobby ? G.netLobby.modsFromProfile(profile) : null;
   },
 
+  // lobbyShare("invite"|"answer") — hand the code off the way the button does:
+  // the OS share sheet where there is one, the clipboard where there isn't.
+  // Exposed because navigator.share opens NATIVE UI that Playwright cannot
+  // click through, so the only testable thing is what we do around it — and
+  // the fallback is the path most desktops actually take.
+  lobbyShare(which) {
+    if (!G.netLobby) return false;
+    return which === "answer" ? G.netLobby.shareAnswer() : G.netLobby.shareInvite();
+  },
+
   // netStartArm(nowMs, atMs, hold) — arm a synchronised lights-out directly,
   // as the START event does. Lets a test assert that both grids are released
   // at an absolute INSTANT rather than after an equal delay, which is the
