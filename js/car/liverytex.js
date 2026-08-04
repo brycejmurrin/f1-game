@@ -747,6 +747,70 @@ const LiveryTex = (function () {
   // sun disc, the Racing Bulls plate) keep their own colour so the mark still
   // has something to sit on. Those are skipped in `bare` (shark-fin) mode
   // anyway, which is where a hand-picked logo colour matters most.
+  // ── real team marks ────────────────────────────────────────────────────────
+  // assets/logos/<teamId>.png — the actual team emblems, drawn straight into the
+  // atlas. Loaded ONCE, asynchronously, and entirely optional: until they land
+  // (or if a file is missing) every crest falls back to the hand-drawn vector
+  // mark below, so boot never waits on them and a stripped build still renders.
+  const LOGOS = Object.create(null);
+  let _logosPending = 0;
+  const _logosReady = [];
+  function onLogosReady(cb) { if (typeof cb === "function") _logosReady.push(cb); }
+  function loadLogos(ids) {
+    if (typeof Image === "undefined") return;
+    // Resolve against THIS SCRIPT's URL, not the document's. A relative
+    // "assets/logos/..." is document-relative, so it 404s for every consumer
+    // that does not sit at the site root — tools/carview.html asked for
+    // /tools/assets/logos/... and silently fell back to the vector crests.
+    // Reuse the shell's cache-bust too so a redeployed mark is not served stale.
+    let base = "", v = "";
+    try {
+      const own = document.querySelector('script[src*="liverytex.js"]');
+      if (own) {
+        const q = own.getAttribute("src").match(/\?v=\d+/);
+        if (q) v = q[0];
+        base = new URL(own.src, document.baseURI).href.replace(/js\/car\/liverytex\.js.*$/, "");
+      }
+    } catch (_) {}
+    for (const id of ids) {
+      const img = new Image();
+      _logosPending++;
+      img.onload = () => { LOGOS[id] = img; done(); };
+      img.onerror = done;
+      img.src = base + "assets/logos/" + id + ".png" + v;
+    }
+    function done() {
+      if (--_logosPending > 0) return;
+      // Atlases built before the marks arrived are now stale — the listener is
+      // how game.js knows to drop its cached decal textures and rebuild.
+      for (const cb of _logosReady) { try { cb(); } catch (_) {} }
+    }
+  }
+  // SELF-INITIALISING on purpose. This used to be kicked off by js/game.js, so
+  // any consumer that loads liverytex.js on its own — tools/carview.html, the
+  // crest sheets, tests — silently fell back to the vector crests and looked
+  // like the real marks had not been picked up at all. The team ids come from
+  // SHORT, which is the canonical list in this file.
+  try { loadLogos(Object.keys(SHORT)); } catch (_) {}
+
+  // Draw a loaded mark to fit `R`, preserving its aspect. `tint` (the livery
+  // `logo` colour) recolours it to a flat silhouette via an offscreen pass.
+  function drawLogoImage(ctx, img, R, tint) {
+    const pad = 0.06, bw = R.w * (1 - pad * 2), bh = R.h * (1 - pad * 2);
+    const sc = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
+    const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
+    const x = R.x + (R.w - w) / 2, y = R.y + (R.h - h) / 2;
+    if (!tint) { ctx.drawImage(img, x, y, w, h); return; }
+    const off = document.createElement("canvas");
+    off.width = Math.max(1, Math.round(w)); off.height = Math.max(1, Math.round(h));
+    const oc = off.getContext("2d");
+    oc.drawImage(img, 0, 0, off.width, off.height);
+    oc.globalCompositeOperation = "source-in";
+    oc.fillStyle = css(tint);
+    oc.fillRect(0, 0, off.width, off.height);
+    ctx.drawImage(off, x, y, w, h);
+  }
+
   let _logoInk = null, _crestBg = null, _crestInk = null;
   // A brand colour is only usable if it separates from the paint UNDER it.
   // McLaren's mark is papaya and McLaren's car is papaya, so the speedmark was
@@ -938,7 +1002,8 @@ const LiveryTex = (function () {
 
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe);
-    drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent, false, logo, c1);
+    if (LOGOS[teamId]) drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo);
+    else drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent, false, logo, c1);
     // Shark-fin panel: the SAME tail graphic + a BARE motif (disc/shield stripped)
     // so the fin reads as a painted tail, not a floating badge.
     // The wash + motif strokes are the accent colour, and the FIN IS ITS OWN
@@ -956,7 +1021,8 @@ const LiveryTex = (function () {
     // Accent has to separate from the FIN's ink here, not the body's.
     const finAccent = contrast(accent, inkFin) >= 2.0 ? accent
       : (contrast(c1, inkFin) >= 2.0 ? c1 : haloFor(inkFin));
-    drawCrest(ctx, teamId, REGIONS.finBadge, inkFin, finAccent, true, logo, finPaint);
+    if (LOGOS[teamId]) drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo);
+    else drawCrest(ctx, teamId, REGIONS.finBadge, inkFin, finAccent, true, logo, finPaint);
 
     // Sponsor wordmarks.
     const names = SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
@@ -997,6 +1063,6 @@ const LiveryTex = (function () {
     return canvas;
   }
 
-  return { SIZE, REGIONS, buildAtlas, drawCrest };
+  return { SIZE, REGIONS, buildAtlas, drawCrest, loadLogos, onLogosReady, LOGOS };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

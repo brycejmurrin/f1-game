@@ -6306,6 +6306,16 @@ if (typeof window !== "undefined" && window.__APEX_DEBUG) {
   window.__APEX = { cars: () => cars, player: () => player, state: () => state, track: () => track };
 }
 
+// Real team marks (assets/logos/<id>.png). Optional and async: every atlas built
+// before they land uses the hand-drawn vector crest, so this drops those cached
+// textures once the images arrive and the cars repaint with the real emblems.
+if (typeof LiveryTex !== "undefined" && LiveryTex.loadLogos) {
+  LiveryTex.onLogosReady(() => {
+    for (const t of Teams.LIST) invalidateDecalTextures(t.id);
+    _spMeshKey = "";   // force the garage turntable to repaint too
+  });
+  LiveryTex.loadLogos(Teams.LIST.map((t) => t.id));
+}
 syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 migrateSeasonPoints();
 if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
