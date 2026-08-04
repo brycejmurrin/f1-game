@@ -5,7 +5,7 @@
    (10 s → 20 s, max 2 retries — long waits avoid consuming more quota; callers
    that need more can add their own circuit-level retry on top). Retry-After
    header honoured. On final failure serves stale cache if present (with
-   console.warn), else rejects. Never auto-polls.
+   Log.warn on the "data" namespace), else rejects. Never auto-polls.
    No DOM / localStorage access at module top level. */
 const F1API = (function () {
   "use strict";
@@ -49,7 +49,7 @@ const F1API = (function () {
     try {
       localStorage.setItem(CACHE_PREFIX + url, JSON.stringify({ t: Date.now(), data: data }));
     } catch (e) {
-      console.warn("apex26: api cache write failed (quota?)", e);
+      Log.warn("data", "apex26: api cache write failed (quota?)", e);
     }
   }
 
@@ -110,7 +110,7 @@ const F1API = (function () {
         // makes LIVE look "updated" while silently serving old classification.
         const msg = (err && err.message) || "";
         if (hit && msg.indexOf("Live F1 session") === -1 && msg.indexOf("HTTP 401") === -1 && msg.indexOf("HTTP 403") === -1) {
-          console.warn("apex26: fetch failed, serving stale cache for " + url, err);
+          Log.warn("data", "apex26: fetch failed, serving stale cache for " + url, err);
           return hit.data;
         }
         throw err;

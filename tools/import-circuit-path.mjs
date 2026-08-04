@@ -21,7 +21,7 @@
  * Observed agreement is 0.4-1.1 m mean error per circuit (digitisation-level).
  *
  * Usage:
- *   node tools/import-circuit-path.mjs --self-check            # all 24 committed
+ *   node tools/import-circuit-path.mjs --self-check            # every committed path
  *   node tools/import-circuit-path.mjs --self-check monza spa
  *   node tools/import-circuit-path.mjs <gameId>:<featureId> …  # emit new entries
  *   node tools/import-circuit-path.mjs --classics              # emit all 16 retired

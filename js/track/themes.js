@@ -19,7 +19,7 @@ const SceneryThemes = (function () {
   };
 
   const THEMES = {
-    // Was literally {} — which meant the 24 circuits that auto-derive
+    // Was literally {} — which meant the circuits that auto-derive
     // `permanent` all collapsed onto bare BASE and shared one facility look.
     permanent: {
       palette: { shell: [0.72, 0.73, 0.75], roof: [0.34, 0.36, 0.40],

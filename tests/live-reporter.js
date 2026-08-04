@@ -91,13 +91,25 @@ class LiveReporter {
       this.durations.push({ name: this.name(test), dur: result.duration });
       if (test.outcome && test.outcome() === "flaky") this.flaky++;
     }
-    // On-failure __apex state dump: any spec that attaches "apex-state" (see the
-    // afterEach in tests/fixtures.js) has its telemetry echoed inline so a failure
-    // shows WHY, not just the bare assertion.
+    // On-failure diagnostics, echoed inline so a tailed log shows WHY without a
+    // trip to the HTML report. tests/fixtures.js attaches all three (see its
+    // afterEach); a spec on the base Playwright fixture attaches none and
+    // simply prints nothing extra.
     if (result.status !== "passed" && result.status !== "skipped") {
-      const st = (result.attachments || []).find((a) => a.name === "apex-state");
+      const att = (name) => (result.attachments || []).find((a) => a.name === name);
+      const st = att("apex-state");
       if (st && st.body) {
         this.write(`           apex-state: ${st.body.toString().slice(0, 400)}`);
+      }
+      // The log ring and the console tail are the two things that say what the
+      // PAGE was doing. Kept short on purpose — the full text is in the report.
+      for (const [name, keep] of [["apex-logs", 8], ["page-console", 8]]) {
+        const a = att(name);
+        if (!a || !a.body) continue;
+        const tail = a.body.toString().split("\n").filter(Boolean).slice(-keep);
+        if (!tail.length) continue;
+        this.write(`           ${name}:`);
+        for (const line of tail) this.write(`             ${line.slice(0, 200)}`);
       }
     }
   }

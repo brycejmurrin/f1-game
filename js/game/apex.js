@@ -1343,7 +1343,12 @@ const api = {
     const c = typeof idx === "number" ? G.cars[idx] : G.cars.find((x) => x.isPlayer);
     if (!c) return null;
     return {
-      id: G.cars.indexOf(c), isPlayer: !!c.isPlayer, team: c.team && c.team.id,
+      // `id` is this screen's cars[] index and is NOT comparable across peers —
+      // the grid differs in length and order between two browsers in the same
+      // race. driverId ("redbull:1") is content-derived and is the key results,
+      // qualifying and the netcode agree on, so it is exposed alongside.
+      id: G.cars.indexOf(c), driverId: c.driverId,
+      isPlayer: !!c.isPlayer, team: c.team && c.team.id,
       code: c.code, seat: c.seat,
       // The two numbers that decide how fast an AI car is allowed to be, so
       // "why is this car quick?" is answerable without reading the source.
@@ -1951,7 +1956,10 @@ const api = {
   // netPeerSend({s, x, head, speed, gear, lap, ...}) — publish one car state AS
   // THE REMOTE PEER. Fields default to the rival's current values, so a test
   // can move one axis at a time.
-  netPeerSend(st, atMs) {
+  // wireId overrides the id stamped on the packet, so a test can post a car
+  // this peer holds no slot for and assert it is DROPPED rather than posed over
+  // whichever car that number happened to name.
+  netPeerSend(st, atMs, wireId) {
     if (!_netPeer || !G.netPlay) return false;
     const status = G.netPlay.status();
     const cur = G.cars[status.remoteId] || {};
@@ -1962,8 +1970,13 @@ const api = {
     }, st || {});
     const now = atMs != null ? atMs : performance.now();
     _netPeer.pump(now);
+    // The WIRE id, not the cars[] index. A real peer stamps its packets with
+    // G.wireId — the same number on every screen, which an index is not — so
+    // the fake peer must too, or onState has no slot to route it to.
+    const wire = wireId != null ? wireId
+      : (status.remotes && status.remotes.length ? status.remotes[0].wire : status.remoteId);
     const ok = _netPeer.send("state", NetSnapshot.encodeSnapshot(Math.round(now), [
-      { id: status.remoteId, car },
+      { id: wire, car },
     ]));
     return ok ? { sent: car, at: Math.round(now) } : false;
   },
@@ -2519,6 +2532,40 @@ const api = {
   // for a session and returns normalised {x,z}[] track outline points (≤400 pts).
   // Find sessionKey via: __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")
   // ── Console diagnostics ────────────────────────────────────────────────────
+  // logs(filter?) — the retained log ring (js/log.js).
+  //
+  // The point of a ring buffer is that it is already full when you go looking:
+  // diagnostics at or below the BUFFER threshold (default `info`) are retained
+  // whether or not they were printed, so a failure that has already happened
+  // still has a record. Filter with {ns, level, since, limit}; `since` takes a
+  // record `id` so a poller only gets what it has not seen.
+  //
+  //   __apex.logs()                          // everything retained
+  //   __apex.logs({ ns: "scenery" })         // one namespace
+  //   __apex.logs({ level: "warn", limit: 20 })
+  logs(filter) {
+    if (typeof Log === "undefined") return [];
+    return Log.records(filter);
+  },
+
+  // logLevel(spec?) — read or move the console/buffer thresholds.
+  //
+  // No arg reads the resolved state. A spec string applies it: `"debug"` for
+  // everything, `"scenery:debug"` for one namespace, `"buffer:debug"` to retain
+  // more without printing more. `persist` writes it to localStorage so it
+  // survives the reload — the shape to hand a player reproducing a bug.
+  //
+  //   __apex.logLevel()                      // { console, buffer, consoleNs, … }
+  //   __apex.logLevel("scenery:debug")
+  //   __apex.logLevel("debug", true)         // and remember it
+  //   __apex.logLevel(null, true)            // forget it
+  logLevel(spec, persist) {
+    if (typeof Log === "undefined") return { ok: false, error: "no_log_module" };
+    if (persist) Log.persist(spec === undefined ? null : spec);
+    else if (spec !== undefined) Log.level(spec);
+    return Log.level();
+  },
+
   // save(data, filename) — hand a file back out of the browser.
   //
   // Exists because the reverse direction is the hard one: reading state OUT of
@@ -2649,10 +2696,12 @@ const api = {
       // for the one-liner that installs a collector BEFORE reproducing a bug.
       errors: safe(() => (window.__apexErrors || []).slice(-40), []),
     };
+    // A raw console.log on purpose: DevTools renders an inspectable
+    // object tree, which Log flattens to text.
     try { console.log(d); } catch (_) {}
     if (o.download !== false) {
       const bytes = this.save(d, o.filename || "apex-diag.json");
-      try { console.log("[diag] downloaded apex-diag.json (" + bytes + " bytes)"); } catch (_) {}
+      try { Log.info("apex", "downloaded apex-diag.json (" + bytes + " bytes)"); } catch (_) {}
     }
     return d;
   },

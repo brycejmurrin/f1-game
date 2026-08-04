@@ -1,6 +1,6 @@
 /* Apex 26 — MONACO circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/tracks.js engine
-   (palette resolved there from `night`, geometry from js/circuits.js or `segs`). */
+   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
+   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -24,7 +24,7 @@
       // The harbour occupies the right side of the racing lap from Portier to Rascasse.
       { kinds: ["city", "foliage", "lamps"], s0: 0.29, s1: 0.70, side: 1 },
     ],
-    // The bundled GPS trace (js/circuits.js) runs counter-clockwise; real Monaco
+    // The bundled GPS trace (js/track/geo-paths.js) runs counter-clockwise; real Monaco
     // is driven CLOCKWISE. `reverse` flips the lap direction in the engine
     // (centreline + minimap + scenery/barrier s-coordinates) so the car drives
     // the correct way without re-digitising the trace or re-authoring scenery.
@@ -34,7 +34,7 @@
     // original trace; tuned against the reversed layout).
     startFrac: 0.28,
     pal: { horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.4], concrete: [0.24, 0.23, 0.22], fogDensity: 0.0014, sunDir: [0.22008805283522467, 0.8803522113408987, 0.4201681008672471], sun: [1, 0.98, 0.93], sunColor: [1, 0.97, 0.9] },
-    // NOTE: Monaco's geometry comes from the real GPS trace in js/circuits.js
+    // NOTE: Monaco's geometry comes from the real GPS trace in js/track/geo-paths.js
     // (CircuitPaths.monaco); these segs are only a fallback if that trace is
     // absent. Editing them has no effect while the trace is present.
     segs: [

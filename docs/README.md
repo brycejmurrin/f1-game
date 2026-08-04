@@ -20,7 +20,7 @@ code but are *not* a description of current behaviour.
 | [SCENERY-GROUNDING.md](SCENERY-GROUNDING.md) | How props seat on the terrain ribbon, and the float/clip audits. |
 | [RENDER-CLIPPING.md](RENDER-CLIPPING.md) | Near/far planes, depth precision, and the clipping rules. |
 | [TRACK-MIGRATION-CHECKLIST.md](TRACK-MIGRATION-CHECKLIST.md) | Steps for moving a circuit onto the shared track foundation. |
-| [TESTING.md](TESTING.md) | Spec coverage table, fixtures, the test philosophy. |
+| [TESTING.md](TESTING.md) | How to run tests (background + tail, picking groups), every `test:*` group, the fixtures, the full spec coverage table, the philosophy. |
 | [LAYOUT-AUDIT.md](LAYOUT-AUDIT.md) | The screen x viewport grid: which mechanism owns which layout decision, what the probe measures, and how to read the results. |
 | [iOS-OPTIMIZATION.md](iOS-OPTIMIZATION.md) | Mobile/iOS perf and Safari quirks. |
 | [tracks/](tracks/) | Per-circuit reference material. |

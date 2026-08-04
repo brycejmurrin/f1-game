@@ -1,11 +1,11 @@
 // scenery-api-contract.test.mjs — freezes the shape of the `scenery(api)`
-// object that js/tracks.js buildProps hands to every circuit's bespoke
+// object that js/track/tracks.js buildProps hands to every circuit's bespoke
 // scenery callback (24 consumer files in js/tracks/).
 //
 // The api members below are the de-facto public contract those files were
 // written against (docs/SCENERY-API.md). Any split/refactor of buildProps
 // must keep this surface intact — this test catches an accidentally dropped
-// or renamed member headlessly in seconds, without building all 24 circuits.
+// or renamed member headlessly in seconds, without building every circuit.
 //
 // If you ADD a member intentionally, append it here (additions are safe;
 // removals/renames break circuit files and need a sweep of js/tracks/*.js).

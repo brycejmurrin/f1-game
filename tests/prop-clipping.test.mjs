@@ -18,6 +18,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -50,7 +51,7 @@ const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "clip-baseline.json"), "utf8"),
 );
 
-// The sweep rebuilds all 24 circuits (~90 s), so run it ONCE and share it.
+// The sweep rebuilds every circuit (~90 s), so run it ONCE and share it.
 let cached = null;
 const sweep = () => (cached ||= JSON.parse(execFileSync(
   process.execPath,
@@ -60,7 +61,10 @@ const sweep = () => (cached ||= JSON.parse(execFileSync(
 
 test("prop interpenetration stays within the per-circuit baseline", () => {
   const results = sweep();
-  assert.ok(results.length >= 24, `expected >= 24 circuits, got ${results.length}`);
+  // The floor is the ROSTER, not a number typed once: `>= 24` kept passing after
+  // the roster reached 40, so the sweep could have silently dropped 16 circuits.
+  const roster = createRequire(import.meta.url)("../tools/manifest.cjs").CIRCUITS.length;
+  assert.equal(results.length, roster, `expected ${roster} circuits, got ${results.length}`);
 
   const grown = [];
   for (const r of results) {

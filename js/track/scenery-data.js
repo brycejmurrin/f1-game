@@ -1,9 +1,9 @@
-/* Apex 26 — static scenery data tables for js/tracks.js buildProps().
+/* Apex 26 — static scenery data tables for js/track/tracks.js buildProps().
    Pure constants (no closure state): per-track street-furniture + barrier
    liveries, crowd/sign/house/motorhome palettes, and the city generator's
    neon/daylight palettes + building-style tables. Hoisted out of buildProps
    so the placement logic and the data can evolve separately. Must load
-   BEFORE js/tracks.js (see index.html and tools/verify-track.cjs). */
+   BEFORE js/track/tracks.js (see index.html and tools/verify-track.cjs). */
 const TrackSceneryData = (function () {
   "use strict";
 

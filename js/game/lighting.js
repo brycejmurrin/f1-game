@@ -54,7 +54,7 @@ function floodColor(theme, id) {
 // knob feeds — most are LIT_FS uniforms uploaded from frame.tune in glx.js
 // begin(); a few (uSpread, uCarGloss, uVigSoft, uBloomKnee) are post-pass
 // uniforms uploaded from opts.tune in present(). Knobs with NO `u` are applied
-// driver-side in game.js/glx.js (they scale several values, not one uniform).
+// driver-side in game.js/render/glx.js (they scale several values, not one uniform).
 const TUNE_DEFS = [
   // ── SUN & MOON ──
   { id: "keyMul",       label: "KEY LIGHT (SUN)", group: "SUN & MOON", min: 0,   max: 4,  step: 0.02,  def: 1.0,  u: "uKeyMul", help: "Direct sun/moon intensity — diffuse + speculars + shadows. Ambient, fog and sky reflection are untouched, so the scene stays coherent when dimmed. Floor stays 0 (already fully off); headroom is on the bright end." },

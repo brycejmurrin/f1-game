@@ -28,24 +28,29 @@
 // 12% of pixels is far too coarse to catch a real regression, which is the whole
 // point of the suite. Find the last source first.
 // Shared helpers + data for the consolidated per-track visual regression suite
-// (tests/tracks-visual.spec.js). Previously each of the 24 circuits had its own
+// (tests/tracks-visual.spec.js) and the all-circuit audit specs. Previously each
+// of the then-24 circuits had its own
 // 5-line stub spec calling describeTrack(id) with 25 fractions each (600 golden
 // PNGs) AND a parallel visual-regression-circuits-N set — the two were redundant
 // pixel suites. Collapsed to ONE data-driven spec looping TRACKS at 6 fractions.
 import { test, expect } from "@playwright/test";
 
-// The 24 circuits, in Tracks.LIST order. Keep in sync with js/tracks/*.js.
-export const TRACKS = [
-  "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring",
-  "imola", "interlagos", "jeddah", "madrid", "mexico", "miami",
-  "monaco", "montreal", "monza", "qatar", "redbull", "shanghai",
-  "silverstone", "singapore", "spa", "suzuka", "vegas", "zandvoort",
-  // Retired / off-calendar circuits (def `classic: true`).
-  "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
-  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
-  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
-  "jacarepagua",
-];
+// Every circuit, in Tracks.LIST order — DERIVED, not written down. This used to
+// be a hand-maintained array whose comment still said "the 24 circuits" long
+// after the roster reached 40, and nothing would have failed if a new circuit
+// had been left out of it: the suite would simply have stopped covering it.
+// tools/manifest.cjs's CIRCUITS list IS Tracks.LIST order (the load-order test
+// asserts index.html against it), so read it there.
+import { createRequire } from "module";
+export const TRACKS = createRequire(import.meta.url)("../tools/manifest.cjs").CIRCUITS;
+
+/* The same roster for the all-circuit AUDIT specs, honouring TRACK=<id> so one
+   circuit can be measured on its own. Three specs had each pasted their own
+   copy of the 40 ids; a new circuit added to js/circuits/ silently escaped all
+   three. */
+export function auditTracks() {
+  return process.env.TRACK ? [process.env.TRACK] : TRACKS;
+}
 
 // 6 evenly spaced lap positions (~every 16.7%): 0, 17, 33, 50, 67, 83%. Enough
 // to catch gross scenery/geometry/clipping regressions per circuit without the

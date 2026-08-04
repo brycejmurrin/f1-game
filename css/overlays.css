@@ -684,6 +684,18 @@ body.hud-hidden #hud-restore { display: block; }
   background: rgba(255, 255, 255, 0.05);
   font-size: 0.8rem;
 }
+/* The other players, one row each. A column rather than more fixed elements,
+   because how many there are is not known until people join. Your row plus
+   three others still has to fit a phone in landscape, which is the tightest
+   case this screen ever sees — so the list scrolls rather than pushing GARAGE
+   and START off the bottom, which would strand the room with no way out. */
+#vsfriend .vs-others {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 28vh;
+  overflow-y: auto;
+}
 #vsfriend .vs-who { flex: 0 0 auto; opacity: 0.6; width: 3.2em; }
 #vsfriend .vs-car { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #vsfriend .vs-swatch { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 2px; }
