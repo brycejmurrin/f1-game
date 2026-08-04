@@ -79,6 +79,15 @@ const SCREENS = [
       await p.click("#mb-help"); await p.waitForSelector("#howtoplay:not([hidden])", { timeout: 15000 }); } },
   { id: "settings", name: "Settings", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 }); } },
+  // The VS FRIEND lobby is the densest sheet in the game — two multi-hundred-
+  // character code boxes, a QR, copy buttons and a room code — and it was the
+  // one screen the grid did not cover. It is also all of css/overlays.css's
+  // trailing block, the part that spent this long outside its cascade layer.
+  // No peer is dialled: the lobby opens on its own and the layout is the same
+  // whether or not anyone answers.
+  { id: "vsfriend", name: "VS friend lobby", root: "#vsfriend", open: async (p) => {
+      await p.click("#mb-vs"); await p.waitForSelector("#vsfriend:not([hidden])", { timeout: 15000 });
+      await p.waitForTimeout(600); } },
   // The garage owns the team card now (#cs-team-card, TEAM tab) — the select
   // screen's #sel-team-card is gone. Reaching a screen by the route a player
   // takes is the point; when the route moves, the audit's own path has to move.

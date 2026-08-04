@@ -520,7 +520,9 @@ body.hud-hidden #hud-restore { display: block; }
   display: flex; align-items: center; justify-content: center;
   background: var(--bg);
 }
-} /* @layer overlays */
+/* NOTE: the layer's closing brace used to be HERE, so everything below — the
+   whole VS FRIEND lobby — was unlayered, and unlayered rules outrank every
+   cascade layer in the project. See tests/css-layers.test.mjs. */
 
 /* ── VS FRIEND lobby ────────────────────────────────────────────────────────
    The invite/answer codes are a few hundred characters of base64 — a full
@@ -755,3 +757,4 @@ body.hud-hidden #hud-restore { display: block; }
 /* Failure here is usually NAT traversal, which the player can act on only if
    we say so plainly — hence a distinct state rather than the same grey text. */
 #vsfriend .vs-status.vs-error { color: #ff8a80; opacity: 1; }
+} /* @layer overlays */

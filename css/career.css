@@ -272,7 +272,10 @@
    the foot, so focus is never yanked out from under a keyboard user. */
 #quali.q-done #q-drive, #quali.q-done #q-sim, #quali.q-done #q-back { display: none; }
 #quali:not(.q-done) #q-go { display: none; }
-}
+/* NOTE: a stray `}` here used to close `@layer components` early, leaving
+   everything below — the slot picker, sponsors, the facility, extra funds —
+   UNLAYERED, and unlayered rules outrank every layer in the project.
+   See tests/css-layers.test.mjs. */
 
 /* ---------- the slot picker ---------- */
 /* Three careers can be live at once (Career.SLOTS). Each row is a CARD YOU PRESS
@@ -402,3 +405,4 @@
 /* ---------- extra funds ---------- */
 .cr-cheats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .cr-cheats .sel-chip { flex: 1 1 auto; min-width: 120px; }
+} /* @layer components */
