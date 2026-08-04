@@ -255,6 +255,20 @@ passing an autumn colour to `tree()` still gives you a `tree()` shape.
 | `acacia(k, side, dist, h, col, opts)` | flat-topped veld thorn: low fork + near-horizontal umbrella | `{spread, layers, barkCol}` |
 | `plane(k, side, dist, h, col, opts)` | pollarded avenue tree — pale mottled trunk + broad flattened crown discs | `{stages, spread, trunkCol}` |
 
+**`FURN[id].tree` reaches these too.** The generic roadside scatter runs on
+every circuit and used to resolve to exactly three silhouettes — `"palm"`,
+`"fir"`, or `"broad"` for everything else — so eighteen circuits shared one tree
+shape on the one foliage pass that is guaranteed to run. The five species above
+are now valid `FURN.tree` values as well (`"cypress"`, `"stonePine"`,
+`"broadleafFall"`, `"acacia"`, `"plane"`), each with its own `canopyR()` entry
+so the scatter's fence guard clears a barrier by exactly what the species
+actually spans. Unknown names still fall back to `"broad"`, so the field stays
+backward-compatible.
+
+Note that `FURN.tree` does nothing on a circuit whose `dressingExclusions`
+suppress `"foliage"` lap-wide (imola plants its own bespoke parkland instead) —
+setting it there is a declaration of the local species, not a visible change.
+
 ### Composite models — structures
 | Model | Builds |
 |---|---|

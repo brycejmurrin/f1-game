@@ -836,6 +836,14 @@ const SceneryNature = (function () {
       if (kind === "pine") return 2.7 * jMax + 0.4;       // pine(): widest lower tier
       if (kind === "fir")  return 2.1 + h * 0.06 + 0.4;   // conifer(): no jitter applied
       if (kind === "palm") return 5.2;                    // frond hub 2.4 + blade spread
+      // The five species emitters added for the identity pass. Each figure is
+      // the emitter's OWN on-track guard radius at the default spread, so the
+      // roadside scatter clears a fence by exactly what the species clears.
+      if (kind === "cypress")       return 1.45 * jMax + 0.4;   // narrow column
+      if (kind === "stonePine")     return h * 0.44 + 0.6;      // wide flat parasol
+      if (kind === "broadleafFall") return h * 0.34 + 0.8;      // lobed crown
+      if (kind === "acacia")        return h * 0.575 + 0.8;     // flat-topped thorn, spread = h*1.15
+      if (kind === "plane")         return 4.2 + h * 0.12 + 0.6;  // pollarded avenue crown
       return (3.7 + h * 0.14) * jMax + 0.4;               // tree(): widest bulge cone
     };
     // Queued, then flushed after def.scenery() returns. A track file is written

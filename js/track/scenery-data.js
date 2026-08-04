@@ -142,7 +142,7 @@ const TrackSceneryData = (function () {
     singapore: { tree: "palm",  fol: [0.16, 0.46, 0.20], lamp: "arm",   lc: [0.85, 0.95, 1.0] },
     baku:      { tree: "palm",  fol: [0.30, 0.42, 0.20], lamp: "globe", lc: [1.0, 0.82, 0.50] },  // Caspian boulevard palms
     jeddah:    { tree: "palm",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },
-    madrid:    { tree: "broad", fol: [0.40, 0.45, 0.27], lamp: "post",  lc: [1.0, 0.90, 0.66] },   // olive, not northern green
+    madrid:    { tree: "plane", fol: [0.40, 0.45, 0.27], lamp: "post",  lc: [1.0, 0.90, 0.66] },   // olive, not northern green
     miami:     { tree: "palm",  fol: [0.20, 0.48, 0.22], lamp: "post",  lc: [1.0, 0.78, 0.85] },
     shanghai:  { tree: "broad", fol: [0.24, 0.42, 0.22], lamp: "post",  lc: [0.90, 0.96, 1.0] },
     mexico:    { tree: "broad", fol: [0.32, 0.44, 0.18], lamp: "post",  lc: [1.0, 0.86, 0.55] },
@@ -152,14 +152,14 @@ const TrackSceneryData = (function () {
     abudhabi:  { tree: "palm",  fol: [0.26, 0.42, 0.20], lamp: "arm",   lc: [1.0, 0.82, 0.50] },
     spa:         { tree: "fir",   fol: [0.14, 0.31, 0.21], lamp: "none" },                 // dark Ardennes spruce, blue-green
     silverstone: { tree: "broad", fol: [0.28, 0.45, 0.22], lamp: "none" },                 // English oak copses, mid-green
-    monza:       { tree: "broad", fol: [0.16, 0.34, 0.17], lamp: "none" },                 // deep royal-park canopy
+    monza:       { tree: "stonePine", fol: [0.16, 0.34, 0.17], lamp: "none" },                 // deep royal-park canopy
     suzuka:      { tree: "broad", fol: [0.24, 0.46, 0.24], lamp: "none" },                 // mixed Japanese hill forest
     interlagos:  { tree: "palm",  fol: [0.26, 0.48, 0.20], lamp: "none" },                 // warm subtropical
     zandvoort:   { tree: "fir",   fol: [0.40, 0.45, 0.29], lamp: "none", sparse: true },   // coastal dune scrub — thin + pale
     redbull:     { tree: "fir",   fol: [0.17, 0.40, 0.22], lamp: "none" },                 // lush emerald alpine spruce
-    imola:       { tree: "broad", fol: [0.24, 0.41, 0.21], lamp: "none" },                 // riverbank poplar/willow/oak
+    imola:       { tree: "cypress", fol: [0.24, 0.41, 0.21], lamp: "none" },                 // riverbank poplar/willow/oak
     hungaroring: { tree: "broad", fol: [0.44, 0.44, 0.19], lamp: "none", sparse: true },   // dry straw-olive, dusty bowl
-    cota:        { tree: "broad", fol: [0.32, 0.39, 0.18], lamp: "none" },                 // dry Texas live oak
+    cota:        { tree: "acacia", fol: [0.32, 0.39, 0.18], lamp: "none" },                 // dry Texas live oak
     montreal:    { tree: "fir",   fol: [0.20, 0.42, 0.23], lamp: "none" },                 // lush island maple/conifer
     albert_park: { tree: "broad", fol: [0.28, 0.46, 0.22], lamp: "none" },                 // tidy Melbourne parkland
     // ── retired / off-calendar circuits (def `classic: true`) ──
@@ -169,20 +169,20 @@ const TrackSceneryData = (function () {
     // the identity the bespoke planting in each scenery() is built around.
     hockenheim:    { tree: "fir",   fol: [0.11, 0.30, 0.15], lamp: "none" },                          // Hardtwald pine corridor
     nurburgring:   { tree: "fir",   fol: [0.09, 0.27, 0.14], lamp: "none" },                          // dark Eifel spruce, bluer than Spa
-    catalunya:     { tree: "fir",   fol: [0.16, 0.32, 0.17], lamp: "post",  lc: [0.96, 0.96, 1.0], sparse: true },  // thin Catalan umbrella pine
+    catalunya:     { tree: "stonePine",   fol: [0.16, 0.32, 0.17], lamp: "post",  lc: [0.96, 0.96, 1.0], sparse: true },  // thin Catalan umbrella pine
     sepang:        { tree: "palm",  fol: [0.16, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.94, 0.72] },  // ordered oil-palm plantation
-    istanbul:      { tree: "fir",   fol: [0.13, 0.30, 0.16], lamp: "post",  lc: [1.0, 0.90, 0.66], sparse: true },  // sparse Thracian hillside pine
-    paul_ricard:   { tree: "fir",   fol: [0.14, 0.30, 0.16], lamp: "none",  sparse: true },           // bleached plateau — planting stays off the runoff
-    portimao:      { tree: "fir",   fol: [0.14, 0.31, 0.16], lamp: "none",  sparse: true },           // thin Algarve pine; the elevation is the view
+    istanbul:      { tree: "stonePine",   fol: [0.13, 0.30, 0.16], lamp: "post",  lc: [1.0, 0.90, 0.66], sparse: true },  // sparse Thracian hillside pine
+    paul_ricard:   { tree: "stonePine",   fol: [0.14, 0.30, 0.16], lamp: "none",  sparse: true },           // bleached plateau — planting stays off the runoff
+    portimao:      { tree: "stonePine",   fol: [0.14, 0.31, 0.16], lamp: "none",  sparse: true },           // thin Algarve pine; the elevation is the view
     sochi:         { tree: "broad", fol: [0.20, 0.44, 0.20], lamp: "globe", lc: [0.94, 0.96, 1.0] },  // landscaped Olympic-park planting
-    mugello:       { tree: "broad", fol: [0.20, 0.44, 0.20], lamp: "none" },                          // Tuscan broadleaf behind the cypress ranks
+    mugello:       { tree: "cypress", fol: [0.20, 0.44, 0.20], lamp: "none" },                          // Tuscan broadleaf behind the cypress ranks
     magny_cours:   { tree: "broad", fol: [0.22, 0.46, 0.22], lamp: "none" },                          // Nivernais poplar and hedgerow
     indianapolis:  { tree: "broad", fol: [0.22, 0.42, 0.19], lamp: "post",  lc: [0.94, 0.96, 1.0] },  // clipped infield planting + service lighting
-    buenos_aires:  { tree: "broad", fol: [0.30, 0.50, 0.24], lamp: "globe", lc: [1.0, 0.90, 0.68] },  // plátano avenues, city-park globes
+    buenos_aires:  { tree: "plane", fol: [0.30, 0.50, 0.24], lamp: "globe", lc: [1.0, 0.90, 0.68] },  // plátano avenues, city-park globes
     jacarepagua:   { tree: "palm",  fol: [0.18, 0.44, 0.20], lamp: "post",  lc: [1.0, 0.88, 0.62] },  // Rio coconut palm over restinga
     estoril:       { tree: "broad", fol: [0.29, 0.36, 0.19], lamp: "none", sparse: true },  // grey-olive cork oak between the parasol pines
-    kyalami:       { tree: "broad", fol: [0.33, 0.38, 0.21], lamp: "none", sparse: true },  // grey-green thorn; sparse keeps the veld open
-    watkins_glen:  { tree: "broad", fol: [0.56, 0.30, 0.13], lamp: "none" },                // turning scarlet-brown — the fall reads or it doesn't
+    kyalami:       { tree: "acacia", fol: [0.33, 0.38, 0.21], lamp: "none", sparse: true },  // grey-green thorn; sparse keeps the veld open
+    watkins_glen:  { tree: "broadleafFall", fol: [0.56, 0.30, 0.13], lamp: "none" },                // turning scarlet-brown — the fall reads or it doesn't
   };
 
   const FURN_DEF = {
