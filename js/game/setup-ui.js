@@ -309,7 +309,7 @@ function buildLiveryOptions(container, team) {
     const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
-                     noseStripe: "", nose: "", pod: "", wing: "", halo: "" };
+                     noseStripe: "", nose: "", pod: "", wing: "", halo: "", finish: "gloss" };
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -338,6 +338,15 @@ function buildLiveryOptions(container, team) {
     const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
     nameRow.appendChild(document.createTextNode(liv.name));
     if (isCustom) { const tg = document.createElement("span"); tg.className = "cs-opt-tag"; tg.textContent = "MINE"; nameRow.appendChild(tg); }
+    // A non-gloss FINISH is invisible in a flat two-tone swatch, so it gets a
+    // badge — otherwise a satin scheme is indistinguishable from its gloss twin
+    // until you fit it and look at the turntable.
+    if (liv.finish && liv.finish !== "gloss") {
+      const tg = document.createElement("span");
+      tg.className = "cs-opt-tag";
+      tg.textContent = liv.finish.toUpperCase();
+      nameRow.appendChild(tg);
+    }
     main.appendChild(nameRow);
     row.appendChild(main);
 
@@ -353,6 +362,7 @@ function buildLiveryOptions(container, team) {
           stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
+          finish: liv.finish || "gloss",
         };
         csLivEditId = liv.id;
         csLivCreating = true;
@@ -392,6 +402,7 @@ function buildLiveryOptions(container, team) {
           stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
+          finish: liv.finish || "gloss",
         };
         csLivEditId = null;   // create-new: never overwrites the stock scheme
         csLivCreating = true;
@@ -459,6 +470,37 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
   wrap.appendChild(colorRow("WINGS", "wing", true));
   wrap.appendChild(colorRow("HALO", "halo", true));
+  // FINISH is the paint MATERIAL rather than a colour, so it is a 3-way choice
+  // instead of a colour well: gloss (the clearcoat car paint every livery has
+  // always had), satin (flat matte wrap) and chrome (tinted mirror). Previews
+  // live on the turntable like every colour row does.
+  {
+    const r = document.createElement("div"); r.className = "cs-liv-ed-row";
+    const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = "FINISH"; r.appendChild(lb);
+    const group = document.createElement("span"); group.className = "cs-liv-ed-finish";
+    const btns = [];
+    for (const f of ["gloss", "satin", "chrome"]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "cs-liv-ed-none" + ((d.finish || "gloss") === f ? " active" : "");
+      b.dataset.csFinish = f;
+      b.textContent = f.toUpperCase();
+      b.setAttribute("aria-pressed", String((d.finish || "gloss") === f));
+      b.onclick = () => {
+        d.finish = f;
+        for (const other of btns) {
+          const on = other.dataset.csFinish === f;
+          other.classList.toggle("active", on);
+          other.setAttribute("aria-pressed", String(on));
+        }
+        applyPreview();
+      };
+      btns.push(b);
+      group.appendChild(b);
+    }
+    r.appendChild(group);
+    wrap.appendChild(r);
+  }
 
   const nameRow = document.createElement("label"); nameRow.className = "cs-liv-ed-row";
   const nlb = document.createElement("span"); nlb.className = "cs-liv-ed-lbl"; nlb.textContent = "NAME"; nameRow.appendChild(nlb);
@@ -482,6 +524,7 @@ function buildLiveryCreator(container, team) {
     if (d.pod)  liv.pod  = hexToArr(d.pod);
     if (d.wing) liv.wing = hexToArr(d.wing);
     if (d.halo) liv.halo = hexToArr(d.halo);
+    if (d.finish && d.finish !== "gloss") liv.finish = d.finish;
     const existing = getCustomLiveries(team.id);
     // Edit-in-place replaces the matching entry (same id); create appends.
     setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === id ? liv : l)) : existing.concat([liv]));
@@ -507,17 +550,23 @@ function livIdCounter() { _livSeq = (_livSeq + 1) % 1000; return String(Date.now
 function livePreviewDraft(team, d) {
   G.livDraftOverride = { teamId: team.id, liv: { c1: hexToArr(d.c1), c2: hexToArr(d.c2), stripe: d.stripe ? hexToArr(d.stripe) : null, accent: d.accent ? hexToArr(d.accent) : null,
     nose: d.nose ? hexToArr(d.nose) : null, pod: d.pod ? hexToArr(d.pod) : null, wing: d.wing ? hexToArr(d.wing) : null, halo: d.halo ? hexToArr(d.halo) : null,
-    noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null } };
+    noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null,
+    finish: d.finish && d.finish !== "gloss" ? d.finish : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
 function openSetup() {
   buildSetup();
-  // #select sits directly under #carsetup and is nearly opaque (blocks the
-  // live 3D preview behind the now-transparent, docked setup panel) — hide it
-  // while setup is open, same as #overlay is already hidden by the time #select
-  // itself is reached. Restored in the cs-done handler below.
+  // #select and #overlay both sit under #carsetup and are nearly opaque (they
+  // block the live 3D preview behind the now-transparent, docked setup panel),
+  // so hide BOTH while setup is open. Only #select used to be hidden, on the
+  // assumption that #overlay was already gone by the time #select was reached —
+  // true of the sel-setup path, but the title screen's GARAGE button opens setup
+  // straight off #overlay, which then stayed up and showed the APEX 26 title and
+  // the whole main menu through the panel. cs-done restores whichever one the
+  // player came from (garageReturn).
   els.select.hidden = true;
+  els.overlay.hidden = true;
   $("carsetup").hidden = false;
   G.setupPreviewOn = true;
 }

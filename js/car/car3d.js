@@ -20,6 +20,13 @@ const Car3D = (function () {
     metal: 23, glass: 24,
     emissive: 25, functionalEmissive: 25, panel: 26,
   });
+  // Livery FINISH -> the surface id the body paint is emitted as. "gloss" (or an
+  // absent finish) keeps SURFACES.paint, i.e. the clearcoat + metallic-flake car
+  // paint the lit shader has always given bodywork. The two alternatives reuse
+  // ids the shader already classifies, so no renderer needs a new branch:
+  //   satin  -> panel  (roughness >= 0.72, specular 0.35 — a flat matte wrap)
+  //   chrome -> metal  (metalness >= 0.78, roughness <= 0.16 — tinted mirror)
+  const FINISH_SURFACE = Object.freeze({ satin: 26, chrome: 23 });
   const DARK   = [0.05, 0.05, 0.05];
   const CARBON = [0.07, 0.07, 0.08];
   const VISOR  = [0.08, 0.08, 0.09];          // tinted visor
@@ -567,13 +574,19 @@ const Car3D = (function () {
       podWidth: 1, shoulderHeight: 1, undercut: 1,
       coke: 1, tailWidth: 1, coverHeight: 1,
       servicePanel: tier === 2 ? 3 : 1, heatShield: 1,
+      chimney: 0,
     }, recipe);
   }
   function buildAeroParts(recipe, tier) {
     const lvl = tier === 0 ? 0 : tier === 2 ? 4 : 2;
+    // plate/casc/swan/tvane are the newer front-/rear-wing STRUCTURE knobs.
+    // `plate` defaults to 1 (the shipped outwash endplate); `casc` and `tvane`
+    // default to null, meaning "derive from lvl exactly as before", so every
+    // option written before these existed builds byte-identical geometry.
     return mergeRecipe({
       lvl, beam: tier === 2 ? 1 : 0, drs: 0,
       vane: lvl >= 4 ? 3 : lvl >= 3 ? 2 : lvl >= 1 ? 1 : 0,
+      plate: 1, casc: null, swan: 0, tvane: null,
       frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
       rearSweep: 0.03, rearTaper: 0.98,
       floorEdge: 1, floorCut: 0.04, diffuserRise: 1,
@@ -592,13 +605,16 @@ const Car3D = (function () {
       cal: BRAKE_CALIPER[tier], duct: tier === 0 ? 0.5 : tier === 2 ? 1.9 : 1,
       rim: null, caliperPos: 0, coverOpen: tier === 2 ? 1 : 0,
       rotor: tier === 2 ? 2 : 1, rotorScale: tier === 2 ? 1.12 : 1,
+      // null = derive the duct fairing from `duct` (the shipped behaviour).
+      scoop: null,
     }, recipe);
   }
   function buildTyreParts(recipe, tier) {
     return mergeRecipe({ band: TYRE_BAND[tier], grooved: false }, recipe);
   }
   function buildErsParts(recipe, tier, accent) {
-    return mergeRecipe({ led: tier === 2 ? accent : null, pack: 1, cells: tier === 2 ? 6 : 3 }, recipe);
+    return mergeRecipe({ led: tier === 2 ? accent : null, pack: 1,
+      cells: tier === 2 ? 6 : 3, conduit: 0 }, recipe);
   }
   function buildGearboxParts(recipe, tier) {
     return mergeRecipe({
@@ -612,7 +628,7 @@ const Car3D = (function () {
     return mergeRecipe({
       cap: tier === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60],
       flame: [1.15, 0.42, 0.14],
-      line: 1,
+      line: 1, filler: 0,
     }, recipe);
   }
   function buildPartRecipes(T, accent) {
@@ -1053,6 +1069,19 @@ const Car3D = (function () {
       const fuelSurface = SURFACES.metal;
       addBox(out, 0.12, 0.828, -0.50, 0.10,  0.02, 0.15, fuelDisplay, fuelSurface);            // collar ring (proud)
       addBox(out, 0.12, 0.85,  -0.50, 0.035, 0.03, 0.05, fuelDisplay, fuelSurface);            // cap dot
+      // Filler HARDWARE (`filler`, 0..2): 1 adds a quick-fill coupling stub beside
+      // the cap, 2 adds a second coupling and a breather standpipe — the pit-lane
+      // rig fitting that tells a race blend apart from a qualifying brew from above.
+      const fuelFiller = Math.max(0, Math.min(2, Math.round(fuelStyle.filler || 0)));
+      if (fuelFiller >= 1) {
+        addBox(out, -0.02, 0.815, -0.50, 0.055, 0.045, 0.09, [0.12, 0.12, 0.14], SURFACES.carbon);
+        addBox(out, -0.02, 0.848, -0.50, 0.038, 0.024, 0.06, fuelDisplay, fuelSurface);
+      }
+      if (fuelFiller >= 2) {
+        addBox(out, 0.12, 0.815, -0.66, 0.050, 0.042, 0.085, [0.12, 0.12, 0.14], SURFACES.carbon);
+        addBox(out, 0.12, 0.845, -0.66, 0.034, 0.022, 0.055, fuelDisplay, fuelSurface);
+        addBox(out, -0.02, 0.895, -0.50, 0.020, 0.075, 0.020, fuelDisplay, fuelSurface);   // breather standpipe
+      }
       if (fuelStyle.line) {
         const lineRear = anchors.coverAt(-1.30);
         addSpan(out,
@@ -1088,6 +1117,25 @@ const Car3D = (function () {
           0.016, 0.032, Math.max(0.025, half * 1.5 / cells),
           ersGlow, SURFACES.metal);
       }
+      // External high-voltage CONDUIT (`conduit`, 0..2): a glowing run carried on
+      // the engine-cover flank from the pack back to the MGU-K, with junction
+      // nodes at 2. Reads as visible hybrid plumbing from the chase camera and
+      // glows through the night emissive path like the cell strip above.
+      const ersConduit = Math.max(0, Math.min(2, Math.round(ersStyle.conduit || 0)));
+      if (ersConduit > 0 && !ckpt) {
+        const cf = anchors.coverAt(-0.72), cr = anchors.coverAt(-1.66);
+        for (const side of [-1, 1]) {
+          addSpan(out,
+            { z: cf.z, x: side*(cf.x + 0.014), y: cf.top - 0.07, w: 0.016, h: 0.022 },
+            { z: cr.z, x: side*(cr.x + 0.014), y: cr.top - 0.05, w: 0.014, h: 0.018 },
+            ersGlow, null, SURFACES.metal);
+          if (ersConduit >= 2) for (let i = 0; i < 3; i++) {
+            const z = -0.86 - i * 0.30, p = anchors.coverAt(z);
+            addBox(out, side*(p.x + 0.020), p.top - 0.062, z, 0.026, 0.038, 0.048,
+              [0.10, 0.10, 0.12], SURFACES.carbon);
+          }
+        }
+      }
     }
 
     part("bodyDetail");
@@ -1117,6 +1165,18 @@ const Car3D = (function () {
         const fp = anchors.podAt(fz);
         addBox(out, s*(fp.x + 0.012), fp.bottom + 0.025, fz, 0.014, 0.05, 0.13, CARBON);
       }
+    }
+    // --- Sidepod cooling CHIMNEYS (engine recipe `chimney`, 0..3): squat stacks
+    // standing proud of the pod shoulder, each capped by a dark exit slot. The
+    // classic "we are running hot" tell, and the clearest way to read a
+    // cooling-led power unit apart from a sealed one at a glance. Anchored on
+    // podAt() so they ride whatever bodywork the engine recipe lofted. ---
+    const engChimney = Math.max(0, Math.min(3, Math.round(engStyle.chimney || 0)));
+    for (const s of [-1, 1]) for (let i = 0; i < engChimney; i++) {
+      const z = -0.16 - i * 0.30, p = anchors.podAt(z);
+      const cx = s * Math.max(0.16, p.x - 0.055);
+      addBox(out, cx, p.top + 0.040, z, 0.060, 0.080, 0.105, CARBON);            // stack
+      addBox(out, cx, p.top + 0.084, z - 0.010, 0.048, 0.014, 0.078, INTAKE);    // exit slot
     }
 
     part("livery");
@@ -1393,20 +1453,40 @@ const Car3D = (function () {
       addSpan(out, { z: topE[2], x: s * (fwHalf * topE[4] - 0.05), y: topE[3], w: 0.16, h: topE[5] * 1.5 },
                    { z: topE[2] - 0.04, x: s * (fwHalf + 0.02),    y: topE[3] + 0.085, w: 0.09, h: topE[5] * 1.6 }, topE[6]);
     }
+    // Endplate PROFILE (`plate`): 0 slim low-drag fence · 1 the shipped outwash
+    // flick · 2 a tall arched footplate with a bridging spar over its crown. The
+    // front wing is the first thing a chase camera sees, so this is the loudest
+    // single-knob silhouette change in the aero package.
+    const aPlate = Math.max(0, Math.min(2, Math.round(
+      aeroStyle.plate != null ? aeroStyle.plate : 1)));
+    const PLATE = [
+      { hF: 0.16, hR: 0.30, kick: 0.020, footW: 0.09, footZ: 0.46, arch: 0 },
+      { hF: 0.22, hR: 0.40, kick: 0.060, footW: 0.13, footZ: 0.54, arch: 0 },
+      { hF: 0.30, hR: 0.54, kick: 0.100, footW: 0.19, footZ: 0.62, arch: 1 },
+    ][aPlate];
+    // Cascade winglet count on the endplate outer face. A recipe may set it
+    // outright; otherwise it falls back to the downforce-level map that shipped.
+    const aCasc = Math.max(0, Math.min(3, Math.round(aeroStyle.casc != null ? aeroStyle.casc
+      : (aLvl >= 4 ? 3 : (aLvl >= 3 ? 2 : (aLvl >= 1 ? 1 : 0))))));
     for (const s of [-1, 1]) {
       const epW = aLvl >= 4 ? 0.060 : (aLvl <= 0 ? 0.028 : 0.044);
       const epX = s * (fwHalf + 0.03);
       // Main endplate: a swept plate rising up-and-outboard (the outwash flick) —
       // moderated in height so it reads as a real 3-D structure without towering
       // over the wing (it was ~1.5× too tall and looked detached from the plane).
-      addSpan(out, { z: 2.66, x: epX,          y: 0.135, w: epW, h: 0.22 },
-                   { z: 1.98, x: epX + s*0.06, y: 0.245, w: epW, h: 0.40 }, c2);
+      addSpan(out, { z: 2.66, x: epX,                 y: 0.135, w: epW, h: PLATE.hF },
+                   { z: 1.98, x: epX + s*PLATE.kick,  y: 0.245, w: epW, h: PLATE.hR }, c2);
       // Footplate: the horizontal "foot" kicking outward along the endplate base
       // (the ground-effect seal that reads as a real front-wing foot).
-      addBox(out, epX + s*0.03, 0.050, 2.30, 0.13, 0.016, 0.54, c1);
-      // Canard / dive-plane cascade on the outer face of the endplate — more
-      // planes at higher DF (aLvl 1 → one, 3 → two, 4 → three).
-      const nCan = aLvl >= 4 ? 3 : (aLvl >= 3 ? 2 : (aLvl >= 1 ? 1 : 0));
+      addBox(out, epX + s*(PLATE.footW * 0.23), 0.050, 2.30, PLATE.footW, 0.016, PLATE.footZ, c1);
+      // Tall-plate variant carries a bridging spar across the crown, tying the
+      // top of the arch back to the outer flap tip.
+      if (PLATE.arch) {
+        addSpan(out, { z: 2.60, x: epX + s*0.012, y: 0.135 + PLATE.hF * 0.5 + 0.010, w: 0.030, h: 0.018 },
+                     { z: 2.06, x: epX + s*(PLATE.kick + 0.012), y: 0.245 + PLATE.hR * 0.5 + 0.010, w: 0.026, h: 0.016 }, c1);
+      }
+      // Canard / dive-plane cascade on the outer face of the endplate.
+      const nCan = aCasc;
       for (let i = 0; i < nCan; i++) {
         const cz = 2.52 - i * 0.18, cy = 0.170 + i * 0.058;
         addSpan(out, { z: cz,        x: s * (fwHalf - 0.03), y: cy,         w: 0.030, h: 0.12 },
@@ -1494,19 +1574,40 @@ const Car3D = (function () {
       }
       rearWing(-2.38, upperTrailY - 0.075, -2.64, upperTrailY,
         0.51, 0.035, wingC, 1.0);
-      // Swan-neck mount: slim pylons sweeping UP and BACK from the rear crash
+      // Wing mount. Default: slim pylons sweeping UP and BACK from the rear crash
       // structure to the underside of the main plane — this is what visually hangs
       // the wing off the car (previously the mount sat above the plane, so the
       // whole wing read as detached/floating). A central pylon reinforces it.
-      for (const s of [-1, 1]) {
-        addSpan(out, { z: -1.98, x: s*0.14, y: 0.46, w: 0.05, h: 0.13 },
-                     { z: -2.34, x: s*0.14, y: epCY + 0.01, w: 0.042, h: 0.10 }, DARK);
+      // `swan` swaps in a true swan-neck yoke instead: the necks climb PAST the
+      // main plane and hook back DOWN onto its upper surface, leaving the
+      // pressure side clean — the real reason teams run the layout, and an
+      // unmistakable tell from behind.
+      const aSwan = aeroStyle && aeroStyle.swan ? 1 : 0;
+      if (aSwan) {
+        const mainTopY = upperTrailY - 0.225 + 0.016;
+        for (const s of [-1, 1]) {
+          addSpan(out, { z: -1.98, x: s*0.16, y: 0.46, w: 0.048, h: 0.13 },
+                       { z: -2.26, x: s*0.16, y: mainTopY + 0.075, w: 0.036, h: 0.095 }, DARK);
+          addSpan(out, { z: -2.26, x: s*0.16, y: mainTopY + 0.075, w: 0.036, h: 0.060 },
+                       { z: -2.44, x: s*0.16, y: mainTopY + 0.012, w: 0.030, h: 0.048 }, DARK);
+        }
+      } else {
+        for (const s of [-1, 1]) {
+          addSpan(out, { z: -1.98, x: s*0.14, y: 0.46, w: 0.05, h: 0.13 },
+                       { z: -2.34, x: s*0.14, y: epCY + 0.01, w: 0.042, h: 0.10 }, DARK);
+        }
       }
       addSpan(out, { z: -1.96, x: 0, y: 0.44, w: 0.09, h: 0.14 },
                    { z: -2.36, x: 0, y: epCY, w: 0.07, h: 0.10 }, DARK);   // central spine mount
+      // T-wing: shipped behaviour is "max DF and not DRS"; a recipe may request or
+      // suppress it outright via `tvane` so mid-downforce packages can carry one.
+      const aTvane = aeroStyle && aeroStyle.tvane != null
+        ? (aeroStyle.tvane ? 1 : 0) : (aLvl >= 4 && !aDrs ? 1 : 0);
       if (aLvl >= 4 && !aDrs) {
-        // Extra proud top element + a T-wing ahead of it (max-DF look).
+        // Extra proud top element (max-DF look).
         rearWing(-2.42, crownY - 0.055, -2.66, crownY, 0.50, 0.030, c2, 1.1);
+      }
+      if (aTvane) {
         addBox(out, 0, epCY + 0.20, -1.98, 0.34, 0.02, 0.09, c2);     // T-wing (tracks the lowered wing)
         // T-wing mount: a slim central pylon down to the engine-cover ridge — without
         // it the T-wing is a plank floating ~0.4m above the bodywork with nothing
@@ -1591,10 +1692,20 @@ const Car3D = (function () {
     // Brake packages alter duct and caliper hardware. Heat glow is emitted only
     // by the runtime brake-ring effect once live brake temperature crosses its
     // threshold; baking it into high-spec meshes made parked cars look overheated.
+    // Duct FAIRING form (`scoop`): 0 bare inlet · 1 the horizontal winglet that
+    // shipped with big-brake specs · 2 a wrapped boomerang — winglet plus an
+    // outboard fence and a lower deflector curling around the wheel face. Absent
+    // from a recipe, it derives from duct size exactly as before.
+    const brakeScoop = Math.max(0, Math.min(2, Math.round(
+      brakeStyle && brakeStyle.scoop != null ? brakeStyle.scoop : (ductMul >= 1.3 ? 1 : 0))));
     for (const s of [-1, 1]) {
       addBox(out, s*0.60, 0.28, AXLES.frontZ + 0.19, 0.06, 0.20 * ductMul, 0.13 * ductMul, DARK);
       // Big-brake spec: a horizontal duct winglet scooping over each front wheel.
-      if (ductMul >= 1.3) addBox(out, s*0.65, 0.42, AXLES.frontZ + 0.16, 0.11, 0.02, 0.15, CARBON);
+      if (brakeScoop >= 1) addBox(out, s*0.65, 0.42, AXLES.frontZ + 0.16, 0.11, 0.02, 0.15, CARBON);
+      if (brakeScoop >= 2) {
+        addBox(out, s*0.705, 0.38, AXLES.frontZ + 0.15, 0.014, 0.12, 0.17, CARBON);   // outboard fence
+        addBox(out, s*0.655, 0.20, AXLES.frontZ + 0.11, 0.10, 0.016, 0.20, CARBON);   // lower deflector
+      }
       if (!ckpt) addBox(out, s*0.58, 0.30, AXLES.rearZ - 0.20, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
     }
 
@@ -1666,6 +1777,18 @@ const Car3D = (function () {
       }
     }
 
+    // --- Livery FINISH: the paint's MATERIAL, not its colour. Bodywork paint is
+    // the only thing emitted as SURFACES.paint, so a non-gloss finish is a single
+    // remap of those material ids (see FINISH_SURFACE). Carbon, rubber, glass,
+    // emissive and the sponsor/number panels keep their own ids, and a livery
+    // with no `finish` leaves the array byte-identical to before. ---
+    const finishSurface = FINISH_SURFACE[liv.finish];
+    if (finishSurface) {
+      for (let i = 0; i < out.mat.length; i++) {
+        if (out.mat[i] === SURFACES.paint) out.mat[i] = finishSurface;
+      }
+    }
+
     // Close the last section and measure each from the vertices it emitted.
     if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
     out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {
@@ -1685,7 +1808,8 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
+  return { build, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+           TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, teamStyleOf,
            endplate: endplateGeom, numberBoard, aeroLevelOf };
 })();

@@ -15,7 +15,13 @@
    wing?:[r,g,b] optional FRONT+REAR WING flap colour (defaults to c2 = today's look).
    halo?:[r,g,b] optional cockpit-HALO hoop tint (defaults to brushed titanium).
      All four are additive and fully optional — a livery without them renders
-     exactly as before. }.
+     exactly as before.
+   finish?:"gloss"|"satin"|"chrome" optional paint FINISH — the material rather
+     than the colour. Absent (or "gloss") is the clearcoat-and-flake car paint
+     every livery has always had; "satin" renders the bodywork as a flat matte
+     wrap and "chrome" as a tinted mirror. Car3D.build applies it by remapping
+     the body-paint surface id (see Car3D.FINISH_SURFACE) — decals, carbon,
+     rubber and glass are untouched, and it costs no extra geometry. }.
    UNIVERSAL apply to every team; BY_TEAM are team-specific specials. A team's own
    colours are the synthesized "default" livery. Consumed by game.js
    (resolveLivery + the LIVERY tab in car setup). Colours are [r,g,b] 0..1. */
@@ -56,6 +62,37 @@ const Liveries = (function () {
       pod: [0.95, 0.20, 0.60], wing: [0.10, 0.90, 0.55], halo: [0.10, 0.90, 0.55] },
     { id: "goldcrest", name: "Gold Crest",  c1: [0.04, 0.05, 0.08], c2: [0.85, 0.68, 0.28], stripe: [0.96, 0.86, 0.48], accent: [0.96, 0.86, 0.48],
       nose: [0.85, 0.68, 0.28], halo: [0.85, 0.68, 0.28], wing: [0.85, 0.68, 0.28] },
+    // Gloss schemes — colour only, the classic clearcoat finish.
+    { id: "redline",   name: "Redline",     c1: [0.10, 0.10, 0.12], c2: [0.88, 0.09, 0.12], stripe: [0.95, 0.13, 0.16], accent: [0.92, 0.93, 0.96],
+      wing: [0.88, 0.09, 0.12], halo: [0.88, 0.09, 0.12] },
+    { id: "oceanic",   name: "Oceanic",     c1: [0.02, 0.24, 0.32], c2: [0.10, 0.82, 0.78], stripe: [0.85, 0.96, 0.98], accent: [0.05, 0.55, 0.62],
+      pod: [0.05, 0.55, 0.62], nose: [0.10, 0.82, 0.78] },
+    { id: "magma",     name: "Magma",       c1: [0.09, 0.05, 0.05], c2: [0.98, 0.30, 0.05], stripe: [1.0, 0.62, 0.08], accent: [0.85, 0.12, 0.05],
+      noseStripe: [1.0, 0.82, 0.20], wing: [0.98, 0.30, 0.05] },
+    { id: "royal",     name: "Royal",       c1: [0.16, 0.06, 0.36], c2: [0.86, 0.72, 0.30], stripe: [0.96, 0.88, 0.55], accent: [0.55, 0.32, 0.85],
+      nose: [0.86, 0.72, 0.30], halo: [0.86, 0.72, 0.30] },
+    { id: "pastel",    name: "Pastel Drift", c1: [0.96, 0.80, 0.86], c2: [0.55, 0.88, 0.82], stripe: [0.98, 0.94, 0.62], accent: [0.42, 0.44, 0.62],
+      pod: [0.55, 0.88, 0.82], wing: [0.96, 0.80, 0.86] },
+    { id: "hazard",    name: "Hazard",      c1: [0.98, 0.78, 0.06], c2: [0.07, 0.07, 0.08], stripe: [0.07, 0.07, 0.08], accent: [0.96, 0.96, 0.98],
+      nose: [0.07, 0.07, 0.08], pod: [0.07, 0.07, 0.08], wing: [0.98, 0.78, 0.06] },
+    // SATIN schemes — a flat matte wrap. The finish reads strongest on dark and
+    // saturated bodies, where a clearcoat would otherwise blow out to a highlight.
+    { id: "satinnight", name: "Satin Night", c1: [0.07, 0.07, 0.09], c2: [0.62, 0.10, 0.14], stripe: [0.80, 0.14, 0.18], accent: [0.55, 0.57, 0.62],
+      halo: [0.62, 0.10, 0.14], finish: "satin" },
+    { id: "mattelime", name: "Matte Lime",  c1: [0.20, 0.24, 0.10], c2: [0.72, 0.92, 0.14], stripe: [0.80, 0.98, 0.24], accent: [0.10, 0.11, 0.12],
+      wing: [0.72, 0.92, 0.14], finish: "satin" },
+    { id: "frostbite", name: "Frostbite",   c1: [0.88, 0.92, 0.95], c2: [0.28, 0.58, 0.82], stripe: [0.16, 0.34, 0.60], accent: [0.55, 0.78, 0.92],
+      nose: [0.28, 0.58, 0.82], noseStripe: [0.88, 0.92, 0.95], finish: "satin" },
+    { id: "monochrome", name: "Monochrome", c1: [0.42, 0.43, 0.46], c2: [0.93, 0.94, 0.96], stripe: [0.08, 0.08, 0.09], accent: [0.68, 0.70, 0.74],
+      pod: [0.08, 0.08, 0.09], wing: [0.93, 0.94, 0.96], finish: "satin" },
+    // CHROME schemes — the paint becomes a tinted mirror, so the primary colour
+    // reads as the metal itself rather than as a coat over it.
+    { id: "mirrorlake", name: "Mirror Lake", c1: [0.80, 0.86, 0.92], c2: [0.06, 0.28, 0.52], stripe: [0.12, 0.52, 0.82], accent: [0.90, 0.94, 0.98],
+      wing: [0.06, 0.28, 0.52], finish: "chrome" },
+    { id: "copperhead", name: "Copperhead", c1: [0.72, 0.40, 0.18], c2: [0.10, 0.09, 0.10], stripe: [0.92, 0.62, 0.30], accent: [0.94, 0.78, 0.46],
+      nose: [0.10, 0.09, 0.10], halo: [0.92, 0.62, 0.30], finish: "chrome" },
+    { id: "bronzeage", name: "Bronze Age",  c1: [0.55, 0.42, 0.20], c2: [0.90, 0.80, 0.52], stripe: [0.30, 0.24, 0.14], accent: [0.96, 0.90, 0.70],
+      pod: [0.30, 0.24, 0.14], wing: [0.90, 0.80, 0.52], finish: "chrome" },
   ];
   // Per-team heritage / concept schemes.
   const BY_TEAM = {
@@ -71,6 +108,12 @@ const Liveries = (function () {
         nose: [0.05, 0.06, 0.07], wing: [0.86, 0.14, 0.14], noseStripe: [0.0, 0.63, 0.61] },
       { id: "mer_lumen",  name: "Lumen",        c1: [0.0, 0.20, 0.22], c2: [0.0, 0.86, 0.78], stripe: [0.90, 0.93, 0.95], accent: [0.62, 0.64, 0.68],
         pod: [0.0, 0.86, 0.78], halo: [0.90, 0.93, 0.95] },
+      { id: "mer_satin",  name: "Satin Arrow",  c1: [0.08, 0.09, 0.10], c2: [0.0, 0.63, 0.61], stripe: [0.0, 0.78, 0.73], accent: [0.72, 0.74, 0.78],
+        wing: [0.0, 0.63, 0.61], finish: "satin" },
+      { id: "mer_chrome", name: "Chrome Arrow", c1: [0.84, 0.87, 0.92], c2: [0.0, 0.63, 0.61], stripe: [0.05, 0.06, 0.07], accent: [0.0, 0.86, 0.78],
+        nose: [0.0, 0.63, 0.61], halo: [0.0, 0.78, 0.73], finish: "chrome" },
+      { id: "mer_dtm",    name: "DTM Tribute",  c1: [0.93, 0.94, 0.96], c2: [0.05, 0.06, 0.07], stripe: [0.0, 0.63, 0.61], accent: [0.86, 0.14, 0.14],
+        pod: [0.05, 0.06, 0.07], wing: [0.05, 0.06, 0.07], noseStripe: [0.86, 0.14, 0.14] },
     ],
     ferrari: [
       { id: "fer_classic", name: "Classic 412T", c1: [0.86, 0.0, 0.0],   c2: [0.97, 0.83, 0.0], stripe: [0.98, 0.86, 0.0], accent: [0.06, 0.06, 0.08] },
@@ -86,6 +129,12 @@ const Liveries = (function () {
         pod: [0.86, 0.0, 0.0], halo: [0.97, 0.83, 0.0] },
       { id: "fer_lauda",   name: "Niki '77",     c1: [0.86, 0.0, 0.0],   c2: [0.95, 0.95, 0.97], accent: [0.05, 0.05, 0.06],
         nose: [0.95, 0.95, 0.97], pod: [0.95, 0.95, 0.97], wing: [0.86, 0.0, 0.0], noseStripe: [0.05, 0.05, 0.06] },
+      { id: "fer_satin",   name: "Rosso Satin",  c1: [0.62, 0.02, 0.02], c2: [0.97, 0.83, 0.0], stripe: [0.86, 0.0, 0.0], accent: [0.95, 0.95, 0.97],
+        halo: [0.97, 0.83, 0.0], finish: "satin" },
+      { id: "fer_cromo",   name: "Cromo Rosso",  c1: [0.88, 0.06, 0.05], c2: [0.06, 0.06, 0.08], stripe: [0.97, 0.83, 0.0], accent: [0.96, 0.90, 0.62],
+        nose: [0.06, 0.06, 0.08], wing: [0.06, 0.06, 0.08], finish: "chrome" },
+      { id: "fer_corsa",   name: "Nero Corsa",   c1: [0.09, 0.05, 0.06], c2: [0.86, 0.0, 0.0], stripe: [0.97, 0.83, 0.0], accent: [0.60, 0.02, 0.04],
+        pod: [0.86, 0.0, 0.0], nose: [0.86, 0.0, 0.0], halo: [0.97, 0.83, 0.0] },
     ],
     mclaren: [
       { id: "mcl_papaya",  name: "Papaya",        c1: [1.0, 0.50, 0.0],  c2: [0.10, 0.11, 0.13], stripe: [0.05, 0.05, 0.06], accent: [0.0, 0.62, 0.86] },
@@ -101,6 +150,12 @@ const Liveries = (function () {
         nose: [1.0, 0.50, 0.0], wing: [0.0, 0.62, 0.86], halo: [1.0, 0.50, 0.0], noseStripe: [0.95, 0.96, 0.98] },
       { id: "mcl_solar",   name: "Solar Flare",   c1: [1.0, 0.38, 0.0],  c2: [1.0, 0.72, 0.10], stripe: [1.0, 0.85, 0.20], accent: [0.10, 0.11, 0.13],
         pod: [1.0, 0.72, 0.10], halo: [0.10, 0.11, 0.13] },
+      { id: "mcl_satin",   name: "Satin Papaya",  c1: [0.82, 0.40, 0.02], c2: [0.12, 0.13, 0.15], stripe: [0.10, 0.11, 0.13], accent: [0.0, 0.62, 0.86],
+        wing: [0.12, 0.13, 0.15], finish: "satin" },
+      { id: "mcl_mirror",  name: "Mirror Works",  c1: [0.84, 0.86, 0.90], c2: [1.0, 0.50, 0.0], stripe: [0.10, 0.11, 0.13], accent: [0.0, 0.62, 0.86],
+        nose: [1.0, 0.50, 0.0], halo: [1.0, 0.50, 0.0], finish: "chrome" },
+      { id: "mcl_azure",   name: "Azure Papaya",  c1: [0.0, 0.46, 0.78], c2: [1.0, 0.50, 0.0], stripe: [1.0, 0.62, 0.10], accent: [0.93, 0.95, 0.97],
+        pod: [1.0, 0.50, 0.0], wing: [0.0, 0.46, 0.78], noseStripe: [1.0, 0.50, 0.0] },
     ],
     redbull: [
       { id: "rb_matte",  name: "Matte Navy",  c1: [0.06, 0.10, 0.22], c2: [0.95, 0.78, 0.0], stripe: [0.82, 0.10, 0.14], accent: [0.90, 0.92, 0.95] },
@@ -114,6 +169,12 @@ const Liveries = (function () {
         nose: [0.086, 0.137, 0.294], wing: [0.20, 0.55, 0.95], noseStripe: [0.90, 0.12, 0.16] },
       { id: "rb_night",  name: "Night Raid",  c1: [0.04, 0.06, 0.13], c2: [0.95, 0.78, 0.0], stripe: [0.75, 0.30, 0.90], accent: [0.25, 0.85, 0.95],
         pod: [0.086, 0.137, 0.294], halo: [0.95, 0.78, 0.0] },
+      { id: "rb_satin",  name: "Matte Charge", c1: [0.07, 0.10, 0.20], c2: [0.90, 0.12, 0.16], stripe: [0.95, 0.78, 0.0], accent: [0.90, 0.92, 0.95],
+        wing: [0.90, 0.12, 0.16], finish: "satin" },
+      { id: "rb_chrome", name: "Chrome Bull", c1: [0.80, 0.84, 0.90], c2: [0.086, 0.137, 0.294], stripe: [0.90, 0.12, 0.16], accent: [0.95, 0.78, 0.0],
+        nose: [0.086, 0.137, 0.294], halo: [0.95, 0.78, 0.0], finish: "chrome" },
+      { id: "rb_carbon", name: "Carbon Bull", c1: [0.08, 0.08, 0.10], c2: [0.20, 0.24, 0.42], stripe: [0.95, 0.78, 0.0], accent: [0.90, 0.12, 0.16],
+        pod: [0.086, 0.137, 0.294], wing: [0.90, 0.12, 0.16], noseStripe: [0.95, 0.78, 0.0] },
     ],
     alpine: [
       { id: "alp_pink",  name: "BWT Pink",      c1: [1.0, 0.53, 0.74], c2: [0.0, 0.58, 0.80], stripe: [0.05, 0.06, 0.10], accent: [0.95, 0.96, 0.98] },
@@ -128,6 +189,12 @@ const Liveries = (function () {
         pod: [1.0, 0.53, 0.74], halo: [1.0, 0.53, 0.74] },
       { id: "alp_estoril", name: "Estoril",     c1: [0.0, 0.22, 0.62], c2: [1.0, 0.53, 0.74], stripe: [0.0, 0.72, 0.86], accent: [0.90, 0.92, 0.95],
         nose: [1.0, 0.53, 0.74], wing: [0.0, 0.22, 0.62], halo: [0.90, 0.92, 0.95] },
+      { id: "alp_satin",   name: "Satin Azur",  c1: [0.02, 0.30, 0.52], c2: [1.0, 0.53, 0.74], stripe: [0.0, 0.72, 0.86], accent: [0.92, 0.94, 0.96],
+        wing: [1.0, 0.53, 0.74], finish: "satin" },
+      { id: "alp_chrome",  name: "Chrome Alpine", c1: [0.82, 0.86, 0.92], c2: [0.0, 0.42, 0.85], stripe: [1.0, 0.53, 0.74], accent: [0.0, 0.72, 0.86],
+        nose: [0.0, 0.42, 0.85], halo: [1.0, 0.53, 0.74], finish: "chrome" },
+      { id: "alp_gpf",     name: "Grand Prix",  c1: [0.0, 0.16, 0.52], c2: [0.95, 0.96, 0.98], stripe: [0.86, 0.10, 0.16], accent: [1.0, 0.53, 0.74],
+        pod: [0.95, 0.96, 0.98], wing: [0.86, 0.10, 0.16], noseStripe: [0.86, 0.10, 0.16] },
     ],
     racingbulls: [
       { id: "rbv_galaxy", name: "Galaxy",     c1: [0.06, 0.08, 0.22], c2: [0.086, 0.20, 0.80], stripe: [0.75, 0.45, 1.0], accent: [0.95, 0.40, 0.80] },
@@ -142,6 +209,12 @@ const Liveries = (function () {
         nose: [0.85, 0.14, 0.18], wing: [0.086, 0.20, 0.80], noseStripe: [0.086, 0.20, 0.80] },
       { id: "rbv_midway",  name: "Midway",      c1: [0.06, 0.08, 0.22], c2: [0.95, 0.94, 0.92], stripe: [0.85, 0.14, 0.18], accent: [0.75, 0.45, 1.0],
         pod: [0.086, 0.20, 0.80], halo: [0.95, 0.94, 0.92] },
+      { id: "rbv_satin",   name: "Satin Cadet", c1: [0.10, 0.14, 0.42], c2: [0.95, 0.94, 0.92], stripe: [0.85, 0.14, 0.18], accent: [0.40, 0.70, 1.0],
+        wing: [0.086, 0.20, 0.80], finish: "satin" },
+      { id: "rbv_chrome",  name: "Chrome Faenza", c1: [0.80, 0.84, 0.90], c2: [0.086, 0.20, 0.80], stripe: [0.85, 0.14, 0.18], accent: [0.75, 0.45, 1.0],
+        nose: [0.086, 0.20, 0.80], halo: [0.086, 0.20, 0.80], finish: "chrome" },
+      { id: "rbv_sunset",  name: "Faenza Sunset", c1: [0.14, 0.08, 0.30], c2: [0.98, 0.45, 0.30], stripe: [0.98, 0.72, 0.30], accent: [0.086, 0.20, 0.80],
+        pod: [0.98, 0.45, 0.30], wing: [0.98, 0.72, 0.30], noseStripe: [0.95, 0.94, 0.92] },
     ],
     haas: [
       { id: "haas_black", name: "Blackout",  c1: [0.06, 0.06, 0.07], c2: [0.85, 0.16, 0.11], stripe: [0.90, 0.92, 0.94], accent: [0.70, 0.72, 0.76] },
@@ -155,6 +228,12 @@ const Liveries = (function () {
         pod: [0.34, 0.36, 0.40], halo: [0.85, 0.16, 0.11] },
       { id: "haas_racer", name: "Dirt Racer", c1: [0.85, 0.16, 0.11], c2: [0.90, 0.92, 0.94], stripe: [0.08, 0.08, 0.10], accent: [0.96, 0.80, 0.20],
         nose: [0.90, 0.92, 0.94], pod: [0.08, 0.08, 0.10], wing: [0.85, 0.16, 0.11] },
+      { id: "haas_satin", name: "Satin Steel", c1: [0.24, 0.26, 0.29], c2: [0.85, 0.16, 0.11], stripe: [0.90, 0.92, 0.94], accent: [0.62, 0.64, 0.68],
+        wing: [0.85, 0.16, 0.11], finish: "satin" },
+      { id: "haas_chrome", name: "Chrome Machine", c1: [0.82, 0.84, 0.88], c2: [0.85, 0.16, 0.11], stripe: [0.08, 0.16, 0.48], accent: [0.10, 0.28, 0.70],
+        nose: [0.85, 0.16, 0.11], halo: [0.85, 0.16, 0.11], finish: "chrome" },
+      { id: "haas_stock", name: "Stock Car",  c1: [0.90, 0.92, 0.94], c2: [0.06, 0.06, 0.07], stripe: [0.85, 0.16, 0.11], accent: [0.08, 0.16, 0.48],
+        pod: [0.85, 0.16, 0.11], wing: [0.06, 0.06, 0.07], noseStripe: [0.08, 0.16, 0.48] },
     ],
     williams: [
       { id: "wil_stripe",   name: "Racing Stripe", c1: [0.94, 0.95, 0.97], c2: [0.06, 0.24, 0.79], stripe: [0.06, 0.24, 0.79], accent: [0.90, 0.14, 0.20] },
@@ -169,6 +248,12 @@ const Liveries = (function () {
         nose: [0.06, 0.24, 0.79], wing: [0.55, 0.70, 0.92], halo: [0.06, 0.24, 0.79] },
       { id: "wil_grove",    name: "Grove Works",   c1: [0.04, 0.10, 0.30], c2: [0.95, 0.80, 0.15], stripe: [0.06, 0.24, 0.79], accent: [0.55, 0.70, 0.92],
         pod: [0.06, 0.24, 0.79], halo: [0.95, 0.80, 0.15] },
+      { id: "wil_satin",    name: "Satin Navy",    c1: [0.05, 0.12, 0.34], c2: [0.55, 0.70, 0.92], stripe: [0.94, 0.95, 0.97], accent: [0.95, 0.80, 0.15],
+        wing: [0.55, 0.70, 0.92], finish: "satin" },
+      { id: "wil_chrome",   name: "Chrome Grove",  c1: [0.82, 0.86, 0.92], c2: [0.06, 0.24, 0.79], stripe: [0.06, 0.24, 0.79], accent: [0.90, 0.14, 0.20],
+        nose: [0.06, 0.24, 0.79], halo: [0.06, 0.24, 0.79], finish: "chrome" },
+      { id: "wil_canary",   name: "Canary",        c1: [0.95, 0.80, 0.15], c2: [0.06, 0.24, 0.79], stripe: [0.04, 0.10, 0.30], accent: [0.94, 0.95, 0.97],
+        pod: [0.06, 0.24, 0.79], wing: [0.04, 0.10, 0.30], noseStripe: [0.06, 0.24, 0.79] },
     ],
     audi: [
       { id: "audi_black", name: "Vorsprung", c1: [0.06, 0.06, 0.07], c2: [0.96, 0.02, 0.22], stripe: [0.70, 0.71, 0.74], accent: [0.92, 0.93, 0.96] },
@@ -182,6 +267,12 @@ const Liveries = (function () {
         nose: [0.96, 0.02, 0.22], wing: [0.96, 0.02, 0.22], halo: [0.70, 0.71, 0.74], noseStripe: [0.70, 0.71, 0.74] },
       { id: "audi_sport",  name: "Sport Quattro", c1: [0.93, 0.94, 0.96], c2: [0.96, 0.02, 0.22], stripe: [0.96, 0.02, 0.22], accent: [0.06, 0.06, 0.07],
         pod: [0.06, 0.06, 0.07], halo: [0.96, 0.02, 0.22] },
+      { id: "audi_satin",  name: "Satin Vorsprung", c1: [0.10, 0.10, 0.12], c2: [0.96, 0.02, 0.22], stripe: [0.70, 0.71, 0.74], accent: [0.92, 0.93, 0.96],
+        wing: [0.96, 0.02, 0.22], finish: "satin" },
+      { id: "audi_chrome", name: "Chrome Rings",  c1: [0.84, 0.86, 0.90], c2: [0.06, 0.06, 0.07], stripe: [0.96, 0.02, 0.22], accent: [0.70, 0.71, 0.74],
+        nose: [0.06, 0.06, 0.07], halo: [0.96, 0.02, 0.22], finish: "chrome" },
+      { id: "audi_dtm",    name: "DTM Silver",    c1: [0.70, 0.71, 0.74], c2: [0.06, 0.06, 0.07], stripe: [0.96, 0.02, 0.22], accent: [0.50, 0.52, 0.56],
+        pod: [0.06, 0.06, 0.07], wing: [0.96, 0.02, 0.22], noseStripe: [0.06, 0.06, 0.07] },
     ],
     astonmartin: [
       { id: "amr_green", name: "Racing Green", c1: [0.0, 0.35, 0.31], c2: [0.72, 0.88, 0.11], stripe: [0.05, 0.06, 0.06], accent: [0.90, 0.92, 0.90] },
@@ -195,6 +286,12 @@ const Liveries = (function () {
         nose: [0.0, 0.35, 0.31], wing: [0.72, 0.88, 0.11], noseStripe: [0.72, 0.88, 0.11] },
       { id: "amr_heritage", name: "Ulster",    c1: [0.0, 0.28, 0.25], c2: [0.90, 0.92, 0.90], stripe: [0.90, 0.30, 0.55], accent: [0.72, 0.88, 0.11],
         pod: [0.90, 0.30, 0.55], halo: [0.90, 0.92, 0.90] },
+      { id: "amr_satin",  name: "Satin BRG",   c1: [0.0, 0.26, 0.23], c2: [0.72, 0.88, 0.11], stripe: [0.05, 0.06, 0.06], accent: [0.90, 0.92, 0.90],
+        wing: [0.72, 0.88, 0.11], finish: "satin" },
+      { id: "amr_chrome", name: "Chrome Vantage", c1: [0.80, 0.86, 0.84], c2: [0.0, 0.35, 0.31], stripe: [0.72, 0.88, 0.11], accent: [0.82, 0.66, 0.28],
+        nose: [0.0, 0.35, 0.31], halo: [0.72, 0.88, 0.11], finish: "chrome" },
+      { id: "amr_cyan",   name: "Cyan Wing",   c1: [0.04, 0.09, 0.10], c2: [0.0, 0.78, 0.72], stripe: [0.72, 0.88, 0.11], accent: [0.0, 0.35, 0.31],
+        pod: [0.0, 0.35, 0.31], wing: [0.0, 0.78, 0.72], noseStripe: [0.72, 0.88, 0.11] },
     ],
     cadillac: [
       { id: "cad_usa",   name: "Americana", c1: [0.05, 0.10, 0.35], c2: [0.86, 0.12, 0.16], stripe: [0.94, 0.94, 0.96], accent: [0.82, 0.68, 0.32] },
@@ -209,6 +306,12 @@ const Liveries = (function () {
         nose: [0.10, 0.18, 0.50], wing: [0.93, 0.93, 0.95], noseStripe: [0.86, 0.12, 0.16] },
       { id: "cad_motorcity", name: "Motor City", c1: [0.16, 0.17, 0.20], c2: [0.80, 0.66, 0.30], stripe: [0.94, 0.94, 0.96], accent: [0.86, 0.12, 0.16],
         pod: [0.05, 0.05, 0.06], halo: [0.94, 0.94, 0.96] },
+      { id: "cad_satin",  name: "Satin Onyx",  c1: [0.08, 0.08, 0.09], c2: [0.80, 0.66, 0.30], stripe: [0.88, 0.78, 0.42], accent: [0.86, 0.88, 0.92],
+        wing: [0.80, 0.66, 0.30], finish: "satin" },
+      { id: "cad_chrome", name: "Chrome Luxe", c1: [0.86, 0.78, 0.52], c2: [0.05, 0.05, 0.06], stripe: [0.96, 0.90, 0.60], accent: [0.86, 0.12, 0.16],
+        nose: [0.05, 0.05, 0.06], halo: [0.96, 0.90, 0.60], finish: "chrome" },
+      { id: "cad_lemans", name: "Le Mans V",   c1: [0.93, 0.93, 0.95], c2: [0.05, 0.10, 0.35], stripe: [0.86, 0.12, 0.16], accent: [0.80, 0.66, 0.30],
+        pod: [0.05, 0.10, 0.35], wing: [0.86, 0.12, 0.16], noseStripe: [0.80, 0.66, 0.30] },
     ],
   };
 
@@ -219,7 +322,7 @@ const Liveries = (function () {
     // Optional extra paint carried on the team (custom "My Team" defines these via
     // the MY TEAM panel). Additive: absent -> exact same default shape as before.
     const ex = team.livery;
-    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo"]) if (ex[k]) def[k] = ex[k];
+    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo", "finish"]) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 

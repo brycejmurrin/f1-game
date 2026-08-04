@@ -219,7 +219,10 @@ js/circuits/     — circuit DATA —
 
 js/car/          — car —
   car3d.js       Car3D          procedural F1 car geometry
-  liveries.js    Liveries       custom paint jobs
+  liveries.js    Liveries       custom paint jobs — colours plus an optional
+                                  `finish` ("gloss" default | "satin" | "chrome"),
+                                  applied by remapping the body-paint surface id
+                                  (Car3D.FINISH_SURFACE); no shader change
   liverytex.js   LiveryTex      canvas-2D livery texture atlas (crests/sponsors/number)
   parts.js       Parts          upgrade catalog (8 categories, getMods, getCost, statMult)
   ghost.js       Ghost          time-trial ghost record/replay data layer
@@ -305,7 +308,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (83) + tests/*.test.mjs unit suites (22)
+tests/*.spec.js                 Playwright specs (84) + tests/*.test.mjs unit suites (22)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -357,6 +360,22 @@ Budget = 600 cr. `Parts.getMods(setup, teamEngine)` returns
 (e.g. `manu_mercedes`) are only shown when `team.engine` matches.
 `unlimitedBudget` (localStorage `apex26.unlimitedBudget`) removes the 600 cr cap.
 
+Every option also carries a parametric `visual` **recipe** consumed by `Car3D`
+(`getVisualTiers().._visual`); `VISUAL_FIELD_REGISTRY` names the one consumer of
+each recipe field, and `tests/parts-physics.spec.js` fails on an unregistered or
+stale field, a duplicate recipe within a category, or an engine that repeats
+another's six-field bodywork shape. The newer STRUCTURE knobs are
+`aero.plate/casc/swan/tvane` (endplate profile, cascade count, swan-neck mount,
+T-wing), `engine.chimney`, `brakes.scoop`, `ers.conduit` and `fuel.filler` — each
+defaults to the shipped geometry, so an option written before them is unchanged.
+
+**SIGNATURE options** (`tag: "SIGNATURE"`, `teams: [id]`) are cost- and
+physics-identical clones of the universal option named in `equivalent` — they buy
+a distinct mesh, never an advantage, and the test suite enforces that. Every team
+fields one in every category via `FACTORY_PRESETS`, except the four on a
+manufacturer-exclusive FACTORY power unit (that unit is already team-unique).
+`FACTORY_PRESETS` drives AI car MESHES only — never AI physics or player saves.
+
 ---
 
 ## Physics
@@ -365,6 +384,21 @@ Per-axle bicycle model. Key tuning variables in `game.js`: `WHEELBASE`,
 `STEER_EXPO`, `STEER_MAX_SLIP`, `STEER_SPEED_REF`, `DRIFT`, `ROAD_FOLLOW`,
 `PLAYER_GRIP`, `FRONT_GRIP`, `YAW_DAMP`, `YAW_INERTIA`, `PACE`. Modify via
 `__apex.setPhysics(o)` for A/B tests.
+
+**`PACE` is a ground-speed scale, not a speed cap.** The OVERALL SPEED slider
+scales the car's real m/s (and the accel curve) — nothing else. Everything else
+measured in speed is pace-normalised through two helpers next to `VMAX`:
+`vTop()` (where the envelope tops out in m/s — divide by it to normalise) and
+`vStd(v)` (that speed on the standard, pace-5 scale — compare hard-coded
+thresholds against it). So `VMAX`, `GEAR_TOP`, `TAPER_LO/HI`, `GRASS_V` and
+`STEER_SPEED_REF` all keep their literal values, while the gearbox still sweeps
+1→8, the tach its whole band, and the dial 0 → ~259 km/h at *every* setting.
+Only lap times move. **Adding anything that divides a speed by `VMAX`, or
+compares one against a literal, means picking `vTop()` or `vStd()`** — a bare
+`VMAX` there silently makes the slider shrink the player's envelope again.
+`__apex` hooks stay raw m/s; `obs().dashKph` is what the dial reads. True force
+constants (`LAT_MAX`, `BRAKE`, `LONG_GRIP`, `ACCEL`) are deliberately absolute —
+that is what makes low pace more forgiving.
 
 **Combined-slip (friction ellipse)**: `LONG_GRIP = 34 m/s²` is the longitudinal
 axis of the traction circle. Braking or accelerating consumes longitudinal grip;
@@ -630,7 +664,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-83 Playwright specs + 22 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+84 Playwright specs + 22 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

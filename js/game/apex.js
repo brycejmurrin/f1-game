@@ -1039,6 +1039,12 @@ const api = {
   // + one node per placement, plus batches() — the backend-neutral instanced-draw
   // handoff. Returns null before a track is built. Live object, not a copy: read
   // it, do not mutate it.
+  // Get or PIN the render clock (sky/cloud drift, FLAG cloth wave). It normally
+  // accumulates real frame dt, so two runs of the same frozen scene render
+  // different pixels — the reason tests/tracks-visual.spec.js could never hold a
+  // baseline. Setting it makes a capture reproducible; it keeps advancing from
+  // the value you set unless the scene is also headless().
+  renderClock(t) { if (t !== undefined) G.skyT = t; return G.skyT; },
   trackGraph: () => (G.track && G.track.graph) || null,
   tracks: () => Tracks.LIST.map((t, i) => ({ id: t.id, name: t.name, i })),
 
@@ -1277,7 +1283,11 @@ const api = {
 
       // ── motion ──
       speed:     +(G.player.speed || 0).toFixed(2),
-      speedKph:  +((G.player.speed || 0) * 3.6).toFixed(1),
+      speedKph:  +((G.player.speed || 0) * 3.6).toFixed(1),   // TRUE ground speed
+      // What the HUD/cockpit LCD actually shows: km/h on the pace-5 scale, so the
+      // dial spans the same range at every OVERALL SPEED setting. speedKph above
+      // (and every other speed in this API) stays raw — the hooks report physics.
+      dashKph:   +G.dashKph(G.player.speed || 0).toFixed(1),
       head:      +(G.player.head || 0).toFixed(4),
       vLat:      +(G.player.vLat || 0).toFixed(3),
 

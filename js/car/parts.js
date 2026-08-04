@@ -8,7 +8,11 @@
    visualTier (0=low/1=mid/2=high) drives Car3D's parts-driven geometry —
    purely cosmetic, no relation to the physics multipliers below. The
    category default is always tier 1 so an unmodified car's geometry is
-   unchanged. */
+   unchanged.
+   Options tagged SIGNATURE are locked to one team (`teams`) and are exact
+   cost/physics CLONES of the universal option named in `equivalent` — they buy
+   a distinct mesh, never an advantage. See FACTORY_PRESETS below for the grid's
+   fixed visual identity. */
 const Parts = (function () {
   const BUDGET = 600;
 
@@ -43,6 +47,24 @@ const Parts = (function () {
         { id: "sig_mercedes_zero", label: "Zero-Sidepod PU", cost: 150, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "hybrid_max",
           desc: "Mercedes signature compact installation — Hybrid Max performance in a tighter cooling form", speed: 1.05, accel: 1.08, cornering: 1.03, visual: { in: 1.38, snork: 1, twin: 1, inlet: 2, outlet: 3, podWidth: 0.72, shoulderHeight: 0.90, undercut: 1.35, coke: 1.34, tailWidth: 0.70, coverHeight: 0.90 }, visualTier: 2 },
         { id: "quali_engine",  label: "Quali Mode",    cost: 220, desc: "Unrestricted qualifying spec — peak power, no thermal limits",    speed: 1.10, accel: 1.09, visual: {"in": 1.65, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.20, shoulderHeight: 1.24, undercut: 0.78, coke: 0.84, tailWidth: 1.18, coverHeight: 1.22}, visualTier: 2 },
+        // Cooling-layout units — the `chimney` stacks are the visual tell.
+        { id: "chimney_spec",  label: "Chimney Spec",  cost:  90, desc: "Open-cooling installation — runs hot mappings safely for strong acceleration", accel: 1.08, speed: 1.01, visual: { in: 1.22, snork: 0, twin: 0, inlet: 2, outlet: 2, podWidth: 1.03, shoulderHeight: 1.05, undercut: 0.97, coke: 1.05, tailWidth: 1.01, coverHeight: 1.06, chimney: 3 }, visualTier: 1 },
+        { id: "sealed_pod",    label: "Sealed Bodywork", cost: 110, desc: "Fully closed cooling — minimum drag from a tightly packaged installation", speed: 1.06, accel: 1.02, visual: { in: 0.96, snork: 0, twin: 0, inlet: 1, outlet: 1, podWidth: 0.84, shoulderHeight: 0.94, undercut: 1.22, coke: 1.20, tailWidth: 0.82, coverHeight: 0.96, chimney: 0 }, visualTier: 1 },
+        { id: "plenum_max",    label: "Plenum Max",    cost: 170, desc: "Oversized airbox plenum — deep breathing across the whole rev range",   speed: 1.07, accel: 1.09, visual: { in: 1.72, snork: 1, twin: 1, inlet: 3, outlet: 2, podWidth: 1.11, shoulderHeight: 1.21, undercut: 0.85, coke: 0.96, tailWidth: 1.09, coverHeight: 1.19, chimney: 1 }, visualTier: 2 },
+        // ENGINE — one SIGNATURE per team (stat- and cost-identical to the
+        // universal option each team already fields; only the mesh differs).
+        { id: "sig_mclaren_pu", label: "Woking Hybrid", cost: 150, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "hybrid_max",
+          desc: "McLaren signature hybrid — Hybrid Max performance with 1 cooling chimney", speed: 1.05, accel: 1.08, cornering: 1.03, visual: { in: 1.3, snork: 1, twin: 1, inlet: 2, outlet: 2, podWidth: 1.037, shoulderHeight: 1.122, undercut: 0.908, coke: 0.988, tailWidth: 1.026, coverHeight: 1.107, chimney: 1 }, visualTier: 2 },
+        { id: "sig_alpine_pu", label: "Enstone Hybrid", cost: 60, teams: ["alpine"], tag: "SIGNATURE", equivalent: "performance",
+          desc: "Alpine signature hybrid — Performance spec with 3 cooling chimneys", speed: 1.00, accel: 1.09, visual: { in: 1.15, twin: 1, inlet: 2, outlet: 1, podWidth: 1.102, shoulderHeight: 1.133, undercut: 0.927, coke: 0.996, tailWidth: 1.097, coverHeight: 1.081, chimney: 3 }, visualTier: 2 },
+        { id: "sig_racingbulls_pu", label: "Faenza Hybrid", cost: 40, teams: ["racingbulls"], tag: "SIGNATURE", equivalent: "torque_curve",
+          desc: "Racing Bulls signature hybrid — Torque Curve performance with 1 cooling chimney", accel: 1.06, cornering: 1.03, visual: { in: 1, inlet: 1, outlet: 1, podWidth: 0.921, shoulderHeight: 1.003, undercut: 1.061, coke: 1.145, tailWidth: 0.904, coverHeight: 0.97, chimney: 1 }, visualTier: 1 },
+        { id: "sig_haas_pu", label: "Kannapolis Hybrid", cost: 70, teams: ["haas"], tag: "SIGNATURE", equivalent: "v_power",
+          desc: "Haas signature hybrid — V-Power Spec performance with 2 cooling chimneys", speed: 1.02, accel: 1.07, visual: { in: 1.1, twin: 1, inlet: 2, outlet: 1, podWidth: 1.144, shoulderHeight: 1.145, undercut: 0.931, coke: 0.959, tailWidth: 1.123, coverHeight: 1.082, chimney: 2 }, visualTier: 2 },
+        { id: "sig_williams_pu", label: "Grove Hybrid", cost: 100, teams: ["williams"], tag: "SIGNATURE", equivalent: "highrev",
+          desc: "Williams signature hybrid — High-Rev performance with fully sealed cooling bodywork", speed: 1.05, accel: 1.04, visual: { in: 1.25, snork: 1, inlet: 3, outlet: 2, podWidth: 0.912, shoulderHeight: 1.044, undercut: 0.994, coke: 1.253, tailWidth: 0.852, coverHeight: 1.079, chimney: 0 }, visualTier: 1 },
+        { id: "sig_cadillac_pu", label: "Detroit Hybrid", cost: 200, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "manu_ferrari",
+          desc: "Cadillac signature hybrid — Ferrari 066/12 performance with 3 cooling chimneys", speed: 1.09, accel: 1.11, braking: 1.04, visual: { in: 1.58, snork: 1, twin: 1, inlet: 3, outlet: 3, podWidth: 1.28, shoulderHeight: 1.28, undercut: 0.76, coke: 0.774, tailWidth: 1.271, coverHeight: 1.272, chimney: 3 }, visualTier: 2 },
       ],
     },
     {
@@ -70,8 +92,27 @@ const Parts = (function () {
           desc: "Aston Martin signature tunnel floor — Ground Effect performance with an active upper flap", speed: 0.87, cornering: 1.32, braking: 1.10, visual: { lvl: 4, beam: 1, vane: 2, drs: 1, frontSweep: 0.10, frontTaper: 0.87, frontRise: 0.12, rearSweep: 0.15, rearTaper: 0.82, floorEdge: 1.32, floorCut: 0.21, diffuserRise: 1.38 }, visualTier: 2 },
         { id: "sig_redbull_concept", label: "Newey Concept", cost: 170, teams: ["redbull"], tag: "SIGNATURE", equivalent: "ground_effect",
           desc: "Red Bull signature high-rake concept — Ground Effect performance with an aggressive diffuser ramp", speed: 0.87, cornering: 1.32, braking: 1.10, visual: { lvl: 4, beam: 1, vane: 3, frontSweep: 0.08, frontTaper: 0.90, frontRise: 0.14, rearSweep: 0.11, rearTaper: 0.87, floorEdge: 1.26, floorCut: 0.19, diffuserRise: 1.44 }, visualTier: 2 },
+        // Wing-STRUCTURE packages — plate profile, cascade count, swan-neck mount
+        // and T-wing are the visual tells (see the aero recipe knobs in car3d.js).
+        { id: "swan_low",      label: "Swan-Neck Low Drag", cost: 70, desc: "Over-slung wing mount on a stripped front end — clean airflow, minimal downforce", speed: 1.07, cornering: 0.86, visual: { lvl: 1, vane: 1, plate: 0, casc: 0, swan: 1, tvane: 0, frontSweep: 0.02, frontTaper: 0.99, frontRise: 0.01, rearSweep: 0.05, rearTaper: 0.92, floorEdge: 0.90, floorCut: 0.05, diffuserRise: 0.86 }, visualTier: 0 },
+        { id: "outwash_max",   label: "Max Outwash",   cost: 140, desc: "Tall arched endplates and a full canard cascade — front-end bite in slow corners", speed: 0.96, cornering: 1.20, braking: 1.04, visual: { lvl: 3, vane: 2, plate: 2, casc: 3, swan: 0, tvane: 0, frontSweep: 0.14, frontTaper: 0.85, frontRise: 0.13, rearSweep: 0.06, rearTaper: 0.95, floorEdge: 1.12, floorCut: 0.13, diffuserRise: 1.18 }, visualTier: 2 },
+        { id: "twin_tier",     label: "Twin-Tier Wing", cost: 150, desc: "Swan-neck rear with a T-wing tier — stable rear platform through fast sequences", speed: 0.97, cornering: 1.22, braking: 1.03, visual: { lvl: 3, beam: 1, vane: 2, plate: 1, casc: 2, swan: 1, tvane: 1, frontSweep: 0.07, frontTaper: 0.92, frontRise: 0.07, rearSweep: 0.11, rearTaper: 0.89, floorEdge: 1.08, floorCut: 0.12, diffuserRise: 1.20 }, visualTier: 2 },
         { id: "sig_cadillac_lowline", label: "Detroit Lowline", cost: 80, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "le_mans",
           desc: "Cadillac signature superspeedway trim — Le Mans Trim performance with a stretched flat-deck wing", speed: 1.14, cornering: 0.80, visual: { lvl: 0, vane: 0, beam: 0, frontSweep: -0.02, frontTaper: 1.04, frontRise: 0, rearSweep: 0.01, rearTaper: 0.94, floorEdge: 0.84, floorCut: 0.04, diffuserRise: 0.74 }, visualTier: 0 },
+        // AERO — one SIGNATURE per team (stat- and cost-identical to the
+        // universal option each team already fields; only the mesh differs).
+        { id: "sig_mercedes_wing", label: "Brackley Aero Kit", cost: 80, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "high",
+          desc: "Mercedes signature aero kit — High DF performance with outwash endplates on a swan-neck mount", speed: 0.95, cornering: 1.15, visual: { lvl: 3.25, vane: 2, frontSweep: 0.07, frontTaper: 0.928, frontRise: 0.09, rearSweep: 0.084, rearTaper: 0.918, floorEdge: 1.037, floorCut: 0.1, diffuserRise: 1.114, plate: 1, casc: 1, swan: 1, tvane: 0 }, visualTier: 2 },
+        { id: "sig_ferrari_wing", label: "Maranello Aero Kit", cost: 190, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "circuit_adaptive",
+          desc: "Ferrari signature aero kit — Circuit Adaptive performance with tall arched endplates and a T-wing tier", speed: 1.01, cornering: 1.22, braking: 1.06, visual: { lvl: 3.6, beam: 1, drs: 1, vane: 3, frontSweep: 0.124, frontTaper: 0.845, frontRise: 0.12, rearSweep: 0.138, rearTaper: 0.835, floorEdge: 1.206, floorCut: 0.15, diffuserRise: 1.293, plate: 2, casc: 3, swan: 0, tvane: 1 }, visualTier: 2 },
+        { id: "sig_alpine_wing", label: "Enstone Aero Kit", cost: 120, teams: ["alpine"], tag: "SIGNATURE", equivalent: "underfloor",
+          desc: "Alpine signature aero kit — Underfloor Kit performance with outwash endplates and a T-wing tier", speed: 0.94, cornering: 1.22, visual: { lvl: 3, beam: 1, vane: 3, frontSweep: 0.078, frontTaper: 0.93, frontRise: 0.08, rearSweep: 0.065, rearTaper: 0.94, floorEdge: 1.265, floorCut: 0.18, diffuserRise: 1.31, plate: 1, casc: 1, swan: 0, tvane: 1 }, visualTier: 2 },
+        { id: "sig_racingbulls_wing", label: "Faenza Aero Kit", cost: 50, teams: ["racingbulls"], tag: "SIGNATURE", equivalent: "beam_wing",
+          desc: "Racing Bulls signature aero kit — Beam Wing performance with stripped low-drag endplates on a swan-neck mount", speed: 0.99, cornering: 1.07, braking: 1.04, visual: { lvl: 2, beam: 1, vane: 1, frontSweep: 0.044, frontTaper: 1.009, frontRise: 0.04, rearSweep: 0.072, rearTaper: 0.967, floorEdge: 0.921, floorCut: 0.05, diffuserRise: 0.996, plate: 0, casc: 1, swan: 1, tvane: 0 }, visualTier: 2 },
+        { id: "sig_haas_wing", label: "Kannapolis Aero Kit", cost: 40, teams: ["haas"], tag: "SIGNATURE", equivalent: "low",
+          desc: "Haas signature aero kit — Low DF performance with stripped low-drag endplates", speed: 1.06, cornering: 0.88, visual: { lvl: 1, vane: 1, frontSweep: 0.016, frontTaper: 1.018, frontRise: 0.02, rearSweep: 0.032, rearTaper: 0.996, floorEdge: 0.95, floorCut: 0.06, diffuserRise: 0.804, plate: 0, casc: 0, swan: 0, tvane: 0 }, visualTier: 0 },
+        { id: "sig_audi_wing", label: "Neuburg Aero Kit", cost: 90, teams: ["audi"], tag: "SIGNATURE", equivalent: "rake_setup",
+          desc: "Audi signature aero kit — Rake Setup performance with tall arched endplates and a T-wing tier", speed: 0.97, cornering: 1.1, braking: 1.08, visual: { lvl: 3, vane: 2, frontSweep: 0.07, frontTaper: 0.912, frontRise: 0.07, rearSweep: 0.086, rearTaper: 0.912, floorEdge: 1.092, floorCut: 0.11, diffuserRise: 1.21, plate: 2, casc: 2, swan: 0, tvane: 1 }, visualTier: 2 },
       ],
     },
     {
@@ -91,12 +132,33 @@ const Parts = (function () {
         { id: "heave_spring",    label: "Heave Spring",    cost: 150, desc: "Aero-optimised springing — stable floor clearance under hard braking",   cornering: 1.21, speed: 1.03, visual: {"ride": -0.03, "arm": 1.2, "push": 1, "pull": 1}, visualTier: 2 },
         { id: "active",          label: "Active",          cost: 190, desc: "Active suspension system — peak cornering, slight top speed boost",       cornering: 1.28, speed: 1.02, visual: {"ride": -0.045, "arm": 1.25, "push": 1}, visualTier: 2 },
         { id: "interlinked",     label: "Interlinked",     cost: 170, desc: "Hydraulically linked heave control — stable platform with kerb compliance", cornering: 1.23, braking: 1.05, speed: 1.01, visual: { ride: -0.028, arm: 1.12, push: 1, pull: 1 }, visualTier: 2 },
+        { id: "torsion_bar",     label: "Torsion Bar",     cost:  60, desc: "Torsion-bar springing — compact, consistent response over a long stint",     cornering: 1.10, visual: { ride: -0.005, arm: 0.96, push: 0, wishbone: 1.12, toe: 1.08 }, visualTier: 2 },
+        { id: "zero_keel",       label: "Zero Keel",       cost:  85, desc: "Keel-less front end — cleaner airflow under the nose with a stiffer platform", cornering: 1.13, braking: 1.03, visual: { ride: -0.022, arm: 1.02, push: 1, wishbone: 0.82, toe: 0.92 }, visualTier: 2 },
+        { id: "mono_damper",     label: "Monotube Damper", cost: 140, desc: "Monotube gas dampers — precise control with a useful mass saving",          cornering: 1.20, accel: 1.02, visual: { ride: -0.032, arm: 1.06, push: 1, pull: 1, wishbone: 1.24, toe: 1.16 }, visualTier: 2 },
         { id: "sig_redbull_pullrod", label: "Milton Keynes Pullrod", cost: 190, teams: ["redbull"], tag: "SIGNATURE", equivalent: "active",
           desc: "Red Bull signature pullrod layout — Active performance with a distinct crossed actuator", cornering: 1.28, speed: 1.02, visual: { ride: -0.043, arm: 1.28, push: 1, pull: 1 }, visualTier: 2 },
         { id: "sig_mclaren_active", label: "Woking Active", cost: 190, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "active",
           desc: "McLaren signature adaptive platform — Active performance with slimline carbon arms", cornering: 1.28, speed: 1.02, visual: { ride: -0.047, arm: 0.92, push: 1, pull: 1 }, visualTier: 2 },
         { id: "sig_audi_damper", label: "Neuburg Damper", cost: 100, teams: ["audi"], tag: "SIGNATURE", equivalent: "triple_damper",
           desc: "Audi signature three-stage damper — Triple Damper performance with a heavy-gauge arm set", cornering: 1.17, speed: 1.01, visual: { ride: -0.017, arm: 1.32, push: 1 }, visualTier: 2 },
+        // SUSPENSION — one SIGNATURE per team (stat- and cost-identical to the
+        // universal option each team already fields; only the mesh differs).
+        { id: "sig_mercedes_susp", label: "Brackley Chassis", cost: 170, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "interlinked",
+          desc: "Mercedes signature chassis — Interlinked performance with a crossed pullrod actuator", speed: 1.01, cornering: 1.23, braking: 1.05, visual: { ride: -0.024, arm: 1.053, push: 1, pull: 1, wishbone: 1.06, toe: 0.94 }, visualTier: 2 },
+        { id: "sig_ferrari_susp", label: "Maranello Chassis", cost: 90, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "racing",
+          desc: "Ferrari signature chassis — Racing performance with pushrod actuation", cornering: 1.16, visual: { ride: -0.029, arm: 1.265, push: 1, wishbone: 0.9, toe: 1.1 }, visualTier: 2 },
+        { id: "sig_alpine_susp", label: "Enstone Chassis", cost: 70, teams: ["alpine"], tag: "SIGNATURE", equivalent: "kerb_spec",
+          desc: "Alpine signature chassis — Kerb Spec performance with heavy-gauge arms", cornering: 1.11, braking: 1.05, visual: { ride: 0.012, arm: 1.144, push: 0, wishbone: 0.96, toe: 1.04 }, visualTier: 2 },
+        { id: "sig_racingbulls_susp", label: "Faenza Chassis", cost: 50, teams: ["racingbulls"], tag: "SIGNATURE", equivalent: "sport",
+          desc: "Racing Bulls signature chassis — Sport performance with slimline carbon arms", cornering: 1.08, visual: { ride: -0.004, arm: 1.008, push: 0, wishbone: 1.04, toe: 0.96 }, visualTier: 2 },
+        { id: "sig_haas_susp", label: "Kannapolis Chassis", cost: 60, teams: ["haas"], tag: "SIGNATURE", equivalent: "carbon_pushrods",
+          desc: "Haas signature chassis — Carbon Pushrods performance with pushrod actuation", cornering: 1.09, braking: 1.04, visual: { ride: -0.007, arm: 0.972, push: 1, wishbone: 0.92, toe: 1.08 }, visualTier: 2 },
+        { id: "sig_williams_susp", label: "Grove Chassis", cost: 80, teams: ["williams"], tag: "SIGNATURE", equivalent: "low_ride",
+          desc: "Williams signature chassis — Low Ride Height performance with slimline carbon arms", speed: 1.02, cornering: 1.12, visual: { ride: -0.037, arm: 0.924, push: 0, wishbone: 1.12, toe: 0.88 }, visualTier: 2 },
+        { id: "sig_astonmartin_susp", label: "Silverstone Chassis", cost: 150, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "heave_spring",
+          desc: "Aston Martin signature chassis — Heave Spring performance with a crossed pullrod actuator", speed: 1.03, cornering: 1.21, visual: { ride: -0.042, arm: 1.272, push: 1, pull: 1, wishbone: 0.94, toe: 1.06 }, visualTier: 2 },
+        { id: "sig_cadillac_susp", label: "Detroit Chassis", cost: 110, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "inboard_dampers",
+          desc: "Cadillac signature chassis — Inboard Dampers performance with a crossed pullrod actuator", cornering: 1.18, braking: 1.07, visual: { ride: -0.01, arm: 1.122, push: 1, pull: 1, wishbone: 0.98, toe: 1.02 }, visualTier: 2 },
       ],
     },
     {
@@ -115,6 +177,9 @@ const Parts = (function () {
         { id: "ceramic",     label: "Carbon Ceramic",   cost: 140, desc: "Maximum stopping power — zero fade",                                        braking: 1.24, visual: {"cal": [0.97, 0.1, 0.08], "duct": 1.6, "rim": [0.55, 0.56, 0.6]}, visualTier: 2 },
         { id: "brembo_evo",  label: "Brembo Evo",       cost: 160, desc: "Next-gen racing brake package — ultimate stopping with mass benefit",        braking: 1.26, accel: 1.04, visual: {"cal": [0.98, 0.62, 0.05], "duct": 1.75, "rim": [0.42, 0.34, 0.12]}, visualTier: 2 },
         { id: "six_piston",   label: "Six Piston",       cost: 180, desc: "Large monobloc calipers — peak initial bite with stable trail braking",       braking: 1.27, cornering: 1.02, visual: { cal: [0.10, 0.65, 0.95], duct: 1.55, rim: [0.24, 0.28, 0.34] }, visualTier: 2 },
+        { id: "mono_steel",   label: "Monobloc Steel",   cost:  70, desc: "One-piece steel calipers — predictable bite with no exotic materials",        braking: 1.12, visual: { cal: [0.62, 0.64, 0.70], duct: 0.95, scoop: 0, rotor: 1, rotorScale: 1.02 }, visualTier: 1 },
+        { id: "scoop_wrap",   label: "Wrapped Ducts",    cost: 110, desc: "Boomerang duct fairings wrapping the wheel face — cooling that also turns air", braking: 1.19, cornering: 1.02, visual: { cal: [0.20, 0.55, 0.85], duct: 1.30, scoop: 2, rim: [0.26, 0.30, 0.36] }, visualTier: 2 },
+        { id: "cryo_pack",    label: "Cryo Pack",        cost: 150, desc: "Cryogenically treated discs — deep, repeatable stopping power under load",     braking: 1.25, accel: 1.02, visual: { cal: [0.72, 0.86, 0.95], duct: 1.62, scoop: 2, rim: [0.50, 0.54, 0.60] }, visualTier: 2 },
         { id: "sig_ferrari_brembo", label: "Maranello Brembo", cost: 160, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "brembo_evo",
           desc: "Ferrari signature brake package — Brembo Evo performance with red monobloc hardware", braking: 1.26, accel: 1.04, visual: { cal: [0.95, 0.05, 0.04], duct: 1.70, rim: [0.52, 0.45, 0.20] }, visualTier: 2 },
         { id: "sig_haas_carbonmag", label: "Kannapolis C-Mag", cost: 120, teams: ["haas"], tag: "SIGNATURE", equivalent: "carbon_mag",
@@ -123,6 +188,22 @@ const Parts = (function () {
           desc: "Mercedes signature brake package — Carbon Ceramic performance with Petronas-teal hardware", braking: 1.24, visual: { cal: [0.0, 0.75, 0.70], duct: 1.55, rim: [0.60, 0.62, 0.66] }, visualTier: 2 },
         { id: "sig_aston_carbon", label: "Lagonda Carbon", cost: 100, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "ventilated",
           desc: "Aston Martin signature vented brake — Ventilated Carbon performance with racing-green monoblocs", braking: 1.18, visual: { cal: [0.0, 0.55, 0.38], duct: 1.40, rim: [0.50, 0.44, 0.20] }, visualTier: 2 },
+        // BRAKES — one SIGNATURE per team (stat- and cost-identical to the
+        // universal option each team already fields; only the mesh differs).
+        { id: "sig_mclaren_brakes", label: "Woking Brake Pack", cost: 180, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "six_piston",
+          desc: "McLaren signature brake pack — Six Piston performance with a duct winglet", cornering: 1.02, braking: 1.27, visual: { cal: [1, 0.5, 0], duct: 1.643, rim: [0.24, 0.28, 0.34], scoop: 1 }, visualTier: 2 },
+        { id: "sig_redbull_brakes", label: "Milton Keynes Brake Pack", cost: 120, teams: ["redbull"], tag: "SIGNATURE", equivalent: "carbon_mag",
+          desc: "Red Bull signature brake pack — Carbon-Mag performance with wrapped boomerang ducts", accel: 1.03, braking: 1.2, visual: { cal: [0.95, 0.78, 0], duct: 1.624, rim: [0.48, 0.4, 0.16], scoop: 2 }, visualTier: 2 },
+        { id: "sig_alpine_brakes", label: "Enstone Brake Pack", cost: 100, teams: ["alpine"], tag: "SIGNATURE", equivalent: "ventilated",
+          desc: "Alpine signature brake pack — Ventilated Carbon performance with a duct winglet", braking: 1.18, visual: { cal: [1, 0.53, 0.74], duct: 1.296, scoop: 1 }, visualTier: 2 },
+        { id: "sig_racingbulls_brakes", label: "Faenza Brake Pack", cost: 40, teams: ["racingbulls"], tag: "SIGNATURE", equivalent: "sport",
+          desc: "Racing Bulls signature brake pack — Sport performance with bare duct inlets", braking: 1.08, visual: { cal: [0.2, 0.3, 0.95], duct: 0.874, scoop: 0 }, visualTier: 2 },
+        { id: "sig_williams_brakes", label: "Grove Brake Pack", cost: 50, teams: ["williams"], tag: "SIGNATURE", equivalent: "titanium",
+          desc: "Williams signature brake pack — Titanium Caliper performance with a duct winglet", accel: 1.04, braking: 1.06, visual: { cal: [0.2, 0.55, 0.95], duct: 0.765, scoop: 1 }, visualTier: 1 },
+        { id: "sig_audi_brakes", label: "Neuburg Brake Pack", cost: 130, teams: ["audi"], tag: "SIGNATURE", equivalent: "regen_brakes",
+          desc: "Audi signature brake pack — Regen Brakes performance with wrapped boomerang ducts", accel: 1.06, braking: 1.12, visual: { cal: [0.98, 0.28, 0.05], duct: 1.425, scoop: 2 }, visualTier: 2 },
+        { id: "sig_cadillac_brakes", label: "Detroit Brake Pack", cost: 60, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "endurance",
+          desc: "Cadillac signature brake pack — Endurance performance with wrapped boomerang ducts", accel: 1.02, braking: 1.1, visual: { cal: [0.85, 0.7, 0.32], duct: 1.218, scoop: 2 }, visualTier: 2 },
       ],
     },
     {
@@ -140,10 +221,33 @@ const Parts = (function () {
         { id: "qualigum",     label: "Quali Spec",    cost: 180, desc: "One-lap ultra-soft — maximum short-run grip",                                 speed: 0.91, cornering: 1.28, accel: 1.09, visual: {"band": [0.62, 0.12, 0.78], "grooved": false, "grooves": 0, "bandWidth": 0.14, "coverVanes": 11}, visualTier: 2 },
         { id: "hypersoft",    label: "Hyper Soft",    cost: 200, desc: "Prototype extreme compound — maximum peak grip, very short lifespan",          speed: 0.88, cornering: 1.36, accel: 1.12, visual: {"band": [0.98, 0.38, 0.62], "grooved": false, "grooves": 0, "bandWidth": 0.15, "coverVanes": 12}, visualTier: 2 },
         { id: "sprint_soft",  label: "Sprint Soft",   cost: 150, desc: "Short-race compound — rapid warm-up and strong launch traction",                 speed: 0.93, cornering: 1.22, accel: 1.08, visual: { band: [0.15, 0.55, 0.95], grooved: false, grooves: 0, bandWidth: 0.105, coverVanes: 9 }, visualTier: 2 },
+        { id: "wet_full",     label: "Full Wet",      cost:   0, desc: "Deep-tread monsoon tyre — the only compound that clears standing water",         speed: 0.88, cornering: 0.90, accel: 0.90, visual: { band: [0.10, 0.40, 0.92], grooved: true, grooves: 5, grooveDepth: 0.075, bandWidth: 0.09, coverVanes: 4 }, visualTier: 0 },
+        { id: "compound_c3",  label: "Compound C3",   cost:  50, desc: "Pirelli's workhorse medium-hard — a small, safe step up from the base compound", speed: 1.01, cornering: 1.05, accel: 1.01, visual: { band: [0.92, 0.92, 0.60], grooved: false, grooves: 0, bandWidth: 0.065, coverVanes: 9 }, visualTier: 1 },
+        { id: "endurance_tyre", label: "Endurance Spec", cost: 70, desc: "Reinforced casing — holds its shape lap after lap without giving up top speed", speed: 1.02, cornering: 1.06, accel: 1.00, visual: { band: [0.55, 0.58, 0.64], grooved: false, grooves: 0, bandWidth: 0.055, coverVanes: 12 }, visualTier: 1 },
         { id: "sig_cadillac_sprint", label: "Cadillac Sprint", cost: 150, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "sprint_soft",
           desc: "Cadillac signature sprint compound — Sprint Soft performance with a gold double-width band", speed: 0.93, cornering: 1.22, accel: 1.08, visual: { band: [0.92, 0.72, 0.18], grooved: false, grooves: 0, bandWidth: 0.125, coverVanes: 4 }, visualTier: 2 },
         { id: "sig_rb_street", label: "Faenza Street", cost: 130, teams: ["racingbulls"], tag: "SIGNATURE", equivalent: "supersoft",
           desc: "Racing Bulls signature street compound — Super Soft performance with a twin-blue sidewall band", speed: 0.94, cornering: 1.20, accel: 1.06, visual: { band: [0.20, 0.30, 0.95], grooved: false, grooves: 0, bandWidth: 0.135, coverVanes: 7 }, visualTier: 2 },
+        // TYRES — one SIGNATURE per team (stat- and cost-identical to the
+        // universal option each team already fields; only the mesh differs).
+        { id: "sig_mercedes_tyre", label: "Brackley Compound", cost: 0, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "medium",
+          desc: "Mercedes signature compound — Medium performance with a 10-vane wheel cover", speed: 1.00, accel: 1.00, cornering: 1.00, visual: { band: [0.96, 0.8, 0.1], grooved: false, grooves: 0, bandWidth: 0.069, coverVanes: 10 }, visualTier: 1 },
+        { id: "sig_ferrari_tyre", label: "Maranello Compound", cost: 80, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "soft",
+          desc: "Ferrari signature compound — Soft performance with a 6-vane wheel cover", speed: 0.97, accel: 1.04, cornering: 1.12, visual: { band: [0.92, 0.12, 0.1], grooved: false, grooves: 0, bandWidth: 0.11, coverVanes: 6 }, visualTier: 2 },
+        { id: "sig_mclaren_tyre", label: "Woking Compound", cost: 150, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "sprint_soft",
+          desc: "McLaren signature compound — Sprint Soft performance with a 11-vane wheel cover", speed: 0.93, accel: 1.08, cornering: 1.22, visual: { band: [0.15, 0.55, 0.95], grooved: false, grooves: 0, bandWidth: 0.109, coverVanes: 11 }, visualTier: 2 },
+        { id: "sig_redbull_tyre", label: "Milton Keynes Compound", cost: 80, teams: ["redbull"], tag: "SIGNATURE", equivalent: "soft",
+          desc: "Red Bull signature compound — Soft performance with a 8-vane wheel cover", speed: 0.97, accel: 1.04, cornering: 1.12, visual: { band: [0.92, 0.12, 0.1], grooved: false, grooves: 0, bandWidth: 0.106, coverVanes: 8 }, visualTier: 2 },
+        { id: "sig_alpine_tyre", label: "Enstone Compound", cost: 60, teams: ["alpine"], tag: "SIGNATURE", equivalent: "compound_c4",
+          desc: "Alpine signature compound — Compound C4 performance with a 7-vane wheel cover", speed: 0.98, accel: 1.02, cornering: 1.08, visual: { band: [0.95, 0.42, 0.1], grooved: false, grooves: 0, bandWidth: 0.092, coverVanes: 7 }, visualTier: 2 },
+        { id: "sig_haas_tyre", label: "Kannapolis Compound", cost: 0, teams: ["haas"], tag: "SIGNATURE", equivalent: "hard",
+          desc: "Haas signature compound — Hard performance with a 5-vane wheel cover", speed: 1.02, accel: 0.97, cornering: 0.92, visual: { band: [0.9, 0.9, 0.93], grooved: false, grooves: 0, bandWidth: 0.051, coverVanes: 5 }, visualTier: 0 },
+        { id: "sig_williams_tyre", label: "Grove Compound", cost: 0, teams: ["williams"], tag: "SIGNATURE", equivalent: "hard",
+          desc: "Williams signature compound — Hard performance with a 12-vane wheel cover", speed: 1.02, accel: 0.97, cornering: 0.92, visual: { band: [0.9, 0.9, 0.93], grooved: false, grooves: 0, bandWidth: 0.045, coverVanes: 12 }, visualTier: 0 },
+        { id: "sig_audi_tyre", label: "Neuburg Compound", cost: 60, teams: ["audi"], tag: "SIGNATURE", equivalent: "compound_c4",
+          desc: "Audi signature compound — Compound C4 performance with a 4-vane wheel cover", speed: 0.98, accel: 1.02, cornering: 1.08, visual: { band: [0.95, 0.42, 0.1], grooved: false, grooves: 0, bandWidth: 0.095, coverVanes: 4 }, visualTier: 2 },
+        { id: "sig_astonmartin_tyre", label: "Silverstone Compound", cost: 80, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "soft",
+          desc: "Aston Martin signature compound — Soft performance with a 3-vane wheel cover", speed: 0.97, accel: 1.04, cornering: 1.12, visual: { band: [0.92, 0.12, 0.1], grooved: false, grooves: 0, bandWidth: 0.1, coverVanes: 3 }, visualTier: 2 },
       ],
     },
     {
@@ -162,10 +266,34 @@ const Parts = (function () {
         { id: "full_attack",    label: "Full Attack",   cost: 200, desc: "Maximum ERS output — qualifying/sprint spec",                               speed: 1.06, accel: 1.14, visual: {"led": [2.25, 0.22, 0.16], "pack": 1.3}, visualTier: 2 },
         { id: "overcharge",     label: "Overcharge",    cost: 230, desc: "Experimental limit-push mode — maximum all-channel ERS output",              speed: 1.10, accel: 1.18, visual: {"led": [2.4, 0.75, 0.06], "pack": 1.35}, visualTier: 2 },
         { id: "supercapacitor", label: "Supercapacitor", cost: 180, desc: "High-discharge buffer — immediate deployment with improved recovery",        speed: 1.04, accel: 1.13, braking: 1.04, visual: { led: [0.30, 2.20, 2.20], pack: 1.10 }, visualTier: 2 },
+        // External-conduit packages — visible high-voltage plumbing on the cover.
+        { id: "harvest_max",    label: "Harvest Max",   cost:  95, desc: "Maximum recovery window — tops the pack up everywhere without hurting pace",   speed: 1.01, braking: 1.08, accel: 1.02, visual: { led: [0.20, 1.60, 0.85], pack: 1.05, cells: 4, conduit: 1 }, visualTier: 1 },
+        { id: "conduit_twin",   label: "Twin Conduit",  cost: 140, desc: "Doubled deployment loom — steady high-current delivery out of every corner",   speed: 1.02, accel: 1.09, visual: { led: [0.35, 0.85, 2.05], pack: 1.18, cells: 6, conduit: 2 }, visualTier: 2 },
+        { id: "burst_map",      label: "Burst Map",     cost: 165, desc: "Short, violent deployment bursts — overtaking punch with cornering traction",  speed: 0.98, accel: 1.13, cornering: 1.02, visual: { led: [2.15, 0.45, 0.12], pack: 1.26, cells: 7, conduit: 2 }, visualTier: 2 },
         { id: "sig_audi_quattro", label: "Quattro Hybrid", cost: 180, teams: ["audi"], tag: "SIGNATURE", equivalent: "supercapacitor",
           desc: "Audi signature deployment map — Supercapacitor performance with a red energy conduit", speed: 1.04, accel: 1.13, braking: 1.04, visual: { led: [2.35, 0.18, 0.08], pack: 1.12 }, visualTier: 2 },
         { id: "sig_alpine_boost", label: "Enstone Boost", cost: 150, teams: ["alpine"], tag: "SIGNATURE", equivalent: "race_mode",
           desc: "Alpine signature deployment map — Race Mode performance with a rose-glow energy cell", speed: 1.03, accel: 1.07, visual: { led: [1.90, 0.55, 1.20], pack: 1.18 }, visualTier: 2 },
+        // ERS — one SIGNATURE per team (stat- and cost-identical to the
+        // universal option each team already fields; only the mesh differs).
+        { id: "sig_mercedes_ers", label: "Brackley Deploy Map", cost: 150, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "race_mode",
+          desc: "Mercedes signature deploy map — Race Mode performance with an external conduit run", speed: 1.03, accel: 1.07, visual: { led: [0.1, 1.85, 1.7], pack: 1.14, cells: 5, conduit: 1 }, visualTier: 2 },
+        { id: "sig_ferrari_ers", label: "Maranello Deploy Map", cost: 120, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "torque_fill",
+          desc: "Ferrari signature deploy map — Torque Fill performance with a twin external conduit", accel: 1.08, cornering: 1.06, visual: { led: [2.1, 0.2, 0.12], pack: 1.196, cells: 7, conduit: 2 }, visualTier: 2 },
+        { id: "sig_mclaren_ers", label: "Woking Deploy Map", cost: 180, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "supercapacitor",
+          desc: "McLaren signature deploy map — Supercapacitor performance with a twin external conduit", speed: 1.04, accel: 1.13, braking: 1.04, visual: { led: [2.2, 1.05, 0.05], pack: 1.078, cells: 6, conduit: 2 }, visualTier: 2 },
+        { id: "sig_redbull_ers", label: "Milton Keynes Deploy Map", cost: 130, teams: ["redbull"], tag: "SIGNATURE", equivalent: "overtake_focus",
+          desc: "Red Bull signature deploy map — OT Focus performance with an external conduit run", speed: 0.96, accel: 1.12, cornering: 1.04, visual: { led: [2.15, 1.7, 0.1], pack: 1.224, cells: 4, conduit: 1 }, visualTier: 2 },
+        { id: "sig_racingbulls_ers", label: "Faenza Deploy Map", cost: 90, teams: ["racingbulls"], tag: "SIGNATURE", equivalent: "split_deploy",
+          desc: "Racing Bulls signature deploy map — Split Deploy performance with an external conduit run", accel: 1.06, cornering: 1.04, visual: { led: [0.35, 0.6, 2.25], pack: 1.067, cells: 5, conduit: 1 }, visualTier: 1 },
+        { id: "sig_haas_ers", label: "Kannapolis Deploy Map", cost: 60, teams: ["haas"], tag: "SIGNATURE", equivalent: "harvest",
+          desc: "Haas signature deploy map — Harvest performance with an external conduit run", speed: 1.02, accel: 0.95, visual: { led: [1.8, 1.8, 1.95], pack: 0.997, cells: 3, conduit: 1 }, visualTier: 0 },
+        { id: "sig_williams_ers", label: "Grove Deploy Map", cost: 110, teams: ["williams"], tag: "SIGNATURE", equivalent: "thermal_max",
+          desc: "Williams signature deploy map — Thermal Max performance with an external conduit run", speed: 1.04, braking: 1.03, visual: { led: [0.25, 1.15, 2.2], pack: 0.976, cells: 4, conduit: 1 }, visualTier: 1 },
+        { id: "sig_astonmartin_ers", label: "Silverstone Deploy Map", cost: 200, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "full_attack",
+          desc: "Aston Martin signature deploy map — Full Attack performance with an external conduit run", speed: 1.06, accel: 1.14, visual: { led: [1.35, 2.15, 0.25], pack: 1.287, cells: 6, conduit: 1 }, visualTier: 2 },
+        { id: "sig_cadillac_ers", label: "Detroit Deploy Map", cost: 100, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "deploy",
+          desc: "Cadillac signature deploy map — Deploy performance with a twin external conduit", speed: 0.97, accel: 1.1, visual: { led: [2.05, 1.55, 0.6], pack: 1.272, cells: 8, conduit: 2 }, visualTier: 2 },
       ],
     },
     {
@@ -179,12 +307,33 @@ const Parts = (function () {
         { id: "carbon_case",   label: "Carbon Case",    cost: 130, desc: "Lightweight carbon housing — mass reduction improves accel and handling",     accel: 1.08, speed: 1.02, cornering: 1.02, visual: {"strakes": 4, "fin": 1, "strakeH": 0.19, "finSY": 0.15, "finSZ": 0.3, "casing": 3, "louvres": 0, "heat": 1}, visualTier: 2 },
         { id: "f1_spec",       label: "F1 Spec",        cost: 180, desc: "Race-validated paddle-shift unit — peak response and powerflow efficiency",   speed: 1.04, accel: 1.10, cornering: 1.03, visual: {"strakes": 5, "fin": 1, "strakeH": 0.22, "finSY": 0.22, "finSZ": 0.4, "casing": 3, "louvres": 5, "heat": 1}, visualTier: 2 },
         { id: "seamless_shift",label: "Seamless Shift", cost: 210, desc: "Continuous torque transfer — maximum shift response with minimal interruption", speed: 1.05, accel: 1.12, cornering: 1.02, visual: { strakes: 5, fin: 1, strakeH: 0.20, finSY: 0.18, finSZ: 0.36, casing: 2, louvres: 6, heat: 1 }, visualTier: 2 },
+        { id: "wide_stack",    label: "Wide Stack",     cost:  60, desc: "Widely spaced upper gears — carries speed down the longest straights",         speed: 1.05, accel: 0.96, visual: { strakes: 2, fin: 0, strakeH: 0.18, casing: 1, louvres: 1, heat: 1, caseWidth: 1.14 }, visualTier: 1 },
+        { id: "quickshift",    label: "Quickshift",     cost: 110, desc: "Reduced shift latency — less time off the throttle through the gears",        accel: 1.09, speed: 1.01, visual: { strakes: 4, fin: 1, strakeH: 0.16, finSY: 0.19, finSZ: 0.26, casing: 2, louvres: 3, heat: 0 }, visualTier: 2 },
+        { id: "titanium_case", label: "Titanium Case",  cost: 150, desc: "Titanium bellhousing — stiff, light, and kind to the rear suspension mounts", accel: 1.09, speed: 1.03, cornering: 1.02, visual: { strakes: 5, fin: 1, strakeH: 0.21, finSY: 0.20, finSZ: 0.34, casing: 3, louvres: 2, heat: 1, caseWidth: 0.86 }, visualTier: 2 },
         { id: "sig_rb_shortcase", label: "Faenza Shortcase", cost: 210, teams: ["racingbulls"], tag: "SIGNATURE", equivalent: "seamless_shift",
           desc: "Racing Bulls signature compact casing — Seamless Shift performance with a taller crash fin", speed: 1.05, accel: 1.12, cornering: 1.02, visual: { strakes: 5, fin: 1, strakeH: 0.18, finSY: 0.24, finSZ: 0.30, casing: 2, louvres: 6, heat: 1 }, visualTier: 2 },
         { id: "sig_ferrari_seamless", label: "Maranello Seamless", cost: 210, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "seamless_shift",
           desc: "Ferrari signature shift package — Seamless Shift performance in a sculpted red-crackle casing", speed: 1.05, accel: 1.12, cornering: 1.02, visual: { strakes: 4, fin: 1, strakeH: 0.21, finSY: 0.16, finSZ: 0.38, casing: 3, louvres: 4, heat: 1 }, visualTier: 2 },
         { id: "sig_williams_longshift", label: "Grove Longshift", cost: 40, teams: ["williams"], tag: "SIGNATURE", equivalent: "long_ratio",
           desc: "Williams signature top-speed stack — Long Ratio performance with a heat-wrapped slim case", speed: 1.04, accel: 0.97, visual: { strakes: 3, fin: 0, strakeH: 0.18, casing: 1, louvres: 0, heat: 1, caseWidth: 0.92 }, visualTier: 1 },
+        // GEARBOX — one SIGNATURE per team (stat- and cost-identical to the
+        // universal option each team already fields; only the mesh differs).
+        { id: "sig_mercedes_gbox", label: "Brackley Gearcase", cost: 90, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "sequential_pro",
+          desc: "Mercedes signature gearcase — Sequential Pro performance with a 4-strake diffuser", speed: 1.02, accel: 1.07, visual: { strakes: 4, fin: 1, strakeH: 0.163, finSY: 0.17, finSZ: 0.32, casing: 2, louvres: 3, heat: 1, caseWidth: 0.92 }, visualTier: 2 },
+        { id: "sig_mclaren_gbox", label: "Woking Gearcase", cost: 210, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "seamless_shift",
+          desc: "McLaren signature gearcase — Seamless Shift performance with a 5-strake diffuser", speed: 1.05, accel: 1.12, cornering: 1.02, visual: { strakes: 5, fin: 1, strakeH: 0.196, finSY: 0.18, finSZ: 0.36, casing: 2, louvres: 5, heat: 1, caseWidth: 0.96 }, visualTier: 2 },
+        { id: "sig_redbull_gbox", label: "Milton Keynes Gearcase", cost: 70, teams: ["redbull"], tag: "SIGNATURE", equivalent: "short_stack",
+          desc: "Red Bull signature gearcase — Short Stack performance with a 4-strake diffuser", accel: 1.08, cornering: 1.03, visual: { strakes: 4, fin: 1, strakeH: 0.152, finSY: 0.11, finSZ: 0.22, casing: 2, louvres: 2, heat: 0, caseWidth: 1.02 }, visualTier: 2 },
+        { id: "sig_alpine_gbox", label: "Enstone Gearcase", cost: 50, teams: ["alpine"], tag: "SIGNATURE", equivalent: "close_ratio",
+          desc: "Alpine signature gearcase — Close Ratio performance with a 2-strake diffuser", speed: 0.98, accel: 1.06, visual: { strakes: 2, fin: 0, strakeH: 0.135, casing: 1, louvres: 3, heat: 0, caseWidth: 1.08 }, visualTier: 1 },
+        { id: "sig_haas_gbox", label: "Kannapolis Gearcase", cost: 130, teams: ["haas"], tag: "SIGNATURE", equivalent: "carbon_case",
+          desc: "Haas signature gearcase — Carbon Case performance with a 3-strake diffuser", speed: 1.02, accel: 1.08, cornering: 1.02, visual: { strakes: 3, fin: 1, strakeH: 0.2, finSY: 0.15, finSZ: 0.3, casing: 3, louvres: 1, heat: 1, caseWidth: 1.1 }, visualTier: 2 },
+        { id: "sig_audi_gbox", label: "Neuburg Gearcase", cost: 90, teams: ["audi"], tag: "SIGNATURE", equivalent: "sequential_pro",
+          desc: "Audi signature gearcase — Sequential Pro performance with a 5-strake diffuser", speed: 1.02, accel: 1.07, visual: { strakes: 5, fin: 1, strakeH: 0.18, finSY: 0.17, finSZ: 0.32, casing: 2, louvres: 4, heat: 1, caseWidth: 1.12 }, visualTier: 2 },
+        { id: "sig_astonmartin_gbox", label: "Silverstone Gearcase", cost: 180, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "f1_spec",
+          desc: "Aston Martin signature gearcase — F1 Spec performance with a 5-strake diffuser", speed: 1.04, accel: 1.1, cornering: 1.03, visual: { strakes: 5, fin: 1, strakeH: 0.224, finSY: 0.22, finSZ: 0.4, casing: 3, louvres: 5, heat: 1, caseWidth: 1.04 }, visualTier: 2 },
+        { id: "sig_cadillac_gbox", label: "Detroit Gearcase", cost: 130, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "carbon_case",
+          desc: "Cadillac signature gearcase — Carbon Case performance with a 3-strake diffuser", speed: 1.02, accel: 1.08, cornering: 1.02, visual: { strakes: 3, fin: 1, strakeH: 0.205, finSY: 0.15, finSZ: 0.3, casing: 3, louvres: 2, heat: 1, caseWidth: 1.16 }, visualTier: 2 },
       ],
     },
     {
@@ -197,10 +346,34 @@ const Parts = (function () {
         { id: "quali_mix",     label: "Qualifying Mix", cost: 150, desc: "Maximum energy density — qualifying-spec fuel load for peak performance",    speed: 1.04, accel: 1.08, visual: {"cap": [0.95, 0.28, 1.5], "flame": [1.25, 0.35, 1.75], "fxFlame": [1.5, 1.7, 2.4]}, visualTier: 2 },
         { id: "custom_formula",label: "Custom Formula", cost: 200, desc: "Team-developed proprietary blend — marginal all-metric gains",               speed: 1.05, accel: 1.09, cornering: 1.02, braking: 1.02, visual: {"cap": [1.9, 0.25, 1.25], "flame": [1.85, 0.25, 1.4], "fxFlame": [2.6, 0.5, 2.1]}, visualTier: 2 },
         { id: "efuel_dense",   label: "Dense E-Fuel",   cost: 175, desc: "Synthetic high-density blend — clean burn with balanced race performance",      speed: 1.045, accel: 1.085, braking: 1.01, visual: { cap: [0.12, 1.25, 1.65], flame: [0.25, 1.20, 1.95], fxFlame: [0.55, 1.75, 2.75] }, visualTier: 2 },
+        // Filler-hardware specs — the pit-lane coupling on the cover is the tell.
+        { id: "quick_fill",    label: "Quick Fill",     cost:  60, desc: "Twin-coupling rig fitting — a cooler, denser fill for a stronger opening lap", accel: 1.04, braking: 1.02, visual: { cap: [0.85, 0.86, 0.90], flame: [1.30, 0.95, 0.35], fxFlame: [2.4, 1.6, 0.6], line: 1, filler: 2 }, visualTier: 1 },
+        { id: "cold_blend",    label: "Cold Blend",     cost: 120, desc: "Chilled high-density charge — cleaner combustion and a broader torque plateau", speed: 1.03, accel: 1.06, visual: { cap: [0.30, 0.80, 1.60], flame: [0.55, 0.95, 1.85], fxFlame: [1.1, 1.6, 2.7], line: 1, filler: 1 }, visualTier: 1 },
+        { id: "hydro_synth",   label: "Hydro-Synth",    cost: 190, desc: "Hydrogen-derived synthetic — near-custom performance with a clean cold burn",   speed: 1.05, accel: 1.08, braking: 1.03, visual: { cap: [1.75, 1.60, 0.30], flame: [1.90, 1.75, 0.40], fxFlame: [2.9, 2.5, 0.7], line: 2, filler: 2 }, visualTier: 2 },
         { id: "sig_alpine_efuel", label: "Viry E-Fuel", cost: 175, teams: ["alpine"], tag: "SIGNATURE", equivalent: "efuel_dense",
           desc: "Alpine signature synthetic blend — Dense E-Fuel performance with a blue-pink burn", speed: 1.045, accel: 1.085, braking: 1.01, visual: { cap: [0.10, 0.72, 1.85], flame: [0.65, 0.32, 1.95], fxFlame: [0.85, 0.65, 2.85] }, visualTier: 2 },
         { id: "sig_haas_blend", label: "Kannapolis Blend", cost: 90, teams: ["haas"], tag: "SIGNATURE", equivalent: "race_blend",
           desc: "Haas signature race fuel — Race Blend performance with a stars-and-stripes red burn", speed: 1.02, accel: 1.06, visual: { cap: [1.70, 0.20, 0.15], flame: [1.90, 0.30, 0.25], fxFlame: [2.90, 0.60, 0.40] }, visualTier: 1 },
+        // FUEL — one SIGNATURE per team (stat- and cost-identical to the
+        // universal option each team already fields; only the mesh differs).
+        { id: "sig_mercedes_fuel", label: "Brackley Blend", cost: 175, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "efuel_dense",
+          desc: "Mercedes signature blend — Dense E-Fuel performance with a quick-fill coupling", speed: 1.045, accel: 1.085, braking: 1.01, visual: { cap: [0, 1.2, 1.12], flame: [0.35, 1.55, 1.45], fxFlame: [0.525, 2.325, 2.175], filler: 1 }, visualTier: 2 },
+        { id: "sig_ferrari_fuel", label: "Maranello Blend", cost: 90, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "race_blend",
+          desc: "Ferrari signature blend — Race Blend performance with twin filler couplings", speed: 1.02, accel: 1.06, visual: { cap: [1.52, 0.08, 0.064], flame: [1.9, 0.3, 0.15], fxFlame: [2.85, 0.45, 0.225], filler: 2 }, visualTier: 1 },
+        { id: "sig_mclaren_fuel", label: "Woking Blend", cost: 175, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "efuel_dense",
+          desc: "McLaren signature blend — Dense E-Fuel performance with a quick-fill coupling", speed: 1.045, accel: 1.085, braking: 1.01, visual: { cap: [1.6, 0.8, 0], flame: [1.95, 0.95, 0.1], fxFlame: [2.925, 1.425, 0.15], filler: 1 }, visualTier: 2 },
+        { id: "sig_redbull_fuel", label: "Milton Keynes Blend", cost: 90, teams: ["redbull"], tag: "SIGNATURE", equivalent: "race_blend",
+          desc: "Red Bull signature blend — Race Blend performance with a single-point filler", speed: 1.02, accel: 1.06, visual: { cap: [1.52, 1.248, 0], flame: [1.85, 1.45, 0.2], fxFlame: [2.775, 2.175, 0.3], filler: 0 }, visualTier: 1 },
+        { id: "sig_racingbulls_fuel", label: "Faenza Blend", cost: 40, teams: ["racingbulls"], tag: "SIGNATURE", equivalent: "high_octane",
+          desc: "Racing Bulls signature blend — High Octane performance with a quick-fill coupling", accel: 1.05, visual: { cap: [0.32, 0.48, 1.52], flame: [0.45, 0.6, 1.95], fxFlame: [0.675, 0.9, 2.925], filler: 1 }, visualTier: 1 },
+        { id: "sig_williams_fuel", label: "Grove Blend", cost: 40, teams: ["williams"], tag: "SIGNATURE", equivalent: "high_octane",
+          desc: "Williams signature blend — High Octane performance with a single-point filler", accel: 1.05, visual: { cap: [0.32, 0.88, 1.52], flame: [0.55, 1.05, 1.9], fxFlame: [0.825, 1.575, 2.85], filler: 0 }, visualTier: 1 },
+        { id: "sig_audi_fuel", label: "Neuburg Blend", cost: 50, teams: ["audi"], tag: "SIGNATURE", equivalent: "biofuel",
+          desc: "Audi signature blend — Biofuel 100 performance with a quick-fill coupling", accel: 1.03, braking: 1.04, visual: { cap: [1.568, 0.448, 0.08], flame: [2, 0.45, 0.15], fxFlame: [3, 0.675, 0.225], filler: 1 }, visualTier: 1 },
+        { id: "sig_astonmartin_fuel", label: "Silverstone Blend", cost: 200, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "custom_formula",
+          desc: "Aston Martin signature blend — Custom Formula performance with twin filler couplings", speed: 1.05, accel: 1.09, cornering: 1.02, braking: 1.02, visual: { cap: [1.152, 1.408, 0.176], flame: [1.1, 1.9, 0.3], fxFlame: [1.65, 2.85, 0.45], filler: 2 }, visualTier: 2 },
+        { id: "sig_cadillac_fuel", label: "Detroit Blend", cost: 175, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "efuel_dense",
+          desc: "Cadillac signature blend — Dense E-Fuel performance with twin filler couplings", speed: 1.045, accel: 1.085, braking: 1.01, visual: { cap: [1.36, 1.12, 0.512], flame: [1.8, 1.35, 0.5], fxFlame: [2.7, 2.025, 0.75], filler: 2 }, visualTier: 2 },
       ],
     },
   ];
@@ -217,16 +390,17 @@ const Parts = (function () {
     geometry: Object.freeze({
       engine: Object.freeze(["in", "snork", "twin", "inlet", "outlet",
         "podWidth", "shoulderHeight", "undercut", "coke", "tailWidth", "coverHeight",
-        "servicePanel", "heatShield"]),
-      aero: Object.freeze(["lvl", "beam", "drs", "vane",
+        "servicePanel", "heatShield", "chimney"]),
+      aero: Object.freeze(["lvl", "beam", "drs", "vane", "plate", "casc", "swan", "tvane",
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
         "floorEdge", "floorCut", "diffuserRise"]),
       suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe"]),
-      brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale"]),
+      brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop"]),
       tyres: Object.freeze(["grooved", "grooves", "grooveDepth", "bandWidth", "coverVanes"]),
-      ers: Object.freeze(["pack", "cells"]),
+      ers: Object.freeze(["pack", "cells", "conduit"]),
       gearbox: Object.freeze(["strakes", "fin", "strakeH", "finSY", "finSZ",
         "casing", "louvres", "heat", "caseWidth"]),
+      fuel: Object.freeze(["filler"]),
     }),
     material: Object.freeze({
       brakes: Object.freeze(["cal", "rim"]),
@@ -241,20 +415,25 @@ const Parts = (function () {
 
   // Fixed visual identity for the 2026 grid. These are never read from player
   // saves and never alter AI physics; they only select deterministic car meshes.
-  // Every team fields BOTH of its SIGNATURE parts (each stat-identical to a
-  // universal equivalent, so this shapes the meshes, not the pecking order).
+  // Every team fields its own SIGNATURE part in EVERY category — each one cloned
+  // from the universal option that team already ran, so cost and all four stat
+  // multipliers are unchanged and this shapes the meshes, not the pecking order.
+  // The four teams on a manufacturer-exclusive FACTORY power unit keep it: that
+  // unit is already a team-unique model, so a signature engine would be
+  // redundant. Cadillac is the exception — it is Ferrari-powered and would
+  // otherwise render the exact same power unit as Ferrari.
   const FACTORY_PRESETS = {
-    mercedes:    { engine: "sig_mercedes_zero", aero: "high", suspension: "interlinked", brakes: "sig_mercedes_discs", tyres: "medium", ers: "race_mode", gearbox: "sequential_pro", fuel: "efuel_dense" },
-    ferrari:     { engine: "manu_ferrari", aero: "circuit_adaptive", suspension: "racing", brakes: "sig_ferrari_brembo", tyres: "soft", ers: "torque_fill", gearbox: "sig_ferrari_seamless", fuel: "race_blend" },
-    mclaren:     { engine: "hybrid_max", aero: "sig_mclaren_flex", suspension: "sig_mclaren_active", brakes: "six_piston", tyres: "sprint_soft", ers: "supercapacitor", gearbox: "seamless_shift", fuel: "efuel_dense" },
-    redbull:     { engine: "manu_ford", aero: "sig_redbull_concept", suspension: "sig_redbull_pullrod", brakes: "carbon_mag", tyres: "soft", ers: "overtake_focus", gearbox: "short_stack", fuel: "race_blend" },
-    alpine:      { engine: "performance", aero: "underfloor", suspension: "kerb_spec", brakes: "ventilated", tyres: "compound_c4", ers: "sig_alpine_boost", gearbox: "close_ratio", fuel: "sig_alpine_efuel" },
-    racingbulls: { engine: "torque_curve", aero: "beam_wing", suspension: "sport", brakes: "sport", tyres: "sig_rb_street", ers: "split_deploy", gearbox: "sig_rb_shortcase", fuel: "high_octane" },
-    haas:        { engine: "v_power", aero: "low", suspension: "carbon_pushrods", brakes: "sig_haas_carbonmag", tyres: "hard", ers: "harvest", gearbox: "carbon_case", fuel: "sig_haas_blend" },
-    williams:    { engine: "highrev", aero: "sig_williams_lowdrag", suspension: "low_ride", brakes: "titanium", tyres: "hard", ers: "thermal_max", gearbox: "sig_williams_longshift", fuel: "high_octane" },
-    audi:        { engine: "manu_audi", aero: "rake_setup", suspension: "sig_audi_damper", brakes: "regen_brakes", tyres: "compound_c4", ers: "sig_audi_quattro", gearbox: "sequential_pro", fuel: "biofuel" },
-    astonmartin: { engine: "manu_honda", aero: "sig_aston_tunnel", suspension: "heave_spring", brakes: "sig_aston_carbon", tyres: "soft", ers: "full_attack", gearbox: "f1_spec", fuel: "custom_formula" },
-    cadillac:    { engine: "manu_ferrari", aero: "sig_cadillac_lowline", suspension: "inboard_dampers", brakes: "endurance", tyres: "sig_cadillac_sprint", ers: "deploy", gearbox: "carbon_case", fuel: "efuel_dense" },
+    mercedes:    { engine: "sig_mercedes_zero", aero: "sig_mercedes_wing", suspension: "sig_mercedes_susp", brakes: "sig_mercedes_discs", tyres: "sig_mercedes_tyre", ers: "sig_mercedes_ers", gearbox: "sig_mercedes_gbox", fuel: "sig_mercedes_fuel" },
+    ferrari:     { engine: "manu_ferrari", aero: "sig_ferrari_wing", suspension: "sig_ferrari_susp", brakes: "sig_ferrari_brembo", tyres: "sig_ferrari_tyre", ers: "sig_ferrari_ers", gearbox: "sig_ferrari_seamless", fuel: "sig_ferrari_fuel" },
+    mclaren:     { engine: "sig_mclaren_pu", aero: "sig_mclaren_flex", suspension: "sig_mclaren_active", brakes: "sig_mclaren_brakes", tyres: "sig_mclaren_tyre", ers: "sig_mclaren_ers", gearbox: "sig_mclaren_gbox", fuel: "sig_mclaren_fuel" },
+    redbull:     { engine: "manu_ford", aero: "sig_redbull_concept", suspension: "sig_redbull_pullrod", brakes: "sig_redbull_brakes", tyres: "sig_redbull_tyre", ers: "sig_redbull_ers", gearbox: "sig_redbull_gbox", fuel: "sig_redbull_fuel" },
+    alpine:      { engine: "sig_alpine_pu", aero: "sig_alpine_wing", suspension: "sig_alpine_susp", brakes: "sig_alpine_brakes", tyres: "sig_alpine_tyre", ers: "sig_alpine_boost", gearbox: "sig_alpine_gbox", fuel: "sig_alpine_efuel" },
+    racingbulls: { engine: "sig_racingbulls_pu", aero: "sig_racingbulls_wing", suspension: "sig_racingbulls_susp", brakes: "sig_racingbulls_brakes", tyres: "sig_rb_street", ers: "sig_racingbulls_ers", gearbox: "sig_rb_shortcase", fuel: "sig_racingbulls_fuel" },
+    haas:        { engine: "sig_haas_pu", aero: "sig_haas_wing", suspension: "sig_haas_susp", brakes: "sig_haas_carbonmag", tyres: "sig_haas_tyre", ers: "sig_haas_ers", gearbox: "sig_haas_gbox", fuel: "sig_haas_blend" },
+    williams:    { engine: "sig_williams_pu", aero: "sig_williams_lowdrag", suspension: "sig_williams_susp", brakes: "sig_williams_brakes", tyres: "sig_williams_tyre", ers: "sig_williams_ers", gearbox: "sig_williams_longshift", fuel: "sig_williams_fuel" },
+    audi:        { engine: "manu_audi", aero: "sig_audi_wing", suspension: "sig_audi_damper", brakes: "sig_audi_brakes", tyres: "sig_audi_tyre", ers: "sig_audi_quattro", gearbox: "sig_audi_gbox", fuel: "sig_audi_fuel" },
+    astonmartin: { engine: "manu_honda", aero: "sig_aston_tunnel", suspension: "sig_astonmartin_susp", brakes: "sig_aston_carbon", tyres: "sig_astonmartin_tyre", ers: "sig_astonmartin_ers", gearbox: "sig_astonmartin_gbox", fuel: "sig_astonmartin_fuel" },
+    cadillac:    { engine: "sig_cadillac_pu", aero: "sig_cadillac_lowline", suspension: "sig_cadillac_susp", brakes: "sig_cadillac_brakes", tyres: "sig_cadillac_sprint", ers: "sig_cadillac_ers", gearbox: "sig_cadillac_gbox", fuel: "sig_cadillac_fuel" },
   };
 
   function teamContext(team) {

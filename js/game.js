@@ -195,6 +195,25 @@ const ACCEL = 7;            // m/s^2 at low speed
 // (player + AI) so the whole field speeds up/slows down together and the racing
 // stays competitive. 1.0 = stock. Driven by the OVERALL SPEED slider.
 let PACE = 1.0;
+// PACE scales the car's real GROUND speed and nothing else. It used to shrink the
+// whole envelope the player sees along with it, because every threshold and
+// normaliser in here was written against the bare VMAX: at pace 2 the top speed is
+// ~45 m/s, which sits inside 6th gear's band, so 7th and 8th were unreachable, the
+// tach never left the middle of its sweep and the dial topped out at ~162 km/h.
+// (Symmetrically, above pace ~1.02 the MANUAL gearbox's top-gear limiter pinned the
+// car at gearHi(8) + 1.5 = 73.5 m/s and swallowed the slider entirely.)
+//
+// So: vTop() is where the envelope actually tops out in m/s, and vStd() re-expresses
+// a real speed on the STANDARD (pace-5) scale. Normalisers divide by vTop();
+// hard-coded speed thresholds compare against vStd(speed). Every constant below —
+// VMAX, GEAR_TOP, TAPER_LO/HI, GRASS_V, STEER_SPEED_REF, the bare 20/18 literals —
+// keeps exactly the value and meaning it has always had, and the gearbox, tach,
+// dial and speed-driven effects span their full range at any setting. The slider
+// changes what each of those speeds MEANS on the ground, not the range.
+// PACE is floored so a setPhysics({pace:0}) can't divide by zero.
+function vTop()  { return VMAX * Math.max(PACE, 0.05); }
+function vStd(v) { return v * VMAX / vTop(); }
+function dashKph(v) { return vStd(v) * 3.6; }
 const BRAKE = 22;
 const REVERSE_MAX = -5;     // m/s — top reverse crawl speed (brake held at a stop)
 const REVERSE_ACCEL = 5;    // m/s^2 — how quickly the reverse crawl builds
@@ -397,10 +416,12 @@ const KERB_CUE_HOLD = 0.10; // s — bridges the ~20 Hz per-node flicker of the 
                             //   rumble/shake/haptic cue can't machine-gun on/off.
 const DEPLOY_A = 3.0;       // extra accel from electric deploy
 const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed band
+                                     //   (a vStd() band — pace-normalised, so the
+                                     //   taper sits at the same place on the dial)
 function isErsDeploying(c) {
   if (!c || c.energy <= 0 || !(c.boostOn || c.otT > 0)) return false;
   const taper = c.otT > 0 ? 1 :
-    clamp(1 - (c.speed - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
+    clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
   return DEPLOY_A * taper > 0.4;
 }
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
@@ -443,8 +464,14 @@ const { TIER_V } = GameTables;
 // rather than dropping to idle or barely dropping at all. Top speed fraction of VMAX.
 // F1-authentic 8 gears.
 const { GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM } = GameTables;
-function gearLo(g) { return g > 1 ? VMAX * GEAR_TOP[g - 2] : 0; }
-function gearHi(g) { return VMAX * GEAR_TOP[g - 1]; }
+// GEAR_TOP is a fraction of the speed ENVELOPE, so these track vTop() rather than
+// the bare VMAX: all eight gears stay reachable at any OVERALL SPEED setting, the
+// tach sweeps its whole band, and the manual top-gear limiter (which caps speedCap
+// at gearHi(8) + 1.5) stops swallowing the slider above pace ~1.02. PACE only —
+// NOT playerMods.speed, so an engine upgrade still nudges you past 8th's top into
+// the rev clamp exactly as before.
+function gearLo(g) { return g > 1 ? vTop() * GEAR_TOP[g - 2] : 0; }
+function gearHi(g) { return vTop() * GEAR_TOP[g - 1]; }
 function naturalGear(speed) {
   for (let g = 1; g <= GEARS; g++) if (speed <= gearHi(g) + 0.01) return g;
   return GEARS;
@@ -863,7 +890,7 @@ function resolveLivery(team) {
     const l = livDraftOverride.liv;
     return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
-             noseStripe: l.noseStripe || null };
+             noseStripe: l.noseStripe || null, finish: l.finish || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -872,7 +899,7 @@ function resolveLivery(team) {
   // — additive, so an unmodified livery still resolves to today's exact object shape.
   const val = liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
-                      noseStripe: liv.noseStripe || null }
+                      noseStripe: liv.noseStripe || null, finish: liv.finish || null }
                   : { c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -1287,7 +1314,7 @@ function drawCockpitRig(c, base, dt, paint) {
   // Clamp to 0: a negative c.speed (e.g. hard braking to a near-stop, or a
   // reversing glitch) would otherwise stringify with a "-" character that
   // getSpeedDigit can't parse (+"-" is NaN -> SEG7[NaN] -> crash every frame).
-  const kmh = Math.max(0, Math.min(999, Math.round((c.speed || 0) * 3.6)));
+  const kmh = Math.max(0, Math.min(999, Math.round(dashKph(c.speed || 0))));
   const ds = String(kmh);
   for (let i = 0; i < ds.length; i++) {
     _digT[12] = -0.034 + (i - (ds.length - 1) / 2) * 0.0135; _digT[13] = 0.022; _digT[14] = -0.0335;
@@ -1693,6 +1720,10 @@ function endRace(forcedOrder) {
 const G = {
   $, els,
   fmtTime: (t) => fmtTime(t),
+  // The DASH number for a real ground speed — km/h on the pace-5 scale, so the
+  // HUD/LCD span the same range at every OVERALL SPEED setting. Debug hooks
+  // deliberately keep reporting raw m/s; see vTop/vStd.
+  dashKph: (v) => dashKph(v),
   ttBoard, teamById: (id) => teamById(id), cssCol: (c) => cssCol(c),
   get state() { return state; }, set state(v) { state = v; },
   get track() { return track; },
@@ -1713,7 +1744,9 @@ const G = {
   simSeed, simRnd,
   get DRIFT() { return DRIFT; }, set DRIFT(v) { DRIFT = v; },
   get FRONT_GRIP() { return FRONT_GRIP; }, set FRONT_GRIP(v) { FRONT_GRIP = v; },
-  get PACE() { return PACE; }, set PACE(v) { PACE = v; },
+  // Cameras normalise speed against an injected vmax, so re-inject on every pace
+  // change — otherwise the FOV/shake speed feel would stay pinned to pace 5.
+  get PACE() { return PACE; }, set PACE(v) { PACE = v; GameCams.init({ vmax: vTop() }); },
   get PLAYER_GRIP() { return PLAYER_GRIP; }, set PLAYER_GRIP(v) { PLAYER_GRIP = v; },
   get ROAD_FOLLOW() { return ROAD_FOLLOW; }, set ROAD_FOLLOW(v) { ROAD_FOLLOW = v; },
   get STEER_EXPO() { return STEER_EXPO; }, set STEER_EXPO(v) { STEER_EXPO = v; },
@@ -1741,6 +1774,11 @@ const G = {
   get paused() { return paused; }, set paused(v) { paused = v; },
   get raceLaps() { return raceLaps; }, set raceLaps(v) { raceLaps = v; },
   get raceT() { return raceT; }, set raceT(v) { raceT = v; },
+  // The RENDER clock (sky/cloud drift, FLAG cloth wave). It accumulates real
+  // frame dt, so its value depends on how many frames happened to render — which
+  // makes any pixel comparison across runs non-deterministic. Exposed so a
+  // visual-regression capture can pin it; see __apex.renderClock().
+  get skyT() { return _skyT; }, set skyT(v) { _skyT = v; },
   get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
   get renderAlpha() { return renderAlpha; }, set renderAlpha(v) { renderAlpha = v; },
@@ -2009,7 +2047,7 @@ function update(dt) {
 
   if (soundOn) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-    GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad, clamp(player.speed / VMAX, 0, 1), player.gear);
+    GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad, clamp(player.speed / vTop(), 0, 1), player.gear);
     // Squeal from the CAR's slip, via the same skidIntensity the marks and smoke
     // use. This was a SECOND, independent copy of the old curvature formula
     // (|k| * speed), so the tyres you HEAR still screamed at the road's arc —
@@ -2274,7 +2312,7 @@ function updateCar(c, dt, ranked) {
     : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25))
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   if (wantBoost && c.energy > 0) {
-    const taper = c.otT > 0 ? 1 : clamp(1 - (c.speed - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
+    const taper = c.otT > 0 ? 1 : clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
     deploy = DEPLOY_A * taper;
     // Only drain the battery when deploy actually produces thrust. Above the taper
     // band (with no OT active) deploy is 0, so holding BOOST there must not silently
@@ -2331,7 +2369,7 @@ function updateCar(c, dt, ranked) {
   }
 
   // --- gearbox (player) ---
-  let gearMult = 1, speedCap = vmax + 14;
+  let gearMult = 1, speedCap = vmax + 14 * Math.max(PACE, 0.05);   // ERS overspeed margin — a speed, so it rides the pace scale
   if (c.isPlayer) {
     c.shiftT = Math.max(0, c.shiftT - dt);
     const up = Input.consumeShiftUp(), down = Input.consumeShiftDown();
@@ -2416,8 +2454,13 @@ function updateCar(c, dt, ranked) {
     // could not stop at all, and crawling out of a gravel trap at 3 m/s snapped
     // you to 10.8 in a single frame. It also runs after the accel/brake/slope
     // integration, so it overrode all of them.
-    if (c.speed > GRASS_V * 0.6) {
-      c.speed = Math.max(GRASS_V * 0.6, c.speed - (20 + offDepth * 28) * dt);
+    // The floor is a SPEED, so it rides the pace scale — otherwise the crawl sits
+    // at 24% of top speed at pace 2 and 15% at pace 5, i.e. the grass would let you
+    // off progressively lighter the faster the field runs. The scrub RATE is a
+    // force and stays absolute, like BRAKE.
+    const grassFloor = GRASS_V * 0.6 * Math.max(PACE, 0.05);
+    if (c.speed > grassFloor) {
+      c.speed = Math.max(grassFloor, c.speed - (20 + offDepth * 28) * dt);
     }
     c.offT += dt;
     if (c.offT > 1.2) {
@@ -2530,8 +2573,8 @@ function updateCar(c, dt, ranked) {
   // that isn't moving can't be steered sideways, so tilting while stopped no
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
-  const latFac = clamp(Math.abs(c.speed) / 18, 0, 1);
-  const gripScale = 1 - clamp((c.speed - 20) / (VMAX - 20), 0, 1) * 0.28;
+  const latFac = clamp(vStd(Math.abs(c.speed)) / 18, 0, 1);
+  const gripScale = 1 - clamp((vStd(c.speed) - 20) / (VMAX - 20), 0, 1) * 0.28;
   // Riding a kerb loses a little grip — damped continuous instead of a binary
   // 1↔0.7 flip: the raw flag flickers at the ~4 m node rate at speed, and a
   // 30% lateral-grip square wave at ~20 Hz was genuine yaw dither in the
@@ -2571,7 +2614,10 @@ function updateCar(c, dt, ranked) {
     // --- road-wheel steer angle: driver lock (eased a little at speed) + the
     // DRIVING-HELP assist that steers toward the road curvature for you. Both
     // act through the front tyre below, so neither can exceed available grip.
-    const lockTaper = Math.max(0.4, 1 - Math.abs(c.speed) / STEER_SPEED_REF);
+    // vStd: the SPEED STEER slider's reference is a point on the dial, so the lock
+    // taper reaches the same place at every pace. The slider's own mapping
+    // (speedRefFromSlider in js/game/steer-tuning.js) is untouched.
+    const lockTaper = Math.max(0.4, 1 - vStd(Math.abs(c.speed)) / STEER_SPEED_REF);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively
@@ -2700,7 +2746,7 @@ function updateCar(c, dt, ranked) {
     // same surface/weather grip the rest of the sim uses.
     // Aero load (rises with v²) replaces the old speed taper, and the surface the
     // car is actually on now scales lateral grip — see DOWNFORCE / OFF_GRIP.
-    const aeroGrip = 1 + DOWNFORCE * Math.min(1, (Math.abs(c.speed) / VMAX)) ** 2;
+    const aeroGrip = 1 + DOWNFORCE * Math.min(1, (Math.abs(c.speed) / vTop())) ** 2;
     const offDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
     const surfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, offDepth);
     // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar
@@ -3356,7 +3402,7 @@ function appendCarTailLights() {
 // EVERY mode identically. `extra` carries player-only spice — { bankDy,
 // deploy, slipLat } — all optional. COCKPIT_EYE_* are shared with the
 // camera-anchored cockpit-rig draw in render().
-GameCams.init({ vmax: VMAX });
+GameCams.init({ vmax: vTop() });   // re-injected by the PACE setter on a slider move
 const { COCKPIT_EYE_FWD, COCKPIT_EYE_UP } = GameCams;
 function camVantage(mode, s, x, spd, now, extra) {
   return GameCams.vantage(track, mode, s, x, spd, now, extra);
@@ -3630,7 +3676,7 @@ function render(dt) {
     // fades in with speed so it never jitters a slow/standing car.
     const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
     if (state === "race" && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "tcam")) {
-      const spV = clamp(player.speed / VMAX, 0, 1);
+      const spV = clamp(player.speed / vTop(), 0, 1);
       const vAmp = (spV * spV * 0.022 + (player.deploying ? 0.008 : 0)) * _buzzWet;
       if (vAmp > 0.001) {
         const tv = performance.now() * 0.001;
@@ -4810,8 +4856,8 @@ function render(dt) {
     _grade = _gradeOut;
   }
   // SPEED BLUR: fold the car's velocity into the tuner amount so the radial
-  // smear only appears at speed (zero when parked; ramps in above ~40% of VMAX).
-  const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp(((player.speed || 0) / VMAX - 0.4) / 0.5, 0, 1) : 0;
+  // smear only appears at speed (zero when parked; ramps in above ~40% of vTop()).
+  const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp(((player.speed || 0) / vTop() - 0.4) / 0.5, 0, 1) : 0;
   const po = _presentOpts;
   // Bloom joins the last shedding tier: bloomAmt 0 skips the whole ~9-pass
   // bright+mip chain in present() — the single biggest post-chain saving left
@@ -5407,6 +5453,16 @@ const CZ_LIV_FIELDS = [
   ["cz-stripe", "stripe"], ["cz-nosestripe", "noseStripe"], ["cz-detail", "accent"],
   ["cz-nose", "nose"], ["cz-pod", "pod"], ["cz-wing", "wing"], ["cz-halo", "halo"],
 ];
+// The custom team's paint FINISH ("gloss" = the default clearcoat car paint, so
+// it is never written to ct.livery). Held here rather than read off the DOM so
+// the three buttons behave as one radio group.
+let czFinish = "gloss";
+function czSetFinish(value) {
+  czFinish = value || "gloss";
+  for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
+    btn.classList.toggle("active", btn.dataset.czFinish === czFinish);
+  }
+}
 // A field is "NONE" when its colour input carries the cz-off class.
 function czSetLivField(domId, arr) {
   const inp = $(domId), none = $(domId + "-none");
@@ -5431,6 +5487,7 @@ function openCustomize() {
   $("cz-num").value = ct.drivers[0].num;
   const liv = ct.livery || {};
   CZ_LIV_FIELDS.forEach(([domId, key]) => czSetLivField(domId, liv[key] || null));
+  czSetFinish(liv.finish);
   czPreview();
   els.customize.hidden = false;
 }
@@ -5442,6 +5499,9 @@ CZ_LIV_FIELDS.forEach(([domId]) => {
   $(domId).addEventListener("input", () => { $(domId).classList.remove("cz-off"); $(domId + "-none").classList.remove("active"); });
   $(domId + "-none").onclick = () => { $(domId).classList.add("cz-off"); $(domId + "-none").classList.add("active"); if (soundOn) GameAudio.uiTick(); };
 });
+for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
+  btn.onclick = () => { czSetFinish(btn.dataset.czFinish); if (soundOn) GameAudio.uiTick(); };
+}
 els.selCustomize.onclick = () => { if (soundOn) GameAudio.uiSelect(); openCustomize(); };
 // CAR SETUP is reachable from the select screen AND from the title, so DONE has
 // to go back where it came from. It used to unhide #select unconditionally,
@@ -5481,6 +5541,7 @@ $("cz-save").onclick = () => {
   // Optional extra paint -> ct.livery (only the fields that aren't NONE).
   const liv = {};
   CZ_LIV_FIELDS.forEach(([domId, key]) => { if (!$(domId).classList.contains("cz-off")) liv[key] = hexToRgb($(domId).value); });
+  if (czFinish && czFinish !== "gloss") liv.finish = czFinish;
   if (Object.keys(liv).length) ct.livery = liv;
   store.set("customTeam", ct);
   syncCustomTeam();
