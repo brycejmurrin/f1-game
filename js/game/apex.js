@@ -1825,6 +1825,35 @@ const api = {
   },
   lobbyFakeConnected() { return !!_lobbyPeer; },
 
+  // ── Driving the REAL handshake from a test ──────────────────────────────
+  // These exist because the WebRTC path is the one part of multiplayer that no
+  // in-process test can reach: the loopback transport has no SDP at all, and
+  // the lobby specs deliberately use a fake transport. Driving the real thing
+  // through the DOM means fighting click actionability for the ~25 s the
+  // handshake genuinely takes, which tests the buttons rather than the wire.
+  // With these, two pages can complete a real offer/answer exchange in
+  // page.evaluate() and assert that a session actually came up.
+  //
+  //   A: const {code} = await __apex.lobbyHost()
+  //   B: const {code} = await __apex.lobbyJoin(inviteCode)
+  //   A: await __apex.lobbyAccept(answerCode)
+  //   both: await __apex.net().active === true
+  lobbyHost() {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    return G.netLobby.host();
+  },
+  lobbyJoin(inviteCode) {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    G.netLobby.join();
+    return G.netLobby.makeAnswer(inviteCode);
+  },
+  lobbyAccept(answerCode) {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    return G.netLobby.acceptAnswer(answerCode);
+  },
+
   // lobbyMods(profile) — resolve a peer profile to multipliers, locally.
   lobbyMods(profile) {
     return G.netLobby ? G.netLobby.modsFromProfile(profile) : null;
