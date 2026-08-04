@@ -22,9 +22,18 @@
 
 .dh-card {
   width: min(760px, 100%);
-  /* Always fill most of the viewport — content scrolls inside */
-  min-height: clamp(300px, calc(100svh - 60px), 900px);
-  max-height: calc(100svh - var(--sat) - var(--sab) - 2 * var(--gut));
+  /* Always fill most of the viewport — content scrolls inside.
+     THE MIN MAY NOT EXCEED THE MAX. `calc(100svh - 60px)` is 599px on an iPhone
+     15 Pro upright, while the max below — the viewport less the real notch and
+     home-indicator insets — is 542px, and when a min-height is larger than a
+     max-height the MIN wins. So the card grew 57px past its own safe box and the
+     panel inside it ran 16px under the home indicator, with the close button
+     2px under the Dynamic Island. Both only on a device with insets, which is
+     why nothing caught it until the audit started simulating them.
+     Sharing one custom property means the two can no longer disagree. */
+  --dh-safe-h: calc(100svh - var(--sat) - var(--sab) - 2 * var(--gut));
+  min-height: clamp(300px, calc(100svh - 60px), min(900px, var(--dh-safe-h)));
+  max-height: var(--dh-safe-h);
   display: flex; flex-direction: column;
   /* same elevation ladder as the menu sheets (see css/tokens.css) */
   background: var(--surf-1);

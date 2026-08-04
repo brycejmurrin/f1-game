@@ -37,10 +37,15 @@ const SHOT_DIR = path.join(OUT, "shots");
 // VIEWPORTS: the shapes a display can be, not the devices people own. Each one
 // exists because some layout branch turns on or off at it.
 const VIEWPORTS = [
+  // The 4th element is the SAFE-AREA INSET to inject (see applyInsets): Chromium
+  // reports env(safe-area-inset-*) as 0 under device emulation, so a notch has
+  // to be simulated or it is never tested at all. iPhone 15 Pro, measured:
+  // 59/34 top/bottom upright; on its side the notch moves to the LEADING edge.
   ["ios-iphone-portrait",   { ...devices["iPhone 15 Pro"], deviceScaleFactor: 2 },
-    "the phone as most people hold it"],
+    "the phone as most people hold it", { t: 59, r: 0, b: 34, l: 0 }],
   ["ios-iphone-landscape",  { ...devices["iPhone 15 Pro landscape"], deviceScaleFactor: 2 },
-    "the shape the game is PLAYED in — 343px of height for everything"],
+    "the shape the game is PLAYED in — 343px of height for everything",
+    { t: 0, r: 59, b: 21, l: 59 }],
   ["ios-ipad-portrait",     { ...devices["iPad Pro 11"], deviceScaleFactor: 1 },
     "wide sheet, tall window: the case that wants bands, not columns"],
   ["ios-ipad-landscape",    { ...devices["iPad Pro 11 landscape"], deviceScaleFactor: 1 },
@@ -500,38 +505,63 @@ const PROBE = (rootSel) => {
   // is the orientation this game is played in and the one where a mis-inset
   // control is least likely to be noticed by eye.
   //
-  // Playwright cannot emulate a physical notch, so the check reads whatever the
-  // tokens resolve to and, when they are zero (every desktop, and Chromium's
-  // phone emulation), falls back to the iPhone's real values for the orientation
-  // being measured. That turns "we handled the notch" from a claim into a
-  // number on a screen nobody can hold.
+  // Playwright cannot emulate a physical notch — `env(safe-area-inset-*)` is 0
+  // in Chromium's device emulation — so the sweep INJECTS the insets by setting
+  // `--sat/--sar/--sab/--sal` on :root before probing (see applyInsets below).
+  // That matters: the tokens are what `.screen`'s padding is built from, so the
+  // layout actually REFLOWS, and the question the check asks becomes the right
+  // one — does this screen move its content out of the way when the insets are
+  // real? A screen that positions from the viewport edge instead of the tokens
+  // does not move, and is flagged.
+  // Comparing un-inset emulator geometry against real-device inset numbers, as
+  // the first version of this did, flags 47 cells out of 60 and means nothing.
   const cssPx = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
   const rs = getComputedStyle(document.documentElement);
-  let inset = {
+  const inset = {
     t: cssPx(rs.getPropertyValue("--sat")), r: cssPx(rs.getPropertyValue("--sar")),
     b: cssPx(rs.getPropertyValue("--sab")), l: cssPx(rs.getPropertyValue("--sal")),
   };
-  out.insetReal = inset.t || inset.r || inset.b || inset.l ? true : false;
-  if (!out.insetReal && /iphone/i.test(navigator.userAgent)) {
-    // iPhone 15 Pro, measured: 59/34 top/bottom upright, 59 on the leading edge
-    // and 21 at the bottom on its side.
-    inset = vw > vh ? { t: 0, r: 59, b: 21, l: 59 } : { t: 59, r: 0, b: 34, l: 0 };
-  }
   out.inset = inset;
+  // CHROME, NOT CONTENT. A row inside a scroll region that happens to sit low in
+  // its list is not under the hardware in any meaningful sense — you scroll it.
+  // What matters is whether the things that CANNOT move — close buttons, action
+  // bars, tab strips, absolutely-positioned toggles — and the scroll REGIONS
+  // themselves stay clear. Checking every focusable element instead reported the
+  // circuit list, the garage's option list and the career slot picker on every
+  // phone cell, which is the same mistake `belowFold` already exists to avoid.
   out.underHardware = [];
   if (inset.t || inset.r || inset.b || inset.l) {
-    for (const el of root.querySelectorAll(FOCUSABLE)) {
-      if (!visible(el)) continue;
-      const r = targetRect(el);
-      if (r.width < 1 || r.height < 1) continue;
-      if (r.right < 0 || r.bottom < 0 || r.left > vw || r.top > vh) continue;
+    const intrusion = (r) => {
       const into = {
         top: px(inset.t - r.top), bottom: px(r.bottom - (vh - inset.b)),
         left: px(inset.l - r.left), right: px(r.right - (vw - inset.r)),
       };
-      const worst = Math.max(into.top, into.bottom, into.left, into.right);
-      if (worst > 1) out.underHardware.push({ el: desc(el), into, worst,
+      return { into, worst: Math.max(into.top, into.bottom, into.left, into.right) };
+    };
+    const onScreen = (r) => r.width >= 1 && r.height >= 1
+      && r.right >= 0 && r.bottom >= 0 && r.left <= vw && r.top <= vh;
+    const seen = new Set();
+    const consider = (el, r, label) => {
+      if (seen.has(el) || !onScreen(r)) return;
+      seen.add(el);
+      const { into, worst } = intrusion(r);
+      if (worst > 1) out.underHardware.push({ el: desc(el), into, worst, kind: label,
         text: (el.textContent || "").trim().slice(0, 24) });
+    };
+    for (const el of root.querySelectorAll(FOCUSABLE)) {
+      if (!visible(el) || scrollerAncestor(el)) continue;
+      consider(el, targetRect(el), "control");
+    }
+    for (const el of root.querySelectorAll(SCROLLERS)) {
+      // Matching `.pane` is not the same as BEING a scroll region: #cr-left and
+      // #cr-right carry the class but go `overflow: visible` in the stacked
+      // layout, where they are ordinary full-height blocks inside a scrolling
+      // body. Measured as scrollers they read as 858px of intrusion, which is
+      // just their content height. Ask the computed style, as everywhere else.
+      if (!visible(el)) continue;
+      const cs = getComputedStyle(el);
+      if (!/(auto|scroll)/.test(cs.overflowY + cs.overflowX)) continue;
+      consider(el, el.getBoundingClientRect(), "scroll region");
     }
   }
 
@@ -607,7 +637,7 @@ const queue = [...viewports];
 await Promise.all(Array.from({ length: Math.min(JOBS, queue.length) }, () => worker()));
 async function worker() { while (queue.length) { const vp = queue.shift(); if (vp) await sweepViewport(vp); } }
 
-async function sweepViewport([vpName, vpOpts, why]) {
+async function sweepViewport([vpName, vpOpts, why, insets]) {
   const ctx = await browser.newContext({ ...vpOpts, colorScheme: "dark" });
   const page = await ctx.newPage();
   let errors = [];
@@ -668,6 +698,17 @@ async function sweepViewport([vpName, vpOpts, why]) {
       }
       await screen.open(page);
       await page.waitForTimeout(400);
+      // Simulate the notch by writing the tokens the layout is built on, then
+      // let it reflow. Applied per cell rather than once per context because a
+      // cell may reload the page (see the reset check above).
+      if (insets) {
+        await page.evaluate((i) => {
+          const d = document.documentElement.style;
+          d.setProperty("--sat", i.t + "px"); d.setProperty("--sar", i.r + "px");
+          d.setProperty("--sab", i.b + "px"); d.setProperty("--sal", i.l + "px");
+        }, insets);
+        await page.waitForTimeout(150);
+      }
       Object.assign(cell, await page.evaluate(PROBE, screen.root));
       if (wantShots) {
         const file = `${screen.id}__${vpName}.png`;

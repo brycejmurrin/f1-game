@@ -712,4 +712,31 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   width: 28px; height: 28px; object-fit: contain;
   background: rgba(255,255,255,0.08); border-radius: 4px; padding: 2px;
 }
+/* ---------- foldables: a guard, not a layout ----------
+   A `.screen` centres its sheet in the viewport. On a dual-screen or folded
+   device the viewport spans BOTH panels, so a centred sheet lands on the hinge —
+   the circuit list cut in half by hardware, which no amount of responsive sizing
+   fixes because the gap is physical.
+   This does not attempt a two-segment layout; it keeps the sheet inside ONE
+   segment. `env(viewport-segment-*)` gives each segment's edges, so the sheet is
+   capped at the width of the first one and pushed to its start. Everything else
+   about the screen is unchanged, and on a device with a single segment (every
+   phone, tablet and desktop) the query simply does not match.
+   Chrome shipped the Viewport Segments API from the 125 origin trial and its
+   DevTools can emulate a fold, so this is testable without the hardware. */
+@media (horizontal-viewport-segments: 2) {
+  .screen > .sheet, .dh-card {
+    max-width: calc(env(viewport-segment-right 0 0) - env(viewport-segment-left 0 0));
+  }
+  .screen { justify-items: start; }
+}
+/* Folded the other way — a hinge running across, not down — the scarce axis is
+   height, and a sheet centred over the crease has its middle rows in the fold.
+   Same treatment on the other axis: keep it in the top segment. */
+@media (vertical-viewport-segments: 2) {
+  .screen > .sheet, .dh-card {
+    max-height: calc(env(viewport-segment-bottom 0 0) - env(viewport-segment-top 0 0));
+  }
+  .screen { align-items: start; }
+}
 } /* @layer components */
