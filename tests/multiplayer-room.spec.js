@@ -105,6 +105,11 @@ test.describe("the waiting room", () => {
   });
 
   test("the guest's room follows the host's settings live", async ({ page }) => {
+    // Slow on purpose. Both guest tests boot the page, open a session and then
+    // wait on replicated state; under a loaded box with several software-GL
+    // workers that legitimately outruns the default budget, and they timed out
+    // in a full test:net run while passing alone. The code is not the slow part.
+    test.slow();
     // Settings now change WHILE both players sit here, so they have to
     // replicate on arrival rather than at lights-out.
     await enterRoom(page, "guest");
@@ -119,6 +124,9 @@ test.describe("the waiting room", () => {
   });
 
   test("GO is what actually starts the guest's race", async ({ page }) => {
+    // The slowest test in the group: GO builds an entire circuit, and
+    // SwiftShader builds it on the CPU.
+    test.slow();
     await enterRoom(page, "guest");
     await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day" });
     await peerSays(page, EV.GO, {});
