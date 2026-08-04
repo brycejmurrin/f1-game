@@ -469,7 +469,7 @@
       // Warm aluminium against the sand, not the pale Tilke grey.
       if (typeof bleacher === "function") {
         bleacher(0.152, 0.216, 1, 20, {
-          rows: 8, rise: 0.70, setback: 0.95, step: 8, density: 0.50,
+          rows: 6, rise: 0.78, setback: 1.05, step: 17, density: 0.42,
           frameCol: [0.56, 0.55, 0.54], plankCol: [0.66, 0.63, 0.58],
         });
       } else {
@@ -640,7 +640,7 @@
       // Same reasoning as T2/T3: temporary open seating, not a built stand.
       if (typeof bleacher === "function") {
         bleacher(0.922, 0.966, 1, 15, {
-          rows: 7, rise: 0.72, setback: 0.95, step: 8, density: 0.55,
+          rows: 6, rise: 0.78, setback: 1.05, step: 17, density: 0.42,
           frameCol: [0.54, 0.53, 0.53], plankCol: [0.64, 0.61, 0.57],
         });
       } else {

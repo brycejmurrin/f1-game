@@ -62,6 +62,7 @@
     scenery: function (api) {
       const { out, track, n, px, py, pz, hw, pyMin, place, every, ferrisWheel,
               hash, mountain, pine, tree, bush, grandstandEx, spectatorHill,
+              bleacher, cypress, broadleafFall,
               building, tower, billboard,
               marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
               addBox, addCyl, addCone, addFrustum, groundYAt, onTrack, forestEdge, backdrop,
@@ -91,6 +92,15 @@
       const stand = (s, side, gap, len, opts) => {
         grandstandEx(s, side, gap, len, null, null, opts || {});
       };
+      // ── Uncovered seating helper. grandstandEx({roof:"none"}) is NOT an open
+      //    bank: it still builds the 12 m back shell, so the two "uncovered
+      //    bleacher" calls this file used to make read as roofless boxes with a
+      //    wall behind the crowd. The shared bleacher() is the real form —
+      //    planks on a bolted frame, a guard rail, and open sky behind. Ranges
+      //    are the old centre ±half the old length: 5.8 km/lap, so 1 m ≈ 1.72e-4.
+      const M = 1 / 5800;
+      const openBank = (s, side, gap, lenM, opts) =>
+        bleacher(s - lenM * M / 2, s + lenM * M / 2, side, gap, opts);
 
       // ── Forested Mie-prefecture hills: three depth-haze rings of wooded summits
       //    encircling the circuit. Near rings overlap so the horizon reads as one
@@ -586,14 +596,20 @@
       stand(0.15,  1, 15, 28, { livery: "steel", roof: "truss" });         // Esses — compact bank on the rising outside
       stand(0.28, -1, 9, 28,  { livery: "concrete", roof: "flat" });      // Degner entry
       stand(0.45,  1, 9, 38,  { livery: "navy", tiers: 2, endWalls: true }); // Hairpin
-      stand(0.75,  1, 8, 26,  { livery: "steel", roof: "none" });         // 200R approach — uncovered bleacher
       stand(0.94,  1, 9, 35,  { livery: "steel", roof: "truss", endWalls: true });  // Casio Triangle right
       stand(0.94, -1, 9, 35,  { livery: "navy", roof: "truss", endWalls: true });   // Casio Triangle left
       stand(0.50,  1, 8, 24,  { livery: "concrete" });                    // Mid-circuit flex stand
-      // Compact packed fan terraces at the two strongest driver-eye hero beats.
-      // Grandstand shells guard the crowd geometry and keep it behind catch fencing.
-      stand(0.205, 1, 20, 22, { livery: "steel", roof: "none" }); // Esses crest crowd
       stand(0.875, 1, 18, 24, { livery: "concrete", endWalls: true }); // 130R exit crowd
+
+      // ── The two OPEN banks. Suzuka's outfield seating away from the main
+      //    stands is bolted steel bleacher, not a shelled grandstand — the
+      //    Esses crest and the 200R approach are both bare rakes on the
+      //    hillside, and the sky behind them is half of what makes those
+      //    corners read as hill country rather than a stadium.
+      openBank(0.205, 1, 20, 22, { rows: 9, rise: 0.70, setback: 0.92,
+        frameCol: [0.58, 0.60, 0.64], plankCol: [0.66, 0.67, 0.70], density: 0.72 });
+      openBank(0.750, 1,  8, 26, { rows: 7, rise: 0.72, setback: 0.95,
+        frameCol: [0.56, 0.58, 0.62], plankCol: [0.64, 0.65, 0.68], density: 0.66 });
 
       // ── Spoon and 130R: grass-bank terracing, not roofed stands ──────────────
       // Real spectator viewing here is informal earth terracing on the hillside,

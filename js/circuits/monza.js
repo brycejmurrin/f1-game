@@ -82,10 +82,10 @@
     scenery: function (api) {
       const { out, MAT, n, ds, pyMin, place, prop, backdrop, groundYAt, every,
         onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, motorhome, tower,
-        cypress, stonePine, tieredBowl, terrace,
+        cypress, stonePine, tieredBowl,
         grandstandEx, spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall,
-        addBox, addCyl, addCone, addPrism, addFrustum, anchor, along, vadd,
+        addBox, addCyl, addPrism, anchor, along, vadd,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, groundedSegments,
         px, pz } = api;
       const K = (s) => Math.round(s * n) % n;

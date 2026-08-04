@@ -244,24 +244,29 @@
           if (type === 0) {
             // Galería: three continuous balcony bands on the street face, each
             // a slab plus a thin railing — one run per floor, not per window.
+            // NOTHING here projects past the block's own w × d envelope: the
+            // deeper city ranks already sit close enough that even a 0.8 m
+            // overhang pushed two of them from a grazing contact into a severe
+            // interpenetration. Madrid's galerías are enclosed and near-flush
+            // anyway, so the band reads from its colour and railing line.
             const bands = 3;
             for (let i = 0; i < bands; i++) {
               const y = bodyH * (0.28 + i * 0.22);
               stage._mat = MAT.CONCRETE;
-              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 + 0.35)), a.u, y),
+              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.45)), a.u, y),
                 [0.9, 0.22, d * 0.86], trim, b);
               stage._mat = MAT.METAL;
-              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 + 0.72)), a.u, y + 0.55),
+              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.06)), a.u, y + 0.55),
                 [0.12, 0.9, d * 0.86], STEEL, b);
               stage._mat = 0;
               // Glazed gallery behind the band — the enclosed balcony Madrid
               // is full of, and the reason the street face reads as layered.
-              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.1)), a.u, y + 0.95),
+              addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.45)), a.u, y + 0.95),
                 [0.3, 1.5, d * 0.80], GLASS, b);
             }
-            // Cornice + mansard-ish attic cap.
+            // Cornice + mansard-ish attic cap, both flush with the body.
             stage._mat = MAT.CONCRETE;
-            addBox(stage, vadd(a.c, a.u, bodyH + 0.25), [w + 0.7, 0.5, d + 0.7], trim, b);
+            addBox(stage, vadd(a.c, a.u, bodyH + 0.25), [w, 0.5, d], trim, b);
             addBox(stage, vadd(a.c, a.u, bodyH + 1.6), [w * 0.86, 2.2, d * 0.88],
               [0.34, 0.30, 0.30], b);
             stage._mat = 0;
@@ -270,7 +275,7 @@
             addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.25)), a.u, bodyH * 0.52),
               [0.4, bodyH * 0.66, d * 0.86], GLASS, b);
             stage._mat = MAT.CONCRETE;
-            addBox(stage, vadd(a.c, a.u, bodyH + 0.2), [w + 0.6, 0.4, d + 0.6], trim, b);
+            addBox(stage, vadd(a.c, a.u, bodyH + 0.2), [w, 0.4, d], trim, b);
             addBox(stage, vadd(vadd(a.c, a.r, -IN * w * 0.16), a.u, bodyH + 1.9),
               [w * 0.62, 3.0, d * 0.72], OFFWHITE, b);          // set-back top storey
             // Terrace parapet along the street edge of the setback.
@@ -294,52 +299,12 @@
                 a.r, IN * (w * 0.5 - 0.3)), a.u, 2.0),
                 [0.6, 3.2, d * 0.09], ARCADE_DARK, b);
             }
-            addBox(stage, vadd(a.c, a.u, bodyH + 0.3), [w + 0.9, 0.6, d + 0.9], trim, b);
+            addBox(stage, vadd(a.c, a.u, bodyH + 0.3), [w, 0.6, d], trim, b);
             stage._mat = MAT.ROOF;
             addPrism(stage, vadd(a.c, a.u, bodyH + 0.6), [w, 1.8, d], [0.40, 0.28, 0.24], b);
             stage._mat = 0;
           }
 
-          // Rooftop clutter — water tanks, a lift overrun and a chimney stack.
-          // Madrid's skyline is defined by this junk; a clean parapet is what
-          // makes a generated city look generated. Two items, hash-placed.
-          const top = bodyH + (type === 1 ? 3.6 : 2.8);
-          stage._mat = MAT.METAL;
-          addBox(stage, vadd(vadd(a.c, a.t, (hv - 0.5) * d * 0.5), a.u, top + 0.9),
-            [1.8, 1.8, 2.2], [0.62, 0.60, 0.56], b);
-          stage._mat = MAT.STONE;
-          addBox(stage, vadd(vadd(a.c, a.t, (0.5 - hv) * d * 0.34), a.u, top + 1.4),
-            [1.1, 2.8, 1.1], trim, b);
-          stage._mat = 0;
-        });
-      }
-
-      function avenueOffice(id, frac, side, gap, h) {
-        venueGroup(id, frac, side, gap, [20, h + 5, 32], false, (stage, a) => {
-          const b = basis(a);
-          addBox(stage, vadd(a.c, a.u, h * 0.5), [17, h, 29], OFFWHITE, b);
-          addBox(stage, vadd(vadd(a.c, a.r, -side * 8.7), a.u, h * 0.56),
-            [0.7, h * 0.72, 26], DARK_GLASS, b);
-          for (let bay = -2; bay <= 2; bay++) {
-            const col = vadd(vadd(a.c, a.t, bay * 5.1), a.r, -side * 9.3);
-            addBox(stage, vadd(col, a.u, 3.4), [0.65, 6.8, 0.65], STEEL, b);
-          }
-          addBox(stage, vadd(vadd(a.c, a.r, -side * 10.0), a.u, 7.1),
-            [3.0, 0.7, 29], WHITE, b);
-        });
-      }
-
-      function monumentalArcade(id, frac, side) {
-        venueGroup(id, frac, side, 35, [20, 18, 36], false, (stage, a) => {
-          const b = basis(a);
-          addBox(stage, vadd(a.c, a.u, 4.5), [17, 9, 33], MADRID_RED, b);
-          for (let bay = -3; bay <= 3; bay++) {
-            const opening = vadd(vadd(a.c, a.t, bay * 4.2), a.r, -side * 8.7);
-            addBox(stage, vadd(opening, a.u, 4.3), [0.7, 5.4, 2.4], ARCADE_DARK, b);
-          }
-          addBox(stage, vadd(a.c, a.u, 9.5), [18, 1.0, 34], WHITE, b);
-          addBox(stage, vadd(a.c, a.u, 12.0), [15, 4.0, 31], CROWD, b);
-          addPrism(stage, vadd(a.c, a.u, 15.0), [17, 2.2, 34], WHITE, b);
         });
       }
 
