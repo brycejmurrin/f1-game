@@ -472,80 +472,122 @@
   #cs-inner > .sheet-foot { grid-column: 1; grid-row: 3; }
 }
 
-/* ---------- preview camera bar ----------
-   Overlays the canvas region the sheet leaves for the car (bottom-left), so it
-   never fights the option list for space. #carsetup is pointer-events:none —
-   that is what lets the orbit drag reach the canvas underneath — so this bar
-   has to opt back in, exactly like #cs-inner does.
-   It is positioned against the SAFE BOX (.screen's padding), not the raw
-   viewport, so it clears the home indicator on a notched phone. */
-#cs-view {
-  pointer-events: auto;
+/* ---------- preview controls (bottom-left) ----------
+   ONE absolutely-positioned stack holding the camera chip row and the aero
+   group, laid out in normal flow inside it. That is the whole point: the two
+   used to be positioned separately, with the chip row lifted by a hard-coded
+   44px to clear the group below it. A hard-coded offset is a promise about
+   another element's height, and the aero group broke it the moment it wrapped
+   to a second row on a landscape handset — it grew up into the chips and
+   squashed them. A column cannot overlap itself, so the promise is now
+   structural instead of numeric.
+   It overlays the canvas region the sheet leaves for the car, so it never
+   fights the option list for space. #carsetup is pointer-events:none — that is
+   what lets the orbit drag reach the canvas underneath — so the CONTROLS opt
+   back in, while the stack itself stays transparent to the pointer: its empty
+   right-hand side sits over the car, and a wrapper that swallowed drags there
+   would break orbiting exactly where there is most car to orbit.
+   Positioned against the SAFE BOX (.screen's padding), not the raw viewport,
+   so it clears the home indicator on a notched phone. Bounded by BOTH edges
+   rather than by a max-width: left of the safe box, right of wherever the
+   sheet actually starts, so rows wrap inside the room the car has instead of
+   sliding under the panel. */
+#cs-stack {
+  pointer-events: none;
   position: absolute;
   left: calc(var(--safe-l) + var(--gap));
-  /* Lifted clear of #cs-aero, which owns the bottom-left corner. The chip row
-     wraps UPWARD, so growing it can never collide with the control below. */
-  bottom: calc(var(--safe-b) + var(--gap) + 44px);
-  z-index: 1;
-  /* Bounded by BOTH edges rather than by a max-width: left of the safe box,
-     right of wherever the sheet actually starts. The row then wraps inside the
-     room the car has instead of sliding under the panel. */
+  bottom: calc(var(--safe-b) + var(--gap));
   right: calc(var(--safe-r) + var(--cs-sheet-w) + var(--gap));
-  display: flex; flex-wrap: wrap; align-items: center;
-  gap: 4px;
-  justify-content: flex-start;
+  z-index: 2;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+}
+/* The two top-level buttons. This row is all that shows at rest. */
+#cs-bar {
+  pointer-events: auto;
+  display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px;
+  max-width: 100%;
+}
+/* The disclosure. Its lit state hangs off aria-expanded rather than the `active`
+   class every other group uses, deliberately: `active` is what AriaState watches
+   to decide a group is a set of toggles, and a disclosure already states itself
+   with aria-expanded. Two competing state attributes on one button is worse for
+   a screen reader than either alone. */
+#cs-cam {
+  flex: 0 0 auto; width: auto; margin: 0;
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: var(--r-sm);
+  font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
+  background: rgba(12,12,16,0.62); color: rgba(255,255,255,0.62);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(3px);
+  min-height: 30px;
+}
+#cs-cam:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+.cs-cam-caret { font-size: 8px; line-height: 1; transition: transform 0.15s ease; }
+#cs-cam[aria-expanded="true"] {
+  background: rgba(0,204,136,0.18); color: #0c8;
+  border-color: rgba(0,204,136,0.4);
+}
+#cs-cam[aria-expanded="true"] .cs-cam-caret { transform: rotate(180deg); }
+
+/* The panel. In normal flow ABOVE the bar inside the column, so it pushes
+   nothing and overlaps nothing — it just makes the stack taller, and the stack
+   is anchored at the bottom. */
+#cs-cam-panel {
+  pointer-events: auto;
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 8px 10px; border-radius: var(--r-sm);
+  background: rgba(10,10,14,0.86);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(6px);
+  max-width: 100%;
+}
+#cs-cam-panel[hidden] { display: none; }
+/* Label column + controls. The labels are a fixed column so the three rows of
+   chips line up on one left edge instead of stepping in and out with the label
+   width. */
+.cs-pan-row { display: flex; align-items: center; gap: 8px; }
+.cs-pan-lbl {
+  flex: 0 0 34px;
+  font-size: 8px; font-weight: 800; letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.32); text-align: right;
+}
+.cs-pan-grp, #cs-view, #cs-wing-views {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  min-width: 0;
 }
 /* Below this the sheet is the whole screen (its width floor is 430px) and there
    is no car left to aim a camera at, so the controls would be pointing at
    nothing. Portrait phones land here. */
 @media (max-width: 700px) {
-  #cs-view { display: none; }
+  #cs-stack { display: none; }
 }
-/* ACTIVE AERO toggle — its own control in the bottom-LEFT corner, not one more
-   camera chip: it changes the CAR, not the view of it, and watching the flaps
-   sweep open is the whole reason it exists. It owns the corner and the camera
-   chip row sits above it, so the row can wrap upward without ever colliding. */
+/* ACTIVE AERO — top level beside CAMERA, never inside the panel: it changes the
+   CAR, not the view of it, and it is the one control here you tap over and over
+   to watch something happen. Its own wrapper so AriaState sees a single-button
+   group — sharing a parent with #cs-cam would make the disclosure announce
+   itself as an unpressed toggle the moment the aero toggle lit up. */
 #cs-aero-bar {
   pointer-events: auto;
-  position: absolute;
-  left: calc(var(--safe-l) + var(--gap));
-  bottom: calc(var(--safe-b) + var(--gap));
-  z-index: 2;
-  display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px;
-  right: calc(var(--safe-r) + var(--cs-sheet-w) + var(--gap));
-  justify-content: flex-start;
+  display: flex; align-items: stretch;
 }
 #cs-aero {
   flex: 0 0 auto;
   display: flex; flex-direction: row; align-items: baseline; gap: 7px;
   width: auto; margin: 0;
-  padding: 6px 11px; border-radius: var(--r-sm);
+  padding: 5px 10px; border-radius: var(--r-sm);
   background: rgba(12,12,16,0.62);
   border: 1px solid rgba(255,255,255,0.14);
   backdrop-filter: blur(3px);
-  min-height: 44px;
+  min-height: 30px;
 }
-/* The two wing framings live beside the toggle because they exist FOR it: the
-   flaps rotate about the car's X axis, so the stock FRONT/REAR presets stare
-   straight down that axis and show nothing moving. These are the angles that
-   do. */
-.cs-wing-btn {
-  flex: 0 0 auto; width: auto; margin: 0;
-  padding: 6px 10px; border-radius: var(--r-sm);
-  font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
-  background: rgba(12,12,16,0.62); color: var(--dim);
-  border: 1px solid rgba(255,255,255,0.14);
-  backdrop-filter: blur(3px);
-  min-height: 44px;
-}
-.cs-wing-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
 #cs-aero:hover { border-color: rgba(255,255,255,0.3); }
 .cs-aero-lbl {
   font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
   color: rgba(255,255,255,0.42);
 }
 .cs-aero-val {
-  font-size: 13px; font-weight: 800; font-style: italic; letter-spacing: 0.06em;
+  font-size: 12px; font-weight: 800; font-style: italic; letter-spacing: 0.06em;
   color: var(--dim);
 }
 /* Lit state uses the same CYAN the in-race HUD chip uses for X-mode, so the
@@ -553,19 +595,13 @@
 #cs-aero.active { background: rgba(34,211,238,0.16); border-color: rgba(34,211,238,0.45); }
 #cs-aero.active .cs-aero-lbl { color: rgba(125,249,255,0.75); }
 #cs-aero.active .cs-aero-val { color: #7df9ff; }
-/* Same reasoning as #cs-view: below this there is no car left to look at. With
-   the control gone, the chip row drops back into the corner it vacated. */
-@media (max-width: 700px) {
-  #cs-aero-bar { display: none; }
-  #cs-view { bottom: calc(var(--safe-b) + var(--gap)); }
-}
 @media (max-width: 1000px) {
-  #cs-aero-bar { gap: 4px; }
-  #cs-aero { padding: 5px 9px; gap: 5px; min-height: 32px; }
+  #cs-aero { padding: 4px 8px; gap: 5px; min-height: 26px; }
   .cs-aero-lbl { font-size: 8px; letter-spacing: 0.08em; }
   .cs-aero-val { font-size: 11px; }
-  .cs-wing-btn { padding: 5px 8px; font-size: 9px; letter-spacing: 0.05em; min-height: 32px; }
-  #cs-view { bottom: calc(var(--safe-b) + var(--gap) + 40px); }
+  #cs-cam { padding: 4px 8px; font-size: 8px; min-height: 26px; }
+  #cs-cam-panel { padding: 6px 8px; gap: 4px; }
+  .cs-pan-lbl { flex-basis: 30px; }
 }
 .cs-view-btn {
   flex: 0 0 auto; width: auto; margin: 0;

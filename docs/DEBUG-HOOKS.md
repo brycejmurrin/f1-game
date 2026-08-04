@@ -545,9 +545,13 @@ the garage is closed (the rest is then just the parked state). `spin` is the
 auto-turntable toggle; `az`/`el` are radians (az 0 = ahead of the nose, PI =
 behind the wing; el 0 = level, ~1.2 = overhead) and `dist` is the orbit radius in
 metres. The camera is driven by the `#cs-view` chips (`[data-cs-view]`, `hero` |
-`front` | `side` | `rear` | `top`), a drag on the canvas, the wheel/pinch, or the
-`+`/`−` chips — this hook is how tests observe the result without going anywhere
-near rendered pixels.
+`front` | `side` | `rear` | `top`), the two wing framings in `#cs-wing-views`
+(`wingFront` | `wingRear`), a drag on the canvas, the wheel/pinch, or the `+`/`−`
+chips — this hook is how tests observe the result without going anywhere near
+rendered pixels. All of those chips live in `#cs-cam-panel`, which is **shut
+until the `#cs-cam` (CAMERA) disclosure is pressed**, so a test that clicks one
+has to open the panel first; picking a preset shuts it again, while the
+MOVE/zoom/SPIN controls leave it open.
 
 ### `corners() → [number, …]`
 Lap-fractions of **curvature-peak** apexes (local maxima of `|curvature|`). Handy
