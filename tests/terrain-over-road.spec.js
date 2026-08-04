@@ -12,6 +12,11 @@ const ALL_TRACKS = [
   "interlagos", "jeddah", "madrid", "mexico", "miami", "monaco", "montreal",
   "monza", "qatar", "redbull", "shanghai", "silverstone", "singapore", "spa",
   "suzuka", "vegas", "zandvoort",
+  // Retired / off-calendar circuits (def `classic: true`).
+  "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
+  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
+  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
+  "jacarepagua",
 ];
 const TRACKS = process.env.TRACK ? [process.env.TRACK] : ALL_TRACKS;
 const CROSSOVER_TRACKS = new Set(["madrid", "suzuka", "zandvoort"]);

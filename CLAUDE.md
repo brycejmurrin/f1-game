@@ -38,7 +38,8 @@ npm run test:visual     # pixel-diff visual regression (tracks-visual, slow)
 npm run test:scenery    # props/terrain over road + f1-track-accuracy
 npm run test:webgl      # webgl-probes + lighting-ab
 npm run test:audio      # engine/sfx audio smoke
-npm run test:modes      # season + time-trial game modes
+npm run test:modes      # season + time-trial + career game modes
+npm run test:career     # career only: mode axes, the save, the hub, a round
 npm run test:map        # minimap hooks
 npm run test:agent      # agent world view (world/trackInfo/scene/visible/rollout)
 npm run test:circuit    # walls + autopilot + elevation + audit (all circuit-level)
@@ -219,7 +220,8 @@ js/track/        — track ENGINE (shared code) —
                                   tests/scenery-api-contract.test.mjs
 
 js/circuits/     — circuit DATA —
-  <id>.js        TrackDefs      24 circuits (one file each, registers on Tracks.LIST);
+  <id>.js        TrackDefs      40 circuits (one file each, registers on Tracks.LIST):
+                                  24 season rounds then 16 retired `classic: true`;
                                   script-tag order == Tracks.LIST == picker/season order
 
 js/car/          — car —
@@ -300,6 +302,20 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   you drive: TEAM & DRIVER, the 8 part categories
                                   + budget, LIVERY. The select screen owns WHERE
                                   you race and links here; race settings own HOW
+  career.js      Career         CAREER core: the apex26.career save + migration,
+                                  the credits economy, contracts, driver/team
+                                  development, R&D ownership, round settlement.
+                                  Pure rules — no DOM. A plain global (like
+                                  CamTune), because game.js calls it from
+                                  makeCars()/recomputePlayerMods()/endRace().
+                                  Every GAMEPLAY accessor is gated on
+                                  inCareer(), NOT on "a save exists" — the save
+                                  is read at boot so the title button can offer
+                                  CONTINUE, but its rules must not reach a
+                                  Grand Prix
+  career-ui.js   CareerUI       the CAREER screen (#career): new-career setup
+                                  and the season hub. Replaces #select in
+                                  career — the calendar owns WHERE you race
   menus.js       Menus          menu/select/pause DOM flows
   scrollfade.js  ScrollFade     "there is more below" edge fade + position indicator
                                   for every menu scroll region (self-initialising)
@@ -682,7 +698,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-86 Playwright specs + 23 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+87 Playwright specs + 23 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

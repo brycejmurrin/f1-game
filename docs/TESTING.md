@@ -58,7 +58,7 @@ node tools/verify-track.cjs --all
 | `circuit` | walls + autopilot + elevation + audit (all circuit-level) |
 | `tooling` | Node tooling/foundation contracts, including scenery themes and kits |
 | `tooling-fast` | the structural half of `tooling` — everything except the two full-fleet audits. ~4 s, so it fits the edit loop; run `tooling` (or `sweeps`) before pushing. |
-| `sweeps` | the two full-fleet geometry audits pulled out of `tooling` because they dominate it: `prop-clipping.test.mjs` (~92 s) and `road-under-floor.test.mjs` (~83 s), each rebuilding all 24 circuits. |
+| `sweeps` | the two full-fleet geometry audits pulled out of `tooling` because they dominate it: `prop-clipping.test.mjs` (~92 s) and `road-under-floor.test.mjs` (~83 s), each rebuilding all 40 circuits. |
 | `fast` | curated fast subset: smoke + api + collision + offtrack + parts-physics + steering (~3 min) |
 | `ab` | lighting A/B pixel comparison (`lighting-ab.spec.js`) |
 | `audit` | coverage guard: every spec must belong to ≥1 group (`tools/test-coverage-audit.mjs`) |
@@ -169,8 +169,8 @@ hook values.
 |---|---|
 | `smoke.spec.js` | page loads, `__apex` available, race starts |
 | `autopilot.spec.js` | closed-loop programmatic driving (monza, suzuka) |
-| `tracks-visual.spec.js` | per-circuit pixel-diff regression (all 24 circuits × 6 fractions) |
-| `tracks-walls.spec.js` | barrier geometry on all 24 circuits |
+| `tracks-visual.spec.js` | per-circuit pixel-diff regression (all 40 circuits × 6 fractions) |
+| `tracks-walls.spec.js` | barrier geometry on all 40 circuits |
 | `f1-track-accuracy.spec.js` | CircuitPaths OSM data vs real bacinger/f1-circuits GeoJSON outlines (direction, shape) |
 | `physics-fixes.spec.js`, `world-physics.spec.js`, `longitudinal.spec.js` | physics regression |
 | `projection.spec.js` | world↔track (Frenet) projection continuity — no lap-distance teleport near hairpins |

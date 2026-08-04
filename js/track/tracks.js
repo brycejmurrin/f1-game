@@ -986,6 +986,7 @@ const Tracks = (function () {
       // within a run there is no interior geometry at all and nothing to see
       // but water. Coplanar neighbouring runs leave no seam either.
       const y = pyMin - 0.8;
+      const vert0 = waterBuf.pos.length / 3;
       let placed = 0;
       for (const [iz, list] of rows) {
         list.sort((a, b) => a - b);
@@ -1000,6 +1001,17 @@ const Tracks = (function () {
           i = j + 1;
         }
       }
+      // Record the SUCCESS too, not just the failure. This path only ever pushed
+      // to `suppressed`, so a water band that built perfectly left no trace in
+      // the ledger at all — it was neither emitted nor suppressed nor invalid.
+      // Anything asking "did this model ship?" therefore got `false` for every
+      // raster water body in the game, whatever happened. modelGroup and
+      // waterSurface both log an `emitted` entry; this is the same record, with
+      // the merged-run count that is this path's unit of work.
+      if (placed && opts.id)
+        diagnostics.emitted.push({ id: opts.id, required: !!opts.required,
+                                   vertices: waterBuf.pos.length / 3 - vert0,
+                                   water: true, runs: placed });
       if (!placed && opts.required)
         diagnostics.suppressed.push({ id: opts.id || "waterfield", required: true, reason: "no cell placed" });
       return placed;

@@ -62,7 +62,7 @@
 
     scenery: function (api) {
       const {
-        out, n, px, pz, hw, pyMin, night, hash, anchor, vadd,
+        out, MAT, seat, n, px, pz, hw, pyMin, night, hash, anchor, vadd,
         modelGroup, overheadSpan, groundPatch, groundedSegments,
         addBox, addCyl, addPrism, addFrustum,
         ridge, floodMast, tree, bush, hedge,
@@ -83,6 +83,18 @@
       const STRAW_DARK = [0.67, 0.59, 0.39];
       const OLIVE = [0.40, 0.46, 0.28];
       const CROWD = [0.48, 0.25, 0.24];
+      const GOLD = [0.84, 0.66, 0.22];
+      // Madring's seat mouldings are the venue's brand colour, not stadium
+      // grey — red and gold alternating down the rake is the one thing that
+      // makes a bolted-together temporary deck read as SPANISH from trackside.
+      const SEAT_COL = [
+        [0.66, 0.16, 0.16], [0.80, 0.62, 0.20], [0.62, 0.15, 0.15], [0.86, 0.68, 0.24],
+      ];
+      // Summer Madrid: short sleeves, sun hats, a lot of white.
+      const FANS = [
+        [0.92, 0.90, 0.86], [0.72, 0.20, 0.18], [0.88, 0.72, 0.26], [0.26, 0.32, 0.46],
+        [0.90, 0.88, 0.82], [0.58, 0.24, 0.28], [0.34, 0.44, 0.36], [0.94, 0.92, 0.90],
+      ];
 
       const at = (frac) => Math.round(frac * n) % n;
       const basis = (a) => [a.r, a.u, a.t];
@@ -171,6 +183,116 @@
         });
       }
 
+      // ── MADRING MODULAR DECK ────────────────────────────────────────────
+      // Madrid 2026 is a brand-new venue that is assembled, not poured: the
+      // stands are bolted steel frames on precast pads with aluminium bench
+      // decks and a printed fascia banner. grandstandEx's back-shell-and-
+      // cantilever silhouette is a permanent circuit's, which is precisely
+      // the wrong read here — so this form is built from primitives instead
+      // and gives Madrid a stand shape no other circuit has.
+      function madringDeck(id, frac, side, gap, bays, opts) {
+        opts = opts || {};
+        const rows = opts.rows || 7, pitch = 6.6, len = bays * pitch;
+        const topH = 2.4 + rows * 1.42;
+        const banner = opts.banner || MADRID_RED;
+        venueGroup(id, frac, side, gap, [15, topH + 5.5, len + 3], false, (stage, a) => {
+          const b = basis(a);
+          const IN = -side;                       // +1 along a.r faces the track
+          // Frame geometry: a raking diagonal per bay division, plus two ties.
+          // The diagonal needs its own basis, so build one orthonormal to the
+          // rake rather than shearing a box across a non-perpendicular pair.
+          const run = 10.4, dl = Math.hypot(run, topH);
+          const dv = [(a.r[0] * run * IN + a.u[0] * topH) / dl,
+                      (a.r[1] * run * IN + a.u[1] * topH) / dl,
+                      (a.r[2] * run * IN + a.u[2] * topH) / dl];
+          const pv = [(-a.r[0] * topH * IN + a.u[0] * run) / dl,
+                      (-a.r[1] * topH * IN + a.u[1] * run) / dl,
+                      (-a.r[2] * topH * IN + a.u[2] * run) / dl];
+          for (let i = 0; i <= bays; i++) {
+            const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(p, a.u, 0.22), [12.4, 0.44, 1.7], CONCRETE, b);   // precast pad
+            stage._mat = MAT.METAL;
+            seat.cyl(stage, vadd(p, a.r, IN * 5.2), 0.16, 2.4, STEEL, 6, b);     // front leg
+            seat.cyl(stage, vadd(p, a.r, -IN * 5.2), 0.16, topH, STEEL, 6, b);   // back leg
+            addBox(stage, vadd(p, a.u, topH * 0.5), [0.15, dl, 0.15], STEEL, [pv, dv, a.t]);
+            addBox(stage, vadd(p, a.u, topH * 0.34), [10.6, 0.13, 0.13], STEEL, b);
+            addBox(stage, vadd(p, a.u, topH * 0.72), [10.6, 0.13, 0.13], STEEL, b);
+          }
+          // Aluminium treads with red/gold seat mouldings, and a summer crowd
+          // on them: a bespoke stand with no people in it reads as bare
+          // scaffolding next to grandstandEx's built-in crowd.
+          for (let t = 0; t < rows; t++) {
+            const lat = IN * (4.7 - t * 1.32), y = 1.5 + t * 1.42;
+            stage._mat = MAT.METAL;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y), [1.32, 0.16, len],
+              [0.74, 0.75, 0.78], b);
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.16), [0.95, 0.78, len - 1.6],
+              SEAT_COL[t % SEAT_COL.length], b);
+            stage._mat = MAT.FABRIC;
+            for (let j = 0; j * 0.95 < len - 3; j++) {
+              const h2 = hash(Math.round(frac * 997) + t * 83 + j * 31);
+              if (h2 < 0.42) continue;
+              seat.box(stage,
+                vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1.6 + j * 0.95), a.u, y + 0.9),
+                [0.52, 0.94, 0.44], FANS[Math.floor(h2 * 83) % FANS.length], b);
+            }
+          }
+          stage._mat = 0;
+          // Printed fascia banner across the front of the deck — the venue's
+          // red-and-gold, and the piece that identifies the stand at speed.
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 5.6), a.u, 1.3), [0.22, 2.0, len], banner, b);
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 5.68), a.u, 0.6), [0.14, 0.44, len], GOLD, b);
+          // Tensile shade sail on the back legs — Madrid in summer is 35 °C and
+          // the temporary decks are covered by fabric, not a concrete slab.
+          if (opts.canopy !== false) {
+            stage._mat = MAT.FABRIC;
+            for (let i = 0; i <= bays; i++)
+              seat.cyl(stage, vadd(vadd(a.c, a.t, (i - bays / 2) * pitch), a.r, -IN * 5.2),
+                0.13, topH + 3.6, STEEL, 5, b);
+            for (let i = 0; i < bays; i++)
+              seat.box(stage,
+                vadd(vadd(vadd(a.c, a.t, (i - (bays - 1) / 2) * pitch), a.r, -IN * 0.8),
+                  a.u, topH + 3.4),
+                [9.4, 0.2, pitch - 0.5], (i % 2) ? OFFWHITE : [0.90, 0.84, 0.74], b);
+            stage._mat = 0;
+          }
+        });
+      }
+
+      // ── MADRING PIT LANE ────────────────────────────────────────────────
+      // Was five copies of the generic urbanBlock() office box. The real
+      // IFEMA pit building is a low white garage deck with individually
+      // shuttered bays, a glazed suite storey stepped back off the garage
+      // face and an open roof terrace with the venue banner along its edge —
+      // a silhouette no other structure on the lap repeats.
+      function madringPitBay(id, frac, side, gap, bays) {
+        const pitch = 7.0, len = bays * pitch;
+        venueGroup(id, frac, side, gap, [17, 15, len + 2], false, (stage, a) => {
+          const b = basis(a);
+          const IN = -side;
+          addBox(stage, vadd(a.c, a.u, 3.1), [15, 6.2, len], WHITE, b);          // garage deck
+          for (let i = 0; i < bays; i++) {
+            const p = vadd(a.c, a.t, (i - (bays - 1) / 2) * pitch);
+            addBox(stage, vadd(vadd(p, a.r, IN * 7.4), a.u, 2.3),
+              [0.5, 4.2, pitch - 1.5], ARCADE_DARK, b);                          // shutter opening
+            addBox(stage, vadd(vadd(p, a.r, IN * 7.5), a.u, 5.2),
+              [0.34, 1.0, pitch - 2.4], i % 2 ? MADRID_RED : GOLD, b);           // bay header
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, -IN * 1.6), a.u, 8.9),
+            [11.4, 5.0, len - 2], GLASS, b);                                     // suite storey
+          addBox(stage, vadd(vadd(a.c, a.r, -IN * 1.6), a.u, 11.6),
+            [11.8, 0.5, len - 1.4], OFFWHITE, b);
+          addBox(stage, vadd(a.c, a.u, 6.5), [15.4, 0.5, len + 0.6], OFFWHITE, b); // terrace slab
+          for (let i = 0; i < bays * 2; i++) {                                    // terrace railing
+            const p = vadd(a.c, a.t, (i - (bays * 2 - 1) / 2) * (pitch / 2));
+            seat.cyl(stage, vadd(vadd(p, a.r, IN * 7.0), a.u, 6.7), 0.06, 1.1, STEEL, 4, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 7.0), a.u, 7.7),
+            [0.12, 0.42, len], MADRID_RED, b);
+        });
+      }
+
       // IFEMA's horizontal white exhibition halls frame the pit straight. The
       // real campus is a grid of ~12 giant sheds, so a deeper second rank keeps
       // the venue reading as a campus rather than three isolated boxes.
@@ -248,21 +370,45 @@
       // start "straight" that is not actually straight — props-over-road measured
       // the riser 0.77 m onto the tarmac.
       grandstandEx(0.00, -1, 10, 52, null, null,
-        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+        { livery: "crimson", tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       // T1 chicane stand, opposite the motorway overpass piers (brief s≈0.08).
+      // Low and open-trussed with no end walls — a corner stand seen THROUGH,
+      // deliberately a lighter silhouette than the three-tier hero above.
       grandstandEx(0.085, -1, 16, 45, null, null,
-        { livery: "concrete", tiers: 1, roof: "truss" });
+        { livery: "sandstone", tiers: 1, roof: "truss", h: 8 });
       // El Búnker corner stand overlooking the retaining-wall drop (s≈0.50 L) —
-      // terracotta rotates the third STAND_SETS.madrid family in.
+      // flat-roofed, two decks, closed ends: the heavy massing that suits a
+      // stand backed onto a concrete retaining face.
       grandstandEx(0.50, -1, 20, 40, null, null,
-        { livery: "terracotta", tiers: 1, roof: "flat", endWalls: true });
+        { livery: "steel", tiers: 2, roof: "flat", endWalls: true, pylons: true });
 
-      // Pits and paddock use bounded, terrain-seated modules rather than one long
-      // floating slab that can chord across the start-line curve.
+      // Three modular decks — the venue's signature stand form. Placed where
+      // a 2026 street/hybrid venue actually drops temporary seating: the wide
+      // urban avenue, the fast return leg and the pit-entry approach.
+      madringDeck("madrid-deck-avenue", 0.135, 1, 12, 7, { rows: 7 });
+      madringDeck("madrid-deck-avenue-far", 0.300, 1, 14, 6, { rows: 6, banner: GOLD });
+      madringDeck("madrid-deck-return", 0.620, -1, 13, 7, { rows: 8 });
+
+      // Pits and paddock: bounded, terrain-seated bays rather than one long
+      // floating slab that can chord across the start-line curve. Each bay is
+      // short enough to follow the start "straight", which is not actually
+      // straight, and together they read as one continuous garage frontage.
       for (let i = 0; i < 5; i++) {
-        urbanBlock(`madrid-pit-${i}`, (0.985 + i * 0.014) % 1, 1, 8,
-          12, 9 + (i % 2), 20, i % 2 ? OFFWHITE : WHITE);
+        madringPitBay(`madrid-pit-${i}`, (0.985 + i * 0.014) % 1, 1, 8, 3);
       }
+      // Race control closes the garage row at the pit-exit end: a glazed
+      // corner tower with the venue banner, not another anonymous office box.
+      venueGroup("madrid-race-control", 0.058, 1, 10, [16, 30, 18], false, (stage, a) => {
+        const b = basis(a);
+        addBox(stage, vadd(a.c, a.u, 6.5), [14, 13, 16], WHITE, b);
+        addBox(stage, vadd(a.c, a.u, 17.5), [12.5, 8.5, 14.5], GLASS, b);   // glazed control deck
+        addBox(stage, vadd(a.c, a.u, 22.2), [13.2, 0.7, 15.2], OFFWHITE, b);
+        // Banner hangs on the track-facing face (this group sits on side +1,
+        // so the track is in the -a.r direction).
+        addBox(stage, vadd(vadd(a.c, a.r, -7.2), a.u, 11.0),
+          [0.3, 9.0, 3.4], MADRID_RED, b);
+        seat.cyl(stage, vadd(a.c, a.u, 22.5), 0.16, 7, STEEL, 5, b);        // aerial mast
+      });
 
       // La Monumental: a CONTINUOUS 270-degree bowl — contiguous 34 m stand
       // bays at ~34 m pitch (0.0062 lap frac) so the ring reads as one

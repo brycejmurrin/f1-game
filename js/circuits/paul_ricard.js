@@ -30,6 +30,13 @@
       // generic foliage pass has no business standing in it.
       { kind: "foliage", s0: 0.20, s1: 0.44 },
       { kind: "foliage", s0: 0.60, s1: 0.78 },
+      // The `modern` theme's city generator rings the lap with procedural
+      // towers and neon retail. Le Castellet is 400 m up on an empty limestone
+      // plateau: the nearest building of any height is the aerodrome tower,
+      // which this file builds itself. A skyline here is not just wrong, it is
+      // the exact opposite of what makes the place recognisable — the horizon
+      // has to stay empty for the painted runoff to dominate.
+      { kind: "city", s0: 0, s1: 1 },
     ],
     // High Provençal plateau: hard white light, bleached limestone, dry scrub.
     pal: {
@@ -62,16 +69,19 @@
       { frac: 0.640, angleDeg: 3.5, widthM: 160 },   // Bosch curve
     ],
     scenery: function (api) {
-      const { out, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
+      const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
         pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
-        broadcastCompound, billboard, gantry, marshalPost, tower, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, prop,
-        addBox, addCyl, addCone, addPrism } = api;
+        broadcastCompound, billboard, gantry, marshalPost, motorhome,
+        fence, guardrail, tyreWall, groundPatch, modelGroup, prop, runoffApron,
+        cameraTower, sponsorHoarding, signBoard,
+        addBox, addCyl, addCone, addFrustum } = api;
       const K = (s) => Math.round(s * n) % n;
 
       const PINE = [0.14, 0.30, 0.16], PINE_D = [0.11, 0.24, 0.14];
       const SCRUB = [0.36, 0.40, 0.22], SCRUB_D = [0.30, 0.34, 0.19];
       const BLUE = [0.36, 0.42, 0.66], RED = [0.62, 0.28, 0.26];
+      const BLUE_D = [0.29, 0.34, 0.56], LINE = [0.90, 0.90, 0.88];
+      const ALU = [0.76, 0.78, 0.80], WHITE = [0.94, 0.94, 0.92];
 
       // =====================================================================
       // 1. THE BLUE-AND-RED RUNOFF — Paul Ricard's single most recognisable
@@ -93,59 +103,130 @@
           { id: id + "-blue", samples: 8 });
       }
 
+      // The corner patches alone leave the rest of the lap green, which is the
+      // one thing Paul Ricard never is: the painted abrasive apron is
+      // CONTINUOUS — every verge, every straight, the whole way round. Laid as
+      // a run of flat aprons rather than one huge patch so each piece is
+      // footprint-guarded and follows the (very slight) plateau relief. The
+      // white cross-lines are the Blue Zone's lane markings, which is what
+      // stops all that blue reading as a swimming pool from the air.
+      for (const side of [-1, 1]) {
+        let i = 0;
+        along(0.0, 1.0, 18, (k, spacing) => {
+          const seg = spacing * 1.05;   // slight overlap so the run reads unbroken
+          runoffApron(k, side, 2.5, [9, 0.16, seg], RED);
+          runoffApron(k, side, 11.5, [30, 0.14, seg], (i & 1) ? BLUE : BLUE_D);
+          runoffApron(k, side, 41.5, [26, 0.12, seg], (i & 1) ? BLUE_D : [0.33, 0.38, 0.60]);
+          if (i % 3 === 0) {
+            const a = anchor(k, side, 26);
+            addBox(out, vadd(a.c, a.u, 0.22), [28, 0.10, 0.9], LINE, [a.r, a.u, a.t]);
+          }
+          i++;
+        });
+      }
+
       // =====================================================================
       // 2. PROVENÇAL SCRUB — low aleppo pine and dry brush beyond the runoff.
       //    Kept sparse and far back: the open plateau is the look.
       // =====================================================================
       const openRunoff = (s) =>
         (s >= 0.92 || s <= 0.10) || (s >= 0.20 && s <= 0.44) || (s >= 0.60 && s <= 0.78);
+      // Thresholds are deliberately high. Le Castellet is a bleached limestone
+      // plateau: the scrub is thin, low and beaten back by the mistral, and any
+      // planting dense enough to read as a treeline is wrong for the place.
       every(30, (k) => {
         const s = k / n;
         if (openRunoff(s)) return;
         const h = hash(k * 31);
-        if (h < 0.45) return;
-        pine(k, h < 0.5 ? -1 : 1, 30 + h * 20, 9 + h * 6, h < 0.6 ? PINE : PINE_D);
+        if (h < 0.62) return;
+        pine(k, h < 0.5 ? -1 : 1, 44 + h * 22, 8 + h * 5, h < 0.75 ? PINE : PINE_D);
       });
       every(26, (k) => {
         const h = hash(k * 97 + 23);
-        if (h < 0.55) return;
-        bush(k, h < 0.72 ? -1 : 1, 26 + h * 14, h < 0.6 ? SCRUB : SCRUB_D);
+        if (h < 0.66) return;
+        bush(k, h < 0.82 ? -1 : 1, 42 + h * 16, h < 0.75 ? SCRUB : SCRUB_D);
       });
       every(50, (k) => {
         const s = k / n;
         if (openRunoff(s)) return;
         const h = hash(k * 67 + 17);
-        if (h < 0.60) return;
-        tree(k, h < 0.5 ? -1 : 1, 56 + h * 30, 8 + h * 5, [0.26, 0.36, 0.20]);
+        if (h < 0.72) return;
+        tree(k, h < 0.5 ? -1 : 1, 64 + h * 30, 7 + h * 4, [0.26, 0.36, 0.20]);
       });
 
       // =====================================================================
-      // 3. PIT COMPLEX — a long modern pit building with the big overhanging
-      //    roof and the control tower at the line.
+      // 3. PIT COMPLEX — Paul Ricard's pit lane is a single-storey white slab
+      //    that runs almost dead straight for 300 m under one uninterrupted
+      //    flat roof, held off the garage face on a comb of thin round columns.
+      //    There is no stacked hospitality block and no stepped silhouette: the
+      //    whole building is one horizontal line, which is exactly what makes
+      //    the place read as an aerodrome apron rather than a stadium.
+      //    Bay lengths/setbacks are probed against the foldback behind the
+      //    straight (s≈0.97 is the tightest; 20 m clears a 36 m bay there).
       // =====================================================================
-      const pitWall = [0.90, 0.90, 0.88];
-      for (let i = 0; i < 9; i++) {
-        building(K(0.945 + i * 0.007), 1, 15, 16, 9, 11,
-          { wall: pitWall, window: [0.28, 0.32, 0.40], floor: 4.5, roof: true });
-      }
-      tower(K(0.985), 1, 13, 6, 34, { col: [0.94, 0.94, 0.92], cap: true, capCol: [0.16, 0.30, 0.62], mast: 8 });
-      gantry(0.0, 9, [0.15, 0.15, 0.18]);
-      gantry(0.965, 8.5, [0.15, 0.15, 0.18]);
-      grandstandEx(0.005, -1, 12, 150, null, null,
-        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.955, -1, 12, 90, null, null, { livery: "concrete", endWalls: true });
-      {
-        // s≈0.995, not 0.98: the pit-straight side narrows where the lap folds
-        // back on itself earlier along the straight, and an 84 m canopy needs
-        // ~30 m of setback there. Here 19 m clears comfortably.
-        const a = anchor(K(0.995), 1, 19);
-        modelGroup("paul-ricard-pit-canopy", {
-          center: vadd(a.c, a.u, 11), size: [13, 1.6, 84], basis: [a.r, a.u, a.t],
+      for (const [i, s] of [0.950, 0.970, 0.990, 0.010].entries()) {
+        const a = anchor(K(s), 1, 20);
+        const b = [a.r, a.u, a.t];
+        modelGroup(`paul-ricard-pit-bay-${i + 1}`, {
+          center: vadd(a.c, a.u, 6), size: [22, 12, 38], basis: b,
         }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, 11.2), [12, 0.9, 84], [0.92, 0.92, 0.90], [a.r, a.u, a.t]);
-          addBox(stage, vadd(a.c, a.u, 10.3), [11, 0.25, 82], [0.94, 0.90, 0.62], [a.r, a.u, a.t]);
+          stage._mat = MAT.CONCRETE;
+          // Garage slab — low, wide, deliberately featureless.
+          addBox(stage, vadd(a.c, a.u, 3.4), [15, 6.8, 36], WHITE, b);
+          stage._mat = MAT.GLASS;
+          // One continuous dark glazing band at head height, broken only by the
+          // pier between each pair of garage doors.
+          addBox(stage, vadd(vadd(a.c, a.r, -6.6), a.u, 3.2), [0.4, 3.6, 34],
+            [0.16, 0.19, 0.26], b);
+          stage._mat = MAT.METAL;
+          for (let d = 0; d < 4; d++) {
+            const off = (d - 1.5) * 8.6;
+            addBox(stage, vadd(vadd(vadd(a.c, a.t, off), a.r, -7.3), a.u, 3.3),
+              [0.5, 6.4, 1.0], [0.82, 0.83, 0.86], b);
+          }
+          // The roof plane: one thin slab overhanging the pit lane, with a blue
+          // fascia lip. It is the building's only strong line.
+          addBox(stage, vadd(a.c, a.u, 7.2), [21, 0.55, 37], [0.90, 0.91, 0.92], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -10.2), a.u, 6.85),
+            [0.55, 0.7, 37], [0.20, 0.34, 0.62], b);
+          // Column comb under the overhang — slender, evenly spaced, no bracing.
+          for (let c = 0; c < 5; c++) {
+            const off = (c - 2) * 7.2;
+            addCyl(stage, vadd(vadd(vadd(a.c, a.t, off), a.r, -9.4), a.u, 3.4),
+              0.18, 6.8, [0.86, 0.87, 0.88], 6, b);
+          }
+          stage._mat = 0;
         }, { required: true });
       }
+      // Race control: a glazed box cantilevered clear of the roof line on a
+      // single blank core — the one vertical element on the whole straight.
+      {
+        const a = anchor(K(0.992), 1, 26);
+        const b = [a.r, a.u, a.t];
+        modelGroup("paul-ricard-race-control", {
+          center: vadd(a.c, a.u, 10), size: [16, 22, 20], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 7), [8, 14, 9], [0.90, 0.90, 0.88], b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(a.c, a.r, -3), a.u, 15.6), [13, 4.2, 17],
+            [0.18, 0.24, 0.34], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.r, -3), a.u, 18.2), [14, 0.5, 18],
+            [0.90, 0.91, 0.92], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -3), a.u, 13.2), [13.4, 0.5, 17.4],
+            [0.20, 0.34, 0.62], b);
+          addCyl(stage, vadd(a.c, a.u, 18.4), 0.14, 9, [0.86, 0.86, 0.88], 5, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      // s=0.004, not 0.000: at node 0 exactly, the span's support footprint is
+      // rejected and the START gantry silently never existed. One node further
+      // on is clear, and 4 m along a 5.8 km lap is invisible.
+      gantry(0.004, 9, [0.15, 0.15, 0.18]);
+      gantry(0.965, 8.5, [0.15, 0.15, 0.18]);
+      grandstandEx(0.005, -1, 12, 150, null, null,
+        { livery: "alu", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
       for (let i = 0; i < 4; i++) {
         building(K(0.918 + i * 0.013), 1, 40, 24, 12, 18,
           { wall: [0.84, 0.84, 0.84], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
@@ -159,12 +240,52 @@
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.20, 0.34, 0.70]);
 
       // =====================================================================
-      // 4. CORNER STANDS — sparse; Paul Ricard's crowd is small and the runoff
-      //    pushes every stand a long way back.
+      // 4. CORNER STANDS — sparse, and mostly not stands at all. What Paul
+      //    Ricard actually puts at its corners is bare uncovered aluminium
+      //    bleachers bolted to a scaffold rake, standing alone in the middle of
+      //    all that painted tarmac. No shell, no roof, no fascia: the sky shows
+      //    straight through the frame, which is why the place looks empty on
+      //    camera even when the seats are full.
       // =====================================================================
-      grandstandEx(0.075, 1, 70, 80, null, null, { livery: "steel", endWalls: true });
-      grandstandEx(0.565, 1, 76, 76, null, null, { livery: "concrete", endWalls: true });
-      grandstandEx(0.910, -1, 62, 70, null, null, { livery: "steel", endWalls: true });
+      const bleacher = (s0, s1, side, gap, opts) => {
+        opts = opts || {};
+        const rows = opts.rows || 6, rise = opts.rise || 0.75, depth = opts.depth || 1.0;
+        along(s0, s1, opts.step || 9, (k, spacing) => {
+          const a = anchor(k, side, gap);
+          const b = [a.r, a.u, a.t], seg = spacing * 0.94;
+          // Scaffold rake: two tube legs per station carrying the whole tier.
+          out._mat = MAT.METAL;
+          for (const f of [0.25, 0.85]) {
+            const back = f * rows * depth, up = f * rows * rise;
+            addCyl(out, vadd(vadd(a.c, a.r, side * back), a.u, up * 0.5),
+              0.09, up + 0.4, [0.62, 0.64, 0.68], 5, b);
+          }
+          // Diagonal brace — the giveaway that this is a temporary frame.
+          addBox(out, vadd(vadd(a.c, a.r, side * rows * depth * 0.55),
+            a.u, rows * rise * 0.55), [rows * depth * 1.2, 0.10, 0.10],
+            [0.62, 0.64, 0.68], b);
+          for (let r = 0; r < rows; r++) {
+            const back = r * depth, up = 0.5 + r * rise;
+            // One stepped tread per row — bare mill-finish aluminium, no seat
+            // backs and nothing behind them.
+            addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
+              [depth, rise + 0.14, seg], r & 1 ? ALU : [0.71, 0.73, 0.76], b);
+            // Thin, scattered crowd — a Paul Ricard grandstand is rarely full.
+            const h = hash(k * 13 + r * 7);
+            if (h < 0.70) continue;
+            out._mat = MAT.FABRIC;
+            addBox(out, vadd(vadd(vadd(a.c, a.r, side * back),
+              a.t, (h - 0.5) * seg * 0.8), a.u, up + 0.55),
+              [0.5, 0.9, 0.55], h < 0.8 ? [0.80, 0.34, 0.28] : [0.30, 0.40, 0.66], b);
+            out._mat = MAT.METAL;
+          }
+          out._mat = 0;
+        });
+      };
+      bleacher(0.055, 0.095, 1, 66, { rows: 8 });
+      bleacher(0.545, 0.590, 1, 72, { rows: 8 });
+      bleacher(0.890, 0.930, -1, 58, { rows: 7 });
+      bleacher(0.700, 0.740, -1, 54, { rows: 6, step: 7 });
       spectatorHill(0.68, 0.76, 1, 60, { rows: 3, rise: 1.0, depth: 1.8, density: 0.34, step: 9 });
       for (const s of [0.070, 0.560, 0.905]) marshalPost(K(s), -1, 12);
       for (const s of [0.44, 0.72]) marshalPost(K(s), 1, 12);
@@ -204,26 +325,110 @@
       }
 
       // =====================================================================
-      // 7. BESPOKE IDENTITY — the airfield. Paul Ricard's circuit wraps a live
-      //    aerodrome, and the hangars and windsock are visible from the Mistral.
+      // 7. BESPOKE IDENTITY — the aerodrome. Le Castellet airport is INSIDE the
+      //    circuit; its runway runs parallel to the Mistral and its hangars,
+      //    tower and parked aircraft are the only things on that horizon. The
+      //    circuit is the aerodrome's neighbour, not the other way round, and
+      //    dressing it properly is what stops the plateau reading as empty
+      //    farmland with a track on it.
       // =====================================================================
+      // The apron and its parallel taxiway stripe: bare grey concrete, painted
+      // edge lines, nothing growing on it.
+      groundPatch(K(0.50), 1, 104, [86, 0.16, 240], [0.60, 0.60, 0.59],
+        { id: "paul-ricard-airfield-apron", samples: 10 });
+      groundPatch(K(0.50), 1, 196, [22, 0.16, 300], [0.44, 0.45, 0.46],
+        { id: "paul-ricard-runway", samples: 10 });
+      for (let i = 0; i < 9; i++) {
+        const a = anchor(K(0.40 + i * 0.025), 1, 196);
+        addBox(out, vadd(a.c, a.u, 0.22), [1.2, 0.10, 14], LINE, [a.r, a.u, a.t]);
+      }
       {
         const a = anchor(K(0.50), 1, 150);
         const b = [a.r, a.u, a.t];
         modelGroup("paul-ricard-aerodrome", {
-          center: vadd(a.c, a.u, 6), size: [46, 14, 130], basis: b,
+          center: vadd(a.c, a.u, 8), size: [46, 20, 150], basis: b,
         }, (stage) => {
-          // Three curved-roof hangars in a row.
+          // Three curved-roof hangars in a row, doors facing the apron.
           for (let i = 0; i < 3; i++) {
             const p = vadd(a.c, a.t, (i - 1) * 42);
+            stage._mat = MAT.CONCRETE;
             addBox(stage, vadd(p, a.u, 4), [26, 8, 32], [0.80, 0.80, 0.78], b);
-            addPrism(stage, vadd(p, a.u, 9.6), [27, 3.4, 33], [0.66, 0.68, 0.70], b);
+            stage._mat = MAT.METAL;
+            // Barrel roof, laid along the hangar's length like a real Nissen span.
+            addCyl(stage, vadd(vadd(p, a.u, 8), a.t, -16), 13, 32,
+              [0.68, 0.70, 0.73], 10, [a.r, a.t, a.u]);
+            // Full-width sliding door band on the apron face.
+            addBox(stage, vadd(vadd(p, a.r, -13.1), a.u, 3.4), [0.3, 6.4, 28],
+              [0.40, 0.43, 0.48], b);
           }
-          // Windsock mast at one end.
-          const w = vadd(vadd(a.c, a.t, 62), a.r, -14);
-          addCyl(stage, w, 0.14, 9, [0.86, 0.86, 0.88], 6, b);
-          addCone(stage, vadd(w, a.u, 8.4), 0.9, 2.6, [0.92, 0.44, 0.14], 6, b);
+          stage._mat = 0;
         });
+      }
+      // The tower: a squat glazed cab on a white shaft — the tallest thing for
+      // kilometres on this plateau, and the aerodrome's whole silhouette.
+      {
+        const a = anchor(K(0.545), 1, 128);
+        const b = [a.r, a.u, a.t];
+        modelGroup("paul-ricard-airfield-tower", {
+          center: vadd(a.c, a.u, 12), size: [12, 30, 12], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 8), [7, 16, 7], WHITE, b);
+          stage._mat = MAT.GLASS;
+          // Cab glazing leans outward, as every control cab's does.
+          addFrustum(stage, vadd(a.c, a.u, 18), 4.2, 5.4, 4, [0.22, 0.30, 0.40], 8, b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(a.c, a.u, 20.4), [12, 0.5, 12], [0.86, 0.87, 0.90], b);
+          addCyl(stage, vadd(a.c, a.u, 24), 0.10, 7, [0.86, 0.86, 0.88], 5, b);
+          // Windsock on its own mast beside the tower.
+          const w = vadd(vadd(a.c, a.t, 16), a.r, -6);
+          addCyl(stage, w, 0.14, 9, [0.86, 0.86, 0.88], 6, b);
+          addFrustum(stage, vadd(vadd(w, a.u, 8.4), a.t, 1.4), 0.95, 0.35, 2.8,
+            [0.92, 0.44, 0.14], 6, [a.r, a.t, a.u]);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      // Light aircraft parked nose-in on the apron. Three of them, at the same
+      // angle, is the detail that says "this taxiway is live".
+      for (let i = 0; i < 3; i++) {
+        const a = anchor(K(0.465 + i * 0.022), 1, 118);
+        const b = [a.r, a.u, a.t];
+        modelGroup(`paul-ricard-lightplane-${i + 1}`, {
+          center: vadd(a.c, a.u, 1.8), size: [12, 4, 9], basis: b,
+        }, (stage) => {
+          const body = vadd(a.c, a.u, 1.5);
+          stage._mat = MAT.METAL;
+          addBox(stage, body, [1.1, 1.1, 7], WHITE, b);
+          addBox(stage, body, [10, 0.3, 1.5], WHITE, b);                       // high wing
+          addBox(stage, vadd(vadd(body, a.t, -3.0), a.u, 0.9), [0.25, 1.8, 1.3],
+            i % 2 ? [0.20, 0.34, 0.62] : [0.72, 0.24, 0.22], b);               // fin
+          addBox(stage, vadd(body, a.t, -3.0), [3.2, 0.22, 1.0], WHITE, b);    // tailplane
+          addCone(stage, vadd(body, a.t, 3.6), 0.5, 1.2, [0.30, 0.32, 0.36], 6,
+            [a.r, a.t, a.u]);                                                  // spinner
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(body, a.u, 0.55), [0.9, 0.5, 1.8], [0.28, 0.38, 0.46], b);
+          stage._mat = 0;
+        });
+      }
+      // The paddock is not a field with trucks parked on it, it is a hectare of
+      // bare hardstanding with white bay lines painted on it. That expanse of
+      // grey — with the odd motorhome adrift in the middle of it — is as much
+      // Paul Ricard's look as the blue run-off is.
+      groundPatch(K(0.955), 1, 44, [76, 0.16, 200], [0.56, 0.56, 0.55],
+        { id: "paul-ricard-paddock-apron", samples: 10 });
+      for (let i = 0; i < 14; i++) {
+        const a = anchor(K(0.925 + i * 0.008), 1, 52);
+        addBox(out, vadd(a.c, a.u, 0.22), [64, 0.09, 0.5], LINE, [a.r, a.u, a.t]);
+      }
+      // Helipad on the infield side of the pits — a painted circle on bare
+      // tarmac, which at Paul Ricard is what most of the ground already is.
+      groundPatch(K(0.885), 1, 92, [40, 0.16, 40], [0.50, 0.50, 0.50],
+        { id: "paul-ricard-helipad", samples: 6 });
+      {
+        const a = anchor(K(0.885), 1, 112);
+        addFrustum(out, vadd(a.c, a.u, 0.24), 9, 9, 0.10, LINE, 14, [a.r, a.u, a.t]);
+        addFrustum(out, vadd(a.c, a.u, 0.28), 7.6, 7.6, 0.10, [0.50, 0.50, 0.50], 14,
+          [a.r, a.u, a.t]);
       }
       // Long white pit-lane speed / advertising walls along the straight, the
       // one place Paul Ricard shows colour against all that pale tarmac.
@@ -232,18 +437,21 @@
       for (const s of [0.965, 0.985, 0.015]) {
         prop(K(s), -1, 5, [1.6, 1.4, 60], [0.92, 0.92, 0.90]);
       }
-      // Distance boards down the Mistral — the longest flat-out run on the lap.
-      for (let i = 0; i < 4; i++) {
-        const a = anchor(K(0.470 + i * 0.014), 1, 9);
-        addBox(out, vadd(a.c, a.u, 1.5), [0.18, 1.4, 1.8], [0.94, 0.94, 0.90], [a.r, a.u, a.t]);
-        addCyl(out, a.c, 0.09, 1.0, [0.25, 0.25, 0.28], 5, [a.r, a.u, a.t]);
-      }
-      // Camera/lighting masts.
-      for (const [s, side, gap] of [[0.030, -1, 26], [0.565, 1, 84], [0.910, -1, 70]]) {
-        const a = anchor(K(s), side, gap);
-        addCyl(out, a.c, 0.20, 18, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 18.4), [1.4, 0.6, 2.8], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
-      }
+      // Braking boards into the Mistral chicane — the only reference points on
+      // a 1.8 km run with no trees, no buildings and no kerbs to judge against.
+      for (let i = 0; i < 3; i++) signBoard(K(0.398 + i * 0.010), 1, 8, "braking", 3 - i);
+      signBoard(K(0.052), -1, 8, "corner", 1);
+      signBoard(K(0.560), -1, 9, "corner", 8);
+      // Hoarding runs. Against acres of pale blue apron these boards are the
+      // only saturated colour on the lap, so they line the whole pit straight
+      // and both ends of the Mistral rather than dotting the odd billboard.
+      sponsorHoarding(0.935, 0.070, -1, 3.6, { h: 1.25, step: 10 });
+      sponsorHoarding(0.400, 0.465, 1, 3.6, { h: 1.25, step: 11 });
+      // Broadcast towers at the three camera positions the circuit actually
+      // uses — set well back because the runoff pushes everything back here.
+      cameraTower(K(0.030), -1, 26, { h: 17 });
+      cameraTower(K(0.565), 1, 84, { h: 20 });
+      cameraTower(K(0.910), -1, 70, { h: 17 });
     },
   }
   );
