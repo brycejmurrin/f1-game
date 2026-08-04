@@ -68,7 +68,7 @@
         tree, bush, ridge, building, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        addBox, addCyl, addFrustum } = api;
+        addBox, addCyl, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Highveld palette — thorn-tree greens are grey-blue, not lush, and the
@@ -366,7 +366,7 @@
         const k = K(0.55);
         for (let i = 0; i < 9; i++) {
           building(k, 1, 320 + i * 24, 16, 26 + (i % 4) * 12, 16,
-            { wall: [0.62 + i * 0.012, 0.64 + i * 0.012, 0.70], window: [0.54, 0.56, 0.62] });
+            { kind: "podium", wall: [0.62 + i * 0.012, 0.64 + i * 0.012, 0.70], window: [0.54, 0.56, 0.62] });
         }
       }
 
@@ -478,6 +478,14 @@
         const a = anchor(K(s), side, gap);
         addCyl(out, a.c, 0.20, 17, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 17.4), [1.4, 0.6, 2.8], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
+      }
+      // BUSHVELD THICKET. The highveld is not forest — it is open grass with
+      // clumped thorn along the drainage lines — so this belt is deliberately
+      // the sparsest in the fleet and set well back. Without it the outfield
+      // was bare ground to the horizon, which reads as a desert, not the veld.
+      for (const [s0, s1] of [[0.12, 0.34], [0.5, 0.9]]) {
+        for (const side of [-1, 1])
+          forestEdge(s0, s1, side, 18, { density: 0.30, hMin: 6, hMax: 11, pineFrac: 0.08, col: GUM, col2: THORN });
       }
     },
   }

@@ -63,7 +63,7 @@
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard,
-        addBox, addCyl, addCone, addPrism, addFrustum } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       const PINE = [0.12, 0.29, 0.15], PINE_D = [0.09, 0.23, 0.13];
@@ -446,6 +446,13 @@
       cameraTower(K(0.072), -1, 30, { h: 18 });
       cameraTower(K(0.500), 1, 30, { h: 18 });
       cameraTower(K(0.880), 1, 28, { h: 16 });
+      // THE MUGELLO HILLSIDE. This circuit runs through a wooded Tuscan valley
+      // and the trees come right down to the barriers on the climbs. Mixed oak
+      // and pine, dense — the cypresses stay as the ordered accent above.
+      for (const [s0, s1] of [[0.12, 0.34], [0.48, 0.9]]) {
+        for (const side of [-1, 1])
+          forestEdge(s0, s1, side, 14, { density: 0.64, hMin: 11, hMax: 20, pineFrac: 0.45, col: PINE, col2: LEAF_D });
+      }
     },
   }
   );

@@ -63,7 +63,7 @@
         pine, tree, bush, ridge, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, gantry, marshalPost, motorhome, waterBand,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        addBox, addCyl, addFrustum } = api;
+        addBox, addCyl, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Autumn hardwood palette — maple/oak turning, with dark conifer behind.
@@ -488,6 +488,13 @@
         const a = anchor(K(s), side, gap);
         addCyl(out, a.c, 0.19, 16, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 16.4), [1.3, 0.6, 2.6], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
+      }
+      // FINGER LAKES HARDWOOD. The Glen is carved straight out of deciduous
+      // woodland that stands hard against the armco — closer to the track than
+      // anywhere else in the fleet, which is why the place feels enclosed.
+      for (const [s0, s1] of [[0.1, 0.22], [0.36, 0.91]]) {
+        for (const side of [-1, 1])
+          forestEdge(s0, s1, side, 10, { density: 0.74, hMin: 12, hMax: 22, pineFrac: 0.22, col: FIR, col2: OAK });
       }
     },
   }

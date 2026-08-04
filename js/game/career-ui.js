@@ -47,6 +47,9 @@ function create(G) {
       teamId: teams.length ? teams[0].id : "haas",
       seat: 1,                 // the junior seat by default — you are the newcomer
       name: "Your Name", code: "YOU", num: 99,
+      // Mid-table by default: affordable on the starting balance, and not so slow
+      // that the constructors' championship is out of reach in year one.
+      hire: "NKM",
     };
   }
 
@@ -98,6 +101,30 @@ function create(G) {
         grid.appendChild(b);
       }
       left.appendChild(grid);
+    }
+
+    if (draft.flavour === "myteam") {
+      left.appendChild(head("YOUR SECOND DRIVER"));
+      left.appendChild(el("div", "cr-note",
+        "You own the team and drive one of its two cars. The other seat is a hire, "
+        + "and you pay their salary every round out of the same balance that "
+        + "develops the car — a quick team-mate costs you upgrades."));
+      const list = el("div", "cr-teamgrid");
+      for (const a of Career.freeAgents()) {
+        const b = el("button", "cr-teamtile" + (draft.hire === a.code ? " active" : ""));
+        b.setAttribute("aria-pressed", draft.hire === a.code ? "true" : "false");
+        const sw = el("span", "cr-teamtile-sw");
+        // Their pace, from the same deterministic tier fallback the grid will use,
+        // so the number on the tile is the number you get.
+        const r = DriverRatings.get(a.code, a.tier);
+        sw.style.background = G.cssCol([0.2 + r.pace / 200, 0.5, 0.9 - r.pace / 300]);
+        b.append(sw, el("span", "cr-teamtile-name", a.name),
+          el("span", "cr-teamtile-meta",
+            "PACE " + r.pace + " · CRAFT " + r.craft + " · " + a.ask + " cr / round"));
+        b.onclick = () => { draft.hire = a.code; buildSetupPanes(); if (G.soundOn) GameAudio.uiTick(); };
+        list.appendChild(b);
+      }
+      left.appendChild(list);
     }
 
     // ---- identity ----
@@ -176,7 +203,19 @@ function create(G) {
       meter("REPUTATION", Math.round(st.rep) + " / 100"),
       meter("ROUND", (Math.min(st.round + 1, st.rounds)) + " / " + st.rounds));
 
-    // ---- left: contract + objectives ----
+    // ---- left: this round's brief, then the contract it sits inside ----
+    // The objective goes FIRST because it is the only thing on this screen that
+    // changes between one visit and the next; the contract is background.
+    if (!Career.seasonDone()) {
+      const obj = Career.objective();
+      left.appendChild(head("THIS ROUND"));
+      const objCard = el("div", "cr-card cr-objective");
+      objCard.append(el("div", "cr-obj-line", Career.objectiveLabel(obj)));
+      if (c.deal) objCard.append(row("Season goal", "P" + c.deal.goal.value + " in the championship"));
+      objCard.append(row("If you hit it", "+" + Career.OBJ_BONUS + " cr · +" + Career.OBJ_REP + " REP"));
+      left.appendChild(objCard);
+    }
+
     left.appendChild(head("CONTRACT"));
     if (c.deal) {
       const card = el("div", "cr-card");
@@ -184,8 +223,7 @@ function create(G) {
         row("Team", team ? team.name : c.deal.team),
         row("Seasons left", String(c.deal.left)),
         row("Salary", c.deal.salary + " cr / round"),
-        row("Points bonus", c.deal.bonusPt + " cr / point"),
-        row("Season target", "finish P" + c.deal.goal.value + " or better"));
+        row("Points bonus", c.deal.bonusPt + " cr / point"));
       left.appendChild(card);
     }
 
@@ -198,8 +236,28 @@ function create(G) {
       row("Development", devLabel(c.tdev[c.team] || 0)));
     left.appendChild(carCard);
 
+    // MY TEAM runs a wage bill on top of the car. Shown as its own card because it
+    // is a different budget: salaries come off the BALANCE, never off the fitted
+    // cap, so a fast team-mate costs you upgrades rather than legality.
+    if (c.flavour === "myteam" && c.roster && c.roster.length) {
+      left.appendChild(head("THE TEAM"));
+      const teamCard = el("div", "cr-card");
+      teamCard.appendChild(row("Car 1", c.driver.name + " (you)"));
+      for (const d of c.roster) {
+        teamCard.appendChild(row("Car 2", d.name));
+        teamCard.appendChild(row("Salary", d.salary + " cr / round"));
+        teamCard.appendChild(row("Contract", d.left + (d.left === 1 ? " season" : " seasons")));
+      }
+      left.appendChild(teamCard);
+    }
+
     // ---- right: next race + standings ----
-    if (Career.seasonDone()) {
+    if (st.offers) {
+      right.appendChild(head("A SEAT TO SIGN"));
+      right.appendChild(el("div", "cr-note", "The " + c.year + " season cannot start until you " +
+        "have somewhere to drive it. " + st.offers + (st.offers === 1 ? " offer is" : " offers are") +
+        " on the table."));
+    } else if (Career.seasonDone()) {
       right.appendChild(head("SEASON COMPLETE"));
       right.appendChild(el("div", "cr-note", "All " + st.rounds + " rounds are done. " +
         "Close out the year to see where you finished."));
@@ -245,9 +303,69 @@ function create(G) {
       });
     }
 
-    $("cr-go").textContent = Career.seasonDone() ? "END OF SEASON" : "GO RACING";
+    $("cr-go").textContent = st.offers ? "SIGN A CONTRACT"
+      : Career.seasonDone() ? "END OF SEASON" : "GO RACING";
     $("cr-garage").hidden = false;
   }
+
+  // ---------- end of season (#career-offers) ----------
+  // The year that was, and the seats on the table for the next one. Built from the
+  // ARCHIVE rather than the live season: by the time this is on screen the rollover
+  // has run, so career.season has already been reset to round 0 of the new year and
+  // the only record of what just happened is career.history's last entry.
+
+  function buildOffers() {
+    const c = Career.data();
+    const body = $("co-body");
+    body.textContent = "";
+    const past = c.history[c.history.length - 1];
+    $("co-title").textContent = past ? "SEASON " + past.year : "END OF SEASON";
+
+    if (past) {
+      body.appendChild(head("THE YEAR"));
+      const card = el("div", "cr-card");
+      card.append(
+        row("World champion", past.champion || "—"),
+        row("You finished", "P" + past.pos + " · " + past.pts + " pts"),
+        row("Constructors", "P" + past.cPos + " · " + past.cPts + " pts"),
+        row("Wins / podiums", past.wins + " / " + past.podiums));
+      body.appendChild(card);
+    }
+
+    body.appendChild(head("ON THE TABLE"));
+    body.appendChild(el("div", "cr-note",
+      "Pick a seat for " + c.year + ". Moving team means starting the car over from " +
+      "that team's works build — you do not take your parts with you."));
+
+    (c.offers || []).forEach((o, i) => {
+      const t = Teams.LIST.find((x) => x.id === o.teamId);
+      const staying = o.teamId === c.team;
+      const b = el("button", "co-offer" + (staying ? " staying" : ""));
+      const sw = el("span", "co-offer-sw");
+      sw.style.background = G.cssCol(t ? t.color : [0.5, 0.5, 0.5]);
+      sw.style.borderColor = G.cssCol(t ? (t.color2 || t.color) : [0.5, 0.5, 0.5]);
+      b.append(sw,
+        el("span", "co-offer-team", t ? t.name : o.teamId),
+        el("span", "co-offer-tag", staying ? "STAY" : "MOVE"),
+        el("span", "co-offer-terms",
+          o.years + (o.years === 1 ? " season" : " seasons") + " · " +
+          o.salary + " cr / round · target P" + o.goal.value));
+      b.onclick = () => {
+        if (G.soundOn) GameAudio.uiSelect();
+        Career.acceptOffer(i);
+        closeOffers();
+        // Back through openCareer() rather than straight to the hub: signing can
+        // change your team, and that is where teamIdx/driverIdx and the player's
+        // part mods are re-pointed at the contract.
+        G.openCareer();
+      };
+      body.appendChild(b);
+    });
+    ScrollFade.refresh();
+  }
+
+  function openOffers() { buildOffers(); $("career-offers").hidden = false; }
+  function closeOffers() { $("career-offers").hidden = true; }
 
   function row(k, v) {
     const r = el("div", "cr-row");
@@ -293,11 +411,24 @@ function create(G) {
       G.openCareer();          // re-enters the hub with the save in place
       return;
     }
-    if (Career.seasonDone()) return;   // rollover lands here in phase 5
+    // Three states, in order of precedence. Unsigned offers come FIRST, because
+    // the rollover has already reset the calendar to round 0 by the time they
+    // exist: without this gate a player who backed out of the offers sheet would
+    // find GO RACING live again and drive the new season with no contract.
+    const c = Career.data();
+    if (c.offers && c.offers.length) { openOffers(); return; }
+    if (Career.seasonDone()) { Career.rollover(); build(); openOffers(); return; }
     G.openRaceSettings("career");
   };
+  // DECIDE LATER, not CANCEL. The offers survive on the save, so this returns to
+  // the hub with SIGN A CONTRACT still waiting rather than discarding the year.
+  $("co-back").onclick = () => {
+    closeOffers();
+    build();
+    if (G.soundOn) GameAudio.uiSelect();
+  };
 
-  return { build, openHub, close };
+  return { build, openHub, close, openOffers, closeOffers };
 }
 
 return { create, STARTER_TIER_MIN };

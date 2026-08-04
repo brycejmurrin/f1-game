@@ -335,6 +335,7 @@
         for (let i = 0; i < 5; i++) {
           const gap = 42 + i * 28;
           building(k, -1, gap, 24, 44 + i * 10, 24, {
+            kind:   ["spire", "cylinder", "notch", "fin", "twin"][i % 5],
             wall:   WALL_WARM,
             window: i % 2 ? WIN_WARM : WIN_COOL,
             floor:  14,

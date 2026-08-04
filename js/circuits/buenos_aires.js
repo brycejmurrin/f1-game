@@ -61,7 +61,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         cameraTower, sponsorHoarding,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        addBox, addCyl, addCone, addPrism } = api;
+        addBox, addCyl, addCone, addPrism, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // Plátano (London plane) is THE Buenos Aires street tree — pale mottled
@@ -267,7 +267,7 @@
         const k = K(0.62);
         for (let i = 0; i < 12; i++) {
           building(k, 1, 230 + i * 22, 15, 26 + (i % 5) * 8, 15,
-            { wall: [0.76 - (i % 3) * 0.04, 0.75, 0.72], window: [0.42, 0.46, 0.52], floor: 3.2 });
+            { kind: "slab", wall: [0.76 - (i % 3) * 0.04, 0.75, 0.72], window: [0.42, 0.46, 0.52], floor: 3.2 });
         }
       }
 
@@ -287,6 +287,13 @@
       cameraTower(K(0.030), -1, 24, { h: 13 });
       cameraTower(K(0.380), 1, 40, { h: 16 });
       cameraTower(K(0.850), 1, 26, { h: 13 });
+      // THE PARK ITSELF. The autodromo sits inside a municipal park, and behind
+      // the ordered plane avenues is continuous mixed woodland. Broadleaf almost
+      // exclusively — a conifer here would read as northern European.
+      for (const [s0, s1] of [[0.12, 0.36], [0.5, 0.9]]) {
+        for (const side of [-1, 1])
+          forestEdge(s0, s1, side, 30, { density: 0.62, hMin: 11, hMax: 18, pineFrac: 0.04, col: EUC, col2: PLANE_D });
+      }
     },
   }
   );

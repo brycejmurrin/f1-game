@@ -27,7 +27,7 @@ test.describe("Liveries — catalog", () => {
   test("every livery has well-formed colours and a known finish", async ({ page }) => {
     await load(page);
     const bad = await page.evaluate(() => {
-      const COLOURS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "halo"];
+      const COLOURS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "halo"];
       const FINISHES = ["gloss", "satin", "chrome"];
       const all = [...Liveries.UNIVERSAL, ...Object.values(Liveries.BY_TEAM).flat()];
       const problems = [];
@@ -121,10 +121,14 @@ test.describe("Liveries — paint finish", () => {
         };
       };
       return { satin: report("satin"), chrome: report("chrome"),
-               ids: { panel: Car3D.SURFACES.panel, metal: Car3D.SURFACES.metal } };
+               ids: { panel: Car3D.SURFACES.panel, mirror: Car3D.SURFACES.mirror } };
     });
     expect(result.satin.target).toBe(result.ids.panel);
-    expect(result.chrome.target).toBe(result.ids.metal);
+    // chrome targets `mirror`, not `metal`: metalness kills the diffuse response
+    // while the shader's env lobe is gated on clearcoat, which metal has none of,
+    // so the old mapping rendered the body darker and flatter than plain gloss.
+    // See the FINISH_SURFACE comment in js/car/car3d.js.
+    expect(result.chrome.target).toBe(result.ids.mirror);
     for (const finish of ["satin", "chrome"]) {
       const r = result[finish];
       expect(r.movedFromPaint, finish).toBeGreaterThan(0);

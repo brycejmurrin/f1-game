@@ -65,7 +65,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         sponsorHoarding, cameraTower, seat, groundedSegments,
-        addBox, addCyl, addPrism } = api;
+        addBox, addCyl, addPrism, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       const PINE = [0.13, 0.30, 0.15], PINE_D = [0.10, 0.24, 0.13];
@@ -270,7 +270,7 @@
       }
       for (let i = 0; i < 4; i++) {
         building(K(0.925 + i * 0.013), 1, 66, 24, 12, 18,
-          { wall: [0.84, 0.80, 0.74], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
+          { kind: "chevron", wall: [0.84, 0.80, 0.74], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
@@ -340,7 +340,7 @@
         const k = K(0.20);
         for (let i = 0; i < 8; i++) {
           building(k, -1, 260 + i * 26, 18, 30 + (i % 3) * 10, 18,
-            { wall: [0.66 + i * 0.012, 0.66 + i * 0.012, 0.70], window: [0.54, 0.56, 0.60] });
+            { kind: "slab", wall: [0.66 + i * 0.012, 0.66 + i * 0.012, 0.70], window: [0.54, 0.56, 0.60] });
         }
       }
 
@@ -419,6 +419,13 @@
         h: 1.3, step: 10,
         palette: [TURK_RED, [0.94, 0.92, 0.88], [0.14, 0.30, 0.58], [0.94, 0.76, 0.10]],
       });
+      // THRACIAN PINE BELT, set well back so the long sightlines this circuit
+      // is built on survive. The scattered ranks alone left the middle distance
+      // empty between the verge scrub and the ridgelines.
+      for (const [s0, s1] of [[0.1, 0.32], [0.48, 0.91]]) {
+        for (const side of [-1, 1])
+          forestEdge(s0, s1, side, 20, { density: 0.42, hMin: 9, hMax: 17, pineFrac: 0.72, col: PINE, col2: PINE_D });
+      }
     },
   }
   );

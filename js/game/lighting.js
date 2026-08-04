@@ -283,7 +283,10 @@ const LAMP_KINDS = {
   work:       { col: [1.38, 0.74, 0.30], eMul: 0.55, cIn: 0.70, cOut: 0.44, blB: 0.08, blV: 0.06, volW: 0.4,  glareW: 0.8, tintMix: 0.20 }, // orange work lamp
   fluor:      { col: [1.00, 1.10, 0.94], eMul: 0.92, cIn: 0.80, cOut: 0.46, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.85, tintMix: 0.28 }, // 4000K greenish fluorescent
 };
-function buildTrackLights(track) {
+// `onlyAlways` builds ONLY the fixtures a circuit marked always-on (see
+// lampPost() in js/track/tracks.js) — the set game.js uploads in a BRIGHT
+// session, where the ordinary lamps stay off.
+function buildTrackLights(track, onlyAlways) {
   const lights = [];
   const n = track.n, total = track.total;
   // Guard against a not-yet-complete track (centreline arrays missing): return
@@ -307,6 +310,10 @@ function buildTrackLights(track) {
   // specular streaks, volumetric beams and reflections all anchor to geometry.
   // Fallback: synthetic stride walk when lampPosts is absent (older track build).
   let posts = (track.lampPosts && track.lampPosts.length) ? track.lampPosts : null;
+  if (onlyAlways) {
+    posts = posts ? posts.filter((p) => p && p.always) : null;
+    if (!posts || !posts.length) return lights;
+  }
   // ── DARK-GAP FILL ─────────────────────────────────────────────────────────
   // A circuit can suppress the generic flood masts over a stretch with a
   // dressingExclusions rule of kind "floodlights", usually because a bespoke
@@ -322,7 +329,10 @@ function buildTrackLights(track) {
   // the LIGHT back. Fill lights get no lens halo (glareW 0) and damped
   // volumetrics, because there is no fixture to anchor them to — they read as
   // spill from off-camera architectural lighting rather than a floating lens.
-  if (posts && LT.lampGapFill > 0) {
+  // Never runs for the always-on subset: those are specific modelled fixtures
+  // (a tunnel soffit), and back-filling the "gap" between them with synthetic
+  // roadside masts would invent street lighting inside a bore.
+  if (posts && LT.lampGapFill > 0 && !onlyAlways) {
     const sorted = posts.slice().sort((a, b) => a.k - b.k);
     const maxGap = Math.max(stride * 2, Math.round(LT.lampGapFill / ds));
     const fill = [];
@@ -347,6 +357,7 @@ function buildTrackLights(track) {
   }
   const nPosts = posts ? posts.length : Math.ceil(n / stride);
   for (let i = 0; i < nPosts; i++) {
+    const post = posts ? posts[i] : null;
     const k = posts ? posts[i].k : Math.min(n - 1, i * stride);
     const side = posts ? posts[i].side : ((i % 2 === 0) ? 1 : -1);
     const bri  = 0.70 + lh(i + 97) * 0.62;      // 0.70 … 1.32 brightness (wide)
@@ -360,7 +371,10 @@ function buildTrackLights(track) {
     const frac = k / n;
     const pitStraight = frac < 0.045 || frac > 0.985;   // start/finish zone
     const kindRoll = lh(i + 71);
-    if (street && kindRoll < 0.10 && !pitStraight) {
+    // Custom fixtures are exempt: a circuit-placed luminaire is a specific,
+    // modelled thing, and hanging a random magenta signage washer off it would
+    // invent a light source that has no fixture.
+    if (street && kindRoll < 0.10 && !pitStraight && !(post && post.custom)) {
       // EDGE WASHER: coloured signage light belongs on WALLS and verges, never on
       // the racing line. A low pastel lamp at the track edge aimed OUTWARD washes
       // the barrier/building side in colour while the road stays neutral. It is
@@ -440,8 +454,18 @@ function buildTrackLights(track) {
     let ax = track.px[k] + track.rx[k] * nlOff - lx;
     let ay = track.py[k] - ly;
     let az = track.pz[k] + track.rz[k] * nlOff - lz;
+    // THROW DISTANCE (lens → the road it lights) drives the inverse-square energy
+    // below and must be measured from this geometric vector, never from the beam
+    // direction: a registered fixture may name its own aim, and those vectors are
+    // unit-length, which would collapse the al² term to 1 and leave the lamp ~30×
+    // too dim.
     const al = Math.hypot(ax, ay, az) || 1;
-    ax /= al; ay /= al; az /= al;
+    // A registered fixture may name its own beam direction. The near-lane aim
+    // above is right for a lamp standing BESIDE the road; a soffit luminaire is
+    // already over it and must throw straight down, not rake sideways at a wall.
+    if (post && post.aim) { ax = post.aim[0]; ay = post.aim[1]; az = post.aim[2]; }
+    const anorm = Math.hypot(ax, ay, az) || 1;
+    ax /= anorm; ay /= anorm; az /= anorm;
     // Physically-based punctual light: intensity is in inverse-square units (the
     // shader divides by d²), so scale by the lens→road distance² AND the surface
     // incidence at the aim point (NoL = h/al for an up-facing road) — a raking
@@ -449,20 +473,23 @@ function buildTrackLights(track) {
     // The incidence divisor is CLAMPED so a mast beside banked/elevated road
     // (lens barely above the aim point) can't blow the energy up.
     const hAim = Math.max(ly - track.py[k], 1);
-    const ePhys = intensity * bri * eMul * (al * al) * LT.poolEnergy / Math.max(hAim / al, 0.35);
+    const ePhys = intensity * bri * eMul * (al * al) * LT.poolEnergy / Math.max(hAim / al, 0.35)
+                * (post && post.energy != null ? post.energy : 1);
     lights.push(
       lx, ly, lz,
       Math.max(0, mr) * ePhys,
       Math.max(0, mg) * ePhys,
       Math.max(0, mb) * ePhys,
-      radius * LT.lampRadiusMul,
+      (post && post.radius != null ? post.radius : radius) * LT.lampRadiusMul,
       ax, ay, az, coneIn, coneOut, Math.min(0.9, bleed * LT.bleedMul), volW, glareW,
     );
   }
   // START-GANTRY DOWNLIGHTS: a crisp white bar of light straight down over the
   // start/finish at node 0 (typical gantry height) — marks the line the way
   // broadcast lighting does. Placement is independent of the scenery gantry mesh.
-  {
+  // Skipped in the always-on subset: that set is "fixtures that burn in daylight",
+  // and broadcast lighting over the grid is not one of them.
+  if (!onlyAlways) {
     const hwk = track.hw[0] || 7;
     // Halved (1.15 -> 0.55 weight): three of these stack right over the grid, on
     // top of the flood_bank pit-straight lamps — the start line was the hottest
@@ -557,8 +584,10 @@ const _byDistAsc = (a, b) => a.d - b.d;   // hoisted sort comparator (no per-fra
 let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
-function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier) {
-  const src = track._lights;
+function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet) {
+  // srcSet overrides the session light set (the daylight always-on subset);
+  // absent, the baked full set is used exactly as before.
+  const src = srcSet || track._lights;
   if (!src || !src.length) { frame.lights = null; return; }
   // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
   // cull. With traffic, CAP defaults to lampCull (28) so ~4 of the 32 shader

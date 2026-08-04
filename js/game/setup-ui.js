@@ -7,7 +7,10 @@
    livery draft override, preview-mesh key) is reached through the ctx façade
    G handed to SetupUI.create(G); persistence helpers (getTeamParts,
    getLiveries, …) and the shared team-picker/customize openers arrive by
-   destructure or off G. Consumes globals Parts, Teams, GameAudio.
+   destructure or off G. Consumes globals Parts, Teams, GameAudio, Career — the
+   last of those turns the same screen into the career garage (balance + fitted
+   cap in the header, R&D-locked rows), and answers "are we in one" via
+   G.careerOwned() rather than a second flow check that could drift.
    Must load BEFORE js/game.js (see index.html). */
 const SetupUI = (function () {
   "use strict";
@@ -196,8 +199,19 @@ function buildSetup() {
   }
   if (partsChanged) saveTeamParts(team.id, parts);
 
+  // Career's R&D gate, or null in free play. Non-null is also the one test for "this
+  // is the career garage" — Career.owned() already answers "career rules apply AND
+  // the team on screen is the career team".
+  const owned = G.careerOwned();
+  // Career measures the fitted build against its own cap (the team's works car,
+  // scaled by the budget upgrades bought so far) rather than the flat free-play
+  // 600 cr, and it does not offer FREE BUILD at all: an unlimited-budget cheat
+  // would hand away the economy the whole mode is built on.
+  const cap = owned ? Career.budget() : Parts.BUDGET;
+  const unlimited = !owned && G.unlimitedBudget;
+
   const spent = Parts.getCost(parts, team);
-  const remaining = Parts.BUDGET - spent;
+  const remaining = cap - spent;
 
   $("cs-team").textContent = team.name.toUpperCase();
 
@@ -205,20 +219,27 @@ function buildSetup() {
   const budgetFill = $("cs-budget-fill");
   const unlimitedBtn = $("cs-unlimited");
   if (budgetEl) {
-    if (G.unlimitedBudget) {
+    if (unlimited) {
       budgetEl.textContent = "FREE BUILD — no budget limit";
       budgetEl.className = "unlimited";
+    } else if (owned) {
+      // Two numbers because career runs two budgets: what you can SPEND developing
+      // parts (the balance) and what you may FIT on the car at once (the cap).
+      budgetEl.textContent = "BALANCE " + Career.data().money.toLocaleString() + " cr · FITTED "
+                           + spent.toLocaleString() + " / " + cap.toLocaleString() + " cr";
+      budgetEl.className = remaining < 0 ? "over" : remaining < 100 ? "tight" : "";
     } else {
-      budgetEl.textContent = "BUDGET: " + remaining + " / " + Parts.BUDGET + " cr remaining";
+      budgetEl.textContent = "BUDGET: " + remaining + " / " + cap + " cr remaining";
       budgetEl.className = remaining < 0 ? "over" : remaining < 100 ? "tight" : "";
     }
   }
   if (budgetFill) {
-    budgetFill.style.transform = G.unlimitedBudget ? "scaleX(0)" : "scaleX(" + Math.max(0, Math.min(1, spent / Parts.BUDGET)) + ")";
+    budgetFill.style.transform = unlimited ? "scaleX(0)" : "scaleX(" + Math.max(0, Math.min(1, spent / cap)) + ")";
   }
   if (unlimitedBtn) {
-    unlimitedBtn.textContent = G.unlimitedBudget ? "∞ FREE BUILD: ON" : "∞ FREE BUILD";
-    unlimitedBtn.className = "cs-unlimited-btn" + (G.unlimitedBudget ? " on" : "");
+    unlimitedBtn.hidden = !!owned;
+    unlimitedBtn.textContent = unlimited ? "∞ FREE BUILD: ON" : "∞ FREE BUILD";
+    unlimitedBtn.className = "cs-unlimited-btn" + (unlimited ? " on" : "");
   }
 
   // Which category tab is open — persisted across rebuilds; default to the first.
@@ -271,13 +292,18 @@ function buildSetup() {
   const factorySetup = Parts.getFactorySetup(team);
   for (const opt of activeCat.options) {
     if (!Parts.isOptionAvailable(opt, team)) continue;
+    // The R&D gate is a THIRD row state, not a filter: an unresearched part still
+    // lists, because "what could this car become" is most of what the garage is for
+    // in a career. Only the supplier/team gate above hides a row outright.
+    const locked = !Parts.isOptionAvailable(opt, team, owned);
     const active = curOpt && curOpt.id === opt.id;
     const costDelta = (opt.cost || 0) - curCost;
-    const wouldExceed = !active && !G.unlimitedBudget && (spent + costDelta > Parts.BUDGET);
+    const wouldExceed = !active && !unlimited && (spent + costDelta > cap);
 
     const row = document.createElement("button");
     const restricted = opt.supplier || opt.suppliers || opt.team || opt.teams;
-    row.className = "cs-opt" + (active ? " active" : "") + (wouldExceed ? " over-budget" : "") + (restricted ? " exclusive" : "");
+    row.className = "cs-opt" + (active ? " active" : "") + (wouldExceed ? " over-budget" : "")
+                  + (locked ? " locked" : "") + (restricted ? " exclusive" : "");
     row.dataset.csOpt = opt.id;
     row.dataset.csCat = activeCat.id;
 
@@ -305,19 +331,36 @@ function buildSetup() {
     row.appendChild(main);
 
     const cost = document.createElement("span");
-    cost.className = "cs-opt-cost" + (opt.cost > 0 ? "" : " free");
-    cost.textContent = opt.cost > 0 ? opt.cost + " cr" : "FREE";
+    // A locked row is quoting a PRICE, not a spec, so it says what buying it costs
+    // rather than what fitting it would charge against the cap.
+    cost.className = "cs-opt-cost" + (locked ? " research" : opt.cost > 0 ? "" : " free");
+    cost.textContent = locked ? "RESEARCH · " + Career.researchCost(opt).toLocaleString() + " cr"
+                     : opt.cost > 0 ? opt.cost + " cr" : "FREE";
     row.appendChild(cost);
+
+    const reject = () => {
+      row.classList.add("budget-reject");
+      row.addEventListener("animationend", () => row.classList.remove("budget-reject"), { once: true });
+      if (G.soundOn) GameAudio.uiTick();
+    };
 
     row.onclick = () => {
       if (active) return;
+      // An unowned part is BOUGHT before it can be fitted, and the two draw on
+      // different budgets: research spends the balance, fitting spends the cap. So a
+      // research can succeed and the fit behind it still be refused — the rebuild in
+      // that branch is the feedback, since the money really did leave the account
+      // and shaking a row that just cost you 900 cr would read as "nothing happened".
+      if (locked) {
+        if (!Career.research(opt)) { reject(); return; }
+        if (G.soundOn) GameAudio.uiSelect();
+      }
       const p = getTeamParts(team.id);
       const co = activeCat.options.find((o) => o.id === (p[activeCat.id] || Parts.DEFAULTS[activeCat.id]));
       const cc = co ? (co.cost || 0) : 0;
-      if (!G.unlimitedBudget && (Parts.getCost(p, team) - cc + (opt.cost || 0)) > Parts.BUDGET) {
-        row.classList.add("budget-reject");
-        row.addEventListener("animationend", () => row.classList.remove("budget-reject"), { once: true });
-        if (G.soundOn) GameAudio.uiTick();
+      if (!unlimited && (Parts.getCost(p, team) - cc + (opt.cost || 0)) > cap) {
+        if (locked) { buildSetup(); return; }
+        reject();
         return;
       }
       p[activeCat.id] = opt.id;
@@ -390,7 +433,8 @@ function buildLiveryOptions(container, team) {
     const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
-                     noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", halo: "", finish: "gloss" };
+                     noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", logo: "",
+                     halo: "", finish: "gloss" };
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -444,6 +488,7 @@ function buildLiveryOptions(container, team) {
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
+          logo: liv.logo ? arrToHex(liv.logo) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = liv.id;
@@ -485,6 +530,7 @@ function buildLiveryOptions(container, team) {
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
+          logo: liv.logo ? arrToHex(liv.logo) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = null;   // create-new: never overwrites the stock scheme
@@ -556,7 +602,10 @@ function buildLiveryCreator(container, team) {
   // picks: the fin is one flat colour, so an art colour equal to it disappears.
   // NONE on FIN ART keeps the automatic choice, which contrasts the fin paint.
   wrap.appendChild(colorRow("TAIL FIN", "fin", true));
-  wrap.appendChild(colorRow("FIN ART", "finArt", true));
+  // Three separate things people kept conflating: the fin PLATE, the abstract
+  // brush-stroke graphic painted on it, and the team EMBLEM sitting on top.
+  wrap.appendChild(colorRow("TAIL GRAPHIC", "finArt", true));
+  wrap.appendChild(colorRow("TEAM LOGO", "logo", true));
   wrap.appendChild(colorRow("HALO", "halo", true));
   // FINISH is the paint MATERIAL rather than a colour, so it is a 3-way choice
   // instead of a colour well: gloss (the clearcoat car paint every livery has
@@ -613,6 +662,7 @@ function buildLiveryCreator(container, team) {
     if (d.wing) liv.wing = hexToArr(d.wing);
     if (d.fin)  liv.fin  = hexToArr(d.fin);
     if (d.finArt) liv.finArt = hexToArr(d.finArt);
+    if (d.logo) liv.logo = hexToArr(d.logo);
     if (d.halo) liv.halo = hexToArr(d.halo);
     if (d.finish && d.finish !== "gloss") liv.finish = d.finish;
     const existing = getCustomLiveries(team.id);
@@ -651,6 +701,7 @@ function livePreviewDraft(team, d) {
   G.livDraftOverride = { teamId: team.id, liv: { c1: hexToArr(d.c1), c2: hexToArr(d.c2), stripe: d.stripe ? hexToArr(d.stripe) : null, accent: d.accent ? hexToArr(d.accent) : null,
     nose: d.nose ? hexToArr(d.nose) : null, pod: d.pod ? hexToArr(d.pod) : null, wing: d.wing ? hexToArr(d.wing) : null, halo: d.halo ? hexToArr(d.halo) : null,
     fin: d.fin ? hexToArr(d.fin) : null, finArt: d.finArt ? hexToArr(d.finArt) : null,
+    logo: d.logo ? hexToArr(d.logo) : null,
     noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null,
     finish: d.finish && d.finish !== "gloss" ? d.finish : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints

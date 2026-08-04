@@ -28,9 +28,9 @@ window.MenuNav = (function () {
   // js/game/input.js asks the same question before it lets a key drive the car.
   // #overlay is the main menu; the rest are the `.screen` overlays plus the two
   // full-screen panels that are not `.screen` (#track-detail, #datahub).
-  const LAYER_IDS = ["overlay", "pausemenu", "pmsettings", "select", "career", "teampicker",
-    "race-settings", "standings", "results", "customize", "carsetup", "howtoplay",
-    "advanced", "track-detail", "datahub"];
+  const LAYER_IDS = ["overlay", "pausemenu", "pmsettings", "select", "career", "career-offers",
+    "teampicker", "race-settings", "quali", "standings", "results", "customize", "carsetup",
+    "howtoplay", "advanced", "track-detail", "datahub"];
   // `:not([hidden])` belongs IN the selector rather than in a filter after it.
   // Every one of these overlays is opened and closed with the hidden attribute, so
   // mid-race the query matches nothing and no element is ever measured. That is

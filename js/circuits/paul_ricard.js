@@ -74,7 +74,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, prop, runoffApron,
         cameraTower, sponsorHoarding, signBoard,
-        addBox, addCyl, addCone, addFrustum } = api;
+        addBox, addCyl, addCone, addFrustum, addPrism } = api;
       const K = (s) => Math.round(s * n) % n;
 
       const PINE = [0.14, 0.30, 0.16], PINE_D = [0.11, 0.24, 0.14];
@@ -455,6 +455,80 @@
       cameraTower(K(0.030), -1, 26, { h: 17 });
       cameraTower(K(0.565), 1, 84, { h: 20 });
       cameraTower(K(0.910), -1, 70, { h: 17 });
+
+      // =====================================================================
+      // 8. PROVENÇAL AGRICULTURE — vine and lavender parcels on the plateau
+      //    beyond the runoff. This circuit is the sparsest in the fleet BY
+      //    DESIGN (a bleached limestone plateau, and a treeline here would be
+      //    wrong), so the density it was missing has to come from something
+      //    that actually grows at Le Castellet rather than from woodland.
+      //    Both are planted in RULED ROWS — that geometric regularity, seen
+      //    from a car at 300 km/h, is what says southern France, and it is the
+      //    opposite of the hash-scattered planting every other circuit uses.
+      // =====================================================================
+      {
+        const VINE = [0.26, 0.36, 0.20], VINE_D = [0.21, 0.30, 0.17];
+        const LAV = [0.44, 0.38, 0.62], LAV_D = [0.36, 0.31, 0.54];
+        const SOIL = [0.72, 0.66, 0.52];
+        // Parcels sit clear of the runoff aprons, on the open ground the
+        // backdrop ridges close off. Each is a block of parallel rows.
+        // Parcel sizes are deliberately large: the Bandol vineyards around Le
+        // Castellet run to the horizon, and a token five-row patch would read
+        // as a garden rather than as agriculture.
+        for (const [id, s, side, gap, rows, kind] of [
+          ["vine-north",  0.150, -1,  96, 18, 0],
+          ["vine-east",   0.310,  1, 104, 16, 0],
+          ["lav-south",   0.660, -1,  92, 16, 1],
+          ["vine-west",   0.820,  1,  84, 14, 0],
+          ["lav-north",   0.075,  1, 104, 12, 1],
+          ["vine-far-n",  0.200, -1, 176, 14, 0],
+          ["vine-far-s",  0.700, -1, 168, 12, 0],
+          ["lav-east",    0.380,  1, 168, 12, 1],
+          ["vine-mistral", 0.480, -1, 118, 14, 0],
+          ["lav-west",    0.880,  1, 148, 10, 1],
+        ]) {
+          // Bare tilled ground under the parcel, so rows sit on soil not grass.
+          groundPatch(K(s), side, gap, [rows * 4.5, 0.15, 120], SOIL,
+            { id: `paul-ricard-${id}-soil`, samples: 8 });
+          for (let r = 0; r < rows; r++) {
+            const a = anchor(K(s), side, gap + (r - rows / 2) * 4.2);
+            const b = [a.r, a.u, a.t];
+            if (onTrack(a.c[0], a.c[2], 4)) continue;
+            const alt = (r & 1);
+            if (kind === 0) {
+              // Vine row: a low trained hedge on posts, with the posts visible
+              // at the ends of the run — a vineyard reads as rows plus stakes.
+              addBox(out, vadd(a.c, a.u, 0.95), [0.85, 1.5, 112],
+                alt ? VINE : VINE_D, b);
+              for (const t of [-54, -18, 18, 54])
+                addCyl(out, vadd(vadd(a.c, a.t, t), a.u, 0.1), 0.07, 2.0,
+                  [0.52, 0.44, 0.32], 4, b);
+            } else {
+              // Lavender row: a lower, rounder, grey-violet ridge with bare
+              // tilled soil showing between the rows.
+              addBox(out, vadd(a.c, a.u, 0.42), [1.5, 0.85, 108],
+                alt ? LAV : LAV_D, b);
+            }
+          }
+        }
+        // A dry-stone field wall and a cabanon — the one built thing in a
+        // Provençal parcel, and it gives the middle distance a hard edge.
+        const a = anchor(K(0.235), -1, 90);
+        const b = [a.r, a.u, a.t];
+        modelGroup("paul-ricard-cabanon", {
+          center: vadd(a.c, a.u, 3), size: [10, 8, 14], basis: b,
+        }, (stage) => {
+          const DRY = [0.72, 0.68, 0.58], DRY_D = [0.62, 0.58, 0.49];
+          addBox(stage, vadd(a.c, a.u, 2.1), [6, 4.2, 8], DRY, b);
+          addPrism(stage, vadd(a.c, a.u, 4.9), [6.6, 1.8, 8.6], [0.58, 0.40, 0.30], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -3.2), a.u, 1.5), [0.25, 2.2, 1.1],
+            [0.34, 0.28, 0.22], b);                              // door
+          // The wall running off it, in irregular courses.
+          for (let i = 0; i < 14; i++)
+            addBox(stage, vadd(vadd(a.c, a.t, 8 + i * 3.1), a.u, 0.6 + (i & 1) * 0.1),
+              [0.7, 1.2 + (i % 3) * 0.15, 3.0], (i & 1) ? DRY_D : DRY, b);
+        });
+      }
     },
   }
   );

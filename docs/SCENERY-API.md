@@ -5,7 +5,7 @@ Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
 (`buildProps`, split across the `js/track/scenery-nature.js` / `scenery-city.js`
 / `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
 `js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
-primitives, and composite models. The **106-member `api` surface is a frozen
+primitives, and composite models. The **107-member `api` surface is a frozen
 contract** — `tests/scenery-api-contract.test.mjs` fails on any rename/removal,
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
@@ -79,7 +79,8 @@ sectors and turns remain racing-lap data.
 | Helper | Contract |
 |---|---|
 | `modelGroup(id, bounds, emit, opts?)` | preflights one complete footprint and commits staged geometry atomically; `emit(stage)` must produce a finite, non-empty group |
-| `overheadSpan(spec)` | intentional cross-track span with explicit `clearance` (minimum 4.8 m) and support-footprint checks |
+| `overheadSpan(spec)` | intentional cross-track span with explicit `clearance` (minimum 4.8 m) and support-footprint checks; optional `offset` shifts the band laterally |
+| `lampPost(spec)` | registers a light fixture the circuit has drawn itself, so it emits a real point light |
 | `waterSurface(k, side, gap, size, col, opts?)` | typed water emission to the reflective water buffer |
 | `groundPatch(k, side, gap, size, col, opts?)` | subdivided terrain-conforming patch; `opts.collision` optionally registers its visual boundary |
 | `groundedSegments(spec)` | multi-sample connected model segments grounded at every endpoint |
@@ -87,6 +88,35 @@ sectors and turns remain racing-lap data.
 Use `required: true` only for a hero model whose absence must fail
 `verify-track`. Invalid or suppressed groups are skipped instead of uploading
 malformed buffers and appear in `__apex.modelDiagnostics()`.
+
+**`overheadSpan` lateral offset.** `offset` (metres, +right of the centreline)
+shifts a band sideways. A centred span can only ever be a flat lid; an ARCHED
+soffit needs bands that sit beside the crown and leave the middle open. Build a
+vault as concentric bands whose `clearance` DROPS as `offset` grows (Monaco's
+tunnel: crown 6.45 m at offset 0, haunches 6.05 m, springing 5.55 m). `clearance`
+still means underside height above the road datum at that node, so it is the
+offset band's own clearance — the 4.8 m minimum applies to each band, and the
+prop-over-road audits still ignore anything above 5.0 m.
+
+**`lampPost(spec)`** — `{ pos:[x,y,z], k?, side?, kind?, aim?, energy?, radius?,
+always? }`. The generic mast pass owns every ordinary lamp on every circuit and
+emits one point light per exported mast lens. `lampPost` covers the case it
+cannot: a luminaire the circuit had to model by hand because no mast could stand
+there (a tunnel soffit, a canopy underside, a portal reveal). Hand back the world
+position of the lens you drew and the light follows the same fixture-anchored
+rule as every other lamp — no light without something visible emitting it.
+
+- `pos` is a RAW WORLD position, like the `px`/`py`/`pz` arrays, and is *not*
+  remapped by the reversed-lap wrapper.
+- `kind` names a `LAMP_KINDS` entry (`led`, `fluor`, `halide`, `sodium`, …) and
+  sets colour, cone and volumetric weight, exactly as for a mast.
+- `aim` overrides the default beam direction. The default aims at the centre of
+  the near lane, which is right for a lamp standing *beside* the road and wrong
+  for one already over it.
+- `always: true` marks a fixture that burns in daylight. Ordinary lamps only
+  reach the shader once the session is dark; these are baked into a separate set
+  that a bright session still uploads, for the places the sun cannot reach.
+- Capped at 96 fixtures per circuit.
 
 ### Scene graph (`ctx.instance`) — engine-internal, not part of the `api` contract
 
@@ -98,7 +128,7 @@ through the same guarded emitters, so geometry and on-track suppression are
 unchanged — the build simply also leaves behind `track.graph`, a description of
 what stands where.
 
-This is internal to `js/track/`: the 106-member `scenery(api)` surface a circuit
+This is internal to `js/track/`: the 107-member `scenery(api)` surface a circuit
 destructures is untouched, and circuit files need no changes. Gate any migration
 with `node tools/graph-parity.cjs --all`. See
 [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md).

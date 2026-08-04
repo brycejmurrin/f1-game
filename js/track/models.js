@@ -121,10 +121,20 @@ const TrackModels = (function () {
       const depth = spec.depth != null ? spec.depth : 1.4;
       const supportGap = spec.supportGap != null ? spec.supportGap : 1.5;
       const span = spec.span != null ? spec.span : frame.hw * 2 + supportGap * 2 + 2;
+      // LATERAL OFFSET: shift the band sideways along the track's right vector.
+      // A single centred slab can only ever be a flat lid — an ARCHED soffit
+      // (a tunnel vault, a stepped portal) needs bands that sit beside the
+      // crown and leave the middle open, which a centred span cannot express.
+      // `clearance` still means "underside height above the ROAD DATUM at this
+      // node", so it is the offset band's own clearance, not a clearance over
+      // the centreline; on banked road the two differ by sin(bank)·offset,
+      // which is sub-decimetre at the ≤3° a street circuit carries.
+      const offset = Number.isFinite(spec.offset) ? spec.offset : 0;
+      const lift = clearance + thickness / 2;
       const center = [
-        frame.c[0] + frame.u[0] * (clearance + thickness / 2),
-        frame.c[1] + frame.u[1] * (clearance + thickness / 2),
-        frame.c[2] + frame.u[2] * (clearance + thickness / 2),
+        frame.c[0] + frame.r[0] * offset + frame.u[0] * lift,
+        frame.c[1] + frame.r[1] * offset + frame.u[1] * lift,
+        frame.c[2] + frame.r[2] * offset + frame.u[2] * lift,
       ];
       // Intentional overhead geometry bypasses ordinary road-footprint rejection;
       // its safety contract is explicit underside clearance.

@@ -424,7 +424,7 @@
       recordBarrier(0.44, 0.50, 1, 4);
 
       // BRDC clubhouse set back (s≈0.48 R) — pale historical building
-      building(k(0.48), 1, 28, 22, 9, 20, { wall: [0.76, 0.76, 0.72], window: [0.18, 0.24, 0.30] });
+      building(k(0.48), 1, 28, 22, 9, 20, { kind: "chevron", wall: [0.76, 0.76, 0.72], window: [0.18, 0.24, 0.30] });
       // Formal pollarded avenue on the clubhouse lawn. Everything else growing
       // at this circuit is a copse, a windbreak or a hedgerow — i.e. landscape
       // that happened. This is the one PLANTED, cut-back, deliberate row, and
@@ -470,7 +470,7 @@
       }
 
       // ---- National pit straight (s≈0.0) garages + pit wall + paddock ----
-      building(k(0.97), 1, 6, 12, 8, 90, { wall: [0.82, 0.83, 0.85], window: [0.20, 0.24, 0.28], floor: 4 });
+      building(k(0.97), 1, 6, 12, 8, 90, { kind: "hall", wall: [0.82, 0.83, 0.85], window: [0.20, 0.24, 0.28], floor: 4 });
       // paddock support buildings / hospitality units set back behind the pits —
       // motorhome() gives the real two-tier team-unit body + awning canopy
       // instead of a flat building() office-block mass.
@@ -641,7 +641,7 @@
       ]) oak(k(s), side, gap, h, alt ? COPSE2 : COPSE);
 
       // ---- Pit control tower near the start gantry ----
-      building(k(0.01), 1, 8, 9, 5, 11, { wall: [0.76, 0.75, 0.70], window: [0.26, 0.30, 0.34] });
+      building(k(0.01), 1, 8, 9, 5, 11, { kind: "podium", wall: [0.76, 0.75, 0.70], window: [0.26, 0.30, 0.34] });
 
       // ---- Maggotts/Becketts infield oak cluster ----
       {

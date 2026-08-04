@@ -68,7 +68,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, runoffApron,
         cameraTower, sponsorHoarding, signBoard, groundedSegments,
-        addBox, addCyl, addCone, addPrism, addFrustum } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
       const PINE = [0.14, 0.31, 0.16], PINE_D = [0.11, 0.25, 0.14];
@@ -441,6 +441,13 @@
       cameraTower(K(0.055), 1, 26, { h: 16 });
       cameraTower(K(0.500), -1, 28, { h: 18 });
       cameraTower(K(0.860), 1, 26, { h: 16 });
+      // ALGARVE PINE. The Autodromo is cut into hills carrying umbrella pine
+      // and eucalyptus; the elevation is the circuit's whole character and it
+      // only reads as elevation when something covers the slopes.
+      for (const [s0, s1] of [[0.1, 0.28], [0.44, 0.91]]) {
+        for (const side of [-1, 1])
+          forestEdge(s0, s1, side, 16, { density: 0.52, hMin: 9, hMax: 16, pineFrac: 0.78, col: PINE, col2: PINE_D });
+      }
     },
   }
   );

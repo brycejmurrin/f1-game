@@ -196,7 +196,7 @@
         }
       })();
       building(K(0.98), -1, 14, 16, 11, 55,
-        { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
+        { kind: "slab", wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
 
       // =================================================================================
       // TWIN WING BRIDGES — Shanghai's pit-straight gateway.
@@ -256,10 +256,10 @@
       // race-control and hospitality blocks. The previous migration reduced
       // this whole area to one low stand, leaving the pit straight anonymous.
       building(K(0.042), -1, 70, 20, 28, 34, {
-        wall: CONC, window: WIN_TOWER, floor: 5, lit: true,
+        kind: "cylinder", wall: CONC, window: WIN_TOWER, floor: 5, lit: true,
       });
       building(K(0.072), -1, 76, 20, 20, 38, {
-        wall: [0.82, 0.84, 0.86], window: WIN_LIT, floor: 4, lit: true,
+        kind: "notch", wall: [0.82, 0.84, 0.86], window: WIN_LIT, floor: 4, lit: true,
       });
 
       // Start gantry over the line.
@@ -772,8 +772,8 @@
       }
 
       // ================= PIT ENTRY BUILDINGS (s 0.96, R) =================
-      building(K(0.96), 1, 2, 12,  9, 50, { wall: [0.86, 0.87, 0.88], window: WIN_LIT, floor: 3 });
-      building(K(0.94), 1, 2, 10,  7, 34, { wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 2 });
+      building(K(0.96), 1, 2, 12,  9, 50, { kind: "hall", wall: [0.86, 0.87, 0.88], window: WIN_LIT, floor: 3 });
+      building(K(0.94), 1, 2, 10,  7, 34, { kind: "slab", wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 2 });
 
       // Low commercial strips — kept short so they don't fight the marsh/Pudong read
       cityFront(0.92, 0.965, 1, 48, {

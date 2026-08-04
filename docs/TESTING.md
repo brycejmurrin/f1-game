@@ -62,7 +62,7 @@ node tools/verify-track.cjs --all
 | `fast` | curated fast subset: smoke + api + collision + offtrack + parts-physics + steering (~3 min) |
 | `ab` | lighting A/B pixel comparison (`lighting-ab.spec.js`) |
 | `audit` | coverage guard: every spec must belong to ≥1 group (`tools/test-coverage-audit.mjs`) |
-| `tooling` | `node --test` unit suites (no browser): coverage-audit, fixture-consumer-audit, quick-validate, track-accuracy-validator, **`load-order.test.mjs`** (the `<script>` tags in `index.html` must match `tools/manifest.cjs` — the load-order single source of truth), **`scenery-api-contract.test.mjs`** (the 106-member `scenery(api)` surface served by the `js/track/scenery-*.js` modules is frozen) |
+| `tooling` | `node --test` unit suites (no browser): coverage-audit, fixture-consumer-audit, quick-validate, track-accuracy-validator, **`load-order.test.mjs`** (the `<script>` tags in `index.html` must match `tools/manifest.cjs` — the load-order single source of truth), **`scenery-api-contract.test.mjs`** (the 107-member `scenery(api)` surface served by the `js/track/scenery-*.js` modules is frozen) |
 
 ---
 
@@ -194,6 +194,8 @@ hook values.
 | `dev-tools.spec.js` | `__apex` API contract tests (60+ tests) |
 | `new-hooks.spec.js` | contract tests for timing/field/energy hooks plus `modelDiagnostics()` / `geometryDiagnostics()` and day/night model manifests |
 | `season.spec.js`, `time-trial.spec.js` | season mode + time trial / ghost delta |
+| `career.spec.js` | career mode: the flow/session axes, the save + its migration, the isolation guarantees (career development must not reach a Grand Prix, and must reach the career), the hub flow, a settled round, driver ratings |
+| `quali.spec.js` | one-lap qualifying: the simulated field and its spread, the sheet's two states, and that the race grid IS the qualifying order car-for-car (not the hardcoded P12) |
 | `custom-team.spec.js` | custom-team livery editor: colour save frees/rebuilds the decal texture |
 | `data-lifecycle.spec.js` | data hub session plumbing: meeting/year/session/driver responses own their option lists (no stale races) |
 | `telemetry-compare.spec.js` | TELEMETRY multi-lane compare (3+ drivers) + cross-session (one driver's race vs quali via the session-surviving tray), lane removal |
@@ -212,7 +214,7 @@ hook values.
 | `inspect/*.spec.js` | 24 per-circuit inspection/screenshot specs (**excluded from default discovery** via `testIgnore`; run explicitly) |
 | `galleries/*.spec.js` | explicit-path gallery emitters such as track traces and all-tracks building surveys (**excluded from default discovery** via `testIgnore`; run explicitly) |
 | `load-order.test.mjs` (`node --test`, `test:tooling`) | `index.html` `<script>` tag order matches `tools/manifest.cjs` exactly — adding a JS file requires both a tag and a manifest entry; this catches divergence (incl. `HARD_EDGES` eval-time dependencies) |
-| `scenery-api-contract.test.mjs` (`node --test`, `test:tooling`) | freezes the 106-member `scenery(api)` contract across the buildProps split (`js/track/scenery-nature.js`, `-city.js`, `-structures.js`, `-identity.js`) — a circuit callback can destructure any of those names; renames/removals fail here first |
+| `scenery-api-contract.test.mjs` (`node --test`, `test:tooling`) | freezes the 107-member `scenery(api)` contract across the buildProps split (`js/track/scenery-nature.js`, `-city.js`, `-structures.js`, `-identity.js`) — a circuit callback can destructure any of those names; renames/removals fail here first |
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain (or verge-shoulder) triangle renders above the racing line — the green-wedge / elevation-mound-over-road class. Point-in-triangle face test vs the asphalt; large road-over-road overs are ignored as intentional crossovers (Suzuka figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line (roofs, canopies, buildings, crowds). Same point-in-triangle method against the props mesh, in 3D (0.2–5 m band above the road). Per-track `BASELINE` caps document justified overheads (Miami beach canopy, Mexico Foro Sol pass-through, gantries) and small tracked residuals; any new/worsened intrusion on a clean track fails. Measure one track: `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots` |
 | `track-foundation.test.mjs` | pure Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, and mesh validation |

@@ -121,9 +121,11 @@ function create(G) {
 
   // ---------- running a session ----------
 
-  // Simulate every car, including the player, and build the classification.
+  // Simulate every car, including the player, and RETURN the rows without
+  // storing them. Split from simulate() so a probe (__apex.qualiSim) can read the
+  // model on any track without overwriting a real weekend's classification.
   // `playerTime` overrides the player's row when they actually drove the lap.
-  function simulate(playerTime) {
+  function compute(playerTime) {
     const track = G.track;
     if (!track || !G.cars.length) return null;
     const grip = G.gripMult();
@@ -138,13 +140,41 @@ function create(G) {
     rows.sort((a, b) => a.t - b.t);
     const pole = rows[0].t;
     rows.forEach((r, i) => { r.pos = i + 1; r.gap = +(r.t - pole).toFixed(3); r.t = +r.t.toFixed(3); });
-    classification = rows;
     return rows;
   }
 
-  // The grid order gridUp() consumes: the cars themselves, pole first.
-  function order() {
-    return classification ? classification.map((r) => r.car) : null;
+  // Run the session for real: compute and keep the result as THE classification.
+  function simulate(playerTime) {
+    const rows = compute(playerTime);
+    if (rows) classification = rows;
+    return rows;
+  }
+
+  // Read-only: the model's times for the current track, classification untouched.
+  function preview(playerTime) {
+    const rows = compute(playerTime);
+    return rows ? rows.map(({ car, ...row }) => row) : null;
+  }
+
+  // The grid order gridUp() consumes, mapped onto the LIVE cars by driverId.
+  //
+  // It must not return the car objects the classification captured: startRace()
+  // calls makeCars() again, so by the time the grid is built those references are
+  // orphans. Handing them over placed twenty-two cars nobody was driving and left
+  // the real field at prog 0 — where fieldState() then reported Teams.LIST order
+  // and looked plausible enough to pass a careless check.
+  //
+  // Returns null unless every live car is accounted for, so a partial map falls
+  // back to the normal grid instead of placing half a field.
+  function order(live) {
+    if (!classification || !live || !live.length) return null;
+    const byId = new Map(live.map((c) => [c.driverId, c]));
+    const out = [];
+    for (const r of classification) {
+      const c = byId.get(r.driverId);
+      if (c) out.push(c);
+    }
+    return out.length === live.length ? out : null;
   }
   function results() {
     return classification
@@ -186,7 +216,7 @@ function create(G) {
   function open() { build(); $("quali").hidden = false; ScrollFade.refresh(); }
   function close() { $("quali").hidden = true; }
 
-  return { simulate, order, results, clear, build, open, close, lapTime, capFor };
+  return { simulate, preview, order, results, clear, build, open, close, lapTime, capFor };
 }
 
 return { create, STEP, QUALI_TRIM, EXEC_SPREAD };

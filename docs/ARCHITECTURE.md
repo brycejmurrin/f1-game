@@ -271,7 +271,7 @@ modules — nature (trees/terrain furniture), city (the `STYLES` building
 generator, neon, glass), structures (grandstands, gantries, barriers,
 floodmasts), identity (per-circuit landmark passes) — each instantiated with a
 ctx of the placement helpers and accumulators. Together they serve the
-**106-member `scenery(api)` contract**, frozen by
+**107-member `scenery(api)` contract**, frozen by
 `tests/scenery-api-contract.test.mjs`: a circuit's `scenery(api)` callback can
 destructure any of those 84 names, so removing/renaming one is a breaking
 change the test catches. See [SCENERY-API.md](SCENERY-API.md).
@@ -378,7 +378,8 @@ shading (duplicated verts, face normals).
 |---|---|---|
 | `liveries.js` | `Liveries` | custom paint jobs — `{id, name, c1, c2, stripe?, noseStripe?, …}` |
 | `liverytex.js` | `LiveryTex` | per-team livery texture atlas (canvas-2D; stylised fan-art crests, invented sponsor wordmarks, car number onto a 1024² atlas mapped by panel UVs) |
-| `parts.js` | `Parts` | upgrade catalog — 8 ordered categories, `getMods`, `getCost`, `statMult`, 600 cr budget (see CLAUDE.md "Parts system") |
+| `driver-ratings.js` | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` |
+| `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 600 cr budget (see CLAUDE.md "Parts system") |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
 
 ## js/game/input.js — `Input`
@@ -515,14 +516,17 @@ state plus stable helpers, passed to `Module.create(G)`:
 
 | File | Global | Owns |
 |---|---|---|
-| `store.js` | `GameStore` | localStorage persistence (settings, season, parts, records) |
+| `store.js` | `GameStore` | localStorage persistence (settings, season, parts, records) + the career save and its migration ladder |
+| `career.js` | `Career` | CAREER rules: the `apex26.career` save, the credits economy, contracts, driver/team development, R&D ownership, round settlement. Pure data — no DOM, and a plain global (no ctx), because game.js calls it from `makeCars()`/`recomputePlayerMods()`/`endRace()`. Every GAMEPLAY accessor is gated on `inCareer()`, NOT on "a save exists": the save loads at boot so the title button can offer CONTINUE, but its rules must never reach a Grand Prix |
+| `career-ui.js` | `CareerUI` | the CAREER screen (`#career`) — new-career setup and the season hub. Replaces `#select` in career, since the calendar owns where you race |
+| `quali.js` | `Quali` | ONE-LAP QUALIFYING (`#quali`). A `session`, not a game state: the player's flying lap reuses the time-trial path, and the rest of the field is MODELLED — a quasi-steady forward/backward lap simulation off the same `LAT_MAX`/`ACCEL`/`BRAKE` the driving model uses, so a simulated time and a driven one land on one scale. Feeds `gridUp()` |
 | `perf.js` | `PerfGov` | adaptive performance governor (render scale / FX tiers) |
 | `cameras.js` | `GameCams` | the 13 player camera modes + the `__apex.view` debug free-cam framing |
 | `hud.js` | `GameHud` | in-race DOM HUD (pos/lap/times, speed, energy, gaps, minimap) |
 | `results.js` | `GameResults` | results + season-end screens, penalties, points |
 | `apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md) |
 | `atmosphere.js` | `Atmosphere` | `applyRaceSettings` — time-of-day/weather scene state, palettes, flood activation |
-| `setup-ui.js` | `SetupUI` | GARAGE screen — TEAM & DRIVER, 8 part categories + budget, LIVERY |
+| `setup-ui.js` | `SetupUI` | GARAGE screen — TEAM & DRIVER, 12 part categories + budget, LIVERY |
 | `menus.js` | `Menus` | menu/select/pause DOM flows |
 | `scrollfade.js` | `ScrollFade` | edge fade + scroll-position indicator on every menu pane (self-initialising, owns no game state) |
 | `menunav.js` | `MenuNav` | desktop menu input (self-initialising): wheel/trackpad gestures that land outside a pane are redirected into the open menu's nearest one, and arrow keys / Home / End / PageUp / PageDown move focus through it |
@@ -532,9 +536,27 @@ state plus stable helpers, passed to `Module.create(G)`:
 
 ## js/game.js — main
 
-The entry point (post-reorg ~4,700 lines: loop, physics, AI, race logic — the
-subsystems above are extracted). States: `menu | select | count | race |
-results | seasonEnd`. Player + 21 AI.
+The entry point (~6,100 lines: loop, physics, AI, race logic — the subsystems
+above are extracted). Player + 21 AI.
+
+**States** are `menu | count | race | results` — those are the only four values
+ever assigned to `state`. (This previously listed `select` and `seasonEnd` as
+well; neither exists. The select screen is shown by unhiding `#select` while the
+state stays `menu`, and the season-end panel is the `results` state with
+`#res-next` relabelled. Two `state === "select"` comparisons and one
+`state === "pause"` survive in game.js and can never be true.)
+
+**Mode** is two independent axes rather than one enum, because a career weekend
+has to be able to say "career" and "qualifying" at the same time:
+
+- `flow` — `gp | season | career`: what the RUN is for; survives a whole championship.
+- `session` — `race | tt | quali`: what THIS visit to the track is.
+
+`seasonMode` and `timeTrial` are no longer state: they are derived views handed
+out through the `G` façade (`seasonMode` = `flow` is season **or** career, since a
+career is a championship), which is why every module that reads them and the
+`__apex.info()` contract were unaffected by the split. `setFlow()` is the only
+writer — it also tells `Career` whether its rules apply. See docs/CAREER.md.
 Position model: the car drives in **world space** (`player.head` = world
 heading, `px/pz` world position); `s` (metres along centreline, wraps) and `x`
 (lateral metres, +right) are recovered by projection each frame. Physics:

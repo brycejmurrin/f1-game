@@ -275,7 +275,7 @@
       // ── PIT BUILDING + MAIN GRANDSTAND — s 0.00 ──────────────────────────
       // One long low pit building with a lit window band (was five stacked raw
       // place() boxes reading as a row of blocks).
-      building(K(0.0), -1, 16, 62, 8, 28, { wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
+      building(K(0.0), -1, 16, 62, 8, 28, { kind: "hall", wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
       // MAIN GRANDSTAND — the only permanent seating on the Corniche, and the
       // one place the national colours are worn at full size: a deep-green
       // shell under a gold fascia and roof. Every other night circuit in the
@@ -317,8 +317,8 @@
       });
 
       // ── JEDDAH SKYLINE — 3 landmark towers at s 0.27–0.31 L ──────────────
-      building(K(0.27), -1, 55, 28, 115, 26, { wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8 });
-      building(K(0.30), -1, 88, 24, 172, 22, { wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 8 });
+      building(K(0.27), -1, 55, 28, 115, 26, { kind: "spire", wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8 });
+      building(K(0.30), -1, 88, 24, 172, 22, { kind: "antenna", wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 8 });
       tower(K(0.285), -1, 140, 18, 160, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 12 });
       // Layered Corniche hotel frontage below the three landmark silhouettes.
       // Mid-rise spacing maintains depth while leaving the driver-facing edge
@@ -375,7 +375,7 @@
       // height, so the two surfaces fought for the same pixels.
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
-      building(K(0.69), -1, 60, 26, 68, 22, { wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8 });
+      building(K(0.69), -1, 60, 26, 68, 22, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8 });
       tower(K(0.71), -1, 100, 18, 105, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 10 });
 
       // Billboards — Corniche signage character

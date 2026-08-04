@@ -39,7 +39,7 @@ npm run test:scenery    # props/terrain over road + f1-track-accuracy
 npm run test:webgl      # webgl-probes + lighting-ab
 npm run test:audio      # engine/sfx audio smoke
 npm run test:modes      # season + time-trial + career game modes
-npm run test:career     # career only: mode axes, the save, the hub, a round
+npm run test:career     # career + qualifying: mode axes, the save, the hub, the grid
 npm run test:map        # minimap hooks
 npm run test:net        # multiplayer: car roles (human vs local), the per-car
                         #   input seam, per-car parts, and the SESSION — rival
@@ -224,7 +224,7 @@ js/track/        — track ENGINE (shared code) —
                                   city palettes/styles) — data only, no placement logic
   scenery-nature.js / scenery-city.js / scenery-structures.js / scenery-identity.js
                  Scenery*.create(ctx)   the buildProps split; together they serve the
-                                  106-member scenery(api) contract frozen by
+                                  107-member scenery(api) contract frozen by
                                   tests/scenery-api-contract.test.mjs
 
 js/circuits/     — circuit DATA —
@@ -237,7 +237,12 @@ js/car/          — car —
   liveries.js    Liveries       custom paint jobs — colours plus an optional
                                   `finish` ("gloss" default | "satin" | "chrome"),
                                   applied by remapping the body-paint surface id
-                                  (Car3D.FINISH_SURFACE); no shader change
+                                  (Car3D.FINISH_SURFACE); no shader change.
+                                  The SHARK FIN is its own two paint slots:
+                                  `fin` (the plate, defaults to c2) and `finArt`
+                                  (the tail graphic on it, defaults to a colour
+                                  picked to contrast the fin) — the fin is one
+                                  flat colour, so art equal to it is invisible
   liverytex.js   LiveryTex      canvas-2D livery texture atlas (crests/sponsors/number)
   parts.js       Parts          upgrade catalog (8 categories, getMods, getCost, statMult)
   ghost.js       Ghost          time-trial ghost record/replay data layer
@@ -388,6 +393,13 @@ js/game/         — game modules (each created with the G ctx façade from game
   career-ui.js   CareerUI       the CAREER screen (#career): new-career setup
                                   and the season hub. Replaces #select in
                                   career — the calendar owns WHERE you race
+  quali.js       Quali          ONE-LAP QUALIFYING (#quali). A `session`, not a
+                                  game state: the player's flying lap reuses the
+                                  time-trial path, and the rest of the field is
+                                  MODELLED — a quasi-steady forward/backward lap
+                                  simulation off the same LAT_MAX/ACCEL/BRAKE the
+                                  driving model uses, so a simulated time and a
+                                  driven one are on one scale. Feeds gridUp()
   menus.js       Menus          menu/select/pause DOM flows
   scrollfade.js  ScrollFade     "there is more below" edge fade + position indicator
                                   for every menu scroll region (self-initialising)

@@ -219,7 +219,7 @@
       }
 
       // ---- Pit building + main grandstand ----
-      building(K(0.00), -1, 1, 16, 11, 130, { wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5, lit: true });
+      building(K(0.00), -1, 1, 16, 11, 130, { kind: "slab", wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5, lit: true });
       prop(K(0.01), -1, 7, [2.5, 1.6, 120], RED);
       grandstand(0.965, -1, 10, 90, [0.55, 0.58, 0.62], RED);
       grandstand(0.02,  1, 22, 80, [0.52, 0.55, 0.60], [0.78, 0.30, 0.22]);
@@ -353,9 +353,9 @@
       }
 
       // ---- Pit / paddock complex (left of pit straight) ----
-      building(K(0.97), -1, 18, 14, 7, 90, { wall: PITWALL, window: WIN_LIT, floor: 4, lit: true });
-      building(K(0.90), -1, 20, 22, 9, 40, { wall: [0.66, 0.67, 0.70], window: WIN_LIT, floor: 4, roof: true, lit: true });
-      building(K(0.94), -1, 46, 30, 12, 34, { wall: STONE, window: WIN_LIT, floor: 4, lit: true });
+      building(K(0.97), -1, 18, 14, 7, 90, { kind: "hall", wall: PITWALL, window: WIN_LIT, floor: 4, lit: true });
+      building(K(0.90), -1, 20, 22, 9, 40, { kind: "chevron", wall: [0.66, 0.67, 0.70], window: WIN_LIT, floor: 4, lit: true });
+      building(K(0.94), -1, 46, 30, 12, 34, { kind: "podium", wall: STONE, window: WIN_LIT, floor: 4, lit: true });
       {
         const aA = anchor(K(0.92), -1, 56);
         addCyl(out, aA.c, 2.0, 13, [0.60, 0.56, 0.48], 8, [aA.r, aA.u, aA.t]);

@@ -179,9 +179,9 @@
       const parkA = Math.round(n * 0.995) % n;   // just before S/F, behind the wheel
 
       // Motopia Hotel block — 5-storey, clear of the wheel footprint
-      building(Math.round(n * 0.005) % n, -1, 95, 30, 36, 22, { wall: [0.74, 0.74, 0.78], window: litWin, floor: 5, setback: true, roof: true });
+      building(Math.round(n * 0.005) % n, -1, 95, 30, 36, 22, { kind: "tiered", wall: [0.74, 0.74, 0.78], window: litWin, floor: 5, setback: true, roof: true });
       // Secondary pavilion
-      building(Math.round(n * 0.985) % n, -1, 110, 24, 26, 16, { wall: [0.76, 0.76, 0.80], window: litWin, floor: 4, roof: true });
+      building(Math.round(n * 0.985) % n, -1, 110, 24, 26, 16, { kind: "twin", wall: [0.76, 0.76, 0.80], window: litWin, floor: 4 });
 
       // Domed pavilion / central gathering structure (deep behind wheel)
       {

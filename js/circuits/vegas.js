@@ -452,11 +452,11 @@
       // Strip-canyon foreground — so they replace what used to be two generic
       // ad billboards at the T1 approach.
       // Fontainebleau: a dark blue-glass mega-tower (the real one is ~68 storeys).
-      building(K(0.03), -1, 52, 34, 128, 30, { wall: [0.07, 0.08, 0.13], window: [0.10, 0.22, 0.42], floor: 11, lit: true });
+      building(K(0.03), -1, 52, 34, 128, 30, { kind: "notch", wall: [0.07, 0.08, 0.13], window: [0.10, 0.22, 0.42], floor: 11, lit: true });
       place(K(0.03), -1, 20, [10, 1.0, 26], [0.15, 0.30, 0.55]);   // cool blue base uplight
       // Resorts World: the huge LED marquee facade is the real landmark here,
       // not another neon ad board — a bright emissive screen on the tower face.
-      building(K(0.062), -1, 60, 30, 90, 26, { wall: [0.14, 0.14, 0.18], window: LED, floor: 15, lit: true });
+      building(K(0.062), -1, 60, 30, 90, 26, { kind: "screen", wall: [0.14, 0.14, 0.18], window: LED, floor: 15, lit: true });
       place(K(0.062), -1, 44, [2.5, 16, 30], LED);                // giant LED megascreen
 
       // --- s 0.05–0.28: T1-T5 (Koval Ln / Sands Ave back-of-house) ---
@@ -465,8 +465,8 @@
       const BOH_WALL = [0.16, 0.17, 0.20];   // flat concrete-grey, no warm cast
       const BOH_WIN  = [0.30, 0.38, 0.48];   // cool dim office glass, not neon
       // Prominent hotel towers either side of the start/finish straight approach
-      building(K(0.10), -1, 22, 30, 46, 30, { wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
-      building(K(0.14), 1, 20, 26, 40, 26, { wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      building(K(0.10), -1, 22, 30, 46, 30, { kind: "twin", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      building(K(0.14), 1, 20, 26, 40, 26, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
       // cityFront fills the T3-T8 sector with a continuous but LOW, dim street-wall.
       // Start at 0.12 (after the two explicit buildings at s 0.10/0.14) to avoid
       // duplicate geometry on the same nodes. Gap 52 safely clears T3 apex.
@@ -475,8 +475,8 @@
       cityFront(0.12, 0.20,  1, 20, { minH: 18, maxH: 38, depth: 20, step: 30,
         palette: [[0.18, 0.18, 0.20], [0.17, 0.18, 0.21]], lit: true, windowCol: BOH_WIN });
       // Mid-sector buildings around T3-T5 corner — still low/dim, service-road massing
-      building(K(0.22), 1, 26, 30, 40, 28, { wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
-      building(K(0.28), -1, 30, 34, 46, 30, { wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      building(K(0.22), 1, 26, 30, 40, 28, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      building(K(0.28), -1, 30, 34, 46, 30, { kind: "notch", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
 
       // --- s 0.30 L near: MSG Sphere — single-hue LED orb hero ---
       // Open technical sector: one giant silhouette, not a rainbow onion. Venetian
@@ -522,8 +522,8 @@
       // ═══════════════════════════════════════════════════════════════════
 
       // --- s ~0.49 L: Venetian / Palazzo at Strip entry ---
-      building(K(0.49), -1, 20, 42, 98, 40, { wall: [0.64, 0.60, 0.52], window: [1.0, 0.85, 0.35], floor: 8 });
-      building(K(0.505), -1, 46, 32, 75, 32, { wall: [0.62, 0.58, 0.50], window: [0.98, 0.80, 0.30], floor: 8 });
+      building(K(0.49), -1, 20, 42, 98, 40, { kind: "pyramid", wall: [0.64, 0.60, 0.52], window: [1.0, 0.85, 0.35], floor: 8 });
+      building(K(0.505), -1, 46, 32, 75, 32, { kind: "spire", wall: [0.62, 0.58, 0.50], window: [0.98, 0.80, 0.30], floor: 8 });
       tower(K(0.492), -1, 70, 18, 60, { col: [0.58, 0.54, 0.46], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
       place(K(0.49), -1, 9, [28, 1.8, 8], [1.0, 0.85, 0.25]); // golden uplighting
 
@@ -531,12 +531,12 @@
       // East of Blvd = left when racing southbound. Rim clearance: dist 85 − r 65.
       ferrisWheel(K(0.55), -1, 85, 65);
       billboard(K(0.56), -1, 18, 16, 10, CYAN);
-      building(K(0.55), -1, 22, 36, 18, 28, { wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
+      building(K(0.55), -1, 22, 36, 18, 28, { kind: "screen", wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
       place(K(0.55), -1, 10, [24, 0.7, 24], [0.15, 0.45, 0.65]);
       place(K(0.55), -1, 10, [20, 0.5, 20], [0.10, 0.30, 0.50]);
 
       // --- s ~0.62 R: Caesars Palace — wide cream box, gold up-lights ---
-      building(K(0.62), 1, 22, 62, 75, 46, { wall: [0.68, 0.64, 0.56], window: [1.0, 0.85, 0.40], floor: 8 });
+      building(K(0.62), 1, 22, 62, 75, 46, { kind: "drum", wall: [0.68, 0.64, 0.56], window: [1.0, 0.85, 0.40], floor: 8 });
       place(K(0.62), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
       place(K(0.62), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
 

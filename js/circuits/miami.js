@@ -409,12 +409,12 @@
           });
         } else {
           // Fallback if the kit is unavailable — keep the pit lane building.
-          building(K(0.0), -1, 13, 22, 9, 120, { wall: WHITE, window: GLASS, lit: true, windowCol: WIN_AMBER });
+          building(K(0.0), -1, 13, 22, 9, 120, { kind: "hall", wall: WHITE, window: GLASS, lit: true, windowCol: WIN_AMBER });
         }
         // paddock club terrace — deliberately a plain glass tower, distinct
         // from the pit building's bay rhythm and the control tower's mast.
         building(K(0.0), -1, 42, 26, 22, 120,
-          { wall: WHITE, window: GLASS, floor: 6, lit: true, windowCol: WIN_AMBER });
+          { kind: "slab", wall: WHITE, window: GLASS, floor: 6, lit: true, windowCol: WIN_AMBER });
         // pit wall
         wall(0.0, 0.05, -1, 2.2, 1.1, GREYWHITE);
       }

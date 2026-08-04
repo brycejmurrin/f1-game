@@ -28,8 +28,8 @@ window.AriaState = (function () {
   // data hub's own prefix for the same idea.
   const ON = ["active", "dh-active"];
   // Roots to watch: everything that is a menu, plus the two DOM-built overlays.
-  const ROOTS = "#overlay,#select,#career,#teampicker,#carsetup,#howtoplay,#advanced," +
-    "#pmsettings,#pausemenu,#lighting,#camtune,#audioset,#results,#standings," +
+  const ROOTS = "#overlay,#select,#career,#career-offers,#teampicker,#carsetup,#howtoplay,#advanced," +
+    "#pmsettings,#pausemenu,#lighting,#camtune,#audioset,#results,#quali,#standings," +
     "#race-settings,#customize,#datahub,#track-detail";
 
   const isOn = (el) => ON.some((c) => el.classList.contains(c));

@@ -598,6 +598,10 @@ const isChampionship = () => flow === "season" || flow === "career";
 // can never drift out of step with the mode.
 function setFlow(v) { flow = v; Career.engage(v === "career"); }
 const isTimeTrial = () => session === "tt";
+const isQuali = () => session === "quali";
+// The full field as it was before startRace() narrowed `cars` to the lone
+// qualifying car — Quali.simulate() needs every car to build a classification.
+let qualiField = null;
 const isCareer = () => flow === "career";
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
@@ -956,7 +960,7 @@ function resolveLivery(team) {
     const l = livDraftOverride.liv;
     return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
-             fin: l.fin || null, finArt: l.finArt || null,
+             fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null,
              noseStripe: l.noseStripe || null, finish: l.finish || null };
   }
   const c = _livResolveCache.get(team.id);
@@ -966,7 +970,7 @@ function resolveLivery(team) {
   // — additive, so an unmodified livery still resolves to today's exact object shape.
   const val = liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
-                      fin: liv.fin || null, finArt: liv.finArt || null,
+                      fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null,
                       noseStripe: liv.noseStripe || null, finish: liv.finish || null }
                   : { c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
@@ -1084,13 +1088,18 @@ function makeCars() {
   cars = [];
   // the custom team only enters the grid when the player has selected it
   const grid = Teams.LIST.filter((t, ti) => !t.custom || ti === teamIdx);
-  const total = grid.reduce((s, t) => s + t.drivers.length, 0);
+  // Counted through the same accessor the loop below iterates, or MY TEAM's second
+  // car would be missing from the lane spread it feeds.
+  const total = grid.reduce((s, t) => s + Career.gridDrivers(t).length, 0);
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
     const factoryParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
     const savedParts = ti === teamIdx ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
-    team.drivers.forEach((dSeat, di) => {
+    // MY TEAM enters TWO cars — you and the driver you hired — where the custom
+    // team ships with one. gridDrivers() returns team.drivers unchanged in every
+    // other case, so free play and driver careers are untouched.
+    Career.gridDrivers(team).forEach((dSeat, di) => {
       const isP = ti === teamIdx && di === driverIdx;
       const resolvedParts = isP ? savedParts : factoryParts;
       // In a driver career YOU take one of the team's two real seats; the driver
@@ -1134,13 +1143,25 @@ function makeCars() {
   player = cars.find((c) => c.isPlayer);
 }
 
-function gridUp() {
-  // grid order: by tier then random-ish; player at P12 for a fun climb
-  const order = cars.slice().sort((a, b) => (a.tier - b.tier) || (simRnd() - 0.5));
-  const pi = order.indexOf(player);
-  order.splice(pi, 1);
-  order.splice(Math.min(11, order.length), 0, player);
+// `preOrder` is an explicit grid, fastest first — a qualifying classification.
+// Without one the old behaviour stands: sort by tier, then drop the player into
+// P12 for a climb. GP keeps that on purpose; only a session that actually held a
+// qualifying hour has earned the right to say where everyone starts.
+function gridUp(preOrder) {
+  const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
+    // grid order: by tier then random-ish; player at P12 for a fun climb
+    const o = cars.slice().sort((a, b) => (a.tier - b.tier) || (simRnd() - 0.5));
+    const pi = o.indexOf(player);
+    o.splice(pi, 1);
+    o.splice(Math.min(11, o.length), 0, player);
+    return o;
+  })();
   order.forEach((c, i) => {
+    // Where this car STARTED. The only record of it: `order` is discarded here and
+    // the classification at the flag is built from finishing times. Career's
+    // "out-qualify your team-mate" objective is what reads it, and it is correct
+    // for both branches above — the qualifying grid and the tier-sorted fallback.
+    c.gridPos = i + 1;
     c.s = wrapS(track.total - 14 - i * 8);
     c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
     c.xVis = c.x;   // reset smoothed render position so the grid doesn't slide
@@ -1750,7 +1771,16 @@ function snapGameCam() {
 function startRace() {
   loadTrack(trackIdx);
   makeCars();
-  if (isTimeTrial()) {
+  // A qualifying lap is a time trial with the rest of the field simulated: one
+  // car on track, the existing lap-timing and validity path, and no new game
+  // state. Two laps — a standing out-lap, then the flying one that counts, the
+  // same reason TT_LAPS exists. The AI field is built BEFORE cars is narrowed,
+  // so the classification can still see every car.
+  if (isQuali()) {
+    qualiField = cars;
+    cars = [player];
+    lapsTarget = 2;
+  } else if (isTimeTrial()) {
     cars = [player];          // solo against the clock — no AI on track
     lapsTarget = raceLaps;
     const board = ttBoard(track.def.id);
@@ -1768,7 +1798,7 @@ function startRace() {
   } else {
     Particles.rainShow(false);
   }
-  gridUp();
+  gridUp(quali.order(cars));
   recomputePlayerMods();
   resultT = 0;
   camRoll = 0; camSlipSm = 0;
@@ -1826,6 +1856,16 @@ function endRace(forcedOrder) {
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
   if (soundOn) GameAudio.finish();
+  // Qualifying ends in its own sheet: the player's flying lap is measured
+  // against the simulated field and becomes the grid. Mirrors the TT return
+  // below — first branch out, before any race classification is built.
+  if (isQuali()) {
+    cars = qualiField || cars;
+    quali.simulate(player.best < Infinity ? player.best : 0);
+    $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
+    quali.open();
+    return;
+  }
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
   // classification: finished by time(+penalty), rest by progress
   const fin = cars.filter((c) => c.finished).sort((a, b) => (a.finishT + a.penalty) - (b.finishT + b.penalty));
@@ -1951,6 +1991,11 @@ const G = {
   get livDraftOverride() { return livDraftOverride; }, set livDraftOverride(v) { livDraftOverride = v; },
   get _spMeshKey() { return _spMeshKey; }, set _spMeshKey(v) { _spMeshKey = v; },
   get setupPreviewOn() { return setupPreviewOn; }, set setupPreviewOn(v) { setupPreviewOn = v; },
+  // Read-only garage-camera state for __apex.garageCam().
+  get setupPreviewSpin() { return setupPreviewSpin; },
+  get setupPreviewAz() { return setupPreviewAz; },
+  get setupPreviewEl() { return setupPreviewEl; },
+  get setupPreviewDist() { return setupPreviewDist; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; },
@@ -1972,7 +2017,14 @@ const G = {
   openCustomize: (...a) => openCustomize(...a),
   // Career plumbing — same deferred-arrow reason as the block above.
   openRaceSettings: (...a) => openRaceSettings(...a),
+  // Read-only qualifying model for the CURRENT track (__apex.qualiSim).
+  qualiSim: (playerTime) => quali.preview(playerTime || 0),
   refreshCareerButton: (...a) => refreshCareerButton(...a),
+  // The R&D gate for the garage LISTING: the option ids the team on screen may fit,
+  // or null. Career.owned() answers "career rules apply AND this is the career
+  // team" by itself, so outside a career this is a no-op the garage can ignore.
+  // Read per rebuild rather than held, so a part researched mid-session shows up.
+  careerOwned: () => Career.owned(Teams.LIST[teamIdx] && Teams.LIST[teamIdx].id),
   updateTrackPreview: (...a) => updateTrackPreview(...a),
   // Mutable state + helpers consumed by js/game/photomode.js.
   get photoMode() { return photoMode; }, set photoMode(v) { photoMode = v; },
@@ -2005,6 +2057,11 @@ const G = {
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
   GAME_LAPS, TT_LAPS, LONG_GRIP,
+  // The friction-circle constants, for js/game/quali.js: it runs a quasi-steady
+  // lap simulation off the SAME numbers the driving model uses, so a simulated
+  // qualifying time and a driven one are on one scale by construction.
+  LAT_MAX, ACCEL, BRAKE,
+  vTop: () => vTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
   getTeamParts, getLiveryId,   // lobby: the profile it sends is ids, never resolved numbers
@@ -2032,6 +2089,9 @@ const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwa
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
 // and the save live in js/game/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
+// QUALIFYING (js/game/quali.js) — the flying lap plus the simulated field it is
+// measured against. Holds the classification between the session and the grid.
+const quali = Quali.create(G);
 // Photo mode (js/game/photomode.js).
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
@@ -3612,7 +3672,7 @@ function applyLightTune(fromApplyRace) {
     v = clamp(v, d.min, d.max);
     if (LT[d.id] !== v) { LT[d.id] = v; if (d.rebuild) rebuilt = true; if (d.reinitRain) reinit = true; if (_APPLY_RACE_IDS.has(d.id)) reapply = true; }
   }
-  if (rebuilt && track) track._lights = null;
+  if (rebuilt && track) { track._lights = null; track._alwaysLights = null; }
   // Skip the reapply when applyRaceSettings itself invoked us (it derives from
   // the fresh LT values right after this returns) — re-entering ran the whole
   // sky/ambient/fog derivation twice per track/time/weather transition.
@@ -3634,7 +3694,7 @@ function setLightTune(id, v) {
     if (v === ltFallback(id)) delete prof[id]; else prof[id] = v;
     if (!Object.keys(prof).length) delete _ltStore[key];
   }
-  if (d.rebuild && track) track._lights = null;   // re-bake per-track light records next frame
+  if (d.rebuild && track) { track._lights = null; track._alwaysLights = null; }   // re-bake per-track light records next frame
   if (d.reinitRain && isWetRoad()) initRainDrops();   // re-seed the rain field with the new count/length
   if (_APPLY_RACE_IDS.has(id) && track && state !== "menu" && state !== "select") applyRaceSettings();
   return true;
@@ -3649,8 +3709,8 @@ const _wheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive:
 const _ersLightOpts = { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 };
 const _flameOpts = { emissive: 1.0, roughness: 1, specular: 0, alpha: 1, noAlphaWrite: true };
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
-function setFrameLights(eye, scale, fwd) {
-  LightTune.setFrameLights(frame, track, cars, eye, scale, fwd, gfx.mobileTier);
+function setFrameLights(eye, scale, fwd, srcSet) {
+  LightTune.setFrameLights(frame, track, cars, eye, scale, fwd, gfx.mobileTier, srcSet);
 }
 function appendCarTailLights() {
   LightTune.appendCarTailLights(frame, track, cars, player);
@@ -3677,6 +3737,53 @@ function camVantage(mode, s, x, spd, now, extra) {
 // on player.px/track. This is the same ring-of-lamps energy math, anchored at
 // the world origin instead of the player's track position.
 let setupPreviewOn = false, setupPreviewAz = 0.6;
+// Preview CAMERA state. The turntable used to be the only way to see the car:
+// one fixed height, one fixed distance, spinning left whether you wanted it to
+// or not, so inspecting the part you just bought meant waiting for it to come
+// back around. az/el/dist are now a real orbit the player drives (drag on the
+// canvas, wheel/pinch to zoom, preset chips in #cs-view), and SPIN is a toggle
+// over the top of it rather than the whole interaction.
+// Defaults reproduce the previous framing exactly: eye y 2.0 at dist 8.5 over a
+// target at y 0.35 is an elevation of atan2(1.65, 8.5).
+const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.5;
+let setupPreviewEl = SP_EL_DEF, setupPreviewDist = SP_DIST_DEF;
+let setupPreviewSpin = true;
+// Orbit limits: never underneath the floor plane, never past straight down, and
+// close enough to read a decal without clipping into the nose.
+const SP_EL_MIN = -0.12, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15;
+// az 0 = ahead of the nose (+Z), PI = behind the wing; see the eye vector below.
+// Distances are per-view because the car is 5.4 m long and 1.9 m wide, and the
+// sheet takes the right ~40% of the canvas: head-on it fits close, broadside it
+// does not. SIDE and TOP get the extra pull-back their aspect actually needs
+// rather than one nominal distance that crops the nose off two of the five.
+const SP_VIEWS = {
+  hero:  { az: Math.PI * 0.78, el: 0.30, dist: 8.5 },   // rear three-quarter
+  front: { az: 0,              el: 0.20, dist: 8.2 },
+  side:  { az: Math.PI * 0.5,  el: 0.10, dist: 11.2 },
+  rear:  { az: Math.PI,        el: 0.22, dist: 8.4 },
+  top:   { az: Math.PI * 0.5,  el: 1.20, dist: 11.5 },
+};
+function setSetupView(name) {
+  const v = SP_VIEWS[name];
+  if (!v) return;
+  setupPreviewAz = v.az; setupPreviewEl = v.el; setupPreviewDist = v.dist;
+  // Picking a view means "hold it there" — leaving the turntable running would
+  // immediately rotate away from the angle that was just asked for.
+  setSetupSpin(false);
+}
+function setSetupSpin(on) {
+  setupPreviewSpin = !!on;
+  const b = $("cs-view-spin");
+  // `active` drives the lit style (and is what AriaState reads); the attribute
+  // is set here too so the state is correct before AriaState's observer fires.
+  if (b) {
+    b.classList.toggle("active", setupPreviewSpin);
+    b.setAttribute("aria-pressed", String(setupPreviewSpin));
+  }
+}
+function setupZoom(mul) {
+  setupPreviewDist = clamp(setupPreviewDist * mul, SP_DIST_MIN, SP_DIST_MAX);
+}
 const _spLights = [];
 function buildSetupPreviewLights() {
   _spLights.length = 0;
@@ -3716,10 +3823,15 @@ function getSetupPreviewMesh() {
 const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = new Float32Array(16);
 function renderSetupPreview(dt) {
   gfx.resize();
-  setupPreviewAz += dt * 0.35;   // slow turntable
+  if (setupPreviewSpin) setupPreviewAz += dt * 0.35;   // slow turntable
   // Pulled back + a touch wider than a "hero shot" distance so the whole
   // ~5.4 m car (nose to rear wing) clears the frustum at any turntable angle.
-  const eye = [Math.sin(setupPreviewAz) * 8.5, 2.0, Math.cos(setupPreviewAz) * 8.5 - 1.0];
+  // The orbit radius is horizontal, so raising the camera does not walk it away
+  // from the car: at el 0 this is the old fixed ring, at el 1.2 it is overhead.
+  const spCe = Math.cos(setupPreviewEl), spSe = Math.sin(setupPreviewEl);
+  const eye = [Math.sin(setupPreviewAz) * setupPreviewDist * spCe,
+               0.35 + setupPreviewDist * spSe,
+               Math.cos(setupPreviewAz) * setupPreviewDist * spCe - 1.0];
   M4.perspectiveTo(_spProj, 36 * Math.PI / 180, gfx.aspect, 0.1, 60);
   // The docked #cs-inner panel covers the right portion of the canvas — an
   // on-axis camera centers the car behind it, half-cropped. Shift the
@@ -4441,6 +4553,20 @@ function render(dt) {
     setFrameLights(camEye, floodScale, _lightFwd);
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     if (_floodActive) appendCarTailLights();
+  } else if (track.hasAlwaysLamps) {
+    // ALWAYS-ON FIXTURES in a bright session. A circuit can register lamps that
+    // burn regardless of the hour (lampPost({always:true}) — Monaco's tunnel
+    // luminaires). Those live in a SEPARATE baked set, so a day race lights the
+    // one place the sun cannot reach without switching the whole circuit's
+    // street lighting on. Same cull, same knobs; no twilight ramp and no car
+    // tail-lights, both of which are after-dark cues.
+    if (!track._alwaysLights || track._alwaysLights.length === 0)
+      track._alwaysLights = buildTrackLights(track, true);
+    if (track._alwaysLights.length) {
+      const _al = LT.lampLevel;
+      _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
+      setFrameLights(camEye, [_al, _al, _al], _lightFwd, track._alwaysLights);
+    } else frame.lights = null;
   } else {
     frame.lights = null;
   }
@@ -5796,8 +5922,43 @@ $("rs-go").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   $("race-settings").hidden = true;
   if (steerMode === "tilt") enableTilt();
-  startRace();
+  // In a championship the weekend starts with qualifying, which is what decides
+  // the grid. A one-off Grand Prix goes straight to the race and keeps its P12
+  // start — that mode is a quick blast, not a weekend.
+  if (isChampionship()) openQuali(); else startRace();
 };
+
+// ── qualifying ───────────────────────────────────────────────────────────────
+// The sheet opens BEFORE the session with the field already simulated, so the
+// player can see what they have to beat and choose whether to drive it or take
+// the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
+function openQuali() {
+  session = "quali";
+  quali.clear();
+  loadTrack(trackIdx);
+  makeCars();
+  quali.simulate(0);              // provisional: everyone simulated, including you
+  $("quali").classList.remove("q-done");
+  quali.open();
+}
+function closeQualiToGrid() {
+  quali.close();
+  session = "race";
+  startRace();                    // gridUp() reads quali.order()
+}
+$("q-drive").onclick = () => {
+  if (soundOn) GameAudio.uiSelect();
+  quali.close();
+  session = "quali";
+  startRace();                    // one out-lap + one flying lap, alone
+};
+$("q-sim").onclick = () => {
+  if (soundOn) GameAudio.uiSelect();
+  quali.simulate(0);              // keep the simulated time for the player too
+  $("quali").classList.add("q-done");
+  quali.build();
+};
+$("q-go").onclick = () => { if (soundOn) GameAudio.uiSelect(); closeQualiToGrid(); };
 
 // ---- customize my team ----
 // Optional extra-paint rows: DOM colour-input id -> livery key. Saved onto the
@@ -5805,7 +5966,8 @@ $("rs-go").onclick = () => {
 const CZ_LIV_FIELDS = [
   ["cz-stripe", "stripe"], ["cz-nosestripe", "noseStripe"], ["cz-detail", "accent"],
   ["cz-nose", "nose"], ["cz-pod", "pod"], ["cz-wing", "wing"],
-  ["cz-fin", "fin"], ["cz-finart", "finArt"], ["cz-halo", "halo"],
+  ["cz-fin", "fin"], ["cz-finart", "finArt"], ["cz-logo", "logo"],
+  ["cz-halo", "halo"],
 ];
 // The custom team's paint FINISH ("gloss" = the default clearcoat car paint, so
 // it is never written to ct.livery). Held here rather than read off the DOM so
@@ -5856,6 +6018,68 @@ CZ_LIV_FIELDS.forEach(([domId]) => {
 for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
   btn.onclick = () => { czSetFinish(btn.dataset.czFinish); if (soundOn) GameAudio.uiTick(); };
 }
+
+// ---- garage preview camera ----
+// The chips in #cs-view, plus orbit-by-drag and zoom on the canvas itself. All
+// of it is gated on setupPreviewOn, so none of these listeners can touch the
+// camera during a race — the canvas is shared with the track render and, on
+// touch, with the steering.
+for (const btn of document.querySelectorAll("#cs-view [data-cs-view]")) {
+  btn.onclick = () => { setSetupView(btn.dataset.csView); if (soundOn) GameAudio.uiTick(); };
+}
+$("cs-view-spin").onclick = () => { setSetupSpin(!setupPreviewSpin); if (soundOn) GameAudio.uiTick(); };
+$("cs-view-in").onclick  = () => { setupZoom(1 / 1.18); if (soundOn) GameAudio.uiTick(); };
+$("cs-view-out").onclick = () => { setupZoom(1.18); if (soundOn) GameAudio.uiTick(); };
+{
+  const canvas = $("game");
+  // Live pointers by id, so a two-finger pinch is separable from a one-finger
+  // orbit without a separate touch-event path.
+  const spPtr = new Map();
+  let spPinch = 0;
+  const pinchGap = () => {
+    const p = [...spPtr.values()];
+    return p.length >= 2 ? Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) : 0;
+  };
+  if (canvas) {
+    canvas.addEventListener("pointerdown", (e) => {
+      if (!setupPreviewOn) return;
+      spPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      spPinch = pinchGap();
+      // Taking hold of the car is itself the instruction to stop the turntable —
+      // dragging against a rotation that keeps adding to your input is horrible.
+      if (spPtr.size === 1) setSetupSpin(false);
+    });
+    window.addEventListener("pointermove", (e) => {
+      if (!setupPreviewOn || !spPtr.has(e.pointerId)) return;
+      const p = spPtr.get(e.pointerId);
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX; p.y = e.clientY;
+      if (spPtr.size >= 2) {
+        // Pinch: the gap between the two fingers drives distance directly.
+        const gap = pinchGap();
+        if (spPinch > 0 && gap > 0) setupZoom(spPinch / gap);
+        spPinch = gap;
+        return;
+      }
+      // Drag: horizontal spins, vertical raises/lowers. Scaled by viewport width
+      // so the same swipe travels the same arc on a phone and on a desktop.
+      const span = Math.max(1, canvas.clientWidth);
+      setupPreviewAz -= dx * (Math.PI * 1.6) / span;
+      setupPreviewEl = clamp(setupPreviewEl + dy * (Math.PI * 0.9) / span, SP_EL_MIN, SP_EL_MAX);
+    });
+    const release = (e) => {
+      spPtr.delete(e.pointerId);
+      spPinch = pinchGap();
+    };
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    canvas.addEventListener("wheel", (e) => {
+      if (!setupPreviewOn) return;
+      e.preventDefault();
+      setupZoom(e.deltaY > 0 ? 1.1 : 1 / 1.1);
+    }, { passive: false });
+  }
+}
 // The GARAGE is reachable from the title AND from the select screen's car card,
 // so DONE has to go back where it came from. It used to unhide #select
 // unconditionally, which dropped you on the track picker after opening the
@@ -5867,6 +6091,14 @@ function openGarage(from) {
   if (from === "menu") GameAudio.init();
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
+  // Fresh camera every visit: a garage that reopened on the last angle someone
+  // dragged to — nose-down, zoomed into a wheel — reads as broken rather than
+  // as remembered. The turntable is the front door; the controls are there for
+  // anyone who wants off it.
+  setupPreviewAz = 0.6;
+  setupPreviewEl = SP_EL_DEF;
+  setupPreviewDist = SP_DIST_DEF;
+  setSetupSpin(true);
   openSetup();
 }
 $("sel-setup").onclick = () => openGarage("select");

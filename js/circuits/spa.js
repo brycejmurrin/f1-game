@@ -176,7 +176,7 @@
       motorhome(Math.round(n * 0.006) % n, -1, 24, 15, 7, 18, { wall: [0.82, 0.84, 0.88], window: [0.32, 0.40, 0.48] });
       motorhome(Math.round(n * 0.994) % n, -1, 24, 15, 7, 18, { wall: [0.86, 0.87, 0.90], window: [0.30, 0.38, 0.46] });
       // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).
-      building(Math.round(n * 0.10) % n, -1, 40, 12, 9, 40, { wall: [0.74, 0.72, 0.66], window: [0.34, 0.34, 0.32], floor: 4 });
+      building(Math.round(n * 0.10) % n, -1, 40, 12, 9, 40, { kind: "chevron", wall: [0.74, 0.72, 0.66], window: [0.34, 0.34, 0.32], floor: 4 });
       // Broadcast compound near Stavelot: OB trucks + satellite uplink dishes.
       // This was the single most-requested missing model across the whole
       // scenery review (14 of 24 circuits) and no track — Spa included — had
