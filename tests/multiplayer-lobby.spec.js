@@ -12,13 +12,21 @@
 // The claim worth testing hardest is the profile one: what crosses the wire is
 // part IDS, never resolved multipliers. Since Phase 0 made upgrades per-car, a
 // peer that could declare `{cornering: 9}` would simply be faster.
+//
+// Anything that reaches a transport calls __apex.lobbyFake(true) first, which
+// swaps the lobby's transport factory for loopback endpoints. That is a
+// necessity, not a shortcut: measured in this environment an RTCPeerConnection
+// constructs fine but ICE gathering NEVER completes — one candidate, still
+// "gathering" after six seconds — and a PC left spinning starves the box. A
+// test that builds one does not fail, it HANGS, which is far worse.
 import { test, expect } from "./fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-async function menu(page) {
+async function menu(page, fakeTransport = true) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+  if (fakeTransport) await page.evaluate(() => window.__apex.lobbyFake(true));
 }
 
 test.describe("VS FRIEND lobby", () => {
@@ -48,13 +56,10 @@ test.describe("VS FRIEND lobby", () => {
   });
 
   test("hosting moves to the invite step and reports progress", async ({ page }) => {
-    // Deliberately does NOT wait for an invite code. Producing one requires ICE
-    // gathering to finish, and in a sandboxed CI browser it never does — this
-    // environment gathers exactly one candidate and stays in "gathering"
-    // indefinitely. Asserting on that would be asserting on NAT traversal,
-    // which fails for reasons no one can fix from the repo. The code FORMAT is
-    // pinned in tests/net-transport.test.mjs against a synthetic SDP instead,
-    // which tests the part we actually wrote.
+    // Asserts the SCREEN advances and says something, not that a code appears:
+    // producing a real code needs ICE, which this environment cannot finish.
+    // The code FORMAT is pinned in tests/net-transport.test.mjs against a
+    // synthetic SDP instead — the part we actually wrote.
     await menu(page);
     await page.click("#mb-vs");
     await page.click("#vs-host");
@@ -69,12 +74,14 @@ test.describe("VS FRIEND lobby", () => {
     await menu(page);
     await page.click("#mb-vs");
     await page.click("#vs-join");
-    // Decoding happens before any ICE work, so this is deterministic here.
+    // The code is validated BEFORE the connection is touched, so this reports
+    // the real problem ("that isn't an Apex code") rather than a generic
+    // transport error the player could do nothing about.
     await page.fill("#vs-invite-in", "not-a-real-code");
     await page.click("#vs-make-answer");
     await expect(page.locator("#vs-status")).toHaveClass(/vs-error/);
     const msg = await page.textContent("#vs-status");
-    expect(msg.length).toBeGreaterThan(10);
+    expect(msg).toMatch(/apex invite code/i);
   });
 
   test("an empty box asks for the code rather than failing silently", async ({ page }) => {

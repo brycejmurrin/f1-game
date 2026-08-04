@@ -91,9 +91,17 @@ const NetLobby = (function () {
     }
 
     // ---- connection -------------------------------------------------------
+    // How a transport gets made is injectable, for the same reason the wire
+    // itself is: a test must be able to exercise this screen without building
+    // a real RTCPeerConnection. That is not a convenience — a PC whose ICE
+    // never completes (a sandboxed CI browser, a locked-down network) spins
+    // indefinitely, so a test that constructs one does not fail, it HANGS.
+    let makeTransport = (o) => NetTransport.rtc(o);
+    function setTransportFactory(fn) { makeTransport = fn || ((o) => NetTransport.rtc(o)); }
+
     function newTransport(asRole) {
       role = asRole;
-      transport = NetTransport.rtc({ role: asRole, name: asRole });
+      transport = makeTransport({ role: asRole, name: asRole });
       if (!transport) {
         say("This browser cannot do WebRTC, so it cannot race a friend.", true);
         return null;
@@ -307,7 +315,7 @@ const NetLobby = (function () {
 
     return {
       wire, open, close, cancel, host, join, makeAnswer, acceptAnswer,
-      localProfile, modsFromProfile,
+      localProfile, modsFromProfile, setTransportFactory,
       status: () => ({ role, statusText, connected: !!transport && transport.status === "open" }),
     };
   }

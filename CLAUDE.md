@@ -307,6 +307,20 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   for an incident-sim takeover. tick() also runs
                                   through the paused gate: one player opening a
                                   menu cannot stop a shared world
+  lobby.js       NetLobby       the VS FRIEND screen. The two code pastes ARE
+                                  the signalling server — the one thing WebRTC
+                                  cannot start without, and the one thing two
+                                  people already have between them. Opens the
+                                  session ITSELF (the guest learns which race to
+                                  load from the host, so the session must exist
+                                  before a track does) and hands it to NetPlay
+                                  once the race is up. The profile it sends is
+                                  part IDS, never resolved multipliers — a peer
+                                  declaring {cornering: 9} would simply be
+                                  faster. Its transport factory is injectable:
+                                  an RTCPeerConnection whose ICE never completes
+                                  spins forever, so a test that builds one HANGS
+                                  rather than fails (__apex.lobbyFake)
 
 js/game/         — game modules (each created with the G ctx façade from game.js) —
   tables.js      GameTables     static game data (CAM_MODES, DIFF, gears, paints)
@@ -390,7 +404,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (89) + tests/*.test.mjs unit suites (26)
+tests/*.spec.js                 Playwright specs (90) + tests/*.test.mjs unit suites (26)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -756,7 +770,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-89 Playwright specs + 26 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+90 Playwright specs + 26 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

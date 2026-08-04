@@ -32,6 +32,8 @@ const agentView = AgentView.create(G);
 // a test, which is what makes the game side of multiplayer testable without
 // signalling, a second browser, or a network.
 let _netPeer = null;
+// The far end of a faked lobby connection — see lobbyFake().
+let _lobbyPeer = null;
 
 const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
@@ -1651,6 +1653,26 @@ const api = {
       shown: !!(document.getElementById("vsfriend") && !document.getElementById("vsfriend").hidden),
     });
   },
+
+  // lobbyFake(on) — make the lobby build LOOPBACK endpoints instead of real
+  // RTCPeerConnections. Necessary, not merely convenient: an RTCPeerConnection
+  // whose ICE never completes (a sandboxed CI browser, a locked-down network)
+  // spins indefinitely, so a test that builds one does not fail — it HANGS,
+  // which is far worse. The far endpoint is kept here so the connection can be
+  // completed on demand via lobbyFakeConnect().
+  lobbyFake(on) {
+    if (!G.netLobby) return false;
+    if (!on) { _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false; }
+    G.netLobby.setTransportFactory((o) => {
+      const pair = NetTransport.loopback({ latencyMs: 0 });
+      _lobbyPeer = pair[1];
+      // Loopback endpoints report "open" immediately; the lobby polls for that,
+      // so a fake connection completes the moment it is asked to.
+      return Object.assign(pair[0], { role: o && o.role });
+    });
+    return true;
+  },
+  lobbyFakeConnected() { return !!_lobbyPeer; },
 
   // lobbyMods(profile) — resolve a peer profile to multipliers, locally.
   lobbyMods(profile) {
