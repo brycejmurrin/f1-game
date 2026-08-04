@@ -5734,7 +5734,6 @@ function setSound(b) {
   soundOn = b; store.set("sound", b);
   GameAudio.setEnabled(b);
   els.soundbtn.textContent = b ? "♪ ON" : "♪ OFF";
-  $("pm-sound").textContent = "SOUND: " + (b ? "ON" : "OFF");
   if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); }
   else {
     if (state === "menu") GameAudio.startMusic(-1);
@@ -5748,6 +5747,11 @@ els.soundbtn.onclick = () => setSound(!soundOn);
 // Music on/off, independent of the master sound toggle: engine + SFX keep
 // playing with music off.
 function setMusic(b) {
+  // The master gates both buses and its only button lives on the title screen,
+  // so asking for music mid-race has to lift it — otherwise the switch reads
+  // ON and nothing plays, which is exactly the confusion the duplicated
+  // pause-menu toggle used to cause.
+  if (b && !soundOn) { setSound(true); }
   musicEnabled = b; store.set("music", b);
   GameAudio.setMusicEnabled(b);
   syncAudioPanel();
@@ -5767,6 +5771,7 @@ GameAudio.setSfxEnabled(sfxOn);
 // playing — the sources stay alive at zero gain rather than being torn down, so
 // there is nothing to rebuild when it comes back on.
 function setSfx(b) {
+  if (b && !soundOn) { setSound(true); }
   sfxOn = b; store.set("sfx", b);
   GameAudio.setSfxEnabled(b);
   syncAudioPanel();
@@ -5839,7 +5844,6 @@ function syncAudioPanel() {
   // Disabled, not hidden: the row keeps its slot so nothing reflows under a
   // thumb mid-tap, and .tune-row greys to say the control is inert.
   $("as-mvol").disabled = !musicLive;
-  $("as-skip").disabled = !musicLive;
   $("as-svol").disabled = !sfxLive;
   $("as-mvol").closest(".tune-row").classList.toggle("tune-off", !musicLive);
   $("as-svol").closest(".tune-row").classList.toggle("tune-off", !sfxLive);
@@ -5847,7 +5851,15 @@ function syncAudioPanel() {
   $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
   $("as-svol").value = String(Math.round(sfxVol * 10));
   $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
-  $("as-now").textContent = musicLive ? (GameAudio.trackName() || "—") : "off";
+  $("as-now").textContent = musicLive ? (GameAudio.trackName() || "—") : "Music off";
+  // The caption says WHERE the track came from, which is the question the old
+  // single line could not answer — "Now playing X" with four possible sources.
+  const SRC_LABEL = { all: "All music", builtin: "Built-in", user: "My tracks", spotify: "Spotify" };
+  $("as-now-src").textContent = musicLive ? (SRC_LABEL[musicSrc] || "") : "";
+  $("as-play").innerHTML = musicEnabled ? "&#10074;&#10074;" : "&#9654;";
+  $("as-play").setAttribute("aria-label", musicEnabled ? "Pause music" : "Play music");
+  for (const id of ["as-prev", "as-skip"]) $(id).disabled = !musicLive;
+  $("as-play").disabled = !soundOn;
   // The uploaded-track rows carry a "playing" marker, so they have to be
   // re-rendered whenever the panel is opened or the track changes — MusicLib
   // owns the list, we only tell it the picture is stale.
@@ -5886,12 +5898,22 @@ $("as-svol").oninput = (e) => {
   store.set("volSfx", sfxVol);
   $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
 };
-$("as-skip").onclick = () => {
-  const name = GameAudio.skipTrack();
+// One handler for all three transport buttons: they differ only in which
+// GameAudio call they make, and all three then have to refresh the same
+// now-playing card and the uploaded-track list's "playing" marker.
+function audioTransport(fn) {
+  const name = fn();
   if (name) $("as-now").textContent = name;
   if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
+  syncAudioPanel();
   if (soundOn) GameAudio.uiTick();
-};
+}
+$("as-skip").onclick = () => audioTransport(() => GameAudio.skipTrack());
+$("as-prev").onclick = () => audioTransport(() => GameAudio.prevTrack());
+// PLAY/PAUSE is the music switch, not a separate transport state — there is
+// one music bus and `musicEnabled` already owns whether it is running, so a
+// third notion of "paused" here would be a second source of truth.
+$("as-play").onclick = () => { setMusic(!musicEnabled); if (soundOn) GameAudio.uiTick(); };
 
 // Render resolution setting: AUTO = the frame-time governor adapts the scale;
 // LOW/MED/HIGH pin a fixed scale (and disable the governor so it can't fight
@@ -6670,7 +6692,6 @@ $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
-$("pm-sound").onclick = () => setSound(!soundOn);
 
 // One STEER button cycles the single mode: TILT -> BUTTONS -> TOUCH.
 const STEER_MODES = ["tilt", "buttons", "touch"];
