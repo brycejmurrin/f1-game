@@ -199,6 +199,21 @@ const NetTransport = (function () {
     },
   ];
 
+  // RELAY ONLY, for testing the path that NAT'd and mobile players actually
+  // depend on. On one machine — and on most home networks — a direct host pair
+  // forms instantly and TURN is never touched, so the relay leg is exactly the
+  // one a developer never exercises and a player on carrier-grade NAT always
+  // does. Forcing it is the only way to find out it is broken before somebody's
+  // phone does.
+  //
+  // localStorage apex26.iceRelayOnly = "true". Read HERE rather than passed
+  // down from the lobby, for the same reason turnFromStore() is: the real
+  // transport and any harness then behave identically.
+  function relayOnly() {
+    try { return localStorage.getItem("apex26.iceRelayOnly") === "true"; }
+    catch (e) { return false; }
+  }
+
   // Your own relay still wins when you have one: localStorage apex26.turn =
   // {"urls":"turn:host:3478","username":"u","credential":"p"}. Read here rather
   // than in the lobby so the real transport and any harness behave identically.
@@ -235,7 +250,13 @@ const NetTransport = (function () {
     // escape into a click handler, where it would kill the UI silently.
     let pc;
     try {
-      pc = new PC({ iceServers: iceServers(opts) });
+      const cfg = { iceServers: iceServers(opts) };
+      // "relay" makes ICE discard host and srflx candidates, so the ONLY way a
+      // pair can form is through TURN. If the relay path is broken, it fails
+      // here rather than on a stranger's phone.
+      const policy = opts.iceTransportPolicy || (relayOnly() ? "relay" : null);
+      if (policy) cfg.iceTransportPolicy = policy;
+      pc = new PC(cfg);
     } catch (e) { return null; }
     const chans = {};
     let inbox = [];
