@@ -42,6 +42,9 @@ npm run test:modes      # season + time-trial game modes
 npm run test:map        # minimap hooks
 npm run test:net        # multiplayer car roles: human (person-driven) vs local
                         #   (this screen), the per-car input seam, per-car parts
+npm run test:net-unit   # js/net wire: loopback transport (latency/jitter/loss,
+                        #   deterministic via a seeded rnd) + invite-code codec.
+                        #   Pure logic, no browser — runs in under a second
 npm run test:agent      # agent world view (world/trackInfo/scene/visible/rollout)
 npm run test:circuit    # walls + autopilot + elevation + audit (all circuit-level)
 npm run test:tiny       # START HERE: page loads, __apex present, dev hooks respond
@@ -250,6 +253,27 @@ js/data/         — data hub —
   schedule.js / standings.js / lastrace.js / live.js   the other tabs, same
                                   Data*.create(ctx) pattern
 
+js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
+  transport.js   NetTransport   two channels — "state" (unreliable/unordered:
+                                  snapshots + inputs; a late packet is
+                                  worthless) and "event" (reliable/ordered:
+                                  lobby, start tick, lap times, results).
+                                  loopback() wires two endpoints IN ONE PAGE
+                                  with injectable latency/jitter/loss so the
+                                  netcode is testable with no network at all;
+                                  rtc() is the real RTCPeerConnection. Both
+                                  deliver only on pump(), so latency and loss
+                                  are reproducible rather than wall-clock
+  handshake.js   NetHandshake   signalling with no server: vanilla ICE (gather
+                                  fully, so one static string suffices) →
+                                  slimmed SDP → deflate → base64url invite
+                                  code, pasted between players. Embeds
+                                  version.json's build and REFUSES a mismatched
+                                  peer — different builds mean different
+                                  splines, barriers and constants. Scenery is
+                                  deliberately not checked (props never affect
+                                  physics)
+
 js/game/         — game modules (each created with the G ctx façade from game.js) —
   tables.js      GameTables     static game data (CAM_MODES, DIFF, gears, paints)
   lighting.js    LightTune      TUNE_DEFS registry, live LT values, floodColor,
@@ -318,7 +342,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (87) + tests/*.test.mjs unit suites (23)
+tests/*.spec.js                 Playwright specs (87) + tests/*.test.mjs unit suites (24)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -684,7 +708,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-87 Playwright specs + 23 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+87 Playwright specs + 24 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for

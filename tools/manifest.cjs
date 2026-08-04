@@ -138,6 +138,10 @@ const FULL = [
   "js/game/agentview-raster.js",
   "js/game/agentview.js",
   "js/game/apex.js",
+  // Multiplayer wire. Pure logic with no game dependency, so position only
+  // has to satisfy "before whatever consumes it" — game.js, last as always.
+  "js/net/transport.js",
+  "js/net/handshake.js",
   "js/game.js",
 ];
 
