@@ -91,6 +91,18 @@ const NetNostr = (function () {
    * of the game standing on somebody else's servers, and when they are down the
    * lobby has to fall back to the link, not break.
    */
+  // localStorage apex26.nostrRelays = ["wss://…", …] — an explicit relay list,
+  // used verbatim (Trystero prefixes wss:// only onto ITS defaults, so a
+  // ws://127.0.0.1 fixture works here and nowhere else).
+  function relayUrls() {
+    try {
+      const raw = localStorage.getItem("apex26.nostrRelays");
+      if (!raw) return null;
+      const list = JSON.parse(raw);
+      return Array.isArray(list) && list.length ? list : null;
+    } catch (e) { return null; }
+  }
+
   async function exchange(opts) {
     // send/reply are the two-party pair this started as. mintOffer+onJoiner are
     // SUBSCRIPTION mode: a host that stays in the room and answers each arrival
@@ -172,7 +184,17 @@ const NetNostr = (function () {
         // with it, so the relay relays ciphertext.
         roomId(code).then((id) => {
           if (done) return;
-          room = mod.joinRoom({ appId: APP_ID, password: code }, id);
+          // WHICH RELAYS. Trystero's getRelays() picks its subset
+          // DETERMINISTICALLY from a hash of the appId, so every player of this
+          // game gets the same handful for ever — a bad draw is permanent, not
+          // intermittent. A real console showed ours: two with dead DNS, one
+          // timing out, one rate-limiting. Being able to say otherwise is both
+          // the fix for that and what makes this path testable at all, against
+          // a relay on localhost (tools/nostr-local.cjs).
+          room = mod.joinRoom(Object.assign(
+            { appId: APP_ID, password: code },
+            relayUrls() ? { relayConfig: { urls: relayUrls() } } : null,
+          ), id);
           // Trystero 0.25 returns an OBJECT from makeAction, not the [send,
           // receive] tuple older versions did, and its onMessage is a setter
           // like onPeerJoin. Both mistakes throw into the catch below and come

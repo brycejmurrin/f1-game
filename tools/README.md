@@ -85,6 +85,13 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   (`npm run rtc:e2e-3p`, or `rtc:e2e-3p-relay` to force every pair through
   TURN — the leg a developer never exercises and a phone behind
   carrier-grade NAT always does).
+- `nostr-local.cjs` — a Nostr relay on localhost, so the ROOM CODE path can be
+  tested without depending on somebody else's server. The smallest relay
+  Trystero needs (ephemeral events, `since: now()`, live fan-out only). Needs
+  `npm i --no-save ws`.
+- `rtc-e2e-room.mjs` — drives the room-code path end to end against that relay.
+  INCOMPLETE: needs `__apex.lobbyCodeHost`/`lobbyCodeJoin`, which do not exist
+  yet, so it does not run as committed.
 - `turn-local.cjs` — a TURN server on localhost, which is what makes that relay
   mode testable at all: on one machine ICE forms a direct pair instantly and
   TURN is never touched. Needs `npm i --no-save node-turn` — a test fixture,
