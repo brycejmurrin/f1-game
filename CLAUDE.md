@@ -215,7 +215,7 @@ js/track/        — track ENGINE (shared code) —
                                   city palettes/styles) — data only, no placement logic
   scenery-nature.js / scenery-city.js / scenery-structures.js / scenery-identity.js
                  Scenery*.create(ctx)   the buildProps split; together they serve the
-                                  96-member scenery(api) contract frozen by
+                                  105-member scenery(api) contract frozen by
                                   tests/scenery-api-contract.test.mjs
 
 js/circuits/     — circuit DATA —

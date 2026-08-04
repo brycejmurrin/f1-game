@@ -82,6 +82,7 @@
     scenery: function (api) {
       const { out, MAT, n, ds, pyMin, place, prop, backdrop, groundYAt, every,
         onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, motorhome, tower,
+        cypress, stonePine, tieredBowl, terrace,
         grandstandEx, spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall,
         addBox, addCyl, addCone, addPrism, addFrustum, anchor, along, vadd,
@@ -105,14 +106,23 @@
       // Lesmo (0.43-0.54): those woods stay dense, they're a separate identity.
       const openParkland = (s) =>
         (s >= 0.19 && s <= 0.28) || (s >= 0.36 && s <= 0.42) || (s >= 0.58 && s <= 0.66);
-      // Rank A — front pines close to verge (umbrella pines).
+      // Rank A — the umbrella pines themselves. Monza's near-verge signature is
+      // the pino domestico: a long bare trunk under a flat parasol crown, which
+      // is exactly why a 20 m tree can stand 10 m off the road here without
+      // closing the sightline. pine()'s stacked conifer tiers — a spruce — were
+      // the wrong species for the one tree every photograph of this circuit is
+      // framed through, and they were also what made this rank read the same as
+      // Spa's and Suzuka's. The deep ranks C/D below stay pine(): the far wall
+      // of the park IS mixed conifer, and it wants the darker, taller mass.
       every(24, (k) => {
         const h = hash(k * 31);
         const thin = openParkland(k / n);
         if (h < (thin ? 0.78 : 0.08)) return;
         const side = h < 0.5 ? -1 : 1;
-        pine(k, side, 9 + h * 6, 18 + h * 13, h < 0.3 ? PINE_D : PINE);
-        if (!thin && h > 0.25) pine(k, -side, 10 + h * 7, 16 + h * 12, PINE);
+        stonePine(k, side, 10 + h * 6, 15 + h * 6, h < 0.3 ? PINE_D : PINE,
+                  { spread: 0.68 + h * 0.14, lean: 0.3 });
+        if (!thin && h > 0.25)
+          stonePine(k, -side, 11 + h * 7, 14 + h * 6, PINE, { spread: 0.70, lean: 0.25 });
       });
       // Rank B — broadleaf trees interleaved with pines (oaks, maples, ashes).
       every(28, (k) => {
@@ -289,7 +299,10 @@
       groundPatch(K(0.04), 1, 5, [24, 0.18, 34], GRAVEL,
         { id: "monza-rettifilo-gravel", samples: 6 });
       tyreWall(0.03, 0.055, 1, 4, [0.88, 0.20, 0.18]);
-      grandstandEx(0.05, -1, 12, 76, null, null, { livery: "crimson" });
+      // Rettifilo's permanent stand faces the heaviest braking zone on the lap:
+      // an exposed steel truss roof over a single deep rake, closed at both ends.
+      grandstandEx(0.05, -1, 12, 76, null, null,
+        { livery: "crimson", roof: "truss", endWalls: true, pylons: true, h: 11 });
       marshalPost(K(0.045), 1, 10);
 
       // Variante della Roggia (s~0.30) — shaded chicane, gravel both sides, fog detail.
@@ -300,7 +313,11 @@
       tyreWall(0.29, 0.315, -1, 4, [0.20, 0.40, 0.85]);
       // Keep the stand compact and set back: crowdBank uses intentionally cheap
       // raw spectators, so its full footprint must stay clear of the chicane arc.
-      grandstandEx(0.30, 1, 20, 52, null, null, { livery: "concrete" });
+      // Roggia's stand is the oldest survivor on the lap — a squat poured-concrete
+      // block with a flat slab cap, deliberately shorter than everything else so
+      // the chicane keeps its shaded, enclosed feel.
+      grandstandEx(0.30, 1, 20, 52, null, null,
+        { livery: "concrete", roof: "flat", endWalls: true, h: 8 });
       // Thin drifting fog boxes under tree shade (Roggia's signature element).
       const fogCol = [0.76, 0.74, 0.68];   // warm tan-grey fog
       for (let i = 0; i < 3; i++) {
@@ -330,7 +347,10 @@
       groundPatch(K(0.795), 1, 6, [24, 0.18, 32], GRAVEL,
         { id: "monza-ascari-gravel-right", samples: 6 });
       tyreWall(0.77, 0.80, -1, 4, [0.88, 0.20, 0.18]);
-      grandstandEx(0.78, -1, 14, 80, null, null, { livery: "steel" });
+      // Ascari's stand is the modern one: two rakes under an open lattice roof on
+      // trackside pylons, so it reads tall and light against the woodland behind.
+      grandstandEx(0.78, -1, 14, 80, null, null,
+        { livery: "steel", tiers: 2, roof: "truss", pylons: true, endWalls: true, h: 12 });
       marshalPost(K(0.785), 1, 9);
 
       // Parabolica / Curva Alboreto (s~0.88–0.93) — wide outer gravel, big arc stand.
@@ -546,10 +566,15 @@
       }
 
       // 8b. Expand Parabolica grandstand — two extra sections widening the arc.
-      // Most iconic turn at Monza with largest crowd presence. Varied liveries
-      // (concrete / steel) so the arc doesn't repeat one stand three times.
-      grandstandEx(0.875, 1, 14, 80, null, null, { livery: "concrete" });
-      grandstandEx(0.935, 1, 14, 80, null, null, { livery: "steel" });
+      // The three sections STEP: the 0.905 hero is two-tier under a cantilever
+      // with suites, entry (0.875) is a single rake on an open truss, exit
+      // (0.935) drops again to a flat-capped block. Reading them left to right
+      // gives the arc a rising-then-falling roofline instead of one shell
+      // repeated three times in three colours.
+      grandstandEx(0.875, 1, 14, 80, null, null,
+        { livery: "concrete", roof: "truss", pylons: true, endWalls: true, h: 11 });
+      grandstandEx(0.935, 1, 14, 80, null, null,
+        { livery: "steel", roof: "flat", endWalls: true, h: 9 });
       // Support plinths underneath stands — placed at groundYAt so they don't float.
       for (const s of [0.875, 0.935]) {
         const kp = K(s);
@@ -624,28 +649,24 @@
       // =====================================================================
 
       // ── 9a. Italian cypress — the tall slim dark-green spire that lines
-      //     Italian avenues (distinct columnar form vs. the umbrella pines). ──
-      const CYP = [0.12, 0.29, 0.16], CYP_D = [0.09, 0.23, 0.13];
-      function cypress(k, side, dist, h) {
-        const a = anchor(k, side, dist);
-        const b = [a.r, a.u, a.t];
-        const col = hash(k * 7 + side) < 0.5 ? CYP : CYP_D;
-        out._mat = MAT.WOOD;
-        addCyl(out, a.c, 0.22, h * 0.16, [0.30, 0.22, 0.14], 5, b);          // slim trunk
-        out._mat = MAT.FOLIAGE;
-        addCone(out, vadd(a.c, a.u, h * 0.10), 1.45, h * 0.58, col, 6, b);    // columnar body
-        addCone(out, vadd(a.c, a.u, h * 0.44), 1.10, h * 0.42, col, 6, b);
-        addCone(out, vadd(a.c, a.u, h * 0.70), 0.70, h * 0.32, col, 6, b);    // pointed crown
-        out._mat = 0;
-      }
+      //     Italian avenues (distinct columnar form vs. the umbrella pines).
+      //     Monza's hand-rolled cypress() is gone: the shared api.cypress() is
+      //     that model generalised (same trunk plus 1.45/1.10/0.70 cone stack),
+      //     and it adds the sunk root stub and the per-instance tone shift the
+      //     local one faked with a two-colour coin flip. CYP stays as the tone
+      //     to pass in — the shared model darkens half the instances to within
+      //     a rounding error of the old CYP_D. ──
+      const CYP = [0.12, 0.29, 0.16];
       // Formal cypress avenue flanking the approach to the Villa Reale (s~0.60).
       for (let i = 0; i < 8; i++) {
         const s = 0.58 + i * 0.007;
-        cypress(K(s), 1, 46 + (i % 2) * 3, 15 + hash(i * 9) * 5);
+        cypress(K(s), 1, 46 + (i % 2) * 3, 15 + hash(i * 9) * 5, CYP);
       }
       // Cypress rank punctuating the pit-straight backdrop and Parabolica bank.
       for (const [s0, side, gap] of [[0.955, -1, 30], [0.02, 1, 40], [0.90, 1, 34]]) {
-        for (let i = 0; i < 5; i++) cypress(K(s0 + i * 0.006), side, gap + (i % 2) * 4, 14 + hash(i * 5 + s0 * 50) * 6);
+        for (let i = 0; i < 5; i++)
+          cypress(K(s0 + i * 0.006), side, gap + (i % 2) * 4,
+                  14 + hash(i * 5 + s0 * 50) * 6, CYP);
       }
 
       // ── 9b. Terraced tifosi bowl — bespoke multi-tier crowd wall that steps
@@ -662,47 +683,37 @@
         steel:    [[0.50, 0.53, 0.58], [0.42, 0.45, 0.50]],   // cool grey
       };
       const TIFOSI = [[0.84, 0.26, 0.22], [0.88, 0.86, 0.82], [0.30, 0.40, 0.62], [0.72, 0.63, 0.30]];
-      function tieredBowl(s, side, gap, len, tiers, livery) {
-        const [shellA, shellB] = SHELL_SETS[livery] || SHELL_SETS.concrete;
-        const k = K(s);
-        const g0 = anchor(k, side, gap);
-        if (onTrack(g0.c[0], g0.c[2], len * 0.4)) return;
-        for (let t = 0; t < tiers; t++) {
-          const a = anchor(k, side, gap + t * 5.6);
-          const b = [a.r, a.u, a.t];
-          const h = 3 + t * 3.3;
-          out._mat = MAT.CONCRETE;
-          addBox(out, vadd(a.c, a.u, h * 0.5), [5.2, h, len], t % 2 ? shellA : shellB, b);        // riser
-          out._mat = MAT.FABRIC;
-          addBox(out, vadd(a.c, a.u, h + 0.85), [4.5, 1.6, len], TIFOSI[t % 4], b);               // crowd band
-          out._mat = 0;
-          addBox(out, vadd(a.c, a.u, h + 1.85), [4.8, 0.32, len + 1], [0.93, 0.90, 0.80], b);     // fascia
-          // Sparse speckle so the band reads as a crowd, not a flat slab.
-          const cnt = Math.min(16, Math.floor(len / 6));
-          out._mat = MAT.FABRIC;
-          for (let c = 0; c < cnt; c++) {
-            const off = (c / (cnt - 1) - 0.5) * (len - 4);
-            const hp = hash(k * 3 + t * 31 + c);
-            if (hp < 0.45) continue;
-            addBox(out, vadd(vadd(a.c, a.t, off), a.u, h + 1.3), [2.0, 0.7, 1.3],
-                   TIFOSI[(c + t) % 4], b);
-          }
-          out._mat = 0;
-        }
-        // Cantilever roof over the top tier.
-        const aR = anchor(k, side, gap + (tiers - 0.5) * 5.6);
-        out._mat = MAT.METAL;
-        addBox(out, vadd(aR.c, aR.u, 3 + tiers * 3.3 + 1.6), [7.2, 0.5, len + 2],
-               [0.19, 0.19, 0.23], [aR.r, aR.u, aR.t]);
-        out._mat = 0;
-      }
+      // The hand-rolled bowl that used to live here is now api.tieredBowl() —
+      // this file is the model the shared one was generalised FROM, so the
+      // geometry is unchanged (5.6 m tier depth, 3 + 3.3t riser, crowd band at
+      // h+0.85, fascia at h+1.85, cantilever over the top tier). What DOES
+      // change is that the shared version is a RANGE emitter walking the arc
+      // with along(), where the local one froze one anchor and extruded a
+      // straight `len` box off it — at the Parabolica (92 m through the
+      // circuit's longest curve) that box chorded across the bowl it was
+      // supposed to wrap. Monza's five bowls are authored as centre + length,
+      // so convert metres → arc fraction once here rather than at five sites.
+      const TOTAL_M = ds * n;
+      const tifosiBowl = (s, side, gap, len, tiers, livery) => {
+        const half = (len / 2) / TOTAL_M;
+        tieredBowl(s - half, s + half, side, gap, {
+          tiers, tierDepth: 5.6, base: 3, rise: 3.3,
+          shell: SHELL_SETS[livery] || SHELL_SETS.concrete,
+          crowd: TIFOSI, density: 0.55, roof: true, roofCol: [0.19, 0.19, 0.23],
+          // 11 m bays: the local model's ONE box per tier is the cheapest a
+          // bowl can be, and the shared emitter costs a set of bays instead.
+          // A bay per ~11 m still tracks the Parabolica arc while keeping the
+          // five bowls inside the park's vertex budget.
+          step: 11,
+        });
+      };
       // A wall of tifosi at the start/finish and around the iconic Parabolica.
       // Livery family varies per stand (see SHELL_SETS above).
-      tieredBowl(0.905, 1, 26, 92, 4, "crimson");   // Parabolica outer — largest crowd
-      tieredBowl(0.02, 1, 40, 84, 4, "steel");      // facing the pit straight
-      tieredBowl(0.955, -1, 30, 78, 4, "concrete"); // behind Tribuna Centrale
-      tieredBowl(0.11, 1, 24, 64, 3, "crimson");    // Curva Grande sweep
-      tieredBowl(0.78, -1, 30, 70, 3, "steel");     // Ascari outer
+      tifosiBowl(0.905, 1, 26, 92, 4, "crimson");   // Parabolica outer — largest crowd
+      tifosiBowl(0.02, 1, 40, 84, 4, "steel");      // facing the pit straight
+      tifosiBowl(0.955, -1, 30, 78, 4, "concrete"); // behind Tribuna Centrale
+      tifosiBowl(0.11, 1, 24, 64, 3, "crimson");    // Curva Grande sweep
+      tifosiBowl(0.78, -1, 30, 70, 3, "steel");     // Ascari outer
 
       // ── 9c. Autodromo museum / podium building — a low classical block with a
       //     columned portico + pediment, evoking the historic 1922 buildings. ──
@@ -816,16 +827,19 @@
         }
       }
 
-      // 10c. Curva Grande pine wall — densify umbrella pines both sides
-      //     ~s 0.08–0.18 so the fast sweep reads as a green corridor at speed.
+      // 10c. Curva Grande pine wall — densify the corridor both sides ~s 0.08–0.18
+      //     so the fast sweep reads as a green tunnel at speed. The two INNER
+      //     ranks are parasol pines (what actually lines this sweep); the two
+      //     set-back ranks stay spruce, so the wall has a canopy layer over a
+      //     dark understorey rather than one repeated silhouette four deep.
       every(14, (k) => {
         const s = k / n;
         if (s < 0.08 || s > 0.18) return;
         const h = hash(k * 19 + 11);
-        pine(k, -1, 9 + h * 2, 16 + h * 12, h < 0.4 ? PINE_D : PINE);
-        pine(k,  1, 9 + h * 2.5, 15 + h * 11, h < 0.5 ? PINE : PINE_D);
-        if (h > 0.40) pine(k, -1, 14 + h * 3, 18 + h * 10, PINE_D);
-        if (h > 0.50) pine(k,  1, 15 + h * 3, 17 + h * 9, PINE);
+        stonePine(k, -1, 10 + h * 3, 14 + h * 6, h < 0.4 ? PINE_D : PINE, { spread: 0.72 });
+        stonePine(k,  1, 10 + h * 3.5, 13 + h * 6, h < 0.5 ? PINE : PINE_D, { spread: 0.70 });
+        if (h > 0.40) pine(k, -1, 20 + h * 4, 18 + h * 10, PINE_D);
+        if (h > 0.50) pine(k,  1, 21 + h * 4, 17 + h * 9, PINE);
       });
 
       // 10d. General-admission crowd hills — Curva Grande and the Lesmo woods
@@ -927,9 +941,14 @@
 
       // 11e. Opposing, compact tifosi stands at the three major braking zones.
       // Their 28–32 m clearances keep marker boards and corner entry visible.
-      grandstandEx(0.032, 1, 32, 54, null, null, { livery: "crimson" });
-      grandstandEx(0.295, -1, 28, 50, null, null, { livery: "concrete" });
-      grandstandEx(0.775, 1, 30, 58, null, null, { livery: "steel" });
+      // These are the CHEAP seats — race-week seating that goes up in April and
+      // comes down in September. roof:"none" plus a back shell barely taller
+      // than the top row is what separates them on the skyline from the roofed
+      // permanent stands 20 m in front of them; without it Monza had six
+      // identically-profiled shells and only the paint told them apart.
+      grandstandEx(0.032, 1, 32, 54, null, null, { livery: "crimson", roof: "none", h: 7 });
+      grandstandEx(0.295, -1, 28, 50, null, null, { livery: "concrete", roof: "none", h: 6.5 });
+      grandstandEx(0.775, 1, 30, 58, null, null, { livery: "steel", roof: "none", h: 7 });
     },
   }
   );
