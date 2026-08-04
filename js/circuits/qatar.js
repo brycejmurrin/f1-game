@@ -267,7 +267,19 @@
         let i = 0;
         along(0.0, 0.12, 6, (k) => {
           const col = (i % 2) ? [0.18, 0.18, 0.20] : [0.28, 0.28, 0.30];
-          place(k, -1, 3, [0.5, 4.5, 5.0], col);
+          // Garages stand BEHIND the pit wall below, not in it. Both helpers
+          // centre a 0.5 m-thick box on their lateral distance — place() on
+          // `dist` (tracks.js), wall() on `gap` with thick defaulting to 0.5 —
+          // so at the same value of 3 they spanned an identical hw+2.75..3.25
+          // and their outward faces were EXACTLY coplanar, same normal, zero
+          // gap. The wall runs 0.96->0.08 and these run 0.00->0.12, so the two
+          // overlapped for 432 m starting precisely at the start line: the
+          // z-fighting flash reported at Qatar's start. 3.9 leaves 0.40 m of
+          // real clearance rather than betting on depth precision.
+          // blockAt() still records the garage at dist - sz[0]/2 = 3.65 while
+          // the wall records 3.0, and the tighter wins — the driving limit is
+          // unchanged.
+          place(k, -1, 3.9, [0.5, 4.5, 5.0], col);
           i++;
         });
       })();
