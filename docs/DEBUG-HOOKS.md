@@ -509,7 +509,7 @@ movement should move its corresponding value here (and the car's behaviour).
 | `frontGrip` | front-axle friction bias (understeer safety; internal) |
 | `yawDamp` | yaw damping (internal) |
 | `yawInertia` | rotational-inertia scale, controls turn-in speed (internal) |
-| `pace` | OVERALL SPEED |
+| `pace` | OVERALL SPEED — ground-speed scale (see the note under `setPhysics`) |
 | `raceLineAssist` | RACING LINE |
 | `maxTilt` | TILT SENSITIVITY (deg for full lock) |
 | `deadzone` | tilt dead zone (deg; fixed, not a slider) |
@@ -656,7 +656,7 @@ tuning. Any omitted field is left unchanged; returns the new `tuning()`.
 |---|---|
 | `drift` | lateral-slip injection (SLIDE; 0 = on-rails) |
 | `roadFollow` | passive road-curvature tracking — internal, not exposed as a slider |
-| `pace` | global speed/accel multiplier for all cars (OVERALL SPEED) |
+| `pace` | ground-speed scale for all cars (OVERALL SPEED) — see below |
 | `speedRef` | speed-sensitive steer taper reference (SPEED STEER) |
 | `wheelbase` | turn-in snappiness (RESPONSE; shorter = snappier) |
 | `expo` | input shaping (LINEARITY) |
@@ -671,6 +671,15 @@ tuning. Any omitted field is left unchanged; returns the new `tuning()`.
 
 Fields marked "internal" have no slider but are settable via `setPhysics()` for
 A/B tests. `maxTilt`/`deadzone`/`tiltCutoff` are routed to the Input module.
+
+`pace` scales the car's real **ground** speed (and the accel curve) and nothing
+else. Everything else that is measured in speed is pace-normalised against it —
+gear tops, rev range, engine pitch, downforce, the grip taper, the ERS deploy
+taper, the grass crawl floor, the steering lock taper, the camera/blur/cockpit
+speed effects, and the HUD + cockpit dial. So the gearbox always sweeps 1→8 and
+the dial always spans 0 → ~259 km/h at any setting; only lap times move. The
+debug hooks stay honest — every `speed`/`speedKph` in this API is raw m/s, and
+`obs().dashKph` is the separate field that reports what the dial shows.
 
 ```js
 __apex.setPhysics({ drift: 0, roadFollow: 0 });   // on-rails, no auto road-tracking
@@ -1825,7 +1834,8 @@ proximity. Returns `null` if no track is loaded.
 | Field(s) | Description |
 |---|---|
 | `s, x, prog, lap, raceT` | Position, progress (m cumulative), lap count, race clock |
-| `speed, speedKph, head, vLat` | Motion: speed (m/s), heading (rad), lateral velocity |
+| `speed, speedKph, head, vLat` | Motion: TRUE ground speed (m/s), heading (rad), lateral velocity |
+| `dashKph` | What the HUD/cockpit dial reads — km/h pace-normalised (see `setPhysics`'s `pace`) |
 | `axEstSm, axFrac, slipFactor, slipDeg` | Combined-slip state (see `physState()`) |
 | `k, hw, slope, gripMult, weather` | Track context at player: curvature, half-width, road pitch, grip multiplier |
 | `wallR, wallL, clearR, clearL` | Signed barrier distances and clearances to each side (m) |

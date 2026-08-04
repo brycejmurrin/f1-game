@@ -143,6 +143,129 @@ test.describe("Apex 26 — steering sliders", () => {
     expect(aiFast).toBeGreaterThan(aiSlow + 5);   // AI field clearly faster too
   });
 
+  // ...but it must lift the GROUND speed only. OVERALL SPEED used to shrink the
+  // whole envelope the player sees along with it, because gear tops and every
+  // speed normaliser were fractions of the bare VMAX = 72, which knows nothing
+  // about PACE. At pace 2 (top ~45 m/s) 7th and 8th were simply unreachable and
+  // the dial stopped at ~162 km/h. PACE now scales the envelope too (vTop/vStd in
+  // game.js). The three tests below pin that down: the dial→gear mapping, the
+  // envelope actually reached under power, and the manual-gearbox limiter.
+
+  // The mapping itself, measured without driving: plant the car at the speeds that
+  // put the dial at a given km/h and read the gearbox back. Same dial reading =>
+  // same gear, at every pace.
+  test("OVERALL SPEED leaves the dial→gear mapping identical", async ({ page }) => {
+    await startRace(page);
+    const rows = await page.evaluate(() => {
+      const DIAL = [30, 90, 150, 210, 250];   // km/h on the dial
+      const out = [];
+      for (const sv of [1, 2, 5, 9, 10]) {
+        const el = document.getElementById("pm-pace");
+        el.value = String(sv); el.dispatchEvent(new Event("input", { bubbles: true }));
+        window.__apex.park(0.1); window.__apex.freeze(false);
+        // dashKph is speed/PACE*3.6, so this is the ground speed that shows `kph`.
+        const pace = window.__apex.tuning().pace;
+        const gears = [], dials = [];
+        for (const kph of DIAL) {
+          window.__apex.jump(0.1, kph / 3.6 * pace, 0);
+          window.__apex.setInput({ steer: 0, throttle: false });
+          window.__apex.step(1 / 60, 2);     // let the auto box pick its gear
+          const o = window.__apex.obs();
+          gears.push(o.gear); dials.push(o.dashKph);
+        }
+        window.__apex.clearInput();
+        out.push({ sv, gears, dials });
+      }
+      return out;
+    });
+    const ref = rows[0];
+    for (const r of rows) {
+      expect(r.gears, `gears at pace ${r.sv}`).toEqual(ref.gears);
+      // ...and the dial agrees to within a km/h across the whole slider range.
+      r.dials.forEach((d, i) => expect(Math.abs(d - ref.dials[i])).toBeLessThan(1));
+    }
+    expect(ref.gears[ref.gears.length - 1]).toBe(8);   // 250 km/h is top gear
+  });
+
+  // The same thing under power: hold the throttle down and see what the car
+  // actually reaches. Re-planting it at the same point each block keeps it on
+  // clear road (un-steered it would run wide and settle on the grass floor, which
+  // erased the peak), and setLap keeps the long run from tripping the flag.
+  test("OVERALL SPEED reaches the full gearbox and dial at every setting", async ({ page }) => {
+    await startRace(page);
+    const flatOut = (paceSlider) => page.evaluate((sv) => {
+      const el = document.getElementById("pm-pace");
+      el.value = String(sv); el.dispatchEvent(new Event("input", { bubbles: true }));
+      window.__apex.park(0.1); window.__apex.freeze(false);
+      window.__apex.jump(0.1, 0, 0);
+      window.__apex.setInput({ steer: 0, throttle: true });
+      let gear = 1, dash = 0, speed = 0;
+      for (let b = 0; b < 20; b++) {
+        window.__apex.setLap(1);
+        window.__apex.jump(0.1, window.__apex.probe().speed, 0);
+        window.__apex.step(1 / 60, 60);
+        const o = window.__apex.obs();
+        gear = Math.max(gear, o.gear); dash = Math.max(dash, o.dashKph);
+        speed = Math.max(speed, o.speedKph);
+      }
+      window.__apex.clearInput();
+      return { gear, dash, speed };
+    }, paceSlider);
+
+    const slow = await flatOut(2);
+    const mid  = await flatOut(5);
+    const fast = await flatOut(9);
+
+    // The gearbox sweeps all the way up whatever the slider says...
+    for (const e of [slow, mid, fast]) expect(e.gear).toBe(8);
+    // ...and so does the dial. The approach to vmax has a pace-INDEPENDENT time
+    // constant (ACCEL*PACE / (VMAX*PACE) cancels), so equal ticks means an equal
+    // fraction of the envelope — these land within a fraction of a percent.
+    const dashes = [slow.dash, mid.dash, fast.dash];
+    expect(Math.min(...dashes)).toBeGreaterThan(Math.max(...dashes) * 0.95);
+    // What the slider DOES change is real ground speed, by far more than that.
+    expect(fast.speed).toBeGreaterThan(slow.speed * 1.5);
+  });
+
+  // The pace > 1 half of the same bug, and the worst of it: in MANUAL gears the
+  // top-gear limiter clamped speedCap to gearHi(8) + 1.5 = 73.5 m/s, so a
+  // manual-shifting player was pinned at ~264 km/h wherever the slider sat while
+  // the auto/AI cars scaled past it. gearHi() tracks pace now.
+  test("OVERALL SPEED clears the old top-gear limiter in MANUAL gears", async ({ page }) => {
+    await startRace(page);
+    const r = await page.evaluate(() => {
+      // Desktop viewport => touchControlsNeeded() is false => gearsManual() goes
+      // live as soon as the pause-menu toggle flips manualMode on.
+      const btn = document.getElementById("pm-gears");
+      if (!/MANUAL/.test(btn.textContent)) btn.click();
+      const el = document.getElementById("pm-pace");
+      el.value = "10"; el.dispatchEvent(new Event("input", { bubbles: true }));
+      window.__apex.park(0.1); window.__apex.freeze(false);
+      window.__apex.jump(0.1, 0, 0);
+      // Shift up to top while STOPPED: in manual the box never picks its own gear,
+      // and the limiter would dump a fast car back to first gear's ceiling.
+      window.__apex.setInput({ steer: 0, throttle: false });
+      for (let i = 0; i < 10; i++) {          // 7 upshifts + slack; shiftT is 0.1 s
+        window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyE" }));
+        window.__apex.step(1 / 60, 8);
+      }
+      // Now plant it just above the OLD clamp and hold the throttle. Before the
+      // fix speedCap pinned this to 73.5 m/s on the very first tick.
+      window.__apex.jump(0.1, 80, 0);
+      window.__apex.setInput({ steer: 0, throttle: true });
+      for (let b = 0; b < 6; b++) {
+        window.__apex.setLap(1);
+        window.__apex.jump(0.1, window.__apex.probe().speed, 0);
+        window.__apex.step(1 / 60, 30);
+      }
+      const out = { gear: window.__apex.obs().gear, speed: window.__apex.probe().speed };
+      window.__apex.clearInput();
+      return out;
+    });
+    expect(r.gear).toBe(8);
+    expect(r.speed).toBeGreaterThan(78);   // the old clamp pinned this at 73.5
+  });
+
   // The tilt INPUT sliders (TILT RANGE, STEER SMOOTHING) are covered by the wiring
   // tests above — each moves the exact live value (maxTilt / tiltCutoff) that the
   // tilt pipeline consumes in tiltSteering(). Tilt sensitivity is the single

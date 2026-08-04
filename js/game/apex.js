@@ -1283,7 +1283,11 @@ const api = {
 
       // ── motion ──
       speed:     +(G.player.speed || 0).toFixed(2),
-      speedKph:  +((G.player.speed || 0) * 3.6).toFixed(1),
+      speedKph:  +((G.player.speed || 0) * 3.6).toFixed(1),   // TRUE ground speed
+      // What the HUD/cockpit LCD actually shows: km/h on the pace-5 scale, so the
+      // dial spans the same range at every OVERALL SPEED setting. speedKph above
+      // (and every other speed in this API) stays raw — the hooks report physics.
+      dashKph:   +G.dashKph(G.player.speed || 0).toFixed(1),
       head:      +(G.player.head || 0).toFixed(4),
       vLat:      +(G.player.vLat || 0).toFixed(3),
 

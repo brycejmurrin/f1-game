@@ -3,7 +3,7 @@
    nodes, and the minimap with its pre-rendered track-outline blit. Live game
    state comes through the ctx façade handed to GameHud.create(ctx) (the `G`
    object in game.js): els, player, cars, ranked, track, timeTrial, lapsTarget,
-   sectorLast, ttRecord, fmtTime, cssCol. Consumes globals Ghost, TrackMaps,
+   sectorLast, ttRecord, fmtTime, cssCol, dashKph. Consumes globals Ghost, TrackMaps,
    GameTables. Must load BEFORE js/game.js (see index.html). */
 const GameHud = (function () {
   "use strict";
@@ -65,7 +65,7 @@ function updateHud(force) {
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   hText(els.time, G.fmtTime(player.lapTime));
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
-  hText(els.speed, "" + Math.round(player.speed * 3.6));
+  hText(els.speed, "" + Math.round(G.dashKph(player.speed)));
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
   // gear + tachometer
   hText(els.gear, "" + player.gear);
