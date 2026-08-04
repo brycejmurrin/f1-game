@@ -341,17 +341,6 @@ const NetPlay = (function () {
 
       role = opts.role === "host" ? "host" : "guest";
       peerProfile = opts.peerProfile || null;
-      // GRID SLOTS FIRST, handlers second. This check used to sit below the
-      // registrations and merely null the local `session` on failure, which left
-      // ten handlers attached to the lobby's session object — so a retry through
-      // beginRace() stacked a second set and every lap event fired twice.
-      localCar = (G.cars || []).find((c) => c.local) || G.player || null;
-      remoteCar = pickRemoteSlot(peerProfile);
-      if (!localCar || !remoteCar) {
-        session = null;
-        return { ok: false, error: "no_slot", message: "Could not find a grid slot for both drivers." };
-      }
-
       // The lobby has to talk to the peer BEFORE a track exists — it is how the
       // guest learns which race to load — so it opens the session itself and
       // hands it over here. Adopting it keeps one clock estimate and one set of
