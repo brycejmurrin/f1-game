@@ -366,7 +366,7 @@ const NetLobby = (function () {
         e.raceSummary.innerHTML =
           `<div><dt>Circuit</dt><dd>${track ? (track.name || track.id) : "—"}</dd></div>`
           + `<div><dt>Laps</dt><dd>${G.raceLaps}</dd></div>`
-          + `<div><dt>Grid</dt><dd>${G.raceQuali ? "Qualifying" : "P12 start"}</dd></div>`
+          + `<div><dt>Qualifying lap</dt><dd>${G.raceQuali ? "On" : "Off"}</dd></div>`
           + `<div><dt>Weather</dt><dd>${wx}</dd></div>`
           + `<div><dt>Time</dt><dd>${tod}</dd></div>`;
       }
