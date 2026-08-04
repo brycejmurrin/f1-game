@@ -120,6 +120,38 @@ test("a throwing message handler cannot take down the transport", () => {
 });
 
 // ---------------------------------------------------------------------------
+// ICE configuration
+// ---------------------------------------------------------------------------
+
+test("a TURN relay ships by default, because STUN alone leaves people out", () => {
+  // STUN gets roughly 75-90% of pairs connected; symmetric NAT needs a relay,
+  // and "both sides found an address but the link was blocked" is exactly the
+  // failure seen on real devices. Open Relay publishes static credentials meant
+  // to be embedded client-side, so this costs nothing and needs no deployment.
+  const turn = NetTransport.OPEN_RELAY || [];
+  assert.ok(turn.length, "there must be a default relay");
+  const urls = turn.flatMap((s) => (Array.isArray(s.urls) ? s.urls : [s.urls]));
+  assert.ok(urls.every((u) => u.startsWith("turn:")), "these must be relays, not STUN");
+  // 443 and a TCP variant are what get through a corporate firewall; a relay
+  // only reachable on an exotic UDP port helps nobody behind one.
+  assert.ok(urls.some((u) => u.includes(":443")), "needs a 443 endpoint");
+  assert.ok(urls.some((u) => u.includes("transport=tcp")), "needs a TCP fallback");
+  for (const s of turn) {
+    assert.ok(s.username && s.credential, "static credentials, or it cannot be used from a static site");
+  }
+});
+
+test("more STUN servers than one, from different operators", () => {
+  // A single STUN server is a single point of failure for the one thing that
+  // decides whether two people can connect at all: learning your public
+  // address. When it fails you gather only LAN candidates, silently.
+  assert.ok(NetTransport.STUN.length >= 2, "one STUN server is not a plan");
+  const hosts = NetTransport.STUN.map((u) => u.split(":")[1]);
+  assert.ok(new Set(hosts.map((h) => h.split(".").slice(-2).join("."))).size >= 2,
+    "STUN servers must not all be the same operator");
+});
+
+// ---------------------------------------------------------------------------
 // Handshake codec
 // ---------------------------------------------------------------------------
 

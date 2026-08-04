@@ -1,0 +1,110 @@
+/* net-trystero-api.test.mjs — the vendored Trystero surface we actually use.
+ *
+ * WHY THIS EXISTS. js/net/nostr.js wraps its room setup in try/catch, because
+ * a relay being unreachable must degrade to "use the invite link" rather than
+ * throw inside a click handler. That is right, and it has a nasty consequence:
+ * a WRONG API CALL also lands in that catch and comes back as "could not reach
+ * the room service". A bug is then indistinguishable from a bad network.
+ *
+ * It already happened. Trystero 0.25 turned `onPeerJoin` from a method into a
+ * SETTER; calling it threw, the catch swallowed it, and the room-code path
+ * reported a relay failure while every relay was fine.
+ *
+ * So the shape of the vendored API is asserted directly against the vendored
+ * source. This runs in node with no browser and no network — it is about what
+ * the library exposes, not about whether Nostr is up.
+ *
+ * Run: node --test tests/net-trystero-api.test.mjs   (npm run test:net-unit)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const VENDOR = path.join(ROOT, "vendor/trystero-0.25.3");
+const room = fs.readFileSync(path.join(VENDOR, "core/room.mjs"), "utf8");
+const actions = fs.readFileSync(path.join(VENDOR, "core/actions.mjs"), "utf8");
+const ours = fs.readFileSync(path.join(ROOT, "js/net/nostr.js"), "utf8");
+
+test("onPeerJoin is a SETTER, and we assign to it rather than calling it", () => {
+  // The regression. If a future Trystero makes it a method again, this fails
+  // here instead of in a lobby that blames the network.
+  assert.match(room, /set onPeerJoin\(/, "vendored Trystero exposes onPeerJoin as a setter");
+  assert.match(ours, /room\.onPeerJoin\s*=/, "we must ASSIGN the handler");
+  assert.doesNotMatch(ours, /room\.onPeerJoin\(/, "calling it would throw into the relay catch");
+});
+
+test("makeAction returns an OBJECT with send + an onMessage setter", () => {
+  // The second shape change to bite. Trystero used to return a [send, receive]
+  // tuple; 0.25 returns an object whose onMessage is a setter. Destructuring
+  // the old tuple threw `pair[1] is not a function` straight into the relay
+  // catch, so the lobby blamed the network for a wrong API call.
+  //
+  // Asserted against the VENDORED LIBRARY, not against our own text — the
+  // first version of this test only checked that our source matched a pattern,
+  // which is why it passed while the code was broken.
+  assert.match(actions, /send:\s*async/, "actions expose send()");
+  assert.match(actions, /set onMessage\(/, "onMessage is a setter, not a callback arg");
+
+  assert.match(ours, /room\.makeAction\(/, "we still make the action");
+  assert.match(ours, /\.onMessage\s*=/, "we must ASSIGN the handler");
+  assert.doesNotMatch(ours, /const \[[^\]]+\]\s*=\s*room\.makeAction/,
+    "destructuring a tuple would throw into the relay catch");
+});
+
+test("leave() exists, because a room we never leave keeps sockets open", () => {
+  assert.match(room, /leave\s*[(:]/, "vendored Trystero must expose leave");
+  assert.match(ours, /room\.leave\(\)/, "every exit path has to close the room");
+});
+
+test("the vendored tree is complete and self-contained", () => {
+  // A missing file here is a dynamic import that fails at the exact moment a
+  // player taps a button, which is the worst possible time to discover it.
+  for (const f of ["core/index.mjs", "core/room.mjs", "nostr/index.mjs", "noble-secp256k1.js"]) {
+    assert.ok(fs.existsSync(path.join(VENDOR, f)), `missing vendored file: ${f}`);
+  }
+  // Licences travel with the code — both packages are MIT.
+  assert.ok(fs.existsSync(path.join(VENDOR, "LICENSE-trystero")));
+  assert.ok(fs.existsSync(path.join(VENDOR, "LICENSE-noble-secp256k1")));
+});
+
+test("every bare import in the vendored tree is covered by the importmap", () => {
+  // The tree uses bare specifiers (@noble/secp256k1, @trystero-p2p/core). A
+  // browser resolves those ONLY through the importmap in index.html — miss one
+  // and the module fails to load with nothing in the console but a bad URL.
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const map = JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]).imports;
+
+  const bare = new Set();
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) { walk(full); continue; }
+      if (!/\.(mjs|js)$/.test(e.name)) continue;
+      const src = fs.readFileSync(full, "utf8");
+      for (const m of src.matchAll(/from\s*"([^"]+)"/g)) {
+        if (!m[1].startsWith(".")) bare.add(m[1]);
+      }
+    }
+  };
+  walk(VENDOR);
+
+  assert.ok(bare.size, "expected the vendored tree to use bare specifiers");
+  for (const spec of bare) {
+    assert.ok(map[spec], `importmap is missing "${spec}" — the module will not load`);
+    assert.ok(fs.existsSync(path.join(ROOT, map[spec].replace(/^\.\//, ""))),
+      `importmap points "${spec}" at a file that is not there`);
+  }
+});
+
+test("Trystero is dynamic-imported, never in the boot path", () => {
+  // ~170 KB with its schnorr dependency, for a feature most sessions never
+  // touch. It must not be a <script> tag and must not be in the load manifest.
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.doesNotMatch(html, /<script[^>]+trystero/i, "must not be a boot script");
+  assert.match(ours, /import\("@trystero-p2p\/nostr"\)/, "reached by dynamic import");
+  const manifest = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
+  assert.ok(!manifest.includes("trystero"), "not part of the IIFE load order");
+});

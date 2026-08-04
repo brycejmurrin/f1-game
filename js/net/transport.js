@@ -172,12 +172,36 @@ const NetTransport = (function () {
     "stun:stun.cloudflare.com:3478",
   ];
 
-  // A TURN relay is the only thing that connects two symmetric NATs, and it
-  // cannot be free — someone pays to carry the traffic. So there is no default
-  // one, but a player who has credentials can supply them without a code
-  // change: localStorage apex26.turn = {"urls":"turn:host:3478",
-  // "username":"u","credential":"p"}. Read here rather than in the lobby so
-  // both the real transport and any harness get identical behaviour.
+  // A TURN relay is the only thing that connects two symmetric NATs, and STUN
+  // alone leaves roughly 10-25% of pairs unable to connect at all — which is
+  // exactly the "both sides found an address but the link was blocked" failure
+  // seen on real devices.
+  //
+  // It turns out this does NOT have to be paid for. Open Relay publishes STATIC
+  // credentials intended to be embedded in client-side JavaScript, ~20 GB a
+  // month free, on ports 80 and 443 so corporate firewalls pass it. Our traffic
+  // is ~2 KB/s per player and only relays when a direct path fails, so that
+  // allowance is effectively unbounded here.
+  //
+  // It is free infrastructure and the operator says plainly it "can and will go
+  // down without notice" — so it is an ADDITIONAL ice server, never a
+  // replacement for the direct path. When it is gone, everything that worked
+  // before still works; only the hardest NATs stop connecting.
+  const OPEN_RELAY = [
+    {
+      urls: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443",
+        "turn:openrelay.metered.ca:443?transport=tcp",
+      ],
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+  ];
+
+  // Your own relay still wins when you have one: localStorage apex26.turn =
+  // {"urls":"turn:host:3478","username":"u","credential":"p"}. Read here rather
+  // than in the lobby so the real transport and any harness behave identically.
   function turnFromStore() {
     try {
       const raw = localStorage.getItem("apex26.turn");
@@ -190,8 +214,13 @@ const NetTransport = (function () {
   function iceServers(opts) {
     if (opts.iceServers) return opts.iceServers;
     const list = [{ urls: STUN }];
-    const turn = turnFromStore();
-    if (turn) list.push(turn);
+    const mine = turnFromStore();
+    // A relay you control beats a free public one, so it goes first and the
+    // public one stays as the fallback behind it — ICE will prefer whichever
+    // actually yields a working pair regardless, so listing both costs nothing
+    // but a couple of extra candidates.
+    if (mine) list.push(mine);
+    list.push(...OPEN_RELAY);
     return list;
   }
 
@@ -297,5 +326,11 @@ const NetTransport = (function () {
     return typeof RTCPeerConnection !== "undefined";
   }
 
-  return { STATE, EVENT, loopback, rtc, supported };
+  return {
+    STATE, EVENT, loopback, rtc, supported,
+    // Exported so the ICE configuration is testable: whether a relay ships at
+    // all decides whether the hardest ~10-25% of networks can play at all, and
+    // that is not something to discover from a user's screenshot.
+    STUN, OPEN_RELAY,
+  };
 })();
