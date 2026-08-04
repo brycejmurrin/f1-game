@@ -35,6 +35,66 @@ function buildResults(order) {
     row.append(pos, sw, nm, pt);
     els.resultsTable.appendChild(row);
   });
+  // THE ROUND'S EARNINGS. Career only, and only for a round that just settled.
+  // Every figure here comes straight off Career.settleRound()'s return, which
+  // used to be computed and discarded — so the balance moved and the player was
+  // never told by how much or for what.
+  const st = G.careerSettlement;
+  if (st) {
+    const box = document.createElement("div");
+    box.className = "res-settle";
+    const h = document.createElement("div");
+    h.className = "res-settle-head";
+    h.textContent = st.dnf ? "ROUND SETTLED — DNF (" + st.dnf + ")" : "ROUND SETTLED";
+    box.appendChild(h);
+    // Signed, and only when non-zero: a driver career has no wage bill and a
+    // missed brief pays nothing, and a column of zeroes reads as a bug.
+    const line = (k, v, cls) => {
+      if (!v) return;
+      const r = document.createElement("div");
+      r.className = "res-settle-row" + (cls ? " " + cls : "");
+      const a2 = document.createElement("span"); a2.textContent = k;
+      const b2 = document.createElement("span");
+      b2.className = "res-settle-v";
+      b2.textContent = (v > 0 ? "+" : "\u2212") + Math.abs(v).toLocaleString() + " cr";
+      r.append(a2, b2);
+      box.appendChild(r);
+    };
+    line("Prize money — P" + st.pos, st.prize);
+    line("Salary", st.salary);
+    line("Points bonus — " + st.pts + " pts", st.bonus);
+    if (st.obj) {
+      line(Career.objectiveLabel(st.obj), st.obj.done ? Career.OBJ_BONUS : 0);
+      if (!st.obj.done) {
+        const miss = document.createElement("div");
+        miss.className = "res-settle-row missed";
+        const a3 = document.createElement("span"); a3.textContent = Career.objectiveLabel(st.obj);
+        const b3 = document.createElement("span");
+        b3.className = "res-settle-v"; b3.textContent = "MISSED";
+        miss.append(a3, b3);
+        box.appendChild(miss);
+      }
+    }
+    line("Driver wages", -st.wages);
+    const tot = document.createElement("div");
+    tot.className = "res-settle-row total";
+    const ta = document.createElement("span"); ta.textContent = "BALANCE";
+    const tb = document.createElement("span");
+    tb.className = "res-settle-v"; tb.textContent = st.money.toLocaleString() + " cr";
+    tot.append(ta, tb);
+    box.appendChild(tot);
+    // Reputation is not money, so it sits under the total rather than in the
+    // column — but it is the other thing this round changed.
+    const rep = document.createElement("div");
+    rep.className = "res-settle-row rep";
+    const ra = document.createElement("span"); ra.textContent = "Reputation";
+    const rb = document.createElement("span");
+    rb.className = "res-settle-v"; rb.textContent = Math.round(st.rep) + " / 100";
+    rep.append(ra, rb);
+    box.appendChild(rep);
+    els.resultsTable.appendChild(box);
+  }
+
   if (G.seasonMode) {
     // Driver championship (top 10)
     const head = document.createElement("div");

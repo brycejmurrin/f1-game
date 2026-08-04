@@ -154,6 +154,10 @@ function migrateCareer(career) {
   career.offers = Array.isArray(career.offers) ? career.offers : [];
   career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
   career.budgetLvl = career.budgetLvl | 0;
+  // The open-ended research facility (js/game/career.js). A fill, not a
+  // migration step: a save from before it existed is a valid v1 save at level 0.
+  career.facility = career.facility | 0;
+  career.moves = Array.isArray(career.moves) ? career.moves : [];
   return career;
 }
 

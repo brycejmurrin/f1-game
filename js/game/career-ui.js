@@ -518,7 +518,7 @@ function create(G) {
     const meters = $("cr-meters");
     meters.textContent = "";
     meters.append(
-      meter("BALANCE", st.money.toLocaleString() + " cr"),
+      meter("BALANCE", Career.freeMoney() ? "UNLIMITED" : st.money.toLocaleString() + " cr"),
       meter("REPUTATION", Math.round(st.rep) + " / 100"),
       meter("ROUND", (Math.min(st.round + 1, st.rounds)) + " / " + st.rounds));
 
@@ -553,6 +553,10 @@ function create(G) {
       row("Parts owned", c.owned.length + " of " + totalOptions()),
       row("Fitted", fittedCost + " / " + Career.budget() + " cr"),
       row("Development", devLabel(c.tdev[c.team] || 0)),
+      // The facility is the one upgrade that never runs out, so it belongs with
+      // the car rather than in the economy: it is what late money buys.
+      row("Facility", st.facility + " / " + Career.FACILITY_MAX
+        + (st.facilityDiscount ? "  (−" + Math.round(st.facilityDiscount * 100) + "% research)" : "")),
       // Reliability belongs on THE CAR: a DNF is the car letting you down, and
       // team development plus a developed engine and gearbox are what buy it off.
       row("Retirements", st.dnfs + " this season"));
@@ -608,6 +612,85 @@ function create(G) {
     slotBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openSlots(); };
     left.appendChild(slotBtn);
 
+    // The facility upgrade sits under THE CAR because that is what it buys: a
+    // permanent cut to what every future part costs. Hidden at the ceiling
+    // rather than shown disabled — there is nothing left to say about it.
+    if (st.facilityCost != null) {
+      const fac = el("button", "cr-card cr-record");
+      fac.id = "cr-facility";
+      const afford = Career.freeMoney() || st.money >= st.facilityCost;
+      fac.disabled = !afford;
+      fac.append(
+        el("span", "cr-record-line", "Upgrade the factory · " + st.facilityCost.toLocaleString() + " cr"),
+        el("span", "cr-record-cta", "LEVEL " + st.facility + " → " + (st.facility + 1)
+          + "  ·  −" + Math.round((st.facilityDiscount + 0.05) * 100) + "% RESEARCH"));
+      fac.onclick = () => {
+        if (!Career.upgradeFacility()) return;
+        if (G.soundOn) GameAudio.uiSelect();
+        build();
+      };
+      left.appendChild(fac);
+    }
+
+    // WHO WOULD SIGN YOU. Reputation is a number on the header and means nothing
+    // on its own; offerBar() is already a visible ladder in the rules, so show
+    // it. A tier you clear is a seat that will talk to you at the end of the
+    // year, which turns a stat into a goal. MY TEAM has no ladder to climb —
+    // nobody signs an owner — so it gets the team's own standing instead.
+    if (c.flavour !== "myteam") {
+      left.appendChild(head("WHO WOULD SIGN YOU"));
+      const mv = Math.round(Career.marketValue(Career.driverStandings()));
+      const ladder = el("div", "cr-card");
+      ladder.appendChild(row("Your market value", mv + " / 100"));
+      // One row per tier, best first, so the climb reads top-down.
+      const TIERS = [[0, "Front runners"], [1, "Title contenders"],
+                     [2, "Upper midfield"], [3, "Midfield"], [4, "The back"]];
+      for (const [tier, label] of TIERS) {
+        const bar = Career.offerBar(tier);
+        const openSeat = mv >= bar;
+        const r = el("div", "cr-ladder" + (openSeat ? " open" : ""));
+        const names = Teams.LIST.filter((t) => !t.custom && t.tier === tier)
+          .map((t) => t.short || t.name).join(" · ");
+        r.append(
+          el("span", "cr-ladder-k", label),
+          el("span", "cr-ladder-teams", names),
+          el("span", "cr-ladder-v", openSeat ? "OPEN" : "needs " + bar));
+        ladder.appendChild(r);
+      }
+      left.appendChild(ladder);
+    }
+
+    // EXTRA FUNDS. A deliberate cheat, kept where it cannot be pressed by
+    // accident: below the car and the contract, not beside GO RACING. The
+    // unlimited toggle does not move the FITTED CAP, so even a bottomless
+    // balance still cannot put more on the car than the rules allow.
+    left.appendChild(head("EXTRA FUNDS"));
+    const cheat = el("div", "cr-card");
+    const unlimited = Career.freeMoney();
+    cheat.appendChild(el("div", "cg-p",
+      "Off by default. Money stops being the constraint; the cap on what you may "
+      + "fit at once does not move, so the car is still a choice."));
+    const cheatRow = el("div", "cr-cheats");
+    const grantBtn = el("button", "sel-chip", "+" + Career.GRANT.toLocaleString() + " CR");
+    grantBtn.id = "cr-grant";
+    grantBtn.onclick = () => {
+      Career.grant(Career.GRANT);
+      if (G.soundOn) GameAudio.uiSelect();
+      build();
+    };
+    const freeBtn = el("button", "sel-chip" + (unlimited ? " active" : ""),
+      unlimited ? "UNLIMITED · ON" : "UNLIMITED · OFF");
+    freeBtn.id = "cr-freemoney";
+    freeBtn.setAttribute("aria-pressed", unlimited ? "true" : "false");
+    freeBtn.onclick = () => {
+      Career.freeMoney(!Career.freeMoney());
+      if (G.soundOn) GameAudio.uiTick();
+      build();
+    };
+    cheatRow.append(grantBtn, freeBtn);
+    cheat.appendChild(cheatRow);
+    left.appendChild(cheat);
+
     // The rules, in the player's words. A card for the same reason the two above
     // are: the action bar has room for three buttons at 844x390 and it already
     // has three. Named for the flavour actually being played — a MY TEAM owner
@@ -623,7 +706,50 @@ function create(G) {
     left.appendChild(guideBtn);
 
     // ---- right: next race + standings ----
-    if (st.offers) {
+    // YOUR DRIVER'S CONTRACT, when it has run out. Outranks the calendar for the
+    // same reason a driver career's unsigned offers do: MY TEAM enters two cars,
+    // and a season cannot start with one of them empty.
+    if (st.hire) {
+      const h = st.hire;
+      right.appendChild(head(h.kind === "left" ? "YOUR DRIVER HAS GONE" : "YOUR DRIVER IS OUT OF CONTRACT"));
+      right.appendChild(el("div", "cr-note", h.kind === "left"
+        ? h.name + " had a season good enough that somebody else came for them. "
+          + "The seat is empty — the market is below."
+        : h.name + " will re-sign for " + h.ask.toLocaleString() + " cr a round"
+          + (h.ask > h.salary ? ", up from " + h.salary.toLocaleString()
+            : h.ask < h.salary ? ", down from " + h.salary.toLocaleString() : "")
+          + ". Take it, or let them go and sign somebody else."));
+
+      if (h.kind === "renew") {
+        const keep = el("button", "cr-card cr-record");
+        keep.id = "cr-rehire";
+        keep.append(
+          el("span", "cr-record-line", "Keep " + h.name + " · " + h.ask.toLocaleString() + " cr a round"),
+          el("span", "cr-record-cta", "RE-SIGN"));
+        keep.onclick = () => {
+          Career.renewHire(1);
+          if (G.soundOn) GameAudio.uiSelect();
+          build();
+        };
+        right.appendChild(keep);
+      }
+
+      right.appendChild(head(h.kind === "left" ? "THE MARKET" : "OR SIGN SOMEBODY ELSE"));
+      const seats = el("div", "cr-seats");
+      for (const a2 of Career.freeAgents()) {
+        if (a2.code === h.code && h.kind === "renew") continue;   // they are the offer above
+        const b2 = el("button", "cr-seat");
+        b2.append(el("span", "cr-seat-role", a2.name),
+          el("span", "cr-seat-who", a2.ask.toLocaleString() + " cr / round"));
+        b2.onclick = () => {
+          Career.hireDriver(a2.code, 1);
+          if (G.soundOn) GameAudio.uiSelect();
+          build();
+        };
+        seats.appendChild(b2);
+      }
+      right.appendChild(seats);
+    } else if (st.offers) {
       right.appendChild(head("A SEAT TO SIGN"));
       right.appendChild(el("div", "cr-note", "The " + c.year + " season cannot start until you " +
         "have somewhere to drive it. " + st.offers + (st.offers === 1 ? " offer is" : " offers are") +
@@ -674,8 +800,12 @@ function create(G) {
       });
     }
 
-    $("cr-go").textContent = st.offers ? "SIGN A CONTRACT"
+    $("cr-go").textContent = st.hire ? "SIGN A DRIVER"
+      : st.offers ? "SIGN A CONTRACT"
       : Career.seasonDone() ? "END OF SEASON" : "GO RACING";
+    // An empty second seat blocks the weekend outright — there is nothing for
+    // GO RACING to do until the car has a driver in it.
+    $("cr-go").disabled = !!st.hire;
     $("cr-go").hidden = false;
     $("cr-go").disabled = false;
     $("cr-garage").hidden = false;
@@ -703,6 +833,22 @@ function create(G) {
         row("Constructors", "P" + past.cPos + " · " + past.cPts + " pts"),
         row("Wins / podiums", past.wins + " / " + past.podiums));
       body.appendChild(card);
+    }
+
+    // WHAT THE WINTER DID. The market has always moved 0-2 seats and the player
+    // only ever met the result — a driver they had raced all year was suddenly
+    // somewhere else, with nothing to say it had happened. This is the one
+    // screen between the two seasons, so it is where the news belongs.
+    const moves = c.moves || [];
+    if (moves.length) {
+      body.appendChild(head("THE DRIVER MARKET"));
+      const mv = el("div", "cr-card");
+      for (const m of moves)
+        mv.appendChild(row(m.name, m.fromName + " → " + m.toName));
+      mv.appendChild(el("div", "cg-p", moves.length === 1
+        ? "One seat changed hands over the winter."
+        : moves.length + " seats changed hands over the winter."));
+      body.appendChild(mv);
     }
 
     body.appendChild(head("ON THE TABLE"));
