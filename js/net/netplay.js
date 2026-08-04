@@ -217,6 +217,13 @@ const NetPlay = (function () {
       // An id we have no slot for is dropped, not guessed at: that is a car
       // this peer does not know about, and posing it over somebody else would
       // be worse than not drawing it.
+      //
+      // That drop is LOAD-BEARING now the host relays. A relayed packet carries
+      // every car the host holds, which from a guest's point of view includes
+      // ITS OWN — and a peer's own car must never be posed from the wire, or it
+      // would be driving against a round-tripped copy of itself. It is dropped
+      // here for free, because localCar is by construction not in `remotes`.
+      // Do not "helpfully" fall back to cars[] lookup on a miss.
       for (const entry of pkt.cars) {
         const r = remotes.get(entry.id);
         if (r) r.interp.push(t, entry);
@@ -472,15 +479,32 @@ const NetPlay = (function () {
       // handled and this only fires when the guest really has gone quiet.
       if (armDeadline && now >= armDeadline) nameTheMoment();
 
-      // Publish our own car. Only ours — under distributed authority nobody
-      // else's position is ours to assert.
+      // Publish our own car — and, as host, forward everyone else's.
+      //
+      // AUTHORITY IS UNCHANGED by this. The host is not asserting where anybody
+      // is; it FORWARDS what each guest asserted about itself, unaltered and
+      // under that guest's own id. Two guests have no connection to each other
+      // (star, not mesh: one RTCPeerConnection per guest, all of them to the
+      // host), so without the relay guest B never learns guest C exists at all.
+      // Each guest still owns its own car outright and is never corrected.
+      //
+      // What is relayed is the last POSED state, not a re-simulation — we pass
+      // on what arrived. Guest-to-guest that costs roughly one publish interval
+      // of extra age on top of the interpolation delay, which the buffer
+      // already absorbs. That is the price of star over mesh, and it buys not
+      // opening N² connections through N NATs.
       if (localCar && now - lastPublish >= PUBLISH_MS) {
         lastPublish = now;
         // G.wireId, not cars.indexOf — the receiver has to be able to say WHICH
         // car this is, and its grid is not indexed the same as ours.
-        session.sendState(NetSnapshot.encodeSnapshot(Math.round(now), [
-          { id: G.wireId(localCar), car: localCar },
-        ]));
+        const entries = [{ id: G.wireId(localCar), car: localCar }];
+        if (role === "host") {
+          for (const r of remotes.values()) entries.push({ id: G.wireId(r.car), car: r.car });
+        }
+        // encodeSnapshot has always taken a list with a count byte and a
+        // per-entry id (js/net/snapshot.js). This is the first caller to send
+        // more than one, which is what that shape was reserved for.
+        session.sendState(NetSnapshot.encodeSnapshot(Math.round(now), entries));
       }
 
       // Draw each rival where it was INTERP_DELAY_MS ago, blended between the

@@ -132,7 +132,8 @@ const NetLobby = (function () {
       transport.onClose(() => {
         // A drop AFTER connecting must also stop the lobby's pump, or a 40 Hz
         // timer runs forever holding the whole peer connection alive.
-        clearInterval(pumpTimer); pumpTimer = null; session = null;
+        clearInterval(pumpTimer); pumpTimer = null;
+        sessions.clear(); session = null;
         say("Connection closed.", true);
       });
       return transport;
@@ -151,6 +152,7 @@ const NetLobby = (function () {
       clearInterval(pollTimer);
       clearInterval(pumpTimer);
       pumpTimer = null;
+      sessions.clear();
       session = null;
       if (transport) { try { transport.close(); } catch (e) {} }
       transport = null;
@@ -239,8 +241,15 @@ const NetLobby = (function () {
     function onConnected() {
       say("Connected.");
       session = NetSession.create({ transport });
+      sessions.set(SELF_ONE, session);
       clearInterval(pumpTimer);
-      pumpTimer = setInterval(() => { if (session) session.pump(performance.now()); }, 25);
+      // Every session, not "the" session: a host with three guests has three
+      // connections and all of them have to be pumped or the quiet ones look
+      // like they dropped.
+      pumpTimer = setInterval(() => {
+        const now = performance.now();
+        for (const s of allSessions()) s.pump(now);
+      }, 25);
 
       // The LATEST hello wins, not the first: a profile is re-sent every time
       // someone changes team or livery in the waiting room, and keeping the
@@ -315,8 +324,11 @@ const NetLobby = (function () {
     }
 
     function publishSettings() {
-      if (!session || role !== "host") return false;
-      return session.sendEvent(NetPlay.EV.SETTINGS, {
+      if (!sessions.size || role !== "host") return false;
+      // To every guest. The host owns the race, so the settings are one fact
+      // that all of them have to receive — a guest that missed it would load a
+      // different circuit.
+      return broadcast(NetPlay.EV.SETTINGS, {
         track: G.trackIdx,
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
         quali: !!G.raceQuali,
@@ -347,7 +359,7 @@ const NetLobby = (function () {
       // the garage, and what goes on the wire should be the seat you end up in
       // rather than the one you are about to be moved out of. When it fires it
       // sends the hello itself, so this must not send a second.
-      if (what === "car") { if (!resolveSeatClash()) session.sendEvent(NetPlay.EV.HELLO, localProfile()); }
+      if (what === "car") { if (!resolveSeatClash()) broadcast(NetPlay.EV.HELLO, localProfile()); }
       else publishSettings();
       // Changing your mind un-readies you — otherwise READY means "I was happy
       // with something else".
@@ -358,7 +370,7 @@ const NetLobby = (function () {
 
     function setReady(v) {
       selfReady = !!v;
-      if (session) session.sendEvent(NetPlay.EV.READY, { ready: selfReady });
+      if (sessions.size) broadcast(NetPlay.EV.READY, { ready: selfReady });
       renderRoom();
     }
 
@@ -449,7 +461,7 @@ const NetLobby = (function () {
       // an error: nothing failed, somebody was simply quicker.
       say(was.driver + " was taken — you're driving " + now.driver
         + (now.team ? " (" + now.team + ")" : "") + ".");
-      session.sendEvent(NetPlay.EV.HELLO, localProfile());
+      broadcast(NetPlay.EV.HELLO, localProfile());
       // Your READY was for a car you are no longer in — the same reasoning
       // roomChanged() uses when you change your own mind.
       if (selfReady) setReady(false);
@@ -511,9 +523,26 @@ const NetLobby = (function () {
         e.raceNote.hidden = host;
       }
       if (e.me) e.me.innerHTML = driverLine(localProfile(), "You", selfReady);
-      // One row still, because the markup has one. Phase C turns #vs-them into
-      // a list; until then this shows the first peer, which is the only peer.
-      if (e.them) e.them.innerHTML = driverLine(firstPeer(), "Them", peersReady());
+      // A row per other player. #vs-them is a LIST now, so this builds one
+      // .vs-driver per peer rather than overwriting a single fixed row — with
+      // one peer it renders exactly what it always did.
+      //
+      // Iterated over peerIds(), not _peers: somebody who has said READY but
+      // whose profile has not arrived is still in the room, and showing nothing
+      // for them is how you get a START that will not enable with no visible
+      // reason why. That ordering is not hypothetical — it is the bug the
+      // READY specs caught.
+      if (e.them) {
+        const ids = [...peerIds()];
+        const row = (inner) => `<div class="vs-driver">${inner}</div>`;
+        // "Them" while there is one other player, because that is what a person
+        // says; P2/P3/P4 once there are several, because "them" no longer picks
+        // anybody out.
+        e.them.innerHTML = ids.length
+          ? ids.map((k, i) => row(driverLine(_peers.get(k) || null,
+              ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k)))).join("")
+          : row(driverLine(null, "Them", false));
+      }
       if (e.ready) {
         e.ready.textContent = selfReady ? "NOT READY" : "READY";
         e.ready.setAttribute("aria-pressed", selfReady ? "true" : "false");
@@ -532,7 +561,7 @@ const NetLobby = (function () {
       // "Everyone", not "both" — the sentence has to survive a third player.
       if (!(selfReady && peersReady())) { say("Everyone needs to be ready.", true); return false; }
       publishSettings();
-      session.sendEvent(NetPlay.EV.GO, {});
+      broadcast(NetPlay.EV.GO, {});
       beginRace();
       return true;
     }
@@ -569,7 +598,7 @@ const NetLobby = (function () {
     // the connection.
     function reportQuali(driverId, t) {
       if (!session || !(t > 0)) return false;
-      return session.sendEvent(NetPlay.EV.QUALI, { driverId, t: +t.toFixed(3) });
+      return broadcast(NetPlay.EV.QUALI, { driverId, t: +t.toFixed(3) });
     }
 
     function finishStart() {
@@ -608,7 +637,30 @@ const NetLobby = (function () {
       close();
     }
 
+    // peerId -> NetSession. One entry today, because there is one transport —
+    // but the room is a star: when it holds four players the HOST has three
+    // sessions and each guest still has one, to the host. Routing every read
+    // through the map now means Phase C's transport work adds entries rather
+    // than rewriting this file.
+    //
+    // NetSession itself is untouched and stays one-per-transport: that is the
+    // right shape (one clock estimate, one liveness clock, one handler table
+    // per connection). There are simply several of them.
+    const sessions = new Map();
+    const SELF_ONE = "peer";
+    // THE session, for the many call sites that mean "the connection we talk
+    // over". On a guest that is the only one there will ever be — the host. On
+    // the host today it is the single guest.
     let session = null;
+    const allSessions = () => [...sessions.values()];
+    // Say something to everyone. On a guest that is the host; on the host it is
+    // every guest, which is what makes the relay and the lobby events reach a
+    // room rather than a pair.
+    function broadcast(type, data) {
+      let ok = false;
+      for (const s of allSessions()) { try { ok = s.sendEvent(type, data) || ok; } catch (e) {} }
+      return ok;
+    }
     let pumpTimer = null;
 
     // ---- the four buttons -------------------------------------------------
