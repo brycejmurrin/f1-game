@@ -5940,27 +5940,26 @@ function refreshCareerButton() {
   const c = Career.data() || Career.load();
   const label = btn.querySelector(".mb-label");
   const used = Career.slots().filter((s) => s.used).length;
-  if (label) label.textContent = c ? "CONTINUE CAREER" : "CAREER";
+  // ONE door, always the same words. It used to read CONTINUE CAREER once
+  // anything was saved and go straight into that save — which meant a player
+  // with one driver career had no way in to MY TEAM, to their other saves, or to
+  // the delete that makes room. The button opens the modes screen now, and the
+  // line under it says what is behind it.
+  if (label) label.textContent = "CAREER MODES";
   // The second line says WHICH career, because with up to three saved,
   // "CONTINUE" on its own does not answer the only question that matters. Blank
   // when there is nothing to continue — .mb-sub:empty collapses, so a first-time
   // title screen is unchanged.
   const sub = $("mb-career-sub");
   if (!sub) return;
-  if (!c) { sub.textContent = ""; return; }
+  if (!c) { sub.textContent = "DRIVER CAREER  ·  MY TEAM"; return; }
   const team = Teams.LIST.find((t) => t.id === c.team);
   const who = c.flavour === "myteam" ? "MY TEAM" : (c.driver ? c.driver.code : "YOU");
   sub.textContent = who + " · " + (team ? team.name : c.team).toUpperCase()
     + " · " + c.year + " R" + Math.min(c.season.round + 1, Tracks.SEASON.length)
     + (used > 1 ? "  ·  " + used + " SAVED" : "");
 }
-// With more than one career saved, "which one" is the first question rather than
-// an afterthought, so the button opens the picker instead of dropping straight
-// into whichever slot happened to be live.
-$("mb-career").onclick = () => {
-  if (Career.slots().filter((s) => s.used).length > 1) { openCareerSlots(); return; }
-  openCareer();
-};
+$("mb-career").onclick = () => openCareerSlots();
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
 $("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };

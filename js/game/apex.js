@@ -975,20 +975,26 @@ const api = {
   },
   careerReset() { Career.clear(); G.refreshCareerButton(); return true; },
   // ── Career SLOTS ──────────────────────────────────────────────────────────
-  // Three careers can be saved at once (`apex26.career.0..2`). No argument lists
-  // them; a number SWITCHES to that slot and returns the save it holds (null for
-  // an empty one). Switching saves the career being left first.
-  careerSlots(i) {
-    if (i === undefined) return Career.slots();
-    const c = Career.useSlot(i);
+  // SIX saves: three DRIVER slots and three MY TEAM slots, in separate sets
+  // (`apex26.career.<flavour>.0..2`). A slot's address is both halves — an index
+  // alone does not say which career it is.
+  //
+  //   careerSlots()            -> all six
+  //   careerSlots("myteam")    -> that set's three
+  //   careerSlots("driver", 1) -> SWITCH to driver slot 1, return the save there
+  //
+  // Switching saves the career being left first.
+  careerSlots(flavour, i) {
+    if (i === undefined) return Career.slots(flavour);
+    const c = Career.useSlot(flavour, i);
     G.refreshCareerButton();
     return c;
   },
-  // Wipe ONE slot, whichever is live or not. The other two are untouched —
-  // careerReset() is the narrower "wipe the one I am in".
-  careerSlotDelete(i) {
-    Career.deleteSlot(i);
-    Career.load();               // land on whatever is left, so CONTINUE still means something
+  // Wipe ONE slot, live or not. The other five are untouched — careerReset() is
+  // the narrower "wipe the one I am in".
+  careerSlotDelete(flavour, i) {
+    Career.deleteSlot(flavour, i);
+    Career.load();               // land on whatever is left, anywhere
     G.refreshCareerButton();
     return Career.slots();
   },

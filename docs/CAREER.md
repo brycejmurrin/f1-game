@@ -52,35 +52,65 @@ So every **gameplay** accessor in `Career` is gated on `inCareer()` — `paceMul
 (`data`, `state`, `start`, `load`, `save`) are not. `tests/career.spec.js` pins both
 directions: development must not reach a Grand Prix, and must reach the career.
 
-## The saves — `apex26.career.0` … `.2`
+## The saves — `apex26.career.<flavour>.0` … `.2`
 
-**Three slots, one live at a time.** `apex26.careerSlot` holds which. Each slot is a
-whole career — its own team, garage, money, development and archive — so a driver
-career and a MY TEAM can run side by side, and a different team can be tried without
-giving up the season you are twelve rounds into.
+**Six saves in two sets**: three DRIVER-career slots and three MY TEAM slots, kept
+apart so the two modes can never compete for room. `apex26.careerSlot` names the
+live one as `"flavour:index"`.
 
-**One key per slot, not one array under one key.** localStorage rewrites the *whole*
-value on every `setItem`, so a single array would rewrite all three careers on every
-round settled — and a quota failure would then lose three saves instead of one.
+Separate **sets** rather than six shared slots, because the two modes are different
+games. A player twelve rounds into a MY TEAM should not have to weigh that against
+trying a driver career, and *&ldquo;which of my three careers do I delete to make
+room&rdquo;* is not a question either mode should be able to ask of the other.
 
-`Career.slots()` summarises all three for the picker (the **live** one from the
-in-memory object, not from storage: a round settled but not yet written would
-otherwise read as lost progress). `useSlot(i)` **saves the career being left first** —
-`settleRound()` already persists, but a garage edit or an accepted offer lives on the
-object until something calls `save()`, and switching away is exactly when that would
-be lost. `deleteSlot(i)` wipes one and leaves the others.
+Separate **keys** rather than one array, because localStorage rewrites the *whole*
+value on every write: a single array would rewrite all six careers every time a
+round settled, and a quota failure would cost six saves instead of one.
 
-The single-save era wrote `apex26.career`. `migrateSlots()` moves it into slot 0 and
-clears the old key, guarded on slot 0 being empty so running twice cannot overwrite a
-career started since.
+**A career's own flavour decides its set** — never the caller. `start({slot: 2})` on
+a driver career fills DRIVER slot 2, and there is no argument that can put it in the
+MY TEAM set. That invariant is what keeps the sets meaningful.
+
+`Career.slots()` returns all six; `slots("myteam")` one set. The **live** slot is
+summarised from the in-memory object, not from storage — a round settled but not yet
+written would otherwise read as lost progress. `useSlot(flavour, i)` **saves the
+career being left first**: `settleRound()` already persists, but a garage edit or an
+accepted offer lives on the object until something calls `save()`, and switching away
+is exactly when that would be lost.
+
+### Two earlier layouts migrate
+
+| Wrote | Becomes |
+|---|---|
+| `apex26.career` — the single save of the first career build | its flavour's slot 0 |
+| `apex26.career.0..2` — three SHARED slots, either flavour in any | sorted into the two sets, in order |
+
+Order is preserved rather than index: a MY TEAM that sat in shared slot 2 becomes MY
+TEAM slot 1 if it is the second MY TEAM found, which is what a player scanning the
+new screen expects. Migration never overwrites — a set that already holds saves is
+the current layout, and a stale key from a half-finished migration must not clobber
+it.
 
 > **`migrateCareer()` must stay PURE.** It used to end in `store.set("career", …)`,
 > which was right when there was one save under one key and wrong the moment there
-> were three: reading slot 0 wrote it straight back under the *legacy* name, so the
-> key `migrateSlots()` had just cleared came back on the same boot and every later
+> were more: reading a slot wrote it straight back under the *legacy* name, so the
+> key the slot migration had just cleared came back on the same boot and every later
 > boot resurrected it — a stale duplicate an older build would happily load.
 > `Career.load()` persists the climbed shape instead, because it is the one that
 > knows the slot.
+
+### CAREER MODES is the one door
+
+The title button reads **CAREER MODES** always — never CONTINUE. It used to go
+straight into whichever save was last touched, which meant a player with a single
+driver career had no way in to MY TEAM, to their other saves, or to the delete that
+makes room. The screen behind it is `#career`'s picker state: one pane per mode,
+each carrying that mode's three slots and its guide. Pressing an empty slot decides
+**both halves of the address** — which mode and which slot — so the setup form opens
+on that mode rather than asking again.
+
+Changing mode on the setup form re-targets the slot (`Career.firstFree`), because
+slot 3 of the driver set is not slot 3 of MY TEAM.
 
 Versioned (`CAREER_V`), migrated through a ladder of one function per version step,
 mirroring `migrateSeasonPoints`. Key fields:

@@ -63,20 +63,20 @@ function create(G) {
   // on its own when the live slot is empty but another holds a save — pressing
   // CONTINUE has to show you what there is to continue.
   let picking = false;
-  // Which DELETE is armed, as a slot index. Deleting a decade of career from one
-  // tap would be unforgivable, and a confirm modal for it would be a whole screen
-  // — so the button asks once, in place, and disarms on any other interaction.
-  let armedDelete = -1;
+  // Which DELETE is armed, as a "flavour:index" ADDRESS — an index alone would
+  // arm the same-numbered slot in both modes. Deleting a decade of career from
+  // one tap would be unforgivable, and a confirm modal for it would be a whole
+  // screen, so the button asks once in place and disarms on anything else.
+  let armedDelete = "";
 
   function slotCard(s) {
-    const card = el("div", "cr-slot" + (s.used ? " used" : " empty")
-      + (s.i === Career.slot() && s.used ? " active" : ""));
+    const live = s.used && s.live;
+    const card = el("div", "cr-slot" + (s.used ? " used" : " empty") + (live ? " active" : ""));
     const open = el("button", "cr-slot-main");
-    open.append(el("span", "cr-slot-n", "SLOT " + (s.i + 1)));
+    open.append(el("span", "cr-slot-n", "SLOT " + (s.i + 1) + (live ? " · PLAYING" : "")));
     if (s.used) {
-      const who = s.flavour === "myteam" ? "MY TEAM" : s.code;
       open.append(
-        el("span", "cr-slot-who", who + " · " + s.teamName.toUpperCase()),
+        el("span", "cr-slot-who", (s.flavour === "myteam" ? s.teamName : s.code + " · " + s.teamName).toUpperCase()),
         el("span", "cr-slot-meta",
           s.year + " · round " + Math.min(s.round + 1, s.rounds) + " of " + s.rounds
           + " · " + s.money.toLocaleString() + " cr"),
@@ -86,33 +86,42 @@ function create(G) {
           + (s.titles ? " · " + s.titles + (s.titles === 1 ? " title" : " titles") : "")));
     } else {
       open.append(el("span", "cr-slot-who", "EMPTY"),
-        el("span", "cr-slot-meta", "Start a new career here"));
+        el("span", "cr-slot-meta", s.flavour === "myteam"
+          ? "Start a team here" : "Start a career here"));
     }
     open.onclick = () => {
       if (G.soundOn) GameAudio.uiSelect();
-      armedDelete = -1;
+      armedDelete = "";
       picking = false;
-      if (s.used) { Career.useSlot(s.i); G.openCareer(); return; }
-      // An empty slot goes to setup, and the draft remembers WHICH slot, so
-      // Career.start() writes where the player pointed rather than wherever the
-      // last switch happened to leave the cursor.
-      Career.useSlot(s.i);
-      draft = freshDraft(); draft.slot = s.i;
+      if (s.used) { Career.useSlot(s.flavour, s.i); G.openCareer(); return; }
+      // An empty slot goes to setup with BOTH halves of its address already
+      // decided — which mode's column it was in, and which slot. The setup form
+      // opens on that mode rather than asking again.
+      Career.useSlot(s.flavour, s.i);
+      draft = freshDraft();
+      draft.flavour = s.flavour;
+      draft.slot = s.i;
+      if (s.flavour === "myteam") draft.teamId = "custom";
       build();
     };
     card.appendChild(open);
     if (s.used) {
-      const armed = armedDelete === s.i;
+      // Armed state is keyed by the FULL address. Keyed by index alone, arming
+      // driver slot 2 would also arm MY TEAM slot 2 — two DELETE? buttons for one
+      // press, on two different careers.
+      const id = s.flavour + ":" + s.i;
+      const armed = armedDelete === id;
       const del = el("button", "cr-slot-del" + (armed ? " armed" : ""), armed ? "DELETE?" : "DELETE");
-      del.setAttribute("aria-label", "Delete the career in slot " + (s.i + 1));
+      del.setAttribute("aria-label", "Delete the "
+        + (s.flavour === "myteam" ? "team" : "career") + " in slot " + (s.i + 1));
       del.onclick = (ev) => {
         ev.stopPropagation();
         if (G.soundOn) GameAudio.uiTick();
-        if (armedDelete !== s.i) { armedDelete = s.i; build(); return; }
-        armedDelete = -1;
-        Career.deleteSlot(s.i);
+        if (!armed) { armedDelete = id; build(); return; }
+        armedDelete = "";
+        Career.deleteSlot(s.flavour, s.i);
         // Deleting the live career leaves nothing engaged; reload picks up
-        // whatever is left so CONTINUE still means something.
+        // whatever is left, anywhere, so the title screen still has something.
         Career.load();
         G.refreshCareerButton();
         build();
@@ -122,65 +131,49 @@ function create(G) {
     return card;
   }
 
+  // One mode's column: its name, its three saves, and its guide. The two modes
+  // get one pane each, so "what have I got, and what is this?" is answered per
+  // mode instead of being pooled into a list that hides which is which.
+  function modeColumn(pane, flavour) {
+    const my = flavour === "myteam";
+    pane.appendChild(head(my ? "MY TEAM" : "DRIVER CAREER"));
+    pane.appendChild(el("div", "cr-note", my
+      ? "Own the twelfth team and drive one of its two cars. You hire your "
+        + "team-mate, pay their wages, and build the car both of you race."
+      : "Sign for a team that will have you, hit what they ask of you, and earn a "
+        + "better seat. You are paid; the car is somebody else's."));
+    for (const s of Career.slots(flavour)) pane.appendChild(slotCard(s));
+
+    const guide = el("button", "cr-card cr-record");
+    guide.id = my ? "cr-guide-myteam" : "cr-guide-driver";
+    guide.append(
+      el("span", "cr-record-line", my
+        ? "Money, the hire, the car you build"
+        : "Contracts, money, upgrades and the climb"),
+      el("span", "cr-record-cta", my ? "HOW MY TEAM WORKS" : "HOW CAREER WORKS"));
+    guide.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openGuide(flavour); };
+    pane.appendChild(guide);
+  }
+
   function buildSlotPanes() {
     const left = $("cr-left"), right = $("cr-right");
     left.textContent = ""; right.textContent = "";
-    $("cr-title").textContent = "CAREERS";
-    $("cr-sub").textContent = "";
+    $("cr-title").textContent = "CAREER MODES";
+    const used = Career.slots().filter((x) => x.used).length;
+    $("cr-sub").textContent = used
+      ? used + (used === 1 ? " career saved" : " careers saved")
+      : "Two ways to play a championship";
     $("cr-sub").style.color = "";
     $("cr-meters").textContent = "";
 
-    left.appendChild(head("SAVE SLOTS"));
-    for (const s of Career.slots()) left.appendChild(slotCard(s));
+    modeColumn(left, "driver");
+    modeColumn(right, "myteam");
 
-    right.appendChild(head("THREE AT ONCE"));
-    right.appendChild(el("div", "cr-note",
-      "Each slot is a whole career — its own team, garage, money, development and "
-      + "archive. Run a driver career and a MY TEAM side by side, or try a different "
-      + "team without giving up the season you are halfway through."));
-    right.appendChild(el("div", "cr-note",
-      "Progress saves automatically after every round, and switching slots saves "
-      + "the one you are leaving first."));
-
-    // With every slot full there is nowhere to put a new career, and the honest
-    // thing is to say which action makes room rather than to leave a dead
-    // button. DELETE is right there on each card.
-    const free = firstFreeSlot();
-    if (free < 0) {
-      right.appendChild(head("ALL SLOTS FULL"));
-      right.appendChild(el("div", "cr-note",
-        "There is nowhere to put a new career. Delete one you have finished with "
-        + "and its slot opens up — deleting asks twice, and only ever removes the "
-        + "career you pressed it on."));
-    }
-    $("cr-go").hidden = false;
-    $("cr-go").textContent = "NEW CAREER";
-    $("cr-go").disabled = free < 0;
+    // Nothing in the foot to press: every action on this screen is a card. GO
+    // RACING would have to pick a career first, which is the thing being asked.
+    $("cr-go").hidden = true;
+    $("cr-go").disabled = false;
     $("cr-garage").hidden = true;
-  }
-
-  // The lowest slot with nothing in it, or -1. Lowest rather than "next after
-  // the live one" so the picker's NEW CAREER always fills the first gap a player
-  // can see, which is the one they expect it to use.
-  function firstFreeSlot() {
-    const slots = Career.slots();
-    for (let i = 0; i < slots.length; i++) if (!slots[i].used) return i;
-    return -1;
-  }
-
-  // Start a fresh career in `i` (default: the first free slot). Leaves the
-  // picker for the setup form with the slot already chosen, so Career.start()
-  // writes where the player pointed.
-  function newCareerIn(i) {
-    const slot = i == null ? firstFreeSlot() : i;
-    if (slot < 0) return false;
-    armedDelete = -1;
-    picking = false;
-    Career.useSlot(slot);
-    draft = freshDraft();
-    draft.slot = slot;
-    build();
-    return true;
   }
 
   // ---------- how it works ----------
@@ -374,6 +367,13 @@ function create(G) {
         draft.flavour = id;
         if (id === "myteam") draft.teamId = "custom";
         else if (draft.teamId === "custom") draft.teamId = freshDraft().teamId;
+        // The slot belongs to the MODE's set, so changing mode here has to move
+        // the target with it — slot 3 of the driver set is not slot 3 of MY TEAM.
+        // -1 (that set is full) is left as-is: Career.start() falls back to the
+        // live slot of the set it is actually writing to.
+        const free = Career.firstFree(id);
+        if (free >= 0) draft.slot = free; else delete draft.slot;
+        Career.useSlot(id, free >= 0 ? free : 0);
         buildSetupPanes();
         if (G.soundOn) GameAudio.uiTick();
       };
@@ -600,9 +600,11 @@ function create(G) {
     const slotBtn = el("button", "cr-card cr-record");
     slotBtn.id = "cr-slots";
     slotBtn.append(
-      el("span", "cr-record-line", "Slot " + (Career.slot() + 1) + " of " + Career.SLOTS
+      el("span", "cr-record-line",
+        (c.flavour === "myteam" ? "MY TEAM" : "Driver career") + " · slot "
+        + (Career.slot().i + 1) + " of " + Career.SLOTS
         + " · " + used + (used === 1 ? " career saved" : " careers saved")),
-      el("span", "cr-record-cta", "SWITCH CAREER"));
+      el("span", "cr-record-cta", "CAREER MODES"));
     slotBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openSlots(); };
     left.appendChild(slotBtn);
 
@@ -857,26 +859,30 @@ function create(G) {
 
   // ---------- shell ----------
 
-  // THREE states, in this order of precedence:
+  // THREE states in one sheet, in this order of precedence:
   //
-  //   1. the picker, when the player asked for it, or when the live slot is empty
-  //      but another holds a save — CONTINUE has to show what there is to continue
-  //   2. the hub, whenever the live slot holds a career
-  //   3. new-career setup
+  //   1. CAREER MODES — the entry. Both modes side by side with their saves and
+  //      their guides, which is the screen the title button opens.
+  //   2. the HUB, once a career has been picked
+  //   3. new-career SETUP, reached by pressing an empty slot (which is also what
+  //      decides the mode, so the form opens on it rather than asking again)
   //
-  // A first-time player still lands straight on setup: with nothing saved
-  // anywhere, a slot screen offering three identical empty boxes is a click that
-  // asks a question they have no way to answer yet.
+  // The modes screen leads because "which career" is genuinely the first
+  // question once there can be six. It is also the only screen that says the two
+  // modes exist at all — the old entry went straight into whichever save was
+  // last touched, so a player with one driver career had no way to discover MY
+  // TEAM, their other saves, or the delete they needed to make room.
   function build() {
-    if (picking || (!Career.active() && Career.anySave())) { draft = null; buildSlotPanes(); }
+    if (picking) { draft = null; buildSlotPanes(); }
     else if (Career.active()) { draft = null; buildHubPanes(); }
-    else { draft = draft || freshDraft(); buildSetupPanes(); }
+    else if (draft) buildSetupPanes();
+    else buildSlotPanes();
     ScrollFade.refresh();
   }
 
   function openHub() {
     picking = false;
-    armedDelete = -1;
+    armedDelete = "";
     build();
     $("career").hidden = false;
   }
@@ -884,7 +890,7 @@ function create(G) {
   // three on the go, "which one" is the first question, not an afterthought.
   function openSlots() {
     picking = true;
-    armedDelete = -1;
+    armedDelete = "";
     build();
     $("career").hidden = false;
   }
@@ -895,7 +901,7 @@ function create(G) {
   $("cr-back").onclick = () => {
     // From the picker, BACK steps back into the career you were in — the picker
     // is a detour, not the way out. Only from the hub (or setup) does it leave.
-    if (picking && Career.active()) { picking = false; armedDelete = -1; build(); return; }
+    if (picking && Career.active()) { picking = false; armedDelete = ""; build(); return; }
     close();
     els.overlay.hidden = false;
     G.flow = "gp"; G.session = "race";
@@ -908,7 +914,6 @@ function create(G) {
     // The picker comes first: a career is normally LOADED while it is open (you
     // are choosing another one), so the "no career yet" branch below would never
     // be reached and NEW CAREER would silently go racing instead.
-    if (picking) { newCareerIn(); return; }
     if (!Career.active()) {
       Career.start(draft);          // draft.slot, when the picker set one
       G.openCareer();          // re-enters the hub with the save in place
