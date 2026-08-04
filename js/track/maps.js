@@ -193,26 +193,6 @@ const TrackMaps = (function () {
     const width = opts.width || 3;
     g.lineJoin = "round"; g.lineCap = "round";
 
-    // helper: stroke a sub-range of pts (inclusive indices, wrapping)
-    function strokeRange(from, to, color) {
-      g.strokeStyle = opts.casing || "rgba(0,0,0,0.55)";
-      g.lineWidth = width + 2.5;
-      g.beginPath();
-      const count = ((to - from + pts.length) % pts.length) + 1;
-      for (let di = 0; di <= count; di++) {
-        const p = pts[(from + di) % pts.length];
-        di === 0 ? g.moveTo(PX(p[0]), PY(p[1])) : g.lineTo(PX(p[0]), PY(p[1]));
-      }
-      g.stroke();
-      g.strokeStyle = color;
-      g.lineWidth = width;
-      g.beginPath();
-      for (let di = 0; di <= count; di++) {
-        const p = pts[(from + di) % pts.length];
-        di === 0 ? g.moveTo(PX(p[0]), PY(p[1])) : g.lineTo(PX(p[0]), PY(p[1]));
-      }
-      g.stroke();
-    }
 
     if (opts.sectors) {
       // Draw the full casing first so sectors don't have gaps in the outline

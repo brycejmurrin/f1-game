@@ -1,11 +1,18 @@
 # Testing reference
 
-69 root Playwright spec files (`tests/*.spec.js`), plus 24-file
-`tests/blank-scan/` and `tests/inspect/` per-circuit suites and explicit-path
-helpers under `tests/galleries/`. **`inspect/**`, `blank-scan/**`, and
-`galleries/**` are excluded from default test discovery** via `testIgnore` in
-`playwright.config.js`, so a bare `npx playwright test` runs the 69 root specs
-only; run the excluded suites by naming them explicitly. The suite covers
+97 root Playwright spec files (`tests/*.spec.js`) plus 32 `node --test` unit
+suites (`tests/*.test.mjs`), and — separately — 40-file `tests/blank-scan/` and
+`tests/inspect/` per-circuit suites with explicit-path helpers under
+`tests/galleries/`.
+
+**`inspect/**`, `blank-scan/**` and `galleries/**` are AD-HOC INVESTIGATION
+PROBES, not regression tests.** They are excluded from default discovery via
+`testIgnore` in `playwright.config.js`, so a bare `npx playwright test` runs the
+root specs only, and `tools/test-coverage-audit.mjs` — which requires every spec
+to belong to a topical `test:*` group — does not see them either. Nothing runs
+them unless you name them. Keep it that way: they exist to be pointed at one
+circuit when you are looking into it, and a per-circuit file that nobody runs is
+cheaper than a per-circuit file in the regression budget. Run them by path. The suite covers
 physics, behaviour, geometry, cameras, UI, parts, steering, lighting, scenery,
 gamepad, timing/field hooks, headless RL, and per-circuit blank-frame detection.
 
@@ -210,8 +217,8 @@ hook values.
 | `gamepad.spec.js` | gamepad mapping (steer/throttle/brake/boost/overtake/camera) |
 | `webgl-probes.spec.js` | renderer/GL capability probes |
 | `audio-smoke.spec.js` | WebAudio engine/sfx smoke (objective pitch, no listening) |
-| `blank-scan/*.spec.js` | 24 per-circuit blank-frame detection (**excluded from default discovery** via `testIgnore`; run explicitly) |
-| `inspect/*.spec.js` | 24 per-circuit inspection/screenshot specs (**excluded from default discovery** via `testIgnore`; run explicitly) |
+| `blank-scan/*.spec.js` | 40 per-circuit blank-frame detection (**excluded from default discovery** via `testIgnore`; run explicitly) |
+| `inspect/*.spec.js` | 40 per-circuit inspection/screenshot specs (**excluded from default discovery** via `testIgnore`; run explicitly) |
 | `galleries/*.spec.js` | explicit-path gallery emitters such as track traces and all-tracks building surveys (**excluded from default discovery** via `testIgnore`; run explicitly) |
 | `load-order.test.mjs` (`node --test`, `test:tooling`) | `index.html` `<script>` tag order matches `tools/manifest.cjs` exactly — adding a JS file requires both a tag and a manifest entry; this catches divergence (incl. `HARD_EDGES` eval-time dependencies) |
 | `scenery-api-contract.test.mjs` (`node --test`, `test:tooling`) | freezes the 107-member `scenery(api)` contract across the buildProps split (`js/track/scenery-nature.js`, `-city.js`, `-structures.js`, `-identity.js`) — a circuit callback can destructure any of those names; renames/removals fail here first |

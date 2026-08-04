@@ -359,7 +359,6 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 @media (max-width: 420px) { .dh-thint { display: none; } }
 .dh-onboard.dh-tplaying { background: #2a6df0; border-color: #2a6df0; color: #fff; }
 .dh-delta { max-width: 600px; height: auto; margin-top: -2px; }
-.dh-sectors { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; color: #b4b4b8; }
 
 .dh-dash {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); gap: 8px;
@@ -466,7 +465,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 }
 /* the legend's colour swatches are decoration inside their button, not the
    target — the button around them is what grew */
-.dh-legend-item .dh-legend-dot, .dh-legend-item .dh-leg-swatch { flex: 0 0 auto; }
+.dh-legend-item .dh-legend-dot { flex: 0 0 auto; }
 /* EXPORT tab — browser-side OpenF1 start-line gathering */
 .dh-export { display: flex; flex-direction: column; gap: 10px; }
 .dh-export-note { font-size: 12px; line-height: 1.5; color: #b6b6c0; }

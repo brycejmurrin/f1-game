@@ -25,8 +25,10 @@
      experience   races started, roughly. Ages slowly, damps development, and in
                   career decides who is still improving and who is declining.
 
-   Ratings are read through Career.ratingsFor(), which layers a career's per-driver
-   development deltas on top. Outside career these values are used as-is. */
+   Ratings are read through DriverRatings.get(code, tier, dev) — callers pass the
+   career's per-driver development delta as `dev` (Career.devFor(teamId, seat)),
+   which layers on top. Outside career devFor returns nothing and these values are
+   used as-is. */
 const DriverRatings = (function () {
   "use strict";
 

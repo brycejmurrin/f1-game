@@ -315,7 +315,6 @@
   .sel-edit:hover { background: rgba(225,6,0,0.22); box-shadow: 0 0 10px rgba(225,6,0,0.25); }
 }
 .sel-edit:active { background: rgba(225,6,0,0.3); }
-#sel-driver { color: var(--dim); font-size: 13px; }
 h3.sel-label { font-size: var(--label); font-weight: 700; }
 #sel-left .sel-label + * { margin-bottom: var(--gap); }
 #sel-stats { font-variant-numeric: tabular-nums; }

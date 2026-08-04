@@ -264,7 +264,6 @@
 
       // Tropical palette constants
       const GREEN  = [0.20, 0.44, 0.20];
-      const GREEN2 = [0.24, 0.48, 0.22];
       // Hill green for backdrop mounds
       const HILL   = [0.22, 0.46, 0.20];
       const HILL2  = [0.26, 0.52, 0.22];

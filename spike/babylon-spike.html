@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <!-- Apex 26 — Babylon.js migration spike harness (comparison arm to three-spike.html).
      Standalone: NOT part of index.html / tools/manifest.cjs / the test suite.
+     NEEDS ITS VENDOR BACK BEFORE IT RUNS: the 8 MB vendored babylon.js was removed
+     once the comparison concluded in three.js's favour (see spike/README.md and
+     ADOPTION-PLAN.md for the measured numbers this arm produced). Drop a Babylon
+     9.19.0 UMD build at spike/vendor/babylon/babylon.js — the path below — to
+     re-run it; nothing else here changed.
      Loads the real track-build pipeline (script list copied verbatim from
      three-spike.html) + ONE circuit, then renders it with the vendored Babylon.js
      UMD build via spike/babylon-spike.js (plain script, global BABYLON — no modules).

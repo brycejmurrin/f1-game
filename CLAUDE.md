@@ -151,11 +151,11 @@ never scattered at the repo root:
 - **`scratch/renders/`** — car/parts/aero review sheets
 - **`scratch/profiles/`** — CPU/GPU profiles
 
-Both roots are created on demand. `assets/`, committed generated sources, and the
-tracked golden baselines in `tests/*-snapshots/` stay outside these roots. The
-current consolidated visual suite has no tracked replacement baselines yet; do the
-Linux/SwiftShader regeneration as a separate required operation before treating
-`npm run test:visual` as a reliable regression gate.
+Both roots are created on demand. `assets/` and committed generated sources stay
+outside them. There are currently **no** tracked golden baselines — no
+`tests/*-snapshots/` directory exists — so `npm run test:visual` is not a
+regression gate yet; regenerating the baselines on Linux/SwiftShader is a
+separate, still-outstanding operation.
 
 ---
 
@@ -251,9 +251,15 @@ js/car/          — car —
                                   picked to contrast the fin) — the fin is one
                                   flat colour, so art equal to it is invisible
   liverytex.js   LiveryTex      canvas-2D livery texture atlas (crests/sponsors/number)
-  parts.js       Parts          upgrade catalog (8 categories, getMods, getCost, statMult)
+  parts.js       Parts          upgrade catalog (12 categories, getMods, getCost, statMult)
   ghost.js       Ghost          time-trial ghost record/replay data layer
   teams.js       Teams          2026 grid (11 teams, 22 drivers, engine supplier per team)
+  driver-ratings.js  DriverRatings  the five-axis skill table (pace/craft/awareness/
+                                  consistency/experience), keyed by driver CODE.
+                                  Deliberately NOT in teams.js: that file is the
+                                  verified real-world grid, these are balance
+                                  values that get tuned. Career layers its
+                                  per-driver development deltas on top
 
 js/data/         — data hub —
   api.js         F1API          Jolpica + OpenF1 clients, localStorage cache
@@ -471,7 +477,7 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   (docs/AGENT-WORLD-API.md)
   atmosphere.js  Atmosphere     applyRaceSettings — time-of-day/weather scene state
   setup-ui.js    SetupUI        GARAGE screen (#carsetup) — WHO you are and WHAT
-                                  you drive: TEAM & DRIVER, the 8 part categories
+                                  you drive: TEAM & DRIVER, the 12 part categories
                                   + budget, LIVERY. The select screen owns WHERE
                                   you race and links here; race settings own HOW
   career.js      Career         CAREER core: the apex26.career.<flavour>.0..2
@@ -554,6 +560,17 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
   reads A's global at eval time). `tools/verify-track.cjs` and the VM-based tests
   read the manifest's `TRACK_VM` list instead of hardcoding paths.
   `tools/extract-module.mjs` assists further game.js extractions.
+- **DEFERRED modules have no `<script>` tag.** `js/render/three/*` (TLX) and
+  `js/render/webgpu/*` (WGX) are the two opt-in renderer backends — ~532 KB that
+  every visitor used to parse for something almost nobody runs — so they are
+  listed in the manifest's `DEFERRED` map instead of `FULL`, and `js/game.js`
+  injects them at boot only when `apex26.gfxBackend` selects one. Three things
+  must agree and `tests/load-order.test.mjs` asserts all three: `DEFERRED`,
+  `BACKEND_FILES` in game.js, and the OPTIONAL precache seed in `sw.js` (the
+  service worker finds every other asset by parsing the shell's own tags, so a
+  tagless file is invisible to it). A failed injection is not an error path —
+  `Gfx.create` already reads a missing `TLX`/`WGX` global as "unavailable" and
+  falls back to GLX.
 - **`js/track/` = engine, `js/circuits/` = data.** Circuit defs (one per track)
   live in `js/circuits/<id>.js`; all shared spline/mesh/scenery code lives in
   `js/track/`. Circuit script-tag order == `Tracks.LIST` == picker/season order.
@@ -800,8 +817,12 @@ own triplanar convention in `lit.js`) and no new vertex attribute.
 
 - **Blended, not replaced.** `albedo * tex.rgb * 2.0`, so per-track tarmac tint,
   racing-line wear and per-vertex grain all survive.
-- **Ships OFF.** `matTexMix` is a `TUNE_DEFS` knob with `def: 0`. A pack is inert
-  weight until someone moves it (`__apex.matTex(1)`).
+- **Ships ON.** `matTexMix` is a `TUNE_DEFS` knob and its `def` is `1.0`, so the
+  pack is fetched at boot and blended by default; `__apex.matTex(0)` is the A/B
+  knob that turns it back off. (It shipped at 0 once, behind a lazy "only fetch
+  when matTexMix > 0" load — that guard was removed because with the knob on by
+  default nobody can turn it off BEFORE their first load, so it saved nobody
+  anything. See the comment at the Assets.load() call in js/game.js.)
 - **Every failure degrades to procedural** — no pack, malformed pack, or a
   backend with no `createTextureArray` (WGX/WebGPU, which has not ported the
   procedural material system either). Boot never awaits or fails on assets.
@@ -1005,5 +1026,10 @@ the wrong button.
 
 ## Git branch
 
-Active development branch: `claude/project-architecture-reorganize-7hv8ez`. Never push to main
-without review.
+Active development branch: `claude/project-cleanup-optimization-mugfaj`. Never push to
+main without review.
+
+**The deploy branch is a DIFFERENT branch.** `.github/workflows/pages.yml` fires
+only on a push to `claude/f1-game-project-26h3ng`, so work on any other branch —
+including this one — builds and tests but does not reach
+https://brycejmurrin.github.io/f1-game/ until it is merged there.

@@ -2318,7 +2318,16 @@ const api = {
       c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
       c.stuckT = 0; c.deploying = false; c.boostOn = false; c.otArmed = false;
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
-      c.wasOnThrottle = false; c.vertLoad = 1;
+      c.wasOnThrottle = false;
+      // vertLoad is a crest/dip DELTA, not a multiplier: js/game.js computes it
+      // as clamp(kv*v²/9.8, -0.20, 0.20) and spends it as `* (1 + vertLoad)`, so
+      // its baseline is 0 and setting it to 1 handed the car ~2x lateral grip for
+      // the ~0.4 s the damp took to decay. It also made reset() non-idempotent —
+      // the FIRST reset left it undefined so `?? vtRaw` seeded it correctly and
+      // every later one got 1 — which is exactly the run-to-run difference the
+      // rest of this block exists to remove. Deleting it reseeds from vtRaw on
+      // the next tick, i.e. identically to a car that has just been built.
+      delete c.vertLoad;
       // `prog` accumulates via `ds = s - (c._prevS ?? c.s)` (js/game.js:2705).
       // Leaving _prevS at the PREVIOUS episode's final s makes the very first
       // tick bank one bogus delta, so an identically-seeded, identically-driven

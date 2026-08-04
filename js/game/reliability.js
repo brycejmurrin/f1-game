@@ -96,14 +96,23 @@ function buildQuality(setup, team) {
 }
 
 // One car's probability of not finishing. `build` is buildQuality() for a car
-// whose setup we know — which is the human cars only: an AI runs its team's works
-// car, and that is precisely what `tier` already encodes.
+// whose setup we know — which is THE LOCAL PLAYER only: an AI runs its team's
+// works car, and that is precisely what `tier` already encodes.
+//
+// isPlayer, NOT human. In multiplayer the remote rival is `human` too
+// (setCarRole(remoteCar, true, false) in js/net/netplay.js), so a `car.human`
+// gate scaled the RIVAL's risk by THIS peer's engine/gearbox spec. Both peers
+// draw from the same stateless (seed, round, driver) hash, so the draw matched
+// while the threshold did not: `draw >= risk` could land on opposite sides, and
+// one peer would announce a retirement and park a car at the barrier that was
+// still racing — and still being posed from the wire — on the other. On the solo
+// path isPlayer and human are the same car, so nothing there moves.
 function riskFor(car, scale, build) {
   if (!scale) return 0;
   const tier = clamp(car.tier | 0, 0, TIER_RISK.length - 1);
   let risk = TIER_RISK[tier];
   risk *= 1 - DEV_RELIEF * devNorm(car.team && car.team.id);
-  if (car.human && build > 0) risk *= 1 - BUILD_RELIEF * clamp(build, 0, 1);
+  if (car.isPlayer && build > 0) risk *= 1 - BUILD_RELIEF * clamp(build, 0, 1);
   return clamp(risk * scale, 0, 1);
 }
 

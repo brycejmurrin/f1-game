@@ -110,6 +110,63 @@ test("the test-suite counts in CLAUDE.md match the files on disk", () => {
     assert.equal(n, units, `CLAUDE.md claims ${n} unit suites; tests/ holds ${units}`);
 });
 
+// The three counts below all drifted in the same way and for the same reason:
+// something ELSE changed (a circuit was added, four part categories were added,
+// a knob's default was flipped) and the prose that quoted it did not move.
+test("the circuit count in the docs matches js/circuits/", () => {
+  const circuits = ls("js/circuits", /\.js$/).length;
+  for (const doc of ["CLAUDE.md", "README.md"]) {
+    const text = read(doc);
+    for (const m of text.matchAll(/(\d+)\s+circuit data files/gi))
+      assert.equal(Number(m[1]), circuits, `${doc} claims ${m[1]} circuit data files; js/circuits/ holds ${circuits}`);
+    for (const m of text.matchAll(/verify-track\.cjs --all[^\n]*?all (\d+) circuits/gi))
+      assert.equal(Number(m[1]), circuits, `${doc} claims verify-track covers ${m[1]} circuits; js/circuits/ holds ${circuits}`);
+  }
+});
+
+test("the parts-category count in the docs matches Parts.CATALOG", () => {
+  // CLAUDE.md said "8 categories" in two places and "12 category objects" in a
+  // third, against a catalog of 12 — it contradicted itself as well as the code.
+  const src = read("js/car/parts.js");
+  const catalog = src.slice(src.indexOf("const CATALOG"), src.indexOf("const DEFAULTS"));
+  const categories = (catalog.match(/^\s{6}id: "\w+", label: "/gm) || []).length;
+  assert.ok(categories > 0, "could not count Parts.CATALOG categories");
+  for (const doc of ["CLAUDE.md", "README.md"]) {
+    const text = read(doc);
+    for (const m of text.matchAll(/(\d+)\s+(?:part |upgrade )?categor(?:y|ies)/gi))
+      assert.equal(Number(m[1]), categories,
+        `${doc} claims ${m[1]} part categories; Parts.CATALOG has ${categories}`);
+  }
+});
+
+test("CLAUDE.md's matTexMix default matches TUNE_DEFS", () => {
+  // "Ships OFF … def: 0" survived the knob being flipped to 1.0, which inverted
+  // the meaning of the whole asset-pack section.
+  const lighting = read("js/game/lighting.js");
+  const def = lighting.match(/\{\s*id:\s*"matTexMix"[^}]*?\bdef:\s*([\d.]+)/);
+  assert.ok(def, "matTexMix is no longer a TUNE_DEFS entry with a def");
+  const on = Number(def[1]) > 0;
+  const claude = read("CLAUDE.md");
+  const section = claude.slice(claude.indexOf("Baked asset pack"), claude.indexOf("`window.__apex` dev API"));
+  assert.ok(section, "the baked-asset-pack section moved");
+  assert.equal(/\*\*Ships ON\.\*\*/.test(section), on,
+    `matTexMix def is ${def[1]}, so the asset-pack section must say "Ships ON" iff that is > 0`);
+  assert.ok(!/`matTexMix`[^\n]*`def: 0`/.test(section) || !on,
+    "CLAUDE.md still claims matTexMix has def: 0");
+});
+
+test("CLAUDE.md's active branch is a branch that exists, and names the deploy branch", () => {
+  // Three different answers were in the repo at once: CLAUDE.md named a branch
+  // nobody was on, pages.yml deploys from a third, and nothing said so.
+  const claude = read("CLAUDE.md");
+  const pages = read(".github/workflows/pages.yml");
+  const deploy = pages.match(/branches:\s*\[([^\]]+)\]/);
+  assert.ok(deploy, "pages.yml no longer pins a deploy branch");
+  const deployBranch = deploy[1].trim();
+  assert.ok(claude.includes(deployBranch),
+    `CLAUDE.md must name the deploy branch (${deployBranch}) so nobody assumes their branch ships`);
+});
+
 test("every npm test:* group names specs that exist", () => {
   const pkg = JSON.parse(read("package.json"));
   const missing = [];

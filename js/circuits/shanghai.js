@@ -90,7 +90,6 @@
       const STEEL = [0.62, 0.64, 0.67];
       const SEAT  = [0.40, 0.42, 0.46];
       const DARK  = [0.30, 0.32, 0.36];
-      const ASPH  = [0.50, 0.52, 0.54];
       const PALE  = [0.58, 0.58, 0.60];   // Tilke asphalt runoff — cockpit-readable
       const MARSH = [0.34, 0.45, 0.28];
       const MARSH_N = [0.28, 0.38, 0.24];

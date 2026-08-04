@@ -1251,7 +1251,6 @@ const DataTelemetry = (function () {
     }
     return { d: out, mn: mn, mx: mx };
   }
-  function deltaSamples(view) { return deltaSamplesFor(view, view.compare); }
   function renderDelta(g, W, H, view) {
     const pad = 6, car = view.primary.car;
     g.clearRect(0, 0, W, H);

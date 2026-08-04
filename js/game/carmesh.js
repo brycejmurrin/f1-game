@@ -326,28 +326,41 @@ const _flapOrder = [];
 const FLAP_CACHE_MAX = 128;
 // One mesh per (element, downforce level, colour). `idx` indexes the array
 // Car3D.aeroFlaps() returns — each element has its own chord, span and taper.
-function getAeroFlap(aLvl, col, idx, style) {
+// `el` is the element record the caller ALREADY solved (drawAeroFlaps walks
+// Car3D.aeroFlaps() and holds it); passing it in skips a second identical lookup
+// per flap per car per frame. Omitted, it is resolved here as before.
+function getAeroFlap(aLvl, col, idx, style, el) {
   const c = col || [0.9, 0.9, 0.1];
   // aLvl is passed through RAW — catalog options use fractional levels and the
   // wing geometry depends on the exact value, so it must not be truncated here
   // either (it is part of the cache key for the same reason).
-  const g = Car3D.aeroFlaps(aLvl, style)[idx | 0];
+  const g = el || Car3D.aeroFlaps(aLvl, style)[idx | 0];
   if (!g) return null;
   // The style is part of the key: the flap PLANFORM reads the recipe's
   // sweep/taper/rise (and drs moves the rear slot), and with real per-option
   // recipes flowing through here two options at the same level and colour are
   // NOT the same mesh. Keying without it served whichever was built first.
-  const sig = style ? [style.frontSweep, style.frontTaper, style.frontRise,
-                       style.rearSweep, style.rearTaper, style.drs || 0]
-    .map((v) => +v || 0).join(",") : "d";
-  const key = g.id + aLvl + "|" + sig + "|" + c.map((v) => v.toFixed(2)).join(",");
+  // Car3D stamps that (level, recipe, index) identity onto the element when it
+  // solves it, so this is a read rather than the array-map-join it used to
+  // rebuild on every call; the fallback covers a record from an older solve.
+  const sig = g.cacheKey || (g.id + aLvl + "|" + (style ? [
+    style.frontSweep, style.frontTaper, style.frontRise,
+    style.rearSweep, style.rearTaper, style.drs || 0].map((v) => +v || 0).join(",") : "d"));
+  // Colour, spelled out rather than mapped+joined — same 0.01 resolution, no
+  // array and no closure. The whole key build runs per flap per car per frame.
+  const key = sig + "|" + c[0].toFixed(2) + "," + c[1].toFixed(2) + "," + c[2].toFixed(2);
   if (_flapMeshes[key]) return _flapMeshes[key];
   const mesh = _gfx.createMesh(Car3D.buildFlapGeom(g, c));
   _flapMeshes[key] = mesh;
   _flapOrder.push(key);
   if (_flapOrder.length > FLAP_CACHE_MAX) {
     const old = _flapOrder.shift();
-    if (_flapMeshes[old] && _gfx.deleteMesh) _gfx.deleteMesh(_flapMeshes[old]);
+    // freeMesh, not deleteMesh: no backend has ever had a deleteMesh (GLX, TLX and
+    // WGX all expose freeMesh — see the contract in js/render/gfx.js), so the old
+    // `&& _gfx.deleteMesh` guard silently skipped the free and every evicted flap
+    // leaked its GL buffers for the life of the page. Same call the two frees
+    // above this function already make.
+    if (_flapMeshes[old] && _gfx.freeMesh) _gfx.freeMesh(_flapMeshes[old]);
     delete _flapMeshes[old];
   }
   return mesh;

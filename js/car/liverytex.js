@@ -111,8 +111,6 @@ const LiveryTex = (function () {
     ink.worst = Math.max(d, l);
     return ink;
   }
-  // Pick a high-contrast ink for a given paint colour.
-  function inkFor(c) { return inkOn([c]); }
   // The halo a mark needs when no ink clears INK_TARGET on its background: the
   // opposite ink, stroked behind the glyphs, which buys contrast on any paint.
   function haloFor(ink) { return lum(ink) < 0.5 ? INK_LIGHT : INK_DARK; }

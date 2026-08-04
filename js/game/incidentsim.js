@@ -102,7 +102,6 @@ const IncidentSim = (function () {
   // Inverted at rest: the car's local +Y, rotated to world, points below this →
   // it settled on its side/roof → route into the existing rescue flow.
   const INVERT_UP_Y = 0.40;
-  const RIDE_Y = 0.45;         // mirror body centre height above the road (DebrisWorld)
 
   // Deterministic PRNG (mulberry32), seeded purely from game state.
   function rng32(seed) {

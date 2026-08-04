@@ -889,10 +889,19 @@ const AgentView = (function () {
       while (headErr > Math.PI) headErr -= 2 * Math.PI;
       while (headErr < -Math.PI) headErr += 2 * Math.PI;
 
-      const ranked = G.cars.slice().sort((a, b) => b.prog - a.prog);
+      // Retirements are NOT in the field — mirror js/game.js's own `ranked`, which
+      // drops them so the HUD position stops counting a parked car. Ranking over
+      // every car here made world().ego.pos disagree with the HUD after any DNF.
+      const ranked = G.cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
       const pos = ranked.findIndex((c) => c.isPlayer) + 1;
 
-      const axFrac = clamp(Math.abs(p.axEstSm || 0) / (LONG_GRIP || 34), 0, 1);
+      // The friction ellipse's longitudinal axis is weather-scaled, exactly as in
+      // js/game.js's own combined-slip block and in apex.js's two copies. Dividing
+      // by the dry LONG_GRIP alone reported a slip budget the physics never had —
+      // optimistic by ~28% in the rain, i.e. wrong in the direction that puts an
+      // agent reading world() into the barrier.
+      const axFrac = clamp(Math.abs(p.axEstSm || 0)
+                           / ((LONG_GRIP || 34) * (gripMult ? gripMult() : 1)), 0, 1);
       const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
 
       const ego = {
@@ -1008,7 +1017,10 @@ const AgentView = (function () {
           offroad: !!p.offroad,
           stuckS: r2(p.stuckT || 0),
           wallContactS: r2(p.wallT || 0),
-          vertLoad: r2(p.vertLoad != null ? p.vertLoad : 1),
+          // A crest/dip DELTA in ±0.20 spent as `* (1 + vertLoad)`, so an
+          // un-seeded car's load is 0, not 1 — reporting 1 claimed a car sitting
+          // on flat ground was carrying double the vertical load it had.
+          vertLoad: r2(p.vertLoad != null ? p.vertLoad : 0),
         };
         // setPhysics() can retune the car underneath an agent mid-session. If
         // it cannot see the tunables it will attribute the change to its own

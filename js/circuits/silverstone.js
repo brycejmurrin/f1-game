@@ -52,13 +52,13 @@
       { frac: 0.9199, angleDeg: 3.0, widthM: 100 },
     ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, place, prop, backdrop, every, onTrack, hash, pal,
-              grandstandEx, building, motorhome, hedge, tree, bush, billboard, gantry, mountain, anchor, vadd, addBox,
-              pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum,
-              tower, forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
+      const { out, MAT, n, px, pz, pyMin, place, backdrop, every, onTrack, hash, pal,
+              grandstandEx, building, motorhome, hedge, billboard, mountain, anchor, vadd, addBox,
+              pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism,
+              forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
               bleacher, broadleafFall, plane,
               groundedSegments, recordBarrier, circuitKit,
-              signBoard, seat, addPyramid,
+              signBoard, seat,
               spectatorHill, cameraTower, sponsorHoarding } = api;
       const k = (s) => Math.round(s * n) % n;
 
@@ -90,12 +90,10 @@
       const COPSE  = [0.12, 0.36, 0.16];   // dark-green tree copses / hedgerows
       const COPSE2 = [0.16, 0.40, 0.18];   // slightly lighter broadleaf
       const PINEG  = [0.10, 0.30, 0.14];   // conifer needle green
-      const GRASS  = (ATM && ATM.britishOvercast && ATM.britishOvercast.grass) || [0.16, 0.40, 0.18];
       const WHITE  = [0.92, 0.92, 0.92];
       const RED    = [0.85, 0.15, 0.15];
       const STEEL  = [0.55, 0.56, 0.60];
       const CONC   = [0.74, 0.75, 0.76];
-      const TARMAC = [0.22, 0.22, 0.24];
       // Airfield asphalt apron — former runway concrete, slightly lighter than racing line
       const APRON  = (ATM && ATM.britishOvercast && ATM.britishOvercast.runoff) || [0.48, 0.46, 0.42];
       // Muted British-summer crowd tones. Saturated primaries here read as a
@@ -1066,10 +1064,6 @@
                  SPONSOR[((i + 4) % SPONSOR.length + SPONSOR.length) % SPONSOR.length], b);
         }
       }
-
-      // silence unused-guard lint helpers (destructured but not called directly)
-      void GRASS; void TARMAC; void prop; void tower; void bush;
-      void gantry; void building; void addFrustum; void addPyramid; void tree;
     },
   }
   );

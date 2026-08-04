@@ -384,13 +384,46 @@ const GLX = (function () {
   // sharpness for fill-rate. The HUD is a DOM overlay, so only the 3D view
   // softens. setRenderScale() drives it from the frame-time governor in game.js.
   let renderScale = 1;
+  // CACHED CSS SIZE. resize() is the first statement of every render() — and
+  // clientWidth/clientHeight are LAYOUT reads, so asking for them there forces a
+  // synchronous reflow of anything dirtied since the last frame. The HUD dirties
+  // layout constantly (textContent, style and classList writes, plus a dataset
+  // write on documentElement), so the frame loop was paying a forced reflow every
+  // time the 10 Hz HUD tick, an announce, or a lights change landed. The CSS box
+  // only changes on a viewport/orientation change or a rotation of the device, so
+  // read it when the browser tells us it moved and cache it in between.
+  let cssW = 0, cssH = 0, cssDirty = true;
+  const markCssDirty = () => { cssDirty = true; };
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("resize", markCssDirty);
+    window.addEventListener("orientationchange", markCssDirty);
+    // Covers the cases a window resize never fires for: a CSS/layout change that
+    // moves the canvas alone (entering photo mode, a rotated phone that keeps the
+    // same window size). Feature-detected — no ResizeObserver just means we fall
+    // back to the two listeners above, which is what this always had.
+    if (typeof ResizeObserver === "function") {
+      try { new ResizeObserver(markCssDirty).observe(canvas); } catch (_) {}
+    }
+  }
+  function cssSize() {
+    // A zero is never a real size — it means the canvas has not been laid out
+    // yet (init before first layout, a display:none ancestor). Keep re-reading
+    // until it is real, so this can't latch a 1x1 backbuffer the way a plain
+    // cache would; the old read-every-frame code self-corrected for free.
+    if (cssDirty || cssW <= 0 || cssH <= 0) {
+      cssW = canvas.clientWidth;
+      cssH = canvas.clientHeight;
+      cssDirty = false;
+    }
+  }
   function resize() {
     // Mobile: cap DPR at 1.5 (was 2) — every full-screen target scales with the
     // square of this; 1.5 is 56% of the pixels of 2 with little visible loss on
     // a ~6" screen, and it multiplies with every other saving.
     const dpr = Math.min(window.devicePixelRatio || 1, MOBILE_TIER ? 1.5 : 2);
-    const w = Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale));
-    const h = Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale));
+    cssSize();
+    const w = Math.max(1, Math.round(cssW * dpr * renderScale));
+    const h = Math.max(1, Math.round(cssH * dpr * renderScale));
     const changed = canvas.width !== w || canvas.height !== h;
     if (changed) {
       canvas.width = w;
@@ -761,8 +794,19 @@ const GLX = (function () {
   // Close the frame's query and harvest any completed result. GPU_DISJOINT means
   // the GPU was interrupted (e.g. power-state change) and every in-flight timing
   // is invalid — drop them. Keeps at most a few queries in flight.
+  // NOTE the _gpuTimerOn gate. The extension is acquired unconditionally at
+  // context creation, so without it the gl.getParameter below ran at the END OF
+  // EVERY FRAME on every device that has EXT_disjoint_timer_query_webgl2 (i.e.
+  // all of Chrome desktop + Android) for a feature that ships off. getParameter
+  // with an uncached pname is a synchronous round trip to the GPU process — a
+  // command-buffer flush plus blocking IPC — so this was a per-frame pipeline
+  // stall, worst exactly when the GPU process is already backed up. _gpuTimerBegin
+  // has always had this guard; this one did not.
   function _gpuTimerEnd() {
     if (!_gpuTimerExt) return;
+    // Timing just switched off: close and drain what is still in flight, then
+    // stop touching the GPU until it is switched back on.
+    if (!_gpuTimerOn && !_gpuQActive && !_gpuQPending.length) return;
     if (_gpuQActive) {
       gl.endQuery(_gpuTimerExt.TIME_ELAPSED_EXT);
       _gpuQPending.push(_gpuQActive);

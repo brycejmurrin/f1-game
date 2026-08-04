@@ -10,7 +10,7 @@ compares to the bespoke model. Data below, recommendation at the end.
 
 | item | value |
 |---|---|
-| engine | `@dimforge/rapier3d-compat` **0.19.3** (vendored in `vendor/`, WASM inlined as base64, no network) |
+| engine | `@dimforge/rapier3d-compat` **0.19.3** (the game's own `vendor/rapier-0.19.3/`, WASM inlined as base64, no network) |
 | runtime | Node 22.22.2, pure `node`, no browser |
 | geometry | **real** track geometry, browser-free: `build-geometry.cjs` replays the `tools/manifest.cjs` `TRACK_VM` file list in a Node VM (the `tools/verify-track.cjs` pattern), calls `Tracks.build(def)`, exports the road mesh + centreline |
 | track | Singapore: 23,250 road verts, 42,778 tris, 4,906 m lap, 1,227 centreline nodes (`geometry-singapore.json`, 3.6 MB) |
@@ -172,4 +172,6 @@ the ~2.2 MB compat bundle vs the game's no-build IIFE loading, and per-platform
 - `build-geometry.cjs` — browser-free geometry extractor (VM pattern from `tools/verify-track.cjs`)
 - `geometry-singapore.json` — road mesh `{pos,nrm,idx}` + centreline `px/py/pz/tx/ty/tz/hw` (regenerable)
 - `rapier-eval.mjs` — all tests above (`node spike/physics/rapier-eval.mjs [trackId]`)
-- `vendor/` — `@dimforge/rapier3d-compat` 0.19.3 (`rapier.mjs`, LICENSE Apache-2.0, package.json)
+- *(no `vendor/`)* — these harnesses import the game's own `vendor/rapier-0.19.3/rapier.mjs`
+  (Apache-2.0). The byte-identical copy that used to sit here was 2.2 MB of pure
+  duplication and has been removed.

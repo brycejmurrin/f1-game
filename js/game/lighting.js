@@ -518,7 +518,7 @@ const _clampNum = (v, a, b) => (v < a ? a : v > b ? b : v);
 // a red glow trailing each car on the road surface.
 const _tlSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _tlSel = [];
-function appendCarTailLights(frame, track, cars, player) {
+function appendCarTailLights(frame, track, cars, player, mobileTier) {
   const L = frame.lights;
   // frame.lights is always the per-frame copy (flicker copies every frame), so
   // appending here never mutates the cached track set.
@@ -542,11 +542,13 @@ function appendCarTailLights(frame, track, cars, player) {
   const nT = Math.min(_tlSel.length, 5);
   if (nT <= 0) return;
   // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
-  // grid the floodlights alone can fill the shader's 32-light cap (or the tighter
-  // lampCull CAP from setFrameLights), so appending overflowed and the shader
-  // dropped the tail-lights. Evict that many of the FARTHEST floods instead
-  // (setFrameLights sorts ascending by distance, so the tail end is farthest).
-  const room = 32 - ((L.length / 15) | 0);
+  // grid the floodlights alone can fill the frame's light budget, so appending
+  // overflowed and the shader dropped the tail-lights. Evict that many of the
+  // FARTHEST floods instead (setFrameLights sorts ascending by distance, so the
+  // tail end is farthest). Measure against the SAME budget setFrameLights culled
+  // to — against the literal 32 this whole reserve was a no-op on the mobile
+  // tier, i.e. on exactly the devices it was written to protect.
+  const room = lampCap(cars.length, mobileTier) - ((L.length / 15) | 0);
   if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
   // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
   // cutoff so a car doesn't pop in/out abruptly as it drifts past the limit. 0 =
@@ -584,20 +586,30 @@ const _byDistAsc = (a, b) => a.d - b.d;   // hoisted sort comparator (no per-fra
 let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
+// How many lights this frame may end up carrying. Named because BOTH movers need
+// the same answer — setFrameLights culls down to it, and appendCarTailLights has
+// to evict against it to make room. appendCarTailLights used to measure its room
+// against the shader's literal 32 instead, so on the mobile tier (CAP 24) it saw
+// 8 free slots that did not exist, evicted nothing, and left the phone running 29
+// lights through the per-fragment loop the 24 was chosen to protect.
+function lampCap(carCount, mobileTier) {
+  // With traffic, CAP defaults to lampCull (28) so ~4 of the 32 shader slots stay
+  // free for tail-lights; solo runs use the full 32. Mobile tier clamps both
+  // paths to 24: the per-fragment lamp loop (GGX + clearcoat per lamp) is the
+  // dominant night fill cost on phones, and clamping HERE (not the knob's def)
+  // means a per-track preset can't push a phone back up to 32.
+  return Math.min(
+    carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 28) : 32,
+    mobileTier ? 24 : 32);
+}
 function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet) {
   // srcSet overrides the session light set (the daylight always-on subset);
   // absent, the baked full set is used exactly as before.
   const src = srcSet || track._lights;
   if (!src || !src.length) { frame.lights = null; return; }
   // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
-  // cull. With traffic, CAP defaults to lampCull (28) so ~4 of the 32 shader
-  // slots stay free; solo runs use the full 32. Mobile tier clamps both paths
-  // to 24: the per-fragment lamp loop (GGX + clearcoat per lamp) is the
-  // dominant night fill cost on phones, and clamping HERE (not the knob's def)
-  // means a per-track preset can't push a phone back up to 32.
-  const CAP = Math.min(
-    cars.length > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 28) : 32,
-    mobileTier ? 24 : 32);
+  // cull, against the same budget (see lampCap).
+  const CAP = lampCap(cars.length, mobileTier);
   // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
   // + warmth: dim & warm at twilight, full & neutral at deep night).
   const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);

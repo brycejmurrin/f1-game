@@ -45,7 +45,7 @@ try {
   // ── load + init ─────────────────────────────────────────────────────────
   const heap0 = mem();
   const tImp0 = performance.now();
-  const { default: RAPIER } = await import("./vendor/rapier.mjs");
+  const { default: RAPIER } = await import("../../vendor/rapier-0.19.3/rapier.mjs");
   const tImp1 = performance.now();
   await RAPIER.init({});
   const tInit = performance.now();

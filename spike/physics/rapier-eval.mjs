@@ -12,7 +12,7 @@
 
 import fs from "node:fs";
 import { performance } from "node:perf_hooks";
-import RAPIER from "./vendor/rapier.mjs";
+import RAPIER from "../../vendor/rapier-0.19.3/rapier.mjs";
 
 await RAPIER.init({});
 

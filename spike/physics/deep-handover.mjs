@@ -23,7 +23,7 @@
 // the real game has sculpted terrain). Usage: node spike/physics/deep-handover.mjs
 
 import fs from "node:fs";
-import RAPIER from "./vendor/rapier.mjs";
+import RAPIER from "../../vendor/rapier-0.19.3/rapier.mjs";
 
 await RAPIER.init({});
 

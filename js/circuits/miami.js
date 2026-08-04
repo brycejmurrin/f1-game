@@ -109,9 +109,6 @@
       const SKY_PAL_STADIUM = [   // stadium-lot corridor (T11 approach) — concrete-forward, cooler
         CONCRETE, GREYWHITE, [0.62, 0.82, 0.88], [0.80, 0.84, 0.88], [0.90, 0.84, 0.76],
       ];
-      const SKY_PAL_RESORT = [   // Beach Club corridor — warm sand / terracotta / seafoam
-        [0.92, 0.78, 0.58], [0.86, 0.90, 0.84], [0.94, 0.70, 0.55], [0.80, 0.86, 0.92], [0.90, 0.82, 0.64],
-      ];
       const SKY_PAL_DUSKGLASS = [   // back-straight DRS corridor — deeper, more saturated glass
         [0.30, 0.60, 0.64], [0.66, 0.40, 0.50], [0.44, 0.54, 0.78], [0.60, 0.68, 0.48], [0.78, 0.56, 0.32],
       ];
