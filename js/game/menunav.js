@@ -28,7 +28,7 @@ window.MenuNav = (function () {
   // js/game/input.js asks the same question before it lets a key drive the car.
   // #overlay is the main menu; the rest are the `.screen` overlays plus the two
   // full-screen panels that are not `.screen` (#track-detail, #datahub).
-  const LAYER_IDS = ["overlay", "pausemenu", "pmsettings", "select", "teampicker",
+  const LAYER_IDS = ["overlay", "pausemenu", "pmsettings", "select", "career", "teampicker",
     "race-settings", "standings", "results", "customize", "carsetup", "howtoplay",
     "advanced", "track-detail", "datahub"];
   // `:not([hidden])` belongs IN the selector rather than in a filter after it.
