@@ -10,7 +10,8 @@ const canvas = $("game");
 const els = {
   hud: $("hud"), pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"),
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
-  ot: $("hud-ot"), gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
+  ot: $("hud-ot"), aero: $("hud-aero"),
+  gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
   flag: $("hud-flag"), minimap: $("minimap"),
   lights: $("lights"), announce: $("announce"),
@@ -28,7 +29,7 @@ const els = {
   pmStandings: $("pm-standings"),
   pausebtn: $("pausebtn"), pausemenu: $("pausemenu"), pmsettings: $("pmsettings"), btnCam: $("btn-cam"),
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
-  btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnBrake: $("btn-brake"),
+  btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBrake: $("btn-brake"),
   btnThrottle: $("btn-throttle"),
   btnSteerLeft: $("btn-steer-left"), btnSteerRight: $("btn-steer-right"),
   shiftUp: $("shift-up"), shiftDown: $("shift-down"),
@@ -255,6 +256,31 @@ const WT_LONG = 0.22;       // longitudinal load transfer (braking loads the fro
 // quick corners felt vague and slow ones felt sharp. Lateral grip is now
 // 1 + DOWNFORCE·(v/VMAX)², so high-speed cornering firms up the way it should.
 const DOWNFORCE = 0.65;     // extra grip fraction at VMAX (0 = no wings)
+// ACTIVE AERO — the 2026 X-mode / Z-mode rules, and the THIRD member of the
+// straight-line toolkit alongside BOOST (spend battery) and OVERTAKE (a free
+// proximity-gated push). It is not a fourth kind of boost: it spends no energy
+// and adds no thrust. It TRADES downforce for drag.
+//   Z-mode (aeroX 0, the default) — flaps closed, full downforce, full drag.
+//   X-mode (aeroX 1)              — flaps open, low drag, MUCH less downforce.
+// The blend `c.aeroX` is what every consumer reads (top speed, coast drag,
+// lateral grip, the rear-wing flap angle the renderer draws).
+//
+// The FIA gates X-mode to "any straight longer than three seconds" — not to
+// painted DRS zones, and not to a proximity window. So does this: X_STRAIGHT_T
+// seconds of road ahead must be straighter than X_K_MAX before the mode ARMS,
+// which means the arming window shrinks as you speed up and the flap is already
+// shut by the time the car reaches the braking zone. Un-arming (or touching the
+// brake) SLAMS the flap shut — X_CLOSE_RATE is deliberately several times
+// X_OPEN_RATE, so the downforce comes back faster than it left.
+const X_VMAX_GAIN = 0.075;  // top-speed gain at full X-mode (~+19 km/h at pace 1)
+const X_DF_LOSS = 0.55;     // fraction of the DOWNFORCE term X-mode gives up
+const X_COAST_CUT = 0.35;   // fraction of COAST_DRAG X-mode sheds while coasting
+const X_OPEN_RATE = 2.2;    // aeroX per second opening (~0.45 s to full X)
+const X_CLOSE_RATE = 8.0;   // aeroX per second closing (~0.12 s back to Z)
+const X_STRAIGHT_T = 3.0;   // s of clear road ahead required to arm (FIA's rule)
+const X_LOOK_MIN = 45, X_LOOK_MAX = 260;   // m — clamps on that look-ahead
+const X_K_MAX = 0.0045;     // curvature that still counts as "straight" (r ~ 220 m)
+const X_MIN_SPEED = 25;     // m/s (a vStd() threshold) — no X-mode at crawl speed
 // Lateral grip OFF the racing surface. muBase had no off-track term at all, so
 // grass and gravel cornered exactly like tarmac and only scrubbed forward speed —
 // you could take a run-off at full lateral grip. Faded in over the first ~1.5 m
@@ -441,6 +467,25 @@ function isErsDeploying(c) {
 }
 const DRAIN = 0.20, REGEN = 0.115;   // energy per second
 const OT_TIME = 4, OT_COOL = 12, OT_GAP = 1.0;
+
+// -- ACTIVE AERO ------------------------------------------------------------
+// Is there enough straight road ahead of this car to run X-mode? The window is
+// X_STRAIGHT_T SECONDS long, so it stretches with speed exactly like the real
+// rule: a slow car needs a short clear stretch, a car at 300 km/h needs most of
+// a straight. Sampled every 12 m — the same granularity the AI's braking scan
+// uses, and fine enough that a chicane can't hide between two samples.
+function xStraightAhead(c) {
+  const look = clamp(Math.abs(c.speed) * X_STRAIGHT_T, X_LOOK_MIN, X_LOOK_MAX);
+  for (let d = 10; d <= look; d += 12) {
+    if (Math.abs(Tracks.curvature(track, wrapS(c.s + d))) > X_K_MAX) return false;
+  }
+  return true;
+}
+// Live downforce multiplier on the DOWNFORCE (aero-load) term. 1 in Z-mode,
+// 1 - X_DF_LOSS with the flaps fully open. Nothing else in the grip model
+// changes: mechanical grip, kerbs, weather and the friction ellipse are
+// untouched, so opening the wing costs you exactly the wing.
+function aeroDfMult(c) { return 1 - X_DF_LOSS * (c && c.aeroX || 0); }
 
 // ── seeded simulation randomness ────────────────────────────────────────────
 // Everything that FEEDS THE SIMULATION draws from here, never Math.random(), so
@@ -981,6 +1026,15 @@ function resolveLivery(team) {
   return val;
 }
 
+// The colour a team's WING FLAP elements are painted — the same fallback chain
+// Car3D uses for `wingC` when it builds the baked front/rear wing planes, so the
+// moveable active-aero flap drawn over the crown matches the wing it belongs to
+// instead of being a differently-coloured bolt-on.
+function wingColorOf(team) {
+  const liv = resolveLivery(team);
+  return liv.wing || liv.c2 || team.color2;
+}
+
 // partsVisualKey(teamId) -> cheap cache key for the resolved cosmetic tiers
 // (e.g. "11111111" = every category at its default/neutral tier). Used by the
 // setup-screen live preview (getSetupPreviewMesh), which re-keys its mesh every
@@ -1135,6 +1189,9 @@ function makeCars() {
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
         gear: 1, rpm: IDLE_RPM, shiftT: 0, boostOn: false,
         energy: 1, otT: 0, otCool: 0, deploying: false,
+        // active aero: commanded mode, the 0..1 flap blend, and whether the
+        // road ahead currently allows X-mode at all (see xStraightAhead).
+        xOn: false, aeroX: 0, xArmed: false,
         lapStart: 0, lapTime: 0, best: Infinity, totalT: 0,
         finished: false, finishT: 0, finPos: 0,
         offroad: false, offT: 0, cuts: 0, penalty: 0,
@@ -1172,6 +1229,7 @@ function gridUp(preOrder) {
     c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
     c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
+    c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0;
@@ -1839,6 +1897,7 @@ function showTouchControls(show) {
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
+  if (els.btnAero) els.btnAero.hidden = !t;
   els.shiftUp.hidden = !(t && manual);
   els.shiftDown.hidden = !(t && manual);
   const steerBtns = t && steerMode === "buttons";
@@ -2701,6 +2760,41 @@ function updateCar(c, dt, ranked) {
     if (unstuckActive) braking = false;
   }
 
+  // --- active aero (X-mode / Z-mode) ---
+  // Runs AFTER `braking` is known (touching the brake shuts the flaps) and
+  // BEFORE vmax is consumed by the gearbox and the speed integration, so the
+  // low-drag top speed applies on the same frame the flap opens.
+  //
+  // Note the AI needs no separate "close before the corner" rule: its braking
+  // scan looks 1.7 s ahead and the arming scan looks 3 s ahead, so the mode has
+  // already un-armed by the time the AI decides to brake for a corner.
+  c.xArmed = !c.offroad && !braking && vStd(c.speed) > X_MIN_SPEED
+    && !c.finished && state === "race" && xStraightAhead(c);
+  if (c.human) {
+    if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
+    else c.xOn = !!(inp && inp.aero);
+  } else {
+    // AI runs X-mode whenever it is available — a real driver leaves nothing on
+    // the table down a straight, and the arming window already keeps it honest.
+    c.xOn = c.xArmed;
+  }
+  {
+    // The flap POSITION, not the switch, is what the physics reads: the mode
+    // has to travel, and the travel is asymmetric (see X_CLOSE_RATE). Holding
+    // the button through a corner therefore buys nothing — the flap is shut.
+    const want = (c.xOn && c.xArmed) ? 1 : 0;
+    const rate = want > (c.aeroX || 0) ? X_OPEN_RATE : X_CLOSE_RATE;
+    c.aeroX = clamp((c.aeroX || 0) + Math.sign(want - (c.aeroX || 0)) * rate * dt,
+                    Math.min(c.aeroX || 0, want), Math.max(c.aeroX || 0, want));
+    // Losing the arming window drops the SWITCH too, so the flap doesn't spring
+    // back open at the exit of a corner the driver never re-armed for. Same as
+    // the real system: it re-arms, it does not re-open.
+    if (!c.xArmed) c.xOn = false;
+  }
+  // Low drag is worth top speed. This is the ONLY thrust-side effect — no
+  // engine power is added, so X-mode out of a slow corner does nothing at all.
+  vmax *= 1 + X_VMAX_GAIN * c.aeroX;
+
   // --- gearbox (player) ---
   let gearMult = 1, speedCap = vmax + 14 * Math.max(PACE, 0.05);   // ERS overspeed margin — a speed, so it rides the pace scale
   if (c.human) {
@@ -2736,9 +2830,12 @@ function updateCar(c, dt, ranked) {
     }
     c.energy = Math.min(1, c.energy + REGEN * 1.6 * dt);
   } else if (!onThrottle) {
-    // coasting: gentle engine-braking/drag both ways (don't snap reverse to 0)
-    if (c.speed > 0) c.speed = Math.max(0, c.speed - COAST_DRAG * dt);
-    else if (c.speed < 0) c.speed = Math.min(0, c.speed + COAST_DRAG * dt);
+    // coasting: gentle engine-braking/drag both ways (don't snap reverse to 0).
+    // X-mode sheds part of that drag — a lift-and-coast in the low-drag wing
+    // carries further, which is the whole point of opening it.
+    const cd = COAST_DRAG * (1 - X_COAST_CUT * (c.aeroX || 0));
+    if (c.speed > 0) c.speed = Math.max(0, c.speed - cd * dt);
+    else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
     c.energy = Math.min(1, c.energy + REGEN * dt);
   } else {
     const a = (ACCEL * PACE * (c.human ? mods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
@@ -3080,7 +3177,11 @@ function updateCar(c, dt, ranked) {
     // same surface/weather grip the rest of the sim uses.
     // Aero load (rises with v²) replaces the old speed taper, and the surface the
     // car is actually on now scales lateral grip — see DOWNFORCE / OFF_GRIP.
-    const aeroGrip = 1 + DOWNFORCE * Math.min(1, (Math.abs(c.speed) / vTop())) ** 2;
+    // ACTIVE AERO pays for its straight-line speed HERE, and only here: the
+    // aero-load term is scaled by aeroDfMult (1 in Z-mode, 0.45 with the flaps
+    // fully open). Carrying X-mode into a fast corner is therefore a genuine
+    // loss of grip at exactly the speed where aero load is doing the most work.
+    const aeroGrip = 1 + DOWNFORCE * aeroDfMult(c) * Math.min(1, (Math.abs(c.speed) / vTop())) ** 2;
     const offDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
     const surfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, offDepth);
     // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar
@@ -3581,6 +3682,7 @@ function rescuePlayer(c) {
   c.speed = Math.max(c.speed, 16);
   c.px = smp.p[0]; c.pz = smp.p[2];
   c.boostOn = false; c.deploying = false;
+  c.xOn = false; c.aeroX = 0; c.xArmed = false;   // rescue drops back to Z-mode
   c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
   c.rescueLastT = raceT;
   // Cues are for the driver at THIS screen — a rival being recovered elsewhere
@@ -4962,6 +5064,34 @@ function render(dt) {
           }
         }
       }
+    }
+    // ACTIVE AERO: the moveable upper rear-wing element, swung between the
+    // Z-mode and X-mode flap angles by this car's live `aeroX`. Drawn for EVERY
+    // car, not just the player — a rival's wing opening down the straight is the
+    // single most readable "he is going for it" cue the sport has, and it is the
+    // only part of the car that moves, so faking it on the HUD alone would be a
+    // lie about what the physics is doing.
+    // Skipped in cockpit view (that branch `continue`s well above this) and for
+    // a loaded GLB body, whose wing is somebody else's geometry.
+    if (!carModelBuf) {
+      const aState = teamDecalState(c.team, c.isPlayer);
+      const fg = Car3D.aeroFlap(aState.val);
+      const ang = fg.zAngle + (fg.xAngle - fg.zAngle) * clamp(c.aeroX || 0, 0, 1);
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      const W = _ringWorld;
+      W.set(tmpMat);
+      // Rotate the flap about the car's local X (the `r` column) by `ang`, then
+      // hang it at the pivot. Columns are [r, u, f]: local +Y maps to
+      // u*cos+f*sin and local +Z to -u*sin+f*cos, which lifts the trailing edge
+      // (at local -z) as the angle grows. Handedness of [r,u,f] doesn't matter —
+      // `u` is the real up vector either way.
+      for (let i = 0; i < 3; i++) {
+        const uu = tmpMat[4 + i], ff = tmpMat[8 + i];
+        W[4 + i] = uu * ca + ff * sa;
+        W[8 + i] = -uu * sa + ff * ca;
+        W[12 + i] += uu * fg.y + ff * fg.z;
+      }
+      gfx.draw(CarMesh.getAeroFlap(aState.val, wingColorOf(c.team)), W, paint);
     }
     // Rear LED: FIA rain-light strobe in the wet (~4 Hz, 55% duty), and STEADY
     // at night — a car's rear/vertical faces receive none of the downward-aimed

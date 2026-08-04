@@ -211,7 +211,9 @@ The egocentric snapshot. `brief` is what a control loop reads each tick.
   "rivals": [ { "id": 3, "rel": "ahead", "gapM": 22.4, "gapS": 0.46,
                 "lateralM": 2.1, "closingMps": 1.8, "side": "right",
                 "threat": "closing" } ],
-  "affordances": [ { "id": "deploy_ers", "why": "energy 0.74, 380 m straight" } ],
+  "aero": { "mode": "X", "flap": 1, "requested": true, "armed": true },
+  "affordances": [ { "id": "deploy_ers", "why": "energy 0.74, 380 m straight" },
+                   { "id": "active_aero_x_mode", "why": "straight road ahead" } ],
   "unavailable": [ { "id": "overtake_L", "why": "1.1 m to barrier" } ],
   "brief": "Lap 3, P4, 218 km/h in 6th, approaching T7 Ascari (left, 52 m), 1.4 m left of the line, car ahead 0.46 s and closing."
 }

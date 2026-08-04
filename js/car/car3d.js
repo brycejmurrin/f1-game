@@ -624,6 +624,27 @@ const Car3D = (function () {
       rear: profile(-2.69, cy + 0.015, sy),
     };
   }
+  // ACTIVE-AERO flap anchor — where the MOVEABLE upper rear-wing element hangs.
+  // Same deal as endplateGeom/numberBoard: a single source of truth so the flap
+  // the renderer swings (js/game/carmesh.js getAeroFlap + the draw in game.js)
+  // sits on the wing this car actually has, at every downforce level.
+  //
+  // The pivot is the leading edge of the crown slot the build already reserves
+  // (see `upperTrailY` in the rear-wing section): the baked stack ends just
+  // below it, so the flap reads as the topmost element rather than a duplicate
+  // of one. Chord and half-span match the baked top plane's planform.
+  function aeroFlapGeom(aLvl) {
+    const ep = endplateGeom(aLvl);
+    return {
+      z: -2.36,                       // pivot z (leading edge), car-local metres
+      y: ep.rear.top - 0.018 + 0.026, // pivot y — just above the crown rail
+      chord: 0.27, half: 0.50, thick: 0.028,
+      // Flap angle at each end of the travel. Z-mode is a steep, working flap;
+      // X-mode lays it almost flat, which is exactly what the eye reads as
+      // "the wing just opened".
+      zAngle: 0.50, xAngle: 0.05,     // radians, trailing edge up from the pivot
+    };
+  }
   // The driver-number board on the endplate: a fixed-height board anchored LOW,
   // its bottom a small gap above the plate base. The plate base barely moves with
   // DF (~0.46 → 0.51) while the top shoots up, so a low anchor reads grounded on
@@ -2118,7 +2139,7 @@ const Car3D = (function () {
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, teamStyleOf,
-           endplate: endplateGeom, numberBoard,
+           endplate: endplateGeom, numberBoard, aeroFlap: aeroFlapGeom,
            sharkFin: FIN, sharkFinPanel, sharkFinBadge,
            aeroLevelOf };
 })();

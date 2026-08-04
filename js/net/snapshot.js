@@ -59,7 +59,8 @@ const NetSnapshot = (function () {
   const F_DEPLOY = 0x10, F_OFFROAD = 0x20, F_KERB = 0x40, F_BRAKE = 0x80;
   // Input flags.
   const I_THROTTLE = 0x01, I_BRAKE = 0x02, I_SHIFT_UP = 0x04,
-        I_SHIFT_DOWN = 0x08, I_OVERTAKE = 0x10, I_BOOST = 0x20;
+        I_SHIFT_DOWN = 0x08, I_OVERTAKE = 0x10, I_BOOST = 0x20,
+        I_AERO = 0x40;   // ACTIVE AERO: X-mode requested (see js/game.js)
 
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
   const i32 = (v) => (v | 0);
@@ -160,6 +161,7 @@ const NetSnapshot = (function () {
       if (inp.shiftDown) f |= I_SHIFT_DOWN;
       if (inp.overtake) f |= I_OVERTAKE;
       if (inp.boostOn) f |= I_BOOST;
+      if (inp.aero) f |= I_AERO;
       dv.setUint8(INPUT_HEADER + i * INPUT_BYTES + 1, f);
     }
     return new Uint8Array(buf);
@@ -184,6 +186,7 @@ const NetSnapshot = (function () {
         shiftDown: !!(f & I_SHIFT_DOWN),
         overtake: !!(f & I_OVERTAKE),
         boostOn: !!(f & I_BOOST),
+        aero: !!(f & I_AERO),
       });
     }
     return { type: TYPE_INPUT, tick: last, inputs };

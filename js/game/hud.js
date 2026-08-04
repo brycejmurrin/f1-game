@@ -79,6 +79,15 @@ function updateHud(force) {
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
   hClass(els.ot, ot);
   hText(els.ot, player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1) : "OVERTAKE");
+  // ACTIVE AERO. Three states worth telling apart at a glance: the flap is OPEN
+  // (X-MODE), the road ahead would allow it (armed, so the button is worth
+  // pressing), or it is simply unavailable here. `aeroX` is the flap travel,
+  // not the switch, so the readout follows the wing rather than the button.
+  const xOpen = (player.aeroX || 0) > 0.05;
+  hToggle(els.btnAero, "on", xOpen);
+  hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
+  hClass(els.aero, xOpen ? "ax-open" : player.xArmed ? "ax-armed" : "ax-off");
+  hText(els.aero, xOpen ? "X-MODE" : "Z-MODE");
   if (timeTrial) {
     // no rivals — show ghost delta (or last lap) and the record to chase instead of gaps
     if (Ghost.hasGhost()) {
