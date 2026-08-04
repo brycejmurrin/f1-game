@@ -1459,6 +1459,16 @@ const Tracks = (function () {
       // semantic prop registry (see note() above) — scenery modules call this
       // after their own guards so only props that actually ship are recorded
       note, noteSpan,
+      // Per-circuit trackside-furniture FORM lookup, resolved the same way FURN
+      // and BARRIER already are: KIT[def.id] || KIT_DEF[theme] || fallback. The
+      // fallback the caller passes is always that emitter's CURRENT geometry,
+      // so an absent table leaves all 40 circuits exactly as they were.
+      kitOf: (family, fallback) => {
+        const K = TrackSceneryData.KIT || {};
+        const D = TrackSceneryData.KIT_DEF || {};
+        const row = K[def.id] || D[theme] || D.green || {};
+        return row[family] || fallback;
+      },
     };
     Object.assign(ctx, SceneryNature.create(ctx));
     Object.assign(ctx, SceneryStructures.create(ctx));

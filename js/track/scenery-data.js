@@ -193,6 +193,80 @@ const TrackSceneryData = (function () {
     modern:       { tree: "broad", fol: [0.26, 0.42, 0.20], lamp: "post",  lc: [0.95, 0.95, 1.0] },
   };
 
+  // ── PER-CIRCUIT TRACKSIDE FURNITURE FORMS ───────────────────────────────
+  // FURN keys a circuit's planting and lighting; KIT keys its barriers,
+  // signage and marshal kit. Same rule, same fallback shape:
+  //   KIT[def.id] || KIT_DEF[theme] || KIT_DEF.green
+  // and every field is optional — an absent field falls back to that emitter's
+  // own default, which is its pre-existing geometry.
+  //
+  // Why this table exists: marshalPost, billboard, fence, guardrail, tyreWall,
+  // gantry, cameraTower and sponsorHoarding were ~870 calls of geometry that
+  // was byte-identical on all 40 circuits, differing only in tint. They line
+  // the whole lap and are in frame constantly, so they were the single largest
+  // reason different circuits read as the same place — far more than the
+  // grandstands, which are already well parameterised.
+  //
+  // BUDGET: tyre "double"/"pyramid" multiply the tyre count and fence
+  // "hoarding"/"palisade" are heavier than mesh. They appear only on circuits
+  // with measured headroom, never in KIT_DEF.
+  const KIT = {
+    // ── street circuits: rented kit, tecpro, printed hoarding ──
+    monaco:      { marshal: "tent",      rail: "armco",       fence: "hoarding",  tyre: "tecpro",  board: "fascia",    gantry: "cantilever", camera: "scaffold",  hoarding: "barrierTop" },
+    vegas:       { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
+    singapore:   { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "truss",      camera: "scaffold",  hoarding: "led" },
+    baku:        { marshal: "hut",       rail: "armco",       fence: "chainlink",  tyre: "tecpro",  board: "fascia",    gantry: "portal",     camera: "scaffold",  hoarding: "barrierTop" },
+    jeddah:      { marshal: "hut",       rail: "armco",       fence: "chainlink",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "monopole",  hoarding: "led" },
+    miami:       { marshal: "kiosk",     rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
+    madrid:      { marshal: "tent",      rail: "jersey",      fence: "hoarding",  tyre: "tecpro",  board: "led",       gantry: "cantilever", camera: "scaffold",  hoarding: "banner" },
+    // ── Gulf / desert: containers, sand-proof kit, monopole signage ──
+    bahrain:     { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },
+    qatar:       { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "airfence", board: "monopole", gantry: "portal",     camera: "monopole",  hoarding: "led" },
+    abudhabi:    { marshal: "kiosk",     rail: "safer",       fence: "panelled",  tyre: "airfence", board: "led",      gantry: "truss",      camera: "monopole",  hoarding: "led" },
+    // ── modern Tilke-era permanent ──
+    shanghai:    { marshal: "kiosk",     rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "truss",      camera: "monopole",  hoarding: "panel" },
+    cota:        { marshal: "kiosk",     rail: "safer",       fence: "panelled",  tyre: "tecpro",  board: "monopole",  gantry: "truss",      camera: "lattice",   hoarding: "panel" },
+    sochi:       { marshal: "kiosk",     rail: "jersey",      fence: "panelled",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "monopole",  hoarding: "led" },
+    sepang:      { marshal: "kiosk",     rail: "armco",       fence: "mesh",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },
+    paul_ricard: { marshal: "kiosk",     rail: "wArmco",      fence: "panelled",  tyre: "tecpro",  board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "led" },
+    catalunya:   { marshal: "kiosk",     rail: "wArmco",      fence: "leaning",   tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "lattice",   hoarding: "panel" },
+    portimao:    { marshal: "cabin",     rail: "wArmco",      fence: "leaning",   tyre: "stack",   board: "trivision", gantry: "box",        camera: "scaffold",  hoarding: "panel" },
+    istanbul:    { marshal: "kiosk",     rail: "armco",       fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },
+    magny_cours: { marshal: "cabin",     rail: "wArmco",      fence: "mesh",      tyre: "stack",   board: "trivision", gantry: "box",        camera: "lattice",   hoarding: "panel" },
+    // ── old-school permanent: armco, timber, lattice ──
+    spa:         { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
+    monza:       { marshal: "hut",       rail: "armco",       fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "truss",      camera: "lattice",   hoarding: "panel" },
+    imola:       { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
+    silverstone: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
+    hockenheim:  { marshal: "bunker",    rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
+    nurburgring: { marshal: "bunker",    rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
+    zandvoort:   { marshal: "cabin",     rail: "armco",       fence: "palisade",  tyre: "stack",   board: "banner",    gantry: "box",        camera: "scaffold",  hoarding: "banner" },
+    interlagos:  { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
+    suzuka:      { marshal: "kiosk",     rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "banner",    gantry: "truss",      camera: "lattice",   hoarding: "banner" },
+    mugello:     { marshal: "cabin",     rail: "armco",       fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
+    estoril:     { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "trivision", gantry: "box",        camera: "scaffold",  hoarding: "panel" },
+    kyalami:     { marshal: "cabin",     rail: "cable",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
+    watkins_glen:{ marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
+    buenos_aires:{ marshal: "cabin",     rail: "cable",       fence: "palisade",  tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
+    jacarepagua: { marshal: "cabin",     rail: "cable",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "banner" },
+    indianapolis:{ marshal: "tower",     rail: "safer",       fence: "chainlink", tyre: "stack",   board: "tower",     gantry: "truss",      camera: "lattice",   hoarding: "double" },
+    montreal:    { marshal: "hut",       rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
+    redbull:     { marshal: "cabin",     rail: "armco",       fence: "mesh",   tyre: "stack",   board: "banner",    gantry: "portal",     camera: "monopole",  hoarding: "banner" },
+    hungaroring: { marshal: "hut",       rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
+    mexico:      { marshal: "hut",       rail: "armco",       fence: "chainlink",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
+    albert_park: { marshal: "container", rail: "jersey",      fence: "chainlink", tyre: "tecpro",  board: "panel",     gantry: "box",        camera: "scaffold",  hoarding: "panel" },
+  };
+
+  // Theme fallback. Every value here is the emitter's PRE-EXISTING default, so
+  // a circuit with no KIT row is untouched.
+  const KIT_DEF = {
+    green:        { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
+    desert:       { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
+    street_night: { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
+    street_day:   { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
+    modern:       { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
+  };
+
   // fh / bh = front / back-row height [min, range]. Real-circuit character:
   // Vegas/Singapore tall; Baku = low sandstone Old City + tall flame towers;
   // Monaco = SHORT tan Mediterranean apartment blocks; Jeddah/Madrid/Miami mid.
@@ -385,5 +459,5 @@ const TrackSceneryData = (function () {
     watkins_glen:  ["scaffold", "alu", "concrete"],         // club-built timber/steel, no colour at all
   };
 
-  return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF, STYLES, THEME_DEF, ATM, COL, STAND_LIVERIES, STAND_SETS, STAND_SET_DEF };
+  return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF, STYLES, THEME_DEF, ATM, COL, STAND_LIVERIES, STAND_SETS, STAND_SET_DEF, KIT, KIT_DEF };
 })();
