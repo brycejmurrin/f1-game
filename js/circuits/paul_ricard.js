@@ -74,7 +74,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, prop, runoffApron,
         cameraTower, sponsorHoarding, signBoard,
-        addBox, addCyl, addCone, addPrism, addFrustum } = api;
+        addBox, addCyl, addCone, addFrustum } = api;
       const K = (s) => Math.round(s * n) % n;
 
       const PINE = [0.14, 0.30, 0.16], PINE_D = [0.11, 0.24, 0.14];

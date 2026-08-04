@@ -70,7 +70,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
         cameraTower, sponsorHoarding, signBoard,
-        addBox, addCyl, addCone, addPrism, addFrustum } = api;
+        addBox, addCyl, addCone, addFrustum } = api;
       const K = (s) => Math.round(s * n) % n;
 
       const LEAF = [0.20, 0.44, 0.20], LEAF_D = [0.15, 0.36, 0.18];

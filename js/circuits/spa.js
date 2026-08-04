@@ -54,7 +54,7 @@
       { frac: 0.8572, angleDeg: 4.0, widthM: 140 },   // Blanchimont
     ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, hash, every, place, backdrop, pal,
+      const { out, MAT, seat, n, px, pz, pyMin, hash, every, place, backdrop, pal,
               addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
               mountain, pine, tree, forestEdge, building, motorhome,
               marshalPost, gantry, billboard, fence, guardrail, tyreWall, wall,
