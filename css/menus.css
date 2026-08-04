@@ -201,11 +201,36 @@
    wants width.
    The circuit section still spans the body row AND the foot row, which is what
    lets it scroll down to the sheet floor rather than stopping ~50px above it. */
-#sel-inner { grid-template-columns: minmax(0, 1fr); }
+/* THE COLUMNS AND ROWS LIVE HERE, NOT IN A @container BLOCK. #sel-inner IS the
+   `sheet` container, and a container query cannot style its own container — a
+   `@container sheet` rule targeting #sel-inner resolves against an outer
+   container that does not exist and silently never applies. (Measured: the
+   two-column template written inside the query did nothing, the sheet stayed on
+   its old single-column rule, and the items placed in "column 2" landed in an
+   implicit auto column — which is why the preview swelled to 60% of the sheet.)
+   Declared unconditionally instead, with every direct child spanning both
+   columns by default so the narrow layout is exactly the one-column stack it
+   was; the split only comes alive when the wide block below places items into
+   the individual columns.
+   PERCENT for the preview column, not fr: the map canvas carries an intrinsic
+   520px width, and an fr track takes content into account, so the preview kept
+   resolving WIDER than the list it is meant to be narrower than. */
+#sel-inner {
+  grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) min-content;
+  column-gap: calc(var(--pad) * 0.8);
+}
 #sel-inner > .sheet-head,
 #sel-inner > .sheet-body,
 #sel-inner > .sheet-foot { grid-column: 1 / -1; }
 
+/* COLUMNS ARE FOR A WIDE SHEET; A TALL ONE GETS BANDS. Gating the two-column
+   split on width alone put an upright iPad (810px sheet, 1170px tall) into
+   side-by-side, where the preview column is only as wide as 42% of the sheet —
+   so the map, whose size is its column's width, stayed small while 750px of that
+   column sat empty underneath it. Portrait keeps the stacked layout below and
+   spends the width on the map instead. */
+@media (orientation: landscape) {
 @container sheet (min-width: 620px) {
   #sel-body { display: contents; }
   #sel-inner > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
@@ -217,20 +242,91 @@
      Side by side, the list gets the full height of the sheet and the preview
      gets a column narrow enough that its map and its facts stack inside it
      (see the max-width rule below), which is the shape that card was designed
-     for anyway. */
+     for anyway.
+
+     THE LIST RUNS TO THE SHEET FLOOR. The columns live on the sheet itself now
+     and the list spans the body row AND the foot row, exactly as the garage's
+     option list does (css/carsetup.css). The action bar holds BACK and START,
+     both under the preview column; running its row the full width cut the list
+     off 49px above the floor on a landscape phone and 76px on a desktop, for a
+     bar with nothing in it on that side.
+     The foot row is min-content, NOT auto: an auto track's growth limit is
+     max-content, and with the list spanning into that row the list's own
+     max-content — twenty-four circuit rows — became the limit, so the bar grew
+     to eat a third of the sheet. min-content takes the FOOT's height; the list,
+     a scroll container with min-height 0, contributes nothing to it. */
+  #sel-track-preview, #sel-preview-map { min-width: 0; }
+  /* THE MAP YIELDS, THE FACTS DO NOT. The map's height comes from its 520:300
+     ratio against a full-width column, which ignores how much height the column
+     has: on a 343px-tall landscape phone that is 176px of map, the name/GP/chip
+     rows want 90 more, and the card has ~215 — so the chip row, which wraps to a
+     second line as soon as a circuit has a fourth fact, hung below the card and
+     was clipped mid-chip. T1 SLOWEST, the one red chip, was the casualty.
+     Capping the map at half the card leaves the facts their room; object-fit
+     keeps the outline undistorted when the cap is what binds. Two IDs because
+     the base width is a custom property precisely so container-query rules can
+     beat it without depending on source order. */
+  #sel-track-preview #sel-preview-map { max-height: 50%; object-fit: contain; }
   #sel-track-section {
-    grid-column: 1 / -1; grid-row: 2 / 3;
-    display: grid;
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    column-gap: calc(var(--pad) * 0.8);
-    overflow: hidden; min-height: 0;
-    padding: calc(var(--pad) * 0.25) var(--pad) 0 var(--pad);
+    grid-column: 1; grid-row: 2;
+    min-height: 0; overflow: hidden;
+    display: flex; flex-direction: column;
+    padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
   }
-  #sel-circuit-label { grid-column: 1 / -1; grid-row: 1; }
-  #sel-track-preview { grid-column: 1; grid-row: 2; }
-  #sel-tracks { grid-column: 2; grid-row: 2; min-height: 0; }
-  #sel-inner > .sheet-foot { grid-column: 1 / -1; grid-row: 3; }
+  /* The label sits at the top; the card takes the rest of the column and centres
+     itself in it, so a pane taller than the card has its spare height split
+     above and below rather than pooled at the bottom. */
+  #sel-track-section > #sel-track-preview { margin-block: auto; }
+  #sel-tracks {
+    grid-column: 2; grid-row: 2 / 4; min-height: 0;
+    padding-right: var(--pad); padding-bottom: calc(var(--pad) * 0.5);
+  }
+  #sel-inner > .sheet-foot { grid-column: 1; grid-row: 3; }
+}
+}
+
+/* ---------- PORTRAIT ON A WIDE SHEET: TOP AND BOTTOM, NOT LEFT AND RIGHT ----
+   An upright tablet has width to give the map and height to give the list, so
+   the preview becomes a BAND across the top and the list takes everything under
+   it down to the action bar. The map is the reason the card exists and it is
+   sized by width, so a full-width band is what makes it big: ~390px across on an
+   iPad instead of the 300 it got as a 42% column, with the facts beside it
+   rather than under it. The action bar stays full width here — in this shape
+   there is no left column for it to sit under. */
+@media (orientation: portrait) {
+  @container sheet (min-width: 620px) {
+    #sel-body { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; }
+    /* THE BAND IS CAPPED AT HALF THE BODY, AND THE MAP YIELDS INSIDE IT.
+       A portrait VIEWPORT does not guarantee a portrait SHEET: on a rotated
+       1080x1920 monitor css/responsive.css caps #sel-inner at 720px tall, so the
+       sheet is landscape-shaped inside a portrait window. Sized purely by its
+       content, the full-width map band came out 710px of that 720 and left the
+       circuit list TWO PIXELS. Capping the section and letting the map shrink
+       inside it (object-fit keeps the outline true when the cap binds) means the
+       list always gets the other half, whatever shape the sheet turns out to be. */
+    #sel-track-section {
+      display: flex; flex-direction: column;
+      flex: 0 1 auto; min-height: 0; max-height: 52%;
+    }
+    /* The card FILLS the capped band, which gives it a definite height, and the
+       map is capped at that height minus the room the caption needs. A share of
+       the card (66%) was wrong: the caption's height is roughly fixed — name,
+       GP, meta, up to two chip rows, the elevation strip — while the band's is
+       not, so a percentage left the facts 50px on a rotated monitor and clipped
+       them. Subtracting a constant leaves the caption whole at every band size
+       and lets the map have the rest; where the map's own 520:300 height is
+       smaller than the cap, the cap simply does not bind. */
+    #sel-track-preview { flex: 1 1 auto; min-height: 0; }
+    #sel-track-preview #sel-preview-map { max-height: calc(100% - 9.5rem); }
+    /* The card keeps the wide-sheet shape it already has — map across the top,
+       facts under it — and in a full-width band that makes the map ~765px on an
+       iPad instead of the ~300 it got as a 42% column. Nothing to set here: the
+       card's own wide-sheet rule below is not gated to landscape, so the map is
+       already 100% of the card. */
+    /* The list is the rest of the sheet, and it scrolls. Without flex: 1 it
+       sizes to content and the sheet's body row leaves it short. */
+    #sel-tracks { flex: 1 1 auto; min-height: 0; max-height: none; }
+  }
 }
 
 /* ---------- team card + team picker ----------
@@ -363,6 +459,43 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 }
 #sel-preview-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
 
+/* PORTRAIT: THE MAP IS THE SUBJECT, THE FACTS ARE A CAPTION.
+   A phone held upright gives the card width and almost no height, and half of
+   that width was going to four short lines of text — the circuit outline, the
+   one thing you are actually choosing between, came out 160px wide. The map
+   takes 62% here and every readout under it drops a step, which buys the map
+   its width AND gives the list back the height the smaller type frees.
+   Only the type sizes are listed: the map's width is the inherited knob, so an
+   upright TABLET (which stacks map-over-facts at --sel-map-w: 100%) keeps its
+   full-width map and simply gets the smaller caption too. */
+@media (orientation: portrait) {
+  /* PHONE PORTRAIT: MAP ON TOP, FACTS AS A CAPTION UNDER IT — the same band the
+     upright tablet gets, for the same reason. Widening the map inside the ROW
+     layout backfired: at 62% the facts had 230px left, so the meta wrapped to
+     two lines and every chip took a row of its own, and the card came out TALLER
+     than when the map was small. Full width doubles the map (160 -> 323px) and
+     the caption under it costs four short lines. The elevation strip goes: at
+     323px wide and 22px tall it is a texture, not a reading, and it is the one
+     thing here that costs height without saying anything the chips do not. */
+  @container sheet (max-width: 619px) {
+    #sel-track-preview { flex-direction: column; align-items: stretch; --sel-map-w: 100%; }
+    #sel-preview-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+    #sel-preview-name, #sel-preview-gp, #sel-preview-meta { margin: 0; }
+    #sel-preview-facts { flex-basis: 100%; }
+    /* Two IDs: the base `#sel-preview-elev { display: block }` is declared later
+       in this file, and a single-ID rule here would lose to it on source order —
+       the same trap the map's width knob exists to dodge. */
+    #sel-track-preview #sel-preview-elev { display: none; }
+  }
+  #sel-preview-name { font-size: 13px; }
+  #sel-preview-gp { font-size: 10px; }
+  #sel-preview-meta { font-size: 10px; line-height: 1.35; margin-top: 4px; }
+  #sel-preview-rec { font-size: 10px; margin-top: 3px; }
+  .spf-fact { font-size: 9px; padding: 1px 6px; }
+  #sel-preview-facts { gap: 4px; margin-top: 4px; }
+  #sel-preview-elev { height: 22px; margin-top: 4px; }
+}
+
 /* THE PREVIEW CARD IN THE TWO-COLUMN LAYOUT.
    Scoped through #sel-track-preview — two IDs — deliberately. A container query
    adds no specificity, so a single-ID rule here ties with every other single-ID
@@ -377,9 +510,28 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 @container sheet (min-width: 620px) {
   #sel-track-preview {
     align-self: stretch; margin-bottom: 0;
-    flex-direction: column; align-items: stretch; justify-content: center;
+    flex-direction: column; align-items: stretch;
     gap: calc(var(--gap) * 0.8);
     --sel-map-w: 100%;          /* the whole column, not half of it */
+    /* FILLS ITS COLUMN, AND IS BOUNDED BY IT. Content-driven height was the bug:
+       on a 343px-tall landscape phone the card came out 269px inside a 239px
+       column and the section clipped the difference off the bottom, which is
+       where the facts are. `flex: 1 1 auto` with `min-height: 0` makes the
+       column the authority in both directions — the card cannot exceed it, and
+       on a tall pane (iPad portrait: a 352px card in a 1111px column) it no
+       longer leaves 750px of dead band underneath.
+       `safe center` rather than plain `center`: centring is what looks right
+       when the content fits, but when it does not, plain centring pushes the
+       overflow out BOTH ends and takes the circuit name off the top. The safe
+       keyword falls back to flex-start in exactly that case.
+       The card HUGS ITS CONTENT and is centred in the column by the section
+       below. Stretching it to fill a 1111px iPad-portrait column instead framed
+       a small cluster of map and chips in a mostly empty bordered box — worse
+       than the dead band it was meant to cure. The pane's spare height goes to
+       the MAP, by way of a wider column in portrait (see the media query above
+       the container block), not to the card's background. */
+    justify-content: safe center;
+    flex: 0 1 auto; min-height: 0;
   }
   #sel-preview-info { flex: 0 0 auto; }
 }
