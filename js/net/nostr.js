@@ -92,7 +92,10 @@ const NetNostr = (function () {
    * lobby has to fall back to the link, not break.
    */
   async function exchange(opts) {
-    const { code, send, reply, token, onTick } = opts;
+    // send/reply are the two-party pair this started as. mintOffer+onJoiner are
+    // SUBSCRIPTION mode: a host that stays in the room and answers each arrival
+    // with an offer of its own, rather than resolving on the first one.
+    const { code, send, reply, token, onTick, mintOffer, onJoiner } = opts;
     if (!available()) {
       return { ok: false, error: "unsupported",
                message: "This browser cannot reach the room service." };
@@ -160,17 +163,32 @@ const NetNostr = (function () {
           // network failure's clothes. tests/net-trystero-api.test.mjs pins
           // both shapes against the vendored source.
           const swap = room.makeAction("swap");
-          const post = (data) => swap.send(data);
-          let handling = false;
+          // TARGETED send. Trystero 0.25's signature is
+          // send(data, options) with options.target — NOT send(data, id) as
+          // the older tuple API suggested. Getting that wrong posts to
+          // EVERYONE, which is exactly what makes two joiners collide on the
+          // host's single offer. Pinned in tests/net-trystero-api.test.mjs.
+          const post = (data, to) => (to ? swap.send(data, { target: to }) : swap.send(data));
+          // Per-JOINER, not global. As one boolean this was "somebody is being
+          // answered", which with three joiners means two of them are dropped.
+          const handling = new Set();
 
-          swap.onMessage = (async (data) => {
-            if (done || handling) return;
+          swap.onMessage = (async (data, ctx) => {
+            // Trystero hands the sender as ctx.peerId — the second argument is
+            // a metadata OBJECT, not a bare id.
+            const from = (ctx && ctx.peerId) || null;
+            if (done) return;
             if (typeof data !== "string" || !data) return;
+            // SUBSCRIPTION MODE — a host that wants several players. Every
+            // joiner's answer is handed straight over and the room STAYS OPEN;
+            // only cancel, expiry, a dead relay or an explicit stop() ends it.
+            if (onJoiner) { try { onJoiner(from, data); } catch (e) {} return; }
+            if (handling.has(from)) return;
             if (!reply) { finish({ ok: true, payload: data }); return; }
             // Answering takes seconds (setRemoteDescription plus a full ICE
             // gather), and the room stays open across it — leaving early would
             // throw away the channel the answer has to go back down.
-            handling = true;
+            handling.add(from);
             let out;
             try { out = await reply(data); }
             catch (e) { out = null; }
@@ -180,7 +198,7 @@ const NetNostr = (function () {
                        message: "Could not answer that invite." });
               return;
             }
-            try { post(out); } catch (e) {}
+            try { post(out, from); } catch (e) {}
             // Give the relay a moment to carry it before the room is torn down.
             setTimeout(() => finish({ ok: true, payload: data }), 600);
           });
@@ -194,9 +212,37 @@ const NetNostr = (function () {
           // a generic "could not reach the room service". A wrong API used
           // inside a try/catch does not look like a bug, it looks like the
           // network being down.
-          if (send) {
+          if (mintOffer) {
+            // A FRESH OFFER PER JOINER. One SDP offer belongs to one
+            // RTCPeerConnection, so handing the same string to two people has
+            // them both answering the same connection and one of them losing.
+            // Targeted, so nobody else in the room even sees it.
+            room.onPeerJoin = async (id) => {
+              if (done) return;
+              let offer = null;
+              try { offer = await mintOffer(id); } catch (e) { offer = null; }
+              if (!offer || done) return;
+              try { post(offer, id); } catch (e) {}
+            };
+          } else if (send) {
+            // Post on join AND immediately: whoever is already in the room gets
+            // it now, whoever arrives later gets it then. Without the join hook
+            // the second peer never sees the first one's string.
+            //
+            // onPeerJoin is a SETTER, not a method — Trystero 0.25 changed it,
+            // and calling it threw an exception this file's own catch turned
+            // into a generic "could not reach the room service". A wrong API
+            // used inside a try/catch does not look like a bug, it looks like
+            // the network being down.
             room.onPeerJoin = () => { try { post(send); } catch (e) {} };
             try { post(send); } catch (e) {}
+          }
+          // Subscription mode has nothing to wait for: hand back the way to
+          // stop, and let the lobby decide when the room closes.
+          if (onJoiner && !done) {
+            done = true;
+            clearInterval(tick);
+            resolve({ ok: true, subscribed: true, stop: () => { clearInterval(tick); leave(); } });
           }
         }).catch(() => finish({ ok: false, error: "relay",
           message: "Could not reach the room service. Use the invite link instead." }));
