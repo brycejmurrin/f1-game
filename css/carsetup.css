@@ -483,7 +483,9 @@
   pointer-events: auto;
   position: absolute;
   left: calc(var(--safe-l) + var(--gap));
-  bottom: calc(var(--safe-b) + var(--gap));
+  /* Lifted clear of #cs-aero, which owns the bottom-left corner. The chip row
+     wraps UPWARD, so growing it can never collide with the control below. */
+  bottom: calc(var(--safe-b) + var(--gap) + 44px);
   z-index: 1;
   /* Bounded by BOTH edges rather than by a max-width: left of the safe box,
      right of wherever the sheet actually starts. The row then wraps inside the
@@ -498,6 +500,72 @@
    nothing. Portrait phones land here. */
 @media (max-width: 700px) {
   #cs-view { display: none; }
+}
+/* ACTIVE AERO toggle — its own control in the bottom-LEFT corner, not one more
+   camera chip: it changes the CAR, not the view of it, and watching the flaps
+   sweep open is the whole reason it exists. It owns the corner and the camera
+   chip row sits above it, so the row can wrap upward without ever colliding. */
+#cs-aero-bar {
+  pointer-events: auto;
+  position: absolute;
+  left: calc(var(--safe-l) + var(--gap));
+  bottom: calc(var(--safe-b) + var(--gap));
+  z-index: 2;
+  display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px;
+  right: calc(var(--safe-r) + var(--cs-sheet-w) + var(--gap));
+  justify-content: flex-start;
+}
+#cs-aero {
+  flex: 0 0 auto;
+  display: flex; flex-direction: row; align-items: baseline; gap: 7px;
+  width: auto; margin: 0;
+  padding: 6px 11px; border-radius: var(--r-sm);
+  background: rgba(12,12,16,0.62);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(3px);
+  min-height: 44px;
+}
+/* The two wing framings live beside the toggle because they exist FOR it: the
+   flaps rotate about the car's X axis, so the stock FRONT/REAR presets stare
+   straight down that axis and show nothing moving. These are the angles that
+   do. */
+.cs-wing-btn {
+  flex: 0 0 auto; width: auto; margin: 0;
+  padding: 6px 10px; border-radius: var(--r-sm);
+  font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+  background: rgba(12,12,16,0.62); color: var(--dim);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(3px);
+  min-height: 44px;
+}
+.cs-wing-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+#cs-aero:hover { border-color: rgba(255,255,255,0.3); }
+.cs-aero-lbl {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
+  color: rgba(255,255,255,0.42);
+}
+.cs-aero-val {
+  font-size: 13px; font-weight: 800; font-style: italic; letter-spacing: 0.06em;
+  color: var(--dim);
+}
+/* Lit state uses the same CYAN the in-race HUD chip uses for X-mode, so the
+   garage and the track speak the same colour about the same system. */
+#cs-aero.active { background: rgba(34,211,238,0.16); border-color: rgba(34,211,238,0.45); }
+#cs-aero.active .cs-aero-lbl { color: rgba(125,249,255,0.75); }
+#cs-aero.active .cs-aero-val { color: #7df9ff; }
+/* Same reasoning as #cs-view: below this there is no car left to look at. With
+   the control gone, the chip row drops back into the corner it vacated. */
+@media (max-width: 700px) {
+  #cs-aero-bar { display: none; }
+  #cs-view { bottom: calc(var(--safe-b) + var(--gap)); }
+}
+@media (max-width: 1000px) {
+  #cs-aero-bar { gap: 4px; }
+  #cs-aero { padding: 5px 9px; gap: 5px; min-height: 32px; }
+  .cs-aero-lbl { font-size: 8px; letter-spacing: 0.08em; }
+  .cs-aero-val { font-size: 11px; }
+  .cs-wing-btn { padding: 5px 8px; font-size: 9px; letter-spacing: 0.05em; min-height: 32px; }
+  #cs-view { bottom: calc(var(--safe-b) + var(--gap) + 40px); }
 }
 .cs-view-btn {
   flex: 0 0 auto; width: auto; margin: 0;
@@ -525,6 +593,13 @@
    bar stacked three deep on a phone. */
 .cs-view-grp { display: contents; }
 .cs-view-zoom { font-size: 13px; padding: 3px 10px; line-height: 1; }
+/* The arrows repeat while held, so they must not start a text selection or a
+   long-press context menu under the finger. */
+.cs-view-nudge {
+  font-size: 10px; padding: 4px 8px; line-height: 1;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 .cs-view-sep {
   width: 1px; height: 16px; margin: 0 2px;
   background: rgba(255,255,255,0.16);

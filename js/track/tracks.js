@@ -827,6 +827,8 @@ const Tracks = (function () {
           prism: (stage, c, size, color, basis) => addPrism(stage, c, size, color, basis),
           cylinder: (stage, c, radius, height, color, seg, basis) =>
             addCyl(stage, c, radius, height, color, seg, basis),
+          frustum: (stage, c, rB, rT, h, color, seg, basis) =>
+            addFrustum(stage, c, rB, rT, h, color, seg, basis),
         });
       }
       if (sceneryTheme && landmarkKit && typeof CircuitKit !== "undefined" && CircuitKit &&
@@ -1459,6 +1461,16 @@ const Tracks = (function () {
       // semantic prop registry (see note() above) — scenery modules call this
       // after their own guards so only props that actually ship are recorded
       note, noteSpan,
+      // Per-circuit trackside-furniture FORM lookup, resolved the same way FURN
+      // and BARRIER already are: KIT[def.id] || KIT_DEF[theme] || fallback. The
+      // fallback the caller passes is always that emitter's CURRENT geometry,
+      // so an absent table leaves all 40 circuits exactly as they were.
+      kitOf: (family, fallback) => {
+        const K = TrackSceneryData.KIT || {};
+        const D = TrackSceneryData.KIT_DEF || {};
+        const row = K[def.id] || D[theme] || D.green || {};
+        return row[family] || fallback;
+      },
     };
     Object.assign(ctx, SceneryNature.create(ctx));
     Object.assign(ctx, SceneryStructures.create(ctx));
@@ -1638,8 +1650,14 @@ const Tracks = (function () {
       // the identity pass but nothing outside a circuit's own scenery() could
       // reach it. SPECIES names now pass straight through.
       const SPECIES = { cypress: 1, stonePine: 1, broadleafFall: 1, acacia: 1, plane: 1 };
+      // FURN.treeCrown reshapes the broadleaf the scatter plants — the one
+      // foliage pass that runs on every circuit. canopyR keys off the same
+      // name so the fence guard clears what the crown actually spans.
+      const CROWNS = { vase: 1, weeping: 1, columnar: 1 };
+      const crownForm = CROWNS[fz.treeCrown] ? fz.treeCrown : "round";
       const kind = SPECIES[fz.tree] ? fz.tree
-        : fz.tree === "palm" ? "palm" : fz.tree === "fir" ? "fir" : "broad";
+        : fz.tree === "palm" ? "palm" : fz.tree === "fir" ? "fir"
+        : crownForm !== "round" ? crownForm : "broad";
       const crown = canopyR(kind, h);
       // Spatial barrier guard — the canopy allowance above only clears the
       // barrier belonging to THIS node, and the hits that survived it were with
@@ -1653,7 +1671,7 @@ const Tracks = (function () {
       else if (kind === "broadleafFall") broadleafFall(k, side, d, h, col);
       else if (kind === "acacia") acacia(k, side, d, h, col);
       else if (kind === "plane") plane(k, side, d, h, col);
-      else tree(k, side, d, h, col);
+      else tree(k, side, d, h, col, crownForm !== "round" ? { crown: crownForm } : undefined);
     };
     // Lamp posts — streets / modern / desert. Alternate sides, set behind the
     // barrier line; the head glows HDR at night via streetLamp(). ~12% of posts

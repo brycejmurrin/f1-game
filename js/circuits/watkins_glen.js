@@ -276,7 +276,7 @@
       // One poured-concrete stand down the straight, uncovered, so the pit
       // straight is not four repeats of the same timber frame.
       grandstandEx(0.030, -1, 13, 72, null, null,
-        { livery: "concrete", roof: "none", endWalls: true, h: 8 });
+        { livery: "scaffold", roof: "none", endWalls: true, h: 8 });
 
       // =====================================================================
       // 4. CORNERS — the Glen kept real gravel and real armco, and the crowd

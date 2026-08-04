@@ -63,7 +63,7 @@ const NetTransport = (function () {
   }
 
   // ---- loopback ------------------------------------------------------------
-  // opts: { latencyMs, jitterMs, loss (0..1), reorder (0..1), rnd, manual }
+  // opts: { latencyMs, jitterMs, loss (0..1), rnd }
   // Returns [a, b]. Anything a sends arrives at b and vice versa.
   //
   // Loss and reorder apply ONLY to the "state" channel: that is the honest
@@ -75,7 +75,6 @@ const NetTransport = (function () {
     const latency = opts.latencyMs != null ? opts.latencyMs : 50;
     const jitter  = opts.jitterMs  != null ? opts.jitterMs  : 0;
     const loss    = opts.loss      || 0;
-    const reorder = opts.reorder   || 0;
     const rnd     = opts.rnd       || Math.random;
 
     const a = makeEndpoint("a"), b = makeEndpoint("b");
@@ -105,10 +104,10 @@ const NetTransport = (function () {
       if (channel === STATE) {
         if (loss > 0 && rnd() < loss) { dropped++; return; }
       }
-      let at = (from._wire || 0) + latency + (jitter ? (rnd() * 2 - 1) * jitter : 0);
-      // Reordering: shove this one behind a plausible successor. Only ever
-      // applied to the unordered channel.
-      if (channel === STATE && reorder > 0 && rnd() < reorder) at += latency * 0.5;
+      // Jitter alone reorders the unordered channel: two packets sent in
+      // order can land out of order once their arrival times cross, which is
+      // the real mechanism rather than a separate knob.
+      const at = (from._wire || 0) + latency + (jitter ? (rnd() * 2 - 1) * jitter : 0);
       queue.push({ at, to, channel, data, seq: seq++ });
     }
 
@@ -162,6 +161,40 @@ const NetTransport = (function () {
   // pump(), matching loopback exactly. Without that, RTC delivery would
   // interleave with the fixed-step loop at arbitrary points and the two
   // transports would not be substitutable.
+  // More than one STUN server, because a single one is a single point of
+  // failure for the ONE thing that decides whether two people can connect:
+  // learning your own public address. If it is blocked, rate-limited, or slow
+  // on the day, you gather only LAN candidates and the connection fails with
+  // no explanation. Different operators, so they do not fail together.
+  const STUN = [
+    "stun:stun.l.google.com:19302",
+    "stun:stun1.l.google.com:19302",
+    "stun:stun.cloudflare.com:3478",
+  ];
+
+  // A TURN relay is the only thing that connects two symmetric NATs, and it
+  // cannot be free — someone pays to carry the traffic. So there is no default
+  // one, but a player who has credentials can supply them without a code
+  // change: localStorage apex26.turn = {"urls":"turn:host:3478",
+  // "username":"u","credential":"p"}. Read here rather than in the lobby so
+  // both the real transport and any harness get identical behaviour.
+  function turnFromStore() {
+    try {
+      const raw = localStorage.getItem("apex26.turn");
+      if (!raw) return null;
+      const cfg = JSON.parse(raw);
+      return cfg && cfg.urls ? cfg : null;
+    } catch (e) { return null; }
+  }
+
+  function iceServers(opts) {
+    if (opts.iceServers) return opts.iceServers;
+    const list = [{ urls: STUN }];
+    const turn = turnFromStore();
+    if (turn) list.push(turn);
+    return list;
+  }
+
   function rtc(opts) {
     opts = opts || {};
     const PC = (typeof RTCPeerConnection !== "undefined") ? RTCPeerConnection : null;
@@ -173,11 +206,29 @@ const NetTransport = (function () {
     // escape into a click handler, where it would kill the UI silently.
     let pc;
     try {
-      pc = new PC({ iceServers: opts.iceServers || [{ urls: "stun:stun.l.google.com:19302" }] });
+      pc = new PC({ iceServers: iceServers(opts) });
     } catch (e) { return null; }
     const chans = {};
     let inbox = [];
     let openCount = 0;
+
+    // WHAT KIND of candidates we found, which is the difference between two
+    // completely different failures that otherwise look identical to a player:
+    //   no srflx  -> STUN never answered; we never learnt our public address
+    //   srflx but no connection -> we know both addresses and the path is
+    //                              still blocked, i.e. symmetric NAT, which
+    //                              only a TURN relay fixes
+    // Without this the UI can only say "it didn't work", and the player cannot
+    // tell whether trying again on another network would help.
+    const found = { host: 0, srflx: 0, relay: 0, mdns: 0 };
+    pc.onicecandidate = (e) => {
+      const line = e.candidate && e.candidate.candidate;
+      if (!line) return;                       // null candidate = end of gathering
+      const m = /\btyp (\w+)/.exec(line);
+      const t = m ? m[1] : null;
+      if (t && found[t] != null) found[t]++;
+      if (t === "host" && /\.local\b/i.test(line)) found.mdns++;
+    };
 
     function adopt(ch, kind) {
       chans[kind] = ch;
@@ -235,6 +286,9 @@ const NetTransport = (function () {
       queued: inbox.length,
       connection: pc.connectionState,
       ice: pc.iceConnectionState,
+      gathering: pc.iceGatheringState,
+      candidates: Object.assign({}, found),
+      turn: !!turnFromStore(),
     });
     return ep;
   }
@@ -243,5 +297,5 @@ const NetTransport = (function () {
     return typeof RTCPeerConnection !== "undefined";
   }
 
-  return { STATE, EVENT, CHANNELS, loopback, rtc, supported };
+  return { STATE, EVENT, loopback, rtc, supported };
 })();

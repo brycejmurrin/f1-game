@@ -929,6 +929,19 @@ const GameAudio = (function () {
     nextTrack(1);
     return trackName();
   }
+  // Step BACK one track. nextTrack() already takes a signed step, so the only
+  // new thing here is the Spotify backend, whose remote transport has its own
+  // previous() — falling back to skip() there would jump forward, which is the
+  // opposite of what the button says.
+  function prevTrack() {
+    if (!musicEnabled) return null;
+    if (backend) {
+      try { return backend.prev ? backend.prev() : backend.name(); } catch (e) { return null; }
+    }
+    if (!ctx) return null;
+    nextTrack(-1);
+    return trackName();
+  }
   function trackName() {
     if (backend) { try { return backend.name(); } catch (e) { return null; } }
     const e = PLAYLIST[musicIndex];
@@ -1078,6 +1091,7 @@ const GameAudio = (function () {
     stopMusic,
     setMusicEnabled,
     skipTrack,
+    prevTrack,
     trackName,
     tracks,
     addTracks,

@@ -361,6 +361,8 @@ const api = {
       axEstSm: +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac: +axFrac.toFixed(3),
       slipFactor: +Math.sqrt(Math.max(0, 1 - axFrac * axFrac)).toFixed(3),
+      aeroX: +(G.player.aeroX || 0).toFixed(3),
+      xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
     };
   },
   // Driving-boundary stats for the current track (both sides, all nodes): the
@@ -906,6 +908,10 @@ const api = {
     yaw: +(c.yawVis || 0).toFixed(4),
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2), lap: c.lap,
     ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
+    // ACTIVE AERO flap travel 0..1 (short key, like the rest of this list —
+    // it is polled per frame). Whether a RIVAL has its wing open is the
+    // difference between "he's catching me" and "he's about to go past".
+    ax: +(c.aeroX || 0).toFixed(2),
   })),
   // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
   // Distinct from curated FIA turns on track.def.turns / info().turns — use those
@@ -1283,6 +1289,7 @@ const api = {
       contactT: +(c.contactT || 0).toFixed(3),
       wrongWay: !!c.wrongWay, rescueT: +(c.rescueT || 0).toFixed(2),
       energy: +(c.energy || 0).toFixed(3), boostOn: !!c.boostOn,
+      aeroX: +(c.aeroX || 0).toFixed(3), xOn: !!c.xOn, xArmed: !!c.xArmed,
       brakeHeat: +(c.brakeHeat || 0).toFixed(2), gear: c.gear || 1,
     };
   },
@@ -1567,6 +1574,12 @@ const api = {
       energy: +(G.player.energy || 0).toFixed(3),
       gear: G.player.gear || 1,
 
+      // ── active aero (X-mode / Z-mode) ── aeroX is the FLAP TRAVEL 0..1 (what
+      // the physics reads); xOn is the switch, xArmed whether the road allows it
+      aeroX:  +(G.player.aeroX || 0).toFixed(3),
+      xOn:    !!G.player.xOn,
+      xArmed: !!G.player.xArmed,
+
       // ── episode state flags ──
       wrongWay: !!G.player.wrongWay,
       offT:     +(G.player.offT || 0).toFixed(2),
@@ -1668,6 +1681,7 @@ const api = {
       gapAhead:      ahead  ? +(ahead.prog  - (G.player.prog || 0)).toFixed(2) : null,
       gapBehind:     behind ? +((G.player.prog || 0) - behind.prog).toFixed(2) : null,
       energy:        +(G.player.energy || 0).toFixed(3),
+      aeroX:         +(G.player.aeroX || 0).toFixed(3),
       gear:           G.player.gear || 1,
       sector:         G.sectorIdx + 1,
       sectorElapsed: +((G.player.lapTime || 0) - G.sectorStartT).toFixed(3),
@@ -1856,9 +1870,56 @@ const api = {
   },
   lobbyFakeConnected() { return !!_lobbyPeer; },
 
+  // ── Driving the REAL handshake from a test ──────────────────────────────
+  // These exist because the WebRTC path is the one part of multiplayer that no
+  // in-process test can reach: the loopback transport has no SDP at all, and
+  // the lobby specs deliberately use a fake transport. Driving the real thing
+  // through the DOM means fighting click actionability for the ~25 s the
+  // handshake genuinely takes, which tests the buttons rather than the wire.
+  // With these, two pages can complete a real offer/answer exchange in
+  // page.evaluate() and assert that a session actually came up.
+  //
+  //   A: const {code} = await __apex.lobbyHost()
+  //   B: const {code} = await __apex.lobbyJoin(inviteCode)
+  //   A: await __apex.lobbyAccept(answerCode)
+  //   both: await __apex.net().active === true
+  lobbyHost() {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    return G.netLobby.host();
+  },
+  lobbyJoin(inviteCode) {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    G.netLobby.join();
+    return G.netLobby.makeAnswer(inviteCode);
+  },
+  lobbyAccept(answerCode) {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    return G.netLobby.acceptAnswer(answerCode);
+  },
+
   // lobbyMods(profile) — resolve a peer profile to multipliers, locally.
   lobbyMods(profile) {
     return G.netLobby ? G.netLobby.modsFromProfile(profile) : null;
+  },
+
+  // lobbyFailure(wireStats, secs) — the message a failed connection produces,
+  // from a given wire state. Exposed because the real thing needs two devices
+  // on two hostile networks, which no CI can arrange — but WHICH diagnosis we
+  // draw from a given set of candidates is pure logic and must not regress.
+  lobbyFailure(st, secs) {
+    return G.netLobby ? G.netLobby.failureMsg(st, secs || 30) : null;
+  },
+
+  // lobbyShare("invite"|"answer") — hand the code off the way the button does:
+  // the OS share sheet where there is one, the clipboard where there isn't.
+  // Exposed because navigator.share opens NATIVE UI that Playwright cannot
+  // click through, so the only testable thing is what we do around it — and
+  // the fallback is the path most desktops actually take.
+  lobbyShare(which) {
+    if (!G.netLobby) return false;
+    return which === "answer" ? G.netLobby.shareAnswer() : G.netLobby.shareInvite();
   },
 
   // netStartArm(nowMs, atMs, hold) — arm a synchronised lights-out directly,
@@ -1933,6 +1994,22 @@ const api = {
   // setEnergy(v) — set player ERS charge (0..1). Clamps silently.
   // setBoost(on) — toggle the player's ERS boost (for tests/screenshots).
   setBoost(on) { if (G.player) G.player.boostOn = !!on; return G.player ? G.player.boostOn : false; },
+
+  // aero(on?) — ACTIVE AERO (2026 X-mode / Z-mode). No argument reads the state;
+  // a boolean requests/drops X-mode, exactly like pressing Z. Requesting it does
+  // NOT force the flaps open: `xArmed` still gates on 3 s of straight road
+  // ahead, so on a corner this returns xOn:false and aeroX stays at 0. That is
+  // the mechanic, not a failure — poll aeroX to see the flap actually travel.
+  aero(on) {
+    if (!G.player) return null;
+    if (on !== undefined) G.player.xOn = !!on;
+    return {
+      xOn: !!G.player.xOn,
+      xArmed: !!G.player.xArmed,
+      aeroX: +(G.player.aeroX || 0).toFixed(3),
+      mode: (G.player.aeroX || 0) > 0.05 ? "X" : "Z",
+    };
+  },
   carEffects() {
     if (!G.player) return null;
     const brakeGlowThreshold = 0.05;
@@ -2092,6 +2169,7 @@ const api = {
       c.gear = 1; c.rpm = GameTables.IDLE_RPM; c.shiftT = 0;
       c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
       c.stuckT = 0; c.deploying = false; c.boostOn = false; c.otArmed = false;
+      c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false; c.vertLoad = 1;
       // `prog` accumulates via `ds = s - (c._prevS ?? c.s)` (js/game.js:2705).
       // Leaving _prevS at the PREVIOUS episode's final s makes the very first

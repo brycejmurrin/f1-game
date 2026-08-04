@@ -147,6 +147,9 @@ const FULL = [
   "js/game/apex.js",
   // Multiplayer wire. Pure logic with no game dependency, so position only
   // has to satisfy "before whatever consumes it" — game.js, last as always.
+  "js/net/sdp.js",
+  "js/net/qr.js",
+  "js/net/scan.js",
   "js/net/transport.js",
   "js/net/handshake.js",
   "js/net/snapshot.js",
@@ -217,6 +220,21 @@ const HARD_EDGES = [
   // the raster module must have evaluated first.
   ["js/game/agentview-raster.js", "js/game/agentview.js"],
   ["js/mat4.js", "js/render/glx.js"],                       // glx uses M4 at init
+  // session.js decodes off the same channel as snapshot.js and shares its ONE
+  // toView(); the two hand-rolled copies had already diverged over how a
+  // DataView argument is handled, which is exactly the bug a shared helper
+  // prevents. Call-time, not eval-time, but a session with no NetSnapshot
+  // silently drops every state packet rather than throwing — so pin the order.
+  ["js/net/snapshot.js", "js/net/session.js"],
+  // handshake.js calls NetSdp.packChecked/unpack whenever it builds or reads
+  // an invite code. Call-time, but a handshake with no NetSdp throws inside
+  // the click handler that generates the invite — the one place an error is
+  // least visible.
+  ["js/net/sdp.js", "js/net/handshake.js"],
+  // lobby.js draws the invite QR through NetQr the moment an invite exists.
+  ["js/net/qr.js", "js/net/lobby.js"],
+  // lobby.js creates a NetScan the moment a SCAN button is wired.
+  ["js/net/scan.js", "js/net/lobby.js"],
   // chunks.js before every shader file (lit/sky/post interpolate GLXChunks at
   // eval; fx.js is chunk-free today but keeps the uniform ordering contract).
   ["js/render/shaders/chunks.js", "js/render/shaders/lit.js"],

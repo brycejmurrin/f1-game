@@ -76,3 +76,9 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   port (or `:3456`).
 - Anything that edits `js/*`/`css/*` still needs a `?v=N` cache bump (bump-cache).
 - Never write disposable output to `/tmp`; use `artifacts/tmp/` or the standard `scratch/` subtrees.
+- `rtc-e2e.mjs` — a REAL WebRTC handshake between two pages (`npm run rtc:e2e`).
+  Covers the one path nothing else can: the loopback transport has no SDP, and
+  the lobby spec uses a fake transport because a real `RTCPeerConnection` never
+  finishes ICE gathering in a sandboxed CI browser. Deliberately outside every
+  test group — it takes minutes and depends on the host's network stack. Run it
+  by hand after touching `js/net/handshake.js` or `js/net/transport.js`.

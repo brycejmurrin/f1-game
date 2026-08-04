@@ -140,4 +140,134 @@ test.describe("VS FRIEND lobby", () => {
     expect(out.unknown).toBe(null);
     expect(out.empty).toBe(null);
   });
+
+  test("the invite goes out as a link, and the link opens straight into joining",
+    async ({ page }) => {
+      // The point of the link: the guest never has to work out WHICH box to
+      // paste into. Opening it fills the invite field and shows the joining
+      // step. Without this the fragment format is decoration — inviteFromUrl()
+      // existed for a while with nothing on earth producing a link for it.
+      await menu(page);
+      // A REAL code, but built directly rather than by driving a handshake:
+      // encodeCode needs no peer connection, and the fake transport has no .pc
+      // to make one with. The handshake itself is covered by tools/rtc-e2e.mjs
+      // against two real browsers; what is under test here is the link.
+      // Bare identifier, not window.NetHandshake: the modules are top-level
+      // `const` in classic scripts, which land in the global LEXICAL scope and
+      // never become properties of window.
+      const code = await page.evaluate(() => NetHandshake.encodeCode({
+        b: 1, k: "offer", p: { team: "ferrari", driver: 0 },
+        s: "v=0\r\na=ice-ufrag:abcd\r\n",
+      }));
+      const url = await page.evaluate((c) => NetHandshake.inviteUrl(c), code);
+      expect(url).toContain("#vs=");
+      // The FRAGMENT, never the query string — a fragment is not sent to the
+      // server, and there being no server is the whole design.
+      expect(url.split("#")[0]).not.toContain(code);
+
+      // about:blank FIRST. Navigating from "/" to "/#vs=..." differs only in
+      // the fragment, which the browser treats as a same-document navigation —
+      // no reload, so wire() never runs again and the link appears not to work.
+      // A guest opening the link genuinely loads the page, so the test must too.
+      await page.goto("about:blank");
+      await page.goto(url);
+      await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+      await expect(page.locator("#vsfriend")).toBeVisible();
+      await expect(page.locator("#vs-joining")).toBeVisible();
+      await expect(page.locator("#vs-invite-in")).toHaveValue(code);
+      // Leave nothing gathering: join() built a real RTCPeerConnection on this
+      // fresh load, and an abandoned one keeps trying candidates.
+      await page.click("#vs-close");
+    });
+
+  test("SHARE falls back to the clipboard, and says so instead of failing", async ({ page }) => {
+    // navigator.share does not exist in this browser, which is exactly the
+    // fallback path most desktops take. The button must still do something
+    // useful and must not claim to have shared.
+    await menu(page);
+    await page.click("#mb-vs");
+
+    // The label names what it will actually do here — a button saying SHARE
+    // that silently copies has lied to the player. Headless Chromium has no
+    // navigator.share, which is exactly the case being covered.
+    expect(await page.evaluate(() => !!navigator.share)).toBe(false);
+    await expect(page.locator("#vs-share-invite")).toHaveText("COPY LINK");
+
+    const out = await page.evaluate(async () => {
+      let copied = null;
+      // Stub the clipboard: headless Chromium has no permission for it by
+      // default, and this is testing OUR fallback, not Playwright's permission
+      // model. defineProperty, not assignment — navigator.clipboard is a
+      // read-only accessor and `=` on it fails SILENTLY.
+      Object.defineProperty(window.navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: async (t) => { copied = t; } },
+      });
+      document.getElementById("vs-invite").value = "APEX1.s.PRETEND";
+      const ok = await window.__apex.lobbyShare();
+      return { ok, copied, status: document.getElementById("vs-status").textContent };
+    });
+    expect(out.ok).toBe(true);
+    expect(out.copied).toContain("#vs=");
+    expect(out.status).toMatch(/copied/i);
+  });
+
+  test("a failed connection says WHICH failure it was", async ({ page }) => {
+    // The two ways this fails need opposite responses from the player, and
+    // from the outside they look identical. Reported live on a real device as
+    // one flat "some networks block direct connections", which is true and
+    // useless: it does not say whether trying another network would help.
+    await menu(page);
+    const out = await page.evaluate(() => {
+      const f = window.__apex.lobbyFailure;
+      return {
+        noStun: f({ ice: "failed", connection: "failed", candidates: { host: 2, srflx: 0, relay: 0 } }, 20),
+        blocked: f({ ice: "failed", connection: "failed", candidates: { host: 2, srflx: 1, relay: 0 } }, 20),
+        stale: f({ ice: "failed", connection: "failed", candidates: { host: 2, srflx: 1, relay: 0 } }, 120),
+      };
+    });
+    // No public address at all: another network genuinely may work.
+    expect(out.noStun).toMatch(/never revealed a public address/i);
+    expect(out.noStun).toMatch(/different network/i);
+    // We had one and still could not get through: switching Wi-Fi is not the
+    // fix, and telling them to try again would be a loop that cannot succeed.
+    expect(out.blocked).toMatch(/relay/i);
+    expect(out.blocked).not.toMatch(/different network/i);
+    // Our own design causes this one: a human carries the codes, and a NAT
+    // mapping expires in about a minute.
+    expect(out.stale).toMatch(/stale/i);
+  });
+
+  test("the QR encodes the invite LINK, not the bare code", async ({ page }) => {
+    // The distinction is the entire feature. A QR of the code shows the guest
+    // 240 characters to retype; a QR of the link opens the game for them with
+    // the joining step showing and the code already in the box. Encoder
+    // correctness is proved against an independent decoder in
+    // tests/net-qr.test.mjs — what is checked here is which string we hand it.
+    await menu(page);
+    await page.click("#mb-vs");
+    await expect(page.locator("#vs-qr-wrap")).toBeHidden();
+
+    const out = await page.evaluate(() => {
+      const url = NetHandshake.inviteUrl("APEX1.s.aB3-_x9Zq");
+      const qr = NetQr.encode(url);
+      return { url, size: qr && qr.size, version: qr && qr.version };
+    });
+    expect(out.url).toContain("#vs=");
+    expect(out.version).toBeGreaterThan(0);
+    // Odd, and 21 + 4n: the module count of a real QR symbol.
+    expect((out.size - 21) % 4).toBe(0);
+  });
+
+  test("sharing before there is a code says so rather than sharing nothing",
+    async ({ page }) => {
+      await menu(page);
+      await page.click("#mb-vs");
+      const out = await page.evaluate(async () => {
+        const ok = await window.__apex.lobbyShare("answer");   // never generated
+        return { ok, status: document.getElementById("vs-status").textContent };
+      });
+      expect(out.ok).toBe(false);
+      expect(out.status).toMatch(/nothing to share/i);
+    });
 });

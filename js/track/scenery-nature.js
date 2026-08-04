@@ -12,7 +12,7 @@ const SceneryNature = (function () {
   "use strict";
 
   function create(ctx) {
-    const { out, track, n, hw, px, py, pz, NIGHT, MAT,
+    const { out, track, n, hw, px, py, pz, NIGHT, MAT, def, theme,
             clearTreeDist,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             addMountain, emit, RAW, rejBox, recordBarrier, groundYAt,
@@ -80,7 +80,9 @@ const SceneryNature = (function () {
     // identical clones stretched to different sizes: FULL (dense 4-tier), LEAN
     // (windswept — each tier offset sideways, increasing with height), SPARSE
     // (thinner 3-tier, gappy — storm-thinned or younger tree).
-    const pine = (k, side, dist, h, col) => {
+    //   opts: { tiers, lean, sparse, snow, deadTop }
+    const pine = (k, side, dist, h, col, opts) => {
+      opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 3)) {
         console.warn(`[scenery] pine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
@@ -91,9 +93,11 @@ const SceneryNature = (function () {
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
       const c2 = [col[0] * 0.86, col[1] * 0.86, col[2] * 0.82];   // shaded lower needles
       const vr = hash(k * 6.1 + side * 4.4 + dist + 9.3);
-      const sparse = vr > 0.82;                          // ~18% thinner 3-tier trees
-      const lean = !sparse && vr > 0.55 ? (vr - 0.55) * 2.2 : 0;   // ~27% windswept lean
-      const tiers = sparse ? 3 : 4;
+      const sparse = opts.sparse != null ? !!opts.sparse : vr > 0.82;   // ~18% thinner 3-tier trees
+      const lean = opts.lean != null ? opts.lean
+        : (!sparse && vr > 0.55 ? (vr - 0.55) * 2.2 : 0);              // ~27% windswept lean
+      const tiers = opts.tiers != null ? Math.max(2, Math.min(6, Math.round(opts.tiers)))
+        : (sparse ? 3 : 4);
       // Graph form: the silhouette is recorded ONCE per distinct parameter set in
       // canonical space (origin = the anchor, axes = the track basis) and replayed
       // through the guarded emitters. Geometry and guard decisions are unchanged;
@@ -131,7 +135,13 @@ const SceneryNature = (function () {
     // treeline rather than a cloned forest. Living trees get a per-instance
     // ASYMMETRIC lean on the upper canopy (~35%) so not every crown is a perfect
     // dome.
-    const tree = (k, side, dist, h, col) => {
+    //   opts: { crown: "round"(default) | "vase" | "weeping" | "columnar",
+    //           spread, deadChance }
+    // "round" reproduces the pre-existing crown exactly, so the 57 direct calls
+    // and the generic roadside scatter are unchanged until a circuit asks.
+    const tree = (k, side, dist, h, col, opts) => {
+      const crown = (opts && opts.crown) || "round";
+      const sp = (opts && opts.spread) || 1;
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 4)) {
         console.warn(`[scenery] tree SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
@@ -141,7 +151,8 @@ const SceneryNature = (function () {
       // height, so w/d are an estimate rather than a measured bound.
       ctx.note("tree", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.5, h, h * 0.5], { k, side });
       const vr = hash(k * 8.3 + side * 5.1 + dist + 4.7);
-      if (vr > 0.91) {   // dead/storm tree: bare trunk + a few angled branch stubs.
+      const deadAt = 1 - ((opts && opts.deadChance != null) ? opts.deadChance : 0.09);
+      if (vr > deadAt) {   // dead/storm tree: bare trunk + a few angled branch stubs.
         // addCyl extends along basis[1] ("up"), so each branch needs its OWN
         // tilted up-vector (mostly vertical, blended with an outward lean) —
         // not the tree's vertical `a.u`, or the branches would draw straight up.
@@ -191,10 +202,27 @@ const SceneryNature = (function () {
       // to look near-identical). Top two layers are inverted/short cones so the
       // crown rounds off instead of tapering to a spike, and lean into `a.r`
       // increasingly with height on asymmetric instances.
-      addCone(out, vadd(a.c, a.u, h * 0.28), (3.3 + h * 0.13) * j, h * 0.30, col, 9, b);   // wide skirt
-      addCone(out, vadd(a.c, a.u, h * 0.46), (3.7 + h * 0.14) * j, h * 0.26, col, 9, b);   // widest bulge
-      addCone(out, vadd(vadd(a.c, a.u, h * 0.66), a.r, lean), (2.9 + h * 0.10) * j, h * 0.26, c2, 8, b);    // shoulder
-      addCone(out, vadd(vadd(a.c, a.u, h * 0.82), a.r, lean * 1.6), (1.7 + h * 0.06) * j, h * 0.22, c2, 7, b);    // rounded cap
+      if (crown === "vase") {
+        // Eucalyptus / elm: narrow at the fork, spreading upward and outward.
+        addCone(out, vadd(a.c, a.u, h * 0.34), (2.1 + h * 0.07) * j * sp, h * 0.28, col, 8, b);
+        addCone(out, vadd(a.c, a.u, h * 0.56), (3.4 + h * 0.15) * j * sp, h * 0.28, col, 9, b);
+        addCone(out, vadd(vadd(a.c, a.u, h * 0.78), a.r, lean), (4.0 + h * 0.17) * j * sp, h * 0.24, c2, 9, b);
+      } else if (crown === "weeping") {
+        // Willow: a high dome with the mass hanging BELOW it.
+        addCone(out, vadd(a.c, a.u, h * 0.62), (3.6 + h * 0.15) * j * sp, h * 0.30, col, 9, b);
+        addFrustum(out, vadd(a.c, a.u, h * 0.24), (1.4 + h * 0.05) * j * sp,
+          (3.9 + h * 0.16) * j * sp, h * 0.40, c2, 9, b);
+      } else if (crown === "columnar") {
+        // Poplar / lombardy: a tall narrow spire, almost no spread.
+        addCone(out, vadd(a.c, a.u, h * 0.30), (1.5 + h * 0.05) * j * sp, h * 0.36, col, 7, b);
+        addCone(out, vadd(a.c, a.u, h * 0.56), (1.2 + h * 0.04) * j * sp, h * 0.34, col, 7, b);
+        addCone(out, vadd(a.c, a.u, h * 0.80), (0.8 + h * 0.03) * j * sp, h * 0.26, c2, 6, b);
+      } else {
+        addCone(out, vadd(a.c, a.u, h * 0.28), (3.3 + h * 0.13) * j * sp, h * 0.30, col, 9, b);   // wide skirt
+        addCone(out, vadd(a.c, a.u, h * 0.46), (3.7 + h * 0.14) * j * sp, h * 0.26, col, 9, b);   // widest bulge
+        addCone(out, vadd(vadd(a.c, a.u, h * 0.66), a.r, lean), (2.9 + h * 0.10) * j * sp, h * 0.26, c2, 8, b);    // shoulder
+        addCone(out, vadd(vadd(a.c, a.u, h * 0.82), a.r, lean * 1.6), (1.7 + h * 0.06) * j * sp, h * 0.22, c2, 7, b);    // rounded cap
+      }
       out._mat = 0;
     };
     // Palm: tall thin trunk + a crown of drooping frond prisms.
@@ -577,7 +605,28 @@ const SceneryNature = (function () {
     const grandstandEx = (s, side, gap, len, shell, crowd, opts) => {
       opts = opts || {};
       const lib = TrackSceneryData.STAND_LIVERIES || {};
-      const liv = (opts.livery && lib[opts.livery]) || null;
+      // STAND_SETS is the per-circuit stand FAMILY. It documented itself as the
+      // rotation grandstandEx uses, but nothing read it — the table was dead
+      // config and circuits hand-copied its values into local arrays instead.
+      // It is now the FALLBACK, and only the fallback: an explicit opts.livery
+      // or a positional `shell` colour still wins, so the 221 of 226 call sites
+      // that specify one are untouched. In practice this governs the handful of
+      // calls that ask for a stand without saying what colour it is, which is
+      // exactly what a house style is for.
+      // Picked by HASH off the node index, not by a sequential cursor: a cursor
+      // would mean inserting one stand recolours every stand after it on that
+      // circuit, so an author adding a bleacher at Turn 2 silently repaints the
+      // main grandstand. Hashing off k keeps every other stand where it was.
+      let liveryName = opts.livery;
+      if (!liveryName && !shell) {
+        const set = (TrackSceneryData.STAND_SETS || {})[def && def.id]
+          || TrackSceneryData.STAND_SET_DEF;
+        if (set && set.length) {
+          const kk = Math.round(s * n) % n;
+          liveryName = set[Math.floor(hash(kk * 2.7 + side * 1.9) * set.length) % set.length];
+        }
+      }
+      const liv = (liveryName && lib[liveryName]) || null;
       shell = shell || (liv && liv.shell) || null;
       crowd = crowd || (liv && liv.crowd) || null;
       const roofKind = opts.roof || "cantilever";
@@ -844,6 +893,12 @@ const SceneryNature = (function () {
       if (kind === "broadleafFall") return h * 0.34 + 0.8;      // lobed crown
       if (kind === "acacia")        return h * 0.575 + 0.8;     // flat-topped thorn, spread = h*1.15
       if (kind === "plane")         return 4.2 + h * 0.12 + 0.6;  // pollarded avenue crown
+      // tree() crown forms: vase spreads WIDER than round, columnar much
+      // narrower. The roadside scatter's fence guard uses this, so it has to
+      // track the actual widest cone in each form.
+      if (kind === "vase")          return (4.0 + h * 0.17) * jMax + 0.4;
+      if (kind === "weeping")       return (3.9 + h * 0.16) * jMax + 0.4;
+      if (kind === "columnar")      return (1.5 + h * 0.05) * jMax + 0.4;
       return (3.7 + h * 0.14) * jMax + 0.4;               // tree(): widest bulge cone
     };
     // Queued, then flushed after def.scenery() returns. A track file is written
@@ -863,6 +918,23 @@ const SceneryNature = (function () {
       const treeCol = opts.col2 || [0.20, 0.40, 0.16];
       const pineFrac = opts.pineFrac != null ? opts.pineFrac : 0.55;
       // density 0..1 → step 7m (sparse) … 3m (dense). Default ~medium-dense.
+      //
+      // WHAT THIS KNOB ACTUALLY DOES. along() quantises to whole nodes
+      // (`step = max(1, round(stepM / ds))`) and every circuit resamples to
+      // ds = 4.00 m, so this maps to exactly TWO reachable spacings:
+      //   density > 0.25  → stepM < 6 m  → 1 node  → trees every 4 m
+      //   density <= 0.25 → stepM >= 6 m → 2 nodes → trees every 8 m
+      // Anything from 0.26 to 1.0 is the same treeline. Measured, not guessed:
+      // 0.86 and 0.42 emit identical geometry.
+      //
+      // 4 m spacing is TIGHTER THAN THE CANOPY. A 30 m pine's canopyR is ~3.5 m,
+      // so adjacent crowns overlap by ~3 m — and because this emitter alternates
+      // pine/tree, the clip audit sees two DIFFERENT models interpenetrating and
+      // counts every one. A dense belt is therefore worth tens of severe clip
+      // spots by construction. That is accepted: real mixed woodland has
+      // interlocking canopies, and thinning to 8 m to satisfy the metric costs
+      // half the trees for a small fraction of the spots (measured on
+      // hockenheim: 180 k props for 20 spots). Baseline it, don't thin it.
       const dens = opts.density != null ? Math.max(0.05, Math.min(1, opts.density)) : 0.7;
       const step = 7 - dens * 4;
       ctx.along(s0, s1, step, (k) => {
@@ -887,7 +959,9 @@ const SceneryNature = (function () {
     // Bush / shrub clump: 2-3 jittered cones offset around a centre so it reads
     // as an irregular clump of foliage rather than one uniform cone (every bush
     // on every track used to be geometrically identical).
-    const bush = (k, side, dist, col) => {
+    //   opts: { form: "clump"(default) | "grass" | "agave" | "scrub", lobes }
+    const bush = (k, side, dist, col, opts) => {
+      const bform = (opts && opts.form) || "clump";
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
       if (onTrack(p.c[0], p.c[2], 2)) {
         console.warn(`[scenery] bush SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
@@ -900,7 +974,20 @@ const SceneryNature = (function () {
       const bc = col || [0.20, 0.38, 0.18];
       const c2 = [bc[0] * 0.90, bc[1] * 0.94, bc[2] * 0.88];
       const jh = hash(k * 4.3 + side * 2.1 + dist);
-      const lobes = jh < 0.4 ? 2 : 3;   // most clumps 2-3 lobes, some just 1 big lump
+      let lobes = (opts && opts.lobes) || (jh < 0.4 ? 2 : 3);   // most clumps 2-3 lobes
+      if (bform === "agave") {
+        // Spiky rosette — desert circuits need something that is not a blob.
+        out._mat = MAT.FOLIAGE;
+        for (let i = 0; i < 6; i++) {
+          const ang = i / 6 * 6.2832;
+          const tip = vadd(vadd(vadd(p.c, p.u, 1.5), p.r, Math.cos(ang) * 1.3), p.t, Math.sin(ang) * 1.3);
+          addCone(out, vadd(p.c, p.u, 0.2), 0.34, 1.9, bc, 4,
+            [p.r, norm([tip[0] - p.c[0], 1.3, tip[2] - p.c[2]]), p.t]);
+        }
+        out._mat = 0;
+        return;
+      }
+      if (bform === "grass") { lobes = 1; }   // a single low tussock
       for (let i = 0; i < lobes; i++) {
         const lh = hash(k * 5.9 + side * 3.3 + dist + i * 1.7);
         const ang = (i / lobes + lh * 0.3) * 6.2832;

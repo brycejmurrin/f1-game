@@ -7,7 +7,22 @@ import { galleryPath } from "./output-paths.js";
 const PORTRAIT  = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
+// A sheet enters with `sheet-in` (0.19s, translateY(10px) scale(0.985) — see
+// css/components.css), so a sheet measured or photographed mid-flight is
+// genuinely 0.985x its final size and 10px low. Read as layout, that is a
+// phantom shift of exactly the kind "buttons keep their positions" exists to
+// catch — it was comparing a still-animating sheet against a settled one.
+// Waiting it out does not work: the game parks its rAF loop behind the menu, so
+// the document stops producing frames and the animation clock stops with it —
+// the entrance sits frozen at t=0 until some input forces a frame. Turn the
+// motion off instead. css/components.css gates every sheet animation behind
+// `prefers-reduced-motion: no-preference`, so the reduced mode lands the final
+// layout on the first frame; these are layout and behaviour tests and none of
+// them assert motion. It has to be this per-page call — `test.use({
+// reducedMotion })` does not reach the page under this config (matchMedia still
+// reports no-preference).
 async function waitReady(page) {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
 }
 
@@ -168,7 +183,7 @@ test.describe("Pause settings — stable layout", () => {
     await page.waitForTimeout(200);
 
     const ids = ["pm-steer", "pm-calib", "pm-advanced", "pm-lighting", "pm-gears",
-      "pm-sound", "pm-audio", "pm-hidehud", "pm-res", "pm-settings-close"];
+      "pm-audio", "pm-hidehud", "pm-res", "pm-settings-close"];
     const grab = () => page.evaluate((ids) => {
       const out = {};
       for (const id of ids) {
@@ -184,9 +199,12 @@ test.describe("Pause settings — stable layout", () => {
     const after = await grab();
     expect(after).toEqual(before);
 
-    // and the button aimed at AFTER the change still receives the tap
-    await page.locator("#pm-sound").click();
-    await expect(page.locator("#pm-sound")).toHaveText(/SOUND: OFF/);
+    // and the button aimed at AFTER the change still receives the tap. RESOLUTION
+    // replaces the old SOUND toggle here: it is a same-grid cycling button, so it
+    // still proves the tap landed on the control the thumb was aimed at.
+    const resBefore = await page.locator("#pm-res").textContent();
+    await page.locator("#pm-res").click();
+    await expect(page.locator("#pm-res")).not.toHaveText(resBefore);
     await expect(page.locator("#pmsettings")).toBeVisible();   // menu did not collapse
   });
 });
@@ -333,4 +351,23 @@ test.describe("Race settings — landscape layout", () => {
     expect(scrollable).toBe(false);
     await page.screenshot({ path: galleryPath("ui-button-touch", "race-settings-landscape.png") });
   });
+});
+
+// HOW TO PLAY is the one screen a new player opens to find out what the game
+// IS, and it listed RACE, SEASON and TIME TRIAL only — so the long game and the
+// only way to play against another person were both invisible from it. This is
+// the guard that a mode added later gets a line here too.
+test("HOW TO PLAY names every way to play", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+  await page.locator("#mb-help").click();
+  await expect(page.locator("#howtoplay")).toBeVisible();
+  const body = await page.locator("#howtoplay .sheet-body").innerText();
+  for (const mode of ["RACE", "SEASON", "TIME TRIAL", "CAREER", "QUALIFYING", "RACE A FRIEND"])
+    expect(body).toContain(mode);
+  // The title screen's own buttons are the list it has to keep up with.
+  const buttons = await page.evaluate(() =>
+    [...document.querySelectorAll("#menu-hero button, #menu-primary button")]
+      .map((b) => b.innerText.trim()).filter(Boolean));
+  expect(buttons.length).toBeGreaterThan(3);
 });

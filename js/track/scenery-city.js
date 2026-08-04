@@ -23,7 +23,7 @@ const SceneryCity = (function () {
     const { out, glassBuf, def, theme, NIGHT, MAT, lod,
             seat, cantilever,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
-            rejBox, blockAt, onTrack, hash, vadd,
+            rejBox, blockAt, onTrack, hash, vadd, kitOf,
             anchor, along, massBlocked, massAdd } = ctx;
     const { WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY } = TrackSceneryData;
 
@@ -864,7 +864,12 @@ const SceneryCity = (function () {
       blockAt(k, side, dist - baseW * 0.5, baseW * 0.5);   // solid base
     };
     // Advertising hoarding / billboard: a panel on two slim posts.
-    const billboard = (k, side, gap, w, h, col) => {
+    //   opts: { style: "panel"(default) | "monopole" | "trivision" | "arched"
+    //                | "led" | "fascia" | "banner", postCol }
+    // "fascia" has NO posts — it bolts to the barrier top, which is what a
+    // street circuit actually has room for.
+    const billboard = (k, side, gap, w, h, col, opts) => {
+      const st = (opts && opts.style) || kitOf("board", "panel");
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
       if (onTrack(p.c[0], p.c[2], w / 2 + 1)) {
         console.warn(`[scenery] billboard SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (need gap>${(w/2+1).toFixed(1)})`);
@@ -876,10 +881,28 @@ const SceneryCity = (function () {
       // +/-0.4w spacing into the geometry and mint a model per width; a z-scale
       // would instead stretch the post RADIUS (radScale takes max(|sx|,|sz|)).
       // Promoting the offset to the placement leaves one model per height.
-      for (const o of [-w * 0.4, w * 0.4])
-        ctx.instance(`billboard-post|${h}`,
+      const postCol = (opts && opts.postCol) || [0.2, 0.2, 0.22];
+      // Post COUNT and form are what the style changes; the panel below is
+      // shared. "fascia" bolts straight to the barrier and has none at all.
+      const posts = st === "fascia" ? []
+        : st === "monopole" || st === "tower" ? [0]
+        : [-w * 0.4, w * 0.4];
+      for (const o of posts)
+        ctx.instance(`billboard-post|${h}|${st}|${postCol.join(",")}`,
           { o: vadd(p.c, p.t, o), r: p.r, u: p.u, t: p.t },
-          (rec) => rec.cyl([0, -0.4, 0], 0.12, h + 0.4, [0.2, 0.2, 0.22], 4),   // posts, base sunk
+          (rec) => {
+            if (st === "monopole" || st === "tower") {
+              rec.cyl([0, -0.4, 0], 0.42, h + 0.4, postCol, 8);                 // one fat column
+              rec.box([0, h + 0.1, 0], [0.9, 0.5, 1.6], postCol);               // panel bracket
+            } else if (st === "banner") {
+              rec.cyl([0, -0.4, 0], 0.09, h + 3.6, postCol, 5);                 // slim mast
+            } else if (st === "led") {
+              rec.cyl([0, -0.4, 0], 0.16, h + 0.4, postCol, 5);
+              rec.box([0, h + 3.4, 0], [0.5, 0.3, 0.5], postCol);               // service walkway
+            } else {
+              rec.cyl([0, -0.4, 0], 0.12, h + 0.4, postCol, 4);                 // posts, base sunk
+            }
+          },
           { kind: "billboard", k, side });
       // Backlit at night: trackside advertising is illuminated at real races —
       // the lifted albedo rides the emissive path so panels glow softly.
@@ -890,9 +913,35 @@ const SceneryCity = (function () {
       // The panel is a plain box: width on the node scale and the advert colour on
       // the node, so every hoarding of a given height shares ONE model however
       // wide it is and whatever it advertises.
-      ctx.instance(`billboard-face|${h}`,
+      ctx.instance(`billboard-face|${h}|${st}`,
         Object.assign({ s: [1, 1, w], col: face }, place),
-        (rec) => rec.box([0, h + 1.6, 0], [0.3, 3.2, 1], TrackGraph.NODE_COLOR),
+        (rec) => {
+          const NC = TrackGraph.NODE_COLOR;
+          if (st === "trivision") {
+            // Three angled slats — the rotating-prism hoarding. Reads as a
+            // louvred face rather than a flat board from any angle.
+            for (let i = 0; i < 3; i++)
+              rec.box([(i - 1) * 0.16, h + 0.6 + i * 1.05, 0], [0.42, 0.95, 1], NC);
+          } else if (st === "arched") {
+            rec.box([0, h + 1.6, 0], [0.3, 3.2, 1], NC);
+            rec.prism([0, h + 3.5, 0], [0.3, 0.9, 1], NC);
+          } else if (st === "led") {
+            rec.box([0, h + 2.0, 0], [0.22, 3.9, 1], NC);                       // thin screen
+            rec.box([0, h + 0.0, 0], [0.42, 0.30, 1], postCol);                 // bezel
+            rec.box([0, h + 4.0, 0], [0.42, 0.26, 1], postCol);
+          } else if (st === "fascia") {
+            rec.box([0, 1.35, 0], [0.24, 1.5, 1], NC);                          // low, on the barrier
+          } else if (st === "banner") {
+            rec.mat(MAT.FABRIC);
+            rec.box([0, h + 2.2, 0], [0.10, 4.4, 1], NC);
+            rec.mat(0);
+          } else if (st === "monopole" || st === "tower") {
+            rec.box([0, h + 2.1, 0], [0.32, 4.2, 1], NC);
+            rec.box([0, h - 0.2, 0], [0.5, 0.34, 1], postCol);                  // return wing
+          } else {
+            rec.box([0, h + 1.6, 0], [0.3, 3.2, 1], NC);                        // panel (default)
+          }
+        },
         { kind: "billboard", k, side });
       blockAt(k, side, gap, w * 0.4);   // posts + panel face → stop before it
     };

@@ -98,12 +98,20 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
   const fp = Car3D.sharkFinPanel ? Car3D.sharkFinPanel()
     : [{ x: 0.023, y: 0.655, z: -0.82 }, { x: 0.023, y: 0.655, z: -1.56 },
        { x: 0.023, y: 0.945, z: -1.56 }, { x: 0.023, y: 0.945, z: -0.82 }];
+  // The fin decals are lit by SUN + HEMISPHERE AMBIENT only (glx.drawDecal
+  // uploads no point lights), so a normal of exactly ±X collects nothing from a
+  // sun with no sideways component and almost nothing from the sky term — a
+  // white team mark rendered as ~70% grey. Tilting the normal up puts it back:
+  // the sun contribution then depends only on n.y, which is IDENTICAL for both
+  // flanks, so the two faces still match exactly. The quads stay where they are;
+  // only the shading normal leans.
+  const FIN_N = 0.78, FIN_NY = 0.62;      // normalised: 0.78² + 0.62² ≈ 1
   const face = (c, region) => {
     const v = (i, s) => [s * c[i].x, c[i].y, c[i].z];
     // +x face reads front→back; the −x face mirrors (and reverses winding) so the
     // mark is upright on both flanks.
-    quad([v(0, 1), v(1, 1), v(2, 1), v(3, 1)], [1, 0, 0], region);
-    quad([v(1, -1), v(0, -1), v(3, -1), v(2, -1)], [-1, 0, 0], region);
+    quad([v(0, 1), v(1, 1), v(2, 1), v(3, 1)], [FIN_N, FIN_NY, 0], region);
+    quad([v(1, -1), v(0, -1), v(3, -1), v(2, -1)], [-FIN_N, FIN_NY, 0], region);
   };
   face(fp, R.fin);
   // The crest gets its own UPRIGHT SQUARE patch rather than a slice of the panel
@@ -301,6 +309,36 @@ function getErsLight() {
   return ersMesh;
 }
 
+// ACTIVE AERO — the wing's OWN top elements, lifted out of the baked car mesh so
+// they can rotate. Geometry comes from Car3D.buildFlapGeom, which runs the SAME
+// planform emitter the baked wing uses, in a canonical hinge frame (leading edge
+// at the origin, chord back along -z), so the draw only has to rotate and place
+// it. These are not parts laid OVER the wing — they are the wing.
+const _flapMeshes = {};
+const _flapOrder = [];
+const FLAP_CACHE_MAX = 48;
+// One mesh per (element, downforce level, colour). `idx` indexes the array
+// Car3D.aeroFlaps() returns — each element has its own chord, span and taper.
+function getAeroFlap(aLvl, col, idx, style) {
+  const c = col || [0.9, 0.9, 0.1];
+  // aLvl is passed through RAW — catalog options use fractional levels and the
+  // wing geometry depends on the exact value, so it must not be truncated here
+  // either (it is part of the cache key for the same reason).
+  const g = Car3D.aeroFlaps(aLvl, style)[idx | 0];
+  if (!g) return null;
+  const key = g.id + aLvl + "|" + c.map((v) => v.toFixed(2)).join(",");
+  if (_flapMeshes[key]) return _flapMeshes[key];
+  const mesh = _gfx.createMesh(Car3D.buildFlapGeom(g, c));
+  _flapMeshes[key] = mesh;
+  _flapOrder.push(key);
+  if (_flapOrder.length > FLAP_CACHE_MAX) {
+    const old = _flapOrder.shift();
+    if (_flapMeshes[old] && _gfx.deleteMesh) _gfx.deleteMesh(_flapMeshes[old]);
+    delete _flapMeshes[old];
+  }
+  return mesh;
+}
+
 // ── First-person cockpit rig (COCKPIT cam viewmodel) ─────────────────────────
 // The car body is hidden in cockpit view and has no modelled interior, so the
 // driver's-eye view draws the real car body (minus the helmet + halo) plus a steering
@@ -449,5 +487,5 @@ function getPedalBar(brake) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, getPedalBar };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, getPedalBar };
 })();

@@ -35,7 +35,7 @@
 "use strict";
 
 const NetSession = (function () {
-  const PING = 3, PONG = 4;           // 1 and 2 belong to NetSnapshot
+  const PING = 3, PONG = 4;           // 1 belongs to NetSnapshot (TYPE_SNAPSHOT)
   const PING_BYTES = 13;              // type u8 + id u32 + t0 f64
   const PONG_BYTES = 21;              // + t1 f64
 
@@ -56,20 +56,18 @@ const NetSession = (function () {
     dv.setFloat64(5, t0); dv.setFloat64(13, t1);
     return new Uint8Array(dv.buffer);
   }
-  function view(data) {
-    if (!data) return null;
-    if (data instanceof ArrayBuffer) return new DataView(data);
-    if (ArrayBuffer.isView(data)) return new DataView(data.buffer, data.byteOffset, data.byteLength);
-    return null;
-  }
+  // Shared with NetSnapshot: one decode entry point for the channel. The two
+  // copies had already diverged — this one mishandled a DataView argument by
+  // reading .buffer off it — which is precisely why there should only be one.
+  const view = (data) => NetSnapshot.toView(data);
 
   function create(opts) {
     opts = opts || {};
     const transport = opts.transport;
     if (!transport) throw new Error("NetSession needs a transport");
     const cfg = Object.assign({}, DEFAULTS, opts);
-    const CH_STATE = opts.stateChannel || "state";
-    const CH_EVENT = opts.eventChannel || "event";
+    const CH_STATE = NetTransport.STATE;
+    const CH_EVENT = NetTransport.EVENT;
 
     const eventHandlers = new Map();   // type -> [fn]
     const stateHandlers = [];          // fn(bytes, fromPeerTimeMs)
@@ -81,7 +79,6 @@ const NetSession = (function () {
     let best = null;                   // { rtt, offset } — lowest-RTT sample
     let samples = [];
     let alive = true;
-    let started = 0;
     // The clock the rest of the session reads. Set at the top of every pump so
     // handlers invoked from transport.pump() stamp arrivals with the same
     // `now` the caller passed in, rather than each reading a slightly
@@ -91,7 +88,14 @@ const NetSession = (function () {
     // ---- clock ------------------------------------------------------------
     // offset = theirClock - ourClock. peerToLocal() is what lets a snapshot
     // stamped over there be placed on our timeline.
+    const MAX_PLAUSIBLE_RTT_MS = 4000;
     function addSample(rtt, offset) {
+      // A round trip this long is not a network measurement, it is a stalled
+      // tab or a starved CPU — and an offset derived from it would misplace
+      // every subsequent snapshot in the interpolation buffer. Observed for
+      // real: tools/rtc-e2e.mjs saw a 15 s RTT on a loaded box. Drop it and
+      // wait for a sane exchange; the previous best estimate keeps working.
+      if (!(rtt >= 0) || rtt > MAX_PLAUSIBLE_RTT_MS) return;
       samples.push({ rtt, offset });
       if (samples.length > cfg.clockSamples) samples.shift();
       // Lowest RTT wins: it is the exchange least distorted by queuing.
@@ -99,6 +103,10 @@ const NetSession = (function () {
     }
     const offset = () => (best ? best.offset : 0);
     const rtt = () => (best ? best.rtt : 0);
+    // A real function, not just a key on the returned object: stats() below
+    // calls it, and as a bare property it was a ReferenceError the moment
+    // anything asked for stats — which nothing in the loopback tests ever did.
+    const synced = () => best != null;
     const peerToLocal = (tPeer) => tPeer - offset();
     const localToPeer = (tLocal) => tLocal + offset();
 
@@ -158,7 +166,6 @@ const NetSession = (function () {
 
     function pump(now) {
       lastNow = now;
-      if (!started) started = now;
       if (transport.pump) transport.pump(now);
 
       if (alive && now - lastPingAt >= cfg.pingEveryMs) {
@@ -193,7 +200,7 @@ const NetSession = (function () {
       rtt, offset, peerToLocal, localToPeer,
       // Half the round trip: how stale a just-arrived snapshot already is.
       lagMs: () => rtt() / 2,
-      synced: () => best != null,
+      synced,
       // -- liveness --
       alive: () => alive,
       lastHeard: () => lastHeardAt,
@@ -204,7 +211,7 @@ const NetSession = (function () {
         fire(closeHandlers, "local");
       },
       stats: () => ({
-        rtt: rtt(), offset: offset(), synced: best != null,
+        rtt: rtt(), offset: offset(), synced: synced(),
         samples: samples.length, alive, lastHeard: lastHeardAt,
       }),
     };

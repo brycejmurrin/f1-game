@@ -153,6 +153,10 @@ const SWEEP  = arg('sweep', null);
 const INTEN  = arg('intensity', null);
 const EXP    = arg('exp', null);
 const REFL   = arg('refl', null);   // env-mirror strength 0..1 (0 = matte paint, no chrome)
+// ACTIVE AERO blend: 0 = Z-mode (wings closed, max downforce), 1 = X-mode (the
+// moveable elements rotated flat). Not --aero, which is the aero PART id.
+const FLAP   = arg('flap', null);
+const LOOKY  = arg('looky', null);   // orbit-target Y offset — see carview.html
 const BG     = arg('bg', null);
 const LOOK   = parseFloat(arg('look', '0'));    // orbit-target Z offset (+nose / −rear)
 const LOOKX  = parseFloat(arg('lookx', '0'));   // orbit-target X offset (+right / −left)
@@ -242,6 +246,8 @@ if (SWEEP != null) qs.set('sweep', SWEEP);
 if (BG) qs.set('bg', BG);
 if (INTEN != null) qs.set('intensity', INTEN); if (EXP != null) qs.set('exp', EXP);
 if (REFL != null) qs.set('refl', REFL);
+if (FLAP != null) qs.set('flap', FLAP);
+if (LOOKY != null) qs.set('looky', LOOKY);
 for (const pl of PLIGHTS) qs.append('plight', pl);
 for (const [k, v] of Object.entries(parts)) qs.set(k, v);
 const pageUrl = `${URL}/tools/carview.html?${qs.toString()}`;
@@ -264,6 +270,7 @@ try {
     }, { az: s.az, el: s.el, dist: s.dist,
          look:  s.look  != null ? s.look  : LOOK,
          lookX: s.lookX != null ? s.lookX : LOOKX,
+         lookY: s.lookY != null ? s.lookY : (LOOKY != null ? parseFloat(LOOKY) : 0),
          tod: s.tod, intensity: s.intensity != null ? s.intensity : INTEN });
     // SwiftShader can spend far longer than a fixed delay compiling or rebuilding
     // the dusk/night reflection probe. Eight completed post-change frames covers

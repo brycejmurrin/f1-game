@@ -219,7 +219,7 @@
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 11, 150, null, null,
-        { livery: "alu", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
+        { livery: "navy", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
       // The technopole units: a wide low podium with a set-back upper floor —
       // the French business-park idiom the whole Magny-Cours site was built in.
       for (let i = 0; i < 4; i++) {

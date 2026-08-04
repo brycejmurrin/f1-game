@@ -226,7 +226,7 @@
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 11, 140, null, null,
-        { livery: "concrete", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
+        { livery: "terracotta", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
       // The Algarve paddock is cut into a hillside, so its blocks STEP with the
       // slope. A flat-topped box here would sit level against ground that isn't.
       for (let i = 0; i < 4; i++) {

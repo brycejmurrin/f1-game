@@ -236,10 +236,10 @@
       // times; the main straight's flagship stand gets a second tier, suites
       // and a truss roof to read as the venue's biggest structure.
       grandstandEx(0.02,  1,  8, 120, null, null,
-        { livery: "navy", tiers: 2, roof: "truss", suites: true, endWalls: true, pylons: true });
+        { livery: "teal", tiers: 2, roof: "truss", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.0,  -1, 10,  90, null, null, { livery: "steel", roof: "cantilever", endWalls: true });
       grandstandEx(0.06,  1,  9,  90, null, null, { livery: "alu", roof: "flat" });
-      grandstandEx(0.96, -1, 11,  80, null, null, { livery: "navy", roof: "cantilever" });
+      grandstandEx(0.96, -1, 11,  80, null, null, { livery: "teal", roof: "cantilever" });
 
       // Start/finish gantry spanning the main straight + a second timing arch
       gantry(0.005, 7.5, [0.14, 0.14, 0.18]);
@@ -781,7 +781,7 @@
       // s 0.55 both — L'Épingle hairpin: tight U of walls + grandstand
       // ===================================================================
       grandstandEx(0.55,  1, 12, 70, null, null, { livery: "alu", roof: "cantilever" });
-      grandstandEx(0.53, -1, 12, 60, null, null, { livery: "navy", roof: "flat" });
+      grandstandEx(0.53, -1, 12, 60, null, null, { livery: "teal", roof: "flat" });
       grandstandEx(0.57,  1, 13, 60, null, null, { livery: "steel", roof: "cantilever" });
       for (const side of [-1, 1]) {
         for (let j = 0; j < 3; j++) place(K(0.55 + j * 0.004), side, 3, [3, 0.2, 4], (j % 2) ? KERB_R : KERB_W);
@@ -830,7 +830,7 @@
       // L'Épingle and the final chicane (the busiest spectator zone on the island).
       // (increased gap from 11m→14m→18m to clear curve intrusion at s=0.72)
       grandstandEx(0.65, -1, 18, 80, null, null,
-        { livery: "navy", tiers: 2, roof: "cantilever", endWalls: true });
+        { livery: "teal", tiers: 2, roof: "cantilever", endWalls: true });
 
       // ===================================================================
       // s 0.66–0.90 — Back stretch through Parc Jean-Drapeau (parkland)
@@ -924,7 +924,7 @@
       }
       // Grandstand viewing the Wall + final chicane
       grandstandEx(0.97, -1, 12, 90, null, null,
-        { livery: "navy", roof: "truss", endWalls: true });
+        { livery: "teal", roof: "truss", endWalls: true });
       billboard(K(0.96), -1, 12, 14, 4, [0.85, 0.30, 0.16]);
     },
   }

@@ -116,5 +116,6 @@
 body.cockpit-cam #hud-gearbox,
 body.cockpit-cam #hud-speed,
 body.cockpit-cam #hud-energy,
-body.cockpit-cam #hud-ot { display: none; }
+body.cockpit-cam #hud-ot,
+body.cockpit-cam #hud-aero { display: none; }
 } /* @layer overlays */

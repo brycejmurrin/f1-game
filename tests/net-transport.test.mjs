@@ -175,25 +175,33 @@ test("a build mismatch is refused, and says which side is stale", () => {
   assert.match(newer.message, /reload the page to update/i);
 });
 
-test("SDP slimming drops the regenerable lines and keeps the essential ones", () => {
+test("SDP survives the round trip verbatim, CRLF-terminated", () => {
+  // The regression this exists for. An earlier version stripped "regenerable"
+  // attributes and rejoined with \n, which dropped the trailing terminator —
+  // so the last line arrived unterminated and Chrome refused the whole
+  // description with "Invalid SDP line". Every attribute must survive, every
+  // line must end CRLF, and the final line must be terminated too.
   const sdp = [
     "v=0",
     "o=- 4611731400430051336 2 IN IP4 127.0.0.1",
+    "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
     "a=ice-ufrag:4ZcD",
     "a=ice-pwd:2/1muCWoOi3uLifh0NuRHlZw",
     "a=fingerprint:sha-256 AB:CD",
-    "a=rtpmap:111 opus/48000/2",       // droppable
-    "a=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level", // droppable
-    "a=ssrc:1234 cname:foo",           // droppable
     "a=candidate:1 1 udp 2113937151 192.168.1.10 54321 typ host",
-  ].join("\r\n");
-  const slim = NetHandshake.slimSdp(sdp);
-  for (const keep of ["v=0", "a=ice-ufrag:4ZcD", "a=ice-pwd:", "a=fingerprint:", "a=candidate:"]) {
-    assert.ok(slim.includes(keep), `must keep ${keep}`);
-  }
-  for (const drop of ["a=rtpmap:", "a=extmap:", "a=ssrc:"]) {
-    assert.ok(!slim.includes(drop), `must drop ${drop}`);
-  }
+    "a=sctp-port:5000",
+    "a=max-message-size:262144",          // the line that was being orphaned
+  ].join("\r\n") + "\r\n";
+
+  const out = NetHandshake.normaliseSdp(sdp);
+  assert.equal(out, sdp, "the SDP must survive untouched");
+  assert.ok(out.endsWith("\r\n"), "the final line MUST be terminated");
+  assert.ok(out.includes("a=max-message-size:262144"));
+  assert.ok(!out.includes("\n\n"), "no blank lines");
+
+  // Bare-LF input (some stacks) is normalised up to CRLF rather than passed on.
+  const lf = NetHandshake.normaliseSdp("v=0\na=ice-ufrag:x\na=max-message-size:262144");
+  assert.equal(lf, "v=0\r\na=ice-ufrag:x\r\na=max-message-size:262144\r\n");
 });
 
 test("the invite link keeps the code in the fragment", () => {
