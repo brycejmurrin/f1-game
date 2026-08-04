@@ -276,7 +276,12 @@ const NetPlay = (function () {
         sessions.delete(id);
         const carFor = remoteFor(id);
         if (carFor != null && sessions.size && role === "host") { handBackToAI(why, carFor); }
-        else stop(why);
+        // "peer_closed", never a bare stop(): stop() defaults an absent reason
+        // to "local", and the transport does not always give one — so a
+        // CONNECTION THAT DROPPED was being reported as a deliberate local
+        // stop. That is not cosmetic; it sent this session hunting for a local
+        // caller that does not exist while a real drop went unexamined.
+        else stop(why || "peer_closed");
         session = sessionList()[0] || null;
       });
       for (const type of Object.keys(EV)) {
