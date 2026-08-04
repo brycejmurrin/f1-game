@@ -73,6 +73,70 @@ not tell you the sheet's shape, and the sheet is what the layout keys on.
 
 ---
 
+## The screens, and how to reach each one
+
+The other half of the matrix. `SCREENS` in `tools/layout-audit.mjs` is the
+executable version of this table — **it is the inventory**, so a screen missing
+from it is a screen nobody measures.
+
+The first draft of this grid held twelve entries and reported "130 cells, 0 red",
+which read as full coverage. It was not: the app has **21 screen roots**, and
+several change shape entirely between states behind one root. Qualifying, the
+livery editor, the standings table, both tuner panels and every career
+sub-screen had never been measured once. The first sweep that included them
+found a real WCAG failure in the lighting tuner within a minute.
+
+**Top-level screens** — one root each, reached the way a player reaches it:
+
+| cell | root | route |
+|---|---|---|
+| `title` | `#overlay` | boot |
+| `select` | `#select` | `#mb-race` |
+| `garage` | `#carsetup` | `#mb-garage` → ENGINE tab |
+| `career` | `#career` | `#mb-career` (new-career SETUP state) |
+| `datahub` | `#datahub` | `#mb-data` |
+| `howtoplay` | `#howtoplay` | `#mb-help` |
+| `settings` | `#pmsettings` | `#mb-settings` |
+| `vsfriend` | `#vsfriend` | `#mb-vs` |
+| `teampicker` | `#teampicker` | garage → TEAM tab → `#cs-team-card` |
+| `racesettings` | `#race-settings` | select → START → garage → `#cs-done` |
+| `quali` | `#quali` | race settings → QUALIFYING LAP **on** → `#rs-go` |
+| `standings` | `#standings` | in-race → pause → `#pm-standings` |
+| `customize` | `#customize` | garage → **TEAM** tab → `#cs-customize` |
+| `advanced` | `#advanced` | settings → `#pm-advanced` |
+| `audioset` | `#audioset` | settings → `#pm-audio` |
+| `spotify` | `#spotifypanel` | shown directly (no account to connect) |
+| `careerguide` | `#career-guide` | career → HOW CAREER WORKS |
+| `careerhistory` | `#career-history` | career → SEASON BY SEASON |
+| `careeroffers` | `#career-offers` | `__apex.careerRollover()` → `#cr-go` |
+| `results` | `#results` | `__apex.finishRace()` |
+| `pause` | `#pausemenu` | in-race |
+| `hud` | `#hud` | in-race |
+
+**Sub-views** — same root, materially different layout. These are not extra
+polish: a screen measured in one state is a screen measured once, and the
+lighting tuner's failure was in a state the grid had no entry for.
+
+| cell | why it is its own cell |
+|---|---|
+| `careerhub` | `#career` is the new-career SETUP on a fresh profile and the SEASON HUB once one exists — two layouts, one root |
+| `garagelivery` | colour pickers and swatch grids, not option rows |
+| `garageteam` | team card + driver chips + EDIT MY TEAM |
+| `datatelemetry` | the trace viewer/map/playback — the densest thing in the app |
+| `dataschedule` | a wide table, the case that wants horizontal scroll |
+| `lightingtuner` | `#lighting`, a docked slider panel; `#lt-rail` goes `display: contents` when wide |
+| `cameratuner` | `#camtune`, the same shape for the 13 camera modes |
+| `hudmanual` | MANUAL moves the gearbox into the right thumb column and relocates BOOST/OT/AERO — a different control stack, not a restyle |
+
+**Known gaps, stated rather than implied:** the garage's other ten part-category
+tabs share `garage`'s layout exactly (option rows), so one stands for all; the
+data hub's STANDINGS/LAST RACE/LIVE tabs are tables like `dataschedule`; the
+`results` cell measures the race screen, not the season-end variant; and the HUD
+is measured in two of its steering modes, not four. Adding any of these is a
+table entry, not new machinery.
+
+---
+
 ## Seven axes, and which mechanism owns each
 
 **Read this before adding any layout rule.** Every layout bug this project has
@@ -164,6 +228,25 @@ looked exactly like a real bug:
    slot list) that came from asking a hardcoded list of selectors whether an
    ancestor scrolls, instead of asking the computed style. `#cr-body` has 319px
    of scroll range; scrolling it moves SLOT 3 from y=728 to y=409.
+4. Thirty-four "clipped" findings on the lighting tuner, the first time that
+   screen was ever measured. `#lt-rail` is `display: contents` on a wide sheet,
+   so it has a 0x0 rect while its children lay out normally — and the probe was
+   treating it as a clipper everything escaped. The tell was in the numbers: an
+   element cannot overflow its clipper by 1071px on the left AND 1413px on the
+   right. A clipper must generate a box.
+5. "Every checkbox in the app is a 13x13 WCAG failure" — the probe was measuring
+   the `<input>`, but these are wrapped in a `<label>`, and clicking the label is
+   what toggles them. The activation target is the union of the two. Correcting
+   it did not make the finding go away, it made it TRUE: the real target was
+   342x16, and 16 still fails the 24px floor. A miscalibrated probe does not just
+   cry wolf, it hides the size of the actual wolf.
+
+There is a matching harness lesson about ORDER. The sweep boots once per viewport
+and walks the screens in sequence, so a cell can be poisoned by its predecessor:
+forcing `#pmsettings.hidden = false` desynced that screen's internal state, and
+every tuner cell in the sweep skipped while passing in isolation. **Reach a screen
+through the app's own door** (`pause` -> SETTINGS) rather than by unhiding its
+element, and add its root to `OVERLAY_IDS` so the reset closes it.
 
 So: **before fixing a cell the grid turned red, confirm the finding by a route
 that does not run the probe's code** — a script that actually scrolls the
