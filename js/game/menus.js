@@ -87,12 +87,26 @@ function buildTeamPicker() {
     name.className = "tm-name"; name.textContent = t.name;
     const sub = document.createElement("span");
     sub.className = "tm-sub";
-    sub.textContent = t.drivers.map((d) => "#" + d.num + " " + d.name.split(" ").pop()).join("  ·  ");
+    // Whose seats are already spoken for, so it reads BEFORE you tap rather
+    // than only on the driver chips one screen later. Empty off-line, which is
+    // what keeps every solo mode exactly as it was.
+    const taken = G.peerSeats ? G.peerSeats() : [];
+    const isTaken = (si) => taken.some((s) => s.team === t.id && s.driver === si);
+    sub.textContent = t.drivers
+      .map((d, si) => "#" + d.num + " " + d.name.split(" ").pop() + (isTaken(si) ? " (TAKEN)" : ""))
+      .join("  ·  ");
     body.append(name, sub);
     b.append(teamSwatch(t), body);
     b.onclick = () => {
-      G.teamIdx = i; G.driverIdx = 0; store.set("team", i);
-      store.set("driver", 0);   // the old team's driver index means nothing here
+      // The old team's driver index means nothing here, so this used to reset
+      // to seat 0 flat. In a friend race seat 0 may be the seat the other
+      // player is in, which dropped you straight into a taken seat with a
+      // disabled chip underneath you. Take the first seat nobody holds; the
+      // seat-clash rule in js/net/lobby.js catches the simultaneous case.
+      let seat = 0;
+      while (seat < t.drivers.length - 1 && isTaken(seat)) seat++;
+      G.teamIdx = i; G.driverIdx = seat; store.set("team", i);
+      store.set("driver", seat);
       setTeamPicker(false);
       // Rebuild whichever screen opened the sheet. The garage repaints its own
       // 3D car for free — getSetupPreviewMesh() is keyed on the team id.

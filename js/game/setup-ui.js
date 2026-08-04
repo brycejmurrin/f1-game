@@ -158,10 +158,19 @@ function buildTeamOptions(optsEl, team) {
   row.setAttribute("role", "group"); row.setAttribute("aria-label", "Driver");
   team.drivers.forEach((d, i) => {
     const b = document.createElement("button");
+    // A seat somebody else is already in cannot be taken. Disabled rather than
+    // hidden — hiding reflows the row so the next tap lands on the wrong chip,
+    // which is the same reason #pm-calib and #pm-gears are disabled and not
+    // removed. The native attribute is enough: button:disabled is already
+    // styled (css/tokens.css), so this needs no new class.
+    const taken = (G.peerSeats ? G.peerSeats() : [])
+      .some((s) => s.team === team.id && s.driver === i);
     b.className = "sel-chip" + (i === G.driverIdx ? " active" : "");
+    b.disabled = taken;
+    if (taken) b.title = "Taken by the other player";
     b.setAttribute("aria-pressed", i === G.driverIdx ? "true" : "false");
     b.dataset.csDriver = String(i);
-    b.textContent = "#" + d.num + " " + d.name;
+    b.textContent = "#" + d.num + " " + d.name + (taken ? "  · TAKEN" : "");
     b.onclick = () => {
       if (i === G.driverIdx) return;
       G.driverIdx = i; store.set("driver", i);

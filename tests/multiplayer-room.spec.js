@@ -205,7 +205,12 @@ test.describe("qualifying in a friend race", () => {
     test.slow();
     await enterRoom(page, "guest");
     await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
-    await expect(page.locator("#vs-race-summary")).toContainText(/qualifying/i, { timeout: 5000 });
+    // Wait on the VALUE, not the label. renderRoom() always emits the
+    // "Qualifying lap" <dt>, so /qualifying/i matched before the settings
+    // packet had been pumped at all — the guard passed instantly and the
+    // raceQuali read below raced the delivery, which is exactly what it fails
+    // on under a loaded box.
+    await expect(page.locator("#vs-race-summary")).toContainText(/Qualifying lap\s*On/i, { timeout: 5000 });
     expect(await page.evaluate(() => window.__apex.info().raceQuali)).toBe(true);
   });
 
