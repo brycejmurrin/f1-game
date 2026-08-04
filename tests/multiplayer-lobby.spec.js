@@ -212,6 +212,32 @@ test.describe("VS FRIEND lobby", () => {
     expect(out.status).toMatch(/copied/i);
   });
 
+  test("a failed connection says WHICH failure it was", async ({ page }) => {
+    // The two ways this fails need opposite responses from the player, and
+    // from the outside they look identical. Reported live on a real device as
+    // one flat "some networks block direct connections", which is true and
+    // useless: it does not say whether trying another network would help.
+    await menu(page);
+    const out = await page.evaluate(() => {
+      const f = window.__apex.lobbyFailure;
+      return {
+        noStun: f({ ice: "failed", connection: "failed", candidates: { host: 2, srflx: 0, relay: 0 } }, 20),
+        blocked: f({ ice: "failed", connection: "failed", candidates: { host: 2, srflx: 1, relay: 0 } }, 20),
+        stale: f({ ice: "failed", connection: "failed", candidates: { host: 2, srflx: 1, relay: 0 } }, 120),
+      };
+    });
+    // No public address at all: another network genuinely may work.
+    expect(out.noStun).toMatch(/never revealed a public address/i);
+    expect(out.noStun).toMatch(/different network/i);
+    // We had one and still could not get through: switching Wi-Fi is not the
+    // fix, and telling them to try again would be a loop that cannot succeed.
+    expect(out.blocked).toMatch(/relay/i);
+    expect(out.blocked).not.toMatch(/different network/i);
+    // Our own design causes this one: a human carries the codes, and a NAT
+    // mapping expires in about a minute.
+    expect(out.stale).toMatch(/stale/i);
+  });
+
   test("the QR encodes the invite LINK, not the bare code", async ({ page }) => {
     // The distinction is the entire feature. A QR of the code shows the guest
     // 240 characters to retype; a QR of the link opens the game for them with

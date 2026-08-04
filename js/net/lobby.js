@@ -33,7 +33,13 @@
 "use strict";
 
 const NetLobby = (function () {
-  const CONNECT_TIMEOUT_MS = 30000;
+  // 30 s was too tight. A real ICE exchange over mobile data, with a relay
+  // candidate in the mix, can legitimately take most of a minute — and this
+  // timer starts at the LAST paste, so it is racing a handshake that has
+  // already used up its patience elsewhere. A definite `failed` short-circuits
+  // it anyway (see waitForOpen), so waiting longer only costs time in the case
+  // where there is still hope.
+  const CONNECT_TIMEOUT_MS = 60000;
 
   function create(G) {
     const $ = (id) => document.getElementById(id);
@@ -139,6 +145,45 @@ const NetLobby = (function () {
       transport = null;
     }
 
+    // "It didn't work" is not an answer a player can act on, and the two ways
+    // this fails need OPPOSITE responses. Which one happened is decided by
+    // whether we ever learnt our own public address:
+    //
+    //   no srflx candidate  -> STUN never answered. The network is filtering
+    //                          it, and a different network genuinely may work.
+    //   srflx but no path   -> both sides know both addresses and the packets
+    //                          still will not flow: symmetric NAT. Switching
+    //                          Wi-Fi will not help; only a relay does, and a
+    //                          relay costs someone money to run. Saying "try
+    //                          again" here would send them round a loop that
+    //                          cannot succeed.
+    //
+    // The stale case is the one worth catching separately, because our own
+    // design causes it: the codes are carried by a human, and a NAT's UDP
+    // mapping expires in about a minute. Take too long over the paste and the
+    // addresses in the code are simply no longer valid.
+    function failureMsg(st, secs) {
+      const c = (st && st.candidates) || {};
+      const last = st ? " (" + st.ice + "/" + st.connection + ")" : "";
+      const slow = secs > 90;
+      if (!c.srflx && !c.relay) {
+        return "Could not connect after " + secs + "s" + last + "."
+          + " This network never revealed a public address, so the other side had"
+          + " nothing to reach. Try again on a different network — mobile data"
+          + " often works where guest or office Wi-Fi does not.";
+      }
+      if (slow) {
+        return "Could not connect after " + secs + "s" + last + "."
+          + " The invite probably went stale — the addresses in a code stop working"
+          + " after a minute or so. Start a new invite and paste the answer back"
+          + " more quickly.";
+      }
+      return "Could not connect after " + secs + "s" + last + "."
+        + " Both sides found an address but the direct link was blocked, which"
+        + " usually means one of the networks needs a relay to get through."
+        + (st && st.turn ? "" : " Racing over the same Wi-Fi is the reliable fix.");
+    }
+
     // Poll for the DataChannels opening. There is no event that means "the
     // whole session is ready" — each channel opens separately — so the
     // transport raises open only once BOTH are up, and this waits for that.
@@ -161,15 +206,14 @@ const NetLobby = (function () {
         const secs = Math.round((Date.now() - started) / 1000);
         if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")");
 
-        if (Date.now() - started > CONNECT_TIMEOUT_MS) {
+        // A definite `failed` is final — ICE has exhausted every pair. Waiting
+        // out the rest of the timer after that just makes the player watch a
+        // spinner for a verdict already delivered. `disconnected` is NOT final:
+        // it can recover on its own, so it keeps waiting.
+        const dead = st && (st.ice === "failed" || st.connection === "failed");
+        if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
           clearInterval(pollTimer);
-          const last = st ? " Last state: " + st.ice + "/" + st.connection + "." : "";
-          // Honest about the most likely cause: without a TURN relay some
-          // networks genuinely cannot be traversed. Saying "try again" forever
-          // would be worse than saying so.
-          say("Could not connect after " + secs + "s." + last
-            + " Some home/mobile networks block direct connections — try again on the"
-            + " same Wi-Fi, or both switch networks.", true);
+          say(failureMsg(st, secs), true);
           teardown();
           show("pick");            // leave the lobby usable, not dead
         }
@@ -469,11 +513,14 @@ const NetLobby = (function () {
       wire, open, close, cancel, host, join, makeAnswer, acceptAnswer,
       shareInvite, shareAnswer, canShare,
       localProfile, modsFromProfile, setTransportFactory,
+      failureMsg,
       status: () => ({
         role, statusText,
         connected: !!transport && transport.status === "open",
-        // The live ICE/connection state — the only window into a handshake
-        // that no in-process test can reproduce.
+        // The live ICE/connection state and the CANDIDATE TYPES — the only
+        // window into a handshake that no in-process test can reproduce, and
+        // the difference between "this network blocks STUN" and "these two
+        // networks need a relay", which look identical from the outside.
         wire: transport && transport.stats ? transport.stats() : null,
       }),
     };

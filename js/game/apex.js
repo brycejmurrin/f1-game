@@ -1887,6 +1887,14 @@ const api = {
     return G.netLobby ? G.netLobby.modsFromProfile(profile) : null;
   },
 
+  // lobbyFailure(wireStats, secs) — the message a failed connection produces,
+  // from a given wire state. Exposed because the real thing needs two devices
+  // on two hostile networks, which no CI can arrange — but WHICH diagnosis we
+  // draw from a given set of candidates is pure logic and must not regress.
+  lobbyFailure(st, secs) {
+    return G.netLobby ? G.netLobby.failureMsg(st, secs || 30) : null;
+  },
+
   // lobbyShare("invite"|"answer") — hand the code off the way the button does:
   // the OS share sheet where there is one, the clipboard where there isn't.
   // Exposed because navigator.share opens NATIVE UI that Playwright cannot
