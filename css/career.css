@@ -100,7 +100,7 @@
 
 /* ---------- cards ---------- */
 .cr-card {
-  background: var(--surf-1); border: 1px solid var(--edge); border-radius: var(--r-sm);
+  background: var(--surf-1); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--r-sm);
   padding: calc(var(--pad) * 0.7); display: flex; flex-direction: column; gap: 5px;
 }
 .cr-row { display: flex; justify-content: space-between; gap: var(--gap); font-size: 12px; }
@@ -113,7 +113,7 @@
    column and reads as an afterthought. */
 .cr-obj-line {
   font-size: 13px; font-weight: 700; font-style: italic; line-height: 1.35;
-  padding-bottom: 4px; border-bottom: 1px solid var(--edge);
+  padding-bottom: 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .cr-nextrace { align-items: flex-start; gap: 2px; }
@@ -127,7 +127,7 @@
 .cr-flavour {
   display: flex; flex-direction: column; gap: 4px; text-align: left;
   min-height: var(--tap); padding: calc(var(--pad) * 0.7);
-  background: var(--surf-1); border: 1px solid var(--edge); border-radius: var(--r-sm);
+  background: var(--surf-1); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--r-sm);
   color: inherit; font: inherit; cursor: pointer;
 }
 /* Selection reuses the .sel-chip.active / .team-tile.active treatment: an inset
@@ -150,7 +150,7 @@
   display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto;
   column-gap: 8px; align-items: center; text-align: left;
   min-height: var(--tap); padding: 8px calc(var(--pad) * 0.6);
-  background: var(--surf-1); border: 1px solid var(--edge); border-radius: var(--r-sm);
+  background: var(--surf-1); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--r-sm);
   color: inherit; font: inherit; cursor: pointer;
 }
 
@@ -163,7 +163,7 @@
 .cr-field-lbl { font-size: var(--label); letter-spacing: 0.1em; color: var(--dim); width: 78px; flex: 0 0 auto; }
 .cr-input {
   flex: 1 1 auto; min-width: 0; min-height: var(--chip-h);
-  background: var(--surf-1); border: 1px solid var(--edge); border-radius: var(--r-sm);
+  background: var(--surf-1); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--r-sm);
   color: inherit; font: inherit; font-weight: 700; padding: 0 10px;
 }
 .cr-input:focus-visible { outline: 2px solid var(--red); outline-offset: 1px; }
@@ -172,7 +172,7 @@
 .cr-seat {
   flex: 1 1 140px; display: flex; flex-direction: column; gap: 2px; text-align: left;
   min-height: var(--tap); padding: 8px calc(var(--pad) * 0.6);
-  background: var(--surf-1); border: 1px solid var(--edge); border-radius: var(--r-sm);
+  background: var(--surf-1); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--r-sm);
   color: inherit; font: inherit; cursor: pointer;
 }
 
@@ -206,7 +206,7 @@
   grid-template-rows: auto auto; column-gap: 10px; align-items: center;
   width: 100%; text-align: left; margin-bottom: 6px;
   min-height: var(--tap); padding: 10px calc(var(--pad) * 0.6);
-  background: var(--surf-1); border: 1px solid var(--edge); border-radius: var(--r-sm);
+  background: var(--surf-1); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--r-sm);
   color: inherit; font: inherit; cursor: pointer;
 }
 .co-offer:hover, .co-offer:focus-visible { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
@@ -221,6 +221,35 @@
   background: var(--red); color: #fff;
 }
 .co-offer.staying .co-offer-tag { background: rgba(255, 255, 255, 0.14); color: var(--dim); }
+
+/* ---------- career history (#career-history) ---------- */
+/* Same relationship to the hub as #career-offers: a .dim modal laid over it, at
+   the same z-index because only one of the two is ever open. Narrower than the
+   offers sheet — a totals card and a column of season rows are both short lines,
+   and a wide sheet would strand the points column half a screen from the year. */
+#career-history { z-index: 30; --sheet-w: 520px; }
+
+/* The way in, at the foot of the hub's left column. A .cr-card that happens to be
+   a button, so it inherits the card's surface and rhythm and only has to undo the
+   things a <button> brings with it. Hover/focus borrows .co-offer's red edge —
+   the two are the same gesture (a card you press), and they should feel it. */
+.cr-record {
+  width: 100%; text-align: left; cursor: pointer;
+  color: inherit; font: inherit; min-height: var(--tap);
+  gap: 4px;
+}
+.cr-record:hover, .cr-record:focus-visible { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+.cr-record-line { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* The affordance line: dim, tracked-out and red, so the card reads as a door
+   rather than one more read-only summary in a column full of them. */
+.cr-record-cta {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.14em; color: var(--red);
+}
+
+/* The position column carries a "P" here, unlike the championship block on the
+   hub where the same component numbers rows 1..5 — these rows are sorted by YEAR,
+   so a bare figure would read as an index instead of a title finish. */
+#ch-body .res-pos { width: 32px; }
 
 /* ---------- qualifying (#quali) ---------- */
 /* A .dim modal, unlike #career — it lays over whatever screen sent you here and

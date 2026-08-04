@@ -1888,6 +1888,103 @@ w = (__apex.act({ steer: 0.2, throttle: true }, 1/60, 10), __apex.world({ since:
 
 ---
 
+## Career & qualifying
+
+Career mode's hooks (`js/game/career.js`, `js/game/quali.js`). See
+[CAREER.md](CAREER.md) for the design; this is the API surface.
+
+Two things to know before using any of them. **A career save existing is not the
+same as a career being played** — the save is read at boot so the title button can
+offer CONTINUE, but its rules only apply while `flow` is `"career"`. And a career
+**is** a championship, so `info().seasonMode` stays `true` inside one.
+
+### `info()` — additions
+`flow` (`"gp" | "season" | "career"`), `session` (`"race" | "tt" | "quali"`) and
+`career` (bool: a save exists). `timeTrial` and `seasonMode` are unchanged derived
+views of those, so older harnesses keep working.
+
+### `career(opts?) → save | null`
+No args returns the whole `apex26.career` save, or `null`. Pass `true` to resume
+the stored career and open the hub. Pass an object to start a NEW career and open
+the hub, skipping the setup screen.
+
+| Option | Meaning |
+|---|---|
+| `flavour` | `"driver"` (default) or `"myteam"` |
+| `teamId` | who you drive for; ignored for `myteam`, which is always `custom` |
+| `seat` | 0 or 1 — which of the team's two seats you take |
+| `name`, `code`, `num` | your driver identity |
+| `hire` | MY TEAM only: the `code` of the free agent to sign |
+| `seed` | fixes every career draw; same seed → same career |
+
+```js
+__apex.career({ teamId: "haas", seat: 1, code: "ZZZ", seed: 4242 });
+__apex.career().season.round;   // 0
+```
+
+### `careerState() → {...} | null`
+Compact snapshot — prefer this to reading the save. `flavour`, `year`, `round`,
+`rounds`, `team`, `teamName`, `money`, `rep`, `budget`, `budgetLvl`, `owned`
+(count), `deal`, `obj`, `offers` (count), `seasons`, and — MY TEAM only —
+`roster` and `wages`.
+
+### `careerMoney(n?) → number | null`
+Get or set the balance. A test that wants to buy a part should not have to drive
+twelve races first.
+
+### `careerSim(n) → [round, …] | null`
+Settle `n` rounds with nobody driving, through the **same** `Career.settleRound()`
+the driven path uses — so prize money, objectives, reputation and the standings are
+genuinely exercised, not approximated. Each entry is `{pos, pts, prize, salary,
+bonus, wages, obj, money, rep}`.
+
+Needs a track and a grid loaded, because the qualifying model reads both: stage one
+weekend first. Every round is simulated on **that** circuit — the per-round
+variation comes from the seeded draw, not from rebuilding twenty-four tracks
+headlessly.
+
+```js
+__apex.career({ teamId: "haas", seed: 1 });   // then stage a weekend…
+__apex.careerSim(24);                          // …and fast-forward the season
+```
+
+### `careerRollover() → {champion, offers, history} | null`
+Force the season rollover: archive the year, develop drivers and teams, run the
+driver market, and put contract offers on the table. What the end-of-season sheet
+reads.
+
+### `careerReset() → true`
+Wipe the save.
+
+### `ratings(code?) → {pace, craft, awareness, consistency, experience, overall}`
+The five-axis driver table (`js/car/driver-ratings.js`) with any career development
+folded in. No args returns the whole grid keyed by code. **Ratings apply in every
+mode**, not just career — the grid has personality in a one-off Grand Prix too.
+`consistency` is a *variance* axis: it narrows the random band around a driver's
+pace rather than raising it. An unknown code resolves through a deterministic tier
+hash, so a custom or generated driver still has a stable personality.
+
+### `qualiSim(playerTime?) → [{pos, driverId, code, name, team, t, gap, isPlayer}, …] | null`
+The qualifying model's times for the **loaded** track, fastest first, **without**
+running a session — a real weekend's classification is left alone. Pass a lap time
+to substitute it for the player's row.
+
+The AI field is modelled rather than driven: a quasi-steady forward/backward lap
+simulation off the same `LAT_MAX`/`ACCEL`/`BRAKE` constants the driving model uses,
+so a simulated time and a driven one land on one scale by construction.
+
+```js
+__apex.race("monza");
+__apex.qualiSim()[0];   // → { pos:1, code:"VER", t:100.958, gap:0, … }
+```
+
+### `carAt(i)` — additions
+`code`, `seat`, `tierV`, `skill` and `ratings`. `tierV` and `skill` are the two
+multipliers that decide how fast an AI car is allowed to be (`vmax = VMAX · PACE ·
+tierV · skill · difficulty`), so "why is this car quick?" is answerable without
+reading the source. `tierV` folds the team's `TIER_V` together with career team
+development; `skill` is the driver.
+
 ## Headless / RL control loop
 
 For reinforcement-learning, autopilot testing, or any high-throughput physics

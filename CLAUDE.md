@@ -417,6 +417,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
 tests/*.spec.js                 Playwright specs (91) + tests/*.test.mjs unit suites (26)
+tests/*.spec.js                 Playwright specs (90) + tests/*.test.mjs unit suites (26)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -718,6 +719,28 @@ __apex.aiPlace(idx,frac,v?,x?) // teleport any AI car (by cars[] index) to a tra
 __apex.setEnergy(v)           // set player ERS charge 0–1 (clamped)
 __apex.setLap(n)              // override player lap counter (for results-screen tests)
 __apex.trackProfile(n?)       // [{frac,y,k,hw,slope}] — elevation/curvature profile (default 100 pts)
+// ── Career & qualifying (js/game/career.js, js/game/quali.js) ──
+//    A career SAVE existing is not a career being PLAYED: the save loads at boot
+//    so the title button can offer CONTINUE, but its rules only apply while
+//    flow === "career". A career IS a championship, so seasonMode stays true.
+__apex.info()                 // + flow ("gp"|"season"|"career"), session
+                              //   ("race"|"tt"|"quali"), career (a save exists)
+__apex.career()               // the whole apex26.career save, or null
+__apex.career({teamId:"haas", seat:1, seed:42})   // start one, skipping the setup
+                              //   screen; flavour:"myteam" + hire:"<code>" for MY TEAM
+__apex.careerState()          // compact snapshot — prefer this to reading the save
+__apex.careerMoney(n?)        // get/set the balance
+__apex.careerSim(n)           // settle n rounds with nobody driving, through the
+                              //   SAME settleRound() the driven path uses. Needs a
+                              //   track staged; reuses THAT circuit for every round
+__apex.careerRollover()       // force the season rollover -> {champion, offers, history}
+__apex.careerReset()          // wipe the save
+__apex.ratings(code?)         // five-axis driver table + overall; no args = the grid.
+                              //   Applies in EVERY mode, not just career
+__apex.qualiSim(playerTime?)  // the qualifying model for the loaded track WITHOUT
+                              //   running a session (a real weekend is left alone)
+__apex.carAt(i)               // + code, seat, tierV, skill, ratings — the two
+                              //   multipliers that decide AI pace, now observable
 // ── Headless / RL control loop ──
 __apex.headless(true)         // skip render() — physics runs uncapped
 __apex.obs()                  // full debug observation (pos, slip, clearances, scan, reward, gear)
