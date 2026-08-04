@@ -197,7 +197,7 @@ const TLX = (function () {
       try {
         window.scene = scene; window.camera = camera; window.renderer = renderer;
         window.THREE = THREE;
-        console.log("[TLX] window.scene / camera / renderer / THREE exposed — Three.js DevTools will find the scene");
+        Log.info("gfx", "[TLX] window.scene / camera / renderer / THREE exposed — Three.js DevTools will find the scene");
       } catch (_) { /* non-fatal: debug convenience only */ }
 
       // Fallback material: unlit vertex colour (the M2 look). Kept as the
@@ -229,7 +229,7 @@ const TLX = (function () {
           shadowSys = TLXShaders.shadowSys(THREE, TSL, { renderer, mobileTier });
         }
       } catch (e) {
-        try { console.warn("TLX: shadow factory failed, shadows off —", e); } catch (_) {}
+        try { Log.warn("gfx", "TLX: shadow factory failed, shadows off —", e); } catch (_) {}
         shadowSys = null;
       }
 
@@ -251,7 +251,7 @@ const TLX = (function () {
           if (post && !post.enabled()) post = null;
         }
       } catch (e) {
-        try { console.warn("TLX: post factory failed, direct to canvas —", e); } catch (_) {}
+        try { Log.warn("gfx", "TLX: post factory failed, direct to canvas —", e); } catch (_) {}
         post = null;
       }
 
@@ -292,7 +292,7 @@ const TLX = (function () {
         renderer.setRenderTarget(_prevTgt);
         try { renderer.setClearAlpha(_prevA); } catch (_) {}
       } catch (e) {
-        try { console.warn("TLX: env-probe target alloc failed, analytic reflections only —", e); } catch (_) {}
+        try { Log.warn("gfx", "TLX: env-probe target alloc failed, analytic reflections only —", e); } catch (_) {}
         envRT = null; envDummy = null;
       }
 
@@ -331,7 +331,7 @@ const TLX = (function () {
             envCube: envRT ? envRT.texture : null, matMaps });
         }
       } catch (e) {
-        try { console.warn("TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
+        try { Log.warn("gfx", "TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
         lit = null;
       }
 
@@ -346,7 +346,7 @@ const TLX = (function () {
           sky = TLXShaders.sky(THREE, TSL, { chunks });
         }
       } catch (e) {
-        try { console.warn("TLX: sky factory failed, flat clear only —", e); } catch (_) {}
+        try { Log.warn("gfx", "TLX: sky factory failed, flat clear only —", e); } catch (_) {}
         sky = null;
       }
 
@@ -360,7 +360,7 @@ const TLX = (function () {
           fx = TLXShaders.fx(THREE, TSL, { chunks });
         }
       } catch (e) {
-        try { console.warn("TLX: fx factory failed, FX paths off —", e); } catch (_) {}
+        try { Log.warn("gfx", "TLX: fx factory failed, FX paths off —", e); } catch (_) {}
         fx = null;
       }
 
@@ -373,7 +373,7 @@ const TLX = (function () {
           chunkedSys = TLXShaders.chunked(THREE, {});
         }
       } catch (e) {
-        try { console.warn("TLX: chunked factory failed, un-culled props —", e); } catch (_) {}
+        try { Log.warn("gfx", "TLX: chunked factory failed, un-culled props —", e); } catch (_) {}
         chunkedSys = null;
       }
 
@@ -556,7 +556,7 @@ const TLX = (function () {
           envCubeCam.coordinateSystem = renderer.coordinateSystem;
           envCubeCam.updateCoordinateSystem();
         } catch (e) {
-          try { console.warn("TLX: env cube-cam orient failed, probe off —", e); } catch (_) {}
+          try { Log.warn("gfx", "TLX: env cube-cam orient failed, probe off —", e); } catch (_) {}
           envCubeCam = null;
         }
       }

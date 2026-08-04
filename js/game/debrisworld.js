@@ -762,7 +762,7 @@ function step(dt) {
   try {
     world.step(_events);
   } catch (e) {
-    try { console.warn("[debris] rapier step trapped — debris disabled", e); } catch (_e) {}
+    try { Log.warn("game", "[debris] rapier step trapped — debris disabled", e); } catch (_e) {}
     _active = false;
     try { destroyWorld(); } catch (_e) {}
     return;

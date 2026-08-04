@@ -6,19 +6,10 @@
 // circuit's meshes, then point-in-triangle test every face against asphalt
 // sample points across the whole lap — purely geometric, no rendering.
 import { test, expect } from "@playwright/test";
+import { auditTracks } from "./track-helpers.js";
 
-const ALL_TRACKS = [
-  "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring", "imola",
-  "interlagos", "jeddah", "madrid", "mexico", "miami", "monaco", "montreal",
-  "monza", "qatar", "redbull", "shanghai", "silverstone", "singapore", "spa",
-  "suzuka", "vegas", "zandvoort",
-  // Retired / off-calendar circuits (def `classic: true`).
-  "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
-  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
-  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
-  "jacarepagua",
-];
-const TRACKS = process.env.TRACK ? [process.env.TRACK] : ALL_TRACKS;
+// Every circuit (derived from tools/manifest.cjs), or TRACK=<id> for one.
+const TRACKS = auditTracks();
 const CROSSOVER_TRACKS = new Set(["madrid", "suzuka", "zandvoort"]);
 
 // A face poking this far above the asphalt counts as a defect. Small tolerance

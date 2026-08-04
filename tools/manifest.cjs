@@ -9,7 +9,7 @@
 // Directory map (post-reorg):
 //   js/render/    renderer: gfx façade, GLX (WebGL2), shaders, WebGPU backend
 //   js/track/     track ENGINE + infra (geometry, surface, scenery kits)
-//   js/circuits/  the 24 circuit DEFINITIONS (data; one file per circuit)
+//   js/circuits/  the 40 circuit DEFINITIONS (24 season + 16 classic; one file each)
 //   js/car/       car model, liveries, parts, ghost, teams
 //   js/data/      data hub (api client + tab modules + shell)
 //   js/game/      game-support modules extracted from / loaded before game.js
@@ -49,6 +49,8 @@ const circuitFiles = CIRCUITS.map((id) => `${CIRCUITS_DIR}/${id}.js`);
 
 // Every js file, in exact index.html <script> tag order.
 const FULL = [
+  // Log must be first: every module below may log at evaluation time.
+  "js/log.js",
   "js/mat4.js",
   "js/render/shaders/chunks.js",
   "js/render/shaders/lit.js",
@@ -174,6 +176,7 @@ const CSS = [
 // tools/carview.html <script> subset, in order (paths repo-relative; the file
 // itself uses ../js/... since it is served from /tools/).
 const CARVIEW = [
+  "js/log.js",
   "js/mat4.js",
   "js/render/shaders/chunks.js",
   "js/render/shaders/lit.js",
@@ -196,6 +199,7 @@ const CARVIEW = [
 // "@circuits" expands to every file in CIRCUITS_DIR (readdir, sorted — VM
 // verification is per-id, so LIST order does not matter there).
 const TRACK_VM = [
+  "js/log.js",
   "js/track/geo-paths.js",
   "js/track/geom.js",
   "js/track/scenery-data.js",

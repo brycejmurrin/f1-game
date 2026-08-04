@@ -2519,6 +2519,40 @@ const api = {
   // for a session and returns normalised {x,z}[] track outline points (≤400 pts).
   // Find sessionKey via: __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")
   // ── Console diagnostics ────────────────────────────────────────────────────
+  // logs(filter?) — the retained log ring (js/log.js).
+  //
+  // The point of a ring buffer is that it is already full when you go looking:
+  // diagnostics at or below the BUFFER threshold (default `info`) are retained
+  // whether or not they were printed, so a failure that has already happened
+  // still has a record. Filter with {ns, level, since, limit}; `since` takes a
+  // record `id` so a poller only gets what it has not seen.
+  //
+  //   __apex.logs()                          // everything retained
+  //   __apex.logs({ ns: "scenery" })         // one namespace
+  //   __apex.logs({ level: "warn", limit: 20 })
+  logs(filter) {
+    if (typeof Log === "undefined") return [];
+    return Log.records(filter);
+  },
+
+  // logLevel(spec?) — read or move the console/buffer thresholds.
+  //
+  // No arg reads the resolved state. A spec string applies it: `"debug"` for
+  // everything, `"scenery:debug"` for one namespace, `"buffer:debug"` to retain
+  // more without printing more. `persist` writes it to localStorage so it
+  // survives the reload — the shape to hand a player reproducing a bug.
+  //
+  //   __apex.logLevel()                      // { console, buffer, consoleNs, … }
+  //   __apex.logLevel("scenery:debug")
+  //   __apex.logLevel("debug", true)         // and remember it
+  //   __apex.logLevel(null, true)            // forget it
+  logLevel(spec, persist) {
+    if (typeof Log === "undefined") return { ok: false, error: "no_log_module" };
+    if (persist) Log.persist(spec === undefined ? null : spec);
+    else if (spec !== undefined) Log.level(spec);
+    return Log.level();
+  },
+
   // save(data, filename) — hand a file back out of the browser.
   //
   // Exists because the reverse direction is the hard one: reading state OUT of
@@ -2649,10 +2683,12 @@ const api = {
       // for the one-liner that installs a collector BEFORE reproducing a bug.
       errors: safe(() => (window.__apexErrors || []).slice(-40), []),
     };
+    // A raw console.log on purpose: DevTools renders an inspectable
+    // object tree, which Log flattens to text.
     try { console.log(d); } catch (_) {}
     if (o.download !== false) {
       const bytes = this.save(d, o.filename || "apex-diag.json");
-      try { console.log("[diag] downloaded apex-diag.json (" + bytes + " bytes)"); } catch (_) {}
+      try { Log.info("apex", "downloaded apex-diag.json (" + bytes + " bytes)"); } catch (_) {}
     }
     return d;
   },

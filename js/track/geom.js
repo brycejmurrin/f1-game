@@ -1,15 +1,15 @@
 /* Apex 26 — pure 3D geometry emitters shared by the track/scenery builders
-   (js/tracks.js). Each add*(out, ...) pushes positions/normals/colours/indices
+   (js/track/tracks.js). Each add*(out, ...) pushes positions/normals/colours/indices
    into the caller's `out` accumulator; emit() fan-triangulates one auto-
    oriented convex face; MAT is the per-vertex procedural-material id map
    (stamped via out._mat). Stateless and renderer-free: no GLX, no track state —
    loads under tools/verify-track.cjs's bare VM sandbox. Must load BEFORE
-   js/tracks.js (see index.html). */
+   js/track/tracks.js (see index.html). */
 const TrackGeom = (function () {
   "use strict";
 
   // Procedural surface-material ids — stamped per-vertex (out._mat) and textured
-  // in the lit shader's applyMaterial() (js/glx.js). 0 = FLAT (untextured, the
+  // in the lit shader's applyMaterial() (js/render/glx.js). 0 = FLAT (untextured, the
   // original look). Exposed to per-track scenery() via api.MAT.
   const MAT = { FLAT: 0, CONCRETE: 1, BRICK: 2, GLASS: 3, METAL: 4, WOOD: 5,
                 FOLIAGE: 6, FABRIC: 7, SAND: 8, GRASS: 9, ROCK: 10, SNOW: 11,

@@ -4,7 +4,7 @@
  *
  * A second implementer of the GLX draw-API contract (the renderer object
  * returned by the GLX IIFE). See docs/WEBGPU-MIGRATION.md,
- * docs/WEBGPU-PHASE0-NOTES.md, docs/WEBGPU-PHASE2-NOTES.md and js/gfx.js for the
+ * docs/WEBGPU-PHASE0-NOTES.md, docs/WEBGPU-PHASE2-NOTES.md and js/render/gfx.js for the
  * interface contract and the frame/opts object shapes.
  *
  * WHAT IS REAL (Phase 1 + Phase 2):
@@ -32,7 +32,7 @@
  * clip-space z bug (Z01 remap) that would have half-clipped ALL geometry.
  *
  * PHASE 4 (this pass): the post-processing chain + foreground FX.
- *   - present() now runs the WGSLPost chain (js/webgpu/wgsl-post.js) in its
+ *   - present() now runs the WGSLPost chain (js/render/webgpu/wgsl-post.js) in its
  *     documented PASS_ORDER: SSAO (half-res) -> GODRAY (half-res, screen-space
  *     radial) -> BLOOM down/up mip chain (rgba16f, additive up) -> COMPOSITE
  *     (scene * AO + godray, exposure, bloom, ACES, colour grade, lens flare,
@@ -43,7 +43,7 @@
  *     skipped so the composite never samples a stale frame. If the post
  *     pipelines/targets are unavailable, present() FALLS BACK to the Phase-2
  *     tonemap blit (no crash).
- *   - FX (js/webgpu/wgsl-fx.js): drawShadow/drawMark (blob + skid stamps),
+ *   - FX (js/render/webgpu/wgsl-fx.js): drawShadow/drawMark (blob + skid stamps),
  *     drawSkidBatch (batched trail), drawGlow (additive HDR halos), drawDecal
  *     (textured atlas) — all recorded INTO the open lit pass so they interleave
  *     with draw()/drawSky() exactly as game.js expects. createTexMesh/createTexture
@@ -76,7 +76,7 @@
  * caller falls back to GLX; a check that cannot be RUN is skipped, never fatal.
  *
  * NO build step, no ES modules: "use strict" IIFE assigning one global `WGX`.
- * WGSL lives as inline template strings (js/webgpu/wgsl-chunks.js).
+ * WGSL lives as inline template strings (js/render/webgpu/wgsl-chunks.js).
  *
  * Feature-detected & inert: WGX.create() returns null on any failure so the
  * caller falls back to GLX. Constructing on a supported browser never throws.
@@ -188,7 +188,7 @@ const WGX = (function () {
   let _lastFailure = null;
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
-    try { console.warn("WGX unavailable (" + _lastFailure.reason + ") — falling back to WebGL2"); } catch (_) {}
+    try { Log.warn("gfx", "WGX unavailable (" + _lastFailure.reason + ") — falling back to WebGL2"); } catch (_) {}
     return null;
   }
 
@@ -296,7 +296,7 @@ const WGX = (function () {
       device.onuncapturederror = function (ev) {
         const msg = (ev && ev.error && ev.error.message) || "gpu error";
         if (!_bootError) _bootError = msg;
-        try { console.warn("WGX GPU error:", msg); } catch (_) {}
+        try { Log.warn("gfx", "WGX GPU error:", msg); } catch (_) {}
       };
     } catch (_) {}
 
@@ -1099,7 +1099,7 @@ const WGX = (function () {
       return { _wgx: "mesh", vbuf, ibuf, count: b.count, indexFormat: b.indexFormat, chunks: null };
     }
     // Textured decal mesh (Phase 4): interleave pos3+nrm3+uv2 -> stride-32 vbuf +
-    // index buffer, matching the DECAL shader vertex layout (js/webgpu/wgsl-fx.js).
+    // index buffer, matching the DECAL shader vertex layout (js/render/webgpu/wgsl-fx.js).
     function createTexMesh(data) {
       if (!data || !data.pos || !data.nrm || !data.uv) return { _wgx: "texmesh", _phase: 4 };
       const pos = toF32(data.pos), nrm = toF32(data.nrm), uv = toF32(data.uv);
@@ -1157,7 +1157,7 @@ const WGX = (function () {
       });
       return { _wgx: "chunked", vbuf, chunks, count: chunks.length ? chunks[0].count : 0, indexFormat };
     }
-    // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/glx.js): a
+    // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx.js): a
     // 256×256 2D-canvas of value-noise + smudge blobs + dust specks + wipe
     // streaks, uploaded as an rgba8unorm texture the composite samples (.r). Same
     // seeded PRNG + draw ops as GLX, so the WebGPU grime matches the WebGL2 look.
@@ -1329,7 +1329,7 @@ const WGX = (function () {
       // map can't leak shadows into a night scene.
       const sunUp = !sd || sd[1] > -0.05;
       d[72] = (_shadowRendered && sunUp) ? 1 : 0;
-      // SHADOW STRENGTH knob × KEY-luminance fade (GLX parity, js/glx.js lit
+      // SHADOW STRENGTH knob × KEY-luminance fade (GLX parity, js/render/glx.js lit
       // begin): the night moon-key is deliberately held HIGH (sunDir.y ≈ 0.97
       // drives the sky glow), so the binary sunUp gate above never fires at
       // night — without this fade WebGPU kept full-strength terrain/road sun
@@ -1607,7 +1607,7 @@ const WGX = (function () {
     }
 
     // ── Live env-cube probe ────────────────────────────────────────────────────
-    // GLX parity (js/glx.js envFaceBegin/End): capture ONE cube face of the world
+    // GLX parity (js/render/glx.js envFaceBegin/End): capture ONE cube face of the world
     // around the player car per frame into a real RGBA16F cube; after a full 6-face
     // cycle the LIT car-paint block samples it (Block 7, envProbeStr). game.js re-issues
     // the world draws (drawSky + track meshes, NO cars) between begin/end — they record

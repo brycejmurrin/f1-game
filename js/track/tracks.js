@@ -1,4 +1,4 @@
-/* Apex 26 — Tracks engine: turns per-circuit definitions (js/tracks/<id>.js,
+/* Apex 26 — Tracks engine: turns per-circuit definitions (js/circuits/<id>.js,
    registered on the global TrackDefs list) into resampled closed Catmull-Rom
    splines extruded into 3D meshes. Contract: docs/ARCHITECTURE.md.
    Depends on globals TrackDefs + CircuitPaths (data). Mesh upload goes through
@@ -10,7 +10,7 @@ const Tracks = (function () {
 
   const WORLD_UP = [0, 1, 0];
 
-  // Geometry primitives + the MAT material-id map live in js/track-geom.js
+  // Geometry primitives + the MAT material-id map live in js/track/geom.js
   // (global TrackGeom, loaded before this file — index.html and
   // tools/verify-track.cjs). MAT is re-exposed to per-track scenery() via
   // api.MAT; buildProps shadows the raw emitters with on-track rejection
@@ -201,7 +201,7 @@ const Tracks = (function () {
         const result = TrackModels.validateGeometry(geo);
         track.geometryDiagnostics.push(Object.assign({ name }, result));
         if (result.ok) return geo;
-        console.warn(`[geometry] ${def.id}/${name} skipped: ${result.reason}`);
+        Log.warn("track", `${def.id}/${name} skipped: ${result.reason}`);
         return { pos: [], nrm: [], col: [], idx: [], mat: [] };
       };
       track.meshes.floor = G.createMesh(safe("floor", buildFloor(track)));
@@ -313,7 +313,7 @@ const Tracks = (function () {
 
   function buildProps(track) {
     // Static dressing tables (barrier liveries, furniture, crowd/sign/city
-    // palettes, building styles) live in js/track-scenery-data.js.
+    // palettes, building styles) live in js/track/scenery-data.js.
     const { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS,
             MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF,
             STYLES, THEME_DEF, ATM, COL } = TrackSceneryData;
@@ -1303,7 +1303,7 @@ const Tracks = (function () {
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       // skip if this prop would overlap a parallel stretch of track
       if (onTrack(cx, cz, sz[0] / 2 + 1.5)) {
-        console.warn(`[scenery] place SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]} (need dist>${(sz[0]/2+1.5).toFixed(1)})`);
+        Log.warn("track", `place SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]} (need dist>${(sz[0]/2+1.5).toFixed(1)})`);
         return;
       }
       // sink the base 0.8m below grade so prop bottoms tuck under the terrain
@@ -1366,7 +1366,7 @@ const Tracks = (function () {
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       if (onTrack(cx, cz, sz[0] / 2 + 6)) {
-        console.warn(`[scenery] backdrop SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]}`);
+        Log.warn("track", `backdrop SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]}`);
         return;
       }
       // distant scenery settles to the lap's low baseline (groundYAt past the last
@@ -1577,7 +1577,7 @@ const Tracks = (function () {
     }
 
     // ── Trackside SIGNAGE: corner-number boards + braking markers + pit speed.
-    // Prefer curated FIA turn apexes (def.turns from CircuitMarkings; all 24
+    // Prefer curated FIA turn apexes (def.turns from CircuitMarkings; all
     // shipped circuits have a table). Fall back to curvature-peak detection
     // only if a def somehow lacks turns.
     {
@@ -1866,7 +1866,7 @@ const Tracks = (function () {
 
     // ---------- circuit-registered light fixtures ----------
     // The generic mast pass below owns every ORDINARY lamp on every circuit, and
-    // game.js/lighting.js emits one point light per exported mast lens. That
+    // js/game/lighting.js emits one point light per exported mast lens. That
     // covers roadside posts and flood banks — but not a fixture the circuit
     // builds itself, and there is exactly one shape of those that matters: a
     // luminaire the circuit had to model by hand because no mast could stand
@@ -1905,20 +1905,20 @@ const Tracks = (function () {
       return true;
     };
 
-    // Per-circuit bespoke scenery lives in js/tracks/<id>.js (def.scenery).
+    // Per-circuit bespoke scenery lives in js/circuits/<id>.js (def.scenery).
     if (def.scenery) {
       let sceneryApi = {
         out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin,
         // Session darkness (chosen time of day) — lets bespoke scenery render a lit
         // night version vs a daytime version of the same structure.
         night: NIGHT,
-        // Procedural surface-material ids (js/glx.js applyMaterial/applyMaterialNormal).
+        // Procedural surface-material ids (js/render/glx.js applyMaterial/applyMaterialNormal).
         // Tag a block of geometry by setting out._mat = MAT.<NAME> before the add*()
         // calls that should carry it, then out._mat = 0 (MAT.FLAT) to stop. Applies to
         // BOTH the day/night colour tint AND a real light-catching bump — no images,
         // no UVs. See docs/SCENERY-API.md.
         MAT,
-        // Named atmosphere / colour packs (js/track-scenery-data.js)
+        // Named atmosphere / colour packs (js/track/scenery-data.js)
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
         modelGroup, overheadSpan, lampPost, waterSurface, waterField, waterBand, groundPatch, groundedSegments,
@@ -2096,7 +2096,7 @@ const Tracks = (function () {
       }
     }
     if (out.pos.length === 0) addBox(out, [px[0] + 30, 1, pz[0]], [2, 2, 2], [0.4, 0.4, 0.4]);
-    if (_culled) console.info(`[scenery] ${def.id}: culled ${_culled} on-track primitive(s)`);
+    if (_culled) Log.info("track", `${def.id}: culled ${_culled} on-track primitive(s)`);
     flushAsm();          // the last anonymous run has no successor to close it
     // Swap every named record's guessed envelope for what it actually emitted.
     for (const rec of propList) {
@@ -2213,12 +2213,12 @@ const Tracks = (function () {
     return p;
   }
 
-  // Circuit definitions live in js/tracks/<id>.js — each registers itself on the
+  // Circuit definitions live in js/circuits/<id>.js — each registers itself on the
   // global TrackDefs list (loaded before this engine). Palette is resolved here
   // from the `night` flag; bridges/elevations/street travel with each def.
   const DEFS = (typeof window !== "undefined" && window.TrackDefs) || [];
 
-  // Surveyed elevation profile lookup. js/circuit-elevations.js (baked offline
+  // Surveyed elevation profile lookup. js/track/circuit-elevations.js (baked offline
   // by tools/bake-elevation.mjs from SRTM) registers CircuitElevations[id] as an
   // array of metres, relative to the start, sampled evenly by arc-fraction. When
   // present it supersedes the authored cosine `elevations` bumps for that
@@ -2234,7 +2234,7 @@ const Tracks = (function () {
     return (typeof CircuitElevations !== "undefined") && !!(CircuitElevations[id] && CircuitElevations[id].length);
   }
 
-  // Real circuit centerlines (js/circuits.js): projected OSM traces in metres.
+  // Real circuit centerlines (js/track/geo-paths.js): projected OSM traces in metres.
   // We use the real layout instead of the authored segment lists. Points are
   // kept flat (y = 0) unless a surveyed elevation profile is loaded — the old
   // per-segment elevation distributed a vertical residual that tilted the whole
@@ -2317,16 +2317,16 @@ const Tracks = (function () {
       flatTerrain: !!d.flatTerrain,
       sceneryCoordinates: d.sceneryCoordinates || "legacy",
       dressingExclusions: d.dressingExclusions || null,
-      // bespoke per-circuit scenery (js/tracks/<id>.js); run by buildProps
+      // bespoke per-circuit scenery (js/circuits/<id>.js); run by buildProps
       scenery: d.scenery || null,
-      // surveyed elevation (if js/circuit-elevations.js is loaded) is baked into
+      // surveyed elevation (if js/track/circuit-elevations.js is loaded) is baked into
       // the points below and supersedes the authored cosine bumps.
       elevations: hasRealElevation(d.id) ? null : (d.elevations || null),
       // Half-width overlays for CircuitPaths traces (segs `w:` is ignored there).
       hwZones: d.hwZones || null,
       reverse: !!d.reverse,
       startFrac: d.startFrac || 0,
-      // Curated FIA-aligned sector splits + turn apexes (js/circuit-markings.js).
+      // Curated FIA-aligned sector splits + turn apexes (js/track/markings.js).
       // Authored in RACING-LAP space (post startFrac/reverse) — do not fmap.
       sectors: (typeof CircuitMarkings !== "undefined" && CircuitMarkings[d.id] && CircuitMarkings[d.id].sectors) || null,
       turns:   (typeof CircuitMarkings !== "undefined" && CircuitMarkings[d.id] && CircuitMarkings[d.id].turns)   || null,

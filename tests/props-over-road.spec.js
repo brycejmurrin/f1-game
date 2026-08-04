@@ -13,19 +13,10 @@
 // surface sits between TOL and CEIL metres above the racing line is an offender.
 // Purely geometric — no rendering, so it runs under SwiftShader in CI.
 import { test, expect } from "@playwright/test";
+import { auditTracks } from "./track-helpers.js";
 
-const ALL_TRACKS = [
-  "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring", "imola",
-  "interlagos", "jeddah", "madrid", "mexico", "miami", "monaco", "montreal",
-  "monza", "qatar", "redbull", "shanghai", "silverstone", "singapore", "spa",
-  "suzuka", "vegas", "zandvoort",
-  // Retired / off-calendar circuits (def `classic: true`).
-  "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
-  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
-  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
-  "jacarepagua",
-];
-const TRACKS = process.env.TRACK ? [process.env.TRACK] : ALL_TRACKS;
+// Every circuit (derived from tools/manifest.cjs), or TRACK=<id> for one.
+const TRACKS = auditTracks();
 
 // Vertical band that counts as an intrusion. Below TOL is ground-level dressing
 // (kerbs, tyre-wall bases) that legitimately hugs the edge; above CEIL is
@@ -68,7 +59,7 @@ test("Shanghai uses the default clean prop-clearance baseline", () => {
 });
 
 test("no prop geometry on/above the racing line (all circuits)", async ({ page }) => {
-  // One test walks all 24 circuits, so the budget scales with the roster AND
+  // One test walks every circuit, so the budget scales with the roster AND
   // with how much geometry each circuit carries. 600 s was already marginal on
   // a 4-core box (observed 616 s) — this is the guard that catches props over
   // the racing line, so it has to survive a scenery-density pass rather than

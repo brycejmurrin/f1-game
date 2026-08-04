@@ -1,8 +1,8 @@
 /* Apex 26 — the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS
    trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled
    map PNG per circuit) with a hand-rolled ZIP writer. Split out of
-   js/data.js; instantiated by the DataHub shell via DataExport.create(ctx).
-   Uses the F1API global directly. Must load BEFORE js/data.js. */
+   js/data/hub.js; instantiated by the DataHub shell via DataExport.create(ctx).
+   Uses the F1API global directly. Must load BEFORE js/data/hub.js. */
 const DataExport = (function () {
   "use strict";
 

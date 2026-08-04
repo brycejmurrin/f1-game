@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // verify-track.cjs — headless build check for Apex 26 track definitions.
-// Loads js/tracks.js (+ js/circuits.js) in a Node.js VM, stubs GLX so that
+// Loads js/track/tracks.js (+ js/track/geo-paths.js) in a Node.js VM, stubs GLX so that
 // buildRoad / buildTerrain / buildProps / buildGate actually run and their
 // vertex counts are captured.  Any THROW during the build is a hard failure —
 // the game would strand on the menu with the same error.
 //
 // Usage:
 //   node tools/verify-track.cjs <trackId>     # verify one track
-//   node tools/verify-track.cjs --all         # verify every track in js/tracks.js
+//   node tools/verify-track.cjs --all         # verify every track in js/track/tracks.js
 //
 // Success: prints "OK <id>: props N verts (road Y, terrain Z)"
 // Failure: prints the error and exits 1.

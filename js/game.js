@@ -4508,7 +4508,7 @@ function ltKey() {
 // The resolution layers for the current condition, LOWEST precedence first:
 //   TUNE_DEFS default → file "*" → file "track|tod|wx"
 //     → localStorage "*" → localStorage "track|tod|wx"
-// So a committed js/light-presets.js is the shipped baseline, and a player's
+// So a committed js/game/light-presets.js is the shipped baseline, and a player's
 // local (localStorage) edits always win over it. A missing layer is skipped.
 function ltLayers() {
   const F = window.LightPresets || null;

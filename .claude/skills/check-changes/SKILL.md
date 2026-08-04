@@ -1,36 +1,49 @@
 ---
 name: check-changes
-description: Pre-commit/pre-push validation for Apex 26 — pick the right npm test:<group> for the files you touched, run the headless verify-track guard for any track edit, and confirm the cache-busting version was bumped. Use before committing or pushing, when asked "did I break anything?", "run the right tests", "validate my changes", or "ready to push?".
+description: Pre-commit/pre-push validation for Apex 26 — use tools/pick-tests.mjs to choose the npm test:<group> set for the files you touched, run those groups in the background via tools/test-bg.mjs, run the headless verify-track guard for any track edit, and confirm the cache-busting version was bumped. Use before committing or pushing, when asked "did I break anything?", "run the right tests", "validate my changes", or "ready to push?".
 ---
 
 # Validate changes before committing/pushing
 
-The suite is large (100+ specs, ~10+ min full). Don't run everything for every
-change — map the files you touched to the **narrowest** group that covers them,
-then add the universal guards. Inspect the diff first:
+The suite is ~40 minutes of software rendering, so running everything for every
+change is not a plan. Which groups a change needs is mechanical — **ask, do not
+guess or hand-maintain a second copy of the map**:
 
 ```sh
-git status --short && git diff --stat
+git status --short && git diff --stat     # look at the diff first
+node tools/pick-tests.mjs                 # -> the groups this change needs
+node tools/pick-tests.mjs --bg            # -> a ready-to-paste background command
 ```
 
-## File → test group map
+The routing rules live in `RULES` at the top of `tools/pick-tests.mjs`. If a
+change is not routed anywhere, that is a missing rule — add it there rather than
+working around it here; `tests/test-groups.test.mjs` fails if a source directory
+routes to nothing.
 
-| You changed… | Run |
-|---|---|
-| `js/circuits/<id>.js` (geometry/metadata) | `node tools/verify-track.cjs <id>` → `npm run test:circuit` → `npm run test:barriers` |
-| a track's `scenery(...)` | `node tools/verify-track.cjs <id>` → (full suite's `terrain-over-road.spec.js` for terrain) |
-| `js/track/*` (engine) or many tracks | `node tools/verify-track.cjs --all` (all 24 circuits, ~30 s) → `npm run test:circuit` |
-| `js/track/scenery-*.js` (buildProps split) | `node tools/verify-track.cjs --all` → `npm run test:tooling-fast` (scenery-api contract, ~4 s) → `npm run test:sweeps` (prop-clipping) → `npm run test:scenery` |
-| added/renamed a JS file, or touched `<script>` order | update `tools/manifest.cjs` too, then `npm run test:tooling-fast` (load-order) + `npm run test:smoke` |
-| collision / drift / off-track only | `npm run test:collision` (narrower than `test:behaviour`) |
-| `js/game.js` physics/AI | `npm run test:physics` + `npm run test:behaviour` (+ `test:steering` if steering) |
-| `js/game/apex.js` (`__apex` API) | `npm run test:api` (dev-tools + headless + obs/act edge + new-hooks) |
-| headless loop only (fast) | `npm run test:headless` (headless-api + obs-act-edge, no render) |
-| `js/car/parts.js` | `npm run test:parts` |
-| `js/game/input.js` / steering modes | `npm run test:steering` |
-| `js/render/glx.js` / lighting / `css/` / UI DOM | `npm run test:ui` (slow) and/or `npm run test:visual` |
-| game modes (season / time-trial) | `npm run test:modes` |
-| broad / unsure | `npm run test:fast` (smoke + api + collision + parts, ~3 min) |
+## Run them in the background and tail
+
+A foreground run blocks for minutes and prints nothing actionable. Always:
+
+```sh
+node tools/test-bg.mjs <group> [group...]   # starts, returns immediately
+tail -f artifacts/logs/<group>.log          # watch it live
+node tools/test-bg.mjs --status             # running / how each ended
+node tools/test-bg.mjs --wait               # block until all finish (exit 1 if any failed)
+```
+
+A hung test is the one with a `> start` line and no end line; the 30 s heartbeat
+names everything still in flight. Failures carry `apex-state`, `apex-logs` and
+`page-console` inline in the log — read those before re-running anything.
+
+## Escalation order
+
+| Step | Command | Why |
+|---|---|---|
+| 1 | `npm run test:tiny` | page loads, `__apex` responds. If red, nothing else is worth running |
+| 2 | `npm run test:tooling-fast` | ~4 s: load order, docs integrity, test groups, api contracts, validators |
+| 3 | `node tools/verify-track.cjs <id>` | any track edit — 2 s, no browser, catches a build THROW that strands the game on the menu |
+| 4 | the groups `pick-tests` named | in the background, per above |
+| 5 | `npm run test:sweeps` | before pushing, if geometry moved (full-fleet, slow) |
 
 ## Universal guards (always, before push)
 
@@ -38,7 +51,7 @@ git status --short && git diff --stat
    (`FAIL <id>: <msg>` means the game would strand on the menu — non-negotiable):
    ```sh
    node tools/verify-track.cjs <id>     # one circuit
-   node tools/verify-track.cjs --all    # all 24 (js/track/* engine edits)
+   node tools/verify-track.cjs --all    # all 40 (js/track/* engine edits)
    ```
 2. **Cache version bumped — BOTH files?** If you changed any `js/*.js` or
    `css/*.css`, the `?v=N` in `index.html` must be incremented AND
@@ -62,8 +75,9 @@ git status --short && git diff --stat
 When a spec fails, first decide **stale expectation vs real regression**: read the
 actual `__apex` hook values the test asserts on (`physState()`, `obs()`,
 `wallStats()`, `groundY()`) and check whether the assertion still matches the
-intended design. Magnitude-threshold specs and the legacy `blank-scan/*` /
-pixel soft-asserts in `tracks-visual` drift; geometry/behaviour hooks are ground truth.
+intended design. Magnitude-threshold specs and the legacy
+`tests/manual/blank-scan.spec.js` / pixel soft-asserts in `tracks-visual` drift;
+geometry/behaviour hooks are ground truth.
 Don't "fix" code to satisfy a threshold that itself went stale — fix the threshold,
 or confirm the behaviour is genuinely wrong first.
 
