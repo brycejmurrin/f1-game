@@ -348,6 +348,11 @@ function start(opts) {
     offers: [],
     dev: {}, tdev: {}, seats: {},
     moves: [],            // what the winter market did, for the season summary
+    // Which sponsor windows have already paid. migrateCareer() fills this for
+    // a loaded save, so ONLY a freshly started career was ever missing it —
+    // and settleSponsor() creates it lazily, so nothing noticed until a test
+    // read it before the first window closed.
+    paidSponsors: [],
     obj: null,
     history: [],
     // MY TEAM only. You own the team and drive one of its two cars; `roster` is
@@ -603,11 +608,18 @@ function sponsorLabel(sp) {
 
 // The deal running right now, drawn once per window and pure in (seed, year,
 // windowIndex) so it survives a reload and cannot be rerolled.
-function sponsor() {
-  if (!inCareer() || career.flavour !== "myteam") return null;
+// The deal covering a GIVEN round. Parameterised because the two callers ask
+// about different rounds and conflating them cost the whole mechanic: the hub
+// wants the window the season is in NOW, but settlement runs after
+// endRace()/simCareerRound() have already advanced season.round, so it has to
+// ask about the round that was just RACED. Reading the live round there meant
+// settleSponsor() always inspected the NEXT window, whose end is by definition
+// still ahead — so its guard was always true, it always returned early, and no
+// sponsor ever paid out at all.
+function sponsorAt(round) {
+  if (!career || career.flavour !== "myteam") return null;
   const team = Teams.LIST.find((t) => t.id === career.team) || { tier: 2 };
-  // Which window we are in. Windows tile the season from round 0.
-  const round = career.season.round;
+  // Which window that round falls in. Windows tile the season from round 0.
   let start = 0, idx = 0, kind = null;
   while (start <= round) {
     const i = Math.floor(rnd(career.year, "spon", idx) * SPONSOR_KINDS.length);
@@ -637,12 +649,21 @@ function sponsor() {
     label: sponsorLabel({ type: kind.type, value, window: kind.window }),
   };
 }
+// Gated on the SAVE, not on inCareer(): this describes which deal is running —
+// a save/UI accessor like state() and data(), not a gameplay rule — and gating
+// it on "a career is being played" made it read as null any time the save was
+// merely loaded, which is exactly what a reload leaves you with. The rule that
+// MOVES MONEY is settleSponsor(), reached only through settleRound(), which is
+// gated. The money stays protected; the description stays readable.
+function sponsor() { return career ? sponsorAt(career.season.round) : null; }
 // Paid ONCE, at the round that closes the window, and only if it was met.
 // `career.paidSponsors` records which windows have paid so a reload cannot
 // double-pay and an unmet window cannot be retried by replaying the round.
 function settleSponsor() {
-  const sp = sponsor();
-  if (!sp || career.season.round - 1 < sp.end) return 0;
+  // The round just RACED, not the one the calendar has moved on to.
+  const raced = career.season.round - 1;
+  const sp = sponsorAt(raced);
+  if (!sp || raced < sp.end) return 0;
   career.paidSponsors = career.paidSponsors || [];
   if (career.paidSponsors.indexOf(sp.idx) >= 0) return 0;
   career.paidSponsors.push(sp.idx);
@@ -1238,7 +1259,7 @@ return {
   SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, anySave, firstFree,
   data, active, inCareer, engage, load, save, clear, start, state, rnd, hash,
   GRANT, freeMoney, grant,
-  sponsor, sponsorLabel, settleSponsor,
+  sponsor, sponsorAt, sponsorLabel, settleSponsor,
   FACILITY_MAX, FACILITY_DISCOUNT_MAX, facility, facilityCost, facilityDiscount,
   upgradeFacility, SPONSOR_KINDS,
   renewHire, hireDriver, hirePending, HIRE_MIN,
