@@ -73,9 +73,48 @@ not tell you the sheet's shape, and the sheet is what the layout keys on.
 
 ---
 
-## The three ways a layout decision gets made here
+## Seven axes, and which mechanism owns each
 
-Knowing which mechanism owns a decision is most of debugging one:
+**Read this before adding any layout rule.** Every layout bug this project has
+had was one axis being answered by a mechanism that belongs to a different one —
+not a missing technique, a misrouted question. The rotated monitor was *viewport
+shape* answering for *container shape*. The garage/select divergence was two
+screens answering *container size* with two different sets of hand-picked
+thresholds.
+
+| axis | the question it asks | mechanism that owns it |
+|---|---|---|
+| **viewport size** | how big is the window | `@media (min-width: …)` |
+| **viewport shape** | is the WINDOW tall or wide | `@media (orientation: …)` — and almost nothing should need this |
+| **container size** | how much room did this PANEL get | `@container sheet (min-width: …)` |
+| **container shape** | is the PANEL tall or wide | `data-shape="tall\|wide"`, written by `js/game/sheetshape.js` — CSS cannot ask (see below) |
+| **input modality** | finger, mouse, or both | `pointer` / `any-pointer` / `any-hover`; `body.desktop` |
+| **density** | how big should a target be | the `--tap` / `--pad` / `--gap` token ladder in `css/tokens.css` |
+| **safe area** | what hardware is in the way | `env(safe-area-inset-*)` via the `--safe-t/r/b/l` tokens |
+
+Two axes are worth extra care because they *look* like each other:
+
+- **Viewport shape is not container shape.** A portrait window can hold a
+  landscape sheet — `css/responsive.css` caps `#sel-inner` at 720px tall, so on a
+  rotated 1080x1920 monitor the sheet is wider than it is tall inside a portrait
+  window. Gating a band layout on `@media (orientation: portrait)` gave that
+  screen the tablet layout and left the circuit list two pixels high.
+- **Input modality is not size.** A 1024px iPad is not a desktop. `body.desktop`
+  comes from `pointer: coarse`, which is the right kind of question; use it for
+  affordances, never for room.
+
+**Why container shape needs JavaScript at all:** querying height, `aspect-ratio`
+or `orientation` on a container requires `container-type: size`, which applies
+size containment in both axes — and a size container may not take its size from
+its contents, which every sheet here does. So `sheetshape.js` measures with a
+`ResizeObserver` and writes the answer to an attribute. An attribute rather than
+a custom property deliberately: attribute selectors carry specificity, and
+container queries add none (see the trap below).
+
+## The three mechanisms in detail, and their traps
+
+The table above says which axis owns what. This is how the three CSS mechanisms
+behind it actually behave, including the ways they have misled us:
 
 1. **Container queries on the sheet** (`@container sheet (min-width: …)`) — the
    default, and right for anything that depends on the room a panel actually got.
@@ -100,6 +139,13 @@ Two traps worth writing on the wall:
   spans into an `auto` row hands that row its entire content height — a 24-row
   circuit list turned a 76px action bar into 358px. Use `min-content` for a track
   a scroller spans into.
+- **Anything outside a cascade layer beats everything inside one.** Unlayered
+  normal declarations outrank every `@layer`, so a one-ID unlayered rule defeats a
+  two-ID layered one and no amount of specificity closes the gap. A stray `}` put
+  200 lines of `css/menus.css` outside `@layer components` and quietly defeated
+  the phone layout's own overrides. `tests/css-layers.test.mjs` guards it now.
+  (`!important` inverts the order: unlayered `!important` is the *weakest*, and
+  the first layer declared wins — that is the emergency hatch, not a habit.)
 
 ---
 
