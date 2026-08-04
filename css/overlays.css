@@ -120,12 +120,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     justify-content: center;
     flex-wrap: wrap;
   }
-  /* manual: shifts hold the outer column and BOOST/OT/AERO sit inboard at 100 */
-  #hud-gearbox { gap: 3px; }
-  #hud-gear { font-size: 48px; }
-  #hud-tach { width: 92px; height: 13px; }
-  #hud-speed { font-size: 26px; }
-  #hud-energy { width: 112px; }
+  /* Landscape sizes the readouts DOWN. Portrait can afford a 58px gear because
+     the screen is tall and the HUD owns the bottom third; landscape has ~390px
+     of height total and the road is the thing you are actually looking at. */
+  #hud-gearbox { gap: 2px; padding: 3px 6px; }
+  #hud-gear { font-size: 36px; min-width: 34px; }
+  #hud-tach { width: 76px; height: 10px; }
+  #hud-speed { font-size: 20px; }
+  #hud-energy { width: 88px; height: 11px; }
+  .hud-unit { font-size: 9px; margin-left: 2px; }
   /* manual: keep everything on the right — shifts in the outer column, BOOST/OT
      in a second column just inboard (vertical space is too short to stack four).
      Override shift positions so both columns align at the same row heights. */
@@ -152,10 +155,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     pointer-events: none;          /* the middle must pass drags to the canvas */
   }
   body:not(.desktop) .dock {
-    display: flex; align-items: flex-end; gap: 8px;
+    display: flex; gap: 8px;
     /* wrap-reverse so an overflowing dock grows UPWARD into empty sky rather
        than pushing the bottom row off the screen. */
     flex-wrap: wrap-reverse;
+    /* flex-START, and it means the BOTTOM. wrap-reverse inverts the cross axis,
+       so `flex-end` here resolves to visually top — which is what left the
+       three tap buttons hovering ~100px above the shift column instead of
+       sitting level with it. The two properties have to be read together. */
+    align-items: flex-start;
     pointer-events: auto;
   }
   body:not(.desktop) #dock-right { justify-content: flex-end; }
@@ -234,7 +242,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      so it changes width every frame. Wrapping it to two lines made the whole
      cluster jump a row taller and back as the car approached a zone. */
   body:not(.desktop) #hud-ot,
-  body:not(.desktop) #hud-aero { white-space: nowrap; }
+  body:not(.desktop) #hud-aero {
+    white-space: nowrap; font-size: 11px; padding: 3px 7px;
+  }
   /* console steer: arrows bottom-left, side by side (left thumb home) */
   #btn-steer-left  { left: calc(16px + var(--sal)); bottom: calc(12px + var(--sab)); }
   #btn-steer-right { left: calc(16px + var(--steer) + var(--btn-gap) + var(--sal)); bottom: calc(12px + var(--sab)); }
@@ -264,15 +274,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      ~170px, which fits between the docks on every phone. */
   @media (max-width: 740px) {
     :root { --ped: 64px; --act: 48px; }
-    #hud-gear { font-size: 34px; }
-    #hud-tach { width: 72px; }
-    /* An iPhone SE landscape leaves ~323px between the docks in tilt+manual —
-       the widest mode. Three columns at full size want ~343, so the two items
-       that are only ever GLANCED at give the width back. */
-    body:not(.desktop) #hud-energy { width: 92px; }
-    body:not(.desktop) #hud-speed { font-size: 22px; }
+    /* An iPhone SE landscape leaves ~323px between the docks in tilt+manual,
+       the widest mode — one notch further down than the sizes above. */
+    #hud-gear { font-size: 30px; }
+    #hud-tach { width: 64px; }
+    body:not(.desktop) #hud-energy { width: 74px; }
+    body:not(.desktop) #hud-speed { font-size: 18px; }
     body:not(.desktop) #hud-ot,
-    body:not(.desktop) #hud-aero { font-size: 11px; padding: 4px 7px; }
+    body:not(.desktop) #hud-aero { font-size: 10px; padding: 3px 6px; }
   }
   /* touch: BRAKE left corner, BOOST/OT right corner */
   /* touch mode differs only in BRAKE dropping to the left corner (no GAS) —
