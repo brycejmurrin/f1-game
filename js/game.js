@@ -817,6 +817,22 @@ function qualiNetWaiting() {
   return !(qualiPeer && qualiPeer.t > 0);
 }
 
+// Say WHY the grid is not available yet, on the button itself.
+//
+// This used to be an announce() banner. That is the wrong instrument twice
+// over: the banner is a full-width overlay across the middle of the screen, so
+// it physically covers the sheet foot — the very button it is talking about —
+// and it fades, so a player who looks away has no way to find out why nothing
+// happened. A disabled button with its reason written on it cannot cover
+// itself, cannot expire, and cannot be clicked by mistake.
+function refreshQualiGate() {
+  const b = $("q-go");
+  if (!b) return;
+  const waiting = qualiNetWaiting();
+  b.disabled = waiting;
+  b.textContent = waiting ? "WAITING FOR THEIR LAP…" : "TO THE GRID";
+}
+
 // Stage a qualifying session for a FRIEND race. Same session the solo path
 // runs; the difference is only what happens when it ends — the lobby has to
 // build the race and hand its connection to NetPlay, and it cannot do that
@@ -824,6 +840,7 @@ function qualiNetWaiting() {
 function openQualiForNet(done) {
   qualiNetDone = done || null;
   openQuali();
+  refreshQualiGate();
 }
 
 function onPeerQuali(d) {
@@ -832,6 +849,7 @@ function onPeerQuali(d) {
   const mine = player && player.best < Infinity ? player.best : 0;
   quali.simulate(qualiDriven(mine));
   if (!$("quali").hidden) quali.build();
+  refreshQualiGate();
 }
 function qualiDriven(myTime) {
   const m = new Map();
@@ -2353,6 +2371,7 @@ function endRace(forcedOrder) {
     quali.simulate(qualiDriven(myLap));
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
     quali.open();
+    refreshQualiGate();
     return;
   }
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
@@ -6934,7 +6953,7 @@ function buildRaceSettings() {
   // is wrong (the sheet is rebuilt when the lap arrives, and that rebuild looks
   // like it drops the q-done foot). Shipping the chip before that is understood
   // would offer a session that can strand two players on a sheet.
-  $("rs-quali-section").hidden = isTimeTrial() || netRoom;
+  $("rs-quali-section").hidden = isTimeTrial();
   const qEl = $("rs-quali");
   qEl.innerHTML = "";
   for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
@@ -7086,9 +7105,12 @@ $("q-sim").onclick = () => {
   quali.simulate(qualiDriven(0));
   $("quali").classList.add("q-done");
   quali.build();
+  refreshQualiGate();
 };
 $("q-go").onclick = () => {
-  if (qualiNetWaiting()) { announce("WAITING FOR YOUR RIVAL'S LAP", 2); return; }
+  // Guarded as well as disabled: the button is the only way out of this sheet,
+  // and a stale enabled state would grid up without the rival's lap.
+  if (qualiNetWaiting()) { refreshQualiGate(); return; }
   if (soundOn) GameAudio.uiSelect();
   // In a friend race the lobby, not this handler, builds the race: it still
   // holds the connection and has to hand it to NetPlay once the grid exists.
