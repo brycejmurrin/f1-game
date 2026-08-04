@@ -147,6 +147,7 @@ const FULL = [
   "js/game/apex.js",
   // Multiplayer wire. Pure logic with no game dependency, so position only
   // has to satisfy "before whatever consumes it" — game.js, last as always.
+  "js/net/rendezvous.js",
   "js/net/sdp.js",
   "js/net/qr.js",
   "js/net/scan.js",
@@ -233,6 +234,8 @@ const HARD_EDGES = [
   ["js/net/sdp.js", "js/net/handshake.js"],
   // lobby.js draws the invite QR through NetQr the moment an invite exists.
   ["js/net/qr.js", "js/net/lobby.js"],
+  // lobby.js calls NetRendezvous the moment a room-code button is wired.
+  ["js/net/rendezvous.js", "js/net/lobby.js"],
   // lobby.js creates a NetScan the moment a SCAN button is wired.
   ["js/net/scan.js", "js/net/lobby.js"],
   // chunks.js before every shader file (lit/sky/post interpolate GLXChunks at
