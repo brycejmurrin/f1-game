@@ -225,6 +225,9 @@ const api = {
     state: G.state, track: (G.state === "race" || G.state === "count") ? (G.track && G.track.def.id) : null,
     n: G.track && G.track.n, total: G.track && G.track.total, timeTrial: G.timeTrial, seasonMode: G.seasonMode,
     flow: G.flow, session: G.session, career: !!G.career,
+    // How many laps THIS session runs. Not always the race length: a time trial
+    // runs TT_LAPS and qualifying runs a single flying lap.
+    lapsTarget: G.lapsTarget,
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
   }),
