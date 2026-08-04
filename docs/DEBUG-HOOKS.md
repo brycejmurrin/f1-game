@@ -672,6 +672,12 @@ __apex.act({throttle:true}, 1/60, 60);
 __apex.aero();                  // → {xOn:true, xArmed:true, aeroX:1, mode:"X"}
 ```
 
+Both wings move, and so does more than one element on each: per the 2026 rules
+every wing element except the mainplane rotates. At the default downforce level
+`aeroX` swings four — the front cascade's top two flaps (23 deg / 26 deg) and
+the rear wing's top two planes (26 deg / 28 deg) — on every car on track, in
+cockpit view, and on the GARAGE turntable (the ACTIVE AERO button there).
+
 X-mode is worth ~+7.5 % top speed and costs ~55 % of the aero-downforce term
 (`DOWNFORCE` in `js/game.js`) — it is the only one of the three straight-line
 levers that spends cornering grip instead of battery. `aeroX`/`xOn`/`xArmed`

@@ -533,7 +533,19 @@ the coast drag, paid for with `X_DF_LOSS` (55 %) of the `DOWNFORCE` aero-load
 term. Nothing else in the grip model changes.
 
 `c.aeroX` is the FLAP TRAVEL (0..1) and is what every consumer reads — physics,
-HUD and the rear-wing flap the renderer swings. `c.xOn` is the switch and
+HUD and the wings' own moveable ELEMENTS. Per the 2026 rules every element
+except each mainplane rotates, and both wings actuate together: at the default
+downforce level that is the front cascade's top two flaps plus the rear wing's
+top two planes — four elements, all driven by the one `aeroX`. They are NOT
+baked into the car mesh; `Car3D.aeroFlaps()` hands them out as canonical hinged
+specs (leading edge at the origin) and `drawAeroFlaps` places them, so the car
+at rest is geometrically identical to the old fixed wing. `Car3D.buildFlapGeom`
+runs the SAME `addWingPlanform` emitter the baked wing uses and both read one
+table, so they cannot drift apart. Closed = the element's own incidence plus
+`Z_BITE`, CLAMPED per element against the measured nose underside (`NOSE_UNDER`)
+so nothing ever swings into the bodywork; open = flat. `X_OPEN_RATE` is set by
+the FIA's 400 ms transition cap, not by feel. The GARAGE turntable shares the
+same draw, so its ACTIVE AERO button shows the real geometry at real angles. `c.xOn` is the switch and
 `c.xArmed` whether the road allows it at all: `xStraightAhead()` requires
 `X_STRAIGHT_T` **seconds** of road ahead under `X_K_MAX` curvature, so the window
 shrinks as you speed up, exactly like the FIA's "any straight longer than three

@@ -301,45 +301,23 @@ function getErsLight() {
   return ersMesh;
 }
 
-// ACTIVE-AERO flap: the MOVEABLE upper rear-wing element (2026 X-mode/Z-mode).
-// The baked car mesh is static, so the one part of the car that has to move
-// lives here as its own little mesh and is rotated per frame by the draw in
-// game.js. Built with the PIVOT AT THE ORIGIN and the chord running back along
-// -z, so the caller's only job is "rotate about local x by the flap angle, then
-// place at Car3D.aeroFlap()'s (y, z)".
-//
-// It is a real extra element, not a duplicate of a baked one: Car3D reserves the
-// crown slot above the baked stack for exactly this (see aeroFlapGeom), so at
-// the Z-mode end of the travel it reads as the top plane of the wing.
+// ACTIVE AERO — the wing's OWN top elements, lifted out of the baked car mesh so
+// they can rotate. Geometry comes from Car3D.buildFlapGeom, which runs the SAME
+// planform emitter the baked wing uses, in a canonical hinge frame (leading edge
+// at the origin, chord back along -z), so the draw only has to rotate and place
+// it. These are not parts laid OVER the wing — they are the wing.
 const _flapMeshes = {};
 const _flapOrder = [];
-const FLAP_CACHE_MAX = 24;
-function getAeroFlap(aLvl, col) {
+const FLAP_CACHE_MAX = 48;
+// One mesh per (element, downforce level, colour). `idx` indexes the array
+// Car3D.aeroFlaps() returns — each element has its own chord, span and taper.
+function getAeroFlap(aLvl, col, idx, style) {
   const c = col || [0.9, 0.9, 0.1];
-  const key = (aLvl | 0) + "|" + c.map((v) => v.toFixed(2)).join(",");
+  const g = Car3D.aeroFlaps(aLvl | 0, style)[idx | 0];
+  if (!g) return null;
+  const key = g.id + (aLvl | 0) + "|" + c.map((v) => v.toFixed(2)).join(",");
   if (_flapMeshes[key]) return _flapMeshes[key];
-  const g = Car3D.aeroFlap(aLvl | 0);
-  const out = { pos: [], nrm: [], col: [], idx: [] };
-  const face = (quad, n) => {
-    const b = out.pos.length / 3;
-    for (const v of quad) { out.pos.push(v[0], v[1], v[2]); out.nrm.push(n[0], n[1], n[2]); out.col.push(c[0], c[1], c[2]); }
-    out.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
-  };
-  // Tapered planform: full half-span at the leading edge, slightly less at the
-  // trailing edge, matching the baked wing's rearTaper look closely enough that
-  // the flap doesn't read as a bolted-on rectangle.
-  const hL = g.half, hT = g.half * 0.94, t = g.thick * 0.5, C = -g.chord;
-  const P = [
-    [-hL, -t, 0], [hL, -t, 0], [hL, t, 0], [-hL, t, 0],          // 0-3 leading edge
-    [-hT, -t, C], [hT, -t, C], [hT, t, C], [-hT, t, C],          // 4-7 trailing edge
-  ];
-  face([P[3], P[2], P[6], P[7]], [0, 1, 0]);        // upper surface
-  face([P[4], P[5], P[1], P[0]], [0, -1, 0]);       // lower (pressure) surface
-  face([P[0], P[1], P[2], P[3]], [0, 0, 1]);        // leading edge
-  face([P[5], P[4], P[7], P[6]], [0, 0, -1]);       // trailing edge
-  face([P[1], P[5], P[6], P[2]], [1, 0, 0]);        // right tip
-  face([P[4], P[0], P[3], P[7]], [-1, 0, 0]);       // left tip
-  const mesh = _gfx.createMesh(out);
+  const mesh = _gfx.createMesh(Car3D.buildFlapGeom(g, c));
   _flapMeshes[key] = mesh;
   _flapOrder.push(key);
   if (_flapOrder.length > FLAP_CACHE_MAX) {

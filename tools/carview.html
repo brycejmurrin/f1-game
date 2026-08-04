@@ -84,6 +84,9 @@
   // reflection (det −1), and the decal UVs are authored for that handedness, so
   // we must match it here or the sponsor/number text would read mirrored.
   const REFLECT_X = new Float32Array([-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+  // ACTIVE AERO moveable wing elements (see rebuild()/drawFlaps below).
+  let flapLvl = 2, flapStyle = null, flapCol = null;
+  const _flapW = new Float32Array(16);
   const CENTER = [0, 0.45, 0];   // base orbit look-target (car centre, ~hip height)
 
   // ---- URL params ----
@@ -154,6 +157,10 @@
     az: parseFloat(qp("az", "35")), el: parseFloat(qp("el", "14")), dist: parseFloat(qp("dist", "6.2")),
     look: parseFloat(qp("look", "0")),   // orbit-target Z offset (+nose / −rear) — lets a close dist frame ONE end (a wheel corner, the wing) without cropping it by centring the target off the car's midpoint
     lookX: parseFloat(qp("lookx", "0")), // orbit-target X offset (+right / −left) — frames one wheel side, not the car spine
+    lookY: parseFloat(qp("looky", "0")), // orbit-target Y offset (+up) — the wings sit 0.3-0.6 m above CENTER's 0.45,
+                                         // so without this a close shot of either one pins it to the frame edge
+    flap: parseFloat(qp("flap", "0")),   // ACTIVE AERO blend 0 = Z-mode (closed) .. 1 = X-mode (flat).
+                                         // NOT "aero" — that query param is already the aero PART id.
     tod: qp("tod", "day"),
     rig: qp("rig", qp("studio", "1") !== "0" ? "studio" : "none"),        // lighting rig preset
     intensity: Q.has("intensity") ? parseFloat(qp("intensity")) : null,   // null = tod default
@@ -216,6 +223,13 @@
     const num = driverNum(team);
     if (carMesh) GLX.freeMesh(carMesh);
     carMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, { livery: liv, num, parts: tiers }));
+    // ACTIVE AERO: the wing's top elements are NOT in that mesh — Car3D leaves
+    // them out so they can rotate (see Car3D.aeroFlaps). A viewer that only drew
+    // Car3D.build() would therefore show a wing missing its top flaps. Keep what
+    // they need so frame() can draw them at the current blend.
+    flapLvl = Car3D.aeroLevelOf(tiers);
+    flapStyle = tiers && tiers.aero;
+    flapCol = liv.wing || liv.c2 || team.color2;
     // Shared runtime implementation: same body anchors, segmentation and bounded
     // cache as the race renderer.
     decalMesh = CarMesh.getCarDecalMesh(Car3D.aeroLevelOf(tiers), tiers, false);
@@ -230,7 +244,7 @@
     // dead-centre target crops BOTH ends of the ~5.4 m car out of frame; shifting
     // the target toward one wheel/corner lets a close shot fill the frame with
     // that part while the rest of the car still reads around it.
-    const tgt = [CENTER[0] + S.lookX, CENTER[1], CENTER[2] + S.look];
+    const tgt = [CENTER[0] + S.lookX, CENTER[1] + S.lookY, CENTER[2] + S.look];
     // az 0 = behind the car (rear), 180 = head-on; el = elevation.
     const eye = [
       tgt[0] + S.dist * Math.cos(e) * Math.sin(a),
@@ -265,6 +279,30 @@
   }
 
   let ready = false, frameSeq = 0;
+  // Mirrors drawAeroFlaps() in js/game.js: each element is hinged at its own
+  // leading edge and rotated about the car's local X between its closed
+  // incidence (zAngle) and flat (xAngle = 0).
+  function drawFlaps() {
+    if (!Car3D.aeroFlaps) return;
+    const els = Car3D.aeroFlaps(flapLvl, flapStyle);
+    const b = Math.max(0, Math.min(1, S.flap || 0));
+    for (let i = 0; i < els.length; i++) {
+      const g = els[i];
+      const ang = g.zAngle + (g.xAngle - g.zAngle) * b;
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      const W = _flapW;
+      W.set(REFLECT_X);
+      for (let k = 0; k < 3; k++) {
+        const uu = REFLECT_X[4 + k], ff = REFLECT_X[8 + k];
+        W[4 + k] = uu * ca + ff * sa;
+        W[8 + k] = -uu * sa + ff * ca;
+        W[12 + k] += uu * g.y + ff * g.z;
+      }
+      const mesh = CarMesh.getAeroFlap(flapLvl, flapCol, i, flapStyle);
+      if (mesh) GLX.draw(mesh, W, paint);
+    }
+  }
+
   function frame() {
     GLX.resize();
     if (S.spin) S.az = (S.az + 0.4) % 360;
@@ -290,6 +328,7 @@
     GLX.begin(frameParams);
     if (paint) Object.assign(paint, paintFromRefl(S.refl));   // live reflection strength (sparkle/doubleSided untouched by draw, harmless to reassign)
     if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
+    drawFlaps();
     if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
     const effectWorld = (y, z, x) => {
       const W = new Float32Array(REFLECT_X);
@@ -407,7 +446,7 @@
         buildUI();
       }
       if (o.lights !== undefined) S.lights = o.lights || [];
-      for (const k of ["az", "el", "dist", "look", "lookX", "tod", "rig", "intensity", "exp", "refl", "bg", "spin", "sweep"]) if (o[k] !== undefined) S[k] = o[k];
+      for (const k of ["az", "el", "dist", "look", "lookX", "lookY", "tod", "rig", "intensity", "exp", "refl", "bg", "spin", "sweep"]) if (o[k] !== undefined) S[k] = o[k];
       if (reb) { buildUI(); rebuild(); }
       return true;
     },
