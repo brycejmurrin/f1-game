@@ -16,9 +16,11 @@
 //
 // Rules encoded here:
 //  - FULL is every js/ file in the exact index.html <script> order.
-//  - The 24 circuit tags ("@circuits") stay in their curated order — that
-//    order IS Tracks.LIST, which is the track-picker and season-calendar
-//    order. Do not sort or reorder them.
+//  - The circuit tags ("@circuits") stay in their curated order — that
+//    order IS Tracks.LIST, which is the track-picker order. The season
+//    calendar is Tracks.SEASON, the `classic: false` prefix of that list, so
+//    the 24 season circuits MUST stay first and in calendar order. Do not
+//    sort or reorder them.
 //  - A future generated js/track/circuit-elevations.js (tools/
 //    bake-elevation.mjs) must slot immediately BEFORE js/track/tracks.js.
 //  - HARD_EDGES are eval-time dependencies (destructure/call at IIFE
@@ -26,12 +28,18 @@
 
 "use strict";
 
-// Curated circuit order (== Tracks.LIST == picker + season calendar order).
+// Curated circuit order (== Tracks.LIST == picker order).
+// The first 24 are the season calendar (Tracks.SEASON, in round order); the
+// retired circuits below carry `classic: true` and are appended, never
+// interleaved — a stored apex26.track is a positional index into this list.
 const CIRCUITS = [
   "bahrain", "monaco", "silverstone", "spa", "monza", "suzuka", "singapore",
   "cota", "interlagos", "vegas", "madrid", "zandvoort", "jeddah",
   "albert_park", "shanghai", "miami", "imola", "montreal", "redbull",
   "hungaroring", "baku", "mexico", "qatar", "abudhabi",
+  // ── retired / off-calendar (classic: true) ──
+  "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
+  "paul_ricard",
 ];
 
 const CIRCUITS_DIR = "js/circuits";

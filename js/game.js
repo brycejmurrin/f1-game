@@ -1909,7 +1909,7 @@ function quitToMenu() {
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
   if (soundOn) GameAudio.startMusic(-1);
   // Show standings button when an active season is in progress
-  const hasSeason = season && season.round > 0 && season.round < Tracks.LIST.length;
+  const hasSeason = season && season.round > 0 && season.round < Tracks.SEASON.length;
   $("mb-standings").hidden = !hasSeason;
 }
 
@@ -5317,11 +5317,11 @@ $("mb-tt").onclick = () => {
 };
 $("mb-season").onclick = () => {
   seasonMode = true; timeTrial = false;
-  if (!season || season.round >= Tracks.LIST.length) {
+  if (!season || season.round >= Tracks.SEASON.length) {
     season = { round: 0, pts: {}, teamPts: {}, driverCodes: {} };
     store.set("season", season);
   }
-  trackIdx = season.round;
+  trackIdx = Tracks.seasonIndex(season.round);
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
@@ -5569,7 +5569,7 @@ $("cz-save").onclick = () => {
 els.resMenu.onclick = () => quitToMenu();
 els.resNext.onclick = () => {
   if (seasonMode) {
-    if (season.round >= Tracks.LIST.length) {
+    if (season.round >= Tracks.SEASON.length) {
       if (els.resNext.textContent !== "MAIN MENU") {
         // First click: build champion panel, stay on results screen
         const sorted = cars.slice().sort((a, b) => (season.pts[b.driverId] || 0) - (season.pts[a.driverId] || 0));
@@ -5611,7 +5611,7 @@ els.resNext.onclick = () => {
       quitToMenu();
       return;
     }
-    trackIdx = season.round;
+    trackIdx = Tracks.seasonIndex(season.round);
   }
   els.results.hidden = true;
   startRace();
@@ -5790,7 +5790,11 @@ syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 migrateSeasonPoints();
 if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
 if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx = 0;
-{ const hasSeason = season && season.round > 0 && season.round < Tracks.LIST.length;
+// `apex26.track` is a POSITIONAL index into Tracks.LIST, so a reordered or
+// shortened circuit list would leave it dangling and crash loadTrack on the
+// undefined def. Clamp it the same way teamIdx/driverIdx are clamped above.
+if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
+{ const hasSeason = season && season.round > 0 && season.round < Tracks.SEASON.length;
   $("mb-standings").hidden = !hasSeason; }
 // Pause key: when the settings sub-menu is open it acts as a BACK to the pause
 // menu; otherwise it toggles pause as usual.
@@ -5804,7 +5808,7 @@ Input.init(canvas, { onPause: () => {
   if (paused && els.pmsettings && !els.pmsettings.hidden) { closeSettings(); return; }
   setPaused(!paused);
 } });
-if (!Input.touchControlsNeeded()) { document.body.classList.add("desktop"); els.subtitle.textContent = "2026 grid · 24 real circuits"; }
+if (!Input.touchControlsNeeded()) { document.body.classList.add("desktop"); els.subtitle.textContent = "2026 grid · " + Tracks.LIST.length + " real circuits"; }
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
 $("pm-steer").textContent = steerLabel();
