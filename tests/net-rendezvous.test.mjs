@@ -132,6 +132,57 @@ test("the two halves meet at the same code", async () => {
   } finally { await r.close(); }
 });
 
+test("the private-relay backend still trades both ways", async () => {
+  // swap() is what the lobby calls. With a private relay it is a post then a
+  // poll; with the public relay network it is a live room. Same shape either
+  // way, which is the point of the seam.
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    setTimeout(() => NetRendezvous.put(code, "answer", "THEIR-ANSWER"), 250);
+    const out = await NetRendezvous.swap({
+      code, mine: "MY-OFFER", slot: "offer", want: "answer", token: { cancelled: false },
+    });
+    assert.equal(out.ok, true);
+    assert.equal(out.payload, "THEIR-ANSWER");
+    // ...and our own half really was left for them.
+    assert.equal((await NetRendezvous.get(code, "offer")).body.payload, "MY-OFFER");
+  } finally { await r.close(); }
+});
+
+test("a replier waits first, then posts what it produced", async () => {
+  // The guest cannot answer until it has seen the invite. Getting this backwards
+  // is exactly the bug the first version shipped.
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    await NetRendezvous.put(code, "offer", "THE-INVITE");
+    let saw = null;
+    const out = await NetRendezvous.swap({
+      code, slot: "answer", want: "offer", token: { cancelled: false },
+      reply: async (got) => { saw = got; return "ANSWER-TO-" + got; },
+    });
+    assert.equal(out.ok, true);
+    assert.equal(saw, "THE-INVITE", "the reply must receive what the host posted");
+    assert.equal(out.payload, "THE-INVITE");
+    assert.equal((await NetRendezvous.get(code, "answer")).body.payload, "ANSWER-TO-THE-INVITE");
+  } finally { await r.close(); }
+});
+
+test("a reply that fails reports it rather than posting nothing", async () => {
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    await NetRendezvous.put(code, "offer", "THE-INVITE");
+    const out = await NetRendezvous.swap({
+      code, slot: "answer", want: "offer", token: { cancelled: false },
+      reply: async () => null,
+    });
+    assert.equal(out.ok, false);
+    assert.equal(out.error, "reply_failed");
+  } finally { await r.close(); }
+});
+
 test("waitFor resolves as soon as the other side posts", async () => {
   const r = await relay();
   try {

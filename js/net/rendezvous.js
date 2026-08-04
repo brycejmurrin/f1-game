@@ -23,19 +23,22 @@
  * couple of minutes, which is why this fits inside a free tier at any traffic a
  * fan game will ever see.
  *
- * NOTHING TO DEPLOY, NOTHING TO CONFIGURE. The meeting place is a PUBLIC MQTT
- * broker (js/net/mqtt.js), which needs no account and is already running. A
- * retained message is held by the broker for whoever subscribes next, which is
- * exactly "host leaves an offer under a code, guest picks it up a minute
- * later". Our own Cloudflare Worker (worker/rendezvous.js) is still supported
- * and takes precedence when its URL is set, because a broker you control beats
- * a stranger's — but it is an upgrade, never a requirement.
+ * NOTHING TO DEPLOY, NOTHING TO CONFIGURE. The meeting place is the public
+ * NOSTR relay network, reached through Trystero (js/net/nostr.js). Accepting
+ * arbitrary events from anonymous clients is what a relay is FOR, which is why
+ * this is Nostr and not one of the free public MQTT brokers an earlier version
+ * used: those are TEST brokers, and HiveMQ's and EMQX's terms both say plainly
+ * that they must not be used by real applications.
  *
- * THE BROKER IS PUBLIC, SO THE PAYLOAD IS ENCRYPTED. Anyone may subscribe to
- * any topic on these brokers. The key is derived from the ROOM CODE, so the
- * broker relays ciphertext it cannot read and someone who guesses the topic
- * without the code gets nothing usable. The code is the secret — the same
- * trust model as the invite code this replaces.
+ * Our own Cloudflare Worker (worker/rendezvous.js) still takes precedence when
+ * its URL is set, because a relay you control beats a stranger's — but it is
+ * an upgrade, never a requirement.
+ *
+ * THE RELAYS ARE PUBLIC, SO NOTHING READABLE CROSSES THEM. Trystero encrypts
+ * the signalling payload under the room code, the room id is a hash of the code
+ * rather than the code, and the private-relay path seals its payload the same
+ * way. The code is the secret — the same trust model as the invite code this
+ * replaces.
  *
  * IT IS A BACKUP OPTION, NOT A REPLACEMENT. The link and QR paths stay primary
  * because they depend on nothing at all, while this leans on servers somebody
@@ -224,55 +227,45 @@ const NetRendezvous = (function () {
 
   const httpGet = (code, slot) => call(`/r/${normalise(code)}/${slot}`, { method: "GET" });
 
-  // ---- the public-broker backend --------------------------------------------
-  // One connection per operation, torn down straight after: the game does not
-  // sit on a broker, because the broker's only job is to introduce two peers.
-  // A retained publish is what lets the two halves happen minutes apart.
-  async function mqttPut(code, slot, payload) {
-    const conn = await NetMqtt.connect({});
-    if (!conn.ok) return conn;
-    try {
-      const bytes = await seal(code, payload);
-      conn.publish(await topicFor(code, slot), bytes, true);
-      // The publish is fire-and-forget at QoS 0, so give the socket a moment to
-      // flush before closing it — closing immediately can drop the frame.
-      await new Promise((r) => setTimeout(r, 250));
-      return { ok: true };
-    } catch (e) {
-      return ERR("relay", "Could not leave the invite with the room service.");
-    } finally { conn.close(); }
+  // ---- the public-relay backend ---------------------------------------------
+  // A Nostr room is LIVE, not a mailbox: unlike a retained MQTT message there
+  // is nothing sitting there for later, so both peers meet in the room and swap
+  // strings. That is why this is one exchange() rather than a put and a get —
+  // and it is a better fit anyway, since the host is already sitting on a
+  // "waiting for them to join" screen while it happens.
+  function nostrExchange(o) {
+    return NetNostr.exchange({
+      code: o.code, send: o.mine, reply: o.reply, token: o.token, onTick: o.onTick,
+    });
   }
 
-  // Subscribe and wait for the retained message to arrive. Retained delivery is
-  // immediate if it is already there, so a short window is enough to tell
-  // "nobody yet" from "here it is" — and the caller's waitFor loop supplies the
-  // patience.
-  function mqttGet(code, slot, windowMs) {
-    return new Promise(async (resolve) => {
-      const want = await topicFor(code, slot);
-      let done = false;
-      const conn = await NetMqtt.connect({
-        onMessage: async (topic, bytes) => {
-          if (done || topic !== want || !bytes.length) return;
-          const text = await open(code, bytes);
-          if (!text) return;                       // not ours; wrong code
-          done = true;
-          resolve({ ok: true, body: { payload: text } });
-        },
-      });
-      if (!conn.ok) { resolve(conn); return; }
-      conn.subscribe(want);
-      setTimeout(() => {
-        conn.close();
-        if (!done) { done = true; resolve(ERR("not_found", "Nobody is waiting on that code.")); }
-      }, windowMs || 2500);
-    }).then((r) => r);
-  }
+  // The private relay keeps the put/get shape (it really is a mailbox); the
+  // public one is a live swap. swap() is the interface the lobby uses, and it
+  // hides which of the two is underneath.
+  const put = (code, slot, payload) => httpPut(code, slot, payload);
+  const get = (code, slot) => httpGet(code, slot);
 
-  const put = (code, slot, payload) =>
-    (usingPrivateRelay() ? httpPut : mqttPut)(code, slot, payload);
-  const get = (code, slot, windowMs) =>
-    (usingPrivateRelay() ? httpGet(code, slot) : mqttGet(code, slot, windowMs));
+  // Give `mine` to the other side and get theirs back, whichever backend is in
+  // play. `slot`/`want` only mean anything to the mailbox backend.
+  async function swap(o) {
+    const { code, mine, reply, slot, want, token, onTick } = o;
+    if (!usingPrivateRelay()) return nostrExchange(o);
+    // The mailbox backend does the same trade in two steps. A replier waits
+    // for the other side FIRST, then posts what it produced.
+    if (reply) {
+      const got = await waitFor(code, want, token, onTick);
+      if (!got.ok) return got;
+      let out = null;
+      try { out = await reply(got.payload); } catch (e) { out = null; }
+      if (!out) return ERR("reply_failed", "Could not answer that invite.");
+      const posted = await httpPut(code, slot, out);
+      return posted.ok ? { ok: true, payload: got.payload } : posted;
+    }
+    const posted = await httpPut(code, slot, mine);
+    if (!posted.ok) return posted;
+    const got = await waitFor(code, want, token, onTick);
+    return got.ok ? { ok: true, payload: got.payload } : got;
+  }
 
   // Poll until the other side posts, the caller cancels, or we give up. The
   // cancel token is an object with .cancelled — a plain flag rather than an
@@ -301,7 +294,7 @@ const NetRendezvous = (function () {
 
   return {
     ALPHABET, CODE_LEN, POLL_TIMEOUT_MS, STORE_KEY, DEFAULT_URL, TOPIC,
-    configured, usingPrivateRelay, setUrl, baseUrl,
+    configured, usingPrivateRelay, setUrl, baseUrl, swap,
     // Exported for the tests: the crypto is what makes a public broker safe to
     // use, and "it encrypted something" is not the same claim as "the wrong
     // code cannot read it".
