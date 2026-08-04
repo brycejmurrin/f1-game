@@ -167,9 +167,17 @@ const NetLobby = (function () {
         session = [...sessions.values()][0] || null;
         if (!sessions.size) {
           clearInterval(pumpTimer); pumpTimer = null;
-          say("Connection closed.", true);
+          // SAY WHICH loss this was. Everyone connects THROUGH the host — that
+          // is what a star is — so the host going away ends the room for
+          // everybody, and there is no recovery to offer. A guest leaving is a
+          // different event with a different answer, and "Connection closed"
+          // for both told a player nothing about which had happened or whether
+          // waiting would help.
+          say(role === "guest"
+            ? "The host left, so the race is over. Everyone connects through them."
+            : "Connection closed.", true);
         } else {
-          say("A player left.");
+          say("A player left. The rest of you are still in.");
         }
         renderRoom();
       });
@@ -618,7 +626,12 @@ const NetLobby = (function () {
       }
       if (e.editRace) e.editRace.hidden = !host;
       if (e.raceNote) {
-        e.raceNote.textContent = host ? "" : "The host chooses the circuit and conditions.";
+        // Both facts a guest needs, said before they matter rather than after.
+        // Everyone connects through the host, so if the host leaves the room
+        // ends — that is inherent to a star and worth stating, not papering
+        // over with a generic "connection closed" once it happens.
+        e.raceNote.textContent = host ? ""
+          : "The host chooses the circuit and conditions — and everyone connects through them, so if they leave, the race ends.";
         e.raceNote.hidden = host;
       }
       if (e.me) e.me.innerHTML = driverLine(localProfile(), "You", selfReady);

@@ -19,11 +19,22 @@ function buildResults(order) {
   order.forEach((c, i) => {
     const row = document.createElement("div");
     const podium = i === 0 ? " p1" : i === 1 ? " p2" : i === 2 ? " p3" : "";
-    row.className = "res-row" + podium + (c.isPlayer ? " you" : "");
+    // Another PERSON, not an AI. `you` already marks the local player, so this
+    // is the friend you were racing — and on a results screen "who did I
+    // actually beat" is the question being asked. Same signal the HUD and the
+    // qualifying sheet use: human without local (see setCarRole).
+    const other = c.human && !c.local ? " q-real" : "";
+    row.className = "res-row" + podium + (c.isPlayer ? " you" : "") + other;
     const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
     const sw = document.createElement("span"); sw.className = "res-swatch";
     sw.style.background = G.cssCol(c.team.color);
     const nm = document.createElement("span"); nm.className = "res-name";
+    if (other) {
+      // Text as well as colour, for the same reason the quali sheet does it.
+      const tag = document.createElement("span");
+      tag.className = "q-real-tag"; tag.textContent = " PLAYER";
+      nm.appendChild(tag);
+    }
     // A retirement says WHY in the place a penalty would say how much: the two
     // never co-occur (a car that stopped was not given time back).
     nm.textContent = c.code + "  " + c.name
