@@ -183,21 +183,34 @@ const NetTransport = (function () {
   // is ~2 KB/s per player and only relays when a direct path fails, so that
   // allowance is effectively unbounded here.
   //
-  // It is free infrastructure and the operator says plainly it "can and will go
-  // down without notice" — so it is an ADDITIONAL ice server, never a
-  // replacement for the direct path. When it is gone, everything that worked
-  // before still works; only the hardest NATs stop connecting.
-  const OPEN_RELAY = [
-    {
-      urls: [
-        "turn:openrelay.metered.ca:80",
-        "turn:openrelay.metered.ca:443",
-        "turn:openrelay.metered.ca:443?transport=tcp",
-      ],
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-  ];
+  // THE STATIC FREE RELAY IS DEAD. Open Relay's embeddable credentials
+  // (openrelayproject/openrelayproject) were retired — Metered now requires a
+  // per-account API key and a credentials endpoint that RETURNS the iceServers
+  // array. Measured from a real device: the old config gathered zero relay
+  // candidates while STUN worked, which is worse than shipping nothing,
+  // because it looks like a relay exists and diagnosis chases the wrong thing.
+  //
+  // So: no static TURN is shipped. A relay comes from ONE of
+  //   apex26.turnApi — a credentials URL (Metered-style: returns
+  //     {iceServers|iceServers:[…]} or a bare array), fetched by prefetchIce()
+  //     when the lobby opens and merged here once it arrives. The free tier is
+  //     50 GB/month on an account the game's OWNER controls — the model the
+  //     operator actually offers, rather than freeloading on credentials they
+  //     retired.
+  //   apex26.turn — a single static server you run yourself.
+  let fetchedIce = null;
+  let fetchingIce = null;
+  function prefetchIce() {
+    let url = null;
+    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) {}
+    if (!url || fetchedIce || fetchingIce) return fetchingIce;
+    fetchingIce = fetch(url).then((r) => r.json()).then((body) => {
+      const list = Array.isArray(body) ? body : (body && (body.iceServers || body.ice_servers)) || null;
+      if (Array.isArray(list) && list.length) fetchedIce = list;
+      return fetchedIce;
+    }).catch(() => null).finally(() => { fetchingIce = null; });
+    return fetchingIce;
+  }
 
   // RELAY ONLY, for testing the path that NAT'd and mobile players actually
   // depend on. On one machine — and on most home networks — a direct host pair
@@ -230,12 +243,11 @@ const NetTransport = (function () {
     if (opts.iceServers) return opts.iceServers;
     const list = [{ urls: STUN }];
     const mine = turnFromStore();
-    // A relay you control beats a free public one, so it goes first and the
-    // public one stays as the fallback behind it — ICE will prefer whichever
-    // actually yields a working pair regardless, so listing both costs nothing
-    // but a couple of extra candidates.
+    // A relay you configured yourself goes first; credential-fetched servers
+    // follow. ICE prefers whichever actually yields a working pair, so listing
+    // both costs nothing but a couple of extra candidates.
     if (mine) list.push(mine);
-    list.push(...OPEN_RELAY);
+    if (fetchedIce) list.push(...fetchedIce);
     return list;
   }
 
@@ -349,9 +361,9 @@ const NetTransport = (function () {
 
   return {
     STATE, EVENT, loopback, rtc, supported,
-    // Exported so the ICE configuration is testable: whether a relay ships at
-    // all decides whether the hardest ~10-25% of networks can play at all, and
-    // that is not something to discover from a user's screenshot.
-    STUN, OPEN_RELAY,
+    // Exported so the ICE configuration is testable: whether a relay is
+    // reachable decides whether the hardest ~10-25% of networks can play at
+    // all, and that is not something to discover from a user's screenshot.
+    STUN, prefetchIce, iceServers,
   };
 })();
