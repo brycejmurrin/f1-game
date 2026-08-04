@@ -330,7 +330,33 @@ const NetLobby = (function () {
       // into one slot — and a peer that can name itself is a peer that can name
       // somebody else.
       made.onEvent(NetPlay.EV.HELLO, (p) => {
-        if (p) _peers.set(id, p);
+        if (!p) { renderRoom(); return; }
+        // WHOSE profile this is. On the host, always the connection it came in
+        // on — a guest that could name itself could name somebody else. On a
+        // guest, a `from` is a profile the HOST is RELAYING on behalf of
+        // another guest, and trusting the host is not a new trust: it already
+        // owns the race. Without this a guest files every relayed profile
+        // under its one connection and they overwrite each other, so it never
+        // learns that the other guests exist at all.
+        const who = role === "host" ? id : (p.from || id);
+        _peers.set(who, p);
+        // THE ROSTER IS RELAYED, not just the state. Guests have no connection
+        // to each other, so unless the host passes this on, B never hears that
+        // C is here — and a peer with no slot for C silently drops every packet
+        // about it. It also makes their grids disagree, because separateGrid
+        // lays out the humans it knows about.
+        if (role === "host") {
+          const tagged = Object.assign({}, p, { from: id });
+          for (const [k, sess] of sessions) {
+            if (k === id) continue;                 // not back to the sender
+            try { sess.sendEvent(NetPlay.EV.HELLO, tagged); } catch (e) {}
+          }
+          // ...and the new arrival needs everyone who was already here.
+          for (const [k, prof] of _peers) {
+            if (k === id || !prof) continue;
+            try { made.sendEvent(NetPlay.EV.HELLO, Object.assign({}, prof, { from: k })); } catch (e) {}
+          }
+        }
         // Learning what they picked is the moment a clash becomes knowable.
         resolveSeatClash();
         renderRoom();
@@ -824,7 +850,12 @@ const NetLobby = (function () {
       say("Reading answer…");
       const res = await NetHandshake.acceptAnswer(transport, code);
       if (!res.ok) { say(res.message || "That answer could not be read.", true); return res; }
-      if (res.peer) _peers.set(PEER_ONE, res.peer);
+      // Under the id of the connection this answer belongs to, NOT a fixed
+      // key. As PEER_ONE, accepting a second guest overwrote the first and
+      // ALSO left a phantom "peer" entry that no session ever answers for —
+      // so peersReady() could never be true and START was unreachable. Found
+      // by tools/rtc-e2e-3p, which is the only thing that can see it.
+      if (res.peer) _peers.set(pendingId || PEER_ONE, res.peer);
       waitForOpen();
       return res;
     }
@@ -1066,7 +1097,7 @@ const NetLobby = (function () {
       }
       const acc = await NetHandshake.acceptAnswer(transport, got.payload);
       if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return acc; }
-      if (acc.peer) _peers.set(PEER_ONE, acc.peer);
+      if (acc.peer) _peers.set(pendingId || PEER_ONE, acc.peer);
       waitForOpen();
       return { ok: true, code };
     }
