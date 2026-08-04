@@ -154,6 +154,8 @@ const INTEN  = arg('intensity', null);
 const EXP    = arg('exp', null);
 const REFL   = arg('refl', null);   // env-mirror strength 0..1 (0 = matte paint, no chrome)
 const BG     = arg('bg', null);
+const LOOK   = parseFloat(arg('look', '0'));    // orbit-target Z offset (+nose / −rear)
+const LOOKX  = parseFloat(arg('lookx', '0'));   // orbit-target X offset (+right / −left)
 const PRESET = arg('preset', null);
 const LIGHTSET = arg('lightset', null);   // e.g. "day,dusk,night" — fan out every shot across these tod values
 const PLIGHTS = process.argv.filter(a => a.startsWith('--plight=')).map(a => a.slice('--plight='.length));
@@ -204,6 +206,9 @@ if (PRESET === 'list') {
 let shotDefs;
 if (CUSTOM) {
   shotDefs = [{ label: 'custom', az: parseFloat(arg('az', '35')), el: parseFloat(arg('el', '14')), dist: parseFloat(arg('dist', '4.6')), tod: null }];
+  // (--look/--lookx used to be dropped on this path: the shot object carried no
+  //  look, and the per-shot CARVIEW.set below then wrote look:0 over whatever the
+  //  query string had set, so an ad-hoc angle could never be aimed off-centre.)
 } else if (PRESET) {
   const p = PRESETS[PRESET];
   if (!p) { console.error(`Unknown preset "${PRESET}". Available: ${Object.keys(PRESETS).join(', ')}`); process.exit(1); }
@@ -256,7 +261,10 @@ try {
       const before = window.CARVIEW.frame;
       window.CARVIEW.set(p);
       return before;
-    }, { az: s.az, el: s.el, dist: s.dist, look: s.look || 0, tod: s.tod, intensity: s.intensity != null ? s.intensity : INTEN });
+    }, { az: s.az, el: s.el, dist: s.dist,
+         look:  s.look  != null ? s.look  : LOOK,
+         lookX: s.lookX != null ? s.lookX : LOOKX,
+         tod: s.tod, intensity: s.intensity != null ? s.intensity : INTEN });
     // SwiftShader can spend far longer than a fixed delay compiling or rebuilding
     // the dusk/night reflection probe. Eight completed post-change frames covers
     // that slow path and gives the browser compositor a presented canvas.
