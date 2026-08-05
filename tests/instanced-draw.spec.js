@@ -92,6 +92,69 @@ test.describe("GLX instanced draw", () => {
     expect(r.every, "a containing frustum should keep every instance").toBe(r.total);
   });
 
+  test("the radial cap culls what the frustum would admit", async ({ racePage: page }) => {
+    // drawChunked culls TWICE — frustum, then radially against frame.cullDist —
+    // and its own comment says why the second exists: "the frustum's far plane
+    // is the only distance cull, so when it's pushed out (free camera) a
+    // high/wide vantage admits the whole ~5 M-vert city at once — a mobile-tiler
+    // OOM". cullInstances did frustum only, so wiring these batches into the
+    // draw path without the same cap would reopen exactly that, on the backend
+    // nearest its memory ceiling. See docs/research/SCENE-GRAPH-PLAN.md §8.3.
+    //
+    // The frustum here is the all-containing one, so anything removed below was
+    // removed by the CAP and nothing else.
+    await page.evaluate(() => __apex.race("monza"));
+    await page.waitForFunction(() => __apex.info().track === "monza", null, { timeout: 180000 });
+
+    const r = await page.evaluate(() => {
+      const graph = __apex.trackGraph && __apex.trackGraph();
+      if (!graph) return { skipped: "no graph" };
+      const { batches } = graph.batches();
+      if (!batches.length) return { skipped: "no batches" };
+      const big = batches.reduce((a, b) => (b.count > a.count ? b : a));
+      const batch = GLX.createInstancedBatch(big.geo, big.matrices, big.colors, { cellSize: 72 });
+      const all = [[1,0,0,1e9],[-1,0,0,1e9],[0,1,0,1e9],[0,-1,0,1e9],[0,0,1,1e9],[0,0,-1,1e9]];
+
+      // The centre of the batch, so a cap around it keeps a plausible middle.
+      let cx = 0, cz = 0;
+      for (let i = 0; i < batch.instances; i++) {
+        cx += big.matrices[i * 16 + 12]; cz += big.matrices[i * 16 + 14];
+      }
+      cx /= batch.instances; cz /= batch.instances;
+      const eye = [cx, 0, cz];
+
+      const out = {
+        cells: batch.cells.length,
+        total: batch.instances,
+        // No cap when it is not asked for — the old two-argument behaviour, and
+        // what every existing caller still relies on.
+        uncapped: GLX.cullInstances(batch, all),
+        // Explicit zero means the same thing.
+        capZero: GLX.cullInstances(batch, all, eye, 0),
+        // No eye means no cap either, however large the distance.
+        capNoEye: GLX.cullInstances(batch, all, null, 500),
+        near: GLX.cullInstances(batch, all, eye, 150),
+        far: GLX.cullInstances(batch, all, eye, 2000),
+        // Far outside the circuit: the cap must be able to reject EVERYTHING,
+        // which is the case it exists for — a cull that merely thins is no use
+        // against a vantage that would otherwise admit the whole city.
+        away: GLX.cullInstances(batch, all, [1e6, 0, 1e6], 1000),
+      };
+      GLX.freeInstancedBatch(batch);
+      return out;
+    });
+
+    test.skip(!!r.skipped, r.skipped || "");
+    // Unchanged for anyone not asking for a cap.
+    expect(r.uncapped, "two-argument culling must stay frustum-only").toBe(r.total);
+    expect(r.capZero, "cullDist 0 is no cap").toBe(r.total);
+    expect(r.capNoEye, "a distance without an eye is no cap").toBe(r.total);
+    // The cap bites, and monotonically.
+    expect(r.near).toBeLessThan(r.total);
+    expect(r.near).toBeLessThanOrEqual(r.far);
+    expect(r.away, "a vantage far outside the circuit keeps nothing").toBe(0);
+  });
+
   test("instanced geometry can cast shadows", async ({ racePage: page }) => {
     const api = await page.evaluate(() => typeof GLX.castShadowInstanced);
     expect(api, "instanced props would light correctly but drop no shadow").toBe("function");

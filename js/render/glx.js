@@ -1155,13 +1155,40 @@ const GLX = (function () {
   // Repack the instances whose cell survives the frustum to the front of the GPU
   // buffer and record how many. Returns the visible count. A batch created
   // without cellSize has no cells and is left whole (always drawn in full).
-  function cullInstances(batch, planes) {
+  //
+  // TWO culls, exactly as drawChunked runs two — and the second is the one that
+  // matters on a phone. The frustum's far plane is the only DISTANCE cull, so a
+  // high, wide vantage with the far plane pushed out (the free camera) admits
+  // the entire city at once, which is a mobile-tiler OOM. The chunked path has
+  // capped that radially against frame.cullDist since it was written; an
+  // instanced path without the same cap would quietly reopen it, on the one
+  // backend already sitting near its memory ceiling.
+  //
+  // The cap is EXPLICIT — omit `eye`/`cullDist` and this behaves exactly as it
+  // always has, frustum only. It does not read the live frame, deliberately:
+  // frame.cullDist is 0 on a healthy desktop but becomes 900 once PerfGov
+  // reaches tier 3, so a silent default would make every caller's behaviour
+  // depend on how fast the machine happened to be that run.
+  //
+  // Forgetting it at a call site is the hazard, so the draw path must not have
+  // one to forget: whatever loop ends up drawing these batches owns the cap the
+  // way drawChunked owns its own — extracted once, applied to every batch —
+  // rather than each site remembering. See SCENE-GRAPH-PLAN.md §8.3.
+  //
+  // aabbDist2 is CHK's own, not a local copy: chunked.js exports it precisely
+  // "so callers outside the draw path can run the SAME cull test the GPU path
+  // runs, rather than reimplementing it and drifting".
+  function cullInstances(batch, planes, eye, cullDist) {
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
     const src = batch.srcMatrices, dst = batch.packMatrices;
     const sc = batch.srcColors, dc = batch.packColors;
+    const cd = cullDist > 0 && eye ? cullDist : 0;
+    const cd2 = cd * cd;
+    const ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
     let n = 0;
     for (const c of batch.cells) {
       if (!CHK.aabbInFrustum(planes, c.mn, c.mx)) continue;
+      if (cd > 0 && CHK.aabbDist2(c.mn, c.mx, ex, ey, ez) > cd2) continue;
       for (const i of c.idx) {
         dst.set(src.subarray(i * 16, i * 16 + 16), n * 16);
         if (dc) dc.set(sc.subarray(i * 3, i * 3 + 3), n * 3);
