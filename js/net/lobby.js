@@ -925,10 +925,18 @@ const NetLobby = (function () {
         say("That is four players — the grid is full.", true);
         return { ok: false, error: "room_full" };
       }
-      const res = await host();
-      // host() shows the invite step; the room is one BACK away and everybody
-      // in it is still connected.
-      return res;
+      // BOTH WAYS IN, for the second guest as much as the first. This used to
+      // go straight to host(), which meant a room code could only ever invite
+      // ONE player — the rest had to be pasted a link, for no reason other
+      // than which button had been wired. So it returns to the choice, with
+      // the JOIN options hidden: a host inviting somebody is not also looking
+      // for a room to join, and offering it would be a way to destroy the room
+      // you already have.
+      show("pick");
+      if ($("vs-join")) $("vs-join").hidden = true;
+      if ($("vs-code-join")) $("vs-code-join").hidden = true;
+      say("Invite another player — a link or a room code, whichever suits.");
+      return { ok: true, step: "pick" };
     }
 
     async function join() {
@@ -1418,6 +1426,11 @@ const NetLobby = (function () {
       if (!e.screen) return false;
       _peers.clear(); _ready.clear();
       show("pick");
+      // inviteAnother() hides these; a fresh open must always offer all four
+      // routes again, or a player who once invited a second guest can never
+      // JOIN anybody afterwards.
+      if ($("vs-join")) $("vs-join").hidden = false;
+      if ($("vs-code-join")) $("vs-code-join").hidden = false;
       for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
       if (e.answerHint) e.answerHint.hidden = true;
       if (e.answerActions) e.answerActions.hidden = true;
@@ -1503,7 +1516,28 @@ const NetLobby = (function () {
         return handOff({ title: "Apex 26", text: "Race me on Apex 26 — room code " + c }, c);
       });
       on("vs-start", startFromRoom);
-      on("vs-close", cancel);
+      // CLOSE MEANS "BACK", NOT "DESTROY", WHEN THERE IS A ROOM TO GO BACK TO.
+      //
+      // The invite and code steps are reached FROM the waiting room via INVITE
+      // ANOTHER, and closing there used to cancel() — tearing down every
+      // connection and dropping the player on the main menu, taking any
+      // already-connected guests with them. Losing three players because you
+      // changed your mind about inviting a fourth is not a close button, it is
+      // a trapdoor.
+      on("vs-close", () => {
+        const e = els();
+        const inRoom = transports.size > 0;
+        const onSubStep = !!(e.roomStep && e.roomStep.hidden);
+        if (inRoom && onSubStep) {
+          dropPending();      // abandon the half-built invite, keep the room
+          stopCodeWait();
+          show("room");
+          renderRoom();
+          say("");
+          return;
+        }
+        cancel();
+      });
       // A paste straight into the box runs too, so all four routes in behave
       // the same. Deferred a tick because the value is not in the textarea yet
       // while the paste event is being dispatched.

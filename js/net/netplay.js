@@ -622,6 +622,12 @@ const NetPlay = (function () {
       start, stop, tick,
       ownsRaceControl, ownsClassification,
       hostStart, reportLap, reportResult, reportCaution, awaitingResult, reportQuali,
+      // Is this side still waiting to be TOLD when the lights go out? Only a
+      // guest ever is: the host names the moment itself. Without this the
+      // countdown falls through to accumulating dt locally — its own clock,
+      // its own random hold — and the two grids are released seconds apart,
+      // which is the one thing netStart exists to prevent.
+      awaitingStart: () => active && role === "guest" && !G.netStart,
       peerLaps: () => peerLaps.slice(),
       peerResult: () => peerResult,
       // updateCar() consults this: a car posed from the network must not also

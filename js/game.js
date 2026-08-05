@@ -2877,6 +2877,21 @@ function update(dt) {
     if (netStart) {
       startHold = netStart.hold;
       countT = (5 + startHold) - (netStart.at - netStart.now()) / 1000;
+    } else if (netPlay && netPlay.awaitingStart && netPlay.awaitingStart()) {
+      // A GUEST WAITS TO BE TOLD, rather than starting its own countdown.
+      //
+      // The host names the moment and holds netStart from the outset; a guest
+      // only gets it when it PUMPS the EV.START event, and pump runs on the
+      // game loop — which is blocked solid while the circuit builds. Falling
+      // through to `countT += dt` here meant the guest ran an entirely
+      // independent countdown, with its own random hold, from whenever its
+      // own lights appeared. The host's lights went out seconds first, which
+      // is precisely what netStart exists to prevent, and it looked like a
+      // clock-sync bug rather than a missing event.
+      //
+      // So the gantry simply holds unlit until the host speaks. It arrives
+      // within a frame or two of the build finishing, and a moment of dark
+      // lights is far better than being released at two different times.
     } else {
       countT += dt;
     }
