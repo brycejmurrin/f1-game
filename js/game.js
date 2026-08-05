@@ -1049,6 +1049,12 @@ let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
+// The five red lamps, one per second. A CONSTANT rather than a literal because
+// the networked start has to name an instant a whole countdown away — a lead
+// shorter than the sequence means every peer joins it part-way through by
+// construction — so js/net/netplay.js needs this number too, via G.countdownS.
+// Three private copies of it is exactly how that drifts back apart.
+const COUNTDOWN_S = 5;
 let paused = false;
 // Player racing-line assist, set by the pause-menu slider. -1..1: 0 = pure
 // manual (default), >0 gently pulls toward the racing line through corners,
@@ -2891,7 +2897,7 @@ const G = {
   // a global search — see its comment), worldFromTrack its exact inverse.
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
-  GAME_LAPS, TT_LAPS, LONG_GRIP,
+  GAME_LAPS, TT_LAPS, LONG_GRIP, COUNTDOWN_S,
   // The friction-circle constants, for js/game/quali.js: it runs a quasi-steady
   // lap simulation off the SAME numbers the driving model uses, so a simulated
   // qualifying time and a driven one are on one scale by construction.
@@ -2903,6 +2909,15 @@ const G = {
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
+  // The countdown clock and how many lamps are lit. netStartArm has always
+  // written G.countT and, with no accessor here, it has always gone nowhere —
+  // an expando on the façade that nothing reads. Invisible until now only
+  // because the netStart branch overwrites countT every frame; a test asking
+  // for the UNARMED hold gets no such rescue. lightsLit is worse: go()/reset()
+  // clear the lamp DOM and leave the counter at 5, which silently disarms any
+  // "did every lamp light?" assertion made after them.
+  get countT() { return countT; }, set countT(v) { countT = v; },
+  get lightsLit() { return lightsLit; }, set lightsLit(v) { lightsLit = v; },
   get netLobby() { return netLobby; },
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
@@ -3110,26 +3125,29 @@ function update(dt) {
     // the exact moment both cars are released. Solo, this branch never runs.
     if (netStart) {
       startHold = netStart.hold;
-      countT = (5 + startHold) - (netStart.at - netStart.now()) / 1000;
+      countT = (COUNTDOWN_S + startHold) - (netStart.at - netStart.now()) / 1000;
     } else if (netPlay && netPlay.awaitingStart && netPlay.awaitingStart()) {
-      // A GUEST WAITS TO BE TOLD, rather than starting its own countdown.
+      // NOBODY COUNTS DOWN UNTIL THE MOMENT IS NAMED.
       //
-      // The host names the moment and holds netStart from the outset; a guest
-      // only gets it when it PUMPS the EV.START event, and pump runs on the
-      // game loop — which is blocked solid while the circuit builds. Falling
-      // through to `countT += dt` here meant the guest ran an entirely
-      // independent countdown, with its own random hold, from whenever its
-      // own lights appeared. The host's lights went out seconds first, which
-      // is precisely what netStart exists to prevent, and it looked like a
-      // clock-sync bug rather than a missing event.
+      // Falling through to `countT += dt` here meant a peer ran an entirely
+      // independent countdown, with its own random hold, from whenever its own
+      // lights appeared — which is precisely what netStart exists to prevent.
       //
-      // So the gantry simply holds unlit until the host speaks. It arrives
-      // within a frame or two of the build finishing, and a moment of dark
-      // lights is far better than being released at two different times.
+      // Both roles hold, not just the guest. The host names the moment itself,
+      // but not until every guest reports its circuit built, and a host that
+      // free-ran until then would be SEVERAL LAMPS INTO the sequence when the
+      // shared instant finally arrived. countT would drop backwards, lightsLit
+      // is monotonic, and the gantry would sit frozen mid-count before
+      // resuming. Deriving both sides from the one instant is the whole point.
+      //
+      // The wait is real on the host — it lasts as long as the slowest guest's
+      // circuit build — so say so rather than showing a dead gantry. It decays
+      // and hides itself once netStart lands.
+      if (announceT <= 0) announce("WAITING FOR PLAYERS…", 1);
     } else {
       countT += dt;
     }
-    const lit = Math.min(5, Math.floor(countT));
+    const lit = Math.min(COUNTDOWN_S, Math.floor(countT));
     if (lit > lightsLit) {
       // Light EVERY lamp up to `lit`, not just the newest. countT can advance
       // by more than one second in a frame — a networked countdown is pinned to
@@ -3143,9 +3161,9 @@ function update(dt) {
       if (lit === 1) Input.calibrate();
       // all five lit — hold for a randomised beat, as in real F1, so the
       // start can't be timed and lights-out is a genuine reaction moment.
-      if (lit === 5 && !netStart) startHold = 0.2 + simRnd() * 1.8;
+      if (lit === COUNTDOWN_S && !netStart) startHold = 0.2 + simRnd() * 1.8;
     }
-    if (lightsLit === 5 && countT > 5 + startHold) {
+    if (lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold) {
       state = "race"; raceT = 0;
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");

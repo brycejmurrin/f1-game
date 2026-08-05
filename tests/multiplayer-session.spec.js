@@ -261,6 +261,141 @@ test.describe("multiplayer session", () => {
     expect(out.state).toBe("race");
   });
 
+  // The four below cover the countdown's SECOND branch — holding the gantry
+  // unlit until somebody names the moment. Everything above arms netStart
+  // directly, so until now nothing executed that branch, and nothing at all
+  // executed the host's nameTheMoment(): the lead that decides whether a
+  // countdown is watchable was reachable only from the lobby.
+  //
+  // They run on the virtual clock like the rest of the file. netTick(t) is what
+  // advances it — the netStart branch reads netStart.now(), which IS that clock
+  // — so one physics substep per sample is enough.
+
+  test("a peer waiting on the moment holds the gantry dark", async ({ page }) => {
+    // Counting down locally is what released the two grids seconds apart. The
+    // price is a dark gantry until the moment is named, and it must really be
+    // dark: a peer that quietly accumulates dt here looks identical right up
+    // until race day.
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      const lit = () => [...document.querySelectorAll("#lights > *")]
+        .filter((e) => e.classList.contains("on")).length;
+      A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0, role: "guest" });
+      const armed = A.netStartArm(1000);        // in the countdown, nothing named
+      const seen = [];
+      for (let t = 1000; t <= 13000; t += 250) { A.netTick(t); A.step(1 / 60, 1); seen.push(lit()); }
+      return { awaiting: armed.awaiting, max: Math.max(...seen), state: A.info().state };
+    });
+
+    expect(out.awaiting).toBe(true);
+    // Twelve seconds — twice the whole sequence — and not one lamp.
+    expect(out.max).toBe(0);
+    expect(out.state).toBe("count");
+  });
+
+  test("the host waits for its guest's circuit instead of counting down alone", async ({ page }) => {
+    // The host used to be exempt from the hold, which is why it never saw this
+    // bug: it free-ran countT from startRace and lit its lamps organically. And
+    // it ALWAYS free-ran — start() clears armedPeers and lobby.js calls
+    // hostStart() with no pump in between, so allArmed() is false on the first
+    // call every single race. Harmless while the lead was shorter than the
+    // sequence; with the moment now named a whole countdown out, a free-running
+    // host would be lamps deep when the shared instant landed, countT would
+    // drop backwards, and lightsLit being monotonic the gantry would sit frozen
+    // mid-count before resuming.
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      const lit = () => [...document.querySelectorAll("#lights > *")]
+        .filter((e) => e.classList.contains("on")).length;
+      A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0, role: "host",
+                      peer: { team: "redbull", driver: 0 } });
+      A.netStartArm(1000);
+      A.netHostStart();                        // the peer never ARMs: still building
+      const seen = [];
+      for (let t = 1000; t <= 13000; t += 250) { A.netTick(t); A.step(1 / 60, 1); seen.push(lit()); }
+      return { max: Math.max(...seen), state: A.info().state };
+    });
+
+    expect(out.max).toBe(0);
+    expect(out.state).toBe("count");
+  });
+
+  test("the arm deadline releases a host whose guest never reports in", async ({ page }) => {
+    // ARM_WAIT_MS is the only thing between a guest that never finishes
+    // building and a host holding a dark gantry for good. Assertable at all
+    // only because the deadline is now read off the same clock the countdown
+    // is — naming the moment on performance.now() put it on wall time, where
+    // no test could reach it, which is why it has never had one.
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0, role: "host",
+                      peer: { team: "redbull", driver: 0 } });
+      A.netStartArm(1000);
+      A.netHostStart();
+      let named = null, t = 1000;
+      for (; t <= 45000; t += 250) {
+        A.netTick(t); A.step(1 / 60, 1);
+        if (named == null && A.net().startPending) named = t;
+        if (A.info().state === "race") break;
+      }
+      return { named, state: A.info().state };
+    });
+
+    // Waited out the full ARM_WAIT (20 s from the first tick) and no longer.
+    expect(out.named).toBeGreaterThanOrEqual(21000);
+    expect(out.named).toBeLessThan(22000);
+    expect(out.state).toBe("race");             // and the race did eventually start
+  });
+
+  test("a host-named moment plays all five lamps in sequence, not backfilled", async ({ page }) => {
+    // THE REPORTED BUG, from a real race, by the guest: "the timing was correct
+    // for the start of the race but I didn't get lights." The moment was named
+    // 2500 ms out against a 5.2-7.0 s sequence, so countT began at ~2.7-4.5 —
+    // two to four lamps snapped on in a single frame and a second or so of
+    // countdown was all that remained, on a device still painting its first
+    // frames after a circuit build.
+    //
+    // Driven through the REAL naming path, because the lead is the thing under
+    // test and arming netStart by hand is exactly what hides it.
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      const lit = () => [...document.querySelectorAll("#lights > *")]
+        .filter((e) => e.classList.contains("on")).length;
+      A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0, role: "host",
+                      peer: { team: "redbull", driver: 0 } });
+      A.netStartArm(1000);
+      A.netHostStart();                        // holds, waiting for ARMED
+      A.netPeerEvent("armed", {}, 1000);       // the guest's circuit is up
+      A.netTick(1050); A.step(1 / 60, 1);      // pumped -> nameTheMoment()
+      const atNaming = lit();
+      const seen = [];
+      for (let t = 1050; t <= 14000; t += 100) {
+        A.netTick(t); A.step(1 / 60, 1); seen.push(lit());
+        if (A.info().state === "race") break;
+      }
+      return { named: A.net().startPending || A.info().state === "race", atNaming, seen, state: A.info().state };
+    });
+
+    expect(out.named).toBe(true);
+    // Nothing lit at the instant the moment is named — the whole sequence is
+    // still ahead, which is what "a whole countdown away" buys.
+    expect(out.atNaming).toBe(0);
+    // It STEPS. A jump of two or more is the bug: lamps backfilled in one frame.
+    const steps = out.seen.slice(1).map((n, i) => n - out.seen[i]);
+    expect(Math.max(...steps)).toBe(1);
+    expect(Math.max(...out.seen)).toBe(5);
+    // ...and each lamp was up long enough to SEE. A second is ten samples at
+    // 100 ms; five still fails a half-second flash.
+    for (let k = 1; k <= 4; k++) {
+      expect(out.seen.filter((n) => n === k).length).toBeGreaterThanOrEqual(5);
+    }
+    expect(out.state).toBe("race");
+  });
+
   test("a lap time reaches the rival over the reliable channel", async ({ page }) => {
     // Lap times decide the RESULT, so they cannot ride the lossy channel.
     await race(page);
