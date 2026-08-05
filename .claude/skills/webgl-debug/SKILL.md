@@ -31,7 +31,8 @@ before suspecting the GPU upload:
 If `numLights > 0` but lights look wrong in-frame, check the light-record
 layout (§4). If `numLights === 0` on a night track, the `buildTrackLights` /
 `setFrameLights` guard is failing — check `track.def.night` and the scene-dark
-condition in `game.js`.
+condition in `game.js`. **Monza has `night: false`** — for night floodlight
+probes prefer `singapore` or `vegas` (both `night: true`).
 
 ## 3. Detect WebGL errors
 
@@ -49,6 +50,12 @@ gl.getError();   // 0 = GL_NO_ERROR; non-zero = error code
 Check the **browser console** first — WebGL implementations log
 `GL_INVALID_OPERATION` with the call site when debug extensions are active.
 SwiftShader is especially verbose.
+
+**Mobile STANDARD tier:** on mobile UA without GRAPHICS: HIGH, car/lamp shadow
+maps are not created but `game.js` still issues castShadow calls each frame.
+If those casts do not no-op, they spam `GL_INVALID_OPERATION` every frame
+(guarded by `tests/webgl-probes.spec.js` — "mobile standard tier renders without
+GL errors"). Symptom: "STANDARD is buggy and laggy while HIGH runs great".
 
 ## 4. Point-light upload — uniform arrays, 15 floats per light
 
@@ -71,15 +78,16 @@ field COUNT in `buildTrackLights` — every `lights.push(...)` must be exactly
 ### Shadow acne / detached shadows
 
 The lit shader combines a slope-scale bias with the SHADOW BIAS tuner knob
-(`sampleShadow` in glx.js):
+(`sampleShadow` in `js/render/shaders/lit.js`):
 
 ```glsl
-float slopeBias = uShadowTexel * 1.5 * (sqrt(1.0 - c*c) / c);   // tan(theta)
-float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
+float slopeBias = t * 1.5 * (sqrt(1.0 - cosTheta * cosTheta) / cosTheta);
+float biasTerm = clamp(slopeBias, 0.0005, 0.004) + uShadowBias * 0.5;
+float z = sc.z - biasTerm;
 ```
 
 Acne on flat surfaces → raise the SHADOW BIAS slider (`uShadowBias`, TUNE_DEFS
-def 0.001, max 0.005). Peter-Panning (shadows detach from feet) → lower it.
+def 0.001, **max 0.01**). Peter-Panning (shadows detach from feet) → lower it.
 Do NOT hand-edit the clamp constants first; the tuner knob exists for this.
 
 ### Shadow shimmer / edge flicker while driving
@@ -126,6 +134,6 @@ expect(err).toBe(0);   // GL_NO_ERROR
 # Check HDR mode
 node tools/apex-eval.mjs monza "GLX.hdrMode()" --raw
 
-# Light state on a night track (full workflow: lighting-tuner skill)
+# Light state on a night track (Monza has night:false — use vegas/singapore)
 node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw
 ```

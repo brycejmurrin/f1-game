@@ -46,6 +46,7 @@ Hooks:
 
 | Hook | Use |
 |---|---|
+| `__apex.net()` | **Primary remotes/buffers inspector** — role, grid slots, clock sync, buffered packets; `{ active: false }` when solo |
 | `__apex.netLoopback(opts)` | Start one-page deterministic peer session |
 | `__apex.netPeerSend(state, atMs?, wireId?)` | Publish remote state into the local session |
 | `__apex.netTick(nowMs?)` | Pump net session by virtual time |
@@ -120,6 +121,21 @@ Read first:
    - Run `test:net` in the background through `tools/test-bg.mjs`.
    - Use real RTC scripts only for browser/ICE behavior that loopback cannot
      exercise.
+
+## Three-player (star topology)
+
+Three peers use a **star topology**: guest B and guest C each connect to the
+host; the host **relays** snapshots between them (no direct B↔C link). Invites
+are **sequential** — mint one invite, accept, then `lobbyInviteAnother()` for
+the next guest. Prefer the dedicated script:
+
+```sh
+npm run rtc:e2e-3p
+```
+
+Background-tab throttling can stall WebRTC timers in a real browser — for
+reliable 3-player debugging use `__apex.headless(true)` or the headless RTC
+scripts above rather than three background tabs.
 
 ## Common Mistakes
 

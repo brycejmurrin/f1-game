@@ -36,6 +36,15 @@ node .claude/skills/playwright-probe/shot.mjs monaco 0.18 orbit  scratch/capture
 node .claude/skills/playwright-probe/shot.mjs spa    0.07 eye    scratch/captures/playwright-probe/eau-rouge.png
 ```
 
+**Viewport gotcha:** `shot.mjs` uses **1280×720** (wide survey frame). In-race
+Playwright **specs** use landscape **844×390** to avoid the `#rotate-device`
+overlay — don't copy the spec viewport into `shot.mjs` or vice versa.
+
+**Corner fractions:** don't hardcode folklore chicane numbers — probe first:
+`__apex.trackInfo({what:"corners"})`, `__apex.corners()`, or `js/track/markings.js`
+(`CircuitMarkings` curated apexes). Official FIA turns ≠ curvature peaks (see
+**debug-tracks**).
+
 A blank/dark canvas comes out < ~5 KB; a real 3D frame is tens of KB (the
 suite's non-blank heuristic). For the full camera-hook reference
 (park/freeze/eyeAt/orbit/view/cinematic/carOrbit/previewCam) see
@@ -87,18 +96,19 @@ helped asset fetch; they are not the current harness.
    ~1.6 s settle for the mesh build before probing/shooting.
 5. **Viewports**: in-race shots use **landscape** `{844,390}` (avoids the
    `#rotate-device` overlay); DOM screens (menu/results) use a larger viewport.
-6. **THE CAMERA LAGS — call `snapCam()`.** The game camera eases toward its rig
-   target exponentially, so after a `jump()`/`park()` teleport it spends a second
+6. **THE CAMERA LAGS — call `snapCam()` after `park()`/`jump()`.** The game camera
+   eases toward its rig target exponentially, so after a teleport it spends a second
    or more *flying* to the car. Screenshot in that window and you get an empty
-   frame, the car half out of shot, or scenery from 300 m back — and any
-   `camState()` reading is of a camera still in transit, not of the rig.
+   frame, the car half out of shot, or scenery from 300 m back.
    ```js
    __apex.park(0.12);   // stationary + frozen: the deterministic-shot hook
-   __apex.snapCam();    // REQUIRED: bypasses the damping, rig lands exactly
+   __apex.snapCam();    // REQUIRED for park/chase — bypasses damping
    ```
-   Waiting longer is not a fix (the ease is slow and `freeze()` can hold it).
-   Symptom to recognise: eye-to-car distance in the hundreds of metres, when
-   chase should read ~5.8 m and cockpit/hood ~0.3-0.6 m.
+   **`shot.mjs` calls `snapCam()` automatically for `park` mode**; for `orbit` /
+   `eye` / `cinematic` / `trackside` it sets `dbgCam` directly (no snapCam — and
+   never call snapCam after orbit; see **debug-cameras**). Waiting longer is not a
+   fix (the ease is slow and `freeze()` can hold it). Symptom: eye-to-car distance
+   in the hundreds of metres when chase should read ~5.8 m.
 
    If you are comparing camera BEHAVIOUR (does the rig follow the car or the
    road?), note that `park()` cannot tell them apart: it puts the car on the

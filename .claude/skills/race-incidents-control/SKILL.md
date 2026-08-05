@@ -53,7 +53,8 @@ Hooks:
 
 | Hook | Use |
 |---|---|
-| `__apex.debris(on?)` | Enable/disable or inspect debris side-world status |
+| `__apex.debris(arg?)` | Enable/disable, inspect status, `{hazards:true}`, `{reset:true}`, `{burst:n}` — thin in DEBUG-HOOKS prose but fully documented in `apex.js` |
+| `__apex.incident(arg?)` | R2/R3/C1 takeover status; `{launch:true}`, `{flags:{…}}`, `{reset:true}` to abort takeovers |
 | `__apex.caution(arg?)` | Inspect/toggle flags; pass `{hazards:true}` for live hazard list |
 | `__apex.retirements()` | Inspect planned and active DNFs |
 | `__apex.reliability(mode?)` | Configure staged reliability behavior |
@@ -113,10 +114,19 @@ Deep references:
    - Keep fixed insertion/order guarantees when interacting with Rapier.
 
 6. **Use hooks to inspect the exact layer.**
-   - `__apex.debris()` for side-world enabled/ready/status.
+   - `__apex.debris()` for side-world enabled/ready/active (`DebrisWorld.active`,
+     `apex26.debris` localStorage key).
+   - `__apex.incident()` / `incident({reset:true})` for R2/R3/C1 takeover state.
    - `__apex.caution({hazards:true})` for flag state plus hazard list.
    - `__apex.retirements()` after `seed()`/`reliability()`/`race()` for DNF plan.
    - `carAt(i).otEnabled` to confirm overtake gating under cautions.
+
+   **"SC never comes out" checklist:**
+   1. `DebrisWorld.active` / `apex26.debris` — side-world enabled?
+   2. `caution({hazards:true})` — hazard `total` vs thresholds (`VSC_MIN=6`,
+      `SC_MIN=10` in `racecontrol.js`)?
+   3. `caution({enabled:true})` — cautions not disabled?
+   4. Multiplayer: only the **host** computes flags; guests adopt host `apply()`.
 
 7. **Verify narrowly, then with browser coverage.**
    - Run the pure unit guard `node --test tests/race-control.test.mjs` after

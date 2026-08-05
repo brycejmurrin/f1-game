@@ -20,10 +20,10 @@ stale the moment physics is retuned).
 | `speedRef` (`STEER_SPEED_REF` 60 m/s) | speed-sensitive lock taper | keeps lock at speed |
 | `drift` (`DRIFT` 0) | rear looseness / oversteer | more tail-out (debug only) |
 | `roadFollow` (`ROAD_FOLLOW` 0.7) | curvature steering assist | more auto-drive |
-| `frontGrip` (`FRONT_GRIP` 0.89) | front friction bias | less understeer-safe |
+| `frontGrip` (`FRONT_GRIP` 0.89) | front friction bias (`muF *= FRONT_GRIP`) | more front grip / less understeer |
 | `playerGrip` (`PLAYER_GRIP` 1.15) | player grip headroom vs AI | more forgiving |
 | `yawDamp` (`YAW_DAMP` 1.0) | yaw damping | calmer rotation |
-| `yawInertia` (`YAW_INERTIA` 0.7) | rotational inertia | snappier turn-in (<1) |
+| `yawInertia` (`YAW_INERTIA` 0.7) | rotational inertia (`<1` = snappier) | lazier turn-in |
 | `pace` (`PACE` 1.0) | global speed multiplier | faster everywhere |
 
 Fixed (edit `js/game.js` to change): `LONG_GRIP = 34 m/s²` (longitudinal axis of
@@ -47,9 +47,11 @@ function trial(phys) {
   return o;                             // o.x, o.speed, o.slipFactor, o.k, o.clearL/R, o.offT, o.wrongWay, o.reward
 }
 
-const a = trial({ frontGrip: 0.89 });
-const b = trial({ frontGrip: 0.80 });
-// Compare: does the lower-frontGrip run carry less apex speed / run wider (larger |x|)?
+const a = trial({ frontGrip: 0.89 });          // baseline
+const b = trial({ frontGrip: 1.00 });          // more front grip → less understeer
+// Compare: does the higher-frontGrip run hold a tighter line (smaller |x|) / keep more apex speed?
+// For mid-corner understeer: RAISE frontGrip (or LOWER yawInertia toward snappier). Do not copy an
+// example that lowers frontGrip — that widens the line.
 ```
 
 For open-loop physics probes use `step` + `physState`/`probe` instead:

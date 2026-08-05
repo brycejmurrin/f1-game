@@ -57,11 +57,18 @@ GameAudio.centroidHz()  // e.g. 340 at idle, higher at speed
 
 ## Tuning the engine pitch curve
 
-The pitch mapping lives in `js/game/audio.js` — search for the `setEngine(speed,
-gear, ...)` function.  The **sample core** sets `playbackRate` proportional to
-RPM (derived from `speed` and the per-gear ratio array near that function).  The
-**synth fallback** sets oscillator frequencies directly.  To shift the tonal
-range, adjust the gear-ratio constants or the RPM→rate mapping in `setEngine`.
+The pitch mapping lives in `js/game/audio.js` — search for `setEngine(rev01,
+boost01, offroad, speed01, gear)`.  The game loop passes normalised rev/throttle
+and gear each frame; the **sample core** sets `playbackRate` from those inputs,
+and the **synth fallback** sets oscillator frequencies directly until MP3s decode.
+To shift the tonal range, adjust the gear-ratio constants or the rev→rate mapping
+inside `setEngine`.
+
+```js
+// Manual probe (matches the signature the game uses):
+GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
+// rev01, boost01, offroad, speed01, gear
+```
 
 After editing `js/game/audio.js`, **bump the cache version** (`bump-cache` skill) and
 reload — WebAudio doesn't hot-reload.  Use `GameAudio.rate()` before and after
@@ -71,8 +78,9 @@ to confirm the playback-rate changed at the same speed.
 
 1. Check `GameAudio.enabled()` — if `false`, call `GameAudio.setEnabled(true)`.
 2. Check `GameAudio.debug().samplesReady` — if `false`, the MP3s haven't decoded
-   yet (network or CORS issue); the synth fallback should be active.  Check
-   `usingSamples` to confirm which core is running.
+   yet (network/CORS issue, or the CC0 files are absent from the checkout); the
+   synth fallback should be active.  Check `usingSamples` to confirm which core
+   is running — absence of sample files is not fatal.
 3. If the AudioContext is suspended (autoplay policy), clicking `#soundbtn` or
    any user gesture resumes it.  In the browser console:
    ```js
@@ -88,9 +96,10 @@ to confirm the playback-rate changed at the same speed.
 
 ## Testing
 
-`tests/audio-smoke.spec.js` covers three checks: `GameAudio` is defined, the
-OfflineAudioContext synthesis pipeline produces non-silent output, and
-`AudioContext.resume()` transitions to `"running"`. Run it with:
+`tests/audio-smoke.spec.js` covers three browser checks: `GameAudio` initialises
+without console errors, re-enabling sound during a race restarts race music, and
+a real user-gesture unlock runs engine synthesis (`setEngine(0.75, 0.4, false,
+0.6, 4)` then `centroidHz() > 50`, `contextState === "running"`). Run it with:
 
 ```sh
 npx playwright test tests/audio-smoke.spec.js

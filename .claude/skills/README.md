@@ -43,6 +43,20 @@ skill, not how to run it. Bodies carry the workflow.
 | **asset-pack** | Deferred — `tools/assets.mjs` + `docs/research/ASSET-API-RESEARCH.md` cover bake/verify for now. |
 | **pwa-cache-service-worker** | Deferred — `bump-cache` for routine bumps; `sw.js` + `test:service-worker` for SW work. |
 
+## Pressure-test notes (2026-08)
+
+Invoked every skill with fast subagents (`composer-2.5-fast`; Haiku not available
+in this environment) against fictional user requests. Highest-confidence fixes
+applied: wrong APIs (`UiLayers.gateOpen` → `anyOpen`), inverted physics table
+(`frontGrip`/`yawInertia`), wrong `setEngine` signature, shake location
+(`game.js` not `cameras.js`), career facility≠budget-cap, missing `incident()`/
+`net()` hooks, `corners()` vs FIA turns, 40-circuit roster, `perf-profile` tool
+lag, folklore corner fractions.
+
+Still PARTIAL by design for some requests (e.g. motion-capture is track-generic;
+agent-view race `finished` needs chained rollouts). Re-run a skill scenario after
+editing it.
+
 The debug-* skills pair with `tools/apex-eval.mjs` / `tools/apex-capture.mjs` so
 changes are validated visually, not just asserted.
 

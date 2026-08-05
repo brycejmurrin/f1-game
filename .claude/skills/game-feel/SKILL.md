@@ -15,8 +15,11 @@ Apex 26's plain-JS IIFE game loop and `js/game/*` modules.
 
 ## Overview: map juice to Apex systems
 
-- **Camera punch** -> `js/game/cameras.js` / `GameCams`: add decaying visual
-  offsets to camera rigs, never to `car.px/pz`, `s`, `x`, or `psi`.
+- **Camera punch / screen shake** -> `js/game.js`: trauma lives in the `shake`
+  variable (0..1, decays in the render loop, applied to `eyeT`/`tgtT` after
+  `GameCams` picks a rig). `js/game/cameras.js` / `GameCams` owns camera
+  *modes* only — not shake storage. Never write shake to `car.px/pz`, `s`, `x`,
+  or `psi`.
 - **Particles and flashes** -> `js/game/particles.js` / `Particles`: transient
   smoke, sparks, spray, glow puffs. This is render-path feedback; it must not
   feed physics or collision decisions.
@@ -56,9 +59,9 @@ Apex 26's plain-JS IIFE game loop and `js/game/*` modules.
 
 | Feedback | Start here | Notes |
 |---|---|---|
-| Screen shake / camera impulse | `js/game/cameras.js`; call site likely in `js/game.js` where the event is detected | Store trauma/impulse on the camera module; decay per rendered frame. |
-| Collision or wall scrape sfx | `js/game/audio.js` plus the collision event path in `js/game.js` | Gate repeated scrapes with cooldown/intensity so audio does not buzz. |
-| Kerb/grass/spray/sparks | `js/game/particles.js` | Use existing bounded pools; particles are visual and should not feed surface grip. |
+| Screen shake / camera impulse | `js/game.js` — `shake` var + decay block (~line 5159) | Wall hits: `shake = Math.min(1, shake + 0.1 + incidence * 0.3)` in the wall collision path (~4238). Car-car: `shake += impact * 0.45` in `collideFx()`. Kerb: `KERB_SHAKE` constant. |
+| Collision or wall scrape sfx | `GameAudio.collision()` from `js/game.js` wall/car-car paths | Gate repeated scrapes with cooldown (`collideT`, `wallT`) so audio does not buzz. |
+| Kerb/grass/spray/sparks | `js/game/particles.js` / `Particles.sparks` | Wall scrape sparks: render loop in `game.js` (~6152) reads `Tracks.wallAt` proximity. Collision sparks via `c.fxSparkI` flag set in physics, consumed in render. |
 | Tyre marks | `js/game/skidmarks.js` | Stamp from measured slip/contact; keep the ring buffer bounded. |
 | Chassis pitch/roll/bob | `js/game/bodyattitude.js` | Visual attitude only; never write back into physics. |
 | HUD or menu pop | `js/game/hud.js`, `js/game/menus.js`, CSS components | Prefer short CSS/DOM transitions over per-frame JS where possible. |
@@ -79,14 +82,17 @@ Apex 26's plain-JS IIFE game loop and `js/game/*` modules.
 
 ## Common mistakes
 
+- Hunting `js/game/cameras.js` for shake/trauma storage — it only defines camera
+  *modes*; the `shake` variable and its writers/decay live in `js/game.js`.
 - Editing physics constants because an impact feels soft. First layer audio,
   shake, sparks or tyre evidence; only tune physics when measured behaviour is
   wrong.
 - Adding expensive FX directly inside `updateCar` or other per-car hot loops.
-  Emit a bounded event and process it in `Particles`, `GameAudio`, `GameCams`,
-  `SkidMarks`, or `BodyAttitude`.
+  Emit a bounded flag/impulse (e.g. `c.fxSparkI`, bump `shake`) and consume it
+  in the render/audio path (`Particles`, `GameAudio`, `SkidMarks`,
+  `BodyAttitude`). Do not allocate particles or call audio from the physics step.
 - Applying shake to the car, track position, heading, or collision shape. Shake
-  the camera/view only.
+  the camera/view only (`eyeT`/`tgtT` offsets after the rig is chosen).
 - Implementing hit-stop by pausing the physics clock. If you need emphasis, use
   visual/audio freeze cues that do not alter `act()`/`obs()` determinism.
 - Letting random effects change reproducible headless runs. Use visual-only RNG

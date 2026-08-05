@@ -46,26 +46,29 @@ __apex.lightState()
 
 ## One-off inspection
 
+`tools/apex-eval.mjs` and `tools/apex-capture.mjs` launch **Chromium via
+Playwright** — they need a browser install (`npx playwright install chromium`).
+
 ```sh
 # What does Vegas look like in night vs day mode?
 node tools/apex-eval.mjs vegas "a.lightState()"
 node tools/apex-eval.mjs monaco "a.lightState()"
 
-# After calling setTimeOfDay live:
-node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw
+# After calling setTimeOfDay live (Monza has night:false — prefer vegas/singapore):
+node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw
 ```
 
 ## Before/after workflow (validate a code change)
 
 ```sh
-# 1. Capture baseline
-node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
+# 1. Capture baseline (Monza has night:false — use vegas or singapore for night)
+node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
 
 # 2. Edit applyRaceSettings in js/game/atmosphere.js (or a TUNE_DEFS default in js/game/lighting.js)
 # 3. Bump cache version, reload
 
 # 4. Capture after
-node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
+node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
 
 # 5. Diff
 diff artifacts/tmp/before.json artifacts/tmp/after.json
@@ -93,8 +96,8 @@ __apex.orbit(0.15, 45, 20, 60);  // frame turn 1
 
 | Symptom | Field to check | Likely fix |
 |---|---|---|
-| "Night looks like day" | `ambientSky` too bright, `numLights` = 0 | `lightTune({ambientMul})` / night ambient cap in `applyRaceSettings`, or track doesn't trigger dark rebuild |
-| "Floodlights not firing" | `numLights === 0` on a dark track | `buildTrackLights` guard condition — check `track.def.night` flag |
+| "Night looks like day" | `ambientSky` too bright, `numLights` = 0 | **Also inspect shipped `LightPresets["track\|tod\|weather"]` in `js/game/light-presets.js`** before only live-tuning — a baked preset may be washing the scene out. Then `lightTune({ambientMul})` / night ambient cap in `applyRaceSettings`, or track doesn't trigger dark rebuild |
+| "Floodlights not firing" | `numLights === 0` on a dark track | `buildTrackLights` guard — check `track.def.night` (Monza is `false`; use singapore/vegas for night probes) |
 | "Floodlight masts invisible" | `floodEmit === 0` | Night emissive not applied in `buildProps`; check `lightTune({floodEmitMul})` |
 | "Dawn sun too high" | `sunY` close to 1.0 | `lightTune({sunElev: -N})` (deg offset); structural default lives in `applyRaceSettings` |
 | "Scene washed out" | `exposure` too high or `ambientGround` too bright | `lightTune({exposureMul, ambientMul})`; night branch caps ambient |
@@ -102,11 +105,15 @@ __apex.orbit(0.15, 45, 20, 60);  // frame turn 1
 
 ## Writing a lightstate contract test
 
-```js
-// tests/lighting-tuner-grade.spec.js
-// Run with: npx playwright test tests/lighting-tuner-grade.spec.js
+Day/night **light counts and exposure** are asserted in:
+
+```sh
+npx playwright test tests/webgl-probes.spec.js   # mobile tier GL errors + render probes
+npx playwright test tests/lighting-ab.spec.js    # "night light budget: lamps on at night, off by day"
 ```
 
-The spec asserts: day → `numLights === 0`, night → `numLights > 0` with darker
-ambient.  After any `applyRaceSettings` edit, run this spec first — it catches
-the most common regression (accidentally lighting the night scene like day).
+`tests/lighting-tuner-grade.spec.js` is **IMAGE & COLOUR UI grading only** (tonal
+range, lift/gamma/gain knobs, persist/reset/export) — it does NOT check
+`numLights` or day/night ambient. After any `applyRaceSettings` edit, run
+`lighting-ab.spec.js` first for the common regression (accidentally lighting the
+night scene like day).

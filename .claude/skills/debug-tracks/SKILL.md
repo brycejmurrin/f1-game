@@ -19,7 +19,7 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 | `trackBounds()` | `{minX,maxX,minZ,maxZ,spanX,spanZ,centerFrac}` |
 | `mapPts()` | `Array(~207)` of `[x,z]` normalised 0..1 (the minimap) |
 | `nodeAt(frac)` | `{k, frac, x,y,z, tx,tz, rx,rz}` — world pos + tangent + right vector |
-| `corners()` | `Array` of apex fractions (e.g. Spa → 42, Suzuka → 37, Monaco → 29) |
+| `corners()` | `Array` of **curvature-peak** fractions — NOT the official FIA turn count (see below) |
 
 ## Surface & barriers
 
@@ -29,10 +29,28 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 | `scan([d1,d2,...])` | look-ahead `Array` of `{s,k,hw,slope}` at each distance ahead |
 | `wallStats()` | `{minB, maxB, minOverHw, anyNaN, street, n}` — barrier audit; `anyNaN:true` or tiny `minOverHw` = bad geometry |
 
+## "How many corners?" — official vs peaks
+
+`corners()` finds **every local curvature maximum** along the centreline. A long
+sweeper or a double-apex often registers as multiple peaks, so the count is
+**higher** than the FIA turn list (e.g. Spa ~42 peaks vs ~19–20 official turns).
+
+| Question | Hook |
+|---|---|
+| Official FIA turn **count** | `__apex.info().turns` (length of curated list on `track.def.turns`) |
+| Official turn **details** (name, direction, radius) | `__apex.trackInfo({what:"corners"})` — sourced from `CircuitMarkings` in `js/track/markings.js` |
+| Curvature **peaks** (geometry audit) | `__apex.corners().length` |
+
+When someone asks "how many corners does Spa have?", answer with `info().turns` /
+`trackInfo`, not `corners().length`.
+
 ## One-off queries
 
 ```sh
-node tools/apex-eval.mjs spa   "({corners:a.corners().length, bounds:a.trackBounds()})"
+# official turn count vs curvature peaks:
+node tools/apex-eval.mjs spa "({official:a.info().turns, peaks:a.corners().length})"
+node tools/apex-eval.mjs spa "a.trackInfo({what:'corners'})" --raw   # curated FIA list
+
 node tools/apex-eval.mjs monza "a.wallStats()"
 node tools/apex-eval.mjs monaco "a.groundY(0.18, 10)"          # gap finder at a corner
 node tools/apex-eval.mjs suzuka "a.trackProfile(40)" --raw     # full elevation profile
@@ -45,10 +63,10 @@ Chromium workers (see the **playwright-probe** skill for the harness). Example o
 profile sweep:
 
 ```
-suzuka  37 corners  elev 12.0 m   maxk 0.042
-monaco  29 corners  elev 27.5 m   maxk 0.060
-spa     42 corners  elev 23.4 m   maxk 0.044
-vegas   27 corners  elev  4.0 m   maxk 0.030   (night-default → numLights 32)
+suzuka  18 official / 37 peaks  elev 12.0 m   maxk 0.042
+monaco  19 official / 29 peaks  elev 27.5 m   maxk 0.060
+spa     19 official / 42 peaks  elev 23.4 m   maxk 0.044
+vegas   17 official / 27 peaks  elev  4.0 m   maxk 0.030   (night-default → numLights 32)
 ```
 
 `lightState().numLights` is a quick night/floodlit tell (>0 = dark session with

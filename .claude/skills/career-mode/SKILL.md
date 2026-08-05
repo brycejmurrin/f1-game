@@ -39,6 +39,8 @@ Do **not** use this for:
 | Modes | DRIVER uses an existing team/seat; MY TEAM owns `custom` and hires a second driver |
 | Season shape | `career.season` matches standalone `apex26.season` so standings/HUD/results share code |
 | Economy | Credits buy research; fitting owned parts is free but capped by budget level |
+| Research facility | `Career.facilityDiscount()` — discount on **research cost only**; does NOT raise the fitted part budget cap |
+| Fitted budget cap | `Career.budget()` / `budgetLvl` — separate from facility; may be unwired in UI (always `budgetLvl` 0 today) |
 | Randomness | Use `Career.rnd(...parts)`; do not consume `simRnd` or `Math.random` |
 | Ratings | `DriverRatings` apply in all modes; career adds deltas on top |
 
@@ -62,7 +64,7 @@ Hooks:
 Commands:
 
 ```sh
-node tools/career-economy.mjs
+node tools/career-economy.mjs            # launches Playwright/Chromium
 node tools/career-economy.mjs --years 3
 node tools/test-bg.mjs career
 npm run test:tooling-fast
@@ -127,6 +129,11 @@ Deep references:
 
 ## Common Mistakes
 
+- Confusing **research facility** with **fitted budget cap**: facility =
+  `facilityDiscount()` on research cost; cap = `Career.budget()` /
+  `budgetLvl` (separate ladder, may be unwired in UI). When the user says
+  "budget cap wrong after facility upgrade", check this split first — upgrading
+  the facility does not raise the cap.
 - Treating "save exists" as "career rules are active", leaking development or
   owned parts into Grand Prix.
 - Persisting career standings with standalone season storage instead of

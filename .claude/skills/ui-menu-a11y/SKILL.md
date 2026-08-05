@@ -31,7 +31,7 @@ Do **not** use this for:
 
 | Surface | Owner | Contract |
 |---|---|---|
-| Topmost screen / input gate | `js/game/uilayers.js` | `UiLayers.top()` ranks `:modal` above any z-index; `UiLayers.gateOpen()` decides if keys may drive |
+| Topmost screen / input gate | `js/game/uilayers.js` | `UiLayers.top()` ranks `:modal` above any z-index; `UiLayers.anyOpen()` gates driving keys |
 | Dialog top layer seam | `js/game/topmodal.js` | `hidden` remains source of truth; `<dialog>.showModal()` mirrors it |
 | Escape/back | `data-esc-close`, `data-esc="none"` | Press the named control; do not invent a second close path |
 | Desktop menu navigation | `js/game/menunav.js` | Redirect wheel only when no scroll region owns it; arrow keys move by geometry |
@@ -67,9 +67,9 @@ Deep references:
 
 1. **Identify the layer first.**
    - If keys, wheel, or Escape go to the wrong place, inspect
-     `UiLayers.top()`/`gateOpen()` before touching individual modules.
-   - New full-screen overlays must be represented in `UiLayers.DEFS` unless they
-     deliberately do not gate driving input.
+     `UiLayers.top()` / `UiLayers.anyOpen()` before touching individual modules.
+   - New full-screen overlays must be added to the internal `DEFS` array in
+     `uilayers.js` (only `LAYER_IDS` is exported — do not assign `UiLayers.DEFS`).
 
 2. **Use the declared close door.**
    - For real dialogs, let `TopModal` mirror `hidden` to `showModal()`/`close()`.

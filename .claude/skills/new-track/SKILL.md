@@ -22,6 +22,7 @@ and prop meshes. **Track files load before `js/track/tracks.js`** in `index.html
     gp: "Grand Prix Name",
     country: "Country",
     night: false,             // default lighting (true = night-default circuit)
+    classic: false,           // true = retired/off-calendar; appended after the 24 season rounds
     theme: "green",           // green | desert | street_day | street_night | modern
     lengthKm: 5.5,            // approx lap length (display + scenery density)
     baseHW: 7.5,              // default half-width in metres
@@ -36,11 +37,19 @@ and prop meshes. **Track files load before `js/track/tracks.js`** in `index.html
     // GEOMETRY — used only when no OSM trace exists for this id (trace wins).
     // t = turn degrees (+right, -left); l = length metres; h = elevation delta;
     // b = bank radians; w = half-width override.
+    // Minimal closed loop (200×100 m rectangle — cumulative turn ≈ 360°):
     segs: [
       { t: 0,   l: 200 },
-      { t: 90,  l: 150, h: -3 },
-      // ... must close the loop (engine distributes residual + Laplacian-smooths)
+      { t: 90,  l: 100 },
+      { t: 0,   l: 200 },
+      { t: 90,  l: 100 },
     ],
+    // Real circuits are longer — copy spa.js / monza.js and adapt:
+    // segs: [
+    //   { t: 0,   l: 200 },
+    //   { t: 90,  l: 150, h: -3 },
+    //   // ... must close the loop (engine distributes residual + Laplacian-smooths)
+    // ],
 
     bridges:   [{ s: 0.5, halfM: 12, rise: 6 }],   // figure-8 overpass (terrain stays flat under it)
     elevations:[{ s: 0.3, halfM: 40, rise: 8 }],   // real terrain bump (terrain follows)
@@ -62,10 +71,19 @@ in metres (0 → `track.total`), lateral `x` in metres (+ = right of centreline)
    layout) and adapt it — don't start from a blank file.
 2. **Register it** (new tracks only): add `<script src="js/circuits/<id>.js?v=N"></script>`
    to `index.html` in the circuit block (before `js/track/tracks.js`) **and add the
-   matching entry to `tools/manifest.cjs`** — the load-order single source of
-   truth; `tests/load-order.test.mjs` (`npm run test:tooling`) fails if the two
-   diverge. Tag order == `Tracks.LIST` == picker/season order, so the position
-   matters. Verify with `__apex.tracks()` that the id appears.
+   matching entry to the `CIRCUITS` array in `tools/manifest.cjs`** — the load-order
+   single source of truth; `tests/load-order.test.mjs` (`npm run test:tooling`) fails
+   if the two diverge. Tag order == `Tracks.LIST` == picker/season order:
+   - **Season circuits** (24 rounds): append in calendar order at the end of the
+     season block (before the `classic: true` section).
+   - **Retired circuits**: set `classic: true` in the def and append after the 24
+     season rounds (see the `// ── retired / off-calendar ──` comment in
+     `manifest.cjs`).
+   - **Roster is capped at 40 circuits** — `tests/shared-track-foundation-characterization.test.cjs`
+     asserts `Tracks.LIST.length === 40`. Adding one requires updating that test
+     (and any other roster-gated expectations) **or** replacing an existing classic
+     circuit; you cannot silently grow the fleet.
+   Verify with `__apex.tracks()` that the id appears.
 3. **Headless build guard** — the fast pre-push check that needs no browser:
    ```sh
    node tools/verify-track.cjs <id>

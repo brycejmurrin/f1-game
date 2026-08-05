@@ -11,8 +11,10 @@ tool. Work one circuit at a time; the same loop applies to all 40.
 
 > **One command does the survey** — `node tools/survey-track.mjs <id>` self-boots the
 > game and emits the screenshots + the flagged ground-profile probe in one pass (no
-> server, one output folder). The focused skills handle the rest: **scenery-dress**
-> (edit `scenery(api)`), **debug-tracks** (deeper geometry hooks), **playwright-probe**
+> server, one output folder). Requires **Chromium + SwiftShader** (same preinstalled
+> browser as Playwright probes). The focused skills handle the rest: **scenery-dress**
+> (edit `scenery(api)` in `js/circuits/<id>.js` — not the old `js/tracks/` path),
+> **debug-tracks** (deeper geometry hooks), **playwright-probe**
 > (one bespoke shot via `shot.mjs`), **check-changes** (ship).
 
 ## Where the truth lives
@@ -102,6 +104,10 @@ is now flag-free and the eye shots show props on real ground.
   **check-changes**.
 
 ## Worked example — Montreal "floating trees" pass
+
+> **Survey first:** Montreal already ships `flatTerrain: true` + `terrainOuter: 70`
+> in `js/circuits/montreal.js`. Do not re-apply that fix blindly — run the survey
+> command and read the probe/EYE shots; only edit if flags are still present.
 
 The exact shape of a survey+update pass:
 1. **Brief** (`docs/tracks/montreal.md`): flat island in a river; Olympic Basin
