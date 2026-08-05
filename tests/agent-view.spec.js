@@ -1328,12 +1328,22 @@ test.describe("worldModel()", () => {
     }
   });
 
+  // Kept in sync with js/track/scenery-structures.js by tests/span-kinds.test.mjs.
+  const SPAN_KINDS = ["guardrail", "fence", "tyreWall", "wall",
+                      "bleacher", "scaffoldStand", "terrace", "tieredBowl"];
+
   test("linear furniture is spans, not thousands of segments", async ({ page }) => {
     await load(page);
     const w = await page.evaluate(() => window.__apex.worldModel());
     expect(w.spans.length).toBeLessThan(60);
+    expect(w.spans.length, "a built Monza reported no linear furniture at all").toBeGreaterThan(0);
     for (const s of w.spans) {
-      expect(["guardrail", "fence", "tyreWall", "wall"]).toContain(s.kind);
+      // SOURCE OF TRUTH: every `ctx.noteSpan(...)` call site in
+      // js/track/scenery-structures.js. This list was four kinds long while the
+      // emitters had grown to eight — the grandstand family (bleacher,
+      // scaffoldStand, terrace, tieredBowl) became spans later and nothing here
+      // followed. tests/span-kinds.test.mjs now fails if the two diverge again.
+      expect(SPAN_KINDS).toContain(s.kind);
       expect(["left", "right"]).toContain(s.side);
       expect(s.lengthM).toBeGreaterThan(0);
     }
@@ -1529,9 +1539,15 @@ test.describe("agentHelp()", () => {
     expect(notes).toContain("null");
     // the static/dynamic model note replaces the old whenToUse block
     expect(Object.keys(h.model).length).toBeGreaterThan(2);
-    // it is a manifest, not documentation — keep it cheap. It now maps the whole
+    // It is a manifest, not documentation — keep it cheap. It now maps the whole
     // toolkit (read hooks + control verbs), so a little larger, still bounded.
-    expect(JSON.stringify(h).length).toBeLessThan(5500);
+    //
+    // 6 KB, not the old 5500: measured 5474, and a ceiling seven bytes above the
+    // artefact is not a budget, it is a tripwire that fires on adding a word.
+    // What this has to stop is the manifest turning INTO the documentation —
+    // another whole section, not another clause — and 6 KB says that where 5500
+    // only said "you edited it".
+    expect(JSON.stringify(h).length).toBeLessThan(6000);
   });
 });
 

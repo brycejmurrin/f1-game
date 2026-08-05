@@ -71,8 +71,15 @@ test.describe("Car runtime effects", () => {
   });
 
   test("ERS indicator follows actual deployment rather than the boost toggle", async ({ page }) => {
-    await startCar(page, 100);
+    // The lamp must track DEPLOYMENT, so the case that matters is BOOST held
+    // while nothing comes out. That used to be "too fast" — deploy tapered to
+    // exactly 0 above 191 km/h — but the taper is floored now (TAPER_FLOOR),
+    // because a BOOST that produced no thrust and cost no energy on every
+    // straight was the bug, not the contract. A FLAT BATTERY is what still
+    // separates the switch from the deployment, so hold the switch on that.
+    await startCar(page, 60);
     await page.evaluate(() => {
+      window.__apex.setEnergy(0);
       window.__apex.setBoost(true);
       window.__apex.step(1 / 60, 2);
     });

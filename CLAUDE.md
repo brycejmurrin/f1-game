@@ -593,7 +593,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (102) + tests/*.test.mjs unit suites (37)
+tests/*.spec.js                 Playwright specs (102) + tests/*.test.mjs unit suites (38)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
                  ARCHITECTURE-REVIEW.md is the standing assessment + defect
                    register: what the no-build-step bet costs, why asserted
@@ -1100,7 +1100,7 @@ __apex.reset(frac, speed, x)  // fast episode reset without reloading assets →
 //    RENDERED frame — stage and let frames draw before trusting either.
 //    seed() below lives in apex.js, not agentview.js, and just returns a
 //    number. See docs/AGENT-WORLD-API.md ──
-__apex.agentHelp()            // manifest of this surface (~5.7 KB, ~1.4k tokens —
+__apex.agentHelp()            // manifest of this surface (~5.5 KB, ~1.4k tokens —
                               //   read it ONCE per session, never per tick)
 __apex.objective()            // what the GAME is: win condition, trade-offs,
                               //   constraints. Static; does NOT describe car
@@ -1161,7 +1161,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Writing tests
 
-102 Playwright specs + 37 `node --test` unit suites. **How to RUN them is under
+102 Playwright specs + 38 `node --test` unit suites. **How to RUN them is under
 Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
 to do when writing one.
 

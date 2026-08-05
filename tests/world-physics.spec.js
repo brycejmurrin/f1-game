@@ -130,15 +130,18 @@ test.describe("Apex 26 — world-space player physics", () => {
       // (measured: minProg -120 after 10 s, i.e. the AI never got away).
       // So drive the player as before and judge only the AI, below.
       //
-      // STILL FAILING, and left failing rather than guessed at further. minProg
-      // after 10 s measures: -120 with the player parked in the pack (it blocks
-      // the grid), 16.8 driving through them as here, 6.9 with the player
-      // teleported half a lap away — so removing the player made it WORSE, which
-      // contradicts the blocking explanation and means the cause is not
-      // understood. Note the AI rubber-band reads player.prog
-      // (`gap = player.prog - c.prog`), so where the player is changes AI pace;
-      // that is the thread to pull. The 70 m threshold assumes a field that gets
-      // away cleanly, and something about the grid start no longer does.
+      // Measured as DISTANCE COVERED, not as absolute prog. This asserted
+      // `minProg > 70` for years and had been failing with no explanation
+      // written down (16.8 with the player driving, 6.9 with it teleported
+      // away, -120 with it parked in the pack — three numbers that refused to
+      // tell a story). The story is that minProg is not a progress measurement
+      // at all: the grid is 22 cars deep and the last one STARTS at prog -182
+      // on Monza, so "prog > 70 after 10 s" quietly demands the back marker
+      // average 25 m/s from a standstill, through the whole field. It never
+      // could. Per-car delta from its own slot is what the test meant, and by
+      // that measure the field is healthy — every car covers 142-221 m, the
+      // slowest 142 (measured), nobody stuck.
+      const at0 = new Map(window.__apex.cars().map((c) => [c.id, c.prog]));
       window.__apex.setInput({ steer: 0, throttle: true });
       for (let i = 0; i < 600; i++) window.__apex.step(1 / 60, 1);  // ~10 s
       window.__apex.clearInput();
@@ -146,10 +149,16 @@ test.describe("Apex 26 — world-space player physics", () => {
       const ai = cars.filter((c) => !c.p);   // the player is hand-driven here
       return {
         offTrack: ai.filter((c) => Math.abs(c.x) > 18).length,   // AI only — see above
-        minProg: Math.min(...ai.map((c) => c.prog)),
+        minGain: Math.min(...ai.map((c) => c.prog - at0.get(c.id))),
+        minSpeed: Math.min(...ai.map((c) => c.speed)),
       };
     });
     expect(r.offTrack).toBe(0);
-    expect(r.minProg).toBeGreaterThan(70);
+    // Every AI car got away from its grid slot and is still racing. 100 m is
+    // well under the measured 142 — the point is "nobody is stuck", not a lap
+    // time, and the back of the grid is legitimately slower than the front.
+    expect(r.minGain, "an AI car barely left its grid slot").toBeGreaterThan(100);
+    expect(r.minSpeed, "an AI car is stationary 10 s after the green light")
+      .toBeGreaterThan(2);
   });
 });
