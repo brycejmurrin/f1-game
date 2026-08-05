@@ -95,6 +95,15 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   shipped through that gap before this existed. Against a relay we run, a
   failure is ours by construction rather than somebody's server having a bad
   day. Needs `tools/nostr-local.cjs` running.
+- `nostr-probe.mjs` — which public relays will actually CARRY our signalling.
+  Publishes what the game publishes (ephemeral kind-22xxx, freshly generated
+  key) to each candidate and records the NIP-01 verdict. This is the only
+  criterion that decides whether room codes work: relays increasingly refuse
+  anonymous ephemeral events, and all six of the shipped list pass
+  reachability, popularity and uptime while room codes still fail. The list has
+  been changed three times on reasoning; change it on this instead. Prints a
+  paste-ready `RELAYS` block and exits non-zero if nothing accepts. Needs
+  `npm i --no-save ws @noble/curves`.
 - `turn-local.cjs` — a TURN server on localhost, which is what makes that relay
   mode testable at all: on one machine ICE forms a direct pair instantly and
   TURN is never touched. Needs `npm i --no-save node-turn` — a test fixture,

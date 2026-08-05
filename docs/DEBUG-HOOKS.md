@@ -1019,14 +1019,32 @@ await __apex.turnProbe();
 //     summary:"No TURN relay is configured — only STUN. …" }
 ```
 
-**No relay ships enabled by default**, because the two free no-signup ones
-were measured dead: trickle-ICE gathers from two independent vantage points,
-each carrying a Google-STUN control that *did* produce an srflx candidate,
-returned zero relay candidates from both Open Relay and freestun. The
-derivation code is still there behind
-`localStorage.setItem("apex26.freeTurn", "true")` — one line the day either
-operator comes back, and `turnProbe()` is how you find out. See
-`js/net/transport.js`.
+**A relay ships by default** — a Metered free-tier credentials URL. Not a
+luxury for hard networks: without one, two devices on the *same Wi-Fi* often
+cannot connect at all, because the only host candidate a browser offers is
+mDNS-obfuscated and, when that name will not resolve, the sole remaining pair
+is srflx↔srflx needing router hairpinning that many routers do not do.
+`apex26.turnApi` overrides it outright.
+
+The two free no-signup relays are **measured dead** and stay off behind
+`localStorage.setItem("apex26.freeTurn", "true")`: trickle-ICE gathers from two
+independent vantage points, each carrying a Google-STUN control that *did*
+produce an srflx candidate, returned zero relay candidates from both Open Relay
+and freestun.
+
+**Two traps this hook exists to expose**, both of which produced `relay: 0`
+wire dumps for hours while the relay was demonstrably alive:
+
+- `iceServers` are fixed **at construction**. `prefetchIce()` must be awaited
+  before a connection is built — the lobby's `readyIce()` does this — or the
+  fetch lands ~200 ms too late and the connection gathers STUN-only.
+- The invite code caps candidates and SDP lists them in **gathering** order, so
+  relay is always last. `sdp.js` selects round-robin by kind (`RETAIN`, relay
+  first) rather than taking the first N.
+
+So `turnProbe()` reporting `ok: true` while a race still fails means the relay
+is fine and something downstream is discarding it. Check
+`__apex.lobby().wire.candidates` for a non-zero `relay`.
 
 ---
 
