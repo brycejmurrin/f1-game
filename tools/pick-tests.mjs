@@ -66,8 +66,8 @@ export const RULES = [
   // worse, and these RULES are deliberately biased toward running too much.
   [/^js\/game\.js/, ["behaviour", "api", "circuit", "physics"], "the loop: physics, AI, race logic"],
   [/^js\/game\/(cameras|cam-tune|cam-tuner)\.js/, ["camera"], ""],
-  [/^js\/game\/(input|steer-tuning)\.js/, ["steering"], ""],
-  [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate)\.js/, ["ui"], "DOM screens"],
+  [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["steering"], ""],
+  [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers)\.js/, ["ui"], "DOM screens"],
   [/^js\/game\/(lighting|light-presets|atmosphere|tuner)\.js/, ["webgl", "ab"], ""],
   [/^js\/game\/(career|career-ui|reliability|quali)\.js/, ["career"], ""],
   [/^js\/game\/(audio|music-lib|spotify)\.js/, ["audio"], ""],

@@ -11,18 +11,13 @@
 //     kinematic model's signature failure)
 //   - SPEED STEER keeps more steering at high speed (at part-lock, below the grip
 //     limit, where the lock taper is what's felt)
-// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
-// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
-// 50" arrives with the car's state and the retained log ring beside it.
 import { test, expect } from "./fixtures.js";
 
-async function startRace(page) {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
-  await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
-  await page.evaluate(() => window.__apex.go());
-}
+// PACE PINNED — same reason as tests/offtrack.spec.js: these assertions are in
+// m/s and degrees of slip, and the OVERALL SPEED default moved to 0.84 with the
+// Phase C regrid. A spec that inherits it silently changes what it measures.
+const pinPace = (page) => page.evaluate(() => window.__apex.setPhysics({ pace: 1 }));
+
 
 // Hold a fixed steer from the main straight at a given SLIDE (drift); report how
 // far the heading swings (turn-in), the peak slip angle, and the steady heading
@@ -50,16 +45,18 @@ const corner = (page, drift, steer = 1, speed = 40, frames = 48) =>
   }, { d: drift, steer, speed, frames });
 
 test.describe("Apex 26 — dynamic bicycle model", () => {
-  test("default car is stable at the limit: full lock washes wide, never spins", async ({ page }) => {
-    await startRace(page);
+  test("default car is stable at the limit: full lock washes wide, never spins", async ({ page, loadTrack }) => {
+    await loadTrack();
+    await pinPace(page);
     const r = await corner(page, 0.15, 1, 50, 90);   // shipped-ish SLIDE, full lock, 1.5 s
     expect(r.finite).toBe(true);
     expect(r.peakSlip).toBeLessThan(45);             // understeer wash, not a spin
     expect(Math.abs(r.x)).toBeLessThan(60);          // stayed in the track neighbourhood
   });
 
-  test("SLIDE loosens the rear: more slip and more rotation than planted", async ({ page }) => {
-    await startRace(page);
+  test("SLIDE loosens the rear: more slip and more rotation than planted", async ({ page, loadTrack }) => {
+    await loadTrack();
+    await pinPace(page);
     const planted = await corner(page, 0.0, 1, 40, 48);
     const loose = await corner(page, 0.7, 1, 40, 48);
     expect(loose.finite && planted.finite).toBe(true);
@@ -67,8 +64,9 @@ test.describe("Apex 26 — dynamic bicycle model", () => {
     expect(loose.turn).toBeGreaterThan(planted.turn);              // looser rear rotates more
   });
 
-  test("slide self-aligns: release the steering and the slip decays", async ({ page }) => {
-    await startRace(page);
+  test("slide self-aligns: release the steering and the slip decays", async ({ page, loadTrack }) => {
+    await loadTrack();
+    await pinPace(page);
     const tail = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0.7 });
       window.__apex.jump(0.0, 40, 0);
@@ -84,8 +82,9 @@ test.describe("Apex 26 — dynamic bicycle model", () => {
     expect(tail).toBeLessThan(1.5);    // slip bled away — the car straightens itself
   });
 
-  test("cornering is grip-limited: yaw rate doesn't run away with speed", async ({ page }) => {
-    await startRace(page);
+  test("cornering is grip-limited: yaw rate doesn't run away with speed", async ({ page, loadTrack }) => {
+    await loadTrack();
+    await pinPace(page);
     // Kinematic models spin faster the faster you go (yaw ∝ speed). A grip-limited
     // tyre model caps the path: steady heading yaw at full lock should be roughly
     // flat — certainly not growing with speed.
@@ -95,10 +94,11 @@ test.describe("Apex 26 — dynamic bicycle model", () => {
     expect(fast.steadyYaw).toBeLessThan(slow.steadyYaw * 1.3);
   });
 
-  test("high drift + aggressive steering never NaNs or flies off", async ({ page }) => {
+  test("high drift + aggressive steering never NaNs or flies off", async ({ page, loadTrack }) => {
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
-    await startRace(page);
+    await loadTrack();
+    await pinPace(page);
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0.7 });
       window.__apex.jump(0.0, 70, 0);
@@ -119,8 +119,9 @@ test.describe("Apex 26 — dynamic bicycle model", () => {
     expect(r.maxAbsX).toBeLessThan(60);   // stayed in the track's neighbourhood
   });
 
-  test("SPEED STEER: higher keeps more turn-in at high speed", async ({ page }) => {
-    await startRace(page);
+  test("SPEED STEER: higher keeps more turn-in at high speed", async ({ page, loadTrack }) => {
+    await loadTrack();
+    await pinPace(page);
     // At part-lock (below the grip limit) the lock taper is what's felt: a higher
     // reference keeps more steer angle — and so more turn-in — at speed.
     const turnAtRef = (ref) => page.evaluate((r) => {

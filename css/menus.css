@@ -33,15 +33,29 @@
      caption on the CAREER button rather than the last line of the small print. */
   gap: clamp(20px, 4vh, 40px);
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  /* CENTRED UNTIL IT DOES NOT FIT, then top-aligned and scrollable.
+     `align-content: center` in a grid that overflows pushes content past BOTH
+     edges, and the start edge of a scroll container cannot be scrolled to — so
+     with the old `overflow: hidden` the title menu simply lost its ends. At
+     UI SIZE 130 % on a 852x393 phone the button column measured -14..407 in a
+     393px box: 14px gone off the top, 14px off the bottom, unreachable. 150 %
+     lost 45px at each end. `safe center` falls back to `start` exactly when
+     that would happen, and the pair of declarations is the progressive form —
+     a browser without `safe` drops the second and keeps plain centring.
+     Declared here rather than compensated per-scale because the overflow is a
+     function of viewport height as much as of the slider: a short enough
+     window does this at 100 %. */
+  align-content: center;
+  align-content: safe center;
   /* in oklab so the red wash stays red through its falloff instead of
      sagging grey, and .grain (css/components.css) dithers what is left */
   background:
     radial-gradient(120% 90% at 50% 10% in oklab, rgba(225, 6, 0, 0.20), transparent 62%),
     rgba(6, 6, 10, 0.55);
-  overflow: hidden;
+  overflow: auto;
 }
 #title {
-  font-size: clamp(34px, 9vw, 92px);
+  font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
   color: var(--text);
   text-shadow: 0 0 36px rgba(225, 6, 0, 0.75), 0 2px 12px rgba(0, 0, 0, 0.8);
 }
@@ -71,7 +85,9 @@
    four quick modes into 2x2 pays for the hero's extra height, so the column is
    no taller than before and still clears a 390px landscape phone. */
 #menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
-#menu-hero, #menu-primary, #menu-secondary { display: grid; width: min(78vw, 340px); }
+/* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
+   `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
+#menu-hero, #menu-primary, #menu-secondary { display: grid; width: min(calc(78 * var(--vwz)), 340px); }
 /* 2x2. minmax(0,1fr) rather than 1fr because a grid column's default `min-width:
    auto` refuses to shrink below its longest word — RACE A FRIEND would push the
    pair wider than the hero above it. */
@@ -147,27 +163,38 @@
   #overlay {
     grid-template-columns: auto auto;
     justify-content: center; align-content: center; justify-items: start;
+    /* Re-stating `safe center` because this block re-declares align-content and
+       would otherwise take the base rule's overflow bug back — see there. */
+    align-content: safe center;
     column-gap: 32px;
   }
   #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
   #menu-buttons { grid-column: 2; grid-row: 1; align-self: center; width: auto; }
-  #title { font-size: clamp(26px, 7.5vw, 48px); }
+  #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
   #subtitle { margin: 8px 0 0; font-size: 13px; }
   #menu-meta { margin-top: 12px; gap: 4px; }
   #audiostate { font-size: 11px; }
   #disclaimer { font-size: 11px; }
   /* the group is what gets the width now; the buttons fill their cell */
-  #menu-hero, #menu-primary, #menu-secondary { width: min(46vw, 300px); }
+  #menu-hero, #menu-primary, #menu-secondary { width: min(calc(46 * var(--vwz)), 300px); }
   /* One notch up, for the same reason as the HUD and the tap ladder: this
      block is the PHONE, and it was the smallest type in the app on the device
      held furthest from your face. The group widths above cap the row, so the
      extra size comes out of padding rather than pushing anything off screen. */
   #menu-hero .bigbtn { padding-block: 12px; }
   .mb-sub { font-size: 11px; }
-  /* Horizontal padding is TIGHTER than the type grew, on purpose: the cells are
-     a fixed min(46vw, 300px), so at 17px "RACE A FRIEND" wrapped to two lines
-     and took its whole row's height with it. The room comes out of the gutter,
-     which nobody reads, rather than out of the label, which is the point. */
+  /* Horizontal padding is TIGHTER than the type grew, to buy the labels room
+     back out of the gutter rather than out of the type.
+     IT DOES NOT SAVE "RACE A FRIEND", and this comment used to claim it did.
+     Measured at 667x375: that label needs 209px on one line against a 155px
+     cell — a 54px shortfall, where the whole horizontal padding is 20px. The
+     cell would have to reach ~408px, and the brand column beside it is 273px,
+     so 273 + 32 + 408 = 713 in a 667px window. It wraps to two lines at every
+     landscape width, on touch and desktop alike, and that is the correct
+     outcome: the alternative is either a horizontal overflow on the narrowest
+     phone or that one button carrying smaller type than the five around it.
+     The row is sized by its tallest cell, so SEASON grows to match — which is
+     why the pair still reads as a pair. */
   #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
   #menu-buttons .minibtn { padding: 7px 10px; font-size: 12px; }
 }
@@ -637,7 +664,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* In the single-column layout the list is capped so it cannot push the sheet's
    own body into a long scroll — the list scrolls, the screen does not. */
 @container sheet (max-width: 619px) {
-  #sel-tracks { max-height: min(40svh, 300px); overflow-y: auto; }
+  #sel-tracks { max-height: min(calc(40 * var(--svhz)), 300px); overflow-y: auto; }
 }
 .track-row {
   display: flex; align-items: baseline; gap: 8px;

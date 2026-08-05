@@ -2,7 +2,7 @@
  * Apex 26 — WGSL shader chunks (WebGPU migration, Phase 0/1).
  *
  * A minimal "shader chunk" registry — the WebGPU-side realization of the
- * maintainability review's recommendation (docs/WEBGPU-MAINTAINABILITY.md
+ * maintainability review's recommendation (docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md
  * §B / §C.1). It holds the shared *math leaves* that multiple WGSL passes will
  * want as named string fragments, exactly the way a future GLSL-side
  * `js/render/shaders/chunks.js` would (same chunk NAMES on both sides, so a change to
@@ -18,7 +18,7 @@
  * SKY_FS at js/render/glx.js:901). The heavy Lit/Composite shaders are explicitly NOT
  * ported here (Phase 2/4).
  *
- * WGSL vs GLSL notes captured while porting (see docs/WEBGPU-PHASE0-NOTES.md):
+ * WGSL vs GLSL notes captured while porting (see docs/archive/webgpu/WEBGPU-PHASE0-NOTES.md):
  *  - texture(s,uv)          -> textureSample(t, s, uv)  (texture+sampler split)
  *  - vec3                   -> vec3<f32>, strict typing (1.0 not 1, explicit f32())
  *  - gl_VertexID            -> @builtin(vertex_index) (u32)
@@ -68,7 +68,7 @@ fn fbm(p_in: vec2<f32>) -> f32 {
 }`;
 
   // ── tonemap: ACES filmic approx — a shared math leaf the review names as one
-  //    of the "single-source" candidates (acesTonemap, js/render/glx.js:1644). Not used
+  //    of the "single-source" candidates (acesTonemap, js/render/shaders/chunks.js). Not used
   //    by the sky (which outputs HDR straight to an LDR swapchain here), but
   //    included as the seed of the shared post-math the Composite port will use.
   // Coefficients are passed in (TONE CURVE knobs on the composite path; the BLIT

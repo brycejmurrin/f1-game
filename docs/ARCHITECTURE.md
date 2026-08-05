@@ -51,9 +51,15 @@ Conventions: `const` + `camelCase`, constants `UPPER_CASE`, colors are
 
 The July 2026 architecture reorg moved every module into a domain directory
 (old→new map in the git history) and split the three giants (`game.js` 8,955 →
-~4,700 lines; `glx-shaders.js` → chunked shader files; `buildProps` → four
-scenery modules). The mechanisms that keep a no-build, script-tag codebase
-coherent after the split:
+~4,700 lines as measured then; `glx-shaders.js` → chunked shader files;
+`buildProps` → four scenery modules).
+
+**That 4,700 is a historical measurement, not a current one.** `game.js` is back
+over 8,000 — extraction moved code out once and nothing stopped it accumulating
+again, because no guard bounds the file. Treat the number as a record of what the
+reorg achieved, and `wc -l js/game.js` as the truth about today.
+
+The mechanisms that keep a no-build, script-tag codebase coherent after the split:
 
 - **The `G` ctx façade.** Extracted `js/game/*` modules never reach into
   game.js's closure. game.js builds one `G` object — live getters/setters over
@@ -74,7 +80,26 @@ coherent after the split:
 ### Deferred follow-ups (known debt, in rough priority order)
 
 - **game.js pass 2** — promote the remaining closure `let`s to a shared state
-  object and split the two megafunctions (`render()`, `updateCar()`).
+  object. Two modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`),
+  and the next candidates, verified with their exact boundary crossings, are the
+  lighting profile store, race control / caution, the quali networking block,
+  collisions, and the ~307-line garage preview (whose natural partner
+  `js/game/setup-ui.js` already exists).
+
+  **Splitting the two megafunctions is NOT recommended.** `render()` and
+  `updateCar()` are ~1,376 and ~1,838 lines, and `updateCar`'s tyre model is one
+  continuous integration over ~40 interdependent locals — extracting it means
+  inventing a state struct and risking the determinism that
+  `tests/physics-characterization.spec.js` now pins, for no functional gain.
+  Take the cohesive blocks around them instead.
+
+  `tests/module-size.test.mjs` is the guard that makes this stick: a per-file
+  line ceiling you LOWER when you extract. It exists because this file's own
+  note above — that extraction happened once and nothing stopped the file
+  growing back — was demonstrated again in miniature during the 2026-08 cleanup,
+  when two extractions removed 91 lines from game.js and a concurrent branch
+  added 130 over the same period. Nobody did anything wrong; nothing was
+  watching.
 - **~~tracks.js → GLX direct calls~~ (done, TLX M10)** — `Tracks.build` now
   takes the active backend via `opts.gfx` and routes every `createMesh` /
   `createChunkedMesh` / `mobileTier` read through that injected handle (falling
@@ -169,6 +194,20 @@ GLX remains the default; TLX and WGX are **opt-in only**. The pause-menu
 **RENDERER** control is a 3-state cycle (WEBGL2 → THREE → WEBGPU-if-available)
 that writes the key and reloads. The eventual flip of the default and the
 deletion of GLX/WGX is "Phase D" — future work, out of scope here.
+
+**WGX is not at parity with GLX, and never reached it.** Four things are still
+reduced or absent on the WebGPU path, so do not assume a GLX feature exists
+there:
+
+- lamp-fog / ground-mist **volumetrics**
+- **PCSS** soft-shadow quality
+- **MSAA stays at 1**
+- **no `gpuTimer`** (`__apex.gpuTimer()` reports unsupported)
+
+WGX also does not implement the baked material arrays (`createTextureArray`),
+so `matTexMix` does nothing there and the look falls back to procedural. This
+list was previously buried in a phase-notes build log; it is a live caveat about
+shipped code, so it lives here now.
 
 **TLX (`js/render/three/`)** is the three.js/TSL backend: classic-IIFE scripts
 (`tlx.js` core + `tlx-shadow.js` / `tlx-post.js` / `tlx-chunked.js` passes +
@@ -568,6 +607,11 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `photomode.js` | `Photomode` | photo mode |
 | `tuner.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel (COPY VALUES export) |
 | `steer-tuning.js` | `SteerTuning` | ADVANCED STEERING panel (presets + sliders) |
+| `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `xStraightAhead()`/`aeroDfMult()` stay in game.js because they read car state |
+| `skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
+| `sheetshape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
+| `topmodal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 16 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |
+| `ariastate.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
 ## js/game.js — main
 

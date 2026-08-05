@@ -12,6 +12,27 @@ const F1API = (function () {
 
   const JOLPICA = "https://api.jolpi.ca/ergast/f1";
   const OPENF1 = "https://api.openf1.org/v1";
+
+  // THE SEASON IS READ FROM THE CLOCK, NOT BAKED INTO THE URL.
+  //
+  // Four Jolpica URLs hardcoded /2026/, so the whole data hub — schedule,
+  // both standings tables, last race — would have quietly kept serving 2026
+  // for the rest of time. Nothing would have errored: the requests stay valid
+  // forever, they just describe a season that is over, which is the worst
+  // shape of bug because it looks like it works.
+  //
+  // Computed per call rather than once at module load, so a tab left open
+  // across New Year rolls over instead of pinning the year it booted in.
+  //
+  // Not Ergast's `/current` alias, which would be the tidier answer: this
+  // sandbox's egress proxy blocks api.jolpi.ca, so it could not be verified
+  // here, and an unverified API dependency is a worse bug than the one being
+  // fixed. `/current` is a safe swap for anyone who can confirm it responds.
+  //
+  // Between Jan 1 and the season opener the standings endpoints return an
+  // empty list. That is CORRECT — there are no standings yet — and every
+  // caller already handles the empty/null case.
+  const season = () => String(new Date().getFullYear());
   const CACHE_PREFIX = "apex26.api.";
   const MIN_GAP_MS = 400;
   const MAX_RETRY = 2;         // retries on 429 / 5xx before giving up
@@ -141,7 +162,7 @@ const F1API = (function () {
   /* ---------- Jolpica methods ---------- */
 
   function schedule() {
-    return request(JOLPICA + "/2026.json", TTL_SCHEDULE).then(function (json) {
+    return request(JOLPICA + "/" + season() + ".json", TTL_SCHEDULE).then(function (json) {
       return jRaces(json).map(function (r) {
         const c = (r && r.Circuit) || {};
         const loc = c.Location || {};
@@ -170,7 +191,7 @@ const F1API = (function () {
   }
 
   function driverStandings() {
-    return request(JOLPICA + "/2026/driverstandings.json", TTL_STANDINGS).then(function (json) {
+    return request(JOLPICA + "/" + season() + "/driverstandings.json", TTL_STANDINGS).then(function (json) {
       const sl = jStandingsList(json);
       return arr(sl && sl.DriverStandings).map(function (s) {
         const d = (s && s.Driver) || {};
@@ -190,7 +211,7 @@ const F1API = (function () {
   }
 
   function constructorStandings() {
-    return request(JOLPICA + "/2026/constructorstandings.json", TTL_STANDINGS).then(function (json) {
+    return request(JOLPICA + "/" + season() + "/constructorstandings.json", TTL_STANDINGS).then(function (json) {
       const sl = jStandingsList(json);
       return arr(sl && sl.ConstructorStandings).map(function (s) {
         const cons = (s && s.Constructor) || {};
@@ -205,7 +226,7 @@ const F1API = (function () {
   }
 
   function lastRace() {
-    return request(JOLPICA + "/2026/last/results.json", TTL_STANDINGS).then(function (json) {
+    return request(JOLPICA + "/" + season() + "/last/results.json", TTL_STANDINGS).then(function (json) {
       const race = jRaces(json)[0];
       if (!race) return null;
       return {

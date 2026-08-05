@@ -365,18 +365,13 @@ const Input = (function () {
   // move through the menu and must not also be steering and braking the car
   // underneath it. Asked per key event, never per tick — keys are rare and the
   // set of open overlays changes without notice.
+  // THE LIST LIVES IN js/game/uilayers.js. This used to be a hand-maintained
+  // selector here and a second one in js/game/menunav.js, and they drifted: the
+  // career hub and its three sub-sheets and #quali were missing from this one,
+  // so an arrow press inside the career screen fell through and latched the
+  // car's steering. One list, asked by everyone.
   function menuOverlayOpen() {
-    // #overlay (the main menu) is deliberately NOT here. Nothing is driving while
-    // it is up, so a latched key is harmless, and several input tests dispatch
-    // keys straight at a freshly-loaded page — gating those on the title screen
-    // being closed would make the guard the thing under test.
-    const el = document.querySelector(
-      "#pausemenu:not([hidden]),#pmsettings:not([hidden]),#select:not([hidden])," +
-      "#teampicker:not([hidden]),#race-settings:not([hidden]),#standings:not([hidden])," +
-      "#results:not([hidden]),#customize:not([hidden]),#carsetup:not([hidden])," +
-      "#howtoplay:not([hidden]),#advanced:not([hidden]),#audioset:not([hidden]),#track-detail:not([hidden])," +
-      "#datahub:not([hidden])");
-    return !!(el && el.getClientRects().length);
+    return !!(window.UiLayers && window.UiLayers.anyOpen());
   }
 
   function onKey(e, down) {
@@ -404,7 +399,46 @@ const Input = (function () {
     // keeps focus after it opens the pause menu, and letting that focus fall
     // through to the switch below is exactly how an arrow key ended up steering a
     // paused car.
-    if (menuOverlayOpen() || (interactive && !hudControl)) {
+    const typing = interactive && !hudControl;
+    /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
+       driving gate — but still below the typing check, because P in a text
+       field is a letter.
+       They used to sit inside the switch below, which only worked by accident:
+       the gate's screen list happened not to mention the two tuner panels, so
+       the pause key reached them. The moment that list was corrected (one list
+       for everyone, js/game/uilayers.js) the key started being swallowed in the
+       LIGHTING TUNER and free camera — the one place its documented
+       all-the-way-out behaviour matters most. Reachability should not be a
+       side effect of a list being incomplete. */
+    if (down && !e.repeat && (e.code === "KeyP" || e.code === "Escape") && !typing) {
+      if (e.code === "KeyP") {
+        if (onPauseCb) onPauseCb();
+        return;
+      }
+      /* ESCAPE IS "BACK", AND ONLY PAUSE WHEN THERE IS NOTHING TO GO BACK FROM.
+         It was a bare alias for KeyP with no state check, which read wrong on a
+         desktop keyboard everywhere the answer to Escape was obviously "close
+         this" — and was actively wrong with a tuner open, where it resumed the
+         race instead of stepping back to SETTINGS. An open layer belongs to the
+         Escape handler in js/game/topmodal.js, which runs first (capture) and
+         presses that screen's own back control; by the time one is open this
+         key normally never even arrives. */
+      if (onPauseCb && window.UiLayers && window.UiLayers.inRace() && !window.UiLayers.anyOpen()) {
+        onPauseCb();
+        /* AND THE KEY IS SPENT — without this, Escape could not pause at all.
+           #pausemenu is a <dialog> (js/game/topmodal.js), so opening it here
+           hands Chrome a fresh close-watcher MID-KEYPRESS, and the watcher
+           takes the KEYUP of the very Escape that opened it: the menu appeared
+           and vanished within one press, measured keydown→shown, keyup→hidden.
+           preventDefault on the keydown suppresses the close request, and it is
+           honest besides — we consumed the key. Only in this branch:
+           preventDefault on an Escape we did NOT handle would stop every dialog
+           on the screen from closing. */
+        e.preventDefault();
+      }
+      return;
+    }
+    if (menuOverlayOpen() || typing) {
       if (down) return;
       switch (e.code) {
         case "ArrowLeft": case "KeyA": keyLeft = false; break;
@@ -437,9 +471,8 @@ const Input = (function () {
         if (down && !e.repeat) shiftDownPressed = true; break;
       case "KeyC":
         if (down && !e.repeat) cameraCyclePressed = true; break;
-      case "KeyP": case "Escape":
-        if (down && !e.repeat && onPauseCb) onPauseCb();
-        break;
+      // KeyP and Escape are handled ABOVE the driving gate — see the comment
+      // there. They are commands, and a menu being open must not swallow them.
     }
   }
 
@@ -506,7 +539,17 @@ const Input = (function () {
     if (!touchActive) touchSteer = 0;
   }
 
+  // A CANVAS TOUCH IS ONLY DRIVING WHEN NOTHING IS OVER THE CANVAS. The same
+  // gate the keyboard uses (menuOverlayOpen), because the failure is the same:
+  // in the lighting tuner's FREE CAMERA the fly-cam wants that finger for a
+  // look-drag, and these handlers were still armed and preventDefault()ing it
+  // out from under it. Releases are always processed, exactly as onKey does it
+  // — swallowing a touchend is how a steering touch latches on with no way to
+  // clear it.
+  function canvasTouchIsDriving() { return !menuOverlayOpen(); }
+
   function onTouchStart(e) {
+    if (!canvasTouchIsDriving()) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
       // Anchor AT the touch-down point, so the command starts at exactly zero
@@ -517,6 +560,7 @@ const Input = (function () {
   }
 
   function onTouchMove(e) {
+    if (!canvasTouchIsDriving()) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
       const rec = touches.get(t.identifier);
@@ -881,11 +925,30 @@ const Input = (function () {
   // MediaQueryList every call. mql.matches stays LIVE on the cached object,
   // so convertible/hybrid devices still flip correctly.
   let _coarseMql = null;
+  const _coarseCbs = [];
   function touchControlsNeeded() {
     if (_coarseMql === null && typeof window !== "undefined" && window.matchMedia) {
       try { _coarseMql = window.matchMedia("(pointer: coarse)"); } catch (_) { _coarseMql = false; }
+      if (_coarseMql && _coarseMql.addEventListener) {
+        _coarseMql.addEventListener("change", () => {
+          for (const cb of _coarseCbs) { try { cb(touchControlsNeeded()); } catch (_) {} }
+        });
+      }
     }
     return !!(_coarseMql && _coarseMql.matches);
+  }
+  /* THE ANSWER CHANGES WHILE THE GAME IS RUNNING, and until now only half the
+     app heard about it. The query above stays live, so autoThrottle/manualGears
+     were always right — but `body.desktop` was computed ONCE at boot
+     (js/game.js), and every CSS rule that gives the driving dock its tap targets
+     and its `pointer-events: auto` hangs off `body:not(.desktop)`. Undock an
+     iPad from its Magic Keyboard mid-session and the pointer goes coarse: the
+     GAS/BRAKE/BOOST buttons duly appear, inherit `pointer-events: none` from
+     #hud-dock, and do nothing — with #pm-steer and #pm-calib still hidden by
+     css/responsive.css, so there is no route back either. Subscribe instead. */
+  function onPointerKindChange(cb) {
+    touchControlsNeeded();            // make sure the MQL (and its listener) exists
+    if (typeof cb === "function") _coarseCbs.push(cb);
   }
 
   function onScreenRotate() {
@@ -971,6 +1034,25 @@ const Input = (function () {
     padPrevButtons.length = 0;
   }
 
+  /* THE EDGE LATCHES NEED EMPTYING WHILE NOBODY IS READING THEM.
+     poll() runs BEFORE the paused gate in the game loop, deliberately, so the
+     pad's Start button can un-pause — but every other edge it records
+     (boost/overtake/aero/shift/camera) is written with nothing on the other end
+     to consume it. Mash a pad in the pause menu or the standings and the whole
+     handful fires at once on the first frame after RESUME: boost spent, a gear
+     grabbed, the camera somewhere else. Clearing is right rather than
+     not-recording, because the pad is polled, not evented — skipping the read
+     would also skip the edge bookkeeping and turn a button HELD across the
+     pause into a fresh press on resume. */
+  function clearEdges() {
+    overtakePressed = false;
+    boostTogglePressed = false;
+    aeroTogglePressed = false;
+    shiftUpPressed = false;
+    shiftDownPressed = false;
+    cameraCyclePressed = false;
+  }
+
   // Live per-source input snapshot for diagnosis (surfaced as
   // __apex.inputState()): shows WHICH source is asserting throttle/brake and
   // whether any hold button still tracks pressed pointers. If a "stuck
@@ -1024,6 +1106,8 @@ const Input = (function () {
     setTiltSmoothing,
     setTiltDeadzone,
     touchControlsNeeded,
+    onPointerKindChange,
+    clearEdges,
     get padConnected() { return padConnected; },
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },

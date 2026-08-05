@@ -291,6 +291,12 @@
   background: #07070c; border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--r-md); display: block;
   cursor: ew-resize;
+  /* The trace is SCRUBBED by dragging it (js/data/telemetry.js attachScrub), and
+     without this the drag is not ours to have: the hub's .dh-content scroller
+     claims a touch that starts here, Safari fires pointercancel, and the panel
+     scrolls while the cursor stays put. setPointerCapture does not prevent
+     that — only touch-action does. */
+  touch-action: none;
 }
 .dh-canvas.dh-map { cursor: default; max-width: 320px; max-width: min(320px, 42dvh); margin: 0 auto; aspect-ratio: 1 / 1; }
 /* colour key for the car dots under the track map */

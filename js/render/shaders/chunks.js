@@ -2,7 +2,7 @@
  * Apex 26 — GLXChunks: shared GLSL leaves for the WebGL2 shader sources.
  *
  * The GLSL-side sibling of js/render/webgpu/wgsl-chunks.js (WGSLChunks) — the
- * maintainability review's option B(i) / step C.1 (docs/WEBGPU-MAINTAINABILITY.md):
+ * maintainability review's option B(i) / step C.1 (docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md):
  * math snippets genuinely shared by more than one pass live here ONCE as named
  * template-string constants, and js/render/shaders/{lit,sky,fx,post}.js
  * interpolate them into the program sources at load time (plain JS string

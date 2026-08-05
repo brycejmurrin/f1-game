@@ -47,10 +47,23 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
     { s: 0.8125, halfM: 300, rise: 11 },
     { s: 0.0625, halfM: 260, rise: -5 },
   ]);
-  expect(audit.raw.bridges).toEqual([{ s: 0.4235, halfM: 150, rise: 7 }]);
+  // The figure-8 crossover was RETUNED after this spec pinned it; the old
+  // { s: 0.4235, halfM: 150, rise: 7 } predates that and no longer describes a
+  // bridge the rest of the circuit can live under. Measured on the current build:
+  // source s 0.4298 maps through startFrac 0.6125 to racing s 0.8173
+  // (raw + (1 − startFrac)), and the upper road there sits at y = 13.51 m while
+  // the LOWER road it crosses (racing s 0.226) sits at y = 5.40 m — 8.1 m of
+  // road-to-road daylight, matching the derivation in js/circuits/suzuka.js.
+  // suzuka-crossover-deck is built from that budget (5.0 m clearance + 1.7 m
+  // thickness = a 6.7 m top above the lower road), so the old rise 7 would leave
+  // 7 − 5.4 = 1.6 m and put the deck straight through the upper ribbon. The bridge
+  // moved 0.4235 → 0.4298 onto the MEASURED self-crossing and widened 150 → 160
+  // with it. The elevations above are untouched, which is why only these two
+  // lines move.
+  expect(audit.raw.bridges).toEqual([{ s: 0.4298, halfM: 160, rise: 13.5 }]);
   expect(audit.built.elevations[0].s).toBeCloseTo(0.20, 6);
   expect(audit.built.elevations[1].s).toBeCloseTo(0.45, 6);
-  expect(audit.built.bridges[0].s).toBeCloseTo(0.811, 6);
+  expect(audit.built.bridges[0].s).toBeCloseTo(0.8173, 4);
 
   expect(audit.relief.esses).toBeGreaterThan(4);
   expect(audit.relief.degner).toBeLessThan(-2);

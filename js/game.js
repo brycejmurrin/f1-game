@@ -104,7 +104,7 @@ try {
   const optIn = !phone && (pref === "three" || (pref === "webgpu" && navigator.gpu));
   if (optIn && typeof Gfx !== "undefined") {
     // FETCH THE BACKEND ONLY NOW. Neither alternate has a <script> tag any more:
-    // together they are ~532 KB that every visitor downloaded, parsed and
+    // together they are ~550 KB that every visitor downloaded, parsed and
     // evaluated so that almost none of them could use it. `optIn` above is
     // resolved synchronously from localStorage, so the default GLX path never
     // reaches this line and never awaits anything.
@@ -364,7 +364,7 @@ const DOWNFORCE = 0.65;     // extra grip fraction at VMAX (0 = no wings)
 // refuses to rotate the wings outside one — it is not a proximity window like
 // DRS, and it is not a rolling "is the road ahead clear" test either. A zone
 // only exists where a straight exceeds three seconds at racing speed, which is
-// why MONACO has none and runs no active aero at all. See buildAeroZones().
+// why MONACO has none and runs no active aero at all. See js/game/aerozones.js.
 // Leaving the zone (or touching the brake) SLAMS the flap shut — X_CLOSE_RATE is deliberately several times
 // X_OPEN_RATE, so the downforce comes back faster than it left. Both directions
 // sit inside the FIA's 400 ms transition cap.
@@ -400,15 +400,9 @@ function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c
 // Closing is deliberately faster (still inside the cap) — see X_CLOSE_RATE.
 const X_OPEN_RATE = 2.6;    // aeroX per second opening (~0.385 s, inside the 400 ms cap)
 const X_CLOSE_RATE = 8.0;   // aeroX per second closing (~0.125 s back to Z — well inside the cap)
-const X_STRAIGHT_T = 3.0;   // s of clear road ahead required to arm (FIA's rule)
-const X_LOOK_MAX = 260;     // m — upper clamp on that look-ahead
-const X_K_MAX = 0.0045;     // curvature that still counts as "straight" (r ~ 220 m)
-// Curvature that counts as straight FOR A ZONE — much stricter than X_K_MAX,
-// which was tuned for "is the car allowed to hold the mode right now" and lets a
-// 220 m-radius kink through. Approving zones at that threshold gave MONACO four
-// of them, which is exactly the circuit the real rule exists to exclude. A zone
-// is a proper straight (r >= ~700 m), and the length test then does the rest.
-const X_ZONE_K = 0.0014;
+// (X_STRAIGHT_T and X_ZONE_K used to sit here. They belong to the zone SCAN, so
+// they live in js/game/aerozones.js now — along with the X_K_MAX / X_LOOK_MAX
+// story, which is about the rolling look-ahead the zone scan replaced.)
 const X_MIN_SPEED = 25;     // m/s (a vStd() threshold) — no X-mode at crawl speed
 // Overtake's own crawl floor, and a vStd() threshold for exactly the same
 // reason X_MIN_SPEED is one. Named rather than inline so the next reader can
@@ -623,82 +617,20 @@ function regenFor(c) { return lerp(REGEN_LO, REGEN_HI, ersRegenOf(c)); }
 function otTimeFor(c) { return lerp(OT_TIME_LO, OT_TIME_HI, ersDeployOf(c)); }
 function otCoolFor(c) { return lerp(OT_COOL_HI, OT_COOL_LO, ersDeployOf(c)); }
 
+let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
 // -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
-// The real system does NOT ask "is the road ahead straight enough right now".
-// The FIA approves fixed ACTIVATION ZONES per circuit, and the standard ECU
-// refuses to rotate the wings unless the car is inside one. A zone only exists
-// if it is longer than three seconds at racing speed — the rule that leaves
-// MONACO with no zones at all, and therefore no active aero.
+// The zone GEOMETRY lives in js/game/aerozones.js (AeroZones.create(G), wired
+// after the G façade as `aeroZ`). It is pure circuit geometry — curvature in,
+// arc-metre spans out — and knows nothing about a car. What stays here is the
+// half that reads car state: whether THIS car is in a zone, and what opening
+// the wing costs it.
 //
-// That distinction is the whole feel of the mechanic. A rolling look-ahead (what
-// this used to be) has no start and no end: the window opens and closes under
-// you as the road bends, so there is nothing to learn and nothing to see coming.
-// Fixed zones are a place on the track. You can be shown the boards, you can
-// know the next one is 400 m away, and pressing the button becomes a thing you
-// do SOMEWHERE rather than a thing you retry until it takes.
-//
-// Zones are measured against a fixed reference speed, not the car's own: they
-// are a property of the CIRCUIT, and the OVERALL SPEED slider must not silently
-// add or remove them (PACE scales real m/s — see vTop()/vStd()).
-const X_ZONE_VREF = 70;                       // m/s — "racing speed" for the 3 s test
-const X_ZONE_MIN = X_STRAIGHT_T * X_ZONE_VREF;  // 210 m — the FIA's three seconds
-const X_ZONE_STEP = 8;                        // m between curvature samples
-let aeroZones = [];                           // [{start, end, len}] in arc metres
-
-// Scan the whole lap for contiguous runs under X_ZONE_K and keep the ones long
-// enough to qualify. Runs are found on the OPEN lap then the wrap is stitched,
-// so a straight crossing the start line is one zone rather than two short ones
-// that each fail the length test.
-function buildAeroZones() {
-  aeroZones = [];
-  if (!track || !track.total) return;
-  const total = track.total, n = Math.max(8, Math.round(total / X_ZONE_STEP));
-  const straight = new Array(n);
-  for (let i = 0; i < n; i++) {
-    straight[i] = Math.abs(Tracks.curvature(track, (i + 0.5) * total / n)) <= X_ZONE_K;
-  }
-  if (straight.every((v) => v)) {   // a full-lap oval: one zone, the whole lap
-    aeroZones = [{ start: 0, end: total, len: total }];
-    return;
-  }
-  let i0 = 0;
-  while (i0 < n && straight[i0]) i0++;          // begin at a corner, so no run is cut
-  const runs = [];
-  let cur = null;
-  for (let k = 0; k < n; k++) {
-    const i = (i0 + k) % n;
-    if (straight[i]) {
-      if (!cur) cur = { start: i * total / n, len: 0 };
-      cur.len += total / n;
-    } else if (cur) { cur.end = cur.start + cur.len; runs.push(cur); cur = null; }
-  }
-  if (cur) { cur.end = cur.start + cur.len; runs.push(cur); }
-  for (const r of runs) if (r.len >= X_ZONE_MIN) aeroZones.push(r);
-}
-// The zone containing arc position s, or null. Zones can run past `total` when
-// they wrap the start line, hence the second test.
-function aeroZoneAt(s) {
-  if (!track || !track.total) return null;
-  for (const z of aeroZones) {
-    if (s >= z.start && s <= z.end) return z;
-    if (z.end > track.total && s + track.total <= z.end) return z;   // wrapped
-  }
-  return null;
-}
-// Metres from s to the start of the next zone (0 when already inside one), or
-// Infinity on a circuit with no zones at all.
-function aeroZoneAhead(s) {
-  if (!aeroZones.length || !track) return Infinity;
-  if (aeroZoneAt(s)) return 0;
-  let best = Infinity;
-  for (const z of aeroZones) {
-    let d = z.start - s;
-    if (d < 0) d += track.total;
-    if (d < best) best = d;
-  }
-  return best;
-}
-function xStraightAhead(c) { return !!aeroZoneAt(wrapS(c.s)); }
+// X_STRAIGHT_T / X_ZONE_K / X_ZONE_VREF / X_ZONE_MIN / X_ZONE_STEP live with the
+// geometry. (The first two were COPIED rather than moved when this was
+// extracted, so dead duplicates sat up at ~line 395 for a while with this
+// comment asserting they had gone. An extraction is not done until the
+// originals are deleted.)
+function xStraightAhead(c) { return !!aeroZ.at(wrapS(c.s)); }
 // Live downforce multiplier on the DOWNFORCE (aero-load) term. 1 in Z-mode,
 // 1 - X_DF_LOSS with the flaps fully open. Nothing else in the grip model
 // changes: mechanical grip, kerbs, weather and the friction ellipse are
@@ -823,7 +755,9 @@ const photoKeys = { w: false, s: false, a: false, d: false, up: false, dn: false
                     pu: false, pd: false, yl: false, yr: false, boost: false };
 const photoMove = { x: 0, y: 0 };   // touch move stick: x=strafe, y=forward (−1..1)
 const photoLook = { x: 0, y: 0 };   // touch look stick: x=yaw, y=pitch (−1..1)
-const photoMouse = { dx: 0, dy: 0, drag: false, px: 0, py: 0 };
+// pid: the ONE pointer that owns a look-drag; every other one is ignored (see
+// js/game/photomode.js). null when nothing is dragging.
+const photoMouse = { dx: 0, dy: 0, drag: false, px: 0, py: 0, pid: null };
 let photoAlt = 0;                    // touch up/down buttons: +1 up, −1 down
 let photoVertT = 0;                  // how long vertical input has been held (s) — ramps the climb rate
 // Studio light rig (__apex.studio): a ring of test lamps that follows the player
@@ -1061,6 +995,12 @@ let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
+// The five red lamps, one per second. A CONSTANT rather than a literal because
+// the networked start has to name an instant a whole countdown away — a lead
+// shorter than the sequence means every peer joins it part-way through by
+// construction — so js/net/netplay.js needs this number too, via G.countdownS.
+// Three private copies of it is exactly how that drifts back apart.
+const COUNTDOWN_S = 5;
 let paused = false;
 // Player racing-line assist, set by the pause-menu slider. -1..1: 0 = pure
 // manual (default), >0 gently pulls toward the racing line through corners,
@@ -1115,42 +1055,11 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0;
-const MAX_SKID = 120;
-const skidMarks = Array.from({ length: MAX_SKID }, () => new Float32Array(16));
-let skidActive = 0;           // how many marks are live (grows to MAX_SKID then stays)
-let skidIdx = 0;
-let skidFrameT = 0;           // frame countdown between stamp placements
-// Batched skid trail: all live marks baked into one world-space vertex buffer
-// (pos3 + uv2 per vertex, 6 verts/mark) drawn in a single call. Rebuilt only
-// when a mark is added/evicted (at most every ~5 frames while sliding) instead
-// of issuing up to 120 per-mark draws every frame.
-const _skidVerts = new Float32Array(MAX_SKID * 6 * 5);
-let _skidVertCount = 0;
-let _skidBatchDirty = false;
-const _SKID_W = 0.6, _SKID_L = 2.2;
-// 6 verts (two tris) — matches the shadowVAO quad winding [0,1,2, 0,2,3].
-const _SKID_CORNERS = [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5];
-function rebuildSkidBatch() {
-  const full = skidActive >= MAX_SKID, cnt = full ? MAX_SKID : skidActive;
-  let o = 0;
-  for (let i = 0; i < cnt; i++) {
-    const M = full ? skidMarks[(skidIdx + i) % MAX_SKID] : skidMarks[i];
-    const m0 = M[0], m1 = M[1], m2 = M[2], m4 = M[4], m5 = M[5], m6 = M[6],
-          m8 = M[8], m9 = M[9], m10 = M[10], m12 = M[12], m13 = M[13], m14 = M[14];
-    for (let v = 0; v < 6; v++) {
-      const ax = _SKID_CORNERS[v * 2], ay = _SKID_CORNERS[v * 2 + 1];
-      const lx = ax * _SKID_W, lz = ay * _SKID_L;
-      _skidVerts[o++] = m0 * lx + m4 * 0.02 + m8 * lz + m12;
-      _skidVerts[o++] = m1 * lx + m5 * 0.02 + m9 * lz + m13;
-      _skidVerts[o++] = m2 * lx + m6 * 0.02 + m10 * lz + m14;
-      _skidVerts[o++] = ax * 2;
-      _skidVerts[o++] = ay * 2;
-    }
-  }
-  _skidVertCount = cnt * 6;
-  _skidBatchDirty = false;
-}
-
+let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
+// Tyre marks (the 120-entry ring buffer, its batched vertex build and the
+// per-mark fallback draw) live in js/game/skidmarks.js — SkidMarks.create(G),
+// wired after the G façade as `skids`. Nothing outside that module reads its
+// state, which is what made it liftable.
 const { PAINT_WET_NIGHT, PAINT_WET_DAY, PAINT_DRY_NIGHT, PAINT_DRY_DAY } = GameTables;  // car paint materials (see js/game/tables.js)
 // Apply the CAR tuner group (LT.car*) to a base paint constant, into a reused
 // scratch object (gfx.draw consumes the material synchronously, so one scratch
@@ -1834,7 +1743,7 @@ Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
-        getErsBar, getOtLamp, getPedalBar } = CarMesh;
+        getErsBar, getOtLamp } = CarMesh;
 const _decalTexCache = {};
 function invalidateDecalTextures(teamId) {
   const prefix = teamId + ":";
@@ -2271,7 +2180,7 @@ function loadTrack(idx) {
     DebrisWorld.registerFurniture(track);
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
-    buildAeroZones();           // fixed ACTIVATION ZONES for this circuit
+    aeroZ.build();              // fixed ACTIVATION ZONES for this circuit
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
     if (gfx.envProbeReset) gfx.envProbeReset();
@@ -2525,7 +2434,7 @@ function startRace() {
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
-  skidActive = 0; skidIdx = 0; skidFrameT = 0; _skidBatchDirty = true;
+  skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   clearMenuScreens();
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
@@ -2755,7 +2664,6 @@ const G = {
   get career() { return Career.data(); },
   get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
-  openCareerSlots: (...a) => openCareerSlots(...a),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   get ttNewRecord() { return ttNewRecord; },
@@ -2847,9 +2755,9 @@ const G = {
   // Repaint the pause-menu button too: __apex.aeroMode() and the button are two
   // doors onto one value, and a stale label is a lie about the car's behaviour.
   set raceAeroMode(v) { raceAeroMode = v; store.set("aeroMode", v); refreshAeroBtn(); },
-  get aeroZones() { return aeroZones; },
-  aeroZoneAt: (s) => aeroZoneAt(s),
-  aeroZoneAhead: (s) => aeroZoneAhead(s),
+  get aeroZones() { return aeroZ ? aeroZ.zones : []; },
+  aeroZoneAt: (s) => aeroZ.at(s),
+  aeroZoneAhead: (s) => aeroZ.ahead(s),
   stepSetupAero: (dt) => stepSetupAero(dt),
   // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
   // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
@@ -2920,7 +2828,7 @@ const G = {
   // a global search — see its comment), worldFromTrack its exact inverse.
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
-  GAME_LAPS, TT_LAPS, LONG_GRIP,
+  GAME_LAPS, TT_LAPS, LONG_GRIP, COUNTDOWN_S,
   // The friction-circle constants, for js/game/quali.js: it runs a quasi-steady
   // lap simulation off the SAME numbers the driving model uses, so a simulated
   // qualifying time and a driven one are on one scale by construction.
@@ -2932,12 +2840,22 @@ const G = {
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
+  // The countdown clock and how many lamps are lit. netStartArm has always
+  // written G.countT and, with no accessor here, it has always gone nowhere —
+  // an expando on the façade that nothing reads. Invisible until now only
+  // because the netStart branch overwrites countT every frame; a test asking
+  // for the UNARMED hold gets no such rescue. lightsLit is worse: go()/reset()
+  // clear the lamp DOM and leave the counter at 5, which silently disarms any
+  // "did every lamp light?" assertion made after them.
+  get countT() { return countT; }, set countT(v) { countT = v; },
+  get lightsLit() { return lightsLit; }, set lightsLit(v) { lightsLit = v; },
   get netLobby() { return netLobby; },
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   wireId, carFromWireId,                // stable cross-peer car identity
+  setScale,                             // UI SIZE / HUD SIZE — see __apex.uiScale
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
   // Seats held by the OTHER players, so the garage can refuse to hand out one
@@ -2968,6 +2886,10 @@ const careerUi = CareerUI.create(G);
 // QUALIFYING (js/game/quali.js) — the flying lap plus the simulated field it is
 // measured against. Holds the classification between the session and the grid.
 const quali = Quali.create(G);
+// ACTIVE AERO activation zones (js/game/aerozones.js) — pure circuit geometry.
+aeroZ = AeroZones.create(G);
+// Tyre marks (js/game/skidmarks.js) — self-contained ring buffer + batched draw.
+skids = SkidMarks.create(G);
 // Photo mode (js/game/photomode.js).
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
@@ -3138,26 +3060,29 @@ function update(dt) {
     // the exact moment both cars are released. Solo, this branch never runs.
     if (netStart) {
       startHold = netStart.hold;
-      countT = (5 + startHold) - (netStart.at - netStart.now()) / 1000;
+      countT = (COUNTDOWN_S + startHold) - (netStart.at - netStart.now()) / 1000;
     } else if (netPlay && netPlay.awaitingStart && netPlay.awaitingStart()) {
-      // A GUEST WAITS TO BE TOLD, rather than starting its own countdown.
+      // NOBODY COUNTS DOWN UNTIL THE MOMENT IS NAMED.
       //
-      // The host names the moment and holds netStart from the outset; a guest
-      // only gets it when it PUMPS the EV.START event, and pump runs on the
-      // game loop — which is blocked solid while the circuit builds. Falling
-      // through to `countT += dt` here meant the guest ran an entirely
-      // independent countdown, with its own random hold, from whenever its
-      // own lights appeared. The host's lights went out seconds first, which
-      // is precisely what netStart exists to prevent, and it looked like a
-      // clock-sync bug rather than a missing event.
+      // Falling through to `countT += dt` here meant a peer ran an entirely
+      // independent countdown, with its own random hold, from whenever its own
+      // lights appeared — which is precisely what netStart exists to prevent.
       //
-      // So the gantry simply holds unlit until the host speaks. It arrives
-      // within a frame or two of the build finishing, and a moment of dark
-      // lights is far better than being released at two different times.
+      // Both roles hold, not just the guest. The host names the moment itself,
+      // but not until every guest reports its circuit built, and a host that
+      // free-ran until then would be SEVERAL LAMPS INTO the sequence when the
+      // shared instant finally arrived. countT would drop backwards, lightsLit
+      // is monotonic, and the gantry would sit frozen mid-count before
+      // resuming. Deriving both sides from the one instant is the whole point.
+      //
+      // The wait is real on the host — it lasts as long as the slowest guest's
+      // circuit build — so say so rather than showing a dead gantry. It decays
+      // and hides itself once netStart lands.
+      if (announceT <= 0) announce("WAITING FOR PLAYERS…", 1);
     } else {
       countT += dt;
     }
-    const lit = Math.min(5, Math.floor(countT));
+    const lit = Math.min(COUNTDOWN_S, Math.floor(countT));
     if (lit > lightsLit) {
       // Light EVERY lamp up to `lit`, not just the newest. countT can advance
       // by more than one second in a frame — a networked countdown is pinned to
@@ -3171,9 +3096,9 @@ function update(dt) {
       if (lit === 1) Input.calibrate();
       // all five lit — hold for a randomised beat, as in real F1, so the
       // start can't be timed and lights-out is a genuine reaction moment.
-      if (lit === 5 && !netStart) startHold = 0.2 + simRnd() * 1.8;
+      if (lit === COUNTDOWN_S && !netStart) startHold = 0.2 + simRnd() * 1.8;
     }
-    if (lightsLit === 5 && countT > 5 + startHold) {
+    if (lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold) {
       state = "race"; raceT = 0;
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
@@ -4477,9 +4402,20 @@ function updateCar(c, dt, ranked) {
     }
   }
 
-  // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
+  // Line crossing. `ds > 0` stops a backward crossing INCREMENTING the lap, but
+  // for a long time nothing undid one either — there was no `lap--` anywhere in
+  // js/, while `c.prog` was symmetric. So crossing the line, being shoved back
+  // over it by shiftLong (contact resolution moves a car up to ~4-5 m along the
+  // road) and crossing again added a SECOND lap, and `c.finished` could fire a
+  // full lap early. The backward branch below restores the symmetry `prog`
+  // already had.
   if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
+    // Retained so the backward branch can put the clock back. Without it a
+    // re-crossing records the few tenths since the reset as a completed lap —
+    // which is not just a wrong readout, it beats `c.best` and becomes the
+    // stored ghost.
+    c._lapTimeAtLine = c.lapTime;
     // A takeover (R2/R3/C1) during this lap invalidates it EXPLICITLY: the car
     // was moved by Rapier, so the lap is not a legitimate timed lap. Don't let it
     // set a personal best or become the stored ghost; just start the next lap
@@ -4508,6 +4444,19 @@ function updateCar(c, dt, ranked) {
       c.finished = true;
       c.finishT = raceT;
       if (c.isPlayer) announce("FINISH!", 2);
+    }
+  } else if (ds < 0 && oldS < track.total * 0.5 && c.s > track.total * 0.5) {
+    // Backward over the line: give the lap back and put the clock where it was,
+    // so the next forward crossing re-times the SAME lap rather than a sliver.
+    // Only the player can get here — updateCar overwrites `ds` with
+    // `c.speed * dt` for every AI car, so their `ds` is never negative.
+    if (c.lap > 0) {
+      c.lap--;
+      c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;
+      // Re-crossing forward will re-announce and re-report this lap, so it must
+      // not also count as a fresh completion for the race result.
+      if (c.finished && c.lap <= lapsTarget) { c.finished = false; c.finishT = 0; }
+      if (c.isPlayer) { sectorIdx = sectorAt(c.s); sectorStartT = c.lapTime; }
     }
   }
   // Skip ghost recording while the current lap is incident-invalidated (a
@@ -4682,7 +4631,7 @@ function publishCaution() {
 // overtaking aid in 2026 and carries none of its restrictions: every driver
 // gets it on every lap in every approved zone, leader and backmarker alike,
 // with no proximity requirement. Its only limits are the activation zones
-// themselves (see buildAeroZones) — which is why Monaco has none.
+// themselves (see js/game/aerozones.js) — which is why Monaco has none.
 //
 // The LEADER's lap, not each car's own: a field-wide switch is what race
 // control actually throws, and gating per-car would hand a lapped driver the
@@ -4926,7 +4875,9 @@ function appendCarTailLights() {
   LightTune.appendCarTailLights(frame, track, cars, player, gfx.mobileTier);
 }
 
-// ---------- render ----------
+// ---------- cameras ----------
+// (render() itself is further down, after the garage preview — see the
+// `render` banner below it.)
 // Reusable camera-vantage solver — lives in js/game/cameras.js (GameCams).
 // For a player camera `mode` at arc position `s`, lateral `x`, speed `spd`
 // (m/s) and wall-clock `now` (ms), returns { eye, tgt, fov }. Centralised so
@@ -5355,6 +5306,7 @@ const _presentOpts = {};
 const _hazeWorld = [0, 0, 0];
 let _hazeStr = 0;
 const _hazeOpts = { u: 0, v: 0, str: 0 };
+// ---------- render ----------
 function render(dt) {
   if (headlessMode) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
@@ -6089,20 +6041,7 @@ function render(dt) {
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
   // ring buffer filled. Falls back to per-mark draws if the batch path is
   // unavailable (older GPU where the batch program failed to link).
-  {
-    let rebuilt = false;
-    if (_skidBatchDirty) { rebuildSkidBatch(); rebuilt = true; }
-    if (!gfx.drawSkidBatch(_skidVerts, _skidVertCount, rebuilt)) {
-      const ex = camEye[0], ez = camEye[2], SKID_CULL = 170 * 170;
-      const full = skidActive >= MAX_SKID, cnt = full ? MAX_SKID : skidActive;
-      for (let i = 0; i < cnt; i++) {
-        const m = full ? skidMarks[(skidIdx + i) % MAX_SKID] : skidMarks[i];
-        const dx = m[12] - ex, dz = m[14] - ez;
-        if (dx * dx + dz * dz > SKID_CULL) continue;
-        gfx.drawMark(m, 0.6, 2.2);
-      }
-    }
-  }
+  skids.draw(gfx, camEye);
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   const hidePlayerCar = !dbgCam && (state === "race" || state === "count") &&
@@ -6397,18 +6336,7 @@ function render(dt) {
     }
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
-      if ((skid > 0.25 || c.offroad) && c.speed > 10) {
-        skidFrameT--;
-        if (skidFrameT <= 0) {
-          skidFrameT = 5;
-          skidMarks[skidIdx].set(tmpMat);
-          skidIdx = (skidIdx + 1) % MAX_SKID;
-          if (skidActive < MAX_SKID) skidActive++;
-          _skidBatchDirty = true;   // rebuild the batched trail next render
-        }
-      } else {
-        skidFrameT = 0;
-      }
+      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10);
     }
     // ── Transient particle FX emitters (visual-only: they READ car state and
     // write none of it, so headless physics is untouched). They live HERE
@@ -6777,9 +6705,18 @@ function tickBody(now) {
   // rival keeps driving whatever this screen is doing. Inert solo.
   netPlay.tick(now);
   if (paused && !netPlay.active()) {
+    // Nothing downstream reads the pad's edge latches while we are parked here,
+    // so drop them rather than let a pause-menu button-mash queue up and fire
+    // in one burst on the first frame after RESUME (see Input.clearEdges).
+    Input.clearEdges();
     // LIGHTING / CAMERA TUNER live preview: keep RENDERING (physics stays
     // paused) while either panel is open so every slider change shows on the
     // held frame — a camera angle is unjudgeable on a frozen picture.
+    // THIS IS THE ONLY updatePhotoCam CALL SITE, and that is on purpose: the
+    // free camera is a sub-mode OF the tuner, only reachable from it, and the
+    // tuner is only reachable from the pause menu. Resuming tears it down
+    // (setPaused -> closeLightTuner -> exitPhotoMode), so there is no unpaused
+    // state in which it should still be flying.
     if ((state === "race" || state === "count") && (!$("lighting").hidden || !$("camtune").hidden)) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
@@ -7063,37 +7000,73 @@ $("as-prev").onclick = () => audioTransport(() => GameAudio.prevTrack());
 // third notion of "paused" here would be a second source of truth.
 $("as-play").onclick = () => { setMusic(!musicEnabled); if (soundOn) GameAudio.uiTick(); };
 
-// UI SIZE: how big the whole interface is, as a percentage. Writes --ui-scale,
-// which every density and type token derives from (css/tokens.css) and which
-// the sheets consume as a `zoom` — so one number moves the menus, the tap
-// ladder and the in-race dock together.
+// UI SIZE / HUD SIZE: how big the interface is, as a percentage, on two
+// independent sliders. Each writes a custom property the stylesheets consume as
+// a `zoom`:
+//   --ui-scale   the menus  — .sheet (components.css), #overlay (menus.css)
+//   --hud-scale  the race   — the HUD clusters (hud.css), the dock (overlays.css)
 //
-// A SETTING RATHER THAN A CONSTANT because this is the one thing measurement
-// could not settle: the size that reads correctly at arm's length on a phone in
-// motion is not something a screenshot answers, and three rounds of picking a
-// number from one ended with "still too small". The player has the device.
+// TWO KNOBS BECAUSE THE TWO LAYERS ARE READ DIFFERENTLY. Menu type is read at
+// rest, with time to spare; the HUD is glanced at while driving, and the size
+// that works there depends on where the phone is mounted and whose eyes are
+// reading it. They also compete for the same screen, so trading one against the
+// other is a real choice rather than a compromise to be guessed at centrally.
+//
+// SLIDERS RATHER THAN CONSTANTS because this is the thing measurement could not
+// settle: what reads correctly at arm's length on a phone in motion is not a
+// question a screenshot answers, and three rounds of picking a number from one
+// ended with "still too small". The player has the device.
 //
 // Written INLINE ON documentElement (<html>), which is where css/tokens.css
-// declares --ui-scale and every calc() that reads it. That element matters: a
-// custom property is substituted where it is DECLARED, so a value set on <body>
-// leaves :root's calc()s reading :root's own --ui-scale and the knob silently
-// does nothing (measured: --tap stayed at `calc(44px * 1)` at every setting).
-// An inline style on <html> beats the stylesheet rule, so the choice sticks
-// without !important. Desktop keeps 100% unless asked: a mouse gains nothing
-// from bigger targets and loses rows off the screen.
-const UI_SCALES = [90, 100, 115, 130];
-let uiScale = store.get("uiScale", Input.touchControlsNeeded() ? 115 : 100);
-function applyUiScale() {
-  const btn = $("pm-uiscale"); if (btn) btn.textContent = "UI SIZE: " + uiScale + "%";
-  document.documentElement.style.setProperty("--ui-scale", uiScale / 100);
+// declares both properties. That element matters: a custom property is
+// substituted where it is DECLARED, so a value set on <body> leaves :root's
+// rules reading :root's own value and the knob silently does nothing — measured
+// on build 997, where --tap sat at `calc(44px * 1)` at every setting until this
+// moved to documentElement.
+//
+// NOTHING STORED => NO INLINE STYLE, so the `@media (pointer: coarse)` default
+// in the stylesheet stands and a phone is correct on its FIRST paint rather
+// than from whenever this module runs.
+const SCALE_MIN = 80, SCALE_MAX = 150;
+const scaleDefault = () => (Input.touchControlsNeeded() ? 115 : 100);
+const scalePct = (k) => {
+  const v = store.get(k, null);
+  return typeof v === "number" ? Math.max(SCALE_MIN, Math.min(SCALE_MAX, v)) : scaleDefault();
+};
+function applyScale(key, prop, inputId) {
+  const stored = store.get(key, null);
+  if (typeof stored === "number") document.documentElement.style.setProperty(prop, stored / 100);
+  else document.documentElement.style.removeProperty(prop);
+  const pct = scalePct(key);
+  const input = $(inputId); if (input) input.value = String(pct);
+  const out = $(inputId + "-v"); if (out) out.textContent = pct + "%";
 }
-$("pm-uiscale").onclick = () => {
-  uiScale = UI_SCALES[(UI_SCALES.indexOf(uiScale) + 1) % UI_SCALES.length];
-  store.set("uiScale", uiScale);
+function applyUiScale()  { applyScale("uiScale",  "--ui-scale",  "pm-uiscale"); }
+function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
+// `input`, not `change`: the size should follow the thumb while it is dragged,
+// which is the only way to find the right one — the same convention the volume
+// sliders use.
+$("pm-uiscale").oninput = (e) => {
+  store.set("uiScale", +e.target.value || scaleDefault());
   applyUiScale();
-  if (soundOn) GameAudio.uiSelect();
+};
+$("pm-hudscale").oninput = (e) => {
+  store.set("hudScale", +e.target.value || scaleDefault());
+  applyHudScale();
 };
 applyUiScale();
+applyHudScale();
+// The __apex read/write door for both sliders (see G.setScale in the ctx
+// façade). Kept here beside the appliers so there is one place that knows how a
+// scale is stored, clamped and pushed to the DOM.
+function setScale(key, prop, v) {
+  if (v !== undefined) {
+    if (v === null) store.set(key, null);
+    else store.set(key, Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v || scaleDefault())));
+    if (key === "uiScale") applyUiScale(); else applyHudScale();
+  }
+  return { pct: scalePct(key), stored: store.get(key, null), min: SCALE_MIN, max: SCALE_MAX };
+}
 
 // Render resolution setting: AUTO = the frame-time governor adapts the scale;
 // LOW/MED/HIGH pin a fixed scale (and disable the governor so it can't fight
@@ -7345,12 +7318,15 @@ $("adv-close").onclick = () => { $("advanced").hidden = true; };
 // The LIGHTING TUNER panel UI lives in js/game/tuner.js
 // (TunerPanel.create(G) — wired after the G façade).
 
-// ---------- Photo mode (free-fly camera) ----------
-// Seed the fly-cam from the camera currently on screen so it starts exactly
-// where the user was, then let them fly. yaw/pitch use view()'s convention:
-// dir = (sin yaw·cos pitch, sin pitch, −cos yaw·cos pitch).
-// Photo mode (free-fly camera + enter/exit + DOM wiring) lives in
-// js/game/photomode.js (Photomode.create(G) — wired after the G façade).
+// ---------- pre-race screens ----------
+// RACE SETTINGS, QUALIFYING, CUSTOM TEAM and the GARAGE wiring. Everything from
+// here to the button wiring below is screen flow, not simulation.
+//
+// This banner used to read "Photo mode (free-fly camera)" and had done since
+// photo mode was extracted to js/game/photomode.js — ~780 lines of unrelated
+// screen code sitting under a heading naming a file that no longer holds any of
+// it. A section banner is the only navigation this file has; one that lies is
+// worse than none.
 
 function buildRaceSettings() {
   // In the room this screen confirms the host's choice and hands it to the
@@ -7691,9 +7667,18 @@ document.addEventListener("pointerdown", (e) => {
   if (!setupPreviewOn || !setupCamPanelOpen()) return;
   if (!e.target.closest || !e.target.closest("#cs-stack")) setSetupCamPanel(false);
 }, true);
+// AN INNER DISCLOSURE CLAIMS ESCAPE BEFORE ITS SCREEN DOES. This listener is on
+// document/capture and registers at script-eval time, i.e. before the generic
+// layer handler in js/game/topmodal.js (which registers on DOMContentLoaded and
+// therefore runs second on the same node) — and that handler bails on an event
+// already marked handled. stopPropagation alone did NOT mark it: it stops the
+// event descending but says nothing to a sibling listener on this same node, so
+// preventDefault is what actually keeps Escape from ALSO pressing the GARAGE's
+// BACK button and closing the screen behind the panel.
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && setupPreviewOn && setupCamPanelOpen()) {
     setSetupCamPanel(false);
+    e.preventDefault();
     e.stopPropagation();   // don't also close the GARAGE behind it
   }
 }, true);
@@ -7819,10 +7804,36 @@ function openGarage(from) {
   openSetup();
 }
 $("mb-garage").onclick = () => openGarage("menu");
-$("cs-done").onclick = () => {
+// Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
+// the part maths, which both exits owe the rest of the game.
+function leaveGarage() {
   $("carsetup").hidden = true;
   setupPreviewOn = false;
   recomputePlayerMods();
+}
+/* BACK — the door DONE cannot be, because DONE goes FORWARD. From the circuit
+   picker, DONE means "I have chosen a car, now set the race up" and lands on
+   race settings; there was no way at all to change your mind and return to the
+   picker, and no control on the screen that meant "back". So Escape could not
+   be pointed at DONE either (see data-esc-close on #carsetup in index.html) —
+   a back key that walks you further into a flow is worse than none.
+   Selections are kept exactly as DONE keeps them: nothing here is a cancel. */
+function garageBack() {
+  if (soundOn) GameAudio.uiTick();
+  leaveGarage();
+  if (garageReturn === "vsfriend") {
+    $("vsfriend").hidden = false;
+    netLobby.roomChanged("car");
+    return;
+  }
+  if (garageReturn === "career") { careerUi.openHub(); return; }
+  if (garageReturn === "select") { buildSelect(); $("select").hidden = false; return; }
+  buildSelect();
+  els.overlay.hidden = false;   // came in from the title screen's GARAGE button
+}
+$("cs-back").onclick = garageBack;
+$("cs-done").onclick = () => {
+  leaveGarage();
   // Back to the waiting room, and tell the other player what you are driving —
   // a room that only synced on START would have two people spend a minute each
   // choosing a car neither can see.
@@ -8034,6 +8045,16 @@ const camPicker = (() => {
   });
   b.addEventListener("pointerup", () => clearTimeout(holdT));
   b.addEventListener("pointerleave", () => clearTimeout(holdT));
+  /* A CANCELLED TOUCH IS NOT A LONG PRESS. iOS cancels touches routinely — an
+     edge swipe, a notification, its own gesture arbitration — and a touch
+     pointer holds implicit capture, so `pointerleave` does not fire for one
+     either: neither line above ran, the 340 ms timer went off, and the
+     thirteen-mode camera picker opened mid-corner. `held` then stayed true and
+     ate the NEXT genuine tap as the hold's trailing click, so the camera button
+     appeared to do nothing at all until it was pressed twice. */
+  const cancelHold = () => { clearTimeout(holdT); held = false; };
+  b.addEventListener("pointercancel", cancelHold);
+  b.addEventListener("lostpointercapture", cancelHold);
   b.addEventListener("contextmenu", (e) => { e.preventDefault(); camPicker.show(); });
   // Cycle on CLICK (not pointerup): synthetic .click() from tests/assistive tech
   // works unchanged, and a real tap fires it after pointerup anyway. When the
@@ -8128,10 +8149,9 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); });
 
 // ---------- boot ----------
-// Inert in production; only attaches when a test harness pre-sets the flag.
-if (typeof window !== "undefined" && window.__APEX_DEBUG) {
-  window.__APEX = { cars: () => cars, player: () => player, state: () => state, track: () => track };
-}
+// (A `window.__APEX` bridge lived here, gated on a `window.__APEX_DEBUG` flag
+// that nothing in js/, tests/, tools/ or index.html has ever set. The harness
+// it was written for is window.__apex, in js/game/apex.js.)
 
 // MY TEAM's own emblem. Stored as a downscaled data URL under apex26.customLogo
 // so it survives a reload without touching the asset pipeline — LiveryTex takes
@@ -8216,6 +8236,10 @@ if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
   $("mb-standings").hidden = !hasSeason; }
 Career.load();            // resolve + migrate the career save once at boot
 refreshCareerButton();
+// `state` is closure-local, and js/game/uilayers.js is what decides whether
+// Escape means PAUSE or BACK — hand it the answer rather than have it guess one
+// from the DOM. Same pair setPaused() gates on.
+UiLayers.setRaceGetter(() => state === "race" || state === "count");
 // Pause key: when the settings sub-menu is open it acts as a BACK to the pause
 // menu; otherwise it toggles pause as usual.
 Input.init(canvas, { onPause: () => {
@@ -8234,7 +8258,22 @@ Input.init(canvas, { onPause: () => {
 // circuits on a phone and 40 on a desktop. Both now read the championship
 // calendar (Tracks.SEASON), and the desktop, which has the room, names the
 // classics rather than silently folding them into the season count.
-if (!Input.touchControlsNeeded()) document.body.classList.add("desktop");
+/* body.desktop IS A LIVE ANSWER, NOT A BOOT-TIME ONE. It used to be set once,
+   here, and never revisited — but `(pointer: coarse)` flips whenever an iPad is
+   docked to or undocked from a keyboard, and showTouchControls() reads the LIVE
+   query. So the un-docked iPad un-hid GAS/BRAKE/BOOST while body.desktop was
+   still on, and every rule that gives those buttons their tap size and their
+   `pointer-events: auto` is `body:not(.desktop)` (css/overlays.css) — real
+   buttons, correctly laid out, that could not be pressed, with #pm-steer and
+   #pm-calib hidden by css/responsive.css so there was no way back either.
+   Re-run everything that reads the query, in the order boot does. */
+function syncPointerKind() {
+  document.body.classList.toggle("desktop", !Input.touchControlsNeeded());
+  if (state === "race" || state === "count") showTouchControls(true);
+  refreshGearsBtn();   // GEARS is enabled by thumbs being free, i.e. by this
+}
+syncPointerKind();
+Input.onPointerKindChange(syncPointerKind);
 {
   const rounds = Tracks.SEASON.length, classics = Tracks.LIST.length - rounds;
   els.subtitle.textContent = "2026 grid · " + rounds + " real circuits · "

@@ -1,0 +1,127 @@
+name: CI
+
+# The test gate. Until this existed, .github/workflows/pages.yml deployed on
+# every push and ran NOTHING — 141 test files gated only by whether a human
+# remembered. Two of the repo's own structural guards were found red in the
+# working tree that way, from the same day's work.
+#
+# The jobs are split by what they cost, so the common case stays fast:
+#
+#   guards   ~1 min, no browser  — the structural invariants (load order, docs
+#                                  integrity, test taxonomy, scenery contract,
+#                                  deploy allow-list) plus the pure-node unit
+#                                  suites. This is the job that must never be
+#                                  red; everything it asserts is a property a
+#                                  compiler would enforce in a language that had
+#                                  one.
+#   sweeps   ~5 min, no browser  — the per-circuit geometry sweeps. Separate
+#                                  because each suite rebuilds all 40 circuits
+#                                  and they run --test-concurrency=1 on purpose
+#                                  (four at once reached 5.4 GB and was
+#                                  OOM-killed, which presents as a SIGKILL with
+#                                  no assertion, i.e. NOT as a test failure).
+#   smoke    ~3 min, Chromium    — the page actually boots and __apex answers.
+#                                  If this is red nothing else is worth running.
+#
+# Deliberately NOT here: the full Playwright suite is ~40 minutes of SwiftShader.
+# Run it locally with tools/test-bg.mjs against the groups tools/pick-tests.mjs
+# names. This gate is for what breaks silently, not for everything.
+
+on:
+  push:
+    # Every branch EXCEPT the deploy branch — that one reaches this workflow
+    # through pages.yml's `uses:` call instead, so it is gated exactly once
+    # rather than running twice in parallel against itself.
+    branches-ignore: [claude/f1-game-project-26h3ng]
+  pull_request:
+  workflow_call:      # pages.yml gates its deploy on this
+
+permissions:
+  contents: read
+
+# CANCEL ONLY PULL-REQUEST RUNS. This said `cancel-in-progress: true` for every
+# event, and the result was that FIFTEEN CONSECUTIVE RUNS ENDED "cancelled" and
+# the gate never once completed — a branch under active work gets a push every
+# few minutes, and each one killed the run before it could report.
+#
+# It also broke the deploy, which is the part that matters. pages.yml calls this
+# workflow and has `needs: ci`, so when a push cancelled the in-flight ci job the
+# whole Pages run went down with it: the first gated deploy came back
+# "cancelled" where the previous ungated one had been "success". A gate that
+# blocks the thing it is meant to protect is worse than no gate.
+#
+# On a pull request, superseding an obsolete run is right — the new commit is
+# what matters and the minutes are wasted. On a push, and above all on a
+# workflow_call from pages.yml, the run must be allowed to finish and report.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  guards:
+    name: Structural guards + unit suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      # `npm ci` installs the playwright PACKAGE (some tool modules require it at
+      # import time even when they never launch a browser) but not the browser
+      # binaries — those cost ~200 MB and only the smoke job needs them.
+      - run: npm ci
+      - name: Structural guards
+        run: npm run test:tooling-fast
+      - name: Every test file belongs to a topical group
+        run: npm run test:audit
+      - name: Pure-node unit suites
+        run: |
+          npm run test:net-unit
+          npm run test:service-worker
+          npm run test:webgpu-lifecycle
+          npm run test:agent-contract
+
+  sweeps:
+    name: Per-circuit geometry sweeps
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Geometry sweeps (rebuilds all 40 circuits per suite)
+        run: npm run test:sweeps
+      - name: Every circuit still builds headlessly
+        run: node tools/verify-track.cjs --all
+
+  smoke:
+    name: Smoke (page boots, __apex responds)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      # Chromium only — the suite never targets firefox/webkit, and installing
+      # all three triples the step for nothing.
+      - run: npx playwright install --with-deps chromium
+      - name: Smoke
+        run: npm run test:tiny
+      - name: Failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore

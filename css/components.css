@@ -167,7 +167,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 /* Title scales with the viewport HEIGHT, which is the axis that is scarce on a
    phone held sideways — a fixed 24px title costs the same as a row of the list
    it is sitting above. */
-.sheet-head h2 { color: var(--red); margin: 0; font-size: clamp(15px, 3.6vh, 24px); }
+.sheet-head h2 { color: var(--red); margin: 0; font-size: clamp(15px, calc(3.6 * var(--vhz)), 24px); }
 .sheet-body {
   min-height: 0;
   padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5);
@@ -190,7 +190,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   width: auto; min-width: 110px; margin: 0; flex: 0 1 auto;
   /* same reasoning as the title: on a 393px-tall screen a 20px/14px button is
      ~54px of the ~230px the content has to live in */
-  font-size: clamp(13px, 3.6vh, 20px);
+  font-size: clamp(13px, calc(3.6 * var(--vhz)), 20px);
   padding: clamp(7px, 1.8vh, 14px) 16px;
 }
 /* ---------- pane-pair: the LIST/DETAIL primitive ----------
@@ -475,7 +475,9 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 /* ---------- buttons ---------- */
 .bigbtn {
   display: block;
-  width: min(78vw, 340px);
+  /* --vwz, not bare vw: .bigbtn lives inside .sheet and inside #overlay > *,
+     both of which are zoomed. See the note in tokens.css. */
+  width: min(calc(78 * var(--vwz)), 340px);
   margin: 10px auto;
   /* on the height ladder (css/tokens.css). The padding alone happened to land
      these on --tap at most sizes and a pixel or two off at others; stating the
@@ -695,6 +697,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
 .pm-group button { margin: 3px 0; width: 100%; }
+/* A SLIDER IN A BUTTON COLUMN. .pm-group was 100% <button> until UI/HUD SIZE
+   arrived, so both of its house rules — the 3px rhythm above and the
+   `min-height: var(--tap)` at the top of this file — are keyed to `button` and
+   miss a `.tune-row` entirely. Without these two lines the slider sits flush
+   against the button above it and presents a 24px target in a column of 52px
+   ones, which is under the WCAG 2.5.8 floor for a control you drag.
+   The row gets the rhythm; the input itself gets the height, because it is the
+   thing you actually grab. .tune-row/.tune-label are unscoped in css/tuner.css,
+   so everything else about the slider already works here. */
+.pm-group .tune-row { margin: 3px 0; }
+.pm-group .tune-row input[type="range"] { min-height: var(--tap); }
 @container sheet (min-width: 420px) {
   .pm-groups { grid-template-columns: 1fr 1fr; }
 }

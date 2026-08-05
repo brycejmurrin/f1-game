@@ -62,16 +62,28 @@ test.describe("Las Vegas track foundation migration", () => {
       expect(hard, `${time} required models`).toEqual([]);
 
       const emitted = new Map(result.models.emitted.map((entry) => [entry.id, entry]));
+      // The Bellagio lake is TWO basins now, not one. js/circuits/vegas.js widened
+      // the frontage to the real ~300 m and replaced the single 110x44 m patch with
+      // overlapping east/west basins, because one box that long would risk clipping
+      // the T13 apex the road carries through this stretch. Measured on the current
+      // build at BOTH times of day: emitted = vegas-bellagio-lake-east (required,
+      // water) + vegas-bellagio-lake-west (water), suppressed/invalid/unsafe all
+      // empty. No model emits the old id "vegas-bellagio-lake" any more — this was
+      // a rename, not a loss, which the `required` sweep above independently
+      // confirms (the east basin is required, so a suppressed lake would fail there
+      // first). Both ids are pinned so a future re-merge into one basin is caught.
       for (const id of [
         "vegas-sphere",
         "vegas-high-roller",
-        "vegas-bellagio-lake",
+        "vegas-bellagio-lake-east",
+        "vegas-bellagio-lake-west",
         "vegas-strip-gateway",
         "vegas-finish-halo",
       ]) {
         expect(emitted.has(id), `${time} ${id}`).toBe(true);
       }
-      expect(emitted.get("vegas-bellagio-lake").water).toBe(true);
+      for (const id of ["vegas-bellagio-lake-east", "vegas-bellagio-lake-west"])
+        expect(emitted.get(id).water, `${time} ${id} water`).toBe(true);
       for (const id of ["vegas-strip-gateway", "vegas-finish-halo"]) {
         expect(emitted.get(id).overhead).toBe(true);
         expect(emitted.get(id).clearance).toBeGreaterThanOrEqual(4.8);

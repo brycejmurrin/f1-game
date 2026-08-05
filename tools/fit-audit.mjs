@@ -19,8 +19,10 @@
 //   node tools/fit-audit.mjs                    # the standard matrix
 //   node tools/fit-audit.mjs --only=select,menu
 //   node tools/fit-audit.mjs --sizes=852x393,393x852
+//   node tools/fit-audit.mjs --scale=100,130,150   # ...crossed with interface size
 //
 import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
+import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 let setupApiMocks = null;
 try { ({ setupApiMocks } = await import("../tests/f1-api-mock.js")); } catch { /* hub degrades to its empty state */ }
 
@@ -28,6 +30,11 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const argv = process.argv.slice(2);
 const arg = (k) => { const a = argv.find((x) => x.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : null; };
 const ONLY = arg("only") ? arg("only").split(",").filter(Boolean) : null;
+// The interface-size axis (tools/ui-scale-axis.mjs). Crossed with SIZES below,
+// so the nine-viewport sweep becomes 9 x N cells per screen — which is the
+// point: a 24px chip that clears the WCAG floor at 100 % is a different control
+// at 80 %, and nothing else in the repo would notice.
+const SCALES = parseScales(argv);
 
 // The matrix. Both orientations of the three phone classes the game targets,
 // both of a tablet, and a desktop — a menu that fits at 852x393 can still lose
@@ -59,9 +66,12 @@ const SCREENS = [
   ["menu", `null`, "#overlay", {}],
   ["select", `document.getElementById('mb-race').click()`, "#select", {}],
   ["teampicker", `document.getElementById('mb-race').click(); document.getElementById('sel-team-card').click()`, "#teampicker", {}],
-  ["race-settings", `document.getElementById('mb-race').click(); document.getElementById('sel-go').click()`, "#race-settings", {}],
+  // The garage is a STEP, not a side door: #select's START opens #carsetup and
+  // the garage's DONE goes on to #race-settings. `sel-setup` no longer exists,
+  // and both routes below had been silently reporting "missing/hidden".
+  ["race-settings", `document.getElementById('mb-race').click(); await until('#carsetup:not([hidden])',4000); document.getElementById('cs-done').click()`, "#race-settings", {}],
   ["customize", `document.getElementById('mb-race').click(); document.getElementById('sel-customize').click()`, "#customize", {}],
-  ["carsetup", `document.getElementById('mb-race').click(); document.getElementById('sel-setup').click()`, "#carsetup", {}],
+  ["carsetup", `document.getElementById('mb-race').click(); document.getElementById('sel-go').click()`, "#carsetup", {}],
   ["howtoplay", `document.getElementById('mb-help').click()`, "#howtoplay", {}],
   ["settings", `document.getElementById('mb-settings').click()`, "#pmsettings", {}],
   ["audioset", `document.getElementById('mb-settings').click(); await until('#pmsettings:not([hidden])',3000); document.getElementById('pm-audio').click()`, "#audioset", {}],
@@ -205,32 +215,35 @@ try {
     console.log(`\n### ${name}`);
     for (const viewport of SIZES) {
       await page.setViewportSize(viewport);
-      // let the resize settle: container queries, ScrollFade's own remeasure
-      await sleep(180);
-      await page.evaluate(() => {
-        for (const a of document.getAnimations()) { try { a.finish(); } catch { /* infinite */ } }
-        if (window.ScrollFade && window.ScrollFade.refresh) window.ScrollFade.refresh();
-      }).catch(() => {});
-      await sleep(120);
-      const r = await page.evaluate(MEASURE, sel).catch((e) => ({ error: e.message }));
-      const tag = `${viewport.width}x${viewport.height}`;
-      if (r.error) { console.log(`  ${tag.padEnd(9)} ${r.error}`); continue; }
-      const bits = [];
-      for (const k of ["tap", "spacing", "type", "overflow", "marker"]) {
-        if (r[k].length) { bits.push(`${k}:${r[k].length}`); totals.set(k, (totals.get(k) || 0) + r[k].length); }
-      }
-      if (!bits.length) { console.log(`  ${tag.padEnd(9)} ok`); continue; }
-      console.log(`  ${tag.padEnd(9)} ${bits.join("  ")}`);
-      for (const k of ["tap", "spacing", "type", "overflow", "marker"]) {
-        for (const f of r[k].slice(0, 4)) {
-          const d = k === "tap" ? `${f.w}x${f.h} (${f.sev})`
-            : k === "spacing" ? `gap ${f.gap}px to ${f.near}`
-            : k === "type" ? `${f.px}px "${f.text}"`
-            : k === "overflow" ? `${f.axis} by ${f.over}px`
-            : `fade=${f.fade} thumb=${f.thumb} over=${f.over}px`;
-          console.log(`      ${k.padEnd(8)} ${f.el}  ${d}`);
+      for (const scale of SCALES) {
+        await applyScale(page, scale).catch(() => {});
+        // let the resize settle: container queries, ScrollFade's own remeasure
+        await sleep(180);
+        await page.evaluate(() => {
+          for (const a of document.getAnimations()) { try { a.finish(); } catch { /* infinite */ } }
+          if (window.ScrollFade && window.ScrollFade.refresh) window.ScrollFade.refresh();
+        }).catch(() => {});
+        await sleep(120);
+        const r = await page.evaluate(MEASURE, sel).catch((e) => ({ error: e.message }));
+        const tag = `${viewport.width}x${viewport.height}${scaleTag(scale)}`;
+        if (r.error) { console.log(`  ${tag.padEnd(13)} ${r.error}`); continue; }
+        const bits = [];
+        for (const k of ["tap", "spacing", "type", "overflow", "marker"]) {
+          if (r[k].length) { bits.push(`${k}:${r[k].length}`); totals.set(k, (totals.get(k) || 0) + r[k].length); }
         }
-        if (r[k].length > 4) console.log(`      ${k.padEnd(8)} … +${r[k].length - 4} more`);
+        if (!bits.length) { console.log(`  ${tag.padEnd(13)} ok`); continue; }
+        console.log(`  ${tag.padEnd(9)} ${bits.join("  ")}`);
+        for (const k of ["tap", "spacing", "type", "overflow", "marker"]) {
+          for (const f of r[k].slice(0, 4)) {
+            const d = k === "tap" ? `${f.w}x${f.h} (${f.sev})`
+              : k === "spacing" ? `gap ${f.gap}px to ${f.near}`
+              : k === "type" ? `${f.px}px "${f.text}"`
+              : k === "overflow" ? `${f.axis} by ${f.over}px`
+              : `fade=${f.fade} thumb=${f.thumb} over=${f.over}px`;
+            console.log(`      ${k.padEnd(8)} ${f.el}  ${d}`);
+          }
+          if (r[k].length > 4) console.log(`      ${k.padEnd(8)} … +${r[k].length - 4} more`);
+        }
       }
     }
     await page.close();

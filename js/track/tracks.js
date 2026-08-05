@@ -117,7 +117,8 @@ const Tracks = (function () {
     //
     // Amplitude scales with the track's own relief: a circuit that already
     // climbs (Spa, Red Bull) gets a little more, a flat street circuit stays
-    // nearly smooth, and nothing exceeds UNDULATE_MAX. Deterministic — seeded
+    // nearly smooth, and nothing exceeds the 0.42 cap applied below.
+    // Deterministic — seeded
     // off the circuit id — so a lap is repeatable and ghosts stay valid.
     if (def.undulate !== false) {
       let lo = Infinity, hi = -Infinity;

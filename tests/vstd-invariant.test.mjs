@@ -172,7 +172,13 @@ const ALLOWED = [
   // would make the two disagree. All sit below the grip-limited corner floor,
   // i.e. they separate "crawling" from "driving" at every pace.
   {
-    file: "js/game.js", expr: "c.speed > 10", code: "if ((skid > 0.25 || c.offroad) && c.speed > 10) {",
+    file: "js/game.js", expr: "c.speed > 10",
+    code: "skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10);",
+    // The justification did not change when the SkidMarks extraction rewrote this
+    // line from an `if` into a stamp() argument — but the `code` match did, and the
+    // lint correctly reported the site as unapproved until this text followed it.
+    // That is the guard working: an approval that survives a refactor without being
+    // re-read is an approval nobody has actually re-granted.
     why: "world-space emission gate — skid marks are laid at real ground travel",
   },
   {

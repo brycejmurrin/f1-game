@@ -2,9 +2,10 @@
 
 > **Status update (superseded in part):** this document is the original
 > *planning* doc. Since it was written, the additive WebGPU backend has been
-> **built and wired in, opt-in, through Phase 4b** — `index.html` loads
-> `js/render/webgpu/wgsl-chunks.js`, `js/render/webgpu/wgsl-post.js`, `js/render/webgpu/wgsl-fx.js`,
-> `js/render/webgpu/wgx.js` and `js/render/gfx.js`, and the backend activates only when
+> **built and wired in, opt-in, through Phase 4b** — though **not via a
+> `<script>` tag**: `js/render/webgpu/*` is `DEFERRED` in `tools/manifest.cjs` and
+> injected by `js/game.js` at boot. Only `js/render/gfx.js` (the backend
+> selector) has a tag. The backend activates only when
 > `localStorage apex26.gfxBackend = "webgpu"` is set (it falls back to WebGL2/GLX
 > on any failure). WebGL2 remains the default, always-present path. See the
 > `WEBGPU-PHASE0/2/3/4-NOTES.md` for the as-built state. The Phase table and

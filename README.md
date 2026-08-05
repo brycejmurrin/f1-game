@@ -142,7 +142,7 @@ logic). Load order is defined in `tools/manifest.cjs`.
 
 ## Testing & development
 
-The project ships a **Playwright test suite** (101 specs) plus 37 `node --test`
+The project ships a **Playwright test suite** (104 specs) plus 39 `node --test`
 unit suites, covering physics regression, AI behaviour, geometry audits, UI
 screens, multiplayer, career and visual regression. The whole thing is ~40
 minutes of software rendering, so the workflow is: ask which groups a change
@@ -170,7 +170,8 @@ python3 -m http.server 3456
 npx serve -l 3456 .
 ```
 
-Active development branch: `claude/project-cleanup-tests-k7mqb6`.
+Development happens on `claude/<topic>` feature branches; the deploy branch is
+`claude/f1-game-project-26h3ng`.
 
 A debug scripting API — `window.__apex` — is available at runtime (devtools
 console or headless harness). Full reference in

@@ -5,7 +5,7 @@ unmodified game pipeline) with three.js, to measure feasibility and performance
 before committing to any renderer migration. **Nothing under `js/`, `index.html`,
 `tools/manifest.cjs` or `tests/` is touched** — the whole suite stays untouched by
 design. See the full plan + research in the session plan file and
-`docs/WEBGPU-MAINTAINABILITY.md` for why the candidate is three.js (TSL =
+`docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md` for why the candidate is three.js (TSL =
 single-source shaders for WebGL2 + WebGPU; the repo currently hand-maintains
 ~2,900 lines of GLSL *and* ~2,400 lines of WGSL).
 
