@@ -496,8 +496,12 @@ js/game/         — game modules (each created with the G ctx façade from game
   tables.js      GameTables     static game data (CAM_MODES, DIFF, gears, paints)
   lighting.js    LightTune      TUNE_DEFS registry, live LT values, floodColor,
                                   LAMP_KINDS, buildTrackLights, setFrameLights,
-                                  appendCarTailLights (profile store stays in game.js —
-                                  it reads live track/tod/weather state)
+                                  appendCarTailLights
+  light-store.js LightStore     the PROFILE STORE — which layer wins for the
+                                  conditions on screen, and persisting a player's
+                                  edits. Per (track, time-of-day, weather); the
+                                  five-layer resolution is documented in its header
+                                  and under Lighting & sky below
   light-presets.js  LightPresets  shipped lighting-tuner values, keyed "track|tod|weather"
                                   (baked from the LIGHTING TUNER panel's COPY VALUES export)
   carmesh.js     CarMesh        car decal/effect/cockpit-instrument geometry
@@ -805,7 +809,8 @@ each frame instead of a literal. Values are stored per (track, time-of-day,
 weather) profile, resolving lowest→highest: `TUNE_DEFS.def` → `LightPresets["*"]`
 → `LightPresets["track|tod|wx"]` → localStorage `"*"` → localStorage
 `"track|tod|wx"`. So `js/game/light-presets.js` is the shipped baseline and a
-player's live edits always win.
+player's live edits always win. That resolution and its persistence live in
+`js/game/light-store.js`; `js/game/tuner.js` is only the panel.
 
 Adding a knob: append to `TUNE_DEFS` (+ a shader uniform and `frame.tune` upload
 if it is not a driver literal), and point `tools/ab-lighting.mjs`'s catalog at it.

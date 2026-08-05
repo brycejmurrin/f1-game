@@ -2605,6 +2605,8 @@ function endRace(forcedOrder) {
   els.results.hidden = false;
 }
 
+let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
+
 // ── The shared ctx façade over game.js closure state ─────────────────────────
 // Extracted modules (js/game/results.js, hud.js, apex.js, …) can't reach the
 // closure `let`s in this file, so game.js hands them ONE object of live
@@ -2774,7 +2776,9 @@ const G = {
   get _photoPrevScale() { return _photoPrevScale; }, set _photoPrevScale(v) { _photoPrevScale = v; },
   get photoAlt() { return photoAlt; }, set photoAlt(v) { photoAlt = v; },
   get photoVertT() { return photoVertT; }, set photoVertT(v) { photoVertT = v; },
-  get _ltStore() { return _ltStore; }, set _ltStore(v) { _ltStore = v; },
+  // The live profile object owned by js/game/light-store.js — photomode.js
+  // deletes a key out of it for the tuner's RESET and merges it for COPY VALUES.
+  get _ltStore() { return ltStore.profiles; }, set _ltStore(v) { ltStore.profiles = v; },
   photoCam, photoKeys, photoMouse, photoMove, photoLook,
   applyResMode: (...a) => applyResMode(...a),
   setPaused: (...a) => setPaused(...a),
@@ -2787,6 +2791,7 @@ const G = {
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
   isRaining: () => isRaining(),
   isWetRoad: () => isWetRoad(),
+  initRainDrops: () => initRainDrops(),
   isFloodActiveSession: () => isFloodActiveSession(),
   _nightAmbientBand: () => _nightAmbientBand(),
   applyLightTune: (fromApplyRace) => applyLightTune(fromApplyRace),
@@ -2840,6 +2845,10 @@ const G = {
   startRace, startWeatherArc, update, wrapS,
 };
 
+// Lighting profile resolution + persistence (js/game/light-store.js). FIRST of
+// the module wires: it reads the saved profiles at construction, and
+// Atmosphere's applyRaceSettings — created a few lines down — calls into it.
+ltStore = LightStore.create(G);
 // Results / TT-leaderboard / standings DOM builders (js/game/results.js).
 const { buildResults, buildTTResults, buildStandings } = GameResults.create(G);
 // In-race HUD + minimap (js/game/hud.js).
@@ -4688,95 +4697,14 @@ function coast(c, dt) {
 // mutated in place, so the profile-resolution code below and the sliders/
 // __apex.lightTune keep every LT.x call site unchanged.
 const { TUNE_DEFS, LT, floodColor, LAMP_KINDS, buildTrackLights } = LightTune;
-// Profile store shape: { "monza|night|wet": {lampLevel:0.4,…}, "*": {…legacy} }.
-let _ltStore = {};
-{
-  const saved = store.get("lightTune", null);
-  if (saved && typeof saved === "object") {
-    const vals = Object.values(saved);
-    // Legacy flat format was {id:number}. New format nests {key:{id:number}}.
-    if (vals.length && vals.every((v) => typeof v === "number")) _ltStore = { "*": saved };
-    else _ltStore = saved;
-  }
-}
-// The profile key for the CURRENT session conditions ("default" TOD resolves to
-// the track's actual day/night look so it shares one profile with an explicit
-// pick of the same look).
-function ltKey() {
-  if (!track || !track.def) return null;
-  let tod = raceTimeOfDay;
-  if (tod === "default") tod = track.def.night ? "night" : "day";
-  return track.def.id + "|" + tod + "|" + raceWeather;
-}
-// The resolution layers for the current condition, LOWEST precedence first:
-//   TUNE_DEFS default → file "*" → file "track|tod|wx"
-//     → localStorage "*" → localStorage "track|tod|wx"
-// So a committed js/game/light-presets.js is the shipped baseline, and a player's
-// local (localStorage) edits always win over it. A missing layer is skipped.
-function ltLayers() {
-  const F = window.LightPresets || null;
-  const key = ltKey();
-  return [
-    F && F["*"], F && key && F[key],
-    _ltStore["*"], key && _ltStore[key],
-  ];
-}
-// What the current knob would resolve to WITHOUT the current condition's local
-// profile — i.e. the value RESET falls back to. Used to decide whether a slider
-// edit needs storing (store only when it differs from this fallback).
-function ltFallback(id) {
-  const d = TUNE_DEFS.find((t) => t.id === id);
-  let v = d.def;
-  const F = window.LightPresets || null, key = ltKey();
-  if (F && F["*"] && typeof F["*"][id] === "number") v = F["*"][id];
-  if (F && key && F[key] && typeof F[key][id] === "number") v = F[key][id];
-  if (_ltStore["*"] && typeof _ltStore["*"][id] === "number") v = _ltStore["*"][id];
-  return clamp(v, d.min, d.max);
-}
-// Rebuild LT for the current conditions. Called whenever the track/time/weather
-// changes (via applyRaceSettings) so the right profile is live for both the
-// tuner panel and actual racing.
-// Knobs whose effect is baked into frame.*/frameSky.* by applyRaceSettings()
-// (not read per-frame in render). Changing one re-runs applyRaceSettings so it
-// updates live — safe because that function re-derives from the branch values.
-const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance", "skyColorSat", "fogColorSat"]);
-function applyLightTune(fromApplyRace) {
-  const layers = ltLayers();
-  let rebuilt = false, reapply = false, reinit = false;
-  for (const d of TUNE_DEFS) {
-    let v = d.def;
-    for (const L of layers) if (L && typeof L[d.id] === "number") v = L[d.id];
-    v = clamp(v, d.min, d.max);
-    if (LT[d.id] !== v) { LT[d.id] = v; if (d.rebuild) rebuilt = true; if (d.reinitRain) reinit = true; if (_APPLY_RACE_IDS.has(d.id)) reapply = true; }
-  }
-  if (rebuilt && track) { track._lights = null; track._alwaysLights = null; }
-  // Skip the reapply when applyRaceSettings itself invoked us (it derives from
-  // the fresh LT values right after this returns) — re-entering ran the whole
-  // sky/ambient/fog derivation twice per track/time/weather transition.
-  if (reapply && !fromApplyRace && track && state !== "menu" && state !== "select") applyRaceSettings();
-  if (reinit && isWetRoad()) initRainDrops();
-}
-function setLightTune(id, v) {
-  const d = TUNE_DEFS.find((t) => t.id === id);
-  if (!d || typeof v !== "number" || !isFinite(v)) return false;
-  v = clamp(v, d.min, d.max);
-  LT[id] = v;
-  const key = ltKey();
-  if (key) {
-    const prof = _ltStore[key] || (_ltStore[key] = {});
-    // Store only when the value differs from what it would resolve to anyway
-    // (default / file / legacy global). Storing an explicit value IS required
-    // when it matches the default but the file/global would otherwise win —
-    // that's how a local edit overrides a shipped value back down.
-    if (v === ltFallback(id)) delete prof[id]; else prof[id] = v;
-    if (!Object.keys(prof).length) delete _ltStore[key];
-  }
-  if (d.rebuild && track) { track._lights = null; track._alwaysLights = null; }   // re-bake per-track light records next frame
-  if (d.reinitRain && isWetRoad()) initRainDrops();   // re-seed the rain field with the new count/length
-  if (_APPLY_RACE_IDS.has(id) && track && state !== "menu" && state !== "select") applyRaceSettings();
-  return true;
-}
-function persistLightTune() { store.set("lightTune", _ltStore); }
+// The PROFILE STORE — which layer of (default / shipped preset / player edit)
+// wins for the conditions on screen — lives in js/game/light-store.js
+// (LightStore.create(G), assigned with the other modules below). These four are
+// thin passes through to it, kept so every call site here reads unchanged.
+function ltKey() { return ltStore.key(); }
+function applyLightTune(fromApplyRace) { ltStore.apply(fromApplyRace); }
+function setLightTune(id, v) { return ltStore.set(id, v); }
+function persistLightTune() { ltStore.persist(); }
 // LAMP_KINDS + buildTrackLights(track) live in js/game/lighting.js (LightTune).
 
 // Per-frame light assembly (nearest-N flood cull + car tail lights) lives in

@@ -1,7 +1,8 @@
 /* Apex 26 — the LIGHTING TUNER panel UI for js/game.js: slider rows generated
    from TUNE_DEFS, group tabs, preview time-of-day/weather chips, RESET/COPY
-   VALUES export, and close plumbing. The PROFILE STORE (ltKey/ltLayers/
-   setLightTune) stays in game.js — it reads live track/tod/weather state.
+   VALUES export, and close plumbing. The PROFILE STORE — which layer of
+   default/preset/player-edit wins, and persisting it — is js/game/light-store.js,
+   reached through the same G members this file already destructures.
    Live state comes through the ctx façade G handed to TunerPanel.create(G).
    Consumes globals LightTune (TUNE_DEFS/LT). Must load BEFORE js/game.js. */
 const TunerPanel = (function () {
