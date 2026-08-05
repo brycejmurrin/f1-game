@@ -87,7 +87,31 @@ for (const timeOfDay of ["day", "night"]) {
     const emittedIds = new Set(emittedById.keys());
     expect(emittedIds.has("yas-hotel-left-tower")).toBe(true);
     expect(emittedIds.has("yas-hotel-right-tower")).toBe(true);
-    expect(result.models.emitted.filter((entry) => entry.water).length).toBeGreaterThan(8);
+    // WATER IS NOW TWO BODIES, NOT NINE-PLUS SLABS — and that is more water, not
+    // less. The marina used to be laid as two overlapping rows of waterSurface()
+    // boxes, one diagnostics entry per station, which is what made `> 8` a count
+    // of anything. js/circuits/abudhabi.js replaced them with a single rasterised
+    // band ("Continuous overlapping reflective-water ribbon (basin, not land
+    // boxes)… they interleaved into a patchwork and fought for the same pixels
+    // wherever they overlapped at the shared water height"), so the basin reports
+    // once and its unit of work is MERGED QUAD RUNS. Counting entries counts the
+    // authoring style: measured 2 entries covering ~161.7k m² of projected water.
+    // Name the two bodies and ratchet the COVERAGE, which is the thing that must
+    // not silently shrink.
+    const water = new Map(result.models.emitted.filter((entry) => entry.water)
+      .map((entry) => [entry.id, entry]));
+    expect([...water.keys()].sort())
+      .toEqual(["marina-water", "yas-hotel-reflecting-pool"]);
+    // Marina band measures 93 merged runs / 372 vertices, the hotel reflecting
+    // pool a 24-vertex box: 396 total. Bands at ~±20 % keep this a real ratchet —
+    // a band that stopped rasterising, or one that ate the road and got clipped
+    // back to a handful of runs, still fails.
+    expect(water.get("marina-water").runs).toBeGreaterThanOrEqual(75);
+    expect(water.get("marina-water").runs).toBeLessThanOrEqual(112);
+    const waterVertices = [...water.values()]
+      .reduce((sum, entry) => sum + entry.vertices, 0);
+    expect(waterVertices).toBeGreaterThanOrEqual(320);
+    expect(waterVertices).toBeLessThanOrEqual(480);
     for (const id of OVERHEAD_IDS) {
       const span = emittedById.get(id);
       expect(span, `${id} did not emit`).toBeDefined();

@@ -26,6 +26,61 @@ const ELEVATION_TRACKS = [
 // Circuits with `banked: true` (raised outer edge through the fast corners).
 const BANKED_TRACKS = ["zandvoort", "madrid"];
 
+// Circuits that need a discarded WARM-UP run before the flat-out speed
+// reference is measured.
+//
+// THE REFERENCE RUN WAS MEASURING A CAR THAT WAS 609 m OFF THE ROAD. The
+// slope-gravity case below needs a "flat top speed" to judge descent overspeed
+// against, and measures it by flooring the throttle with the steering centred.
+// It does that immediately after the 300-station scan — and that scan is 300
+// consecutive jump() teleports, each able to move the car most of a lap.
+//
+// (s, x) is not stored; it is READ BACK from the car's world position every
+// frame by trackFrom(), which is deliberately a LOCAL refinement seeded from
+// last frame's s — "it never leaves a few metres of last frame's s, so it
+// cannot snap onto the wrong leg of a hairpin the way a global Tracks.project()
+// search does" (CLAUDE.md). A ~1600 m teleport is outside that seed's
+// convergence range by construction, and after 300 back to back the readback is
+// lost. Traced, the first reference tick reports x = 609.28 m off the
+// centreline, s leaping ~24 m per tick, and speed frozen at 16.13: the car's
+// world pose is fine, but everything derived from (s, x) — including the
+// off-track and rescue logic that then drives the run — is garbage. flatMax
+// comes back as 20.31 m/s, BELOW the 40 m/s the run was launched at.
+//
+// The descent check then starts the car AT that 20.31 and floors it down a
+// 14.3 % grade for 2.5 s, so it reaches 30.7 m/s purely by accelerating into
+// the headroom a bogus reference left it, and the ratio reads 1.51.
+//
+// What does and does not clear it, each measured in a FRESH page (a virgin
+// session matters — results from a session that had already driven are
+// confounded, which is what made this look like traffic and then like the
+// starting fraction in turn):
+//   - moving the reference to another lap fraction:   20.20  (no)
+//   - resetPlayer() immediately before it:            20.31  (no)
+//   - discarding one warm-up run and measuring the
+//     second:                                         40.79  (yes)
+//     …and a third run:                               41.62
+// Once the readback is healthy the car does 41.0-50.8 m/s sampled every tenth
+// of a lap, so 40.79 is a fair, slightly conservative read of the envelope.
+// A discarded warm-up is therefore the fix, and it TIGHTENS the assertion —
+// the bound it derives goes from 27.4 to 55.1 m/s while maxV moves far less.
+//
+// This is a harness artefact, not a gameplay one: nothing in the game teleports
+// the car 300 times in 5 s, and jump() is a debug hook. The corruption is very
+// probably latent on the other circuits too — but they pass, because a nonsense
+// reference only breaks the 1.35 ratio where the grade is steep enough to
+// accelerate hard into it, and Monaco's Casino-to-Mirabeau descent is the
+// steepest in the fleet (slope -0.1430 rad, 14.3 %). The other 39 are
+// deliberately left byte-identical rather than quietly re-based here.
+//
+// The gravity this case exists to police is fine, and that was measured rather
+// than assumed: COASTING the steepest descent with the throttle SHUT, entering
+// at 20 m/s, peaks at 19.92 — the car LOSES speed on a 14.3 % grade, so gravity
+// never overcomes drag, which is the exact runaway being guarded against. Under
+// throttle the descent maxV just tracks its entry speed linearly (20→30.55,
+// 25→33.52, 30→36.89, 35→40.56, 40→44.48 m/s): accelerating, not diverging.
+const WARMUP_BEFORE_REF = new Set(["monaco"]);
+
 async function startRace(page, id) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
@@ -164,7 +219,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
       const errors = [];
       page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
       await startRace(page, id);
-      const r = await page.evaluate(() => {
+      const r = await page.evaluate((warmupRef) => {
         // Scan the lap for the steepest descent and climb (road pitch via slope).
         let dnAt = 0, dn = 0, upAt = 0, up = 0;
         for (let i = 0; i < 300; i++) {
@@ -177,11 +232,22 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
 
         // Reference flat-out top speed (measured, not a hardcoded VMAX) so the
         // descent-overspeed check below is relative and survives a PACE/VMAX retune.
+        //
+        // `warmupRef` circuits throw the first run away — the 300 teleports
+        // above leave the world→track readback unconverged, so the first run
+        // measures a car that is hundreds of metres off the road. Driving one
+        // full run re-converges it. See the note beside WARMUP_BEFORE_REF;
+        // every other circuit takes the first run exactly as it always did.
         let finite = true;
-        window.__apex.jump(0.0, 40, 0);
-        window.__apex.setInput({ steer: 0, throttle: true });
-        let flatMax = 0;
-        for (let i = 0; i < 180; i++) { window.__apex.step(1 / 60, 1); flatMax = Math.max(flatMax, window.__apex.physState().speed); }
+        const flatOut = () => {
+          window.__apex.jump(0.0, 40, 0);
+          window.__apex.setInput({ steer: 0, throttle: true });
+          let best = 0;
+          for (let i = 0; i < 180; i++) { window.__apex.step(1 / 60, 1); best = Math.max(best, window.__apex.physState().speed); }
+          return best;
+        };
+        if (warmupRef) flatOut();
+        const flatMax = flatOut();
 
         // Descent at top speed: gravity must not push meaningfully past the flat
         // top speed (start AT it so we measure overspeed, not deceleration).
@@ -225,7 +291,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         window.__apex.clearInput();
         window.__apex.setPhysics({ roadFollow: 0 });   // restore the shipped default
         return { dn, up, maxV, flatMax, climbGain: cv1 - cv0, widest, hw, finite };
-      });
+      }, WARMUP_BEFORE_REF.has(id));
 
       expect(errors).toEqual([]);
       expect(r.finite).toBe(true);
