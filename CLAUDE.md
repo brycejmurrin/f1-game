@@ -483,6 +483,34 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   for an incident-sim takeover. tick() also runs
                                   through the paused gate: one player opening a
                                   menu cannot stop a shared world.
+                                  LIGHTS-OUT is an INSTANT, not a delay: the
+                                  host names one and every peer derives countT
+                                  from it, so nobody accumulates dt and nobody
+                                  rolls their own hold. NOBODY COUNTS DOWN
+                                  UNTIL IT IS NAMED — the host included, which
+                                  it did not used to be. It always free-ran,
+                                  because start() clears armedPeers and
+                                  hostStart() runs with no pump in between, so
+                                  the first allArmed() is always false; that
+                                  was invisible only while the lead was SHORTER
+                                  than the sequence. And a lead shorter than
+                                  the sequence puts every peer part-way through
+                                  it by construction: 2500 ms against 5.2-7.0 s
+                                  of lights had a guest joining at countT ~ 2.7
+                                  -4.5, two to four lamps backfilled in one
+                                  frame, on a phone still painting its first
+                                  frames after a build. Reported as correct
+                                  timing and no lights at all. So the moment is
+                                  named a WHOLE COUNTDOWN away (G.COUNTDOWN_S +
+                                  the hold + a settle) and both sides hold dark
+                                  until then. The wait is real — it lasts as
+                                  long as the slowest guest's circuit build, up
+                                  to ARM_WAIT_MS — so the gantry says so rather
+                                  than looking hung. Everything here reads ONE
+                                  clock, nowMs(): naming the moment off
+                                  performance.now() while game.js counts down
+                                  against G.netNow put the deadline on wall
+                                  time, where no test could reach it.
                                   UP TO FOUR PLAYERS, in a STAR: the host holds
                                   one session per guest and each guest holds one,
                                   to the host. Rivals are a Map keyed by
