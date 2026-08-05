@@ -591,19 +591,21 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    so the scrim has to actually separate them — 0.6 left the sheet looking
    washed with the menu behind it reading through. */
 .screen.dim { background: rgba(0, 0, 0, 0.72); }
+
+/* THE LADDER IS ONLY FOR THE SCREENS STILL IN NORMAL FLOW.
+   A screen migrated to `<dialog>.showModal()` (js/game/topmodal.js) renders in
+   the TOP LAYER, where z-index is not consulted at all — nothing in the document
+   can paint over it and no `overflow: hidden` or transformed ancestor can clip
+   it. Every migrated screen still carried a value here (#spotifypanel 42,
+   #advanced 41, #howtoplay 40, #customize 36, #results and #standings 30 …) and
+   every one of them was dead: inert numbers that still LOOK like a working
+   ladder, which is worse than a ladder, because the next person maintains them.
+   Deleted. What is left is the four screens that are still `<div>`s because they
+   own or gate a flow — and they no longer have to be reasoned about against
+   twelve neighbours that have left the stacking context entirely. */
 #pausemenu { z-index: 30; }
 #pmsettings { z-index: 35; }
-#results, #standings, #race-settings { z-index: 30; }
-/* Above #carsetup (35): MY TEAM is reachable from inside the GARAGE now, not
-   only from the select screen, so at 30 it opened BEHIND the garage sheet. */
-#customize { z-index: 36; }
-#howtoplay { z-index: 40; }
-#advanced { z-index: 41; }
-#audioset { z-index: 41; }
-/* Above #audioset (41): the Spotify player is opened FROM the audio panel as
-   well as from the pause menu, and without this it rendered under the main
-   menu, which carries z-index 20. */
-#spotifypanel { z-index: 42; }
+#race-settings { z-index: 30; }
 
 /* One-per-line stacks (pause menu, settings groups, results actions). */
 .stack { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }

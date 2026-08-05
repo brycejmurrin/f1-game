@@ -148,7 +148,7 @@
 /* ---------- start lights ---------- */
 #lights {
   position: fixed;
-  top: calc(18vh + var(--sat));
+  top: calc(18svh + var(--sat));
   left: 50%; transform: translateX(-50%);
   display: flex; gap: 12px;
   background: rgba(8, 8, 12, 0.85);
@@ -161,7 +161,7 @@
 
 #announce {
   position: fixed;
-  top: 30vh; left: 50%; transform: translateX(-50%);
+  top: 30svh; left: 50%; transform: translateX(-50%);
   font-size: clamp(30px, 8vw, 64px);
   font-weight: 800; font-style: italic;
   text-shadow: 0 0 24px rgba(225, 6, 0, 0.8);
@@ -301,8 +301,18 @@ body.pc-uihidden #lighting-inner { display: none !important; }
 @media (hover: hover) { #pc-restore:hover { opacity: 0.95; } }
 #pc-restore:active { opacity: 0.95; }
 body.pc-uihidden #pc-restore { display: block; }
-/* touch: hide the desktop key hint (no keyboard); narrow screens too */
-@media (pointer: coarse), (max-width: 720px) { .pc-hint { display: none; } }
+/* Hide the keyboard-shortcut hint where there is no keyboard — and ask that
+   question of the WHOLE device, not just its primary pointer.
+   `(pointer: coarse)` describes the PRIMARY input only, so an iPad with a Magic
+   Keyboard or a Surface matched it and lost the hint: the one user who
+   definitely has the keys was the one told nothing about them. `any-pointer`
+   describes the union of every input attached, so "no fine pointer anywhere" is
+   the honest test for "no keyboard to speak of".
+   Used sparingly and only here, per the note in docs/research/UI-LAYOUT-RESEARCH.md
+   §11: these features mislead in both directions, and this is the narrow case
+   where the affordance is otherwise unreachable rather than merely awkward.
+   The narrow-screen clause is unchanged — there is no room for it either way. */
+@media (not (any-pointer: fine)), (max-width: 720px) { .pc-hint { display: none; } }
 /* while the LIGHTING TUNER is open (free camera or not) hide every in-race
    overlay underneath it — HUD, start lights, CHASE/pause, and ALL touch driving
    controls (GAS/BRAKE/BOOST/OT/shift/steer) — so the scene reads clean.

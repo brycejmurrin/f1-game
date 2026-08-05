@@ -394,11 +394,29 @@ moves inside; Escape closes AND puts `hidden` back in step so the screen reopens
 Escape on the lobby calls the lobby's own close button; `#results` refuses it.
 `npm run test:net` 65/65 with the lobby as a `<dialog>`, and 300 audit cells clean.
 
-**The four left out** — `#pausemenu`, `#pmsettings`, `#race-settings`, `#quali` —
-own or gate a flow rather than being dismissible, and `#pmsettings` has already
-demonstrated that changing its visibility behind its own back makes every button
-inside it a silent no-op. They deserve their own pass, with the flow reasoned
-about rather than the tag swapped.
+**The four flow screens are done too**, in a second pass with the flow reasoned
+about rather than the tag swapped. All sixteen `.screen.dim` modals are now
+`<dialog>`s. What each one means by "leave this screen" already existed in the
+app, so Escape was pointed at that control rather than given a new meaning:
+
+| screen | Escape presses | because |
+|---|---|---|
+| `#pausemenu` | `#pm-resume` | that is what the pause key already does |
+| `#pmsettings` | `#pm-settings-close` | it must go BACK to the pause menu, not out of both |
+| `#race-settings` | `#rs-cancel` | it is a gate; cancelling is the only "leave" |
+| `#quali` | `#q-back` | which also clears a session nobody ran |
+| `#results` | *(refused)* | MENU and NEXT, and neither means "dismiss" |
+
+Verified the exact interaction that carved these out in the first place: pause →
+settings → Escape lands back on the PAUSE MENU (not out of both), Escape again
+resumes, re-pausing works, and `#pm-advanced` inside settings still opens. That
+last one is the bug that started this — forcing `#pmsettings.hidden = false`
+desynced the screen and made every button inside it a silent no-op — and it is
+the thing the seam had to survive.
+
+`#pmsettings` and `#pausemenu` are mutually exclusive by construction
+(`setPaused` and `closeSettings` toggle one as they toggle the other), so the
+top layer never has to arbitrate between them.
 
 ## 17. Ranked, second pass
 
@@ -409,19 +427,47 @@ about rather than the tag swapped.
    is (1,1,0) against the primitive's (0,3,0)), plus one rule returning the foot
    to `grid-column: 1 / -1` in the band layout, and its `:not([data-shape="tall"])`
    column extras moved off the container query onto `[data-pair="on"]`.
-3. ~~**Migrate the `.screen.dim` modals to `<dialog>.showModal()`**~~ — **12 of
-   16 done** (`js/game/topmodal.js`). See §17. The four left are the ones that
-   own or gate a FLOW rather than being dismissible overlays: `#pausemenu`,
-   `#pmsettings`, `#race-settings`, `#quali`.
+3. ~~**Migrate the `.screen.dim` modals to `<dialog>.showModal()`**~~ — **all 16
+   done** (`js/game/topmodal.js`), and the z-index ladder they made inert is
+   deleted: 49 declarations down to 39, with none left on a migrated screen.
+   See §16.
 4. **Safe-area assertion in the audit probe.** The one axis we claim to handle
    and never verify, on the orientation the game is played in. *(cheap)*
-5. **Cost out `container-type: size` on the sheet** — if it can have a definite
-   height, `sheetshape.js` deletes itself. *(cheap to investigate)*
+5. ~~**Cost out `container-type: size` on the sheet**~~ — **costed, and the
+   answer is no.** Size containment forbids a container from taking its size
+   from its contents, and that is exactly how every sheet is sized: `.sheet` sets
+   `width` and `max-height: 100%` but no `height`, and sits in a
+   `display: grid; place-items: center` screen, so it SHRINKS TO FIT. The only
+   exception is `#sel-inner`, and only in one branch
+   (`css/responsive.css: height: min(100%, 720px)`). Making the rest definite
+   means `height: 100%` on every sheet — every modal becomes a full-height card
+   instead of hugging its content, which is a visual redesign, not a refactor.
+   `js/game/sheetshape.js` stays, and its 90 lines are the cheaper side of that
+   trade.
 6. **Foldable guard** — one media query, turns broken into unoptimised. *(cheap)*
-7. **`svh` as the house cap unit**, and **six blessed pixel baselines** — carried
-   over from the first pass, both still worth doing. *(trivial / cheap)*
-8. **`any-hover` for hybrid devices**, sparingly. *(low priority, easy to get
-   wrong)*
+7. ~~**`svh` as the house cap unit**~~ — **done**. Every layout cap and fixed
+   overlay position now uses it; the type and gap clamps deliberately stay on
+   `vh` (a font-size that changed as the toolbar slid would be worse than the
+   imprecision). House rule recorded in css/tokens.css.
+8. ~~**Six blessed pixel baselines**~~ — **done**, `tests/menu-baseline.spec.js`.
+   Proved they can fail before trusting them: swapping `--red` to blue fails four
+   of six, restoring it passes all six.
+9. ~~**`any-hover` for hybrid devices**~~ — **done, in exactly one place.**
+   `.pc-hint` (the keyboard-shortcut hint) was hidden on `(pointer: coarse)`,
+   which describes the PRIMARY input only — so an iPad with a Magic Keyboard or a
+   Surface lost the hint, telling the one user who definitely has the keys
+   nothing about them. Now `(not (any-pointer: fine))`, which asks the whole
+   device. Left everywhere else alone, per §11.
+10. ~~**The rotated-monitor sheet cap**~~ — **done**. `#sel-inner` was capped at
+   a flat 720px, so a 1080x1920 portrait monitor showed a 720px sheet in ~1896px
+   of room — about 60 % of the screen empty. Now `min(100%, max(720px, 78svh))`:
+   the fraction follows the screen and the 720 floor leaves every landscape
+   desktop untouched (78 % of 800-937px is under 720 anyway). Measured, the
+   rotated monitor goes 720 -> 1498px tall, `data-shape` flips it to TALL, and it
+   takes the BAND layout with a 974x922 list instead of a 573x661 one. Worth
+   noting this was only safe to do AFTER the shape system existed: under the old
+   orientation proxy a taller sheet there would have kept the columns and merely
+   stretched them.
 
 ## What the audit found while this was being written (build 923) — and why it was wrong
 

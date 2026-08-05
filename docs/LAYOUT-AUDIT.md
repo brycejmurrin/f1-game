@@ -66,7 +66,7 @@ some branch turns on or off at it.
 | `desktop-1920x1080` | full screen on a 1080p monitor |
 | `desktop-windowed-1920x937` | the same monitor with browser chrome — 143px less, and browser chrome is why a "desktop" can land on a phone branch |
 | `desktop-narrow-860x560` | a small window, or a maximised one at 125% zoom; below the 900x600 large-screen gate |
-| `desktop-portrait-1080x1920` | a rotated monitor: a PORTRAIT window whose sheet is capped landscape by `#sel-inner { height: min(100%, 720px) }` |
+| `desktop-portrait-1080x1920` | a rotated monitor: a PORTRAIT window. `#sel-inner` is capped at `min(100%, max(720px, 78svh))`, so here the sheet is genuinely TALL and takes the band layout — it used to be capped landscape at a flat 720px, which is what made the circuit list two pixels high |
 
 The last two are the ones that keep finding bugs. A viewport's orientation does
 not tell you the sheet's shape, and the sheet is what the layout keys on.
@@ -128,12 +128,25 @@ lighting tuner's failure was in a state the grid had no entry for.
 | `cameratuner` | `#camtune`, the same shape for the 13 camera modes |
 | `hudmanual` | MANUAL moves the gearbox into the right thumb column and relocates BOOST/OT/AERO — a different control stack, not a restyle |
 
-**Known gaps, stated rather than implied:** the garage's other ten part-category
-tabs share `garage`'s layout exactly (option rows), so one stands for all; the
-data hub's STANDINGS/LAST RACE/LIVE tabs are tables like `dataschedule`; the
-`results` cell measures the race screen, not the season-end variant; and the HUD
-is measured in two of its steering modes, not four. Adding any of these is a
-table entry, not new machinery.
+Also measured, added when the gaps above were closed: `datastandings`,
+`datalastrace`, `datalive`, `dataexport` (the rest of the hub's tabs),
+`resultsseason` (the same root carrying a championship table, ten rows taller
+than a Grand Prix classification), `hudtouch` and `hudbuttons` (the two remaining
+steering modes — "touch" hides the gas pedal, "buttons" adds an explicit GAS), and
+`garagewheels`.
+
+**`garagewheels` exists to MEASURE a claim rather than assert it.** The line used
+to read "the garage's other ten part tabs share one layout, so one stands for
+all", which is the kind of statement that is true until it is not. WHEELS is the
+last tab, so it also exercises the rail scrolled to its end. It measures clean,
+which is what earns the other nine their exemption.
+
+**One real gap remains:** a screen that needs `page.reload()` to reach cannot be
+a cell. Reload destroys the execution context, and the first version of the
+steering-mode cells did exactly that — every screen AFTER them failed with
+"Execution context was destroyed", and two viewports ran out of budget and failed
+to boot: 98 skipped cells, not one a layout finding. Reach the state through the
+app's own controls (`#pm-steer` cycles the mode) or leave it unmeasured.
 
 ---
 
@@ -203,6 +216,12 @@ Two traps worth writing on the wall:
   spans into an `auto` row hands that row its entire content height — a 24-row
   circuit list turned a 76px action bar into 358px. Use `min-content` for a track
   a scroller spans into.
+- **A modal in the TOP LAYER ignores z-index entirely.** Every `.screen.dim` is a
+  `<dialog>` opened with `showModal()` (`js/game/topmodal.js`), so nothing in the
+  document can paint over it and no `overflow: hidden` or transformed ancestor
+  can clip it. Do not add a `z-index` to one — it does nothing, and an inert
+  number that looks like a working ladder is worse than a ladder. Ordering
+  between two open modals is the order `showModal()` was called in.
 - **Anything outside a cascade layer beats everything inside one.** Unlayered
   normal declarations outrank every `@layer`, so a one-ID unlayered rule defeats a
   two-ID layered one and no amount of specificity closes the gap. A stray `}` put

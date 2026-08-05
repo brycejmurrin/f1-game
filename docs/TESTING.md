@@ -1,6 +1,6 @@
 # Testing reference
 
-101 root Playwright spec files (`tests/*.spec.js`) + 37 `node --test` unit suites
+102 root Playwright spec files (`tests/*.spec.js`) + 38 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -132,6 +132,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | `webgl` | instanced draw, GL capability probes, lighting A/B, image grade |
 | `ab` | the lighting A/B pixel comparison alone |
 | `visual` | per-circuit pixel-diff regression (slow) |
+| `baseline` | six blessed pixel baselines for menu IDENTITY — colour, type, spacing (fast) |
 | `shimmer` | does baked tarmac crawl under motion |
 | `tlx` | the three.js/TSL backend probes |
 | `webgpu-lifecycle` | WGX resource lifecycle, as a pure unit suite |
@@ -376,6 +377,7 @@ what it covers.
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain or verge triangle renders above the racing line. Point-in-triangle vs the asphalt; large road-over-road is ignored as an intentional crossover (Suzuka's figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line, in 3D, 0.2–5 m above the road. Per-track `BASELINE` caps document justified overheads (Miami's beach canopy, Mexico's Foro Sol, gantries) |
 | `prop-clipping.test.mjs` | ratchet: prop-vs-prop interpenetration must not grow |
+| `component-inventory.test.mjs` | docs/COMPONENTS.md must name every class family in `css/`, name none that has left, and keep the dead-class list accurate — a map that silently rots is worse than none, because it is trusted |
 | `road-under-floor.test.mjs` | no visible road surface may sit below the flat floor plane |
 | `coplanar-faces.test.mjs` | ratchet: SAME-FACING coplanar faces — the pairs that z-fight at every distance, which `clip-audit` structurally cannot see |
 | `f1-track-accuracy.spec.js` | `CircuitPaths` OSM traces vs a pinned subset of real GeoJSON outlines (direction, shape) |
@@ -435,6 +437,9 @@ what it covers.
 | `hud-audit.spec.js` | HUD screenshots + mode-dependent elements |
 | `menu-survey.spec.js` | click every button, capture every state |
 | `menu-keyboard.spec.js` | desktop menu input — wheel redirection and arrow/Home/End/PageUp/PageDown focus |
+| `menu-baseline.spec.js` | SIX blessed pixel baselines (title/select/garage x landscape-phone/desktop) — the IDENTITY half `tools/layout-audit.mjs` structurally cannot see: colour, type, weight, spacing. Deliberately six, not 380: a suite that asks a human to bless 380 images gets rubber-stamped |
+| `multiplayer-npeer.spec.js` | the rival is keyed by a cross-peer identity — a packet for an unknown car is dropped rather than posed over somebody |
+| `multiplayer-seats.spec.js` | seat exclusivity — a seat somebody else is in cannot be picked, and the clash resolves |
 | `camera.spec.js` | all 13 player camera modes, via the hook and the CAM button |
 | `camera-hooks.spec.js` | `dolly()`, `roadside()`, `tourShots()` |
 | `camera-driving-hooks.spec.js` | orbit fov, cinematic, `carOrbit()` |
@@ -486,6 +491,7 @@ what it covers.
 | `test-coverage-audit.test.mjs` | the coverage auditor itself |
 | `fixture-consumer-audit.test.mjs` | the specs that must import `tests/fixtures.js` do |
 | `component-inventory.test.mjs` | the class families in `css/` match `docs/COMPONENTS.md` — a class defined in one file and used from another is the drift this catches |
+| `span-kinds.test.mjs` | the agent view's span vocabulary matches the `ctx.noteSpan(...)` emitters — the list had fallen four kinds behind, so any circuit placing a tiered bowl failed `agent-view.spec.js` with a message that pointed nowhere near the cause |
 | `css-layers.test.mjs` | every rule in a `@layer`-wrapped stylesheet stays inside its declared layer — an unlayered rule (a stray brace closing the layer early) silently outranks every layered rule regardless of specificity, with no parse error and no console warning |
 | `deploy-staging.test.mjs` | the Pages workflow uploads an allow-list of directories — every path the shipped code can fetch must be inside it, or it 404s in production while passing every local run |
 | `service-worker.test.mjs` | the SW's install/fetch/version-guard behaviour |

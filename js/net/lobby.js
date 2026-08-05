@@ -138,6 +138,28 @@ const NetLobby = (function () {
     let makeTransport = (o) => NetTransport.rtc(o);
     function setTransportFactory(fn) { makeTransport = fn || ((o) => NetTransport.rtc(o)); }
 
+    // THE RELAY HAS TO ARRIVE BEFORE THE CONNECTION IS BUILT.
+    //
+    // An RTCPeerConnection's iceServers are fixed at construction — gathering
+    // starts immediately and never revisits the list. prefetchIce() is a
+    // FETCH, so open() firing it and codeHost() building the transport
+    // microseconds later is a race the fetch always loses: the connection
+    // gathers with STUN only and relay:0, while fetchedIce lands ~200 ms later
+    // and makes hasRelay() true for everything that asks afterwards.
+    //
+    // That produced the most misleading message the lobby has ever shown — "a
+    // relay was offered and did not carry it" — when the relay had never been
+    // in the connection at all. Every wire dump through this whole
+    // investigation said relay:0 while a perfectly good Metered credentials
+    // endpoint sat there answering in 180 ms.
+    //
+    // So: await it here, at the one choke point every path goes through, and
+    // no call site can forget. It resolves instantly once fetched (memoised),
+    // it never rejects, and no relay configured stays a normal state.
+    async function readyIce() {
+      try { if (NetTransport.prefetchIce) await NetTransport.prefetchIce(); } catch (e) {}
+    }
+
     function newTransport(asRole) {
       // Drop only the PENDING attempt, not the connections already made. A
       // previous attempt that timed out leaves a dead RTCPeerConnection behind
@@ -832,6 +854,7 @@ const NetLobby = (function () {
     // is clicking buttons and scraping textareas, which is exactly the kind of
     // test that fights actionability instead of exercising WebRTC.
     async function host() {
+      await readyIce();
       show("hosting");
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       say("Preparing invite… (this can take a few seconds)");
@@ -862,10 +885,11 @@ const NetLobby = (function () {
       return res;
     }
 
-    function join() {
+    async function join() {
       // Show the step FIRST: if the transport cannot be created, the error has
       // to land somewhere the player can see, and that is this screen.
       show("joining");
+      await readyIce();
       if (!newTransport("guest")) return;
       say("Paste the invite code they sent you.");
     }
@@ -1091,6 +1115,7 @@ const NetLobby = (function () {
     async function codeHost() {
       stopCodeWait();
       if (!NetRendezvous.configured()) { say(NO_RELAY, true); return { ok: false, error: "not_configured" }; }
+      await readyIce();
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       const code = NetRendezvous.makeCode();
       showCodeStep("show", "Your room code", "Read this to your friend.");
@@ -1135,6 +1160,7 @@ const NetLobby = (function () {
           // and doing that on every join is what got us rate-limited.
           mintOffer: async () => {
             if (sessions.size >= MAX_GUESTS) return null;      // room full
+            await readyIce();
             if (!newTransport("host")) return null;
             const more = await NetHandshake.createInvite(transport, localProfile());
             return more.ok ? more.code : null;
@@ -1146,10 +1172,21 @@ const NetLobby = (function () {
             // is pending NOW — a fresh stable PC, which throws. Seen in a real
             // console as an uncaught InvalidStateError.
             if (answersSeen.has(answer)) return;
-            answersSeen.add(answer);
+            // MARK IT SEEN ONLY ONCE IT CAN BE ACTED ON. Recording it before
+            // the guard below meant an answer that arrived a moment too early
+            // — between transports, or before pendingId was set — was dropped
+            // AND blacklisted, so the guest's retries all matched
+            // answersSeen and were ignored. The host then waited for an answer
+            // it had already thrown away, which on a LAN, where ICE cannot be
+            // at fault, presents as a permanent "Connecting…".
             if (!transport || !pendingId) return;   // nothing awaiting an answer
+            answersSeen.add(answer);
             const acc = await NetHandshake.acceptAnswer(transport, answer);
             if (!acc.ok) {
+              // A rejected answer must not stay blacklisted either: the guest
+              // may repost the same string against a transport that is by then
+              // ready for it.
+              answersSeen.delete(answer);
               if (acc.error !== "already_answered") say(acc.message || "That answer could not be read.", true);
               return;
             }
@@ -1198,6 +1235,7 @@ const NetLobby = (function () {
         say("That is not a room code — six letters and numbers.", true);
         return { ok: false, error: "bad_code" };
       }
+      await readyIce();
       if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       say("Looking for that room…");
       // The guest cannot answer until it has SEEN the host's invite, so it

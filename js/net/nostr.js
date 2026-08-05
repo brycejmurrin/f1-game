@@ -46,6 +46,12 @@ const NetNostr = (function () {
   // How long to give the relays to answer at all before deciding the network,
   // rather than the other player, is the problem.
   const RELAY_CHECK_MS = 6000;
+  // How often the host says its offer again while waiting. A Nostr room has no
+  // memory — Trystero subscribes with `since: now()` and the events are
+  // ephemeral — so anything said before a guest subscribed is unreachable to
+  // it, for ever. Five seconds is slow enough not to look like spam to a relay
+  // and fast enough that nobody notices the wait.
+  const REPOST_MS = 5000;
 
   let modPromise = null;
 
@@ -178,6 +184,7 @@ const NetNostr = (function () {
 
     return new Promise((resolve) => {
       let rotate = null;       // swap the offer on the table for a fresh one
+      let rebroadcast = null;  // the repeating re-post of the offer on the table
       let done = false;        // torn down: room left, nothing more can happen
       let settled = false;     // the promise has been answered
       // SUBSCRIPTION MODE RESOLVES EARLY and the room stays open, so "answered"
@@ -191,6 +198,7 @@ const NetNostr = (function () {
         if (done) return;
         done = true;
         clearInterval(tick);
+        clearInterval(rebroadcast);
         leave();
         if (!settled) { settled = true; resolve(r); return; }
         // Already answered, so the only way to report this is the callback the
@@ -315,66 +323,57 @@ const NetNostr = (function () {
             // in a fresh one — rotate() below — rather than this minting a new
             // connection on every join, which is what got us rate-limited.
             let current = send || null;
-            let mintedAt = current ? Date.now() : 0;
-            let minting = false;
-            // A vanilla-ICE offer AGES: its candidates are the host's NAT
-            // mappings at gather time, and on a phone (carrier NAT, aggressive
-            // Wi-Fi) those die in tens of seconds. The pre-minted offer is
-            // gathered when NEW CODE is tapped — but the joiner arrives
-            // however long it takes a human to walk to the other machine and
-            // type. Serving that joiner a half-minute-old offer is how "phone
-            // hosts" fails while "desktop hosts" works: a desktop's mappings
-            // survive the wait, a phone's do not.
-            //
-            // So a JOINER whose offer on the table is stale gets a FRESH one
-            // minted for them. This is not the per-event minting that got us
-            // rate-limited: it fires only on a join, only past the age
-            // threshold, and one at a time.
-            const STALE_MS = 25000;
-            // …but NEVER out from under somebody. Once the current offer has
-            // been handed to a joiner, replacing it also replaces the
-            // connection awaiting their answer (the lobby's mintOffer rotates
-            // the pending transport) — a second joiner arriving mid-answer
-            // would hang up on the first. An offer that has been SERVED is
-            // spoken for; the rotate() in the connected path replaces it the
-            // moment its taker lands.
-            const servedTo = new Set();
-            const put = (to) => {
-              if (!current) return;
-              if (to && mintOffer && !minting && servedTo.size === 0 && Date.now() - mintedAt > STALE_MS) {
-                minting = true;
-                Promise.resolve(mintOffer(null)).then((o) => {
-                  minting = false;
-                  if (done) return;
-                  if (o) { current = o; mintedAt = Date.now(); }
-                  servedTo.add(to);
-                  try { post(current, to); } catch (e) {}
-                }).catch(() => {
-                  // Minting failed: the stale offer is still better than
-                  // silence — on a friendly network it may well work.
-                  minting = false;
-                  if (!done) { servedTo.add(to); try { post(current, to); } catch (e) {} }
-                });
-                return;
-              }
-              if (to) servedTo.add(to);
-              try { post(current, to); } catch (e) {}
-            };
+            // NOTE — DO NOT "refresh a stale offer" HERE. Build 975 tried it:
+            // a joiner arriving more than 25 s after the offer was gathered
+            // got a freshly minted one, on the theory that a phone's NAT
+            // mappings die during the walk to the other machine. It is a real
+            // problem and this is the wrong place to fix it, because the
+            // lobby's mintOffer calls newTransport(), which REPLACES the
+            // pending RTCPeerConnection. The offer was already broadcast to
+            // the room the moment it opened, so the guest is by then answering
+            // the ORIGINAL — and that answer comes back to a connection that
+            // has just been thrown away. The symptom is a permanent
+            // "Connecting…" on the same Wi-Fi, where ICE could not possibly be
+            // at fault. Refreshing offers needs an offer -> transport map, not
+            // a timer.
+            const put = (to) => { if (current) { try { post(current, to); } catch (e) {} } };
             if (!current && mintOffer) {
               // No opening offer supplied: make one now rather than waiting for
               // an arrival to trigger it.
-              Promise.resolve(mintOffer(null)).then((o) => { if (!done && o) { current = o; mintedAt = Date.now(); put(); } }).catch(() => {});
+              Promise.resolve(mintOffer(null)).then((o) => { if (!done && o) { current = o; put(); } }).catch(() => {});
             } else {
               put();
             }
             room.onPeerJoin = (id) => { if (!done) put(id); };
+            // AND REPEAT IT, because a Nostr room has no memory and the join
+            // hook cannot be trusted to fire.
+            //
+            // Trystero subscribes with `since: now()` and these are EPHEMERAL
+            // events — relays store nothing. So a guest that subscribes after
+            // the host published can NEVER see that publication; its only hope
+            // is the host posting again, which until now happened solely in
+            // onPeerJoin. That makes the entire room-code route depend on
+            // Trystero's presence announcements propagating, through public
+            // relays, both ways, in seconds.
+            //
+            // Measured on two devices on ONE Wi-Fi, both healthy: the host sat
+            // for the full two minutes and reported "Nobody joined that code"
+            // while the guest sat at "Looking for that room…". Neither ever
+            // saw the other. The offer had been posted once, before the guest
+            // existed, and nothing posted it again.
+            //
+            // Re-broadcasting the SAME small string every few seconds removes
+            // the dependency entirely: whenever the guest turns up, the next
+            // tick reaches it. It is not the per-join MINTING that got us
+            // rate-limited in build 954 — no RTCPeerConnection is created, no
+            // ICE is gathered, it is one already-built payload roughly every
+            // five seconds for as long as somebody is genuinely waiting.
+            rebroadcast = setInterval(() => { if (!done) put(); }, REPOST_MS);
             rotate = async (next) => {
               current = next || null;
               if (!current && mintOffer) {
                 try { current = await mintOffer(null); } catch (e) { current = null; }
               }
-              mintedAt = current ? Date.now() : 0;
-              servedTo.clear();
               if (!done) put();
             };
           } else if (send) {
@@ -389,6 +388,12 @@ const NetNostr = (function () {
             // the network being down.
             room.onPeerJoin = () => { try { post(send); } catch (e) {} };
             try { post(send); } catch (e) {}
+            // Same reasoning as the subscription branch above: the room has no
+            // memory, so the offer must keep being said for as long as nobody
+            // has taken it.
+            rebroadcast = setInterval(() => {
+              if (!done) { try { post(send); } catch (e) {} }
+            }, REPOST_MS);
           }
           // Subscription mode has nothing to wait for: hand back the way to
           // stop, and let the lobby decide when the room closes.

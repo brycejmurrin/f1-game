@@ -555,7 +555,6 @@ body.hud-hidden #hud-restore { display: block; }
    explicit z-index the sheet renders BEHIND the menu: still "visible" to a
    query, but every click lands on the menu instead, which reads as a dead
    button rather than a stacking bug. */
-#vsfriend { z-index: 38; }
 #vsfriend .vs-step { display: flex; flex-direction: column; gap: 10px; }
 #vsfriend .vs-hint {
   margin: 4px 0 0;
@@ -607,7 +606,7 @@ body.hud-hidden #hud-restore { display: block; }
 #vsfriend .vs-qr-wrap canvas {
   /* Capped on HEIGHT as well as width: a landscape phone has ~390px of it in
      total, and a QR that needs scrolling to see is a QR nobody can scan. */
-  width: min(180px, 38vh);
+  width: min(180px, 38svh);
   height: auto;
   image-rendering: pixelated;   /* never blur module edges; that is what breaks a scan */
   border-radius: 6px;
@@ -693,7 +692,7 @@ body.hud-hidden #hud-restore { display: block; }
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 28vh;
+  max-height: 28svh;
   overflow-y: auto;
 }
 #vsfriend .vs-who { flex: 0 0 auto; opacity: 0.6; width: 3.2em; }
@@ -751,7 +750,7 @@ body.hud-hidden #hud-restore { display: block; }
 }
 #vsfriend .vs-scan video {
   width: min(320px, 90%);
-  height: min(240px, 46vh);
+  height: min(240px, 46svh);
   object-fit: cover;
   border-radius: 8px;
   background: #000;

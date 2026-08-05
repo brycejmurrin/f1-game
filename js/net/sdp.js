@@ -52,6 +52,12 @@ const NetSdp = (function () {
 
   const SETUPS = ["actpass", "active", "passive", "holdconn"];
   const MAX_CANDS = 8;              // more than this is stragglers, not reach
+  // Which kinds keep their place when the budget is tight. Relay first: it is
+  // the one that works when nothing else does, and it is also the one that
+  // arrives last and so was always the one truncated away. Then the public
+  // address, then the LAN ones.
+  const RETAIN = [3 /*C_RELAY4*/, 2 /*C_SRFLX4*/, 5 /*C_SRFLX6*/,
+                  0 /*C_MDNS*/, 1 /*C_HOST4*/, 4 /*C_HOST6*/];
 
   // RFC 5245 priority for component 1 at full local preference. Recomputed
   // rather than carried: it is a pure function of the candidate type, so
@@ -186,14 +192,46 @@ const NetSdp = (function () {
     const uf = strBytes(ufrag), pw = strBytes(pwd);
     if (!uf || !pw) return null;
 
-    const cands = [];
+    // TAKE THE FIRST EIGHT OF EACH KIND, NOT THE FIRST EIGHT.
+    //
+    // SDP lists candidates in GATHERING order: host first, then srflx once
+    // STUN answers, then relay once TURN allocates — relay is always last
+    // because it is always slowest. Truncating the raw sequence therefore
+    // drops exactly the candidates that matter most, and does it precisely on
+    // the machines that need them: a laptop with Wi-Fi, Ethernet, a VPN and
+    // IPv6 can fill eight slots with host and srflx before a single relay line
+    // appears.
+    //
+    // That is what was happening. __apex.turnProbe() reported all four Metered
+    // servers reachable with relay candidates, the connection gathered them,
+    // and the invite code carried none — so the peer was offered a set of
+    // addresses it could not reach and the relay never entered the race. The
+    // wire dump said relay:0 and looked like a dead relay for hours.
+    //
+    // So group by kind and round-robin. Every kind present keeps at least one
+    // slot, and the budget is still MAX_CANDS.
+    const byKind = new Map();
     const re = /^a=candidate:(.+)$/gmi;
     let m;
-    while ((m = re.exec(text)) && cands.length < MAX_CANDS) {
+    while ((m = re.exec(text))) {
       const c = parseCandidate(m[1]);
       // An unparseable candidate is skipped, not fatal: a stack may offer TCP
       // or a type we do not pack, and the UDP ones are what connect.
-      if (c && c.port >= 0 && c.port <= 65535) cands.push(c);
+      if (!c || c.port < 0 || c.port > 65535) continue;
+      if (!byKind.has(c.kind)) byKind.set(c.kind, []);
+      byKind.get(c.kind).push(c);
+    }
+    // Relay first, so that when the budget is tight the fallback of last
+    // resort is the thing guaranteed a place.
+    const order = [...byKind.keys()].sort((a, b) => RETAIN.indexOf(a) - RETAIN.indexOf(b));
+    const cands = [];
+    for (let round = 0; cands.length < MAX_CANDS; round++) {
+      let added = 0;
+      for (const k of order) {
+        const list = byKind.get(k);
+        if (round < list.length && cands.length < MAX_CANDS) { cands.push(list[round]); added++; }
+      }
+      if (!added) break;
     }
     if (!cands.length) return null;                       // nothing to connect to
 

@@ -2376,7 +2376,9 @@ const AgentView = (function () {
             "drive an interval, return a digest instead of every frame",
           "terminal()": "{done, reason} — retired|finished|wrong_way|rescued|null",
           "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once",
-          "agentHelp()": "this manifest",
+          // agentHelp() itself is deliberately absent: it is not an act, and an
+          // entry describing the call whose output you are already reading is
+          // the one line in here that can never tell anybody anything.
         },
         // What the numbers MEAN, in terms of what to do about them. The single
         // best-measured context intervention available: BIRD text-to-SQL went

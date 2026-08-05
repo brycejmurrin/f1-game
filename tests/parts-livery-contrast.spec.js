@@ -259,9 +259,67 @@ test.describe("Livery atlas — ink contrast", () => {
         .toContain(slot);
     }
     // The regions that historically broke must all be covered by the probe.
-    for (const r of ["fin", "wing", "titleA"]) {
+    // `wing` is deliberately NOT in this list: its backing surface is the top
+    // rear plane, which ACTIVE AERO hoisted out of the baked body mesh so it can
+    // rotate (Car3D.aeroFlaps / drawAeroFlaps). There is nothing behind the band
+    // for a body-mesh probe to find, and demanding one here would only be
+    // satisfiable by painting the band onto a surface that does not move with
+    // it. The next test covers that region against the geometry it actually
+    // sits on.
+    for (const r of ["fin", "titleA"]) {
       expect(Object.keys(result), `probe never located region ${r}`).toContain(r);
     }
+  });
+
+  // The counterpart to the probe above, for the one region the probe cannot see.
+  // The old guarantee — "this mark sits on a real painted surface" — still has to
+  // hold for the wing band; the surface just lives in the ACTIVE AERO element
+  // list now instead of the body mesh. Checked at the flap's REST angle, which is
+  // where the band is authored: carDecalData builds the quad from the aero
+  // recipe's own upperTrailY, so if either side's numbers move independently the
+  // wordmark floats off the wing and only this catches it.
+  test("the wing sponsor band sits on the rear flap it is painted for", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => {
+      const data = CarMesh.carDecalData(2, null, false, "ferrari");
+      const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
+      const uL = R.wing.x / S, uR = (R.wing.x + R.wing.w) / S;
+      const vB = 1 - (R.wing.y + R.wing.h) / S, vT = 1 - R.wing.y / S;
+      const band = [];
+      for (let q = 0; q < data.pos.length / 3; q += 4) {
+        const u = data.uv[q * 2], v = data.uv[q * 2 + 1];
+        if (u < uL - 1e-6 || u > uR + 1e-6 || v < vB - 1e-6 || v > vT + 1e-6) continue;
+        for (let k = 0; k < 4; k++)
+          band.push([data.pos[(q + k) * 3], data.pos[(q + k) * 3 + 1], data.pos[(q + k) * 3 + 2]]);
+      }
+      // Rest-position bounds of each rear element, in the car frame: rotate the
+      // canonical geometry by zAngle about local X, then hang it at its pivot —
+      // exactly what drawAeroFlaps does at blend 0.
+      const rear = [];
+      for (const fg of Car3D.aeroFlaps(2, null)) {
+        if (fg.wing !== "rear") continue;
+        const g = Car3D.buildFlapGeom(fg, [1, 1, 1]);
+        const ca = Math.cos(fg.zAngle), sa = Math.sin(fg.zAngle);
+        const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+        for (let p = 0; p < g.pos.length; p += 3) {
+          const c = [g.pos[p],
+                     g.pos[p + 1] * ca - g.pos[p + 2] * sa + fg.y,
+                     g.pos[p + 1] * sa + g.pos[p + 2] * ca + fg.z];
+          for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], c[k]); hi[k] = Math.max(hi[k], c[k]); }
+        }
+        rear.push({ lo, hi });
+      }
+      // How far outside the best-fitting element does the band stray? 0 = wholly on it.
+      const escape = (el) => Math.max(...band.map((p) =>
+        Math.max(...[0, 1, 2].map((k) => Math.max(el.lo[k] - p[k], p[k] - el.hi[k], 0)))));
+      return { corners: band.length, rear: rear.length, worst: Math.min(...rear.map(escape)) };
+    });
+    expect(r.corners, "no decal quad carries the wing region").toBeGreaterThanOrEqual(4);
+    expect(r.rear, "no ACTIVE AERO rear elements to sit on").toBeGreaterThan(0);
+    // Measured 0 — the band is wholly inside the top plane's rest envelope. The
+    // slack is for a taper/sweep retune, not for the band drifting onto air.
+    expect(r.worst, "the wing sponsor band hangs off the flap it is painted on")
+      .toBeLessThan(0.02);
   });
 
   test("the wing sponsor band is mapped onto geometry, not drawn into nothing", async ({ page }) => {
