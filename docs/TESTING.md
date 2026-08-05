@@ -1,6 +1,6 @@
 # Testing reference
 
-105 root Playwright spec files (`tests/*.spec.js`) + 40 `node --test` unit suites
+106 root Playwright spec files (`tests/*.spec.js`) + 40 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -361,6 +361,7 @@ what it covers.
 | `active-aero.spec.js` | X-mode / Z-mode: flap travel, the downforce/drag trade, the 400 ms transition cap |
 | `aero-zones.spec.js` | fixed ACTIVATION ZONES per circuit, Monaco having none, and the overtake gate on lap 1 / under caution driven through a REAL opening lap |
 | `debris.spec.js` | the Rapier debris side-world — and that it never moves a game car |
+| `race-control.spec.js` | the CAUTION flag contract — defaults ON, a host's flag is adopted verbatim, switching the layer off DROPS a flag already flying, and the setting survives a reload (which also pins the storage format) |
 | `autopilot.spec.js` | a closed-loop driver that actually completes laps (monza, suzuka) |
 | `presets.spec.js` | RELAX / STANDARD / PRO each push the sliders somewhere distinct |
 | `sliders.spec.js` | every pause-menu slider is wired and persists |
