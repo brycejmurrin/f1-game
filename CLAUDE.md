@@ -63,6 +63,61 @@ and `css/` straight from the working tree**, so editing those mid-run makes
 later specs load a mix of versions. Everything else — `tools/`, `docs/`,
 `tests/` (new files), commit messages, `CLAUDE.md` — is fair game.
 
+#### What to actually DO with those minutes
+
+Roughly in priority order. The first two are work on the run itself; the rest is
+work you would otherwise do after it.
+
+1. **Triage failures as they land, not at the end.** `live-reporter.js` writes a
+   line per test the moment it finishes, so a failure is readable minutes before
+   the run is. `grep -n "x FAIL" artifacts/logs/<group>.log` and start
+   diagnosing immediately — by the time the run ends you can already have the
+   fix written (staged, not applied, if the run is still going).
+2. **Predict the blast radius and check the prediction.** Before the result
+   arrives, write down which specs SHOULD fail given the diff and why. A spec
+   that fails and is not on your list is the interesting one; a spec on your list
+   that passes means you did not understand your own change. This turns a wait
+   into a comprehension check.
+3. **Reproduce a suspected failure in isolation** — a single spec on a free port
+   is cheap and does not disturb the group (`npx playwright test <spec>
+   -g "<name>" --reporter=line`). This is also how you tell a real failure from a
+   contention timeout (see the ceiling note below).
+4. **Write the NEXT spec.** `tests/` is safe to add to mid-run — Playwright
+   globbed its list at start. New coverage for the change you just made is the
+   single most useful thing to produce while its existing coverage runs.
+5. **Read the code you are about to touch next**, and draft the commit message
+   for the change in flight while the reasoning is still fresh.
+6. **Research.** See below.
+7. **Docs** — `docs/`, `CLAUDE.md`, `tools/README.md`. Note that
+   `tests/docs-integrity.test.mjs` gates several of these (spec counts, the tools
+   index, `docs/README.md` links), so doc work often has to happen anyway.
+
+#### Research tools, and which to reach for
+
+**TinyFish** (`mcp__tinyfish__*`) is the default web toolkit — prefer it over
+`WebFetch`/`curl`:
+
+| Tool | Use it for |
+|---|---|
+| `search` | find pages. `domain_type: "research_paper"` for academic sources, `"news"` for current events; `include_domains` to pin to a known-good site; `after_date`/`before_date` or `recency_minutes` for freshness |
+| `fetch_content` | read up to 10 URLs in parallel, rendered in a real browser, returned as clean markdown. `include_selectors`/`exclude_selectors` to cut boilerplate on a noisy page |
+| `run_web_automation` | when reading is not enough — clicking, forms, login, anything behind interaction. Slow (minutes) and credit-metered; needs a fresh `session_id` UUID per call. If it times out the run may still be live: use `list_runs`/`get_run`, never a blind retry |
+| `create_browser_session` | a remote CDP endpoint for direct Playwright/Puppeteer control. Close it when done |
+
+**Context7** (`mcp__Context7__*`) for library documentation, and it is two calls,
+always in this order: `resolve-library-id` (name → `/org/project`) then
+`query-docs` (one concept per call, specific). Use it for anything versioned —
+three.js, Rapier, Playwright APIs — rather than trusting recall.
+
+What is worth researching here, from experience: how shipped racing games name
+and scope a feature before we invent our own vocabulary; accessibility
+documentation, which is unusually specific about mechanics because it has to be;
+and the physical meaning of anything we are about to map onto a physics
+constant, so the sign is right the first time. Findings that outlive the task go
+in `docs/research/` — including the NEGATIVE ones, because a decision not to
+build something gets re-litigated every few months unless it is written down.
+See `docs/research/DRIVING-CONTROLS-RESEARCH.md` for the shape.
+
 **Parallelism has a real ceiling, and exceeding it manufactures failures.**
 Each group is its own server plus `WORKERS=2` Chromium+SwiftShader processes, so
 N groups is 2N browsers. On a 4-core box, 2-3 groups is the limit. Past it,
