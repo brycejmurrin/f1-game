@@ -118,6 +118,65 @@ in `docs/research/` — including the NEGATIVE ones, because a decision not to
 build something gets re-litigated every few months unless it is written down.
 See `docs/research/DRIVING-CONTROLS-RESEARCH.md` for the shape.
 
+#### Worktrees: the way to keep editing while a run is in flight
+
+The "don't edit `js/` or `css/`" constraint is a property of the DIRECTORY the
+test server was started in, not of the repo. A `git worktree` is a second
+working directory on the same object store, so an edit there cannot disturb a
+run in this one. **Measured:** changing a constant in a worktree's
+`js/game/input.js` left the main tree's copy untouched, and the in-flight run
+kept serving the original.
+
+```sh
+git worktree add .worktrees/<task> -b <branch>        # .worktrees/ is gitignored
+cp --reflink=auto -r node_modules .worktrees/<task>/  # REQUIRED — see below
+git worktree remove --force .worktrees/<task>         # and `git branch -D` if throwaway
+```
+
+Two measured costs, both easy to trip over:
+
+- **A worktree has no `node_modules`** — it is gitignored, so it is not checked
+  out, and `require.resolve("@playwright/test")` fails outright. Nothing can run
+  tests there until you copy it (19 MB here; `--reflink=auto` makes it nearly
+  free on a CoW filesystem). Do NOT symlink it — concurrent installs corrupt a
+  shared directory.
+- **~35 MB of checkout per worktree**, plus that `node_modules`.
+
+**A worktree buys EDITING freedom, not free test parallelism.** Two agents in
+two worktrees each running a test group is exactly the CPU oversubscription
+described below — the group ceiling is a property of the box, not of the
+directory. Parallelise the *writing*; serialise the *running*.
+
+#### Deciding what a plan can fan out
+
+Worth asking of every plan, not just large ones. The decomposition question is
+always the same: **which files does each task own?** Two tasks that touch the
+same file must be sequential; the planning cost of getting this wrong is paid
+back at merge time with interest.
+
+In THIS repo the answer is usually dictated by one file. `js/game.js` is ~8 000
+lines and holds the loop, the physics, the AI and the race logic, so most
+gameplay work touches it and most gameplay work is therefore *serial*. What
+does fan out cleanly:
+
+| Fan out | Because |
+|---|---|
+| Read-only investigation (`Explore` agents, 2-3 at once) | no writes at all; this is the plan-mode default for a reason |
+| Research + docs alongside implementation | `docs/`, `tools/README.md` and `js/` never collide |
+| A `tools/` script beside a `js/` change | different trees entirely |
+| Per-circuit work (`js/circuits/<id>.js`) | one file per circuit, 40 of them, genuinely independent |
+| A new spec beside the change it covers | `tests/` is additive |
+| Independent `js/game/*` modules | each is its own `Module.create(G)` file — but check whether both also need a `G` façade entry in `js/game.js`, which serialises them |
+
+The `Agent` tool takes `isolation: "worktree"` to do the setup itself. Use it
+when subagents genuinely write in parallel; skip it when they only read, since
+it costs setup time and disk for nothing.
+
+Two conventions that make a fan-out reviewable: give each agent a **non-
+overlapping file list in its prompt**, and have it report **what it changed and
+why** rather than leaving you to diff. If two agents must touch `js/game.js`,
+that is the signal to sequence them instead.
+
 **Parallelism has a real ceiling, and exceeding it manufactures failures.**
 Each group is its own server plus `WORKERS=2` Chromium+SwiftShader processes, so
 N groups is 2N browsers. On a 4-core box, 2-3 groups is the limit. Past it,
