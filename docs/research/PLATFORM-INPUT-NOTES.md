@@ -266,36 +266,58 @@ whether the mechanism the authoritative docs describe is even the same mechanism
 
 ---
 
-## 9a. CONFIRMED: `#track-detail` claims to be modal and is not
+## 9a. FIXED: `#track-detail` claimed to be modal and was not
 
-Verified in code, not inferred. `index.html` declares:
+Verified in code, not inferred. `index.html` used to declare:
 
 ```html
 <div id="track-detail" role="dialog" aria-modal="true" …>
 ```
 
-but it is a plain `<div>`: no `showModal()`, so no top layer and **no inert
-background**, and `grep` finds **no focus trap anywhere in this codebase** —
+but it was a plain `<div>`: no `showModal()`, so no top layer and **no inert
+background**, and `grep` found **no focus trap anywhere in this codebase** —
 `js/game/topmodal.js` gets containment from the platform, and nothing else
 implements it by hand.
 
 `aria-modal="true"` is not decoration. It instructs assistive technology to
 treat everything outside the element as inert, so a screen reader removes the
-rest of the page from its virtual cursor. Keyboard focus, meanwhile, walks
-straight out of the div into `#select` behind it. The AT user is told the rest
-of the page is gone and then Tab lands them in it — the worst combination, and
-strictly worse than never having made the claim.
+rest of the page from its virtual cursor. Keyboard focus, meanwhile, walked
+straight out of the div into `#select` behind it. The AT user was told the
+rest of the page was gone and then Tab landed them in it — the worst
+combination, and strictly worse than never having made the claim.
 
-Escape already works here (`data-esc-close="track-detail-close"`, §1). What is
-missing is containment.
+Escape already worked here (`data-esc-close="track-detail-close"`, §1). What
+was missing was containment.
 
-**Fix: make the claim true rather than withdraw it** — convert it to a real
-`<dialog>` so the platform supplies the top layer, the inert background and
-focus containment, exactly as it does for the other sixteen screens. Two things
-to handle: `js/game/topmodal.js` scans `dialog.screen` and this element is not
-`.screen`, so widen that selector; and a `<dialog>` carries UA defaults
-(`margin: auto`, `border`, `padding`, fit-content sizing) that its full-bleed
-`position: fixed; inset: 0` styling in `css/track-detail.css` must override.
+**Fix, shipped: made the claim true rather than withdrawing it.** `#track-detail`
+is now a real `<dialog class="screen dim">` in `index.html`, migrated by the
+exact same seam every other screen used — `js/game/topmodal.js`'s `MutationObserver`
+on `hidden` already mirrors it onto `showModal()`/`close()`, and its `scan()`
+selector (`dialog.screen`) picked the element up with zero code changes once the
+class was added, so nothing in that file changed except a stale header comment
+that still counted it among the non-dialog screens. `role="dialog"` and
+`aria-modal="true"` were removed — the native element and `showModal()` now
+supply that semantics for real, so the hand-written attributes would only have
+been redundant duplicates of what the platform now asserts on its own.
+`js/game/uilayers.js`'s `isModal()` (`el.matches(":modal")`) picked it up
+unchanged too, since `#track-detail` was already in its `DEFS` list with no
+special flags.
+
+The one thing that needed a real check rather than reasoning on paper: a bare
+`<dialog>`'s UA stylesheet defaults to `margin: auto`, and `css/track-detail.css`'s
+`position: fixed; inset: 0` full-bleed layout had no explicit `margin` of its
+own. `#track-detail`'s ID-selector rule already outranks the generic
+`dialog.screen` class rule on every property both declare, so the existing
+`display: flex` full-bleed layout survived unchanged; an explicit `margin: 0`
+was added to `css/track-detail.css` anyway to remove any doubt rather than rely
+on the auto-margin-resolves-to-zero case of the CSS2.1 abspos algorithm holding
+identically across engines.
+
+`tests/menu-keyboard.spec.js` — "Tab cannot escape the track-detail dialog into
+the select screen behind it" — pins the actual defect: opens `#track-detail`
+from the select screen's circuit preview, confirms `showModal()` parked focus
+inside it, walks Tab six times asserting focus never leaves the dialog, and
+confirms it never lands on a control in `#select` sitting behind it.
 
 ---
 

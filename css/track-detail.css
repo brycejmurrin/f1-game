@@ -12,6 +12,14 @@
 /* ---------- track detail fullscreen modal ---------- */
 #track-detail {
   position: fixed; inset: 0; z-index: 400;
+  /* Now a real <dialog> (js/game/topmodal.js) — margin: 0 overrides the UA
+     stylesheet's `margin: auto`, which centring trick only bites when width/
+     height are non-auto. inset:0 with an auto width resolves to filling the
+     containing block regardless (CSS2.1 10.3.7 case 6: width is the 'auto' one
+     among left/width/right, so the margins resolve to 0, not to centring), but
+     nothing here should rely on that computation holding across engines when a
+     one-line override removes the ambiguity entirely. */
+  margin: 0;
   background: #0a0a0e;
   display: flex; flex-direction: column;
   /* Full safe-area inset on every edge — this is a full-bleed overlay, so
