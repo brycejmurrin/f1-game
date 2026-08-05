@@ -200,16 +200,39 @@ why** rather than leaving you to diff. If two agents must touch `js/game.js`,
 that is the signal to sequence them instead.
 
 **Parallelism has a real ceiling, and exceeding it manufactures failures.**
-Each group is its own server plus `WORKERS=2` Chromium+SwiftShader processes, so
-N groups is 2N browsers. On a 4-core box, 2-3 groups is the limit. Past it,
-load average goes to 5-10x core count and tests start failing on the CLOCK
-rather than on an assertion — the signature is
-`Tearing down "context" exceeded the test timeout`, or a spec whose duration is
-several times its usual. Measured here: `elevation-tracks › albert_park` took
-**219 s and failed** with three groups running, and **30 s and passed** alone,
-same commit. Before believing a timing-shaped failure, check `uptime` and
-re-run that ONE spec alone (`npx playwright test <spec> -g "<name>"`) — and
-prefer running heavy groups one at a time over stacking them.
+Count **WORKERS against CORES, not groups against cores** — each group is a
+server plus `WORKERS=2` Chromium+SwiftShader processes, so N groups is 2N
+browsers, and a browser rendering through SwiftShader will take a whole core.
+On a 4-core box **two groups is already 4 workers and starves the OS and the
+servers**; the heavy groups (`physics`, `behaviour`, `circuit`, anything
+rebuilding circuits) want the box to themselves.
+
+Past the ceiling, tests fail on the CLOCK rather than on an assertion. The
+signature is `Tearing down "context" exceeded the test timeout`, a bare
+`Test timeout of 120000ms exceeded`, or a spec whose duration is several times
+its usual. Both measured here, same commit each time:
+
+| Spec | Under load | Alone |
+|---|---|---|
+| `elevation-tracks › albert_park` | 219 s, **FAILED** (3 groups) | 30 s, passed |
+| `aero-zones › a bigger wing trades HARDER` | 133 s, **FAILED** (2 groups) | passed, 10/10 file |
+
+**Before believing a timing-shaped failure:**
+
+1. `cat /proc/loadavg` — anything past ~2x cores means the result is suspect.
+2. **Check for ORPHANED workers.** `test-bg --stop` and killing the run's pid do
+   NOT reap worker trees whose ancestor has already reparented to init, and a
+   stale tree will quietly eat the box under every later run:
+   `ps -eo pid,ppid,comm | awk '$3=="chrome"{print $2}' | sort -u` and trace each
+   parent back — anything whose chain hits `1` before it hits a live `test-bg`
+   pid is a leak. Kill those first.
+3. Re-run that ONE spec alone: `npx playwright test <spec> -g "<name>"`.
+
+**Never amputate one group to rescue another mid-run.** Killing a group takes
+its server down, so every remaining test in it fails in ~1 s against a dead
+port, and the final tally ("31 failed") is almost entirely artifact. If the box
+is oversubscribed, stop EVERYTHING and restart serially — the results you keep
+are worth more than the minutes you save.
 
 ### 2. Run the groups the change needs — not all of them
 
