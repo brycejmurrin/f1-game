@@ -151,13 +151,23 @@ function analyse(env, track, prims, opt) {
   for (const [, arr] of grid) {
     for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) {
       const ia = arr[i], ib = arr[j];
-      const key = ia < ib ? ia * 1e7 + ib : ib * 1e7 + ia;
-      if (seen.has(key)) continue; seen.add(key);
       const a = prims[ia], b = prims[ib];
+      // AABB FIRST, `seen` SECOND. `seen` exists only to stop a pair being
+      // processed twice when both primitives span more than one 10 m cell, so
+      // it needs to hold the pairs that reach the EXPENSIVE stage — not every
+      // pair that happens to share a cell. Deduping first made it the latter,
+      // and on a dense street circuit that is a Set of millions of keys: it is
+      // what exhausted the heap, reproducibly, in `Runtime_SetGrow` under
+      // OrderedHashSet::Rehash. The overlap test below is pure and depends on
+      // nothing but a and b, so running it before the dedup costs a repeat of
+      // three min/max pairs for a duplicate and saves storing a key forever.
+      // Every counter and every hit is reached exactly as often as before.
       const ox = Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX);
       const oy = Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY);
       const oz = Math.min(a.maxZ, b.maxZ) - Math.max(a.minZ, b.minZ);
       if (ox <= 0.02 || oy <= 0.02 || oz <= 0.02) continue;
+      const key = ia < ib ? ia * 1e7 + ib : ib * 1e7 + ia;
+      if (seen.has(key)) continue; seen.add(key);
       stats.broad++;
       if (soft(a) && soft(b)) { stats.softPair++; continue; }
       if (Math.abs(a.q - b.q) <= opt.adj) { stats.adjacent++; continue; }
