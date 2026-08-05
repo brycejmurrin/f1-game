@@ -46,6 +46,76 @@ one looks exactly like "the tests are slow".
 | `pkill -f <pattern>` to clean up | Kills the run you just started as well as the strays. Exit 143/144 with no result | Kill the specific PID you captured |
 | Several heavy runs at once | SwiftShader is CPU-bound; they starve each other and all die to their own timeouts. Not a failure — a false one | One run at a time; more workers is not more throughput |
 
+#### CHECK THE BOX IS QUIET BEFORE YOU START, AND CLEAN UP AFTER
+
+**This is the single easiest way to get fake results, and it does not look like
+one.** The box has **4 cores**. Every Playwright worker drives a SwiftShader
+Chromium; a group at `--workers=2` is already half the machine.
+
+```sh
+pgrep -cf pw-browsers      # Chromium processes. Expect 0 before a run
+cat /proc/loadavg          # expect < 3 before a run, on 4 cores
+node tools/test-bg.mjs --status
+```
+
+Run **at most two groups at once**, and never a group alongside another heavy
+suite (`test:baseline`, anything `--project=render`, a `tools/*-audit.mjs`
+sweep). Groups are separate processes, which is why parallelism helps at all —
+but only up to the core count.
+
+**The signature of an oversubscribed box is a TIMEOUT, never an assertion.** If
+every failure reads `Test timeout of 120000ms exceeded` and none of them is an
+expectation that did not hold, you are almost certainly measuring the machine
+and not the code. Re-run the group ALONE before believing any of it. Measured
+this way once: 117 Chromium processes on 4 cores, load average **50.7**, and
+nine "failures" in `elevation-tracks.spec.js` that were all the same 120 s
+timeout — zero real defects.
+
+**Orphans are the usual cause, and they are invisible.** `--stop` used to signal
+only the `npm run test:<group>` shim, and npm does not forward signals, so
+`run-playwright`, the Playwright runner and its browsers survived. An orphan
+does not appear in `--status`, keeps its workers on the CPU, and **keeps writing
+to the log file the next run truncates under it** — the tell is two independent
+progress counters interleaved in one log (`19/105 done, 0 failed` next to
+`39/105 done, 10 failed`). `--stop` now signals the process GROUP
+(`kill(-pid)`; the children are spawned `detached`, so pgid === pid) and
+escalates to SIGKILL after 4 s. Starting a batch also no longer clobbers the
+record of one already running.
+
+If anything is ever left behind:
+
+```sh
+node tools/test-bg.mjs --stop
+pkill -9 -f 'tools/run-playwright'; pkill -9 -f pw-browsers
+```
+
+Then wait for `/proc/loadavg` to fall back under ~3 before starting anything —
+the load average lags the kill by a minute or two, and starting into a decaying
+load reproduces the same fake timeouts.
+
+#### Parallelise the THINKING, serialise the BROWSER
+
+Full reference: **`docs/PARALLEL-WORK.md`**. The one-line version, because it is
+counter-intuitive and it has already cost a morning:
+
+**Worktrees isolate files. They do not isolate CPU.** Fanning agents out across
+worktrees to run tests faster does the opposite — they thrash the same four
+cores and every one of them reports timeouts.
+
+- **Parallel is free for READS**: exploration, contract audits across a domain,
+  reviewing a diff from several angles, checking prose against code, per-file
+  analysis ahead of a mechanical migration. Token-bound, not CPU-bound.
+- **Parallel is harmful for BROWSERS**: test groups (max two), anything
+  `--project=render`, `test:baseline`, `tools/*-audit.mjs`.
+- **Worktrees earn their keep** for "was this failing before my change?" (the
+  tests serve `js/`/`css/` off disk, so the working tree cannot answer it), for
+  baseline-vs-worktree diffs (`tools/graph-parity.cjs` already works this way),
+  and for edits that would otherwise silently overwrite each other. The `Agent`
+  tool takes `isolation: "worktree"`. Symlink `node_modules` in (safe only while
+  `package-lock.json` matches) and `git worktree remove --force` when done.
+- **A plan's fan-out should reduce the NUMBER of verification rounds**, not run
+  more of them at once — verification is serial here and is the bottleneck.
+
 **AGENTS: DO NOT SIT AND WAIT, AND DO NOT POLL.** A full SwiftShader spec can be
 40-90 s on a small box, so a suite is tens of minutes — that time is yours, not
 dead. Two rules:
@@ -563,6 +633,10 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
                  ARCHITECTURE-REVIEW.md is the standing assessment + defect
                    register: what the no-build-step bet costs, why asserted
                    invariants hold and prose ones drift, and what is deferred
+                 PARALLEL-WORK.md is where to spend concurrency — read-only
+                   fan-out vs worktrees vs the browser suite, which is serial
+                   on 4 cores and is the bottleneck every plan has to respect
+
                  research/PLATFORM-INPUT-NOTES.md is the one to read before
                    debugging anything that reproduces on ONE device: pointer
                    capture and the four-way release net, the top layer vs

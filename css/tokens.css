@@ -362,6 +362,43 @@ body:not(.desktop) {
   :root { --ui-scale: 1.15; --hud-scale: 1.15; }
 }
 
+/* VIEWPORT UNITS ARE THE ONE UNIT FAMILY `zoom` GETS WRONG, so inside a zoomed
+   subtree they need dividing by the same scale. Everything else behaves —
+   measured in Chromium 141 at 844x390 under `zoom: 1.3`:
+
+     width: 340px  -> 442.0px   scales, as intended
+     width: 5.2em  -> 87.9px    scales, as intended
+     width: 78%    -> 658.3px   safe (a share of an already-scaled parent)
+     width: 78vw   -> 855.8px   OVERFLOWS an 844px viewport
+
+   A viewport unit resolves against the UNZOOMED viewport and is then multiplied
+   by the zoom, so `78vw` renders as 101vw. Shipped consequence, measured on the
+   title screen in portrait at 393x852: `min(78vw, 340px)` takes its vw branch
+   (306px), and at UI SIZE 130 % the button column rendered 398.5px wide with its
+   right edge 17.5px off screen; at 150 %, 78.8px off. The CSS width never
+   changed — 306.5px at every setting — which is exactly why it does not read as
+   a sizing bug when you look at the stylesheet.
+
+   `100 * var(--vwz)` is "100vw, as rendered". Use it for ANY viewport-unit
+   length inside a `.sheet`, `#overlay > *`, a HUD cluster or `.dock`; use the
+   bare unit everywhere else, where it is correct and cheaper. The safe-area
+   insets in hud.css already do this by hand (`var(--sat) / var(--hud-scale)`) —
+   same correction, same reason.
+
+   There are TWO PAIRS because there are two scales. The `z` pair is the MENU
+   layer (--ui-scale: .sheet, #overlay > *); the `zh` pair is the DRIVING layer
+   (--hud-scale: the HUD clusters, .dock). Using the wrong one is worse than
+   using none — it divides by a number the player can move independently.
+   The audit that found this turned up exactly one HUD-layer site, #announce's
+   font-size in hud.css, whose `top` on the line above was already divided by
+   --hud-scale by hand while its 8vw was not. */
+:root {
+  --vwz:   calc(1vw  / var(--ui-scale));
+  --svhz:  calc(1svh / var(--ui-scale));
+  --vwzh:  calc(1vw  / var(--hud-scale));
+  --svhzh: calc(1svh / var(--hud-scale));
+}
+
 /* Per-team accents (ids + colours from js/car/teams.js — vivid brand colour of
    each team; dark liveries use their secondary accent so it reads on --bg). */
 :root[data-team="mercedes"]    { --accent: #00b4ab; }

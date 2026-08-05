@@ -85,14 +85,41 @@ async function wait() {
   process.exitCode = bad.length ? 1 : 0;
 }
 
-function stop() {
+// KILL THE PROCESS GROUP, NOT THE npm WRAPPER. `process.kill(pid)` reached only
+// the `npm run test:<group>` shim; npm does not forward the signal, so
+// run-playwright, the Playwright runner and every Chromium it had opened were
+// orphaned and kept running — invisible to --status, still holding the CPU, and
+// still writing to the log file the NEXT run truncated under them.
+//
+// That is how this tool produced fake results. Measured after three `--stop`ed
+// groups: 117 Chromium processes on a 4-core box, load average 50.7, three
+// orphaned runners (one of them re-running the same physics specs as the live
+// run, into the same log). Every "failure" in that state was `Test timeout of
+// 120000ms exceeded` and not one was an assertion.
+//
+// spawn() uses `detached: true`, which makes each child a process-group leader
+// with pgid === pid, so a negative pid signals the whole tree. SIGTERM first so
+// Playwright can close its browsers, then SIGKILL anything still up.
+function stop({ graceMs = 4000 } = {}) {
   const s = readState();
+  const live = s.runs.filter((r) => alive(r.pid));
+  const signal = (pid, sig) => {
+    try { process.kill(-pid, sig); return true; } catch (_) {
+      try { process.kill(pid, sig); return true; } catch (_) { return false; } // not a group leader
+    }
+  };
   let n = 0;
-  for (const r of s.runs) {
-    if (!alive(r.pid)) continue;
-    try { process.kill(r.pid, "SIGTERM"); n++; } catch (_) {}
-  }
-  console.log(`sent SIGTERM to ${n} run(s)`);
+  for (const r of live) if (signal(r.pid, "SIGTERM")) n++;
+  console.log(`sent SIGTERM to ${n} run group(s)`);
+  if (!n) return;
+  const deadline = Date.now() + graceMs;
+  const spin = () => {
+    const still = live.filter((r) => alive(r.pid));
+    if (!still.length) return console.log("all stopped");
+    if (Date.now() < deadline) return setTimeout(spin, 250);
+    for (const r of still) { signal(r.pid, "SIGKILL"); console.log(`SIGKILL ${r.group} (pgid ${r.pid})`); }
+  };
+  setTimeout(spin, 250);
 }
 
 function start(groups) {
@@ -125,7 +152,20 @@ function start(groups) {
     runs.push({ group, pid: child.pid, log, started: new Date().toISOString() });
     console.log(`> test:${group.padEnd(14)} pid=${child.pid}  log=${path.relative(ROOT, log)}`);
   }
-  writeState({ runs, started: new Date().toISOString(), workers: WORKERS });
+  // MERGE WITH WHAT IS STILL RUNNING, don't clobber it. Starting a second batch
+  // used to replace the whole list, which ORPHANED everything already in
+  // flight: --status stopped listing it, --wait returned as soon as the new
+  // batch finished, and --stop left it running. That is not a cosmetic bug —
+  // an orphaned run keeps its workers on the CPU, so the next batch is
+  // measured against a machine that is quietly oversubscribed, and its
+  // timeouts read as test failures. Observed exactly that: `test-bg physics`
+  // then `test-bg tiny` left physics alive and invisible.
+  //
+  // A group started again SUPERSEDES its old entry — same log file, and the
+  // old process is about to be writing to a file the new one truncated.
+  const prior = readState().runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
+  if (prior.length) console.log(`  (still running from an earlier start: ${prior.map((r) => r.group).join(", ")})`);
+  writeState({ runs: [...prior, ...runs], started: new Date().toISOString(), workers: WORKERS });
   console.log(`\ntail one:   tail -f ${path.relative(ROOT, runs[0].log)}`);
   console.log(`tail all:   tail -f ${runs.map((r) => path.relative(ROOT, r.log)).join(" ")}`);
   console.log(`check:      node tools/test-bg.mjs --status`);

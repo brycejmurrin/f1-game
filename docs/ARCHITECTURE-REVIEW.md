@@ -312,6 +312,73 @@ Deferred because the fix touches race classification and wants its own test pass
 **Agreed approach when taken up: symmetric decrement** — mirror the `ds > 0` case
 with a `lap--` on a backward crossing, matching `prog`.
 
+**A13 — `getBoundingClientRect()` inside a zoomed subtree, on Safari.** The UI
+SIZE / HUD SIZE feature is implemented as `zoom` on four subtrees (`.sheet`,
+`#overlay > *`, the HUD clusters, `.dock`). WebKit returned **pre-zoom** rects
+from `getBoundingClientRect()` for thirteen years
+([bug 77998](https://bugs.webkit.org/show_bug.cgi?id=77998)); it was fixed only
+in **Safari 26.4 (May 2026)**, so a large share of installed iOS is still wrong
+today. Chrome and Firefox always returned the scaled values, which is why none
+of this reproduces in the test suite — every spec here runs Chromium.
+
+**CORRECTED after a full sweep — the first version of this entry was half
+wrong.** It named `js/data/telemetry.js:942` as a site. It is not one: the data
+hub is a top-level `<div id="datahub">` (`index.html:1391`), nothing in
+`js/data/hub.js` ever adds a `sheet` class, and `css/data.css` contains **zero**
+`zoom` declarations. Its scrubber reads `ev.clientX` and the canvas rect from
+the *same* unzoomed space and is correct on every browser. Recorded here rather
+than quietly deleted, because "a rect near a zoom" is not the defect — *mixing
+two spaces* is, and the difference is the whole audit.
+
+The confirmed sites, wrong on pre-26.4 iOS *by default* since `--ui-scale`
+ships at 1.15 on a coarse pointer:
+
+- `js/game.js:5139` — the garage lens shift divides `#cs-inner`'s rect width
+  (`class="sheet pane-pair"`, zoomed) by the **unzoomed** `#game` canvas's
+  `clientWidth`. The turntable is framed as though the panel were narrower than
+  it is, so the car sits partly under it.
+- `js/game/menunav.js:114` — `nearestPane()` compares a viewport-space wheel
+  point against pane rects taken inside `.sheet`. Every pane reads ~13 % closer
+  to the origin than it paints, so a trackpad swipe over the right column of a
+  two-column screen scrolls the left one. Fallback path only, so LOW.
+
+Two more found by the same sweep are **not** WebKit-specific and are wrong
+everywhere:
+
+- `js/game/sheetshape.js:57` — `classifyPair()` compares
+  `getBoundingClientRect().width` against `--pair-at`, but `--pair-at` is a
+  **local-space** threshold paired with five real `@container sheet (min-width:
+  620px)` rules, and `components.css:126` says so outright. Measured at 852×393
+  with `--ui-scale: 1.15`: over local widths 506–610 px, `#sel-inner` carries
+  `data-pair="on"` while every one of those container rules is still off — a
+  two-column layout whose contents are styled for one column. The polarity is
+  inverted from the rest of A13: **pre-26.4 WebKit is correct here and Chrome is
+  wrong**, which is also why a Chromium-only suite has no baseline to catch it.
+  Fix is `clientWidth` (or the `ResizeObserver` `contentRect` already in hand at
+  `:120`), *not* the shared viewport-space helper — that would lock the wrong
+  space in on every engine.
+- `js/game/menunav.js:132` — adds a viewport-space `deltaY` to a local-space
+  `scrollTop`, so panes inside a 1.15 sheet scroll ~15 % further than the finger
+  moved. Wrong on all browsers; same root cause, different direction.
+
+So a single `currentCSSZoom` helper is **necessary but not sufficient**: it
+fixes two of the four, and two need the opposite conversion. It also needs a
+one-time feature probe, because `currentCSSZoom` reports 1.15 on both engines
+and does not say whether the rect already had it applied.
+
+**A14 — the data hub does not scale at all.** Falls out of the same sweep:
+`#datahub` is outside every zoomed subtree, so UI SIZE moves every screen in the
+game except this one. Worth fixing and worth sequencing carefully — the moment
+`.dh-card` gains a `zoom`, `telemetry.js:942` stops being a false positive and
+becomes a real A13 site, so the helper must land first.
+
+Deferred rather than fixed: both want a device to confirm on, and the honest fix
+is a shared "rect in viewport space" helper (dividing by `currentCSSZoom`, or
+reading `offsetX`) rather than two spot patches. **Worth doing before B4 decides
+whether `zoom` stays** — it is the strongest argument found so far that it should
+not. Note that `zoom` itself is otherwise sound: Baseline since May 2024, and
+being standardised in CSS Viewport.
+
 **Structural.**
 - **~~No CI gate~~ FIXED (2026-08).** `.github/workflows/ci.yml` runs three jobs
   split by cost (guards / sweeps / smoke) and `pages.yml` now `needs:` it, so a

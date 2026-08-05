@@ -89,7 +89,7 @@ body.desktop #pm-calib { display: none !important; }
      column by 20px on every desktop, which is what made the right edge of the
      menu look ragged. A fixed 320 was also the whole menu on a 1920 screen:
      ~17% of the width, with the composition adrift in the middle of it. */
-  #menu-hero, #menu-primary, #menu-secondary { width: clamp(320px, 24vw, 420px); gap: 10px; }
+  #menu-hero, #menu-primary, #menu-secondary { width: clamp(320px, calc(24 * var(--vwz)), 420px); gap: 10px; }
   #menu-buttons .bigbtn { width: 100%; }
   #menu-buttons .minibtn { font-size: 12px; padding: 9px 8px; }
   /* Small print scales too. At a flat 11/12px it read as a stray line of text
@@ -107,7 +107,7 @@ body.desktop #pm-calib { display: none !important; }
   #title { font-size: clamp(56px, 10vw, 120px); }
   #subtitle { font-size: clamp(15px, 1.8vw, 22px); }
   #audiostate, #disclaimer { font-size: clamp(12px, 1.3vw, 16px); }
-  #menu-hero, #menu-primary, #menu-secondary { width: min(66vw, 520px); }
+  #menu-hero, #menu-primary, #menu-secondary { width: min(calc(66 * var(--vwz)), 520px); }
   #menu-buttons { gap: 14px; }
   #menu-buttons .bigbtn { font-size: clamp(20px, 2.4vw, 28px); }
   #menu-buttons .minibtn { font-size: clamp(13px, 1.5vw, 18px); }
