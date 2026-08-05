@@ -1,5 +1,8 @@
 # UI P0 Hotfixes — Implementation Plan
 
+> **Status (2026-08-05):** Code landed on `cursor/ui-improvement-program-3284`.
+> Track-detail Tab containment spec **passed**. `test:tiny` / `test:ui` verification in flight.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship the P0 correctness repairs from the UI improvement program design so later type-scale / primitive / visual phases build on a sound shell.
