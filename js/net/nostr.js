@@ -46,6 +46,12 @@ const NetNostr = (function () {
   // How long to give the relays to answer at all before deciding the network,
   // rather than the other player, is the problem.
   const RELAY_CHECK_MS = 6000;
+  // How often the host says its offer again while waiting. A Nostr room has no
+  // memory — Trystero subscribes with `since: now()` and the events are
+  // ephemeral — so anything said before a guest subscribed is unreachable to
+  // it, for ever. Five seconds is slow enough not to look like spam to a relay
+  // and fast enough that nobody notices the wait.
+  const REPOST_MS = 5000;
 
   let modPromise = null;
 
@@ -178,6 +184,7 @@ const NetNostr = (function () {
 
     return new Promise((resolve) => {
       let rotate = null;       // swap the offer on the table for a fresh one
+      let rebroadcast = null;  // the repeating re-post of the offer on the table
       let done = false;        // torn down: room left, nothing more can happen
       let settled = false;     // the promise has been answered
       // SUBSCRIPTION MODE RESOLVES EARLY and the room stays open, so "answered"
@@ -191,6 +198,7 @@ const NetNostr = (function () {
         if (done) return;
         done = true;
         clearInterval(tick);
+        clearInterval(rebroadcast);
         leave();
         if (!settled) { settled = true; resolve(r); return; }
         // Already answered, so the only way to report this is the callback the
@@ -337,6 +345,30 @@ const NetNostr = (function () {
               put();
             }
             room.onPeerJoin = (id) => { if (!done) put(id); };
+            // AND REPEAT IT, because a Nostr room has no memory and the join
+            // hook cannot be trusted to fire.
+            //
+            // Trystero subscribes with `since: now()` and these are EPHEMERAL
+            // events — relays store nothing. So a guest that subscribes after
+            // the host published can NEVER see that publication; its only hope
+            // is the host posting again, which until now happened solely in
+            // onPeerJoin. That makes the entire room-code route depend on
+            // Trystero's presence announcements propagating, through public
+            // relays, both ways, in seconds.
+            //
+            // Measured on two devices on ONE Wi-Fi, both healthy: the host sat
+            // for the full two minutes and reported "Nobody joined that code"
+            // while the guest sat at "Looking for that room…". Neither ever
+            // saw the other. The offer had been posted once, before the guest
+            // existed, and nothing posted it again.
+            //
+            // Re-broadcasting the SAME small string every few seconds removes
+            // the dependency entirely: whenever the guest turns up, the next
+            // tick reaches it. It is not the per-join MINTING that got us
+            // rate-limited in build 954 — no RTCPeerConnection is created, no
+            // ICE is gathered, it is one already-built payload roughly every
+            // five seconds for as long as somebody is genuinely waiting.
+            rebroadcast = setInterval(() => { if (!done) put(); }, REPOST_MS);
             rotate = async (next) => {
               current = next || null;
               if (!current && mintOffer) {
@@ -356,6 +388,12 @@ const NetNostr = (function () {
             // the network being down.
             room.onPeerJoin = () => { try { post(send); } catch (e) {} };
             try { post(send); } catch (e) {}
+            // Same reasoning as the subscription branch above: the room has no
+            // memory, so the offer must keep being said for as long as nobody
+            // has taken it.
+            rebroadcast = setInterval(() => {
+              if (!done) { try { post(send); } catch (e) {} }
+            }, REPOST_MS);
           }
           // Subscription mode has nothing to wait for: hand back the way to
           // stop, and let the lobby decide when the room closes.
