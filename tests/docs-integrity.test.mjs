@@ -145,19 +145,28 @@ test("the scenery api member count in the docs matches the frozen contract", () 
   assert.deepEqual(wrong, [], "the frozen scenery(api) contract grew or shrank and the docs did not follow");
 });
 
-test("the test-suite counts in CLAUDE.md match the files on disk", () => {
+test("the test-suite counts in CLAUDE.md and README.md match the files on disk", () => {
+  // README was checked for circuits and part categories but NOT for suite
+  // counts, so it sat at "101 specs / 37 unit suites" against 102/38 while
+  // CLAUDE.md — the only file this test read — was correct. A guard that covers
+  // one of two copies leaves the other free to drift, which is exactly what
+  // happened.
   const specs = ls("tests", /\.spec\.js$/).length;
   const units = ls("tests", /\.test\.mjs$/).length;
-  const claude = read("CLAUDE.md");
 
-  const claimed = [...claude.matchAll(/(\d+)\s+Playwright specs?/gi)].map((m) => Number(m[1]));
-  assert.ok(claimed.length, "CLAUDE.md no longer states a Playwright spec count");
-  for (const n of claimed)
-    assert.equal(n, specs, `CLAUDE.md claims ${n} Playwright specs; tests/ holds ${specs}`);
+  let sawSpecCount = false;
+  for (const doc of ["CLAUDE.md", "README.md"]) {
+    const text = read(doc);
+    const claimed = [...text.matchAll(/(\d+)\s+Playwright specs?/gi)].map((m) => Number(m[1]));
+    if (claimed.length) sawSpecCount = true;
+    for (const n of claimed)
+      assert.equal(n, specs, `${doc} claims ${n} Playwright specs; tests/ holds ${specs}`);
 
-  const unitClaims = [...claude.matchAll(/(\d+)\s+`?node --test`? unit suites/gi)].map((m) => Number(m[1]));
-  for (const n of unitClaims)
-    assert.equal(n, units, `CLAUDE.md claims ${n} unit suites; tests/ holds ${units}`);
+    const unitClaims = [...text.matchAll(/(\d+)\s+`?node --test`? unit suites/gi)].map((m) => Number(m[1]));
+    for (const n of unitClaims)
+      assert.equal(n, units, `${doc} claims ${n} unit suites; tests/ holds ${units}`);
+  }
+  assert.ok(sawSpecCount, "neither CLAUDE.md nor README.md states a Playwright spec count any more");
 });
 
 // The three counts below all drifted in the same way and for the same reason:
@@ -203,6 +212,33 @@ test("CLAUDE.md's matTexMix default matches TUNE_DEFS", () => {
     `matTexMix def is ${def[1]}, so the asset-pack section must say "Ships ON" iff that is > 0`);
   assert.ok(!/`matTexMix`[^\n]*`def: 0`/.test(section) || !on,
     "CLAUDE.md still claims matTexMix has def: 0");
+
+  // …and the same claim, outside the slice. The check above reads only the text
+  // BETWEEN "Baked asset pack" and "`window.__apex` dev API", so the __apex hook
+  // table — which sits after that boundary — kept saying "(ships at 0)" for as
+  // long as the section above it said "Ships ON". Both were in CLAUDE.md at
+  // once. Scan the WHOLE file for a shipped-default claim about this knob.
+  for (const m of read("CLAUDE.md").matchAll(/matTex[^\n]*?ships at ([\d.]+)/gi)) {
+    assert.equal(Number(m[1]), Number(def[1]),
+      `CLAUDE.md says matTex ships at ${m[1]}; TUNE_DEFS has def: ${def[1]}`);
+  }
+});
+
+test("every eagerly-loaded js/game module is named in CLAUDE.md's file layout", () => {
+  // js/game/sheetshape.js and js/game/topmodal.js shipped, were in the manifest
+  // and in index.html, and were absent from the CLAUDE.md layout — so an agent
+  // reading the layout concluded they did not exist. The equivalent guard for
+  // js/render/ subdirectories already existed; js/game/ had none, and that is
+  // the whole reason the gap lasted.
+  const manifest = read("tools/manifest.cjs");
+  const claude = read("CLAUDE.md");
+  const missing = [];
+  for (const m of manifest.matchAll(/"(js\/game\/[a-z0-9-]+\.js)"/g)) {
+    const base = m[1].split("/").pop();
+    if (!claude.includes(base)) missing.push(m[1]);
+  }
+  assert.deepEqual(missing, [],
+    "CLAUDE.md's file layout omits a shipped js/game module — an agent reading it will not know the file exists");
 });
 
 test("CLAUDE.md's active branch is a branch that exists, and names the deploy branch", () => {

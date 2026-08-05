@@ -6,10 +6,13 @@ records the `Gfx` backend seam (Phase 0) and the WebGPU device/clear/sky skeleto
 "shader chunk" + "document the draw-API contract" recommendations in
 [`docs/WEBGPU-MAINTAINABILITY.md`](./WEBGPU-MAINTAINABILITY.md).
 
-> **Update:** the "wiring it in" step below has since been done — `index.html`
-> now loads `js/render/webgpu/wgsl-chunks.js`, `js/render/webgpu/wgsl-post.js`,
-> `js/render/webgpu/wgsl-fx.js`, `js/render/webgpu/wgx.js` and `js/render/gfx.js`, and the whole stack
-> has advanced through **Phase 4b**. The backend is still strictly **opt-in**
+> **Update:** the "wiring it in" step below has since been done, and then
+> superseded. `js/render/webgpu/*` is **DEFERRED**: it has **no `<script>` tag in
+> `index.html`** at all. The files are listed in `tools/manifest.cjs`'s `DEFERRED`
+> map and injected by `js/game.js` at boot only when `apex26.gfxBackend` selects
+> the backend — ~532 KB every visitor used to parse for something almost nobody
+> runs. `js/render/gfx.js` (the selector) is the only one with a tag. The whole
+> stack has advanced through **Phase 4b**. The backend is still strictly **opt-in**
 > (`localStorage apex26.gfxBackend = "webgpu"`) and falls back to WebGL2/GLX on
 > any failure, so the default shipping path is unchanged. The text below is the
 > original Phase 0/1 scaffolding record.

@@ -177,10 +177,15 @@ never scattered at the repo root:
 - **`scratch/profiles/`** — CPU/GPU profiles
 
 Both roots are created on demand. `assets/` and committed generated sources stay
-outside them. There are currently **no** tracked golden baselines — no
-`tests/*-snapshots/` directory exists — so `npm run test:visual` is not a
-regression gate yet; regenerating the baselines on Linux/SwiftShader is a
-separate, still-outstanding operation.
+outside them.
+
+**Golden baselines exist for the MENUS only.** `tests/menu-baseline.spec.js-snapshots/`
+holds six tracked PNGs (title/select/garage × desktop/phone-landscape), and
+`npm run test:baseline` is a real regression gate against them. `npm run test:visual`
+(`tests/tracks-visual.spec.js`) is **not** — it screenshots all 40 circuits and no
+baselines were ever committed for it, so it is skipped unless
+`tests/tracks-visual.spec.js-snapshots/` exists. Generating those on
+Linux/SwiftShader is a separate, still-outstanding operation.
 
 ---
 
@@ -304,7 +309,7 @@ js/data/         — data hub —
   schedule.js / standings.js / lastrace.js / live.js   the other tabs, same
                                   Data*.create(ctx) pattern
 
-js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
+js/net/          — multiplayer wire (2-4 players, WebRTC, NO backend) —
   transport.js   NetTransport   two channels — "state" (unreliable/unordered:
                                   snapshots + inputs; a late packet is
                                   worthless) and "event" (reliable/ordered:
@@ -553,6 +558,16 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   __apex.render({what}) (view/map/circuit/car)
   ariastate.js   AriaState      mirrors each option group's visual selection onto
                                   aria-pressed for screen readers
+  sheetshape.js  SheetShape     self-initialising: measures every `.sheet` with a
+                                  ResizeObserver and writes data-shape="tall|wide"
+                                  / data-pair="on|off". Its CONSUMER IS CSS
+                                  (css/components.css, css/career.css) — no JS
+                                  reads it, which is why a JS-only reference scan
+                                  reports it as orphaned. It is not
+  topmodal.js    TopModal       self-initialising: owns the top-layer/z-index
+                                  ladder over the 16 `<dialog class="screen">`
+                                  elements, reading data-esc-close / data-esc.
+                                  Same CSS/DOM-contract shape as sheetshape.js
   music-lib.js   MusicLib       bring-your-own-music library (IndexedDB), fed to GameAudio
   spotify.js     SpotifyMusic   optional personal-use Spotify Premium soundtrack
   input.js       Input          keyboard / gamepad / touch / tilt
@@ -978,7 +993,7 @@ the current profile. Add a knob: append to `TUNE_DEFS` (+ a shader uniform &
 Procedural per-circuit dressing on top of each track's `scenery(api)` callback.
 Session-time-aware (rebuilt on day↔night flip). Street/modern themes get the city
 generator (`STYLES[def.id]`): building silhouettes, neon palettes, reflective glass
-mesh (`track.meshes.glass`). All 24 tracks get furniture (`FURN`): trees and street
+mesh (`track.meshes.glass`). All 40 circuits get furniture (`FURN`): trees and street
 lamps (glow HDR at night). Street circuits get armco barrier liveries (`BARRIER`).
 `buildRoad` tints tarmac/verge via a stable per-track hash.
 
@@ -1047,7 +1062,7 @@ __apex.lightState()           // lighting snapshot: ambientSky/Ground, sunColor,
 __apex.gpuTimer(on?)          // GPU frame timer {supported,on,ms} — Chrome/Android only (no iOS Safari/SwiftShader); GPU-side counterpart to perf-profile
 __apex.assets()               // baked-pack state {supported,pack,uploaded,tier,layers,scales,…}
 __apex.assetLoad(tier?)       // (re)load the material arrays ("low"|"high"); false = unload
-__apex.matTex(0..1)           // BAKED MATERIALS blend — the A/B knob for the pack (ships at 0)
+__apex.matTex(0..1)           // BAKED MATERIALS blend — the A/B knob for the pack (ships at 1.0)
 __apex.credits()              // attribution roll for every baked asset
 __apex.aero(true)             // ACTIVE AERO: request/drop X-mode (2026 moveable
                               //   wing). No arg reads {xOn,xArmed,aeroX,mode,
@@ -1240,8 +1255,13 @@ the wrong button.
 
 ## Git branch
 
-Active development branch: `claude/project-cleanup-tests-k7mqb6`. Never push to main
-without review.
+Work happens on a `claude/<topic>` feature branch — whichever one the current
+task names. Never push to main without review.
+
+This used to name one specific branch, which was wrong within days of being
+written and stayed wrong: a branch name is a fact about *this week*, and prose
+has no way to notice it changed. `git branch --show-current` is the answer, and
+it cannot drift.
 
 **The deploy branch is a DIFFERENT branch.** `.github/workflows/pages.yml` fires
 only on a push to `claude/f1-game-project-26h3ng`, so work on any other branch

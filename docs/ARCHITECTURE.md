@@ -51,9 +51,15 @@ Conventions: `const` + `camelCase`, constants `UPPER_CASE`, colors are
 
 The July 2026 architecture reorg moved every module into a domain directory
 (old→new map in the git history) and split the three giants (`game.js` 8,955 →
-~4,700 lines; `glx-shaders.js` → chunked shader files; `buildProps` → four
-scenery modules). The mechanisms that keep a no-build, script-tag codebase
-coherent after the split:
+~4,700 lines as measured then; `glx-shaders.js` → chunked shader files;
+`buildProps` → four scenery modules).
+
+**That 4,700 is a historical measurement, not a current one.** `game.js` is back
+over 8,000 — extraction moved code out once and nothing stopped it accumulating
+again, because no guard bounds the file. Treat the number as a record of what the
+reorg achieved, and `wc -l js/game.js` as the truth about today.
+
+The mechanisms that keep a no-build, script-tag codebase coherent after the split:
 
 - **The `G` ctx façade.** Extracted `js/game/*` modules never reach into
   game.js's closure. game.js builds one `G` object — live getters/setters over

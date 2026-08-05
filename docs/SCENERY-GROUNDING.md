@@ -1,6 +1,6 @@
 # Scenery grounding — measuring, positioning, filling, and not clipping
 
-Written after an exhaustive float audit of all 24 circuits (see
+Written after an exhaustive float audit of all 40 circuits (see
 `tools/float-audit.cjs`). It records *why* floating scenery kept recurring and
 what to build so it stops, rather than listing the individual fixes.
 

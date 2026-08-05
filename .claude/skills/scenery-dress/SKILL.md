@@ -72,7 +72,7 @@ scenery: function (api) {
     `onTrack()` point — or it will re-introduce that class of bug.
   - **`RAW.*` bypasses the guard.** Crowd spectators are emitted via `RAW.addBox`
     for speed and are NOT footprint-tested; only place them safely BEHIND a shell.
-  - **Regression coverage:** `tests/props-over-road.spec.js` audits all 24 circuits
+  - **Regression coverage:** `tests/props-over-road.spec.js` audits all 40 circuits
     in 3D and fails if any prop sits on/above the racing line beyond its documented
     `BASELINE` cap. Run it after scenery edits; measure a single track with
     `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots`.

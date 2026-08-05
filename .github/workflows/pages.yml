@@ -23,7 +23,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The deploy gate. This workflow used to ship whatever was pushed, without
+  # running a single test — so a red suite reached the live site silently. The
+  # deploy job now `needs:` this, which means a failing guard blocks the deploy
+  # instead of merely being available to a human who might run it.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   deploy:
+    needs: ci
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
