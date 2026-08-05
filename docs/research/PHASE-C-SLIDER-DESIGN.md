@@ -9,8 +9,12 @@ and the taper in `js/game.js`; regenerate with
 `node artifacts/tmp/phase-c-tables.mjs` (the generator is kept with this doc's
 history, not in the tree — it is 90 lines of arithmetic, not a tool).
 
-**Status: DESIGN, not shipped.** Two of the four are safe on arithmetic alone;
-two want `tools/tune-sweep.mjs` on a quiet box before they go in. Marked below.
+**Status: HALF SHIPPED.** The two that are safe on arithmetic — §1 RACE PACE and
+§4 STEER SMOOTHING — are in, together with the schema ladder under *Known
+blocker* that had to precede them (`STEER_SCHEMA` is 3). §2 SPEED STEER and §3
+RESPONSE are still DESIGN: both move the shipped feel at the default, so they
+want `tools/tune-sweep.mjs` on a quiet box and a drive before they go in. Marked
+per-section below.
 
 ---
 
@@ -84,8 +88,22 @@ different acts and must not be conflated — doing only the first reaches nobody
 who has ever opened the settings, and doing only the second reaches nobody at
 all.
 
-*Safe on arithmetic. The DEFAULT notch (11) is the one judgement call, and the
-sweep should confirm 0.84 rather than 0.79 or 0.89.*
+**SHIPPED.** `paceFromSlider` is `Math.pow(1.06, v - 14)`, the slider is
+`min="1" max="19" value="11"`, and the readout is a PERCENTAGE of reference pace
+(notch 14 = `100%`, the default = `84%`) for the reason given under *What is NOT
+changing*. The v3 ladder step derives the remap from the two mappings rather
+than carrying the table above as a literal, so it cannot drift from either.
+
+*One caveat found in implementation, and left as the doc has it:* old notch 10 is
+a near-tie. Absolute distance puts 1.300 nearer to notch 18 (1.2625, −2.89 %)
+than to notch 19 (1.3382, +2.94 %) — by 0.0007 of pace. In LOG space, which is
+the unit §1 argues is the natural one for a multiplicative scale, the same
+comparison goes the other way and old 10 maps to 19 with no collision and no
+lossy pair at all. The shipped code uses absolute distance, matching this table.
+Worth revisiting if the grid is ever re-derived.
+
+*The DEFAULT notch (11) is still the one judgement call, and the sweep should
+confirm 0.84 rather than 0.79 or 0.89.*
 
 ---
 
@@ -213,8 +231,11 @@ default is preserved to within a rounding error (132.8 ms vs 132.6 ms, i.e. 1.20
 Hz either way). Nobody's car changes; the slider just becomes usable along its
 whole length.
 
-*Safe on arithmetic — the default is unchanged and only the intermediate steps
-move.*
+**SHIPPED.** `cutoffFromSmooth(v)` is now `1000 / (2π · lagFromSmooth(v))` with
+`lagFromSmooth` linear over 55 → 195 ms. Measured from the implementation: notch
+6 = 132.78 ms = **1.1987 Hz**, i.e. the shipped 1.20 Hz. The slider keeps its
+1..10 notches, so `steerSmooth` needs no migration — only what a notch MEANS
+moved, not which notch a stored number denotes.
 
 ---
 
@@ -276,3 +297,11 @@ Bumping `STEER_SCHEMA` to 3 makes a store already at 2 fall through and receive
 value the player chose deliberately after v2 ran. Phase C must convert this to a
 per-version ladder before it changes the constant.
 `tests/steer-migration.spec.js` exists to make that failure loud.
+
+**CLEARED.** `STEER_MIGRATIONS` is now a list of `{to, apply}` steps and
+`migrateSteerStore()` runs only those above the stored schema — the shape
+`CAREER_MIGRATIONS` in `js/game/store.js` already used. Every key a step rewrites
+goes through `migSet()`, which logs the old and new value to `Log.info("game")`
+when it actually moves, so a migration that changes a player's settings leaves a
+record in the ring buffer. The lossy old-9/old-10 collision gets its own
+`Log.warn`.

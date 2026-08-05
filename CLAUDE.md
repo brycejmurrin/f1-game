@@ -1141,9 +1141,17 @@ the driver keeps full manual authority to recover, and fades under hard braking
 **Changing an assist DEFAULT does not reach existing players.** `store.get(k, d)`
 returns the stored value whenever the key exists, so a new default only lands on a
 fresh install — anyone who ever opened the settings keeps the old behaviour
-forever. `drivingHelp` and `raceLine` are migrated once via `STEER_SCHEMA` in
-`js/game/steer-tuning.js`; bump it if a slider's *meaning* changes again (an old
-stored number does not carry over when the scale it was written against moves).
+forever. The fix is `STEER_SCHEMA` in `js/game/steer-tuning.js`, which is a
+per-version **LADDER** (`STEER_MIGRATIONS`, one `{to, apply}` step each, the
+shape `CAREER_MIGRATIONS` uses) and not a single gate: v2 reset `drivingHelp` and
+`raceLine`, v3 regridded `pace` from 1..10 onto 1..19. Bump it and ADD A STEP if
+a slider's *meaning* changes again — an old stored number does not carry over
+when the scale it was written against moves. **A single "have I migrated?" gate
+is data loss the moment there are two versions**: a store at 2 falls through it
+on the way to 3 and gets v2's reset a second time, discarding a choice the player
+made after v2 ran. Every key a step rewrites goes through `migSet()` so it lands
+in the `Log` ring buffer; a migration that quietly changes stored settings and
+leaves no record is indistinguishable from a bug.
 
 ### The arc must not reach the driver
 
