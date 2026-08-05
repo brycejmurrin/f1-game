@@ -1,6 +1,6 @@
 # Testing reference
 
-102 root Playwright spec files (`tests/*.spec.js`) + 38 `node --test` unit suites
+103 root Playwright spec files (`tests/*.spec.js`) + 38 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -358,6 +358,7 @@ what it covers.
 | `presets.spec.js` | RELAX / STANDARD / PRO each push the sliders somewhere distinct |
 | `sliders.spec.js` | every pause-menu slider is wired and persists |
 | `gamepad.spec.js` | gamepad mapping (steer/throttle/brake/boost/overtake/camera) |
+| `touch-steer.spec.js` | canvas touch steering as an anchored DRAG (proportional, relative, ramped on release, most-recently-MOVED finger wins), the on-screen arrows ramping like a key, and pedal TRAVEL on the touch pedals reaching the physics |
 
 ### Per-circuit foundations
 

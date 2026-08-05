@@ -3592,9 +3592,24 @@ function updateCar(c, dt, ranked) {
   // ellipse both scale by it, so easing off the brake actually hands grip back
   // to the front tyres — trail-braking you can modulate, not just stamp/lift.
   let brakeLvl = 1;
+  // THROTTLE travel, the other half of the same idea — and until now nothing in
+  // the game read it. Input.throttleLevel() has always existed and always been
+  // dead: the pad's analog right trigger was thresholded to a boolean and the
+  // travel thrown away, so a controller could only floor it or lift, and the
+  // on-screen pedal had nothing to report at all. Scaling engine accel by it is
+  // what makes a part-open throttle mean something — a measured exit instead of
+  // full power the instant you touch it.
+  //
+  // DEPLOY IS DELIBERATELY OUTSIDE THIS. ERS is its own button; metering the
+  // throttle should not quietly meter the battery too.
+  let throttleLvl = 1;
   if (c.human) {
     braking = inp ? !!inp.brake : Input.braking();
     brakeLvl = inp ? 1 : Math.max(0.15, Input.brakeLevel());
+    // A replicated or scripted input is a boolean by construction, so it means
+    // FULL travel unless it says otherwise — which keeps every __apex.setInput
+    // caller (and every physics spec built on one) exactly as it was.
+    throttleLvl = inp ? (inp.throttleLevel ?? 1) : Math.max(0, Input.throttleLevel());
   } else {
     // AI: brake for upcoming curvature
     const look = clamp(c.speed * 1.7, 30, 160);
@@ -3706,7 +3721,7 @@ function updateCar(c, dt, ranked) {
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
     c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   } else {
-    const a = (ACCEL * PACE * (c.human ? mods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     c.speed = Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   }
@@ -4011,7 +4026,7 @@ function updateCar(c, dt, ranked) {
     // transfer) for an acceleration that isn't actually happening.
     const axEstTarget = braking ? -BRAKE * brakeLvl
       : (onThrottle
-          ? ACCEL * PACE * (c.human ? mods.accel : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
+          ? ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);

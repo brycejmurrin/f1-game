@@ -142,11 +142,16 @@ async function holdKeyboardPointerAndTouch(page) {
     document.getElementById("btn-throttle").dispatchEvent(
       new PointerEvent("pointerdown", { pointerId: 41, bubbles: true })
     );
-    const touch = new Event("touchstart", { bubbles: true, cancelable: true });
-    Object.defineProperty(touch, "changedTouches", {
-      value: [{ identifier: 7, clientX: window.innerWidth - 1 }],
-    });
-    document.getElementById("game").dispatchEvent(touch);
+    // Touch steering is an anchored DRAG, so holding lock takes a touchstart to
+    // set the anchor and a touchmove to displace from it — a bare touchstart is
+    // (correctly) worth zero steering. See tests/touch-steer.spec.js.
+    const send = (type, x) => {
+      const e = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(e, "changedTouches", { value: [{ identifier: 7, clientX: x, clientY: 200 }] });
+      document.getElementById("game").dispatchEvent(e);
+    };
+    send("touchstart", 10);
+    send("touchmove", window.innerWidth + 4000);   // well past full lock, then clamped
     return { brake: Input.braking(), throttle: Input.throttle(), steer: Input.steer() };
   });
 }

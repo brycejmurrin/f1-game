@@ -1203,7 +1203,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Writing tests
 
-102 Playwright specs + 38 `node --test` unit suites. **How to RUN them is under
+103 Playwright specs + 38 `node --test` unit suites. **How to RUN them is under
 Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
 to do when writing one.
 

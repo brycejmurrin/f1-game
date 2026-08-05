@@ -27,8 +27,15 @@ const Input = (function () {
   let DEADZONE = 2.5;         // degrees ignored around neutral — fixed small; not a player knob
   const TILT_SLEW = 8;        // fixed safety cap (steer units/s): a last guard so a hand jolt
                               // can't snap the wheel. Smoothing itself is the One-Euro filter.
-  const KEY_RAMP_IN = 6;      // keyboard steer units/s toward full lock
-  const KEY_RAMP_OUT = 8;     // keyboard steer units/s back to center
+  // THE SHARED DIGITAL STEER RAMP. Any steer command that arrives as a SWITCH
+  // rather than as a position — an arrow key, an on-screen arrow button, the
+  // moment a finger leaves the glass — has to become an angle over time, or the
+  // wheel goes to the stop in one tick. The keyboard has always had this; the
+  // on-screen arrows and canvas touch did not, which is why those two modes
+  // steered like a light switch. All three now share these rates.
+  let KEY_RAMP_IN = 6;        // steer units/s toward full lock
+  let KEY_RAMP_OUT = 8;       // steer units/s back to centre (quicker: releasing
+                              // is a request to stop, and should be answered)
   const DEG = Math.PI / 180;
 
   // keyboard
@@ -70,18 +77,28 @@ const Input = (function () {
   let padPrevButtons = [];     // previous frame's pressed state, for rising edges
   const PAD_DEADZONE = 0.14;   // left-stick centre slop (ignored, then re-scaled)
 
-  // canvas touch halves: identifier -> { dir: -1 | 0 | 1, seq }
+  // canvas touch steering: identifier -> { anchorX, x, seq }
   // `seq` is a monotonic stamp of when this touch last spoke — see
   // recomputeTouchSteer for why insertion order cannot answer that question.
   const touches = new Map();
   let touchSeq = 0;
-  let touchSteer = 0;
+  let touchSteer = 0;      // the winning touch's drag, -1..1
+  let touchActive = false; // is any finger on the glass (vs. ramping back home)
+  let touchSteerVal = 0;   // what steer() emits: touchSteer while held, ramped on release
+  let touchSteerT = 0;     // last ramp timestamp, ms
 
   // on-screen buttons (multi-pointer safe via per-button pointer sets)
   let btnThrottle = false;
   let btnBrake = false;
+  // Pedal travel for the on-screen pedals, the touchscreen's answer to an
+  // analog trigger. 1 on a plain press (the old behaviour, unchanged for anyone
+  // who just taps); see PEDAL_TRAVEL_PX for the ease-off gesture.
+  let btnThrottleVal = 0;
+  let btnBrakeVal = 0;
   let btnSteerLeft = false;
   let btnSteerRight = false;
+  let btnSteerVal = 0;     // ramped -1..1 (the arrows are a keyboard with fat keys)
+  let btnSteerT = 0;       // last ramp timestamp, ms
 
   // tilt
   let tiltRaw = 0;            // latest remapped tilt, degrees (raw, like Neon Drift)
@@ -411,35 +428,75 @@ const Input = (function () {
     }
   }
 
-  /* ---------------- canvas touch halves ---------------- */
+  /* ---------------- canvas touch steering ---------------- */
 
-  function touchDir(t) {
-    // Only in touch mode does a tap on the canvas steer by screen half (the
-    // control buttons are separate elements in the corners, leaving the large
-    // centre free). Tilt and button modes ignore canvas taps.
+  // TOUCH STEERING IS AN ANCHORED DRAG, and it used to be a coin flip.
+  //
+  // The old rule was: whichever HALF of the screen you touched, steer fully that
+  // way. Not "mostly" — `clientX < innerWidth/2 ? -1 : 1`, the same ±1 a held
+  // arrow key produces, delivered instantly with no ramp. So the one steering
+  // mode aimed squarely at an iPad had exactly two reachable steering angles,
+  // full left and full right, and a drag across the centre of the screen flipped
+  // between them with no hysteresis. Every other input had more resolution than
+  // the touchscreen: the pad has an analog stick, the keyboard at least ramps.
+  //
+  // Now the finger's own displacement IS the wheel. Touch down anywhere in the
+  // free centre of the screen to set an anchor, slide toward the corner you want,
+  // lift to let it ramp back to centre. RELATIVE rather than absolute, so it does
+  // not matter where on the glass the thumb happens to land or how big the device
+  // is, and TOUCH_RANGE scales with the viewport so the same gesture spans an
+  // iPhone SE and a 13-inch iPad.
+  //
+  // A tap therefore steers ZERO where it used to mean full lock. That is the
+  // change, not a side effect of it.
+  const TOUCH_RANGE_FRAC = 0.12;   // viewport widths of drag for full lock
+  const TOUCH_DEAD_PX = 5;         // slop around the anchor: a tap is not a steer
+  let touchRangeFrac = TOUCH_RANGE_FRAC;
+
+  function touchRangePx() {
+    const w = (typeof window !== "undefined" && window.innerWidth) || 844;
+    // Floored so a very narrow window can't make the range so small that the
+    // dead zone covers all of it (which would leave only ±1 again).
+    return Math.max(40, w * touchRangeFrac);
+  }
+
+  // Displacement from this touch's anchor, as a steer command. Only touch mode
+  // steers from the canvas at all — the control buttons are separate elements in
+  // the corners, and tilt/button modes leave the centre free for other uses.
+  function touchCmd(rec) {
     if (steerMode !== "touch") return 0;
-    return t.clientX < window.innerWidth / 2 ? -1 : 1;
+    const dx = rec.x - rec.anchorX;
+    const a = Math.abs(dx);
+    if (a <= TOUCH_DEAD_PX) return 0;
+    return clamp(Math.sign(dx) * (a - TOUCH_DEAD_PX) / touchRangePx(), -1, 1);
   }
 
   // "Most recent steering touch wins" is the rule, and it needs an explicit
   // sequence number to be true. The obvious reading — take the last entry of the
   // Map — is wrong: Map iterates in INSERTION order and `set()` on an existing
   // key keeps that key where it was. So a finger placed FIRST and then dragged
-  // across the midline could never take the steering from a later finger that
-  // had not moved since. Stamping every start and every move gives the rule its
+  // across the screen could never take the steering from a later finger that had
+  // not moved since. Stamping every start and every move gives the rule its
   // literal meaning: whichever touch last SAID something is the one steering.
+  //
+  // A touch still resting inside its dead zone counts as steering-zero rather
+  // than as absent, so a second thumb parked on the glass does not silently hand
+  // control back to a finger the player stopped using.
   function recomputeTouchSteer() {
-    touchSteer = 0;
     let best = -1;
+    touchActive = false;
     for (const rec of touches.values()) {
-      if (rec.dir !== 0 && rec.seq > best) { best = rec.seq; touchSteer = rec.dir; }
+      if (rec.seq > best) { best = rec.seq; touchSteer = touchCmd(rec); touchActive = true; }
     }
+    if (!touchActive) touchSteer = 0;
   }
 
   function onTouchStart(e) {
     e.preventDefault();
     for (const t of e.changedTouches) {
-      touches.set(t.identifier, { dir: touchDir(t), seq: ++touchSeq });
+      // Anchor AT the touch-down point, so the command starts at exactly zero
+      // however far from centre the thumb landed — there is no jump to absorb.
+      touches.set(t.identifier, { anchorX: t.clientX, x: t.clientX, seq: ++touchSeq });
     }
     recomputeTouchSteer();
   }
@@ -448,7 +505,7 @@ const Input = (function () {
     e.preventDefault();
     for (const t of e.changedTouches) {
       const rec = touches.get(t.identifier);
-      if (rec) { rec.dir = touchDir(t); rec.seq = ++touchSeq; }
+      if (rec) { rec.x = t.clientX; rec.seq = ++touchSeq; }
     }
     recomputeTouchSteer();
   }
@@ -459,6 +516,33 @@ const Input = (function () {
       touches.delete(t.identifier);
     }
     recomputeTouchSteer();
+  }
+
+  // While a finger is down the drag IS the command and there is nothing to
+  // smooth — the thumb's own position is already continuous, and filtering it
+  // would only add lag to a gesture the player can see. The ramp exists for the
+  // one discontinuity in the scheme: lifting off, which drops the input to
+  // nothing in a single event.
+  function touchSteering() {
+    const t = nowMs();
+    const dt = (touchSteerT ? Math.min(0.1, (t - touchSteerT) / 1000) : 0) * timeScale;
+    touchSteerT = t;
+    if (touchActive) { touchSteerVal = touchSteer; return touchSteerVal; }
+    touchSteerVal = moveToward(touchSteerVal, 0, KEY_RAMP_OUT * dt);
+    return touchSteerVal;
+  }
+
+  // The on-screen arrows are a keyboard with fatter keys, so they get the
+  // keyboard's ramp. Previously they returned a bare ±1 — full lock the instant
+  // a thumb touched down, which is unmanageable at speed and was the reason
+  // BUTTONS mode felt so much cruder than tilt.
+  function buttonSteering() {
+    const t = nowMs();
+    const dt = (btnSteerT ? Math.min(0.1, (t - btnSteerT) / 1000) : 0) * timeScale;
+    btnSteerT = t;
+    const target = (btnSteerRight ? 1 : 0) - (btnSteerLeft ? 1 : 0);
+    btnSteerVal = moveToward(btnSteerVal, target, (target !== 0 ? KEY_RAMP_IN : KEY_RAMP_OUT) * dt);
+    return btnSteerVal;
   }
 
   /* ---------------- on-screen buttons ---------------- */
@@ -481,23 +565,44 @@ const Input = (function () {
   const holdBtns = [];
   function holdReleasePointer(pointerId) {
     for (const h of holdBtns) {
-      if (h.ids.delete(pointerId) && h.ids.size === 0) h.apply(false);
+      h.anchors && h.anchors.delete(pointerId);
+      if (h.ids.delete(pointerId) && h.ids.size === 0) { h.apply(false); h.level && h.level(0); }
     }
   }
   function holdReleaseAll() {
     for (const h of holdBtns) {
       h.ids.clear();
+      h.anchors && h.anchors.clear();
       h.apply(false);
+      h.level && h.level(0);
     }
   }
 
+  // PEDAL TRAVEL ON A TOUCHSCREEN. The analog-trigger note above says the
+  // physics rewards MODULATION and that thresholding a trigger to a boolean
+  // throws all of it away — and then the on-screen pedals did exactly that, so
+  // the one platform with no triggers at all was also the one that could only
+  // stamp or lift. Trail-braking, the mechanic the friction ellipse exists to
+  // reward, was unreachable on an iPad.
+  //
+  // The gesture is STAMP THEN EASE: touching the pedal is full travel, which is
+  // precisely what it did before, so nothing is taken away from a player who
+  // taps and never discovers this. Sliding the thumb UP the screen, away from
+  // the pedal, lifts it — the direction a foot comes off a real one. Pointer
+  // capture (below) is what makes it work past the edge of a 72 px button.
+  const PEDAL_TRAVEL_PX = 90;   // finger travel from full press to the light end
+  const PEDAL_DEAD_PX = 12;     // slop first, so a thumb tremor is not a lift
+  const PEDAL_MIN = 0.12;       // never quite zero: sliding off is not releasing
+
   // Hold semantics, multi-pointer safe: the button stays "held" until
   // every pointer that pressed it has been released/cancelled/left.
-  function wireHold(id, apply) {
+  // `level`, when given, additionally reports 0..1 pedal travel.
+  function wireHold(id, apply, level) {
     const el = document.getElementById(id);
     if (!el) return;
     const ids = new Set();
-    holdBtns.push({ ids, apply });
+    const anchors = level ? new Map() : null;   // pointerId -> y at touch-down
+    holdBtns.push({ ids, apply, level, anchors });
     el.addEventListener("pointerdown", e => {
       // Capture the pointer so the hold survives the finger/cursor drifting off
       // the button — without this a tiny move fires pointerleave and drops the
@@ -506,10 +611,18 @@ const Input = (function () {
       e.preventDefault();
       ids.add(e.pointerId);
       apply(true);
+      if (level) { anchors.set(e.pointerId, e.clientY); level(1); }
+    });
+    if (level) el.addEventListener("pointermove", e => {
+      const a = anchors.get(e.pointerId);
+      if (a == null) return;
+      const up = Math.max(0, a - e.clientY - PEDAL_DEAD_PX);
+      level(clamp(1 - up / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
     });
     function release(e) {
+      anchors && anchors.delete(e.pointerId);
       if (!ids.delete(e.pointerId)) return;
-      if (ids.size === 0) apply(false);
+      if (ids.size === 0) { apply(false); if (level) level(0); }
     }
     el.addEventListener("pointerup", release);
     el.addEventListener("pointercancel", release);
@@ -648,9 +761,9 @@ const Input = (function () {
     const k = keyboardSteer();
     if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
     if (padSteerActive()) return padSteer;
-    if (steerMode === "buttons") return (btnSteerRight ? 1 : 0) - (btnSteerLeft ? 1 : 0);
+    if (steerMode === "buttons") return buttonSteering();
     if (tiltActive()) return tiltSteering();
-    return touchSteer;
+    return touchSteering();
   }
 
   function throttle() {
@@ -661,14 +774,19 @@ const Input = (function () {
     return keyBrake || btnBrake || padBrake;
   }
 
-  // 0..1 pedal travel. Keyboard / on-screen / face buttons are digital, so they
-  // are full travel; an analog trigger reports how far it is actually pressed.
+  // 0..1 pedal travel. A KEY is digital and is therefore always full travel; an
+  // analog trigger and an on-screen pedal both report how far they actually are.
+  // Priority matches throttle()/braking(): whichever source is pressed wins, and
+  // the keyboard wins over everything so a desktop player is never modulated by
+  // a stray pad axis.
   function throttleLevel() {
-    if (keyThrottle || btnThrottle) return 1;
+    if (keyThrottle) return 1;
+    if (btnThrottle) return btnThrottleVal;
     return padThrottleVal > 0.12 ? padThrottleVal : 0;
   }
   function brakeLevel() {
-    if (keyBrake || btnBrake) return 1;
+    if (keyBrake) return 1;
+    if (btnBrake) return btnBrakeVal;
     return padBrakeVal > 0.12 ? padBrakeVal : 0;
   }
 
@@ -710,7 +828,17 @@ const Input = (function () {
 
   function setSteerMode(m) {
     steerMode = (m === "buttons" || m === "touch") ? m : "tilt";
-    if (steerMode !== "buttons") btnSteerLeft = btnSteerRight = false;  // drop held buttons
+    if (steerMode !== "buttons") {
+      btnSteerLeft = btnSteerRight = false;   // drop held buttons
+      btnSteerVal = 0; btnSteerT = 0;
+    }
+    if (steerMode !== "touch") {
+      // A drag in progress when the mode changed is not a command in the new
+      // mode. Leaving its value latched would hold lock the player can no longer
+      // release, because nothing in the new mode ever calls touchSteering().
+      touches.clear();
+      touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
+    }
   }
 
   function getSteerMode() {
@@ -772,8 +900,8 @@ const Input = (function () {
     canvas.addEventListener("touchend", onTouchEnd, { passive: false });
     canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
 
-    wireHold("btn-throttle", function (v) { btnThrottle = v; });
-    wireHold("btn-brake", function (v) { btnBrake = v; });
+    wireHold("btn-throttle", function (v) { btnThrottle = v; }, function (l) { btnThrottleVal = l; });
+    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; });
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
@@ -799,13 +927,15 @@ const Input = (function () {
 
   function reset() {
     touches.clear();
-    touchSteer = 0;
+    touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
     timeScale = 1;   // the loop re-reports it next frame; never leave it stalled slow
     // Clear the hold buttons THROUGH their closures (ghost-pointer purge), not
     // just the exported booleans — see holdBtns for why both must happen.
     holdReleaseAll();
     btnThrottle = btnBrake = false;
+    btnThrottleVal = btnBrakeVal = 0;
     btnSteerLeft = btnSteerRight = false;
+    btnSteerVal = 0; btnSteerT = 0;
     keyLeft = keyRight = keyBrake = keyThrottle = false;
     keySteerVal = 0;
     keySteerT = 0;
@@ -834,13 +964,18 @@ const Input = (function () {
     return {
       steerMode,
       key: { left: keyLeft, right: keyRight, throttle: keyThrottle, brake: keyBrake },
-      btn: { throttle: btnThrottle, brake: btnBrake, left: btnSteerLeft, right: btnSteerRight },
+      btn: { throttle: btnThrottle, brake: btnBrake, left: btnSteerLeft, right: btnSteerRight,
+             throttleVal: btnThrottleVal, brakeVal: btnBrakeVal, steerVal: btnSteerVal },
       pad: { connected: padConnected, steer: padSteer, throttle: padThrottle, brake: padBrake },
       touchSteer,
+      touchActive,
+      touchRangePx: touchRangePx(),
       canvasTouches: touches.size,
       holdPointers: holdBtns.map((h) => h.ids.size),   // pressed-pointer count per hold button
       throttle: throttle(),
       braking: braking(),
+      throttleLevel: throttleLevel(),
+      brakeLevel: brakeLevel(),
     };
   }
 
