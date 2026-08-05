@@ -906,6 +906,22 @@ let qualiPeers = new Map();
 // Whoever currently holds the connection carries it. NetPlay owns the session
 // once the race is built; before that — which is exactly when qualifying runs —
 // the lobby still does.
+// Publish our own lap as we drive it, a couple of times a second. Rate-limited
+// here rather than at the call site so every caller cannot forget: the reliable
+// channel would happily carry sixty of these a second and none of them would be
+// worth the bytes.
+let qualiLiveAt = 0;
+function netReportQualiLive(driverId, t, frac) {
+  const now = performance.now();
+  if (now - qualiLiveAt < 400) return false;
+  qualiLiveAt = now;
+  if (netPlay && netPlay.active && netPlay.active() && netPlay.reportQualiLive) {
+    return netPlay.reportQualiLive(driverId, t, frac);
+  }
+  if (netLobby && netLobby.reportQualiLive) return netLobby.reportQualiLive(driverId, t, frac);
+  return false;
+}
+
 function netReportQuali(driverId, t) {
   if (netPlay && netPlay.active && netPlay.active() && netPlay.reportQuali) return netPlay.reportQuali(driverId, t);
   if (netLobby && netLobby.reportQuali) return netLobby.reportQuali(driverId, t);
@@ -946,7 +962,22 @@ function refreshQualiGate() {
   // the gate itself reads.
   if (!waiting) { b.textContent = "TO THE GRID"; return; }
   const rivals = netPlay.rivalDriverIds();
-  const left = rivals.filter((id) => !(qualiPeers.get(id) > 0)).length;
+  const outstanding = rivals.filter((id) => !(qualiPeers.get(id) > 0));
+  const left = outstanding.length;
+  // SHOW THE LAP AS IT HAPPENS. "Waiting" with no clock is the same screen
+  // whether somebody is two corners in or has walked away, and it is the one
+  // moment in a friend race where everyone else has nothing to do. A live time
+  // is only ever drawn for a lap still running, and goes stale-safe: if the
+  // last packet is more than three seconds old we stop pretending to know.
+  const live = [];
+  for (const id of outstanding) {
+    const l = qualiLive.get(id);
+    if (l && performance.now() - l.at < 3000) {
+      const c = cars.find((x) => x.driverId === id);
+      live.push((c ? c.code : "") + " " + fmtTime(l.t));
+    }
+  }
+  if (live.length) { b.textContent = live.join("   ") + "…"; return; }
   b.textContent = left > 1 ? "WAITING FOR " + left + " LAPS…" : "WAITING FOR THEIR LAP…";
 }
 
@@ -960,7 +991,20 @@ function openQualiForNet(done) {
   refreshQualiGate();
 }
 
+// A rival's lap IN PROGRESS, so the wait has a clock on it. Deliberately
+// separate from qualiPeers: that map is what the classification is built from
+// and must only ever hold COMPLETED laps, or a grid could be assembled from a
+// time somebody was still driving.
+let qualiLive = new Map();        // driverId -> {t, frac, at}
+function onPeerQualiLive(d) {
+  if (!d || d.driverId == null) return;
+  qualiLive.set(d.driverId, { t: +d.t || 0, frac: +d.frac || 0, at: performance.now() });
+  refreshQualiGate();
+}
+
 function onPeerQuali(d) {
+  // The lap is done; the live clock for it is now noise.
+  if (d && d.driverId != null) qualiLive.delete(d.driverId);
   if (d && d.driverId != null && d.t > 0) qualiPeers.set(d.driverId, d.t);
   if (session !== "quali" && !isQuali()) return;
   const mine = player && player.best < Infinity ? player.best : 0;
@@ -2872,7 +2916,7 @@ const G = {
   // room grows past two. Empty off-line, which is what keeps every solo mode
   // exactly as it was.
   peerSeats: () => (netLobby && netLobby.peerSeats ? netLobby.peerSeats() : []),
-  onPeerQuali, openQualiForNet,
+  onPeerQuali, onPeerQualiLive, openQualiForNet,
   get raceQuali() { return raceQuali; }, set raceQuali(v) { raceQuali = !!v; },
   openGarageFrom: (from) => openGarage(from),
   startRace, startWeatherArc, update, wrapS,
@@ -4310,6 +4354,15 @@ function updateCar(c, dt, ranked) {
   }
   c.totalT += dt;
   c.lapTime += dt;
+  // OUR QUALIFYING LAP, AS IT HAPPENS. Everyone else in a friend race is
+  // sitting on a disabled button while this runs, and a clock is the whole
+  // difference between watching somebody and waiting for them. Rate-limited
+  // inside netReportQualiLive, gated to the one car it can be about, and
+  // purely cosmetic — nothing downstream reads it, so a dropped packet costs a
+  // flicker rather than a grid slot.
+  if (c.isPlayer && isQuali() && state === "race" && c.lapTime > 0) {
+    netReportQualiLive(c.driverId, c.lapTime, track && track.total ? (c.s || 0) / track.total : 0);
+  }
   c.wheelAngle = (c.wheelAngle || 0) + c.speed / 0.34 * dt;
 
   // Sector detection (curated splits via sectorAt). Must run before finish-line

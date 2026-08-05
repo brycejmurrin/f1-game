@@ -488,6 +488,10 @@ const NetLobby = (function () {
       // Only reaches the game while WE hold the session — once NetPlay owns it,
       // its own handler does this and the lobby is out of the loop.
       made.onEvent(NetPlay.EV.QUALI, (d) => { if (d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d); });
+      // The lap in progress. Qualifying runs while the LOBBY still holds the
+      // connection, so the live clock has to exist on this side too or it only
+      // works after the race has already started — which is never.
+      made.onEvent(NetPlay.EV.QLIVE, (d) => { if (d && G.onPeerQualiLive) G.onPeerQualiLive(d); });
       made.sendEvent(NetPlay.EV.HELLO, localProfile());
       if (role === "host") publishSettings();
       openRoom();
@@ -826,6 +830,11 @@ const NetLobby = (function () {
     function reportQuali(driverId, t) {
       if (!session || !(t > 0)) return false;
       return broadcast(NetPlay.EV.QUALI, { driverId, t: +t.toFixed(3) });
+    }
+
+    function reportQualiLive(driverId, t, frac) {
+      if (!session || !(t >= 0)) return false;
+      return broadcast(NetPlay.EV.QLIVE, { driverId, t: +t.toFixed(2), frac: +(frac || 0).toFixed(3) });
     }
 
     function finishStart() {
@@ -1612,7 +1621,7 @@ const NetLobby = (function () {
       // Our own qualifying lap goes out through whichever of the lobby and
       // NetPlay currently holds the connection; during the session that is the
       // lobby, because the hand-off has not happened yet.
-      reportQuali,
+      reportQuali, reportQualiLive,
       roomState: () => ({
         open: !!(els().roomStep && !els().roomStep.hidden),
         role, selfReady, peerReady: peersReady(), peer: firstPeer(),
