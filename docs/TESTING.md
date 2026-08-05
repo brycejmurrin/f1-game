@@ -358,7 +358,7 @@ what it covers.
 | `autopilot.spec.js` | a closed-loop driver that actually completes laps (monza, suzuka) |
 | `presets.spec.js` | RELAX / STANDARD / PRO each push the sliders somewhere distinct |
 | `sliders.spec.js` | every pause-menu slider is wired and persists |
-| `gamepad.spec.js` | gamepad mapping (steer/throttle/brake/boost/overtake/camera) |
+| `gamepad.spec.js` | gamepad mapping — driving (steer/throttle/brake/boost/overtake/camera) and, once a menu is open, the UWP-parity menu-nav mapping (D-pad+stick→arrows with hold-repeat, A→click, B→Escape including the native-`<dialog>` `cancel`-event seam, triggers→PageUp/PageDown, bumpers→horizontal paging) with a regression guard that driving is unaffected |
 
 ### Per-circuit foundations
 

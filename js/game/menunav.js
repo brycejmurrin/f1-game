@@ -346,5 +346,8 @@ window.MenuNav = (function () {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { activeLayer, nearestPane, onWheel, onKeyDown };
+  // FOCUSABLE is exported so a second caller (the gamepad A-button seam in
+  // js/game/input.js) can ask "is this a real actionable control" without a
+  // second copy of the selector to drift out of step with this one.
+  return { activeLayer, nearestPane, onWheel, onKeyDown, FOCUSABLE };
 })();
