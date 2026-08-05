@@ -51,11 +51,21 @@ is fine for one spec; anything larger goes in the background.
 
 **DO NOT SIT AND WAIT FOR A RUN.** A SwiftShader group is minutes to tens of
 minutes; an agent that polls `--status` in a loop, or blocks on `--wait`, burns
-the entire run doing nothing. Start the run, then go and do work that does not
-touch `js/` or `css/` — research, docs, a `tools/` script, reading the code you
-are about to change, drafting the next commit message. Arrange to be TOLD when
-it finishes (a monitor on the log, or a background command that exits on
-completion) instead of watching it. `--wait` is for CI and for the one case
+the entire run doing nothing. Repeatedly checking progress is the same waste
+spelled differently — the tally moving from 39/77 to 41/77 is not information.
+
+**Arm a monitor, then go and work.** The `Monitor` tool turns the log into
+events so the result comes to you:
+
+```
+Monitor({ command: 'tail -f artifacts/logs/<group>.log | grep -E --line-buffered "x FAIL|= run (passed|failed)"',
+          description: 'failures or completion in <group>' })
+```
+
+Filter for **both** outcomes — a monitor that greps only for success is silent
+through a crash, and silence looks exactly like "still running". A background
+`Bash` command that exits on completion (`until … done`) works too, and gives
+one notification instead of several. `--wait` is for CI and for the one case
 where the next edit genuinely cannot be chosen until the result lands.
 
 The one hard constraint while a run is in flight: **the test servers read `js/`
@@ -85,10 +95,22 @@ work you would otherwise do after it.
 4. **Write the NEXT spec.** `tests/` is safe to add to mid-run — Playwright
    globbed its list at start. New coverage for the change you just made is the
    single most useful thing to produce while its existing coverage runs.
-5. **Read the code you are about to touch next**, and draft the commit message
+5. **Hunt for bugs in the code you have just been reading.** You are never
+   better placed to find one than immediately after loading a module into
+   context for another reason. Look for the shapes this codebase actually
+   produces: a helper with **no consumer** (`Input.throttleLevel()` sat dead for
+   months — analog trigger travel computed and thrown away), a comment that no
+   longer matches its code, duplicated logic that can drift (`simTilt` restates
+   `tiltSteering`'s body), a constant compared against a raw speed where
+   `vStd()` was meant. `grep` for the invariant, not for the symptom.
+6. **Plan the next phase concretely** — compute the actual numbers, not the
+   intent. Tabulating what a slider currently does is what turned "feels wrong"
+   into "the step below the default is 25 % and above it is 5 %", which is a
+   different and far more fixable statement.
+7. **Read the code you are about to touch next**, and draft the commit message
    for the change in flight while the reasoning is still fresh.
-6. **Research.** See below.
-7. **Docs** — `docs/`, `CLAUDE.md`, `tools/README.md`. Note that
+8. **Research.** See below.
+9. **Docs** — `docs/`, `CLAUDE.md`, `tools/README.md`. Note that
    `tests/docs-integrity.test.mjs` gates several of these (spec counts, the tools
    index, `docs/README.md` links), so doc work often has to happen anyway.
 
