@@ -140,3 +140,70 @@ not "ESM would be slow" — the second half of that has quietly stopped being tr
 - [God Class anti-pattern: how to break it apart](https://eden-technologies.eu/blog/god-class-antipattern/) — Extract Class, incremental verification
 - [ES modules in production](https://www.bryanbraun.com/2020/10/23/es-modules-in-production-my-experience-so-far/) and [ES Modules + import maps](https://stevendcoffey.com/blog/esmodules-importmaps-modern-js-stack/) — the no-build ESM case
 - [ES Modules are terrible, actually](https://gist.github.com/joepie91/bca2fda868c1e8b2c2caf76af7dfcad3) — the counter-case, incl. request waterfalls
+
+---
+
+# Part 3 — two subsystem sanity checks
+
+Same treatment: what the field says, and whether this repo's choice holds up.
+
+## 5. Multiplayer: the topology and the shipped TURN relay both check out
+
+Two claims in `docs/MULTIPLAYER.md` that read like rationalisations turn out to
+match the published numbers.
+
+**"UP TO FOUR PLAYERS, in a STAR."** The practitioner consensus is that a WebRTC
+**full mesh is reliable to about four participants**, because each peer must
+upload N−1 streams — a six-person mesh needs five simultaneous uploads per peer.
+So four is roughly where mesh stops working, and this repo caps at exactly four
+*and* uses a star (host relays between guests) rather than a mesh, which is the
+more conservative of the two. `netplay.js`'s "the host RELAYS — authority does
+not move; it is a courier" is the right shape.
+
+**"A TURN RELAY SHIPS BY DEFAULT."** This is the claim that looks like
+over-engineering for a fan game, and it is not:
+
+- **Both peers behind symmetric NAT is ~5–10% of connections**, and that case
+  cannot be solved by STUN at all — TURN is the only path.
+- The repo's own stated reason is narrower and, if anything, underplayed: on the
+  **same Wi-Fi** the only host candidate a browser offers is mDNS-obfuscated, and
+  when that name will not resolve the sole remaining pair is srflx-to-srflx,
+  which needs router hairpinning many home routers do not do. That is a *local*
+  failure mode, which is exactly the case a couch-multiplayer game hits most.
+
+So a game that shipped STUN-only would fail for a noticeable minority and would
+fail *worst* in its most common scenario. Keep the relay.
+
+The corollary is `prefetchIce()`: `iceServers` are fixed at construction, so a
+credentials fetch that lands 200 ms late gathers STUN-only and every wire dump
+reads `relay:0` while the relay is demonstrably alive. That is why it must be
+awaited before a connection is built — and why the `Log.warn` added to
+`transport.js` in this pass matters, since that failure was previously silent.
+
+## 6. The service-worker version guard is the right pattern
+
+`index.html`'s shell guard fetches `version.json` with `no-store` and force-reloads
+a stale installed shell. Worth recording that this is **not** a workaround for
+something the platform does better:
+
+- A service worker only checks for a new version of *itself* on navigation, and
+  browsers may only re-check after a **24-hour** window. Relying on that alone
+  means a stale shell can persist for a day.
+- `index.html` itself carries no `?v=`, so it is the one file the cache-bust
+  convention cannot refresh. Something outside the cache-bust scheme has to
+  notice, and a no-store fetch of a tiny version file is the cheapest such thing.
+- `skipWaiting()` alone is not sufficient and is mildly dangerous on its own: it
+  activates a new worker under pages still running the old assets, which is how
+  you get a client holding half of each build. The standard advice is to pair it
+  with a deliberate reload — which is what this shell guard is.
+
+One thing worth knowing that the current design already sidesteps: a hard reload
+(shift-reload) bypasses the service worker entirely, so "tell the user to hard
+refresh" is a real escape hatch if a worker ever wedges.
+
+## Sources (Part 3)
+
+- [WebRTC P2P: how mesh scales](https://antmedia.io/how-to-create-webrtc-peer-to-peer-communication/) — the ~4-participant mesh ceiling and N−1 upload cost
+- [A deep dive into WebRTC, ICE, STUN and TURN](https://akashsahani2001.medium.com/building-real-time-p2p-communication-a-deep-dive-into-webrtc-ice-stun-and-turn-e645492230c5) — symmetric-NAT-on-both-ends at ~5–10%
+- [TURN server in WebRTC: when you need it](https://bloggeek.me/webrtcglossary/turn/)
+- [The service worker lifecycle](https://web.dev/articles/service-worker-lifecycle) and [handling updates with immediacy](https://developer.chrome.com/docs/workbox/handling-service-worker-updates) — update checks, the 24 h window, skipWaiting + reload
