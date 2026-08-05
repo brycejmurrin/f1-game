@@ -237,6 +237,25 @@ const NetNostr = (function () {
       }
       const restoreWarn = () => { if (realWarn) console.warn = realWarn; };
 
+      // CARRY THE ACTUAL FAILURE. This file already learned that lesson once,
+      // for the dynamic import — "Could not load the room service" on its own
+      // could not distinguish a 404 from a MIME rejection from a blocked
+      // network, and the truth turned out to be a plain 404 because the deploy
+      // workflow never staged vendor/.
+      //
+      // The very next catch threw its exception away anyway, and it cost
+      // hours: on real hardware, hosting a room returned a bare
+      // {error:"relay"} while a raw joinRoom() in the same console worked
+      // perfectly. "Could not reach the room service" was actively
+      // misleading — the relays were reachable, six of them, and something in
+      // OUR setup was throwing. Naming it would have pointed straight at it.
+      const relayFail = (e) => {
+        const why = (e && (e.message || String(e))) || "unknown";
+        return { ok: false, error: "relay", detail: why,
+                 message: "Could not reach the room service (" + why.slice(0, 90) + ")."
+                        + " Use the invite link instead." };
+      };
+
       const finish = (r) => {
         if (done) return;
         done = true;
@@ -464,11 +483,9 @@ const NetNostr = (function () {
               stop: () => finish({ ok: false, error: "stopped", message: "" }),
             });
           }
-        }).catch(() => finish({ ok: false, error: "relay",
-          message: "Could not reach the room service. Use the invite link instead." }));
+        }).catch((e) => finish(relayFail(e)));
       } catch (e) {
-        finish({ ok: false, error: "relay",
-          message: "Could not reach the room service. Use the invite link instead." });
+        finish(relayFail(e));
       }
     });
   }
