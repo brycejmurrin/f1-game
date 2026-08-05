@@ -14,7 +14,7 @@ name: CI
 #                                  red; everything it asserts is a property a
 #                                  compiler would enforce in a language that had
 #                                  one.
-#   sweeps   ~5 min, no browser  — the per-circuit geometry sweeps. Separate
+#   sweeps  ~16 min, no browser  — the per-circuit geometry sweeps. Separate
 #                                  because each suite rebuilds all 40 circuits
 #                                  and they run --test-concurrency=1 on purpose
 #                                  (four at once reached 5.4 GB and was
@@ -98,7 +98,20 @@ jobs:
   sweeps:
     name: Per-circuit geometry sweeps
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 35, not 20. MEASURED, not estimated: `test:sweeps` takes 14m20s on a
+    # 4-core dev box with the heap ceiling below, and this job then runs
+    # verify-track --all on top of it (~40 circuits at ~2 s each), so the local
+    # job is ~16 min. A shared runner is slower than that box, which puts the
+    # honest range at 20-30 min — i.e. the old cap was BELOW the work even
+    # after the OOM was fixed, and would have kept failing for a second reason
+    # once the first was gone.
+    #
+    # The four suites are serial by construction (--test-concurrency=1) and
+    # each rebuilds all 40 circuits, so this is ~4 full fleet rebuilds:
+    # coplanar-faces 250 s, prop-clipping 210 s, then road-under-floor and the
+    # shared-foundation characterization. Nothing here is parallelisable
+    # without reintroducing the 5.4 GB peak that forced the serialisation.
+    timeout-minutes: 35
     # THE HEAP CEILING IS NOT THE SAME HERE AS ON A DEVELOPER'S BOX, and that is
     # why this job failed for days while the identical command passed locally.
     # V8 sizes its default old-space from the machine, so the runner allowed
