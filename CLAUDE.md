@@ -50,11 +50,49 @@ one looks exactly like "the tests are slow".
 the code. Re-run it serially before believing anything about it, and never
 report it as a pass or a failure.
 
-**Start the run, ARM A WATCHER, and go do the next piece of work.** Waiting is
-the mistake — polling in a loop, sleeping, or narrating progress are all the
-same mistake wearing different clothes. Redirect the run to a log file
-(`> artifacts/logs/x.log 2>&1`, never `| tail`), set a watcher on that file for
-the finish line, and immediately start the next edit. Come back when it fires.
+**Start the run, ARM THE `Monitor` TOOL, and go do the next piece of work.**
+Waiting is the mistake — polling in a loop, `sleep`ing, or narrating progress
+are all the same mistake wearing different clothes. `Monitor` exists so you do
+not have to wait: it watches in the background and *notifies* you, and the
+notification arrives on its own. Arming it and then sitting there defeats the
+entire point.
+
+The pattern, in three steps:
+
+```
+1. Start the run in the background, redirected to a LOG FILE.
+   Never `| tail` — tail buffers to EOF, so the file stays empty and there is
+   nothing for the watcher (or you) to read.
+
+   Bash(run_in_background: true):
+     node tools/run-playwright.mjs tests/foo.spec.js --reporter=line \
+       > artifacts/logs/foo.log 2>&1
+
+2. Arm Monitor on that file, with an until-loop that EXITS when the run ends.
+   Each stdout line becomes one notification, so print only the verdict.
+
+   Monitor(description: "foo specs verdict", timeout_ms: 900000):
+     until grep -qE "[0-9]+ (passed|failed)|Error:" artifacts/logs/foo.log 2>/dev/null
+     do sleep 15; done
+     grep -E "[0-9]+ (passed|failed)|Error:" artifacts/logs/foo.log | head -3
+
+3. IMMEDIATELY start the next piece of work. Do not poll the log, do not sleep,
+   do not report "still running". The notification will come to you.
+```
+
+Two rules that make step 2 work:
+
+- **Match every terminal state, not just success.** A watcher grepping only for
+  `passed` stays silent through a crash, a hang or a timeout kill — and silence
+  is indistinguishable from "still running". Include the failure signatures.
+- **Never let the loop's own command line match its own grep.** `ps aux | grep
+  -q "verify-track"` inside a watcher whose command *contains* the string
+  "verify-track" matches itself and never exits. Watch the LOG, not the process
+  table.
+
+**While the run is in flight, do not edit `js/` or `css/`** (tests serve them
+from the working tree). Edit `tests/`, `docs/`, `tools/` — or write the commit
+message. There is always non-conflicting work.
 
 **2. Run the groups the change needs, not all of them.** The whole suite is ~40
 minutes of SwiftShader, and which groups a change needs is mechanical — so ask:
