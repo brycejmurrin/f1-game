@@ -85,14 +85,41 @@ async function wait() {
   process.exitCode = bad.length ? 1 : 0;
 }
 
-function stop() {
+// KILL THE PROCESS GROUP, NOT THE npm WRAPPER. `process.kill(pid)` reached only
+// the `npm run test:<group>` shim; npm does not forward the signal, so
+// run-playwright, the Playwright runner and every Chromium it had opened were
+// orphaned and kept running — invisible to --status, still holding the CPU, and
+// still writing to the log file the NEXT run truncated under them.
+//
+// That is how this tool produced fake results. Measured after three `--stop`ed
+// groups: 117 Chromium processes on a 4-core box, load average 50.7, three
+// orphaned runners (one of them re-running the same physics specs as the live
+// run, into the same log). Every "failure" in that state was `Test timeout of
+// 120000ms exceeded` and not one was an assertion.
+//
+// spawn() uses `detached: true`, which makes each child a process-group leader
+// with pgid === pid, so a negative pid signals the whole tree. SIGTERM first so
+// Playwright can close its browsers, then SIGKILL anything still up.
+function stop({ graceMs = 4000 } = {}) {
   const s = readState();
+  const live = s.runs.filter((r) => alive(r.pid));
+  const signal = (pid, sig) => {
+    try { process.kill(-pid, sig); return true; } catch (_) {
+      try { process.kill(pid, sig); return true; } catch (_) { return false; } // not a group leader
+    }
+  };
   let n = 0;
-  for (const r of s.runs) {
-    if (!alive(r.pid)) continue;
-    try { process.kill(r.pid, "SIGTERM"); n++; } catch (_) {}
-  }
-  console.log(`sent SIGTERM to ${n} run(s)`);
+  for (const r of live) if (signal(r.pid, "SIGTERM")) n++;
+  console.log(`sent SIGTERM to ${n} run group(s)`);
+  if (!n) return;
+  const deadline = Date.now() + graceMs;
+  const spin = () => {
+    const still = live.filter((r) => alive(r.pid));
+    if (!still.length) return console.log("all stopped");
+    if (Date.now() < deadline) return setTimeout(spin, 250);
+    for (const r of still) { signal(r.pid, "SIGKILL"); console.log(`SIGKILL ${r.group} (pgid ${r.pid})`); }
+  };
+  setTimeout(spin, 250);
 }
 
 function start(groups) {

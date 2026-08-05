@@ -49,6 +49,53 @@ hung test is the one with a `> start` line and no end line
 `tools/test-shards.sh` is the BLOCKING counterpart, for CI. Raw `npm test -- <spec>`
 is fine for one spec; anything larger goes in the background.
 
+#### CHECK THE BOX IS QUIET BEFORE YOU START, AND CLEAN UP AFTER
+
+**This is the single easiest way to get fake results, and it does not look like
+one.** The box has **4 cores**. Every Playwright worker drives a SwiftShader
+Chromium; a group at `--workers=2` is already half the machine.
+
+```sh
+pgrep -cf pw-browsers      # Chromium processes. Expect 0 before a run
+cat /proc/loadavg          # expect < 3 before a run, on 4 cores
+node tools/test-bg.mjs --status
+```
+
+Run **at most two groups at once**, and never a group alongside another heavy
+suite (`test:baseline`, anything `--project=render`, a `tools/*-audit.mjs`
+sweep). Groups are separate processes, which is why parallelism helps at all —
+but only up to the core count.
+
+**The signature of an oversubscribed box is a TIMEOUT, never an assertion.** If
+every failure reads `Test timeout of 120000ms exceeded` and none of them is an
+expectation that did not hold, you are almost certainly measuring the machine
+and not the code. Re-run the group ALONE before believing any of it. Measured
+this way once: 117 Chromium processes on 4 cores, load average **50.7**, and
+nine "failures" in `elevation-tracks.spec.js` that were all the same 120 s
+timeout — zero real defects.
+
+**Orphans are the usual cause, and they are invisible.** `--stop` used to signal
+only the `npm run test:<group>` shim, and npm does not forward signals, so
+`run-playwright`, the Playwright runner and its browsers survived. An orphan
+does not appear in `--status`, keeps its workers on the CPU, and **keeps writing
+to the log file the next run truncates under it** — the tell is two independent
+progress counters interleaved in one log (`19/105 done, 0 failed` next to
+`39/105 done, 10 failed`). `--stop` now signals the process GROUP
+(`kill(-pid)`; the children are spawned `detached`, so pgid === pid) and
+escalates to SIGKILL after 4 s. Starting a batch also no longer clobbers the
+record of one already running.
+
+If anything is ever left behind:
+
+```sh
+node tools/test-bg.mjs --stop
+pkill -9 -f 'tools/run-playwright'; pkill -9 -f pw-browsers
+```
+
+Then wait for `/proc/loadavg` to fall back under ~3 before starting anything —
+the load average lags the kill by a minute or two, and starting into a decaying
+load reproduces the same fake timeouts.
+
 ### 2. Run the groups the change needs — not all of them
 
 The whole suite is ~40 minutes of SwiftShader. Which groups a change needs is
