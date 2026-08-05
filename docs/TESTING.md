@@ -1,6 +1,6 @@
 # Testing reference
 
-106 root Playwright spec files (`tests/*.spec.js`) + 40 `node --test` unit suites
+106 root Playwright spec files (`tests/*.spec.js`) + 41 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -361,7 +361,7 @@ what it covers.
 | `active-aero.spec.js` | X-mode / Z-mode: flap travel, the downforce/drag trade, the 400 ms transition cap |
 | `aero-zones.spec.js` | fixed ACTIVATION ZONES per circuit, Monaco having none, and the overtake gate on lap 1 / under caution driven through a REAL opening lap |
 | `debris.spec.js` | the Rapier debris side-world — and that it never moves a game car |
-| `race-control.spec.js` | the CAUTION flag contract — defaults ON, a host's flag is adopted verbatim, switching the layer off DROPS a flag already flying, and the setting survives a reload (which also pins the storage format) |
+| `race-control.spec.js` | the CAUTION layer in a real page: defaults ON, and the setting survives a reload (which is the guard on its storage format). The machine itself is `race-control.test.mjs` |
 | `autopilot.spec.js` | a closed-loop driver that actually completes laps (monza, suzuka) |
 | `presets.spec.js` | RELAX / STANDARD / PRO each push the sliders somewhere distinct |
 | `sliders.spec.js` | every pause-menu slider is wired and persists |
@@ -494,6 +494,7 @@ what it covers.
 |---|---|
 | `load-order.test.mjs` | `index.html` and `tools/carview.html` `<script>` order matches `tools/manifest.cjs` exactly, including `HARD_EDGES` eval-time dependencies |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
+| `race-control.test.mjs` | the caution state machine in a VM — thresholds, the raise-fast/lower-slow hysteresis, the hard time caps, drop-on-disable, host vs guest, and the leader's-lap rule behind OVERTAKE |
 | `comment-citations.test.mjs` | a `other-file.js:412` comment citation must point at a line that EXISTS, plus a RATCHET on how many there are — a line number in another file cannot be kept true, so cite the symbol |
 | `docs-integrity.test.mjs` | live docs, skills AND source comments reference only files that exist; CLAUDE.md's suite counts, the scenery-api member count, the renderer-backend list, and the skills/tools/docs indexes all match the repo |
 | `test-groups.test.mjs` | the taxonomy: pick-tests rules name real groups and route every source dir; this document lists every group and every test file; `RENDER_SPECS` partitions cleanly; the manual suites stay out of default discovery |

@@ -80,14 +80,36 @@ not.** §7 is the evidence.
 
 ### The gap under all of it
 
-**There is no CI gate.** `.github/workflows/` holds two workflows. `pages.yml`
-fires on a push to the deploy branch and deploys — it runs no tests. Nothing else
-runs tests either. 101 Playwright specs and 37 `node --test` suites are gated by
-whether a human remembered.
+**There was no CI gate.** `.github/workflows/` held two workflows. `pages.yml`
+fired on a push to the deploy branch and deployed — it ran no tests. Nothing else
+ran tests either. Over a hundred Playwright specs and dozens of `node --test`
+suites were gated by whether a human remembered.
 
 This is why two of the repo's own guards were found **red on arrival** during
 this review (§7, B2). Not stale by months — red, in the working tree, with the
-test file sitting right there. The suite is good. Nothing runs it.
+test file sitting right there. The suite is good. Nothing ran it.
+
+> **Closed — cleanup pass, 2026-08.** `.github/workflows/ci.yml` now runs on
+> every push and pull request, and `pages.yml` `needs:` it, so a red guard blocks
+> the deploy instead of merely being available to someone who might run it. Three
+> jobs split by cost: `guards` (~1 min, browser-free — the structural invariants
+> plus the pure-node suites), `sweeps` (per-circuit geometry, `--test-concurrency=1`
+> because four at once reached 5.4 GB and was OOM-killed), and `smoke` (Chromium,
+> `test:tiny`). The full suite is ~40 minutes of SwiftShader and is deliberately
+> NOT in it: this gate is for what breaks silently, not for everything.
+>
+> **The gate broke the deploy for its first hour, which is worth recording.** It
+> shipped with `cancel-in-progress: true`, and a branch under active work takes a
+> push every few minutes — so fifteen consecutive runs ended `cancelled`, the
+> gate never once completed, and because the deploy `needs:` it the Pages run
+> died with it. The first gated deploy came back `cancelled` where the last
+> ungated one had been `success`: the live site silently stopped receiving
+> anything. Now it cancels superseded PULL-REQUEST runs only; a push, and above
+> all the `workflow_call` from `pages.yml`, is allowed to finish and report.
+>
+> A gate that blocks the thing it protects is worse than no gate, and it fails in
+> the same shape as everything else in this document — silently, and looking
+> exactly like success from the outside.
 
 ---
 
@@ -276,12 +298,17 @@ marked otherwise.
 | A10 | Five circuit-def fields silently dropped by the `Tracks.LIST` copy — `sunAzimBias`, `sceneryTheme`, `sceneryThemeOverrides`, `ownPitStraight`, `undulate` — all authored, all read off the *copied* def, all `undefined` at runtime. Qatar fell back to `desert` and Albert Park to `permanent`; Monza's pit opt-out did not opt out, so the generic fallback kept landing on the Tribuna Centrale, which is the exact bug the field was added to fix. The same trap had bitten once before and was fixed for one field only | Fixed, plus `tests/circuit-def-fields.test.mjs` — the guard is the real fix |
 | A11 | Duplicate `__apex.diag` key: two `diag` members of one object literal, so the device/render diagnostic was unreachable, and `DEBUG-HOOKS.md` documented *that* dead version verbatim | Fixed — dead version deleted, its unique fields (canvas vs backing store, PerfGov tier/floor/strikes, GL capability probes, stored overrides) merged into the live `diag(opts)` |
 | A12 | Career budget upgrade unreachable and advertised: `upgradeBudget()`/`budgetUpgradeCost()` have no caller outside `career.js`, so `budgetLvl` is permanently 0 — while the guide told the player, twice, that they got "three upgrades" | Text corrected and the mechanic marked not-yet-wired. **Wiring the UI is a feature and was deliberately not done here** |
+| A13 | **A failed save was silent, and it loses careers.** `js/game/store.js` caches every value it writes, so when `setItem` throws, the catch swallowed it and `_cache` went on answering every later `get()` with the right value. The session plays perfectly and the save is gone on reload, with nothing on screen and nothing in the console. Safari on iOS is the real case, not a hypothetical: Private Browsing sets the localStorage quota to **zero**, so the first write throws | Fixed, and the cache write **kept** — dropping the value would break the session as well as the save, which is worse. The exception's own name is recorded (`QuotaExceededError` and `SecurityError` mean different things to whoever reads the report), `Log` carries it once loudly and repeats to the ring buffer only, and `__apex.persistState()` reports it. `tests/persistence.spec.js` pins both halves separately, because the cache write looks redundant right up until you know why it is there |
 
 ### Tier B — the meta-guards
 
 | # | Defect | Disposition |
 |---|---|---|
 | B2 | `tests/component-inventory.test.mjs` belonged to no `test:*` group, so nothing ever ran it — and it was **red**: `docs/COMPONENTS.md` still listed a `foot` class family and three dead classes since deleted from `css/`. Separately, `docs/TESTING.md` and `README.md` both quoted stale suite counts while `CLAUDE.md` was correct, because `docs-integrity.test.mjs` only checks `CLAUDE.md` | Fixed: doc corrected, test added to `test:tooling` and `test:tooling-fast`, all three counts reconciled |
+| B3 | `npm run test:tiny` — the command `CLAUDE.md` tells every agent to run after *any* edit — silently skipped a third of itself. It passed `tests/logging.spec.js --project=render`, but `"logging"` is not in `RENDER_SPECS`, and the render project is `testMatch: RENDER_SPECS`, so the spec matched no project and never ran. `test-groups.test.mjs` only caught the reverse (a name with no file) | Fixed, plus the **bidirectional** assertion, which is the half that would have caught it |
+| B4 | `npm run test:visual` could never pass: `tracks-visual.spec.js` calls `toHaveScreenshot()` for all 40 circuits and no `tests/tracks-visual.spec.js-snapshots/` was ever committed. It presented as a gate and was not one | Gated behind a baselines-exist skip. Generating them on Linux/SwiftShader is still outstanding |
+| B5 | `tools/test-bg.mjs` would start any number of groups on a 4-core box. Every worker drives a SwiftShader Chromium, so past `cores / WORKERS` they starve each other and die to their own timeouts — which read as test failures and are not. `CLAUDE.md` and `docs/TESTING.md` both said "at most two", and `tools/pick-tests.mjs --bg` printed a paste-ready **nine-group** command anyway | Fixed in the TOOL: it now counts what is already running, refuses past the cap, and prints the batches; `pick-tests` pre-batches its suggestion. Measured before the fix: five groups → load average **46**, 94 Chromiums, every "failure" a 60 s screenshot timeout |
+| B6 | ~200 comments in `js/` cite line numbers in *other* files, and nothing checked them. `js/render/webgpu/wgsl-chunks.js` cited `js/render/glx.js:39-896` for `LIT_FS` about thirty times — glx.js holds no shader source at all; it destructures `GLXShaders`, and the GLSL is in `js/render/shaders/`. Three more port files had the same rot, plus four wrong numeric claims elsewhere (`apex.js` "~110 methods" against 183; `scenery-nature.js` "248 call sites" against 33; `tracks.js` "returns 0" against `return null`) | 49 rewritten to name the SYMBOL and file, no line numbers, since nothing edits both files. `tests/comment-citations.test.mjs` guards it: a cited line must exist, plus a ratchet on the population (197 → 148) |
 
 Also folded in: `js/game/reliability.js` and `js/car/driver-ratings.js` both
 asserted `makeCars()` spends "exactly one" `simRnd()` draw per driver. It spends
