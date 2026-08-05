@@ -2468,6 +2468,23 @@ function startRace() {
     lapsTarget = raceLaps;
   }
   applyRaceSettings();
+  // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
+  //
+  // js/game.js held ZERO Log calls before this one, despite `game` being the
+  // namespace js/log.js defines for exactly this file. That mattered more than
+  // it sounds: the buffer retains at `info` whether or not it prints, and
+  // tests/fixtures.js attaches the ring to EVERY failure — so a physics spec
+  // that failed on "speed was 43, expected > 50" had nothing in its attachment
+  // saying what the car's top speed even was that run. One line makes the whole
+  // class of pace/parts/weather failures self-explaining, which is what the
+  // logging section of CLAUDE.md asks for and what nothing here was doing.
+  Log.info("game", `race ${track.def.id} ${session} laps=${lapsTarget} ` +
+    `pace=${PACE.toFixed(3)} vTop=${vTop().toFixed(1)}m/s ` +
+    `grip=${gripMult().toFixed(2)} weather=${raceWeather} tod=${raceTimeOfDay} ` +
+    `mods=${playerMods ? `s${playerMods.speed.toFixed(2)}/a${playerMods.accel.toFixed(2)}/` +
+      `c${playerMods.cornering.toFixed(2)}/b${playerMods.braking.toFixed(2)}` : "none"} ` +
+    `aeroLoad=${(playerAeroLoad ?? 0.5).toFixed(2)} assists=` +
+    `help${ROAD_FOLLOW.toFixed(2)}/line${raceLineAssist.toFixed(2)}`);
   if (isRaining()) {           // only "rain" precipitates; "wet" is a damp track
     initRainDrops();
     Particles.rainShow(true);
