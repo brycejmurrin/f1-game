@@ -57,6 +57,9 @@ const NetLobby = (function () {
     // The open room-code subscription, if one is running — held so closing the
     // lobby can stop it. A room nobody is watching still holds relay sockets.
     let codeRoom = null;
+    // The room code we closed to get out of Trystero's way, and must reopen
+    // once our own connection is up. Null when we are not hosting a room.
+    let codeReopen = null;
     // A guest has exactly one peer — the host — and calls it PEER_ONE. A host
     // mints an id per guest. Asymmetric on purpose: only the host ever needs to
     // tell several peers apart.
@@ -408,6 +411,18 @@ const NetLobby = (function () {
       // Safe here and not earlier: t has moved into `transports` and pendingId
       // is cleared just above, so minting cannot close a live handshake.
       if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) {} }
+      // REOPEN the room we closed for this guest's ICE. Closing it is what
+      // makes the connection work at all (see onJoiner); reopening is what
+      // keeps a room code a way in for three and four players rather than
+      // exactly one. Same code, so anybody still reading it off a screen is
+      // not stranded, and only while there is space.
+      if (codeReopen && transports.size < MAX_GUESTS) {
+        const again = codeReopen;
+        codeReopen = null;
+        setTimeout(() => { codeHost({ code: again, quiet: true }).catch(() => {}); }, 250);
+      } else {
+        codeReopen = null;
+      }
       // The first connection, not the most recent — `session` means "the one
       // most callers mean", and on a guest it is the only one there is.
       session = [...sessions.values()][0];
@@ -1143,16 +1158,25 @@ const NetLobby = (function () {
     }
 
     // HOST: make a code, publish the invite under it, wait for the answer.
-    async function codeHost() {
+    // opts.code   reopen the SAME room after a guest connected (see onJoiner)
+    // opts.quiet   do not repaint the code step — we are already past it
+    async function codeHost(opts) {
+      opts = opts || {};
       stopCodeWait();
       if (!NetRendezvous.configured()) { say(NO_RELAY, true); return { ok: false, error: "not_configured" }; }
       await readyIce();
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
-      const code = NetRendezvous.makeCode();
-      showCodeStep("show", "Your room code", "Read this to your friend.");
-      const e = els();
-      if (e.codeValue) e.codeValue.textContent = code;
-      say("Preparing… (this can take a few seconds)");
+      const code = opts.code || NetRendezvous.makeCode();
+      // The room is CLOSED while our own ICE runs and reopened afterwards (see
+      // onJoiner), so this path runs twice per guest. The second time we are
+      // already in the waiting room and must not drag the player back to the
+      // code screen.
+      if (!opts.quiet) {
+        showCodeStep("show", "Your room code", "Read this to your friend.");
+        const e = els();
+        if (e.codeValue) e.codeValue.textContent = code;
+        say("Preparing… (this can take a few seconds)");
+      }
 
       const invite = await NetHandshake.createInvite(transport, localProfile());
       if (!invite.ok) { say(invite.message || "Could not create an invite.", true); return invite; }
@@ -1222,6 +1246,29 @@ const NetLobby = (function () {
               return;
             }
             if (acc.peer && pendingId) _peers.set(pendingId, acc.peer);
+            // GET OUT OF TRYSTERO'S WAY BEFORE OUR OWN ICE RUNS.
+            //
+            // The rendezvous has done its job the moment an answer is
+            // accepted: both sides hold each other's SDP and nothing more
+            // needs to cross it. But in subscription mode the room stays open
+            // for further joiners, which leaves Trystero's OWN
+            // RTCPeerConnection and six relay WebSockets live on this device
+            // while our connection negotiates.
+            //
+            // Measured on real hardware, and it is the whole bug: an invite
+            // link between the same two devices connects in ~6 s over a plain
+            // host<->host LAN pair, while the room-code path leaves all 36
+            // pairs — INCLUDING that same host<->host pair — with checks sent
+            // and not one response, on either peer. Trystero's own connection
+            // succeeds at that exact moment, which is how the answer reached
+            // us. One WebRTC connection works on that network and the second
+            // one does not, and iOS Safari is where it shows.
+            //
+            // So the room closes here. A host who wants another player mints a
+            // fresh code, which is a button rather than a bug — and infinitely
+            // better than a room that stays open and cannot connect anybody.
+            codeReopen = code;
+            stopCodeWait();
             waitForOpen();
             // NOT rotating here. Minting the next offer means newTransport(),
             // which drops the PENDING one — and the pending one is this guest's
