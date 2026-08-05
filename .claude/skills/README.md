@@ -4,8 +4,7 @@ Project skills for recurring agent workflows. Each is a `SKILL.md` (auto-matched
 from its `description`, or via `/<name>`), grounded in `__apex`,
 `tools/verify-track.cjs`, and `npm run test:*` groups.
 
-Descriptions follow Skill Discovery Optimization: they say **when** to load the
-skill, not how to run it. Bodies carry the workflow.
+Descriptions say **when** to load the skill; bodies carry the workflow.
 
 | Skill | Use it when |
 |---|---|
@@ -32,37 +31,6 @@ skill, not how to run it. Bodies carry the workflow.
 | **bake-lighting** | Baking a pasted `window.LightPresets = {…}` export into shipped presets. |
 | **webgl-debug** | WebGL2/GLX issues — lights, shadows, bloom, shader compile, GL errors. |
 | **game-feel** | Juice/feedback on Apex systems (camera/particles/audio/skids) without touching physics. |
-
-## Removed / deferred
-
-| Item | Decision |
-|---|---|
-| **hermes** | Removed — persona/council protocol, missing `notes/council-log.md`, not an Apex technique. Use `tune-physics` + `docs/PHYSICS.md`. |
-| **scene-graph-instancing** | Deferred — migrate emitters via `TrackGraph` / `graph-parity`; absorb into scenery work when next needed. |
-| **garage-parts-livery** | Deferred — catalog/garage rules still live in `docs/PARTS.md` + `car-viewer` for visuals. |
-| **asset-pack** | Deferred — `tools/assets.mjs` + `docs/research/ASSET-API-RESEARCH.md` cover bake/verify for now. |
-| **pwa-cache-service-worker** | Deferred — `bump-cache` for routine bumps; `sw.js` + `test:service-worker` for SW work. |
-
-## Pressure-test notes (2026-08)
-
-Two rounds of fast subagents (`composer-2.5-fast`; Haiku not available)
-invoked every skill against realistic prompts.
-
-**Round 1** fixed: phantom `UiLayers` APIs, inverted physics knobs, wrong
-`setEngine` signature, shake location, career facility≠budget-cap, missing
-`incident()`/`net()`, `corners()` vs FIA turns, 40-circuit roster,
-`perf-profile` tool lag, folklore corner fractions.
-
-**Round 2** fixed: in-race mute dual-bus (music vs sfx), street-circuit hw
-compare recipe, OSM geo-paths clone requirement, lightTune localStorage key
-(not `"*"`), bloom→lighting-tuner, apex-capture 12/13 modes + frac limit,
-chrome finish vs `--refl`, serial heavy test groups, mobile QR ICE, guest/host
-caution proof, trail-brake / LONG_GRIP A/B limits, `scene(radius)`≠ahead,
-snapCam recovery, pause-settings Escape ladder, waterSurface channel diagnosis.
-
-Still PARTIAL for some asks by design (motion-capture start-frac needs a fork;
-agent-view race `finished` needs chained rollouts). Re-run a skill scenario
-after editing it.
 
 The debug-* skills pair with `tools/apex-eval.mjs` / `tools/apex-capture.mjs` so
 changes are validated visually, not just asserted.
