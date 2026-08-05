@@ -36,7 +36,6 @@ const RAW_FRAME =
 function buildContext(opts) {
   opts = opts || {};
   const stackFor = opts.stackFor || null;
-  const captures = [];
   // Buffers that actually reached a GPU mesh. TrackModels.modelGroup stages an
   // emission into a scratch buffer and can REJECT it afterwards (vertex budget,
   // invalid geometry), but the emitter wrappers below have already recorded its
@@ -48,7 +47,6 @@ function buildContext(opts) {
     const rec = { verts, pos: buf && buf.pos ? buf.pos : [],
                   nrm: buf && buf.nrm ? buf.nrm : null,
                   idx: buf && buf.idx ? buf.idx : null };
-    captures.push(rec);
     if (buf) liveBufs.add(buf);
     return { verts, idxCount: buf && buf.idx ? buf.idx.length : 0, __cap: rec };
   };
@@ -138,6 +136,27 @@ function buildContext(opts) {
     // Emission-order marker, so a caller reusing one context across circuits can
     // slice out just the primitives a given build produced.
     mark: () => prims.length,
+    // Release everything from index `from` onward — call once a circuit's own
+    // primitives have been sliced out and consumed (shipped(), analyse(), …),
+    // before moving on to the next.
+    //
+    // Every `prims` record carries `buf: out`, a reference to the FULL mesh
+    // buffer that primitive's emitter wrote into (see the TG wrapper below) —
+    // not a copy of its own slice. So as long as ANY primitive record from a
+    // circuit survives in this array, its entire road/terrain/props/glass/
+    // water buffer stays reachable, in full, forever. A caller that shares one
+    // context across all 40 circuits (deliberately — a fresh context per
+    // circuit made --all 24x more expensive) was accumulating every circuit's
+    // full geometry simultaneously with nothing left to reclaim it.
+    //
+    // Measured (tools/*, all 40 circuits, forced GC between builds): 4157 MB
+    // retained without this call, 97 MB with it. `captures` — a second,
+    // write-only accumulator doing the same thing at the MESH level instead of
+    // the primitive level — was removed above for the same reason; it never
+    // added distinct bytes (same buffer objects, reached a second way) but
+    // masked this one, because deleting either alone left the other holding
+    // every buffer alive on its own.
+    trim: (from) => { prims.length = from; liveBufs.clear(); },
   };
 }
 

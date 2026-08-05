@@ -51,7 +51,14 @@ test("the world floor slab never covers the road surface", () => {
   const env = buildContext();
   const covered = [];
   for (const def of env.Tracks.LIST) {
+    const from = env.mark();
     const track = env.Tracks.build(def);
+    // See the comment on trim() in track-build-vm.cjs. This suite never reads
+    // env.prims/env.liveBufs, but Tracks.build() populates them as a side
+    // effect regardless — without releasing them, a 40-circuit run in this
+    // one process accumulated every circuit's full mesh buffers (4157 MB ->
+    // 97 MB measured with this call in place).
+    env.trim(from);
     const surface = track.surface;
     if (!surface) continue;
     const lo = lowestVisibleRoadY(track);

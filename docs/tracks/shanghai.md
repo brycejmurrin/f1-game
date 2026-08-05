@@ -15,7 +15,13 @@ Frequently hazy, low-contrast sky — pale grey-blue with diffuse white sun, sof
 - Grass/marsh green: `[0.34, 0.45, 0.28]`
 
 ## 3. Elevation
-Fairly flat overall. Subtle rise on the Turn 1–2 climb and exit of Turn 6 ("winds uphill"); gentle descent through 7–8. Treat as near-flat: +0.5–1.0 m bumps at s≈0.06 (T1-2) and s≈0.30 (T6), otherwise level.
+Flat by F1 standards, but not literally level: the reclaimed marsh site is
+engineered with ~6.7 m of long-wavelength relief, all under ~1.7% grade. A
+subtle rise on the Turn 1–2 climb and exit of Turn 6 ("winds uphill"); the real
+feature is a broad crest on the back straight (`js/circuits/shanghai.js`'s
+`elevations` anchors it at s≈0.45, 6.5 m — kept there rather than moved to the
+T1-2 bump to avoid a prop-interpenetration clash with the skyline towers).
+Model this as three long, gentle cosine bumps, not a flat plane with two dents.
 
 ## 4. Landmarks & Surroundings by Lap Position
 | s | Side | Distance | Box-model description |

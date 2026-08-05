@@ -50,14 +50,21 @@
       { frac: 0.6110, angleDeg: 3.0, widthM: 120 },
       { frac: 0.9981, angleDeg: 6.0, widthM: 120 },   // banked final right
     ],
-    // Reclaimed seafront: still a drainage-scale grade, but the trace shipped
-    // essentially level (2.2 m) where the real corniche rolls ~9 m across the
+    // Reclaimed seafront: still a drainage-scale grade, but the trace ships
+    // essentially level (~2.2 m) where the real corniche rolls ~9 m across the
     // lap. Long wavelengths only — every gradient stays under ~2 %.
+    //
+    // The four `rise` values below WERE the real-world ~9 m figures verbatim —
+    // 6.5/-3.0/5.0/-1.5 — a straight contradiction of the comment two lines up,
+    // caught by tests/new-hooks.spec.js asserting elevationRange <= 3 while this
+    // authored 9.586 m. Scaled by the same 2.2/9.586 ratio the comment always
+    // implied, keeping the s/halfM shape (the real corniche's wavelengths)
+    // and only correcting the amplitude back to what "shipped" was meant to mean.
     elevations: [
-      { s: 0.16, halfM: 520, rise: 6.5 },
-      { s: 0.30, halfM: 480, rise: -3.0 },
-      { s: 0.62, halfM: 460, rise: 5.0 },
-      { s: 0.84, halfM: 300, rise: -1.5 },
+      { s: 0.16, halfM: 520, rise: 1.5 },
+      { s: 0.30, halfM: 480, rise: -0.7 },
+      { s: 0.62, halfM: 460, rise: 1.1 },
+      { s: 0.84, halfM: 300, rise: -0.3 },
     ],
     scenery: function (api) {
       const { out, MAT, n, pyMin, place, backdrop,

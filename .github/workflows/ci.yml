@@ -14,19 +14,30 @@ name: CI
 #                                  red; everything it asserts is a property a
 #                                  compiler would enforce in a language that had
 #                                  one.
-#   sweeps  ~16 min, no browser  — the per-circuit geometry sweeps. Separate
-#                                  because each suite rebuilds all 40 circuits
-#                                  and they run --test-concurrency=1 on purpose
-#                                  (four at once reached 5.4 GB and was
+#   sweeps   15 min, no browser  — the per-circuit geometry sweeps, and the one
+#                                  job that is CONDITIONAL: the steps are
+#                                  skipped unless the diff touches js/track/,
+#                                  js/circuits/, tools/ or a sweep suite, since
+#                                  nothing else can move circuit geometry. The
+#                                  job itself always runs and always reports.
+#                                  Separate because each suite rebuilds all 40
+#                                  circuits and they run --test-concurrency=1 on
+#                                  purpose (four at once reached 5.4 GB and was
 #                                  OOM-killed, which presents as a SIGKILL with
 #                                  no assertion, i.e. NOT as a test failure).
 #                                  Serialising them was NOT enough on its own —
 #                                  see the NODE_OPTIONS note on the job.
-#   smoke    ~7 min, Chromium    — the page actually boots and __apex answers.
+#   smoke    15 min, Chromium    — the page actually boots and __apex answers.
 #                                  If this is red nothing else is worth running.
-#                                  Nine specs; a SwiftShader test costs 90-115 s
-#                                  on a shared runner, so the per-test price is
-#                                  what sets this budget, not the spec count.
+#                                  Nine specs, run SERIALLY (one worker), which
+#                                  is why it costs the same as the sweeps: two
+#                                  concurrent SwiftShader contexts exceed the
+#                                  per-test timeout on a shared runner. The
+#                                  per-test price sets this budget, not the
+#                                  spec count.
+#
+# Both figures above are MEASURED on run 31023778264 — the first run that ever
+# completed end to end — not estimated: sweeps 15m12s, smoke 14m24s, guards 25s.
 #
 # THE NUMBERS ABOVE ARE THE BUDGET, AND `timeout-minutes` MUST STAY ABOVE THEM.
 # They are a comment, so nothing enforces them: this header read "~3 min" for
@@ -149,21 +160,78 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
+      # fetch-depth: 0 because the filter below diffs against the PREVIOUS head,
+      # and a depth-1 clone does not contain it. It costs a few seconds against
+      # the 15 minutes it decides whether to spend.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
       - run: npm ci
+      # SKIP THE SWEEPS WHEN THE DIFF CANNOT HAVE MOVED THE GEOMETRY.
+      #
+      # This is a STEP-level condition, not a job-level `if:` with a `needs:`
+      # gate, and that is deliberate. pages.yml has `deploy: needs: ci`, so the
+      # called workflow's conclusion decides whether the site ships — and the
+      # entire outage this file documents was a deploy silently not happening.
+      # Keeping the job unconditional means it always runs and always reports;
+      # only the expensive steps inside it are skipped. The `needs:` semantics
+      # that just started working are not touched at all.
+      #
+      # The paths come from tools/pick-tests.mjs's RULES, which is the repo's
+      # existing answer to "what does this diff need": `sweeps` is routed only
+      # from js/track/scenery* and js/track/{tracks,mesh,spline,surface,geom,
+      # graph}.js. js/circuits/ and the suites' own files are included here as
+      # well, because a circuit def or a moved baseline can change what the
+      # sweep measures even when the engine did not.
+      #
+      # FAIL SAFE, NEVER FAIL OPEN. Every path that cannot resolve a diff — not
+      # a push, no before-sha, a force push, an unreachable commit, a git error
+      # — RUNS the sweeps. A filter that guesses "nothing changed" when it does
+      # not know is how a gate stops gating without anyone noticing, which is
+      # the exact failure mode this workflow already had once.
+      - name: Does this diff touch the geometry?
+        id: filter
+        env:
+          BEFORE: ${{ github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -u
+          run_all() { echo "geometry=true" >> "$GITHUB_OUTPUT"; echo "RUNNING SWEEPS: $1"; exit 0; }
+          [ "$EVENT" = "push" ] || run_all "event is '$EVENT', not a push"
+          case "${BEFORE:-}" in
+            ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch or first push)" ;;
+          esac
+          git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable (force push?)"
+          CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
+          echo "--- changed files ---"; echo "$CHANGED"; echo "---------------------"
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/|tests/(prop-clipping|road-under-floor|coplanar-faces|shared-track-foundation))'; then
+            echo "geometry=true" >> "$GITHUB_OUTPUT"
+            echo "RUNNING SWEEPS: the diff touches track engine, circuit data, tools or a sweep suite"
+          else
+            echo "geometry=false" >> "$GITHUB_OUTPUT"
+            echo "SKIPPING SWEEPS: nothing in this diff can move circuit geometry"
+          fi
       - name: Geometry sweeps (rebuilds all 40 circuits per suite)
+        if: steps.filter.outputs.geometry == 'true'
         run: npm run test:sweeps
       - name: Every circuit still builds headlessly
+        if: steps.filter.outputs.geometry == 'true'
         run: node tools/verify-track.cjs --all
 
   smoke:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30, not 20. MEASURED on run 31023778264, the first green one: 14m24s.
+    # That fit the old cap, but with 5.5 minutes to spare on a SHARED runner
+    # whose per-test cost is the very thing that varies — and the last time a
+    # margin here was thin it produced a `cancelled` nobody read as a failure.
+    # The serial single-worker run below is slower per pass by design, so the
+    # budget has to reflect that rather than the 2-worker figure it replaced.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
