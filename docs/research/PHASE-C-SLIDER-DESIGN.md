@@ -232,6 +232,37 @@ move.*
   `vTop()`/`vStd()` discipline. A km/h label would contradict the instrument
   next to it.
 
+## Blast radius — what should fail, and what should not
+
+Written down BEFORE the change, so that a spec which fails and is not on this
+list is the interesting one, and a spec on it that passes means the change did
+not land.
+
+**Must be updated with the change (they encode the current ranges):**
+
+| Where | What it encodes | Why it moves |
+|---|---|---|
+| `tests/sliders.spec.js:35-42` | a table of `{id, key, store, min: 1, max: 10}` per slider | the pace row becomes `max: 19` and its default `11`. The other four rows are unchanged — only PACE grows a wider control |
+| `tests/sliders.spec.js` (the four `OVERALL SPEED …` tests) | drive `pm-pace` to specific notch values | notch numbers no longer denote the same pace. They assert *invariants* (the dial and gearbox span their full range at every setting) rather than magnitudes, so they need new notch numbers and nothing else — which is the sign the `vTop()`/`vStd()` discipline was worth having |
+| `tests/steer-migration.spec.js` "the migration touches only its own two keys" | seeds `pace: 3` and asserts it survives untouched | **v3's whole job is to remap `pace`.** This assertion is correct for v2 and will be wrong for v3. It must be re-scoped to the keys v3 genuinely leaves alone (`steerRate`, `steerSmooth`), not deleted — the "too wide a blast radius" invariant it exists for still matters |
+| `index.html:1064-1065` | `min="1" max="10" value="5"` on `#pm-pace` | → `max="19" value="11"` |
+
+**Should NOT move, and it is worth checking they don't:**
+
+- `tests/drift.spec.js` › *SPEED STEER: higher keeps more turn-in at high speed*
+  drives `setPhysics({speedRef})` at 50 vs 120 and asserts `sharp > calm * 1.1`.
+  It tests the **physics constant**, not the slider notch, so the remapping
+  cannot touch it — and the shape change does not either: at 58 m/s the ratio
+  goes from 1.29 (clamped-linear) to 1.46 (hyperbolic), still comfortably over
+  the 1.1 bar. Verified arithmetically, and it is the one existing assertion
+  that would have caught a sign error in the new taper.
+- `PRESETS` and `STEER_LEVELS` write `steerRate`/`steerExpo`/`steerLock`/
+  `steerSpeed`, none of which change *range*, only meaning per notch. RELAX/
+  STANDARD/PRO keep their notch numbers; whether they still mean what their
+  names say is a play-test question, not an arithmetic one.
+- Anything reading `PACE` through `setPhysics({pace})` — the physics API takes a
+  real multiplier, not a notch, and is unaffected by the slider grid entirely.
+
 ## Known blocker
 
 `migrateSteerStore()` is a single "have I run ANY migration" gate:
