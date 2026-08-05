@@ -435,14 +435,35 @@ the sandbox (its egress proxy blocks the host) — an unverified API dependency
 would be a worse bug than the one being fixed.
 
 **Silent failure.**
-- 340 `catch` blocks in `js/`; 59 `Log` call sites in the entire codebase. The
-  great majority of failures are swallowed.
+- ~~340 `catch` blocks in `js/`; 59 `Log` call sites. The great majority of
+  failures are swallowed.~~ **RE-MEASURED (2026-08) — the framing was wrong, and
+  the real number is smaller and more actionable.** Counting catch blocks against
+  `Log` calls scores every catch that converts an exception into a TYPED ERROR
+  RETURN as "swallowed", and `js/net/` does that deliberately and well:
+  `js/net/rendezvous.js` turns nearly all of its catches into
+  `ERR("timeout"|"offline"|…)` precisely so the lobby can fall back instead of
+  throwing. Parsing each catch BODY instead:
+
+  | | count |
+  |---|---:|
+  | `catch` blocks in `js/` | 344 |
+  | …that do something with the error | 151 |
+  | …empty but carrying a comment saying why | 26 |
+  | …**bare `catch (e) {}`** | **167** |
+
+  So the target is 167, not 469, and a mass rewrite is still the wrong answer —
+  many of those are legitimate best-effort probes (feature detection, an optional
+  API, a `localStorage` read that may be blocked). `tests/silent-catch.test.mjs`
+  is a RATCHET on the bare count, and its escape hatch is a COMMENT rather than a
+  `Log` call: writing "ignored — this probe may fail on Safari" is the sentence
+  that was missing every time this codebase lost something quietly, and demanding
+  one is a better filter than demanding a log line nobody wants in a hot path.
 - ~~`js/net/` had zero `Log` call sites and `js/game/audio.js` still has none.~~
   **PARTLY FIXED (2026-08).** `audio.js` 0 → 4 (context-resume refusal, sample
   and music decode failure — the three that present as "there is no sound") and
   `transport.js` 0 → 3 (TURN credential fetch failure, connection state). The
-  broad 469-catch problem stands; these were the paths where a documented debug
-  namespace could not emit a single line.
+  broad problem stands (see the re-measurement above); these were the paths where
+  a documented debug namespace could not emit a single line.
 - ~~`apex26.envProbeOff` is a one-way latch~~ **FIXED (2026-08).**
   `__apex.envProbe(on?)` is the clear path, documented in `docs/DEBUG-HOOKS.md`.
 
