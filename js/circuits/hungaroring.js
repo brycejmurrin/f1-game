@@ -583,7 +583,7 @@
       //    natural banking, wrapping the bowl. This used to be a hand-rolled
       //    local terracedHillStand() (a mini shell+roof stand duplicating what
       //    spectatorHill() now provides as a shared model — see
-      //    docs/SCENERY-UPGRADE-PLAN.md §1.4/§2). Deleted in favour of
+      //    docs/archive/SCENERY-UPGRADE-PLAN.md §1.4/§2). Deleted in favour of
       //    spectatorHill(): real stepped risers + standing crowd, no shell/roof,
       //    the correct silhouette for "general-admission hillside", set well
       //    below its ~70 verts/m default (rows/density cut) since this rings

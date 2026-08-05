@@ -1263,7 +1263,6 @@ const NetLobby = (function () {
     async function codeHost(opts) {
       opts = opts || {};
       stopCodeWait();
-      if (!NetRendezvous.configured()) { say(NO_RELAY, true); return { ok: false, error: "not_configured" }; }
       await readyIce();
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       const code = opts.code || NetRendezvous.makeCode();
@@ -1409,7 +1408,6 @@ const NetLobby = (function () {
     // GUEST: fetch the invite the host published, answer it under the same code.
     async function codeJoin(codeIn) {
       stopCodeWait();
-      if (!NetRendezvous.configured()) { say(NO_RELAY, true); return { ok: false, error: "not_configured" }; }
       const e = els();
       const raw = codeIn != null ? codeIn : (e.codeIn ? e.codeIn.value : "");
       const code = NetRendezvous.normalise(raw);
@@ -1466,10 +1464,16 @@ const NetLobby = (function () {
       return { ok: true, code };
     }
 
-    // Said out loud rather than hidden: whoever sees this is the person who can
-    // deploy worker/rendezvous.js and paste its URL into NetRendezvous.
-    const NO_RELAY = "Room codes need a relay deployed (worker/rendezvous.js)."
-      + " Use the invite link or QR instead — those need nothing.";
+    // There is no "no relay" state to report. NetRendezvous.configured() is
+    // unconditionally true BY DESIGN — with no private Worker URL set, room
+    // codes fall back to the public Nostr relay pool, which needs no account
+    // and nothing deployed (js/net/rendezvous.js, and pinned by
+    // tests/net-rendezvous.test.mjs). Two guards here tested that function and
+    // therefore could never fire, and the message they would have shown —
+    // "Room codes need a relay deployed" — was the opposite of true. Both are
+    // deleted rather than rewritten: an unreachable branch that lies is worse
+    // than no branch. Real relay failures surface from exchange() as typed
+    // errors (all_rejected, timeout) and are reported where they happen.
 
     // ---- open / close -----------------------------------------------------
     // A PHONE THAT HOSTS FALLS ASLEEP, and that is the whole reason "desktop

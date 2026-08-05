@@ -1,6 +1,6 @@
 # Testing reference
 
-103 root Playwright spec files (`tests/*.spec.js`) + 38 `node --test` unit suites
+104 root Playwright spec files (`tests/*.spec.js`) + 38 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -242,7 +242,12 @@ separate processes with separate ports, and the sizing guidance above applies.
 | `artifacts/logs/` | background-run and shard logs |
 
 All gitignored. Tracked golden baselines live in `tests/*-snapshots/` and stay
-outside these roots.
+outside these roots — but only ONE suite has any: `menu-baseline.spec.js` has
+six (title/select/garage × desktop/phone-landscape), so `npm run test:baseline`
+is a real gate. `tracks-visual.spec.js` has none, so `npm run test:visual`
+SKIPS itself rather than failing 40 circuits on missing snapshots; generating
+them on Linux/SwiftShader is still outstanding, and the suite re-enables itself
+automatically once the directory exists.
 
 ### Fixtures (`tests/fixtures.js`)
 
@@ -254,7 +259,7 @@ Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 | `pageErrors` | `string[]` of uncaught JS exceptions — assert `toHaveLength(0)` after exercising game logic |
 | `consoleLines` | `string[]` of every console line and page error, type-prefixed, favicon noise stripped. Prefer this to a hand-rolled `page.on("console", …)` — the hand-rolled ones drifted into a dozen slightly different filters |
 | `racePage` | navigates to `/` and waits for `window.__apex` (10 s) |
-| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block ~54 specs used to hand-roll, with unified timeouts |
+| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 31 of 102 specs import `tests/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
 
 `tools/fixture-consumer-audit.mjs` enforces the import for the specs that depend
 on those guarantees (`audio-smoke`, `smoke`, `f1-track-accuracy`, `ui-audit`).
@@ -343,6 +348,7 @@ what it covers.
 | `world-physics.spec.js` | the player integrates a bicycle model in WORLD space; `(s, x)` is read back, not authoritative |
 | `physics-fixes.spec.js` | the physics/collision robustness pass |
 | `longitudinal.spec.js` | longitudinal + grip physics and full-lap progress |
+| `physics-characterization.spec.js` | CHARACTERIZATION of the driving model against a committed baseline — asserts the numbers did not move, not that they are right. Live gate against `tests/physics-baseline.json`; regenerate with `APEX_UPDATE_BASELINE=1` and read the diff |
 | `projection.spec.js` | world↔track (Frenet) projection continuity — no lap-distance teleport near hairpins |
 | `elevation-tracks.spec.js` | slope gravity, banking grip, road-follow on graded circuits |
 | `steering.spec.js` | the player heading model in `updateCar` |
@@ -373,7 +379,7 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `tracks-walls.spec.js` | barrier geometry on all 40 circuits — the car stays inside a sane corridor |
-| `tracks-visual.spec.js` | per-circuit pixel-diff regression (all 40 circuits × 6 fractions) |
+| `tracks-visual.spec.js` | per-circuit pixel-diff regression (all 40 circuits × 6 fractions) — **skipped: no baselines committed** |
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain or verge triangle renders above the racing line. Point-in-triangle vs the asphalt; large road-over-road is ignored as an intentional crossover (Suzuka's figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line, in 3D, 0.2–5 m above the road. Per-track `BASELINE` caps document justified overheads (Miami's beach canopy, Mexico's Foro Sol, gantries) |
 | `prop-clipping.test.mjs` | ratchet: prop-vs-prop interpenetration must not grow |

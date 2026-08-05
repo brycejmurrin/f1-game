@@ -21,33 +21,30 @@ node tools/verify-track.cjs <id>  # headless build check (no browser) — catche
 
 ## Testing workflow
 
-Three rules, in order. The reference — every group, every spec, the fixtures and
-the philosophy — is **`docs/TESTING.md`**, and `tests/test-groups.test.mjs`
-fails if it and `package.json` disagree. Do not maintain a second copy of that
-table here.
+**The reference is `docs/TESTING.md`** — every group, every spec, the fixtures,
+the philosophy. `tests/test-groups.test.mjs` fails if it and `package.json`
+disagree. Do not copy its tables here; this section is the three rules only.
 
-### 1. Run tests in the BACKGROUND, and tail the log
-
-A foreground run blocks for minutes and prints nothing you can act on. Backgrounding
-is the default, not the exception:
+**1. Run tests in the BACKGROUND and tail the log. NEVER BLOCK ON A TEST RUN.**
+A foreground run blocks for minutes and prints nothing you can act on. Start it,
+go do something else, come back to it.
 
 ```sh
 node tools/test-bg.mjs smoke api collision   # start; returns immediately
 tail -f artifacts/logs/smoke.log             # watch one
-node tools/test-bg.mjs --status              # running / how each ended
-node tools/test-bg.mjs --wait                # block until all groups finish
-node tools/test-bg.mjs --stop                # kill everything still running
+node tools/test-bg.mjs --status --wait --stop
 ```
 
-Each group gets its own free port, report dir and log, so groups cannot tear
-down each other's web server and a stall is attributable to ONE log rather than
-to "the run". The reporter (`tests/live-reporter.js`) writes a timestamped line
-per test start and end plus a 30 s heartbeat naming everything in flight — a
-hung test is the one with a `> start` line and no end line
-(`APEX_HEARTBEAT=<s>`, `0` disables).
+**Four ways an agent wastes an hour here.** Every one of these was hit in a
+single session; they are cheap to avoid and expensive to diagnose, because each
+one looks exactly like "the tests are slow".
 
-`tools/test-shards.sh` is the BLOCKING counterpart, for CI. Raw `npm test -- <spec>`
-is fine for one spec; anything larger goes in the background.
+| Trap | What happens | Do instead |
+|---|---|---|
+| `cmd \| tail -N` in the background | `tail` buffers to EOF, so the output file stays **empty** for the whole run and there is nothing to poll. It looks hung | Let it write in full, or `\| tee`; read the file at the end |
+| `until ps aux \| grep -q "[f]oo"; do sleep …` | The wait loop's OWN command line contains `foo`, so `ps` matches **itself** and it never exits | Match a PID, or check the output file for a completion marker |
+| `pkill -f <pattern>` to clean up | Kills the run you just started as well as the strays. Exit 143/144 with no result | Kill the specific PID you captured |
+| Several heavy runs at once | SwiftShader is CPU-bound; they starve each other and all die to their own timeouts. Not a failure — a false one | One run at a time; more workers is not more throughput |
 
 #### CHECK THE BOX IS QUIET BEFORE YOU START, AND CLEAN UP AFTER
 
@@ -151,80 +148,127 @@ behaviours that are invisible on the desktop this game is developed on
 (pointer capture, the top layer, `zoom`, `(pointer: coarse)`, iOS context loss).
 Read it BEFORE debugging anything that reproduces on one device and not another.
 
+**A timeout kill (exit 143/144) is not a test result.** It says nothing about
+the code — the run was killed, not answered. Re-run it serially before believing
+anything about it, and never report it as a pass or a failure.
+
+**The concrete `Monitor` pattern**, since "arm a Monitor" is the instruction and
+all the traps are in the mechanics:
+
+```
+1. Start it backgrounded, redirected to a LOG FILE — never `| tail`, which
+   buffers to EOF so the file stays empty and there is nothing to read.
+     node tools/run-playwright.mjs tests/foo.spec.js --reporter=line \
+       > artifacts/logs/foo.log 2>&1
+
+2. Arm Monitor on the FILE with an until-loop that exits when the run ends, and
+   print only the verdict — each stdout line becomes one notification.
+     until grep -qE "[0-9]+ (passed|failed)|Error:" artifacts/logs/foo.log 2>/dev/null
+     do sleep 15; done
+     grep -E "[0-9]+ (passed|failed)|Error:" artifacts/logs/foo.log | head -3
+
+3. Start the next piece of work IMMEDIATELY. The notification comes to you.
+```
+
+- **Match every terminal state, not just success.** A watcher grepping only for
+  `passed` stays silent through a crash, a hang or a timeout kill — and silence
+  is indistinguishable from "still running".
+- **Watch the LOG, not the process table.** A watcher whose own command line
+  contains the string it greps for in `ps` matches *itself* and never exits.
+
 IMPORTANT: don't edit `js/` or `css/` while a run is in flight — the server
 serves the working tree, so later specs load a mixed build (see the note at the
 end of this section). Writing docs, reading, and researching are all safe.
 
 ### 2. Run the groups the change needs — not all of them
 
-The whole suite is ~40 minutes of SwiftShader. Which groups a change needs is
-mechanical, so ask instead of guessing:
+**Start the run, ARM THE `Monitor` TOOL, and go do the next piece of work.**
+Waiting is the mistake — polling in a loop, `sleep`ing, or narrating progress
+are all the same mistake wearing different clothes. `Monitor` exists so you do
+not have to wait: it watches in the background and *notifies* you, and the
+notification arrives on its own. Arming it and then sitting there defeats the
+entire point.
 
-```sh
-node tools/pick-tests.mjs                 # branch point + working tree
-node tools/pick-tests.mjs --staged
-node tools/pick-tests.mjs js/car/parts.js # explicit paths
-node tools/pick-tests.mjs --bg            # ready-to-paste background command
+The pattern, in three steps:
+
+```
+1. Start the run in the background, redirected to a LOG FILE.
+   Never `| tail` — tail buffers to EOF, so the file stays empty and there is
+   nothing for the watcher (or you) to read.
+
+   Bash(run_in_background: true):
+     node tools/run-playwright.mjs tests/foo.spec.js --reporter=line \
+       > artifacts/logs/foo.log 2>&1
+
+2. Arm Monitor on that file, with an until-loop that EXITS when the run ends.
+   Each stdout line becomes one notification, so print only the verdict.
+
+   Monitor(description: "foo specs verdict", timeout_ms: 900000):
+     until grep -qE "[0-9]+ (passed|failed)|Error:" artifacts/logs/foo.log 2>/dev/null
+     do sleep 15; done
+     grep -E "[0-9]+ (passed|failed)|Error:" artifacts/logs/foo.log | head -3
+
+3. IMMEDIATELY start the next piece of work. Do not poll the log, do not sleep,
+   do not report "still running". The notification will come to you.
 ```
 
-Rules live in `RULES` at the top of `tools/pick-tests.mjs`, deliberately coarse
-and biased toward running too much. **A new source directory or a new group means
-a new rule** — `tests/test-groups.test.mjs` fails if a rule names a group that
-does not exist, or if a source directory routes to nothing.
+Two rules that make step 2 work:
 
-Order to escalate in:
+- **Match every terminal state, not just success.** A watcher grepping only for
+  `passed` stays silent through a crash, a hang or a timeout kill — and silence
+  is indistinguishable from "still running". Include the failure signatures.
+- **Never let the loop's own command line match its own grep.** `ps aux | grep
+  -q "verify-track"` inside a watcher whose command *contains* the string
+  "verify-track" matches itself and never exits. Watch the LOG, not the process
+  table.
 
-| When | Run |
-|---|---|
-| after any edit | `npm run test:tiny` — page loads, `__apex` responds. If this is red nothing else is worth running |
-| edit loop | `npm run test:tooling-fast` (~4 s: load order, docs integrity, test groups, api contracts) then the groups `pick-tests` named |
-| track/scenery edit | `node tools/verify-track.cjs <id>` first — 2 s, no browser, catches a build THROW |
-| before pushing | those groups, plus `npm run test:sweeps` if geometry moved |
+**While the run is in flight, do not edit `js/` or `css/`** (tests serve them
+from the working tree). Edit `tests/`, `docs/`, `tools/` — or write the commit
+message. There is always non-conflicting work.
 
-`test:sweeps` and `test:tooling` pass `--test-concurrency=1` **deliberately**:
-every suite in them rebuilds all 40 circuits, and four at once reached 5.4 GB and
-was OOM-killed — which shows up as a `SIGKILL` with no assertion, so it does not
-read as a test failure. Run several GROUPS in parallel instead; those are
-separate processes.
+**2. Run the groups the change needs, not all of them.** The whole suite is ~40
+minutes of SwiftShader, and which groups a change needs is mechanical — so ask:
 
-### 3. Make failures explain themselves
+```sh
+node tools/pick-tests.mjs [--staged|--bg|<paths>]
+```
 
-Specs that import `tests/fixtures.js` attach three things on failure, and
-`live-reporter.js` echoes the tail of each into the log:
+Escalate: `npm run test:tiny` after any edit (if this is red nothing else is
+worth running) → `npm run test:tooling-fast` in the edit loop → the groups
+`pick-tests` named → `npm run test:sweeps` if geometry moved. For a track or
+scenery edit run `node tools/verify-track.cjs <id>` FIRST — 2 s, no browser, and
+it catches a build THROW that would strand the game on the menu.
 
-| Attachment | What it holds |
-|---|---|
-| `apex-state` | `physState` + `probe` + `timing` + `lightState` + `info` |
-| `apex-logs` | the `Log` ring buffer — retained diagnostics **including ones never printed** |
-| `page-console` | what the page said, in order, favicon noise stripped |
+**A new source directory or a new group means a new rule** in `RULES` at the top
+of `tools/pick-tests.mjs`; the test fails if a rule names a group that does not
+exist, or if a source directory routes to nothing.
 
-Turn diagnostics up for a run without editing the spec:
+**3. Make failures explain themselves.** Specs that import `tests/fixtures.js`
+attach `apex-state` (physState + probe + timing + lightState), `apex-logs` (the
+`Log` ring buffer, including entries that never printed) and `page-console` on
+failure, and `live-reporter.js` echoes the tail of each into the log. Turn
+diagnostics up for a run without editing the spec:
 
 ```sh
 APEX_LOG=scenery:debug npm test -- tests/props-over-road.spec.js
 ```
 
-Take the `consoleLines` fixture instead of hand-rolling `page.on("console", …)`,
-and read `__apex.logs({ns})` rather than scraping console text — a scraped
-message ties the spec to its exact wording and misses anything below the print
-threshold.
+Read `__apex.logs({ns})` rather than scraping console text — a scraped message
+ties the spec to its exact wording and misses anything below the print threshold.
+
+**Two projects, not one.** `playwright.config.js` splits the suite into
+`headless` (physics/geometry/hook specs, no GPU) and `render` (screenshot/pixel/GL
+specs, listed in `RENDER_SPECS`). Target `--project=headless` or
+`--project=render`, never `--project=chromium` (gone). `RENDER_SPECS` IS the
+partition — headless is "everything NOT in it" — so a name there matching no file
+silently drops a GL spec into the wide pool, and a spec named by a group whose
+`--project` excludes it never runs at all. Both directions are now asserted.
 
 IMPORTANT: tests serve `js/`/`css/` straight from the working tree — don't edit
 source files while a run is in flight, or its later specs load mixed versions.
 
-**Two projects, not one.** `playwright.config.js` splits the suite into a
-`headless` project (physics/geometry/hook specs — the default, no GPU) and a
-`render` project (screenshot/pixel-diff/GL specs, listed in `RENDER_SPECS`).
-Target `--project=headless` or `--project=render` when filtering, never
-`--project=chromium` (gone). `RENDER_SPECS` is the partition — the headless
-project is "everything NOT in it", so a name there that matches no file silently
-drops a GL spec into the wide pool.
-
-`tests/manual/` is excluded from discovery: the per-circuit blank scan and
-contact sheets, and the gallery emitters. They gate nothing and are run by path
-(see `tests/manual/README.md`).
-
----
+`tests/manual/` is excluded from discovery and is run by path (see
+`tests/manual/README.md`).
 
 ## Logging (`js/log.js`, global `Log`)
 
@@ -283,10 +327,15 @@ never scattered at the repo root:
 - **`scratch/profiles/`** — CPU/GPU profiles
 
 Both roots are created on demand. `assets/` and committed generated sources stay
-outside them. There are currently **no** tracked golden baselines — no
-`tests/*-snapshots/` directory exists — so `npm run test:visual` is not a
-regression gate yet; regenerating the baselines on Linux/SwiftShader is a
-separate, still-outstanding operation.
+outside them.
+
+**Golden baselines exist for the MENUS only.** `tests/menu-baseline.spec.js-snapshots/`
+holds six tracked PNGs (title/select/garage × desktop/phone-landscape), and
+`npm run test:baseline` is a real regression gate against them. `npm run test:visual`
+(`tests/tracks-visual.spec.js`) is **not** — it screenshots all 40 circuits and no
+baselines were ever committed for it, so it is skipped unless
+`tests/tracks-visual.spec.js-snapshots/` exists. Generating those on
+Linux/SwiftShader is a separate, still-outstanding operation.
 
 ---
 
@@ -410,260 +459,35 @@ js/data/         — data hub —
   schedule.js / standings.js / lastrace.js / live.js   the other tabs, same
                                   Data*.create(ctx) pattern
 
-js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
-  transport.js   NetTransport   two channels — "state" (unreliable/unordered:
-                                  snapshots + inputs; a late packet is
-                                  worthless) and "event" (reliable/ordered:
-                                  lobby, start tick, lap times, results).
-                                  loopback() wires two endpoints IN ONE PAGE
-                                  with injectable latency/jitter/loss so the
-                                  netcode is testable with no network at all;
-                                  rtc() is the real RTCPeerConnection. Both
-                                  deliver only on pump(), so latency and loss
-                                  are reproducible rather than wall-clock.
-                                  A TURN RELAY SHIPS BY DEFAULT (a Metered
-                                  free-tier credentials URL) because without
-                                  one two devices ON THE SAME WI-FI often
-                                  cannot connect: the only host candidate a
-                                  browser offers is mDNS-obfuscated, and when
-                                  that name will not resolve the sole
-                                  remaining pair is srflx-to-srflx, which
-                                  needs router hairpinning many do not do. The
-                                  key is readable in devtools — inherent to
-                                  client-side TURN, which is why the operator
-                                  documents this exact fetch from a browser —
-                                  and apex26.turnApi overrides it outright.
-                                  prefetchIce() must be AWAITED BEFORE a
-                                  connection is built (lobby's readyIce()):
-                                  iceServers are fixed at construction, so a
-                                  fetch that lands 200 ms later gathers
-                                  STUN-only and every wire dump reads relay:0
-                                  while the relay is demonstrably alive
-  sdp.js         NetSdp         the invite code's payload as BYTES. A gathered
-                                  data-channel SDP is ~700 B of text and almost
-                                  none of it is information — we only ever
-                                  negotiate one m-line, so every line is either
-                                  a template constant or one of five facts
-                                  (fingerprint, ufrag, pwd, setup role,
-                                  candidates). Packing those is ~90 B, which
-                                  takes the code from ~670 chars to ~240 and is
-                                  what makes it SCANNABLE rather than merely
-                                  pasteable. It never EDITS an SDP — it extracts
-                                  and rebuilds — and packChecked() hands the
-                                  rebuild to a throwaway RTCPeerConnection
-                                  BEFORE a human sees it, falling back to the
-                                  deflated full text if this browser refuses
-                                  our own reconstruction. TCP candidates are
-                                  dropped on purpose. Candidates are capped at
-                                  MAX_CANDS and selected ROUND-ROBIN BY KIND
-                                  (RETAIN, relay first) — never the first N,
-                                  because SDP lists them in GATHERING order and
-                                  relay is always last, so a plain truncation
-                                  drops the relay on exactly the machines with
-                                  enough interfaces to need one
-  nostr.js       NetNostr       the room-code rendezvous, over PUBLIC NOSTR
-                                  RELAYS via a vendored Trystero
-                                  (vendor/trystero-0.25.3, MIT, dynamic
-                                  import()). Nostr and not a public MQTT
-                                  broker because accepting arbitrary events
-                                  from anonymous clients is what a relay is
-                                  FOR — HiveMQ's and EMQX's free brokers say
-                                  outright they must NOT be used by real
-                                  applications, and an earlier build did
-                                  exactly that. SIGNALLING ONLY: Trystero opens
-                                  its channel with createDataChannel("data")
-                                  and no options, i.e. reliable+ordered, which
-                                  is precisely wrong for snapshots — so it
-                                  carries the two invite/answer STRINGS and the
-                                  race then runs over our own PC. The host
-                                  posts and waits; the guest passes a `reply`
-                                  because it cannot answer until it has seen
-                                  the invite.
-                                  ROOM CODES ARE BEST-EFFORT AND THE INVITE
-                                  LINK IS NOT: public relays increasingly
-                                  refuse anonymous ephemeral events, and a
-                                  refusal is a NIP-01 OK=false that the vendor
-                                  turns into a console.warn — no retry, the
-                                  relay stays in the pool, nothing reaches us,
-                                  and getRelaySockets() still reports it OPEN
-                                  because the WebSocket is. So exchange()
-                                  intercepts that warning, and reports
-                                  `all_rejected` when every live relay has
-                                  refused. Measured on hardware: all six
-                                  shipped relays healthy, wellorder answering
-                                  "blocked: spam not permitted", both players
-                                  on spinners. Pick relays with
-                                  tools/nostr-probe.mjs — which tests the only
-                                  criterion that decides this, whether a relay
-                                  accepts an ephemeral event from an UNKNOWN
-                                  pubkey — never by reputation or uptime
-  rendezvous.js  NetRendezvous  room codes — the BACKUP way in, and the
-                                  only part of the game leaning on someone
-                                  else's server. NOTHING TO DEPLOY: a public
-                                  Nostr relay network is the default meeting
-                                  place (js/net/nostr.js), and
-                                  worker/rendezvous.js (one Cloudflare Durable
-                                  Object per code) is an optional upgrade when
-                                  its URL is set. The broker is public, so the
-                                  payload is AES-GCM sealed under a key derived
-                                  from the code and the topic is a HASH of it —
-                                  the operator relays bytes it cannot read, and
-                                  the code is the only secret. A code is
-                                  DISPOSABLE, not an account: nothing stored,
-                                  claimed, squattable or personal, so it avoids
-                                  everything a username system drags in. It
-                                  carries the SAME invite/answer strings the
-                                  manual flow uses, so the relay is a courier
-                                  and never a participant. Every call resolves
-                                  to a typed error, never throws — when the
-                                  relay is down the lobby must fall back to the
-                                  link/QR, which need nothing. Shown even when
-                                  unconfigured: a feature that hides itself on
-                                  an unset URL guarantees nobody discovers it
-  qr.js          NetQr          byte-mode, level-L QR ENCODER (versions 1-20,
-                                  standard mask selection). The invite QR holds
-                                  the invite LINK, so the guest scans it with
-                                  their ORDINARY CAMERA APP and lands in the
-                                  lobby with the code already filled in — no
-                                  in-page scanner, and none possible:
-                                  BarcodeDetector is absent on desktop Linux
-                                  Chrome and iOS Safari (measured). Encoder
-                                  only; decoding is an order more code for a
-                                  job the OS already does. Verified by jsQR (a
-                                  devDependency) in tests/net-qr.test.mjs —
-                                  self-consistency proves nothing here, since a
-                                  wrong mask or a transposed format field
-                                  produces a picture that looks exactly right
-                                  and cannot be read
-  scan.js        NetScan        reading a QR with the device CAMERA, so the
-                                  answer stops being a copy/paste. Two transfers
-                                  are unavoidable — each side must learn the
-                                  other's DTLS fingerprint, and
-                                  generateCertificate() takes no seed — so the
-                                  second one is scanned instead of typed.
-                                  Carries a VENDORED jsQR (Apache-2.0,
-                                  vendor/jsqr-1.4.0, injected ON DEMAND and
-                                  never in the boot path) because
-                                  BarcodeDetector exists on neither iOS Safari
-                                  nor desktop Linux Chrome, which is exactly the
-                                  iOS-to-desktop pairing this is for. stop()
-                                  kills every track and is wired to decode,
-                                  cancel, lobby close and page-hide: a camera
-                                  outliving its screen is a privacy bug nothing
-                                  on screen would reveal
-  handshake.js   NetHandshake   signalling with no server: vanilla ICE (gather
-                                  fully, so one static string suffices) →
-                                  slimmed SDP → deflate → base64url invite
-                                  code, pasted between players. Embeds
-                                  version.json's build and REFUSES a mismatched
-                                  peer — different builds mean different
-                                  splines, barriers and constants. Scenery is
-                                  deliberately not checked (props never affect
-                                  physics)
-  snapshot.js    NetSnapshot    the wire format (13 B/car: s/x/head/speed/gear/
-                                  lap, quantised to 1 cm and 1 cm/s) + the
-                                  interpolation buffer. Remote cars draw ~100 ms
-                                  in the past between two packets; a late packet
-                                  EXTRAPOLATES ALONG s, which follows the road
-                                  by construction and so cannot dead-reckon a
-                                  rival into a barrier. s and head both wrap the
-                                  short way — getting that wrong sends a car
-                                  backwards down the lap once per lap.
-                                  predict() leads sample(): contact must not be
-                                  resolved against the delayed DRAWN pose
-  session.js     NetSession     clock sync (NTP-style; keeps the LOWEST-RTT
-                                  sample, since a slow reply is a queued reply
-                                  and queuing is pure error), packet routing,
-                                  typed JSON events, and a heartbeat, so
-                                  an abandoned car can be handed back to the AI
-                                  instead of standing still on track
-  netplay.js     NetPlay        the game side (NetPlay.create(G)). AUTHORITY:
-                                  each peer fully owns its own car; the host
-                                  additionally owns the AI and race control. So
-                                  your own car is NEVER corrected — no rollback,
-                                  no reconciliation, no host advantage — at the
-                                  cost of the two screens disagreeing by ~1 m
-                                  under heavy contact. A rival is POSED from
-                                  replicated state, so updateCar() early-outs on
-                                  netPlay.owns(c), exactly as it already does
-                                  for an incident-sim takeover. tick() also runs
-                                  through the paused gate: one player opening a
-                                  menu cannot stop a shared world.
-                                  LIGHTS-OUT is an INSTANT, not a delay: the
-                                  host names one and every peer derives countT
-                                  from it, so nobody accumulates dt and nobody
-                                  rolls their own hold. NOBODY COUNTS DOWN
-                                  UNTIL IT IS NAMED — the host included, which
-                                  it did not used to be. It always free-ran,
-                                  because start() clears armedPeers and
-                                  hostStart() runs with no pump in between, so
-                                  the first allArmed() is always false; that
-                                  was invisible only while the lead was SHORTER
-                                  than the sequence. And a lead shorter than
-                                  the sequence puts every peer part-way through
-                                  it by construction: 2500 ms against 5.2-7.0 s
-                                  of lights had a guest joining at countT ~ 2.7
-                                  -4.5, two to four lamps backfilled in one
-                                  frame, on a phone still painting its first
-                                  frames after a build. Reported as correct
-                                  timing and no lights at all. So the moment is
-                                  named a WHOLE COUNTDOWN away (G.COUNTDOWN_S +
-                                  the hold + a settle) and both sides hold dark
-                                  until then. The wait is real — it lasts as
-                                  long as the slowest guest's circuit build, up
-                                  to ARM_WAIT_MS — so the gantry says so rather
-                                  than looking hung. Everything here reads ONE
-                                  clock, nowMs(): naming the moment off
-                                  performance.now() while game.js counts down
-                                  against G.netNow put the deadline on wall
-                                  time, where no test could reach it.
-                                  UP TO FOUR PLAYERS, in a STAR: the host holds
-                                  one session per guest and each guest holds one,
-                                  to the host. Rivals are a Map keyed by
-                                  G.wireId(c) = teamIndex*2 + seat — a byte both
-                                  peers compute identically, which is what lets a
-                                  snapshot say WHICH car it describes. cars[]
-                                  index cannot: makeCars() drops the custom team
-                                  unless the local player picked it, so the grids
-                                  differ in length and order. The host RELAYS —
-                                  guests have no connection to each other, so it
-                                  forwards every rival in one multi-entry
-                                  snapshot, unaltered and under that guest's own
-                                  id. Authority does not move; it is a courier.
-                                  A packet with an unknown id is DROPPED, never
-                                  guessed at — which is also how a guest ignores
-                                  its own car coming back round the relay
-  lobby.js       NetLobby       the VS FRIEND screen. INVITES ARE SEQUENTIAL —
-                                  one negotiation in flight, INVITE ANOTHER once
-                                  a guest lands. Not a limit of the wire
-                                  (createInvite and rtc() are per-transport) but
-                                  of people: with several offers outstanding a
-                                  pasted answer must be matched to the offer that
-                                  produced it, and that is the one thing the
-                                  person pasting cannot tell you. A guest's
-                                  profile is filed under the CONNECTION it
-                                  arrived on, never a `from` in the payload — a
-                                  peer that can name itself can name somebody
-                                  else. The exception is a guest receiving a
-                                  RELAYED roster: there a `from` means the host
-                                  is speaking for another guest, and trusting the
-                                  host is not new trust. Without that relay a
-                                  guest never learns the other guests exist, has
-                                  no slot for them, and drops their packets.
-                                  The two code pastes ARE
-                                  the signalling server — the one thing WebRTC
-                                  cannot start without, and the one thing two
-                                  people already have between them. Opens the
-                                  session ITSELF (the guest learns which race to
-                                  load from the host, so the session must exist
-                                  before a track does) and hands it to NetPlay
-                                  once the race is up. The profile it sends is
-                                  part IDS, never resolved multipliers — a peer
-                                  declaring {cornering: 9} would simply be
-                                  faster. Its transport factory is injectable:
-                                  an RTCPeerConnection whose ICE never completes
-                                  spins forever, so a test that builds one HANGS
-                                  rather than fails (__apex.lobbyFake)
+js/net/          — multiplayer wire (2-4 players, WebRTC, NO backend) —
+                 Full reference: docs/MULTIPLAYER.md. The short version:
+  transport.js   NetTransport   two channels — "state" (unreliable/unordered,
+                                  for snapshots) and "event" (reliable/ordered,
+                                  for lobby/results). loopback() runs both ends
+                                  IN ONE PAGE with injectable latency/loss
+  sdp.js         NetSdp         packs the invite SDP to ~90 B so the code is
+                                  SCANNABLE, not merely pasteable
+  nostr.js       NetNostr       room-code rendezvous over public Nostr relays
+                                  (vendored Trystero). SIGNALLING ONLY
+  rendezvous.js  NetRendezvous  room codes — the backup way in; typed errors,
+                                  never throws, so the lobby can fall back
+  qr.js / scan.js  NetQr, NetScan   invite QR (encoder only) + camera decode
+  handshake.js   NetHandshake   vanilla ICE -> slimmed SDP -> deflate ->
+                                  base64url invite code. REFUSES a peer on a
+                                  different build
+  snapshot.js    NetSnapshot    13 B/car wire format + interpolation. A late
+                                  packet extrapolates ALONG s, so dead
+                                  reckoning cannot put a rival into a barrier
+  session.js     NetSession     clock sync, packet routing, heartbeat
+  netplay.js     NetPlay        the game side. AUTHORITY: each peer fully owns
+                                  its own car, so your car is NEVER corrected.
+                                  Host also owns AI + race control and RELAYS
+                                  between guests. Rivals keyed by G.wireId(c),
+                                  never cars[] index
+  lobby.js       NetLobby       the VS FRIEND screen. Invites are SEQUENTIAL.
+                                  A guest's profile is filed under the
+                                  CONNECTION it arrived on, never a `from`
+
 
 js/game/         — game modules (each created with the G ctx façade from game.js) —
   tables.js      GameTables     static game data (CAM_MODES, DIFF, gears, paints)
@@ -687,6 +511,16 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   __apex.render({what}) (view/map/circuit/car)
   ariastate.js   AriaState      mirrors each option group's visual selection onto
                                   aria-pressed for screen readers
+  sheetshape.js  SheetShape     self-initialising: measures every `.sheet` with a
+                                  ResizeObserver and writes data-shape="tall|wide"
+                                  / data-pair="on|off". Its CONSUMER IS CSS
+                                  (css/components.css, css/career.css) — no JS
+                                  reads it, which is why a JS-only reference scan
+                                  reports it as orphaned. It is not
+  topmodal.js    TopModal       self-initialising: owns the top-layer/z-index
+                                  ladder over the 16 `<dialog class="screen">`
+                                  elements, reading data-esc-close / data-esc.
+                                  Same CSS/DOM-contract shape as sheetshape.js
   music-lib.js   MusicLib       bring-your-own-music library (IndexedDB), fed to GameAudio
   spotify.js     SpotifyMusic   optional personal-use Spotify Premium soundtrack
   input.js       Input          keyboard / gamepad / touch / tilt
@@ -780,6 +614,12 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   CAMERA, not a separate screen. #photo-controls
                                   is a layer above the panel, so Escape steps out
                                   of the fly-cam and leaves the panel open
+  aerozones.js   AeroZones      ACTIVE AERO activation zones — pure circuit
+                                  GEOMETRY (curvature in, arc-metre spans out).
+                                  Knows nothing about a car: xStraightAhead()
+                                  and aeroDfMult() stay in game.js because they
+                                  read car state
+  photomode.js   Photomode      photo mode
   tuner.js       TunerPanel     LIGHTING TUNER pause-menu panel
   cam-tuner.js   CamTunerPanel  CAMERA TUNER pause-menu panel
   steer-tuning.js  SteerTuning  ADVANCED STEERING panel
@@ -788,7 +628,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (103) + tests/*.test.mjs unit suites (38)
+tests/*.spec.js                 Playwright specs (104) + tests/*.test.mjs unit suites (38)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
                  ARCHITECTURE-REVIEW.md is the standing assessment + defect
                    register: what the no-build-step bet costs, why asserted
@@ -857,224 +697,63 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
 
 ## Parts system (`js/car/parts.js`)
 
-**THE ERS PART RUNS THE BATTERY.** Every category moves the four stats
-(`speed`→`vmax`, `accel`→`ACCEL`, `cornering`→`LAT_MAX`, `braking`→`BRAKE`), and
-all twelve have real spread — but ERS's options *describe* battery behaviour
-("harvests extra energy under braking", "maximum recovery window", "immediate
-deployment") and for a long time did none of it. `Parts.ersProfile(setup, team)`
-returns two 0..1 axes read from the bias the catalog already encodes
-(`deploy` ← the option's `accel`, `regen` ← its `speed`), and they drive
-`drainFor`/`regenFor`/`otTimeFor`/`otCoolFor` in game.js. Deriving rather than
-authoring new fields keeps the SIGNATURE clones consistent for free, since they
-copy those stats. Measured:
+**Full reference: `docs/PARTS.md`** — the catalog shape, the measured ERS and
+aero tables, SIGNATURE options, the visual recipe registry.
 
-| ERS part | deploy / regen | boost lasts | recharge | OT push / cooldown |
-|---|---|---|---|---|
-| `harvest` | 0.00 / 0.43 | 3.8 s | 5.4 s | 3.2 s / 14.0 s |
-| `standard` | 0.22 / 0.29 | 4.3 s | 5.9 s | 3.6 s / 12.9 s |
-| `overcharge` | 1.00 / 1.00 | 7.1 s | 4.0 s | 5.2 s / 9.0 s |
+What binds code outside `parts.js`:
 
-A car with no parts — every AI — sits at the midpoint of both axes.
-`physState()` reports `ersDeploy`, `ersRegen`, `drain`, `regen`, `otTime`,
-`otCool`.
-
-`Parts.CATALOG` — an **array** of 12 category objects (ordered, not keyed by id):
-`engine`, `aero`, `suspension`, `brakes`, `tyres`, `ers`, `gearbox`, `fuel`,
-`exhaust`, `floor`, `cockpit`, `wheels`. Each
-category is `{ id, label, options:[…] }`; each option has
-`{ id, label, cost, desc, speed?, accel?, cornering?, braking?, supplier? }`.
-Budget = 600 cr. `Parts.getMods(setup, teamEngine)` returns
-`{speed, accel, cornering, braking}` multipliers. Supplier-exclusive options
-(e.g. `manu_mercedes`) are only shown when `team.engine` matches.
-`unlimitedBudget` (localStorage `apex26.unlimitedBudget`) removes the 600 cr cap.
-
-Every option also carries a parametric `visual` **recipe** consumed by `Car3D`
-(`getVisualTiers().._visual`); `VISUAL_FIELD_REGISTRY` names the one consumer of
-each recipe field, and `tests/parts-physics.spec.js` fails on an unregistered or
-stale field, a duplicate recipe within a category, or an engine that repeats
-another's six-field bodywork shape. The newer STRUCTURE knobs are
-`aero.plate/casc/swan/tvane` (endplate profile, cascade count, swan-neck mount,
-T-wing), `engine.chimney`, `brakes.scoop`, `ers.conduit`, `fuel.filler`,
-`exhaust.pipes/bore/flare/wastegate/wrap` and `floor.fences/fenceH/skid/edgeLip`
-— each defaults to the shipped geometry, so an option written before them is
-unchanged. EXHAUST and FLOOR took over geometry that used to be hardcoded (the
-tailpipe derived from `engine.twin`, and a fixed five-fence floor edge); both
-still derive exactly that when their recipe leaves the field at its default.
-
-Prefer knobs that change WHAT EXISTS over knobs that scale what is already
-there. A category whose recipe is all scalars gives every team the same part at
-a different size — `tyres.shoulder`, `brakes.discFace` and `suspension.rocker`
-exist because those three read as near-identical across the grid without them.
-
-**SIGNATURE options** (`tag: "SIGNATURE"`, `teams: [id]`) are cost- and
-physics-identical clones of the universal option named in `equivalent` — they buy
-a distinct mesh, never an advantage, and the test suite enforces that. Every team
-fields one in every category via `FACTORY_PRESETS`, except the four on a
-manufacturer-exclusive FACTORY power unit (that unit is already team-unique).
-`FACTORY_PRESETS` drives AI car MESHES only — never AI physics or player saves.
-
----
+- `Parts.CATALOG` is an **array** of 12 category objects (ordered, not keyed).
+  Budget 600 cr. `Parts.getMods(setup, teamEngine)` returns `{speed, accel,
+  cornering, braking}` multipliers.
+- **THE ERS PART RUNS THE BATTERY.** `Parts.ersProfile(setup, team)` derives two
+  0..1 axes from the bias the catalog already encodes, and they drive
+  `drainFor`/`regenFor`/`otTimeFor`/`otCoolFor` in game.js. Deriving rather than
+  authoring new fields keeps the SIGNATURE clones consistent for free.
+- **`Parts.aeroLoad(setup, team)` sizes the active-aero trade** — each of the
+  three X-mode constants is a `_LO`/`_HI` pair interpolated by it. A car with no
+  parts (every AI) sits at the midpoint, so the grid is one defined thing.
+- **SIGNATURE options are cost- and physics-identical clones** of the universal
+  option named in `equivalent`. They buy a mesh, never an advantage, and the
+  suite enforces that. `FACTORY_PRESETS` drives AI car MESHES only.
+- Prefer knobs that change WHAT EXISTS over knobs that scale what is there. A
+  recipe of all scalars gives every team the same part at a different size.
+- `tests/parts-physics.spec.js` fails on an unregistered or stale `visual`
+  recipe field, a duplicate recipe within a category, or an engine repeating
+  another's bodywork shape.
 
 ## Physics
 
-Per-axle bicycle model. Key tuning variables in `game.js`: `WHEELBASE`,
-`STEER_EXPO`, `STEER_MAX_SLIP`, `STEER_SPEED_REF`, `DRIFT`, `ROAD_FOLLOW`,
-`PLAYER_GRIP`, `FRONT_GRIP`, `YAW_DAMP`, `YAW_INERTIA`, `PACE`. Modify via
-`__apex.setPhysics(o)` for A/B tests.
+**Full reference: `docs/PHYSICS.md`** — the bicycle model and its tuning
+variables, combined slip, active aero / X-mode, the overtake gate, and the
+world-space rigid-body authority.
 
-**`PACE` is a ground-speed scale, not a speed cap.** The OVERALL SPEED slider
-scales the car's real m/s (and the accel curve) — nothing else. Everything else
-measured in speed is pace-normalised through two helpers next to `VMAX`:
-`vTop()` (where the envelope tops out in m/s — divide by it to normalise) and
-`vStd(v)` (that speed on the standard, pace-5 scale — compare hard-coded
-thresholds against it). So `VMAX`, `GEAR_TOP`, `TAPER_LO/HI`, `GRASS_V` and
-`STEER_SPEED_REF` all keep their literal values, while the gearbox still sweeps
-1→8, the tach its whole band, and the dial 0 → ~259 km/h at *every* setting.
-Only lap times move. **Adding anything that divides a speed by `VMAX`, or
-compares one against a literal, means picking `vTop()` or `vStd()`** — a bare
-`VMAX` there silently makes the slider shrink the player's envelope again.
-`__apex` hooks stay raw m/s; `obs().dashKph` is what the dial reads. True force
-constants (`LAT_MAX`, `BRAKE`, `LONG_GRIP`, `ACCEL`) are deliberately absolute —
-that is what makes low pace more forgiving.
+Two rules bind code all over the repo, so they stay here.
 
-**Combined-slip (friction ellipse)**: `LONG_GRIP = 34 m/s²` is the longitudinal
-axis of the traction circle. Braking or accelerating consumes longitudinal grip;
-`slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip. Trail-braking
-rotates the car; hard braking mid-corner understeers. Exposed via `physState()`
-fields `axEstSm`, `axFrac`, `slipFactor`.
+**`PACE` is a ground-speed scale, not a speed cap.** Everything measured in
+speed is pace-normalised through two helpers next to `VMAX`: `vTop()` (where the
+envelope tops out in m/s — divide by it to normalise) and `vStd(v)` (that speed
+on the standard pace-5 scale — compare hard-coded thresholds against it). So
+`VMAX`, `GEAR_TOP`, `TAPER_LO/HI`, `GRASS_V` and `STEER_SPEED_REF` keep their
+literal values while the gearbox still sweeps 1→8 and the dial still reads
+0 → ~259 km/h at *every* setting. Only lap times move.
 
-**ACTIVE AERO (X-mode / Z-mode)** is the THIRD straight-line lever, next to
-BOOST (spends the battery) and OVERTAKE (a free, proximity-gated push). It adds
-NO thrust and spends NO energy — it trades **downforce for drag**, the 2026
-moveable-wing rules. Z-mode (the default) is flaps shut and full downforce;
-X-mode is flaps open, `xVmaxGain(c)` on top speed and `xCoastCut(c)` off the
-coast drag, paid for with `xDfLoss(c)` of the `DOWNFORCE` aero-load term.
-Nothing else in the grip model changes.
+**Anything that divides a speed by `VMAX`, or compares one against a literal,
+must pick `vTop()` or `vStd()`.** A bare `VMAX` there silently makes the OVERALL
+SPEED slider shrink the player's envelope again. True force constants
+(`LAT_MAX`, `BRAKE`, `LONG_GRIP`, `ACCEL`) are deliberately absolute — that is
+what makes low pace more forgiving.
 
-**THE SIZE OF THE TRADE IS THE AERO PART'S.** All three were single constants,
-which gave a Monza-spec sliver and a maximum-downforce floor exactly the same
-deal — backwards, because a big wing has more drag to shed AND more downforce to
-lose. `Parts.aeroLoad(setup, team)` reads the resolved aero option's own
-`cornering` and normalises it against the catalog's span (0 = `minimal`,
-1 = `ground_effect`; derived from the catalog, so a new option re-scales the axis
-rather than clipping). The car carries it as `c.aeroLoad`, and each constant
-became a `_LO`/`_HI` pair interpolated by it. **A car with no parts — every AI —
-sits at the midpoint**, so the grid is one well-defined thing rather than
-whatever the catalog default is this month. Measured end to end:
+**Read `c.aeroX` (or `aeroDfMult(c)`), never `c.xOn`.** The switch is not the
+wing. And do not cross the active-aero and OVERTAKE rule sets: overtake inherits
+DRS's proximity/opening-lap/caution restrictions, active aero inherits none of
+them but only works inside a zone (Monaco has none).
 
-| aero part | load | top speed | downforce given up | net grip at 70 m/s |
-|---|---|---|---|---|
-| `minimal` | 0.00 | +5.5 % | 42 % | −16.0 % |
-| `medium` | 0.41 | +9.6 % | 57 % | −21.4 % |
-| `ground_effect` | 1.00 | +15.5 % | 78 % | −27.3 % |
+**Road-follow assist is OPT-IN and ships at 0.** Nothing steers the car by
+default except the driver. Changing an assist DEFAULT does not reach existing
+players — `store.get(k, d)` returns the stored value whenever the key exists, so
+bump `STEER_SCHEMA` in `js/game/steer-tuning.js` when a slider's *meaning*
+changes.
 
-The big-wing car has the LOWEST base top speed and the biggest gain from opening,
-so X-mode partly buys back the straight-line speed the wing costs — which is the
-real trade, and the reason the two ends are worth choosing between.
-`physState()` reports `aeroLoad`, `xVmaxGain`, `xDfLoss`, `vmaxNow`, `aeroGrip`
-and `aeroDf`, so none of this has to be read out of `updateCar` again.
-
-`c.aeroX` is the FLAP TRAVEL (0..1) and is what every consumer reads — physics,
-HUD and the wings' own moveable ELEMENTS. Per the 2026 rules every element
-except each mainplane rotates, and both wings actuate together: at the default
-downforce level that is the front cascade's top two flaps plus the rear wing's
-top two planes — four elements, all driven by the one `aeroX`. They are NOT
-baked into the car mesh; `Car3D.aeroFlaps()` hands them out as canonical hinged
-specs (leading edge at the origin) and `drawAeroFlaps` places them, so the car
-at rest is geometrically identical to the old fixed wing. `Car3D.buildFlapGeom`
-runs the SAME `addWingPlanform` emitter the baked wing uses and both read one
-table, so they cannot drift apart. Closed = the element's own incidence plus
-`Z_BITE`, CLAMPED per element against the measured nose underside (`NOSE_UNDER`)
-so nothing ever swings into the bodywork; open = flat. `X_OPEN_RATE` is set by
-the FIA's 400 ms transition cap, not by feel. The GARAGE turntable shares the
-same draw, so its ACTIVE AERO button shows the real geometry at real angles.
-
-`c.xOn` is the switch and `c.xArmed` whether the car is allowed the mode here at
-all. Allowed means **inside an ACTIVATION ZONE**: the FIA approves fixed zones
-per circuit and the standard ECU refuses to rotate the wings outside one, so
-`buildAeroZones()` scans each built track for contiguous runs under `X_ZONE_K`
-and keeps those longer than `X_STRAIGHT_T × X_ZONE_VREF` (210 m — the rule's
-three seconds at racing speed). Zones are measured against a FIXED reference
-speed, never the car's, because they are a property of the circuit and the
-OVERALL SPEED slider must not redraw them. A circuit whose longest straight
-misses the minimum gets **no zones and no active aero** — that is MONACO, and
-`tests/aero-zones.spec.js` pins it. Zones can WRAP the start line, so
-`aeroZones()` exposes `midFrac` and every consumer should use it rather than
-averaging `startFrac`/`endFrac`.
-
-Braking or leaving the zone shuts the flap AND drops the switch, and
-`X_CLOSE_RATE` is ~4× `X_OPEN_RATE` — the downforce comes back faster than it
-left. The HUD chip counts the next zone down in metres like a DRS board, and
-reads `NO AERO ZONE` (struck through, button faded) on a circuit that has none.
-
-**MANUAL or AUTO** is a pause-menu setting (SETTINGS ▸ DRIVING, next to GEARS —
-it is a control preference, not a property of the event, which is why it is not
-in RACE SETTINGS). On AUTO the wing takes every zone by itself and the AERO
-button is **removed from the dock**, not greyed: the survivors close ranks,
-which the flex dock can do and the old absolutely-positioned stack could not.
-`store.get("aeroMode")`, `__apex.aeroMode()`, `raceAeroMode` in game.js.
-
-Adding a consumer? Read `c.aeroX` (or `aeroDfMult(c)` for the downforce
-multiplier) — **never `c.xOn`**. The switch is not the wing.
-
-**OVERTAKE IS NOT ACTIVE AERO, and the two sets of rules must not be crossed.**
-Overtake mode is 2026's successor to DRS as the *proximity-gated* overtaking aid,
-so it inherits DRS's safety restrictions; active aero inherits none of them.
-
-| | ACTIVE AERO (X-mode) | OVERTAKE |
-|---|---|---|
-| proximity to the car ahead | **none** — leader and backmarker alike | within `OT_GAP` (1 s) |
-| where | inside an ACTIVATION ZONE only | anywhere |
-| opening lap | **available** | disabled until the LEADER completes lap 1 |
-| under a caution | available | disabled |
-| circuit with no zones | unavailable (Monaco) | available |
-
-`otEnabled()` in game.js is the race-wide gate — it reads `ranked[0].lap` (the
-LEADER's, because a field-wide switch is what race control throws, and it is
-O(1) since `ranked` is already sorted) and `caution.level`. `c.otArmed` folds
-that together with the car's own gap and cooldown. The HUD says `NO OVERTAKE`
-and fades the button while the gate is shut, because "not armed yet" (keep
-closing) and "switched off" (nothing you do will arm it) are different messages.
-`tests/aero-zones.spec.js` pins both halves, driving a REAL opening lap —
-`setLap()` moves only the player's counter, so a teleport cannot exercise a
-leader-based gate.
-
-**The player is a world-space rigid body.** `px`/`pz`/`head` are the authority:
-the car integrates its own position in world metres from tyre forces alone and
-owes the road nothing. `(s, x)` is READ BACK off that position each frame by
-`trackFrom()` — a predictor (distance along the road ÷ the Frenet stretch `h`,
-see `frenetH`) plus two local Newton steps onto the perpendicular foot — purely
-so the rest of the game can ask "where on the track is that?" (lap timing, walls,
-kerbs, race position, HUD). The refinement is deliberately **local**: it never
-leaves a few metres of last frame's `s`, so it cannot snap onto the wrong leg of
-a hairpin the way a global `Tracks.project()` search does. That was the original
-reason this code integrated in the road frame instead — keeping the search local
-buys the road frame's robustness without surrendering the car's independence.
-
-Only two things may move the player in road coordinates, because both are hard
-constraints rather than suggestions: the **barrier clamp** (`xPinned`) and
-**car-to-car collisions** (resolved in the `(prog, x)` plane). Both write back
-into `px`/`pz`. Everything else flows world → `(s, x)`. Rebuilding the world
-position from `(s, x)` unconditionally — as the code did when `(s, x)` was the
-authority — silently puts the car back on the road's rails.
-
-**Road-follow assist is OPT-IN and ships at 0.** `ROAD_FOLLOW` used to default to
-0.7 with a DRIVING HELP slider that bottomed out at 0.25, so a quarter to a half
-of every corner was steered for you and it could not be switched off (~20 % of
-available lock at 50 m/s, ~40 % in a slow corner). Nothing steers the car by
-default now except the driver; `helpFromSlider` runs `0 .. 0.70` with v1 = OFF,
-and RELAX is the preset that opts back in. When enabled it steers toward the
-curvature of the arc the car is actually on (`kPath = k/h`, not the centreline's),
-**fades to zero off-track** (`offAssistFade`, over ~3 m of grass past the edge) so
-the driver keeps full manual authority to recover, and fades under hard braking
-(`brakeFade`) to kill the turn-in snap.
-
-**Changing an assist DEFAULT does not reach existing players.** `store.get(k, d)`
-returns the stored value whenever the key exists, so a new default only lands on a
-fresh install — anyone who ever opened the settings keeps the old behaviour
-forever. `drivingHelp` and `raceLine` are migrated once via `STEER_SCHEMA` in
-`js/game/steer-tuning.js`; bump it if a slider's *meaning* changes again (an old
-stored number does not carry over when the scale it was written against moves).
 
 ### The arc must not reach the driver
 
@@ -1102,48 +781,38 @@ every hit should be AI-only, assist-gated, broadcast-only, or surface.
 
 ---
 
-## Lighting & sky (`js/render/glx.js` + `applyRaceSettings` in `js/game/atmosphere.js`)
+## Lighting & sky
 
-Lit shader = directional sun (shadow map) + hemisphere ambient (`uAmbSky`/`uAmbGround`)
-+ up to 32 point lights (uniform arrays, 15 floats per light). Composite: ACES tone-map + `colourGrade` + bloom +
-lens flare + vignette. Night: ambient floored+capped, sun dimmed to moonlight,
-floodlights on. Day: `_trackAtmoBias` per circuit. `buildTrackLights()` (in
-`js/game/lighting.js`) places floodlights every ~22 m; `setFrameLights()` culls
-to nearest CAP per frame (`LT.lampCull` def 28 with traffic, else 32 solo; shader max 32).
+**Reference: `docs/LIGHTING-REF.md`** (light-record layout, shader uniforms,
+time-of-day branches, masts), **`docs/LIGHTING-KNOBS.md`** (every constant),
+**`docs/LIGHTING-PRESETS.md`** (how a preset resolves).
+
+Lit shader = directional sun (shadow map) + hemisphere ambient + up to 32 point
+lights. Composite: ACES tone-map + `colourGrade` + bloom + lens flare + vignette.
+`buildTrackLights()` (in `js/game/lighting.js`) places floodlights;
+`setFrameLights()` culls to the nearest CAP per frame.
+
+The **LIGHTING TUNER** exposes every hand-tuned value as a live slider.
+`TUNE_DEFS` is the registry and `LT` the live values; the driver reads `LT.<id>`
+each frame instead of a literal. Values are stored per (track, time-of-day,
+weather) profile, resolving lowest→highest: `TUNE_DEFS.def` → `LightPresets["*"]`
+→ `LightPresets["track|tod|wx"]` → localStorage `"*"` → localStorage
+`"track|tod|wx"`. So `js/game/light-presets.js` is the shipped baseline and a
+player's live edits always win.
+
+Adding a knob: append to `TUNE_DEFS` (+ a shader uniform and `frame.tune` upload
+if it is not a driver literal), and point `tools/ab-lighting.mjs`'s catalog at it.
 
 ```js
-__apex.lightState()           // { ambientSky, ambientGround, sunColor, numLights, … }
-__apex.setTimeOfDay('night')  // 'dawn'|'day'|'dusk'|'night'|'default'
+__apex.lightState()  __apex.setTimeOfDay('night')  __apex.lightTune(obj?)
 ```
-
-See `docs/LIGHTING-REF.md` for the light-record layout, shader uniforms, time-of-day branches, masts.
-
-### Lighting tuner (`TUNE_DEFS` / `LT` in `js/game/lighting.js`)
-
-The in-game **LIGHTING TUNER** (pause-menu page) exposes every hand-tuned
-lighting/rendering value as a live slider. `TUNE_DEFS` is the registry and `LT`
-the live values (both in `js/game/lighting.js`, global `LightTune`; the profile
-store/resolution lives in game.js because it reads live track/tod/weather); the
-driver reads `LT.<id>` each frame instead of a literal (shader-side ones upload
-via `frame.tune`/`opts.tune` — `u:` field names the uniform). Values are stored
-**per (track, time-of-day, weather) profile**. Resolution, lowest→highest
-precedence: `TUNE_DEFS.def` → `LightPresets["*"]` → `LightPresets["track|tod|wx"]`
-→ localStorage `"*"` → localStorage `"track|tod|wx"`. So `js/game/light-presets.js` is
-the shipped baseline and a player's live edits (localStorage `apex26.lightTune`)
-always win. Panel COPY VALUES exports the merged store as the paste-ready
-`window.LightPresets = {…}` body to bake in. `__apex.lightTune(obj?)` gets/sets
-the current profile. Add a knob: append to `TUNE_DEFS` (+ a shader uniform &
-`frame.tune` upload if not a driver literal); the A/B harness catalog
-(`tools/ab-lighting.mjs`) must point at its new home.
-
----
 
 ## City & scenery dressing (`buildProps` / `buildRoad` in the `js/track/` engine)
 
 Procedural per-circuit dressing on top of each track's `scenery(api)` callback.
 Session-time-aware (rebuilt on day↔night flip). Street/modern themes get the city
 generator (`STYLES[def.id]`): building silhouettes, neon palettes, reflective glass
-mesh (`track.meshes.glass`). All 24 tracks get furniture (`FURN`): trees and street
+mesh (`track.meshes.glass`). All 40 circuits get furniture (`FURN`): trees and street
 lamps (glow HDR at night). Street circuits get armco barrier liveries (`BARRIER`).
 `buildRoad` tints tarmac/verge via a stable per-track hash.
 
@@ -1179,203 +848,72 @@ See `docs/research/ASSET-API-RESEARCH.md`.
 
 ## `window.__apex` dev API  — see `docs/DEBUG-HOOKS.md` for the full reference.
 
+~180 hooks. `docs/DEBUG-HOOKS.md` documents them all; this is the short list you
+actually reach for. `__apex.agentHelp()` is the machine-readable manifest of the
+agent surface — read it ONCE per session, never per tick.
+
 ```js
-__apex.race("monza")          // load track, skip menus
-__apex.park(0.1)              // stationary at 10% lap, frozen for screenshot
-__apex.snapCam()              // REQUIRED after park()/jump() before a shot: the camera
-                              //   eases toward its rig target, so without this you
-                              //   photograph a camera still flying to the car
-__apex.jump(0.5, 60, 0)       // teleport to 50% lap at 60 m/s
-__apex.go()                   // start race, grid intact
-__apex.finishRace()           // trigger results screen
-__apex.freeze(bool?)          // get/set physics-frozen state
-__apex.hud(show?)             // toggle HUD visibility
-__apex.uiScale(115)           // UI SIZE — menus/sheets, as a PERCENTAGE (80..150)
-__apex.hudScale(130)          // HUD SIZE — in-race clusters + touch dock. The two
-                              //   are INDEPENDENT and absolute; nothing multiplies.
-                              //   No arg reads {pct, stored, min, max} — `stored`
-                              //   is null until the player moves the slider, which
-                              //   is what lets the coarse-pointer CSS default hold
-                              //   from the first paint. null clears back to it
-__apex.weather("wet"|"dry")   // live weather change
-__apex.setTimeOfDay("night")  // live dawn|day|dusk|night|default — no asset reload (rebuilds only on day↔dark flip)
-__apex.resetPlayer()          // force immediate rescue
-__apex.carAt(idx?)            // detailed telemetry for one car
-__apex.tracks()               // list all circuit ids
-__apex.teams()                // list all teams + engine suppliers
-__apex.camera("cockpit")      // switch camera mode (clears any view() free-cam)
-__apex.camTune("chase", {height:0.6, dist:2})  // CAMERA TUNER: per-mode framing offsets
-                              //   (height/dist/side/pitch/yaw/fov, 0 = shipped framing);
-                              //   no args lists them, null resets that mode
-__apex.view({ s:0.3, side:"L" }) // free debug camera (camera()/snapCam() clear it)
-__apex.eyeAt(0.116, 0, 2.5)   // track-relative free-cam: eye at frac/lat/height, look ahead
-__apex.orbit(0.116, 45, 15, 35) // orbit a track point (az,el,dist) — inspect from all sides
-__apex.carOrbit(0, 40, 10, 4)  // orbit a CAR (idx, az, el, dist) — az 0 = behind, 180 = head-on
-__apex.studio({intensity:3})  // studio light rig around the player car (false = off)
-__apex.groundY(0.11, 12)      // rendered terrain height + road height + gap at frac/lat (gap finder)
-__apex.viewState()            // combined scene/camera snapshot
-__apex.camState()             // active camera {eye,tgt,fov,debug} (debug=true under a view() override)
-__apex.lightState()           // lighting snapshot: ambientSky/Ground, sunColor, exposure, numLights
-__apex.gpuTimer(on?)          // GPU frame timer {supported,on,ms} — Chrome/Android only (no iOS Safari/SwiftShader); GPU-side counterpart to perf-profile
-__apex.assets()               // baked-pack state {supported,pack,uploaded,tier,layers,scales,…}
-__apex.assetLoad(tier?)       // (re)load the material arrays ("low"|"high"); false = unload
-__apex.matTex(0..1)           // BAKED MATERIALS blend — the A/B knob for the pack (ships at 0)
-__apex.credits()              // attribution roll for every baked asset
-__apex.aero(true)             // ACTIVE AERO: request/drop X-mode (2026 moveable
-                              //   wing). No arg reads {xOn,xArmed,aeroX,mode,
-                              //   inZone,zoneAhead,zones,auto}; aeroX is the
-                              //   FLAP TRAVEL the physics reads — asking for X
-                              //   outside a zone leaves it at 0
-__apex.aeroZones()            // the circuit's fixed ACTIVATION ZONES; use
-                              //   midFrac, not the average of start/endFrac —
-                              //   a zone may WRAP the start line. Empty on a
-                              //   circuit with no qualifying straight (Monaco)
-__apex.aeroMode("auto")       // MANUAL | AUTO — the same door as pause >
-                              //   SETTINGS > DRIVING. AUTO takes every zone
-                              //   itself and REMOVES the AERO button
-__apex.caution()              // race control's flags {level 0-3, label, sector,
-                              //   frac, total, sectors[3], sinceT, cause,
-                              //   enabled}; caution(true|false) switches the
-                              //   whole layer (the CAUTIONS race setting's door)
-                              //   and switching it off drops any flag flying
-__apex.setPhysics({pace:0.8}) // override physics params
-__apex.probe()                // player telemetry (x, angle, k, hw, speed, s)
-__apex.physState()            // full state (slip, wrongWay, lap, rescueT)
-__apex.cars()                 // all car telemetry sorted by prog
-__apex.scan([10,30,60])       // look-ahead curvature/width at distances
-__apex.corners()              // apex fractions for the loaded track
-__apex.trackGraph()           // the built scenery SCENE GRAPH (js/track/graph.js):
-                              //   models + nodes, stats(), and batches() — the
-                              //   backend-neutral instanced-draw handoff
-__apex.wallStats()            // barrier geometry audit
-__apex.setInput({steer:1,throttle:true}) // override input
-__apex.step(1/60, 10)         // pump physics deterministically
-__apex.clearInput()
-__apex.tiltSim.step(deg, dt)  // tilt pipeline emulation (for autopilot harness)
-// ── Timing & field ──
-__apex.timing()               // compact race clock: raceT, lapTime, best, lap, pos, energy, gear, sector
-__apex.sectorState()          // live S1/S2/S3 splits: {idx, elapsed, bests[3], last[3]}
-__apex.lapHistory()           // completed lap times — full array in TT, best/lastLap in race
-__apex.fieldState()           // full grid sorted by race position with gap (m)
-__apex.aiPlace(idx,frac,v?,x?) // teleport any AI car (by cars[] index) to a track position
-__apex.setEnergy(v)           // set player ERS charge 0–1 (clamped)
-__apex.setLap(n)              // override player lap counter (for results-screen tests)
-__apex.trackProfile(n?)       // [{frac,y,k,hw,slope}] — elevation/curvature profile (default 100 pts)
-// ── Career & qualifying (js/game/career.js, js/game/quali.js) ──
-//    A career SAVE existing is not a career being PLAYED: the save loads at boot
-//    so the title button can offer CONTINUE, but its rules only apply while
-//    flow === "career". A career IS a championship, so seasonMode stays true.
-__apex.info()                 // + flow ("gp"|"season"|"career"), session
-                              //   ("race"|"tt"|"quali"), career (a save exists)
-__apex.career()               // the whole live career save, or null
-__apex.career({teamId:"haas", seat:1, seed:42})   // start one, skipping the setup
-                              //   screen; flavour:"myteam" + hire:"<code>" for MY TEAM
-__apex.careerState()          // compact snapshot — prefer this to reading the save
-__apex.careerMoney(n?)        // get/set the balance
-__apex.careerSim(n)           // settle n rounds with nobody driving, through the
-                              //   SAME settleRound() the driven path uses. Needs a
-                              //   track staged; reuses THAT circuit for every round
-__apex.careerRollover()       // force the season rollover -> {champion, offers, history}
-__apex.careerReset()          // wipe the LIVE slot
-__apex.careerSlots()          // all SIX slots (3 driver + 3 my team); a flavour
-                              //   narrows to one set; (flavour, i) SWITCHES to it,
-                              //   saving the career being left first
-__apex.careerSlotDelete("myteam", 0)   // wipe ONE slot, leaving the other five
-__apex.careerFreeMoney(true)  // EXTRA FUNDS cheat — money stops being scarce, but
-                              //   the FITTED CAP does not move
-__apex.careerGrant(5000)      // hand the live career credits
-__apex.careerFacility(true)   // the open-ended research facility (the late-game
-                              //   sink): each level cuts research cost for good
-__apex.careerHire("renew")    // MY TEAM's second seat — no arg reports a pending
-                              //   decision, a free-agent CODE signs somebody else
-__apex.ratings(code?)         // five-axis driver table + overall; no args = the grid.
-                              //   Applies in EVERY mode, not just career
-__apex.qualiSim(playerTime?)  // the qualifying model for the loaded track WITHOUT
-                              //   running a session (a real weekend is left alone)
-__apex.carAt(i)               // + code, seat, tierV, skill, ratings — the two
-                              //   multipliers that decide AI pace, now observable;
-                              //   + retired/dnf/dnfAt/finPos
-// ── Reliability & retirements (js/game/reliability.js) — ships OFF ──
-__apex.reliability("real")    // the RELIABILITY race setting: off | low | real
-__apex.retirements()          // the armed plan — who stops, why (engine|gearbox|
-                              //   accident) and at what fraction of race distance.
-                              //   Drawn ONCE at the green light; consumes nothing
-                              //   from the sim RNG stream
-__apex.retire(1, "gearbox")   // retire a car NOW (no arg = the player)
-// ── Headless / RL control loop ──
-__apex.headless(true)         // skip render() — physics runs uncapped
-__apex.obs()                  // full debug observation (pos, slip, clearances, scan, reward, gear)
-__apex.act({steer,throttle,brake}, dt, n) // set input + step n ticks → obs (1 round-trip)
-__apex.reset(frac, speed, x)  // fast episode reset without reloading assets → obs
-// ── Agent world view (js/game/agentview.js) — never returns null; failures are
-//    {ok:false, error, message, fix}. Two exceptions to know: scene() on a
-//    street circuit whose props are still building returns a SUCCESSFUL empty
-//    list (not an error), and visible()/render({what:"view"}) reuse the last
-//    RENDERED frame — stage and let frames draw before trusting either.
-//    seed() below lives in apex.js, not agentview.js, and just returns a
-//    number. See docs/AGENT-WORLD-API.md ──
-__apex.agentHelp()            // manifest of this surface (~5.5 KB, ~1.4k tokens —
-                              //   read it ONCE per session, never per tick)
-__apex.objective()            // what the GAME is: win condition, trade-offs,
-                              //   constraints. Static; does NOT describe car
-                              //   dynamics (learn those from rollout()/act())
-__apex.seed(42)               // get/set the SIM seed; same seed + same inputs
-                              //   => same result. reset(f,v,x,seed) does both.
-                              //   Cosmetic randomness stays unseeded by design.
-__apex.world({detail:"brief"})// egocentric snapshot; brief|drive|full; since= → delta
-__apex.trackInfo({what:"corners"}) // STATIC per-track: corners/sectors/profile
-__apex.scene({radius:120})    // NAMED scenery nearby (trees, buildings, stands…)
-__apex.field({detail:"brief"})// THE GRID — race order, gap-to-leader, interval
-__apex.atmosphere()           // the light as text — day/night, sun/moon, fog, wet
-__apex.describe("prop:12")    // EVERYTHING about one entity — also corner:T3,
-                              //   car:4, span:2; ids come back from scene()/
-                              //   query()/trackInfo()/field()
-__apex.query({kind:"pine", near:150})  // a BOUNDED slice; returns prototype +
-                              //   instances so repeated dressing costs one shape
-                              //   plus a position each. Narrow, don't raise limit
-__apex.render({what:"view"})  // the ONE raster — view|map|circuit|car. APPROXIMATE,
-                              //   for intuition, not measurement. {cols,ss,camera}
-                              //   (replaces frame()/plan()/worldModel()/visible(),
-                              //   which remain as deprecated aliases)
-__apex.carView({team:"ferrari", detail:"render"}) // the car as JSON + edge+shade
-                              //   text elevations (side/top/front) from the real
-                              //   mesh; detail:"parts" = per-part measured boxes
-__apex.survey({stations:24})  // geometry DEFECTS: floating/buried props, props
-                              //   over the racing line, terrain through the road,
-                              //   holes and cliffs in the ground ribbon. ALWAYS
-                              //   scans the whole lap — `stations` is a sample
-                              //   COUNT, not a position; it cannot be aimed
-__apex.rollout({seconds:5, policy})  // drive an interval → digest, not frames
-__apex.terminal()             // {done, reason} — retired|finished|wrong_way|rescued
+// ── staging ──
+__apex.race("monza"); __apex.go(); __apex.jump(0.5, 60, 0)
+__apex.park(0.1); __apex.snapCam()   // snapCam is REQUIRED after park()/jump()
+                                     //   before a shot — the camera eases toward
+                                     //   its rig target, so without it you
+                                     //   photograph a camera still in flight
+__apex.freeze(bool?); __apex.finishRace(); __apex.resetPlayer()
+__apex.weather("wet"); __apex.setTimeOfDay("night")
+
+// ── reading state ──
+__apex.info(); __apex.timing(); __apex.probe(); __apex.physState()
+__apex.cars(); __apex.fieldState(); __apex.carAt(i); __apex.lightState()
+__apex.corners(); __apex.scan([10,30,60]); __apex.groundY(0.11, 12)
+__apex.logs({ns:"scenery"}); __apex.logLevel("scenery:debug")
+
+// ── driving it ──
+__apex.setInput({steer:1,throttle:true}); __apex.step(1/60, 10)
+__apex.headless(true); __apex.obs(); __apex.act({steer,throttle}, dt, n)
+__apex.reset(frac, speed, x); __apex.seed(42)   // same seed + inputs => same result
+
+// ── agent world view (js/game/agentview.js, docs/AGENT-WORLD-API.md) ──
+__apex.agentHelp(); __apex.objective(); __apex.world({detail:"brief"})
+__apex.field(); __apex.scene({radius:120}); __apex.trackInfo({what:"corners"})
+__apex.describe("prop:12"); __apex.query({kind:"pine", near:150})
+__apex.render({what:"view"})   // the ONE raster: view|map|circuit|car. APPROXIMATE
+__apex.survey(); __apex.rollout({seconds:5, policy}); __apex.terminal()
+
+// ── cameras ──
+__apex.camera("cockpit"); __apex.camState(); __apex.view({s:0.3, side:"L"})
+__apex.eyeAt(f, lat, h); __apex.orbit(f, az, el, dist); __apex.carOrbit(i, az, el, d)
+__apex.camTune("chase", {height:0.6}); __apex.studio({intensity:3})
+
+// ── the systems with their own rules ──
+__apex.aero(true); __apex.aeroZones(); __apex.aeroMode("auto")  // use zone midFrac,
+                                     //   NOT the average of start/endFrac — a
+                                     //   zone may WRAP the start line
+__apex.caution(); __apex.reliability("real"); __apex.retirements()
+__apex.career(); __apex.careerState(); __apex.careerSim(n); __apex.ratings(code?)
+__apex.qualiSim(); __apex.matTex(0..1); __apex.assets(); __apex.trackGraph()
+__apex.setPhysics({pace:0.8}); __apex.gpuTimer(on?)
 ```
 
-Corner data in `world().nextCorner` / `trackInfo({what:"corners"})` is smoothed
-over a 30 m window with radius taken from heading swept across the corner —
-`Tracks.curvature`'s 12 m window is right for physics but reads centreline zigzag
-as a hairpin. Curated `CircuitMarkings` apexes are snapped onto the real
-curvature peak and overlapping results merged (`T9-T10`).
+Three things that are not obvious and cost time when missed:
+
+- **`obs()` / `physState()` need `player.px` initialised.** After `race()` +
+  `go()`, call `jump(frac, speed)` or `step(1/60, 1)` first.
+- **agentview never returns null** — failures are
+  `{ok:false, error, message, fix}`. Two exceptions: `scene()` on a street
+  circuit whose props are still building returns a SUCCESSFUL empty list, and
+  `render({what:"view"})` reuses the last RENDERED frame, so let frames draw
+  before trusting it.
+- `visible()`/`worldModel()`/`frame()`/`plan()` are DEPRECATED aliases — prefer
+  `render({what})` and `scene({visible})`. They are still live and still called
+  by `tools/agent.mjs` and the test suite, so they are not removable yet.
 
 `node tools/agent.mjs <track> <world|track|scene|visible|rollout|help> [flags]`
-is the same surface from a shell, with the staging (race/go/jump + let frames
-render) done correctly.
-
-// ── Logging (js/log.js) ──
-__apex.logs({ns:"scenery"})   // the retained log ring — filter {ns, level,
-                              //   since, limit}. Diagnostics down to `info` are
-                              //   kept whether or not they printed, so a failure
-                              //   that already happened still has a record
-__apex.logLevel("scenery:debug")  // move a threshold; "buffer:debug" retains
-                              //   more without printing more; second arg true
-                              //   persists it across reloads
-
-**Note:** `obs()` / `physState()` require `player.px` initialised (`jump()` or one
-tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` first.
-
----
+is the same surface from a shell, with the staging done correctly.
 
 ## Writing tests
 
-103 Playwright specs + 38 `node --test` unit suites. **How to RUN them is under
+104 Playwright specs + 38 `node --test` unit suites. **How to RUN them is under
 Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
 to do when writing one.
 
@@ -1412,8 +950,13 @@ the wrong button.
 
 ## Git branch
 
-Active development branch: `claude/project-cleanup-tests-k7mqb6`. Never push to main
-without review.
+Work happens on a `claude/<topic>` feature branch — whichever one the current
+task names. Never push to main without review.
+
+This used to name one specific branch, which was wrong within days of being
+written and stayed wrong: a branch name is a fact about *this week*, and prose
+has no way to notice it changed. `git branch --show-current` is the answer, and
+it cannot drift.
 
 **The deploy branch is a DIFFERENT branch.** `.github/workflows/pages.yml` fires
 only on a push to `claude/f1-game-project-26h3ng`, so work on any other branch

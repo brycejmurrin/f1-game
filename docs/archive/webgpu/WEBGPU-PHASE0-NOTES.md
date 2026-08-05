@@ -2,14 +2,17 @@
 
 Status: **implemented, additive, and since wired in (opt-in).** This document
 records the `Gfx` backend seam (Phase 0) and the WebGPU device/clear/sky skeleton
-(Phase 1) built per [`docs/WEBGPU-MIGRATION.md`](./WEBGPU-MIGRATION.md) and the
+(Phase 1) built per [`docs/archive/webgpu/WEBGPU-MIGRATION.md`](./WEBGPU-MIGRATION.md) and the
 "shader chunk" + "document the draw-API contract" recommendations in
-[`docs/WEBGPU-MAINTAINABILITY.md`](./WEBGPU-MAINTAINABILITY.md).
+[`docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md`](./WEBGPU-MAINTAINABILITY.md).
 
-> **Update:** the "wiring it in" step below has since been done — `index.html`
-> now loads `js/render/webgpu/wgsl-chunks.js`, `js/render/webgpu/wgsl-post.js`,
-> `js/render/webgpu/wgsl-fx.js`, `js/render/webgpu/wgx.js` and `js/render/gfx.js`, and the whole stack
-> has advanced through **Phase 4b**. The backend is still strictly **opt-in**
+> **Update:** the "wiring it in" step below has since been done, and then
+> superseded. `js/render/webgpu/*` is **DEFERRED**: it has **no `<script>` tag in
+> `index.html`** at all. The files are listed in `tools/manifest.cjs`'s `DEFERRED`
+> map and injected by `js/game.js` at boot only when `apex26.gfxBackend` selects
+> the backend — ~532 KB every visitor used to parse for something almost nobody
+> runs. `js/render/gfx.js` (the selector) is the only one with a tag. The whole
+> stack has advanced through **Phase 4b**. The backend is still strictly **opt-in**
 > (`localStorage apex26.gfxBackend = "webgpu"`) and falls back to WebGL2/GLX on
 > any failure, so the default shipping path is unchanged. The text below is the
 > original Phase 0/1 scaffolding record.
@@ -26,7 +29,7 @@ not opted in), so it cannot affect the shipping WebGL2 game.
 | `js/render/gfx.js` | `Gfx` | The seam. `Gfx.create(canvas, opts)` (async) feature-detects WebGPU and returns a WGX backend, or `null` so the caller falls back to GLX. Header comment documents the full ~35-method backend interface + `frame`/`opts`/`sky` shapes. |
 | `js/render/webgpu/wgx.js` | `WGX` | The WebGPU backend. `WGX.create(canvas, opts)` (async) acquires adapter/device, configures the canvas context, and returns an object implementing the GLX interface. **Real:** device, context configure, DPR/resize, device-lost reload, `begin()`/`present()` clear + one real SKY pass. **Stubbed:** every heavier method (tagged with its phase). |
 | `js/render/webgpu/wgsl-chunks.js` | `WGSLChunks` | Minimal shader-chunk registry: shared WGSL math leaves (`hash`, `vnoise`+`fbm`, `tonemap`, `fullscreenTri`) + the first real shader `SKY` (a reduced faithful port of GLX `SKY_FS`, `js/render/glx.js:901`), composed from the leaves. |
-| `docs/WEBGPU-PHASE0-NOTES.md` | — | This document. |
+| `docs/archive/webgpu/WEBGPU-PHASE0-NOTES.md` | — | This document. |
 
 All three JS files pass `node --check`.
 

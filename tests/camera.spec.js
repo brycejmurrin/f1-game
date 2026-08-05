@@ -3,19 +3,12 @@
 // persistence, and that every mode renders a valid, distinct frame without crashing.
 // Modes: chase, far, drift, cockpit, hood, overhead, heli, reverse, side,
 //        cinematic, low, tcam, rear.
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
-async function startRace(page, id = "monza") {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
-  await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
-  await page.evaluate(() => window.__apex.go());
-}
 
 test.describe("Apex 26 — player camera modes", () => {
-  test("camera() reports all modes and switches by id, index and label", async ({ page }) => {
-    await startRace(page);
+  test("camera() reports all modes and switches by id, index and label", async ({ page, loadTrack }) => {
+    await loadTrack();
     const r = await page.evaluate(() => {
       const init = window.__apex.camera();
       const byId = window.__apex.camera("cockpit");
@@ -29,8 +22,8 @@ test.describe("Apex 26 — player camera modes", () => {
     expect(r.bad).toBe(false);            // unknown mode is rejected, not crashed
   });
 
-  test("the CAM button cycles through every mode and wraps", async ({ page }) => {
-    await startRace(page);
+  test("the CAM button cycles through every mode and wraps", async ({ page, loadTrack }) => {
+    await loadTrack();
     const seq = await page.evaluate(() => {
       window.__apex.camera(0);            // start at chase
       const out = [];
@@ -45,19 +38,19 @@ test.describe("Apex 26 — player camera modes", () => {
     expect(seq).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "chase"]);
   });
 
-  test("camera choice persists across a reload", async ({ page }) => {
-    await startRace(page);
+  test("camera choice persists across a reload", async ({ page, loadTrack }) => {
+    await loadTrack();
     await page.evaluate(() => window.__apex.camera("hood"));
-    await startRace(page);                  // reload + new race
+    await loadTrack();                  // reload + new race
     const mode = await page.evaluate(() => window.__apex.camera().mode);
     expect(mode).toBe("hood");
   });
 
-  test("every camera mode renders without errors and produces a distinct frame", async ({ page }) => {
+  test("every camera mode renders without errors and produces a distinct frame", async ({ page, loadTrack }) => {
     test.slow();   // render-project test on CPU GL: needs more than the default budget
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
-    await startRace(page);
+    await loadTrack();
     await page.evaluate(() => { window.__apex.jump(0.0, 50, 0); window.__apex.snapCam(); });
     const MODES = ["chase", "far", "drift", "cockpit", "hood", "overhead", "heli",
                    "reverse", "side", "cinematic", "low", "tcam", "rear"];
@@ -110,7 +103,7 @@ test.describe("Apex 26 — player camera modes", () => {
   // metre apart laterally. update() returns early during the countdown, so if
   // gridUp() doesn't seed the pose, the grid is framed by the road-frame branch
   // and the camera slides sideways the instant lights-out runs the first tick.
-  test("the player has a world pose on the grid, so the chase rig doesn't switch at lights-out", async ({ page }) => {
+  test("the player has a world pose on the grid, so the chase rig doesn't switch at lights-out", async ({ page, loadTrack }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
     await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
@@ -126,8 +119,8 @@ test.describe("Apex 26 — player camera modes", () => {
     expect(r.hasWorldPose).toBe(true);
   });
 
-  test("the C key cycles the camera during a race", async ({ page }) => {
-    await startRace(page);
+  test("the C key cycles the camera during a race", async ({ page, loadTrack }) => {
+    await loadTrack();
     const r = await page.evaluate(async () => {
       window.__apex.camera(0);
       const before = window.__apex.camera().mode;

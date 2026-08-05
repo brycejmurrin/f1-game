@@ -127,6 +127,7 @@ const FULL = [
   "js/game/topmodal.js",
   "js/game/menunav.js",
   "js/game/ariastate.js",
+  "js/game/aerozones.js",
   "js/game/photomode.js",
   "js/game/tuner.js",
   "js/game/cam-tuner.js",
@@ -288,6 +289,7 @@ const HARD_EDGES = [
   ["js/car/parts.js", "js/game/career.js"],     // Career.start seeds owned/fitted from Parts (call time, keep ordered)
   ["js/car/driver-ratings.js", "js/game.js"],   // makeCars reads DriverRatings for every car's skill
   ["js/game/career.js", "js/game/quali.js"],    // quali reads Career.rnd/devFor for its spread
+  ["js/game/aerozones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/game/career.js", "js/game/reliability.js"],  // reliability draws through Career.hash (call time, keep ordered)
   ["js/car/parts.js", "js/game/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
   ["js/game/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval

@@ -1,11 +1,11 @@
 # WebGPU Phase 2 — real geometry + the lit shading pipeline — build notes
 
 Status: **implemented, additive, and since wired in (opt-in, now at Phase 4b).**
-Extends the Phase 0/1 scaffold (`docs/WEBGPU-PHASE0-NOTES.md`) with real mesh
+Extends the Phase 0/1 scaffold (`docs/archive/webgpu/WEBGPU-PHASE0-NOTES.md`) with real mesh
 GPUBuffers, a `FRAME` uniform buffer + a 32-light storage buffer + a
 dynamic-offset per-draw uniform buffer, a base-PBR lit render pipeline into an
 RGBA16F HDR scene target, and a tonemap blit to the swapchain. Per the plan
-(`docs/WEBGPU-MIGRATION.md` §Phase 2).
+(`docs/archive/webgpu/WEBGPU-MIGRATION.md` §Phase 2).
 
 The backend is now loaded by `index.html` but stays **opt-in**
 (`localStorage apex26.gfxBackend = "webgpu"`); it is feature-detected and inert
@@ -127,6 +127,6 @@ for the experimental backend at a small memory cost.
 - **Phase 5 — instancing / perf.** Move wheels, skid batch, glow billboards, and
   chunked props to instanced draws; profile draw-call reduction vs GLX.
 
-Then the wiring step (`docs/WEBGPU-PHASE0-NOTES.md` §Wiring it in): three
+Then the wiring step (`docs/archive/webgpu/WEBGPU-PHASE0-NOTES.md` §Wiring it in): three
 `<script>` tags in `index.html` + the async boot change in `game.js` + cache-bust
 bump. Not done here — this stays additive R&D behind `apex26.gfxBackend`.

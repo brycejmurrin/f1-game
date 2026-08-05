@@ -393,12 +393,12 @@ function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c
 const X_OPEN_RATE = 2.6;    // aeroX per second opening (~0.385 s, inside the 400 ms cap)
 const X_CLOSE_RATE = 8.0;   // aeroX per second closing (~0.125 s back to Z — well inside the cap)
 const X_STRAIGHT_T = 3.0;   // s of clear road ahead required to arm (FIA's rule)
-const X_LOOK_MAX = 260;     // m — upper clamp on that look-ahead
-const X_K_MAX = 0.0045;     // curvature that still counts as "straight" (r ~ 220 m)
-// Curvature that counts as straight FOR A ZONE — much stricter than X_K_MAX,
-// which was tuned for "is the car allowed to hold the mode right now" and lets a
-// 220 m-radius kink through. Approving zones at that threshold gave MONACO four
-// of them, which is exactly the circuit the real rule exists to exclude. A zone
+// Curvature that counts as straight FOR A ZONE. (It used to be contrasted here
+// with an X_K_MAX of 0.0045 tuned for "is the car allowed to hold the mode right
+// now"; that constant and X_LOOK_MAX were left behind when buildAeroZones()
+// replaced the rolling look-ahead, and neither had been read since.) A kink of
+// ~220 m radius must NOT qualify — approving zones at that threshold gave MONACO
+// four of them, which is exactly the circuit the real rule exists to exclude. A zone
 // is a proper straight (r >= ~700 m), and the length test then does the rest.
 const X_ZONE_K = 0.0014;
 const X_MIN_SPEED = 25;     // m/s (a vStd() threshold) — no X-mode at crawl speed
@@ -611,82 +611,17 @@ function regenFor(c) { return lerp(REGEN_LO, REGEN_HI, ersRegenOf(c)); }
 function otTimeFor(c) { return lerp(OT_TIME_LO, OT_TIME_HI, ersDeployOf(c)); }
 function otCoolFor(c) { return lerp(OT_COOL_HI, OT_COOL_LO, ersDeployOf(c)); }
 
+let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
 // -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
-// The real system does NOT ask "is the road ahead straight enough right now".
-// The FIA approves fixed ACTIVATION ZONES per circuit, and the standard ECU
-// refuses to rotate the wings unless the car is inside one. A zone only exists
-// if it is longer than three seconds at racing speed — the rule that leaves
-// MONACO with no zones at all, and therefore no active aero.
+// The zone GEOMETRY lives in js/game/aerozones.js (AeroZones.create(G), wired
+// after the G façade as `aeroZ`). It is pure circuit geometry — curvature in,
+// arc-metre spans out — and knows nothing about a car. What stays here is the
+// half that reads car state: whether THIS car is in a zone, and what opening
+// the wing costs it.
 //
-// That distinction is the whole feel of the mechanic. A rolling look-ahead (what
-// this used to be) has no start and no end: the window opens and closes under
-// you as the road bends, so there is nothing to learn and nothing to see coming.
-// Fixed zones are a place on the track. You can be shown the boards, you can
-// know the next one is 400 m away, and pressing the button becomes a thing you
-// do SOMEWHERE rather than a thing you retry until it takes.
-//
-// Zones are measured against a fixed reference speed, not the car's own: they
-// are a property of the CIRCUIT, and the OVERALL SPEED slider must not silently
-// add or remove them (PACE scales real m/s — see vTop()/vStd()).
-const X_ZONE_VREF = 70;                       // m/s — "racing speed" for the 3 s test
-const X_ZONE_MIN = X_STRAIGHT_T * X_ZONE_VREF;  // 210 m — the FIA's three seconds
-const X_ZONE_STEP = 8;                        // m between curvature samples
-let aeroZones = [];                           // [{start, end, len}] in arc metres
-
-// Scan the whole lap for contiguous runs under X_ZONE_K and keep the ones long
-// enough to qualify. Runs are found on the OPEN lap then the wrap is stitched,
-// so a straight crossing the start line is one zone rather than two short ones
-// that each fail the length test.
-function buildAeroZones() {
-  aeroZones = [];
-  if (!track || !track.total) return;
-  const total = track.total, n = Math.max(8, Math.round(total / X_ZONE_STEP));
-  const straight = new Array(n);
-  for (let i = 0; i < n; i++) {
-    straight[i] = Math.abs(Tracks.curvature(track, (i + 0.5) * total / n)) <= X_ZONE_K;
-  }
-  if (straight.every((v) => v)) {   // a full-lap oval: one zone, the whole lap
-    aeroZones = [{ start: 0, end: total, len: total }];
-    return;
-  }
-  let i0 = 0;
-  while (i0 < n && straight[i0]) i0++;          // begin at a corner, so no run is cut
-  const runs = [];
-  let cur = null;
-  for (let k = 0; k < n; k++) {
-    const i = (i0 + k) % n;
-    if (straight[i]) {
-      if (!cur) cur = { start: i * total / n, len: 0 };
-      cur.len += total / n;
-    } else if (cur) { cur.end = cur.start + cur.len; runs.push(cur); cur = null; }
-  }
-  if (cur) { cur.end = cur.start + cur.len; runs.push(cur); }
-  for (const r of runs) if (r.len >= X_ZONE_MIN) aeroZones.push(r);
-}
-// The zone containing arc position s, or null. Zones can run past `total` when
-// they wrap the start line, hence the second test.
-function aeroZoneAt(s) {
-  if (!track || !track.total) return null;
-  for (const z of aeroZones) {
-    if (s >= z.start && s <= z.end) return z;
-    if (z.end > track.total && s + track.total <= z.end) return z;   // wrapped
-  }
-  return null;
-}
-// Metres from s to the start of the next zone (0 when already inside one), or
-// Infinity on a circuit with no zones at all.
-function aeroZoneAhead(s) {
-  if (!aeroZones.length || !track) return Infinity;
-  if (aeroZoneAt(s)) return 0;
-  let best = Infinity;
-  for (const z of aeroZones) {
-    let d = z.start - s;
-    if (d < 0) d += track.total;
-    if (d < best) best = d;
-  }
-  return best;
-}
-function xStraightAhead(c) { return !!aeroZoneAt(wrapS(c.s)); }
+// X_STRAIGHT_T / X_ZONE_K / X_ZONE_VREF / X_ZONE_MIN / X_ZONE_STEP moved with
+// the geometry; they had no other reader.
+function xStraightAhead(c) { return !!aeroZ.at(wrapS(c.s)); }
 // Live downforce multiplier on the DOWNFORCE (aero-load) term. 1 in Z-mode,
 // 1 - X_DF_LOSS with the flaps fully open. Nothing else in the grip model
 // changes: mechanical grip, kerbs, weather and the friction ellipse are
@@ -1830,7 +1765,7 @@ Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
-        getErsBar, getOtLamp, getPedalBar } = CarMesh;
+        getErsBar, getOtLamp } = CarMesh;
 const _decalTexCache = {};
 function invalidateDecalTextures(teamId) {
   const prefix = teamId + ":";
@@ -2267,7 +2202,7 @@ function loadTrack(idx) {
     DebrisWorld.registerFurniture(track);
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
-    buildAeroZones();           // fixed ACTIVATION ZONES for this circuit
+    aeroZ.build();              // fixed ACTIVATION ZONES for this circuit
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
     if (gfx.envProbeReset) gfx.envProbeReset();
@@ -2826,9 +2761,9 @@ const G = {
   // Repaint the pause-menu button too: __apex.aeroMode() and the button are two
   // doors onto one value, and a stale label is a lie about the car's behaviour.
   set raceAeroMode(v) { raceAeroMode = v; store.set("aeroMode", v); refreshAeroBtn(); },
-  get aeroZones() { return aeroZones; },
-  aeroZoneAt: (s) => aeroZoneAt(s),
-  aeroZoneAhead: (s) => aeroZoneAhead(s),
+  get aeroZones() { return aeroZ ? aeroZ.zones : []; },
+  aeroZoneAt: (s) => aeroZ.at(s),
+  aeroZoneAhead: (s) => aeroZ.ahead(s),
   stepSetupAero: (dt) => stepSetupAero(dt),
   // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
   // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
@@ -2957,6 +2892,8 @@ const careerUi = CareerUI.create(G);
 // QUALIFYING (js/game/quali.js) — the flying lap plus the simulated field it is
 // measured against. Holds the classification between the session and the grid.
 const quali = Quali.create(G);
+// ACTIVE AERO activation zones (js/game/aerozones.js) — pure circuit geometry.
+aeroZ = AeroZones.create(G);
 // Photo mode (js/game/photomode.js).
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
@@ -4416,9 +4353,20 @@ function updateCar(c, dt, ranked) {
     }
   }
 
-  // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
+  // Line crossing. `ds > 0` stops a backward crossing INCREMENTING the lap, but
+  // for a long time nothing undid one either — there was no `lap--` anywhere in
+  // js/, while `c.prog` was symmetric. So crossing the line, being shoved back
+  // over it by shiftLong (contact resolution moves a car up to ~4-5 m along the
+  // road) and crossing again added a SECOND lap, and `c.finished` could fire a
+  // full lap early. The backward branch below restores the symmetry `prog`
+  // already had.
   if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
+    // Retained so the backward branch can put the clock back. Without it a
+    // re-crossing records the few tenths since the reset as a completed lap —
+    // which is not just a wrong readout, it beats `c.best` and becomes the
+    // stored ghost.
+    c._lapTimeAtLine = c.lapTime;
     // A takeover (R2/R3/C1) during this lap invalidates it EXPLICITLY: the car
     // was moved by Rapier, so the lap is not a legitimate timed lap. Don't let it
     // set a personal best or become the stored ghost; just start the next lap
@@ -4447,6 +4395,19 @@ function updateCar(c, dt, ranked) {
       c.finished = true;
       c.finishT = raceT;
       if (c.isPlayer) announce("FINISH!", 2);
+    }
+  } else if (ds < 0 && oldS < track.total * 0.5 && c.s > track.total * 0.5) {
+    // Backward over the line: give the lap back and put the clock where it was,
+    // so the next forward crossing re-times the SAME lap rather than a sliver.
+    // Only the player can get here — updateCar overwrites `ds` with
+    // `c.speed * dt` for every AI car, so their `ds` is never negative.
+    if (c.lap > 0) {
+      c.lap--;
+      c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;
+      // Re-crossing forward will re-announce and re-report this lap, so it must
+      // not also count as a fresh completion for the race result.
+      if (c.finished && c.lap <= lapsTarget) { c.finished = false; c.finishT = 0; }
+      if (c.isPlayer) { sectorIdx = sectorAt(c.s); sectorStartT = c.lapTime; }
     }
   }
   // Skip ghost recording while the current lap is incident-invalidated (a
@@ -4865,7 +4826,9 @@ function appendCarTailLights() {
   LightTune.appendCarTailLights(frame, track, cars, player, gfx.mobileTier);
 }
 
-// ---------- render ----------
+// ---------- cameras ----------
+// (render() itself is further down, after the garage preview — see the
+// `render` banner below it.)
 // Reusable camera-vantage solver — lives in js/game/cameras.js (GameCams).
 // For a player camera `mode` at arc position `s`, lateral `x`, speed `spd`
 // (m/s) and wall-clock `now` (ms), returns { eye, tgt, fov }. Centralised so
@@ -5294,6 +5257,7 @@ const _presentOpts = {};
 const _hazeWorld = [0, 0, 0];
 let _hazeStr = 0;
 const _hazeOpts = { u: 0, v: 0, str: 0 };
+// ---------- render ----------
 function render(dt) {
   if (headlessMode) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
@@ -7313,12 +7277,15 @@ $("adv-close").onclick = () => { $("advanced").hidden = true; };
 // The LIGHTING TUNER panel UI lives in js/game/tuner.js
 // (TunerPanel.create(G) — wired after the G façade).
 
-// ---------- Photo mode (free-fly camera) ----------
-// Seed the fly-cam from the camera currently on screen so it starts exactly
-// where the user was, then let them fly. yaw/pitch use view()'s convention:
-// dir = (sin yaw·cos pitch, sin pitch, −cos yaw·cos pitch).
-// Photo mode (free-fly camera + enter/exit + DOM wiring) lives in
-// js/game/photomode.js (Photomode.create(G) — wired after the G façade).
+// ---------- pre-race screens ----------
+// RACE SETTINGS, QUALIFYING, CUSTOM TEAM and the GARAGE wiring. Everything from
+// here to the button wiring below is screen flow, not simulation.
+//
+// This banner used to read "Photo mode (free-fly camera)" and had done since
+// photo mode was extracted to js/game/photomode.js — ~780 lines of unrelated
+// screen code sitting under a heading naming a file that no longer holds any of
+// it. A section banner is the only navigation this file has; one that lies is
+// worse than none.
 
 function buildRaceSettings() {
   // In the room this screen confirms the host's choice and hands it to the
@@ -8141,10 +8108,9 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); });
 
 // ---------- boot ----------
-// Inert in production; only attaches when a test harness pre-sets the flag.
-if (typeof window !== "undefined" && window.__APEX_DEBUG) {
-  window.__APEX = { cars: () => cars, player: () => player, state: () => state, track: () => track };
-}
+// (A `window.__APEX` bridge lived here, gated on a `window.__APEX_DEBUG` flag
+// that nothing in js/, tests/, tools/ or index.html has ever set. The harness
+// it was written for is window.__apex, in js/game/apex.js.)
 
 // MY TEAM's own emblem. Stored as a downscaled data URL under apex26.customLogo
 // so it survives a reload without touching the asset pipeline — LiveryTex takes

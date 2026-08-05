@@ -504,15 +504,6 @@ function getOtLamp(active) {
   if (active) _otActiveMesh = m; else _otArmedMesh = m;
   return m;
 }
-let _thrBarMesh = null, _brkBarMesh = null;
-function getPedalBar(brake) {
-  if (brake ? _brkBarMesh : _thrBarMesh) return brake ? _brkBarMesh : _thrBarMesh;
-  const out = { pos: [], nrm: [], col: [], idx: [] };
-  _rigBox(out, 0, 0.026, 0, 0.009, 0.052, 0.006, brake ? [1.9, 0.2, 0.15] : [0.2, 1.8, 0.4]);
-  const m = _gfx.createMesh(out);
-  if (brake) _brkBarMesh = m; else _thrBarMesh = m;
-  return m;
-}
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, getPedalBar };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp };
 })();
