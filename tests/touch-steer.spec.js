@@ -11,7 +11,12 @@
 // These drive the real listeners with synthetic Touch/Pointer events and read
 // the public Input surface the game loop uses. No race needs to start — the
 // module is wired by Input.init() at load.
-import { test, expect } from "@playwright/test";
+//
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console instead of a bare "expected 1, got 0".
+// Every neighbouring driving spec still takes the raw import and therefore gets
+// none of that — this one is not following that example.
+import { test, expect } from "./fixtures.js";
 
 const TOUCH = { hasTouch: true, viewport: { width: 844, height: 390 } };
 
