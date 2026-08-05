@@ -6,9 +6,10 @@ the WebGPU backend. **Only `js/render/webgpu/wgx.js` was edited** (plus this doc
 > **Update (Phase 4b):** the items this doc originally listed as deferred — the
 > wet-road **SSR** pass, the composite **chromatic aberration / unsharp sharpen /
 > radial speed-blur** image FX, and the **env-probe cube** — have since been
-> ported. `index.html` now loads the WebGPU stack (`js/render/webgpu/wgsl-chunks.js`,
-> `js/render/webgpu/wgsl-post.js`, `js/render/webgpu/wgsl-fx.js`, `js/render/webgpu/wgx.js`,
-> `js/render/gfx.js`); it is **opt-in** via `localStorage apex26.gfxBackend = "webgpu"`
+> ported. The WebGPU stack is **DEFERRED** — `js/render/webgpu/*` carries **no
+> `<script>` tag**; `tools/manifest.cjs` lists it under `DEFERRED` and `js/game.js`
+> injects it at boot only when the backend is selected. It is **opt-in** via
+> `localStorage apex26.gfxBackend = "webgpu"`
 > and `WGX.create()` returns `null` on any failure so the game falls back to GLX.
 > The "Stubbed / reduced" section is annotated below with what has landed.
 >

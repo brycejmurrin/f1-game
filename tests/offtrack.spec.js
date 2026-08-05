@@ -2,19 +2,12 @@
 // Off-track, reversing, wrong-way and auto-rescue handling, plus the prog↔s
 // coupling fix (progress is derived from the actual signed change in s, so a
 // spin/reverse can't cheat progress forward).
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
-async function startRace(page) {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
-  await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
-  await page.evaluate(() => window.__apex.go());
-}
 
 test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
-  test("prog tracks s: forward driving advances prog ≈ s-progress", async ({ page }) => {
-    await startRace(page);
+  test("prog tracks s: forward driving advances prog ≈ s-progress", async ({ page, loadTrack }) => {
+    await loadTrack();
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.0, 60, 0);
@@ -29,8 +22,8 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
     expect(Math.abs(r.dProg - r.dS)).toBeLessThan(2);   // prog == s advance
   });
 
-  test("facing backwards and throttling DECREASES progress (no forward cheat)", async ({ page }) => {
-    await startRace(page);
+  test("facing backwards and throttling DECREASES progress (no forward cheat)", async ({ page, loadTrack }) => {
+    await loadTrack();
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.3, 30, 0);
@@ -44,8 +37,8 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
     expect(r.dProg).toBeLessThan(0);              // went backwards → prog dropped
   });
 
-  test("wrong-way is flagged when driving against the track", async ({ page }) => {
-    await startRace(page);
+  test("wrong-way is flagged when driving against the track", async ({ page, loadTrack }) => {
+    await loadTrack();
     const wrong = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.3, 30, 0);
@@ -62,8 +55,8 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
     expect(wrong).toBe(true);
   });
 
-  test("brake at a standstill crawls the car backwards (reverse), then throttle recovers", async ({ page }) => {
-    await startRace(page);
+  test("brake at a standstill crawls the car backwards (reverse), then throttle recovers", async ({ page, loadTrack }) => {
+    await loadTrack();
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.0, 0, 0);
@@ -81,8 +74,8 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
     expect(r.fwd).toBeGreaterThan(5);   // throttle pulls it back to forward motion
   });
 
-  test("driving onto grass and back recovers (slowed off, speeds up on return)", async ({ page }) => {
-    await startRace(page);
+  test("driving onto grass and back recovers (slowed off, speeds up on return)", async ({ page, loadTrack }) => {
+    await loadTrack();
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.0, 80, 14);            // way off in the grass
@@ -99,8 +92,8 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
     expect(r.onSpeed).toBeGreaterThan(r.offSpeed + 2);   // clearly faster back on tarmac
   });
 
-  test("auto-rescue: a wrong-way car is recovered to the racing line facing forward", async ({ page }) => {
-    await startRace(page);
+  test("auto-rescue: a wrong-way car is recovered to the racing line facing forward", async ({ page, loadTrack }) => {
+    await loadTrack();
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.3, 30, 0);
@@ -120,8 +113,8 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
     expect(r.afterWrong).toBe(false);
   });
 
-  test("auto-rescue: a car beached deep off-track is recovered", async ({ page }) => {
-    await startRace(page);
+  test("auto-rescue: a car beached deep off-track is recovered", async ({ page, loadTrack }) => {
+    await loadTrack();
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       let onTrack = false;
@@ -140,7 +133,7 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
   // Regression: a car stopped ON the track (within the road, NOT off-track and not
   // wrong-way) must not sit at 0 forever — the case where you wedge against an
   // inside corner barrier on an incline. The catch-all rescue must dig it out.
-  test("stopped on-track: throttle held is never stuck at 0; gas released is left parked", async ({ page }) => {
+  test("stopped on-track: throttle held is never stuck at 0; gas released is left parked", async ({ page, loadTrack }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
     await page.evaluate(() => window.__apex.race("bahrain", "day", "dry"));

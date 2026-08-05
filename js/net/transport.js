@@ -253,7 +253,15 @@ const NetTransport = (function () {
         const list = Array.isArray(body) ? body : (body && (body.iceServers || body.ice_servers)) || null;
         if (Array.isArray(list) && list.length) fetchedIce = list;
         return fetchedIce;
-      }).catch(() => null).finally(() => { clearTimeout(bail); fetchingIce = null; });
+      }).catch((err) => {
+        // No relay is a NORMAL state and must not block the lobby (see below),
+        // but CLAUDE.md documents prefetchIce() as the thing that has to land
+        // before a connection is built — and when it does not, every wire dump
+        // reads relay:0 while the relay is demonstrably alive. Retained so that
+        // symptom has a cause attached to it.
+        Log.warn("net", "TURN credential fetch failed, gathering STUN-only: " + ((err && err.message) || err));
+        return null;
+      }).finally(() => { clearTimeout(bail); fetchingIce = null; });
     }
     if (fetchingIce) jobs.push(fetchingIce);
     // Failure-silent by design: no relay is a NORMAL state, and a lobby that
@@ -466,7 +474,11 @@ const NetTransport = (function () {
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
+      if (Log.enabled("net", Log.DEBUG)) Log.debug("net", "pc state -> " + s);
       if ((s === "failed" || s === "disconnected" || s === "closed") && ep.status !== "closed") {
+        // The one line that says WHY a race ended. Without it a dropped peer is
+        // indistinguishable from a clean leave anywhere in the logs.
+        Log.info("net", "connection closed (" + s + ")");
         ep.status = "closed"; ep._emit("close", s);
       }
     };

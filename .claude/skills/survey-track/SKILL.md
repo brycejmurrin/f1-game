@@ -7,7 +7,7 @@ description: End-to-end playbook for making a circuit look accurate — survey t
 
 The loop for taking one circuit from "roughly dressed" to "reads like the real
 place". This is the **orchestrator** — each step hands off to a focused skill or
-tool. Work one circuit at a time; the same loop applies to all 24.
+tool. Work one circuit at a time; the same loop applies to all 40.
 
 > **One command does the survey** — `node tools/survey-track.mjs <id>` self-boots the
 > game and emits the screenshots + the flagged ground-profile probe in one pass (no
@@ -17,7 +17,7 @@ tool. Work one circuit at a time; the same loop applies to all 24.
 
 ## Where the truth lives
 
-1. **`docs/tracks/<id>.md`** — THE per-circuit brief (one exists for all 24). Theme
+1. **`docs/tracks/<id>.md`** — THE per-circuit brief (one exists for all 40). Theme
    + palette, elevation notes, and a **landmarks-by-lap-position table** (s, side,
    distance, box-modelling note). This is your target; start here.
 2. Need to *see* the real place? Use the `WebSearch` tool for cited descriptions; if

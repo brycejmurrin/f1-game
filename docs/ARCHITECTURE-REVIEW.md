@@ -294,7 +294,17 @@ the seeded stream.
 
 Recorded here rather than fixed. Nothing below is lost.
 
-**A8 — lap double-count.** `lap` increments on a forward line crossing and there
+> **Update — cleanup pass, 2026-08.** Much of this tier has since been worked.
+> Items now DONE are struck through in place rather than deleted, so the
+> reasoning that deferred them stays readable next to what was actually done.
+> Two entries did **not** survive re-checking and are marked accordingly: a
+> register drifts exactly like any other prose, and this one had.
+
+**~~A8 — lap double-count.~~ FIXED (2026-08).** Done as agreed below — a
+symmetric `lap--` on a backward crossing, plus restoring `lapTime` so the
+re-crossing re-times the same lap instead of stamping a sliver that would beat
+`c.best` and become the stored ghost. Pinned by two tests in
+`tests/audit.spec.js`, both of which fail without the fix. Original entry: `lap` increments on a forward line crossing and there
 is no `lap--` anywhere in `js/`, while `c.prog` *is* symmetric. Crossing the
 line, being pushed back over it by `shiftLong` (up to ~4–5 m) or reversing, then
 crossing again adds a second lap; `c.finished` can fire a full lap early.
@@ -303,30 +313,41 @@ Deferred because the fix touches race classification and wants its own test pass
 with a `lap--` on a backward crossing, matching `prog`.
 
 **Structural.**
-- **No CI gate** — the headline. `.github/workflows/pages.yml` deploys
-  unconditionally on push and runs nothing; 101 specs + 37 suites are gated by
-  memory. Every other item in this document is downstream of this one.
+- **~~No CI gate~~ FIXED (2026-08).** `.github/workflows/ci.yml` runs three jobs
+  split by cost (guards / sweeps / smoke) and `pages.yml` now `needs:` it, so a
+  red guard blocks the deploy. Adding it immediately paid for itself: it
+  required fixing `test:tiny`, which turned out not to run one of the three
+  specs it named.
 - **No vertex budget gate** — `verify-track vegas` prints 1,825,925 prop verts
   and exits 0, on a codebase whose own comment names that VBO as the iOS jetsam
-  trigger.
+  trigger. **Now quantified** in `docs/research/CI-RENDERING-PERFORMANCE.md`
+  Part 2: at the real 10-float interleave that is ~80 MB of GPU buffer for one
+  circuit, against a page a current iPhone SE kills at ~100 MB. The gate is a
+  threshold on a number `verify-track.cjs` already computes, and the
+  clip/coplanar baseline files are the ratchet pattern to copy.
 - **No CSP.**
 
-**Dated.** Four hardcoded `/2026/` Jolpica URLs in `js/data/api.js` plus `YEARS`
-in `js/data/hub.js` — the data hub silently empties in 2027.
+**~~Dated.~~ FIXED (2026-08).** Both now read the clock, and
+`tests/docs-integrity.test.mjs` fails if a season literal comes back. Not
+Ergast's `/current` alias, which would be tidier but could not be verified from
+the sandbox (its egress proxy blocks the host) — an unverified API dependency
+would be a worse bug than the one being fixed.
 
 **Silent failure.**
 - 340 `catch` blocks in `js/`; 59 `Log` call sites in the entire codebase. The
   great majority of failures are swallowed.
-- `js/net/` had **zero** `Log` call sites until A9's fix added the first, and
-  `js/game/audio.js` still has none — so `Log.level("net:debug")` and its audio
-  equivalent, both documented as the way to debug those subsystems, could not
-  emit a line.
-- `apex26.envProbeOff` is a one-way latch: one `setItem`, one `getItem`, no
-  clear path, no UI, no docs.
+- ~~`js/net/` had zero `Log` call sites and `js/game/audio.js` still has none.~~
+  **PARTLY FIXED (2026-08).** `audio.js` 0 → 4 (context-resume refusal, sample
+  and music decode failure — the three that present as "there is no sound") and
+  `transport.js` 0 → 3 (TURN credential fetch failure, connection state). The
+  broad 469-catch problem stands; these were the paths where a documented debug
+  namespace could not emit a single line.
+- ~~`apex26.envProbeOff` is a one-way latch~~ **FIXED (2026-08).**
+  `__apex.envProbe(on?)` is the clear path, documented in `docs/DEBUG-HOOKS.md`.
 
 **Convention drift.**
-- `js/track/markings.js` is the only file of ~150 with no `"use strict"`, and the
-  only bare-object-literal global.
+- ~~`js/track/markings.js` is the only file of ~150 with no `"use strict"`~~
+  **FIXED (2026-08)** — wrapped in the standard IIFE; all 150 files now comply.
 - Mobile-tier detection is reimplemented four times, and `js/game.js` omits
   `_forceMobile` — defeating `apex26.forceMobileTier`.
 - `GameStore` has no cross-tab `storage` listener.
@@ -344,22 +365,35 @@ consistently documented as 12 categories in both `CLAUDE.md` and `README.md`,
 which matches `Parts.CATALOG`; and `js/car/driver-ratings.js` is present in
 `CLAUDE.md`'s file layout. Neither needed a fix.
 
-**Dead code.** `Career.isOwned`; `EV.BYE`; GLX's instancing path;
+**Dead code.** Partly cleared 2026-08: `X_LOOK_MAX`, `X_K_MAX` (both left behind
+when `buildAeroZones()` replaced the rolling look-ahead), `CarMesh.getPedalBar`
+with its two cache slots and its dead import, and the `window.__APEX` bridge
+gated on a `window.__APEX_DEBUG` flag nothing has ever set. **`EV.BYE` is NOT
+dead** — re-checked, it is used at `js/net/netplay.js:323`. Still open:
+`Career.isOwned`; GLX's instancing path;
 `TrackSpline.centerline()` and the authored-`segs` path; the SRTM elevation
 branch; 8 of `Reliability`'s 14 exports; ~60 further dead exports catalogued.
 Three deserve individual mention because they are not merely unused:
 
-- **`NetSnapshot.predict()`** — implemented, tested, exposed, and never called.
-  Its docstring says contact must not be resolved against the delayed drawn
-  pose; because nothing calls it, contact *is* resolved against a ~100 ms-stale
-  pose.
-- **`NetRendezvous.configured()`** is `() => true`, which makes two lobby error
-  paths and the `NO_RELAY` string unreachable.
+- ~~**`NetSnapshot.predict()`** — implemented, tested, exposed, and never
+  called.~~ **NO LONGER TRUE (re-checked 2026-08):** it has a caller at
+  `js/net/netplay.js:691`. Recorded so it is not re-reported a third time.
+- ~~**`NetRendezvous.configured()`** is `() => true`~~ **RESOLVED (2026-08), but
+  not as written.** The function is CORRECT and deliberately so — room codes
+  always work via the public relay pool, and a test pins it. The defect was the
+  two unreachable lobby branches and their message, which told the user "Room
+  codes need a relay deployed" — the opposite of true. Both deleted.
 - **`seal`/`open`/`topicFor`** are tested with zero production callers, while
   `httpPut` posts plaintext — so `CLAUDE.md`'s claim that "the operator relays
   bytes it cannot read" is **false for the private Worker path**. This one is a
   security-relevant documentation error, not just dead code, and should be
-  either implemented or the claim withdrawn.
+  either implemented or the claim withdrawn. **CLAIM WITHDRAWN (2026-08)**, in
+  `docs/MULTIPLAYER.md` and in the source header: the public Nostr path IS
+  encrypted by Trystero, and only the optional private Worker posts plaintext.
+  Implementing was rejected for now because `worker/rendezvous.js`'s
+  single-writer rule compares stored bytes against incoming, and AES-GCM's
+  random IV would make a host re-posting its own offer look like a second host
+  and take a 409 — a change needing a deployed Worker to test.
 
 ---
 

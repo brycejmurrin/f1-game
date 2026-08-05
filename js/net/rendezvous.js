@@ -34,11 +34,16 @@
  * its URL is set, because a relay you control beats a stranger's — but it is
  * an upgrade, never a requirement.
  *
- * THE RELAYS ARE PUBLIC, SO NOTHING READABLE CROSSES THEM. Trystero encrypts
- * the signalling payload under the room code, the room id is a hash of the code
- * rather than the code, and the private-relay path seals its payload the same
- * way. The code is the secret — the same trust model as the invite code this
- * replaces.
+ * THE PUBLIC RELAYS CARRY NOTHING READABLE. Trystero encrypts the signalling
+ * payload under the room code and the room id is a hash of the code rather than
+ * the code itself, so the code is the secret — the same trust model as the
+ * invite code this replaces.
+ *
+ * THE PRIVATE WORKER PATH IS NOT SEALED YET, despite what this header used to
+ * say. httpPut() posts the invite/answer as plain JSON, so whoever runs
+ * worker/rendezvous.js can read the SDP they relay. seal()/open()/topicFor()
+ * below implement the fix and are unit-tested, but nothing calls them — see the
+ * note on them for the specific blocker.
  *
  * IT IS A BACKUP OPTION, NOT A REPLACEMENT. The link and QR paths stay primary
  * because they depend on nothing at all, while this leans on servers somebody
@@ -163,8 +168,16 @@ const NetRendezvous = (function () {
   //
   // This is not defence against a determined attacker with the code; it is what
   // makes the room code the secret, exactly as the invite code is today. Nobody
-  // sweeping the broker learns anything, and the operator relays bytes it
-  // cannot read.
+  // sweeping the broker learns anything.
+  //
+  // NOT WIRED UP. seal/open/topicFor have no production caller: swap() posts
+  // through httpPut(), which sends plain JSON. The blocker is not the crypto,
+  // it is worker/rendezvous.js's single-writer rule — it rejects a second
+  // `offer` by comparing the STORED payload against the incoming one, and
+  // AES-GCM's random IV makes two seals of the same plaintext differ, so a host
+  // re-posting its own offer would be refused with 409 "code already in use".
+  // Wiring this means changing that comparison (compare a per-host token, not
+  // the bytes) and testing both halves against a deployed Worker.
   const SALT = enc().encode("apex26-rendezvous-v1");
 
   async function keyFor(code) {

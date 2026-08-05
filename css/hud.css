@@ -352,7 +352,7 @@ body.pc-uihidden #pc-restore { display: block; }
    definitely has the keys was the one told nothing about them. `any-pointer`
    describes the union of every input attached, so "no fine pointer anywhere" is
    the honest test for "no keyboard to speak of".
-   Used sparingly and only here, per the note in docs/research/UI-LAYOUT-RESEARCH.md
+   Used sparingly and only here, per the note in docs/archive/research/UI-LAYOUT-RESEARCH.md
    §11: these features mislead in both directions, and this is the narrow case
    where the affordance is otherwise unreachable rather than merely awkward.
    The narrow-screen clause is unchanged — there is no room for it either way. */

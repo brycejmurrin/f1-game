@@ -1,14 +1,32 @@
 #!/usr/bin/env node
+// fixture-consumer-audit — how many specs actually use tests/fixtures.js.
+//
+// This tool used to hold a hardcoded four-name allow-list and print
+// "✓ 4 intended fixture consumers use shared fixtures", which is true and says
+// nothing: it measured a list, not a policy. Meanwhile CLAUDE.md and
+// docs/TESTING.md both tell you to import from ./fixtures.js "unless you have a
+// reason not to", and the majority of specs did not — so the convention was
+// documented, believed, and unenforced.
+//
+// It is now a RATCHET. It counts real adoption and fails if that count drops.
+// A ratchet rather than a hard rule because plenty of specs legitimately do not
+// want the fixture (pure-DOM tests, tests that need a raw context), and a rule
+// that would have to exempt half the suite is a rule nobody can read. What must
+// not happen is adoption going BACKWARDS while the docs keep claiming it.
+//
+// Raise FLOOR whenever you migrate specs. Never lower it to make a run green —
+// lowering it is the bug this file exists to catch.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 
-// These tests intentionally consume fixture behavior:
-// - smoke/audio: page-error collection and failure telemetry
-// - track accuracy: __TEST_MODE plus failure telemetry for a full game load
-// - UI audit: deterministic API defaults, augmented by scenario-specific mocks
+// Ratchet: specs importing tests/fixtures.js must not fall below this.
+export const FLOOR = 31;
+
+// These four are load-bearing consumers — they rely on the fixture's mocks and
+// failure telemetry, not merely on `test`/`expect`. Each must keep importing it.
 export const FIXTURE_CONSUMERS = [
   "audio-smoke.spec.js",
   "f1-track-accuracy.spec.js",
@@ -16,23 +34,42 @@ export const FIXTURE_CONSUMERS = [
   "ui-audit.spec.js",
 ];
 
+const IMPORTS_FIXTURES = /from\s+["']\.\/fixtures\.js["']/;
+
 export function fixtureImportViolations(files, consumers = FIXTURE_CONSUMERS) {
   return consumers.filter((file) => {
     const source = files.get(file);
-    return source == null || !/from\s+["']\.\/fixtures\.js["']/.test(source);
+    return source == null || !IMPORTS_FIXTURES.test(source);
   });
 }
 
+export function adoption(specSources) {
+  let uses = 0;
+  for (const src of specSources.values()) if (IMPORTS_FIXTURES.test(src)) uses++;
+  return { uses, total: specSources.size };
+}
+
+export function readSpecs(dir = path.join(ROOT, "tests")) {
+  return new Map(fs.readdirSync(dir)
+    .filter((f) => f.endsWith(".spec.js"))
+    .map((f) => [f, fs.readFileSync(path.join(dir, f), "utf8")]));
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const files = new Map(FIXTURE_CONSUMERS.map((file) => [
-    file,
-    fs.readFileSync(path.join(ROOT, "tests", file), "utf8"),
-  ]));
-  const violations = fixtureImportViolations(files);
+  const specs = readSpecs();
+  const violations = fixtureImportViolations(specs);
+  const { uses, total } = adoption(specs);
   if (violations.length) {
     console.error(`fixture consumers must import ./fixtures.js: ${violations.join(", ")}`);
     process.exitCode = 1;
-  } else {
-    console.log(`✓ ${FIXTURE_CONSUMERS.length} intended fixture consumers use shared fixtures`);
+  }
+  if (uses < FLOOR) {
+    console.error(`fixture adoption fell to ${uses}/${total}; the ratchet floor is ${FLOOR}. ` +
+                  `Migrating a spec OFF the shared fixture also drops its failure attachments.`);
+    process.exitCode = 1;
+  }
+  if (!process.exitCode) {
+    console.log(`✓ ${uses}/${total} specs use tests/fixtures.js (floor ${FLOOR}); ` +
+                `${FIXTURE_CONSUMERS.length} load-bearing consumers intact`);
   }
 }

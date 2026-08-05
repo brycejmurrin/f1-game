@@ -347,7 +347,18 @@ const DataHub = (function () {
 
   /* ========= session selection (shared by LIVE + TELEMETRY) ========= */
 
-  const YEARS = [2026, 2025, 2024, 2023];   // OpenF1 data starts in 2023
+  // Newest first, back to 2023 where OpenF1's data begins. Derived from the
+  // clock rather than written out, because the hardcoded [2026, 2025, 2024,
+  // 2023] would have stopped offering the CURRENT season from 2027 on — and
+  // YEARS[0] is the fallback for `sel.year`, so the picker would have quietly
+  // defaulted to a season in the past rather than shown an error.
+  const OPENF1_FIRST_YEAR = 2023;
+  const YEARS = (function () {
+    const now = new Date().getFullYear();
+    const out = [];
+    for (let y = Math.max(now, OPENF1_FIRST_YEAR); y >= OPENF1_FIRST_YEAR; y--) out.push(y);
+    return out;
+  })();
   const sel = { year: null, meetingKey: null, sessionKey: null, meta: null };
 
   function ensureSession() {

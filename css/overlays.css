@@ -190,7 +190,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      kept; the type is restored to roughly what it was before the flatten. The
      cluster is WIDER now (262px vs 201px), so this buys legibility out of the
      axis landscape actually has, and the block still stands at ~2/3 of the
-     height it had. Measured after: see the table in docs/research/UI-LAYOUT-RESEARCH.md. */
+     height it had. Measured after: see the table in docs/archive/research/UI-LAYOUT-RESEARCH.md. */
   #hud-gearbox { gap: 2px; padding: 3px 6px; }
   #hud-gear { font-size: 48px; min-width: 44px; }
   #hud-tach { width: 96px; height: 13px; }
