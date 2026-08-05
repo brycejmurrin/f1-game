@@ -217,10 +217,14 @@ test.describe("steering-store schema migration", () => {
     }
     expect(got).toEqual(TABLE.map(([, to]) => to));
 
-    // …and the last one resolved into the sim. Asserted against the grid's own
-    // law rather than a literal, so a future retune of PACE_STEP moves both.
+    // …and the last one resolved into the sim. Read the target out of TABLE
+    // rather than restating it: this line used to say `Math.pow(1.06, 18 - 14)`
+    // under a comment claiming it was not a literal, and 18 was the last row's
+    // target under the superseded absolute-distance regrid. It survived a change
+    // to TABLE precisely because it never mentioned TABLE.
+    const [, lastNotch] = TABLE[TABLE.length - 1];
     const t = await tuning(page);
-    expect(t.pace).toBeCloseTo(Math.pow(1.06, 18 - 14), 6);
+    expect(t.pace).toBeCloseTo(Math.pow(1.06, lastNotch - 14), 6);
   });
 
   test("v3 leaves a store with no RACE PACE key alone, so the new default applies", async ({ page }) => {

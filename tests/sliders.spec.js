@@ -184,9 +184,18 @@ test.describe("Apex 26 — steering sliders", () => {
         for (const kph of DIAL) {
           window.__apex.jump(0.1, kph / 3.6 * pace, 0);
           window.__apex.setInput({ steer: 0, throttle: false });
+          // TWO reads, deliberately not one obs(). The gearbox needs a couple of
+          // frames to choose, but those frames COAST — the car sheds
+          // COAST_DRAG * 2/60 = 0.2 m/s — and COAST_DRAG is an absolute force
+          // (that is what makes low pace forgiving) while dashKph divides by
+          // pace. So a dial read after the settle loses 0.2/pace*3.6 km/h: 1.54
+          // at pace 0.47 against 0.54 at 1.34. Reading both from one obs() made
+          // this spec measure the mapping PLUS that decay, and the `< 1 km/h`
+          // tolerance below silently absorbed it until the 19-notch grid widened
+          // the sweep and took the spread from 0.886 to 0.998.
+          dials.push(window.__apex.obs().dashKph);
           window.__apex.step(1 / 60, 2);     // let the auto box pick its gear
-          const o = window.__apex.obs();
-          gears.push(o.gear); dials.push(o.dashKph);
+          gears.push(window.__apex.obs().gear);
         }
         window.__apex.clearInput();
         out.push({ sv, gears, dials });
