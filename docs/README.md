@@ -1,6 +1,8 @@
 # Apex 26 — docs
 
-Three kinds of docs live here.
+Three kinds of docs live here. **Agent entry point (repo root):**
+[`AGENTS.md`](../AGENTS.md) — bootstrap, boundaries, browser tooling.
+**Full engineering reference:** [`CLAUDE.md`](../CLAUDE.md).
 
 - **Engineering reference** — how the shipped game works today. Read it before
   touching the matching subsystem.

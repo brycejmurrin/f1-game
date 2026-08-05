@@ -36,9 +36,11 @@ npm install
 npx playwright install chromium   # unless pickChromium() finds /opt/pw-browsers/chromium
 ```
 
-Set `CHROME` or `PW_CHROMIUM` to override the executable
-(`tools/harness.mjs`). Cloud VMs often have no preinstalled browser; the Playwright
-install step is not optional there.
+Set `CHROME`, `PW_CHROMIUM`, or `PLAYWRIGHT_BROWSERS_PATH` to override the
+executable or install location ([Playwright browser docs](https://playwright.dev/docs/browsers)).
+Cloud VMs often have no preinstalled browser; `npx playwright install chromium`
+is mandatory there. Resolution order matches `tools/harness.mjs` and
+`playwright.config.js`: env vars → `/opt/pw-browsers/chromium*` → Playwright cache.
 
 ### Headless CLI (fastest for agents)
 
@@ -83,24 +85,38 @@ Serve from repo root, then open `http://127.0.0.1:3456/`. Prefer
 to install the package. Cloud agents with computer-use can click through menus
 and confirm UI layout; use headless tools for data and regression.
 
-### Canvas screenshots — two rules agents miss
+### Canvas screenshots — rules agents miss
 
 1. **`snapCam()` after `park()` / `jump()`** when using chase-style rigs — the
    camera eases toward its target; shooting mid-flight yields empty or wrong frames.
-2. **`__apex.headless(true)` before `.screenshot()`** — `park()` freezes physics,
-   not rendering; SwiftShader keeps redrawing forever and Playwright's screenshot
-   queues behind an endless loop (timeouts under load). The pattern lives in
-   `parkForScreenshot()` in `tests/smoke.spec.js`; `shot.mjs` and the smoke
-   rendering specs follow it. Do not verify renders with `canvas.toDataURL()` —
-   the WebGL buffer is often blank without `preserveDrawingBuffer`.
+2. **`__apex.headless(true)` before `.screenshot()`** in custom scripts — `park()`
+   freezes physics, not rendering; SwiftShader keeps redrawing and Playwright's
+   screenshot queues behind an endless loop (30–120 s timeouts under load). The
+   pattern lives in `parkForScreenshot()` (`tests/smoke.spec.js`) and
+   `snapForward()` (`tests/track-helpers.js`); `shot.mjs` calls it before capture.
+3. **Do not use `canvas.toDataURL()`** — WebGL backbuffer is often black without
+   `preserveDrawingBuffer`.
+4. **Do not use `page.screenshot({ animations: 'disabled' })` under SwiftShader**
+   — measured to hang; use `locator('canvas#game').screenshot({ timeout: 60000 })`
+   after `headless(true)` instead (`tools/apex-capture.mjs` documents this).
+   `apex-capture.mjs` parallel workers use `waitFrames(2)` + long timeouts rather
+   than stopping the render loop per shot.
+
+Per Playwright docs, `locator.screenshot({ animations: 'disabled' })` helps on
+normal pages; this project's SwiftShader path is the exception.
 
 ### Cache busting reminder
 
 Any `js/` or `css/` change: increment **every** `?v=N` in `index.html` **and**
 set `version.json` `{ "build": N }` to the same N. Bump as the **last edit before
 commit**, never while a Playwright run is in flight (the shell version guard
-force-reloads open pages). See **Critical conventions** below and the `bump-cache`
-skill.
+force-reloads open pages). PWA/service-worker coupling: `pwa-cache-service-worker`
+skill. Step-by-step: `bump-cache` skill.
+
+### Scene-graph guard
+
+`js/track/graph.js` edits also need `node tools/graph-parity.cjs --all` — vertex
+for vertex prop geometry vs a baseline ref. `pick-tests.mjs` does not route to it.
 
 ---
 

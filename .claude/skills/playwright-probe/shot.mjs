@@ -51,7 +51,7 @@ try {
   await page.goto(srv.url);
   await page.waitForFunction(() => window.__apex != null, { timeout: 10_000 });
 
-  await page.evaluate((id) => window.__apex.race(id), safeTrackId);
+  await page.evaluate((id) => { window.__apex.race(id); window.__apex.go(); }, safeTrackId);
   await page.waitForFunction(
     () => window.__apex.info().track != null,
     { timeout: 15_000 }
@@ -73,8 +73,17 @@ try {
     { frac, cam }
   );
   await sleep(500); // settle camera + render
-
-  const buf = await page.locator("canvas#game").screenshot({ path: out });
+  // Two rAF ticks so the compositor presents the pose (apex-capture pattern).
+  await page.evaluate(() => new Promise((r) => {
+    let i = 0;
+    const tick = () => { if (++i >= 2) r(); else requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }));
+  // Stop the render loop before screenshot — park() freezes physics, not rendering;
+  // SwiftShader keeps redrawing and locator.screenshot can hang (see smoke.spec.js).
+  await page.evaluate(() => window.__apex.headless(true));
+  await sleep(50);
+  const buf = await page.locator("canvas#game").screenshot({ path: out, timeout: 60_000 });
   const kb = (buf.length / 1024).toFixed(1);
   console.log(`wrote ${out} (${kb} KB)` + (buf.length < 5000 ? "  ⚠ looks blank (<5KB)" : ""));
 } catch (err) {

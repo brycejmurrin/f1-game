@@ -123,9 +123,9 @@ helped asset fetch; they are not the current harness.
    __apex.park(0.12);   // stationary + frozen: the deterministic-shot hook
    __apex.snapCam();    // REQUIRED for park/chase — bypasses damping
    ```
-   **`shot.mjs` calls `snapCam()` automatically for `park` mode**; for `orbit` /
-   `eye` / `cinematic` / `trackside` it sets `dbgCam` directly (no snapCam — and
-   never call snapCam after orbit; see **debug-cameras**). Waiting longer is not a
+   **`shot.mjs` calls `snapCam()` for `park` mode and `headless(true)` before
+   screenshot**; for `orbit` / `eye` / `cinematic` / `trackside` it sets `dbgCam`
+   directly (no snapCam — and never call snapCam after orbit; see **debug-cameras**). Waiting longer is not a
    fix (the ease is slow and `freeze()` can hold it). Symptom: eye-to-car distance
    in the hundreds of metres when chase should read ~5.8 m.
 
