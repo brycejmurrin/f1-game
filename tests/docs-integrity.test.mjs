@@ -368,3 +368,20 @@ test("no live doc points a reader at docs/archive/", () => {
   assert.deepEqual(offenders, [],
     "a live doc references docs/archive/ — either it should not be archived, or the reference is stale");
 });
+
+test("the data hub does not hardcode a season year", () => {
+  // js/data/api.js pinned /2026/ into four Jolpica URLs and js/data/hub.js
+  // pinned [2026, 2025, 2024, 2023] as the session-picker years. Neither would
+  // ever have thrown — the requests stay valid forever, they just describe a
+  // season that is over, and YEARS[0] is the fallback for the selected year. So
+  // from 2027 the whole hub would have quietly served the wrong season while
+  // looking like it worked. Both now read the clock; this stops the literal
+  // coming back.
+  const bad = [];
+  const api = read("js/data/api.js");
+  for (const m of api.matchAll(/JOLPICA \+ "\/(\d{4})/g)) bad.push(`js/data/api.js: JOLPICA + "/${m[1]}`);
+  const hub = read("js/data/hub.js");
+  for (const m of hub.matchAll(/const YEARS\s*=\s*\[\s*(\d{4})/g)) bad.push(`js/data/hub.js: YEARS = [${m[1]}`);
+  assert.deepEqual(bad, [],
+    "a season year is hardcoded again — derive it from the clock, or the data hub silently ages out");
+});

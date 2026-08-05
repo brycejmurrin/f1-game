@@ -1205,12 +1205,40 @@ const api = {
       setLightTune("matTexMix", Math.max(0, Math.min(1, +v || 0)));
       persistLightTune();
       if (typeof refreshLightTunePanel === "function") refreshLightTunePanel();
-      // The pack is fetched lazily, so turning the knob up is what triggers the
-      // download. Kick it here rather than waiting for the frame loop to notice,
-      // so matTex(1) starts fetching immediately instead of a frame later.
+      // The pack is NOT fetched lazily any more — js/game.js loads it
+      // unconditionally at boot, because with matTexMix shipping at 1.0 nobody
+      // can turn it down BEFORE their first load, so the lazy guard saved
+      // nobody anything and was removed. This call is therefore a no-op re-request
+      // in the normal case; it is kept for the one path that still needs it,
+      // matTex(1) after an explicit assetLoad(false) unload.
       if (LT.matTexMix > 0 && typeof Assets !== "undefined") Assets.load();
     }
     return LT.matTexMix;
+  },
+  // envProbe(on?) — the clear path for the apex26.envProbeOff LATCH.
+  //
+  // GLX sets that key on a WebGL context loss that happened while the page was
+  // VISIBLE (the memory-pressure signal, as opposed to iOS's benign loss on
+  // backgrounding). Persisting it stops a lose→reload→lose loop on genuinely
+  // memory-tight devices, which is right — but there was one setItem, one
+  // getItem, and nothing anywhere that could clear it: no UI, no hook, no
+  // mention in the docs. A device that lost its context once kept the live
+  // env-probe reflections disabled forever, and it presents as "reflections
+  // are just worse on my phone" rather than as a setting.
+  //
+  // No argument reads the state. `true` re-enables the probe, `false` disables
+  // it. game.js latches the value at module init, so a change needs a reload —
+  // reported rather than done silently.
+  envProbe(on) {
+    const KEY = "apex26.envProbeOff";
+    const read = () => { try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; } };
+    const was = read();
+    if (on !== undefined) {
+      try { if (on) localStorage.removeItem(KEY); else localStorage.setItem(KEY, "1"); }
+      catch (e) { /* private mode / storage disabled — nothing to clear */ }
+    }
+    const off = read();
+    return { on: !off, off, changed: off !== was, needsReload: off !== was };
   },
   // credits() — attribution roll for every baked asset in the pack.
   credits: () => (typeof Assets === "undefined" ? [] : Assets.credits()),

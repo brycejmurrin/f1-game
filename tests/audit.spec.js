@@ -66,6 +66,90 @@ test.describe("Apex 26 — audit regressions", () => {
     expect(r.lap1).toBeLessThanOrEqual(r.lap0);   // never gains a lap going backwards
   });
 
+  // The lap counter used to be one-way: `lap++` on a forward crossing and no
+  // `lap--` anywhere in js/, while `c.prog` was symmetric. Crossing the line,
+  // being pushed back over it (shiftLong moves a car several metres along the
+  // road during contact) and crossing again therefore added a SECOND lap, and
+  // `c.finished` could fire a full lap early. These two pin the symmetry.
+  test("crossing the line, reversing back over it and re-crossing counts ONE lap", async ({ page, loadTrack }) => {
+    await loadTrack();
+    const r = await page.evaluate(() => {
+      const step = (n) => { for (let i = 0; i < n; i++) window.__apex.step(1 / 60, 1); };
+      window.__apex.setPhysics({ drift: 0 });
+      const total = window.__apex.info().total;
+
+      // Approach the line from just before it and cross forward.
+      window.__apex.jump(1 - 12 / total, 22, 0);
+      window.__apex.setInput({ steer: 0, throttle: true });
+      step(90);
+      const afterFirst = window.__apex.physState().lap;
+
+      // Turn round, reverse back over the line, then come forward across it again.
+      window.__apex.aim(180);
+      step(120);
+      const afterBack = window.__apex.physState().lap;
+      window.__apex.aim(180);
+      step(150);
+      const afterSecond = window.__apex.physState().lap;
+      window.__apex.clearInput();
+      return { afterFirst, afterBack, afterSecond };
+    });
+    // Going back over the line gives the lap back...
+    expect(r.afterBack).toBe(r.afterFirst - 1);
+    // ...so re-crossing lands on the same lap, not one beyond it.
+    expect(r.afterSecond).toBe(r.afterFirst);
+  });
+
+  test("a lap given back and re-taken is re-timed, not recorded as a sliver", async ({ page, loadTrack }) => {
+    await loadTrack();
+    const r = await page.evaluate(async () => {
+      // Step until the lap counter moves, rather than guessing a frame count —
+      // how far the car travels per step depends on the accel curve, and a
+      // fixed budget either stops short of the line or sails 100 m past it.
+      const until = (pred, budget) => {
+        for (let i = 0; i < budget; i++) {
+          window.__apex.step(1 / 60, 1);
+          if (pred()) return true;
+        }
+        return false;
+      };
+      const lap = () => window.__apex.timing().lap;
+      window.__apex.setPhysics({ drift: 0 });
+      const total = window.__apex.info().total;
+
+      // Be on lap 2, so the completion branch that stamps lastLap/best actually
+      // runs. Driving there for real is ~4 minutes of sim; setLap is the hook
+      // that exists for exactly this. Start far enough back that a REAL lap
+      // time is on the clock by the time the line arrives.
+      window.__apex.setLap(2);
+      window.__apex.jump(1 - 130 / total, 22, 0);
+      window.__apex.setInput({ steer: 0, throttle: true });
+      const start = lap();
+      const crossed = until(() => lap() > start, 900);
+      const afterFirst = window.__apex.timing();
+
+      window.__apex.aim(180);
+      const wentBack = until(() => lap() < afterFirst.lap, 900);
+      const afterBack = window.__apex.timing();
+
+      window.__apex.aim(180);
+      const reCrossed = until(() => lap() > afterBack.lap, 1200);
+      const afterSecond = window.__apex.timing();
+      window.__apex.clearInput();
+      return { crossed, wentBack, reCrossed, afterFirst, afterBack, afterSecond };
+    });
+    expect(r.crossed && r.wentBack && r.reCrossed).toBe(true);
+    // A real lap time was on the clock when the line was first crossed.
+    expect(r.afterFirst.lastLap).toBeGreaterThan(1);
+    // Going back over the line hands the lap back...
+    expect(r.afterBack.lap).toBe(r.afterFirst.lap - 1);
+    // ...and re-taking it re-times the SAME lap instead of stamping the few
+    // tenths since the reset. That sliver would beat c.best and become the
+    // stored ghost.
+    expect(r.afterSecond.lap).toBe(r.afterFirst.lap);
+    expect(r.afterSecond.lastLap).toBeGreaterThan(1);
+  });
+
   test("rear-ending a car ahead never INCREASES the player's speed", async ({ page, loadTrack }) => {
     await loadTrack();
     const r = await page.evaluate(() => {

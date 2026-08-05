@@ -7,7 +7,12 @@
    sectors: [s1End, s2End] with 0 < s1 < s2 < 1; S3 wraps through the line.
    turns: apex fractions T1..Tn in driving order (length = official turn count).
 */
-window.CircuitMarkings = {
+// Wrapped in the project's standard IIFE. This was the only file of ~150 with
+// no "use strict" and the only bare-object-literal global — a fourth module
+// shape in a codebase that has three. Nothing about the data changes.
+window.CircuitMarkings = (function () {
+  "use strict";
+  return {
   abudhabi: {
     sectors: [0.32, 0.68],
     turns: [0.0432, 0.1524, 0.2654, 0.3783, 0.4780, 0.5777, 0.6065, 0.6513, 0.6763, 0.7020, 0.7233, 0.7453, 0.8021, 0.8446, 0.9492, 0.9962],
@@ -105,3 +110,4 @@ window.CircuitMarkings = {
     turns: [0.0683, 0.0949, 0.1575, 0.2068, 0.2619, 0.4042, 0.4288, 0.5057, 0.5474, 0.5835, 0.7590, 0.8397, 0.8814, 0.9687],
   },
 };
+})();

@@ -74,9 +74,22 @@ room codes — the BACKUP way in, and the only part of the game leaning on
 someone else's server. NOTHING TO DEPLOY: a public Nostr relay network is the
 default meeting place (js/net/nostr.js), and worker/rendezvous.js (one
 Cloudflare Durable Object per code) is an optional upgrade when its URL is
-set. The broker is public, so the payload is AES-GCM sealed under a key
-derived from the code and the topic is a HASH of it — the operator relays
-bytes it cannot read, and the code is the only secret. A code is DISPOSABLE,
+set. On the DEFAULT public path the payload is encrypted by Trystero under the
+room code and the room id is a hash of it, so a relay operator carries bytes it
+cannot read and the code is the only secret.
+
+**That is not yet true of the optional private Worker path.** `httpPut` posts
+the invite/answer as plain JSON, so an operator running `worker/rendezvous.js`
+CAN read the SDP it relays. `seal()`/`open()`/`topicFor()` implement exactly the
+sealing that would fix it and are unit-tested, but nothing calls them — the
+blocker is `worker/rendezvous.js`'s single-writer rule, which rejects a second
+`offer` by comparing the stored payload against the incoming one. AES-GCM uses a
+random IV, so a host re-posting the SAME offer would produce different bytes and
+be turned away with 409 "that code is already in use". Wiring the sealing means
+changing that comparison too, and testing both halves against a deployed
+Worker. Until then the private relay is a broker you must TRUST, which is a
+reasonable trade for one you run yourself — but it is a different claim from the
+public path's, and it was previously documented as the same one. A code is DISPOSABLE,
 not an account: nothing stored, claimed, squattable or personal, so it avoids
 everything a username system drags in. It carries the SAME invite/answer
 strings the manual flow uses, so the relay is a courier and never a

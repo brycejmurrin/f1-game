@@ -393,12 +393,12 @@ function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c
 const X_OPEN_RATE = 2.6;    // aeroX per second opening (~0.385 s, inside the 400 ms cap)
 const X_CLOSE_RATE = 8.0;   // aeroX per second closing (~0.125 s back to Z — well inside the cap)
 const X_STRAIGHT_T = 3.0;   // s of clear road ahead required to arm (FIA's rule)
-const X_LOOK_MAX = 260;     // m — upper clamp on that look-ahead
-const X_K_MAX = 0.0045;     // curvature that still counts as "straight" (r ~ 220 m)
-// Curvature that counts as straight FOR A ZONE — much stricter than X_K_MAX,
-// which was tuned for "is the car allowed to hold the mode right now" and lets a
-// 220 m-radius kink through. Approving zones at that threshold gave MONACO four
-// of them, which is exactly the circuit the real rule exists to exclude. A zone
+// Curvature that counts as straight FOR A ZONE. (It used to be contrasted here
+// with an X_K_MAX of 0.0045 tuned for "is the car allowed to hold the mode right
+// now"; that constant and X_LOOK_MAX were left behind when buildAeroZones()
+// replaced the rolling look-ahead, and neither had been read since.) A kink of
+// ~220 m radius must NOT qualify — approving zones at that threshold gave MONACO
+// four of them, which is exactly the circuit the real rule exists to exclude. A zone
 // is a proper straight (r >= ~700 m), and the length test then does the rest.
 const X_ZONE_K = 0.0014;
 const X_MIN_SPEED = 25;     // m/s (a vStd() threshold) — no X-mode at crawl speed
@@ -1822,7 +1822,7 @@ Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
-        getErsBar, getOtLamp, getPedalBar } = CarMesh;
+        getErsBar, getOtLamp } = CarMesh;
 const _decalTexCache = {};
 function invalidateDecalTextures(teamId) {
   const prefix = teamId + ":";
@@ -4395,9 +4395,20 @@ function updateCar(c, dt, ranked) {
     }
   }
 
-  // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
+  // Line crossing. `ds > 0` stops a backward crossing INCREMENTING the lap, but
+  // for a long time nothing undid one either — there was no `lap--` anywhere in
+  // js/, while `c.prog` was symmetric. So crossing the line, being shoved back
+  // over it by shiftLong (contact resolution moves a car up to ~4-5 m along the
+  // road) and crossing again added a SECOND lap, and `c.finished` could fire a
+  // full lap early. The backward branch below restores the symmetry `prog`
+  // already had.
   if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
+    // Retained so the backward branch can put the clock back. Without it a
+    // re-crossing records the few tenths since the reset as a completed lap —
+    // which is not just a wrong readout, it beats `c.best` and becomes the
+    // stored ghost.
+    c._lapTimeAtLine = c.lapTime;
     // A takeover (R2/R3/C1) during this lap invalidates it EXPLICITLY: the car
     // was moved by Rapier, so the lap is not a legitimate timed lap. Don't let it
     // set a personal best or become the stored ghost; just start the next lap
@@ -4426,6 +4437,19 @@ function updateCar(c, dt, ranked) {
       c.finished = true;
       c.finishT = raceT;
       if (c.isPlayer) announce("FINISH!", 2);
+    }
+  } else if (ds < 0 && oldS < track.total * 0.5 && c.s > track.total * 0.5) {
+    // Backward over the line: give the lap back and put the clock where it was,
+    // so the next forward crossing re-times the SAME lap rather than a sliver.
+    // Only the player can get here — updateCar overwrites `ds` with
+    // `c.speed * dt` for every AI car, so their `ds` is never negative.
+    if (c.lap > 0) {
+      c.lap--;
+      c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;
+      // Re-crossing forward will re-announce and re-report this lap, so it must
+      // not also count as a fresh completion for the race result.
+      if (c.finished && c.lap <= lapsTarget) { c.finished = false; c.finishT = 0; }
+      if (c.isPlayer) { sectorIdx = sectorAt(c.s); sectorStartT = c.lapTime; }
     }
   }
   // Skip ghost recording while the current lap is incident-invalidated (a
@@ -8030,10 +8054,9 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); });
 
 // ---------- boot ----------
-// Inert in production; only attaches when a test harness pre-sets the flag.
-if (typeof window !== "undefined" && window.__APEX_DEBUG) {
-  window.__APEX = { cars: () => cars, player: () => player, state: () => state, track: () => track };
-}
+// (A `window.__APEX` bridge lived here, gated on a `window.__APEX_DEBUG` flag
+// that nothing in js/, tests/, tools/ or index.html has ever set. The harness
+// it was written for is window.__apex, in js/game/apex.js.)
 
 // MY TEAM's own emblem. Stored as a downscaled data URL under apex26.customLogo
 // so it survives a reload without touching the asset pipeline — LiveryTex takes

@@ -403,6 +403,24 @@ __apex.matTex(1);              // full baked materials
 __apex.matTex(0);              // back to the shipped look
 ```
 
+### `envProbe(on?) → {on, off, changed, needsReload}`
+The clear path for the `apex26.envProbeOff` **latch**. GLX sets that key when the
+WebGL context is lost while the page is VISIBLE — the memory-pressure signal, as
+opposed to iOS's benign loss on backgrounding — and persisting it is what stops a
+lose→reload→lose loop on memory-tight devices.
+
+Nothing could clear it. One `setItem`, one `getItem`, no UI, no hook, no mention
+in these docs: a device that lost its context once kept live env-probe
+reflections disabled **forever**, and it presents as "reflections are just worse
+on my phone" rather than as a setting anybody can find.
+
+`game.js` reads the key once at module init, so a change needs a reload —
+reported in `needsReload` rather than done silently.
+```js
+__apex.envProbe();             // {on:false, off:true, …} → the latch is set
+__apex.envProbe(true);         // clear it, then reload
+```
+
 ### `credits() → [{kind, id, author, licence, source}, …]`
 Attribution roll for every baked asset. CC0 imposes no attribution duty, but
 every entry must carry a `source` — that is what `node tools/assets.mjs verify`

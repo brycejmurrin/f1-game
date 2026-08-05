@@ -186,8 +186,13 @@ const GameAudio = (function () {
       .then((r) => r.arrayBuffer())
       .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)));
     Promise.all([grab(SFX_ENGINE), grab(SFX_ACCEL)])
-      .then(([e, a]) => { engBuf = e; accBuf = a; samplesReady = true; })
-      .catch(() => { /* keep synth fallback */ });
+      .then(([e, a]) => { engBuf = e; accBuf = a; samplesReady = true; Log.debug("audio", "engine samples decoded"); })
+      .catch((err) => {
+        // The synth voice takes over, so this is not fatal — which is exactly
+        // why it needs saying. Otherwise "the engine sounds different on my
+        // machine" has no trace anywhere.
+        Log.warn("audio", "engine sample load/decode failed, using synth voice: " + ((err && err.message) || err));
+      });
   }
 
   function init() {
@@ -238,7 +243,11 @@ const GameAudio = (function () {
       p.then(() => {
         rebuildTries = 0;
         lastFailedResume = 0;
-      }).catch(() => {});
+      }).catch((err) => {
+        // A refused resume is THE cause of "there is no sound at all", and it
+        // used to leave no record of any kind.
+        Log.warn("audio", "context resume rejected (state=" + (ctx && ctx.state) + "): " + ((err && err.message) || err));
+      });
     }
   }
 
@@ -883,7 +892,11 @@ const GameAudio = (function () {
       .then(r => r.arrayBuffer())
       .then(ab => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
       .then(buf => { if (cacheable) musicBuffers[url] = buf; playMusicBuffer(buf, token); })
-      .catch(() => { /* music is optional — ignore load/decode errors */ });
+      .catch((err) => {
+        // Music is optional and the game plays on without it. Retained rather
+        // than printed: a soundtrack that never starts is otherwise invisible.
+        Log.warn("audio", "music load/decode failed for " + url + ": " + ((err && err.message) || err));
+      });
   }
 
   /* ---------------- mixer ----------------
