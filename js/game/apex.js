@@ -2071,6 +2071,40 @@ const api = {
     return s || { ok: false, error: "no_connection" };
   },
 
+  // lobbyPairs() — WHY no pair was nominated, from ICE itself.
+  //
+  // The last question lobbySdp() cannot answer. Both peers can send relay
+  // candidates, both relays can be reachable, and ICE can still sit in
+  // "checking" forever — at which point the only remaining authority is the
+  // connection's own candidate-pair table: which pairs were formed, which were
+  // tried, which failed, and whether anything was ever nominated. Everything
+  // before this was inference from the outside.
+  async lobbyPairs() {
+    if (!G.netLobby || !G.netLobby.sdp) return { ok: false, error: "no_lobby" };
+    const s = G.netLobby.sdp();
+    const pc = s && s._pc;
+    if (!pc || !pc.getStats) return { ok: false, error: "no_connection" };
+    const stats = await pc.getStats();
+    const local = new Map(), remote = new Map(), pairs = [];
+    stats.forEach((r) => {
+      if (r.type === "local-candidate") local.set(r.id, r);
+      else if (r.type === "remote-candidate") remote.set(r.id, r);
+      else if (r.type === "candidate-pair") pairs.push(r);
+    });
+    const name = (c) => (c ? (c.candidateType || "?") + " " + (c.address || c.ip || "?")
+                             + ":" + (c.port || "?") + "/" + (c.protocol || "?") : "?");
+    return {
+      ice: s.ice, conn: s.conn,
+      pairs: pairs.map((p) => ({
+        state: p.state, nominated: !!p.nominated,
+        sent: p.requestsSent, recv: p.responsesReceived,
+        bytes: p.bytesSent,
+        local: name(local.get(p.localCandidateId)),
+        remote: name(remote.get(p.remoteCandidateId)),
+      })),
+    };
+  },
+
   // lobbyCodeHost() / lobbyCodeJoin(code) — the ROOM CODE path, driven
   // directly. Exposed because that path had NO test of any kind: exchange() is
   // unreachable from the suite (the loopback has no SDP, the lobby specs use a
