@@ -1,6 +1,6 @@
 # Testing reference
 
-103 root Playwright spec files (`tests/*.spec.js`) + 38 `node --test` unit suites
+104 root Playwright spec files (`tests/*.spec.js`) + 39 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -359,6 +359,7 @@ what it covers.
 | `sliders.spec.js` | every pause-menu slider is wired and persists |
 | `gamepad.spec.js` | gamepad mapping (steer/throttle/brake/boost/overtake/camera) |
 | `touch-steer.spec.js` | canvas touch steering as an anchored DRAG (proportional, relative, ramped on release, most-recently-MOVED finger wins), the on-screen arrows ramping like a key, and pedal TRAVEL on the touch pedals reaching the physics |
+| `tilt-pipeline.spec.js` | the tilt chain end to end — dead zone (subtracted, so no step at its edge), the `MAX_TILT` map and its `steerToTilt` inverse, the 1.6x release/tighten slew asymmetry, calibrating out a held grip offset, One-Euro smoothing as lag rather than gain, and the LIVE `deviceorientation` path pinned to the harness |
 
 ### Per-circuit foundations
 
@@ -485,6 +486,7 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `load-order.test.mjs` | `index.html` and `tools/carview.html` `<script>` order matches `tools/manifest.cjs` exactly, including `HARD_EDGES` eval-time dependencies |
+| `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `docs-integrity.test.mjs` | live docs, skills AND source comments reference only files that exist; CLAUDE.md's suite counts, the scenery-api member count, the renderer-backend list, and the skills/tools/docs indexes all match the repo |
 | `test-groups.test.mjs` | the taxonomy: pick-tests rules name real groups and route every source dir; this document lists every group and every test file; `RENDER_SPECS` partitions cleanly; the manual suites stay out of default discovery |
 | `circuit-def-fields.test.mjs` | every field authored in `js/circuits/<id>.js` survives the field-by-field copy into `Tracks.LIST`, or is named engine-only with a reason — an uncopied field reads as `undefined` at every consumer, silently, and the circuit renders as though it was never written |
