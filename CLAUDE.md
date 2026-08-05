@@ -142,12 +142,23 @@ See `docs/research/DRIVING-CONTROLS-RESEARCH.md` for the shape.
 
 #### Worktrees: the way to keep editing while a run is in flight
 
+**Use a worktree whenever a test run is in flight and you have `js/` or `css/`
+work to do.** This is a standing project instruction, so `EnterWorktree` is
+sanctioned here without asking — that tool is otherwise gated on the user or
+this file saying so.
+
 The "don't edit `js/` or `css/`" constraint is a property of the DIRECTORY the
 test server was started in, not of the repo. A `git worktree` is a second
 working directory on the same object store, so an edit there cannot disturb a
 run in this one. **Measured:** changing a constant in a worktree's
 `js/game/input.js` left the main tree's copy untouched, and the in-flight run
 kept serving the original.
+
+`.claude/settings.json` sets `worktree.baseRef: "head"`. **Do not remove it** —
+the default is `fresh`, which branches from `origin/<default-branch>` and would
+silently strand a worktree on a base with none of the current branch's work.
+
+Either the tool or the raw commands work:
 
 ```sh
 git worktree add .worktrees/<task> -b <branch>        # .worktrees/ is gitignored
