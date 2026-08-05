@@ -218,23 +218,13 @@ const ALLOWED = [
 // Sites the audit could NOT justify as absolute. They are recorded rather than
 // silently exempted, and deliberately NOT fixed here: this file is the guard,
 // not the repair. Fixing one means deleting its row.
-const SUSPECT = [
-  {
-    file: "js/game.js", expr: "c.speed > 15", code: "if (wet && c.speed > 15) {",
-    why: "UNJUSTIFIED — suspected new instance of the A5/A13 class",
-    note:
-      "Rain spray. The gate is 15 m/s and the strength ramp two lines below is " +
-      "clamp((c.speed - 15) / 45, 0, 1), i.e. 21 % -> 83 % of VMAX = 72: the ramp " +
-      "is written as a fraction of the PACE-5 envelope but fed a raw ground speed. " +
-      "At pace 0.5 (vTop 36 m/s) spray strength can never exceed (36-15)/45 = 0.47, " +
-      "so full rain spray is unreachable; at pace 1.3 (vTop 93.6) it saturates at " +
-      "64 % of top speed, so it is maxed down every straight. Alone among the FX " +
-      "gates this one has no absolute constant behind it — the neighbouring smoke, " +
-      "spark and kickup emitters all scale their particle velocity by real m/s, " +
-      "which is why they are in ALLOWED and this is not. Cosmetic only; no physics " +
-      "reads it. The `/ 45` half is a DIVISION and so is outside this lint's rule.",
-  },
-];
+//
+// EMPTY, and that is the point: the one finding this list ever held — the rain
+// spray's `wet && c.speed > 15` with its `clamp((c.speed - 15) / 45, 0, 1)` ramp,
+// which capped spray strength at 0.47 at pace 0.5 — was repaired as A16 in
+// docs/ARCHITECTURE-REVIEW.md and both halves now read vStd(c.speed). A row here
+// is a debt, not a licence; deleting one is what closing it looks like.
+const SUSPECT = [];
 
 const APPROVED = [...ALLOWED, ...SUSPECT];
 

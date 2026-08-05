@@ -11,12 +11,24 @@
 // speed on the standard pace-5 scale, which is the scale every hard-coded
 // number in this file was written against.
 //
-// The prose invariant has been violated twice:
+// The prose invariant has been violated FOUR times:
 //   A5  — the beached-rescue gate was `GRASS_V * 0.6 + 1.5`, true only at PACE 1.
 //   A13 — `c.otArmed` required a bare `c.speed > 15` while the active-aero
 //         floor thirty lines below correctly read `vStd(c.speed) > X_MIN_SPEED`.
 //         Overtake armed at 42 % of top speed at pace 0.5 and 16 % at pace 1.3,
 //         against active aero's constant 35 %.
+//   A16 — the third and fourth, both cosmetic, both in one FX block. The rain
+//         spray's `c.speed > 15` + `(c.speed - 15) / 45` ramp this lint flagged
+//         outright (max strength 0.47 at pace 0.5 — full spray unreachable).
+//         The launch-wheelspin smoke's `_pax > 4.5` it did NOT: an ACCELERATION
+//         carries no `.speed`. It surfaced anyway, because the lint flagged the
+//         `c.speed > 0.5 && c.speed < 12` window on the very same line and
+//         writing that row's justification meant reading the line — peak
+//         getaway accel is 3.50 m/s² at pace 0.5, so the effect never fired at
+//         all. PACE multiplies `ACCEL` exactly as it multiplies ground speed,
+//         which is why js/game.js grew `aStd()` beside `vStd()`. Worth knowing
+//         about this tool: it catches one shape of the class and drags a reader
+//         within a line of the others.
 //
 // THE RULE, in one sentence: a `.speed` read compared with < <= > >= against a
 // numeric literal is a violation unless the speed is wrapped in `vStd(...)`.

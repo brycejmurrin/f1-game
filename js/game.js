@@ -301,6 +301,14 @@ let PACE = 1.0;
 function vTop()  { return VMAX * Math.max(PACE, 0.05); }
 function vStd(v) { return v * VMAX / vTop(); }
 function dashKph(v) { return vStd(v) * 3.6; }
+// The ACCELERATION curve carries the SAME PACE factor as the ground speed —
+// axEstTarget is `ACCEL * PACE * …` — so an acceleration compared against a
+// hard-coded number needs exactly the divisor a speed does. aStd() is vStd() for
+// m/s^2, written as the divisor rather than the VMAX/vTop() round trip so that at
+// pace 5 (PACE === 1) it is the identity to the bit. Measured: at pace 0.5 a
+// full-throttle getaway peaks at ACCEL * 0.5 = 3.5 m/s^2, so the launch-wheelspin
+// smoke's bare 4.5 floor could never fire at all — see A16.
+function aStd(a) { return a / Math.max(PACE, 0.05); }
 const BRAKE = 22;
 const REVERSE_MAX = -5;     // m/s — top reverse crawl speed (brake held at a stop)
 const REVERSE_ACCEL = 5;    // m/s^2 — how quickly the reverse crawl builds
@@ -6431,14 +6439,18 @@ function render(dt) {
         // Tyre smoke (player): cornering scrub via skidIntensity, real lateral
         // slip (vLat — drifts and trail-braking slides, since the friction
         // ellipse converts overdriven braking into lateral slip), and launch
-        // wheelspin (hard accel at crawling speed; peak engine ax is ~7 m/s²,
-        // so the 4.5 floor only fires on genuine full-throttle getaways).
+        // wheelspin (hard accel at crawling speed; peak engine ax is ~7 m/s² on
+        // the STANDARD scale, so the 4.5 floor only fires on genuine
+        // full-throttle getaways). aStd, not a bare c.axEstSm: PACE multiplies
+        // the accel curve, so at pace 0.5 the peak is 3.5 m/s² and a raw 4.5
+        // floor is unreachable — the effect simply did not exist at the bottom
+        // of the OVERALL SPEED slider (A16).
         let smokeI = (c.isPlayer && !c.offroad) ? (c.skidIntensity || 0) : 0;
         if (c.isPlayer && !c.offroad) {
           const _pax = c.axEstSm || 0, _pvl = Math.abs(c.vLat || 0);
           if (c.speed > 10) smokeI = Math.max(smokeI, clamp((_pvl - 3) / 5, 0, 1));
           if (c.speed > 0.5 && c.speed < 12)
-            smokeI = Math.max(smokeI, clamp((_pax - 4.5) / 2.5, 0, 1) * clamp((12 - c.speed) / 9, 0, 1));
+            smokeI = Math.max(smokeI, clamp((aStd(_pax) - 4.5) / 2.5, 0, 1) * clamp((12 - c.speed) / 9, 0, 1));
         }
         if (smokeI > 0.25) {
           const wd = WHEELS[2 + ((Math.random() * 2) | 0)];   // one rear wheel per event
@@ -6464,8 +6476,15 @@ function render(dt) {
         }
         // Rain spray: every car at speed on a wet road drags a rooster tail —
         // lighter on "wet" (drying line) than under full "rain".
-        if (wet && c.speed > 15) {
-          const str = clamp((c.speed - 15) / 45, 0, 1) * (raceWeather === "rain" ? 1 : 0.6);
+        // vStd on BOTH halves: 15 and the /45 span describe a fraction of the
+        // car's envelope (spray starts at ~21 % of top speed and is full at
+        // ~83 %), so fed a raw ground speed they moved with the OVERALL SPEED
+        // slider — at pace 0.5 the strength could never exceed (36-15)/45 = 0.47
+        // and full spray was unreachable, at pace 1.3 it was pinned at 1 down
+        // every straight. The particle VELOCITY below stays real m/s: it is
+        // world-space motion, not a threshold (A16).
+        if (wet && vStd(c.speed) > 15) {
+          const str = clamp((vStd(c.speed) - 15) / 45, 0, 1) * (raceWeather === "rain" ? 1 : 0.6);
           if (str > 0) {
             const sxo = Math.random() < 0.5 ? -0.6 : 0.6;   // behind either rear tyre
             Particles.spray(
