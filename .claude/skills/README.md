@@ -1,40 +1,48 @@
 # Apex 26 developer skills
 
-Claude Code skills scoped to this repo's real workflows. Each is a `SKILL.md`
-(invoked automatically when its description matches, or via `/<name>`), grounded
-in the `__apex` debug API, `tools/verify-track.cjs`, and the `npm run test:*`
-groups.
+Project skills for recurring agent workflows. Each is a `SKILL.md` (auto-matched
+from its `description`, or via `/<name>`), grounded in `__apex`,
+`tools/verify-track.cjs`, and `npm run test:*` groups.
+
+Descriptions say **when** to load the skill; bodies carry the workflow.
 
 | Skill | Use it when |
 |---|---|
-| **survey-track** | Making a circuit accurate end-to-end: survey vs real-world reference → diagnose geometry (floating props, channels, terrain-over-road) → edit → verify → ship. Orchestrates the skills below + a lateral ground-profile probe. |
-| **bump-cache** | You edited any `js/*.js` or `css/*.css` — increment the `?v=N` cache-bust in `index.html` AND sync `version.json`'s build to the same N before committing. |
-| **new-track** | Adding a circuit or editing a track's geometry/metadata in `js/circuits/`. |
+| **survey-track** | End-to-end circuit accuracy: survey → diagnose geometry → edit → verify → ship (orchestrates scenery/debug/probe + ground-profile). |
+| **bump-cache** | Any `js/` or `css/` edit (or script/link tag change) — bump `?v=N` and matching `version.json` before commit. |
+| **new-track** | Adding a circuit or editing geometry/metadata in `js/circuits/`. |
 | **scenery-dress** | Writing/editing a track's `scenery(api)` callback (trees, buildings, barriers, mountains). |
-| **tune-physics** | A/B testing or tuning the driving physics in `js/game.js` via the headless `obs/act/reset` loop — single-page or a parallel multi-config sweep. |
-| **car-viewer** | Inspecting the car in ISOLATION (no track) from any angle/livery/parts/lighting — the standalone `tools/carview.html` photo studio + `tools/render-car.mjs` batch renderer, with point-light rigs for reflection tests. |
-| **check-changes** | Pre-push validation — pick the right `test:<group>`, run `verify-track` (`--all` for engine/multi-track edits), confirm the cache + `version.json` bump. |
-| **debug-cameras** | The 13 camera modes + free debug-camera framing hooks (`view/eyeAt/orbit/cinematic/...`). |
-| **debug-tracks** | Track geometry/surface/barrier query hooks + the parallel multi-track sweep. |
-| **debug-state** | Live race/physics/lighting telemetry hooks + the headless `act/obs/reset` loop. |
-| **agent-view** | Perceive and DRIVE the game as TEXT, no screenshots — the `__apex` agent-view surface (`world`/`field`/`trackInfo`/`scene`/`atmosphere`/`describe`/`query`/`carView`/`render`/`survey`/`rollout`/`objective`/`terminal`/`seed`) and the `tools/agent.mjs` CLI. |
-| **playwright-probe** | Drive the game headless — single deterministic screenshots (`shot.mjs`) through parallel multi-server sweeps; `tools/apex-eval.mjs` & `tools/apex-capture.mjs`. |
-| **motion-capture** | Capture RENDERED MOTION headless to catch temporal artifacts screenshots can't — z-fighting/clipping flicker, shadow crawl, geometry pop-in, texture shimmer "while driving" — and A/B-verify a renderer fix reduces flicker (`tools/motion-capture.mjs`). |
-| **audio-debug** | Inspect and tune the WebAudio synth engine (`js/game/audio.js`) — engine pitch curve, sfx triggers, music layers, mute/volume state. |
-| **perf-profile** | Capture a headless V8 CPU flame chart of the game loop via Playwright CDP — diagnose frame-time spikes, GC jitter, or slow track-build times. |
-| **lighting-tuner** | Tune and validate scene lighting — TUNE_DEFS knobs via `__apex.lightTune`, `applyRaceSettings` branches, live `lightState()` probes and orbit screenshots. |
-| **bake-lighting** | Bake the in-game LIGHTING TUNER's copied `window.LightPresets = {…}` export into the shipped `js/game/light-presets.js`, bump the cache, and commit + push. |
-| **webgl-debug** | Diagnose WebGL2/GLX renderer issues: uniform-array light upload, shadow acne/shimmer, bloom, shader compile errors, `GL_INVALID_OPERATION`. |
-| **game-feel** | Juice/feedback craft (vendored, Apache-2.0): trauma-based screen shake, hit-stop, eased motion, feedback bundles by importance tier — with an Apex 26 mapping section. |
-| **hermes** | Vehicle-dynamics audit council (vendored): Pacejka/Milliken-grade review of tire models, load transfer, friction-ellipse, racing lines — pairs with tune-physics for A/B validation. |
+| **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`. |
+| **car-viewer** | Inspecting the car in isolation (no track) — `tools/carview.html` + `tools/render-car.mjs`. |
+| **check-changes** | Pre-push validation — `pick-tests`, `test-bg`, `verify-track`, cache bump. |
+| **ui-menu-a11y** | Menus/dialogs, Escape/back, keyboard nav, UI scale, AriaState, layout tests. |
+| **multiplayer-debug** | VS FRIEND / WebRTC — loopback, invite SDP, room codes, ICE/TURN, authority. |
+| **career-mode** | DRIVER / MY TEAM career — saves, economy, R&D, quali/reliability weekend flow. |
+| **race-incidents-control** | Debris, incident takeovers, race-control flags, caution/VSC/SC, determinism. |
+| **debug-cameras** | The 13 camera modes + free framing hooks (`view`/`eyeAt`/`orbit`/…). |
+| **debug-tracks** | Track geometry/surface/barrier query hooks + multi-track sweeps. |
+| **debug-state** | Live race/physics/lighting telemetry + headless `act`/`obs`/`reset`. |
+| **agent-view** | Perceive and drive the game as text — `__apex` agent-view + `tools/agent.mjs`. |
+| **playwright-probe** | Headless screenshots/evals — `shot.mjs`, `apex-eval.mjs`, `apex-capture.mjs`. |
+| **motion-capture** | Temporal artifacts while driving (flicker/shimmer/crawl) — `tools/motion-capture.mjs`. |
+| **audio-debug** | WebAudio synth — engine pitch, sfx, music layers, mute/volume. |
+| **perf-profile** | Headless V8 CPU flame chart of the game loop (Playwright CDP). |
+| **lighting-tuner** | Scene lighting — `lightTune`, time-of-day/weather, `lightState`, orbit shots. |
+| **bake-lighting** | Baking a pasted `window.LightPresets = {…}` export into shipped presets. |
+| **webgl-debug** | WebGL2/GLX issues — lights, shadows, bloom, shader compile, GL errors. |
+| **game-feel** | Juice/feedback on Apex systems (camera/particles/audio/skids) without touching physics. |
+| **scene-graph-instancing** | Migrating scenery emitters to `TrackGraph`, graph parity, instanced draws, `bakeOnly`. |
+| **garage-parts-livery** | Parts catalog, SIGNATURE/FACTORY presets, garage UI, livery finish/fin, ERS/aero load. |
+| **asset-pack** | Baking/verifying `assets/pack`, MAT layers, `matTexMix`, procedural fallback. |
+| **pwa-cache-service-worker** | `sw.js` precache, `version.json` network-first, DEFERRED optional assets, stale PWA. |
 
-The debug-* skills are grounded in **verified live return shapes** (probed via
-`tools/apex-eval.mjs` against the running game) and pair with screenshot capture
-(`tools/apex-capture.mjs`) so changes are validated visually, not just asserted.
+The debug-* skills pair with `tools/apex-eval.mjs` / `tools/apex-capture.mjs` so
+changes are validated visually, not just asserted.
 
-Output paths follow the shared contract in `CLAUDE.md`: batch/test output under `artifacts/`, human-reviewed captures/renders/profiles under `scratch/`.
+Output paths: batch/test under `artifacts/`, human-reviewed captures under
+`scratch/` (see `CLAUDE.md`).
 
-Design principles these encode (from `CLAUDE.md`):
-- **No build step** — pure IIFE modules; always bump `?v=N` + `version.json` on asset edits.
-- **Debug-hooks first** — assert behaviour/geometry via `__apex`, not brittle magnitudes.
-- **Headless verify-track** is the fast pre-push guard for any `js/circuits/*` or `js/track/*` change.
+Design principles:
+- **No build step** — bump `?v=N` + `version.json` on asset edits.
+- **Debug-hooks first** — assert via `__apex`, not brittle magnitudes.
+- **Headless verify-track** — fast pre-push guard for circuit/track engine edits.

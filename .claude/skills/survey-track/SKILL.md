@@ -1,6 +1,6 @@
 ---
 name: survey-track
-description: End-to-end playbook for making a circuit look accurate — survey the in-game scene against real-world reference, diagnose geometry problems (floating props, channels/steps, sunk water, terrain over the road), edit the scenery/terrain, then verify and ship. Orchestrates the component skills (scenery-dress, debug-tracks, playwright-probe, check-changes) into one loop and adds a lateral ground-profile probe. Use for "survey Monza", "make Spa more accurate", "do an accuracy pass on this track", "the trees are floating / there's a gap beside the road", "improve a circuit's realism".
+description: Use when the user asks to survey a track, make a circuit more accurate/realistic, compare Apex 26 to real-world reference, fix floating trees/props, gaps beside the road, terrain channels/steps/sunk water, or do a picture-driven accuracy pass.
 ---
 
 # Survey & update a track
@@ -11,8 +11,10 @@ tool. Work one circuit at a time; the same loop applies to all 40.
 
 > **One command does the survey** — `node tools/survey-track.mjs <id>` self-boots the
 > game and emits the screenshots + the flagged ground-profile probe in one pass (no
-> server, one output folder). The focused skills handle the rest: **scenery-dress**
-> (edit `scenery(api)`), **debug-tracks** (deeper geometry hooks), **playwright-probe**
+> server, one output folder). Requires **Chromium + SwiftShader** (same preinstalled
+> browser as Playwright probes). The focused skills handle the rest: **scenery-dress**
+> (edit `scenery(api)` in `js/circuits/<id>.js` — not the old `js/tracks/` path),
+> **debug-tracks** (deeper geometry hooks), **playwright-probe**
 > (one bespoke shot via `shot.mjs`), **check-changes** (ship).
 
 ## Where the truth lives
@@ -45,7 +47,8 @@ This self-boots the game (no server needed) and produces, in one boot:
   - **`terrainY === "--"` sandwiched between solid readings** → a terrain *hole*;
     props out there fall back to the closed-form `groundYAt()` estimate and **float
     or sink** (the "channel between rings"). A trailing `--` at the outer lats is
-    just the ribbon edge — benign.
+    just the ribbon edge — benign. At water, also check **`waterSurface` vs
+    `terrainOuter` ribbon mismatch** and `dressingExclusions` at that frac.
   - **a >1 m jump between adjacent lats** → a cliff/step.
   - `terrainY` sliding steadily more negative with distance → the ribbon is
     **sagging** (right for a hill, wrong for a flat island level with water).
@@ -92,7 +95,8 @@ is now flag-free and the eye shots show props on real ground.
 ### 6 · Test & ship
 - Geometry guards: `npx playwright test tests/terrain-over-road.spec.js tests/tracks-walls.spec.js`
 - Visual regression (all circuits): `npm run test:visual`
-  — if your change is **intentional**, regenerate baselines with:
+  — this suite skips when `tests/tracks-visual.spec.js-snapshots/` is absent; if
+  baselines exist and your change is **intentional**, regenerate them with:
   `npm run test:update -- tests/tracks-visual.spec.js` (then eyeball
   `tests/tracks-visual.spec.js-snapshots/`). Prefer Linux/SwiftShader for CI-matching goldens.
 - **bump-cache**: increment `?v=N` in `index.html` (every `js/*`/`css/*` edit).
@@ -101,6 +105,10 @@ is now flag-free and the eye shots show props on real ground.
   **check-changes**.
 
 ## Worked example — Montreal "floating trees" pass
+
+> **Survey first:** Montreal already ships `flatTerrain: true` + `terrainOuter: 70`
+> in `js/circuits/montreal.js`. Do not re-apply that fix blindly — run the survey
+> command and read the probe/EYE shots; only edit if flags are still present.
 
 The exact shape of a survey+update pass:
 1. **Brief** (`docs/tracks/montreal.md`): flat island in a river; Olympic Basin

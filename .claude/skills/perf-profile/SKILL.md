@@ -1,80 +1,50 @@
 ---
 name: perf-profile
-description: Capture a headless V8 CPU flame chart of the game loop via Playwright CDP (Chrome DevTools Protocol) — no manual browser interaction. Writes a .cpuprofile file openable in Chrome DevTools. Use when hunting frame-time spikes, GC jitter on night tracks, or slow track-build times. Triggers - "profile the game loop", "find the frame budget hog", "GC spike", "slow track load", "measure physics cost", "flame chart".
+description: Use when the user asks to profile the game loop, find a frame-budget hog, investigate GC jitter/spikes, slow track load/build times, measure physics/render CPU cost, or capture/open a flame chart/.cpuprofile for Apex 26.
 ---
 
 # Headless CPU profiling via Playwright + CDP
 
 Captures a V8 `.cpuprofile` of the running game loop without opening a browser
-manually. Uses Playwright's `newCDPSession()` to drive the built-in V8 profiler and
-writes the default capture to `scratch/profiles/gameloop.cpuprofile`.
+manually. The committed tool drives Playwright's `newCDPSession()` V8 profiler and
+writes to `scratch/profiles/<track>-<mode>.cpuprofile`.
 
-## Quick capture (copy-paste harness)
+## Quick capture (committed tool)
 
-```js
-// tools/profile-gameloop.mjs — run with: node tools/profile-gameloop.mjs
-import { createRequire } from "node:module";
-import { spawn } from "node:child_process";
-import { createServer } from "node:net";
-import { writeFileSync, existsSync, mkdirSync } from "node:fs";
-
-const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
-const require = createRequire(ROOT + "/");
-const { chromium } = require("playwright");
-
-function freePort() {
-  return new Promise((res, rej) => {
-    const s = createServer();
-    s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); });
-    s.on("error", rej);
-  });
-}
-function pickChromium() {
-  for (const p of ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"])
-    if (existsSync(p)) return p;
-}
-
-const port = await freePort();
-const server = spawn("python3", ["-m", "http.server", String(port)], { cwd: ROOT, stdio: "ignore" });
-await new Promise(r => setTimeout(r, 700));
-
-const browser = await chromium.launch({ executablePath: pickChromium(),
-  args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"] });
-const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
-
-// Load track and go headless (uncapped physics, no render cost)
-await page.evaluate(() => { window.__apex.race("monza"); });
-await page.waitForFunction(() => window.__apex.info().track === "monza", { timeout: 15000 });
-await new Promise(r => setTimeout(r, 1600));
-
-const cdp = await page.context().newCDPSession(page);
-await cdp.send("Profiler.enable");
-await cdp.send("Profiler.start");
-
-// Run 5 seconds of game loop (300 frames at 60 fps)
-await page.evaluate(() => {
-  window.__apex.go();
-  window.__apex.jump(0.1, 55, 0);
-  window.__apex.step(1/60, 300);  // headless: uncapped, runs synchronously
-});
-
-const { profile } = await cdp.send("Profiler.stop");
-const outDir = ROOT + "/scratch/profiles";
-mkdirSync(outDir, { recursive: true });
-const outPath = outDir + "/gameloop.cpuprofile";
-writeFileSync(outPath, JSON.stringify(profile));
-console.log("Profile written to", outPath);
-console.log("Open in Chrome DevTools: Performance tab → Load profile");
-
-await browser.close();
-server.kill();
+```sh
+node tools/profile-gameloop.mjs [track] [physics|render]
+# examples:
+node tools/profile-gameloop.mjs singapore render   # full rAF + WebGL draw path (~10 s)
+node tools/profile-gameloop.mjs vegas physics      # synchronous __apex.step() loop (default)
 ```
+
+- **`physics`** (default): `__apex.step(1/60, 600)` — 10 s of uncapped physics, no
+  compositor; best for `updateCar`, AI, light culling JS.
+- **`render`**: `recordVideo`-ticked rAF with throttle on — includes WebGL uniform
+  upload and draw-call cost on the main thread.
+
+The tool prints a self-time summary to stdout; open the `.cpuprofile` in Chrome
+DevTools → **Performance** → **Load profile** for the full flame chart.
+
+### Night / time-of-day gap
+
+`profile-gameloop.mjs` loads the track but **does not call `setTimeOfDay`**. A
+night-default circuit (Vegas, Singapore) still builds floodlights, but to profile
+a *forced* night session (or to compare day vs night on a day-default track) inject
+it before profiling — e.g. a one-off `page.evaluate(() =>
+__apex.setTimeOfDay("night"))` after the mesh settle, or fork the tool. Without
+that, "night lag" on a day-default track won't reproduce.
+
+### GPU-bound frames
+
+A CPU flame chart cannot see fill-/fragment-bound work. If the chart is mostly
+idle but frames miss budget, use `__apex.gpuTimer(true)` then read
+`__apex.gpuTimer().ms` (see DEBUG-HOOKS.md): GPU ms ≈ frame budget ⇒ shader/fill
+work, not JS. Chrome/Android only; `-1` under SwiftShader/CI.
 
 ## Reading the flame chart
 
-Open `scratch/profiles/gameloop.cpuprofile` in Chrome DevTools → **Performance** tab →
+Open `scratch/profiles/<track>-<mode>.cpuprofile` in Chrome DevTools → **Performance** tab →
 **Load profile** button.  Key functions to look for:
 
 | Function | What it means |
@@ -85,34 +55,37 @@ Open `scratch/profiles/gameloop.cpuprofile` in Chrome DevTools → **Performance
 | `(garbage collector)` | GC jitter — look for `Minor GC` during night races |
 | `buildRoad` / `buildProps` | Track mesh build — runs once on load, not per-frame |
 
-## Headless vs rendered profiling
-
-`__apex.step(1/60, N)` runs the physics loop synchronously (no render).  To
-profile the **full render pipeline** including WebGL draw calls, omit
-`headless(true)` and instead run the game normally for N frames with rAF:
-
-```js
-await page.evaluate(async (n) => {
-  window.__apex.go(); window.__apex.jump(0.1, 55, 0);
-  await new Promise(r => { let i = 0; function f() { if (++i < n) requestAnimationFrame(f); else r(); } requestAnimationFrame(f); });
-}, 300);
-```
-
-Then `Profiler.stop` as above.
-
 ## Interpreting GC spikes on night tracks
 
-If `Minor GC` appears frequently during a Vegas/Singapore session, the cause is
-almost certainly per-frame `new Float32Array(...)` in the light-upload path.
+The light-upload path was a known GC source but is **fixed**: `js/render/glx.js`
+allocates its per-lamp uniform arrays (`_luPos`, `_luCol`, `_luRad`, `_luDir`,
+`_luCone`, `_luBleed`) **once at module scope** and writes into them each frame,
+and `js/game/lighting.js`'s per-frame selection buffers (`_tlSel`,
+`_lightCullBuf`, `_lightHeap`, …) are pooled objects reused in place — see the
+"fresh objects here were per-car-per-frame GC churn" comment near
+`appendCarTailLights`. **Don't blame "per-frame `new Float32Array` in light
+upload" from memory — that folklore predates the pooling fix.** If `Minor GC`
+still shows up frequently during a Vegas/Singapore session, profile fresh and
+find the actual allocator; do not assume it's lighting.
+
+Current cost centers worth checking first, in rough order of likely impact:
+
+| Cost center | Where | What to look for |
+|---|---|---|
+| Shadow pass | `js/render/glx/shadow.js` (`GLXShadow`) | Static sun map + dynamic car/lamp maps — flag if the shadow FBO render is a large flame-chart slice, not just the main pass |
+| Uniform upload | `js/render/glx.js` `gl.uniform*` calls, per light/mesh | Flag if `> 2 ms`; check light count (`numLights`) isn't maxed unnecessarily |
+| Particles | `js/game/particles.js` | Pooled typed arrays (`_px`, `_vertA`, …) sized to `MAX` — profile the per-frame update/pack loop cost, not allocation |
+| `appendCarTailLights` sort | `js/game/lighting.js` (`_tlSel.sort(_byDistAsc)`) | Runs every frame when floods are lit; cost scales with nearby-car count within `tailRange`, not GC — a flame-chart entry here is CPU time, not garbage |
+| `(garbage collector)` | anywhere | If GC still appears, get the *actual* allocation site from the flame chart's bottom-up view before proposing a fix — don't reattach it to the light-upload path by default |
+
 Check `GLX.hdrMode()` returns `true` (RGBA16F FBO active) — RGBA8 fallback does
-additional intermediate copies.
+additional intermediate copies, which is a separate, still-real cost.
 
-## CPU-bound vs GPU-bound: the GPU timer
+## Legacy inline harness
 
-A CPU flame chart shows only main-thread cost — it **cannot** see a fill-/
-fragment-bound frame (heavy shader, big bloom mip chain, many lit pixels), where
-the JS is idle but the GPU is the bottleneck. Confirm which side is limiting with
-`__apex.gpuTimer(true)` then `__apex.gpuTimer().ms` (see DEBUG-HOOKS.md): if GPU
-ms ≈ frame budget while the flame chart is mostly idle, it's GPU-bound and the fix
-is shader/fill work, not the JS loop. Chrome/Android only (absent on iOS Safari;
-`-1` under SwiftShader/CI).
+The old copy-paste Monza-only script lived here before `tools/profile-gameloop.mjs`
+landed. Prefer the committed tool above; only hand-roll a harness when you need
+custom staging (e.g. `setTimeOfDay("night")` before `Profiler.start`, a specific
+car count, or career state). Pattern: free port → static server → Chromium +
+SwiftShader → CDP `Profiler.enable/start/stop` → write JSON to
+`scratch/profiles/`.

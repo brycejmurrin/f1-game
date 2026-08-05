@@ -1,6 +1,6 @@
 ---
 name: motion-capture
-description: Capture RENDERED MOTION headless to diagnose temporal artifacts that only show while driving — z-fighting/clipping flicker, shadow crawl/boil, geometry pop-in, texture shimmer. Static screenshots CANNOT catch these. Use when a bug is described as happening "as I drive", "while moving", "flickering", "shimmering", "crawling", or "popping", or to A/B-verify a renderer change (near/far plane, depth bias, shadow, LOD) actually reduces flicker. Triggers - "clipping as I drive", "shadows shimmer while moving", "does my fix reduce the flicker", "capture the flicker", "verify the z-fighting is gone", "record a driven lap".
+description: Use when the user reports flicker while driving, clipping as I drive, shadows shimmer/crawl/boil, z-fighting, geometry pop-in, texture shimmer, temporal artifacts during motion, or asks to record/compare a driven lap to verify a rendering fix.
 ---
 
 # Headless motion capture (temporal-artifact verification)
@@ -31,7 +31,13 @@ guessing.
 ```sh
 node tools/motion-capture.mjs <track> [seconds] [speed] [outdir]
 node tools/motion-capture.mjs monaco 4 50
+node tools/motion-capture.mjs spa 4 70   # still starts at jump(0.05) — see below
 ```
+
+**No start-frac CLI** — the tool always `jump(0.05, speed)`. To capture Eau Rouge
+(~frac **0.078** on Spa) you must fork the tool or accept the limitation. Look up
+the fraction first via `__apex.corners()`, `__apex.trackInfo({what:"corners"})`,
+or `js/track/markings.js` before choosing a staging point.
 
 It records a throttle-held chase-cam clip, extracts frames, and prints:
 
