@@ -1093,6 +1093,49 @@ __apex.netTick(1010);
 __apex.carAt(s.remoteId);        // the rival, posed where its owner said
 ```
 
+### `turnProbe(ms?) → Promise<{ok, servers, relaysConfigured, summary}>`
+
+Is a TURN relay actually there? One throwaway `RTCPeerConnection` **per
+server**, each with `iceTransportPolicy: "relay"`, gathering for `ms`
+(default 8000).
+
+Relay-only is what makes the answer proof rather than inference: with host
+and srflx candidates discarded, a candidate can only have come from TURN, so
+`relay > 0` cannot be a direct pair in disguise. Per-server is the other half
+— one combined gather says only "something worked", which is exactly the
+answer that leaves a dead entry shipping next to a live one.
+
+Probes `NetTransport.iceServers({})`, i.e. **what the game would really use**,
+including anything `apex26.turn` / `apex26.turnApi` added. STUN entries are
+reported with `stun: true, error: "not_a_relay"` rather than skipped: "you
+have no relay" and "your relay is down" are opposite diagnoses, and the
+lobby's failure copy branches on the difference.
+
+| Field | Description |
+|---|---|
+| `ok` | Did **any** relay answer |
+| `servers[]` | `{urls, relay, ok, stun?, error?}` per server — `relay` is the candidate count |
+| `relaysConfigured` | How many TURN (not STUN) entries were in the config |
+| `summary` | The sentence to paste back |
+
+`error` carries the operator's own verdict when ICE gave one — `ice_701` is a
+DNS failure, `ice_401` a rejected credential, and those want opposite fixes.
+
+```js
+await __apex.turnProbe();
+// → { ok:false, relaysConfigured:0, servers:[…],
+//     summary:"No TURN relay is configured — only STUN. …" }
+```
+
+**No relay ships enabled by default**, because the two free no-signup ones
+were measured dead: trickle-ICE gathers from two independent vantage points,
+each carrying a Google-STUN control that *did* produce an srflx candidate,
+returned zero relay candidates from both Open Relay and freestun. The
+derivation code is still there behind
+`localStorage.setItem("apex26.freeTurn", "true")` — one line the day either
+operator comes back, and `turnProbe()` is how you find out. See
+`js/net/transport.js`.
+
 ---
 
 ## Timing & field

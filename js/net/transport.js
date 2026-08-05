@@ -183,21 +183,139 @@ const NetTransport = (function () {
   // is ~2 KB/s per player and only relays when a direct path fails, so that
   // allowance is effectively unbounded here.
   //
-  // It is free infrastructure and the operator says plainly it "can and will go
-  // down without notice" — so it is an ADDITIONAL ice server, never a
-  // replacement for the direct path. When it is gone, everything that worked
-  // before still works; only the hardest NATs stop connecting.
-  const OPEN_RELAY = [
-    {
-      urls: [
-        "turn:openrelay.metered.ca:80",
-        "turn:openrelay.metered.ca:443",
-        "turn:openrelay.metered.ca:443?transport=tcp",
-      ],
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
+  // THE STATIC FREE RELAY IS DEAD. Open Relay's embeddable credentials
+  // (openrelayproject/openrelayproject) were retired — Metered now requires a
+  // per-account API key and a credentials endpoint that RETURNS the iceServers
+  // array. Measured from a real device: the old config gathered zero relay
+  // candidates while STUN worked, which is worse than shipping nothing,
+  // because it looks like a relay exists and diagnosis chases the wrong thing.
+  //
+  // So: no static TURN is shipped. A relay comes from ONE of
+  //   apex26.turnApi — a credentials URL (Metered-style: returns
+  //     {iceServers|iceServers:[…]} or a bare array), fetched by prefetchIce()
+  //     when the lobby opens and merged here once it arrives. The free tier is
+  //     50 GB/month on an account the game's OWNER controls — the model the
+  //     operator actually offers, rather than freeloading on credentials they
+  //     retired.
+  //   apex26.turn — a single static server you run yourself.
+  //
+  // Since build 972 there are also two free no-account relays, appended LAST
+  // so anything you configured still wins — but OFF unless opted into, and
+  // the block below says why that is not timidity.
+  let fetchedIce = null;
+  let fetchingIce = null;
+  function prefetchIce() {
+    const jobs = [derivedRelays()];
+    let url = null;
+    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) {}
+    if (url && !fetchedIce && !fetchingIce) {
+      fetchingIce = fetch(url).then((r) => r.json()).then((body) => {
+        const list = Array.isArray(body) ? body : (body && (body.iceServers || body.ice_servers)) || null;
+        if (Array.isArray(list) && list.length) fetchedIce = list;
+        return fetchedIce;
+      }).catch(() => null).finally(() => { fetchingIce = null; });
+    }
+    if (fetchingIce) jobs.push(fetchingIce);
+    // Failure-silent by design: no relay is a NORMAL state, and a lobby that
+    // refused to open because a free third party was down would be worse than
+    // one that connects for the ~80% of pairs needing no relay at all.
+    return Promise.all(jobs).then(() => null, () => null);
+  }
+
+  // THE FREE RELAYS, and the honest state of the evidence.
+  //
+  // Open Relay publishes the shared secret for its static-auth host
+  // (`openrelayprojectsecret`) as the config for Nextcloud Talk and Matrix,
+  // which is the standard coturn REST scheme: the CLIENT derives
+  //   username   = <unix expiry>
+  //   credential = base64(HMAC-SHA1(secret, username))
+  // No account, and the credential EXPIRES, which is strictly better than the
+  // hardcoded password this game shipped until 971 and which its operator had
+  // by then retired.
+  //
+  // BOTH ARE OFF BY DEFAULT, BECAUSE BOTH WERE MEASURED DEAD.
+  //
+  // This is not a guess. Trickle-ICE gathers were run from two independent
+  // internet vantage points (public IPs 18.145.255.226 and 54.151.122.159),
+  // each carrying a CONTROL — Google STUN — alongside both relays. The
+  // control produced an srflx candidate both times, so DNS and UDP demonstrably
+  // worked; both relays produced ZERO relay candidates both times, with
+  // "701 host lookup" against each. A control is what makes that a fact about
+  // the relays rather than a fact about the test box, and it is exactly what
+  // the first, controlless run lacked. Independently, streamlit-webrtc's docs
+  // describe Open Relay as "often down".
+  //
+  // Build 971 removed a dead relay because it is WORSE than none: it looks
+  // like a relay exists and diagnosis chases the wrong thing. Shipping two
+  // more measured-dead entries on by default would re-earn that exactly.
+  //
+  // So the code stays and the switch is the player's:
+  //
+  //     localStorage.setItem("apex26.freeTurn", "true")
+  //     await __apex.turnProbe()
+  //
+  // — which costs nothing while they are down, and is one line the day either
+  // operator comes back. turnProbe() is what answers the question; do not
+  // re-argue this list without running it.
+  const OPEN_RELAY_SECRET = "openrelayprojectsecret";
+  const OPEN_RELAY_HOSTS = [
+    "turn:staticauth.openrelay.metered.ca:80",
+    "turn:staticauth.openrelay.metered.ca:443",
+    "turn:staticauth.openrelay.metered.ca:443?transport=tcp",
   ];
+  // freestun needs no derivation, so it is usable synchronously and survives a
+  // browser with no WebCrypto.
+  const FREE_TURN = [
+    { urls: "turn:freestun.net:3478", username: "free", credential: "free" },
+  ];
+
+  function freeTurnOn() {
+    try { return localStorage.getItem("apex26.freeTurn") === "true"; }
+    catch (e) { return false; }
+  }
+
+  let derived = null;
+  let deriving = null;
+  function derivedRelays() {
+    if (!freeTurnOn()) return Promise.resolve(null);
+    if (derived) return Promise.resolve(derived);
+    if (deriving) return deriving;
+    const sub = (typeof crypto !== "undefined" && crypto.subtle) ? crypto.subtle : null;
+    if (!sub) return Promise.resolve(null);      // no WebCrypto: freestun only
+    // A day out. Long enough that a lobby left open over lunch still works,
+    // short enough that a code scraped out of the bundle is not a standing
+    // grant.
+    const username = String(Math.floor(Date.now() / 1000) + 86400);
+    const enc = (s) => new TextEncoder().encode(s);
+    deriving = sub.importKey("raw", enc(OPEN_RELAY_SECRET), { name: "HMAC", hash: "SHA-1" }, false, ["sign"])
+      .then((key) => sub.sign("HMAC", key, enc(username)))
+      .then((sig) => {
+        const bytes = new Uint8Array(sig);
+        let bin = "";
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        const credential = btoa(bin);
+        derived = OPEN_RELAY_HOSTS.map((urls) => ({ urls, username, credential }));
+        return derived;
+      })
+      .catch(() => null)
+      .then((r) => { deriving = null; return r; });
+    return deriving;
+  }
+
+  // RELAY ONLY, for testing the path that NAT'd and mobile players actually
+  // depend on. On one machine — and on most home networks — a direct host pair
+  // forms instantly and TURN is never touched, so the relay leg is exactly the
+  // one a developer never exercises and a player on carrier-grade NAT always
+  // does. Forcing it is the only way to find out it is broken before somebody's
+  // phone does.
+  //
+  // localStorage apex26.iceRelayOnly = "true". Read HERE rather than passed
+  // down from the lobby, for the same reason turnFromStore() is: the real
+  // transport and any harness then behave identically.
+  function relayOnly() {
+    try { return localStorage.getItem("apex26.iceRelayOnly") === "true"; }
+    catch (e) { return false; }
+  }
 
   // Your own relay still wins when you have one: localStorage apex26.turn =
   // {"urls":"turn:host:3478","username":"u","credential":"p"}. Read here rather
@@ -215,13 +333,30 @@ const NetTransport = (function () {
     if (opts.iceServers) return opts.iceServers;
     const list = [{ urls: STUN }];
     const mine = turnFromStore();
-    // A relay you control beats a free public one, so it goes first and the
-    // public one stays as the fallback behind it — ICE will prefer whichever
-    // actually yields a working pair regardless, so listing both costs nothing
-    // but a couple of extra candidates.
+    // A relay you configured yourself goes first; credential-fetched servers
+    // follow. ICE prefers whichever actually yields a working pair, so listing
+    // both costs nothing but a couple of extra candidates.
     if (mine) list.push(mine);
-    list.push(...OPEN_RELAY);
+    if (fetchedIce) list.push(...fetchedIce);
+    // The free relays go LAST when opted in, and only ever add candidates.
+    // ICE tries every pair it can form and keeps the best, so ordering by
+    // INTENT — yours, then your operator's, then whatever is free — means a
+    // free entry can never displace one that works.
+    if (freeTurnOn()) {
+      if (derived) list.push(...derived);
+      list.push(...FREE_TURN);
+    }
     return list;
+  }
+
+  // Has a relay of any kind made it into the list? The lobby's failure copy
+  // needs to say "no relay is configured" or "a relay did not answer", and
+  // those are opposite instructions to give a player.
+  function hasRelay() {
+    return iceServers({}).some((e) => {
+      const urls = Array.isArray(e.urls) ? e.urls : [e.urls];
+      return urls.some((u) => /^turns?:/i.test(u));
+    });
   }
 
   function rtc(opts) {
@@ -235,7 +370,13 @@ const NetTransport = (function () {
     // escape into a click handler, where it would kill the UI silently.
     let pc;
     try {
-      pc = new PC({ iceServers: iceServers(opts) });
+      const cfg = { iceServers: iceServers(opts) };
+      // "relay" makes ICE discard host and srflx candidates, so the ONLY way a
+      // pair can form is through TURN. If the relay path is broken, it fails
+      // here rather than on a stranger's phone.
+      const policy = opts.iceTransportPolicy || (relayOnly() ? "relay" : null);
+      if (policy) cfg.iceTransportPolicy = policy;
+      pc = new PC(cfg);
     } catch (e) { return null; }
     const chans = {};
     let inbox = [];
@@ -317,7 +458,12 @@ const NetTransport = (function () {
       ice: pc.iceConnectionState,
       gathering: pc.iceGatheringState,
       candidates: Object.assign({}, found),
-      turn: !!turnFromStore(),
+      // "was a relay even offered to ICE", not "is one of mine configured" —
+      // the lobby's failure copy branches on it to choose between two opposite
+      // instructions, and a player who opted into the free relays, or whose
+      // apex26.turnApi answered, has one without it being theirs.
+      turn: hasRelay(),
+      ownTurn: !!turnFromStore(),
     });
     return ep;
   }
@@ -328,9 +474,9 @@ const NetTransport = (function () {
 
   return {
     STATE, EVENT, loopback, rtc, supported,
-    // Exported so the ICE configuration is testable: whether a relay ships at
-    // all decides whether the hardest ~10-25% of networks can play at all, and
-    // that is not something to discover from a user's screenshot.
-    STUN, OPEN_RELAY,
+    // Exported so the ICE configuration is testable: whether a relay is
+    // reachable decides whether the hardest ~10-25% of networks can play at
+    // all, and that is not something to discover from a user's screenshot.
+    STUN, prefetchIce, iceServers, hasRelay,
   };
 })();

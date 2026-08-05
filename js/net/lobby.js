@@ -253,10 +253,21 @@ const NetLobby = (function () {
           + " after a minute or so. Start a new invite and paste the answer back"
           + " more quickly.";
       }
+      // TWO DIFFERENT PROBLEMS, and they take opposite instructions. With no
+      // relay in the config there is nothing to diagnose and the fix is the
+      // same network. With one configured, the relay itself is the suspect —
+      // and telling that player to change Wi-Fi sends them round a loop that
+      // cannot succeed, which is what the old single sentence did.
       return "Could not connect after " + secs + "s" + last + "."
         + " Both sides found an address but the direct link was blocked, which"
-        + " usually means one of the networks needs a relay to get through."
-        + (st && st.turn ? "" : " Racing over the same Wi-Fi is the reliable fix.");
+        + " means one of these networks needs a relay to get through."
+        + (st && st.turn
+          ? " A relay was offered and did not carry it. Run __apex.turnProbe()"
+            + " in the console to see which relay answered — if none did, set"
+            + " apex26.turnApi to a credentials URL of your own. Racing over"
+            + " the same Wi-Fi works meanwhile."
+          : " No relay is configured at all. Race over the same Wi-Fi, or set"
+            + " apex26.turnApi to a credentials URL.");
     }
 
     // Poll for the DataChannels opening. There is no event that means "the
@@ -265,7 +276,20 @@ const NetLobby = (function () {
     function waitForOpen() {
       clearInterval(pollTimer);
       const started = Date.now();
-      say("Connecting…");
+      // A TEST FLAG MUST ANNOUNCE ITSELF. iceRelayOnly forbids direct
+      // connections so the TURN leg can be exercised — but it PERSISTS, and
+      // with no reachable TURN server it makes every connection sit at
+      // "Connecting…" forever with nothing on screen saying why. It did
+      // exactly that to a real person who had set it on an earlier
+      // instruction and had no reason to remember it.
+      let relayNote = "";
+      try {
+        if (localStorage.getItem("apex26.iceRelayOnly") === "true") {
+          relayNote = " [RELAY-ONLY TEST MODE is on — run "
+            + "localStorage.removeItem('apex26.iceRelayOnly') and reload unless you are testing TURN]";
+        }
+      } catch (e) {}
+      say("Connecting…" + relayNote);
       // Capture the transport and id being watched: by the time this fires the
       // host may have moved on to inviting somebody else, and polling "the
       // current pending one" would then connect the wrong session.
@@ -284,7 +308,7 @@ const NetLobby = (function () {
         // didn't work".
         const st = watched.stats ? watched.stats() : null;
         const secs = Math.round((Date.now() - started) / 1000);
-        if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")");
+        if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")" + relayNote);
 
         // A definite `failed` is final — ICE has exhausted every pair. Waiting
         // out the rest of the timer after that just makes the player watch a
@@ -317,6 +341,11 @@ const NetLobby = (function () {
       if (transport === t) { transport = null; pendingId = null; }
       const made = NetSession.create({ transport: t });
       sessions.set(id, made);
+      // This guest is IN, so the offer it used is spent — an SDP offer belongs
+      // to one connection. Put a fresh one on the table for whoever is next.
+      // Safe here and not earlier: t has moved into `transports` and pendingId
+      // is cleared just above, so minting cannot close a live handshake.
+      if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) {} }
       // The first connection, not the most recent — `session` means "the one
       // most callers mean", and on a guest it is the only one there is.
       session = [...sessions.values()][0];
@@ -1071,26 +1100,60 @@ const NetLobby = (function () {
       // offer belongs to one RTCPeerConnection, so the invite minted above is
       // spent on whoever comes first and the rest are minted on demand.
       if (!NetRendezvous.usingPrivateRelay()) {
-        let first = invite.code;
+        const answersSeen = new Set();
         const sub = await NetRendezvous.hostRoom({
           code, token: codeWait,
+          // The offer already prepared above goes out IMMEDIATELY, exactly as
+          // the two-party path did. Waiting for a peer-join event before
+          // saying anything is what broke this.
+          mine: invite.code,
+          // The room stays open, so a failure after it opens has nowhere else
+          // to go. Without this a host whose relays were all unreachable was
+          // told NOTHING and watched a spinner — the console knew, the player
+          // did not.
+          onFail: (r) => {
+            if (!r || r.error === "cancelled" || r.error === "stopped") return;
+            codeRoom = null;
+            say(r.message || "The room service went away. Use the invite link or QR instead.", true);
+          },
           onTick: () => say(sessions.size
             ? "In the room: " + (sessions.size + 1) + ". Still open (code " + code + ")"
             : "Waiting for them to join… (code " + code + ")"),
           // The first arrival gets the invite already prepared; everyone after
           // gets a fresh transport and a fresh offer.
+          // Only called to REPLACE an offer somebody has taken, never per
+          // arrival — minting is a whole RTCPeerConnection plus an ICE gather,
+          // and doing that on every join is what got us rate-limited.
           mintOffer: async () => {
-            if (first) { const c = first; first = null; return c; }
-            if (sessions.size >= MAX_GUESTS) return null;      // room full: ignore them
+            if (sessions.size >= MAX_GUESTS) return null;      // room full
             if (!newTransport("host")) return null;
             const more = await NetHandshake.createInvite(transport, localProfile());
             return more.ok ? more.code : null;
           },
           onJoiner: async (_who, answer) => {
+            // Each answer ONCE, and only while a handshake is waiting for one.
+            // A repeat (relay quirk, a guest retrying) or an answer landing
+            // after rotation would otherwise be applied to whatever transport
+            // is pending NOW — a fresh stable PC, which throws. Seen in a real
+            // console as an uncaught InvalidStateError.
+            if (answersSeen.has(answer)) return;
+            answersSeen.add(answer);
+            if (!transport || !pendingId) return;   // nothing awaiting an answer
             const acc = await NetHandshake.acceptAnswer(transport, answer);
-            if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return; }
+            if (!acc.ok) {
+              if (acc.error !== "already_answered") say(acc.message || "That answer could not be read.", true);
+              return;
+            }
             if (acc.peer && pendingId) _peers.set(pendingId, acc.peer);
             waitForOpen();
+            // NOT rotating here. Minting the next offer means newTransport(),
+            // which drops the PENDING one — and the pending one is this guest's
+            // connection, still gathering ICE. Doing it here killed the
+            // handshake a moment after completing it: the answer arrived, was
+            // accepted, and then the transport it belonged to was closed.
+            // The room rotates once the guest is actually connected, in
+            // onConnected() below, by which point this transport has moved into
+            // `transports` and pendingId is clear.
           },
         });
         if (!sub.ok) { say(sub.message || "Could not open that room.", true); return sub; }
@@ -1165,6 +1228,11 @@ const NetLobby = (function () {
 
     // ---- open / close -----------------------------------------------------
     function open() {
+      // Start fetching relay credentials NOW if a credentials URL is
+      // configured — connecting comes seconds later, and the fetch usually
+      // wins that race, so the first connection attempt already carries relay
+      // candidates. Fire-and-forget: no relay configured is a normal state.
+      try { if (NetTransport.prefetchIce) NetTransport.prefetchIce(); } catch (e) {}
       const e = els();
       if (!e.screen) return false;
       _peers.clear(); _ready.clear();

@@ -84,7 +84,24 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   thing that can test the multi-peer path: the loopback transport has no SDP
   and the lobby specs use a fake one, so `test:net` cannot see it. Checks that
   a second invite does not drop the first guest, and that guest B can see
-  guest C — which is only possible via the host relay. Run by hand.
+  guest C — which is only possible via the host relay. Run by hand
+  (`npm run rtc:e2e-3p`, or `rtc:e2e-3p-relay` to force every pair through
+  TURN — the leg a developer never exercises and a phone behind
+  carrier-grade NAT always does).
+- `nostr-local.cjs` — a Nostr relay on localhost, so the ROOM CODE path can be
+  tested without depending on somebody else's server. The smallest relay
+  Trystero needs (ephemeral events, `since: now()`, live fan-out only). Needs
+  `npm i --no-save ws`.
+- `rtc-e2e-room.mjs` — drives the ROOM CODE path end to end against that relay
+  (`--peers=3` for three). The only test of `exchange()` there is: the loopback
+  has no SDP and the lobby specs use a fake transport, so four regressions
+  shipped through that gap before this existed. Against a relay we run, a
+  failure is ours by construction rather than somebody's server having a bad
+  day. Needs `tools/nostr-local.cjs` running.
+- `turn-local.cjs` — a TURN server on localhost, which is what makes that relay
+  mode testable at all: on one machine ICE forms a direct pair instantly and
+  TURN is never touched. Needs `npm i --no-save node-turn` — a test fixture,
+  deliberately not a dependency. See its header for a known, unattributed drop.
   Covers the one path nothing else can: the loopback transport has no SDP, and
   the lobby spec uses a fake transport because a real `RTCPeerConnection` never
   finishes ICE gathering in a sandboxed CI browser. Deliberately outside every

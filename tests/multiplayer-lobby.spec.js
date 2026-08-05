@@ -32,6 +32,35 @@ async function menu(page, fakeTransport = true) {
 test.describe("VS FRIEND lobby", () => {
   test.use({ viewport: LANDSCAPE });
 
+  // THE REAL TRANSPORT CAN BE BUILT AT ALL.
+  //
+  // Every other test in this file swaps in a fake transport on purpose — a real
+  // RTCPeerConnection never finishes ICE in a sandboxed browser, so a spec that
+  // builds one HANGS rather than fails. The cost of that is a blind spot
+  // exactly where it hurts: rtc() returns null on ANY construction error and
+  // the lobby then reports "this browser cannot do WebRTC", so breaking it
+  // removes multiplayer entirely while every spec in this file still passes.
+  //
+  // Not hypothetical. A referenced-but-undefined helper inside that try turned
+  // every rtc() call into null, and nothing in the suite noticed. CONSTRUCTING
+  // one is safe and fast — it is only WAITING for ICE that hangs — so this
+  // builds one and closes it immediately.
+  test("the REAL transport can be constructed, not just the fake one", async ({ page }) => {
+    await menu(page);
+    const out = await page.evaluate(() => {
+      const t = NetTransport.rtc({ role: "host", name: "probe" });
+      const ok = !!(t && t.pc);
+      const policy = ok ? (t.pc.getConfiguration().iceTransportPolicy || "all") : null;
+      if (t) { try { t.close(); } catch (e) {} }
+      return { supported: NetTransport.supported(), ok, policy };
+    });
+    expect(out.supported).toBe(true);
+    expect(out.ok, "rtc() returned null — the lobby would say WebRTC is unavailable").toBe(true);
+    // The default must stay "all". Relay-only is a deliberate opt-in for
+    // exercising the TURN leg; shipping it on would break every direct pair.
+    expect(out.policy).toBe("all");
+  });
+
   test("the menu has a way in, and it opens the lobby", async ({ page }) => {
     await menu(page);
     await expect(page.locator("#vsfriend")).toBeHidden();
