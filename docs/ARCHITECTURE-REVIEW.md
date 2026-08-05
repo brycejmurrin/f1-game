@@ -80,14 +80,39 @@ not.** §7 is the evidence.
 
 ### The gap under all of it
 
-**There is no CI gate.** `.github/workflows/` holds two workflows. `pages.yml`
-fires on a push to the deploy branch and deploys — it runs no tests. Nothing else
-runs tests either. 101 Playwright specs and 37 `node --test` suites are gated by
-whether a human remembered.
+**There was no CI gate** when this section was written, and that is why two of
+the repo's own guards were found **red on arrival** during this review (§7, B2).
+Not stale by months — red, in the working tree, with the test file sitting right
+there. The suite was good; nothing ran it.
 
-This is why two of the repo's own guards were found **red on arrival** during
-this review (§7, B2). Not stale by months — red, in the working tree, with the
-test file sitting right there. The suite is good. Nothing runs it.
+**`ci.yml` fixed that in 2026-08** (three jobs — guards / sweeps / smoke — with
+`pages.yml` gating its deploy on them). Leaving the original paragraph standing
+here misled a later reader into repeating "pages.yml runs no tests, full stop"
+against a repository where it demonstrably does, so what follows is the state
+now, and the sharper lesson the gate then taught.
+
+**A gate that cannot finish reports `cancelled`, and `cancelled` reads as
+benign.** For several days every deploy run showed 0 failures and still did not
+deploy, because two of the three jobs hit `timeout-minutes` and GitHub renders a
+timed-out job as cancelled, not failed. The run-level summary looked like
+scheduling noise. Both causes were real and neither was flaky:
+
+- **the heap ceiling is a property of the machine, not of the code.** V8 sizes
+  default old-space from available memory, so the runner allowed ~4 GB where the
+  dev box allowed 8. `road-under-floor.test.mjs` peaks above 4 GB rebuilding 40
+  circuits in one process — green locally, SIGABRT in CI, forever, with nothing
+  in any diff to point at. Pinned with `NODE_OPTIONS` on the job so both sides
+  agree on the number instead of inheriting a different one.
+- **the smoke job was budgeted by its name rather than its contents.** It ran
+  `test:tiny` (71 specs; ~53 min at CI's `workers: 2` and a measured 90-115 s
+  per SwiftShader test) under a 20-minute cap and a "~3 min" estimate in the
+  workflow's own header. It had never once completed.
+
+The generalisation is the one §2 keeps arriving at from other directions: **an
+invariant that is asserted holds, and an invariant that is merely estimated
+drifts.** "~3 min" was a comment. Nothing compared it to the job's timeout, and
+nothing ever will — so the estimate rotted the moment the step's command changed
+under it, and the only symptom was a colour on a page nobody reads as red.
 
 ---
 
