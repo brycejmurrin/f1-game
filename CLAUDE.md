@@ -50,6 +50,12 @@ one looks exactly like "the tests are slow".
 the code. Re-run it serially before believing anything about it, and never
 report it as a pass or a failure.
 
+**Start the run, ARM A WATCHER, and go do the next piece of work.** Waiting is
+the mistake — polling in a loop, sleeping, or narrating progress are all the
+same mistake wearing different clothes. Redirect the run to a log file
+(`> artifacts/logs/x.log 2>&1`, never `| tail`), set a watcher on that file for
+the finish line, and immediately start the next edit. Come back when it fires.
+
 **2. Run the groups the change needs, not all of them.** The whole suite is ~40
 minutes of SwiftShader, and which groups a change needs is mechanical — so ask:
 
@@ -418,6 +424,11 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   wheel/trackpad gesture that lands outside a pane
                                   into the open menu's nearest pane, and moves focus
                                   with the arrow keys / Home / End / PageUp / PageDown
+  aerozones.js   AeroZones      ACTIVE AERO activation zones — pure circuit
+                                  GEOMETRY (curvature in, arc-metre spans out).
+                                  Knows nothing about a car: xStraightAhead()
+                                  and aeroDfMult() stay in game.js because they
+                                  read car state
   photomode.js   Photomode      photo mode
   tuner.js       TunerPanel     LIGHTING TUNER pause-menu panel
   cam-tuner.js   CamTunerPanel  CAMERA TUNER pause-menu panel
@@ -427,7 +438,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (102) + tests/*.test.mjs unit suites (38)
+tests/*.spec.js                 Playwright specs (103) + tests/*.test.mjs unit suites (38)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
                  ARCHITECTURE-REVIEW.md is the standing assessment + defect
                    register: what the no-build-step bet costs, why asserted
@@ -700,7 +711,7 @@ is the same surface from a shell, with the staging done correctly.
 
 ## Writing tests
 
-102 Playwright specs + 38 `node --test` unit suites. **How to RUN them is under
+103 Playwright specs + 38 `node --test` unit suites. **How to RUN them is under
 Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
 to do when writing one.
 
