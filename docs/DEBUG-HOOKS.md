@@ -2013,6 +2013,7 @@ a question a few hundred can ("did that change carry more speed through T4?").
 | `policy` | — | `(world) => {steer,throttle,brake}` — closed-loop |
 | `policyHz` | `10` | how often the policy is consulted |
 | `samples` | `12` | waypoints in the returned trace (2–60) |
+| `ids` | — | also digest these cars — ids/codes, or `"all"` |
 
 ```js
 __apex.rollout({ seconds: 6, input: { steer: 0, throttle: true } })
@@ -2022,6 +2023,39 @@ __apex.rollout({ seconds: 6, input: { steer: 0, throttle: true } })
 //   cornerMinSpeedKph:[{turn,minSpeedKph}], terminal:{done,reason,atS},
 //   samples:[{t,frac,speedKph,lateralM,gear}] }
 ```
+
+#### `ids` — the same digest for the AI
+
+`update(dt)` advances the **whole field**, so the AI really races through a
+rollout; without `ids` all of it is thrown away and only the player is reported.
+`ids` names cars the way `field()` does — the numeric id or the driver code —
+and accepts `"car:4"`, `"player"` and `"all"` too:
+
+```js
+__apex.rollout({ seconds: 20, ids: ["VER", 3, "player"] }).cars
+// { "3": { id, code, team, isPlayer, …the identical digest…, lapTimesS:[…] }, … }
+```
+
+The addition is **purely additive**: with no `ids` the payload is byte-for-byte
+what it always was, and with `ids` a `cars` map (keyed by car id) sits between
+`samples` and `note`. Each entry is the same digest plus `lapTimesS` — every lap
+*completed* during the interval, which is what a pace bench needs and which
+`lastLapS` cannot give you. The first crossing out of the grid advances
+`lapsCompleted` with no lap time: the game times a lap from one crossing to the
+next, so that segment is not a lap.
+
+Two fields are **human-only by construction** and come back as gaps rather than
+zeros for an AI car — the gearbox runs under `if (c.human)` in `updateCar()`, and
+so do wrong-way detection and auto-rescue:
+
+| field | AI car |
+|---|---|
+| `samples[].gear` | `null` (never `1`, which is the un-computed value) |
+| `terminal.reason` | only `retired`/`finished`; `wrong_way`/`rescued` can never fire |
+
+Everything else is read off `(s, x, prog, speed, lap, contactT)` — AI cars carry
+no world position at all. Tracking N cars adds only reads, so the seeded
+`simRnd()` stream is untouched and a rollout with `ids` replays exactly.
 
 `policy` implements the loop the real-time agent literature converges on: an LLM
 cannot decide at 60 Hz, so the policy is consulted at `policyHz` while physics
@@ -2083,6 +2117,7 @@ node tools/agent.mjs vegas  model   --detail sections
 node tools/agent.mjs monza  car     --team ferrari --detail parts
 node tools/agent.mjs vegas  survey  --stations 32 --reach 80
 node tools/agent.mjs monza  rollout --seconds 6 --steer 0.1 --throttle
+node tools/agent.mjs monza  rollout --seconds 30 --ids all   # the AI too
 ```
 
 `frame` prints the grid itself rather than a JSON string array — the raster is

@@ -2512,9 +2512,12 @@ const AgentView = (function () {
         act: {
           "rollout({seconds,dt,input,policy,policyHz,samples,ids})":
             "drive an interval, return a digest instead of every frame; "
-            + 'ids:["VER",3]|"all" adds cars{} — the same digest per AI car',
+            + "ids adds one per AI car",
           "terminal()": "{done, reason} — retired|finished|wrong_way|rescued|null",
-          "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once",
+          // Terse on purpose: the manifest is asserted to stay under 5.5 KB, and
+          // listing objective()'s own contents here spends that budget twice.
+          "objective()": "WHAT AM I TRYING TO DO — win condition, trade-offs, "
+            + "hard constraints. Static; read once",
           "agentHelp()": "this manifest",
         },
         // What the numbers MEAN, in terms of what to do about them. The single

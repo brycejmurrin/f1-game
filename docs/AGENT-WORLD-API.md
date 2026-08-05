@@ -111,7 +111,8 @@ adding opponent *orientation* measurably improved overtaking.
 `cars()`/`carAt()`/`fieldState()` return Frenet `(s, x, prog)` only.
 `carOrbit()` has to reconstruct world XZ itself (`js/game/apex.js:558`)
 because AI cars don't carry `px/pz`. Only the player has world coordinates
-(`wsInfo()`).
+(`wsInfo()`). This still holds, and it constrains anything reported per car:
+`rollout({ids})` (§5l) computes every metric from `(s, x)` for that reason.
 
 ### 2.6 Failure returns carry no signal
 
@@ -700,6 +701,60 @@ But *fixed dynamics* rules improve then **degrade** an agent (Cogito Ergo Ludo
 ablation), and standing context files measurably fail to help while costing
 >20% more tokens (ETH Zurich, arXiv 2602.11988). So `objective()` says what the
 game is and refuses to say how the car behaves.
+
+## 5l. The rollout digest, pointed at more than one car
+
+`rollout()` was already a deterministic, seeded, headless driving loop returning
+a digest — and it calls `update(dt)`, which advances the **whole field**. The AI
+genuinely races through a rollout. Only the *reporting* was pointed at one car:
+every metric came off `G.player`. So the machinery a pace bench needs — corner
+minimum speed, off-track events, barrier clearance, laps, lap times — was
+written, ran on all 22 cars' worth of simulation, and threw 21 of them away.
+
+`rollout({ids})` names the others. Four decisions worth recording:
+
+**The shape is additive, not a restructuring.** `cars` is a map keyed by car id,
+sitting between `samples` and `note`; the flat player fields stay exactly where
+they are. Moving the player into `cars["<id>"]` would have been tidier and would
+have broken every caller for nothing — the player digest is what a *driving*
+agent reads, and it should not have to look itself up. With no `ids` the payload
+is unchanged down to key order, which is asserted rather than asserted-by-eye
+(`tests/agent-view.spec.js`, "no ids leaves the payload exactly as it was").
+
+**Cars are named the way `field()` names them** — the numeric id it reports
+(`c.id`, falling back to the `cars[]` index, the same number `describe("car:4")`
+resolves) or the driver `code`. Both resolve as an `id`; `"car:4"`, `"player"`
+and `"all"` do too. The map is keyed by **id and not code** because a code is not
+unique by construction: the 22 shipped codes are, but a custom team's is typed by
+the player and can collide with a real driver's.
+
+**Nothing world-space is reported for an AI car.** §2.5 is still true — AI cars
+carry no `px`/`pz` — so every accumulator reads `(s, x, prog, speed, lap,
+contactT)`, which every car has. Two things are *human-only* by construction and
+are reported as gaps rather than as zeros:
+
+| field | why | what an AI reports |
+|---|---|---|
+| `samples[].gear` | the gearbox runs under `if (c.human)` in `updateCar()`, so an AI sits in gear 1 all race | `null` |
+| `terminal.reason` `wrong_way` / `rescued` | wrong-way detection and auto-rescue are both gated on `c.human`; AI cars get the separate lightweight rescue, which sets no flag | never — only `retired`/`finished` can fire |
+
+Reporting gear 1 for a car whose gearbox was never computed is the failure mode
+this is guarding against: plausible-looking garbage is worse than a gap.
+
+**Per-car entries carry one field the top level does not:** `lapTimesS`, every
+lap *completed* during the interval. `lastLapS` holds one; a pace bench wants the
+distribution (mean/min/stddev). It is not added to the frozen top-level digest,
+so the asymmetry is deliberate and one-directional. Note the game only *times* a
+lap from one start/finish crossing to the next, so the first crossing out of the
+grid advances `lapsCompleted` with no entry in `lapTimesS` — that segment is not
+a lap and is not invented as one.
+
+Determinism is the constraint that shaped the implementation: tracking N cars
+adds only reads (`Tracks.sample`, `Tracks.wallAt`, `cornerAt` — all pure), so the
+`simRnd()` stream the AI overtake decision draws from **every tick per AI car**
+(§5k) is untouched. `tests/agent-determinism.spec.js` pins it from both ends: the
+player half of the digest is byte-identical with and without `ids`, and the whole
+`cars` map replays byte-for-byte at the same seed.
 
 ## 6. Open questions
 
