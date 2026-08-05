@@ -248,7 +248,7 @@
    scale; these seven ladders (16 sites, `grep -n dh-lr-name\\|dh-dchip\\|
    dh-pill\\|dh-tbtn\\|dh-td-time\\|dh-gval\\|dh-live-title data.css`) are
    left for whenever the scale gains an intermediate step, not before. */
-.dh-lr-name { font-size: 16px; font-weight: 800; font-style: italic; color: #fff; }
+.dh-lr-name { font-size: var(--fs-5); font-weight: 800; font-style: italic; color: #fff; }
 .dh-lr-meta { font-size: var(--fs-2); color: #8a8a95; margin-top: 2px; }
 .dh-table { width: 100%; border-collapse: collapse; font-size: var(--fs-3); font-variant-numeric: tabular-nums; }
 .dh-table thead th {
@@ -267,7 +267,7 @@
 .dh-td-driver .dh-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .dh-td-team { color: #8a8a95; font-size: var(--fs-2); width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
 .dh-td-grid { width: 30px; text-align: center; color: #8a8a95; }
-.dh-td-time { width: 88px; text-align: right; color: #c4c4c8; font-size: 12px; }
+.dh-td-time { width: 88px; text-align: right; color: #c4c4c8; font-size: var(--fs-2); }
 .dh-td-pts  { width: 34px; text-align: right; font-weight: 700; }
 .dh-table tbody tr.dh-lr-p1 { color: #ffd700; background: rgba(255, 215, 0, 0.07); border-left: 3px solid #ffd700; }
 .dh-table tbody tr.dh-lr-p2 { color: #c0c0c0; background: rgba(192, 192, 192, 0.05); border-left: 3px solid #c0c0c0; }
@@ -275,7 +275,7 @@
 
 /* live */
 .dh-livecard, .dh-card.dh-livecard { display: flex; flex-direction: column; gap: 4px; }
-.dh-live-title { font-size: 17px; font-weight: 800; font-style: italic; color: #fff; }
+.dh-live-title { font-size: var(--fs-6); font-weight: 800; font-style: italic; color: #fff; }
 .dh-live-type { font-size: var(--fs-2); color: #e10600; letter-spacing: 0.08em; }
 .dh-live-sub { font-size: var(--fs-2); color: #8a8a95; margin-top: 2px; }
 .dh-live-team { color: #8a8a95; font-size: var(--fs-2); }
@@ -294,7 +294,7 @@
 /* ---------- telemetry tab ---------- */
 .dh-driverpick { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 10px; }
 .dh-dchip {
-  font-size: 12px; font-weight: 800;
+  font-size: var(--fs-2); font-weight: 800;
   padding: 5px 9px; border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -369,7 +369,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 /* ---------- lap-replay transport + gauge dashboard ---------- */
 .dh-transport { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; row-gap: 6px; }
 .dh-tbtn {
-  font-size: 12px; font-weight: 800; letter-spacing: 0.05em;
+  font-size: var(--fs-2); font-weight: 800; letter-spacing: 0.05em;
   padding: 7px 14px; border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -401,7 +401,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 }
 .dh-gcell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .dh-glabel { font-size: var(--fs-micro); letter-spacing: 0.1em; color: #8a8a95; white-space: nowrap; }
-.dh-gval { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; line-height: 1; }
+.dh-gval { font-size: var(--fs-6); font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; line-height: 1; }
 .dh-gspeed .dh-gval { color: #39d0ff; }
 .dh-gbar { height: 8px; border-radius: var(--r-sm); background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
 .dh-gfill { height: 100%; width: 0%; border-radius: var(--r-sm); transition: width 0.05s linear; }
@@ -474,7 +474,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 }
 .dh-pick-years { display: flex; gap: 4px; }
 .dh-pill {
-  font-size: 12px; font-weight: 700;
+  font-size: var(--fs-2); font-weight: 700;
   padding: 5px 11px; border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -543,7 +543,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 /* Last Race: tighten table cell padding on portrait */
 @media (max-width: 520px) {
   .dh-table td, .dh-table thead th { padding: 6px 4px; }
-  .dh-td-time { width: auto; font-size: 11px; }
+  .dh-td-time { width: auto; font-size: var(--fs-2); }
   .dh-td-pts { width: 28px; }
 }
 
@@ -615,14 +615,14 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
     gap: 6px 8px;
   }
   .dh-split-L .dh-pick-years { gap: 3px; }
-  .dh-split-L .dh-pill { padding: 3px 7px; font-size: 11px; }
+  .dh-split-L .dh-pill { padding: 3px 7px; font-size: var(--fs-2); }
   .dh-split-L .dh-pick-fields { flex-direction: column; gap: 5px; }
   .dh-split-L .dh-pick-label { font-size: var(--fs-micro); }
   .dh-split-L .dh-pick-select { padding: 4px 6px; font-size: var(--fs-2); }
 
   /* Compact session info card in left pane */
   .dh-split-L .dh-livecard { gap: 2px; }
-  .dh-split-L .dh-live-title { font-size: 13px; gap: 5px; }
+  .dh-split-L .dh-live-title { font-size: var(--fs-3); gap: 5px; }
   .dh-split-L .dh-live-sub { font-size: var(--fs-1); line-height: 1.3; }
   .dh-split-L .dh-live-type { font-size: var(--fs-micro); }
 
@@ -633,7 +633,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 
   /* Driver chips compact in left pane */
   .dh-split-L .dh-driverpick { gap: 3px; margin: 0; }
-  .dh-split-L .dh-dchip { padding: 3px 6px; font-size: 11px; border-left-width: 2px; }
+  .dh-split-L .dh-dchip { padding: 3px 6px; font-size: var(--fs-2); border-left-width: 2px; }
 
   /* Weather grid 2 columns in right pane */
   .dh-split-R .dh-wx-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
@@ -642,11 +642,11 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 
   /* Last race header compact (single line) */
   .dh-lr-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
-  .dh-lr-name { font-size: 15px; }
+  .dh-lr-name { font-size: var(--fs-5); }
 
   /* Gauge dashboard tighter */
   .dh-dash { gap: 6px; padding: 8px 10px; }
-  .dh-gval { font-size: 17px; }
+  .dh-gval { font-size: var(--fs-6); }
 }
 
 /* ── Telemetry player popup ───────────────────────────── */
@@ -699,7 +699,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 /* Compact one-line driver headers inside the popup — swatch · name ·
    sectors · lap time, so the chart gets the vertical space */
 .dh-tpopup .dh-livecard { gap: 2px; }
-.dh-tpopup .dh-live-title { font-size: 12px; }
+.dh-tpopup .dh-live-title { font-size: var(--fs-2); }
 .dh-tpopup .dh-live-sub { font-size: var(--fs-1); }
 .dh-thead { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .dh-thead .dh-swatch { width: 10px; height: 10px; }
@@ -774,10 +774,10 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   /* Compact transport in landscape popup */
   .dh-tpopup .dh-transport { gap: 5px; flex-wrap: nowrap; margin: 2px 0; }
   .dh-tpopup .dh-thint { display: none; }
-  .dh-tpopup .dh-tbtn { padding: 5px 11px; font-size: 11px; }
+  .dh-tpopup .dh-tbtn { padding: 5px 11px; font-size: var(--fs-2); }
   /* Compact gauges in side panel */
   .dh-telem-side .dh-dash { gap: 5px; padding: 8px 10px; }
-  .dh-telem-side .dh-gval { font-size: 15px; }
+  .dh-telem-side .dh-gval { font-size: var(--fs-5); }
   .dh-telem-side .dh-glabel { font-size: var(--fs-micro); }
   /* Track map fits the sidebar */
   .dh-telem-side .dh-canvas.dh-map { max-width: 176px; }
