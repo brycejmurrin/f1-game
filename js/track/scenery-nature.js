@@ -764,7 +764,8 @@ const SceneryNature = (function () {
       if (NIGHT && roofKind !== "none")
         addBox(out, vadd(a.c, a.u, roofY - 0.65), [8.5, 0.28, len - 1], [1.30, 1.12, 0.74], [a.r, a.u, a.t]);
     };
-    // Legacy 6-arg entry point — 248 call sites across js/circuits/*.js. With no
+    // Legacy 6-arg entry point — 33 remaining call sites across js/circuits/*.js
+    // (the rest migrated to grandstandEx, which is now the ~230 of them). With no
     // opts, grandstandEx reproduces the original geometry exactly.
     const grandstand = (s, side, gap, len, shell, crowd) =>
       grandstandEx(s, side, gap, len, shell, crowd, null);

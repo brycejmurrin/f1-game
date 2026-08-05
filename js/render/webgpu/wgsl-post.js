@@ -13,13 +13,14 @@
  *
  * NO build step: plain JS template strings, one global `WGSLPost`. No modules.
  *
- * GROUNDING (GLX reference programs this ports, js/render/glx.js):
- *   POST_VS       js/render/glx.js:1309   fullscreen-triangle vertex (VBO-less)
- *   BRIGHT_FS     js/render/glx.js:1319   bright-pass threshold
- *   DOWN_FS       js/render/glx.js:1354   13-tap Jimenez bloom downsample
- *   UP_FS         js/render/glx.js:1383   9-tap tent bloom upsample (additive)
- *   SSAO_FS       js/render/glx.js:1409   depth-based horizon-AO + contact shadow
- *   GODRAY_FS     js/render/glx.js:1484   volumetric shafts (world-march) — see NOTE
+ * GROUNDING (the GLX programs this ports — all of them in js/render/shaders/post.js;
+ * glx.js only destructures GLXShaders and holds no shader source):
+ *   POST_VS       js/render/shaders/post.js   fullscreen-triangle vertex (VBO-less)
+ *   BRIGHT_FS     js/render/shaders/post.js   bright-pass threshold
+ *   DOWN_FS       js/render/shaders/post.js   13-tap Jimenez bloom downsample
+ *   UP_FS         js/render/shaders/post.js   9-tap tent bloom upsample (additive)
+ *   SSAO_FS       js/render/shaders/post.js   depth-based horizon-AO + contact shadow
+ *   GODRAY_FS     js/render/shaders/post.js   volumetric shafts (world-march) — see NOTE
  *   COMPOSITE_FS  js/render/shaders/post.js COMPOSITE_FS   scene+bloom+ssao+godray, ACES, grade, flare, vignette
  *   FXAA_FS       js/render/shaders/post.js COMPOSITE_FS   Timothy Lottes compact FXAA
  *
@@ -120,7 +121,7 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
 
   // ════════════════════════════════════════════════════════════════════════
   // 1. BLOOM_DOWN — bright-pass threshold + 13-tap downsample.
-  //    Port of GLX BRIGHT_FS (js/render/glx.js:1319) folded into DOWN_FS (js/render/glx.js:1354).
+  //    Port of GLX BRIGHT_FS (js/render/shaders/post.js) folded into DOWN_FS (js/render/shaders/post.js).
   //    threshold > 0 -> bright-pass gate the result (first mip). threshold == 0
   //    -> pure downsample (subsequent mips).
   //
@@ -198,7 +199,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 }`;
 
   // ════════════════════════════════════════════════════════════════════════
-  // 2. BLOOM_UP — 9-tap tent upsample. Port of GLX UP_FS (js/render/glx.js:1383).
+  // 2. BLOOM_UP — 9-tap tent upsample. Port of GLX UP_FS (js/render/shaders/post.js).
   //    Additive combine is done by the PIPELINE BLEND STATE (src ONE, dst ONE),
   //    NOT in the shader — the shader just outputs the tent-filtered sample so
   //    every octave accumulates into the next-larger mip. wgx.js MUST configure
@@ -242,7 +243,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 
   // ════════════════════════════════════════════════════════════════════════
   // 3. SSAO — depth-based horizon AO + optional contact shadow.
-  //    Port of GLX SSAO_FS (js/render/glx.js:1409), reduced to 8 directional taps and
+  //    Port of GLX SSAO_FS (js/render/shaders/post.js), reduced to 8 directional taps and
   //    a 5-step contact march (mobile). Reconstructs view position from depth,
   //    a normal from depth derivatives (dpdx/dpdy), then counts neighbour taps
   //    rising above the tangent plane. Output: AO in .r (1 = unoccluded).

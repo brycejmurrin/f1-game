@@ -1,4 +1,4 @@
-/* Apex 26 — the window.__apex dev/test API for js/game.js (~110 methods:
+/* Apex 26 — the window.__apex dev/test API for js/game.js (~180 methods:
    staging, cameras, track geometry, telemetry, session control, lighting,
    input override, headless obs/act loop). Extracted verbatim from game.js;
    live closure state is reached through the ctx façade G (getters/setters

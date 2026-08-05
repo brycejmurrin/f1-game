@@ -15,7 +15,7 @@
  * Scope for Phase 0/1: only the leaves the *sky* shader needs (hash, value
  * noise/fbm, an ACES tonemap leaf, and the fullscreen-triangle vertex helper),
  * plus the ported SKY shader itself (`WGSLChunks.SKY` — the simplest GLX shader,
- * SKY_FS at js/render/glx.js:901). The heavy Lit/Composite shaders are explicitly NOT
+ * SKY_FS at js/render/shaders/sky.js). The heavy Lit/Composite shaders are explicitly NOT
  * ported here (Phase 2/4).
  *
  * WGSL vs GLSL notes captured while porting (see docs/archive/webgpu/WEBGPU-PHASE0-NOTES.md):
@@ -28,7 +28,7 @@
 "use strict";
 
 const WGSLChunks = (function () {
-  // ── hash: cheap value-hash leaves (mirror SKY_FS hash2/hash3, js/render/glx.js:916) ──
+  // ── hash: cheap value-hash leaves (mirror SKY_FS hash2/hash3, js/render/shaders/sky.js) ──
   const hash = `
 fn hash2(p_in: vec2<f32>) -> f32 {
   var p = fract(p_in * vec2<f32>(127.1, 311.7));
@@ -81,7 +81,7 @@ fn acesTonemap(x: vec3<f32>, a: f32, b: f32, c: f32, d: f32, e: f32) -> vec3<f32
 }`;
 
   // ── fullscreenTri: the empty-VBO fullscreen triangle (mirror SKY_VS/POST_VS
-  //    gl_VertexID trick, js/render/glx.js:894). draw(3) with no vertex buffers; WGSL
+  //    gl_VertexID trick, js/render/shaders/sky.js / post.js). draw(3) with no vertex buffers; WGSL
   //    generates the NDC positions from @builtin(vertex_index).
   const fullscreenTri = `
 fn fsTriNDC(vi: u32) -> vec2<f32> {
@@ -92,7 +92,7 @@ fn fsTriNDC(vi: u32) -> vec2<f32> {
 }`;
 
   // ── brdf: the Cook-Torrance GGX trio shared by the Lit sun + point lights.
-  //    Verbatim port of GLX's D_GGX / V_SmithGGX / F_Schlick (js/render/glx.js:107-125),
+  //    Verbatim port of GLX's D_GGX / V_SmithGGX / F_Schlick (js/render/shaders/lit.js),
   //    the single-source math leaf the migration plan names (§2a). Any future
   //    edit to the microfacet model happens here, mirrored into the GLSL leaf.
   const brdf = `
@@ -116,7 +116,7 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
 }`;
 
   // ── LIT: a FAITHFUL-BUT-REDUCED WGSL port of GLX's Lit program
-  //    (LIT_VS js/render/glx.js:9, LIT_FS js/render/glx.js:39-896). It renders the BASE PBR
+  //    (LIT_VS js/render/shaders/lit.js, LIT_FS js/render/shaders/lit.js). It renders the BASE PBR
   //    that carries the scene read: hemisphere ambient + Lambert sun diffuse +
   //    Cook-Torrance sun specular (soft-clipped), the 32 aimed point lights
   //    (windowed 1/d² falloff + spot cone + diffuse + GGX spec), emissive HDR
@@ -127,16 +127,16 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //    scalars — each gated on its scalar so a 0 value is a no-op and the existing
   //    Phase-2/3 looks are byte-for-byte unchanged. Faithful-but-reduced ports:
   //      * [Block 1a/1b] ground/terrain detail micro-normal + procedural albedo
-  //        grain  (detail = mat1.y ; GLX LIT_FS js/render/glx.js:405-422, 473-507)
+  //        grain  (detail = mat1.y ; GLX LIT_FS js/render/shaders/lit.js, 473-507)
   //      * [Block 2]    clearcoat 2nd low-roughness spec lobe (sun + lamp glints)
-  //        (clearcoat = mat1.z ; GLX js/render/glx.js:657-680, 638-646)
+  //        (clearcoat = mat1.z ; GLX js/render/shaders/lit.js, 638-646)
   //      * [Block 3a]   car-paint orange-peel micro-normal
-  //        (carPaint = mat1.w ; GLX js/render/glx.js:432-452)
+  //        (carPaint = mat1.w ; GLX js/render/shaders/lit.js)
   //      * [Block 4]    metallic-flake sparkle (view-dependent glint, paint-only)
-  //        (sparkle = mat2.x, gated on carPaint ; GLX js/render/glx.js:732-756)
+  //        (sparkle = mat2.x, gated on carPaint ; GLX js/render/shaders/lit.js)
   //      * [Block 5/5b] wet-road response: lower roughness + grazing Fresnel sheen
-  //        (wetness = params1.z ; GLX js/render/glx.js:519-546, 761-801)
-  //      * [Block 6]    lamp-fog glow + low ground-mist  (GLX js/render/glx.js:864-891)
+  //        (wetness = params1.z ; GLX js/render/shaders/lit.js, 761-801)
+  //      * [Block 6]    lamp-fog glow + low ground-mist  (GLX js/render/shaders/lit.js)
   //    PHASE 4 (deferred features, this file): PCSS-style shadow penumbra +
   //    cool shadow tint (params4.x/.y consumed in the shadow block);
   //      * [Block 7]    env-cube car-paint reflection (carReflect = params4.z ;
@@ -274,7 +274,7 @@ fn vs_main(
 fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f32> {
   var N = normalize(in.nrm);
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
-  // wheel/body draws) — GLX LIT_FS gl_FrontFacing branch (js/render/glx.js:404).
+  // wheel/body draws) — GLX LIT_FS gl_FrontFacing branch (js/render/shaders/lit.js).
   if (!ff) { N = -N; }
 
   // ── Deferred material scalars (Phase 4) — all read from the already-plumbed
@@ -308,7 +308,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   }
   let envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;
 
-  // [Block 1a] Ground/terrain detail MICRO-NORMAL (mirrors GLX LIT_FS js/render/glx.js:405-422).
+  // [Block 1a] Ground/terrain detail MICRO-NORMAL (mirrors GLX LIT_FS js/render/shaders/lit.js).
   // Two-scale value-noise gradient perturbs N so procedurally-textured ground gets
   // real bumps (sun/lamp glints break up over the surface instead of one polished
   // sheet). Distance-faded (would alias to shimmer) and wetness-faded (the water
@@ -326,7 +326,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   }
   // Geometric normal snapshot for the smooth clearcoat lobe + flake tangent frame:
   // orange-peel/flake live UNDER the lacquer, so they must not roughen the mirror
-  // shell (GLX LIT_FS js/render/glx.js:431).
+  // shell (GLX LIT_FS js/render/shaders/lit.js).
   let Ngeo = N;
   // Screen-space derivatives of that geometric normal, for the clearcoat lobe's
   // specular-AA widening in [Block 2] far below. They are taken HERE, at uniform
@@ -338,7 +338,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // let-binding and never reassigned, so the value is what it was there.
   let ccDx = dpdx(Ngeo);
   let ccDy = dpdy(Ngeo);
-  // [Block 3a] Car-paint ORANGE-PEEL micro-normal (mirrors GLX LIT_FS js/render/glx.js:432-452).
+  // [Block 3a] Car-paint ORANGE-PEEL micro-normal (mirrors GLX LIT_FS js/render/shaders/lit.js).
   // Coarse waviness + fine flake wobble perturb N so the sun streak / sky reflection
   // shimmer live on the panels. GLX keys this to OBJECT space (vObjPos); WGSL has no
   // object-position varying yet, so we key to world pos — faithful-but-reduced (a
@@ -389,7 +389,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (panelSurface) { rough = max(rough, 0.72); }
   }
 
-  // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/render/glx.js:473-507,
+  // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/render/shaders/lit.js,
   // reduced: coarse+fine value-noise grain + repair-patch tint/roughness; the sparse
   // crack lines are dropped). Multiplicative, so it darkens as much as it lightens.
   var patchM = 0.5;
@@ -407,7 +407,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
 
-  // [Block 5] WET-ROAD material response (mirrors GLX LIT_FS js/render/glx.js:519-546). Rain
+  // [Block 5] WET-ROAD material response (mirrors GLX LIT_FS js/render/shaders/lit.js). Rain
   // darkens + polishes up-facing ground; a value-noise mask pools puddles that go
   // near-mirror. Lowers effective roughness and lifts f0 toward a water film so the
   // sun/lamp GGX speculars (which read rough/a/f0) elongate into wet streaks. Full
@@ -428,7 +428,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let a = rough * rough;
 
   // Hemisphere ambient + Lambert sun (== GLX base diffuse when metalness==0).
-  // Ground fill is NOT scaled by anything — matches GLX js/render/glx.js:639
+  // Ground fill is NOT scaled by anything — matches GLX js/render/shaders/lit.js
   // amb = mix(uAmbGround, uAmbSky, N.y*0.5+0.5). BOUNCE (params3.x) is the
   // per-lamp bounce-fill strength (== GLX uBounceK), consumed in the lamp loop below.
   let amb = mix(F.ambGround.xyz, F.ambSky.xyz, N.y * 0.5 + 0.5);
@@ -535,7 +535,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   specCol = specCol / (1.0 + specCol);
   color = color + specCol;
 
-  // [Block 2] CLEARCOAT 2nd specular lobe (mirrors GLX LIT_FS js/render/glx.js:657-680). A
+  // [Block 2] CLEARCOAT 2nd specular lobe (mirrors GLX LIT_FS js/render/shaders/lit.js). A
   // second, fixed low-roughness (a=0.035) GGX lobe over the base coat catches a crisp
   // sun glint on the smooth lacquer even where the base coat is rough — the glossy
   // showroom read. Uses the UNPERTURBED geometric normal (Ngeo) so the flake wobble
@@ -597,7 +597,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   }
 
   // Physically-based punctual lights (floodlights / street lamps) — verbatim
-  // math from GLX LIT_FS (js/render/glx.js:579-647): windowed 1/d² falloff, aimed spot
+  // math from GLX LIT_FS (js/render/shaders/lit.js): windowed 1/d² falloff, aimed spot
   // cone, diffuse pool + GGX spec. No per-light shadows (cost); the cone shapes
   // the light. (Bounce-fill + per-lamp clearcoat glint deferred to Phase 4.)
   var lampFog = vec3<f32>(0.0);   // lamp irradiance reaching the fog column (Block 6)
@@ -617,14 +617,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let bleed = lights[i].colBleed.w;
     let cd = dot(-Ld, lights[i].dirVol.xyz);
     let beam = smoothstep(lights[i].cone.y, lights[i].cone.x, cd);
-    lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter (GLX js/render/glx.js:616)
+    lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter (GLX js/render/shaders/lit.js)
     let spotD = mix(bleed, 1.0, beam);
     let NoLl = max(dot(N, Ld), 0.0);
     color = color + albedo * lcol * (att * spotD) * NoLl * (1.0 - metalness);
     // Bounce fill: pool light bounced off the road washes nearby surfaces (walls,
     // kerbs, car flanks) with the lamp tint even outside the beam — a near-free
     // stand-in for local ambient probes, with a soft NoL floor (mirrors GLX
-    // js/render/glx.js:716; BOUNCE = params3.x = uBounceK, default 0.04).
+    // js/render/shaders/lit.js; BOUNCE = params3.x = uBounceK, default 0.04).
     color = color + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
     // GGX specular from the lamp (same microfacet BRDF as the sun).
     let Hl = normalize(Ld + V);
@@ -638,7 +638,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     lspec = lspec / (1.0 + lspec);
     color = color + lspec;
     // [Block 2 — lamp portion] The clearcoat lacquer catches the floodlights too: a
-    // crisp low-roughness lens glint over the softer base highlight (GLX js/render/glx.js:638-646).
+    // crisp low-roughness lens glint over the softer base highlight (GLX js/render/shaders/lit.js).
     if (clearcoat > 0.001) {
       let Dcc = D_GGX(NoHl, 0.03);
       let Vcc = V_SmithGGX(NoV, NoLl, 0.01);
@@ -648,7 +648,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     }
   }
 
-  // [Block 4] Metallic-flake SPARKLE (mirrors GLX LIT_FS js/render/glx.js:732-756). A
+  // [Block 4] Metallic-flake SPARKLE (mirrors GLX LIT_FS js/render/shaders/lit.js). A
   // view-dependent micro-glint: each tiny cell gets a random flake tilt and flashes
   // only when its facet half-aligns with the sun. sparkle DEFAULTS TO 1, so the
   // effect is gated on carPaint>0 AND on a non-dark albedo — non-paint meshes
@@ -677,7 +677,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     }
   }
 
-  // [Block 5b] WET-ROAD grazing SHEEN (mirrors GLX LIT_FS js/render/glx.js:761-801, reduced
+  // [Block 5b] WET-ROAD grazing SHEEN (mirrors GLX LIT_FS js/render/shaders/lit.js, reduced
   // to the material response — full SSR is Phase-4 wgx-side). On wet up-facing ground
   // a boosted grazing Fresnel tints the surface with the sky gradient reflected in the
   // view ray, so the tarmac mirrors a faint sky band at the far grazing edge.
@@ -707,7 +707,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   }
 
   // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so
-  // lit windows / neon / lamp lenses bloom (GLX LIT_FS js/render/glx.js:826-839).
+  // lit windows / neon / lamp lenses bloom (GLX LIT_FS js/render/shaders/lit.js).
   if (emissive > 0.0) {
     color = mix(color, albedo, emissive);
     let bright = max(albedo.r, max(albedo.g, albedo.b));
@@ -721,7 +721,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     color = color + albedo * glow * F.params1.y * (1.0 + hdrTag * F.params7.z);   // params1.y = uGlowAmp
   }
 
-  // Height-based fog + sun in-scatter (GLX LIT_FS js/render/glx.js:841-877; lamp-fog /
+  // Height-based fog + sun in-scatter (GLX LIT_FS js/render/shaders/lit.js; lamp-fog /
   // ground-mist volumetrics deferred to Phase 4).
   let fogDensity = F.params0.x;
   let fogHeight  = F.params0.y;
@@ -741,7 +741,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let fTint = F.params3.y;
   fogCol = fogCol * vec3<f32>(1.0 + fTint * 0.16, 1.0 - abs(fTint) * 0.02, 1.0 - fTint * 0.16);
   // [Block 6 — lamp-fog] Nearby floodlights/neon tint the DISTANT fog wall so it
-  // glows around the lamps at night (mirrors GLX LIT_FS js/render/glx.js:864-877, reduced:
+  // glows around the lamps at night (mirrors GLX LIT_FS js/render/shaders/lit.js, reduced:
   // fixed soft-clip, no uLampFog knob). lampFog is 0 with no lamps, so it is a no-op
   // by day; the mix by fAmt gates it so clear near air gets no halo.
   let lf = lampFog * 0.6;
@@ -754,7 +754,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   color = mix(color, fogCol, fAmt);
 
   // [Block 6 — ground mist] Low drifting FBM haze pooling near the surface (mirrors
-  // GLX LIT_FS js/render/glx.js:976-985). GROUND MIST (params3.z) carries frame.groundMist ×
+  // GLX LIT_FS js/render/shaders/lit.js). GROUND MIST (params3.z) carries frame.groundMist ×
   // mistDensity (uploaded wgx.js d[78], == GLX uGroundMist) and gates the whole block
   // exactly like GLX (if uGroundMist > 0.001) — no fogDensity proxy, so clear/dry
   // air is a true no-op. MIST HEIGHT (params3.w) sets the vertical falloff.
@@ -855,7 +855,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 }`;
 
   // ── SKY: the first real WGSL shader. A *reduced but faithful* port of SKY_FS
-  //    (js/render/glx.js:901) — gradient (zenith/horizon), golden-hour horizon warmth,
+  //    (js/render/shaders/sky.js) — gradient (zenith/horizon), golden-hour horizon warmth,
   //    a basic procedural cloud layer, Mie sun corona + disc, stars, moon, and
   //    city skyglow. Composed from the leaves above.
   //
