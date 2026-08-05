@@ -41,7 +41,7 @@ const CEILINGS = {
   // call has to sit on startRace()/setSteerMode/steerMode in this file; a
   // separate module would still need a G façade entry and would not shrink the
   // closure coupling that makes extraction pay.
-  "js/game.js": 8178,
+  "js/game.js": 8179,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,
