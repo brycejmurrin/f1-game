@@ -144,12 +144,38 @@ const NetNostr = (function () {
   // localStorage apex26.nostrRelays = ["wss://…", …] overrides the list above,
   // used verbatim — Trystero prefixes wss:// only onto ITS defaults, so a
   // ws://127.0.0.1 fixture works through here and nowhere else.
+  // A STORED OVERRIDE MUST NOT BE ABLE TO BRICK THE FEATURE, and until now it
+  // could: the list was handed to Trystero verbatim if it merely PARSED as a
+  // non-empty array. Trystero then does `new WebSocket(url)` on each entry, and
+  // a malformed one throws SyntaxError — "The string did not match the
+  // expected pattern" — out of joinRoom, which our catch reported as "could
+  // not reach the room service". A device could be left permanently unable to
+  // use room codes by one bad localStorage write, while the invite link (which
+  // touches no relay) kept working and hid it.
+  //
+  // Not hypothetical: it happened here, from a copy-pasted debugging line whose
+  // ellipsis placeholders — "wss://…" — are valid JSON and an invalid URL.
+  //
+  // So each entry is checked, bad ones are dropped rather than poisoning the
+  // batch, and an override with nothing usable left falls back to the shipped
+  // list instead of leaving the player with no relays at all.
+  function validRelay(u) {
+    if (typeof u !== "string" || !u) return false;
+    try {
+      const p = new URL(u).protocol;
+      return p === "ws:" || p === "wss:";
+    } catch (e) { return false; }
+  }
+
   function relayUrls() {
     try {
       const raw = localStorage.getItem("apex26.nostrRelays");
       if (raw) {
         const list = JSON.parse(raw);
-        if (Array.isArray(list) && list.length) return list;
+        if (Array.isArray(list)) {
+          const good = list.filter(validRelay);
+          if (good.length) return good;
+        }
       }
     } catch (e) { /* fall through to the shipped list */ }
     return RELAYS;
@@ -490,5 +516,9 @@ const NetNostr = (function () {
     });
   }
 
-  return { APP_ID, JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, roomId, exchange, load };
+  return { APP_ID, JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, roomId, exchange, load,
+    // Exported FOR THE TESTS. A bad stored override used to reach
+    // `new WebSocket()` and throw out of joinRoom, and asserting that on the
+    // source text is the kind of test that passes while the code is broken.
+    RELAYS, relayUrls, validRelay };
 })();
