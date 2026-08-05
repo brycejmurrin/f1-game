@@ -26,6 +26,22 @@ name: CI
 # Deliberately NOT here: the full Playwright suite is ~40 minutes of SwiftShader.
 # Run it locally with tools/test-bg.mjs against the groups tools/pick-tests.mjs
 # names. This gate is for what breaks silently, not for everything.
+#
+# THE ONE GROUP THAT ARGUABLY BELONGS HERE AND IS NOT: `test:baseline`, the six
+# golden menu PNGs. The 2026-08 pass found one of them stale — the garage
+# baseline was re-blessed on a branch that did not yet have the garage BACK
+# button, and the two lines merged afterwards. index.html and a .png are
+# different files, so git merged both cleanly and reported no conflict; they
+# conflicted only in meaning, and nothing was running the suite that would have
+# said so. That is exactly the silent class this gate exists for.
+#
+# It is not added yet for one reason: golden images are environment-sensitive,
+# and those six were generated in a dev container. If GitHub's runner renders
+# even slightly differently — a font fallback, a SwiftShader build — the gate
+# goes permanently red and blocks every deploy, which is the failure this
+# workflow already caused once by another route. Add it by first running it on a
+# PR as a non-blocking step and comparing, not by putting it straight into
+# `needs:`.
 
 on:
   push:
