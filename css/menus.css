@@ -359,7 +359,7 @@
        genuinely tall sheet sized purely by its content still lets a full-width
        map band eat the list, and object-fit keeps the outline true when the cap
        binds. Belt and braces, on the branch where the braces are cheap. */
-       THE BAND IS A DEFINITE HEIGHT, NOT A CAP. `flex: 0 1 auto` plus
+    /* THE BAND IS A DEFINITE HEIGHT, NOT A CAP. `flex: 0 1 auto` plus
        `max-height: 52%` gave the section no height of its own — it sized to its
        content, and its content is a card whose map is capped at a PERCENTAGE of
        that same content-derived height. That circle resolves small: measured on
