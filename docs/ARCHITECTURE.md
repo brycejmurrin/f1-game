@@ -80,9 +80,23 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
 ### Deferred follow-ups (known debt, in rough priority order)
 
 - **game.js pass 2** — promote the remaining closure `let`s to a shared state
-  object. Three modules are out (`js/game/aerozones.js`,
-  `js/game/skidmarks.js`, `js/game/light-store.js`), and the next candidates are
-  race control / caution, the quali networking block, and collisions.
+  object. Four modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`,
+  `js/game/light-store.js`, `js/game/racecontrol.js`) — 8,178 → 8,009 lines —
+  and the next candidates are the quali networking block and collisions.
+
+  **The payoff is testability, not tidiness.** Race control is the clearest
+  case: 118 lines in the middle of `game.js` had exactly one assertion anywhere
+  in the suite, because the only way to reach the machine was to stage real
+  settled debris in a browser. As a module taking its hazard picture through a
+  seam, it gets `tests/race-control.test.mjs` — ten tests in milliseconds
+  covering the hysteresis, the time caps and the storage-format migration. None
+  of that was reachable before, and nobody had chosen for it not to be.
+
+  **Check for leftovers after every extraction.** Three for three so far:
+  aerozones COPIED two constants instead of moving them; race control left the
+  settings panel reading a deleted `_cautionOn` (a `ReferenceError` on opening
+  race settings, which no test opens). `grep` the removed symbol names — the
+  suite will not do it for you.
 
   **Sort candidates by boundary crossings, not by line count.** The two measured
   in the 2026-08 pass came out at opposite ends and the difference decided which
