@@ -146,6 +146,69 @@ should not present them as points on one scale.
 
 ---
 
+## 2c. The RACE PACE slider, measured — the complaint is arithmetic
+
+The report was "overall speed is weighted too high and I always end up at the
+lower end". That is not a matter of taste; it falls out of `paceFromSlider`:
+
+| notch | pace | ground top | step from previous |
+|---|---|---|---|
+| 1 | 0.500 | 130 km/h | — |
+| 2 | 0.625 | 162 km/h | **+25.0 %** |
+| 3 | 0.750 | 194 km/h | **+20.0 %** |
+| 4 | 0.875 | 227 km/h | **+16.7 %** |
+| 5 | 1.000 | 259 km/h | **+14.3 %** ← default |
+| 6 | 1.060 | 275 km/h | +6.0 % |
+| 7 | 1.120 | 290 km/h | +5.7 % |
+| 8 | 1.180 | 306 km/h | +5.4 % |
+| 9 | 1.240 | 321 km/h | +5.1 % |
+| 10 | 1.300 | 337 km/h | +4.8 % |
+
+**The resolution is backwards.** The half below the default moves in 14-25 %
+jumps; the half above moves in 5-6 % ones. A player who wants a calmer car is
+handed the coarsest part of the control, and there is no setting between "full
+F1 pace" and "a third slower". Anyone living at notch 2-4 is choosing between
+32 km/h increments.
+
+The fix is a **geometric** scale, so every notch is the same *proportional*
+change. Over `0.45 .. 1.35` in 21 notches that is **5.65 % per notch** — the
+current top-end fineness, applied across the whole range:
+
+| notch | pace | | notch | pace | | notch | pace |
+|---|---|---|---|---|---|---|---|
+| 1 | 0.450 | | 8 | 0.661 | | 15 | 0.971 |
+| 3 | 0.502 | | 10 | 0.738 | | 16 | 1.026 |
+| 5 | 0.561 | | 12 | 0.823 | | 18 | 1.145 |
+| 7 | 0.626 | | 14 | 0.919 | | 21 | 1.350 |
+
+**Value-preserving migration is honest here**, which is the thing that had to be
+checked before committing to a remap. Mapping each old notch to the nearest new
+one by *value* lands within **2.6 % in the worst case** — smaller than the
+smallest step the old scale could express (4.8 %), so nobody's car changes
+perceptibly on upgrade:
+
+```
+old 1 (0.500) -> new  3 (0.502)   old  6 (1.060) -> new 17 (1.084)
+old 2 (0.625) -> new  7 (0.626)   old  7 (1.120) -> new 18 (1.145)
+old 3 (0.750) -> new 10 (0.738)   old  8 (1.180) -> new 19 (1.210)
+old 4 (0.875) -> new 13 (0.870)   old  9 (1.240) -> new 19 (1.210)
+old 5 (1.000) -> new 16 (1.026)   old 10 (1.300) -> new 20 (1.278)
+```
+
+(Old 8 and 9 collide on 19. Harmless — they were 6 % apart and the new notch
+sits between them.)
+
+**The readout must not be km/h.** `dashKph()` divides pace back out, so the
+in-game dial reads 0 → ~259 km/h at *every* setting and
+`tests/sliders.spec.js` pins that to within 1 km/h. A label saying "top speed
+207 km/h" would print a number the speedometer will never show. A percentage of
+standard pace is the honest alternative.
+
+The **default** is deliberately left to `tools/tune-sweep.mjs` rather than
+picked here — that is the whole point of building the sweep.
+
+---
+
 ## 3. Our racing-line assist already matches the industry vocabulary
 
 F1 uses **Off / Corners Only / Full**. `LINE_LEVELS = { off: 0, corner: 3,
