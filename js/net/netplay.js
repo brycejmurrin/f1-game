@@ -47,6 +47,12 @@ const NetPlay = (function () {
     START: "start",                       // host -> guest lights-out tick
     ARMED: "armed",                       // guest -> host: my circuit is built, name the moment
     QUALI: "quali",                       // a driven qualifying lap: {driverId, t}
+    // A lap IN PROGRESS: {driverId, t, frac}. Sent a couple of times a second
+    // while somebody is on their qualifying run, so the others watch a clock
+    // tick instead of a disabled button that says "waiting". Superseded by
+    // QUALI the moment the lap completes; purely for the screen, and nothing
+    // in the classification ever reads it.
+    QLIVE: "qlive",
     LAP: "lap",                           // completed lap / sector
     RESULT: "result",                     // final classification
     CAUTION: "caution",                   // host -> guest race control (flags)
@@ -302,6 +308,7 @@ const NetPlay = (function () {
           // the classification is the game's, and it has to be recomputed with
           // every real time in it the moment another one lands.
           if (name === EV.QUALI && d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d);
+          if (name === EV.QLIVE && d && G.onPeerQualiLive) G.onPeerQualiLive(d);
           if (name === EV.LAP && d) peerLaps.push(d);
           if (name === EV.RESULT && d) peerResult = d;
           if (name === EV.CAUTION && d && G.applyCaution) G.applyCaution(d);
@@ -488,6 +495,14 @@ const NetPlay = (function () {
     // Publish OUR driven qualifying lap. Rides the reliable channel: a lost
     // qualifying time is a wrong grid for the whole race, not one stuttered
     // frame, so it cannot go on the snapshot channel with the positions.
+    // The lap so far. Unlike reportQuali this is allowed to be wrong, late or
+    // lost — it is a clock on somebody else's screen, not an input to the
+    // grid — so it is fire-and-forget and never gated on anything.
+    function reportQualiLive(driverId, t, frac) {
+      if (!sessionList().length || !(t >= 0)) return false;
+      return broadcast(EV.QLIVE, { driverId, t: +t.toFixed(2), frac: +(frac || 0).toFixed(3) });
+    }
+
     function reportQuali(driverId, t) {
       if (!session || !(t > 0)) return false;
       return broadcast(EV.QUALI, { driverId, t: +t.toFixed(3) });
@@ -621,7 +636,7 @@ const NetPlay = (function () {
     return {
       start, stop, tick,
       ownsRaceControl, ownsClassification,
-      hostStart, reportLap, reportResult, reportCaution, awaitingResult, reportQuali,
+      hostStart, reportLap, reportResult, reportCaution, awaitingResult, reportQuali, reportQualiLive,
       // Is this side still waiting to be TOLD when the lights go out? Only a
       // guest ever is: the host names the moment itself. Without this the
       // countdown falls through to accumulating dt locally — its own clock,
