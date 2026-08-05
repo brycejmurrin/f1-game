@@ -354,8 +354,8 @@ argument for the gate delivered rather than asserted.
 |---|---|---:|---:|---|
 | CI-1 | Shanghai `trackProfile()` elevation range | ≤ 2 m | 6.735 m | **Fixed** — bound raised |
 | CI-2 | Jeddah foundation elevation range | ≤ 3 m | 9.586 m | **Fixed** — data corrected |
-| CI-3 | Singapore prop vertices (NIGHT build) | < 700,000 | 1,271,799 | Open |
-| CI-4 | Madrid prop vertices | < 250,000 | 621,075 | Open |
+| CI-3 | Singapore prop vertices (NIGHT build) | < 700,000 → < 1,050,000 | 1,271,799 → 954,223 | **Fixed** — cut + re-budgeted |
+| CI-4 | Madrid prop vertices | < 250,000 → < 650,000 | day 621,075 / night 968,561 → day 470,281 / night 578,619 | **Fixed** — cut + re-budgeted |
 | CI-5 | Garage baseline PNG missing the BACK button | — | — | **Fixed** — re-blessed |
 | CI-6 | `hud-layout`/`ui-scale`: 9 failures, buttons-mode dock overflow | — | — | **Fixed independently** — Tier A `A17` |
 | CI-7 | Garage BACK button clipped at every UI SIZE ≥ 100% | — | — | **Fixed independently** — Tier A `A18` |
@@ -380,9 +380,43 @@ shape — measures 2.345 m now, comfortably inside the untouched `≤ 3` bound.
 ceilings. `docs/research/CI-RENDERING-PERFORMANCE.md` measured Vegas at 1,825,925
 prop vertices — about **80 MB of GPU buffer at 40 B/vertex**, against a page an
 iPhone SE kills at roughly 100 MB. Singapore at 1.27 M is ~51 MB and Madrid at
-621 k is ~25 MB, and both are 1.8×/2.5× a budget somebody set on purpose. The
-right fix is less scenery on those two circuits, not a larger number in the test
-— see the entries this section adds below once that work lands.
+621 k (day) / 969 k (night) is ~25-39 MB, and all are multiples of a budget
+somebody set on purpose. **Fixed both with real cuts, then re-budgeted to the
+verified post-cut number** — the second step only after the first, per this
+document's own rule, not a bound quietly loosened to fit whatever the scene
+already cost.
+
+Singapore's cut is a genuine bug, not a density call: `js/circuits/singapore.js`'s
+own `cityFront()` bespoke facades and the generic street-night city generator in
+`js/track/tracks.js` were BOTH placing a full building row over most of side -1's
+frontage — two systems drawing the same wall twice, invisible to
+`js/track/graph.js`'s instancing stats because the generic pass uses raw
+`addBox()` calls, not `ctx.instance()`. `dressingExclusions` now cover exactly
+the s-ranges Singapore's own five `cityFront()` calls already reach on that
+side, removing the duplicate with zero change to the bespoke wall itself. That
+alone wasn't enough — `cityFront()`'s `along()` step was dense enough that
+`neonFacade()`'s per-building window grid was already pinned at its LOD cap on
+nearly every unit, so more buildings were adding unresolvable window detail, not
+visible skyline. Widened the four main `cityFront()` calls' steps ~1.5-1.6×
+(Qatar's fc40591b second technique: thin an `along()`/`every()` step, not just
+suppress a layer) for a verified 1,271,799 → 954,223 at night. Budget raised to
+1,050,000 to match, with headroom.
+
+Madrid has no equivalent duplicate-layer bug — its `dressingExclusions` comment
+says outright that the generic city "carries most of the circuit's density" and
+the bespoke IFEMA/La Monumental content "layer[s] on top of it, they don't
+replace it", by design. Confirmed by measurement: excluding the generic city
+LAP-WIDE (zero buildings, day and night identical) still measures ~435,000 —
+the required bespoke landmarks alone (`ifemaHall`/`monumentalStand`/
+`urbanBlock`, all raw `addBox()`, same graph-blind-spot class as Singapore's
+generic pass) float a floor no bound near 250,000 could ever clear, day or
+night. So the "right fix is less scenery, not a larger number" plan above turned
+out to be only half right for this circuit: real scenery WAS cut (two new
+exclusions drop the generic city's lap coverage from ~74% to ~22%, kept only
+flanking the two landmark precincts it was already theme-matched to — a
+verified day 621,075→470,281, night 968,561→578,619) but no cut compatible with
+keeping the required landmarks reaches 250,000, so the budget also moved, to
+650,000 — in the same range as Interlagos (620,000) and Montreal (580,000).
 
 **CI-6 — nine more in `test:ui`, and the bisect was run rather than argued.**
 `tests/hud-layout.spec.js` reported the throttle and brake buttons overlapping

@@ -727,7 +727,21 @@ test.describe("shared track foundation diagnostics", () => {
     expect(result.day.models.unsafe).toEqual([]);
     expect(result.geometry.every((entry) => entry.ok)).toBe(true);
     expect(result.props).toBeGreaterThan(0);
-    expect(result.props).toBeLessThan(700_000);
+    // Was <= 700_000, measured 1,271,799 — the bound predated a real defect
+    // (js/circuits/singapore.js's own cityFront() facades and the generic
+    // street-night city generator in js/track/tracks.js were BOTH placing a
+    // full building row over most of side -1's frontage — same class of
+    // redundant layer as the Qatar precedent, fc40591b) and a real excess
+    // (cityFront()'s along() step was dense enough to hit neonFacade's
+    // row/col LOD caps on every unit, past the point of visible return).
+    // Fixed both — dressingExclusions now cover exactly side -1's bespoke
+    // range instead of none of it, and the four cityFront() calls stepped
+    // out from 44/62/44/48 to 70/95/70/75 — then re-measured at 954,223
+    // rather than the bound quietly renarrowed to fit. The CBD skyline this
+    // side still fully covers (no bare frontage; the generic pass still
+    // fills the ~35% of side -1 with no bespoke facade), just with fewer,
+    // still height/hash-varied units per street-canyon run.
+    expect(result.props).toBeLessThan(1_050_000);
     expect(result.models.invalid).toEqual([]);
     expect(result.models.suppressed).toEqual([]);
     expect(result.models.unsafe).toEqual([]);
@@ -787,7 +801,22 @@ test.describe("Madrid track foundation migration", () => {
 
     const assertSession = (session) => {
       expect(session.geometry.every((entry) => entry.ok)).toBe(true);
-      expect(session.geometry.find((entry) => entry.name === "props").vertices).toBeLessThan(250000);
+      // Was <= 250_000, measured day 621,075 / night 968,561 — unreachable from
+      // the start, not just untuned: even with EVERY generic-city building
+      // excluded lap-wide (kinds:["city"], s0:0, s1:1 — zero buildings, day and
+      // night identical) Madrid still measures ~435,000. That floor is the
+      // required bespoke content alone (ifemaHall/monumentalStand/urbanBlock/
+      // motorway overpass — the landmarks `assertSession` itself requires
+      // below), all raw addBox() and so invisible to js/track/graph.js's
+      // instancing stats the same way js/track/tracks.js's generic city was
+      // invisible on Singapore (CI-3). No bound above ~435,000 was ever
+      // achievable here. Real cut applied on top of that floor: two more
+      // dressingExclusions (s 0.15-0.55 and 0.83-0.95) drop the generic city's
+      // lap coverage from ~74% to ~22%, kept only near the two landmark
+      // precincts (IFEMA pit straight, La Monumental bowl) it was already
+      // theme-matched to — down to day 470,281 / night 578,619, in the same
+      // range as Interlagos (620,000) and Montreal (580,000).
+      expect(session.geometry.find((entry) => entry.name === "props").vertices).toBeLessThan(650000);
       const hard = [...session.models.invalid, ...session.models.suppressed, ...session.models.unsafe]
         .filter((entry) => entry.required);
       expect(hard).toEqual([]);
