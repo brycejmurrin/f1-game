@@ -188,8 +188,34 @@ jobs:
       # that report and seventy-one that never finish. dev-tools and logging
       # belong in a local `tools/test-bg.mjs` run, which is where the workflow
       # header already says the full suite lives.
+      # ONE WORKER, AND A PER-TEST TIMEOUT THAT FITS THE RUNNER. With the spec
+      # count fixed, run 31019857052 still failed — but as `failure` rather than
+      # `cancelled`, which is the first time this gate reported anything real.
+      # Both failures were `Test timeout of 120000ms exceeded`, neither was an
+      # assertion, and both were the two SwiftShader RENDERING specs (grid start
+      # 175.7 s, corner approach 150.6 s).
+      #
+      # The log contains its own controlled experiment. `speed readout updates
+      # after jump()` timed out at 125.2 s while a second worker was busy, then
+      # PASSED on retry at 110.6 s in the window where the status line shows w8
+      # running alone. Same test, same commit, same machine: two concurrent
+      # SwiftShader contexts blow the limit and one does not. That is the
+      # oversubscription signature CLAUDE.md describes — every failure a timeout,
+      # not one of them an expectation that did not hold — and it is measuring
+      # the runner, not the game.
+      #
+      # `workers: 2` is right for a 4-core dev box and wrong here, so APEX_WORKERS
+      # (playwright.config.js's documented override) pins it to 1. The timeout
+      # goes to 240 s because even uncontended the runner needed 110.6 s against
+      # a 120 s limit — margin that thin is a coin flip, and a coin flip in a
+      # deploy gate is what this whole exercise has been about.
+      #
+      # Serial and slower per pass is still far cheaper than the retries and the
+      # false red: 9 specs, no contention, well inside the 20-minute cap.
       - name: Smoke
-        run: npm run test:smoke
+        env:
+          APEX_WORKERS: 1
+        run: npm run test:smoke -- --timeout=240000
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
