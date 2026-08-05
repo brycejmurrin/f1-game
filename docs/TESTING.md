@@ -1,6 +1,6 @@
 # Testing reference
 
-104 root Playwright spec files (`tests/*.spec.js`) + 39 `node --test` unit suites
+105 root Playwright spec files (`tests/*.spec.js`) + 39 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -340,6 +340,7 @@ what it covers.
 | `agentview-api-contract.test.mjs` | freezes the shape of the agent-view API |
 | `assets-api.spec.js` | the baked asset pack's runtime path, and that every failure degrades to procedural |
 | `logging.spec.js` | `js/log.js` in a real page: `Log` live before any game module evaluates, retention never lagging the console level, single namespace prefix, records flattened rather than holding references, `logs()` filters, a bad spec ignored not thrown |
+| `persistence.spec.js` | localStorage failing is REPORTED (Log + `persistState()`) and the session still reads back what it wrote — the silent-data-loss case: iOS Private Browsing sets the quota to 0 |
 
 ### Physics & behaviour
 

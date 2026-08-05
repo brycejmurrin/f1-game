@@ -80,11 +80,25 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
 ### Deferred follow-ups (known debt, in rough priority order)
 
 - **game.js pass 2** — promote the remaining closure `let`s to a shared state
-  object. Two modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`),
-  and the next candidates, verified with their exact boundary crossings, are the
-  lighting profile store, race control / caution, the quali networking block,
-  collisions, and the ~307-line garage preview (whose natural partner
-  `js/game/setup-ui.js` already exists).
+  object. Three modules are out (`js/game/aerozones.js`,
+  `js/game/skidmarks.js`, `js/game/light-store.js`), and the next candidates are
+  race control / caution, the quali networking block, and collisions.
+
+  **Sort candidates by boundary crossings, not by line count.** The two measured
+  in the 2026-08 pass came out at opposite ends and the difference decided which
+  was taken:
+
+  | candidate | lines | crossings | verdict |
+  |---|---:|---:|---|
+  | lighting profile store | ~94 | 0 new | taken — the whole surface was ALREADY on `G` for four other files |
+  | garage live preview | ~303 | ~15 new | **left** — `teamDecalState`, `drawAeroFlaps`, `drawCarDecals`, `carDecalNum`, `carPaintMat`, `partsVisualKey`, `resolveLivery`, `getTeamParts`, `teamIdx`, `MAT_REFLECT_X` … none of which `G` carries |
+
+  The garage preview is the bigger block and the more obvious target — its
+  natural partner `js/game/setup-ui.js` already exists — but taking it would
+  widen the façade by half again for one screen. That is precisely the review's
+  warning about `G` being a *migration* device used as an *architecture*: an
+  extraction that adds fifteen accessors has moved the coupling, not removed it.
+  Take it only together with a real car-drawing seam that `render()` shares.
 
   **Splitting the two megafunctions is NOT recommended.** `render()` and
   `updateCar()` are ~1,376 and ~1,838 lines, and `updateCar`'s tyre model is one

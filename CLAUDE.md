@@ -58,7 +58,13 @@ cat /proc/loadavg          # expect < 3 before a run, on 4 cores
 node tools/test-bg.mjs --status
 ```
 
-Run **at most two groups at once**, and never a group alongside another heavy
+**`test-bg.mjs` now ENFORCES this** — it refuses to start more groups than
+`cores / WORKERS` (counting anything already running) and prints the batches to
+run instead; `--force` overrides. `pick-tests.mjs` prints its suggestion
+pre-batched for the same reason. The rule was in this file and in
+`docs/TESTING.md` for some time and was still broken, by an agent reading both,
+because `pick-tests --bg` handed out a nine-group command — so it lives in the
+tool now. Run **at most two groups at once**, and never a group alongside another heavy
 suite (`test:baseline`, anything `--project=render`, a `tools/*-audit.mjs`
 sweep). Groups are separate processes, which is why parallelism helps at all —
 but only up to the core count.
@@ -639,7 +645,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (104) + tests/*.test.mjs unit suites (39)
+tests/*.spec.js                 Playwright specs (105) + tests/*.test.mjs unit suites (39)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
                  ARCHITECTURE-REVIEW.md is the standing assessment + defect
                    register: what the no-build-step bet costs, why asserted
@@ -925,7 +931,7 @@ is the same surface from a shell, with the staging done correctly.
 
 ## Writing tests
 
-104 Playwright specs + 39 `node --test` unit suites. **How to RUN them is under
+105 Playwright specs + 39 `node --test` unit suites. **How to RUN them is under
 Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
 to do when writing one.
 

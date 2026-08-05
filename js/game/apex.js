@@ -2773,6 +2773,22 @@ const api = {
     return Log.level();
   },
 
+  // persistState() — is localStorage actually storing anything?
+  //
+  //   { ok, broken, keys, rev }
+  //
+  // `ok:false` means a read or write has thrown, and `broken` names it
+  // ("QuotaExceededError", "SecurityError"). This is worth a hook of its own
+  // because the failure is otherwise INVISIBLE from inside the session: the
+  // store still caches the value it could not write, so every read for the rest
+  // of the session returns the right answer and only a reload reveals that
+  // nothing was ever saved. Safari on iOS puts the quota at 0 in Private
+  // Browsing, which is the case that actually loses a player's career.
+  persistState() {
+    const s = GameStore.store;
+    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev };
+  },
+
   // save(data, filename) — hand a file back out of the browser.
   //
   // Exists because the reverse direction is the hard one: reading state OUT of
