@@ -19,18 +19,21 @@ Sections are unnumbered on purpose: numbering rots the moment one is inserted.
 | **Braking assist is OFF / CUE / LIGHT / FULL** — starts with information, not intervention | Designed, not yet built |
 | **The braking cue is a pulse RATE, not a pitch ramp**, with a player-set lookahead | Designed. Corrects my first instinct |
 | **A FULL braking level brakes for corners only**, never to avoid rear-ending | Designed |
-| **RACE PACE becomes geometric**, ~5.65 %/notch over 0.45–1.35 | Designed; default deferred to `tools/tune-sweep.mjs` |
+| **RACE PACE becomes geometric** — `pace(n) = 1.06^(n-14)`, 19 notches, 6.0 %/notch, default down to 0.84 | **Specified with the full table** in `PHASE-C-SLIDER-DESIGN.md`; the default NOTCH still wants `tools/tune-sweep.mjs` |
 | **Its readout must not be km/h** — `dashKph` divides pace out, so the dial reads ~259 km/h at every setting | Settled |
-| **Value-preserving migration is honest** — worst case 2.6 %, under the old scale's smallest step | Verified by calculation |
+| **Value-preserving migration is honest** — worst case **2.89 %**, under half a new notch | Verified by calculation, per-notch table in `PHASE-C-SLIDER-DESIGN.md`. Old 9 and old 10 both land on new 18: the one lossy pair, and it must be LOGGED rather than silent |
 | **Do not rename the racing-line assist** — already matches the industry's Off/Corners/Full | Settled |
 | **Speed-sensitive steering is two halves and we ship one** — the rate half belongs in the SPEED STEER retune | Designed |
-| **SPEED STEER is inert at speed** — 2-point spread across all ten notches at 72 m/s; a hyperbolic taper gives 25 | Measured; fix designed |
-| **RESPONSE spends its top half below any real wheelbase** — 3.6 m lands at notch 4 | Measured |
-| **SMOOTHING should map linearly in LAG, not in Hz** — top of range is 398 ms and unusable | Measured |
+| **SPEED STEER is inert at speed** — **1.9-point** spread across all ten notches at 72 m/s (1-9 are bit-for-bit identical); `1/(1+v/ref)` over ref 15..75 gives **33.8** | Measured; fix specified. NOT default-preserving — the two curves have different shapes, and no reference makes a hyperbola equal a clamped line. Needs a drive |
+| **RESPONSE spends its top half below any real wheelbase** — 3.6 m lands at notch 3.6; notches 6-10 run 2.97 → 1.90 m | Measured; proposed 4.4 → 2.6 m with 3.60 m at the default. Moves the shipped feel, so it is the one Phase C number not to ship on arithmetic alone |
+| **SMOOTHING should map linearly in LAG, not in Hz** — steps run 7.2 ms at one end to 132.6 ms at the other, and the top is 398 ms | Measured; proposed 55 → 195 ms, uniform 15.6 ms/notch, default preserved to a rounding error. Safe on arithmetic |
 | **Setup sheet: wing trim / brake bias / suspension**; gears and diff cut | Designed |
 | **Brake bias belongs in the friction ellipse**, which currently charges both axles for grip one spends | Designed — highest-risk item |
 | **Understeer cue is signalling, not simulating** | **Built** |
 | **`js/game.js` had zero `Log` calls** | **Fixed** — one envelope line at race start |
+| **Rain spray and launch smoke were pace-broken** — full spray unreachable below pace ~0.8, launch smoke never fired at all at pace 0.5 | **Fixed** (A16), and the lint that found them now runs in `tooling-fast` |
+| **The tilt chain, the touch drag and the store migration had no tests** | **Fixed** — `tilt-pipeline`, `touch-steer`, `steer-migration` specs |
+| **iOS/iPad platform plumbing is already sound** — `touch-action: none`, `overscroll-behavior: none`, `-webkit-touch-callout`, safe-area tokens, `passive: false` touch listeners, the `DeviceOrientationEvent.requestPermission` gate | Audited, nothing to fix. The iPad gap was input SEMANTICS (absolute-position steering, on/off pedals), which Phase B closed — not the platform layer |
 
 ---
 
