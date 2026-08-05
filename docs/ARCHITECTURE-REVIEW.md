@@ -307,7 +307,7 @@ marked otherwise.
 | A12 | Career budget upgrade unreachable and advertised: `upgradeBudget()`/`budgetUpgradeCost()` have no caller outside `career.js`, so `budgetLvl` is permanently 0 — while the guide told the player, twice, that they got "three upgrades" | Text corrected and the mechanic marked not-yet-wired. **Wiring the UI is a feature and was deliberately not done here** |
 | A13 | **A failed save was silent, and it loses careers.** `js/game/store.js` caches every value it writes, so when `setItem` throws, the catch swallowed it and `_cache` went on answering every later `get()` with the right value. The session plays perfectly and the save is gone on reload, with nothing on screen and nothing in the console. Safari on iOS is the real case, not a hypothetical: Private Browsing sets the localStorage quota to **zero**, so the first write throws | Fixed, and the cache write **kept** — dropping the value would break the session as well as the save, which is worse. The exception's own name is recorded (`QuotaExceededError` and `SecurityError` mean different things to whoever reads the report), `Log` carries it once loudly and repeats to the ring buffer only, and `__apex.persistState()` reports it. `tests/persistence.spec.js` pins both halves separately, because the cache write looks redundant right up until you know why it is there |
 
-### Tier A2 — four failures the CI gate made visible on its first clean run
+### Tier A2 — fourteen failures the CI gate made visible on its first clean run
 
 Added 2026-08. **None of these are new breakage and none were introduced by the
 cleanup pass** — the branch's entire diff under `js/track/` and `js/circuits/` is
@@ -349,10 +349,29 @@ iPhone SE kills at roughly 100 MB. Singapore at 1.27 M is ~51 MB and Madrid at
 621 k is ~25 MB, and both are 1.8×/2.5× a budget somebody set on purpose. The
 right fix is less scenery on those two circuits, not a larger number in the test.
 
+**A19 — nine more in `test:ui`, and this time the bisect was run rather than
+argued.** `tests/hud-layout.spec.js` reports the throttle and brake buttons
+overlapping the pause button (`btn-throttle+pausebtn`, `btn-brake+pausebtn`) in
+BUTTONS steer mode, landscape only — four tests. `tests/ui-scale.spec.js` fails
+five more, on screens fitting at 100/130/150 %.
+
+These were the ones with a real case to answer, because this pass edited `css/`.
+So instead of reasoning about it: `git checkout <before> -- css/`, re-run both
+specs, restore. **Both reproduce identically with the pre-change stylesheets** —
+same four overlaps, same five fits. The CSS work is not the cause.
+
+That is the whole method this document argues for, applied to my own change:
+a claim of "my diff cannot have done this" is worth exactly as much as the
+measurement behind it, and here the measurement was two spec runs and twenty
+minutes.
+
 The meta-point: the gate was added in this pass to stop red guards reaching the
-live site, and within hours of its first working run it found four things that
-had been red for an unknown length of time. Neither the bounds nor the budgets
-had drifted — the *observation* had been missing.
+live site, and within hours of its first working run it surfaced **fourteen**
+failures that had been red for an unknown length of time — four in `test:api`,
+one golden baseline, nine in `test:ui`. Nothing drifted on the day. Neither the
+bounds nor the budgets nor the layouts had moved; the *observation* had been
+missing, which is this document's thesis stated once more and paid for in
+findings rather than argument.
 
 **A18 — a golden baseline went stale through a MERGE, not an edit.**
 `tests/menu-baseline.spec.js-snapshots/garage-phone-landscape.png` shows a garage
