@@ -68,7 +68,7 @@ fn fbm(p_in: vec2<f32>) -> f32 {
 }`;
 
   // ── tonemap: ACES filmic approx — a shared math leaf the review names as one
-  //    of the "single-source" candidates (acesTonemap, js/render/glx.js:1644). Not used
+  //    of the "single-source" candidates (acesTonemap, js/render/shaders/chunks.js). Not used
   //    by the sky (which outputs HDR straight to an LDR swapchain here), but
   //    included as the seed of the shared post-math the Composite port will use.
   // Coefficients are passed in (TONE CURVE knobs on the composite path; the BLIT

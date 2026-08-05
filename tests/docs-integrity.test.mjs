@@ -100,6 +100,76 @@ const SOURCE_EXEMPT = new Map([
   ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],
 ]);
 
+test("a `file.js:NNN` citation in a comment points inside that file", () => {
+  // Line numbers in comments are the one cross-reference nothing maintains. The
+  // renderer backends carried 77 line citations into glx.js, written when it was
+  // a monolith; the post chain and shaders were later split out into
+  // js/render/glx/ and js/render/shaders/, and 16 of those citations ended up
+  // pointing PAST THE END of the file they name.
+  //
+  // The reason to gate it rather than just fix it: the surviving set was MIXED.
+  // Some citations were still right, so a reader could not tell which to trust,
+  // and a wrong one sends them to unrelated code with every appearance of
+  // authority. Out-of-range is the half that is mechanically checkable; prefer
+  // naming a function or a symbol over a line number either way, because a
+  // citation that stays inside the file can still point at the wrong thing.
+  const roots = ["js", "tools", "tests"];
+  const files = [];
+  for (const r of roots) (function walk(dir) {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== "node_modules") walk(rel); }
+      else if (/\.(js|mjs|cjs)$/.test(e.name)) files.push(rel);
+    }
+  })(r);
+
+  const lineCount = new Map();
+  const lines = (rel) => {
+    if (!lineCount.has(rel)) {
+      let n = 0;
+      try { n = read(rel).split("\n").length; } catch (_) { n = -1; }
+      lineCount.set(rel, n);
+    }
+    return lineCount.get(rel);
+  };
+
+  // Citations come in two shapes and BOTH have to be checked: a full path
+  // followed by a colon and a line number, and a BARE FILENAME followed by the
+  // same. The bare shape is the one that hid — a WebGPU comment cited a
+  // four-digit line in glx.js against a file half that long, and a path-only
+  // matcher sails straight past it. Bare names resolve by basename, and only
+  // when that basename is UNIQUE in the repo (several files are named post.js,
+  // and guessing between them yields false failures, which is worse than a miss).
+  //
+  // This test flagged its own comment when that comment quoted real stale
+  // citations verbatim — correct behaviour, and the reason the examples above
+  // are described rather than written out.
+  const byBase = new Map();
+  for (const f of files) {
+    const b = path.basename(f);
+    byBase.set(b, byBase.has(b) ? null : f);   // null marks "ambiguous"
+  }
+
+  const bad = [];
+  for (const file of files) {
+    const src = read(file);
+    src.split("\n").forEach((line, i) => {
+      for (const m of line.matchAll(/(?<![A-Za-z0-9_./-])((?:(?:js|tools|tests)\/[A-Za-z0-9_./-]+|[A-Za-z0-9_-]+)\.(?:js|mjs|cjs)):(\d+)(?:-(\d+))?/g)) {
+        const cited = m[1];
+        const target = cited.includes("/") ? cited : byBase.get(cited);
+        if (!target) continue;                  // unknown or ambiguous basename
+        const hi = Number(m[3] || m[2]);
+        const n = lines(target);
+        if (n > 0 && (Number(m[2]) > n || hi > n)) {
+          bad.push(`${file}:${i + 1} cites ${m[0]} but ${target} has ${n} lines`);
+        }
+      }
+    });
+  }
+  assert.deepEqual(bad, [],
+    "a comment cites a line number past the end of the file it names — the code moved; cite a function or symbol instead");
+});
+
 test("source comments reference only files that exist", () => {
   // A file MOVE is invisible to every reviewer of the diff that caused it: the
   // comment in the file that points at the old location does not appear in it.
