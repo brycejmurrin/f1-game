@@ -321,8 +321,15 @@ asserted.
 |---|---|---:|---:|
 | A14 | Shanghai `trackProfile()` elevation range | ≤ 2 m | **6.735 m** |
 | A15 | Jeddah foundation elevation range | ≤ 3 m | **9.586 m** |
-| A16 | Singapore prop vertices | < 700,000 | **1,271,799** |
+| A16 | Singapore prop vertices (NIGHT build) | < 700,000 | **1,271,799** |
 | A17 | Madrid prop vertices | < 250,000 | **621,075** |
+
+The Singapore spec stages `race("singapore", "night", "dry")` explicitly and
+measures that build, which is both the worst case and the one that matters: night
+adds lit windows, neon and lamp geometry on top of the day mesh, so a street
+circuit's peak memory is its night peak. Naming the time of day IN the test also
+rules the cleanup pass out as a cause — it is not inherited from whatever the
+session last set, so no change to when `applyRaceSettings` runs could flip it.
 
 **A14/A15 are probably stale BOUNDS, not broken code.** Shanghai's own circuit
 def authors a 6.5 m rise at `s = 0.4525` (plus 2.5 m and 0.8 m bumps), so the
