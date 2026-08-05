@@ -811,7 +811,9 @@ const photoKeys = { w: false, s: false, a: false, d: false, up: false, dn: false
                     pu: false, pd: false, yl: false, yr: false, boost: false };
 const photoMove = { x: 0, y: 0 };   // touch move stick: x=strafe, y=forward (−1..1)
 const photoLook = { x: 0, y: 0 };   // touch look stick: x=yaw, y=pitch (−1..1)
-const photoMouse = { dx: 0, dy: 0, drag: false, px: 0, py: 0 };
+// pid: the ONE pointer that owns a look-drag; every other one is ignored (see
+// js/game/photomode.js). null when nothing is dragging.
+const photoMouse = { dx: 0, dy: 0, drag: false, px: 0, py: 0, pid: null };
 let photoAlt = 0;                    // touch up/down buttons: +1 up, −1 down
 let photoVertT = 0;                  // how long vertical input has been held (s) — ramps the climb rate
 // Studio light rig (__apex.studio): a ring of test lamps that follows the player
@@ -6703,9 +6705,18 @@ function tickBody(now) {
   // rival keeps driving whatever this screen is doing. Inert solo.
   netPlay.tick(now);
   if (paused && !netPlay.active()) {
+    // Nothing downstream reads the pad's edge latches while we are parked here,
+    // so drop them rather than let a pause-menu button-mash queue up and fire
+    // in one burst on the first frame after RESUME (see Input.clearEdges).
+    Input.clearEdges();
     // LIGHTING / CAMERA TUNER live preview: keep RENDERING (physics stays
     // paused) while either panel is open so every slider change shows on the
     // held frame — a camera angle is unjudgeable on a frozen picture.
+    // THIS IS THE ONLY updatePhotoCam CALL SITE, and that is on purpose: the
+    // free camera is a sub-mode OF the tuner, only reachable from it, and the
+    // tuner is only reachable from the pause menu. Resuming tears it down
+    // (setPaused -> closeLightTuner -> exitPhotoMode), so there is no unpaused
+    // state in which it should still be flying.
     if ((state === "race" || state === "count") && (!$("lighting").hidden || !$("camtune").hidden)) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
@@ -7648,9 +7659,18 @@ document.addEventListener("pointerdown", (e) => {
   if (!setupPreviewOn || !setupCamPanelOpen()) return;
   if (!e.target.closest || !e.target.closest("#cs-stack")) setSetupCamPanel(false);
 }, true);
+// AN INNER DISCLOSURE CLAIMS ESCAPE BEFORE ITS SCREEN DOES. This listener is on
+// document/capture and registers at script-eval time, i.e. before the generic
+// layer handler in js/game/topmodal.js (which registers on DOMContentLoaded and
+// therefore runs second on the same node) — and that handler bails on an event
+// already marked handled. stopPropagation alone did NOT mark it: it stops the
+// event descending but says nothing to a sibling listener on this same node, so
+// preventDefault is what actually keeps Escape from ALSO pressing the GARAGE's
+// BACK button and closing the screen behind the panel.
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && setupPreviewOn && setupCamPanelOpen()) {
     setSetupCamPanel(false);
+    e.preventDefault();
     e.stopPropagation();   // don't also close the GARAGE behind it
   }
 }, true);
@@ -7776,10 +7796,36 @@ function openGarage(from) {
   openSetup();
 }
 $("mb-garage").onclick = () => openGarage("menu");
-$("cs-done").onclick = () => {
+// Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
+// the part maths, which both exits owe the rest of the game.
+function leaveGarage() {
   $("carsetup").hidden = true;
   setupPreviewOn = false;
   recomputePlayerMods();
+}
+/* BACK — the door DONE cannot be, because DONE goes FORWARD. From the circuit
+   picker, DONE means "I have chosen a car, now set the race up" and lands on
+   race settings; there was no way at all to change your mind and return to the
+   picker, and no control on the screen that meant "back". So Escape could not
+   be pointed at DONE either (see data-esc-close on #carsetup in index.html) —
+   a back key that walks you further into a flow is worse than none.
+   Selections are kept exactly as DONE keeps them: nothing here is a cancel. */
+function garageBack() {
+  if (soundOn) GameAudio.uiTick();
+  leaveGarage();
+  if (garageReturn === "vsfriend") {
+    $("vsfriend").hidden = false;
+    netLobby.roomChanged("car");
+    return;
+  }
+  if (garageReturn === "career") { careerUi.openHub(); return; }
+  if (garageReturn === "select") { buildSelect(); $("select").hidden = false; return; }
+  buildSelect();
+  els.overlay.hidden = false;   // came in from the title screen's GARAGE button
+}
+$("cs-back").onclick = garageBack;
+$("cs-done").onclick = () => {
+  leaveGarage();
   // Back to the waiting room, and tell the other player what you are driving —
   // a room that only synced on START would have two people spend a minute each
   // choosing a car neither can see.
@@ -7991,6 +8037,16 @@ const camPicker = (() => {
   });
   b.addEventListener("pointerup", () => clearTimeout(holdT));
   b.addEventListener("pointerleave", () => clearTimeout(holdT));
+  /* A CANCELLED TOUCH IS NOT A LONG PRESS. iOS cancels touches routinely — an
+     edge swipe, a notification, its own gesture arbitration — and a touch
+     pointer holds implicit capture, so `pointerleave` does not fire for one
+     either: neither line above ran, the 340 ms timer went off, and the
+     thirteen-mode camera picker opened mid-corner. `held` then stayed true and
+     ate the NEXT genuine tap as the hold's trailing click, so the camera button
+     appeared to do nothing at all until it was pressed twice. */
+  const cancelHold = () => { clearTimeout(holdT); held = false; };
+  b.addEventListener("pointercancel", cancelHold);
+  b.addEventListener("lostpointercapture", cancelHold);
   b.addEventListener("contextmenu", (e) => { e.preventDefault(); camPicker.show(); });
   // Cycle on CLICK (not pointerup): synthetic .click() from tests/assistive tech
   // works unchanged, and a real tap fires it after pointerup anyway. When the
@@ -8173,6 +8229,10 @@ if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
   $("mb-standings").hidden = !hasSeason; }
 Career.load();            // resolve + migrate the career save once at boot
 refreshCareerButton();
+// `state` is closure-local, and js/game/uilayers.js is what decides whether
+// Escape means PAUSE or BACK — hand it the answer rather than have it guess one
+// from the DOM. Same pair setPaused() gates on.
+UiLayers.setRaceGetter(() => state === "race" || state === "count");
 // Pause key: when the settings sub-menu is open it acts as a BACK to the pause
 // menu; otherwise it toggles pause as usual.
 Input.init(canvas, { onPause: () => {
@@ -8191,7 +8251,22 @@ Input.init(canvas, { onPause: () => {
 // circuits on a phone and 40 on a desktop. Both now read the championship
 // calendar (Tracks.SEASON), and the desktop, which has the room, names the
 // classics rather than silently folding them into the season count.
-if (!Input.touchControlsNeeded()) document.body.classList.add("desktop");
+/* body.desktop IS A LIVE ANSWER, NOT A BOOT-TIME ONE. It used to be set once,
+   here, and never revisited — but `(pointer: coarse)` flips whenever an iPad is
+   docked to or undocked from a keyboard, and showTouchControls() reads the LIVE
+   query. So the un-docked iPad un-hid GAS/BRAKE/BOOST while body.desktop was
+   still on, and every rule that gives those buttons their tap size and their
+   `pointer-events: auto` is `body:not(.desktop)` (css/overlays.css) — real
+   buttons, correctly laid out, that could not be pressed, with #pm-steer and
+   #pm-calib hidden by css/responsive.css so there was no way back either.
+   Re-run everything that reads the query, in the order boot does. */
+function syncPointerKind() {
+  document.body.classList.toggle("desktop", !Input.touchControlsNeeded());
+  if (state === "race" || state === "count") showTouchControls(true);
+  refreshGearsBtn();   // GEARS is enabled by thumbs being free, i.e. by this
+}
+syncPointerKind();
+Input.onPointerKindChange(syncPointerKind);
 {
   const rounds = Tracks.SEASON.length, classics = Tracks.LIST.length - rounds;
   els.subtitle.textContent = "2026 grid · " + rounds + " real circuits · "

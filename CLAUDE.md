@@ -119,6 +119,42 @@ cores and every one of them reports timeouts.
 - **A plan's fan-out should reduce the NUMBER of verification rounds**, not run
   more of them at once — verification is serial here and is the bottleneck.
 
+**AGENTS: DO NOT SIT AND WAIT, AND DO NOT POLL.** A full SwiftShader spec can be
+40-90 s on a small box, so a suite is tens of minutes — that time is yours, not
+dead. Two rules:
+
+- **Never block on a run.** Start it with `run_in_background`, or arm a `Monitor`
+  with an until-loop (`until ! pgrep -f "[p]laywright test" >/dev/null; do sleep 10; done`)
+  and get woken. Repeatedly `tail`-ing the log in a loop is the same as blocking,
+  only noisier — one check to confirm it started is enough.
+- **Then go and do something useful.** In rough order of value: read the diff you
+  just wrote with fresh eyes; verify a factual claim you put in a code comment;
+  research the platform behaviour behind the bug (see below); draft the docs the
+  change needs; prepare the follow-up edit.
+
+**Research the mechanism, not just the fix.** The TinyFish MCP tools
+(`search`, `fetch_content`) are the fastest way to check a platform claim, and
+this codebase has repeatedly been bitten by defects whose *cause* was guessed
+correctly-ish and written down wrongly. Doing this during a test run costs
+nothing. Two concrete returns from one such session:
+
+- a code comment blamed WebKit for a `setPointerCapture` throw that is in fact
+  spec-mandated in every engine — the comment would have sent the next reader
+  hunting a Safari bug that does not exist;
+- the Escape-vs-`<dialog>` fix was confirmed portable to Safari *for a different
+  reason* than it works in Chrome, which is the difference between "it passed"
+  and "it will keep passing".
+
+Anything durable that comes out of it goes in `docs/research/` — see
+**`docs/research/PLATFORM-INPUT-NOTES.md`**, which collects the platform
+behaviours that are invisible on the desktop this game is developed on
+(pointer capture, the top layer, `zoom`, `(pointer: coarse)`, iOS context loss).
+Read it BEFORE debugging anything that reproduces on one device and not another.
+
+IMPORTANT: don't edit `js/` or `css/` while a run is in flight — the server
+serves the working tree, so later specs load a mixed build (see the note at the
+end of this section). Writing docs, reading, and researching are all safe.
+
 ### 2. Run the groups the change needs — not all of them
 
 The whole suite is ~40 minutes of SwiftShader. Which groups a change needs is
@@ -724,7 +760,26 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   wheel/trackpad gesture that lands outside a pane
                                   into the open menu's nearest pane, and moves focus
                                   with the arrow keys / Home / End / PageUp / PageDown
-  photomode.js   Photomode      photo mode
+  uilayers.js    UiLayers       THE LAYER STACK — the one answer to "which screen
+                                  is on top", asked by menunav.js (which pane do
+                                  the arrows move), input.js (may a key drive the
+                                  car) and topmodal.js (what does Escape close).
+                                  Was three hand-maintained lists that drifted by
+                                  five screens. top() ranks a showModal() dialog
+                                  ABOVE every z-index, because the top layer is
+                                  not orderable by z-index and parseInt("auto")
+                                  is NaN — that bug handed the arrow keys to
+                                  whatever screen sat behind the open modal.
+                                  ESCAPE IS "BACK": every layer names the control
+                                  Escape should press with data-esc-close in
+                                  index.html (data-esc="none" refuses), and it
+                                  only means PAUSE when a race is running with
+                                  nothing on top of it — inRace() comes from
+                                  game.js via setRaceGetter, never re-derived
+  photomode.js   Photomode      photo mode — the LIGHTING/CAMERA TUNER's FREE
+                                  CAMERA, not a separate screen. #photo-controls
+                                  is a layer above the panel, so Escape steps out
+                                  of the fly-cam and leaves the panel open
   tuner.js       TunerPanel     LIGHTING TUNER pause-menu panel
   cam-tuner.js   CamTunerPanel  CAMERA TUNER pause-menu panel
   steer-tuning.js  SteerTuning  ADVANCED STEERING panel
@@ -741,6 +796,15 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
                  PARALLEL-WORK.md is where to spend concurrency — read-only
                    fan-out vs worktrees vs the browser suite, which is serial
                    on 4 cores and is the bottleneck every plan has to respect
+
+                 research/PLATFORM-INPUT-NOTES.md is the one to read before
+                   debugging anything that reproduces on ONE device: pointer
+                   capture and the four-way release net, the top layer vs
+                   z-index, `zoom` and --ui-scale (1.0 on a mouse, 1.15 on
+                   touch — which is what makes a whole class of bug
+                   desktop-invisible), Escape vs <dialog> close watchers,
+                   `(pointer: coarse)` being the PRIMARY pointer only, and iOS
+                   WebGL context loss
 ```
 
 ---

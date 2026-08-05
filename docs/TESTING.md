@@ -431,13 +431,13 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `ui-audit.spec.js` | portrait + landscape screenshots of every screen |
-| `ui-button-touch.spec.js` | button/touch steer mode: auto-throttle, disabled calibrate, race-settings layout |
+| `ui-button-touch.spec.js` | button/touch steer mode: auto-throttle, disabled calibrate, race-settings layout; the lighting tuner's FREE CAMERA touch sticks (drag registers, no latch when the overlay is pulled away mid-hold, a cancelled scene drag releases) and its layout clearing the docked panel at every UI SIZE |
 | `ui-desktop.spec.js` | desktop layout (`body.desktop`), keyboard controls, non-touch UI |
 | `ui-scale.spec.js` | UI SIZE / HUD SIZE — every main screen still fits at 80/100/130/150 %, the two scales stay independent, and the HUD clusters stay on screen. Containment only, never absolute sizes; the exhaustive matrix is `--scale=` on the three fit tools |
 | `hud-layout.spec.js` | touch control + HUD layout across every steering and gearbox mode |
 | `hud-audit.spec.js` | HUD screenshots + mode-dependent elements |
 | `menu-survey.spec.js` | click every button, capture every state |
-| `menu-keyboard.spec.js` | desktop menu input — wheel redirection and arrow/Home/End/PageUp/PageDown focus |
+| `menu-keyboard.spec.js` | desktop menu input — wheel redirection and arrow/Home/End/PageUp/PageDown focus; an open modal outranks the screen behind it; ESCAPE IS BACK (every layer's `data-esc-close` resolves, picker/garage/title, and a sheet closes without resuming the race) |
 | `menu-baseline.spec.js` | SIX blessed pixel baselines (title/select/garage x landscape-phone/desktop) — the IDENTITY half `tools/layout-audit.mjs` structurally cannot see: colour, type, weight, spacing. Deliberately six, not 380: a suite that asks a human to bless 380 images gets rubber-stamped |
 | `multiplayer-npeer.spec.js` | the rival is keyed by a cross-peer identity — a packet for an unknown car is dropped rather than posed over somebody |
 | `multiplayer-seats.spec.js` | seat exclusivity — a seat somebody else is in cannot be picked, and the clash resolves |

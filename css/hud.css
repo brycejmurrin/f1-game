@@ -234,11 +234,18 @@ body.lt-open:not(.pc-nopanel) .pc-stick { width: 84px; height: 84px; }
 body.lt-open:not(.pc-nopanel) .pc-nub { width: 34px; height: 34px; margin: -17px 0 0 -17px; }
 body.lt-open:not(.pc-nopanel) .pc-btn { width: 46px; height: 42px; font-size: 14px; }
 body.lt-open:not(.pc-nopanel) .pc-move-wrap { left: calc(10px + var(--sal)); }
+/* --dock-px, not --dock-w: the PANEL, unlike these controls, IS zoomed — it is a
+   `.sheet`, and css/components.css puts `zoom: var(--ui-scale)` on every sheet —
+   so it paints --dock-w x --ui-scale wide with its safe-area inset scaled along
+   with it. See the comment on --dock-px in css/tuner.css. Both offsets below
+   therefore drop the `+ var(--sar)` they used to carry: --dock-px contains it.
+   Note this is --ui-scale and not --hud-scale, because the thing being cleared
+   is a menu sheet rather than anything in the driving layer. */
 body.lt-open:not(.pc-nopanel) .pc-altcol {
-  left: auto; right: calc(var(--dock-w) + 14px + var(--sar));
+  left: auto; right: calc(var(--dock-px) + 14px);
 }
 body.lt-open:not(.pc-nopanel) .pc-look-wrap {
-  left: auto; right: calc(var(--dock-w) + 66px + var(--sar));
+  left: auto; right: calc(var(--dock-px) + 66px);
 }
 .pc-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
 .pc-stick {
@@ -277,7 +284,7 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
    right:8px + min(88vw,380px) sizing) so the two never overlap. Only while the
    panel is actually showing (pc-nopanel tucks it away and frees the width). */
 body.lt-open:not(.pc-nopanel) #pc-bar {
-  max-width: max(160px, min(70vw, 720px, calc(100vw - var(--dock-w) - 40px - var(--sal) - var(--sar))));
+  max-width: max(160px, min(70vw, 720px, calc(100vw - var(--dock-px) - 40px - var(--sal))));
   gap: 8px; padding: 6px 10px;
 }
 /* Same context: the tuner panel already carries plenty of on-screen text, so
@@ -313,7 +320,10 @@ body.pc-nopanel .pc-look-wrap { left: auto; right: calc(20px + var(--sar)); }
 body.pc-nopanel .pc-altcol   { left: auto; right: calc(152px + var(--sar)); }
 /* Photo-mode HIDE HUD (body.pc-uihidden): clean unobstructed frame — every
    photo control (bar, sticks, buttons) and the docked tuner panel disappear;
-   only the tiny restore eye stays. Keyboard flying keeps working. */
+   only the restore eye stays. On a desktop the keys keep flying the camera, so
+   the eye is just a way back to the UI. ON A TOUCH DEVICE IT IS THE ONLY
+   CONTROL LEFT ON SCREEN — there is no WASD to fall back on — which is what the
+   size rule below is about. */
 body.pc-uihidden #photo-controls > :not(#pc-restore) { display: none !important; }
 body.pc-uihidden #lighting-inner { display: none !important; }
 #pc-restore {
@@ -330,6 +340,15 @@ body.pc-uihidden #lighting-inner { display: none !important; }
 @media (hover: hover) { #pc-restore:hover { opacity: 0.95; } }
 #pc-restore:active { opacity: 0.95; }
 body.pc-uihidden #pc-restore { display: block; }
+/* The one control between a touch-only user and a screen with nothing on it.
+   36px is under the 44px Apple asks for and only just over WCAG 2.2 SC 2.5.8's
+   24px, which is a bad trade for a button you reach for precisely when every
+   other affordance is gone — and unlike a desktop, there is no keyboard here to
+   fly with while you aim at it. Only the box grows; the glyph and the low
+   resting opacity stay, so the clean frame this mode exists for is unchanged. */
+@media (not (any-pointer: fine)) {
+  #pc-restore { width: 46px; height: 46px; font-size: 20px; }
+}
 /* Hide the keyboard-shortcut hint where there is no keyboard — and ask that
    question of the WHOLE device, not just its primary pointer.
    `(pointer: coarse)` describes the PRIMARY input only, so an iPad with a Magic

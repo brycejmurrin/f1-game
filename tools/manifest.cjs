@@ -123,6 +123,7 @@ const FULL = [
   "js/game/menus.js",
   "js/game/scrollfade.js",
   "js/game/sheetshape.js",
+  "js/game/uilayers.js",
   "js/game/topmodal.js",
   "js/game/menunav.js",
   "js/game/ariastate.js",
