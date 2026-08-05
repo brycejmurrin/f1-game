@@ -1,6 +1,6 @@
 # Testing reference
 
-103 root Playwright spec files (`tests/*.spec.js`) + 38 `node --test` unit suites
+104 root Playwright spec files (`tests/*.spec.js`) + 39 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -160,7 +160,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 
 | Group | What it runs |
 |---|---|
-| `api` | the `__apex` contract: dev-tools, headless, obs/act, new hooks, data lifecycle, telemetry compare, assets, logging |
+| `api` | the `__apex` contract: dev-tools, headless, obs/act, new hooks, data lifecycle, telemetry compare, assets, logging, the race wake lock |
 | `hooks` | camera / driving / map / new `__apex` hook contracts |
 | `agent` | the agent world view: world, trackInfo, scene, rollout, determinism, the drive bench |
 | `agent-contract` | freezes the shape of the agent-view API |
@@ -335,6 +335,7 @@ what it covers.
 | `agentview-api-contract.test.mjs` | freezes the shape of the agent-view API |
 | `assets-api.spec.js` | the baked asset pack's runtime path, and that every failure degrades to procedural |
 | `logging.spec.js` | `js/log.js` in a real page: `Log` live before any game module evaluates, retention never lagging the console level, single namespace prefix, records flattened rather than holding references, `logs()` filters, a bad spec ignored not thrown |
+| `wake-lock.spec.js` | the screen wake lock held for the duration of a race: requested on start, released on finish and on a mid-race quit (no results screen), released on hide and re-acquired on return, and degrades silently when the API is missing or its request rejects |
 
 ### Physics & behaviour
 
@@ -497,6 +498,7 @@ what it covers.
 | `deploy-staging.test.mjs` | the Pages workflow uploads an allow-list of directories — every path the shipped code can fetch must be inside it, or it 404s in production while passing every local run |
 | `service-worker.test.mjs` | the SW's install/fetch/version-guard behaviour |
 | `perf-sentinel.test.mjs` | the crash sentinel's memory must not outlive the crash |
+| `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 
 ---

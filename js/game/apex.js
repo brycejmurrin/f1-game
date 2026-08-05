@@ -1578,9 +1578,13 @@ const api = {
   // renderScale(v?) — adaptive-resolution control. No arg: report current state
   // { scale, fps, auto }. Number: pin the 3D render scale (0.5–1) and disable
   // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
-  // win (softer 3D view; HUD stays crisp).
+  // win (softer 3D view; HUD stays crisp). `floorMs` is the governor's derived
+  // per-device budget (the observed floor of frame intervals — see
+  // js/game/perf.js) rather than a hardcoded 16.7 ms; it rises to match an
+  // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
+  // judging that device against a 60 fps target it cannot reach.
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes() };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes() };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
   },

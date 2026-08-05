@@ -299,11 +299,11 @@ to handle: `js/game/topmodal.js` scans `dialog.screen` and this element is not
 
 ---
 
-## 9b. CONFIRMED: the screen can sleep in the middle of a race
+## 9b. FIXED: the screen could sleep in the middle of a race
 
-`grep` for `wakeLock` finds exactly **two** hits, both in `js/net/lobby.js`
-(`holdWake`/`dropWake`, lines ~1491-1554). The VS FRIEND waiting room keeps the
-screen awake. **A race does not.**
+`grep` for `wakeLock` used to find exactly **two** hits, both in
+`js/net/lobby.js` (`holdWake`/`dropWake`, lines ~1491-1554). The VS FRIEND
+waiting room kept the screen awake. **A race did not.**
 
 So on any phone or tablet the system idle timer runs during a Grand Prix and the
 display dims, then locks. Severity depends on how you steer, and the worst case
@@ -325,38 +325,36 @@ part that is easy to miss — **re-acquires on `visibilitychange`**, because the
 platform releases the lock whenever the page is hidden and does not give it
 back. Copy that shape; do not write a second one.
 
-### The fix, scoped
+### The fix, shipped
 
-The lifecycle already exists and is exactly right — `body.in-race` is added at
-`js/game.js:2518` (`startRace`, so it covers every driving session that starts
-there, including the count-in) and removed at `:2646` (`endRace`) and `:3020`
-(`quitToMenu`). Hold the lock on the first, drop it on the other two.
+`holdRaceWake`/`dropRaceWake` in `js/game.js` copy `lobby.js`'s shape exactly.
+Held in `startRace` (so it covers every driving session, including the
+count-in), dropped in `endRace` and in `quitToMenu` — the mid-race PAUSE > QUIT
+exit that never reaches `endRace` at all, and the one `tests/wake-lock.spec.js`
+exists specifically to keep honest. The re-acquire needed **no new listener**:
+the existing `visibilitychange` handler in `js/game.js` gained a third clause
+beside the two it already had (auto-pausing a hidden race, arming/disarming the
+crash sentinel).
 
-The re-acquire needs **no new listener**: `js/game.js:8133` already handles
-`visibilitychange`, and already does the analogous thing for two other systems
-(auto-pausing a hidden race, arming/disarming the crash sentinel). A third
-clause belongs there rather than in a fourth handler.
-
-Both requirements the lobby version encodes must survive the copy: tolerate
-`navigator.wakeLock` being absent, and tolerate the request **rejecting** — it
-is not guaranteed even where supported, and a rejected promise must not become
-an unhandled one.
+Both requirements the lobby version encodes survived the copy: `navigator.wakeLock`
+being absent and the request **rejecting** are both tolerated silently — see the
+two dedicated specs in `tests/wake-lock.spec.js`.
 
 One caveat to verify on hardware: WebKit bug **254545** reports the Wake Lock
 API working in a Safari tab but **not** in a home-screen PWA. Sources conflict
 (iOS 16.4's release notes claim home-screen support). If it does fail there,
 it fails in the exact host most likely to be used for a long session.
 
-**And it compounds with §9c**: Low Power Mode is reported to force auto-lock to
-**30 seconds**. So on a phone in Low Power Mode, steering by tilt, the screen
-goes dark about half a minute into the race — at the same time the governor is
-finishing its own collapse. The two worst mobile defects in this codebase bite
-in the same state, which is probably why "it goes wrong on my phone" has never
-resolved into one reproducible complaint.
+**It used to compound with §9c**: Low Power Mode is reported to force auto-lock
+to **30 seconds**, so on a phone in Low Power Mode, steering by tilt, the
+screen went dark about half a minute into the race — at the same time the
+governor was finishing its own collapse. The two worst mobile defects in this
+codebase bit in the same state, which is probably why "it goes wrong on my
+phone" never resolved into one reproducible complaint. Both are fixed now.
 
 ---
 
-## 9c. CONFIRMED: Low Power Mode makes the game degrade itself for nothing
+## 9c. FIXED: Low Power Mode made the game degrade itself for nothing
 
 **iOS throttles `requestAnimationFrame` to 30 fps in Low Power Mode.** Well
 attested — WebKit bug 173434 discusses it as intended behaviour, and it applies
@@ -411,29 +409,35 @@ API is not in Safari at all, and `w3c/battery#9` ("Detect power saving mode")
 has been open since 2017. Apple exposes `isLowPowerModeEnabled` to native code
 only. So any fix has to be inferential.
 
-### Two fixes, and they are complementary
+### Two fixes, shipped, and they are complementary
 
-**A — derive the budget instead of hardcoding it.** Track the *floor* of
-observed frame intervals (a low percentile, not the mean — that is the fastest
-this display will go) and set the degrade/restore thresholds relative to it.
-On a 60 Hz panel the floor is ~16.7 ms and every threshold keeps its present
-value; under a 30 fps cap the floor is ~33.3 ms and the device is correctly
-judged to be *meeting* its budget. This restores the thing "19 ms" was always
-standing in for.
+**A — derive the budget instead of hardcoding it.** `PerfGov._floorMs` in
+`js/game/perf.js` tracks the *floor* of observed frame intervals (a low
+percentile, not the mean — that is the fastest this display will go), pulled
+down fast toward a newly observed faster frame and crept up slowly toward a
+slower one, and the degrade/restore thresholds are relative to it instead of
+the old hardcoded 19 / 12.5 ms. On a 60 Hz panel the floor settles near
+16.7 ms and every threshold keeps its original value; under a 30 fps cap the
+floor rises to ~33.3 ms and the device is correctly judged to be *meeting* its
+budget. This restores the thing "19 ms" was always standing in for.
 
-**B — make the degrade causal.** After a downscale, compare the EMA before and
-after: if it did not improve meaningfully, fill rate was not the bottleneck, so
-revert the step and stop climbing down. This catches every cause of capping,
-including ones nobody has thought of, at the cost of one wasted step.
+**B — make the degrade causal.** `PerfGov._pendingVerify` marks every
+downscale/tier-shed step provisional: the *next* evaluation compares the EMA
+before and after, and if it did not improve by a small margin, fill rate was
+not the bottleneck, so the step is reverted and the governor holds off rather
+than repeating it. This catches every cause of capping the derived budget does
+not anticipate, at the cost of one wasted step — measured while tuning it: the
+margin has to be small (0.5 ms here, not "meaningfully better"), or it also
+discards real, working steps on a genuinely slow device and turns a settle
+into an endless down/up cycle instead.
 
-A is the right model; B is the safety net for when the model is wrong. A
-variance test (a capped clock pins intervals tightly to a multiple of the vsync
-period, while a GPU-bound scene varies with load) is a third signal, but it is
-a heuristic and the other two are not — treat it as corroboration only.
+A is the right model; B is the safety net for when the model is wrong.
+`tests/perf-governor.test.mjs` exercises both against the real `tick()` logic:
+a 30 fps-capped device settles at full quality, a genuinely GPU-bound one still
+downscales and holds, and a reverted step does not repeat forever.
 
-This is out of scope for a controls pass and is written down rather than fixed.
-It is, on measured impact, probably the largest single mobile-quality defect in
-the codebase.
+This was, on measured impact, probably the largest single mobile-quality
+defect in the codebase.
 
 ---
 

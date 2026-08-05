@@ -2439,6 +2439,33 @@ function launchFlyingLap() {
   announce("QUALIFYING LAP", 1.6);
 }
 
+// SCREEN WAKE LOCK, held for the duration of a race. Without it the system
+// idle timer runs during a Grand Prix same as any other page, and tilt
+// steering sends NO input events by construction (orientation is a sensor
+// read, not user input) — so on a phone driving by tilt the screen dims and
+// locks mid-race with nothing the player did wrong. js/net/lobby.js already
+// holds one for the same reason while the VS FRIEND waiting room is open;
+// this is that shape, copied rather than reinvented. Browsers release the
+// lock on every hide (spec), so it is re-acquired on return by the
+// visibilitychange handler below rather than a second listener here.
+let raceWake = null;
+let raceWakeWanted = false;
+function holdRaceWake() {
+  raceWakeWanted = true;
+  try {
+    if (!navigator.wakeLock || raceWake) return;
+    navigator.wakeLock.request("screen").then((l) => {
+      raceWake = l;
+      l.addEventListener("release", () => { raceWake = null; });
+    }).catch(() => {});
+  } catch (e) {}
+}
+function dropRaceWake() {
+  raceWakeWanted = false;
+  try { if (raceWake) raceWake.release(); } catch (e) {}
+  raceWake = null;
+}
+
 function startRace() {
   // Abort any incident takeover left over from the last race, FIRST — while the
   // cars it owns and the track they crashed on are both still the current ones.
@@ -2516,6 +2543,7 @@ function startRace() {
   // and setMusic/setSfx lift it if it is off, so it can never strand you.
   els.soundbtn.hidden = true;
   document.body.classList.add("in-race");
+  holdRaceWake();
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
   dbgCam = null;              // fresh race — drop any leftover debug free-cam
@@ -2644,6 +2672,7 @@ function endRace(forcedOrder) {
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
   state = "results";
   document.body.classList.remove("in-race");
+  dropRaceWake();
   els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
@@ -3018,6 +3047,7 @@ function quitToMenu() {
   closeCamTuner(false);
   state = "menu"; paused = false;
   document.body.classList.remove("in-race");
+  dropRaceWake();
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
@@ -8137,6 +8167,9 @@ document.addEventListener("visibilitychange", () => {
   // return to a live session.
   if (document.hidden) PerfGov.sentinelArm(false);
   else if (state === "race" || state === "count") PerfGov.sentinelArm(true);
+  // The platform releases a wake lock on every hide and does not give it
+  // back — re-request it here rather than a fourth listener elsewhere.
+  if (!document.hidden && raceWakeWanted) holdRaceWake();
 });
 window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); });
 

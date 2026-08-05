@@ -14,8 +14,9 @@ let _gfx = null;
 // ── Adaptive-resolution governor ─────────────────────────────────────────────
 // Holds framerate by scaling the 3D render resolution (gfx.setRenderScale) when
 // frames run slow, restoring sharpness when there's headroom. Conservative:
-// only downscales when clearly missing 60 fps (>19 ms EMA) so a healthy
-// vsync-capped display never degrades; upscales slowly to avoid oscillation.
+// only downscales when clearly missing THIS DEVICE'S OWN observed budget (see
+// _floorMs below — ~19 ms EMA at the 60 fps default) so a healthy vsync-capped
+// display never degrades; upscales slowly to avoid oscillation.
 //
 // SETTLE, don't HUNT: every scale change reallocates all HDR/bloom targets
 // (setRenderScale -> resize -> createTargets) — a visible hitch. The old
@@ -25,9 +26,54 @@ let _gfx = null;
 // haze/lamp-volumetric passes STANDARD keeps off) — oscillated ~once a second
 // and each realloc read as a "jump". Now: snap down promptly, then HOLD the
 // lower scale (_downHold) and only creep back up under clear, sustained
-// headroom (<12.5 ms). Desktop / STANDARD-tier sit at scale 1 and never enter
-// these branches, so their (already smooth) behaviour is unchanged.
+// headroom (<12.5 ms below the derived budget — see _floorMs). Desktop /
+// STANDARD-tier sit at scale 1 and never enter these branches, so their
+// (already smooth) behaviour is unchanged.
 let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true, _downHold = 0;
+
+// THE BUDGET IS DERIVED, NOT HARDCODED. "> 19 ms" only ever meant "slower than
+// a 60 Hz display can go" — it silently assumed the frame INTERVAL is a proxy
+// for frame COST, which is true only while the display is what you are
+// competing with. Under an external cap (iOS Low Power Mode throttles rAF to
+// 30 fps, a 30 Hz panel, a browser background throttle) the two decouple: every
+// frame lands at ~33.3 ms no matter how cheap it is to draw, the old governor
+// downscaled to the floor and shed every optional feature within ~27 s, and
+// NONE of it could ever help — the clock was capped externally and had nothing
+// to do with how long the frame took to draw. `_floorMs` tracks the FLOOR of
+// observed frame intervals (a low percentile, not the mean — the fastest this
+// display has actually gone) and the thresholds below are relative to it, so a
+// 60 Hz panel keeps exactly today's numbers (floor settles near 16.7 ms) while
+// a capped device is correctly judged to be MEETING its budget instead of
+// chasing a number it cannot move. Pulled toward a faster observed frame
+// quickly (that is direct evidence the device can go there); crept toward a
+// slower one slowly, so a single stray heavy frame can't redefine the budget —
+// only a SUSTAINED absence of fast frames (exactly what a hard rAF cap looks
+// like) moves it.
+let _floorMs = 16.7;
+const FLOOR_DOWN_A = 0.3, FLOOR_UP_A = 0.02;
+const DEGRADE_OVER = 2.3, RESTORE_UNDER = 4.2;   // ...the floor — 19 / 12.5 at the 16.7 ms default
+
+// MAKE THE DEGRADE CAUSAL. The derived budget above is the right model but
+// takes a couple of seconds to settle; this is the net for while it does, and
+// for any cause of capping the model does not anticipate. Every downscale/
+// feature-shed step is provisional until the NEXT evaluation: if the EMA did
+// not improve by a meaningful margin, the step bought nothing, so fill rate
+// was not the bottleneck — revert it and hold off rather than immediately
+// repeating the same failed step, which is what turned one bad guess into
+// "runs to the bottom of the ladder and stays there for the session".
+// VERIFY_MARGIN is deliberately SMALL, not "how much better should this look":
+// a genuinely GPU-bound step (fill rate really was the cost) still shows a
+// real, if partial, improvement — a 0.1 scale cut rarely halves the frame,
+// because plenty of per-frame cost does not shrink with the render target —
+// so a margin sized for "meaningfully better" discarded real, working steps
+// and re-tried them every cycle, which is a slower version of the exact
+// oscillation _downHold exists to prevent (measured while tuning this: at
+// margin 2 a genuinely slow device cycled its scale down and back up every
+// ~7 s forever instead of settling). A capped clock, by contrast, shows
+// ~zero improvement — the frame time was never coupled to the render target
+// at all — so even a small margin still tells the two apart.
+let _pendingVerify = null;   // {kind:"scale"|"tier", prev, ema} for the last unverified step
+const VERIFY_MARGIN = 0.5, VERIFY_COOL = 300;
 
 // ── Feature-shedding tiers: the governor's SECOND stage ──────────────────────
 // Resolution scaling can't rescue costs that don't shrink with the render
@@ -113,16 +159,39 @@ function cleanRace() {
 function tick(dtMs) {
   if (!_autoRes) return;
   // Ignore huge spikes (tab resume, GC): they'd yank the scale.
-  if (dtMs < 100) _frameEMA += (dtMs - _frameEMA) * 0.1;
+  if (dtMs < 100) {
+    _frameEMA += (dtMs - _frameEMA) * 0.1;
+    _floorMs += (dtMs - _floorMs) * (dtMs < _floorMs ? FLOOR_DOWN_A : FLOOR_UP_A);
+  }
   if (_downHold > 0) _downHold--;   // recovery hold ticks down every frame
   if (_govCool > 0) { _govCool--; return; }
   if (++_govT < 45) return;   // evaluate ~every 45 frames
   _govT = 0;
+
+  // Verify the last step before taking a new one.
+  if (_pendingVerify) {
+    const v = _pendingVerify; _pendingVerify = null;
+    if (_frameEMA > v.ema - VERIFY_MARGIN) {
+      if (v.kind === "scale") _gfx.setRenderScale(v.prev);
+      else _perfTier = v.prev;
+      _govCool = VERIFY_COOL;
+      return;
+    }
+  }
+
+  const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs - RESTORE_UNDER;
   const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
-  if (_frameEMA > 19) {                        // <~53 fps: degrade PROMPTLY
-    if (cur > 0.5) { if (_gfx.setRenderScale(cur - 0.1)) { _govCool = 30; _downHold = 600; } }
-    else if (_perfTier < 4) { _perfTier++; _govCool = 90; _downHold = 600; }   // scale floor hit — shed a feature
-  } else if (_frameEMA < 12.5 && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
+  if (_frameEMA > degradeAt) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
+    if (cur > 0.5) {
+      if (_gfx.setRenderScale(cur - 0.1)) {
+        _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
+        _govCool = 30; _downHold = 600;
+      }
+    } else if (_perfTier < 4) {                // scale floor hit — shed a feature
+      _pendingVerify = { kind: "tier", prev: _perfTier, ema: _frameEMA };
+      _perfTier++; _govCool = 90; _downHold = 600;
+    }
+  } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     if (cur < 1) { if (_gfx.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 240; }
     // Features come back only at full res under the same sustained headroom,
     // one per ~4 s — and never below the crash-sentinel floor.
@@ -145,6 +214,7 @@ return {
   tierFloor: () => _perfTierFloor,
   strikes: () => _crashStrikes,
   fpsEMA: () => _frameEMA,
+  floorMs: () => _floorMs,
   autoRes: () => _autoRes,
   setAutoRes: (on) => { _autoRes = !!on; },
 };
