@@ -226,6 +226,21 @@ but the difference between passing and timing out. `physics`, `behaviour`,
 subagent told to "just run `test:tiny` to check" is a third and fourth worker,
 so give it `--workers=1` or have it verify without a browser.
 
+**Give subagents a flat prohibition, not a load threshold.** "Check
+`/proc/loadavg` first and skip the run if it is above 6" reads as careful and
+is not: an agent checks once, spends ten minutes editing, and starts the run
+against a number that has since moved. Measured in exactly that way here — a
+`test:tiny` in a worktree took the box from ~9 to **18.9** and cost the group
+running in the main tree a 209 s timeout on a spec that is fine alone. Say
+**"do not run Playwright at all; report it unverified and I will run it"** and
+run it yourself afterwards. A verification you have to redo is not a saving.
+
+When it happens anyway, **write down the contaminated WINDOW** before doing
+anything else — the log is timestamped, so `awk -F'[][]' '$2 >= "HH:MM:SS" &&
+$2 <= "HH:MM:SS"'` over it gives you the exact list. A pass inside the window is
+still a pass (contention makes tests slower, not wrong); it is only the
+FAILURES in it that have to be re-run alone before they mean anything.
+
 Past the ceiling, tests fail on the CLOCK rather than on an assertion. The
 signature is `Tearing down "context" exceeded the test timeout`, a bare
 `Test timeout of 120000ms exceeded`, or a spec whose duration is several times
