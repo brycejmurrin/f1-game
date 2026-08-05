@@ -119,7 +119,7 @@
 #cs-budget.unlimited { color: #0c8; }
 .cs-unlimited-btn {
   flex: 0 0 auto; width: auto; margin: 0;
-  font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
+  font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.1em;
   padding: 4px 10px; border-radius: var(--r-sm);
   background: rgba(255,255,255,0.06); color: var(--dim);
   border: 1px solid rgba(255,255,255,0.14);
@@ -159,7 +159,7 @@
 .cs-stat-boost.penalty { background: #f90; }
 .cs-stat-val {
   width: 30px; flex-shrink: 0; text-align: right;
-  font-size: 13px; font-weight: 700; color: var(--text);
+  font-size: var(--fs-3); font-weight: 700; color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 .cs-stat-val.up { color: #4df; }
@@ -227,8 +227,8 @@
      keeps the box the size the glyphs actually need. */
   flex: 0 0 auto; line-height: 1.35;
 }
-.cs-tab-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; color: var(--dim); }
-.cs-tab-cur { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.4); }
+.cs-tab-lbl { font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.12em; color: var(--dim); }
+.cs-tab-cur { font-size: var(--fs-1); font-weight: 600; color: rgba(255,255,255,0.4); }
 .cs-tab.upgraded .cs-tab-lbl { color: #4df; }
 .cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }
 .cs-tab.active { background: rgba(225,6,0,0.16); border-color: var(--red); }
@@ -250,7 +250,7 @@
    inline-block, and #cs-options is overflow-x:hidden, so it would be silently
    cut off at the panel edge instead of wrapping. */
 .cs-opt-main { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.cs-opt-name { font-size: 13px; font-weight: 700; color: var(--text); }
+.cs-opt-name { font-size: var(--fs-3); font-weight: 700; color: var(--text); }
 .cs-opt-deltas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
 .cs-delta {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.04em;
@@ -258,10 +258,10 @@
 }
 .cs-delta.up { background: rgba(80,210,255,0.16); color: #4df; }
 .cs-delta.down { background: rgba(255,150,0,0.16); color: #f90; }
-.cs-opt-desc { font-size: 11px; color: var(--dim); line-height: 1.35; margin-top: 6px; }
+.cs-opt-desc { font-size: var(--fs-2); color: var(--dim); line-height: 1.35; margin-top: 6px; }
 .cs-opt-cost {
   flex: 0 0 auto; align-self: center;
-  font-size: 12px; font-weight: 700; color: var(--dim);
+  font-size: var(--fs-2); font-weight: 700; color: var(--dim);
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .cs-opt-cost.free { color: rgba(255,255,255,0.3); font-weight: 600; }
@@ -313,7 +313,7 @@
 /* The pill is a PRICE tag, not the spec number the other rows carry there, so it
    gets a chip shape and the buy colour instead of plain dim text. */
 .cs-opt-cost.research {
-  font-size: 10px; font-weight: 800; letter-spacing: 0.06em;
+  font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.06em;
   padding: 3px 7px; border-radius: var(--r-sm);
   background: color-mix(in oklab, var(--red) 18%, transparent);
   border: 1px solid color-mix(in oklab, var(--red) 45%, transparent);
@@ -336,7 +336,7 @@
 /* ＋ CREATE row: dashed "add" affordance */
 .cs-liv-plus {
   display: flex; align-items: center; justify-content: center;
-  font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.6);
+  font-size: var(--fs-6); font-weight: 700; color: rgba(255,255,255,0.6);
   background: rgba(255,255,255,0.05); border-style: dashed;
 }
 .cs-liv-create { border-style: dashed; border-color: rgba(255,255,255,0.2); }
@@ -350,7 +350,7 @@
   width: var(--chip-h); height: var(--chip-h); min-width: var(--chip-h); min-height: var(--chip-h);
   border-radius: var(--r-md);
   display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: 700;
+  font-size: var(--fs-4); font-weight: 700;
   cursor: pointer; margin: 0; padding: 0;
 }
 .cs-liv-del {
@@ -381,7 +381,7 @@
 }
 .cs-liv-ed-row { display: flex; align-items: center; gap: calc(var(--gap) * 0.8); min-width: 0; }
 .cs-liv-ed-lbl {
-  flex: 0 0 68px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim);
+  flex: 0 0 68px; font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.1em; color: var(--dim);
 }
 .cs-liv-ed-row input[type="color"] {
   flex: 0 0 auto; width: 52px; height: var(--chip-h); padding: 0; border-radius: var(--r-sm);
@@ -407,14 +407,14 @@
 }
 .cs-liv-ed-name {
   flex: 1 1 auto; min-width: 0; min-height: var(--chip-h);
-  font-size: 13px; font-weight: 600; color: var(--text);
+  font-size: var(--fs-3); font-weight: 600; color: var(--text);
   padding: 6px 9px; border-radius: var(--r-sm);
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14);
 }
 .cs-liv-ed-btns { display: flex; gap: calc(var(--gap) * 0.7); margin-top: 2px; }
 .cs-liv-ed-cancel, .cs-liv-ed-save {
   flex: 1 1 0; width: auto; margin: 0; min-height: var(--tap);
-  font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+  font-size: var(--fs-2); font-weight: 800; letter-spacing: 0.06em;
   padding: 9px 0; border-radius: var(--r-md); cursor: pointer;
 }
 .cs-liv-ed-cancel { background: rgba(255,255,255,0.06); color: var(--dim); border: 1px solid rgba(255,255,255,0.14); }
@@ -565,14 +565,14 @@
   flex: 0 0 auto; width: auto; margin: 0;
   display: flex; align-items: center; gap: 6px;
   padding: 5px 10px; border-radius: var(--r-sm);
-  font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
+  font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.12em;
   background: rgba(12,12,16,0.62); color: rgba(255,255,255,0.62);
   border: 1px solid rgba(255,255,255,0.14);
   backdrop-filter: blur(3px);
   min-height: 30px;
 }
 #cs-cam:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
-.cs-cam-caret { font-size: 8px; line-height: 1; transition: transform 0.15s ease; }
+.cs-cam-caret { font-size: var(--fs-1); line-height: 1; transition: transform 0.15s ease; }
 #cs-cam[aria-expanded="true"] {
   background: rgba(0,204,136,0.18); color: #0c8;
   border-color: rgba(0,204,136,0.4);
@@ -598,7 +598,7 @@
 .cs-pan-row { display: flex; align-items: center; gap: 8px; }
 .cs-pan-lbl {
   flex: 0 0 34px;
-  font-size: 8px; font-weight: 800; letter-spacing: 0.1em;
+  font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.1em;
   color: rgba(255,255,255,0.32); text-align: right;
 }
 .cs-pan-grp, #cs-view, #cs-wing-views {
@@ -632,11 +632,11 @@
 }
 #cs-aero:hover { border-color: rgba(255,255,255,0.3); }
 .cs-aero-lbl {
-  font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
+  font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.12em;
   color: rgba(255,255,255,0.42);
 }
 .cs-aero-val {
-  font-size: 12px; font-weight: 800; font-style: italic; letter-spacing: 0.06em;
+  font-size: var(--fs-2); font-weight: 800; font-style: italic; letter-spacing: 0.06em;
   color: var(--dim);
 }
 /* Lit state uses the same CYAN the in-race HUD chip uses for X-mode, so the
@@ -650,15 +650,15 @@
      ladder. Raised to the --label floor; min-height follows so the boxes are
      aimable as well as readable. */
   #cs-aero { padding: 6px 10px; gap: 5px; min-height: 34px; }
-  .cs-aero-lbl { font-size: 11px; letter-spacing: 0.08em; }
-  .cs-aero-val { font-size: 13px; }
-  #cs-cam { padding: 6px 10px; font-size: 11px; min-height: 34px; }
+  .cs-aero-lbl { font-size: var(--fs-2); letter-spacing: 0.08em; }
+  .cs-aero-val { font-size: var(--fs-3); }
+  #cs-cam { padding: 6px 10px; font-size: var(--fs-2); min-height: 34px; }
   #cs-cam-panel { padding: 6px 8px; gap: 4px; }
   .cs-pan-lbl { flex-basis: 30px; }
 }
 .cs-view-btn {
   flex: 0 0 auto; width: auto; margin: 0;
-  font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+  font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.08em;
   padding: 5px 9px; border-radius: var(--r-sm);
   background: rgba(12,12,16,0.62); color: var(--dim);
   border: 1px solid rgba(255,255,255,0.14);
@@ -681,11 +681,11 @@
    could not break internally, so SPIN was stranded on a row of its own and the
    bar stacked three deep on a phone. */
 .cs-view-grp { display: contents; }
-.cs-view-zoom { font-size: 13px; padding: 3px 10px; line-height: 1; }
+.cs-view-zoom { font-size: var(--fs-3); padding: 3px 10px; line-height: 1; }
 /* The arrows repeat while held, so they must not start a text selection or a
    long-press context menu under the finger. */
 .cs-view-nudge {
-  font-size: 10px; padding: 4px 8px; line-height: 1;
+  font-size: var(--fs-1); padding: 4px 8px; line-height: 1;
   touch-action: none; user-select: none; -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
@@ -694,7 +694,7 @@
   background: rgba(255,255,255,0.16);
 }
 .cs-view-hint {
-  font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: var(--fs-1); letter-spacing: 0.08em; text-transform: uppercase;
   color: rgba(255,255,255,0.34); margin-left: 2px;
 }
 /* No mouse = no drag affordance to advertise, and no room for it either. */
@@ -708,10 +708,10 @@
 @media (max-width: 1000px) {
   #cs-view { gap: 3px; }
   .cs-view-btn {
-    font-size: 12px; letter-spacing: 0.05em;
+    font-size: var(--fs-2); letter-spacing: 0.05em;
     padding: 6px 9px; min-height: 34px;
   }
-  .cs-view-zoom { font-size: 12px; padding: 2px 8px; }
+  .cs-view-zoom { font-size: var(--fs-2); padding: 2px 8px; }
   /* The dividers cost width and, once the row wraps, land at arbitrary places
      in it — they read as separators of nothing. */
   .cs-view-sep { display: none; }
@@ -727,12 +727,12 @@
    the base declarations that follow them at equal specificity — a media query
    adds no specificity and source order decides. Desktop keeps its density. */
 body:not(.desktop) .cs-tab-lbl,
-body:not(.desktop) .cs-tab-cur { font-size: 12px; }
-body:not(.desktop) .cs-opt-tag { font-size: 11px; }
-body:not(.desktop) .cs-opt-desc { font-size: 13px; }
-body:not(.desktop) .cs-delta { font-size: 11px; }
+body:not(.desktop) .cs-tab-cur { font-size: var(--fs-2); }
+body:not(.desktop) .cs-opt-tag { font-size: var(--fs-2); }
+body:not(.desktop) .cs-opt-desc { font-size: var(--fs-3); }
+body:not(.desktop) .cs-delta { font-size: var(--fs-2); }
 body:not(.desktop) .cs-cam-lbl,
-body:not(.desktop) .cs-aero-lbl { font-size: 12px; }
-body:not(.desktop) .cs-cam-caret { font-size: 11px; }
-body:not(.desktop) #cs-unlimited { font-size: 12px; }
+body:not(.desktop) .cs-aero-lbl { font-size: var(--fs-2); }
+body:not(.desktop) .cs-cam-caret { font-size: var(--fs-2); }
+body:not(.desktop) #cs-unlimited { font-size: var(--fs-2); }
 } /* @layer components */

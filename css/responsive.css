@@ -77,7 +77,7 @@ body.desktop #pm-calib { display: none !important; }
      ~17% of the width, with the composition adrift in the middle of it. */
   #menu-hero, #menu-primary, #menu-secondary { width: clamp(320px, calc(24 * var(--vwz)), 420px); gap: 10px; }
   #menu-buttons .bigbtn { width: 100%; }
-  #menu-buttons .minibtn { font-size: 12px; padding: 9px 8px; }
+  #menu-buttons .minibtn { font-size: var(--fs-2); padding: 9px 8px; }
   /* Small print scales too. At a flat 11/12px it read as a stray line of text
      dropped near the title rather than a caption belonging to it. */
   #subtitle { font-size: clamp(14px, calc(1.05 * var(--vwz)), 18px); }
@@ -104,8 +104,8 @@ body.desktop #pm-calib { display: none !important; }
 @media (min-width: 1200px) {
   .hud-box { padding: 5px 16px; }
   .hud-value { font-size: 23px; }
-  .hud-label { font-size: 10px; }
-  .hud-gaps { font-size: 14px; top: calc(72px + var(--sat) / var(--hud-scale)); }
+  .hud-label { font-size: var(--fs-1); }
+  .hud-gaps { font-size: var(--fs-4); top: calc(72px + var(--sat) / var(--hud-scale)); }
   #hud-speed { font-size: 42px; }
   #hud-gear  { font-size: 68px; }
   #hud-tach  { width: 150px; height: 18px; }
@@ -113,7 +113,7 @@ body.desktop #pm-calib { display: none !important; }
   /* The chips scale with the rest of the cluster. Landscape sizes them for a
      phone (11px), and desktop now shares that grid — at arm's length on a 27"
      monitor an 11px countdown is the one readout you cannot actually read. */
-  #hud-ot, #hud-aero { font-size: 15px; padding: 6px 12px; }
+  #hud-ot, #hud-aero { font-size: var(--fs-5); padding: 6px 12px; }
   /* 10px off the bottom is a phone's budget, spent because a phone has no
      height to spare. A monitor does, and at this size the cluster hugging the
      edge reads as something that fell off the screen. */
@@ -123,7 +123,7 @@ body.desktop #pm-calib { display: none !important; }
 
 /* sectors: smaller on short landscape screens so they clear the cam/pause buttons */
 @media (orientation: landscape) and (max-height: 560px) {
-  #hud-sectors { top: calc(52px + var(--sat) / var(--hud-scale)); font-size: 10px; padding: 3px 6px; }
+  #hud-sectors { top: calc(52px + var(--sat) / var(--hud-scale)); font-size: var(--fs-1); padding: 3px 6px; }
 }
 
 /* The keyboard focus ring lives in css/tokens.css (@layer base). It was here,

@@ -40,7 +40,7 @@
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 50%;
   width: var(--btn); height: var(--btn);
-  font-size: 13px;
+  font-size: var(--fs-3);
   display: flex; align-items: center; justify-content: center;
   text-align: center; line-height: 1;
   padding: 0;
@@ -104,7 +104,7 @@
    one-hue-per-control.
    It sits one slot further along whichever column OT is in — every layout below
    moves the pair together, so the rule is "AERO is above OT". */
-#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: 12px;
+#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: var(--fs-2);
              background: rgba(200, 230, 252, 0.82); border-color: rgba(233, 245, 255, 0.75); color: #0d2b3d; }
 #btn-aero.armed { background: rgba(38, 165, 245, 1); color: #04202e; border-color: #b3e2ff;
                   box-shadow: 0 0 20px rgba(40, 165, 245, 0.8); }
@@ -119,7 +119,7 @@
 .touchbtn.dead { opacity: 0.3; pointer-events: none; }
 
 /* gear shift buttons: right column, stacked (DN bottom, UP above) with 8 px gaps */
-.shiftbtn { flex-direction: column; font-size: 15px; line-height: 1.05; }
+.shiftbtn { flex-direction: column; font-size: var(--fs-5); line-height: 1.05; }
 .shiftbtn small { font-size: var(--fs-micro); letter-spacing: 0.1em; color: var(--dim); }
 #shift-down { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
 #shift-up   { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
@@ -127,7 +127,7 @@
 /* steer buttons: CONSOLE layout — both arrows in the bottom-LEFT, side by side,
    so the left thumb steers like a d-pad and the right thumb stays free for the
    action buttons (BRAKE/BOOST/OT). */
-.steerbtn { font-size: 22px; background: rgba(20, 20, 30, 0.55); width: var(--steer); height: var(--steer); }
+.steerbtn { font-size: var(--fs-7); background: rgba(20, 20, 30, 0.55); width: var(--steer); height: var(--steer); }
 .steerbtn:active { background: rgba(255, 255, 255, 0.18); }
 #btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(16px + var(--sab)); }
 #btn-steer-right { left: calc(16px + var(--steer) + var(--btn-gap) + var(--sal)); bottom: calc(16px + var(--sab)); }
@@ -208,15 +208,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   #hud-tach { width: 96px; height: 13px; }
   #hud-speed { font-size: 28px; }
   #hud-energy { width: 132px; height: 15px; }
-  .hud-unit { font-size: 12px; margin-left: 2px; }
+  .hud-unit { font-size: var(--fs-2); margin-left: 2px; }
   /* THE LAP BOXES ARE PART OF THE HUD TOO. POS/LAP/TIME/BEST sat at the 9px
      label / 19px value the stylesheet uses everywhere, with NO touch override
      at all — so the one place they are read at arm's length, on a phone, in
      motion, is the place they were smallest relative to the screen. Desktop
      keeps the base sizes; this is the touch notch they never had. */
   body:not(.desktop) .hud-box { padding: 5px 13px; }
-  body:not(.desktop) .hud-label { font-size: 11px; }
-  body:not(.desktop) .hud-value { font-size: 22px; }
+  body:not(.desktop) .hud-label { font-size: var(--fs-2); }
+  body:not(.desktop) .hud-value { font-size: var(--fs-7); }
   /* manual: keep everything on the right — shifts in the outer column, BOOST/OT
      in a second column just inboard (vertical space is too short to stack four).
      Override shift positions so both columns align at the same row heights. */
@@ -292,11 +292,11 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      it is on screen only while driving and competes with the HUD for the same
      edges, so one slider owns everything you see during a race. */
   body:not(.desktop) .dock { --tap: 54px; --hold: 72px; zoom: var(--hud-scale); }
-  body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: 11px; }
+  body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: var(--fs-2); }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
-  body:not(.desktop) .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: 13px; }
-  body:not(.desktop) .dock .shiftbtn { font-size: 15px; }
+  body:not(.desktop) .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: var(--fs-3); }
+  body:not(.desktop) .dock .shiftbtn { font-size: var(--fs-5); }
   /* HELD CONTROLS RIDE HIGHER THAN TAPPED ONES. The pedals, the shift column
      and the steering arrows are what a thumb rests on for a whole lap, so they
      sit a little up from the screen edge where the thumb actually lands; the
@@ -314,10 +314,10 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
     body:not(.desktop) .dock { --tap: 48px; --hold: 64px; }
-    body:not(.desktop) .dock .touchbtn { font-size: 10px; }
+    body:not(.desktop) .dock .touchbtn { font-size: var(--fs-1); }
     body:not(.desktop) .dock .pedal,
     body:not(.desktop) .dock .steerbtn,
-    body:not(.desktop) .dock .shiftbtn { font-size: 12px; }
+    body:not(.desktop) .dock .shiftbtn { font-size: var(--fs-2); }
   }
 
   /* ---- THE INSTRUMENT CLUSTER ----
@@ -361,7 +361,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      cluster jump a row taller and back as the car approached a zone. */
   #hud-ot,
   #hud-aero {
-    white-space: nowrap; font-size: 14px; padding: 5px 10px;
+    white-space: nowrap; font-size: var(--fs-4); padding: 5px 10px;
   }
 
   /* ---- DESKTOP: THE SAME PARTS, LAID OUT FLAT ----
@@ -393,8 +393,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     body.desktop #hud-tach { width: 172px; height: 18px; }
     body.desktop #hud-energy { width: auto; justify-self: stretch; height: 18px; }
     body.desktop #hud-speed { font-size: 42px; }
-    body.desktop .hud-unit { font-size: 13px; margin-left: 4px; }
-    body.desktop #hud-ot, body.desktop #hud-aero { font-size: 15px; padding: 8px 14px; }
+    body.desktop .hud-unit { font-size: var(--fs-3); margin-left: 4px; }
+    body.desktop #hud-ot, body.desktop #hud-aero { font-size: var(--fs-5); padding: 8px 14px; }
   }
   /* console steer: arrows bottom-left, side by side (left thumb home) */
   #btn-steer-left  { left: calc(16px + var(--sal)); bottom: calc(12px + var(--sab)); }
@@ -473,9 +473,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     body:not(.desktop) #hud-energy { width: 108px; }
     body:not(.desktop) #hud-speed { font-size: 24px; }
     body:not(.desktop) #hud-ot,
-    body:not(.desktop) #hud-aero { font-size: 13px; padding: 4px 8px; }
-    body:not(.desktop) .hud-label { font-size: 10px; }
-    body:not(.desktop) .hud-value { font-size: 20px; }
+    body:not(.desktop) #hud-aero { font-size: var(--fs-3); padding: 4px 8px; }
+    body:not(.desktop) .hud-label { font-size: var(--fs-1); }
+    body:not(.desktop) .hud-value { font-size: var(--fs-6); }
   }
   /* touch: BRAKE left corner, BOOST/OT right corner */
   /* touch mode differs only in BRAKE dropping to the left corner (no GAS) —
@@ -507,7 +507,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   min-width: 76px;
   padding: 0 12px;
   border-radius: var(--r-md);
-  font-size: 12px;
+  font-size: var(--fs-2);
   font-weight: 700;
   letter-spacing: 0.06em;
 }
@@ -526,7 +526,7 @@ body.hud-hidden .touchbtn { display: none !important; }
   width: 36px; height: 36px;
   padding: 0;
   border-radius: var(--r-md);
-  font-size: 16px; line-height: 1;
+  font-size: var(--fs-5); line-height: 1;
   opacity: 0.5;
   display: none;            /* only visible while the HUD is hidden */
 }
@@ -560,7 +560,7 @@ body.hud-hidden #hud-restore { display: block; }
   height: var(--chip-h);
   padding: 0 8px;
   border-radius: var(--r-md);
-  font-size: 11px;
+  font-size: var(--fs-2);
   font-weight: 700;
   letter-spacing: 0.05em;
   background: rgba(255, 255, 255, 0.08);
@@ -582,7 +582,7 @@ body.hud-hidden #hud-restore { display: block; }
    The shell (header + scrolling body + pinned action bar) is the shared .sheet
    in css/components.css, and so are the .res-* row rules now that four screens
    use them. Only what is specific to THIS container stays here. */
-#results-table { font-size: 14px; font-variant-numeric: tabular-nums; }
+#results-table { font-size: var(--fs-4); font-variant-numeric: tabular-nums; }
 #results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot, #advanced .sheet-foot { justify-content: center; }
 
 /* ---------- how to play ---------- */
@@ -593,14 +593,14 @@ body.hud-hidden #hud-restore { display: block; }
   align-items: start;
 }
 #howtoplay dt {
-  color: var(--red); font-weight: 700; font-size: 12px;
+  color: var(--red); font-weight: 700; font-size: var(--fs-2);
   letter-spacing: 0.08em; padding: 6px 0 2px;
   border-top: 1px solid rgba(255,255,255,0.06);
   white-space: nowrap;
 }
 #howtoplay dt:first-child { border-top: none; }
 #howtoplay dd {
-  color: var(--text); font-size: 13px; margin-left: 0; line-height: 1.45;
+  color: var(--text); font-size: var(--fs-3); margin-left: 0; line-height: 1.45;
   padding: 6px 0 2px;
   border-top: 1px solid rgba(255,255,255,0.06);
 }
@@ -623,7 +623,7 @@ body.hud-hidden #hud-restore { display: block; }
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: var(--r-sm);
   padding: 0 5px;
-  font-size: 12px;
+  font-size: var(--fs-2);
 }
 
 #nogl {
@@ -680,7 +680,7 @@ body.hud-hidden #hud-restore { display: block; }
   margin: 0;
   /* Sized down from the 20px menu default: in a half-width column these wrap
      their label onto two lines and the row grows to fit. */
-  font-size: 14px;
+  font-size: var(--fs-4);
   padding: 10px 12px;
 }
 /* The QR is the one element on this screen whose job is to be machine-read, so
@@ -829,7 +829,7 @@ body.hud-hidden #hud-restore { display: block; }
 }
 #vsfriend .vs-codebox {
   text-align: center;
-  font-size: 22px;
+  font-size: var(--fs-7);
   letter-spacing: 0.16em;
   text-indent: 0.16em;
   text-transform: uppercase;

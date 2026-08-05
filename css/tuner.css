@@ -131,7 +131,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 .lt-help-toggle {
   display: flex; align-items: center; gap: 7px; margin: 8px 0 4px;
   min-height: 24px;
-  font-size: 11px; opacity: 0.8; cursor: pointer;
+  font-size: var(--fs-2); opacity: 0.8; cursor: pointer;
 }
 .lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
 /* Category tabs — split the 80+ sliders into one group at a time. Part of the
@@ -152,7 +152,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 #lt-tabs .lt-tab, #ct-modes .lt-tab {
   display: inline-flex; align-items: center; justify-content: center;
   width: auto; margin: 0; min-width: 0;
-  padding: 5px 9px; font-size: 10px; letter-spacing: 0.04em;
+  padding: 5px 9px; font-size: var(--fs-1); letter-spacing: 0.04em;
   border: 1px solid rgba(255, 255, 255, 0.16); border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.72);
   cursor: pointer; transition: background 0.12s, color 0.12s;
@@ -174,7 +174,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   padding: 0 0 4px;
   color: rgba(255,255,255,.72);
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
-  font-size: 10px;
+  font-size: var(--fs-1);
   font-weight: 800;
   letter-spacing: .12em;
 }
@@ -185,7 +185,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 /* preview time/weather: one compact line each — small inline label + tight chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
-.lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; margin: 0; padding: 4px 3px; font-size: 10px; }
+.lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; margin: 0; padding: 4px 3px; font-size: var(--fs-1); }
 .lt-preview-row .opt-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
   display: flex; gap: 8px; flex-shrink: 0;
@@ -199,7 +199,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
    tuner above (the selectors are extended, not duplicated); only the bits that
    are camera-specific live here. */
 #ct-profile {
-  font-size: 11px; letter-spacing: 0.06em; font-weight: 700;
+  font-size: var(--fs-2); letter-spacing: 0.06em; font-weight: 700;
   color: var(--red); margin: 2px 0 4px;
 }
 /* A mode whose framing has been changed keeps a red outline even when it is not
@@ -217,24 +217,24 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--r-sm); padding: 6px;
 }
-.adv-intro { font-size: 12px; opacity: 0.7; margin: 0 0 6px; line-height: 1.45; }
+.adv-intro { font-size: var(--fs-2); opacity: 0.7; margin: 0 0 6px; line-height: 1.45; }
 .adv-sec {
-  color: var(--red); font-size: 12px; letter-spacing: 0.08em;
+  color: var(--red); font-size: var(--fs-2); letter-spacing: 0.08em;
   margin: 16px 0 8px; padding-bottom: 4px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 .adv-sec span {
-  color: rgba(255, 255, 255, 0.45); font-size: 10px;
+  color: rgba(255, 255, 255, 0.45); font-size: var(--fs-1);
   letter-spacing: 0.02em; margin-left: 6px;
 }
 .adv-item { margin: 11px 0; }
-.adv-help { font-size: 11px; opacity: 0.6; margin: 3px 0 0; line-height: 1.4; }
+.adv-help { font-size: var(--fs-2); opacity: 0.6; margin: 3px 0 0; line-height: 1.4; }
 .tune-row { display: block; margin: 0; }
 .tune-label {
   display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 12px; letter-spacing: 0.04em; opacity: 0.9; margin-bottom: 2px;
+  font-size: var(--fs-2); letter-spacing: 0.04em; opacity: 0.9; margin-bottom: 2px;
 }
-.tune-label b { color: var(--red); font-size: 13px; }
+.tune-label b { color: var(--red); font-size: var(--fs-3); }
 .tune-row input[type="range"] {
   width: 100%; margin: 0; accent-color: var(--red); height: 24px; cursor: pointer;
 }
@@ -254,7 +254,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 .opt-row.as-toggle .opt-btn {
   flex: 0 0 auto; width: auto;
   min-width: 52px; min-height: var(--tap-sm);
-  padding: 4px 12px; font-size: 11px; letter-spacing: 0.06em;
+  padding: 4px 12px; font-size: var(--fs-2); letter-spacing: 0.06em;
 }
 /* NOW PLAYING card. The old row put a SKIP button first and the track name in
    11px dim text after it, so the least important control was the most
@@ -267,31 +267,31 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   background: rgba(255,255,255,0.04);
 }
 .as-now-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
-.as-now-cap { font-size: 9px; letter-spacing: 0.14em; color: var(--dim); text-transform: uppercase; }
+.as-now-cap { font-size: var(--fs-1); letter-spacing: 0.14em; color: var(--dim); text-transform: uppercase; }
 /* The title is the one thing worth reading here, so it gets the size. It also
    has to truncate — uploaded file names are arbitrarily long. */
 .as-now-title {
-  font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.25;
+  font-size: var(--fs-5); font-weight: 700; color: var(--text); line-height: 1.25;
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.as-now-sub { font-size: 10px; color: var(--dim); }
+.as-now-sub { font-size: var(--fs-1); color: var(--dim); }
 .as-transport { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 .as-tbtn {
   width: var(--tap-sm); height: var(--tap-sm); min-height: var(--tap-sm);
   display: flex; align-items: center; justify-content: center;
-  padding: 0; font-size: 14px; line-height: 1; border-radius: 50%;
+  padding: 0; font-size: var(--fs-4); line-height: 1; border-radius: 50%;
   border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.06);
   color: var(--text); cursor: pointer;
 }
 /* Play/pause is the primary action of the three, so it is bigger and filled. */
 .as-tbtn-main {
   width: calc(var(--tap-sm) * 1.22); height: calc(var(--tap-sm) * 1.22);
-  font-size: 16px; background: rgba(255,255,255,0.15);
+  font-size: var(--fs-5); background: rgba(255,255,255,0.15);
   border-color: rgba(255,255,255,0.28);
 }
 .as-tbtn:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
 .as-tbtn:disabled { opacity: 0.35; cursor: default; }
-.as-note { font-size: 11px; color: var(--dim); margin: calc(var(--gap) * 0.4) 0 0; line-height: 1.35; }
+.as-note { font-size: var(--fs-2); color: var(--dim); margin: calc(var(--gap) * 0.4) 0 0; line-height: 1.35; }
 
 /* A slider follows its switch: RED while the thing it controls is on, GREY when
    it is off. Grey via accent-color rather than a low opacity — a ghosted control
@@ -305,7 +305,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 .preset-row .preset-btn {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   flex: 1; width: auto; margin: 0; padding: 9px 6px; text-align: center;
-  letter-spacing: 0.06em; font-size: 13px;
+  letter-spacing: 0.06em; font-size: var(--fs-3);
 }
 .preset-btn small {
   font-size: var(--fs-micro); letter-spacing: 0.01em; opacity: 0.6; font-weight: normal;
@@ -327,7 +327,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
      heights for controls of the same rank */
   min-height: var(--chip-h);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12px; letter-spacing: 0.03em; text-align: center;
+  font-size: var(--fs-2); letter-spacing: 0.03em; text-align: center;
 }
 .opt-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
 /* ---------- short screens (landscape phones): compact tuner head ----------
@@ -338,9 +338,9 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 @media (max-height: 620px) {
   #lighting-inner, #camtune-inner { padding: 10px 14px; }
   #lt-head, #ct-head { margin-bottom: 2px; }
-  #lt-head h2, #ct-head h2 { font-size: 16px; }
-  #pc-toggle { padding: 6px 10px; font-size: 10.5px; }
-  #lt-profile, #ct-profile { font-size: 10px; }
+  #lt-head h2, #ct-head h2 { font-size: var(--fs-5); }
+  #pc-toggle { padding: 6px 10px; font-size: var(--fs-1); }
+  #lt-profile, #ct-profile { font-size: var(--fs-1); }
   .lt-preview-row { gap: 3px; margin: 2px 0; }
   .lt-preview-lbl { width: 46px; font-size: var(--fs-micro); }
   /* min-height, not more padding: the short-panel branch squeezes these to 23px
@@ -350,7 +350,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   .lt-preview-row .opt-btn {
     padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; min-height: 24px;
   }
-  .lt-help-toggle { margin: 4px 0 2px; font-size: 10px; }
+  .lt-help-toggle { margin: 4px 0 2px; font-size: var(--fs-1); }
   /* Short panel: one scrolling STRIP, so back to flex — a single row that pans
      sideways can never orphan anything, and the grid above is for the layouts
      that wrap. */
@@ -364,7 +364,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   .lt-tabs::-webkit-scrollbar { display: none; }
   #lighting-inner .sheet-foot, #camtune-inner .sheet-foot { margin-top: 6px; padding-top: 6px; }
   #lighting-inner .sheet-foot button,
-  #camtune-inner .sheet-foot button { padding: 6px 10px; font-size: 12px; }
+  #camtune-inner .sheet-foot button { padding: 6px 10px; font-size: var(--fs-2); }
   #lighting-inner .adv-item, #camtune-inner .adv-item { margin: 5px 0; }
   #lt-json { height: 54px; }
 }
@@ -440,7 +440,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   }
   #lighting-inner > .sheet-foot button {
     margin: 0; min-width: 0;
-    padding: 5px 6px; font-size: 11px; min-height: 0;
+    padding: 5px 6px; font-size: var(--fs-2); min-height: 0;
   }
   #lighting-inner > .sheet-foot > #lt-close { grid-column: 1 / -1; }
   /* chips wrap as a block in the rail rather than the short-panel scroll strip */
@@ -454,7 +454,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   /* Title on its own line: at 210px it was wrapping around the FREE CAMERA
      button and costing the rail a whole extra line. */
   #lt-head { flex-direction: column; align-items: stretch; gap: 4px; }
-  #lt-head h2 { font-size: 15px; }
+  #lt-head h2 { font-size: var(--fs-5); }
   /* THREE equal columns for the five chips: 3 + 2, never 4 + 1. This row was
      flex, so the fifth option (TRACK / CLOUD) wrapped alone onto line two and
      stretched the full width of the rail, reading as a different kind of
@@ -468,7 +468,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   #lighting-inner .lt-preview-row .opt-btn { min-width: 0; }
 }
 /* advanced disclosure */
-.adv-more-btn { width: 100%; margin: 14px 0 2px; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85; }
+.adv-more-btn { width: 100%; margin: 14px 0 2px; font-size: var(--fs-2); letter-spacing: 0.08em; opacity: 0.85; }
 #adv-extra { margin-top: 4px; }
 
 /* ---------- MUSIC & SOUND: the player's own uploaded tracks ----------
@@ -481,16 +481,16 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   padding: 6px 8px; border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 12px;
+  font-size: var(--fs-2);
 }
 .music-row.playing { border-color: var(--red); background: rgba(225, 6, 0, 0.14); }
 .music-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.music-size { flex: 0 0 auto; font-size: 10px; opacity: 0.5; font-variant-numeric: tabular-nums; }
+.music-size { flex: 0 0 auto; font-size: var(--fs-1); opacity: 0.5; font-variant-numeric: tabular-nums; }
 .music-row button {
   /* 30px keeps these inside the 44px touch target the rest of the panel uses
      once the row's own padding is counted. */
   flex: 0 0 auto; width: 30px; height: 30px; margin: 0; padding: 0;
-  font-size: 13px; line-height: 1; border-radius: var(--r-sm);
+  font-size: var(--fs-3); line-height: 1; border-radius: var(--r-sm);
 }
 .music-del { opacity: 0.7; }
 .music-del:hover, .music-del:focus-visible { opacity: 1; border-color: var(--red); color: var(--red); }
@@ -504,7 +504,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   min-height: var(--chip-h);   /* on the ladder, like every other field */
   /* 16px floor: iOS Safari zooms the page on focus under that, and the zoom
      sticks after the keyboard closes. */
-  font: inherit; font-size: 16px;
+  font: inherit; font-size: var(--fs-5);
   background: rgba(255, 255, 255, 0.08); color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
 }
@@ -520,26 +520,26 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 }
 .sp-now-txt { min-width: 0; }              /* lets the ellipsis below actually engage */
 .sp-title, .sp-artist, .sp-on { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sp-title { font-size: 14px; font-weight: 700; }
-.sp-artist { font-size: 12px; opacity: 0.75; }
-.sp-on { font-size: 10px; opacity: 0.5; letter-spacing: 0.04em; margin-top: 2px; }
+.sp-title { font-size: var(--fs-4); font-weight: 700; }
+.sp-artist { font-size: var(--fs-2); opacity: 0.75; }
+.sp-on { font-size: var(--fs-1); opacity: 0.5; letter-spacing: 0.04em; margin-top: 2px; }
 .sp-bar { height: 3px; border-radius: var(--r-xs); background: rgba(255, 255, 255, 0.14); overflow: hidden; margin: 2px 0 8px; }
 .sp-bar-fill { height: 100%; background: var(--red); width: 0; transition: width 0.4s linear; }
 #sp-search {
-  width: 100%; margin-top: 6px; font: inherit; font-size: 16px;   /* 16px: iOS zoom floor */
+  width: 100%; margin-top: 6px; font: inherit; font-size: var(--fs-5);   /* 16px: iOS zoom floor */
   background: rgba(255, 255, 255, 0.08); color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
 }
 #sp-results:empty { display: none; }
 #as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {
-  width: 100%; font: inherit; font-size: 16px;   /* 16px: iOS zooms a focused control under it */
+  width: 100%; font: inherit; font-size: var(--fs-5);   /* 16px: iOS zooms a focused control under it */
   background: rgba(255, 255, 255, 0.08); color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
 }
 #as-sp-playlist:disabled, #as-sp-device:disabled,
 #sp-playlist2:disabled, #sp-device2:disabled { opacity: 0.45; }
 .sp-uri {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-1);
   word-break: break-all; opacity: 0.9;
   -webkit-user-select: text; user-select: text; cursor: text;
 }

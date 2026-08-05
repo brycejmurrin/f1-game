@@ -220,6 +220,7 @@
   --fs-4: 14px;
   --fs-5: 16px;
   --fs-6: 20px;
+  --fs-7: 22px;
   /* ---- CORNER RADIUS — four steps, plus a pill ----
      These tokens existed and had three users. Everything else hard-coded its
      own: fourteen distinct radii across the stylesheets (1, 2, 3, 4, 5, 6, 7,
