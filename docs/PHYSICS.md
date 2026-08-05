@@ -26,6 +26,24 @@ compares one against a literal, means picking `vTop()` or `vStd()`** — a bare
 constants (`LAT_MAX`, `BRAKE`, `LONG_GRIP`, `ACCEL`) are deliberately absolute —
 that is what makes low pace more forgiving.
 
+**`aStd()` is `vStd()` for ACCELERATION, and it is needed for the same reason.**
+`PACE` multiplies the accel curve exactly as it multiplies ground speed
+(`axEstTarget` is `ACCEL * PACE * …`), so an acceleration compared against a
+hard-coded number is pace-sensitive in precisely the way a speed is. It is
+written as the divisor (`a / max(PACE, 0.05)`) rather than `vStd`'s
+`VMAX / vTop()` round trip, so at pace 5 it is the identity to the bit. This
+shape is easy to miss because the lint only sees `.speed`: A16's launch-smoke
+defect was reached sideways, by flagging the speed window on the same line.
+
+**The slider is GEOMETRIC: `pace(n) = 1.06^(n - 14)` over 19 notches**, a uniform
+6 % per notch, defaulting to notch 11 (0.840) with the 1.0 reference exactly
+reachable on notch 14. It used to be piecewise linear with steps of 14-25 % below
+the default and 4.8-6 % above, so the half of the slider a player wanting a
+calmer car had to use was the half with no resolution. Pace is a multiplicative
+scale, so a ratio is its natural unit — which is also why the v2→v3 store regrid
+measures "nearest" in LOG space; in absolute pace the two fastest old settings
+collapse onto one new notch. See `docs/research/PHASE-C-SLIDER-DESIGN.md`.
+
 **Combined-slip (friction ellipse)**: `LONG_GRIP = 34 m/s²` is the longitudinal
 axis of the traction circle. Braking or accelerating consumes longitudinal grip;
 `slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip. Trail-braking
@@ -161,6 +179,18 @@ the driver keeps full manual authority to recover, and fades under hard braking
 **Changing an assist DEFAULT does not reach existing players.** `store.get(k, d)`
 returns the stored value whenever the key exists, so a new default only lands on a
 fresh install — anyone who ever opened the settings keeps the old behaviour
-forever. `drivingHelp` and `raceLine` are migrated once via `STEER_SCHEMA` in
-`js/game/steer-tuning.js`; bump it if a slider's *meaning* changes again (an old
-stored number does not carry over when the scale it was written against moves).
+forever. Lowering a default and migrating a stored value are DIFFERENT ACTS and
+both are usually needed: the first reaches nobody who has opened the settings,
+the second reaches nobody who has not.
+
+`STEER_SCHEMA` in `js/game/steer-tuning.js` is the migration, and it is a
+per-version LADDER (`STEER_MIGRATIONS`, currently at 3), not a single gate. That
+distinction is load-bearing. It was once `if (stored >= STEER_SCHEMA) return`
+followed by the v2 body, which works for exactly one version: bump the constant
+and a store already at 2 falls through and receives v2's assist reset a SECOND
+time, silently discarding a `drivingHelp`/`raceLine` value the player chose
+deliberately after v2 ran. Each step now runs only if the stored schema is below
+its own target, and every key a step rewrites is logged through `Log.info` —
+a migration quietly rewriting someone's settings should leave a record.
+`tests/steer-migration.spec.js` pins all of it, including that a store at the
+current schema is left completely alone.
