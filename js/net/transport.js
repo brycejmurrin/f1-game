@@ -227,6 +227,11 @@ const NetTransport = (function () {
     "https://bmurrin-apex.metered.live/api/v1/turn/credentials"
     + "?apiKey=410aca13505116873c708db45f86cd468871";
 
+  // How long a credentials endpoint gets before we race without it. Short on
+  // purpose: a relay improves the odds of connecting, and waiting for one is
+  // never worth making the player stare at a lobby that has not opened.
+  const FETCH_TIMEOUT_MS = 4000;
+
   let fetchedIce = null;
   let fetchingIce = null;
   function prefetchIce() {
@@ -237,11 +242,18 @@ const NetTransport = (function () {
     // never quietly moved onto somebody else's quota.
     if (!url) url = TURN_API;
     if (url && !fetchedIce && !fetchingIce) {
-      fetchingIce = fetch(url).then((r) => r.json()).then((body) => {
+      // BOUNDED. A credentials endpoint that never answers — captive portal,
+      // dead DNS, a firewall that blackholes rather than refuses — must not
+      // become an unbounded wait, because the lobby now awaits this before
+      // building a connection. Abort rather than merely ignore, or the socket
+      // lingers.
+      const ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+      const bail = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, FETCH_TIMEOUT_MS);
+      fetchingIce = fetch(url, ctl ? { signal: ctl.signal } : undefined).then((r) => r.json()).then((body) => {
         const list = Array.isArray(body) ? body : (body && (body.iceServers || body.ice_servers)) || null;
         if (Array.isArray(list) && list.length) fetchedIce = list;
         return fetchedIce;
-      }).catch(() => null).finally(() => { fetchingIce = null; });
+      }).catch(() => null).finally(() => { clearTimeout(bail); fetchingIce = null; });
     }
     if (fetchingIce) jobs.push(fetchingIce);
     // Failure-silent by design: no relay is a NORMAL state, and a lobby that

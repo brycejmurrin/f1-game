@@ -156,8 +156,28 @@ const NetLobby = (function () {
     // So: await it here, at the one choke point every path goes through, and
     // no call site can forget. It resolves instantly once fetched (memoised),
     // it never rejects, and no relay configured stays a normal state.
-    async function readyIce() {
-      try { if (NetTransport.prefetchIce) await NetTransport.prefetchIce(); } catch (e) {}
+    // …BUT NEVER AT THE COST OF THE SCREEN OPENING. A relay improves the odds
+    // of connecting; waiting for one must never be why the lobby has not
+    // appeared. The first version of this awaited the fetch outright, and on a
+    // browser with no route to the credentials host — a captive portal, a
+    // blackholing firewall, or a CI browser with no egress — join() simply
+    // never returned and #vs-room never opened. The multiplayer gate caught it
+    // as fourteen failures; a player would have called it "the button does
+    // nothing".
+    //
+    // So it is a RACE, not an await. Whoever wins, the connection is built:
+    // with the relay if it arrived in time, without it if not — which is
+    // exactly the behaviour before the relay existed, and connected fine for
+    // everyone whose network did not need one.
+    const ICE_WAIT_MS = 2500;
+    function readyIce() {
+      let p = null;
+      try { p = NetTransport.prefetchIce && NetTransport.prefetchIce(); } catch (e) { p = null; }
+      if (!p || typeof p.then !== "function") return Promise.resolve();
+      return Promise.race([
+        p.catch(() => null),
+        new Promise((r) => setTimeout(r, ICE_WAIT_MS)),
+      ]);
     }
 
     function newTransport(asRole) {
@@ -208,7 +228,13 @@ const NetLobby = (function () {
 
     // Throw away an in-flight handshake without touching anybody connected.
     function dropPending() {
-      clearInterval(pollTimer);
+      // ONLY cancel a watcher that belonged to the transport being dropped.
+      // Unconditional, this cancelled a watcher armed BEFORE the transport
+      // existed — which is now the normal order, because host()/join() await
+      // the relay credentials first and callers arm the watcher immediately
+      // after clicking. The room then never opened: fourteen specs, and a
+      // player who would have reported that the button does nothing.
+      if (transport) clearInterval(pollTimer);
       if (transport && !transports.has(pendingId)) {
         try { transport.close(); } catch (e) {}
       }
@@ -315,10 +341,24 @@ const NetLobby = (function () {
       // Capture the transport and id being watched: by the time this fires the
       // host may have moved on to inviting somebody else, and polling "the
       // current pending one" would then connect the wrong session.
-      const watched = transport;
-      const watchedId = pendingId;
+      //
+      // BUT IT MAY NOT EXIST YET. host()/join() became async when the relay
+      // credentials had to be in hand before the connection was built, so a
+      // caller that starts hosting and immediately watches — which is what the
+      // buttons do, and what every room spec does — gets here with `transport`
+      // still null. Capturing that and bailing on the first tick meant the
+      // room never opened at all: fourteen specs, and a player who would have
+      // said the button does nothing. So adopt the transport when it appears
+      // and keep the identity check from then on.
+      let watched = transport;
+      let watchedId = pendingId;
       pollTimer = setInterval(() => {
-        if (!watched || transport !== watched) { clearInterval(pollTimer); return; }
+        if (!watched) {
+          watched = transport;
+          watchedId = pendingId;
+          if (!watched) return;                 // still being built; wait
+        }
+        if (transport !== watched && !transports.has(watchedId)) { clearInterval(pollTimer); return; }
         if (watched.status === "open") {
           clearInterval(pollTimer);
           onConnected(watchedId, watched);

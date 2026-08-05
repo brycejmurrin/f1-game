@@ -314,7 +314,25 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   netcode is testable with no network at all;
                                   rtc() is the real RTCPeerConnection. Both
                                   deliver only on pump(), so latency and loss
-                                  are reproducible rather than wall-clock
+                                  are reproducible rather than wall-clock.
+                                  A TURN RELAY SHIPS BY DEFAULT (a Metered
+                                  free-tier credentials URL) because without
+                                  one two devices ON THE SAME WI-FI often
+                                  cannot connect: the only host candidate a
+                                  browser offers is mDNS-obfuscated, and when
+                                  that name will not resolve the sole
+                                  remaining pair is srflx-to-srflx, which
+                                  needs router hairpinning many do not do. The
+                                  key is readable in devtools — inherent to
+                                  client-side TURN, which is why the operator
+                                  documents this exact fetch from a browser —
+                                  and apex26.turnApi overrides it outright.
+                                  prefetchIce() must be AWAITED BEFORE a
+                                  connection is built (lobby's readyIce()):
+                                  iceServers are fixed at construction, so a
+                                  fetch that lands 200 ms later gathers
+                                  STUN-only and every wire dump reads relay:0
+                                  while the relay is demonstrably alive
   sdp.js         NetSdp         the invite code's payload as BYTES. A gathered
                                   data-channel SDP is ~700 B of text and almost
                                   none of it is information — we only ever
@@ -330,7 +348,13 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   BEFORE a human sees it, falling back to the
                                   deflated full text if this browser refuses
                                   our own reconstruction. TCP candidates are
-                                  dropped on purpose
+                                  dropped on purpose. Candidates are capped at
+                                  MAX_CANDS and selected ROUND-ROBIN BY KIND
+                                  (RETAIN, relay first) — never the first N,
+                                  because SDP lists them in GATHERING order and
+                                  relay is always last, so a plain truncation
+                                  drops the relay on exactly the machines with
+                                  enough interfaces to need one
   nostr.js       NetNostr       the room-code rendezvous, over PUBLIC NOSTR
                                   RELAYS via a vendored Trystero
                                   (vendor/trystero-0.25.3, MIT, dynamic
@@ -348,7 +372,25 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   race then runs over our own PC. The host
                                   posts and waits; the guest passes a `reply`
                                   because it cannot answer until it has seen
-                                  the invite
+                                  the invite.
+                                  ROOM CODES ARE BEST-EFFORT AND THE INVITE
+                                  LINK IS NOT: public relays increasingly
+                                  refuse anonymous ephemeral events, and a
+                                  refusal is a NIP-01 OK=false that the vendor
+                                  turns into a console.warn — no retry, the
+                                  relay stays in the pool, nothing reaches us,
+                                  and getRelaySockets() still reports it OPEN
+                                  because the WebSocket is. So exchange()
+                                  intercepts that warning, and reports
+                                  `all_rejected` when every live relay has
+                                  refused. Measured on hardware: all six
+                                  shipped relays healthy, wellorder answering
+                                  "blocked: spam not permitted", both players
+                                  on spinners. Pick relays with
+                                  tools/nostr-probe.mjs — which tests the only
+                                  criterion that decides this, whether a relay
+                                  accepts an ephemeral event from an UNKNOWN
+                                  pubkey — never by reputation or uptime
   rendezvous.js  NetRendezvous  room codes — the BACKUP way in, and the
                                   only part of the game leaning on someone
                                   else's server. NOTHING TO DEPLOY: a public
