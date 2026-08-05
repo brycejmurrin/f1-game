@@ -93,7 +93,10 @@ window.MenuNav = (function () {
     if (list.length < 2) return list[0] || null;
     let best = null, bestCost = Infinity;
     for (const el of list) {
-      const r = el.getBoundingClientRect();
+      // Viewport-space rects so clientX/clientY compare against painted boxes
+      // under CSS zoom (pre-26.4 WebKit needs DomGeom's scale-up).
+      const r = (window.DomGeom && DomGeom.viewportRect)
+        ? DomGeom.viewportRect(el) : el.getBoundingClientRect();
       const dx = x < r.left ? r.left - x : x > r.right ? x - r.right : 0;
       const dv = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
       const cost = dx * 3 + dv;
@@ -111,7 +114,10 @@ window.MenuNav = (function () {
 
   function scrollPane(pane, px) {
     const before = pane.scrollTop;
-    pane.scrollTop = before + px;
+    // deltaY is viewport pixels; scrollTop is local. Under zoom:1.15 a raw add
+    // overshoots by ~15%. Divide by the pane's accumulated CSS zoom.
+    const z = pane.currentCSSZoom || 1;
+    pane.scrollTop = before + px / z;
     if (pane.scrollTop === before) return false;
     if (window.ScrollFade) window.ScrollFade.paint(pane);
     return true;

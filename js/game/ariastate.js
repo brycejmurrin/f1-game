@@ -26,11 +26,15 @@
 window.AriaState = (function () {
   // The class a group uses to mean "this is the chosen one". `dh-active` is the
   // data hub's own prefix for the same idea.
-  const ON = ["active", "dh-active"];
-  // Roots to watch: everything that is a menu, plus the two DOM-built overlays.
+  // `on` is the tuner / Spotify convention for the same "chosen" meaning as
+  // `active` / `dh-active`. Without it, TIME/WEATHER chips and shuffle/repeat
+  // stay silent to screen readers while painting a selected ring.
+  const ON = ["active", "dh-active", "on"];
+  // Roots to watch: everything that is a menu, plus late-built overlays
+  // (#campicker is created on first open and picked up by ensureObserved).
   const ROOTS = "#overlay,#select,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#advanced," +
     "#pmsettings,#pausemenu,#lighting,#camtune,#audioset,#results,#quali,#standings," +
-    "#race-settings,#customize,#datahub,#track-detail";
+    "#race-settings,#customize,#datahub,#track-detail,#vsfriend,#spotifypanel,#campicker";
 
   const isOn = (el) => ON.some((c) => el.classList.contains(c));
   // Groups whose semantics are already stated explicitly are left alone: a
@@ -78,7 +82,20 @@ window.AriaState = (function () {
     }
   }
 
+  let obs = null;
+  const observed = new WeakSet();
+
+  function ensureObserved() {
+    if (!obs) return;
+    for (const r of document.querySelectorAll(ROOTS)) {
+      if (observed.has(r)) continue;
+      observed.add(r);
+      obs.observe(r, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+    }
+  }
+
   function syncAll() {
+    ensureObserved();
     for (const r of document.querySelectorAll(ROOTS)) syncRoot(r);
   }
 
@@ -99,7 +116,7 @@ window.AriaState = (function () {
   };
 
   function init() {
-    const obs = new MutationObserver((records) => {
+    obs = new MutationObserver((records) => {
       for (const r of records) {
         // Only a class flip or a new subtree can change a group's state; the
         // aria-pressed writes above are invisible here (attributeFilter), so
@@ -107,9 +124,7 @@ window.AriaState = (function () {
         if (r.type === "childList" || r.type === "attributes") { schedule(); return; }
       }
     });
-    for (const r of document.querySelectorAll(ROOTS)) {
-      obs.observe(r, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
-    }
+    ensureObserved();
     syncAll();
   }
 

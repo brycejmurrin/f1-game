@@ -797,6 +797,9 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   __apex.render({what}) (view/map/circuit/car)
   ariastate.js   AriaState      mirrors each option group's visual selection onto
                                   aria-pressed for screen readers
+  domgeom.js     DomGeom        viewport vs local geometry under CSS `zoom` —
+                                  viewportRect() / localWidth() + a one-shot
+                                  probe for pre-Safari-26.4 getBoundingClientRect
   sheetshape.js  SheetShape     self-initialising: measures every `.sheet` with a
                                   ResizeObserver and writes data-shape="tall|wide"
                                   / data-pair="on|off". Its CONSUMER IS CSS

@@ -198,9 +198,8 @@ control↔HUD collisions; portrait rotate-device behaviour unchanged.
 
 ### Direction track (parallel with P0–P2, docs only)
 
-While foundation lands, produce **one** locked direction doc (no CSS):
-
-`docs/superpowers/specs/2026-08-05-ui-visual-direction.md` covering:
+While foundation lands, produce **one** locked direction doc (no CSS) under
+`docs/superpowers/specs/` named `YYYY-MM-DD-ui-visual-direction.md`, covering:
 
 1. Visual north star (motorsport broadcast / night paddock — **not** purple
    gradients, cream+serif, or broadsheet). Preserve existing red/near-black/

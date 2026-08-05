@@ -66,7 +66,13 @@ window.SheetShape = (function () {
     const now = was === "tall" ? (ratio <= TALL_OFF ? "wide" : "tall")
       : (ratio >= TALL_ON ? "tall" : "wide");
     if (now !== was) el.dataset.shape = now;
-    classifyPair(el, w);
+    // --pair-at is a LOCAL (layout) threshold matching @container sheet rules.
+    // getBoundingClientRect width is viewport-scaled under zoom on Chromium, so
+    // comparing it to --pair-at turns data-pair on while container queries stay
+    // off. clientWidth (and ResizeObserver contentRect) stay in local space.
+    const localW = (window.DomGeom && DomGeom.localWidth)
+      ? DomGeom.localWidth(el) : el.clientWidth;
+    classifyPair(el, localW || w);
   }
 
   let ro = null;
@@ -75,8 +81,8 @@ window.SheetShape = (function () {
   function observe(el) {
     if (!el || seen.has(el)) return;
     seen.add(el);
-    const r = el.getBoundingClientRect();
-    classify(el, r.width, r.height);
+    const w = el.clientWidth, h = el.clientHeight;
+    classify(el, w, h);
     if (ro) ro.observe(el);
   }
 
@@ -105,8 +111,7 @@ window.SheetShape = (function () {
       for (const m of muts) {
         if (m.attributeName !== "hidden" || m.target.hidden) continue;
         m.target.querySelectorAll(".sheet").forEach((el) => {
-          const r = el.getBoundingClientRect();
-          classify(el, r.width, r.height);
+          classify(el, el.clientWidth, el.clientHeight);
         });
       }
     }).observe(document.documentElement,
@@ -117,8 +122,9 @@ window.SheetShape = (function () {
     if (typeof ResizeObserver === "function") {
       ro = new ResizeObserver((entries) => {
         for (const e of entries) {
-          const r = e.target.getBoundingClientRect();
-          classify(e.target, r.width, r.height);
+          // contentRect is local (unzoomed) space — same as clientWidth.
+          const cr = e.contentRect;
+          classify(e.target, cr.width, cr.height);
         }
       });
     }

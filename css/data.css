@@ -22,6 +22,10 @@
 
 .dh-card {
   width: min(760px, 100%);
+  /* UI SIZE — same contract as .sheet: zoom the card, not the overlay's
+     safe-area padding. DomGeom must land before this (A14): the telemetry
+     scrubber mixes clientX with the canvas rect inside this card. */
+  zoom: var(--ui-scale);
   /* Always fill most of the viewport — content scrolls inside.
      THE MIN MAY NOT EXCEED THE MAX. `calc(100svh - 60px)` is 599px on an iPhone
      15 Pro upright, while the max below — the viewport less the real notch and
@@ -30,9 +34,11 @@
      panel inside it ran 16px under the home indicator, with the close button
      2px under the Dynamic Island. Both only on a device with insets, which is
      why nothing caught it until the audit started simulating them.
-     Sharing one custom property means the two can no longer disagree. */
-  --dh-safe-h: calc(100svh - var(--sat) - var(--sab) - 2 * var(--gut));
-  min-height: clamp(300px, calc(100svh - 60px), min(900px, var(--dh-safe-h)));
+     Sharing one custom property means the two can no longer disagree.
+     Viewport units inside zoom need --svhz (tokens.css): bare svh would grow
+     with --ui-scale and defeat the safe-height cap. */
+  --dh-safe-h: calc(100 * var(--svhz) - var(--sat) - var(--sab) - 2 * var(--gut));
+  min-height: clamp(300px, calc(100 * var(--svhz) - 60px), min(900px, var(--dh-safe-h)));
   max-height: var(--dh-safe-h);
   display: flex; flex-direction: column;
   /* same elevation ladder as the menu sheets (see css/tokens.css) */
@@ -56,7 +62,7 @@
 @media (min-width: 900px) and (min-height: 700px) {
   .dh-card {
     min-height: 420px;
-    max-height: min(880px, calc(100svh - 2 * var(--gut) - var(--sat) - var(--sab)));
+    max-height: min(880px, calc(100 * var(--svhz) - 2 * var(--gut) - var(--sat) - var(--sab)));
   }
 }
 
@@ -309,7 +315,7 @@
      that — only touch-action does. */
   touch-action: none;
 }
-.dh-canvas.dh-map { cursor: default; max-width: 320px; max-width: min(320px, 42dvh); margin: 0 auto; aspect-ratio: 1 / 1; }
+.dh-canvas.dh-map { cursor: default; max-width: 320px; max-width: min(320px, calc(42 * var(--svhz))); margin: 0 auto; aspect-ratio: 1 / 1; }
 /* colour key for the car dots under the track map */
 .dh-maplegend {
   display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 14px;
@@ -332,7 +338,7 @@
 /* Portrait phone: smaller track map so the lap view needs little-to-no
    scrolling (paddings tightened next to the .dh-telem-* base rules below) */
 @media (orientation: portrait) and (max-width: 620px) {
-  .dh-canvas.dh-map { max-width: 256px; max-width: min(256px, 34dvh); }
+  .dh-canvas.dh-map { max-width: 256px; max-width: min(256px, calc(34 * var(--svhz))); }
 }
 .dh-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: var(--fs-2); color: #9a9aa5; margin-top: -2px; }
 .dh-legend-item {
@@ -430,7 +436,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 /* remove-lane button on a tray row */
 .dh-lane-x {
   margin-left: auto; flex: 0 0 auto;
-  width: 20px; height: 20px; line-height: 1; padding: 0;
+  width: var(--tap-sm); height: var(--tap-sm); line-height: 1; padding: 0;
   border-radius: var(--r-pill); border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.06); color: #f2f2f5; font-size: var(--fs-4);
 }
@@ -655,7 +661,8 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 }
 .dh-tpopup-card {
   width: min(860px, 100%);
-  max-height: calc(100svh - var(--sat) - var(--sab) - 2 * var(--gut));
+  zoom: var(--ui-scale);
+  max-height: calc(100 * var(--svhz) - var(--sat) - var(--sab) - 2 * var(--gut));
   background: #0d0d14;
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: var(--r-lg);
@@ -732,7 +739,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
      room a short screen can't spare. */
   .dh-tpopup { padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
   .dh-tpopup-card {
-    max-height: calc(100svh - var(--sat) - var(--sab));
+    max-height: calc(100 * var(--svhz) - var(--sat) - var(--sab));
     border-radius: var(--r-md);
     width: 100%;
   }
@@ -796,7 +803,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
     border-left: 1px solid rgba(255, 255, 255, 0.08);
   }
   /* the map is the sidebar's centrepiece — let it use the full column */
-  .dh-telem-side .dh-canvas.dh-map { max-width: min(100%, 42dvh); }
+  .dh-telem-side .dh-canvas.dh-map { max-width: min(100%, calc(42 * var(--svhz))); }
   /* The trace chart is drawn at the column's real width but every .dh-canvas is
      displayed through a 600px cap, so on a wide column it was rendered at ~900px
      and then scaled back down to 600 — sharp, but sitting in a half-empty
@@ -804,6 +811,6 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
      (the canvas keeps its own aspect, so it grows in height to match). */
   .dh-telem-main .dh-canvas { max-width: none; }
   /* wider card so the split has something to split */
-  .dh-tpopup-card { width: min(1280px, 96vw); max-width: none; }
+  .dh-tpopup-card { width: min(1280px, calc(96 * var(--vwz))); max-width: none; }
 }
 } /* @layer overlays */

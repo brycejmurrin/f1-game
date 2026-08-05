@@ -939,7 +939,8 @@ const DataTelemetry = (function () {
   // drag the trace chart to scrub (pauses playback)
   function attachScrub(canvas, view) {
     function at(ev) {
-      const r = canvas.getBoundingClientRect();
+      const r = (window.DomGeom && DomGeom.viewportRect)
+        ? DomGeom.viewportRect(canvas) : canvas.getBoundingClientRect();
       // map into bitmap px, then invert the plot-area (axis gutter) transform
       const bx = (ev.clientX - r.left) / (r.width || 1) * canvas.width;
       view.cursorT = clamp((bx - PADL) / ((canvas.width - PADL - PADR) || 1), 0, 1) * view.tMax;

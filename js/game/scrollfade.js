@@ -37,7 +37,7 @@ window.ScrollFade = (function () {
   // data hub (#datahub) and track detail (#track-detail) are toggled by the
   // hidden attribute like the rest.
   const SCREENS = "#select,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#advanced,#pmsettings," +
-    "#lighting,#camtune,#audioset,#results,#quali,#standings,#race-settings,#customize,#pausemenu," +
+    "#lighting,#camtune,#audioset,#vsfriend,#spotifypanel,#results,#quali,#standings,#race-settings,#customize,#pausemenu," +
     "#datahub,#track-detail";
 
   const EDGE = 2;              // px of slack: sub-pixel layout must not flicker

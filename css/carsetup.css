@@ -42,6 +42,9 @@
      the bar starts after the safe-area inset, so "38% of the viewport" is not
      38% of the room it actually has. */
   --cs-sheet-w: min(100%, max(430px, 54vw), 500px);
+  /* #cs-inner is zoomed; #cs-stack is not. Reserve the painted sheet width the
+     same way --dock-px reserves the tuner panel (css/tuner.css). */
+  --cs-sheet-px: calc(var(--cs-sheet-w) * var(--ui-scale));
 }
 #cs-inner {
   pointer-events: auto;
@@ -543,7 +546,7 @@
   position: absolute;
   left: calc(var(--safe-l) + var(--gap));
   bottom: calc(var(--safe-b) + var(--gap));
-  right: calc(var(--safe-r) + var(--cs-sheet-w) + var(--gap));
+  right: calc(var(--safe-r) + var(--cs-sheet-px) + var(--gap));
   z-index: 2;
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
 }

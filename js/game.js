@@ -4982,7 +4982,11 @@ function renderSetupPreview(dt) {
   // pixel width so this tracks every breakpoint/viewport automatically.
   const canvasEl = $("game"), panelEl = $("cs-inner");
   if (canvasEl && panelEl && canvasEl.clientWidth > 0) {
-    const panelFrac = clamp(panelEl.getBoundingClientRect().width / canvasEl.clientWidth, 0, 0.85);
+    // Panel sits under zoom; canvas does not. Compare both in viewport pixels.
+    const panelW = (window.DomGeom && DomGeom.viewportRect)
+      ? DomGeom.viewportRect(panelEl).width
+      : panelEl.getBoundingClientRect().width;
+    const panelFrac = clamp(panelW / canvasEl.clientWidth, 0, 0.85);
     _spProj[8] = panelFrac;   // see mat4 perspectiveTo layout: col2 row0 shifts NDC.x
   }
   _spAim[0] = setupPreviewTgt[0] + setupPreviewPan[0];
@@ -7858,6 +7862,7 @@ const camPicker = (() => {
       el.appendChild(b);
     }
     document.body.appendChild(el);
+    if (window.AriaState) AriaState.sync();
   };
   const sync = () => {
     for (const b of el.children) b.classList.toggle("active", +b.dataset.idx === camMode);
