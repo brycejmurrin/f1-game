@@ -865,7 +865,11 @@ body.hud-hidden #hud-restore { display: block; }
 }
 #vsfriend .vs-raw[open] > summary { margin-bottom: 6px; }
 
-@media (min-width: 620px) {
+/* Sheet-shaped, not viewport-shaped: the two-column exchange keys on the
+   .sheet query container (components.css), so a tall narrow window that still
+   holds a wide sheet gets columns, and a wide window with a narrow sheet does
+   not. Was @media (min-width: 620px) — that asked the wrong box. */
+@container sheet (min-width: 620px) {
   #vsfriend .vs-two {
     display: grid;
     grid-template-columns: 1fr 1fr;

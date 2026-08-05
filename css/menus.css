@@ -435,9 +435,7 @@
 /* ---------- chips ---------- */
 .chip-row { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.7); }
 .sel-chip {
-  /* on the height ladder (css/tokens.css) rather than sized by padding alone */
-  min-height: var(--chip-h);
-  display: inline-flex; align-items: center;
+  /* height/display: shared chip-geometry rule in css/components.css */
   padding: 6px 10px;
   font-size: var(--fs-3);
   border-radius: var(--r-sm);
@@ -480,7 +478,6 @@
   .sel-edit:hover { background: rgba(225,6,0,0.22); box-shadow: 0 0 10px rgba(225,6,0,0.25); }
 }
 .sel-edit:active { background: rgba(225,6,0,0.3); }
-h3.sel-label { font-size: var(--label); font-weight: 700; }
 
 /* ---------- circuit preview ---------- */
 #sel-track-preview {

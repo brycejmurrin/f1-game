@@ -484,17 +484,8 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-pill:disabled { opacity: 0.4; cursor: default; }
 
 /* ---------- TAP TARGETS ----------
-   Every one of these is something you tap — a season, a driver, a sort order, a
-   playback control, a legend trace. They were sized purely by their text and
-   came out 24-31px tall, well under the 40px this game gives a chip elsewhere
-   (--chip-h, which is what .sel-chip uses, and which already drops to 36 on a
-   short landscape phone). The driver picker is the worst case: twenty-odd chips
-   at 24px, on the tab you are most likely to be using one-handed.
-   Height only — the text still sets the width, so nothing reflows sideways. */
-.dh-pill, .dh-dchip, .dh-sortbtn, .dh-livebtn, .dh-tbtn, .dh-ratebtn, .dh-legend-item {
-  min-height: var(--chip-h);
-  display: inline-flex; align-items: center; justify-content: center;
-}
+   Height comes from the shared chip-geometry rule in css/components.css
+   (.dh-pill / .dh-dchip / …). Local rules below only add domain chrome. */
 /* the legend's colour swatches are decoration inside their button, not the
    target — the button around them is what grew */
 .dh-legend-item .dh-legend-dot { flex: 0 0 auto; }

@@ -616,10 +616,22 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   min-height: var(--tap);
 }
 /* Chips are text-sized boxes: they need the centring, and a one-character
-   label ("3", "5" laps) still needs a thumb-sized box. */
-.sel-chip, .sel-edit {
+   label ("3", "5" laps) still needs a thumb-sized box. Shared geometry only —
+   fill, radius and selected-state stay in each screen's stylesheet (B2 first
+   slice: one rule instead of four restatements of min-height/display). */
+.sel-chip, .sel-edit,
+.opt-btn,
+.dh-pill, .dh-dchip, .dh-sortbtn, .dh-livebtn, .dh-tbtn, .dh-ratebtn, .dh-legend-item {
   display: inline-flex; align-items: center; justify-content: center;
-  min-height: var(--chip-h); min-width: var(--chip-h);
+  min-height: var(--chip-h);
+}
+/* One-character chips and the pencil edit control keep a square floor.
+   Flex-row opt/data chips must be allowed to shrink (min-width:auto floors
+   them at the longest word and overflows the panel). */
+.sel-chip, .sel-edit { min-width: var(--chip-h); }
+.opt-btn,
+.dh-pill, .dh-dchip, .dh-sortbtn, .dh-livebtn, .dh-tbtn, .dh-ratebtn, .dh-legend-item {
+  min-width: 0;
 }
 
 /* ---------- dialog sheets (pause menu, settings, results, …) ---------- */

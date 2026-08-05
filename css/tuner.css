@@ -321,12 +321,10 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   /* min-width:0 defeats the flex default of min-width:auto, which floors an
      item at its longest word. The 4-way STEERING row (SUPER EASY / ASSISTED /
      NORMAL / SIM) could not shrink below that sum and pushed SIM past the
-     panel's right edge on a landscape phone. */
+     panel's right edge on a landscape phone.
+     min-height / display come from the shared chip-geometry rule in
+     css/components.css. */
   flex: 1; min-width: 0; width: auto; margin: 0; padding: 8px 4px;
-  /* on the ladder (css/tokens.css): these measured 37px, one of ten different
-     heights for controls of the same rank */
-  min-height: var(--chip-h);
-  display: inline-flex; align-items: center; justify-content: center;
   font-size: var(--fs-2); letter-spacing: 0.03em; text-align: center;
 }
 .opt-btn.active { background: var(--red); border-color: var(--red); color: #fff; }

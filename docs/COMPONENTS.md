@@ -80,7 +80,7 @@ file changes a screen owned by another.
 - `.hud-bottom` / `.hud-unit` / `.touchbtn` — `hud` + `overlays`
 - `.minibtn` — `menus` + `responsive`
 - `.cs-stat-*` (4 classes) — `carsetup` + `menus` + `responsive`
-- `.dh-card` / `.dh-tab` / `.dh-row` / `.dh-pill` / `.dh-dchip` / `.dh-sortbtn` / `.dh-race-sub` / `.dh-error-msg` — `data` + `components`
+- `.dh-card` / `.dh-tab` / `.dh-row` / `.dh-pill` / `.dh-dchip` / `.dh-sortbtn` / `.dh-livebtn` / `.dh-tbtn` / `.dh-ratebtn` / `.dh-legend-item` / `.dh-race-sub` / `.dh-error-msg` — `data` + `components` (shared chip geometry for the tap targets lives in `components.css`; chrome stays in `data.css`)
 
 **Cross-SCREEN reuse — a component borrowed by a screen that does not own it:**
 
