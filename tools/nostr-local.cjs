@@ -36,6 +36,15 @@ catch (e) {
 
 const PORT = Number(process.argv.find((a) => /^\d+$/.test(a)) || 7448);
 const DEBUG = process.argv.includes("--debug");
+// --reject            refuse every publish, as a relay's spam policy does
+// --reject-after=N    accept N, then refuse — the shape of a RATE limit
+const REJECT = process.argv.includes("--reject")
+            || process.argv.some((a) => a.startsWith("--reject-after="));
+const REJECT_AFTER = Number(
+  (process.argv.find((a) => a.startsWith("--reject-after=")) || "--reject-after=0").split("=")[1]);
+// Per-socket publish counts, so "accept N then refuse" is per client and not
+// a global that the second peer inherits already exhausted.
+const acceptedFrom = new Map();
 const wss = new WebSocketServer({ host: "127.0.0.1", port: PORT });
 
 // socket -> subId -> filter
@@ -76,10 +85,30 @@ wss.on("connection", (sock) => {
 
     if (type === "EVENT") {
       const ev = msg[1];
-      // Accepted unconditionally. A relay that verified signatures would be
-      // more faithful and would test nothing extra here — the signing is
-      // Trystero's, not ours, and a fixture that can reject our own traffic is
-      // a fixture that invents failures.
+      // A HOSTILE RELAY, on demand: --reject makes every publish come back
+      // ["OK", id, false, "blocked: …"], which is what a real relay's spam
+      // policy does and what no fixture could previously reproduce.
+      //
+      // That gap mattered. The room-code path failed on real hardware with
+      // exactly this, and the code that now DETECTS it had no test at all,
+      // because the only relay we could run accepted everything. A refusal is
+      // also invisible from outside — Trystero turns it into a console.warn
+      // and the socket stays open, so "connected and refused" looks identical
+      // to "nobody joined" for two full minutes.
+      //
+      // --reject-after=N accepts the first N publishes and refuses the rest,
+      // which is the shape of a RATE limit rather than a policy ban — the
+      // distinction that decides whether a relay is unusable or merely being
+      // asked too often.
+      if (REJECT && acceptedFrom.get(sock) >= REJECT_AFTER) {
+        sock.send(JSON.stringify(["OK", ev.id, false, "blocked: spam not permitted"]));
+        if (DEBUG) console.log("EVENT kind=" + ev.kind + " -> REFUSED");
+        return;
+      }
+      acceptedFrom.set(sock, (acceptedFrom.get(sock) || 0) + 1);
+      // Otherwise accepted unconditionally. A relay that verified signatures
+      // would be more faithful and would test nothing extra here — the signing
+      // is Trystero's, not ours.
       sock.send(JSON.stringify(["OK", ev.id, true, ""]));
       let sent = 0;
       for (const [peer, peerSubs] of subs) {
@@ -91,10 +120,11 @@ wss.on("connection", (sock) => {
       if (DEBUG) console.log("EVENT kind=" + ev.kind + " -> " + sent + " peer(s)");
     }
   });
-  sock.on("close", () => subs.delete(sock));
+  sock.on("close", () => { subs.delete(sock); acceptedFrom.delete(sock); });
 });
 
-console.log("nostr relay on ws://127.0.0.1:" + PORT + (DEBUG ? "  [debug]" : ""));
+console.log("nostr relay on ws://127.0.0.1:" + PORT + (DEBUG ? "  [debug]" : "")
+  + (REJECT ? "  [REFUSING publishes after " + REJECT_AFTER + " per client]" : ""));
 console.log('point the game at it:  localStorage.setItem("apex26.nostrRelays", \'["ws://127.0.0.1:' + PORT + '"]\')');
 
 for (const sig of ["SIGINT", "SIGTERM"]) {

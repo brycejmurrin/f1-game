@@ -88,7 +88,13 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 - `nostr-local.cjs` — a Nostr relay on localhost, so the ROOM CODE path can be
   tested without depending on somebody else's server. The smallest relay
   Trystero needs (ephemeral events, `since: now()`, live fan-out only). Needs
-  `npm i --no-save ws`.
+  `npm i --no-save ws`. `--reject` makes it a HOSTILE relay — every publish
+  comes back `["OK", id, false, "blocked: …"]`, as a real spam policy does —
+  and `--reject-after=N` accepts N first, which is the shape of a rate limit
+  rather than a ban. Without that mode the code that DETECTS a refusal had no
+  test at all, because the only relay we can run accepted everything; and a
+  refusal is invisible from outside, since Trystero turns it into a
+  `console.warn` while the socket stays open.
 - `rtc-e2e-room.mjs` — drives the ROOM CODE path end to end against that relay
   (`--peers=3` for three). The only test of `exchange()` there is: the loopback
   has no SDP and the lobby specs use a fake transport, so four regressions
