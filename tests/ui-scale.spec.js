@@ -220,7 +220,18 @@ test.describe("UI scale", () => {
     await boot(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
     await page.waitForFunction(() => window.__apex.info().state === "race", { timeout: 60_000 }).catch(() => {});
-    await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.3, 50); });
+    await page.evaluate(() => {
+      // HEADLESS, because this test measures getBoundingClientRect on four DOM
+      // clusters and never looks at a pixel. Leaving the GL draw on made it cost
+      // 12.1 MINUTES alone on a quiet box — against a 360 s budget, so it failed
+      // on the clock while every assertion in it passed. updateHud() is a SIBLING
+      // of render() in the frame loop rather than a call inside it, so skipping
+      // the draw leaves the HUD DOM updating exactly as before and nothing this
+      // test asserts can move. The circuit build stays: the layout under test is
+      // the in-race one, and there is no cheaper way to be in a race.
+      window.__apex.headless(true);
+      window.__apex.go(); window.__apex.jump(0.3, 50);
+    });
     await page.waitForTimeout(600);
 
     const CLUSTERS = [".hud-top", ".hud-bottom", "#minimap", ".dock"];
