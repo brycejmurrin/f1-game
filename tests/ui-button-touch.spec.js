@@ -580,6 +580,12 @@ test("HOW TO PLAY names every way to play", async ({ page }) => {
   const body = await page.locator("#howtoplay .sheet-body").innerText();
   for (const mode of ["RACE", "SEASON", "TIME TRIAL", "CAREER", "QUALIFYING", "RACE A FRIEND"])
     expect(body).toContain(mode);
+  // Touch steering is an anchored drag (d94e94ee). The old "tap left/right
+  // halves" line trained players into a gesture that now steers ZERO — keep
+  // the copy honest so iOS "touch is broken" reports are not self-inflicted.
+  expect(body.toUpperCase()).toContain("DRAG");
+  expect(body.toUpperCase()).not.toContain("HALVES");
+  expect(body.toUpperCase()).toContain("ONLY TOUCH");
   // The title screen's own buttons are the list it has to keep up with.
   const buttons = await page.evaluate(() =>
     [...document.querySelectorAll("#menu-hero button, #menu-primary button")]

@@ -521,6 +521,31 @@ defect in the codebase.
 
 ---
 
+## 9d. FIXED: TILT race-entry paths that never called `requestGyro`
+
+**Symptom.** On iOS, default STEER mode is TILT. Pedals responded; the car would
+not turn. Canvas drags also did nothing (canvas steering only runs in TOUCH mode).
+
+**Mechanism.** `Input.steer()` in tilt mode only returns a non-zero command when
+`tiltActive()` (`steerMode === "tilt" && tiltSeen`). Without a prior
+`requestGyro()` from a user gesture, there are no `deviceorientation` samples,
+`tiltSeen` stays false, and the fallthrough calls `touchSteering()` — but
+`touchCmd` zeros every sample unless `steerMode === "touch"`. Result: steer
+locked at 0. Permission **denied** already fell back to BUTTONS; permission
+**never requested** did not.
+
+`enableTilt()` used to run only from `#rs-go` and from cycling STEER to tilt.
+VS FRIEND `finishStart()`, quali DRIVE / TO THE GRID, championship next-round,
+and pause RESTART all reached `startRace()` without that call.
+
+**Fix.** `ensureSteerInput()` runs from `startRace()` (every race-entry path)
+and from `#rs-go` (so a quali-first path still prompts on the confirming click).
+Already-denied gyro fails closed to BUTTONS immediately. `requestGyro()` is
+idempotent. HOW TO PLAY no longer tells players to "tap screen halves" — that
+gesture was removed when touch steering became an anchored drag.
+
+---
+
 ## 10. PWA standalone is a different runtime from a Safari tab
 
 The game is installable, so it has two hosts with materially different

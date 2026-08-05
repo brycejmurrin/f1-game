@@ -496,3 +496,45 @@ test.describe("live path vs harness", () => {
     expect(Math.abs(r.live - r.sim)).toBeLessThan(0.02);
   });
 });
+
+// Race-entry gyro request — every path to lights-out used to share startRace(),
+// but only #rs-go called enableTilt(). VS FRIEND finishStart, quali DRIVE,
+// championship next-round and pause RESTART could therefore leave default TILT
+// armed with Input.steer() locked at 0 (touchCmd zeros when mode !== "touch").
+test.describe("race entry requests gyro for tilt mode", () => {
+  test("startRace marks gyroRequested when steerMode is tilt", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined");
+    await page.evaluate(() => {
+      Input.reset();
+      Input.setSteerMode("tilt");
+    });
+    expect(await page.evaluate(() => Input.gyroRequested)).toBe(false);
+    await page.evaluate(() => { __apex.race("monza"); });
+    await page.waitForFunction(() => Input.gyroRequested === true, null, { timeout: 5000 });
+    // Chromium has DeviceOrientationEvent without requestPermission, so
+    // requestGyro attaches immediately. Denied-fallback is the next test.
+    expect(await page.evaluate(() => Input.gyroAttached || Input.gyroDenied)).toBe(true);
+  });
+
+  test("startRace falls back to buttons when gyro is already denied", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined");
+    const after = await page.evaluate(async () => {
+      Input.reset();
+      Input.setSteerMode("tilt");
+      // Latch gyroDenied the way a refused iOS prompt does, without needing
+      // DeviceOrientationEvent.requestPermission in Chromium.
+      const DOE = window.DeviceOrientationEvent;
+      window.DeviceOrientationEvent = undefined;
+      await Input.requestGyro();
+      window.DeviceOrientationEvent = DOE;
+      if (!Input.gyroDenied) return { error: "expected gyroDenied after missing DOE" };
+      __apex.race("monza");
+      return { mode: Input.getSteerMode(), denied: Input.gyroDenied };
+    });
+    expect(after.error).toBeUndefined();
+    expect(after.denied).toBe(true);
+    expect(after.mode).toBe("buttons");
+  });
+});

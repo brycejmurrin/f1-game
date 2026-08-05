@@ -2444,6 +2444,10 @@ function startRace() {
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   clearMenuScreens();
+  // Every race-entry path lands here (rs-go, quali DRIVE / TO THE GRID,
+  // championship next, pause RESTART, VS FRIEND finishStart). Request gyro
+  // here so none of them can leave TILT armed with no sensor.
+  ensureSteerInput();
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
@@ -2880,7 +2884,7 @@ const G = {
   onPeerQuali, onPeerQualiLive, openQualiForNet,
   get raceQuali() { return raceQuali; }, set raceQuali(v) { raceQuali = !!v; },
   openGarageFrom: (from) => openGarage(from),
-  startRace, startWeatherArc, update, wrapS,
+  startRace, ensureSteerInput, startWeatherArc, update, wrapS,
 };
 
 // Lighting profile resolution + persistence (js/game/light-store.js). FIRST of
@@ -6616,6 +6620,26 @@ function steerLabel() {
   return "STEER: TILT" + (Input.gyroDenied ? " (NO GYRO)" : "");
 }
 
+// Ask for motion access (and fail closed to BUTTONS on deny) whenever a race
+// is about to run in TILT mode. Used to live only on #rs-go, so VS FRIEND
+// finishStart, quali DRIVE, championship next-round and pause RESTART could
+// reach lights-out with steerMode "tilt", no requestGyro() call, and
+// Input.steer() locked at 0 — pedals still worked, which read as "touch
+// steering is dead" on iOS.
+//
+// Must stay synchronous with a user gesture on the call stack when possible:
+// DeviceOrientationEvent.requestPermission is gesture-gated. startRace() is
+// almost always entered from a click; requestGyro() is idempotent so a prior
+// #rs-go call is harmless.
+function ensureSteerInput() {
+  if (steerMode !== "tilt") return;
+  if (Input.gyroDenied) {
+    setSteerMode("buttons");
+    return;
+  }
+  enableTilt();
+}
+
 function enableTilt() {
   // Must run inside a user gesture for the iOS permission prompt.
   Input.requestGyro().then((ok) => {
@@ -7335,7 +7359,10 @@ $("rs-go").onclick = () => {
     netLobby.roomChanged("race");
     return;
   }
-  if (steerMode === "tilt") enableTilt();
+  // Gyro is also requested inside startRace() via ensureSteerInput(); calling
+  // it here keeps the permission prompt tied to this click even when the path
+  // goes openQuali() first and only later reaches startRace().
+  ensureSteerInput();
   // A championship weekend always starts with qualifying, and a one-off does
   // when GRID is set to QUALIFYING. Otherwise it is straight to the lights from
   // P12 — a quick blast, which is the point of that mode.

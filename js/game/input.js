@@ -2,9 +2,9 @@
  * Input: keyboard / gamepad / tilt / touch for Apex 26.
  *
  * Steering sources, by priority: keyboard (held or still returning to
- * center) > gamepad (a connected pad with its stick deflected) > tilt
- * (enabled and delivering fresh data) > touch (on-screen steer buttons or
- * lower-screen halves).
+ * center) > gamepad (a connected pad with its stick deflected) > buttons
+ * (on-screen L/R holds) > tilt (enabled and delivering fresh data) >
+ * touch (anchored canvas drag in touch mode only).
  *
  * Gamepad uses the W3C Gamepad API ("standard" mapping). It has no change
  * events, so poll() must be called once per frame from the game loop; it
@@ -116,6 +116,10 @@ const Input = (function () {
   let tiltSeen = false;       // we have actually received sensor data
   let gyroAttached = false;
   let gyroDenied = false;
+  // True once requestGyro() has been invoked this page load. Distinguishes
+  // "never asked" (silent zero steer in tilt mode — the iOS VS-FRIEND / restart
+  // gap) from "asked, waiting on the first sample" (brief, not a failure).
+  let gyroRequested = false;
   // single source of truth for how the player steers: "tilt" | "buttons" | "touch"
   let steerMode = "tilt";
   let tiltSmoothed = 0;       // One-Euro-filtered tilt angle (deg)
@@ -235,7 +239,11 @@ const Input = (function () {
 
   // Must be called from a user gesture (iOS permission prompt).
   // Resolves true if tilt data can be expected.
+  // Idempotent: a second call after attach or deny does not re-prompt.
   function requestGyro() {
+    gyroRequested = true;
+    if (gyroAttached) return Promise.resolve(true);
+    if (gyroDenied) return Promise.resolve(false);
     if (typeof DeviceOrientationEvent === "undefined") {
       gyroDenied = true;
       return Promise.resolve(false);
@@ -1262,6 +1270,8 @@ const Input = (function () {
     get padConnected() { return padConnected; },
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },
+    get gyroRequested() { return gyroRequested; },
+    get gyroAttached() { return gyroAttached; },
     // Read-only tilt-tuning state (for tests / diagnostics).
     get maxTilt() { return MAX_TILT; },
     get deadzone() { return DEADZONE; },
