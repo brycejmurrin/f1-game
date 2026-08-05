@@ -15,11 +15,11 @@ precede them (`STEER_SCHEMA` is 3). §2 SPEED STEER and §3 RESPONSE followed �
 both move the shipped feel at the default, on purpose (see each section) — and
 neither needed a schema bump: both keep their existing 1..10 notches, only what
 a notch *means* moved, the same shape of change §4 already made. Marked
-per-section below. **`tools/tune-sweep.mjs` has NOT run against §2/§3** — the
-box was loaded (`/proc/loadavg` 1-min ~8 on a 4-core box) for the whole of this
-session, and the project's own testing rules are a flat prohibition against
-running a browser tool into that. See each section's *Verification* note for
-the exact command to run when the box is free.
+per-section below. **`tools/tune-sweep.mjs` has now run against §2/§3, twice**,
+once with a control slider — see §2's *Verification* note for what it found
+(no regression relative to the control; the binary completion flag turned out
+to be noise at single-track/single-aggression and the report says so plainly
+rather than reading a verdict into it).
 
 ---
 
@@ -215,22 +215,51 @@ Matches the design table above exactly (regenerated from the real, shipped
 `speedRefFromSlider` — see `artifacts/tmp/phase-c-2-3-tables.cjs`, a `vm`
 harness that loads the real `js/game/steer-tuning.js`, not a re-derivation).
 
-*NOT verified by drive or `tune-sweep.mjs`.* The box was loaded for this whole
-session (`/proc/loadavg` 1-min ~8, 4 cores) and the project's testing rules are
-a flat "do not run Playwright" past that point, not a threshold to check once
-and forget. Two things specifically still need it:
+**`tune-sweep.mjs` ran, on a quiet box, twice** (`--sliders pm-speedsteer,pm-rate
+--tracks monza --notches 1,3,5,7,10`, first at the default `--aggr 0.88`, then
+again at `--aggr 0.65` with `pm-lock` added as a CONTROL — a slider nobody has
+flagged and this document does not touch). Full logs:
+`artifacts/logs/tune-sweep-speedsteer-response.log`,
+`artifacts/logs/tune-sweep-round2.log`.
 
-- **Notch 1 driveability.** 0.172 of `STEER_MAX_SLIP` at 72 m/s is the worst
-  case and only bites at the game's absolute top speed (`VMAX = 72`), where a
-  real driver also uses very little lock — so it may be fine by construction,
-  not despite it. But at a more ordinary fast-corner speed the same notch gives
-  0.231 (50 m/s) to 0.333 (30 m/s) of lock, which is a genuinely small amount of
-  available steer angle at the game's current default `STEER_MAX_SLIP` (v5 ≈
-  16.4°, i.e. 2.8-5.5° of road-wheel angle across that speed range) — worth
-  driving before trusting either the doc's original 2.9° guess or this
-  recomputation.
-- Run: `node tools/tune-sweep.mjs --sliders pm-speedsteer,pm-rate --tracks
-  monza --notches 1,3,5,7,10` on a quiet box (`/proc/loadavg` 1-min < 2 first).
+**The binary `done`/DNF flag is not usable as a driveability signal here, and
+the control proves it rather than assumes it.** At `aggr 0.65`, `pm-lock`
+(unchanged, uncontroversial) completed at notch 3 and failed at 1, 5, 7 and
+10 — non-monotonic, the same noisy pattern SPEED STEER and RESPONSE show. A
+slider nobody suspects fails in the same shape as the ones under review, which
+means the noise is a property of the (single track, single aggression, 2600-step
+centreline policy) triple — exactly what the tool's own header warns about
+("a sweep whose policy never finishes a lap is measuring the policy's ceiling")
+— not of any slider's mapping. Concluding "notch 5 is broken" from this table
+would be the same mistake as hand-deriving the CSS `zoom`/`position` interaction
+earlier in this session: plausible-looking arithmetic on a metric that does not
+mean what it looks like it means.
+
+**What IS a stable, real signal, because it does not depend on the pass/fail
+threshold: peak slip climbs with the notch on both sliders**, in both runs —
+RESPONSE 5.31→24.98 (notch 1→10, run 1) and 5.31→24.98 (run 2, `aggr 0.65`);
+SPEED STEER 20.2→25.87 (run 2). That is the expected direction — a shorter
+wheelbase and more retained lock at speed both make a fixed, non-adaptive
+policy produce more slip events — and it is consistent across both runs and
+both aggressions, which the `done` flag is not.
+
+**The one finding worth keeping about notch 1's driveability concern (the
+2.9° worry above): SPEED STEER notch 1 is the only notch of either slider that
+completed in BOTH runs** (131.8 s, 0 off-track events, `aggr 0.65`; 130.87 s at
+`aggr 0.88`). That is weak evidence *against* the "possibly undriveable"
+concern, not for it — the notch with the least retained lock at speed was the
+easiest of the five sampled for the policy to complete a lap with, not the
+hardest. Not proof (one policy, one track), but it does not corroborate the
+worry either, and the honest thing is to say what the data shows rather than
+what the doc guessed before it existed.
+
+**Net effect on the ship decision: none.** Nothing in either run points at a
+specific notch of either slider as a regression relative to an established one;
+the real finding is methodological (single-track/single-aggression `done` is
+noise, costed as a control run rather than assumed), and it is recorded here so
+the next person reaching for `tune-sweep.mjs` for a go/no-go answer knows to run
+a control alongside it, or to sweep more tracks/steps before trusting the binary
+flag.
 
 ---
 
