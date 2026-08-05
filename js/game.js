@@ -402,6 +402,10 @@ const X_K_MAX = 0.0045;     // curvature that still counts as "straight" (r ~ 22
 // is a proper straight (r >= ~700 m), and the length test then does the rest.
 const X_ZONE_K = 0.0014;
 const X_MIN_SPEED = 25;     // m/s (a vStd() threshold) — no X-mode at crawl speed
+// Overtake's own crawl floor, and a vStd() threshold for exactly the same
+// reason X_MIN_SPEED is one. Named rather than inline so the next reader can
+// see it is the sibling of the constant above and is measured on the same scale.
+const OT_MIN_SPEED = 15;    // m/s (a vStd() threshold) — no overtake at crawl speed
 // Lateral grip OFF the racing surface. muBase had no off-track term at all, so
 // grass and gravel cornered exactly like tarmac and only scrubbed forward speed —
 // you could take a run-off at full lateral grip. Faded in over the first ~1.5 m
@@ -3574,8 +3578,19 @@ function updateCar(c, dt, ranked) {
   // --- overtake mode ---
   const ahead = ranked[(c.rank || 1) - 2];
   const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
+  // vStd, not a bare c.speed: this is a THRESHOLD, and a threshold compared
+  // against real m/s means something different at every OVERALL SPEED setting.
+  // The active-aero floor thirty lines below already gets this right
+  // (vStd(c.speed) > X_MIN_SPEED) — so the two straight-line aids in this same
+  // function disagreed about what a speed is. Measured as a fraction of the
+  // car's own envelope, X-mode armed at a constant 35 % at every pace while
+  // overtake armed at 42 % of top speed at pace 0.5 and 16 % at pace 1.3.
+  // The error ran the wrong way for the player it reached: the slower you set
+  // the game, the more of the lap you could not use overtake at all — and a
+  // slower setting is what you reach for when the car is already getting away
+  // from you. Same class as the beached-rescue gate (A5 in the review).
   c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
-              && !c.finished && c.speed > 15;
+              && !c.finished && vStd(c.speed) > OT_MIN_SPEED;
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
                       : (c.otArmed && simRnd() < 1 - Math.exp(-0.7 * dt));
   if (fire && c.otArmed) {
@@ -4098,6 +4113,33 @@ function updateCar(c, dt, ranked) {
     const Fyf = tyre(CS_FRONT, slipF, muF) * sp;
     const Fyr = tyre(csR, slipR, muR) * sp;
     const cosD = Math.cos(delta);
+    // --- UNDERSTEER CUE. The car's defining failure mode is washing wide, and
+    // until now the only feedback was visual (a nose that will not point where
+    // you asked) plus tyre squeal, both of which arrive AFTER you have already
+    // lost the corner. A real wheel goes LIGHT as the front lets go — the
+    // self-aligning torque collapses — which is the canonical way a driver
+    // feels this. On a phone or a pad there is no wheel to go light, and sim
+    // racers report that force feedback fails to deliver it even on
+    // direct-drive hardware, so nothing communicates it at all here.
+    //
+    // This is SIGNALLING, NOT SIMULATING. We are not modelling self-aligning
+    // torque; we are telling the player a fact about front-tyre saturation
+    // that they have no other channel for. `sat` is how far the front slip has
+    // pushed past the tanh knee — 1 is the friction limit — so the cue fires
+    // exactly when the tyre stops answering more steering with more grip.
+    // Gated on the LOCAL human (a replicated rival's tyres are not in your
+    // hands), on actually asking for steering, and rate-limited the same way
+    // the kerb haptic is, so it cannot machine-gun.
+    if (c.isPlayer && !c.offroad && sp > 0.5) {
+      const sat = Math.abs(CS_FRONT * slipF) / Math.max(muF, 1e-3);
+      const asking = Math.abs(steer) > 0.15;
+      if (sat > 1.15 && asking && (c.uslipHapT = (c.uslipHapT || 0) - dt) <= 0) {
+        const bite = clamp((sat - 1.15) / 0.85, 0, 1);   // 0 at onset, 1 well past
+        if (navigator.vibrate) { try { navigator.vibrate(10 + (bite * 18) | 0); } catch (e) {} }
+        Input.rumble(0.18 + bite * 0.32, 70);
+        c.uslipHapT = 0.16 - bite * 0.06;                // firmer slide = tighter pulse
+      }
+    }
     // --- rigid-body equations of motion (per unit mass). kz2 = yaw inertia/mass.
     const ay = Fyf * cosD + Fyr;                         // body lateral accel
     // Floored: setPhysics({yawInertia:0}) would otherwise make the rdot below
@@ -4150,7 +4192,7 @@ function updateCar(c, dt, ranked) {
     if (DebrisWorld.active()) {
       const latG = Math.abs(k) * c.speed * c.speed / 9.8;   // ~lateral g demand
       DebrisWorld.tyreMarble(c, {
-        lock: (braking && c.speed > 30) ? 0.95 : 0,
+        lock: (braking && vStd(c.speed) > 30) ? 0.95 : 0,   // vStd: a threshold, not a force
         slip: Math.max(0, Math.min(1, latG - 1.6)) * 0.14,   // → ~slip-angle rad at the limit
         speed: c.speed });
     }
@@ -4330,7 +4372,7 @@ function updateCar(c, dt, ranked) {
   // Drives the emissive brake-glow rings on the player's wheels.
   {
     // ALL cars (the AI brake into corners too — a field of glowing discs).
-    const heating = braking && c.speed > 12;
+    const heating = braking && vStd(c.speed) > 12;   // vStd: a threshold, not a force — see OT_MIN_SPEED
     c.brakeHeat = clamp((c.brakeHeat || 0) + (heating ? dt * 1.6 : -dt * 0.9), 0, 1);
   }
   if (c.human) {

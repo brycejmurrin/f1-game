@@ -18,7 +18,11 @@ const { $, store } = G;
 //  pm-rate     RESPONSE       WHEELBASE m (inverted) — high slider = shorter
 //                             wheelbase = less yaw inertia = snappier turn-in.
 //  pm-expo     LINEARITY      STEER_EXPO — high slider = more linear/direct,
-//                             low = gentle near centre. (affects tilt + keys)
+//                             low = gentle near centre. Applied to the UNIFIED
+//                             steer command in updateCar, so it shapes EVERY
+//                             source alike — pad and canvas touch as much as
+//                             tilt and keys. (The old note said "tilt + keys",
+//                             which would mislead anyone tuning for a gamepad.)
 //  pm-smooth   STEER SMOOTHING One-Euro min-cutoff (Hz) — higher slider = lower
 //                             cutoff = steadier/smoother tilt (kills jitter).
 //  pm-tiltdeg  TILT RANGE     MAX_TILT — degrees of tilt for full lock (the one
