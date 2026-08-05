@@ -16,8 +16,23 @@ body.desktop #pm-calib { display: none !important; }
 /* ---------- LARGE SCREENS (iPad, desktop) ---------- */
 @media (min-width: 900px) and (min-height: 600px) {
   /* The select sheet is the one screen that wants to fill the space it is
-     given rather than shrink to content — it is the game's "home". */
-  #sel-inner { height: min(100%, 720px); }
+     given rather than shrink to content — it is the game's "home".
+     THE CAP IS A FRACTION WITH A FLOOR, not a flat 720. On a rotated portrait
+     monitor (1080x1920) a flat cap left the sheet 720px tall in ~1896px of
+     room — about 60 % of the screen was empty black, on the one display shape
+     that has height to spare. 78 svh follows the screen; the 720px floor keeps
+     every landscape desktop exactly as it was, because 78 % of 800-937px is
+     less than 720 anyway.
+     Measured, sheet height x the resulting `data-shape` (js/game/sheetshape.js):
+       1280x800   720 -> wide    (unchanged)
+       1440x900   720 -> wide    (unchanged)
+       1920x1080  842 -> wide    (0.83 ratio, still columns)
+       1080x1920 1498 -> TALL    (1.47 ratio, and bands is the right answer)
+     The rotated monitor is the only one that moves, and it moves onto the band
+     layout the shape system was built to choose — which is why this is worth
+     doing NOW and was not before: with the old orientation proxy, a taller sheet
+     there would have kept the columns and just stretched them. */
+  #sel-inner { height: min(100%, max(720px, 78svh)); }
   /* The spec strip gets its BARS back on a big screen. They are hidden on a
      landscape phone on purpose — four bars cost ~60px of a ~230px pane and the
      numbers alone carry the comparison. A desktop has the opposite problem:

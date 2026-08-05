@@ -124,6 +124,19 @@
      SHOWN, so a menu sized against it can never be swallowed by a toolbar
      sliding back in mid-scroll (dvh also re-lays-out on every toolbar
      transition, which reads as jitter). In a standalone PWA they are equal. */
+  /* THE HOUSE UNIT FOR A LAYOUT CAP IS `svh`, NOT `vh`.
+     `vh` is the LARGE viewport — the height with the browser toolbars retracted
+     — so a `max-height: 80vh` modal on iOS is capped against space that is not
+     on screen while the toolbar is showing. `svh` is the small viewport, which
+     is the one you are guaranteed. Every layout cap and every fixed overlay
+     position here uses it (the QR panel's comment says it outright: "a QR that
+     needs scrolling to see is a QR nobody can scan", and `vh` was the reason it
+     could).
+     `dvh` is deliberately NOT the house unit: it changes as the toolbar slides,
+     so anything sized against it re-lays-out mid-scroll, which reads as jitter.
+     WHAT STAYS ON `vh`: the type and gap clamps (`clamp(15px, 3.6vh, 24px)` and
+     friends). Those want the roomier number, and a font-size that changed as the
+     toolbar moved would be far worse than a few pixels of imprecision. */
   --gut: 12px;
   --safe-t: calc(var(--sat) + var(--gut));
   --safe-r: calc(var(--sar) + var(--gut));

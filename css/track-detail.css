@@ -4,8 +4,8 @@
    order in index.html preserves the original source order, so the cascade
    is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
 /* ---------- season standings overlay ---------- */
-#standings { max-width: min(92vw, 540px); max-height: 80vh; }
-#standings-body { max-height: 55vh; overflow-y: auto; font-size: 13px; }
+#standings { max-width: min(92vw, 540px); max-height: 80svh; }
+#standings-body { max-height: 55svh; overflow-y: auto; font-size: 13px; }
 /* Row styling is the shared .res-* component (css/components.css); the size
    above is the only thing this container wants of its own. */
 

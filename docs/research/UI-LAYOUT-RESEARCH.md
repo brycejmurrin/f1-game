@@ -427,10 +427,29 @@ about rather than the tag swapped.
    `js/game/sheetshape.js` stays, and its 90 lines are the cheaper side of that
    trade.
 6. **Foldable guard** — one media query, turns broken into unoptimised. *(cheap)*
-7. **`svh` as the house cap unit**, and **six blessed pixel baselines** — carried
-   over from the first pass, both still worth doing. *(trivial / cheap)*
-8. **`any-hover` for hybrid devices**, sparingly. *(low priority, easy to get
-   wrong)*
+7. ~~**`svh` as the house cap unit**~~ — **done**. Every layout cap and fixed
+   overlay position now uses it; the type and gap clamps deliberately stay on
+   `vh` (a font-size that changed as the toolbar slid would be worse than the
+   imprecision). House rule recorded in css/tokens.css.
+8. ~~**Six blessed pixel baselines**~~ — **done**, `tests/menu-baseline.spec.js`.
+   Proved they can fail before trusting them: swapping `--red` to blue fails four
+   of six, restoring it passes all six.
+9. ~~**`any-hover` for hybrid devices**~~ — **done, in exactly one place.**
+   `.pc-hint` (the keyboard-shortcut hint) was hidden on `(pointer: coarse)`,
+   which describes the PRIMARY input only — so an iPad with a Magic Keyboard or a
+   Surface lost the hint, telling the one user who definitely has the keys
+   nothing about them. Now `(not (any-pointer: fine))`, which asks the whole
+   device. Left everywhere else alone, per §11.
+10. ~~**The rotated-monitor sheet cap**~~ — **done**. `#sel-inner` was capped at
+   a flat 720px, so a 1080x1920 portrait monitor showed a 720px sheet in ~1896px
+   of room — about 60 % of the screen empty. Now `min(100%, max(720px, 78svh))`:
+   the fraction follows the screen and the 720 floor leaves every landscape
+   desktop untouched (78 % of 800-937px is under 720 anyway). Measured, the
+   rotated monitor goes 720 -> 1498px tall, `data-shape` flips it to TALL, and it
+   takes the BAND layout with a 974x922 list instead of a 573x661 one. Worth
+   noting this was only safe to do AFTER the shape system existed: under the old
+   orientation proxy a taller sheet there would have kept the columns and merely
+   stretched them.
 
 ## What the audit found while this was being written (build 923) — and why it was wrong
 
