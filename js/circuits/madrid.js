@@ -33,9 +33,25 @@
     // it, they don't replace it. Only carve their curated sightlines (the
     // exhibition-hall pit straight and the banked bullring sector); the old
     // road-overlap risk is handled by the guarded emitters, not exclusions.
+    //
+    // The two rules below (s 0.15-0.55, 0.83-0.95) are a later, separate cut:
+    // tests/new-hooks.spec.js's prop-vertex budget measured day 621,075 /
+    // night 968,561 against 250,000 — not a duplicate-layer bug like
+    // Singapore's (CI-3), just this generic layer covering ~74% of a 5.5 km
+    // lap at its normal density. Unlike Singapore's cityFront(), the generic
+    // city here has no per-circuit along()-step to widen (js/track/tracks.js's
+    // every(18)/every(26) is shared by 14 other circuits), so the only
+    // Madrid-local lever is exclusion. Cuts lap coverage to ~22%, kept where
+    // it was already theme-matched — flanking the two landmark precincts
+    // above — rather than spread thin lap-wide. See the budget comment in
+    // tests/new-hooks.spec.js for the measured before/after and why 250,000
+    // was never reachable (even zero city buildings floors near 435,000, on
+    // the required bespoke landmarks alone).
     dressingExclusions: [
       { kinds: ["city", "foliage"], s0: 0.95, s1: 0.06 },
       { kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0.68, s1: 0.83 },
+      { kinds: ["city"], s0: 0.15, s1: 0.55 },
+      { kinds: ["city"], s0: 0.83, s1: 0.95 },
     ],
     pal: {
       zenith: [0.30, 0.58, 0.90],
