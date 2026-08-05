@@ -334,10 +334,21 @@ const NetNostr = (function () {
         // fussy relay out of six is survivable and must not scare anybody off
         // a working room.
         if (rejectedBy.size >= live) {
-          finish({ ok: false, error: "all_rejected",
-            message: "The room service refused this code — its relays are turning away"
-                   + " anonymous traffic. Use the invite link or QR instead; they need"
-                   + " no third party." });
+          // TELL, DO NOT TEAR DOWN. finish() leaves the Trystero room, and the
+          // room is the only route the guest's answer has home — so reporting
+          // a rejection by ending the rendezvous would DESTROY a handshake
+          // that was still perfectly capable of completing. Rejections are
+          // survivable and demonstrably so: room codes work on hardware where
+          // one relay of six answers "blocked: spam not permitted" throughout.
+          // This is advisory, and the room keeps running.
+          if (onFail) {
+            try {
+              onFail({ ok: false, error: "all_rejected", advisory: true,
+                message: "Every room relay is refusing this code. It may still connect —"
+                       + " if it does not, use the invite link or QR, which need no"
+                       + " third party." });
+            } catch (e) {}
+          }
         }
       }, RELAY_CHECK_MS);
 
