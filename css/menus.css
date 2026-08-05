@@ -16,6 +16,13 @@
 }
 
 /* ---------- main menu ---------- */
+/* UI SCALE reaches the title screen through its CHILDREN, not through #overlay
+   itself: this element carries the safe-area padding (below), and zooming that
+   would divide the notch inset by the scale and slide the brand under hardware
+   — the same reason css/components.css zooms `.sheet` rather than `.screen`.
+   The title screen is not a `.sheet`, so without this it is the one screen the
+   setting would never move. */
+#overlay > * { zoom: var(--ui-scale); }
 #overlay {
   position: fixed; inset: 0;
   z-index: 20;

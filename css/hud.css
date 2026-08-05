@@ -7,9 +7,25 @@
    tools/manifest.cjs CSS. */
 /* ---------- HUD ---------- */
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+
+/* UI SCALE, on the CLUSTERS rather than on #hud. #hud is the full-screen
+   pointer-events:none layer; zooming it would scale `inset: 0` and shrink the
+   layer itself. Each cluster below is separately anchored, so each takes the
+   zoom on its own and stays where it belongs.
+   This is also why the in-race layer is scaled by zoom and not by tokens: the
+   HUD's type is hard-coded px throughout (this file is deliberately OFF the
+   --fs-micro scale — see the note in css/tokens.css), so a token knob would
+   move the boxes and leave every number inside them where it was.
+   THE ANCHORS ARE COMPENSATED: in a zoomed element every length in its own
+   top/right/bottom/left scales too, so each `var(--sa*)` term below is divided
+   by the scale while the px terms are left to scale. A px offset encodes a
+   margin or a neighbour's size and must grow with what it separates; a
+   safe-area inset encodes HARDWARE and must not. */
+.hud-top, .hud-gaps, .hud-bottom, #minimap, #hud-flag, #hud-sectors,
+#lights, #announce { zoom: var(--ui-scale); }
 .hud-top {
   position: absolute;
-  top: calc(8px + var(--sat));
+  top: calc(8px + var(--sat) / var(--ui-scale));
   left: 50%; transform: translateX(-50%);
   display: flex; gap: 10px;
 }
@@ -30,7 +46,7 @@
 .hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .hud-gaps {
   position: absolute;
-  top: calc(64px + var(--sat));
+  top: calc(64px + var(--sat) / var(--ui-scale));
   left: 50%; transform: translateX(-50%);
   text-align: center; font-size: 12px; color: #ddd;
   font-family: var(--font-hud); font-variant-numeric: tabular-nums;
@@ -39,7 +55,7 @@
 }
 .hud-bottom {
   position: absolute;
-  bottom: calc(12px + var(--sab));
+  bottom: calc(12px + var(--sab) / var(--ui-scale));
   left: 50%; transform: translateX(-50%);
   /* compact centred stack so it never collides with the corner buttons */
   display: flex; flex-direction: column; align-items: center; gap: 4px;
@@ -107,8 +123,8 @@
 @keyframes pulse { 50% { opacity: 0.55; } }
 #minimap {
   position: absolute;
-  left: calc(10px + var(--sal));
-  top: calc(8px + var(--sat));
+  left: calc(10px + var(--sal) / var(--ui-scale));
+  top: calc(8px + var(--sat) / var(--ui-scale));
   width: 112px; height: 112px;
   opacity: 0.90;
   background: rgba(8,8,14,0.55); box-shadow: 0 2px 8px rgba(0,0,0,0.6);
@@ -129,8 +145,8 @@
 @media (prefers-reduced-motion: reduce) { #hud-flag.flag-vsc { animation: none; } }
 #hud-sectors {
   position: fixed;
-  top: calc(56px + var(--sat));
-  right: calc(10px + var(--sar));
+  top: calc(56px + var(--sat) / var(--ui-scale));
+  right: calc(10px + var(--sar) / var(--ui-scale));
   background: rgba(8, 8, 14, 0.72);
   border-radius: var(--r-sm);
   padding: 5px 9px;
@@ -148,7 +164,7 @@
 /* ---------- start lights ---------- */
 #lights {
   position: fixed;
-  top: calc(18svh + var(--sat));
+  top: calc((18svh + var(--sat)) / var(--ui-scale));
   left: 50%; transform: translateX(-50%);
   display: flex; gap: 12px;
   background: rgba(8, 8, 12, 0.85);
@@ -161,7 +177,7 @@
 
 #announce {
   position: fixed;
-  top: 30svh; left: 50%; transform: translateX(-50%);
+  top: calc(30svh / var(--ui-scale)); left: 50%; transform: translateX(-50%);
   font-size: clamp(30px, 8vw, 64px);
   font-weight: 800; font-style: italic;
   text-shadow: 0 0 24px rgba(225, 6, 0, 0.8);
@@ -204,7 +220,7 @@ body:has(.screen.dim:not([hidden])) #photo-controls { display: none; }
 body.lt-open:not(.pc-nopanel) .pc-stick { width: 84px; height: 84px; }
 body.lt-open:not(.pc-nopanel) .pc-nub { width: 34px; height: 34px; margin: -17px 0 0 -17px; }
 body.lt-open:not(.pc-nopanel) .pc-btn { width: 46px; height: 42px; font-size: 14px; }
-body.lt-open:not(.pc-nopanel) .pc-move-wrap { left: calc(10px + var(--sal)); }
+body.lt-open:not(.pc-nopanel) .pc-move-wrap { left: calc(10px + var(--sal) / var(--ui-scale)); }
 body.lt-open:not(.pc-nopanel) .pc-altcol {
   left: auto; right: calc(var(--dock-w) + 14px + var(--sar));
 }
@@ -289,8 +305,8 @@ body.pc-uihidden #photo-controls > :not(#pc-restore) { display: none !important;
 body.pc-uihidden #lighting-inner { display: none !important; }
 #pc-restore {
   position: fixed;
-  top: calc(8px + var(--sat));
-  right: calc(10px + var(--sar));
+  top: calc(8px + var(--sat) / var(--ui-scale));
+  right: calc(10px + var(--sar) / var(--ui-scale));
   width: 36px; height: 36px;
   padding: 0; margin: 0;
   border-radius: var(--r-md);

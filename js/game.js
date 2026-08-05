@@ -6965,6 +6965,38 @@ $("as-prev").onclick = () => audioTransport(() => GameAudio.prevTrack());
 // third notion of "paused" here would be a second source of truth.
 $("as-play").onclick = () => { setMusic(!musicEnabled); if (soundOn) GameAudio.uiTick(); };
 
+// UI SIZE: how big the whole interface is, as a percentage. Writes --ui-scale,
+// which every density and type token derives from (css/tokens.css) and which
+// the sheets consume as a `zoom` — so one number moves the menus, the tap
+// ladder and the in-race dock together.
+//
+// A SETTING RATHER THAN A CONSTANT because this is the one thing measurement
+// could not settle: the size that reads correctly at arm's length on a phone in
+// motion is not something a screenshot answers, and three rounds of picking a
+// number from one ended with "still too small". The player has the device.
+//
+// Written INLINE ON documentElement (<html>), which is where css/tokens.css
+// declares --ui-scale and every calc() that reads it. That element matters: a
+// custom property is substituted where it is DECLARED, so a value set on <body>
+// leaves :root's calc()s reading :root's own --ui-scale and the knob silently
+// does nothing (measured: --tap stayed at `calc(44px * 1)` at every setting).
+// An inline style on <html> beats the stylesheet rule, so the choice sticks
+// without !important. Desktop keeps 100% unless asked: a mouse gains nothing
+// from bigger targets and loses rows off the screen.
+const UI_SCALES = [90, 100, 115, 130];
+let uiScale = store.get("uiScale", Input.touchControlsNeeded() ? 115 : 100);
+function applyUiScale() {
+  const btn = $("pm-uiscale"); if (btn) btn.textContent = "UI SIZE: " + uiScale + "%";
+  document.documentElement.style.setProperty("--ui-scale", uiScale / 100);
+}
+$("pm-uiscale").onclick = () => {
+  uiScale = UI_SCALES[(UI_SCALES.indexOf(uiScale) + 1) % UI_SCALES.length];
+  store.set("uiScale", uiScale);
+  applyUiScale();
+  if (soundOn) GameAudio.uiSelect();
+};
+applyUiScale();
+
 // Render resolution setting: AUTO = the frame-time governor adapts the scale;
 // LOW/MED/HIGH pin a fixed scale (and disable the governor so it can't fight
 // the choice). LOW is also the safe pick on older phones — smaller render

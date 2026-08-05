@@ -181,14 +181,6 @@
   --chip-h: 40px;   /* chips are secondary — one step below --tap */
   --tap-sm: 30px;   /* paired micro-toggles only — never a lone control */
   --label: 12px;    /* section label type size */
-  /* A TOUCH DEVICE GETS A BIGGER LADDER, not the desktop one. 44px is a FLOOR
-     — the smallest box Apple and WCAG will accept — and the whole ladder was
-     sitting on it, so a phone (the only place anyone actually aims a thumb)
-     got the same boxes as a mouse pointer that can hit 20px. Reported as
-     "everything has gotten smaller", and this is the half of it that is not
-     the HUD: menu buttons, list rows and tabs were all pinned at the minimum.
-     Desktop keeps the values above; a pointer that precise gains nothing from
-     bigger targets and loses rows off the screen. */
   /* THE TYPE FLOOR. No menu text may be smaller than this.
      A sweep across nine viewports found twenty-four hard-coded sizes below it —
      8px NIGHT/STREET badges on the circuit list, 9px UNIVERSAL and ▲ACCEL tags
@@ -321,16 +313,41 @@
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* THE TOUCH LADDER. See the note beside --tap above: the values there are a
-   FLOOR, and a phone was being handed the floor. `body:not(.desktop)` is the
-   same test the in-race controls use (js/game.js adds `.desktop` when
-   Input.touchControlsNeeded() is false), so the two halves of the UI move
-   together instead of one being tuned and the other left at the minimum. */
+/* THE TOUCH LADDER. The tokens above are a FLOOR (44px is the smallest box
+   Apple's HIG and WCAG 2.5.5 accept) and a phone was being handed the floor —
+   the same targets as a mouse pointer that can hit 20px. `body:not(.desktop)`
+   is the test js/game.js:8107 applies via Input.touchControlsNeeded(). */
 body:not(.desktop) {
   --tap: 52px;
   --chip-h: 46px;
   --tap-sm: 36px;
   --label: 13px;
+}
+
+/* --ui-scale — HOW BIG THE UI IS, as one number, consumed as a `zoom` by the
+   menu sheets and the in-race clusters (css/components.css, css/hud.css).
+
+   ZOOM IS THE ONLY LEVER, AND THE TOKENS ABOVE DELIBERATELY DO NOT USE IT.
+   Scaling the tokens as well would DOUBLE-COUNT: every token above is consumed
+   inside a sheet, and a zoomed subtree already scales the lengths it inherits —
+   --tap: 52px inside zoom 1.15 paints at 59.8px on its own. Multiply first and
+   it paints at 68.8px. Nor can it be neutralised locally, because a token's
+   calc() is substituted where it is DECLARED (up here), not where it is used.
+   One mechanism per layer, and for anything inside a sheet the mechanism is
+   zoom.
+
+   ON :root, so the `zoom` declarations and js/game.js agree on one element.
+   `(pointer: coarse)` is the same question Input.touchControlsNeeded() asks, so
+   the CSS default and the JS default cannot disagree — and unlike the
+   `.desktop` class, which is added at boot, it is right on the FIRST paint.
+
+   1.15 is the shipped default, not a ceiling: SETTINGS ▸ DISPLAY ▸ UI SIZE
+   offers 90/100/115/130 and writes this property inline on documentElement.
+   Routing size through one knob with a control behind it is the point — it
+   replaces guessing a number from a screenshot. */
+:root { --ui-scale: 1; }
+@media (pointer: coarse) {
+  :root { --ui-scale: 1.15; }
 }
 
 /* Per-team accents (ids + colours from js/car/teams.js — vivid brand colour of
@@ -433,16 +450,26 @@ button:disabled:active { background: rgba(255, 255, 255, 0.07); }
 }
 /* THE density switch. A landscape phone is ~390-430px tall and that is the
    whole constraint: the same menus, tighter. Nothing here changes layout —
-   only how much room each part takes — so there is exactly one place to tune
-   "it feels cramped on my phone". */
+   only how much room each part takes.
+
+   FOUR OF THESE WERE DEAD, AND HAD BEEN SINCE THE TOUCH LADDER LANDED.
+   This block declared --tap/--chip-h/--tap-sm/--label on :root while the touch
+   ladder declares --ui-scale (and previously those same four) on body. A
+   declaration on the element ITSELF always beats one inherited from an
+   ancestor, so on every touch device in landscape — which is this game's
+   primary orientation, i.e. exactly the case the block was written for — the
+   body value won and these four never applied. Only --pad/--gap/--gut ever
+   landed. Nothing said so, and the numbers read like a working ladder.
+
+   They are gone rather than moved to body. Shrinking the tap ladder on the one
+   device that aims with a thumb is what the whole "everything is too small"
+   thread was about; the size question now has one answer, --ui-scale, and a
+   setting behind it. What stays is the SPACING, which is the real constraint on
+   a 393px-tall screen and is orthogonal to how big a control is. */
 @media (orientation: landscape) and (max-height: 560px) {
   :root {
     --pad: 13px;
     --gap: 8px;
-    --tap: 40px;
-    --chip-h: 36px;
-    --tap-sm: 28px;
-    --label: 10px;
     --gut: 8px;
   }
 }

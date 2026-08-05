@@ -47,6 +47,19 @@
 .screen {
   position: fixed; inset: 0;
   display: grid;
+  /* ONE EXPLICIT COLUMN, not an implicit auto track. Without this the sheet is
+     placed in an implicit `auto` track, and whether `width: min(100%, …)` on
+     the sheet resolves against the SCREEN or against the sheet's own content
+     then depends on the engine's "stretch auto tracks" step. Chromium stretches
+     it and the cap applies; WebKit does not appear to, so `100%` resolves
+     against a content-sized track and the sheet collapses onto its widest
+     child — which for a dialog whose widest child is a `.bigbtn` means
+     min(78vw, 340px) + padding, i.e. ~389px on an 852px iPhone instead of the
+     520px the CSS says. Reported as "the menu only uses half my screen".
+     `minmax(0, 1fr)` makes the track definite, so both engines resolve the
+     percentage against the same box. The 0 minimum matters: a bare `1fr` floors
+     at min-content and would let a wide child push the track past the screen. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   /* The safe-area padding is the point of this class. viewport-fit=cover means
      the viewport includes the notch and the home indicator; anything centred
@@ -94,6 +107,27 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      without the 0 floor a long list forces the sheet past the screen instead
      of scrolling inside it */
   grid-template-rows: auto minmax(0, 1fr) auto;
+  /* ZOOM IS THE ONLY LEVER THAT REACHES THIS UI'S TYPE. Of 359 font-size
+     declarations in css/, 314 are raw px and 30 go through a var() — there is
+     no root font-size, no rem system, and only 1.6% of all sizing is relative.
+     So a token knob moves the boxes and leaves the text where it was, which is
+     exactly what "everything is still slightly too small" felt like after two
+     passes of raising tokens. `zoom` scales the whole subtree including the
+     hard-coded px, for one declaration.
+     ON .sheet, NOT .screen: .screen carries the safe-area padding, and zooming
+     that would divide the notch inset by the scale and centre the sheet under
+     hardware.
+     NO WIDTH COMPENSATION IS NEEDED, and adding some is a bug. `min(100%, …)`
+     and `max-height: 100%` resolve in the element's OWN (zoomed) space, so the
+     painted box still fits its parent — measured: #sel-inner paints 836px at
+     every scale. What grows is the --sheet-w cap, which is exactly the uplift
+     wanted. Dividing by the scale as well would shrink the sheet as the setting
+     went up.
+     Container queries inside evaluate in the same local space, so `--pair-at`
+     and every `@container sheet` breakpoint keep their meaning: at 130% you
+     need 30% more REAL width to afford two columns, which is the honest answer.
+     A browser without `zoom` renders at 1.0, which is the old behaviour. */
+  zoom: var(--ui-scale);
   width: min(100%, var(--sheet-w, 520px));
   max-height: 100%;
   background: var(--panel);
@@ -586,6 +620,13 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    was two narrow columns and still ran 171px past the fold; the sheet is capped
    by the safe-area width anyway, so this only ever spends room that exists. */
 #customize   { --sheet-w: 760px; }
+/* THE ONE THAT WAS MISSING. #vsfriend was the only dialog in the game with no
+   --sheet-w, so it fell through to the generic 520px fallback in `.sheet` — the
+   second-narrowest number in this table, on the screen with a TWO-COLUMN layout
+   (`#vs-two` goes 1fr 1fr at 620px, css/overlays.css). 61% of an 852px landscape
+   phone, with the rest black. 760px matches #pmsettings and #customize, which
+   are the other two that carry a form in two columns. */
+#vsfriend    { --sheet-w: 760px; }
 
 /* Dialogs stack over a full screen (the team picker sits on the select screen),
    so the scrim has to actually separate them — 0.6 left the sheet looking

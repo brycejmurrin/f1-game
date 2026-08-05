@@ -14,6 +14,16 @@
    Landscape shrinks them: vertical space is the scarce axis there (a phone is
    ~390px tall on its side), and five 76px circles in one column ate two thirds
    of it. 64px still clears Apple's 44pt minimum target with room to spare. */
+/* THESE STAY LITERAL, and are NOT on --ui-scale. Every control sized from them
+   is position:fixed and anchored with `calc(16px + var(--sab))`, so scaling the
+   diameter without also moving the anchor walks the stack off its edge — and
+   scaling the anchor too would divide the safe-area inset and walk it under the
+   home indicator. The controls that actually need to grow live in `.dock`,
+   which is a static flex child with no anchors of its own; that gets `zoom`
+   further down, which scales its --tap/--hold AND its hard-coded button labels
+   in one declaration. This ladder is what the portrait/desktop fallback uses,
+   and portrait racing is blocked outright (#rotate-device), so it is rarely on
+   screen during a race at all. */
 :root {
   --btn: 76px;                                        /* action button diameter */
   --btn-gap: 8px;
@@ -266,7 +276,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      The two sizes are VARIABLES because the alignment rule below has to do
      arithmetic on them; as literals repeated in two media queries they went
      stale the moment either one moved. */
-  body:not(.desktop) .dock { --tap: 62px; --hold: 82px; }
+  body:not(.desktop) .dock { --tap: 54px; --hold: 72px; zoom: var(--ui-scale); }
   body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: 11px; }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
@@ -288,7 +298,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body:not(.desktop) #grp-steer { padding-bottom: 14px; }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
-    body:not(.desktop) .dock { --tap: 56px; --hold: 74px; }
+    body:not(.desktop) .dock { --tap: 48px; --hold: 64px; }
     body:not(.desktop) .dock .touchbtn { font-size: 10px; }
     body:not(.desktop) .dock .pedal,
     body:not(.desktop) .dock .steerbtn,
