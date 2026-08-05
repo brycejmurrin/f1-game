@@ -183,6 +183,39 @@
      this scale (see css/hud.css) — its labels are glanced at, not read, and
      they are sized to boxes that have to clear the driving controls. */
   --fs-micro: 10px;
+  /* ---- TYPE SCALE — seven steps, menus/HUD-adjacent body text only ----
+     No type system existed: 294 raw `font-size: Npx` declarations across the
+     eight menu stylesheets, measured by counting every one of them, sorted:
+       8:3  9:10  10:58  10.5:2  11:57  12:59  12.5:1  13:37  14:18  15:12
+       16:12  17:3  18:5  19:1  20:5  22:3   ...then one-off 23-68px sites.
+     Below ~22px the values are a near-continuous ramp, not the clean gaps the
+     radius tokens had — so each step below is anchored on whichever value is
+     ALREADY most common in its band, same rule the radius tokens used, and a
+     few adjacent sizes (11px into --fs-2, 15px into --fs-5) move by a single
+     pixel onto the nearest step. That is a deliberate, logged consolidation
+     each time a file migrates onto these — never a silent one.
+     Above ~22px every remaining size (23-68px) is a ONE-OFF: a HUD digit
+     readout or a hero title, not a repeated body size. Those stay off this
+     scale entirely, the same exclusion css/hud.css already documents above.
+       --fs-1  micro labels, badges, uppercase tags        = --fs-micro (10px)
+       --fs-2  body base — the single most common size      (12px, was 11-12)
+       --fs-3  body emphasis / secondary label               (13px)
+       --fs-4  control label / subhead                       (14px, was 14-15)
+       --fs-5  larger subhead / button text                  (16px, was 15-16)
+       --fs-6  section heading                                (20px, was 17-20)
+       --fs-7  large heading — the ceiling of this scale       (22px)
+     Migrate ONE FILE PER COMMIT with a before/after font-size dump, per
+     docs/PARALLEL-WORK.md's B1 stage — a commit that changes rendering here
+     is only acceptable when that dump says so on purpose.
+     ONLY THE STEPS WITH A REAL CONSUMER ARE DECLARED BELOW.
+     tests/css-tokens.test.mjs fails a defined-but-unread custom property, on
+     purpose ("an unread token is an invitation to use a value nobody has been
+     maintaining") — so --fs-1/--fs-3/--fs-4/--fs-7 stay in the table above
+     only, and get their `--fs-N: …;` line added by whichever future file's
+     migration is their first real consumer, not pre-declared here. */
+  --fs-2: 12px;
+  --fs-5: 16px;
+  --fs-6: 20px;
   /* ---- CORNER RADIUS — four steps, plus a pill ----
      These tokens existed and had three users. Everything else hard-coded its
      own: fourteen distinct radii across the stylesheets (1, 2, 3, 4, 5, 6, 7,

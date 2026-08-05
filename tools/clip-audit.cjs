@@ -224,6 +224,11 @@ function run(id, opt, env) {
   const from = env.mark();
   const track = env.Tracks.build(env.Tracks.LIST.find((d) => d.id === id));
   const prims = shipped(env.prims.slice(from), env.liveBufs);
+  // Release this circuit's primitives (and the mesh buffers they keep alive)
+  // now that shipped() has copied out what analyse() needs — see the comment
+  // on trim() in track-build-vm.cjs. Harmless when `own`: env is discarded
+  // right after this function returns either way.
+  env.trim(from);
   const res = analyse(env, track, prims, opt);
   return Object.assign({ id, prims: prims.length }, res);
 }

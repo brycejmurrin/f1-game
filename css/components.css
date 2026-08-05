@@ -499,7 +499,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      button below the rest of its row. */
   min-height: var(--tap);
   padding: 14px 20px;
-  font-size: 20px;
+  font-size: var(--fs-6);
   background: var(--grad-primary);
   border: none;
   border-radius: var(--r-md);
@@ -678,7 +678,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    QUIT is the exception the other way: it is the only destructive item here, so
    it gets a rule above it and a muted red label — visibly apart from the two
    harmless ones, without shouting louder than RESUME. */
-#pm-resume { background: var(--red); color: #fff !important; border-color: var(--red); font-weight: 700; font-size: 15px; }
+#pm-resume { background: var(--red); color: #fff !important; border-color: var(--red); font-weight: 700; font-size: var(--fs-5); }  /* was 15px, one step from --fs-5's 16px */
 #pm-quit {
   color: color-mix(in oklab, var(--red) 62%, #fff);
   margin-top: calc(var(--gap) * 0.5);
@@ -705,7 +705,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .pm-col { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 .pm-group { display: flex; flex-direction: column; }
 .pm-group-h {
-  color: var(--red); font-size: 11px; font-weight: 700; letter-spacing: 0.11em;
+  color: var(--red); font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.11em;  /* was 11px, one step from --fs-2's 12px */
   margin: 0 0 6px; padding-bottom: 4px;
   /* a rule that fades out rather than stopping dead — see --grad-rule */
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
@@ -734,7 +734,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      stack their own content are self-sizing, and adding or moving a group no
      longer means rewriting grid coordinates. */
   .pm-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  #pmsettings-inner button { font-size: 12px; padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pmsettings-inner button { font-size: var(--fs-2); padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 /* (BACK was outlined red too — same reasoning as the pause stack above. It is
    the only button in this foot, so nothing needs to out-shout anything.) */

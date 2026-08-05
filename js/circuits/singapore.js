@@ -33,8 +33,56 @@
       // floodMastRing IS the race-lighting rig (no duplicate poles/pools).
       { kinds: ["city", "foliage", "lamps"], s0: 0.15, s1: 0.48, side: 1 },
       { kinds: ["city", "foliage", "lamps"], s0: 0.78, s1: 0.90, side: 1 },
+      // Same double-build, the remaining quarter of side 1: the two rules above
+      // stop at 0.90 and start again at 0.15, but cityFront()'s first call
+      // (below) runs 0.90->0.16 across that exact seam. Closes the gap between
+      // them rather than widening either.
+      { kinds: ["city", "foliage", "lamps"], s0: 0.90, s1: 0.15, side: 1 },
+      // The comment above has always been true for side 1, where the two bay
+      // windows exclude the generic pass from the sightlines cityFront() does
+      // not reach. It was never applied to side -1, where cityFront() ALSO runs
+      // bespoke facades — over s 0.00-0.20 and 0.48-0.88, ~68% of the lap on
+      // this side (see the cityFront() calls below). Nothing excluded the
+      // generic pass there, so for most of side -1 BOTH systems were placing a
+      // full building row over the identical street frontage: the generic
+      // engine-level city generator (js/track/tracks.js, every 18/26 m, raw
+      // addBox geometry via neonTower — invisible to js/track/graph.js's
+      // instancing stats, which is why this was hard to find) stacked
+      // underneath cityFront()'s own facades rather than only showing through
+      // the gaps between them. These three rules (plus the pit-straight one
+      // below) match EXACTLY the s-ranges the five cityFront() calls below
+      // cover on side -1 — a lap-wide exclusion was also measured (811,379 at
+      // night) but rejected: it would also blank the ~35% of side -1
+      // (s 0.20-0.48, 0.88-0.955) that has NO bespoke facade, leaving those
+      // stretches with no buildings at all. This is the redundant-layer class
+      // of cut in tests/new-hooks.spec.js's Qatar precedent (fc40591b) — cut
+      // where two systems draw the same wall twice, not where only one draws
+      // it. Measured: these three rules alone took night from 1,271,799 to
+      // 1,006,947 with ZERO change to the bespoke facade wall itself.
+      { kinds: ["city", "foliage", "lamps"], s0: 0.00, s1: 0.20, side: -1 },
+      { kinds: ["city", "foliage", "lamps"], s0: 0.48, s1: 0.88, side: -1 },
+      // Third side=-1 cityFront() call, the pit-straight fencing wall
+      // (s0=0.955, s1=0.04 below) — same redundant-layer overlap as the two
+      // rules above, just a smaller range.
+      { kinds: ["city", "foliage", "lamps"], s0: 0.955, s1: 0.04, side: -1 },
       { kind: "floodlights", s0: 0, s1: 1 },
     ],
+    // The redundant-layer cut above still left night at 1,006,947 — over even
+    // a raised budget — because cityFront()'s own along() step (44/62/44/48 m)
+    // was dense enough that neonFacade's per-building row/col grid was
+    // already pinned at its LOD cap (rows<=10, cols<=6) on nearly every unit:
+    // past that point, more buildings only adds unresolvable window detail,
+    // not visible skyline. Widened to 70/95/70/75 (~1.5-1.6x) below — Qatar
+    // precedent's second technique, thinning an along()/every() step rather
+    // than suppressing geometry — and re-measured at 954,223. A full
+    // zero-bespoke floor (all five cityFront() calls, plus building()/tower()/
+    // waterBand()/floodMastRing()/makePortal(), NOOPed) still measures
+    // 746,999 — the remaining generic-city-only frontage (the ~35% of side -1
+    // with no bespoke coverage) is itself already close to a 700,000 budget,
+    // so 700,000 was never reachable here without either bare street or
+    // shared-engine (js/track/tracks.js / scenery-city.js) changes touching
+    // every street/night circuit. tests/new-hooks.spec.js's budget for this
+    // circuit is raised to 1,050,000 to match the real, verified number.
     // Cool night: near-black zenith + cool fog/ambient so CBD glass & neon pop.
     // Warm flood pools on tarmac stay in scenery — not the sky.
     pal: {
@@ -187,25 +235,33 @@
       cityFront(0.90, 0.16, 1, 20, {
         minH: 55, maxH: 165, depth: 28, lit: true,
         palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.16, 0.18, 0.26]],
-        windowCol: WIN_CYAN, floor: 18, step: 44,
+        windowCol: WIN_CYAN, floor: 18, step: 70,
       });
       // s 0.16–0.35 R is open bay (waterBand + Marina Bay Sands beyond), so
       // that stretch keeps its across-the-water setback.
       cityFront(0.16, 0.35, 1, 104, {
         minH: 55, maxH: 165, depth: 28, lit: true,
         palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.16, 0.18, 0.26]],
-        windowCol: WIN_CYAN, floor: 18, step: 62,
+        windowCol: WIN_CYAN, floor: 18, step: 95,
       });
       // Left side: colonial district & back-straights — inland, street-tight.
+      // step widened from 44/48 — each unit's neonFacade curtain wall is
+      // capped at rows=10/cols=6 by lod() regardless of building height, so
+      // beyond a point the only lever left that doesn't touch shared engine
+      // code (js/track/scenery-city.js, shared by every street/night circuit)
+      // is fewer, still-varied units. Same Qatar precedent (fc40591b) as the
+      // dressingExclusions above, second technique: widen an along()/every()
+      // step where density exceeds what's visually resolvable at driving
+      // speed, rather than thin detail per unit.
       cityFront(0.00, 0.20, -1, 18, {
         minH: 26, maxH: 90, depth: 22, lit: true,
         palette: [WALL_WARM, WALL_CBD, [0.20, 0.18, 0.24], WALL_LITE],
-        windowCol: WIN_WARM, floor: 14, step: 44,
+        windowCol: WIN_WARM, floor: 14, step: 70,
       });
       cityFront(0.48, 0.88, -1, 18, {
         minH: 26, maxH: 95, depth: 22, lit: true,
         palette: [WALL_WARM, [0.22, 0.20, 0.26], WALL_CBD, WALL_LITE],
-        floor: 14, step: 48,
+        floor: 14, step: 75,
       });
 
       // ===================================================================

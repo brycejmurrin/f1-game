@@ -254,6 +254,10 @@ function run(env, id, opt) {
   const from = env.mark();
   const track = Tracks.build(def, {});
   const prims = shipped(env.prims.slice(from), env.liveBufs);
+  // See the comment on trim() in track-build-vm.cjs: without this, a shared
+  // context accumulates every circuit's full mesh buffers for the life of the
+  // sweep (measured 4157 MB -> 97 MB for the 40-circuit --all run).
+  env.trim(from);
   return Object.assign({ id }, analyse(track, prims, opt));
 }
 
