@@ -57,7 +57,7 @@ We model Overtake as proximity-gated but **positionally unrestricted** —
 `inside an ACTIVATION ZONE only` for active aero. Per the regulations, Overtake
 needs *both* the 1 s gap *and* a zone.
 
-The irony is that we already have the machinery: `buildAeroZones()` scans each
+The irony is that we already have the machinery: `AeroZones.build()` scans each
 built circuit for qualifying straights and `aeroZoneAt()` answers the question
 per position. Overtake could consume the same zones — or its own set — with no
 new geometry work.

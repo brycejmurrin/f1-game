@@ -99,7 +99,8 @@ same draw, so its ACTIVE AERO button shows the real geometry at real angles.
 `c.xOn` is the switch and `c.xArmed` whether the car is allowed the mode here at
 all. Allowed means **inside an ACTIVATION ZONE**: the FIA approves fixed zones
 per circuit and the standard ECU refuses to rotate the wings outside one, so
-`buildAeroZones()` scans each built track for contiguous runs under `X_ZONE_K`
+`AeroZones.create(G).build()` (`js/game/aerozones.js`, wired into game.js as
+`aeroZ`) scans each built track for contiguous runs under `X_ZONE_K`
 and keeps those longer than `X_STRAIGHT_T × X_ZONE_VREF` (210 m — the rule's
 three seconds at racing speed). Zones are measured against a FIXED reference
 speed, never the car's, because they are a property of the circuit and the
