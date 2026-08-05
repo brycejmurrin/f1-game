@@ -153,6 +153,21 @@ Note the distinction `js/game/perf.js:45` already draws: a **jetsam/OOM kill**
 leaves no signal at all — no `pagehide`, no `contextlost`, no error. Context
 loss is the recoverable case; the silent one is not.
 
+**The flag is `apex26.envProbeOff`, and it is a LATCH.** It is set only on a loss
+that happened while the page was VISIBLE — that is the memory-pressure signal, as
+opposed to the benign backgrounding loss this section describes — and until
+recently nothing could clear it: one `setItem`, one `getItem`, no UI, no docs. A
+device that lost its context once kept the live env probe disabled forever, which
+presents as "reflections are just worse on my phone" rather than as a setting.
+`__apex.envProbe(on?)` is now the way out (see `docs/DEBUG-HOOKS.md`); the value
+is latched at module init, so a change needs a reload.
+
+For the memory numbers behind all of this — the ~80 MB one circuit uploads
+against a page a current iPhone SE kills at ~100 MB — see
+`docs/research/CI-RENDERING-PERFORMANCE.md` Part 2. And for the OTHER silent iOS
+failure in the same family, localStorage returning a zero quota in Private
+Browsing, see `docs/research/ENGINEERING-PRACTICE-NOTES.md` §4.
+
 ---
 
 ## 7. `(pointer: coarse)` describes the primary pointer only

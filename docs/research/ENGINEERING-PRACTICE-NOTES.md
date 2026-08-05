@@ -212,6 +212,11 @@ refresh" is a real escape hatch if a worker ever wedges.
 
 # Part 4 — a real gap: localStorage in Safari Private Browsing
 
+> Companion reading: `docs/research/PLATFORM-INPUT-NOTES.md` collects the other
+> platform behaviours that are invisible on a desktop — pointer capture, the top
+> layer, `zoom`, `(pointer: coarse)`, and iPadOS dropping the WebGL context on
+> backgrounding. This section is the same shape of problem in the storage layer.
+
 The first thing in these notes that is **not** confirmatory. Recorded here
 because it is a user-facing failure with no diagnostics, not a style question.
 
