@@ -301,6 +301,14 @@ let PACE = 1.0;
 function vTop()  { return VMAX * Math.max(PACE, 0.05); }
 function vStd(v) { return v * VMAX / vTop(); }
 function dashKph(v) { return vStd(v) * 3.6; }
+// The ACCELERATION curve carries the SAME PACE factor as the ground speed —
+// axEstTarget is `ACCEL * PACE * …` — so an acceleration compared against a
+// hard-coded number needs exactly the divisor a speed does. aStd() is vStd() for
+// m/s^2, written as the divisor rather than the VMAX/vTop() round trip so that at
+// pace 5 (PACE === 1) it is the identity to the bit. Measured: at pace 0.5 a
+// full-throttle getaway peaks at ACCEL * 0.5 = 3.5 m/s^2, so the launch-wheelspin
+// smoke's bare 4.5 floor could never fire at all — see A16.
+function aStd(a) { return a / Math.max(PACE, 0.05); }
 const BRAKE = 22;
 const REVERSE_MAX = -5;     // m/s — top reverse crawl speed (brake held at a stop)
 const REVERSE_ACCEL = 5;    // m/s^2 — how quickly the reverse crawl builds
@@ -396,6 +404,10 @@ const X_CLOSE_RATE = 8.0;   // aeroX per second closing (~0.125 s back to Z — 
 // they live in js/game/aerozones.js now — along with the X_K_MAX / X_LOOK_MAX
 // story, which is about the rolling look-ahead the zone scan replaced.)
 const X_MIN_SPEED = 25;     // m/s (a vStd() threshold) — no X-mode at crawl speed
+// Overtake's own crawl floor, and a vStd() threshold for exactly the same
+// reason X_MIN_SPEED is one. Named rather than inline so the next reader can
+// see it is the sibling of the constant above and is measured on the same scale.
+const OT_MIN_SPEED = 15;    // m/s (a vStd() threshold) — no overtake at crawl speed
 // Lateral grip OFF the racing surface. muBase had no off-track term at all, so
 // grass and gravel cornered exactly like tarmac and only scrubbed forward speed —
 // you could take a run-off at full lateral grip. Faded in over the first ~1.5 m
@@ -2353,6 +2365,23 @@ function startRace() {
     lapsTarget = raceLaps;
   }
   applyRaceSettings();
+  // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
+  //
+  // js/game.js held ZERO Log calls before this one, despite `game` being the
+  // namespace js/log.js defines for exactly this file. That mattered more than
+  // it sounds: the buffer retains at `info` whether or not it prints, and
+  // tests/fixtures.js attaches the ring to EVERY failure — so a physics spec
+  // that failed on "speed was 43, expected > 50" had nothing in its attachment
+  // saying what the car's top speed even was that run. One line makes the whole
+  // class of pace/parts/weather failures self-explaining, which is what the
+  // logging section of CLAUDE.md asks for and what nothing here was doing.
+  Log.info("game", `race ${track.def.id} ${session} laps=${lapsTarget} ` +
+    `pace=${PACE.toFixed(3)} vTop=${vTop().toFixed(1)}m/s ` +
+    `grip=${gripMult().toFixed(2)} weather=${raceWeather} tod=${raceTimeOfDay} ` +
+    `mods=${playerMods ? `s${playerMods.speed.toFixed(2)}/a${playerMods.accel.toFixed(2)}/` +
+      `c${playerMods.cornering.toFixed(2)}/b${playerMods.braking.toFixed(2)}` : "none"} ` +
+    `aeroLoad=${(playerAeroLoad ?? 0.5).toFixed(2)} assists=` +
+    `help${ROAD_FOLLOW.toFixed(2)}/line${raceLineAssist.toFixed(2)}`);
   if (isRaining()) {           // only "rain" precipitates; "wet" is a damp track
     initRainDrops();
     Particles.rainShow(true);
@@ -3493,8 +3522,19 @@ function updateCar(c, dt, ranked) {
   // --- overtake mode ---
   const ahead = ranked[(c.rank || 1) - 2];
   const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
+  // vStd, not a bare c.speed: this is a THRESHOLD, and a threshold compared
+  // against real m/s means something different at every OVERALL SPEED setting.
+  // The active-aero floor thirty lines below already gets this right
+  // (vStd(c.speed) > X_MIN_SPEED) — so the two straight-line aids in this same
+  // function disagreed about what a speed is. Measured as a fraction of the
+  // car's own envelope, X-mode armed at a constant 35 % at every pace while
+  // overtake armed at 42 % of top speed at pace 0.5 and 16 % at pace 1.3.
+  // The error ran the wrong way for the player it reached: the slower you set
+  // the game, the more of the lap you could not use overtake at all — and a
+  // slower setting is what you reach for when the car is already getting away
+  // from you. Same class as the beached-rescue gate (A5 in the review).
   c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
-              && !c.finished && c.speed > 15;
+              && !c.finished && vStd(c.speed) > OT_MIN_SPEED;
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
                       : (c.otArmed && simRnd() < 1 - Math.exp(-0.7 * dt));
   if (fire && c.otArmed) {
@@ -3511,9 +3551,24 @@ function updateCar(c, dt, ranked) {
   // ellipse both scale by it, so easing off the brake actually hands grip back
   // to the front tyres — trail-braking you can modulate, not just stamp/lift.
   let brakeLvl = 1;
+  // THROTTLE travel, the other half of the same idea — and until now nothing in
+  // the game read it. Input.throttleLevel() has always existed and always been
+  // dead: the pad's analog right trigger was thresholded to a boolean and the
+  // travel thrown away, so a controller could only floor it or lift, and the
+  // on-screen pedal had nothing to report at all. Scaling engine accel by it is
+  // what makes a part-open throttle mean something — a measured exit instead of
+  // full power the instant you touch it.
+  //
+  // DEPLOY IS DELIBERATELY OUTSIDE THIS. ERS is its own button; metering the
+  // throttle should not quietly meter the battery too.
+  let throttleLvl = 1;
   if (c.human) {
     braking = inp ? !!inp.brake : Input.braking();
     brakeLvl = inp ? 1 : Math.max(0.15, Input.brakeLevel());
+    // A replicated or scripted input is a boolean by construction, so it means
+    // FULL travel unless it says otherwise — which keeps every __apex.setInput
+    // caller (and every physics spec built on one) exactly as it was.
+    throttleLvl = inp ? (inp.throttleLevel ?? 1) : Math.max(0, Input.throttleLevel());
   } else {
     // AI: brake for upcoming curvature
     const look = clamp(c.speed * 1.7, 30, 160);
@@ -3625,7 +3680,7 @@ function updateCar(c, dt, ranked) {
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
     c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   } else {
-    const a = (ACCEL * PACE * (c.human ? mods.accel : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     c.speed = Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   }
@@ -3930,7 +3985,7 @@ function updateCar(c, dt, ranked) {
     // transfer) for an acceleration that isn't actually happening.
     const axEstTarget = braking ? -BRAKE * brakeLvl
       : (onThrottle
-          ? ACCEL * PACE * (c.human ? mods.accel : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
+          ? ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
@@ -4002,6 +4057,37 @@ function updateCar(c, dt, ranked) {
     const Fyf = tyre(CS_FRONT, slipF, muF) * sp;
     const Fyr = tyre(csR, slipR, muR) * sp;
     const cosD = Math.cos(delta);
+    // --- UNDERSTEER CUE. The car's defining failure mode is washing wide, and
+    // until now the only feedback was visual (a nose that will not point where
+    // you asked) plus tyre squeal, both of which arrive AFTER you have already
+    // lost the corner. A real wheel goes LIGHT as the front lets go — the
+    // self-aligning torque collapses — which is the canonical way a driver
+    // feels this. On a phone or a pad there is no wheel to go light, and sim
+    // racers report that force feedback fails to deliver it even on
+    // direct-drive hardware, so nothing communicates it at all here.
+    //
+    // This is SIGNALLING, NOT SIMULATING. We are not modelling self-aligning
+    // torque; we are telling the player a fact about front-tyre saturation
+    // that they have no other channel for. `sat` is how far the front slip has
+    // pushed past the tanh knee — 1 is the friction limit — so the cue fires
+    // exactly when the tyre stops answering more steering with more grip.
+    // Gated on the LOCAL human (a replicated rival's tyres are not in your
+    // hands), on actually asking for steering, and rate-limited the same way
+    // the kerb haptic is, so it cannot machine-gun.
+    if (c.isPlayer && !c.offroad && sp > 0.5) {
+      const sat = Math.abs(CS_FRONT * slipF) / Math.max(muF, 1e-3);
+      const asking = Math.abs(steer) > 0.15;
+      if (sat > 1.15 && asking && (c.uslipHapT = (c.uslipHapT || 0) - dt) <= 0) {
+        const bite = clamp((sat - 1.15) / 0.85, 0, 1);   // 0 at onset, 1 well past
+        // Safari throws from vibrate() outside a user gesture and some engines
+        // throw on an out-of-range pattern. A cue the driver may not even feel
+        // is not worth interrupting the physics frame for, so it is ignored on
+        // purpose — the same call is retried a tenth of a second later anyway.
+        if (navigator.vibrate) { try { navigator.vibrate(10 + (bite * 18) | 0); } catch (e) { /* haptics are advisory */ } }
+        Input.rumble(0.18 + bite * 0.32, 70);
+        c.uslipHapT = 0.16 - bite * 0.06;                // firmer slide = tighter pulse
+      }
+    }
     // --- rigid-body equations of motion (per unit mass). kz2 = yaw inertia/mass.
     const ay = Fyf * cosD + Fyr;                         // body lateral accel
     // Floored: setPhysics({yawInertia:0}) would otherwise make the rdot below
@@ -4054,7 +4140,7 @@ function updateCar(c, dt, ranked) {
     if (DebrisWorld.active()) {
       const latG = Math.abs(k) * c.speed * c.speed / 9.8;   // ~lateral g demand
       DebrisWorld.tyreMarble(c, {
-        lock: (braking && c.speed > 30) ? 0.95 : 0,
+        lock: (braking && vStd(c.speed) > 30) ? 0.95 : 0,   // vStd: a threshold, not a force
         slip: Math.max(0, Math.min(1, latG - 1.6)) * 0.14,   // → ~slip-angle rad at the limit
         speed: c.speed });
     }
@@ -4234,7 +4320,7 @@ function updateCar(c, dt, ranked) {
   // Drives the emissive brake-glow rings on the player's wheels.
   {
     // ALL cars (the AI brake into corners too — a field of glowing discs).
-    const heating = braking && c.speed > 12;
+    const heating = braking && vStd(c.speed) > 12;   // vStd: a threshold, not a force — see OT_MIN_SPEED
     c.brakeHeat = clamp((c.brakeHeat || 0) + (heating ? dt * 1.6 : -dt * 0.9), 0, 1);
   }
   if (c.human) {
@@ -6079,14 +6165,18 @@ function render(dt) {
         // Tyre smoke (player): cornering scrub via skidIntensity, real lateral
         // slip (vLat — drifts and trail-braking slides, since the friction
         // ellipse converts overdriven braking into lateral slip), and launch
-        // wheelspin (hard accel at crawling speed; peak engine ax is ~7 m/s²,
-        // so the 4.5 floor only fires on genuine full-throttle getaways).
+        // wheelspin (hard accel at crawling speed; peak engine ax is ~7 m/s² on
+        // the STANDARD scale, so the 4.5 floor only fires on genuine
+        // full-throttle getaways). aStd, not a bare c.axEstSm: PACE multiplies
+        // the accel curve, so at pace 0.5 the peak is 3.5 m/s² and a raw 4.5
+        // floor is unreachable — the effect simply did not exist at the bottom
+        // of the OVERALL SPEED slider (A16).
         let smokeI = (c.isPlayer && !c.offroad) ? (c.skidIntensity || 0) : 0;
         if (c.isPlayer && !c.offroad) {
           const _pax = c.axEstSm || 0, _pvl = Math.abs(c.vLat || 0);
           if (c.speed > 10) smokeI = Math.max(smokeI, clamp((_pvl - 3) / 5, 0, 1));
           if (c.speed > 0.5 && c.speed < 12)
-            smokeI = Math.max(smokeI, clamp((_pax - 4.5) / 2.5, 0, 1) * clamp((12 - c.speed) / 9, 0, 1));
+            smokeI = Math.max(smokeI, clamp((aStd(_pax) - 4.5) / 2.5, 0, 1) * clamp((12 - c.speed) / 9, 0, 1));
         }
         if (smokeI > 0.25) {
           const wd = WHEELS[2 + ((Math.random() * 2) | 0)];   // one rear wheel per event
@@ -6112,8 +6202,15 @@ function render(dt) {
         }
         // Rain spray: every car at speed on a wet road drags a rooster tail —
         // lighter on "wet" (drying line) than under full "rain".
-        if (wet && c.speed > 15) {
-          const str = clamp((c.speed - 15) / 45, 0, 1) * (raceWeather === "rain" ? 1 : 0.6);
+        // vStd on BOTH halves: 15 and the /45 span describe a fraction of the
+        // car's envelope (spray starts at ~21 % of top speed and is full at
+        // ~83 %), so fed a raw ground speed they moved with the OVERALL SPEED
+        // slider — at pace 0.5 the strength could never exceed (36-15)/45 = 0.47
+        // and full spray was unreachable, at pace 1.3 it was pinned at 1 down
+        // every straight. The particle VELOCITY below stays real m/s: it is
+        // world-space motion, not a threshold (A16).
+        if (wet && vStd(c.speed) > 15) {
+          const str = clamp((vStd(c.speed) - 15) / 45, 0, 1) * (raceWeather === "rain" ? 1 : 0.6);
           if (str > 0) {
             const sxo = Math.random() < 0.5 ? -0.6 : 0.6;   // behind either rear tyre
             Particles.spray(
@@ -6434,6 +6531,11 @@ function tickBody(now) {
   // shake still plays out.
   let simTime = dt;
   if (hitStop > 0) { hitStop = Math.max(0, hitStop - dt); simTime = dt * 0.15; }
+  // The steering ramps are part of the control loop, so they run on the SIM's
+  // clock, not the wall's — otherwise hit-stop lets the wheel travel ~6.7x
+  // further per simulated second and the car leaves a crash already turned. The
+  // tilt SENSOR filter is deliberately left on the wall clock (see input.js).
+  Input.setTimeScale(dt > 0 ? simTime / dt : 1);
   // Fixed-step physics: advance the sim in constant 1/60 s chunks regardless of
   // the display framerate, so handling is identical on a 30 fps phone, a 120 fps
   // desktop, and a janky frame — a long frame can never enlarge the integration
@@ -7842,10 +7944,8 @@ document.addEventListener("visibilitychange", () => {
   // return to a live session.
   if (document.hidden) PerfGov.sentinelArm(false);
   else if (state === "race" || state === "count") PerfGov.sentinelArm(true);
-  // The screen wake lock re-acquires itself on return — js/game/wakelock.js
-  // owns that listener, because the platform releasing it on every hide is
-  // half of what the feature has to handle and the module holds no game state
-  // that would need to come back here to find it.
+  // No wake-lock clause here on purpose: js/game/wakelock.js owns its own
+  // re-acquire, because it holds no game state that would need to live here.
 });
 window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); });
 

@@ -4,10 +4,19 @@
 // spin/reverse can't cheat progress forward).
 import { test, expect } from "./fixtures.js";
 
+// PACE PINNED. The assertions here are in METRES (dProg > 50) and M/S (offSpeed
+// bounds, the reverse crawl), and PACE is a ground-speed scale that moves both.
+// The OVERALL SPEED default is 0.84 since the Phase C regrid, so a spec that
+// inherits it is measuring a slower car than it was written against — and a red
+// result would be ambiguous between "the physics broke" and "the car is slower
+// now, by design". State the pace instead of inheriting one.
+const pinPace = (page) => page.evaluate(() => window.__apex.setPhysics({ pace: 1 }));
+
 
 test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
   test("prog tracks s: forward driving advances prog ≈ s-progress", async ({ page, loadTrack }) => {
     await loadTrack();
+    await pinPace(page);
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.0, 60, 0);
@@ -24,6 +33,7 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
 
   test("facing backwards and throttling DECREASES progress (no forward cheat)", async ({ page, loadTrack }) => {
     await loadTrack();
+    await pinPace(page);
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.3, 30, 0);
@@ -39,6 +49,7 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
 
   test("wrong-way is flagged when driving against the track", async ({ page, loadTrack }) => {
     await loadTrack();
+    await pinPace(page);
     const wrong = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.3, 30, 0);
@@ -57,6 +68,7 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
 
   test("brake at a standstill crawls the car backwards (reverse), then throttle recovers", async ({ page, loadTrack }) => {
     await loadTrack();
+    await pinPace(page);
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.0, 0, 0);
@@ -76,6 +88,7 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
 
   test("driving onto grass and back recovers (slowed off, speeds up on return)", async ({ page, loadTrack }) => {
     await loadTrack();
+    await pinPace(page);
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.0, 80, 14);            // way off in the grass
@@ -94,6 +107,7 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
 
   test("auto-rescue: a wrong-way car is recovered to the racing line facing forward", async ({ page, loadTrack }) => {
     await loadTrack();
+    await pinPace(page);
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.3, 30, 0);
@@ -115,6 +129,7 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
 
   test("auto-rescue: a car beached deep off-track is recovered", async ({ page, loadTrack }) => {
     await loadTrack();
+    await pinPace(page);
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       let onTrack = false;

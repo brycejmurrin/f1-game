@@ -3,7 +3,10 @@
 //  - projection continuity: a car running wide near a hairpin must not teleport
 //    its lap distance onto the other leg of the corner.
 //  - wall slide: a glancing scrape costs far less speed than burying the nose in.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 async function start(page, circuit) {
   await page.goto("/");

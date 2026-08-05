@@ -8,7 +8,10 @@
 // That distinction is the mechanic. A rolling look-ahead has no start and no
 // end, so there is nothing to learn and nothing to show; a fixed zone is a
 // PLACE, which is why the HUD can count down to it like a DRS board.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/game/aerozones.js
@@ -219,6 +222,14 @@ test.describe("active aero — downforce traded for top speed", () => {
     expect(r.z.aeroGrip).toBeGreaterThan(1);
   });
   test("a bigger wing trades HARDER — both halves scale with the aero part", async ({ page }) => {
+    // THREE times the work of every other test in this file: the aero part is
+    // read by makeCars(), so each of the three settings needs its own
+    // localStorage write, page RELOAD and full Monza build. Measured in this
+    // suite's own logs: the single-build tests land at 30-64 s, this one at
+    // 133 s — i.e. it exceeds the file's 120 s default whenever the box is
+    // anything but idle, which reads as a physics regression and is not one.
+    // test.slow() triples the budget rather than hiding the cost.
+    test.slow();
     // The whole point of scaling the trade: one pair of constants gave a
     // Monza-spec sliver and a maximum-downforce floor the same deal, which is
     // backwards. A big wing has more drag to shed AND more downforce to lose.

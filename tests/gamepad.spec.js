@@ -5,7 +5,10 @@
 // once-per-frame Input.poll(), then read the public Input surface the game loop
 // uses (steer / throttle / braking and the edge-triggered consume* latches).
 // No race needs to start — the input module is wired by Input.init() at load.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 // Build a standard-mapping gamepad with the given left-stick X/Y (axes 0/1)
 // and a sparse {index: value} button map, install it as the sole connected
@@ -142,11 +145,16 @@ async function holdKeyboardPointerAndTouch(page) {
     document.getElementById("btn-throttle").dispatchEvent(
       new PointerEvent("pointerdown", { pointerId: 41, bubbles: true })
     );
-    const touch = new Event("touchstart", { bubbles: true, cancelable: true });
-    Object.defineProperty(touch, "changedTouches", {
-      value: [{ identifier: 7, clientX: window.innerWidth - 1 }],
-    });
-    document.getElementById("game").dispatchEvent(touch);
+    // Touch steering is an anchored DRAG, so holding lock takes a touchstart to
+    // set the anchor and a touchmove to displace from it — a bare touchstart is
+    // (correctly) worth zero steering. See tests/touch-steer.spec.js.
+    const send = (type, x) => {
+      const e = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(e, "changedTouches", { value: [{ identifier: 7, clientX: x, clientY: 200 }] });
+      document.getElementById("game").dispatchEvent(e);
+    };
+    send("touchstart", 10);
+    send("touchmove", window.innerWidth + 4000);   // well past full lock, then clamped
     return { brake: Input.braking(), throttle: Input.throttle(), steer: Input.steer() };
   });
 }

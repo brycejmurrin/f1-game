@@ -4,7 +4,10 @@
 // persists to storage — and (2) actually change the car's behaviour. Physics
 // sliders are checked by driving the sim; tilt sliders by their mapped values
 // plus one end-to-end tilt-input check.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 async function load(page) {
   await page.goto("/");
@@ -36,7 +39,11 @@ const SLIDERS = [
   { id: "pm-lock",    key: "maxSlip",         store: "steerLock",  vid: "pm-lock-v",    min: 1,  max: 10, sign: +1 },
   { id: "pm-speedsteer", key: "speedRef",     store: "steerSpeed", vid: "pm-speedsteer-v", min: 1, max: 10, sign: +1 },
   { id: "pm-help",    key: "roadFollow",      store: "drivingHelp",vid: "pm-help-v",    min: 1,  max: 10, sign: +1 },
-  { id: "pm-pace",    key: "pace",            store: "pace",       vid: "pm-pace-v",    min: 1,  max: 10, sign: +1 },
+  // RACE PACE is the one slider with a wider control: the geometric 6 %/notch
+  // grid needs 19 notches to cover the same span, anchored so notch 14 is
+  // exactly 1.0 (the vTop()/vStd() reference). Its label is a percentage of
+  // reference pace, not a notch number — see paceLabel() in steer-tuning.js.
+  { id: "pm-pace",    key: "pace",            store: "pace",       vid: "pm-pace-v",    min: 1,  max: 19, sign: +1 },
   { id: "pm-line",    key: "raceLineAssist",  store: "raceLine",   vid: "pm-line-v",    min: -5, max: 5,  sign: +1 },
 ];
 
@@ -120,8 +127,12 @@ test.describe("Apex 26 — steering sliders", () => {
       window.__apex.clearInput();
       return peak;
     }, paceSlider);
-    const slow = await playerTop(2);
-    const fast = await playerTop(9);
+    // Notches 6 and 18 on the 19-notch geometric grid: pace 0.627 vs 1.262, the
+    // same two paces this asserted against on the old 1..10 grid (notches 2 and
+    // 9). What is under test is that the slider moves ground speed at all, so
+    // only the paces have to be far apart — the notch numbers are incidental.
+    const slow = await playerTop(6);
+    const fast = await playerTop(18);
     expect(fast).toBeGreaterThan(slow + 5);   // player clearly faster at high pace
 
     // AI also lifts: run the field and compare leader speed at low vs high pace.
@@ -138,15 +149,15 @@ test.describe("Apex 26 — steering sliders", () => {
       window.__apex.clearInput();
       return Math.max(...ai.map((c) => c.speed));
     }, paceSlider);
-    const aiSlow = await aiTop(2);
-    const aiFast = await aiTop(9);
+    const aiSlow = await aiTop(6);
+    const aiFast = await aiTop(18);
     expect(aiFast).toBeGreaterThan(aiSlow + 5);   // AI field clearly faster too
   });
 
   // ...but it must lift the GROUND speed only. OVERALL SPEED used to shrink the
   // whole envelope the player sees along with it, because gear tops and every
   // speed normaliser were fractions of the bare VMAX = 72, which knows nothing
-  // about PACE. At pace 2 (top ~45 m/s) 7th and 8th were simply unreachable and
+  // about PACE. At pace 0.63 (top ~45 m/s) 7th and 8th were simply unreachable and
   // the dial stopped at ~162 km/h. PACE now scales the envelope too (vTop/vStd in
   // game.js). The three tests below pin that down: the dial→gear mapping, the
   // envelope actually reached under power, and the manual-gearbox limiter.
@@ -159,7 +170,11 @@ test.describe("Apex 26 — steering sliders", () => {
     const rows = await page.evaluate(() => {
       const DIAL = [30, 90, 150, 210, 250];   // km/h on the dial
       const out = [];
-      for (const sv of [1, 2, 5, 9, 10]) {
+      // Both ends of the 19-notch grid (0.469 and 1.338), the 1.0 reference at
+      // 14, and the two notches nearest the old 2 / 9 samples. The claim is that
+      // the dial→gear mapping is pace-INDEPENDENT, so the sample only has to span
+      // the slider.
+      for (const sv of [1, 6, 14, 18, 19]) {
         const el = document.getElementById("pm-pace");
         el.value = String(sv); el.dispatchEvent(new Event("input", { bubbles: true }));
         window.__apex.park(0.1); window.__apex.freeze(false);
@@ -169,9 +184,18 @@ test.describe("Apex 26 — steering sliders", () => {
         for (const kph of DIAL) {
           window.__apex.jump(0.1, kph / 3.6 * pace, 0);
           window.__apex.setInput({ steer: 0, throttle: false });
+          // TWO reads, deliberately not one obs(). The gearbox needs a couple of
+          // frames to choose, but those frames COAST — the car sheds
+          // COAST_DRAG * 2/60 = 0.2 m/s — and COAST_DRAG is an absolute force
+          // (that is what makes low pace forgiving) while dashKph divides by
+          // pace. So a dial read after the settle loses 0.2/pace*3.6 km/h: 1.54
+          // at pace 0.47 against 0.54 at 1.34. Reading both from one obs() made
+          // this spec measure the mapping PLUS that decay, and the `< 1 km/h`
+          // tolerance below silently absorbed it until the 19-notch grid widened
+          // the sweep and took the spread from 0.886 to 0.998.
+          dials.push(window.__apex.obs().dashKph);
           window.__apex.step(1 / 60, 2);     // let the auto box pick its gear
-          const o = window.__apex.obs();
-          gears.push(o.gear); dials.push(o.dashKph);
+          gears.push(window.__apex.obs().gear);
         }
         window.__apex.clearInput();
         out.push({ sv, gears, dials });
@@ -212,9 +236,9 @@ test.describe("Apex 26 — steering sliders", () => {
       return { gear, dash, speed };
     }, paceSlider);
 
-    const slow = await flatOut(2);
-    const mid  = await flatOut(5);
-    const fast = await flatOut(9);
+    const slow = await flatOut(6);    // 0.627
+    const mid  = await flatOut(14);   // 1.000 — the vTop()/vStd() reference
+    const fast = await flatOut(18);   // 1.262
 
     // The gearbox sweeps all the way up whatever the slider says...
     for (const e of [slow, mid, fast]) expect(e.gear).toBe(8);
@@ -239,7 +263,7 @@ test.describe("Apex 26 — steering sliders", () => {
       const btn = document.getElementById("pm-gears");
       if (!/MANUAL/.test(btn.textContent)) btn.click();
       const el = document.getElementById("pm-pace");
-      el.value = "10"; el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.value = "19"; el.dispatchEvent(new Event("input", { bubbles: true }));   // top of the grid, pace 1.338
       window.__apex.park(0.1); window.__apex.freeze(false);
       window.__apex.jump(0.1, 0, 0);
       // Shift up to top while STOPPED: in manual the box never picks its own gear,

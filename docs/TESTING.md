@@ -1,6 +1,6 @@
 # Testing reference
 
-107 root Playwright spec files (`tests/*.spec.js`) + 47 `node --test` unit suites
+111 root Playwright spec files (`tests/*.spec.js`) + 48 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -310,6 +310,28 @@ checks against hooks and geometry.
 **When a spec fails**, first check whether it is a stale expectation rather than
 a regression — confirm by reading the actual hook values.
 
+**A tolerance can be hiding a second measurement.** If a spec settles the sim
+before reading (`step()` to let a gearbox pick a gear, a frame or two for a
+filter), it is reading the thing it named PLUS whatever those frames did — and
+a loose tolerance will absorb the difference silently until something widens the
+range being swept.
+
+Measured instance. `sliders.spec.js` › *OVERALL SPEED leaves the dial→gear
+mapping identical* jumps to the speed that puts the dial at a target km/h, steps
+two frames so the automatic box can choose a gear, and reads gear AND `dashKph`
+out of the same `obs()`. Those frames coast, so the car sheds
+`COAST_DRAG * 2/60 = 0.2 m/s` first — and `COAST_DRAG` is an absolute force
+(deliberately: it is part of what makes low pace forgiving) while `dashKph`
+divides by pace. The dial therefore loses `0.2 / pace * 3.6` km/h, which is
+1.54 at pace 0.47 and 0.54 at 1.34. Under the old 1..10 pace grid the spread was
+0.886 km/h against a `< 1` tolerance; widening the grid to 1..19 took it to
+0.998 and the spec went red — for a defect it had been carrying all along.
+
+The fix is never to widen the tolerance. Read the value the test is about at the
+moment it is true (here: the dial at the jump) and read the value that needs
+settling after the settle (the gear). Two reads from two `obs()` calls, with a
+comment saying why they are not one.
+
 ### Viewport rules
 
 - Tests that touch `#pm-steer` / `#pm-calib` must use `hasTouch: true` — desktop
@@ -366,7 +388,11 @@ what it covers.
 | `autopilot.spec.js` | a closed-loop driver that actually completes laps (monza, suzuka) |
 | `presets.spec.js` | RELAX / STANDARD / PRO each push the sliders somewhere distinct |
 | `sliders.spec.js` | every pause-menu slider is wired and persists |
-| `gamepad.spec.js` | gamepad mapping — driving (steer/throttle/brake/boost/overtake/camera) and, once a menu is open, the UWP-parity menu-nav mapping (D-pad+stick→arrows with hold-repeat, A→click, B→Escape including the native-`<dialog>` `cancel`-event seam, triggers→PageUp/PageDown, bumpers→horizontal paging) with a regression guard that driving is unaffected |
+| `gamepad.spec.js` | gamepad mapping (steer/throttle/brake/boost/overtake/camera) |
+| `touch-steer.spec.js` | canvas touch steering as an anchored DRAG (proportional, relative, ramped on release, most-recently-MOVED finger wins), the on-screen arrows ramping like a key, and pedal TRAVEL on the touch pedals reaching the physics |
+| `tilt-pipeline.spec.js` | the tilt chain end to end — dead zone (subtracted, so no step at its edge), the `MAX_TILT` map and its `steerToTilt` inverse, the 1.6x release/tighten slew asymmetry, calibrating out a held grip offset, One-Euro smoothing as lag rather than gain, and the LIVE `deviceorientation` path pinned to the harness |
+| `understeer-cue.spec.js` | the front-axle saturation haptic: it fires when the front stops answering the steering, stays quiet under gentle input, below the 1.5 m/s floor and off-track, repeats no faster than its cooldown allows, tightens with saturation depth, and at the same DEPTH in the grip envelope responds identically at any PACE |
+| `steer-migration.spec.js` | the `STEER_SCHEMA` store migration LADDER — v2's one-time `drivingHelp`/`raceLine` reset runs for a stale store; v3's RACE PACE regrid maps all ten old notches onto the 19-notch geometric grid and leaves a store that never set one alone; every step is a NO-OP at or above its own version (so a schema bump cannot re-apply an earlier step and discard a choice the player made after it), and no step touches `steerRate`/`steerSmooth` |
 
 ### Per-circuit foundations
 
@@ -494,6 +520,7 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `load-order.test.mjs` | `index.html` and `tools/carview.html` `<script>` order matches `tools/manifest.cjs` exactly, including `HARD_EDGES` eval-time dependencies |
+| `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
 | `css-comments.test.mjs` | a CSS comment that ends early (or never opens) turns prose into a selector and DROPS the rule after it, silently — caught by measuring prelude length (real max 173, the two live failures were 275 and 759) |
 | `css-tokens.test.mjs` | every custom property in `css/tokens.css` must have a consumer — an unread token is an invitation to use a value nobody has been maintaining |

@@ -62,7 +62,14 @@ export const RULES = [
   [/^js\/car\/ghost\.js/, ["modes"], "time-trial ghost"],
 
   // ── game ────────────────────────────────────────────────────────────────
-  [/^js\/game\.js/, ["behaviour", "api", "circuit"], "the loop: physics, AI, race logic"],
+  // js/game.js IS the physics — the bicycle model, the friction ellipse, the
+  // aero trade and the longitudinal integrator all live in it — so `physics`
+  // belongs here and was simply missing. js/track/space.js and js/track/tracks.js
+  // routed to it while the file that contains the model did not, which is how a
+  // change to the FX block's pace normalisation came back "no physics group
+  // needed". Four groups for a game.js edit is a lot; running the wrong three is
+  // worse, and these RULES are deliberately biased toward running too much.
+  [/^js\/game\.js/, ["behaviour", "api", "circuit", "physics"], "the loop: physics, AI, race logic"],
   [/^js\/game\/(cameras|cam-tune|cam-tuner)\.js/, ["camera"], ""],
   [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["steering"], ""],
   [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers)\.js/, ["ui"], "DOM screens"],

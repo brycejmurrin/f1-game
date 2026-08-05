@@ -15,7 +15,10 @@
 // returns metrics: completion, lap time, average speed, how far/often it ran past
 // the road edge, and the worst barrier overshoot. Sweeping setPhysics() and
 // comparing those metrics is how we test a steering setting end-to-end.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 async function load(page, id) {
   await page.goto("/");
@@ -23,6 +26,14 @@ async function load(page, id) {
   await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
+  // PACE pinned here, at the one place every test stages its lap. The autopilot's
+  // controller is written in absolute units (VMAX 94 m/s, aLat 13 m/s², A_BRAKE 24
+  // m/s²) and the assertion is a DISTANCE (distPct > 40 of the lap in a fixed 150 s
+  // window) — PACE is a ground-speed scale, so moving the OVERALL SPEED default
+  // moves how far the car gets. Without this a red test is ambiguous between "the
+  // physics broke" and "the car is slower now, by design". runLap() applies its own
+  // setPhysics AFTER this, so a sweep can still override anything it wants.
+  await page.evaluate(() => window.__apex.setPhysics({ pace: 1 }));
 }
 
 // Drive one lap under the given physics settings; returns metrics. Runs entirely

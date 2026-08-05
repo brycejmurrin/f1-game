@@ -418,8 +418,24 @@
 .cs-liv-ed-save { background: var(--red); color: #fff; border: 1px solid var(--red); }
 
 /* ---------- foot ---------- */
-/* DONE is the only action; centre it in the pinned bar. */
-#carsetup .sheet-foot { justify-content: center; }
+/* BACK and DONE, centred in the pinned bar — and the bar is NARROW here, which
+   is the whole reason these two extra declarations exist.
+   (The note this rule used to carry said "DONE is the only action". That
+   stopped being true when BACK was added beside it, and the stale note is how
+   the bug below survived review: the rule still looks right if you believe it.)
+   Measured at 852x393 landscape, garage open: from UI SIZE 100 % upward the
+   pane-pair turns on and this foot drops into the LEFT RAIL, so its content
+   needs 161 px inside a 124 px box. Plain `center` splits that 37 px of
+   overflow across BOTH edges, and #cs-inner clips with overflow:hidden — so
+   BACK painted at 55 % with nothing to scroll to. At 80 % the pair is off, the
+   foot is 458 px wide, and it all fits, which is exactly why shrinking the UI
+   hid the defect instead of showing it.
+     safe center — fall back to flex-start the moment the content overflows, so
+       what is cut is the trailing edge (reachable by wrapping) and never the
+       leading one (not reachable by anything).
+     wrap        — and in a rail this narrow the honest answer is to let them
+       stack rather than to shave a tap target below --tap. */
+#carsetup .sheet-foot { justify-content: safe center; flex-wrap: wrap; }
 
 /* THE COLUMNS COME FROM `.pane-pair` (css/components.css) — the shared
    list-detail primitive. This screen used to spell the whole thing out itself,

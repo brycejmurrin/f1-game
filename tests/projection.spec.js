@@ -7,7 +7,10 @@
 // physics over, this proves Tracks.project() is the faithful inverse of the
 // renderer's (s, lateral) -> world mapping: take a known (s, lat), build the
 // world point, project it back, and the recovered (s, lat) must match.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 async function startLiveRace(page) {
   await page.goto("/");

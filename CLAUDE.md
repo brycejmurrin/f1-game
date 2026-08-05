@@ -176,6 +176,240 @@ IMPORTANT: don't edit `js/` or `css/` while a run is in flight — the server
 serves the working tree, so later specs load a mixed build (see the note at the
 end of this section). Writing docs, reading, and researching are all safe.
 
+**DO NOT SIT AND WAIT FOR A RUN.** A SwiftShader group is minutes to tens of
+minutes; an agent that polls `--status` in a loop, or blocks on `--wait`, burns
+the entire run doing nothing. Repeatedly checking progress is the same waste
+spelled differently — the tally moving from 39/77 to 41/77 is not information.
+
+**Arm a monitor, then go and work.** The `Monitor` tool turns the log into
+events so the result comes to you:
+
+```
+Monitor({ command: 'tail -f artifacts/logs/<group>.log | grep -E --line-buffered "x FAIL|= run (passed|failed)"',
+          description: 'failures or completion in <group>' })
+```
+
+Filter for **both** outcomes — a monitor that greps only for success is silent
+through a crash, and silence looks exactly like "still running". A background
+`Bash` command that exits on completion (`until … done`) works too, and gives
+one notification instead of several. `--wait` is for CI and for the one case
+where the next edit genuinely cannot be chosen until the result lands.
+
+The one hard constraint while a run is in flight: **the test servers read `js/`
+and `css/` straight from the working tree**, so editing those mid-run makes
+later specs load a mix of versions. Everything else — `tools/`, `docs/`,
+`tests/` (new files), commit messages, `CLAUDE.md` — is fair game.
+
+#### What to actually DO with those minutes
+
+Roughly in priority order. The first two are work on the run itself; the rest is
+work you would otherwise do after it.
+
+1. **Triage failures as they land, not at the end.** `live-reporter.js` writes a
+   line per test the moment it finishes, so a failure is readable minutes before
+   the run is. `grep -n "x FAIL" artifacts/logs/<group>.log` and start
+   diagnosing immediately — by the time the run ends you can already have the
+   fix written (staged, not applied, if the run is still going).
+2. **Predict the blast radius and check the prediction.** Before the result
+   arrives, write down which specs SHOULD fail given the diff and why. A spec
+   that fails and is not on your list is the interesting one; a spec on your list
+   that passes means you did not understand your own change. This turns a wait
+   into a comprehension check.
+3. **Reproduce a suspected failure in isolation** — a single spec on a free port
+   is cheap and does not disturb the group (`npx playwright test <spec>
+   -g "<name>" --reporter=line`). This is also how you tell a real failure from a
+   contention timeout (see the ceiling note below).
+4. **Write the NEXT spec.** `tests/` is safe to add to mid-run — Playwright
+   globbed its list at start. New coverage for the change you just made is the
+   single most useful thing to produce while its existing coverage runs.
+5. **Hunt for bugs in the code you have just been reading.** You are never
+   better placed to find one than immediately after loading a module into
+   context for another reason. Look for the shapes this codebase actually
+   produces: a helper with **no consumer** (`Input.throttleLevel()` sat dead for
+   months — analog trigger travel computed and thrown away), a comment that no
+   longer matches its code, duplicated logic that can drift (`simTilt` restates
+   `tiltSteering`'s body), a constant compared against a raw speed where
+   `vStd()` was meant. `grep` for the invariant, not for the symptom.
+6. **Plan the next phase concretely** — compute the actual numbers, not the
+   intent. Tabulating what a slider currently does is what turned "feels wrong"
+   into "the step below the default is 25 % and above it is 5 %", which is a
+   different and far more fixable statement.
+7. **Read the code you are about to touch next**, and draft the commit message
+   for the change in flight while the reasoning is still fresh.
+8. **Research.** See below.
+9. **Docs** — `docs/`, `CLAUDE.md`, `tools/README.md`. Note that
+   `tests/docs-integrity.test.mjs` gates several of these (spec counts, the tools
+   index, `docs/README.md` links), so doc work often has to happen anyway.
+
+#### Research tools, and which to reach for
+
+**TinyFish** (`mcp__tinyfish__*`) is the default web toolkit — prefer it over
+`WebFetch`/`curl`:
+
+| Tool | Use it for |
+|---|---|
+| `search` | find pages. `domain_type: "research_paper"` for academic sources, `"news"` for current events; `include_domains` to pin to a known-good site; `after_date`/`before_date` or `recency_minutes` for freshness |
+| `fetch_content` | read up to 10 URLs in parallel, rendered in a real browser, returned as clean markdown. `include_selectors`/`exclude_selectors` to cut boilerplate on a noisy page |
+| `run_web_automation` | when reading is not enough — clicking, forms, login, anything behind interaction. Slow (minutes) and credit-metered; needs a fresh `session_id` UUID per call. If it times out the run may still be live: use `list_runs`/`get_run`, never a blind retry |
+| `create_browser_session` | a remote CDP endpoint for direct Playwright/Puppeteer control. Close it when done |
+
+**Context7** (`mcp__Context7__*`) for library documentation, and it is two calls,
+always in this order: `resolve-library-id` (name → `/org/project`) then
+`query-docs` (one concept per call, specific). Use it for anything versioned —
+three.js, Rapier, Playwright APIs — rather than trusting recall.
+
+What is worth researching here, from experience: how shipped racing games name
+and scope a feature before we invent our own vocabulary; accessibility
+documentation, which is unusually specific about mechanics because it has to be;
+and the physical meaning of anything we are about to map onto a physics
+constant, so the sign is right the first time. Findings that outlive the task go
+in `docs/research/` — including the NEGATIVE ones, because a decision not to
+build something gets re-litigated every few months unless it is written down.
+See `docs/research/DRIVING-CONTROLS-RESEARCH.md` for the shape.
+
+#### Worktrees: the way to keep editing while a run is in flight
+
+**Use a worktree whenever a test run is in flight and you have `js/` or `css/`
+work to do.** This is a standing project instruction, so `EnterWorktree` is
+sanctioned here without asking — that tool is otherwise gated on the user or
+this file saying so.
+
+The "don't edit `js/` or `css/`" constraint is a property of the DIRECTORY the
+test server was started in, not of the repo. A `git worktree` is a second
+working directory on the same object store, so an edit there cannot disturb a
+run in this one. **Measured:** changing a constant in a worktree's
+`js/game/input.js` left the main tree's copy untouched, and the in-flight run
+kept serving the original.
+
+`.claude/settings.json` sets `worktree.baseRef: "head"`. **Do not remove it** —
+the default is `fresh`, which branches from `origin/<default-branch>` and would
+silently strand a worktree on a base with none of the current branch's work.
+
+Either the tool or the raw commands work:
+
+```sh
+git worktree add .worktrees/<task> -b <branch>        # .worktrees/ is gitignored
+cp --reflink=auto -r node_modules .worktrees/<task>/  # REQUIRED — see below
+git worktree remove --force .worktrees/<task>         # and `git branch -D` if throwaway
+```
+
+Two measured costs, both easy to trip over:
+
+- **A worktree has no `node_modules`** — it is gitignored, so it is not checked
+  out, and `require.resolve("@playwright/test")` fails outright. Nothing can run
+  tests there until you copy it (19 MB here; `--reflink=auto` makes it nearly
+  free on a CoW filesystem). Do NOT symlink it — concurrent installs corrupt a
+  shared directory.
+- **~35 MB of checkout per worktree**, plus that `node_modules`.
+
+**A worktree buys EDITING freedom, not free test parallelism.** Two agents in
+two worktrees each running a test group is exactly the CPU oversubscription
+described below — the group ceiling is a property of the box, not of the
+directory. Parallelise the *writing*; serialise the *running*.
+
+#### Deciding what a plan can fan out
+
+Worth asking of every plan, not just large ones. The decomposition question is
+always the same: **which files does each task own?** Two tasks that touch the
+same file must be sequential; the planning cost of getting this wrong is paid
+back at merge time with interest.
+
+In THIS repo the answer is usually dictated by one file. `js/game.js` is ~8 000
+lines and holds the loop, the physics, the AI and the race logic, so most
+gameplay work touches it and most gameplay work is therefore *serial*. What
+does fan out cleanly:
+
+| Fan out | Because |
+|---|---|
+| Read-only investigation (`Explore` agents, 2-3 at once) | no writes at all; this is the plan-mode default for a reason |
+| Research + docs alongside implementation | `docs/`, `tools/README.md` and `js/` never collide |
+| A `tools/` script beside a `js/` change | different trees entirely |
+| Per-circuit work (`js/circuits/<id>.js`) | one file per circuit, 40 of them, genuinely independent |
+| A new spec beside the change it covers | `tests/` is additive |
+| Independent `js/game/*` modules | each is its own `Module.create(G)` file — but check whether both also need a `G` façade entry in `js/game.js`, which serialises them |
+
+The `Agent` tool takes `isolation: "worktree"` to do the setup itself. Use it
+when subagents genuinely write in parallel; skip it when they only read, since
+it costs setup time and disk for nothing.
+
+Two conventions that make a fan-out reviewable: give each agent a **non-
+overlapping file list in its prompt**, and have it report **what it changed and
+why** rather than leaving you to diff. If two agents must touch `js/game.js`,
+that is the signal to sequence them instead.
+
+**Parallelism has a real ceiling, and exceeding it manufactures failures.**
+Count **WORKERS against CORES, not groups against cores** — each group is a
+server plus `WORKERS=2` Chromium+SwiftShader processes, so N groups is 2N
+browsers. But a SwiftShader browser does not take *a* core, it takes several:
+**measured, ONE group at the default `WORKERS=2` holds this 4-core box at load
+8.9-11.0**, with every chrome tree traced back to that single `test-bg` pid and
+no orphans. `LOCAL_WORKERS` floors at 2, so the default group is *already*
+~2.5x cores and there is no lighter setting short of `--workers=1`.
+
+Which means the practical rule is stronger than "don't run two groups": **one
+heavy group is the box's full capacity**, and a second one is not a 2x slowdown
+but the difference between passing and timing out. `physics`, `behaviour`,
+`circuit` and anything rebuilding circuits want the machine alone — and a
+subagent told to "just run `test:tiny` to check" is a third and fourth worker,
+so give it `--workers=1` or have it verify without a browser.
+
+**Give subagents a flat prohibition, not a load threshold.** "Check
+`/proc/loadavg` first and skip the run if it is above 6" reads as careful and
+is not: an agent checks once, spends ten minutes editing, and starts the run
+against a number that has since moved. Measured in exactly that way here — a
+`test:tiny` in a worktree took the box from ~9 to **18.9** and cost the group
+running in the main tree a 209 s timeout on a spec that is fine alone. Say
+**"do not run Playwright at all; report it unverified and I will run it"** and
+run it yourself afterwards. A verification you have to redo is not a saving.
+
+When it happens anyway, **write down the contaminated WINDOW** before doing
+anything else — the log is timestamped, so `awk -F'[][]' '$2 >= "HH:MM:SS" &&
+$2 <= "HH:MM:SS"'` over it gives you the exact list. A pass inside the window is
+still a pass (contention makes tests slower, not wrong); it is only the
+FAILURES in it that have to be re-run alone before they mean anything.
+
+Past the ceiling, tests fail on the CLOCK rather than on an assertion. The
+signature is `Tearing down "context" exceeded the test timeout`, a bare
+`Test timeout of 120000ms exceeded`, or a spec whose duration is several times
+its usual. Measured here, same commit each time:
+
+| Spec | Under load | Alone |
+|---|---|---|
+| `elevation-tracks › albert_park` | 219 s, **FAILED** (3 groups) | 30 s, passed |
+| `aero-zones › a bigger wing trades HARDER` | 133 s, **FAILED** (2 groups) | passed, 10/10 file |
+| `aero-zones › a bigger wing trades HARDER` | 133 s, **FAILED** (1 group!) | — |
+
+That last row is the one that taught the lesson. The same spec failed a third
+time with **nothing else running**, which is what forced the reading above and
+then the real diagnosis: it does three localStorage writes, three page reloads
+and three full Monza builds, where every other test in its file does one. Its
+own logs show the single-build tests at 30-64 s and this one at 133 s. It is
+not a flaky test and it was never a physics regression — it is **3x the work
+against a shared 120 s default**, and it now carries `test.slow()` and a comment
+saying so.
+
+The general lesson: a timing-shaped failure that survives the load check is
+usually a spec whose COST nobody costed. Before reaching for a retry or a
+bigger box, compare that test's duration against its siblings in the same file
+— an outlier of 2-4x is a structural difference you can name.
+
+**Before believing a timing-shaped failure:**
+
+1. `cat /proc/loadavg` — anything past ~2x cores means the result is suspect.
+2. **Check for ORPHANED workers.** `test-bg --stop` and killing the run's pid do
+   NOT reap worker trees whose ancestor has already reparented to init, and a
+   stale tree will quietly eat the box under every later run:
+   `ps -eo pid,ppid,comm | awk '$3=="chrome"{print $2}' | sort -u` and trace each
+   parent back — anything whose chain hits `1` before it hits a live `test-bg`
+   pid is a leak. Kill those first.
+3. Re-run that ONE spec alone: `npx playwright test <spec> -g "<name>"`.
+
+**Never amputate one group to rescue another mid-run.** Killing a group takes
+its server down, so every remaining test in it fails in ~1 s against a dead
+port, and the final tally ("31 failed") is almost entirely artifact. If the box
+is oversubscribed, stop EVERYTHING and restart serially — the results you keep
+are worth more than the minutes you save.
+
 ### 2. Run the groups the change needs — not all of them
 
 **Start the run, ARM THE `Monitor` TOOL, and go do the next piece of work.**
@@ -670,7 +904,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (106) + tests/*.test.mjs unit suites (46)
+tests/*.spec.js                 Playwright specs (110) + tests/*.test.mjs unit suites (47)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
                  ARCHITECTURE-REVIEW.md is the standing assessment + defect
                    register: what the no-build-step bet costs, why asserted
@@ -956,7 +1190,7 @@ is the same surface from a shell, with the staging done correctly.
 
 ## Writing tests
 
-107 Playwright specs + 47 `node --test` unit suites. **How to RUN them is under
+111 Playwright specs + 48 `node --test` unit suites. **How to RUN them is under
 Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
 to do when writing one.
 
