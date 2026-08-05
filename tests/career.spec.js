@@ -1739,15 +1739,29 @@ test.describe("Career — the guide", () => {
     const body = await page.locator("#cg-body").innerText();
     const c = await page.evaluate(() => ({
       win: Career.PRIZE[0], last: Career.prizeFor(22), bonus: Career.OBJ_BONUS,
-      mult: Career.RESEARCH_MULT, cap: Career.BUDGET_MULT[Career.BUDGET_MULT.length - 1],
-      slots: Career.SLOTS,
+      mult: Career.RESEARCH_MULT, slots: Career.SLOTS,
     }));
     expect(body).toContain(c.win.toLocaleString() + " cr");
     expect(body).toContain(c.last.toLocaleString() + " cr");
     expect(body).toContain("+" + c.bonus.toLocaleString() + " cr");
     expect(body).toContain(c.mult + "x the part's price");
-    expect(body).toContain(c.cap + "x");
     expect(body).toContain(c.slots + " for this mode, " + (c.slots * 2) + " in all");
+
+    // THE FITTED CAP, and the reason it is not quoted as a multiplier here.
+    // This used to assert the top of the BUDGET_MULT ladder ("1.6x"), which was
+    // the one number in the guide that came from prose after all:
+    // Career.upgradeBudget() and budgetUpgradeCost() have no caller outside
+    // career.js, so budgetLvl is permanently 0 and the garage charges level 0
+    // — exactly the team's works car — for the whole career. Quoting 1.6x was
+    // therefore precisely what this test exists to prevent, and the assertion
+    // was holding the lie in place rather than catching it.
+    //
+    // So: the guide must state the cap it actually enforces, and must NOT
+    // promise a ladder that cannot be climbed. Restore both halves together —
+    // wire the control in career-ui.js beside the FACILITY button, then put the
+    // multiplier back here and in the guide, in the same change.
+    expect(body).toContain("your team's own works car");
+    expect(body).not.toContain("three upgrades");
   });
 
   test("MY TEAM's guide prices the actual driver market", async ({ page }) => {

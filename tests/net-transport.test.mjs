@@ -171,10 +171,46 @@ test("NO relay ships by default, because both free ones were measured dead", () 
   const fresh = load("js/net/transport.js", "NetTransport");
   const urls = fresh.iceServers({})
     .flatMap((s) => (Array.isArray(s.urls) ? s.urls : [s.urls]));
-  assert.ok(!urls.some((u) => /^turns?:/.test(u)), "no TURN entry by default");
+  assert.ok(!urls.some((u) => /^turns?:/.test(u)),
+    "no measured-dead TURN entry is baked into the synchronous list");
   assert.ok(urls.some((u) => /^stun:/.test(u)), "STUN is unaffected");
   assert.equal(fresh.hasRelay(), false,
-    "hasRelay() drives the lobby's failure copy — it must not claim one exists");
+    "before prefetchIce() resolves there is genuinely no relay, and hasRelay() "
+    + "must say so — the lobby's failure copy branches on it");
+});
+
+test("a credentials URL ships by default, and yours overrides it", async () => {
+  // The relay is a FETCH URL with expiring credentials, not an embedded
+  // password — that is the difference between this and the Open Relay static
+  // credentials that were retired out from under build 971.
+  //
+  // It exists because two devices on ONE WI-FI could not reach each other:
+  // the only host candidate a browser offers is mDNS-obfuscated, and when
+  // that name will not resolve the sole remaining pair is srflx-to-srflx,
+  // which needs router hairpinning that many do not do.
+  const fresh = load("js/net/transport.js", "NetTransport");
+  const seen = [];
+  const turnServer = { urls: ["turn:relay.metered.example:443"], username: "u", credential: "c" };
+  global.fetch = async (u) => { seen.push(u); return { json: async () => ({ iceServers: [turnServer] }) }; };
+  try {
+    // No apex26.turnApi configured: the shipped default is used.
+    global.localStorage = { getItem: () => null };
+    await fresh.prefetchIce();
+    assert.equal(seen.length, 1, "the default credentials URL is fetched");
+    assert.match(seen[0], /^https:\/\/\S+\/api\/v1\/turn\/credentials\?apiKey=/,
+      "and it is a credentials endpoint, not a bare TURN server");
+    assert.equal(fresh.hasRelay(), true, "once it answers, a relay exists");
+
+    // A player (or a fork) who sets their own must not be moved onto ours.
+    const mine = load("js/net/transport.js", "NetTransport");
+    seen.length = 0;
+    global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://mine.example/creds" : null) };
+    await mine.prefetchIce();
+    assert.deepEqual(seen, ["https://mine.example/creds"],
+      "a configured URL wins outright — never a silent fallback to ours");
+  } finally {
+    delete global.fetch; delete global.localStorage;
+  }
 });
 
 test("the coturn REST credential is derived, not hardcoded, and expires", async () => {
