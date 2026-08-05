@@ -24,6 +24,9 @@ Sections are unnumbered on purpose: numbering rots the moment one is inserted.
 | **Value-preserving migration is honest** — worst case 2.6 %, under the old scale's smallest step | Verified by calculation |
 | **Do not rename the racing-line assist** — already matches the industry's Off/Corners/Full | Settled |
 | **Speed-sensitive steering is two halves and we ship one** — the rate half belongs in the SPEED STEER retune | Designed |
+| **SPEED STEER is inert at speed** — 2-point spread across all ten notches at 72 m/s; a hyperbolic taper gives 25 | Measured; fix designed |
+| **RESPONSE spends its top half below any real wheelbase** — 3.6 m lands at notch 4 | Measured |
+| **SMOOTHING should map linearly in LAG, not in Hz** — top of range is 398 ms and unusable | Measured |
 | **Setup sheet: wing trim / brake bias / suspension**; gears and diff cut | Designed |
 | **Brake bias belongs in the friction ellipse**, which currently charges both axles for grip one spends | Designed — highest-risk item |
 | **Understeer cue is signalling, not simulating** | **Built** |
@@ -226,6 +229,65 @@ standard pace is the honest alternative.
 
 The **default** is deliberately left to `tools/tune-sweep.mjs` rather than
 picked here — that is the whole point of building the sweep.
+
+---
+
+## The handling sliders, measured — one of them is inert
+
+Same treatment as RACE PACE, and it found worse. Each column is what the notch
+*does*, not what it stores:
+
+| notch | RESPONSE wheelbase | LINEARITY (lock at half-stick) | STEER LOCK | SPEED STEER (lock kept @72 m/s) | SMOOTHING lag |
+|---|---|---|---|---|---|
+| 1 | 4.30 m | 8.8 % | 10.3° | 40 % | 72 ms |
+| 3 | 3.77 m | 13.0 % | 13.4° | 40 % | 88 ms |
+| 5 | 3.23 m | 19.1 % | 16.4° | **40 %** | 114 ms |
+| 7 | 2.70 m | 28.1 % | 19.5° | 40 % | 159 ms |
+| 10 | 1.90 m | 50.0 % | 24.1° | 42 % | 398 ms |
+
+### SPEED STEER does nothing at speed — a 2-point spread across ten notches
+
+`lockTaper = max(0.4, 1 − vStd(|v|)/STEER_SPEED_REF)`. The `0.4` floor is not a
+safety net, it is the operating point: at 72 m/s **notches 1 through 9 all return
+exactly 40 %**, and notch 10 returns 42 %. The entire slider is worth **two
+percentage points** at racing speed. It only separates in the middle of the range
+(at 40 m/s: 40 % → 68 %), which is not where anyone reaches for it — you reach for
+it because the car feels nervous *flat out*.
+
+A hyperbolic taper with no floor fixes it without changing the idea:
+
+| ref (notch) | shipped @72 m/s | `1/(1 + v/ref)` @72 m/s |
+|---|---|---|
+| 44 (n1) | 40 % | 38 % |
+| 80 (n5) | 40 % | 52 % |
+| 124 (n10) | 42 % | 63 % |
+
+**Spread at top speed: 2 points → 25 points.** It also never reaches a hard
+floor, so the control stays live everywhere instead of saturating, and it is the
+same shape sims use. This is where the missing *rate* half of speed-sensitive
+steering belongs too — one knob, both halves, tuned together.
+
+### RESPONSE spends half its range below any real car
+
+A real F1 wheelbase is ~3.6 m, which lands at **notch 4**. Notches 6–10 run
+2.97 m down to 1.90 m — shorter than any F1 car, and 1.9 m is go-kart territory.
+So the top half of the slider is a car that does not exist, the default (3.23 m)
+is already shorter than real, and "I keep ending up at the lower end" is a player
+correctly finding the only part of the range where the car is plausible. The
+recentred range should put ~3.6 m mid-slider and buy its extra travel at the
+*stable* end.
+
+### SMOOTHING's useful range is the bottom third
+
+Lag runs 72 ms → 398 ms, but not evenly: notches 1–5 span 42 ms of it and notches
+8–10 span 199 ms. The top of the slider is unusable — 398 ms of steering lag is
+a third of a second — while the half people actually live in is barely
+differentiated. The cutoff is linear in Hz and lag goes as `1/(2πf)`, so the
+mapping should be linear in *lag* instead, over a range whose top is somewhere
+usable.
+
+LINEARITY is the one that is broadly fine (8.8 % → 50 % at half-stick), though
+notch 1 is very numb.
 
 ---
 
