@@ -57,10 +57,29 @@ Open `scratch/profiles/<track>-<mode>.cpuprofile` in Chrome DevTools → **Perfo
 
 ## Interpreting GC spikes on night tracks
 
-If `Minor GC` appears frequently during a Vegas/Singapore session, the cause is
-almost certainly per-frame `new Float32Array(...)` in the light-upload path.
+The light-upload path was a known GC source but is **fixed**: `js/render/glx.js`
+allocates its per-lamp uniform arrays (`_luPos`, `_luCol`, `_luRad`, `_luDir`,
+`_luCone`, `_luBleed`) **once at module scope** and writes into them each frame,
+and `js/game/lighting.js`'s per-frame selection buffers (`_tlSel`,
+`_lightCullBuf`, `_lightHeap`, …) are pooled objects reused in place — see the
+"fresh objects here were per-car-per-frame GC churn" comment near
+`appendCarTailLights`. **Don't blame "per-frame `new Float32Array` in light
+upload" from memory — that folklore predates the pooling fix.** If `Minor GC`
+still shows up frequently during a Vegas/Singapore session, profile fresh and
+find the actual allocator; do not assume it's lighting.
+
+Current cost centers worth checking first, in rough order of likely impact:
+
+| Cost center | Where | What to look for |
+|---|---|---|
+| Shadow pass | `js/render/glx/shadow.js` (`GLXShadow`) | Static sun map + dynamic car/lamp maps — flag if the shadow FBO render is a large flame-chart slice, not just the main pass |
+| Uniform upload | `js/render/glx.js` `gl.uniform*` calls, per light/mesh | Flag if `> 2 ms`; check light count (`numLights`) isn't maxed unnecessarily |
+| Particles | `js/game/particles.js` | Pooled typed arrays (`_px`, `_vertA`, …) sized to `MAX` — profile the per-frame update/pack loop cost, not allocation |
+| `appendCarTailLights` sort | `js/game/lighting.js` (`_tlSel.sort(_byDistAsc)`) | Runs every frame when floods are lit; cost scales with nearby-car count within `tailRange`, not GC — a flame-chart entry here is CPU time, not garbage |
+| `(garbage collector)` | anywhere | If GC still appears, get the *actual* allocation site from the flame chart's bottom-up view before proposing a fix — don't reattach it to the light-upload path by default |
+
 Check `GLX.hdrMode()` returns `true` (RGBA16F FBO active) — RGBA8 fallback does
-additional intermediate copies.
+additional intermediate copies, which is a separate, still-real cost.
 
 ## Legacy inline harness
 

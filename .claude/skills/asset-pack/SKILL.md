@@ -62,7 +62,13 @@ Deep reference: `docs/research/ASSET-API-RESEARCH.md`. Hooks:
 
 **MAT layers:** 17 slots — `MAT.FLAT(0)` … `MAT.ASPHALT(16)`. Must match
 `TrackGeom.MAT` (`js/track/geom.js`) and `MAT_LAYERS` in both `assets.mjs` and
-`assets.js`.
+`assets.js`. **If you ever change the layer count**, `MAT_LAYERS`/`17` is also
+hardcoded (not read from a shared constant) in `js/render/shaders/lit.js`
+(`uMatTexScale[17]` and the `mid > 16` range check in `matTexUV()`) and in
+`js/render/three/tsl-lit.js` (`uniformArray(new Array(17)...)` and the
+`for (let i = 0; i < 17; i++)` upload loop) — miss either and the extra
+layer's scale silently reads `0.0` (GLX) or is dropped (TLX), which is
+indistinguishable from a pack that never uploaded.
 
 **Never bake:** `GLASS`, `FLAG`, `FLAT` — glass needs mirror read; flags are
 vertex-displaced in shader; FLAT is the no-material id.
@@ -95,7 +101,8 @@ vertex-displaced in shader; FLAT is the no-material id.
 
 4. **Add a real CC0 layer** — follow the manifest shape in
    `docs/research/ASSET-API-RESEARCH.md`; run `verify`; confirm MAT id and
-   `worldTile` scale in manifest match `tools/assets.mjs` tables.
+   `scale` (world metres per tile — there is no `worldTile` field; the
+   manifest and `tools/assets.mjs`'s `SCALES` table both call it `scale`) match.
 
 5. **Validate**:
    ```sh

@@ -58,7 +58,29 @@ let src = readFileSync(lpPath, "utf8");
 // `//   window.LightPresets = {…}` example inside the header comment (which is
 // indented behind `//`). Multiline flag: `^window…` and the closing `^};`.
 const re = /^window\.LightPresets\s*=\s*\{[\s\S]*?^\};/m;
-if (!re.test(src)) { console.error("Could not find the window.LightPresets assignment in js/game/light-presets.js"); process.exit(1); }
+const oldMatch = src.match(re);
+if (!oldMatch) { console.error("Could not find the window.LightPresets assignment in js/game/light-presets.js"); process.exit(1); }
+
+// This REPLACES the whole file, not a merge — the in-game COPY VALUES export is
+// always the full file+local merge, so a legitimate paste should not usually
+// carry far fewer profiles than what already shipped. Best-effort shrink
+// detector: warn, but never block, since a real reset/pruning export is valid.
+try {
+  const oldLiteral = oldMatch[0].replace(/^window\.LightPresets\s*=\s*/, "").replace(/;\s*$/, "");
+  const oldObj = JSON.parse(oldLiteral);
+  const oldKeys = Object.keys(oldObj).length;
+  const newKeys = Object.keys(obj).length;
+  if (oldKeys > 0 && newKeys < oldKeys / 2) {
+    console.error(`WARNING: this blob has ${newKeys} profile(s) vs ${oldKeys} already in js/game/light-presets.js.`);
+    console.error("bake.mjs does a FULL replace, not a merge — if this was meant to be a");
+    console.error("one-key update, STOP: re-copy the full COPY VALUES export from the tuner");
+    console.error("(it already merges file+local), or hand-merge instead of re-running this:");
+    console.error('  read js/game/light-presets.js, Object.assign the one key into the parsed');
+    console.error("  object, JSON.stringify it back into the window.LightPresets = ...; literal.");
+    console.error("Writing anyway (this tool never blocks) — review `git diff` before committing.");
+  }
+} catch { /* best-effort only; a parse failure here is not a reason to block the bake */ }
+
 src = src.replace(re, "window.LightPresets = " + JSON.stringify(obj, null, 2) + ";");
 writeFileSync(lpPath, src);
 

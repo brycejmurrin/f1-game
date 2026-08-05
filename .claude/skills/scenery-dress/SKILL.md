@@ -61,10 +61,31 @@ scenery: function (api) {
 - **On-track rejection guard.** Every primitive emitter (`addBox`/`addCyl`/…) is
   wrapped in a Minkowski test against the road half-width at each node (`rejBox`/
   `onRoadHit` in the `js/track/` scenery modules). If a prop's **full oriented footprint** covers
-  tarmac at **any** node it rises above, the **entire shape is dropped** (logged as
-  `[scenery] ... SUPPRESSED at k=...`). So props never half-clip the track — but a
-  too-close prop silently vanishes. If something you placed isn't showing, check
-  the console for SUPPRESSED and increase `dist`/`gap`.
+  tarmac at **any** node it rises above, the **entire shape is dropped**. So props
+  never half-clip the track — but a too-close prop silently vanishes. If something
+  you placed isn't showing, increase `dist`/`gap` — **don't assume the console will
+  tell you it happened.**
+  - **The console warning is NOT universal.** The composite helpers
+    (`building`, `tree`/`pine`/`palm`, `wall`/`fence`/`guardrail`, `tower`,
+    `billboard`, `grandstand`, …) each call `Log.warn("scenery", "<name>
+    SUPPRESSED at k=…")` on rejection — see `js/track/scenery-{nature,city,
+    identity,structures}.js`. But the **raw primitive path**
+    (`addBox`/`addCyl`/`addCone`/… called directly, e.g. from `RAW` or a bespoke
+    shape) only increments a per-track counter (`_culled` in `js/track/tracks.js`)
+    and logs a **single build-end summary** (`Log.info("track", "<id>: culled N
+    on-track primitive(s)")`) with no per-instance identity — you get a count, not
+    a location. A composite helper's SUPPRESSED warning tells you which call and
+    roughly where; the raw-primitive path does not.
+  - **Circuit-inline composites are still vulnerable.** Several
+    `js/circuits/<id>.js` files call `onTrack(x, z, margin)` directly as a
+    single-point guard for a bespoke shape instead of routing through a
+    footprint-tested composite helper (grep `onTrack(` across `js/circuits/` —
+    it's common). A single-point `onTrack()` check has exactly the bug described
+    below for `building()`/mast helpers before they were fixed: it only proves
+    that one sampled point is clear, not the shape's full oriented footprint. If a
+    circuit-inline shape is silently vanishing OR silently clipping the track,
+    check whether it's using a single `onTrack()` point rather than `rejBox(...)`
+    over its widest section — the console will not distinguish these for you.
   - **Composite helpers must guard their whole footprint, not one point.** The
     footprint test only works if the *thing you test* covers the whole model. The
     "props over the racing line" bug came from `building()`/`neonTower`/floodlight

@@ -60,12 +60,12 @@ Each returns the resolved `{eye, target, ...}` and sets a debug override
 | Hook | Returns | Use |
 |---|---|---|
 | `view({s, radius})` | `{eye,target,span}` | frame a track fraction from a distance |
-| `view({s, side, dist, height, look})` | `{eye,target,look}` | trackside survey; `look` = `in`/`out`/`fwd`/`back` |
+| `view({s, side, dist, height, look})` | `{eye,target}` (no `look` field) | trackside survey. **Only `look:"in"` is special** (faces back across the track); any other value, or omitting `look`, gives the SAME "out into the scenery" framing — `view()` does not recognise `"fwd"`/`"back"` at all (that's `roadside()`, below) |
 | `view({eye, target, fov})` | explicit placement | hand-place the camera |
 | `eyeAt(frac, lat, height)` | `{eye,target}` | driver's-eye / how it reads at the wheel |
 | `orbit(frac, az, el, dist, h)` | `{eye,target,fov}` | inspect a point from any angle |
 | `cinematic(frac)` | `{eye,target,fov,az,k}` | auto outside-of-corner framing (reads curvature `k`) |
-| `roadside(frac, side, dist, h)` | `{eye,target,look}` | stand beside the track |
+| `roadside(frac, side, dist, h, {look})` | `{eye,target,look}` | stand beside the track; unlike `view()`, `roadside()` supports the FULL set — `look` = `"fwd"` (default, direction of travel) / `"back"` / `"in"` (across the track) / `"out"` (into the scenery), and echoes it back in the return |
 | `dolly(frac, fwd, right, up)` | `{eye,target}` | track-relative offset looking at another point |
 | `carOrbit(idx, az, el, dist)` | `{eye,target,fov,carIdx,speed}` | orbit any car (livery/car3d checks) |
 | `previewCam(mode, frac, speed, lat)` | `{eye,target,fov,mode}` | preview any in-game mode's framing at a point (no driving) |

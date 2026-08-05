@@ -41,6 +41,7 @@ Do **not** use this for:
 | Economy | Credits buy research; fitting owned parts is free but capped by budget level |
 | Research facility | `Career.facilityDiscount()` — discount on **research cost only**; does NOT raise the fitted part budget cap |
 | Fitted budget cap | `Career.budget()` / `budgetLvl` — separate from facility; may be unwired in UI (always `budgetLvl` 0 today) |
+| Sponsors | **MY TEAM only** — `sponsorAt()`/`sponsor()` return `null` whenever `career.flavour !== "myteam"`; a DRIVER career never has one, by design (a driver is paid a salary, an owner is paid by sponsors) |
 | Randomness | Use `Career.rnd(...parts)`; do not consume `simRnd` or `Math.random` |
 | Ratings | `DriverRatings` apply in all modes; career adds deltas on top |
 
@@ -60,6 +61,19 @@ Hooks:
 | `__apex.qualiSim(playerTime?)` | Simulate qualifying for the loaded track |
 | `__apex.retirements()` | Inspect staged reliability/DNF plan |
 | `__apex.ratings(code?)` | Driver ratings with career deltas folded in |
+
+**Proving a sponsor was just paid is NOT a `careerState()` read.**
+`Career.settleRound()`'s return value (including `sponsorPay`, the amount paid
+this round) is stashed in `js/game.js`'s `careerSettlement` and reached only via
+the `G` façade (`G.careerSettlement`, consumed by `js/game/results.js` for the
+results screen) — **there is no `__apex` hook that surfaces `sponsorPay`
+directly.** And `careerState().sponsor` reads `sponsor()`, which resolves off
+`career.season.round` — the round counter **already incremented** by the time
+settlement finishes — so right after a raced round it describes the *next*
+sponsor window, not the one that (maybe) just paid. To confirm a sponsor paid
+out for the round just raced: read the results screen / `G.careerSettlement`
+path in a driven race, or use `__apex.careerSim(n)` for simulated rounds, which
+runs the real `settleRound()` and you can inspect the return per round.
 
 Commands:
 
@@ -154,3 +168,9 @@ Deep references:
   depend on qualifying or `careerSim()`.
 - Reading `careerState().owned` as part ids — it is a count; use
   `__apex.career().owned` / `Career.isOwned()` for the list.
+- Trying to verify a driven race's `sponsorPay` off `__apex` directly — it is
+  not exposed there; use the results screen / `G.careerSettlement`, or
+  `careerSim()` for simulated rounds.
+- Reading `careerState().sponsor` right after a settlement as "what the sponsor
+  just paid" — the round counter has already advanced, so it describes the
+  NEXT window, not the one just settled.

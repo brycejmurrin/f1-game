@@ -60,8 +60,10 @@ Apex 26's plain-JS IIFE game loop and `js/game/*` modules.
 | Feedback | Start here | Notes |
 |---|---|---|
 | Screen shake / camera impulse | `js/game.js` — `shake` var + decay block (~line 5159) | Wall hits: `shake = Math.min(1, shake + 0.1 + incidence * 0.3)` in the wall collision path (~4238). Car-car: `shake += impact * 0.45` in `collideFx()`. Kerb: `KERB_SHAKE` constant. |
+| Kerb strike (weak-feeling kerb hits) | `js/game.js` `onKerb` block, ~line 3753-3766 | **Not particles.** The sticky `kerbCueT` hold layers `shake = Math.max(shake, KERB_SHAKE)`, `GameAudio.rumble()` (gated by `kerbSndT` cooldown), and haptics (`navigator.vibrate(15)` + `Input.rumble(0.25, 90)`, gated by `kerbHapT`) into one continuous cue instead of re-arming every ~4 m node. If "kerb hits feel weak", tune `KERB_SHAKE` / the rumble args / the haptic amount **here** — this is the one block that owns kerb feedback. |
 | Collision or wall scrape sfx | `GameAudio.collision()` from `js/game.js` wall/car-car paths | Gate repeated scrapes with cooldown (`collideT`, `wallT`) so audio does not buzz. |
-| Kerb/grass/spray/sparks | `js/game/particles.js` / `Particles.sparks` | Wall scrape sparks: render loop in `game.js` (~6152) reads `Tracks.wallAt` proximity. Collision sparks via `c.fxSparkI` flag set in physics, consumed in render. |
+| Wall/car-car sparks | `js/game/particles.js` / `Particles.sparks` | Wall scrape sparks: render loop in `game.js` (~6152) reads `Tracks.wallAt` proximity. Collision sparks via `c.fxSparkI` flag set in physics, consumed in render. |
+| Off-track dust/grass kickup | `js/game/particles.js` / `Particles.kickup` | Fires only when `c.offroad` is true (`Math.abs(c.x) > hw && !c.onKerb` — **excludes riding a kerb**, ~line 6188). A car on a kerb (not off-track) gets the kerb row above, never `kickup`; don't add kickup particles to "fix" kerb feel — that channel is offroad-only by design. |
 | Tyre marks | `js/game/skidmarks.js` | Stamp from measured slip/contact; keep the ring buffer bounded. |
 | Chassis pitch/roll/bob | `js/game/bodyattitude.js` | Visual attitude only; never write back into physics. |
 | Gear-shift punch | `js/game/audio.js` `GameAudio.shift()` + auto-shift call sites near shift audio in `game.js` `updateCar` | Layer a short sfx/camera tick on upshift/downshift; do not retune physics for shift feel. |
@@ -85,6 +87,10 @@ Apex 26's plain-JS IIFE game loop and `js/game/*` modules.
 
 - Hunting `js/game/cameras.js` for shake/trauma storage — it only defines camera
   *modes*; the `shake` variable and its writers/decay live in `js/game.js`.
+- Reaching for `Particles.sparks`/`Particles.kickup` to fix weak kerb feel —
+  kerb feedback is the dedicated `onKerb` block in `js/game.js` (shake +
+  `GameAudio.rumble` + haptics), and `kickup` is gated to `c.offroad`, which
+  explicitly excludes riding a kerb.
 - Editing physics constants because an impact feels soft. First layer audio,
   shake, sparks or tyre evidence; only tune physics when measured behaviour is
   wrong.

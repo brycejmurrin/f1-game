@@ -69,6 +69,21 @@ in metres (0 → `track.total`), lateral `x` in metres (+ = right of centreline)
    existing track (`js/circuits/spa.js` for a green/forest road course,
    `js/circuits/monaco.js` for a street circuit, `js/circuits/monza.js` for a parkland
    layout) and adapt it — don't start from a blank file.
+
+   **Real-world centreline (OSM)**: don't hand-author `segs` for a real circuit
+   if a trace can be imported. `tools/import-circuit-path.mjs` pulls centrelines
+   from `bacinger/f1-circuits` (ODbL-1.0) into `CircuitPaths` in
+   `js/track/geo-paths.js` — the same projection the committed traces already
+   use (verify with `--self-check` before trusting a new entry):
+   ```sh
+   node tools/import-circuit-path.mjs --self-check            # sanity-check the projection against every committed path
+   node tools/import-circuit-path.mjs <gameId>:<featureId>     # emit one new geo-paths.js entry
+   node tools/import-circuit-path.mjs --classics               # emit all 16 retired-circuit traces at once
+   ```
+   Paste the emitted line into `js/track/geo-paths.js` under the new id — the
+   trace wins over `segs` (see Gotchas below), so `segs` in the def only needs
+   to be a rough closed-loop fallback.
+
 2. **Register it** (new tracks only): add `<script src="js/circuits/<id>.js?v=N"></script>`
    to `index.html` in the circuit block (before `js/track/tracks.js`) **and add the
    matching entry to the `CIRCUITS` array in `tools/manifest.cjs`** — the load-order
@@ -80,9 +95,19 @@ in metres (0 → `track.total`), lateral `x` in metres (+ = right of centreline)
      season rounds (see the `// ── retired / off-calendar ──` comment in
      `manifest.cjs`).
    - **Roster is capped at 40 circuits** — `tests/shared-track-foundation-characterization.test.cjs`
-     asserts `Tracks.LIST.length === 40`. Adding one requires updating that test
-     (and any other roster-gated expectations) **or** replacing an existing classic
-     circuit; you cannot silently grow the fleet.
+     asserts `Tracks.LIST.length === 40`. Adding a new circuit at 40 means
+     **replacing** an existing `classic: true` one, not "retiring" it further —
+     e.g. `jacarepagua` (`js/circuits/jacarepagua.js`) is **already**
+     `classic: true` (last Brazilian GP 1989), so swapping it out for a new
+     circuit is a **delete**, done in one pass:
+     1. Delete `js/circuits/jacarepagua.js`.
+     2. Remove its `<script>` tag from `index.html`.
+     3. Remove its entry from the `CIRCUITS` array in `tools/manifest.cjs`.
+     4. Remove its `CircuitPaths` entry in `js/track/geo-paths.js`, if any.
+     Then add the new circuit's four matching pieces. Skipping any one of the
+     four leaves a dangling reference that `tests/load-order.test.mjs` or the
+     40-cap test will catch — but don't rely on the test to tell you which
+     file you forgot; delete all four together.
    Verify with `__apex.tracks()` that the id appears.
 3. **Headless build guard** — the fast pre-push check that needs no browser:
    ```sh

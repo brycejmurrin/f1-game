@@ -121,6 +121,17 @@ Deep references:
    - `__apex.retirements()` after `seed()`/`reliability()`/`race()` for DNF plan.
    - `carAt(i).otEnabled` to confirm overtake gating under cautions.
 
+   **`incident({reset:true})` is a NO-OP once the takeover already ended.**
+   `IncidentSim.reset()` (`js/game/incidentsim.js`) only iterates and hands back
+   entries in `_incidents` — if the takeover already settled or hit its hard
+   time cap, `_incidents` is already empty and `reset()` does nothing (the
+   `for` loop runs zero times) even though it still returns `status()` looking
+   like success. **It cannot fix a car that looks stuck *after* handback** —
+   that is bespoke-model state (off-track, low speed, bad heading), not an
+   active takeover. For a stuck-after-handback car, use `__apex.resetPlayer()`
+   or `__apex.jump(frac, speed, x)` instead; only reach for `incident({reset:true})`
+   while `incident().count > 0` / `incidents` is non-empty.
+
    **"SC never comes out" checklist:**
    1. `DebrisWorld.active` / `apex26.debris` — side-world enabled?
    2. `caution({hazards:true})` — hazard `total` vs thresholds (`VSC_MIN=6`,
@@ -154,3 +165,6 @@ Deep references:
 - Using wall-clock time or global random sources, breaking seeded determinism.
 - Reporting a timeout-shaped browser failure as logic before checking load and
   re-running the specific spec alone if needed.
+- Calling `incident({reset:true})` to un-stick a car and concluding nothing is
+  wrong when it returns cleanly — check `incident().count` first; a car stuck
+  *after* handback needs `resetPlayer()`/`jump()`, not another reset call.

@@ -38,11 +38,23 @@ sweeper or a double-apex often registers as multiple peaks, so the count is
 | Question | Hook |
 |---|---|
 | Official FIA turn **count** | `__apex.info().turns` (length of curated list on `track.def.turns`) |
-| Official turn **details** (name, direction, radius) | `__apex.trackInfo({what:"corners"})` — sourced from `CircuitMarkings` in `js/track/markings.js` |
+| Official turn **details** (id, direction, radius) | `__apex.trackInfo({what:"corners"})` |
 | Curvature **peaks** (geometry audit) | `__apex.corners().length` |
 
 When someone asks "how many corners does Spa have?", answer with `info().turns` /
 `trackInfo`, not `corners().length`.
+
+**Corners have no real names — don't invent "Eau Rouge" or "Casino Square."**
+`js/track/markings.js`'s `CircuitMarkings.turns` is a raw array of apex
+FRACTIONS per track (`turns: [0.0432, 0.1524, ...]`) — no name, direction, or
+radius field lives there at all; it is the curated seed list, nothing else.
+Everything in `trackInfo({what:"corners"})` — the `dir` (`"L"`/`"R"`/`"straight"`),
+`radiusM`, `apexSpeedKph`, etc. — is computed geometrically by `buildCorners()`
+in `js/game/agentview.js` off those fractions, and the only identifier it
+attaches is `turn: "T" + (i+1)` (`"T1"`, `"T2"`, …, in driving order). If a
+real-world corner name is needed for a caption or a scenery placement, it has to
+come from outside this API (e.g. circuit research/docs) — the game itself does
+not know one.
 
 ## One-off queries
 

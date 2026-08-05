@@ -19,7 +19,10 @@ node tools/pick-tests.mjs --bg            # -> a ready-to-paste background comma
 The routing rules live in `RULES` at the top of `tools/pick-tests.mjs`. If a
 change is not routed anywhere, that is a missing rule — add it there rather than
 working around it here; `tests/test-groups.test.mjs` fails if a source directory
-routes to nothing.
+routes to nothing. **One exception exists today:** `js/track/graph.js` IS routed
+to a `test:<group>`, but its real correctness gate — `tools/graph-parity.cjs`,
+which diffs built geometry vertex-for-vertex against a baseline ref — is a
+separate tool `pick-tests` does not know about. See the Universal guards below.
 
 ## Run them in the background (do not sit and wait)
 
@@ -66,7 +69,19 @@ Reserve **`npm run test:tooling` + `npm run test:smoke`** for load-order /
    node tools/verify-track.cjs <id>     # one circuit
    node tools/verify-track.cjs --all    # all 40 (js/track/* engine edits)
    ```
-2. **Cache version bumped — BOTH files?** If you changed any `js/*.js` or
+2. **`js/track/graph.js` edited? Also run the scene-graph parity gate —
+   `pick-tests.mjs` does NOT route to it.** This is the one source directory
+   whose correctness check lives entirely outside the `test:<group>` map, so
+   asking `pick-tests` for a graph.js change and stopping there misses it:
+   ```sh
+   node tools/graph-parity.cjs --all             # baseline = HEAD by default
+   BASE=<pre-change-ref> node tools/graph-parity.cjs --all   # for a migration —
+     # diff the working tree's graph-based build against the ref BEFORE the
+     # migration, not HEAD (which may already be mid-migration)
+   ```
+   Builds each track twice (a baseline ref + the working tree) and diffs the
+   emitted prop geometry vertex for vertex; any mismatch is exit 1.
+3. **Cache version bumped — BOTH files?** If you changed any `js/*.js` or
    `css/*.css`, the `?v=N` in `index.html` must be incremented AND
    `version.json`'s `build` must equal the same N (it force-reloads stale
    installed PWAs — see the `bump-cache` skill):
@@ -75,7 +90,7 @@ Reserve **`npm run test:tooling` + `npm run test:smoke`** for load-order /
    # exactly ONE ?v= line, and version.json build == that N
    ```
    Forgetting this ships a change users never see (stale CDN/browser cache).
-3. **Smoke + load order** if you touched load order, `index.html`, or a core
+4. **Smoke + load order** if you touched load order, `index.html`, or a core
    module (`index.html` script tags must match `tools/manifest.cjs`):
    ```sh
    npm run test:tooling && npm run test:smoke

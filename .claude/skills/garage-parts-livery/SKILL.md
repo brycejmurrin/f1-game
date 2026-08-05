@@ -30,6 +30,27 @@ only** — never AI physics or player saves.
 `cornering`. A car with **no parts** (every AI) sits at the **midpoint** of both
 axes — active-aero trade and battery behaviour are defined relative to that.
 
+**There is no ERS option called "medium."** The `ers` category
+(`js/car/parts.js`) is a flat, unordered list of named deploy maps, not a
+low/medium/high tier — real ids include `standard` (the 0-cost baseline),
+`regen_plus`, `harvest`, `split_deploy`, `mgu_k_max`, `deploy`, `thermal_max`,
+`torque_fill`, `overtake_focus`, `race_mode`, `full_attack`, `overcharge`,
+`supercapacitor`, `harvest_max`, `conduit_twin`, `burst_map`, plus one
+`SIGNATURE` clone per team (`sig_<team>_ers`, cost/stat-identical to its
+`equivalent`). Don't invent or assume an id — grep `js/car/parts.js` for the
+current list, or point the player at picking by `cost`/`desc` (e.g. "cheapest
+recovery-biased option" or "highest accel for the budget") instead of a
+specific name.
+
+**Verify ERS behaviour in-race via `debug-state` / `physState()`**, not just
+the catalog numbers — `Parts.ersProfile` only sets the 0..1 axes; the actual
+battery dynamics (`drainFor`/`regenFor`/`otTimeFor`/`otCoolFor` in `js/game.js`)
+consume them. `__apex.physState()` reports `ersDeploy`, `ersRegen`, `drain`,
+`regen`, `otTime`, `otCool` for the live car — cross-check a part change there,
+not just against the catalog's `speed`/`accel` multipliers. See the measured
+table in `docs/PARTS.md` (`harvest` vs `standard` vs `overcharge`) for expected
+boost-duration/recharge/OT-cooldown deltas.
+
 **Career ownership** is enforced on **write**, not in resolution:
 `Parts._resolve` / `getMods` / `getCost` are **career-blind**. The garage greys
 locked rows via `Parts.isOptionAvailable(opt, team, owned)` where `owned` comes
@@ -82,7 +103,7 @@ python3 -m http.server 3456                       # for carview.html / render to
 
 Deep reference: **`docs/PARTS.md`**.
 
-Related skills: **`car-viewer`**, **`career-mode`**, **`tune-physics`**, **`bump-cache`**.
+Related skills: **`car-viewer`**, **`career-mode`**, **`tune-physics`**, **`debug-state`** (verify `ersDeploy`/`ersRegen`/`drain`/`regen` via `physState()`), **`bump-cache`**.
 
 ## Workflow
 

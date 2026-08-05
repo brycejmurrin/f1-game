@@ -40,6 +40,16 @@ transform per node. Full plan and measured reuse numbers:
 - Expecting **pine** to instancing-win without re-parameterisation — dimensions
   are affine in height (`0.35 + h*0.02`, …), so reuse sits at ~1.00× today
   (see SCENE-GRAPH-PLAN §6).
+- **Running `graph-parity` against old HEAD after re-parameterising pine and
+  treating a mismatch as a regression.** Re-parameterising `pine` so its
+  geometry is purely *linear* (not affine) in its scale parameters is a
+  deliberate, documented **look change** — it moves vertices on purpose so a
+  per-node scale can finally express it, and SCENE-GRAPH-PLAN §6/S4 says so
+  explicitly ("not a bug and not a blocker; it is the actual worklist"). Parity
+  vs a **pre-re-param** baseline (old `HEAD`) is *expected* to fail for pine —
+  that failure is the point, not a bug to chase. Move `BASE` forward to the ref
+  that includes the re-param before judging parity, and expect/accept the look
+  change (behind regenerated visual baselines) rather than reverting it.
 
 ## Quick Reference
 

@@ -106,6 +106,27 @@ Read first:
      mobile guest never finishes ICE (`checking`/`connecting` forever). Probe ICE
      on the **stuck peer** (usually the guest), not only the host.
 
+   - **Guest stuck ON the countdown (lights visibly lighting, never launches)
+     is NOT an ICE symptom — signalling already worked.** If the connection is
+     up (both peers show `net().active`/roles correctly), stop probing ICE and
+     look at countdown *consumption* instead: `js/game.js` reads `netStart`
+     (`{ at, hold, now() }`) each frame and derives `countT` from it
+     (`countT = (COUNTDOWN_S + startHold) - (netStart.at - netStart.now()) / 1000`,
+     ~line 3052), which drives `lightsLit` (~line 3076) and only clears
+     `netStart` once `lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S +
+     startHold` (~line 3092-3096, the "consumed; never carry it into the next
+     race" comment). A guest stuck with lights lit but the race never starting
+     means that consumption path never satisfied its exit condition — check the
+     guest's own `countT`/`lightsLit` progression via `G.countT`/`G.lightsLit`
+     (test-only accessors) or step through `netStartArm`/`netHostStart`, not the
+     ICE/candidate layer.
+   - **`__apex.net().startPending` is a boolean only** — it reflects
+     `!!G.netStart` (see `netHostStart()` in `js/game/apex.js`), i.e. whether a
+     start has been armed at all. It carries none of `netStart`'s actual fields
+     (`at`, `hold`, `now`) and cannot tell you *why* a guest is stuck mid-
+     countdown — for that, inspect `countT`/`lightsLit` progression directly as
+     above, not `startPending`.
+
 5. **Mobile QR flow is out-of-band.**
    - Desktop host shows a QR; the phone guest opens the encoded URL in **Safari
      via the Camera app** (or paste), not the in-page scan UI. Do not debug
@@ -166,3 +187,7 @@ scripts above rather than three background tabs.
 - Running browser net tests before `test:net-unit`, making deterministic unit
   failures look like WebRTC flake.
 - Forgetting `version.json` in build handshakes after JS/CSS edits.
+- Debugging a guest stuck mid-countdown (lights already lit) as an ICE/relay
+  problem when signalling already succeeded — check `countT`/`lightsLit`
+  consumption of `netStart` in `js/game.js`, not candidates. `startPending` is
+  boolean-only and can't diagnose it.

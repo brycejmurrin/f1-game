@@ -31,6 +31,12 @@ the panel. Use **RESET** in the LIGHTING TUNER for the **current** track/tod/wea
 to drop back to shipped values. Legacy `"*"` profiles from older saves may still
 persist — clear that key in DevTools if a global override keeps winning.
 
+A shipped example of stacking white-balance knobs: `LightPresets["jeddah|dawn|dry"]`
+in `js/game/light-presets.js` sets both `sunTemp: -0.35` (warm the low dawn sun)
+and `tint: 0.1` (warm the overall grade slightly on top) alongside `sunElev`,
+`ambTemp`, and the lamp/mist/star knobs — a good reference for how a real
+preset combines the warmth knobs rather than reaching for just one.
+
 `lightState()` returns the full resolved lighting snapshot *after*
 `applyRaceSettings` has run.  Compare before/after any change to confirm it
 actually affected the scene — don't guess from the CLAUDE.md description.
@@ -111,6 +117,12 @@ __apex.orbit(0.15, 45, 20, 60);  // frame turn 1
 | "Scene washed out" / bloom too strong | `exposure` too high, bloom knobs hot | `lightTune({exposureMul, bloomMul, threshOff, bloomKnee})`; try `setTimeOfDay('dusk')` + check shipped `LightPresets` for the condition |
 | "Scene washed out (ambient)" | `ambientGround` too bright | `lightTune({ambientMul})`; night branch caps ambient |
 | "Lamps too bright / too dim" | pool blow-out or dark valleys | `lightTune({lampLevel, poolEnergy, bleedMul})` |
+| "Sun/moonlight too warm or too cold" | `sunColor` skew | `lightTune({sunTemp: ±N})` — white-balance of the direct key light only, unclamped mix, `-2..2` |
+| "Shadow/ambient areas too warm or too cold" | `ambientSky`/`ambientGround` skew | `lightTune({ambTemp: ±N})` — hemisphere fill white-balance, independent of `sunTemp` |
+| "Floodlights/street lamps the wrong colour" | lamp tint fights the scene | `lightTune({lampTemp: ±N})` — shifts ALL lamps toward sodium/amber (−) or LED/broadcast white (+), layered over each lamp kind's own colour (see `LAMP_KINDS` in `js/game/lighting.js`) |
+| "Night skyglow/bloom the wrong hue" | city dome + bloom-adjacent ambient hue | `lightTune({cityGlowWarm: ±N})` — cools toward LED/mercury (−) or warms toward sodium amber (+); 0 = per-theme shipped tint |
+| "Fog reads too warm or too cold" | distance-haze tint | `lightTune({fogTint: ±N})` — + warm/amber-dusty, − cool/blue-overcast |
+| "Overall image warm/cool cast" | final grade, not the scene lights | `lightTune({tint: ±N})` — IMAGE & COLOUR grade knob, applied after lighting; don't reach for this to fix a lamp or sun colour, which have their own knobs above |
 
 ## Writing a lightstate contract test
 
