@@ -636,6 +636,35 @@ Montreal now fails on something real that the water assertion had masked: a
 support's `minY` sits 2.72 m from `groundY` against a 0.05 m allowance.
 Deliberately left failing — it wants a fix, not a wider tolerance.
 
+### Final tally
+
+**9 of 12 fixed.** Monaco, Abu Dhabi (day+night), Montreal's water count, mugello,
+sochi, Vegas, Suzuka, Zandvoort, Qatar's elevation.
+
+**Three of the twelve were the HARNESS, not the code**, and each produced a
+confident wrong conclusion before it was found:
+
+| harness bug | what it faked |
+|---|---|
+| `test-bg.mjs` killed only the npm shim, orphaning the Playwright tree | 117 Chromium on 4 cores, load 50.7, **ten** timeout "failures", zero real |
+| `fullyParallel: true` over `elevation-tracks`, where each test builds a whole circuit | mugello's 36 page errors + sochi's timeout — adjacent tests, one memory event |
+| `live-reporter.js` sliced 4 RAW lines, and Playwright pads with blank ones | dropped `Received:` from every assertion with a custom message, so Spa's 0.525 was read as Monza's — recorded as a nondeterministic build for a bit-stable circuit |
+
+That is the pattern worth keeping: **a test harness that lies produces defects
+that look like the product's.** All three are fixed.
+
+**Two entries in this register were wrong and are corrected above** — A13 naming
+`telemetry.js:942` (the data hub is not zoomed at all) and row (e) calling the
+Bellagio lake missing (it was split into two ids). Both were mine, and both were
+caught by measuring rather than by re-reading.
+
+**Remaining, all genuine, none a stale assertion:** Montreal's support floating
+2.72 m off the ground; Qatar's props at 340 858 against a 265 000 vertex budget
+that exists because the prop VBO is the iOS jetsam trigger; Monza's 0.294, where
+the open question is whether comparing VERGE terrain against the CENTRELINE is
+the right test when the probe sits 3 m beyond an 8 m road edge; and Spa's 0.525
+road-surface excursion at Stavelot.
+
 ### Order
 
 T1 first (two failures, one fix, and the measurement is cheap and headless),
