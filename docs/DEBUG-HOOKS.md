@@ -515,16 +515,57 @@ movement should move its corresponding value here (and the car's behaviour).
 | `deadzone` | tilt dead zone (deg; fixed, not a slider) |
 | `tiltCutoff` | STEER SMOOTHING (One-Euro min-cutoff frequency, Hz) |
 
-### `cars() → [{id, x, xv, yaw, prog, speed, lap, ct, kerb, p}, …]`
+### `cars() → [{id, x, xv, yaw, prog, speed, lap, ct, kerb, p, ax, best, last}, …]`
 Telemetry for every car, leader first: lateral `x` (and smoothed `xv`), visual
-`yaw`, `prog`ress, `speed`, `lap`, in-contact timer `ct`, `kerb` flag, and `p` =
-is-player. For measuring pack jitter / side-by-side stability.
+`yaw`, `prog`ress, `speed`, `lap`, in-contact timer `ct`, `kerb` flag, `p` =
+is-player, and `ax` = active-aero flap travel. For measuring pack jitter /
+side-by-side stability.
 
-### `carAt(idx?) → {id, driverId, isPlayer, team, x, speed, prog, s, lap, finished, finishT, contactT, wrongWay, rescueT} | null`
+`best` and `last` are this car's **lap times** in seconds (3 dp), `null` until it
+has one — the same values `lapHistory()`/`timing()` report for the player, now
+for the whole grid. `lap` is the lap counter. game.js has always set `lastLap`
+and `best` on every car; before this they were unreachable for anyone but the
+player, so no AI lap time existed anywhere in the codebase.
+
+### `carAt(idx?) → {id, driverId, isPlayer, team, x, speed, prog, s, lap, finished, finishT, contactT, wrongWay, rescueT, lapTime, best, lastLap, stuckT, ai} | null`
 Detailed telemetry for one car by index (from the `cars()` list). Called with no
 argument returns the player car. Returns `null` for an out-of-range index. Extends
 `cars()` with fields not worth fetching for the whole field: `team`, `finished`,
 `finishT` (finish timestamp), `contactT` (contact timer), `wrongWay`, `rescueT`.
+
+Timing: `lapTime` (current lap, seconds elapsed), `best` and `lastLap` (seconds,
+3 dp, `null` before a time exists).
+
+`stuckT` is the AI stuck timer in seconds — it climbs while the car is slow and
+boxed in, and `> 0.7` is what arms `ai.unstuckActive`.
+
+#### `carAt(i).ai` — the AI decision block
+
+`null` for a human car. For an AI car it mirrors the frame-locals `updateCar()`
+uses to decide how to drive, which are otherwise destroyed every tick. Without
+it, a slow AI car braking too early, queuing behind a phantom blocker,
+rubber-banding, or stuck in recovery are **indistinguishable from outside**.
+
+| field | meaning |
+|---|---|
+| `vmax` | this car's speed target, m/s — final (after the blocker cap and the active-aero gain) |
+| `bandFactor` | rubber-band boost fraction (`0` = none); ceiling is `DIFF[level].band` |
+| `braking` | is it on the brakes this tick |
+| `vCorner` | the corner speed it is braking down to, m/s |
+| `kMax` | peak curvature found over the brake-lookahead scan |
+| `blocker` | this screen's `cars[]` index of the car judged to be in the way, `-1` = none |
+| `blockerCode` / `blockerId` | driver code and `driverId` of that blocker, `null` = none. `driverId` is the cross-peer key; the `cars[]` index is not |
+| `blockerGap` | arc gap to the blocker in metres, `null` = none |
+| `roomL` / `roomR` | clearance to the left / right (edge or a car alongside), metres |
+| `boxed` | in contact, wedged between both sides, or right behind a blocker |
+| `unstuckActive` | stuck recovery is committing to a side (`stuckT > 0.7`) |
+| `targetX` | racing line + lane target, metres from the centreline |
+| `overtake` | lateral commitment to a pass, metres (signed) |
+| `desiredX` | the line it is actually steering to = `targetX` + overtake + separation + unstuck, clamped |
+
+Pure observability: nothing in the driving model reads these, they are written
+once per AI car per tick onto a reused record, and a human car never allocates
+one.
 
 ### `camState() → {eye, tgt, fov, debug}`
 Raw camera geometry: `eye` `[x,y,z]`, `tgt` `[x,y,z]` (look-at point), `fov`
@@ -816,6 +857,25 @@ Get or set race weather. Called with no argument returns the current mode.
 `"overcast"`/`"fog"` are dry-grip mood modes. Setting `"rain"` toggles the rain
 layer + audio on; any other value turns them off. Takes effect immediately
 without reloading the track.
+
+### `difficulty(level?) → {level, ai, band, levels}`
+Get or set AI difficulty — `"easy" | "normal" | "hard"` (`GameTables.DIFF`).
+Called with no argument it only reads. Returns the level plus the **resolved**
+preset it selects: `ai` is the multiplier applied to every AI car's `vmax`
+(`carAt(i).ai.vmax`), `band` is the rubber-band ceiling (`carAt(i).ai.bandFactor`
+tops out there). `levels` lists the valid names.
+
+Persisted under `apex26.difficulty`, exactly as the `#rs-diff` chips persist it —
+which were until now the **only** way to move this, so nothing could compare two
+difficulties programmatically. Live: `updateCar()` re-reads `DIFF[difficulty]`
+every tick. An unknown value is ignored rather than stored (an undefined preset
+would throw on the next tick). It does not redraw an already-open race-settings
+panel; reopen it to see the chip move.
+
+```js
+__apex.difficulty()        // → {level:"normal", ai:0.92, band:0.08, levels:[…]}
+__apex.difficulty("hard")  // → {level:"hard",   ai:0.99, band:0.03, levels:[…]}
+```
 
 ### `setTimeOfDay(tod?) → "default" | "dawn" | "day" | "dusk" | "night"`
 Get or set the session time of day live, **without reloading track assets**.

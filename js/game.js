@@ -2665,7 +2665,16 @@ const G = {
   getCustomLiveries, setCustomLiveries, getLiveries, invalidateDecalTextures,
   // Mutable state + helpers consumed by js/game/menus.js.
   get driverIdx() { return driverIdx; }, set driverIdx(v) { driverIdx = v; },
-  get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
+  // AI DIFFICULTY — "easy" | "normal" | "hard" (GameTables.DIFF). Persisted the
+  // same way the #rs-diff chips persist it, and validated here so a bad value
+  // from __apex.difficulty() can never leave DIFF[difficulty] undefined (which
+  // would throw in updateCar on the very next tick).
+  get difficulty() { return difficulty; },
+  set difficulty(v) {
+    const d = String(v).toLowerCase();
+    if (!DIFF[d]) return;
+    difficulty = d; store.set("difficulty", d);
+  },
   store, tickUi, scheduleFlybyTrack,
   renderStatBars: (...a) => renderStatBars(...a),   // const initialised below — defer
   // Same deferred-arrow trick for the garage <-> select plumbing: setup-ui.js is
@@ -3326,6 +3335,18 @@ function updateCar(c, dt, ranked) {
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
 
+  // --- AI instrumentation (read by __apex.carAt(i).ai) -----------------------
+  // PURE OBSERVABILITY. Every AI decision variable below this point is a
+  // frame-local that is destroyed each tick, which made "why was that car
+  // slow?" unanswerable from outside — braking too early, queuing behind a
+  // phantom blocker, rubber-banding and stuck-recovery all looked identical.
+  // Mirror them onto ONE record per AI car, allocated once and REUSED (no
+  // per-frame garbage), written only on the AI branches so a human car pays
+  // nothing. Nothing in the driving model may ever READ c.ai — the moment it
+  // does, this stops being instrumentation and becomes state.
+  const aiDbg = c.human ? null : (c.ai || (c.ai = {}));
+  if (aiDbg) aiDbg.bandFactor = 0;   // stale-guard: only written when banding applies
+
   // --- speed targets ---
   let vmax = VMAX * PACE * (c.human ? mods.speed : c.tierV * c.skill * dd.ai);
   // asymmetric rubber band — boost only when player is ahead; no artificial slow-down when behind
@@ -3336,6 +3357,7 @@ function updateCar(c, dt, ranked) {
     const gap = _leadHuman.prog - c.prog;
     const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
     vmax *= 1 + bandFactor;
+    aiDbg.bandFactor = bandFactor;
   }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
@@ -3372,6 +3394,7 @@ function updateCar(c, dt, ranked) {
     if (state === "race" && c.speed < 7 && boxed) c.stuckT = (c.stuckT || 0) + dt;
     else c.stuckT = Math.max(0, (c.stuckT || 0) - dt * 1.5);
     unstuckActive = c.stuckT > 0.7;
+    aiDbg.boxed = !!boxed;   // the only one of this block's reads that is block-scoped
   }
 
   // --- electric deploy ---
@@ -3448,6 +3471,7 @@ function updateCar(c, dt, ranked) {
     }
     // when wedged in/stopped, power out instead of braking
     if (unstuckActive) braking = false;
+    aiDbg.kMax = kMax; aiDbg.vCorner = vCorner;   // both block-scoped to this branch
   }
 
   // --- active aero (X-mode / Z-mode) ---
@@ -3692,6 +3716,18 @@ function updateCar(c, dt, ranked) {
     if (c.steerSm === undefined) c.steerSm = steer;
     c.steerSm = damp(c.steerSm, steer, 9, dt);
     steer = c.steerSm;
+    // The rest of the instrumentation record, in one write at the end of the AI
+    // branch — everything here is still live in this scope, and `vmax`/`braking`
+    // have taken their FINAL values by now (the blocker cap and the active-aero
+    // gain both ran above). The blocker is recorded as identifiers, never the
+    // car object: carAt() output is JSON-cloned.
+    aiDbg.vmax = vmax; aiDbg.braking = braking;
+    aiDbg.blockerCode = blocker ? blocker.code : null;
+    aiDbg.blockerId = blocker ? blocker.driverId : null;
+    aiDbg.blockerGap = blockerGap;
+    aiDbg.roomL = roomL; aiDbg.roomR = roomR;
+    aiDbg.unstuckActive = unstuckActive;
+    aiDbg.targetX = targetX; aiDbg.overtake = overtake; aiDbg.desiredX = desiredX;
   }
   // Lateral authority scales with speed and is ZERO at a standstill: a car
   // that isn't moving can't be steered sideways, so tilting while stopped no
