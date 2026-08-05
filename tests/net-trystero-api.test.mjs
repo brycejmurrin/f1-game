@@ -201,3 +201,37 @@ test("our exchange reports 'connected but refused' as its own outcome", () => {
   assert.match(ours, /restoreWarn/,
     "console.warn must be restored, or the patch outlives the lobby");
 });
+
+test("a bad relay override is dropped, never handed to WebSocket", () => {
+  // Trystero does `new WebSocket(url)` on every entry it is given, and a
+  // malformed one throws SyntaxError out of joinRoom — which our catch
+  // reported as "could not reach the room service", pointing at the network
+  // when the fault was one localStorage value. That left a device permanently
+  // unable to use room codes while the invite link kept working and hid it.
+  //
+  // It happened from a copy-pasted debugging line: '["wss://…","wss://…"]' is
+  // valid JSON and an invalid URL.
+  //
+  // Driven through the REAL relayUrls(), not asserted against the source text
+  // — a source-text test here would pass while the code was broken.
+  const NetNostr = eval(fs.readFileSync(path.join(ROOT, "js/net/nostr.js"), "utf8") + ";NetNostr");
+  const withStore = (value, fn) => {
+    global.localStorage = { getItem: () => JSON.stringify(value) };
+    try { return fn(); } finally { delete global.localStorage; }
+  };
+
+  assert.deepEqual(withStore(["wss://\u2026", "wss://\u2026"], () => NetNostr.relayUrls()),
+    NetNostr.RELAYS, "the ellipsis placeholders that caused this fall back");
+  assert.deepEqual(withStore(["nope", "", null, 42], () => NetNostr.relayUrls()),
+    NetNostr.RELAYS, "junk falls back rather than leaving no relays at all");
+  assert.deepEqual(withStore(["https://nos.lol"], () => NetNostr.relayUrls()),
+    NetNostr.RELAYS, "http is not a socket");
+  assert.deepEqual(
+    withStore(["wss://nos.lol", "wss://\u2026", "wss://nostr.mom"], () => NetNostr.relayUrls()),
+    ["wss://nos.lol", "wss://nostr.mom"],
+    "one bad entry is dropped without poisoning the good ones");
+  assert.deepEqual(
+    withStore(["wss://relay.example", "ws://127.0.0.1:7448"], () => NetNostr.relayUrls()),
+    ["wss://relay.example", "ws://127.0.0.1:7448"],
+    "and a real override still wins — ws:// matters, it is the local fixture");
+});
