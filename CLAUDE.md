@@ -483,6 +483,34 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   for an incident-sim takeover. tick() also runs
                                   through the paused gate: one player opening a
                                   menu cannot stop a shared world.
+                                  LIGHTS-OUT is an INSTANT, not a delay: the
+                                  host names one and every peer derives countT
+                                  from it, so nobody accumulates dt and nobody
+                                  rolls their own hold. NOBODY COUNTS DOWN
+                                  UNTIL IT IS NAMED — the host included, which
+                                  it did not used to be. It always free-ran,
+                                  because start() clears armedPeers and
+                                  hostStart() runs with no pump in between, so
+                                  the first allArmed() is always false; that
+                                  was invisible only while the lead was SHORTER
+                                  than the sequence. And a lead shorter than
+                                  the sequence puts every peer part-way through
+                                  it by construction: 2500 ms against 5.2-7.0 s
+                                  of lights had a guest joining at countT ~ 2.7
+                                  -4.5, two to four lamps backfilled in one
+                                  frame, on a phone still painting its first
+                                  frames after a build. Reported as correct
+                                  timing and no lights at all. So the moment is
+                                  named a WHOLE COUNTDOWN away (G.COUNTDOWN_S +
+                                  the hold + a settle) and both sides hold dark
+                                  until then. The wait is real — it lasts as
+                                  long as the slowest guest's circuit build, up
+                                  to ARM_WAIT_MS — so the gantry says so rather
+                                  than looking hung. Everything here reads ONE
+                                  clock, nowMs(): naming the moment off
+                                  performance.now() while game.js counts down
+                                  against G.netNow put the deadline on wall
+                                  time, where no test could reach it.
                                   UP TO FOUR PLAYERS, in a STAR: the host holds
                                   one session per guest and each guest holds one,
                                   to the host. Rivals are a Map keyed by
@@ -654,7 +682,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (102) + tests/*.test.mjs unit suites (38)
+tests/*.spec.js                 Playwright specs (103) + tests/*.test.mjs unit suites (38)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
                  ARCHITECTURE-REVIEW.md is the standing assessment + defect
                    register: what the no-build-step bet costs, why asserted
@@ -1044,6 +1072,13 @@ __apex.go()                   // start race, grid intact
 __apex.finishRace()           // trigger results screen
 __apex.freeze(bool?)          // get/set physics-frozen state
 __apex.hud(show?)             // toggle HUD visibility
+__apex.uiScale(115)           // UI SIZE — menus/sheets, as a PERCENTAGE (80..150)
+__apex.hudScale(130)          // HUD SIZE — in-race clusters + touch dock. The two
+                              //   are INDEPENDENT and absolute; nothing multiplies.
+                              //   No arg reads {pct, stored, min, max} — `stored`
+                              //   is null until the player moves the slider, which
+                              //   is what lets the coarse-pointer CSS default hold
+                              //   from the first paint. null clears back to it
 __apex.weather("wet"|"dry")   // live weather change
 __apex.setTimeOfDay("night")  // live dawn|day|dusk|night|default — no asset reload (rebuilds only on day↔dark flip)
 __apex.resetPlayer()          // force immediate rescue
@@ -1222,7 +1257,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Writing tests
 
-102 Playwright specs + 38 `node --test` unit suites. **How to RUN them is under
+103 Playwright specs + 38 `node --test` unit suites. **How to RUN them is under
 Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
 to do when writing one.
 

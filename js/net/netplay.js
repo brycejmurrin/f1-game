@@ -306,7 +306,16 @@ const NetPlay = (function () {
         lastReason = why;
         sessions.delete(id);
         const carFor = remoteFor(id);
-        if (carFor != null && sessions.size && role === "host") { handBackToAI(why, carFor); }
+        armedPeers.delete(id);
+        if (carFor != null && sessions.size && role === "host") {
+          handBackToAI(why, carFor);
+          // The peer we were still holding the gantry for may be the one that
+          // just left. allArmed() is otherwise consulted only when an ARMED
+          // arrives, so without this a host waits out the whole ARM_WAIT for a
+          // player it has already stopped racing — three players or more, since
+          // losing the only guest ends the session outright.
+          if (armDeadline && allArmed()) nameTheMoment();
+        }
         // "peer_closed", never a bare stop(): stop() defaults an absent reason
         // to "local", and the transport does not always give one — so a
         // CONNECTION THAT DROPPED was being reported as a deliberate local
@@ -441,6 +450,13 @@ const NetPlay = (function () {
       lastReason = null;
       armedPeers.clear();
       armDeadline = 0;
+      // Armed on the first tick, not here, so it lands on the SAME clock the
+      // hold is compared against. G.netNow is nulled because it belongs to a
+      // session rather than to the page: left over from the last race it would
+      // date every deadline computed before the first tick of this one to a
+      // moment minutes in the past, and fire them all immediately.
+      holdUntil = 0;
+      G.netNow = null;
       active = true;
       // start() is called straight after startRace(), so reaching this line IS
       // "my circuit is built and my loop is about to run again". That is the
@@ -455,17 +471,35 @@ const NetPlay = (function () {
 
     // ---- synchronised lights-out -----------------------------------------
     // The host names a moment on ITS clock; both sides convert it onto their
-    // own and drive the countdown to that instant. A LEAD of a couple of
-    // seconds means the message has landed and both clocks are agreed well
-    // before it matters — arming it at the moment of lights-out instead would
-    // release the host first by half a round trip, every single race.
-    const START_LEAD_MS = 2500;
+    // own and drive the countdown to that instant.
+    //
+    // The moment is one FULL COUNTDOWN out (see nameTheMoment) plus this — a
+    // margin, not a lead. It covers the one-way trip, so the receiving peer's
+    // countT starts at ~0 rather than already a little past it, and buys a
+    // device that has just finished building a circuit a beat of settled
+    // rendering before the first lamp. It is not what makes the countdown fit;
+    // the sequence length does that.
+    const SETTLE_MS = 600;
+    // ONE clock for the whole countdown. G.netNow is the rAF timestamp tick()
+    // publishes, so this is identical to performance.now() in production — but
+    // naming the moment off one clock while game.js counts down against another
+    // puts the deadline on wall time, where no test can reach it. That is why
+    // the ARM_WAIT backstop has never had one.
+    const nowMs = () => (G.netNow != null ? G.netNow : performance.now());
     // How long the host will wait for the guest to say its circuit is built
     // before starting anyway. Long, because it is a ceiling on a pathological
     // case, not a normal wait: a phone building a street circuit is the slow
     // end of legitimate, and starting without them is strictly worse than
     // making the host wait a few more seconds.
     const ARM_WAIT_MS = 20000;
+    // NOBODY WAITS ON THE GRID FOR EVER. Holding the gantry unlit until the
+    // moment is named is right, but it is a wait on somebody else, and a peer
+    // that has gone silent without its session formally closing would otherwise
+    // freeze the countdown outright — a worse failure than starting alone.
+    // Comfortably past the host's own ARM_WAIT_MS ceiling, so this only ever
+    // fires when that ceiling itself failed to produce a START.
+    const HOLD_MAX_MS = ARM_WAIT_MS + 10000;
+    let holdUntil = 0;                    // both roles: when we count down alone
     let armDeadline = 0;                  // host: when to stop waiting for ARMED
     // WHO has reported their circuit built, not merely whether anyone has. With
     // one guest this is the boolean it replaces; with three it stops the lights
@@ -477,7 +511,7 @@ const NetPlay = (function () {
 
     function armStart(atPeerMs, hold) {
       const at = session ? session.peerToLocal(atPeerMs) : atPeerMs;
-      G.netStart = { at, hold, now: () => (G.netNow != null ? G.netNow : performance.now()) };
+      G.netStart = { at, hold, now: nowMs };
     }
 
     // The moment cannot be named until BOTH sides can act on it.
@@ -497,23 +531,30 @@ const NetPlay = (function () {
     // reached, instead of from one side's optimism.
     function hostStart() {
       if (role !== "host" || !session) return false;
-      if (!allArmed()) { armDeadline = performance.now() + ARM_WAIT_MS; return true; }
+      if (!allArmed()) { armDeadline = nowMs() + ARM_WAIT_MS; return true; }
       return nameTheMoment();
     }
 
     function nameTheMoment() {
       if (role !== "host" || !session) return false;
       armDeadline = 0;
-      const at = performance.now() + START_LEAD_MS;
       // The hold is the host's to roll: two independent draws would release
       // one driver before the other, which is the whole thing being fixed.
+      // Rolled BEFORE the instant, because the instant depends on it.
       const hold = 0.2 + Math.random() * 1.8;
+      // A WHOLE COUNTDOWN AWAY, not a lead. Both sides derive countT from this
+      // instant by subtracting the time left, so an instant nearer than the
+      // sequence is long puts every peer part-way through it by construction —
+      // the 2500 ms this used to be left a guest joining at countT ≈ 2.7-4.5,
+      // watching two to four lamps snap on at once and then a second or so of
+      // countdown, on a device still finishing its first frames after a build.
+      const at = nowMs() + (G.COUNTDOWN_S + hold) * 1000 + SETTLE_MS;
       // Each guest gets the moment converted onto ITS OWN clock — localToPeer
       // is per-session, so this cannot be hoisted out of the loop.
       for (const s of sessionList()) {
         try { s.sendEvent(EV.START, { at: s.localToPeer(at), hold }); } catch (e) {}
       }
-      G.netStart = { at, hold, now: () => (G.netNow != null ? G.netNow : performance.now()) };
+      G.netStart = { at, hold, now: nowMs };
       return true;
     }
 
@@ -578,6 +619,9 @@ const NetPlay = (function () {
       sessions.clear();
       peerCar.clear();
       session = null;
+      armDeadline = 0;
+      holdUntil = 0;
+      G.netNow = null;              // a session's clock, not the page's
       return true;
     }
 
@@ -591,6 +635,7 @@ const NetPlay = (function () {
       // Publish the clock the countdown reads, so game.js and the session
       // agree on "now" rather than each calling performance.now() separately.
       G.netNow = now;
+      if (!holdUntil) holdUntil = now + HOLD_MAX_MS;
       // pump() can deliver the close that ends a session — onClose removes it
       // from the map and may call stop() — so iterate a SNAPSHOT (sessionList
       // copies) and re-check afterwards rather than dereferencing again. Found
@@ -598,15 +643,20 @@ const NetPlay = (function () {
       // mid-pump, so nothing here could have caught it.
       for (const s of sessionList()) s.pump(now);
       if (!active || !sessions.size) return;      // onClose already handled it
+      session = sessionList()[0];
+
+      // Host waiting on the guest's circuit (see hostStart). Checked AFTER the
+      // pump, so an ARMED that arrived on this very tick has already been
+      // handled — and BEFORE the liveness gate below, because a guest that has
+      // gone quiet is the exact case this deadline exists for. Behind the gate
+      // it could only fire while somebody was still answering, which is the one
+      // situation it is not needed, and the host would hold an unlit gantry for
+      // ever in the situation it is.
+      if (armDeadline && now >= armDeadline) nameTheMoment();
+
       // Every connection dead is the session over; ONE of several dead is a
       // player who left, and the others are still racing.
       if (!sessionList().some((s) => s.alive())) return;
-      session = sessionList()[0];
-
-      // Host waiting on the guest's circuit (see hostStart). Checked after the
-      // pump, so an ARMED that arrived on this very tick has already been
-      // handled and this only fires when the guest really has gone quiet.
-      if (armDeadline && now >= armDeadline) nameTheMoment();
 
       // Publish our own car — and, as host, forward everyone else's.
       //
@@ -662,12 +712,21 @@ const NetPlay = (function () {
       start, stop, tick,
       ownsRaceControl, ownsClassification,
       hostStart, reportLap, reportResult, reportCaution, awaitingResult, reportQuali, reportQualiLive,
-      // Is this side still waiting to be TOLD when the lights go out? Only a
-      // guest ever is: the host names the moment itself. Without this the
-      // countdown falls through to accumulating dt locally — its own clock,
-      // its own random hold — and the two grids are released seconds apart,
+      // Is this side still waiting to be TOLD when the lights go out? Without
+      // this the countdown falls through to accumulating dt locally — its own
+      // clock, its own random hold — and the grids are released seconds apart,
       // which is the one thing netStart exists to prevent.
-      awaitingStart: () => active && role === "guest" && !G.netStart,
+      //
+      // BOTH roles wait, not just the guest. The host names the moment itself,
+      // but not until every guest reports its circuit built, and a host that
+      // counted down in the meantime would be lamps deep in the sequence when
+      // the shared instant arrived — see nameTheMoment, which now names an
+      // instant a whole countdown away rather than a 2.5 s lead.
+      //
+      // Bounded, because this is a wait on somebody else (see HOLD_MAX_MS).
+      awaitingStart: () =>
+        active && !G.netStart && (role === "guest" || armDeadline > 0) &&
+        (!holdUntil || nowMs() < holdUntil),
       peerLaps: () => peerLaps.slice(),
       peerResult: () => peerResult,
       // updateCar() consults this: a car posed from the network must not also

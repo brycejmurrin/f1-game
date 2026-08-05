@@ -27,6 +27,11 @@ window.ScrollFade = (function () {
   const SEL = [
     ".pane", "#sel-body", ".panel-scroll", ".scroll-y",
     ".dh-content", "#track-detail-body",
+    // The TITLE screen. It only scrolls when the button column outgrows the
+    // window — a short landscape phone, or UI SIZE turned up — but when it does
+    // it is the first screen a player ever sees, and a menu that silently hides
+    // its last two buttons is worse there than anywhere else.
+    "#overlay",
   ].join(",");
   // Overlays whose [hidden] flip is what first gives their regions a box. The
   // data hub (#datahub) and track detail (#track-detail) are toggled by the

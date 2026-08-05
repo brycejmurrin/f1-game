@@ -1051,6 +1051,12 @@ let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
+// The five red lamps, one per second. A CONSTANT rather than a literal because
+// the networked start has to name an instant a whole countdown away — a lead
+// shorter than the sequence means every peer joins it part-way through by
+// construction — so js/net/netplay.js needs this number too, via G.countdownS.
+// Three private copies of it is exactly how that drifts back apart.
+const COUNTDOWN_S = 5;
 let paused = false;
 // Player racing-line assist, set by the pause-menu slider. -1..1: 0 = pure
 // manual (default), >0 gently pulls toward the racing line through corners,
@@ -2893,7 +2899,7 @@ const G = {
   // a global search — see its comment), worldFromTrack its exact inverse.
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
-  GAME_LAPS, TT_LAPS, LONG_GRIP,
+  GAME_LAPS, TT_LAPS, LONG_GRIP, COUNTDOWN_S,
   // The friction-circle constants, for js/game/quali.js: it runs a quasi-steady
   // lap simulation off the SAME numbers the driving model uses, so a simulated
   // qualifying time and a driven one are on one scale by construction.
@@ -2905,12 +2911,22 @@ const G = {
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
+  // The countdown clock and how many lamps are lit. netStartArm has always
+  // written G.countT and, with no accessor here, it has always gone nowhere —
+  // an expando on the façade that nothing reads. Invisible until now only
+  // because the netStart branch overwrites countT every frame; a test asking
+  // for the UNARMED hold gets no such rescue. lightsLit is worse: go()/reset()
+  // clear the lamp DOM and leave the counter at 5, which silently disarms any
+  // "did every lamp light?" assertion made after them.
+  get countT() { return countT; }, set countT(v) { countT = v; },
+  get lightsLit() { return lightsLit; }, set lightsLit(v) { lightsLit = v; },
   get netLobby() { return netLobby; },
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   wireId, carFromWireId,                // stable cross-peer car identity
+  setScale,                             // UI SIZE / HUD SIZE — see __apex.uiScale
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
   // Seats held by the OTHER players, so the garage can refuse to hand out one
@@ -3111,26 +3127,29 @@ function update(dt) {
     // the exact moment both cars are released. Solo, this branch never runs.
     if (netStart) {
       startHold = netStart.hold;
-      countT = (5 + startHold) - (netStart.at - netStart.now()) / 1000;
+      countT = (COUNTDOWN_S + startHold) - (netStart.at - netStart.now()) / 1000;
     } else if (netPlay && netPlay.awaitingStart && netPlay.awaitingStart()) {
-      // A GUEST WAITS TO BE TOLD, rather than starting its own countdown.
+      // NOBODY COUNTS DOWN UNTIL THE MOMENT IS NAMED.
       //
-      // The host names the moment and holds netStart from the outset; a guest
-      // only gets it when it PUMPS the EV.START event, and pump runs on the
-      // game loop — which is blocked solid while the circuit builds. Falling
-      // through to `countT += dt` here meant the guest ran an entirely
-      // independent countdown, with its own random hold, from whenever its
-      // own lights appeared. The host's lights went out seconds first, which
-      // is precisely what netStart exists to prevent, and it looked like a
-      // clock-sync bug rather than a missing event.
+      // Falling through to `countT += dt` here meant a peer ran an entirely
+      // independent countdown, with its own random hold, from whenever its own
+      // lights appeared — which is precisely what netStart exists to prevent.
       //
-      // So the gantry simply holds unlit until the host speaks. It arrives
-      // within a frame or two of the build finishing, and a moment of dark
-      // lights is far better than being released at two different times.
+      // Both roles hold, not just the guest. The host names the moment itself,
+      // but not until every guest reports its circuit built, and a host that
+      // free-ran until then would be SEVERAL LAMPS INTO the sequence when the
+      // shared instant finally arrived. countT would drop backwards, lightsLit
+      // is monotonic, and the gantry would sit frozen mid-count before
+      // resuming. Deriving both sides from the one instant is the whole point.
+      //
+      // The wait is real on the host — it lasts as long as the slowest guest's
+      // circuit build — so say so rather than showing a dead gantry. It decays
+      // and hides itself once netStart lands.
+      if (announceT <= 0) announce("WAITING FOR PLAYERS…", 1);
     } else {
       countT += dt;
     }
-    const lit = Math.min(5, Math.floor(countT));
+    const lit = Math.min(COUNTDOWN_S, Math.floor(countT));
     if (lit > lightsLit) {
       // Light EVERY lamp up to `lit`, not just the newest. countT can advance
       // by more than one second in a frame — a networked countdown is pinned to
@@ -3144,9 +3163,9 @@ function update(dt) {
       if (lit === 1) Input.calibrate();
       // all five lit — hold for a randomised beat, as in real F1, so the
       // start can't be timed and lights-out is a genuine reaction moment.
-      if (lit === 5 && !netStart) startHold = 0.2 + simRnd() * 1.8;
+      if (lit === COUNTDOWN_S && !netStart) startHold = 0.2 + simRnd() * 1.8;
     }
-    if (lightsLit === 5 && countT > 5 + startHold) {
+    if (lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold) {
       state = "race"; raceT = 0;
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
@@ -6976,37 +6995,73 @@ $("as-prev").onclick = () => audioTransport(() => GameAudio.prevTrack());
 // third notion of "paused" here would be a second source of truth.
 $("as-play").onclick = () => { setMusic(!musicEnabled); if (soundOn) GameAudio.uiTick(); };
 
-// UI SIZE: how big the whole interface is, as a percentage. Writes --ui-scale,
-// which every density and type token derives from (css/tokens.css) and which
-// the sheets consume as a `zoom` — so one number moves the menus, the tap
-// ladder and the in-race dock together.
+// UI SIZE / HUD SIZE: how big the interface is, as a percentage, on two
+// independent sliders. Each writes a custom property the stylesheets consume as
+// a `zoom`:
+//   --ui-scale   the menus  — .sheet (components.css), #overlay (menus.css)
+//   --hud-scale  the race   — the HUD clusters (hud.css), the dock (overlays.css)
 //
-// A SETTING RATHER THAN A CONSTANT because this is the one thing measurement
-// could not settle: the size that reads correctly at arm's length on a phone in
-// motion is not something a screenshot answers, and three rounds of picking a
-// number from one ended with "still too small". The player has the device.
+// TWO KNOBS BECAUSE THE TWO LAYERS ARE READ DIFFERENTLY. Menu type is read at
+// rest, with time to spare; the HUD is glanced at while driving, and the size
+// that works there depends on where the phone is mounted and whose eyes are
+// reading it. They also compete for the same screen, so trading one against the
+// other is a real choice rather than a compromise to be guessed at centrally.
+//
+// SLIDERS RATHER THAN CONSTANTS because this is the thing measurement could not
+// settle: what reads correctly at arm's length on a phone in motion is not a
+// question a screenshot answers, and three rounds of picking a number from one
+// ended with "still too small". The player has the device.
 //
 // Written INLINE ON documentElement (<html>), which is where css/tokens.css
-// declares --ui-scale and every calc() that reads it. That element matters: a
-// custom property is substituted where it is DECLARED, so a value set on <body>
-// leaves :root's calc()s reading :root's own --ui-scale and the knob silently
-// does nothing (measured: --tap stayed at `calc(44px * 1)` at every setting).
-// An inline style on <html> beats the stylesheet rule, so the choice sticks
-// without !important. Desktop keeps 100% unless asked: a mouse gains nothing
-// from bigger targets and loses rows off the screen.
-const UI_SCALES = [90, 100, 115, 130];
-let uiScale = store.get("uiScale", Input.touchControlsNeeded() ? 115 : 100);
-function applyUiScale() {
-  const btn = $("pm-uiscale"); if (btn) btn.textContent = "UI SIZE: " + uiScale + "%";
-  document.documentElement.style.setProperty("--ui-scale", uiScale / 100);
+// declares both properties. That element matters: a custom property is
+// substituted where it is DECLARED, so a value set on <body> leaves :root's
+// rules reading :root's own value and the knob silently does nothing — measured
+// on build 997, where --tap sat at `calc(44px * 1)` at every setting until this
+// moved to documentElement.
+//
+// NOTHING STORED => NO INLINE STYLE, so the `@media (pointer: coarse)` default
+// in the stylesheet stands and a phone is correct on its FIRST paint rather
+// than from whenever this module runs.
+const SCALE_MIN = 80, SCALE_MAX = 150;
+const scaleDefault = () => (Input.touchControlsNeeded() ? 115 : 100);
+const scalePct = (k) => {
+  const v = store.get(k, null);
+  return typeof v === "number" ? Math.max(SCALE_MIN, Math.min(SCALE_MAX, v)) : scaleDefault();
+};
+function applyScale(key, prop, inputId) {
+  const stored = store.get(key, null);
+  if (typeof stored === "number") document.documentElement.style.setProperty(prop, stored / 100);
+  else document.documentElement.style.removeProperty(prop);
+  const pct = scalePct(key);
+  const input = $(inputId); if (input) input.value = String(pct);
+  const out = $(inputId + "-v"); if (out) out.textContent = pct + "%";
 }
-$("pm-uiscale").onclick = () => {
-  uiScale = UI_SCALES[(UI_SCALES.indexOf(uiScale) + 1) % UI_SCALES.length];
-  store.set("uiScale", uiScale);
+function applyUiScale()  { applyScale("uiScale",  "--ui-scale",  "pm-uiscale"); }
+function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
+// `input`, not `change`: the size should follow the thumb while it is dragged,
+// which is the only way to find the right one — the same convention the volume
+// sliders use.
+$("pm-uiscale").oninput = (e) => {
+  store.set("uiScale", +e.target.value || scaleDefault());
   applyUiScale();
-  if (soundOn) GameAudio.uiSelect();
+};
+$("pm-hudscale").oninput = (e) => {
+  store.set("hudScale", +e.target.value || scaleDefault());
+  applyHudScale();
 };
 applyUiScale();
+applyHudScale();
+// The __apex read/write door for both sliders (see G.setScale in the ctx
+// façade). Kept here beside the appliers so there is one place that knows how a
+// scale is stored, clamped and pushed to the DOM.
+function setScale(key, prop, v) {
+  if (v !== undefined) {
+    if (v === null) store.set(key, null);
+    else store.set(key, Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v || scaleDefault())));
+    if (key === "uiScale") applyUiScale(); else applyHudScale();
+  }
+  return { pct: scalePct(key), stored: store.get(key, null), min: SCALE_MIN, max: SCALE_MAX };
+}
 
 // Render resolution setting: AUTO = the frame-time governor adapts the scale;
 // LOW/MED/HIGH pin a fixed scale (and disable the governor so it can't fight

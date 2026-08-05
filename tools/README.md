@@ -60,6 +60,7 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | perf-profile |
 | **fit-audit.mjs** | Does every menu FIT, and is everything on it big enough to hit — tap targets, type size and fit across nine viewports. | — |
 | **menu-fit.mjs** | Audits every menu screen for cramped/clipped layout at a given viewport. | — |
+| **ui-scale-axis.mjs** | The `--scale=` axis the three fit tools above share. The player can size the interface 80–150 % (SETTINGS ▸ DISPLAY), so "does this screen fit?" is one question per size, not one question — this turns each tool's screen × viewport matrix into screen × viewport × scale. Library, not a command. | — |
 | **track-accuracy-validator.mjs** | Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests. | new-track |
 | **refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data. Tests never call it and never touch the network. | new-track |
 | **import-circuit-path.mjs** | Projects a `bacinger/f1-circuits` (ODbL) GeoJSON feature into a `CircuitPaths` entry for `js/track/geo-paths.js`; `--self-check` regenerates the committed traces and diffs them so the projection can't silently drift. | new-track |

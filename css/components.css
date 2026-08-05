@@ -695,6 +695,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
 .pm-group button { margin: 3px 0; width: 100%; }
+/* A SLIDER IN A BUTTON COLUMN. .pm-group was 100% <button> until UI/HUD SIZE
+   arrived, so both of its house rules — the 3px rhythm above and the
+   `min-height: var(--tap)` at the top of this file — are keyed to `button` and
+   miss a `.tune-row` entirely. Without these two lines the slider sits flush
+   against the button above it and presents a 24px target in a column of 52px
+   ones, which is under the WCAG 2.5.8 floor for a control you drag.
+   The row gets the rhythm; the input itself gets the height, because it is the
+   thing you actually grab. .tune-row/.tune-label are unscoped in css/tuner.css,
+   so everything else about the slider already works here. */
+.pm-group .tune-row { margin: 3px 0; }
+.pm-group .tune-row input[type="range"] { min-height: var(--tap); }
 @container sheet (min-width: 420px) {
   .pm-groups { grid-template-columns: 1fr 1fr; }
 }

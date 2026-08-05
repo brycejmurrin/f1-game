@@ -927,6 +927,30 @@ Get or set HUD visibility. Called with no argument returns whether the HUD is
 currently visible. Called with a boolean shows (`true`) or hides (`false`) the
 HUD overlay and returns the new state.
 
+### `uiScale(v?) → {pct, stored, min, max}` · `hudScale(v?) → {pct, stored, min, max}`
+The two size sliders (pause ▸ SETTINGS ▸ DISPLAY), as **percentages**, 80–150.
+`uiScale` drives `--ui-scale`, which the menu sheets and the overlay children
+`zoom`; `hudScale` drives `--hud-scale`, which the in-race HUD clusters and the
+touch dock `zoom`. **They are independent and absolute** — UI 115 + HUD 130 means
+exactly that, nothing multiplies.
+
+No argument reads; `pct` is the RESOLVED value and `stored` is what is actually
+persisted, which is `null` until the player moves the slider. That distinction
+matters: with nothing stored no inline custom property is set at all, so the
+`@media (pointer: coarse)` default in `css/tokens.css` (115 %) stands from the
+FIRST paint rather than from whenever `game.js` runs. Passing `null` clears back
+to that; a number sets and persists it (clamped to `min`/`max`).
+
+```js
+__apex.hudScale(130)   // {pct:130, stored:130, min:80, max:150}
+__apex.uiScale()       // {pct:115, stored:null, …}  ← device default, nothing stored
+__apex.hudScale(null)  // back to the device default
+```
+
+Both write to `document.documentElement`, **not `body`** — a custom property is
+substituted on the element it is declared on, and every consumer's `calc()` is
+declared at `:root`, so a value on `body` never reaches them.
+
 ### `weather(w?) → "dry" | "wet" | "rain" | "overcast" | "fog"`
 Get or set race weather. Called with no argument returns the current mode.
 `"wet"` = damp track (wet/reflective road, lower grip, no falling rain);
@@ -1090,6 +1114,33 @@ Pump the session by hand. The game loop already calls this every frame, but a
 test must not depend on rAF running at a useful rate — drive it explicitly and
 latency, loss and interpolation become reproducible, the same way `step()`
 does for physics.
+
+### `netStartArm(nowMs, atMs?, hold?) → {ok, at, hold, awaiting}`
+Arm a synchronised lights-out directly, as the START event does — an absolute
+instant on the shared clock, so a test can assert both grids are released at one
+MOMENT rather than after an equal delay.
+
+Omit `atMs` and it does the opposite: drops the sim into the countdown with
+nothing named, which is the state a peer sits in while it waits to be told. That
+branch holds the gantry unlit, and it was unreachable from a test until this
+hook could decline to arm. `awaiting` reports `netPlay.awaitingStart()`.
+
+Resets `countT`, `lightsLit` and the lamp DOM together. Worth knowing why: the
+lamp elements and the counter used to be cleared separately, so a hook that
+cleared the DOM left `lightsLit` at 5 and silently disarmed any later "did every
+lamp light?" assertion.
+
+### `netHostStart() → {ok, startPending}`
+Run the host's `hostStart()` — naming the moment of lights-out, or arming the
+`ARM_WAIT` deadline and holding until every guest reports its circuit built.
+Otherwise reachable only from `js/net/lobby.js`, which meant the lead that
+decides whether anybody SEES the countdown could not be asserted at all: every
+countdown test armed `netStart` by hand and skipped the code under test.
+
+The host names an instant a **whole countdown away** (`COUNTDOWN_S` + the hold +
+a settle), not a short lead. A lead shorter than the sequence puts every peer
+part-way through it by construction — which is what a 2.5 s lead against a
+5.2–7.0 s sequence did, and why a guest reported correct timing and no lights.
 
 ### `netPeerClose() / netStop()`
 Drop the rival's connection, or end the session locally. On a drop the rival's

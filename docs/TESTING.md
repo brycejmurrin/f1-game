@@ -1,6 +1,6 @@
 # Testing reference
 
-102 root Playwright spec files (`tests/*.spec.js`) + 38 `node --test` unit suites
+103 root Playwright spec files (`tests/*.spec.js`) + 38 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -433,6 +433,7 @@ what it covers.
 | `ui-audit.spec.js` | portrait + landscape screenshots of every screen |
 | `ui-button-touch.spec.js` | button/touch steer mode: auto-throttle, disabled calibrate, race-settings layout; the lighting tuner's FREE CAMERA touch sticks (drag registers, no latch when the overlay is pulled away mid-hold, a cancelled scene drag releases) and its layout clearing the docked panel at every UI SIZE |
 | `ui-desktop.spec.js` | desktop layout (`body.desktop`), keyboard controls, non-touch UI |
+| `ui-scale.spec.js` | UI SIZE / HUD SIZE — every main screen still fits at 80/100/130/150 %, the two scales stay independent, and the HUD clusters stay on screen. Containment only, never absolute sizes; the exhaustive matrix is `--scale=` on the three fit tools |
 | `hud-layout.spec.js` | touch control + HUD layout across every steering and gearbox mode |
 | `hud-audit.spec.js` | HUD screenshots + mode-dependent elements |
 | `menu-survey.spec.js` | click every button, capture every state |

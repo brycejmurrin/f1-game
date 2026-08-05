@@ -19,12 +19,20 @@
 //   node tools/layout-audit.mjs                  # measure every cell, write JSON + HTML
 //   node tools/layout-audit.mjs --shots          # also capture a PNG per cell (slow)
 //   node tools/layout-audit.mjs --screens=select,garage --viewports=ios-*
+//   node tools/layout-audit.mjs --scale=100,130,150   # each viewport at each UI size
+//
+// --scale JOINS THE VIEWPORT AXIS rather than becoming a third dimension of the
+// grid: a cell is identified as `ios-15-landscape@130`, so the queue, the merge
+// and the HTML table all keep working unchanged, and the scaled variants sit in
+// their own columns next to the size they came from — which is where you want
+// them when the question is "what did two notches up cost this screen?".
 //
 // Output: artifacts/layout-audit/{audit.json,index.html,shots/*.png}
 import { createRequire } from "node:module";
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const require = createRequire(ROOT + "/");
@@ -650,6 +658,7 @@ const pick = (flag, all) => {
   return all.filter((x) => pats.some((p) => p.endsWith("*") ? x[0].startsWith(p.slice(0, -1)) : x[0] === p || x.id === p));
 };
 const viewports = pick("--viewports=", VIEWPORTS);
+const SCALES = parseScales(argv);
 const screens = argv.find((x) => x.startsWith("--screens="))
   ? SCREENS.filter((s) => argv.find((x) => x.startsWith("--screens=")).split("=")[1].split(",").includes(s.id))
   : SCREENS;
@@ -694,11 +703,17 @@ const OVERLAY_IDS = ["select", "carsetup", "career", "career-offers", "career-hi
 // the difference between a coffee and an afternoon. Raise with --jobs=N.
 const JOBS = Number((argv.find((a) => a.startsWith("--jobs=")) || "--jobs=3").split("=")[1]) || 3;
 const rows = [];
-const queue = [...viewports];
+// Every (viewport, scale) pair is its own sweep — its own context, its own boot.
+// Rescaling a live context would be cheaper, but the reset-and-reload recovery
+// below can fire at any cell, and a job whose identity is one column is far
+// easier to reason about than one that changes size halfway down it.
+const queue = [];
+for (const vp of viewports) for (const sc of SCALES) queue.push([vp, sc]);
 await Promise.all(Array.from({ length: Math.min(JOBS, queue.length) }, () => worker()));
-async function worker() { while (queue.length) { const vp = queue.shift(); if (vp) await sweepViewport(vp); } }
+async function worker() { while (queue.length) { const job = queue.shift(); if (job) await sweepViewport(job[0], job[1]); } }
 
-async function sweepViewport([vpName, vpOpts, why, insets]) {
+async function sweepViewport([baseName, vpOpts, why, insets], scale) {
+  const vpName = baseName + scaleTag(scale);
   const ctx = await browser.newContext({ ...vpOpts, colorScheme: "dark" });
   const page = await ctx.newPage();
   let errors = [];
@@ -710,6 +725,8 @@ async function sweepViewport([vpName, vpOpts, why, insets]) {
     // Stop the render loop first: the 3D scene starves the compositor, which
     // makes every later wait and every screenshot an order slower.
     await page.evaluate(() => window.__apex.headless(true));
+    // Persisted to localStorage, so it survives the reload recovery below.
+    await applyScale(page, scale);
     // A cell that cannot be reached should cost seconds, not the 30s default —
     // there are 120 of them and "skipped" is a perfectly good result.
     page.setDefaultTimeout(12000);
@@ -804,13 +821,14 @@ try { prior = JSON.parse(fs.readFileSync(path.join(OUT, "audit.json"), "utf8")).
 const key = (r) => r.screen + "|" + r.viewport;
 // Sorted back into the canonical matrix order, so a filtered run's rows land in
 // their own columns instead of appending new ones to the right of the grid.
-const vpOrder = VIEWPORTS.map(([n]) => n), scOrder = SCREENS.map((s) => s.id);
+const vpOrder = VIEWPORTS.flatMap(([n]) => SCALES.map((s) => n + scaleTag(s)));
+const scOrder = SCREENS.map((s) => s.id);
 const rank = (r) => [scOrder.indexOf(r.screen), vpOrder.indexOf(r.viewport)];
 const merged = [...prior.filter((p) => !rows.some((r) => key(r) === key(p))), ...rows]
   .sort((a, b) => { const [as, av] = rank(a), [bs, bv] = rank(b); return as - bs || av - bv; });
 fs.writeFileSync(path.join(OUT, "audit.json"), JSON.stringify({
   when: null, build: JSON.parse(fs.readFileSync(path.join(ROOT, "version.json"), "utf8")).build,
-  viewports: viewports.map(([n, , w]) => ({ name: n, why: w })),
+  viewports: viewports.flatMap(([n, , w]) => SCALES.map((s) => ({ name: n + scaleTag(s), why: w }))),
   screens: screens.map((s) => ({ id: s.id, name: s.name })),
   rows: merged,
 }, null, 2));
