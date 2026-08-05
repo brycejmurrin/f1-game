@@ -1592,50 +1592,6 @@ const api = {
     return this.safeMode();
   },
 
-  // diag() — everything needed to explain a rendering complaint from a device
-  // that cannot be reached. Written because three separate guesses were made at
-  // a phone whose picture looked wrong, from screenshots, with no way to tell a
-  // shed feature from a failed shader from a stale cache. Every field here is
-  // something that was actually wanted at some point and had to be inferred.
-  //
-  // Surfaced on screen by the #diag overlay in index.html, so a player can
-  // photograph it rather than open a console they do not have.
-  diag() {
-    const c = document.getElementById("game");
-    const gl = c && c.getContext && (c.getContext("webgl2", { failIfMajorPerformanceCaveat: false }) || null);
-    const dbg = gl && gl.getExtension("WEBGL_debug_renderer_info");
-    const ls = (k) => { try { return localStorage.getItem("apex26." + k); } catch (e) { return null; } };
-    const perf = this.renderScale();
-    return {
-      build: (typeof window !== "undefined" && window.__APEX_BUILD) || 0,
-      // The two numbers that decide whether the 3D view is sharp. A backing
-      // store far below css*dpr IS the blur, whatever else is true.
-      canvas: c ? { css: [c.clientWidth, c.clientHeight], buffer: [c.width, c.height], dpr: window.devicePixelRatio } : null,
-      renderScale: perf.scale, fps: perf.fps, autoRes: perf.auto,
-      // Safe mode. tierFloor > 0 means features are being withheld on purpose
-      // because this device died before — that is not a renderer fault.
-      tier: perf.tier, tierFloor: perf.tierFloor, crashStrikes: perf.crashStrikes,
-      gfx: { isMobile: !!(gfx && gfx.isMobile), mobileTier: !!(gfx && gfx.mobileTier) },
-      gl: gl ? {
-        renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : "?",
-        maxTex: gl.getParameter(gl.MAX_TEXTURE_SIZE),
-        maxFragUnif: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
-        colorFloat: !!gl.getExtension("EXT_color_buffer_float"),
-        colorHalf: !!gl.getExtension("EXT_color_buffer_half_float"),
-        lost: gl.isContextLost(),
-      } : null,
-      lights: (() => { try { const s = this.lightState(); return { amb: s.ambientSky, sun: s.sunColor, exp: s.exposure, n: s.numLights }; } catch (e) { return null; } })(),
-      // Stored overrides. Any of these beats every shipped default and lives
-      // only on this device, which is the exact shape of a bug that reproduces
-      // for one person and nobody else.
-      stored: {
-        lightTune: !!ls("lightTune"), camTune: !!ls("camTune"), gfxBackend: ls("gfxBackend"),
-        debris: ls("debris"), graphics: ls("graphics"), renderScale: ls("renderScale"),
-      },
-      debris: (() => { try { return this.debris(); } catch (e) { return null; } })(),
-    };
-  },
-
   // obs() — full debug observation of the current game state. Superset of
   // physState() and probe() with track context, barrier clearances, lookahead
   // scan, nearest rivals, reward components, and episode terminal flag.
@@ -2818,7 +2774,55 @@ const api = {
         msaa: safe(() => gfx && gfx.msaa && gfx.msaa(), null),
         renderScale: safe(() => gfx && gfx.getRenderScale && gfx.getRenderScale(), null),
       },
+      // The two numbers that decide whether the 3D view is SHARP. A backing
+      // store far below css x dpr IS the blur, whatever else is true — and it
+      // is the first thing to check on "the game looks fuzzy on my phone",
+      // which no other field here answers.
+      canvas: safe(() => {
+        const c = document.getElementById("game");
+        return c ? { css: [c.clientWidth, c.clientHeight], buffer: [c.width, c.height],
+                     dpr: window.devicePixelRatio } : null;
+      }, null),
+      // PerfGov's safe mode. tierFloor > 0 means features are being withheld ON
+      // PURPOSE because this device died before — a shed feature that is not a
+      // renderer fault, and indistinguishable from one without this.
+      perf: safe(() => {
+        const p = this.renderScale();
+        return { scale: p.scale, fps: p.fps, auto: p.auto, tier: p.tier,
+                 tierFloor: p.tierFloor, crashStrikes: p.crashStrikes };
+      }),
       gl: glInfo,
+      // Capability probes that decide which render path is even available —
+      // a missing float colour buffer sheds the whole HDR post chain, and a
+      // LOST context explains a black screen that looks like a shader bug.
+      glCaps: safe(() => {
+        const cv = document.querySelector("canvas");
+        const gl = cv && (cv.getContext("webgl2") || cv.getContext("webgl"));
+        if (!gl) return null;
+        return {
+          maxFragUnif: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
+          colorFloat: !!gl.getExtension("EXT_color_buffer_float"),
+          colorHalf: !!gl.getExtension("EXT_color_buffer_half_float"),
+          lost: gl.isContextLost(),
+        };
+      }, null),
+      // Stored overrides. Any of these beats every shipped default and lives
+      // only on this device, which is the exact shape of a bug that reproduces
+      // for one person and nobody else. `resMode`, `gfxHigh`, `forceMobileTier`
+      // and `envProbeOff` are here because they decide the render path and were
+      // the ones actually missing; `graphics` and `renderScale` are NOT, because
+      // no such key is written anywhere in the repo — reporting them as null
+      // every time was worse than not reporting them.
+      stored: safe(() => {
+        const ls = (k) => { try { return localStorage.getItem("apex26." + k); } catch (e) { return null; } };
+        return {
+          lightTune: !!ls("lightTune"), camTune: !!ls("camTune"),
+          gfxBackend: ls("gfxBackend"), debris: ls("debris"),
+          gfxHigh: ls("gfxHigh"), resMode: ls("resMode"),
+          forceMobileTier: ls("forceMobileTier"), envProbeOff: ls("envProbeOff"),
+        };
+      }, null),
+      debris: safe(() => this.debris(), null),
       info: safe(() => this.info()),
       assets: safe(() => this.assets()),
       lightTune: safe(() => this.lightTune()),

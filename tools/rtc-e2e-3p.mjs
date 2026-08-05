@@ -242,5 +242,47 @@ const playing = moving && aSeesBoth && bSeesC && cSeesB;
 log(playing
   ? `\n*** THREE PEERS RACING, GUESTS SEEING EACH OTHER THROUGH THE HOST at ${el()} ***`
   : `\n*** connected, but not racing correctly ***`);
+
+// ── ONE GUEST LEAVING IS NOT THE RACE ENDING ────────────────────────────────
+// The other thing only a third peer can show. NetPlay files each rival under
+// the connection id the lobby sends and looks it up on close (remoteFor) to
+// decide whether ONE guest dropped — hand that car back to the AI and race on —
+// or the room emptied. The lobby's `peers` list used to omit that id, so every
+// joiner collapsed onto the PEER_ONE fallback while the sessions stayed keyed
+// g1/g2; remoteFor was then always null, the close handler fell through to
+// stop(), and B leaving ended the race for A and C as well.
+//
+// At two peers the two keyings agree by coincidence and this is invisible,
+// which is exactly why it shipped. Asserted from the SURVIVORS' side: A and C
+// must still be active and still driving after B goes away.
+// Closing the PAGE, not calling a clean shutdown hook: a peer that walks away
+// is the case that matters, and it is the one that reaches the close handler
+// with a transport-supplied reason rather than a deliberate local stop.
+log(`\n${el()} closing guest B…`);
+await B.close().catch(() => {});
+await new Promise((r) => setTimeout(r, 8000));
+
+const [ra2, rc2] = await Promise.all([read(A), read(C)]);
+log(`${el()} A ${JSON.stringify(ra2)}`);
+log(`${el()} C ${JSON.stringify(rc2)}`);
+
+// The host keeps its remaining guest, and the surviving guest keeps the host.
+// nRemotes on A drops 2 -> 1 (B handed back to the AI); C keeps at least the
+// host. Neither may go inactive: `active: false` on either is the bug.
+const aSurvived = ra2.active === true;
+const cSurvived = rc2.active === true;
+const aDroppedOnlyB = ra2.nRemotes >= 1;
+const stillDriving = ra2.mine.speed > 5 && rc2.mine.speed > 5;
+
+log(`\nhost still active after B left:      ${aSurvived}`);
+log(`guest C still active after B left:   ${cSurvived}   <- the regression`);
+log(`host kept a rival (B -> AI, not all): ${aDroppedOnlyB}`);
+log(`both survivors still driving:        ${stillDriving}`);
+
+const survived = aSurvived && cSurvived && aDroppedOnlyB && stillDriving;
+log(survived
+  ? `\n*** ONE GUEST LEFT, THE RACE CARRIED ON at ${el()} ***`
+  : `\n*** a guest leaving took the race down with it ***`);
+
 await b.close(); stopSrv();
-process.exit(playing ? 0 : 1);
+process.exit(playing && survived ? 0 : 1);

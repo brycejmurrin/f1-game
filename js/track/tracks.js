@@ -2317,6 +2317,26 @@ const Tracks = (function () {
       flatTerrain: !!d.flatTerrain,
       sceneryCoordinates: d.sceneryCoordinates || "legacy",
       dressingExclusions: d.dressingExclusions || null,
+      // These five are READ OFF THE COPIED DEF and so have to be copied onto
+      // it. Each was authored in js/circuits/<id>.js, never copied here, and
+      // therefore read as undefined at every consumer — silently, because
+      // every consumer's fallback is a legitimate value:
+      //   sunAzimBias           atmosphere.js — hand-tuned sun geography, inert
+      //   sceneryTheme          tracks.js:~815 — Qatar fell back to `desert`,
+      //                           Albert Park to `permanent`
+      //   sceneryThemeOverrides tracks.js:~819 — Singapore's, always undefined
+      //   ownPitStraight        tracks.js:~1816 — the generic 7-box pit fallback
+      //                           kept landing on Monza's Tribuna Centrale, the
+      //                           exact thing the field was added to stop
+      //   undulate              buildCenterline — the opt-out could not be taken
+      // This trap has bitten before and was fixed for ONE field only (see the
+      // `pal` note in js/game/atmosphere.js); nobody swept the rest. The guard
+      // in tests/circuit-def-fields.test.mjs is what stops the sixth.
+      sunAzimBias: d.sunAzimBias,
+      sceneryTheme: d.sceneryTheme,
+      sceneryThemeOverrides: d.sceneryThemeOverrides || null,
+      ownPitStraight: !!d.ownPitStraight,
+      undulate: d.undulate,
       // bespoke per-circuit scenery (js/circuits/<id>.js); run by buildProps
       scenery: d.scenery || null,
       // surveyed elevation (if js/track/circuit-elevations.js is loaded) is baked into

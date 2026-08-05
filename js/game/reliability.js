@@ -13,9 +13,12 @@
    So a back-marker breaks, a developing team stops breaking, and money buys
    finishes as well as lap time.
 
-   THE DRAW TOUCHES NO STREAM. makeCars() spends exactly one simRnd() per driver
-   and the stream position after it is a hard contract (see driverSkill in
-   game.js) — drawing here would shift every seeded result that follows. This is
+   THE DRAW TOUCHES NO STREAM. makeCars() spends TWO simRnd() draws per driver —
+   the lane jitter and driverSkill() — and the stream position after it is a hard
+   contract (see driverSkill in game.js). Both are unconditional, which is what
+   the contract actually requires; the count itself is incidental and was
+   miscounted here as one. Drawing at all would shift every seeded result that
+   follows, whatever the count. This is
    a STATELESS hash instead, Career.hash(seed, ...parts), with the career's seed
    inside a career and the SIM seed outside one. Nothing is consumed, and the same
    (seed, round, driver) always retires the same car at the same point of the race.

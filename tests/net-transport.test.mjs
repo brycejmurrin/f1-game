@@ -299,6 +299,31 @@ test("a build mismatch is refused, and says which side is stale", () => {
   assert.match(newer.message, /reload the page to update/i);
 });
 
+// An UNKNOWN build is not a matching build. localBuild() used to answer a failed
+// version.json fetch with 0 and memoise it, so two peers who had both failed —
+// one flaky network, one service worker mid-update — compared 0 === 0 and were
+// waved through the one guard that keeps mismatched splines, barriers and tuning
+// constants off the same track. They then desynced on it, which is a far harder
+// thing to diagnose than a refusal at the lobby.
+test("an unknown build is refused, not treated as a match", () => {
+  for (const [mine, theirs] of [[null, null], [null, 817], [817, null],
+                                [undefined, 817], [817, undefined]]) {
+    const r = NetHandshake.checkBuild(mine, theirs);
+    assert.equal(r.ok, false, `checkBuild(${mine}, ${theirs}) must not pass`);
+    assert.equal(r.error, "build_unknown");
+    // The old failure mode told people to "reload the page to update", which
+    // could not work: the reload hit the same dead fetch. Say what is true.
+    assert.match(r.message, /could not confirm/i);
+  }
+
+  // A real pair of equal builds still matches — the guard above must not have
+  // swallowed the ordinary case.
+  assert.equal(NetHandshake.checkBuild(817, 817).ok, true);
+  // 0 is a LEGITIMATE build number, not the sentinel it used to double as.
+  assert.equal(NetHandshake.checkBuild(0, 0).ok, true);
+  assert.equal(NetHandshake.checkBuild(0, 817).error, "build_mismatch");
+});
+
 test("SDP survives the round trip verbatim, CRLF-terminated", () => {
   // The regression this exists for. An earlier version stripped "regenerable"
   // attributes and rejoined with \n, which dropped the trailing terminator —

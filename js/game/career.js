@@ -568,6 +568,17 @@ function research(opt) {
   save();
   return true;
 }
+// NOT WIRED TO ANY UI. This and budgetUpgradeCost() have no caller outside this
+// file, so `budgetLvl` is permanently 0 and budget() always returns
+// worksCost x BUDGET_MULT[0] — i.e. exactly the team's works car, for the whole
+// career. The rules are complete and correct; there is simply no button.
+//
+// Left in place rather than deleted because the mechanic is wanted and the
+// missing part is a screen, not a decision. What is NOT acceptable is telling
+// the player it exists: the career guide advertised "three upgrades" while this
+// sat unreachable, so that text now describes the cap as fixed. Wiring it means
+// adding the control in js/game/career-ui.js (beside the FACILITY button, which
+// is the same shape and does work) and putting the ladder back in the guide.
 function upgradeBudget() {
   const cost = charge(budgetUpgradeCost());
   if (!career || budgetUpgradeCost() == null || cost > career.money) return false;

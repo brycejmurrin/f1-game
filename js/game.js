@@ -2221,9 +2221,6 @@ function loadTrack(idx) {
     if (gfx.envProbeReset) gfx.envProbeReset();
     Ghost.setTrack(def.id);
     hud.invalidateMap();        // force minimap redraw for new track
-    sectorIdx = 0; sectorStartT = 0;
-    sectorBests = [Infinity, Infinity, Infinity];
-    sectorLast = [null, null, null];
   }
   const pal = def.palette;
   frame = {
@@ -2438,6 +2435,16 @@ function startRace() {
   resultT = 0;
   camRoll = 0; camSlipSm = 0;
   sectorIdx = sectorAt(player.s); sectorStartT = 0;
+  // The SPLITS reset here, with the rest of the session — not in loadTrack.
+  // They used to sit inside loadTrack's `builtTrackId !== def.id ||
+  // builtTrackNight !== sessionDark` rebuild gate, so racing the same circuit
+  // twice at the same time of day skipped the reset entirely: session two
+  // opened with session one's bests already in the HUD, and its lap-1 deltas
+  // were measured against a race that had already finished. Changing the time
+  // of day cleared them, which made two otherwise identical sessions differ on
+  // an unrelated setting. Session state belongs to the session.
+  sectorBests = [Infinity, Infinity, Infinity];
+  sectorLast = [null, null, null];
   // Arm the crash sentinel (mobile only) and, after a strike, start the
   // session pre-scaled-down — the governor may restore upward, but only under
   // the clear sustained headroom that proves the device can afford it.
@@ -4390,7 +4397,16 @@ function updateCar(c, dt, ranked) {
     // be reached by a car stuck in the run-off — it idles along at the floor
     // forever, above the gate, and never counts as beached. Measured: a wrong-way
     // car sat at 10.8 m/s and x = -10.9 while its rescue timer decayed back to 0.
-    const beached = c.offroad && c.speed < GRASS_V * 0.6 + 1.5;
+    //
+    // PACE-SCALED, exactly like the floor it sits above. The floor itself is
+    // `GRASS_V * 0.6 * max(PACE, 0.05)` (see the grass-drag clause), so a bare
+    // `GRASS_V * 0.6 + 1.5` only clears it at PACE = 1 — the one setting the
+    // invariant above was measured at. Above ~1.14 the floor climbs past the
+    // gate and a beached car is never rescued; below ~0.57 the gate climbs past
+    // ordinary run-off speeds and a driver in full control is teleported to
+    // x = 0 after 3 s. Both are precisely the bugs this comment says were
+    // fixed, reintroduced through the OVERALL SPEED slider.
+    const beached = c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5;
     const stuck = beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
     // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
     // stuck conditions. Only applies once a rescue has actually happened —

@@ -868,6 +868,39 @@ const TLX = (function () {
         // New track/session: the cube still holds the OLD circuit — hold the
         // probe black (uEnvStr 0) until a fresh full cube captures (GLX 1:1).
         envProbeReset() { envFacesMask = 0; envReady = false; },
+
+        // ── Cull-test helpers (GLX parity) ──────────────────────────────────
+        // js/game/agentview.js calls GLX.makeFrustumPlanes/aabbInFrustum
+        // directly, so its "what is on screen" answer runs the SAME test the
+        // draw path runs. These MUST be own properties of the backend object:
+        // game.js installs a backend by descriptor-copy onto GLX
+        //     Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend))
+        // so a name this object does not carry leaves GLX's OWN arrow in place
+        // — closing over a `CHK` that is null, because GLX.init() never ran
+        // under this backend. agentview then guards with `!GLX.makeFrustumPlanes`,
+        // which is TRUE for a live-but-broken function, passes, and throws one
+        // line later. WGX declares the same two for the same reason; TLX had
+        // neither, so __apex.scene({visible}) threw on the three.js backend.
+        makeFrustumPlanes(viewProj) {
+          return TLXShaders.makeFrustumPlanes(viewProj);
+        },
+        aabbInFrustum: (planes, mn, mx) => TLXShaders.aabbInFrustum(planes, mn, mx),
+        aabbDist2: (mn, mx, ex, ey, ez) => TLXShaders.aabbDist2(mn, mx, ex, ey, ez),
+
+        // ── NOT IMPLEMENTED — declared, and declared ABSENT ─────────────────
+        // The GLX instanced-draw path (TrackGraph.batches() is its consumer)
+        // has no TLX counterpart. Listed as explicit `undefined` for the same
+        // reason WGX lists its own gaps: the descriptor-copy install means a
+        // name this object omits keeps GLX's function, which runs against a
+        // `gl`/`CHK` that stay null when GLX.init() never ran. A caller's
+        // feature test then passes and the call dies inside GLX. A descriptor
+        // whose value is undefined overwrites the inherited one, so the feature
+        // test tells the truth. Implementing any of these means deleting a line.
+        createInstancedBatch: undefined,
+        cullInstances: undefined,
+        drawInstanced: undefined,
+        freeInstancedBatch: undefined,
+        castShadowInstanced: undefined,
         begin(frame) {
           resize();
           const f = (frame && frame.fogColor) || [0.04, 0.04, 0.06];
