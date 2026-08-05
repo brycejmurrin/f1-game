@@ -207,3 +207,77 @@ refresh" is a real escape hatch if a worker ever wedges.
 - [A deep dive into WebRTC, ICE, STUN and TURN](https://akashsahani2001.medium.com/building-real-time-p2p-communication-a-deep-dive-into-webrtc-ice-stun-and-turn-e645492230c5) — symmetric-NAT-on-both-ends at ~5–10%
 - [TURN server in WebRTC: when you need it](https://bloggeek.me/webrtcglossary/turn/)
 - [The service worker lifecycle](https://web.dev/articles/service-worker-lifecycle) and [handling updates with immediacy](https://developer.chrome.com/docs/workbox/handling-service-worker-updates) — update checks, the 24 h window, skipWaiting + reload
+
+---
+
+# Part 4 — a real gap: localStorage in Safari Private Browsing
+
+The first thing in these notes that is **not** confirmatory. Recorded here
+because it is a user-facing failure with no diagnostics, not a style question.
+
+## What the platform does
+
+- localStorage is **~5 MiB per origin**, and exceeding it throws
+  `QuotaExceededError`.
+- **Safari on iOS in Private Browsing sets the quota to ~0** — *any* write
+  throws, immediately, on an empty store. This is long-standing WebKit behaviour,
+  not an edge case.
+
+## What this repo does with that
+
+`js/game/store.js`:
+
+```js
+set(k, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+```
+
+The write failure is swallowed completely — no `Log`, no return value, no signal
+of any kind. And `GameStore` keeps a `_cache` Map in front of it (added to kill
+per-frame `getItem` + `JSON.parse` in the render loop, which is a good reason),
+so **reads keep returning the cached value for the rest of the session**.
+
+That combination produces the worst possible shape of failure:
+
+1. The player changes settings, builds a car, plays a career. Everything appears
+   to work, because the cache answers every read.
+2. They reload. **All of it is gone**, with no error at any point.
+
+Everything under `apex26.` is affected: career saves (six slots), liveries, the
+custom team, part setups, camera and lighting tuning, ghosts, the time-trial
+board. The blast radius is the entire persistence layer.
+
+There is a second, smaller exposure on the same path: `apex26.customLogo` stores
+a **data URL** for MY TEAM's emblem. It is downscaled to `CUSTOM_LOGO_MAX = 384`
+px first, which is the right instinct, but a 384 px PNG as base64 is still on the
+order of a hundred KB against a 5 MiB budget shared with everything else — so on
+a normal browser this is the single largest thing the game stores, and the most
+likely trigger for a genuine quota exception rather than a private-mode zero.
+
+## What to do about it
+
+Not "stop using localStorage" — it is the right store for this data. The gap is
+that a failed write is indistinguishable from a successful one.
+
+1. **Log it.** One `Log.warn("game", …)` in the `catch` turns an invisible
+   failure into something `__apex.logs({ns:"game"})` can show. This is the same
+   fix applied to `js/game/audio.js` and `js/net/transport.js` in this pass, and
+   the same reasoning: a documented debug namespace that cannot emit a line is
+   not a debug namespace.
+2. **Make `set` report success**, so callers that care (career save, custom logo
+   upload) can tell the player their work was not stored. The logo upload in
+   particular is a deliberate user action with an obvious place to put a message.
+3. **Detect the dead store once at boot** — a probe write/read/delete — and say
+   so plainly. "Progress will not be saved in Private Browsing" is a sentence a
+   player can act on; silence is not.
+4. Consider whether the customLogo data URL belongs in IndexedDB instead. The
+   repo already uses it for the music library (`js/game/music-lib.js`), so the
+   dependency exists, and IndexedDB's quota is far larger.
+
+None of this was implemented in this pass — it is a behaviour change to the
+persistence layer and deserves its own commit and its own test.
+
+## Sources (Part 4)
+
+- [MDN — Storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) — the ~5 MiB per-origin figure
+- [Fix: HTML5 game localStorage quota exceeded on Safari iOS](https://bugnet.io/blog/fix-html5-game-localstorage-quota-exceeded-on-safari-ios) — Private Browsing reducing the quota to ~0
+- [WebKit bug 157010](https://bugs.webkit.org/show_bug.cgi?id=157010) — QuotaExceededError in private mode, from WebKit's own tracker

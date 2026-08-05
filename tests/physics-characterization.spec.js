@@ -76,7 +76,7 @@ test("the driving model produces the same numbers it did before", async ({ page,
           a.step(1 / 60, 1);
           if (i % 15 === 0) {
             const p = a.physState();
-            out.push([p.s, p.x, p.speed, p.slip, p.head, p.prog]);
+            out.push([p.s, p.x, p.speed, p.slipDeg, p.head, p.prog]);
           }
         }
       }
