@@ -315,9 +315,7 @@ function create(G) {
       + "price; buy it once and it is yours for good, free to fit and unfit from "
       + "then on.",
       ["Research costs", Career.RESEARCH_MULT + "x the part's price"],
-      ["You may FIT, at first", "your team's own works car"],
-      ["Raising that cap", "up to " + Career.BUDGET_MULT[Career.BUDGET_MULT.length - 1]
-        + "x, three upgrades"],
+      ["You may FIT", "your team's own works car"],
       "Two limits, on purpose. Your BALANCE is what you can spend; the FITTED CAP "
       + "is what you may run at once. You will own more than you can fit, so "
       + "every weekend is a choice about which car to bring.",
@@ -432,8 +430,7 @@ function create(G) {
       "You start with a startup team's car, not a works one: slower than the "
       + "grid, and entirely yours to fix.",
       ["Research costs", Career.RESEARCH_MULT + "x the part's price"],
-      ["Raising the fitted cap", "up to " + Career.BUDGET_MULT[Career.BUDGET_MULT.length - 1]
-        + "x, three upgrades"],
+      ["Your fitted cap", "your team's own works car"],
       "Buy a part once and it is yours for good. You will own more than you can "
       + "fit at one time, which is the point: the car you bring to a circuit is a "
       + "decision, not an inventory.",

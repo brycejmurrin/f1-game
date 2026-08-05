@@ -102,16 +102,18 @@ mistakes them for components.
 
 ## Dead classes
 
-**None.** The three this audit originally found — `dh-leg-swatch`, `dh-sectors`
-and `foot-end`, defined in `css/` and referenced from neither `index.html` nor
-any `js/` file — have since been deleted, and `foot-end` was the last member of
-its prefix family, which therefore leaves this map too.
+None, out of 515 — a class defined in `css/` and referenced from neither
+`index.html` nor any `js/` file. The three this section used to name
+(`dh-leg-swatch`, `dh-sectors`, `foot-end`) have since been deleted from `css/`,
+and the last of them took its whole class family with it — which is why no
+"foot" prefix is listed above any more.
 
-Three out of 516 was the real headline of the exercise, and it survives the
-deletion: the stylesheet was never carrying rot, it was carrying no map.
-`tests/component-inventory.test.mjs` is what keeps that true — it fails if this
-document names a family that has left `css/`, which is exactly how these three
-were noticed going.
+That the count reached zero is the real headline of this exercise: the
+stylesheet was never carrying rot, it was just carrying no map. Keep this
+section even at zero — `tests/component-inventory.test.mjs` asserts that every
+dead class is named here, so the number moving is a prompt to decide whether the
+class is unfinished work or a leftover, and an empty list is a claim worth
+being held to.
 
 ---
 

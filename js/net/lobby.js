@@ -776,7 +776,16 @@ const NetLobby = (function () {
         peerMods: modsFromProfile(firstPeer()),
         // The list form. NetPlay builds one remote slot per entry, so growing
         // the room is a matter of this array getting longer.
-        peers: [..._peers.values()].map((p) => ({ profile: p, mods: modsFromProfile(p) })),
+        //
+        // WITH THE CONNECTION ID, keyed exactly as `sessions` above. NetPlay
+        // files each rival under this id (peerCar) and looks it up on close to
+        // decide whether one guest dropped or the room emptied. Sent without
+        // one, every joiner collapsed onto the `PEER_ONE` fallback while the
+        // sessions stayed keyed "g1"/"g2" — so remoteFor(id) was always null,
+        // the close handler fell through to `stop()`, and ONE guest leaving
+        // ended the race for everybody still driving. Indistinguishable from
+        // correct at two players, which is why it took a third to show up.
+        peers: [..._peers.entries()].map(([id, p]) => ({ id, profile: p, mods: modsFromProfile(p) })),
       });
       clearInterval(pumpTimer);          // the game loop pumps it from here on
       pumpTimer = null;
@@ -1137,10 +1146,21 @@ const NetLobby = (function () {
             // is pending NOW — a fresh stable PC, which throws. Seen in a real
             // console as an uncaught InvalidStateError.
             if (answersSeen.has(answer)) return;
-            answersSeen.add(answer);
+            // MARK IT SEEN ONLY ONCE IT CAN BE ACTED ON. Recording it before
+            // the guard below meant an answer that arrived a moment too early
+            // — between transports, or before pendingId was set — was dropped
+            // AND blacklisted, so the guest's retries all matched
+            // answersSeen and were ignored. The host then waited for an answer
+            // it had already thrown away, which on a LAN, where ICE cannot be
+            // at fault, presents as a permanent "Connecting…".
             if (!transport || !pendingId) return;   // nothing awaiting an answer
+            answersSeen.add(answer);
             const acc = await NetHandshake.acceptAnswer(transport, answer);
             if (!acc.ok) {
+              // A rejected answer must not stay blacklisted either: the guest
+              // may repost the same string against a transport that is by then
+              // ready for it.
+              answersSeen.delete(answer);
               if (acc.error !== "already_answered") say(acc.message || "That answer could not be read.", true);
               return;
             }
@@ -1227,7 +1247,43 @@ const NetLobby = (function () {
       + " Use the invite link or QR instead — those need nothing.";
 
     // ---- open / close -----------------------------------------------------
+    // A PHONE THAT HOSTS FALLS ASLEEP, and that is the whole reason "desktop
+    // hosts → phone joins" worked while the reverse did not (reported from a
+    // real pair of devices). Hosting means WAITING — you tap NEW CODE, put the
+    // phone down, and spend half a minute getting the other machine into the
+    // lobby. In that time the screen locks, the mobile browser suspends the
+    // page, the relay WebSocket dies, and the friend's answer arrives at a
+    // page that is asleep. The guest never has this problem, because joining
+    // is the one moment the phone is guaranteed to be in somebody's hand.
+    //
+    // So the lobby holds a SCREEN WAKE LOCK while it is open. Browsers
+    // release the lock on every hide (that is spec), so it is re-acquired on
+    // return; close() and cancel() drop it. Where the API is missing (older
+    // iOS) this is a silent no-op — the fix degrades to the old behaviour,
+    // never to an error.
+    let wake = null;
+    let wakeWanted = false;
+    function holdWake() {
+      wakeWanted = true;
+      try {
+        if (!navigator.wakeLock || wake) return;
+        navigator.wakeLock.request("screen").then((l) => {
+          wake = l;
+          l.addEventListener("release", () => { wake = null; });
+        }).catch(() => {});
+      } catch (e) {}
+    }
+    function dropWake() {
+      wakeWanted = false;
+      try { if (wake) wake.release(); } catch (e) {}
+      wake = null;
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && wakeWanted) holdWake();
+    });
+
     function open() {
+      holdWake();
       // Start fetching relay credentials NOW if a credentials URL is
       // configured — connecting comes seconds later, and the fetch usually
       // wins that race, so the first connection attempt already carries relay
@@ -1262,6 +1318,10 @@ const NetLobby = (function () {
       // module is most careful about — close() is also the SUCCESS path, since
       // the race starts by closing the lobby.
       stopScan();
+      // The wake lock is the lobby's, not the game's: in-race the screen is
+      // being touched constantly, and holding it past close would silently
+      // change every player's battery life for a feature they left.
+      dropWake();
       const e = els();
       if (e.screen) e.screen.hidden = true;
     }

@@ -185,16 +185,46 @@ const NetHandshake = (function () {
   async function localBuild() {
     if (_buildCache != null) return _buildCache;
     try {
-      const r = await fetch("version.json", { cache: "no-store" });
+      // Cache-buster AS WELL AS no-store, matching the shell's stale-PWA guard
+      // in index.html. sw.js serves version.json network-first but falls back
+      // to the cache after a 3 s timeout, so on a slow link a bare no-store
+      // request can still be answered with a STALE build — which would reject
+      // a peer we actually match.
+      const r = await fetch("version.json?_=" + Date.now(), { cache: "no-store" });
       const v = await r.json();
-      _buildCache = (v && v.build != null) ? v.build : 0;
-    } catch (e) { _buildCache = 0; }
+      _buildCache = (v && v.build != null) ? v.build : null;
+    } catch (e) {
+      // UNKNOWN, not 0 — and deliberately NOT memoised. Writing 0 here made two
+      // peers who had both failed the fetch compare equal, waving mismatched
+      // builds straight through the only guard that stops them racing; and
+      // memoising it meant the "reload the page to update" advice below could
+      // never come true, because the reload hits the same dead fetch and the
+      // tab is stuck on 0 for its lifetime. Returning without caching lets a
+      // later attempt succeed.
+      try {
+        Log.warn("net", "version.json unreadable (" + ((e && e.message) || e) +
+                        ") — build identity unknown, refusing to pair");
+      } catch (_) {}
+      return null;
+    }
     return _buildCache;
   }
 
   // Peers must agree on the build. Everything physics-relevant — the spline,
   // the barrier positions, the tuning constants — ships inside it.
   function checkBuild(mine, theirs) {
+    // An unknown build is not a matching build. This has to come FIRST: the
+    // equality below is what a pair of unknowns used to satisfy.
+    if (mine == null || theirs == null) {
+      return {
+        ok: false,
+        error: "build_unknown",
+        message: "Could not confirm you are both on the same version. " +
+                 "Check your connection and try again.",
+        mine: mine == null ? null : mine,
+        theirs: theirs == null ? null : theirs,
+      };
+    }
     if (mine === theirs) return { ok: true };
     return {
       ok: false,

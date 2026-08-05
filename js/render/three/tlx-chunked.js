@@ -58,46 +58,65 @@
 "use strict";
 
 (function () {
-  function chunked(THREE /*, ctx */) {
 
-    // ── Gribb–Hartmann plane extraction from a COLUMN-MAJOR view-proj
-    // (m[col*4+row]) — glx/chunked.js:19-55 verbatim. Planes are [a,b,c,d],
-    // inside = a*x+b*y+c*z+d >= 0. Scratch is module-static so culling
-    // allocates nothing per frame.
-    const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
-                       new Float32Array(4), new Float32Array(4), new Float32Array(4)];
-    function _setPlane(p, a, b, c, d) {
-      const inv = 1 / (Math.hypot(a, b, c) || 1);
-      p[0] = a * inv; p[1] = b * inv; p[2] = c * inv; p[3] = d * inv;
+  // ── Gribb–Hartmann plane extraction from a COLUMN-MAJOR view-proj
+  // (m[col*4+row]) — glx/chunked.js:19-55 verbatim. Planes are [a,b,c,d],
+  // inside = a*x+b*y+c*z+d >= 0. Scratch is module-static so culling
+  // allocates nothing per frame.
+  //
+  // AT MODULE SCOPE, not inside chunked(), for two reasons. They depend on
+  // neither THREE nor ctx — they are pure math on a matrix. And the agent world
+  // view needs the same test whether or not the chunked subsystem came up:
+  // tlx.js builds `chunkedSys` inside a try/catch that legitimately leaves it
+  // null (missing factory keeps the un-culled single-geometry fallback), and
+  // "is this prop on screen" must not stop answering because prop CULLING is
+  // switched off. Exported below so tlx.js re-exports them in GLX's shape.
+  const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
+                     new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+  function _setPlane(p, a, b, c, d) {
+    const inv = 1 / (Math.hypot(a, b, c) || 1);
+    p[0] = a * inv; p[1] = b * inv; p[2] = c * inv; p[3] = d * inv;
+  }
+  function _extractPlanes(m, planes) {
+    const m0=m[0],m4=m[4],m8=m[8],m12=m[12], m1=m[1],m5=m[5],m9=m[9],m13=m[13],
+          m2=m[2],m6=m[6],m10=m[10],m14=m[14], m3=m[3],m7=m[7],m11=m[11],m15=m[15];
+    _setPlane(planes[0], m3+m0, m7+m4, m11+m8,  m15+m12); // left
+    _setPlane(planes[1], m3-m0, m7-m4, m11-m8,  m15-m12); // right
+    _setPlane(planes[2], m3+m1, m7+m5, m11+m9,  m15+m13); // bottom
+    _setPlane(planes[3], m3-m1, m7-m5, m11-m9,  m15-m13); // top
+    _setPlane(planes[4], m3+m2, m7+m6, m11+m10, m15+m14); // near
+    _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far
+  }
+  // AABB vs frustum via the box's most-positive vertex per plane (conservative).
+  function _aabbInFrustum(planes, mn, mx) {
+    for (let i = 0; i < 6; i++) {
+      const p = planes[i];
+      const px = p[0] >= 0 ? mx[0] : mn[0];
+      const py = p[1] >= 0 ? mx[1] : mn[1];
+      const pz = p[2] >= 0 ? mx[2] : mn[2];
+      if (p[0]*px + p[1]*py + p[2]*pz + p[3] < 0) return false;
     }
-    function _extractPlanes(m, planes) {
-      const m0=m[0],m4=m[4],m8=m[8],m12=m[12], m1=m[1],m5=m[5],m9=m[9],m13=m[13],
-            m2=m[2],m6=m[6],m10=m[10],m14=m[14], m3=m[3],m7=m[7],m11=m[11],m15=m[15];
-      _setPlane(planes[0], m3+m0, m7+m4, m11+m8,  m15+m12); // left
-      _setPlane(planes[1], m3-m0, m7-m4, m11-m8,  m15-m12); // right
-      _setPlane(planes[2], m3+m1, m7+m5, m11+m9,  m15+m13); // bottom
-      _setPlane(planes[3], m3-m1, m7-m5, m11-m9,  m15-m13); // top
-      _setPlane(planes[4], m3+m2, m7+m6, m11+m10, m15+m14); // near
-      _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far
-    }
-    // AABB vs frustum via the box's most-positive vertex per plane (conservative).
-    function _aabbInFrustum(planes, mn, mx) {
-      for (let i = 0; i < 6; i++) {
-        const p = planes[i];
-        const px = p[0] >= 0 ? mx[0] : mn[0];
-        const py = p[1] >= 0 ? mx[1] : mn[1];
-        const pz = p[2] >= 0 ? mx[2] : mn[2];
-        if (p[0]*px + p[1]*py + p[2]*pz + p[3] < 0) return false;
-      }
-      return true;
-    }
-    // Squared distance from point (ex,ey,ez) to the nearest point on an AABB.
-    function _aabbDist2(mn, mx, ex, ey, ez) {
-      const dx = ex < mn[0] ? mn[0] - ex : ex > mx[0] ? ex - mx[0] : 0;
-      const dy = ey < mn[1] ? mn[1] - ey : ey > mx[1] ? ey - mx[1] : 0;
-      const dz = ez < mn[2] ? mn[2] - ez : ez > mx[2] ? ez - mx[2] : 0;
-      return dx * dx + dy * dy + dz * dz;
-    }
+    return true;
+  }
+  // Squared distance from point (ex,ey,ez) to the nearest point on an AABB.
+  function _aabbDist2(mn, mx, ex, ey, ez) {
+    const dx = ex < mn[0] ? mn[0] - ex : ex > mx[0] ? ex - mx[0] : 0;
+    const dy = ey < mn[1] ? mn[1] - ey : ey > mx[1] ? ey - mx[1] : 0;
+    const dz = ez < mn[2] ? mn[2] - ez : ez > mx[2] ? ez - mx[2] : 0;
+    return dx * dx + dy * dy + dz * dz;
+  }
+
+  // GLX's shape: SIX FRESH planes per call, not the per-frame scratch above.
+  // GLX allocates a fresh set for exactly this caller so a held result cannot
+  // be rewritten by the next frame's cull; WGX copied that, and so does this.
+  function makeFrustumPlanes(viewProj) {
+    const p = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
+               new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+    _extractPlanes(viewProj, p);
+    return p;
+  }
+
+  function chunked(THREE /*, ctx */) {
 
     const toF32 = (a) => (a instanceof Float32Array ? a : new Float32Array(a));
 
@@ -270,5 +289,9 @@
     return { build, cull, visList: _visList, releaseMirrors, free };
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { chunked });
+  // The cull helpers ride alongside the factory, NOT on its instance: tlx.js
+  // must be able to re-export them in GLX's shape even when the factory itself
+  // failed and chunkedSys is null. See the note at their definition.
+  window.TLXShaders = Object.assign(window.TLXShaders || {},
+    { chunked, makeFrustumPlanes, aabbInFrustum: _aabbInFrustum, aabbDist2: _aabbDist2 });
 })();

@@ -222,7 +222,7 @@ const NetPlay = (function () {
     }
 
     // ---- inbound state ----------------------------------------------------
-    function onState(bytes, from) {
+    function onState(bytes, from, fromId) {
       if (!active || !remotes.size) return;
       const pkt = NetSnapshot.decodeSnapshot(bytes);
       if (!pkt || !pkt.cars.length) return;
@@ -252,7 +252,25 @@ const NetPlay = (function () {
       // would be driving against a round-tripped copy of itself. It is dropped
       // here for free, because localCar is by construction not in `remotes`.
       // Do not "helpfully" fall back to cars[] lookup on a miss.
+      //
+      // AUTHORITY: a peer owns its OWN car and nothing else, so the host checks
+      // the id on the wire against the id it filed for the connection the
+      // packet arrived on. Routing on entry.id alone let a guest pose any car
+      // on the grid — including another player's — simply by naming its
+      // wireId. The host then RELAYED that, so it landed on every screen under
+      // the host's own name, which every other guest trusts by construction.
+      // A peer we hold no car for speaks for nobody and is dropped outright.
+      //
+      // Guest side there is nothing to narrow to: packets come from the host,
+      // which legitimately speaks for the whole field. Trusting the host is
+      // not new trust — it already owns the AI and race control.
+      let ownOnly = null;
+      if (role === "host" && fromId != null) {
+        ownOnly = remoteFor(fromId);
+        if (ownOnly == null) return;
+      }
       for (const entry of pkt.cars) {
+        if (ownOnly != null && entry.id !== ownOnly) continue;
         const r = remotes.get(entry.id);
         if (r) r.interp.push(t, entry);
       }
@@ -273,7 +291,7 @@ const NetPlay = (function () {
       // mid-race, and a start() that ran twice (the no_slot path below still
       // returns after binding) fired every lap event once per attempt.
       s.clearHandlers();
-      s.onState((bytes) => onState(bytes, s));
+      s.onState((bytes) => onState(bytes, s, id));
       // One peer dropping is not the session ending. Hand THAT rival back to
       // the AI and race on; only the last connection going away stops us — and
       // for a guest, losing the host always does, because the host owns race

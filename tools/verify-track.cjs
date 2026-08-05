@@ -141,6 +141,18 @@ function buildContext(rootOverride) {
   if (!Tracks || !Tracks.LIST) {
     throw new Error("js/track/tracks.js did not define global Tracks.LIST");
   }
+  // The whole context, not just Tracks: the built LIST is a field-by-field COPY
+  // of the authored defs, so anything checking the copy for completeness needs
+  // both sides. Stashed on the returned object rather than changing what
+  // buildContext returns, which every existing caller treats as Tracks itself.
+  //
+  // NOTE for anyone reusing this: the circuits are loaded by readdirSync().sort(),
+  // i.e. ALPHABETICALLY, not in the manifest's curated order. Fine for asking
+  // "does this field survive the copy" of each def independently; do NOT use it
+  // to assert LIST ordering or Tracks.SEASON, which depend on load order.
+  try {
+    Object.defineProperty(Tracks, "_vmContext", { value: ctx, enumerable: false });
+  } catch (_) {}
   return Tracks;
 }
 

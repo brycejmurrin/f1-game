@@ -315,6 +315,19 @@ const NetNostr = (function () {
             // in a fresh one — rotate() below — rather than this minting a new
             // connection on every join, which is what got us rate-limited.
             let current = send || null;
+            // NOTE — DO NOT "refresh a stale offer" HERE. Build 975 tried it:
+            // a joiner arriving more than 25 s after the offer was gathered
+            // got a freshly minted one, on the theory that a phone's NAT
+            // mappings die during the walk to the other machine. It is a real
+            // problem and this is the wrong place to fix it, because the
+            // lobby's mintOffer calls newTransport(), which REPLACES the
+            // pending RTCPeerConnection. The offer was already broadcast to
+            // the room the moment it opened, so the guest is by then answering
+            // the ORIGINAL — and that answer comes back to a connection that
+            // has just been thrown away. The symptom is a permanent
+            // "Connecting…" on the same Wi-Fi, where ICE could not possibly be
+            // at fault. Refreshing offers needs an offer -> transport map, not
+            // a timer.
             const put = (to) => { if (current) { try { post(current, to); } catch (e) {} } };
             if (!current && mintOffer) {
               // No opening offer supplied: make one now rather than waiting for
