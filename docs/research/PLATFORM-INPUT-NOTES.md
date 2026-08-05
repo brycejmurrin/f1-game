@@ -325,10 +325,34 @@ part that is easy to miss — **re-acquires on `visibilitychange`**, because the
 platform releases the lock whenever the page is hidden and does not give it
 back. Copy that shape; do not write a second one.
 
+### The fix, scoped
+
+The lifecycle already exists and is exactly right — `body.in-race` is added at
+`js/game.js:2518` (`startRace`, so it covers every driving session that starts
+there, including the count-in) and removed at `:2646` (`endRace`) and `:3020`
+(`quitToMenu`). Hold the lock on the first, drop it on the other two.
+
+The re-acquire needs **no new listener**: `js/game.js:8133` already handles
+`visibilitychange`, and already does the analogous thing for two other systems
+(auto-pausing a hidden race, arming/disarming the crash sentinel). A third
+clause belongs there rather than in a fourth handler.
+
+Both requirements the lobby version encodes must survive the copy: tolerate
+`navigator.wakeLock` being absent, and tolerate the request **rejecting** — it
+is not guaranteed even where supported, and a rejected promise must not become
+an unhandled one.
+
 One caveat to verify on hardware: WebKit bug **254545** reports the Wake Lock
 API working in a Safari tab but **not** in a home-screen PWA. Sources conflict
 (iOS 16.4's release notes claim home-screen support). If it does fail there,
 it fails in the exact host most likely to be used for a long session.
+
+**And it compounds with §9c**: Low Power Mode is reported to force auto-lock to
+**30 seconds**. So on a phone in Low Power Mode, steering by tilt, the screen
+goes dark about half a minute into the race — at the same time the governor is
+finishing its own collapse. The two worst mobile defects in this codebase bite
+in the same state, which is probably why "it goes wrong on my phone" has never
+resolved into one reproducible complaint.
 
 ---
 
@@ -358,13 +382,54 @@ resolution to the floor and switches off every optional effect, permanently, in
 response to a battery policy rather than a performance problem.** Nothing in
 the UI explains it, and it looks exactly like "this game runs badly on iOS".
 
-The distinction the governor is missing is **slow vs capped**. A genuine fill-
-rate bottleneck gets *better* when you cut resolution; an externally clamped
-clock does not move at all. So the honest guard is a causal one: after a
-downscale, if the EMA does not improve by a meaningful margin, the bottleneck
-is not fill rate — revert and stop climbing down. (A capped clock also shows a
-tell in the distribution: frame times pinned tightly to a multiple of the vsync
-interval rather than varying with scene load.)
+### Simulated against the real constants
+
+Replaying `tick()`'s own thresholds with every frame at 33.3 ms:
+
+```
+  t+ 1.5s  scale -> 0.9      t+14.0s  tier -> 1
+  t+ 4.0s  scale -> 0.8      t+18.5s  tier -> 2
+  t+ 6.5s  scale -> 0.7      t+23.0s  tier -> 3
+  t+ 9.0s  scale -> 0.6      t+27.5s  tier -> 4
+  t+11.5s  scale -> 0.5
+```
+
+**Twenty-seven seconds into a race it is at minimum resolution with every
+optional feature switched off, and it stays there for the whole session** —
+recovery needs `< 12.5 ms`, and no amount of shedding moves a clamped clock.
+
+### Root cause, stated precisely
+
+The governor uses frame **interval** as a proxy for frame **cost**, against a
+hardcoded 60 fps budget. Those two are the same number only while the display
+is the thing you are competing with. Under any externally imposed cap — Low
+Power Mode, a 30 Hz panel, a browser throttle — they decouple completely, and
+the governor spends the session optimising a number it cannot move.
+
+There is **no way to detect Low Power Mode from a page**: the Battery Status
+API is not in Safari at all, and `w3c/battery#9` ("Detect power saving mode")
+has been open since 2017. Apple exposes `isLowPowerModeEnabled` to native code
+only. So any fix has to be inferential.
+
+### Two fixes, and they are complementary
+
+**A — derive the budget instead of hardcoding it.** Track the *floor* of
+observed frame intervals (a low percentile, not the mean — that is the fastest
+this display will go) and set the degrade/restore thresholds relative to it.
+On a 60 Hz panel the floor is ~16.7 ms and every threshold keeps its present
+value; under a 30 fps cap the floor is ~33.3 ms and the device is correctly
+judged to be *meeting* its budget. This restores the thing "19 ms" was always
+standing in for.
+
+**B — make the degrade causal.** After a downscale, compare the EMA before and
+after: if it did not improve meaningfully, fill rate was not the bottleneck, so
+revert the step and stop climbing down. This catches every cause of capping,
+including ones nobody has thought of, at the cost of one wasted step.
+
+A is the right model; B is the safety net for when the model is wrong. A
+variance test (a capped clock pins intervals tightly to a multiple of the vsync
+period, while a GPU-bound scene varies with load) is a third signal, but it is
+a heuristic and the other two are not — treat it as corroboration only.
 
 This is out of scope for a controls pass and is written down rather than fixed.
 It is, on measured impact, probably the largest single mobile-quality defect in
