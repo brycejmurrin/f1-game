@@ -25,14 +25,30 @@ node tools/verify-track.cjs <id>  # headless build check (no browser) — catche
 the philosophy. `tests/test-groups.test.mjs` fails if it and `package.json`
 disagree. Do not copy its tables here; this section is the three rules only.
 
-**1. Run tests in the BACKGROUND and tail the log.** A foreground run blocks for
-minutes and prints nothing you can act on.
+**1. Run tests in the BACKGROUND and tail the log. NEVER BLOCK ON A TEST RUN.**
+A foreground run blocks for minutes and prints nothing you can act on. Start it,
+go do something else, come back to it.
 
 ```sh
 node tools/test-bg.mjs smoke api collision   # start; returns immediately
 tail -f artifacts/logs/smoke.log             # watch one
 node tools/test-bg.mjs --status --wait --stop
 ```
+
+**Four ways an agent wastes an hour here.** Every one of these was hit in a
+single session; they are cheap to avoid and expensive to diagnose, because each
+one looks exactly like "the tests are slow".
+
+| Trap | What happens | Do instead |
+|---|---|---|
+| `cmd \| tail -N` in the background | `tail` buffers to EOF, so the output file stays **empty** for the whole run and there is nothing to poll. It looks hung | Let it write in full, or `\| tee`; read the file at the end |
+| `until ps aux \| grep -q "[f]oo"; do sleep …` | The wait loop's OWN command line contains `foo`, so `ps` matches **itself** and it never exits | Match a PID, or check the output file for a completion marker |
+| `pkill -f <pattern>` to clean up | Kills the run you just started as well as the strays. Exit 143/144 with no result | Kill the specific PID you captured |
+| Several heavy runs at once | SwiftShader is CPU-bound; they starve each other and all die to their own timeouts. Not a failure — a false one | One run at a time; more workers is not more throughput |
+
+**A timeout kill (exit 143/144) is not a test result.** It says nothing about
+the code. Re-run it serially before believing anything about it, and never
+report it as a pass or a failure.
 
 **2. Run the groups the change needs, not all of them.** The whole suite is ~40
 minutes of SwiftShader, and which groups a change needs is mechanical — so ask:
