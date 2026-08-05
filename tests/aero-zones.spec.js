@@ -222,6 +222,14 @@ test.describe("active aero — downforce traded for top speed", () => {
     expect(r.z.aeroGrip).toBeGreaterThan(1);
   });
   test("a bigger wing trades HARDER — both halves scale with the aero part", async ({ page }) => {
+    // THREE times the work of every other test in this file: the aero part is
+    // read by makeCars(), so each of the three settings needs its own
+    // localStorage write, page RELOAD and full Monza build. Measured in this
+    // suite's own logs: the single-build tests land at 30-64 s, this one at
+    // 133 s — i.e. it exceeds the file's 120 s default whenever the box is
+    // anything but idle, which reads as a physics regression and is not one.
+    // test.slow() triples the budget rather than hiding the cost.
+    test.slow();
     // The whole point of scaling the trade: one pair of constants gave a
     // Monza-spec sliver and a maximum-downforce floor the same deal, which is
     // backwards. A big wing has more drag to shed AND more downforce to lose.

@@ -213,20 +213,43 @@ that is the signal to sequence them instead.
 **Parallelism has a real ceiling, and exceeding it manufactures failures.**
 Count **WORKERS against CORES, not groups against cores** — each group is a
 server plus `WORKERS=2` Chromium+SwiftShader processes, so N groups is 2N
-browsers, and a browser rendering through SwiftShader will take a whole core.
-On a 4-core box **two groups is already 4 workers and starves the OS and the
-servers**; the heavy groups (`physics`, `behaviour`, `circuit`, anything
-rebuilding circuits) want the box to themselves.
+browsers. But a SwiftShader browser does not take *a* core, it takes several:
+**measured, ONE group at the default `WORKERS=2` holds this 4-core box at load
+8.9-11.0**, with every chrome tree traced back to that single `test-bg` pid and
+no orphans. `LOCAL_WORKERS` floors at 2, so the default group is *already*
+~2.5x cores and there is no lighter setting short of `--workers=1`.
+
+Which means the practical rule is stronger than "don't run two groups": **one
+heavy group is the box's full capacity**, and a second one is not a 2x slowdown
+but the difference between passing and timing out. `physics`, `behaviour`,
+`circuit` and anything rebuilding circuits want the machine alone — and a
+subagent told to "just run `test:tiny` to check" is a third and fourth worker,
+so give it `--workers=1` or have it verify without a browser.
 
 Past the ceiling, tests fail on the CLOCK rather than on an assertion. The
 signature is `Tearing down "context" exceeded the test timeout`, a bare
 `Test timeout of 120000ms exceeded`, or a spec whose duration is several times
-its usual. Both measured here, same commit each time:
+its usual. Measured here, same commit each time:
 
 | Spec | Under load | Alone |
 |---|---|---|
 | `elevation-tracks › albert_park` | 219 s, **FAILED** (3 groups) | 30 s, passed |
 | `aero-zones › a bigger wing trades HARDER` | 133 s, **FAILED** (2 groups) | passed, 10/10 file |
+| `aero-zones › a bigger wing trades HARDER` | 133 s, **FAILED** (1 group!) | — |
+
+That last row is the one that taught the lesson. The same spec failed a third
+time with **nothing else running**, which is what forced the reading above and
+then the real diagnosis: it does three localStorage writes, three page reloads
+and three full Monza builds, where every other test in its file does one. Its
+own logs show the single-build tests at 30-64 s and this one at 133 s. It is
+not a flaky test and it was never a physics regression — it is **3x the work
+against a shared 120 s default**, and it now carries `test.slow()` and a comment
+saying so.
+
+The general lesson: a timing-shaped failure that survives the load check is
+usually a spec whose COST nobody costed. Before reaching for a retry or a
+bigger box, compare that test's duration against its siblings in the same file
+— an outlier of 2-4x is a structural difference you can name.
 
 **Before believing a timing-shaped failure:**
 
