@@ -2909,6 +2909,7 @@ const G = {
   rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   wireId, carFromWireId,                // stable cross-peer car identity
+  setScale,                             // UI SIZE / HUD SIZE — see __apex.uiScale
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
   // Seats held by the OTHER players, so the garage can refuse to hand out one
@@ -6965,37 +6966,73 @@ $("as-prev").onclick = () => audioTransport(() => GameAudio.prevTrack());
 // third notion of "paused" here would be a second source of truth.
 $("as-play").onclick = () => { setMusic(!musicEnabled); if (soundOn) GameAudio.uiTick(); };
 
-// UI SIZE: how big the whole interface is, as a percentage. Writes --ui-scale,
-// which every density and type token derives from (css/tokens.css) and which
-// the sheets consume as a `zoom` — so one number moves the menus, the tap
-// ladder and the in-race dock together.
+// UI SIZE / HUD SIZE: how big the interface is, as a percentage, on two
+// independent sliders. Each writes a custom property the stylesheets consume as
+// a `zoom`:
+//   --ui-scale   the menus  — .sheet (components.css), #overlay (menus.css)
+//   --hud-scale  the race   — the HUD clusters (hud.css), the dock (overlays.css)
 //
-// A SETTING RATHER THAN A CONSTANT because this is the one thing measurement
-// could not settle: the size that reads correctly at arm's length on a phone in
-// motion is not something a screenshot answers, and three rounds of picking a
-// number from one ended with "still too small". The player has the device.
+// TWO KNOBS BECAUSE THE TWO LAYERS ARE READ DIFFERENTLY. Menu type is read at
+// rest, with time to spare; the HUD is glanced at while driving, and the size
+// that works there depends on where the phone is mounted and whose eyes are
+// reading it. They also compete for the same screen, so trading one against the
+// other is a real choice rather than a compromise to be guessed at centrally.
+//
+// SLIDERS RATHER THAN CONSTANTS because this is the thing measurement could not
+// settle: what reads correctly at arm's length on a phone in motion is not a
+// question a screenshot answers, and three rounds of picking a number from one
+// ended with "still too small". The player has the device.
 //
 // Written INLINE ON documentElement (<html>), which is where css/tokens.css
-// declares --ui-scale and every calc() that reads it. That element matters: a
-// custom property is substituted where it is DECLARED, so a value set on <body>
-// leaves :root's calc()s reading :root's own --ui-scale and the knob silently
-// does nothing (measured: --tap stayed at `calc(44px * 1)` at every setting).
-// An inline style on <html> beats the stylesheet rule, so the choice sticks
-// without !important. Desktop keeps 100% unless asked: a mouse gains nothing
-// from bigger targets and loses rows off the screen.
-const UI_SCALES = [90, 100, 115, 130];
-let uiScale = store.get("uiScale", Input.touchControlsNeeded() ? 115 : 100);
-function applyUiScale() {
-  const btn = $("pm-uiscale"); if (btn) btn.textContent = "UI SIZE: " + uiScale + "%";
-  document.documentElement.style.setProperty("--ui-scale", uiScale / 100);
+// declares both properties. That element matters: a custom property is
+// substituted where it is DECLARED, so a value set on <body> leaves :root's
+// rules reading :root's own value and the knob silently does nothing — measured
+// on build 997, where --tap sat at `calc(44px * 1)` at every setting until this
+// moved to documentElement.
+//
+// NOTHING STORED => NO INLINE STYLE, so the `@media (pointer: coarse)` default
+// in the stylesheet stands and a phone is correct on its FIRST paint rather
+// than from whenever this module runs.
+const SCALE_MIN = 80, SCALE_MAX = 150;
+const scaleDefault = () => (Input.touchControlsNeeded() ? 115 : 100);
+const scalePct = (k) => {
+  const v = store.get(k, null);
+  return typeof v === "number" ? Math.max(SCALE_MIN, Math.min(SCALE_MAX, v)) : scaleDefault();
+};
+function applyScale(key, prop, inputId) {
+  const stored = store.get(key, null);
+  if (typeof stored === "number") document.documentElement.style.setProperty(prop, stored / 100);
+  else document.documentElement.style.removeProperty(prop);
+  const pct = scalePct(key);
+  const input = $(inputId); if (input) input.value = String(pct);
+  const out = $(inputId + "-v"); if (out) out.textContent = pct + "%";
 }
-$("pm-uiscale").onclick = () => {
-  uiScale = UI_SCALES[(UI_SCALES.indexOf(uiScale) + 1) % UI_SCALES.length];
-  store.set("uiScale", uiScale);
+function applyUiScale()  { applyScale("uiScale",  "--ui-scale",  "pm-uiscale"); }
+function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
+// `input`, not `change`: the size should follow the thumb while it is dragged,
+// which is the only way to find the right one — the same convention the volume
+// sliders use.
+$("pm-uiscale").oninput = (e) => {
+  store.set("uiScale", +e.target.value || scaleDefault());
   applyUiScale();
-  if (soundOn) GameAudio.uiSelect();
+};
+$("pm-hudscale").oninput = (e) => {
+  store.set("hudScale", +e.target.value || scaleDefault());
+  applyHudScale();
 };
 applyUiScale();
+applyHudScale();
+// The __apex read/write door for both sliders (see G.setScale in the ctx
+// façade). Kept here beside the appliers so there is one place that knows how a
+// scale is stored, clamped and pushed to the DOM.
+function setScale(key, prop, v) {
+  if (v !== undefined) {
+    if (v === null) store.set(key, null);
+    else store.set(key, Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v || scaleDefault())));
+    if (key === "uiScale") applyUiScale(); else applyHudScale();
+  }
+  return { pct: scalePct(key), stored: store.get(key, null), min: SCALE_MIN, max: SCALE_MAX };
+}
 
 // Render resolution setting: AUTO = the frame-time governor adapts the scale;
 // LOW/MED/HIGH pin a fixed scale (and disable the governor so it can't fight

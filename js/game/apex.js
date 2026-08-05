@@ -1581,6 +1581,14 @@ const api = {
     PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
   },
 
+  // uiScale(v) / hudScale(v) — the two size sliders (SETTINGS ▸ DISPLAY), as
+  // percentages. No arg reads the RESOLVED value (the device default when
+  // nothing is stored); a number sets and persists it; `null` clears back to
+  // the default. The two are independent: the menus scale on --ui-scale, the
+  // in-race HUD and touch dock on --hud-scale.
+  uiScale(v) { return G.setScale("uiScale", "--ui-scale", v); },
+  hudScale(v) { return G.setScale("hudScale", "--hud-scale", v); },
+
   // safeMode(false) — clear the crash-sentinel strikes and lift the safe-mode
   // floor for this session. A phone that died mid-race a few times starts every
   // later session at tier 4 with the render scale pre-dropped, which looks like

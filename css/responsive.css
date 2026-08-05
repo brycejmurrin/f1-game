@@ -116,7 +116,7 @@ body.desktop #pm-calib { display: none !important; }
   .hud-box { padding: 5px 16px; }
   .hud-value { font-size: 23px; }
   .hud-label { font-size: 10px; }
-  .hud-gaps { font-size: 14px; top: calc(72px + var(--sat)); }
+  .hud-gaps { font-size: 14px; top: calc(72px + var(--sat) / var(--hud-scale)); }
   #hud-speed { font-size: 42px; }
   #hud-gear  { font-size: 68px; }
   #hud-tach  { width: 150px; height: 18px; }
@@ -134,7 +134,7 @@ body.desktop #pm-calib { display: none !important; }
 
 /* sectors: smaller on short landscape screens so they clear the cam/pause buttons */
 @media (orientation: landscape) and (max-height: 560px) {
-  #hud-sectors { top: calc(52px + var(--sat)); font-size: 10px; padding: 3px 6px; }
+  #hud-sectors { top: calc(52px + var(--sat) / var(--hud-scale)); font-size: 10px; padding: 3px 6px; }
 }
 
 /* The keyboard focus ring lives in css/tokens.css (@layer base). It was here,

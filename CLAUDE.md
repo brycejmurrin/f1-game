@@ -1025,6 +1025,13 @@ __apex.go()                   // start race, grid intact
 __apex.finishRace()           // trigger results screen
 __apex.freeze(bool?)          // get/set physics-frozen state
 __apex.hud(show?)             // toggle HUD visibility
+__apex.uiScale(115)           // UI SIZE — menus/sheets, as a PERCENTAGE (80..150)
+__apex.hudScale(130)          // HUD SIZE — in-race clusters + touch dock. The two
+                              //   are INDEPENDENT and absolute; nothing multiplies.
+                              //   No arg reads {pct, stored, min, max} — `stored`
+                              //   is null until the player moves the slider, which
+                              //   is what lets the coarse-pointer CSS default hold
+                              //   from the first paint. null clears back to it
 __apex.weather("wet"|"dry")   // live weather change
 __apex.setTimeOfDay("night")  // live dawn|day|dusk|night|default — no asset reload (rebuilds only on day↔dark flip)
 __apex.resetPlayer()          // force immediate rescue

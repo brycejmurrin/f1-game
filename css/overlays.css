@@ -276,7 +276,10 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      The two sizes are VARIABLES because the alignment rule below has to do
      arithmetic on them; as literals repeated in two media queries they went
      stale the moment either one moved. */
-  body:not(.desktop) .dock { --tap: 54px; --hold: 72px; zoom: var(--ui-scale); }
+  /* --hud-scale, with the HUD: the dock is a control rather than a readout, but
+     it is on screen only while driving and competes with the HUD for the same
+     edges, so one slider owns everything you see during a race. */
+  body:not(.desktop) .dock { --tap: 54px; --hold: 72px; zoom: var(--hud-scale); }
   body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: 11px; }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
@@ -445,7 +448,10 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 #btn-cam {
   position: fixed;
   top: calc(8px + var(--sat));
-  right: calc(58px + var(--sar));
+  /* DERIVED, not 58: this used to be 10 + --tap + 4 with --tap hard-coded at
+     its 44px desktop value, so on touch (--tap: 52px) CHASE overlapped the
+     pause button by 4px on every phone. */
+  right: calc(10px + var(--tap) + 4px + var(--sar));
   z-index: 14;
   height: var(--tap);
   min-width: 76px;
@@ -481,8 +487,10 @@ body.hud-hidden #hud-restore { display: block; }
    under the button (top-right), thumb-reachable in landscape. */
 #campicker {
   position: fixed;
-  top: calc(52px + var(--sat));
-  right: calc(58px + var(--sar));
+  /* Same derivation as #btn-cam above — 52 was 8 + --tap at 44px, so the
+     picker overlapped #pausebtn by 8px on touch. */
+  top: calc(8px + var(--tap) + var(--sat));
+  right: calc(10px + var(--tap) + 4px + var(--sar));
   z-index: 24;
   display: grid;
   grid-template-columns: repeat(3, minmax(84px, 1fr));

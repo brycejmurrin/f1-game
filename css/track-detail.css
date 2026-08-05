@@ -108,7 +108,7 @@
     right: calc(10px + var(--sar));
   }
   /* Move sectors below the repositioned CHASE (55 + 40 + 7 = 102px). */
-  #hud-sectors { top: calc(102px + var(--sat)); }
+  #hud-sectors { top: calc(102px + var(--sat) / var(--hud-scale)); }
 }
 
 /* Cockpit cam: gear + speed live on the steering-wheel LCD — hide the floating
