@@ -48,6 +48,24 @@ async function startRace(page, id) {
 }
 
 test.describe("Apex 26 — elevation & banking tracks", () => {
+  // SEQUENTIAL, IN ONE WORKER. `fullyParallel: true` in playwright.config.js
+  // spreads the tests in a file across workers, and each test here BUILDS A
+  // WHOLE CIRCUIT — mugello alone is 637 712 prop verts, 693 752 total. Two of
+  // those under SwiftShader at once is the same memory wall that made
+  // test:sweeps and test:tooling pass --test-concurrency=1 deliberately
+  // (CLAUDE.md: "four at once reached 5.4 GB and was OOM-killed").
+  //
+  // Measured: in the full 105-test physics run, mugello (test 50) failed with
+  // 36 uncaught page errors and sochi (test 51) timed out at 120 s — ADJACENT
+  // tests, 37 seconds apart, one resource event rather than two circuit
+  // defects. Run alone, each passes in ~24 s. Nothing about either circuit was
+  // wrong.
+  //
+  // `default`, not `serial`: both run in a single worker sequentially, but a
+  // failure in one must not skip the rest — a circuit that genuinely breaks
+  // should not hide the other thirty-nine.
+  test.describe.configure({ mode: "default" });
+
   test("banking pivots around the centreline with smooth edge transitions", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
