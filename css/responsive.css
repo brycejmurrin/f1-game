@@ -63,6 +63,9 @@ body.desktop #pm-calib { display: none !important; }
   #overlay {
     grid-template-columns: auto auto;
     justify-content: center; align-content: center; justify-items: start;
+    /* Re-stating `safe center` because this block re-declares align-content and
+       would otherwise take the base rule's overflow bug back (css/menus.css). */
+    align-content: safe center;
     column-gap: clamp(48px, 5vw, 96px); row-gap: 18px;
     background:
       radial-gradient(70% 80% at 38% 50% in oklab, rgba(225,6,0,0.20), transparent 62%),

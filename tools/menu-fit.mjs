@@ -9,6 +9,7 @@
 //   node tools/menu-fit.mjs                 # default 852x393 (iPhone 15 Pro landscape)
 //   node tools/menu-fit.mjs 844x390 390x844 932x430
 //   node tools/menu-fit.mjs 852x393 --safe=59,0,59,21   # simulate notch insets (l,t,r,b)
+//   node tools/menu-fit.mjs 852x393 --scale=100,130,150 # ...at each interface size
 //
 // --safe is the point of this tool. Headless Chromium reports every
 // env(safe-area-inset-*) as 0, so a layout that ignores the insets looks
@@ -22,6 +23,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
+import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 // The data hub is the only screen whose content comes off the network. Reuse the
 // Playwright suite's fixtures so it audits a populated table rather than an error
 // card; if the import ever fails the hub still renders its empty/error state and
@@ -50,6 +52,8 @@ const SAFE_TAG = SAFE ? "-safe" : "";
 // is ~10 pages per size, and iterating on one screen should not cost that.
 const onlyArg = argv.find((a) => a.startsWith("--only="));
 const ONLY = onlyArg ? onlyArg.slice(7).split(",").filter(Boolean) : null;
+// --scale=80,130 adds the interface-size axis (see tools/ui-scale-axis.mjs).
+const SCALES = parseScales(argv);
 
 // Screens: [name, setup fn body (string, runs in page — may use `await`),
 //            root selector, opts? { mock: serve the F1 API fixtures, wait: ms }]
@@ -62,9 +66,12 @@ const SCREENS = [
   ["select-gp", `document.getElementById('mb-race').click()`, "#select"],
   ["select-tt", `document.getElementById('mb-tt').click()`, "#select"],
   ["teampicker", `document.getElementById('mb-race').click(); document.getElementById('sel-team-card').click()`, "#teampicker"],
-  ["race-settings", `document.getElementById('mb-race').click(); document.getElementById('sel-go').click()`, "#race-settings"],
+  // The garage is a STEP, not a side door: #select's START opens #carsetup and
+  // the garage's DONE goes on to #race-settings. `sel-setup` no longer exists,
+  // and both routes below had been silently reporting "root missing/hidden".
+  ["race-settings", `document.getElementById('mb-race').click(); await until('#carsetup:not([hidden])',4000); document.getElementById('cs-done').click()`, "#race-settings"],
   ["customize", `document.getElementById('mb-race').click(); document.getElementById('sel-customize').click()`, "#customize"],
-  ["carsetup", `document.getElementById('mb-race').click(); document.getElementById('sel-setup').click()`, "#carsetup"],
+  ["carsetup", `document.getElementById('mb-race').click(); document.getElementById('sel-go').click()`, "#carsetup"],
   ["howtoplay", `document.getElementById('mb-help').click()`, "#howtoplay"],
   ["pause", `window.__apex.race('bahrain'); `, "#pausemenu"],
 
@@ -234,54 +241,60 @@ async function shot(page, file) {
   try {
     const browser = await launchChromium({ args: ["--use-angle=swiftshader"] });
     for (const viewport of sizes) {
-      const tag = `${viewport.width}x${viewport.height}`;
-      report[tag] = {};
-      for (const [name, setup, sel, opts = {}] of SCREENS) {
-        if (ONLY && !ONLY.some((f) => name.includes(f))) continue;
-        const page = await browser.newPage({ viewport, hasTouch: true, deviceScaleFactor: 1 });
-        if (opts.mock && setupApiMocks) await setupApiMocks(page);
-        if (SAFE_CSS) {
-          await page.addInitScript((css) => {
-            const add = () => {
-              const s = document.createElement("style");
-              s.id = "safe-sim"; s.textContent = css;
-              document.head.appendChild(s);
-            };
-            if (document.head) add();
-            else document.addEventListener("DOMContentLoaded", add, { once: true });
-          }, SAFE_CSS);
-        }
-        await page.goto(srv.url);
-        await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
-        await page.evaluate(`(async () => { ${UNTIL}\n${setup} })()`);
-        await sleep(opts.wait ?? (name === "pause" ? 2500 : 400));
-        await settle(page);
-        if (name === "pause") {
-          await page.evaluate(() => {
-            window.__apex.park(0.1);
-            const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
-            document.getElementById("pausemenu").hidden = false;
-          });
-          await sleep(300);
+      for (const scale of SCALES) {
+        const tag = `${viewport.width}x${viewport.height}${scaleTag(scale)}`;
+        report[tag] = {};
+        for (const [name, setup, sel, opts = {}] of SCREENS) {
+          if (ONLY && !ONLY.some((f) => name.includes(f))) continue;
+          const page = await browser.newPage({ viewport, hasTouch: true, deviceScaleFactor: 1 });
+          if (opts.mock && setupApiMocks) await setupApiMocks(page);
+          if (SAFE_CSS) {
+            await page.addInitScript((css) => {
+              const add = () => {
+                const s = document.createElement("style");
+                s.id = "safe-sim"; s.textContent = css;
+                document.head.appendChild(s);
+              };
+              if (document.head) add();
+              else document.addEventListener("DOMContentLoaded", add, { once: true });
+            }, SAFE_CSS);
+          }
+          await page.goto(srv.url);
+          await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
+          // Before the setup body, not after: a screen laid out at one size and
+          // then rescaled measures a reflow, and a reflow is not what the player
+          // sees on a page they open at their chosen size.
+          await applyScale(page, scale);
+          await page.evaluate(`(async () => { ${UNTIL}\n${setup} })()`);
+          await sleep(opts.wait ?? (name === "pause" ? 2500 : 400));
           await settle(page);
+          if (name === "pause") {
+            await page.evaluate(() => {
+              window.__apex.park(0.1);
+              const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
+              document.getElementById("pausemenu").hidden = false;
+            });
+            await sleep(300);
+            await settle(page);
+          }
+          const res = await page.evaluate(AUDIT, [sel, SAFE]);
+          report[tag][name] = res;
+          await shot(page, `${tag}${SAFE_TAG}-${name}.png`);
+          // settings sub-page too
+          if (name === "pause") {
+            await page.evaluate(() => document.getElementById("pm-settings").click());
+            await sleep(300);
+            await settle(page);
+            report[tag]["pause-settings"] = await page.evaluate(AUDIT, ["#pmsettings", SAFE]);
+            await shot(page, `${tag}${SAFE_TAG}-pause-settings.png`);
+            await page.evaluate(() => document.getElementById("pm-advanced").click());
+            await sleep(300);
+            await settle(page);
+            report[tag]["advanced"] = await page.evaluate(AUDIT, ["#advanced", SAFE]);
+            await shot(page, `${tag}${SAFE_TAG}-advanced.png`);
+          }
+          await page.close();
         }
-        const res = await page.evaluate(AUDIT, [sel, SAFE]);
-        report[tag][name] = res;
-        await shot(page, `${tag}${SAFE_TAG}-${name}.png`);
-        // settings sub-page too
-        if (name === "pause") {
-          await page.evaluate(() => document.getElementById("pm-settings").click());
-          await sleep(300);
-          await settle(page);
-          report[tag]["pause-settings"] = await page.evaluate(AUDIT, ["#pmsettings", SAFE]);
-          await shot(page, `${tag}${SAFE_TAG}-pause-settings.png`);
-          await page.evaluate(() => document.getElementById("pm-advanced").click());
-          await sleep(300);
-          await settle(page);
-          report[tag]["advanced"] = await page.evaluate(AUDIT, ["#advanced", SAFE]);
-          await shot(page, `${tag}${SAFE_TAG}-advanced.png`);
-        }
-        await page.close();
       }
     }
   } finally {
