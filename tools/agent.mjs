@@ -40,7 +40,7 @@ const COMMANDS = {
   query: "a bounded slice     --kind pine --near <m> --from <m> --to <m> --limit <n>",
   scene: "named scenery nearby  --radius <m>  --kinds a,b  --limit <n>  (--visible = on-screen)",
   render: "the ONE raster aid  --what view|map|circuit|car  --cols <n>  --ss <1-6>  --camera <mode>  (APPROXIMATE)",
-  rollout: "drive an interval   --seconds <s>  --steer <-1..1>  --throttle  --brake  --samples <n>",
+  rollout: "drive an interval   --seconds <s>  --steer <-1..1>  --throttle  --brake  --samples <n>  --ids VER,3|all",
   car: "the car as JSON      --team <id>  --detail parts",
   visible: "[deprecated] scene --visible",
   frame: "[deprecated] render --what view",
@@ -101,6 +101,9 @@ const opts = {
   throttle: has("throttle"),
   brake: has("brake"),
   samples: num("samples", 8),
+  // rollout --ids VER,3 | all — a per-car digest for the AI as well as the
+  // player. Comma-separated, so one flag names the whole set.
+  ids: flag("ids", null),
   modelDetail: flag("detail", "summary"),
   offset: num("offset", 0),
   cols: num("cols", 56),
@@ -219,6 +222,10 @@ const opts = {
                                 limit: o.limit || undefined });
         case "rollout":
           return a.rollout({ seconds: o.seconds, samples: o.samples,
+                             ids: o.ids
+                               ? (o.ids.toLowerCase() === "all" ? "all"
+                                  : o.ids.split(",").map((s) => s.trim()).filter(Boolean))
+                               : undefined,
                              input: { steer: o.steer, throttle: o.throttle, brake: o.brake } });
         default:
           return { ok: false, error: "UnknownCommand", command: o.cmd };

@@ -92,6 +92,37 @@ test.describe("simulation determinism", () => {
     expect(r.viaReset).toBe(99);
   });
 
+  // rollout({ids}) only adds READING. If it ever added, dropped or reordered a
+  // simRnd() draw — the AI overtake roll fires every tick for every AI car — the
+  // same seeded episode would stop replaying, and every A/B built on this
+  // surface would be comparing runs that were never comparable.
+  test("asking for a per-car digest does not perturb the episode", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate((src) => {
+      const run = eval("(" + src + ")");
+      const A = window.__apex;
+      const withIds = (seed) => {
+        A.headless(true);
+        A.reset(0.02, 55, 0, seed);
+        const out = A.rollout({ seconds: 4, ids: "all",
+                                input: { steer: 0.05, throttle: true } });
+        const f = A.field({ detail: "full" });
+        A.headless(false);
+        return { player: { distanceM: out.distanceM, speed: out.speedKph, to: out.to,
+                           grid: f.positions.map((p) => p.code + ":" + p.pace).join(",") },
+                 cars: out.cars };
+      };
+      const plain = run(42);
+      const a = withIds(42), b = withIds(42);
+      return { plain, a, b };
+    }, episodeScript().toString());
+    // the player half of the digest is untouched by the extra reporting
+    expect(JSON.stringify(r.a.player)).toBe(JSON.stringify(r.plain));
+    // and the whole field replays byte-for-byte, not just the player
+    expect(JSON.stringify(r.b.cars)).toBe(JSON.stringify(r.a.cars));
+    expect(Object.keys(r.a.cars).length).toBeGreaterThan(5);
+  });
+
   test("cosmetic randomness does not draw from the seeded stream", async ({ page }) => {
     await load(page);
     // Rendering frames between two identical episodes must not shift the sim.

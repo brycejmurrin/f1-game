@@ -2044,6 +2044,50 @@ const AgentView = (function () {
       return null;
     }
 
+    // ── who a rollout digests ────────────────────────────────────────────────
+    // update(dt) already advances the WHOLE field, so the AI genuinely races
+    // through a rollout — only the reporting was pointed at one car. `ids` names
+    // the others, and it names them the way field() does: the numeric id it
+    // reports (c.id, falling back to the cars[] index — the same number
+    // describe("car:4") resolves) OR the driver CODE. Both resolve; the returned
+    // map is KEYED BY ID because a code is not guaranteed unique — a custom
+    // team's code is typed by the player and can collide with a real driver's.
+    function carIdOf(c, i) {
+      if (c && c.id != null) return c.id;
+      return i != null ? i : G.cars.indexOf(c);
+    }
+
+    // "VER" | 4 | "4" | "car:4" | "player"/"me"/"self" → the car, or null.
+    function resolveCarRef(ref) {
+      if (typeof ref === "number") {
+        return G.cars.find((c, i) => carIdOf(c, i) === ref) || null;
+      }
+      if (typeof ref !== "string") return null;
+      const s = ref.trim();
+      if (!s) return null;
+      const low = s.toLowerCase();
+      if (low === "player" || low === "me" || low === "self") return G.player || null;
+      const m = /^(?:car:)?(\d+)$/.exec(low);
+      if (m) {
+        const n = Number(m[1]);
+        return G.cars.find((c, i) => carIdOf(c, i) === n) || null;
+      }
+      const up = s.toUpperCase();
+      return G.cars.find((c) => (c.code || "").toUpperCase() === up) || null;
+    }
+
+    // The terminal state of ONE car. The published terminal() is the player's
+    // contract and stays exactly that. For everyone else only two of its four
+    // reasons can ever fire: wrong-way detection and auto-rescue are gated on
+    // c.human in updateCar() (js/game.js), so an AI car has no wrongWay flag and
+    // no rescueLastT — reporting either as false would be reporting a
+    // measurement that was never taken.
+    function carTerminal(c) {
+      if (c === G.player) return terminal();
+      const reason = c.retired ? "retired" : c.finished ? "finished" : null;
+      return { done: reason != null, reason };
+    }
+
     function rollout(opts) {
       const bad = notReady();
       if (bad) return bad;
@@ -2075,6 +2119,34 @@ const AgentView = (function () {
       const nSamples = clamp(o.samples | 0 || 12, 2, 60);
       const sampleEvery = Math.max(1, Math.floor(ticks / nSamples));
 
+      // Resolve `ids` BEFORE anything below mutates state (the countdown
+      // promotion and _testInput both do), so a typo'd id costs nothing.
+      let wanted = null;
+      if (o.ids != null) {
+        const raw = (typeof o.ids === "string" && o.ids.toLowerCase() === "all")
+          ? G.cars.map((c, i) => carIdOf(c, i)) : o.ids;
+        if (!Array.isArray(raw)) {
+          return fail("BadArgumentError",
+                      'ids must be an array of car ids or driver codes, or "all"',
+                      'call rollout({ids:["VER", 3]}) or rollout({ids:"all"}); '
+                      + "field() lists every car id and code");
+        }
+        wanted = [];
+        const seen = {};
+        for (const ref of raw) {
+          const car = resolveCarRef(ref);
+          if (!car) {
+            return fail("NotFoundError", "no car matches id " + JSON.stringify(ref),
+                        "ids are the numeric id or the driver CODE field() reports "
+                        + '(or "player"); call field() for the grid');
+          }
+          const id = carIdOf(car);
+          if (seen[id]) continue;      // asking twice is not two cars
+          seen[id] = true;
+          wanted.push(car);
+        }
+      }
+
       // Promote out of the countdown, exactly as act() does, so physics advances.
       if (G.state === "count") {
         G.state = "race"; G.raceT = 0;
@@ -2092,15 +2164,102 @@ const AgentView = (function () {
 
       const p = G.player;
       const list = corners();
-      const startProg = p.prog || 0, startT = G.raceT || 0, startLap = p.lap || 0;
-      const startFrac = p.s / G.track.total;
-      let minSpeed = Infinity, maxSpeed = -Infinity, sumSpeed = 0;
-      let offTicks = 0, offEvents = 0, wasOff = false;
-      let minClear = Infinity, contacts = 0, wasContact = false;
-      let terminalReason = null, terminalAtT = null;
-      const terminalEvents = []; let lastSeenReason = null;
-      const cornerMin = {};
-      const samples = [];
+      const startT = G.raceT || 0;
+
+      // One of these per tracked car. The PLAYER always has one — it is what
+      // feeds the flat top-level digest, which is frozen — and `ids` adds the
+      // rest. Everything it accumulates is read off (s, x, prog, speed, lap,
+      // contactT), i.e. Frenet and scalar state every car carries; nothing here
+      // touches px/pz, which AI cars do not have (docs/AGENT-WORLD-API.md §2.5).
+      function tracker(car) {
+        return {
+          car, id: carIdOf(car), code: car.code || null, team: teamIdOf(car),
+          isPlayer: !!car.isPlayer, human: !!car.human,
+          startProg: car.prog || 0, startLap: car.lap || 0,
+          startFrac: car.s / G.track.total,
+          minSpeed: Infinity, maxSpeed: -Infinity, sumSpeed: 0,
+          offTicks: 0, offEvents: 0, wasOff: false,
+          minClear: Infinity, contacts: 0, wasContact: false,
+          terminalReason: null, terminalAtT: null,
+          terminalEvents: [], lastSeenReason: null,
+          prevLap: car.lap || 0, lapTimes: [],
+          cornerMin: {}, samples: [],
+        };
+      }
+
+      // Sampled AFTER update(dt), for one car. Pure reads — Tracks.sample,
+      // Tracks.wallAt and cornerAt consume no randomness, so tracking N cars
+      // instead of one cannot move the simRnd() stream the AI overtake decision
+      // draws from every tick (see docs/AGENT-WORLD-API.md, determinism).
+      function trackTick(tr, i) {
+        const c = tr.car;
+        const sp = c.speed || 0;
+        if (sp < tr.minSpeed) tr.minSpeed = sp;
+        if (sp > tr.maxSpeed) tr.maxSpeed = sp;
+        tr.sumSpeed += sp;
+
+        Tracks.sample(G.track, c.s, scr);
+        const off = Math.abs(c.x) > scr.hw;
+        if (off) { tr.offTicks++; if (!tr.wasOff) tr.offEvents++; }
+        tr.wasOff = off;
+
+        const cl = Math.min(Tracks.wallAt(G.track, c.s, 1) - c.x,
+                            c.x + Tracks.wallAt(G.track, c.s, -1));
+        if (cl < tr.minClear) tr.minClear = cl;
+        const inContact = (c.contactT || 0) > 0;
+        if (inContact && !tr.wasContact) tr.contacts++;
+        tr.wasContact = inContact;
+
+        const cAt = cornerAt(c.s, list);
+        if (cAt) {
+          const prev = tr.cornerMin[cAt.turn];
+          if (prev === undefined || sp < prev) tr.cornerMin[cAt.turn] = sp;
+        }
+
+        // Every lap COMPLETED inside the interval, not just the last one — a
+        // pace bench wants the distribution, and lastLap only ever holds one.
+        if ((c.lap || 0) > tr.prevLap) {
+          tr.prevLap = c.lap || 0;
+          if (isNum(c.lastLap) && c.lastLap > 0) tr.lapTimes.push(r2(c.lastLap));
+        }
+
+        // Record EVERY terminal event, not just the first. Freezing on the first
+        // one hid a later, more important state: a run that was rescued early and
+        // then went on to FINISH reported only "rescued", so an agent scoring the
+        // interval off digest.terminal never learned the race was completed.
+        // Repeat rescues were invisible the same way.
+        const t = carTerminal(c);
+        if (t.done && t.reason) {
+          const atS = r2(G.raceT - startT);
+          if (t.reason !== tr.lastSeenReason) {
+            tr.terminalEvents.push({ reason: t.reason, atS });
+            tr.lastSeenReason = t.reason;
+          }
+          if (!tr.terminalReason) { tr.terminalReason = t.reason; tr.terminalAtT = atS; }
+        } else if (!t.done) {
+          tr.lastSeenReason = null;   // re-arm, so a second rescue is its own event
+        }
+
+        if (i % sampleEvery === 0 || i === ticks - 1) {
+          tr.samples.push({
+            t: r2(G.raceT - startT), frac: +(c.s / G.track.total).toFixed(4),
+            speedKph: r1(sp * 3.6), lateralM: r1(c.x),
+            // The gearbox is maintained under `if (c.human)` in updateCar(), so
+            // an AI car sits in gear 1 for the whole race. Reporting that as a
+            // gear would be reporting a number nothing computed.
+            gear: tr.human ? (c.gear || 1) : null,
+          });
+        }
+      }
+
+      const playerTr = tracker(p);
+      const trackers = [playerTr];
+      const requested = wanted ? wanted.map((car) => {
+        if (car === p) return playerTr;             // never digest one car twice
+        const tr = tracker(car);
+        trackers.push(tr);
+        return tr;
+      }) : null;
 
       for (let i = 0; i < ticks; i++) {
         if (policy && i % policyEvery === 0) {
@@ -2124,89 +2283,80 @@ const AgentView = (function () {
         }
         update(dt);
 
-        const sp = p.speed || 0;
-        if (sp < minSpeed) minSpeed = sp;
-        if (sp > maxSpeed) maxSpeed = sp;
-        sumSpeed += sp;
-
-        Tracks.sample(G.track, p.s, scr);
-        const off = Math.abs(p.x) > scr.hw;
-        if (off) { offTicks++; if (!wasOff) offEvents++; }
-        wasOff = off;
-
-        const cl = Math.min(Tracks.wallAt(G.track, p.s, 1) - p.x,
-                            p.x + Tracks.wallAt(G.track, p.s, -1));
-        if (cl < minClear) minClear = cl;
-        const inContact = (p.contactT || 0) > 0;
-        if (inContact && !wasContact) contacts++;
-        wasContact = inContact;
-
-        const cAt = cornerAt(p.s, list);
-        if (cAt) {
-          const prev = cornerMin[cAt.turn];
-          if (prev === undefined || sp < prev) cornerMin[cAt.turn] = sp;
-        }
-
-        // Record EVERY terminal event, not just the first. Freezing on the first
-        // one hid a later, more important state: a run that was rescued early and
-        // then went on to FINISH reported only "rescued", so an agent scoring the
-        // interval off digest.terminal never learned the race was completed.
-        // Repeat rescues were invisible the same way.
-        {
-          const t = terminal();
-          if (t.done && t.reason) {
-            const atS = r2(G.raceT - startT);
-            if (t.reason !== lastSeenReason) {
-              terminalEvents.push({ reason: t.reason, atS });
-              lastSeenReason = t.reason;
-            }
-            if (!terminalReason) { terminalReason = t.reason; terminalAtT = atS; }
-          } else if (!t.done) {
-            lastSeenReason = null;   // re-arm, so a second rescue is its own event
-          }
-        }
-
-        if (i % sampleEvery === 0 || i === ticks - 1) {
-          samples.push({ t: r2(G.raceT - startT), frac: +(p.s / G.track.total).toFixed(4),
-                         speedKph: r1(sp * 3.6), lateralM: r1(p.x), gear: p.gear || 1 });
-        }
+        for (let j = 0; j < trackers.length; j++) trackTick(trackers[j], i);
       }
 
       lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter;
 
       const elapsed = (G.raceT || 0) - startT;
-      const lapsDone = (p.lap || 0) - startLap;
-      return {
+
+      // The digest itself, for one tracked car. Field order is the shipped
+      // top-level order — it is spread straight into the return below, so the
+      // no-`ids` payload is unchanged down to key order.
+      function digest(tr) {
+        const c = tr.car;
+        const lapsDone = (c.lap || 0) - tr.startLap;
+        return {
+          from: { frac: +tr.startFrac.toFixed(4), lap: tr.startLap },
+          to: { frac: +(c.s / G.track.total).toFixed(4), lap: c.lap || 0 },
+          distanceM: r1((c.prog || 0) - tr.startProg),
+          speedKph: { min: r1(tr.minSpeed * 3.6), max: r1(tr.maxSpeed * 3.6),
+                      mean: r1(tr.sumSpeed / ticks * 3.6),
+                      final: r1((c.speed || 0) * 3.6) },
+          offTrack: { events: tr.offEvents, seconds: r2(tr.offTicks * dt),
+                      pct: r1(tr.offTicks / ticks * 100) },
+          minClearanceM: r1(tr.minClear),
+          wallContacts: tr.contacts,
+          lapsCompleted: lapsDone,
+          lastLapS: lapsDone > 0 && c.lastLap ? r2(c.lastLap) : null,
+          // The point of the whole exercise for tuning work: minimum speed through
+          // each corner actually driven, which is what a setup change moves.
+          cornerMinSpeedKph: Object.keys(tr.cornerMin).map((t) =>
+            ({ turn: t, minSpeedKph: r1(tr.cornerMin[t] * 3.6) })),
+          // `reason`/`atS` are the FIRST event (unchanged); `events` is every one,
+          // and `last` is the state the interval actually ended in.
+          terminal: { done: !!tr.terminalReason, reason: tr.terminalReason,
+                      atS: tr.terminalAtT, events: tr.terminalEvents,
+                      last: tr.terminalEvents.length
+                        ? tr.terminalEvents[tr.terminalEvents.length - 1] : null },
+          samples: tr.samples,
+        };
+      }
+
+      // `cars` is ADDITIVE: keyed by car id, one full digest each, alongside the
+      // flat player fields rather than instead of them. Restructuring the payload
+      // into cars["<player id>"] would have been tidier and would have broken
+      // every existing caller for nothing — the player digest is the thing a
+      // driving agent reads, and it should not have to look itself up.
+      let cars = null;
+      if (requested) {
+        cars = { cars: {} };
+        for (const tr of requested) {
+          cars.cars[tr.id] = Object.assign(
+            { id: tr.id, code: tr.code, team: tr.team, isPlayer: tr.isPlayer },
+            digest(tr),
+            // Only in the per-car entries, never at the top level, which is
+            // frozen: every lap COMPLETED in the interval. lastLapS holds one;
+            // a pace bench wants mean/min/stddev.
+            { lapTimesS: tr.lapTimes });
+        }
+      }
+
+      let note = "a digest of " + ticks + " physics ticks — call world() for the "
+               + "current state, this describes the interval";
+      if (cars) {
+        note += ". cars{} is one digest per requested car, keyed by id; sample "
+              + "gear and the wrong_way/rescued terminal reasons are human-only "
+              + "and null/absent for an AI car";
+      }
+
+      return Object.assign({
         apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
         conventions: CONVENTIONS,
         ran: { ticks, dt: +dt.toFixed(5), seconds: r2(elapsed),
                policy: policy ? "closed-loop at " + (o.policyHz || 10) + " Hz"
                               : "open-loop constant input" },
-        from: { frac: +startFrac.toFixed(4), lap: startLap },
-        to: { frac: +(p.s / G.track.total).toFixed(4), lap: p.lap || 0 },
-        distanceM: r1((p.prog || 0) - startProg),
-        speedKph: { min: r1(minSpeed * 3.6), max: r1(maxSpeed * 3.6),
-                    mean: r1(sumSpeed / ticks * 3.6), final: r1((p.speed || 0) * 3.6) },
-        offTrack: { events: offEvents, seconds: r2(offTicks * dt),
-                    pct: r1(offTicks / ticks * 100) },
-        minClearanceM: r1(minClear),
-        wallContacts: contacts,
-        lapsCompleted: lapsDone,
-        lastLapS: lapsDone > 0 && p.lastLap ? r2(p.lastLap) : null,
-        // The point of the whole exercise for tuning work: minimum speed through
-        // each corner actually driven, which is what a setup change moves.
-        cornerMinSpeedKph: Object.keys(cornerMin).map((t) =>
-          ({ turn: t, minSpeedKph: r1(cornerMin[t] * 3.6) })),
-        // `reason`/`atS` are the FIRST event (unchanged); `events` is every one,
-        // and `last` is the state the interval actually ended in.
-        terminal: { done: !!terminalReason, reason: terminalReason, atS: terminalAtT,
-                    events: terminalEvents,
-                    last: terminalEvents.length
-                      ? terminalEvents[terminalEvents.length - 1] : null },
-        samples,
-        note: "a digest of " + ticks + " physics ticks — call world() for the "
-              + "current state, this describes the interval",
-      };
+      }, digest(playerTr), cars, { note });
     }
 
     // ── render() — the one optional composition aid ─────────────────────────
@@ -2360,8 +2510,9 @@ const AgentView = (function () {
             + "terrain through the road, holes and cliffs",
         },
         act: {
-          "rollout({seconds,dt,input,policy,policyHz,samples})":
-            "drive an interval, return a digest instead of every frame",
+          "rollout({seconds,dt,input,policy,policyHz,samples,ids})":
+            "drive an interval, return a digest instead of every frame; "
+            + 'ids:["VER",3]|"all" adds cars{} — the same digest per AI car',
           "terminal()": "{done, reason} — retired|finished|wrong_way|rescued|null",
           "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once",
           "agentHelp()": "this manifest",
