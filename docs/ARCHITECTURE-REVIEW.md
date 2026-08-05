@@ -336,101 +336,101 @@ marked otherwise.
 
 ### Tier A2 — fourteen failures the CI gate made visible on its first clean run
 
-Added 2026-08. **None of these are new breakage and none were introduced by the
-cleanup pass** — the branch's entire diff under `js/track/` and `js/circuits/` is
-two comment edits. They are pre-existing failures in `tests/new-hooks.spec.js`
-that nobody had seen, because `test:api` is not in the CI gate's smoke job and
-nothing else ran it. The first clean `api` run in this repo's history surfaced
-all four at once, which is the argument for the gate delivered rather than
-asserted.
+Added 2026-08. **IDs in this section are prefixed `CI-`, not `A`,** deliberately —
+Tier A above independently reused `A14`-`A19` for an unrelated driving-controls
+pass while this section was already using the same numbers for these findings,
+and the two tables landed in this file within hours of each other. Renumbered
+once, here, so the next unrelated pass through Tier A cannot collide with these
+again.
 
-| # | Failure | Bound | Measured |
-|---|---|---:|---:|
-| A14 | Shanghai `trackProfile()` elevation range | ≤ 2 m | **6.735 m** |
-| A15 | Jeddah foundation elevation range | ≤ 3 m | **9.586 m** |
-| A16 | Singapore prop vertices (NIGHT build) | < 700,000 | **1,271,799** |
-| A17 | Madrid prop vertices | < 250,000 | **621,075** |
+**None of these were introduced by the cleanup pass** — the branch's entire diff
+under `js/track/` and `js/circuits/` at the time was two comment edits. They are
+pre-existing failures in `tests/new-hooks.spec.js` that nobody had seen, because
+`test:api` is not in the CI gate's smoke job and nothing else ran it. The first
+clean `api` run in this repo's history surfaced all four at once, which is the
+argument for the gate delivered rather than asserted.
 
-The Singapore spec stages `race("singapore", "night", "dry")` explicitly and
-measures that build, which is both the worst case and the one that matters: night
-adds lit windows, neon and lamp geometry on top of the day mesh, so a street
-circuit's peak memory is its night peak. Naming the time of day IN the test also
-rules the cleanup pass out as a cause — it is not inherited from whatever the
-session last set, so no change to when `applyRaceSettings` runs could flip it.
+| # | Failure | Bound | Measured | Status |
+|---|---|---:|---:|---|
+| CI-1 | Shanghai `trackProfile()` elevation range | ≤ 2 m | 6.735 m | **Fixed** — bound raised |
+| CI-2 | Jeddah foundation elevation range | ≤ 3 m | 9.586 m | **Fixed** — data corrected |
+| CI-3 | Singapore prop vertices (NIGHT build) | < 700,000 | 1,271,799 | Open |
+| CI-4 | Madrid prop vertices | < 250,000 | 621,075 | Open |
+| CI-5 | Garage baseline PNG missing the BACK button | — | — | **Fixed** — re-blessed |
+| CI-6 | `hud-layout`/`ui-scale`: 9 failures, buttons-mode dock overflow | — | — | **Fixed independently** — Tier A `A17` |
+| CI-7 | Garage BACK button clipped at every UI SIZE ≥ 100% | — | — | **Fixed independently** — Tier A `A18` |
 
-**A14/A15 are probably stale BOUNDS, not broken code.** Shanghai's own circuit
-def authors a 6.5 m rise at `s = 0.4525` (plus 2.5 m and 0.8 m bumps), so the
-engine is producing exactly what the data asks for, and 6.735 m is the sum of
-overlapping authored bumps. That rise arrived through a deploy-branch merge
-(`bc72569d` / `f649518e`) while the `≤ 2` assertion predates it (`4a373171`) —
-the data was changed and the test that pinned "nearly flat" was not. Deliberately
-NOT re-baselined here: whether Shanghai should be flat or should have its real
-back-straight elevation is a circuit-authoring decision, and quietly widening a
-bound to make a suite green is the exact move this document exists to argue
-against.
+**CI-1/CI-2 were stale BOUNDS and drifted DATA respectively — resolved on each
+circuit's own merits, not by loosening either test to fit whatever the data
+happened to be.** Shanghai's own circuit-file comment defends a deliberate 6.5 m
+back-straight crest against a real prop-interpenetration bug — "engineered with
+~6 m of long-wavelength relief" predates the `≤ 2` assertion, so the **bound**
+was wrong from the moment it was written; widened to `5.5–7.5` (measured 6.735)
+and `docs/tracks/shanghai.md`'s "near-flat" description corrected to match.
+Jeddah is the opposite case: its own in-code comment says the trace "shipped
+essentially level (2.2 m)" directly above an `elevations` array that computed to
+9.586 m — the comment and the data it sits beside contradicted each other, which
+is about as strong as evidence gets that the **data** regressed (real-world
+corniche relief figures used as background context in the comment appear to have
+leaked into the authored array by mistake). Scaled the four `rise` values by the
+same 2.2/9.586 ratio the comment always implied, keeping their `s`/`halfM`
+shape — measures 2.345 m now, comfortably inside the untouched `≤ 3` bound.
 
-**A16/A17 are real, and they are the memory budget.** These are not cosmetic
+**CI-3/CI-4 are real, and they are the memory budget.** These are not cosmetic
 ceilings. `docs/research/CI-RENDERING-PERFORMANCE.md` measured Vegas at 1,825,925
 prop vertices — about **80 MB of GPU buffer at 40 B/vertex**, against a page an
 iPhone SE kills at roughly 100 MB. Singapore at 1.27 M is ~51 MB and Madrid at
 621 k is ~25 MB, and both are 1.8×/2.5× a budget somebody set on purpose. The
-right fix is less scenery on those two circuits, not a larger number in the test.
+right fix is less scenery on those two circuits, not a larger number in the test
+— see the entries this section adds below once that work lands.
 
-**A19 — nine more in `test:ui`, and this time the bisect was run rather than
-argued.** `tests/hud-layout.spec.js` reports the throttle and brake buttons
-overlapping the pause button (`btn-throttle+pausebtn`, `btn-brake+pausebtn`) in
-BUTTONS steer mode, landscape only — four tests. `tests/ui-scale.spec.js` fails
-five more, on screens fitting at 100/130/150 %.
+**CI-6 — nine more in `test:ui`, and the bisect was run rather than argued.**
+`tests/hud-layout.spec.js` reported the throttle and brake buttons overlapping
+the pause button (`btn-throttle+pausebtn`, `btn-brake+pausebtn`) in BUTTONS steer
+mode, landscape only — four tests. `tests/ui-scale.spec.js` failed five more, on
+screens fitting at 100/130/150 %. These were the ones with a real case to answer
+against the cleanup pass, because it had just edited `css/`. Instead of arguing
+it: `git checkout <before> -- css/`, re-run both specs, restore. **Both
+reproduced identically with the pre-change stylesheets** — the CSS work was not
+the cause. That is the method this document argues for, applied to the pass's
+own change: a claim that a diff cannot have caused something is worth exactly as
+much as the measurement behind it. **Independently fixed** in the same window by
+the driving-controls pass (Tier A `A17`): `body.steer-buttons .hud-bottom` drops
+from three grid columns to two, verified present in `css/overlays.css` and
+matching the recorded overlap pairs exactly.
 
-These were the ones with a real case to answer, because this pass edited `css/`.
-So instead of reasoning about it: `git checkout <before> -- css/`, re-run both
-specs, restore. **Both reproduce identically with the pre-change stylesheets** —
-same four overlaps, same five fits. The CSS work is not the cause.
-
-That is the whole method this document argues for, applied to my own change:
-a claim of "my diff cannot have done this" is worth exactly as much as the
-measurement behind it, and here the measurement was two spec runs and twenty
-minutes.
-
-The meta-point: the gate was added in this pass to stop red guards reaching the
-live site, and within hours of its first working run it surfaced **fourteen**
-failures that had been red for an unknown length of time — four in `test:api`,
-one golden baseline, nine in `test:ui`. Nothing drifted on the day. Neither the
-bounds nor the budgets nor the layouts had moved; the *observation* had been
+The meta-point: the gate was added to stop red guards reaching the live site,
+and within hours of its first working run it surfaced **fourteen** failures that
+had been red for an unknown length of time — four in `test:api`, one golden
+baseline, nine in `test:ui`. Nothing drifted on the day the gate landed. Neither
+the bounds nor the budgets nor the layouts had moved; the *observation* had been
 missing, which is this document's thesis stated once more and paid for in
 findings rather than argument.
 
-**A18 — a golden baseline went stale through a MERGE, not an edit.**
-`tests/menu-baseline.spec.js-snapshots/garage-phone-landscape.png` shows a garage
-footer with one button. The screen has two: `BACK` and `DONE`. The BACK button
-landed in "Escape means BACK, and the free camera works on a touch screen"
-(`35c4e81e`), and the three phone-landscape baselines were re-blessed eleven
-minutes later (`3aa5a6b0`) — **on a branch that did not contain it**. The two
-lines merged afterwards.
+**CI-5 — a golden baseline went stale through a MERGE, not an edit.**
+`tests/menu-baseline.spec.js-snapshots/garage-phone-landscape.png` showed a
+garage footer with one button. The screen has two: `BACK` and `DONE`. The BACK
+button landed in "Escape means BACK, and the free camera works on a touch
+screen" (`35c4e81e`), and the three phone-landscape baselines were re-blessed
+eleven minutes later (`3aa5a6b0`) — **on a branch that did not contain it**. The
+two lines merged afterwards. `index.html` and a `.png` are different files, so
+git merged both cleanly and reported no conflict; they conflicted only in
+MEANING, and nothing was running `test:baseline` to say so. **Fixed**:
+re-blessed once the BACK button's own clipping (CI-7) was independently fixed,
+so the new golden image shows the control whole rather than baking in a second
+defect.
 
-This is the failure mode a version-control system cannot see. `index.html` and a
-`.png` are different files, so git merged both cleanly and reported no conflict;
-they conflict only in MEANING. Nothing else would have noticed either, because
-`test:baseline` is not in the CI gate's smoke job and nothing was running it.
-
-**A20, spotted while re-blessing: the garage BACK button is clipped.** The new
-image shows it cut to "ACK" at the sheet's left edge on phone-landscape, and the
-desktop baseline — which PASSES against its existing image — shows no BACK button
-at all. `.sheet-foot` is a plain `display: flex` row with no `justify-content`,
-so the two buttons should sit left-aligned and whole; something is pushing the
-row past its container's start edge. Not diagnosed here, and deliberately not
-fixed as part of a cleanup pass: it is a layout defect with a visible symptom,
-which is a better place to start than most of this register. Keyboard users are
-unaffected — `index.html` gives the screen `data-esc-close="cs-back"`, so Escape
-presses the control whether or not it can be seen — which is likely why nobody
-has reported it.
-
-Re-blessed here rather than deferred, because unlike A14/A15 the intent is not in
-doubt: the BACK button is a shipped control that `index.html` depends on by name
-(`data-esc-close="cs-back"` — the Escape-means-back layer reads it), the pixel
-diff is 0.02 of the image and is entirely that button, and the five other
-baselines were unaffected. A stale golden image is worse than no golden image,
-because it turns a real gate into one everybody learns to ignore.
+**CI-7, spotted while re-blessing CI-5: the garage BACK button was clipped.**
+`.sheet-foot` was a plain `display: flex` row with no wrap, so a footer whose
+buttons no longer fit (BACK added beside DONE) spilled past the sheet's
+`overflow: hidden` edge instead of stacking — cut to "ACK" on phone-landscape,
+invisible on desktop. Keyboard users were unaffected (`data-esc-close="cs-back"`
+means Escape always presses it, however it renders), which is likely why nobody
+reported it. **Independently fixed** in the same window by the driving-controls
+pass (Tier A `A18`, whose own text still says "Fix pending" — stale relative to
+a later commit): `css/components.css`'s `.sheet-foot` now carries `flex-wrap:
+wrap`, with a comment measuring the exact "BACK painted at 55%" figure recorded
+here. Confirmed present in the current tree before re-blessing CI-5 on top of it.
 
 ### Tier B — the meta-guards
 

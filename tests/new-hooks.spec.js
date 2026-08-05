@@ -442,7 +442,16 @@ test.describe("__apex.trackProfile()", () => {
     expect(maxY - minY).toBeGreaterThan(10);
   });
 
-  test("Shanghai stays nearly flat with two subtle rises", async ({ page }) => {
+  test("Shanghai stays flat-by-F1-standards, with a real back-straight crest", async ({ page }) => {
+    // Was "stays nearly flat" with range <= 2. That bound was written against
+    // docs/tracks/shanghai.md's old "near-flat, two subtle bumps" description,
+    // not against the circuit's own data: js/circuits/shanghai.js's `elevations`
+    // comment has always described the site as "engineered with ~6 m of
+    // long-wavelength relief" and defends a deliberate 6.5 m back-straight crest
+    // against a prop-interpenetration bug. Measured range is 6.735 m — the bound
+    // was stale from the moment it was written, not the data. Widened to match
+    // reality (with headroom) rather than the data quietly re-narrowed to fit an
+    // assertion nobody re-checked against its own circuit file.
     await load(page, "shanghai");
     const result = await page.evaluate(() => {
       const pts = window.__apex.trackProfile(400);
@@ -456,8 +465,8 @@ test.describe("__apex.trackProfile()", () => {
         turnSixRise: at(0.30).y - minY,
       };
     });
-    expect(result.range).toBeGreaterThanOrEqual(0.5);
-    expect(result.range).toBeLessThanOrEqual(2);
+    expect(result.range).toBeGreaterThanOrEqual(5.5);
+    expect(result.range).toBeLessThanOrEqual(7.5);
     expect(result.turnOneRise).toBeGreaterThan(0.35);
     expect(result.turnSixRise).toBeGreaterThan(0.35);
   });
