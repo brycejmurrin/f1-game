@@ -242,6 +242,63 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       document.getElementById("standings").contains(document.activeElement))).toBe(true);
   });
 
+  /* THE DEFECT THIS PINS: #track-detail used to be `role="dialog"
+     aria-modal="true"` on a plain <div> — a claim the platform never
+     enforced, since there was no showModal() and so no top layer and no
+     inert background. Tab walked straight out of it into #select sitting
+     behind it (docs/research/PLATFORM-INPUT-NOTES.md §9a). It is now a real
+     <dialog> (js/game/topmodal.js), so the platform makes the background
+     genuinely inert.
+
+     WHAT NOT TO ASSERT: #track-detail has exactly one focusable descendant
+     (the close button), and a native modal with a single focusable control
+     does not "wrap" Tab back onto itself — measured (real Chromium, this
+     harness): Tab bounces close-button -> <body> -> close-button -> <body>,
+     never landing in #track-detail. That is correct, spec-shaped <dialog>
+     behaviour, not a leak, so asserting focus stays a DOM descendant of
+     #track-detail on every single Tab is the wrong test — it fails on
+     platform-correct behaviour the moment there is only one thing to tab to.
+     The property that actually matters, and the one the old <div> broke, is
+     that focus never reaches a CONTROL BEHIND the dialog: walked via Tab, and
+     probed directly, since `showModal()` makes the background inert to
+     scripted `.focus()` too, not just to keyboard navigation. */
+  test("Tab cannot escape the track-detail dialog into the select screen behind it", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSelect(page);
+    // Opens via openTrackDetail() in js/game/menus.js — the circuit preview
+    // map on the select screen, same trigger tests/ui-audit.spec.js uses.
+    await page.locator("#sel-preview-map").click();
+    await page.locator("#track-detail").waitFor({ state: "visible" });
+    await page.waitForTimeout(300);
+
+    expect(await page.evaluate(() =>
+      document.getElementById("track-detail").matches(":modal")), "real top-layer dialog").toBe(true);
+    expect(await page.evaluate(() =>
+      document.getElementById("track-detail").contains(document.activeElement)),
+      "showModal() parked focus inside the dialog").toBe(true);
+
+    // The failure mode being pinned: focus must never reach a control on the
+    // (still open, still painted) #select screen sitting behind the dialog —
+    // walked with repeated Tabs, in either direction.
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press("Tab");
+      const inSelect = await page.evaluate(() =>
+        document.getElementById("select").contains(document.activeElement));
+      expect(inSelect, `Tab #${i + 1} did not land on a control in #select`).toBe(false);
+    }
+
+    // The stronger form of the same claim: the background is INERT, not just
+    // unreached by Tab — a direct scripted focus() on a #select control must
+    // also fail while the dialog is modal, or a keyboard shortcut / script
+    // could still reach behind the "modal" the way it always could on a div.
+    const stolen = await page.evaluate(() => {
+      const btn = document.getElementById("sel-go");
+      btn.focus();
+      return document.activeElement === btn;
+    });
+    expect(stolen, "a direct focus() on a background control fails while the dialog is modal").toBe(false);
+  });
+
   test("with the pause menu up the arrow keys stop reaching the car", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("monza"));
