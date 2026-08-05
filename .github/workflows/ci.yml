@@ -39,9 +39,23 @@ on:
 permissions:
   contents: read
 
+# CANCEL ONLY PULL-REQUEST RUNS. This said `cancel-in-progress: true` for every
+# event, and the result was that FIFTEEN CONSECUTIVE RUNS ENDED "cancelled" and
+# the gate never once completed — a branch under active work gets a push every
+# few minutes, and each one killed the run before it could report.
+#
+# It also broke the deploy, which is the part that matters. pages.yml calls this
+# workflow and has `needs: ci`, so when a push cancelled the in-flight ci job the
+# whole Pages run went down with it: the first gated deploy came back
+# "cancelled" where the previous ungated one had been "success". A gate that
+# blocks the thing it is meant to protect is worse than no gate.
+#
+# On a pull request, superseding an obsolete run is right — the new commit is
+# what matters and the minutes are wasted. On a push, and above all on a
+# workflow_call from pages.yml, the run must be allowed to finish and report.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   guards:

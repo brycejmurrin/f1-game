@@ -552,7 +552,7 @@ const WGX = (function () {
         vertex: { module: shadowModule, entryPoint: "vs_main", buffers: [SHADOW_VERTEX_LAYOUT] },
         // No fragment stage — depth-only. Slope-scaled bias fights shadow acne.
         // GLX renders the shadow depth with CULLING OFF ("render back faces to avoid
-        // peter-panning", glx.js:3739), so match that with cullMode:"none" — winding is
+        // peter-panning" — js/render/glx/shadow.js, the CULL_FACE disable), so match that with cullMode:"none" — winding is
         // then moot and both faces cast, exactly like GLX.
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "less",

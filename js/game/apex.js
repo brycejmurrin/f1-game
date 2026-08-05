@@ -2006,7 +2006,9 @@ const api = {
   // whose ICE never completes (a sandboxed CI browser, a locked-down network)
   // spins indefinitely, so a test that builds one does not fail — it HANGS,
   // which is far worse. The far endpoint is kept here so the connection can be
-  // completed on demand via lobbyFakeConnect().
+  // completed on demand by lobbyWatch(), which drives it to onConnected().
+  // (There is no lobbyFakeConnect(); the nearest name, lobbyFakeConnected(), is
+  // a boolean reader.)
   lobbyFake(on) {
     if (!G.netLobby) return false;
     if (!on) { _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false; }
