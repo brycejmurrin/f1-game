@@ -24,14 +24,17 @@ const ls = (dir, re) => fs.readdirSync(path.join(ROOT, dir)).filter((f) => re.te
 
 // ---------------------------------------------------------------------------
 // Docs that describe the CURRENT code. Everything else under docs/ is a dated
-// record and is exempt: docs/superpowers/ and docs/research/ were accurate when
-// written and are explicitly labelled historical in docs/README.md.
+// record and is exempt: docs/archive/ and docs/research/ were accurate when
+// written and are explicitly labelled historical in docs/README.md. Exempting
+// archive/ is the POINT of having it — a provenance doc naming a file that has
+// since moved is expected, and holding it to the live standard would either
+// churn build logs on every refactor or stop anyone archiving anything.
 const LIVE_DOCS = [];
 (function walk(dir) {
   for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
     const rel = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (/superpowers|research|tracks/.test(e.name)) continue;
+      if (/archive|research|tracks/.test(e.name)) continue;
       walk(rel);
     } else if (e.name.endsWith(".md")) LIVE_DOCS.push(rel);
   }
@@ -50,11 +53,20 @@ const PLACEHOLDERS = new Set([
   "js/circuits/<id>.js", "docs/tracks/<id>.md",
 ]);
 
+// The lookbehind (rather than a bare \b) stops a path segment INSIDE a URL from
+// matching — "github.com/…/blob/main/docs/tool-reference.md" is not a claim
+// about this repo.
+//
+// `docs` is in this list because it was NOT, and that is how thirteen references
+// to the WebGPU notes, ten research files and the scenery upgrade plan
+// survived those files moving into docs/archive/ — in source comments, in CSS
+// and in other docs, none of them checked by anything.
+//
 // Extensions are ordered LONGEST-FIRST and anchored: regex alternation is
 // ordered, so a bare `js|json` matches "clip-baseline.json" as ".js" and then
 // reports a file that was never referenced. The trailing guard stops a prefix
 // match mid-extension.
-const PATH_RE = /\b((?:js|tools|tests|css|assets|spike|vendor)\/[A-Za-z0-9_.<>/-]+\.(?:json|mjs|cjs|css|js|md|sh))(?![A-Za-z0-9])/g;
+const PATH_RE = /(?<![A-Za-z0-9_./-])((?:js|tools|tests|css|assets|spike|vendor|docs)\/[A-Za-z0-9_.<>/-]+\.(?:json|mjs|cjs|css|js|md|sh))(?![A-Za-z0-9])/g;
 
 function brokenPathsIn(file) {
   const bad = [];
@@ -307,4 +319,35 @@ test("docs/README indexes every live engineering doc", () => {
   const missing = ls("docs", /\.md$/)
     .filter((f) => f !== "README.md" && !index.includes(f));
   assert.deepEqual(missing, [], "a doc under docs/ is not linked from docs/README.md");
+});
+
+test("every relative link in docs/README.md resolves", () => {
+  // The index links RELATIVELY ("[TESTING.md](TESTING.md)"), and the broken-path
+  // guard above only matches paths that start with a known top-level directory
+  // (js/, tools/, tests/, css/, …). So a docs-relative link pointed at nothing
+  // and no test noticed — which is exactly what happened when six WebGPU notes,
+  // ten research files and the scenery upgrade plan moved into docs/archive/ and
+  // left thirteen dead rows behind in the table that indexes them.
+  const dead = [];
+  for (const m of read("docs/README.md").matchAll(/\]\(([^)#:]+)\)/g)) {
+    const href = m[1].trim();
+    if (/^(https?:)?\/\//.test(href)) continue;          // external
+    const target = path.resolve(ROOT, "docs", href);
+    if (!fs.existsSync(target)) dead.push(href);
+  }
+  assert.deepEqual(dead, [], "docs/README.md links to a path that does not exist");
+});
+
+test("no live doc points a reader at docs/archive/", () => {
+  // Archive is provenance. A live doc citing it is either a doc that should not
+  // have been archived, or a reference that should have been rewritten — both
+  // are worth catching. docs/README.md is the one legitimate referrer, because
+  // indexing the archive is its job.
+  const offenders = [];
+  for (const doc of LIVE_DOCS) {
+    if (doc === "docs/README.md") continue;
+    if (/docs\/archive\//.test(read(doc))) offenders.push(doc);
+  }
+  assert.deepEqual(offenders, [],
+    "a live doc references docs/archive/ — either it should not be archived, or the reference is stale");
 });

@@ -2,8 +2,8 @@
  * Apex 26 — WGSL post-processing shaders (WebGPU migration, Phase 4).
  *
  * A FAITHFUL-BUT-REDUCED WGSL port of the GLX post chain — the same philosophy
- * the Phase 2 sky/lit port used (docs/WEBGPU-PHASE2-NOTES.md) and the Phase 3
- * shadow port (docs/WEBGPU-PHASE3-NOTES.md): keep the *look-defining* math,
+ * the Phase 2 sky/lit port used (docs/archive/webgpu/WEBGPU-PHASE2-NOTES.md) and the Phase 3
+ * shadow port (docs/archive/webgpu/WEBGPU-PHASE3-NOTES.md): keep the *look-defining* math,
  * drop the deep tail. The Phase-4 tail that WAS deferred — screen-space
  * reflections, radial speed-blur, chromatic aberration and unsharp-mask sharpen
  * — is now ported (SSR as its own pass; the three image FX folded into

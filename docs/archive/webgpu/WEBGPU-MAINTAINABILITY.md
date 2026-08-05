@@ -1,6 +1,6 @@
 # WebGPU maintainability review + refactor design — Apex 26
 
-Companion / critical review of [`docs/WEBGPU-MIGRATION.md`](./WEBGPU-MIGRATION.md).
+Companion / critical review of [`docs/archive/webgpu/WEBGPU-MIGRATION.md`](./WEBGPU-MIGRATION.md).
 Where that document asks *"how do we add WebGPU?"*, this one asks *"what should we
 refactor so the current renderer is easier to maintain — and, as a side effect,
 so a future WebGPU port is cheaper?"*

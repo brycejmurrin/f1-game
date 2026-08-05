@@ -176,6 +176,20 @@ GLX remains the default; TLX and WGX are **opt-in only**. The pause-menu
 that writes the key and reloads. The eventual flip of the default and the
 deletion of GLX/WGX is "Phase D" — future work, out of scope here.
 
+**WGX is not at parity with GLX, and never reached it.** Four things are still
+reduced or absent on the WebGPU path, so do not assume a GLX feature exists
+there:
+
+- lamp-fog / ground-mist **volumetrics**
+- **PCSS** soft-shadow quality
+- **MSAA stays at 1**
+- **no `gpuTimer`** (`__apex.gpuTimer()` reports unsupported)
+
+WGX also does not implement the baked material arrays (`createTextureArray`),
+so `matTexMix` does nothing there and the look falls back to procedural. This
+list was previously buried in a phase-notes build log; it is a live caveat about
+shipped code, so it lives here now.
+
 **TLX (`js/render/three/`)** is the three.js/TSL backend: classic-IIFE scripts
 (`tlx.js` core + `tlx-shadow.js` / `tlx-post.js` / `tlx-chunked.js` passes +
 `tsl-*.js` shader-node factories on a `TLXShaders` global) that dynamically
