@@ -305,6 +305,28 @@ checks against hooks and geometry.
 **When a spec fails**, first check whether it is a stale expectation rather than
 a regression — confirm by reading the actual hook values.
 
+**A tolerance can be hiding a second measurement.** If a spec settles the sim
+before reading (`step()` to let a gearbox pick a gear, a frame or two for a
+filter), it is reading the thing it named PLUS whatever those frames did — and
+a loose tolerance will absorb the difference silently until something widens the
+range being swept.
+
+Measured instance. `sliders.spec.js` › *OVERALL SPEED leaves the dial→gear
+mapping identical* jumps to the speed that puts the dial at a target km/h, steps
+two frames so the automatic box can choose a gear, and reads gear AND `dashKph`
+out of the same `obs()`. Those frames coast, so the car sheds
+`COAST_DRAG * 2/60 = 0.2 m/s` first — and `COAST_DRAG` is an absolute force
+(deliberately: it is part of what makes low pace forgiving) while `dashKph`
+divides by pace. The dial therefore loses `0.2 / pace * 3.6` km/h, which is
+1.54 at pace 0.47 and 0.54 at 1.34. Under the old 1..10 pace grid the spread was
+0.886 km/h against a `< 1` tolerance; widening the grid to 1..19 took it to
+0.998 and the spec went red — for a defect it had been carrying all along.
+
+The fix is never to widen the tolerance. Read the value the test is about at the
+moment it is true (here: the dial at the jump) and read the value that needs
+settling after the settle (the gear). Two reads from two `obs()` calls, with a
+comment saying why they are not one.
+
 ### Viewport rules
 
 - Tests that touch `#pm-steer` / `#pm-calib` must use `hasTouch: true` — desktop
