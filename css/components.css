@@ -475,7 +475,9 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 /* ---------- buttons ---------- */
 .bigbtn {
   display: block;
-  width: min(78vw, 340px);
+  /* --vwz, not bare vw: .bigbtn lives inside .sheet and inside #overlay > *,
+     both of which are zoomed. See the note in tokens.css. */
+  width: min(calc(78 * var(--vwz)), 340px);
   margin: 10px auto;
   /* on the height ladder (css/tokens.css). The padding alone happened to land
      these on --tap at most sizes and a pixel or two off at others; stating the

@@ -85,7 +85,9 @@
    four quick modes into 2x2 pays for the hero's extra height, so the column is
    no taller than before and still clears a 390px landscape phone. */
 #menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
-#menu-hero, #menu-primary, #menu-secondary { display: grid; width: min(78vw, 340px); }
+/* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
+   `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
+#menu-hero, #menu-primary, #menu-secondary { display: grid; width: min(calc(78 * var(--vwz)), 340px); }
 /* 2x2. minmax(0,1fr) rather than 1fr because a grid column's default `min-width:
    auto` refuses to shrink below its longest word — RACE A FRIEND would push the
    pair wider than the hero above it. */
@@ -174,7 +176,7 @@
   #audiostate { font-size: 11px; }
   #disclaimer { font-size: 11px; }
   /* the group is what gets the width now; the buttons fill their cell */
-  #menu-hero, #menu-primary, #menu-secondary { width: min(46vw, 300px); }
+  #menu-hero, #menu-primary, #menu-secondary { width: min(calc(46 * var(--vwz)), 300px); }
   /* One notch up, for the same reason as the HUD and the tap ladder: this
      block is the PHONE, and it was the smallest type in the app on the device
      held furthest from your face. The group widths above cap the row, so the
