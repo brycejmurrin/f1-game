@@ -139,3 +139,52 @@ test("a truncated struct unpacks to null rather than a plausible offer", () => {
   assert.equal(NetSdp.unpack(new Uint8Array([9, 0, 1])), null, "wrong version");
   assert.equal(NetSdp.unpack(null), null);
 });
+
+test("the relay candidate survives the budget, because it arrives last", () => {
+  // MEASURED, and unguarded until now. SDP lists candidates in GATHERING
+  // order — host, then srflx once STUN answers, then relay once TURN
+  // allocates — so relay is ALWAYS last. Truncating the raw sequence at
+  // MAX_CANDS therefore dropped exactly the candidate that matters most, and
+  // dropped it on precisely the machines that need one: a laptop with Wi-Fi,
+  // Ethernet, a VPN and IPv6 fills eight slots before a relay line is emitted.
+  //
+  // The symptom was maddening. __apex.turnProbe() reported every Metered
+  // server reachable, the connection gathered relay candidates, and the invite
+  // code carried none — so the peer was handed addresses it could not reach.
+  // Every wire dump read relay:0 and looked exactly like a dead relay.
+  const cands = [
+    "a=candidate:1 1 udp 2113937151 192.168.1.10 5001 typ host",
+    "a=candidate:2 1 udp 2113937151 192.168.1.11 5002 typ host",
+    "a=candidate:3 1 udp 2113937151 10.0.0.5 5003 typ host",
+    "a=candidate:4 1 udp 2113937151 10.211.55.2 5004 typ host",
+    "a=candidate:5 1 udp 2113937151 172.16.0.3 5005 typ host",
+    "a=candidate:6 1 udp 2113937151 192.168.64.1 5006 typ host",
+    "a=candidate:7 1 udp 1677729535 203.0.113.9 5007 typ srflx raddr 0.0.0.0 rport 0",
+    "a=candidate:8 1 udp 1677729535 203.0.113.10 5008 typ srflx raddr 0.0.0.0 rport 0",
+    "a=candidate:9 1 udp 16777215 198.51.100.7 5009 typ relay raddr 0.0.0.0 rport 0",
+  ];
+  const sdp = [
+    "v=0", "o=- 1 2 IN IP4 127.0.0.1", "s=-", "t=0 0",
+    "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
+    "c=IN IP4 0.0.0.0", "a=ice-ufrag:AbCd",
+    "a=ice-pwd:0123456789abcdefghijklmn",
+    "a=fingerprint:sha-256 " + Array.from({ length: 32 },
+      (_, i) => ((i * 7) % 256).toString(16).toUpperCase().padStart(2, "0")).join(":"),
+    "a=setup:actpass", "a=sctp-port:5000",
+  ].concat(cands).join("\r\n") + "\r\n";
+
+  assert.ok(cands.length > 8, "the fixture must actually exceed the budget");
+
+  const bytes = NetSdp.pack(sdp);
+  assert.ok(bytes, "a crowded SDP must still pack");
+  const out = NetSdp.unpack(bytes);
+  assert.ok(out, "and unpack");
+
+  assert.match(out, /198\.51\.100\.7 5009 typ relay/,
+    "THE RELAY MUST SURVIVE — it is the one candidate that works when none of "
+    + "the others can, and it is always the last one gathered");
+  assert.match(out, /typ srflx/, "the public address keeps its place too");
+  assert.match(out, /typ host/,
+    "and the LAN keeps one, because two phones on a sofa are the case the "
+    + "mDNS packing exists for");
+});

@@ -158,3 +158,46 @@ test("Trystero is dynamic-imported, never in the boot path", () => {
   const manifest = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
   assert.ok(!manifest.includes("trystero"), "not part of the IIFE load order");
 });
+
+// ---------------------------------------------------------------------------
+// A relay that refuses us must be distinguishable from a relay that is down
+// ---------------------------------------------------------------------------
+
+test("a rejection is console.warn and NOTHING else, which is why we intercept it", () => {
+  // This pins the vendor behaviour our diagnosis depends on. NIP-01 says a
+  // relay refuses with ["OK", <id>, false, "<reason>"], and the whole of
+  // Trystero's response to that is one console.warn: no retry, no backoff,
+  // the relay is not dropped from the pool, and nothing is handed back to the
+  // caller. If a future vendor bump gives us a real callback, this test fails
+  // and the console.warn interception in js/net/nostr.js should be replaced
+  // by it rather than kept out of habit.
+  const nostr = fs.readFileSync(path.join(VENDOR, "nostr/index.js"), "utf8");
+  assert.match(nostr, /relay failure from/,
+    "the warning text our matcher keys on must still exist");
+  assert.match(nostr, /msgType === "OK" && !payload/,
+    "an OK with payload=false is how a rejection arrives");
+  // The warning is the ONLY reaction: no throw, no callback, no removal.
+  const around = nostr.slice(Math.max(0, nostr.indexOf("relay failure from") - 400),
+                             nostr.indexOf("relay failure from") + 400);
+  assert.ok(!/throw |reject\(|onRelayReject|removeRelay/.test(around),
+    "if the vendor gains a real error channel, use it instead of the warn hook");
+});
+
+test("our exchange reports 'connected but refused' as its own outcome", () => {
+  // getRelaySockets() only ever reports TRANSPORT state, so a relay that
+  // completes the WebSocket handshake and then throws away every event we
+  // publish counts as live. Without a separate signal the host waits the full
+  // JOIN_TIMEOUT_MS and blames the other player for not joining — which is
+  // precisely what a real phone reported while wellorder was answering
+  // "blocked: spam not permitted".
+  assert.match(ours, /rejectedBy/,
+    "rejections must be tracked, not merely printed");
+  assert.match(ours, /all_rejected/,
+    "and surfaced as a typed outcome distinct from no_relay and expired");
+  // Only when EVERY live relay refuses — one fussy relay out of six must not
+  // scare a player off a room that is working.
+  assert.match(ours, /rejectedBy\.size >= live/,
+    "a single rejecting relay is survivable and must not be reported");
+  assert.match(ours, /restoreWarn/,
+    "console.warn must be restored, or the patch outlives the lobby");
+});

@@ -194,11 +194,55 @@ const NetNostr = (function () {
       // told nothing and sat on a spinner forever. Reported from a real
       // console: damus rate-limiting and nos.social timing out, with the page
       // showing no error at all.
+      // WHICH RELAYS ARE REFUSING US, which is otherwise unknowable.
+      //
+      // A Nostr relay that dislikes our traffic answers NIP-01
+      // ["OK", id, false, "blocked: spam not permitted"] — and Trystero turns
+      // that into a console.warn and nothing else (nostr/index.js): no retry,
+      // no backoff, the relay is not dropped, and no callback, event or return
+      // value reaches us. Meanwhile getRelaySockets() still reports the socket
+      // OPEN, because it is: the WebSocket handshake succeeded, it is the
+      // EVENTS that are being thrown away. So the health probe below passes,
+      // the host waits the full two minutes, and reports "nobody joined" —
+      // when the truth was knowable in five seconds and is something else
+      // entirely.
+      //
+      // That is exactly what happened on a real phone: every relay live,
+      // wellorder answering "blocked: spam not permitted", and both players
+      // staring at spinners. Trystero announces once per relay every ~5.3 s
+      // plus an event per ICE candidate, which is what reads as spam.
+      //
+      // Intercepting console.warn is not elegant. It is the ONLY seam the
+      // vendored library offers, it is scoped to this exchange and restored in
+      // finish(), and the alternative is shipping a feature whose failure mode
+      // is a silent two-minute wait. Everything is guarded: if the shape of
+      // that warning ever changes we simply learn nothing, exactly as today.
+      const rejectedBy = new Set();
+      const warnRe = /relay failure from (\S+?)\/?\s*-\s*(.*)$/i;
+      const realWarn = (typeof console !== "undefined" && console.warn) || null;
+      if (realWarn) {
+        console.warn = function (...args) {
+          try {
+            const first = args.length ? String(args[0]) : "";
+            const m = first.match(warnRe);
+            // "blocked", "rate-limited", "restricted", "not permitted" — a
+            // refusal. A transport hiccup is not, and must not be counted, or
+            // a flapping relay would be reported as a policy rejection.
+            if (m && /block|spam|rate|restrict|not permitted|invalid|reject|pow|proof.of.work/i.test(m[2] || "")) {
+              rejectedBy.add(m[1]);
+            }
+          } catch (e) { /* never let diagnostics break the caller */ }
+          return realWarn.apply(console, args);
+        };
+      }
+      const restoreWarn = () => { if (realWarn) console.warn = realWarn; };
+
       const finish = (r) => {
         if (done) return;
         done = true;
         clearInterval(tick);
         clearInterval(rebroadcast);
+        restoreWarn();
         leave();
         if (!settled) { settled = true; resolve(r); return; }
         // Already answered, so the only way to report this is the callback the
@@ -231,6 +275,17 @@ const NetNostr = (function () {
           finish({ ok: false, error: "no_relay",
             message: "Could not reach any room service — this network may be blocking it."
                    + " Use the invite link or QR instead." });
+          return;
+        }
+        // CONNECTED AND REFUSED is a third state, and the one that actually
+        // happens. Reported only when EVERY live relay has rejected us: one
+        // fussy relay out of six is survivable and must not scare anybody off
+        // a working room.
+        if (rejectedBy.size >= live) {
+          finish({ ok: false, error: "all_rejected",
+            message: "The room service refused this code — its relays are turning away"
+                   + " anonymous traffic. Use the invite link or QR instead; they need"
+                   + " no third party." });
         }
       }, RELAY_CHECK_MS);
 
@@ -345,29 +400,29 @@ const NetNostr = (function () {
               put();
             }
             room.onPeerJoin = (id) => { if (!done) put(id); };
-            // AND REPEAT IT, because a Nostr room has no memory and the join
-            // hook cannot be trusted to fire.
+            // A cheap safety net for ONE narrow case, and — read this before
+            // reasoning about it — NOT a fix for anything at the relay.
             //
-            // Trystero subscribes with `since: now()` and these are EPHEMERAL
-            // events — relays store nothing. So a guest that subscribes after
-            // the host published can NEVER see that publication; its only hope
-            // is the host posting again, which until now happened solely in
-            // onPeerJoin. That makes the entire room-code route depend on
-            // Trystero's presence announcements propagating, through public
-            // relays, both ways, in seconds.
+            // WHAT THIS ACTUALLY DOES. post() is swap.send(), and a Trystero
+            // action sends over the WEBRTC DATA CHANNEL to peers already in
+            // peerMap (core/action-wire.js). It publishes no Nostr event
+            // whatsoever. With nobody connected it is a silent no-op. So the
+            // only thing this interval buys is covering a put() that raced its
+            // data channel opening — worth the near-zero cost, worth nothing
+            // more.
             //
-            // Measured on two devices on ONE Wi-Fi, both healthy: the host sat
-            // for the full two minutes and reported "Nobody joined that code"
-            // while the guest sat at "Looking for that room…". Neither ever
-            // saw the other. The offer had been posted once, before the guest
-            // existed, and nothing posted it again.
+            // WHAT IT DOES NOT DO, because build 977 shipped claiming it did:
+            // it cannot help a guest that has not been discovered yet. Peer
+            // discovery is Trystero's own announce, over the relay, and by the
+            // time this timer can reach anyone that handshake has already
+            // succeeded. A guest the host has never seen is unreachable by
+            // definition here, and re-running this faster would only have
+            // added load to a path already being refused for spam.
             //
-            // Re-broadcasting the SAME small string every few seconds removes
-            // the dependency entirely: whenever the guest turns up, the next
-            // tick reaches it. It is not the per-join MINTING that got us
-            // rate-limited in build 954 — no RTCPeerConnection is created, no
-            // ICE is gathered, it is one already-built payload roughly every
-            // five seconds for as long as somebody is genuinely waiting.
+            // The real failure that 977 mistook for this: public relays reject
+            // Trystero's announce ("blocked: spam not permitted"), which is
+            // console.warn-only inside the vendor and invisible to us. See the
+            // rejection tracking above.
             rebroadcast = setInterval(() => { if (!done) put(); }, REPOST_MS);
             rotate = async (next) => {
               current = next || null;
