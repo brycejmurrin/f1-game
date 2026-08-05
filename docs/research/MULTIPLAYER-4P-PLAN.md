@@ -424,3 +424,82 @@ One commit per phase slice, on
 `claude/multiplayer-seat-exclusivity-q34ksy`, pushed with
 `git push -u origin claude/multiplayer-seat-exclusivity-q34ksy`. No pull
 request unless asked.
+
+---
+
+## ADDENDUM — the relay, MEASURED (build 972)
+
+Four-player works and is deployed. What does not work is a player whose
+network needs a **TURN relay**: a real device reported *"Both sides found an
+address but the direct link was blocked"* — the textbook symptom — with
+`relay:0, turn:false`. Build 971 removed the relay this game shipped, because
+Metered had retired Open Relay's embeddable static credentials and **a dead
+relay is worse than none**: it looks like a relay exists and diagnosis chases
+the wrong thing. That left no relay at all.
+
+The plan to close it was: ship the two free no-signup relays (Open Relay via
+the published coturn REST secret, and freestun), add `__apex.turnProbe()`, and
+let a real device settle whether they were alive — since the sandbox's egress
+proxy refuses TURN and routing around it is forbidden by its own README.
+
+**They were settled, and the answer is no.** A browser outside the sandbox
+(TinyFish web automation) ran the WebRTC trickle-ICE gather from **two
+independent internet vantage points**, public IPs `18.145.255.226` and
+`54.151.122.159`, each carrying a **control** — Google STUN — alongside both
+relays:
+
+| vantage | control (Google STUN) | Open Relay | freestun |
+|---|---|---|---|
+| 18.145.255.226 | **srflx candidate** | 0 relay candidates | 0 relay candidates |
+| 54.151.122.159 | **srflx candidate** | 0 relay candidates | 0 relay candidates |
+
+The control is the whole point: it proves DNS and UDP worked, so zero relay
+candidates is a fact about the relays rather than about the test box. The
+first, control-less run proved nothing and was correctly discarded.
+Independently, streamlit-webrtc's own docs (July 2026) describe Open Relay as
+"often down".
+
+### What shipped instead
+
+- **No relay is enabled by default.** 971's judgement stands, now on
+  measurement rather than on a docs page.
+- **The derivation is written, tested and dormant.** `js/net/transport.js`
+  derives the coturn REST credential properly —
+  `username = <unix expiry>`, `credential = base64(HMAC-SHA1(secret, username))`
+  via WebCrypto, pinned in `tests/net-transport.test.mjs` against an
+  independently computed HMAC — behind
+  `localStorage.setItem("apex26.freeTurn", "true")`. One line the day either
+  operator comes back.
+- **`__apex.turnProbe()`** — one throwaway `RTCPeerConnection` per server at
+  `iceTransportPolicy: "relay"`, so a candidate can only have come from TURN
+  and per-server means one dead entry cannot hide behind a live one. It probes
+  `NetTransport.iceServers({})`, i.e. what the game would really use.
+- **The lobby says which problem it is.** `NetTransport.hasRelay()` splits
+  *no relay configured* from *a relay was offered and did not carry it* —
+  opposite instructions to give a stuck player, and the old single sentence
+  sent the second one round a loop that cannot succeed.
+
+### What is left, and it is not code
+
+A relay that works costs someone money. The remaining options are all a
+**config change**: `apex26.turnApi` pointing at a Metered free-tier
+credentials URL (50 GB/month, needs an account), or a Cloudflare Realtime TURN
+key minted by a worker (1 TB/month free, needs an account *and* something to
+deploy — the TURN key must never reach the browser). Both were rejected
+earlier under "nothing to deploy"; that constraint is now the thing standing
+between the game and cross-NAT play, and it is the owner's call, not a
+technical one.
+
+### Not doing, and why
+
+- **`speed.cloudflare.com/turn-creds`** — a public, no-account endpoint that
+  mints real Cloudflare TURN credentials, and it fits `apex26.turnApi`
+  exactly. It is an undocumented internal of Cloudflare's speed test, offered
+  for that page and not for third-party apps. Building the game's default path
+  on it is the same freeloading that got Open Relay's static credentials
+  retired, and would rot the same way. Worth knowing exists; not worth
+  shipping.
+- **netplayjs** (reviewed): its ICE list comes from its own matchmaking server
+  — the idea this repo already ships as `apex26.turnApi` — and its default is
+  Google STUN with no TURN, so it does not solve this. Its rollback netcode
+  needs deterministic simulation, which this engine explicitly cannot provide.

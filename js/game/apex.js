@@ -2075,6 +2075,93 @@ const api = {
     return G.netLobby.codeJoin(code);
   },
 
+  // turnProbe() — is a relay actually there?
+  //
+  // "Both sides found an address but the direct link was blocked" is the one
+  // failure a player cannot act on and we cannot reproduce: it needs two real
+  // networks, and every free TURN operator this game has tried either retired
+  // its embeddable credentials or answered a lookup with nothing. So the
+  // aliveness of a relay is not a thing to reason about — it is a thing to
+  // MEASURE, on the machine that has the problem.
+  //
+  // One throwaway RTCPeerConnection PER SERVER, each with
+  // iceTransportPolicy "relay". Per-server is the whole point: a combined
+  // gather says only "something worked", which is exactly the answer that
+  // leaves you shipping a dead entry alongside a live one. Relay-only is the
+  // other half — with host and srflx candidates discarded, a candidate can
+  // only have come from TURN, so `relay > 0` is proof rather than inference.
+  //
+  // Reads NetTransport.iceServers({}) so it probes what the GAME would use,
+  // including anything apex26.turn / apex26.turnApi added. A STUN-only entry
+  // is reported with ok:false and stun:true rather than skipped — "you have
+  // no relay configured" is a distinct diagnosis from "your relay is down",
+  // and it is the one the lobby copy now depends on being distinguishable.
+  turnProbe(ms) {
+    const PC = (typeof RTCPeerConnection !== "undefined") ? RTCPeerConnection : null;
+    if (!PC || typeof NetTransport === "undefined") {
+      return Promise.resolve({ ok: false, error: "no_webrtc" });
+    }
+    const wait = Math.max(1000, Number(ms) || 8000);
+    // Flatten: iceServers() groups the STUN urls under one entry, and a
+    // grouped entry that half works would report as one verdict.
+    const flat = [];
+    for (const e of NetTransport.iceServers({})) {
+      const urls = Array.isArray(e.urls) ? e.urls : [e.urls];
+      for (const u of urls) flat.push({ urls: u, username: e.username, credential: e.credential });
+    }
+    const one = (srv) => new Promise((done) => {
+      const isTurn = /^turns?:/i.test(srv.urls);
+      let pc = null;
+      const out = { urls: srv.urls, relay: 0, ok: false, stun: !isTurn };
+      // A STUN entry cannot yield a relay candidate by definition, so probing
+      // it relay-only would report a false failure. Name it and move on.
+      if (!isTurn) { out.error = "not_a_relay"; done(out); return; }
+      try {
+        pc = new PC({ iceServers: [srv], iceTransportPolicy: "relay" });
+      } catch (e) { out.error = "construct_failed"; done(out); return; }
+      const finish = () => {
+        if (!pc) return;
+        out.ok = out.relay > 0;
+        if (!out.ok && !out.error) out.error = "no_relay_candidates";
+        try { pc.close(); } catch (e) {}
+        pc = null;
+        done(out);
+      };
+      const timer = setTimeout(finish, wait);
+      pc.onicecandidate = (ev) => {
+        if (!ev.candidate) { clearTimeout(timer); finish(); return; }
+        if (/ typ relay /.test(ev.candidate.candidate)) out.relay++;
+      };
+      // The gather error carries the operator's own verdict — 701 is a DNS
+      // failure, 401 a rejected credential, and those want opposite fixes.
+      pc.onicecandidateerror = (ev) => {
+        if (ev && ev.errorCode && !out.error) {
+          out.error = "ice_" + ev.errorCode + (ev.errorText ? " " + ev.errorText : "");
+        }
+      };
+      try {
+        pc.createDataChannel("probe");
+        pc.createOffer().then((o) => pc && pc.setLocalDescription(o)).catch(() => {});
+      } catch (e) { clearTimeout(timer); out.error = "offer_failed"; finish(); }
+    });
+    return Promise.all(flat.map(one)).then((servers) => {
+      const relays = servers.filter((s) => !s.stun);
+      return {
+        ok: relays.some((s) => s.ok),
+        servers,
+        relaysConfigured: relays.length,
+        // The sentence to paste back. A probe whose result needs interpreting
+        // is a probe that gets misreported.
+        summary: !relays.length
+          ? "No TURN relay is configured — only STUN. Cross-network play will fail whenever both sides are behind a strict NAT."
+          : relays.some((s) => s.ok)
+            ? "Relay reachable: " + relays.filter((s) => s.ok).map((s) => s.urls).join(", ")
+            : "A relay is configured but none answered: "
+              + relays.map((s) => s.urls + " (" + s.error + ")").join(", "),
+      };
+    });
+  },
+
   // lobbyInviteAnother() — mint a FURTHER invite without disturbing the room.
   // Deliberately not lobbyHost() twice: that calls open(), which clears the
   // peer maps, so inviting a third player would forget the second.
