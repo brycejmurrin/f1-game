@@ -198,15 +198,78 @@ test("the buffer is bounded, so a long session cannot grow it without limit", ()
 
 test("discrete fields step instead of blending", () => {
   // Half a gear is not a thing, and a half-set kerb flag would flicker the
-  // rumble on a rival's car.
+  // rumble on a rival's car. NOTE lap is deliberately NOT asserted here — it is
+  // not a free-stepping discrete field, it is the high half of (lap, s) and can
+  // only move when s crosses the line. The tests below own that.
   const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
-  buf.push(0, car({ gear: 3, lap: 1, onKerb: false }));
-  buf.push(100, car({ gear: 4, lap: 2, onKerb: true }));
+  buf.push(0, car({ gear: 3, onKerb: false }));
+  buf.push(100, car({ gear: 4, onKerb: true }));
   const early = buf.sample(20), late = buf.sample(80);
   assert.equal(early.gear, 3);
-  assert.equal(early.lap, 1);
   assert.equal(early.onKerb, false);
   assert.equal(late.gear, 4);
-  assert.equal(late.lap, 2);
   assert.equal(late.onKerb, true);
+});
+
+// ---- lap and s cross the line TOGETHER ------------------------------------
+// The gap that let a real bug through: one test above wraps s with lap held
+// constant, another stepped lap with no wrap — never both at once, which is the
+// only case where the two can disagree. netplay reconstructs race position as
+// prog = lap*total + s, so a pair that disagrees puts the rival a whole lap out;
+// the +1 case briefly ranks them leader and rubber-bands the entire AI field.
+const progOf = (st) => st.lap * TOTAL + st.s;
+
+test("prog is monotonic across the start/finish line (blend, both halves)", () => {
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+  buf.push(0, car({ s: TOTAL - 50, lap: 3, speed: 100 }));
+  buf.push(100, car({ s: 50, lap: 4, speed: 100 }));   // crossed at u = 0.5
+  let prev = progOf(buf.sample(0));
+  // Walk the whole interval, including u < 0.5 and u > 0.5 (the old code took
+  // lap from whichever sample was nearer, so both halves were wrong in turn).
+  for (let t = 5; t <= 100; t += 5) {
+    const st = buf.sample(t);
+    const prog = progOf(st);
+    assert.ok(prog >= prev - 1e-6, `prog went backwards at t=${t}: ${prev} -> ${prog}`);
+    assert.ok(prog - prev < TOTAL / 2, `prog jumped a lap at t=${t}: ${prev} -> ${prog}`);
+    assert.ok(st.s >= 0 && st.s < TOTAL, `s out of range at t=${t}: ${st.s}`);
+    prev = prog;
+  }
+  // And it lands exactly on the newer packet's own progress.
+  assert.ok(Math.abs(progOf(buf.sample(100)) - (4 * TOTAL + 50)) < 1e-6);
+});
+
+test("a car reversing back over the line loses a lap rather than gaining one", () => {
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+  buf.push(0, car({ s: 50, lap: 4, speed: -100 }));
+  buf.push(100, car({ s: TOTAL - 50, lap: 3, speed: -100 }));
+  // At exactly halfway the car sits ON the line (s = 0), which belongs to the
+  // higher lap — so step just past it to see the crossing itself.
+  assert.equal(buf.sample(50).lap, 4, "s = 0 is still the lap it completed");
+  const past = buf.sample(60);
+  assert.equal(past.lap, 3, "lap must step DOWN with the backward crossing");
+  assert.ok(past.s > TOTAL - 20, `should be just before the line, got ${past.s}`);
+  assert.ok(progOf(past) < progOf(buf.sample(50)), "prog must fall while reversing");
+});
+
+test("extrapolating across the line carries the lap with it", () => {
+  // advance() wrapped s and never touched lap, so a packet gap over the line
+  // showed the rival a full lap behind for up to maxExtrapMs.
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0, maxExtrapMs: 250 });
+  buf.push(0, car({ s: TOTAL - 10, lap: 2, speed: 100 }));
+  const before = buf.sample(50);     // 5 m on: still 5 m short of the line
+  assert.equal(before.lap, 2);
+  const after = buf.sample(200);     // 20 m on: 10 m past the line
+  assert.equal(after.lap, 3, "lap must step with the wrap");
+  assert.ok(after.s >= 0 && after.s < TOTAL);
+  assert.ok(progOf(after) > progOf(before), "extrapolated prog must keep rising");
+});
+
+test("a state with no lap field is left alone by both movers", () => {
+  // The buffer carries whatever the packet had; a caller that never sends lap
+  // must not suddenly grow a NaN one.
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+  buf.push(0, { s: TOTAL - 50, x: 0, head: 0, speed: 100 });
+  buf.push(100, { s: 50, x: 0, head: 0, speed: 100 });
+  assert.equal(buf.sample(50).lap, undefined);
+  assert.equal(buf.sample(500).lap, undefined);   // extrapolated
 });

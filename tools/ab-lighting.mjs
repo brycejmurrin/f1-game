@@ -153,7 +153,11 @@ const KNOBS = [
     expect: { region: "road", metric: "mean", dir: "~", minRel: 0.25 },
     note: "low-strength sheen fade; B = full darker-mirror even at faint levels" },
   { id: "ssr.roadMask", file: "js/render/shaders/post.js", scene: "zandRain",
-    find: "smoothstep(0.40, 0.75, upDot)", b: "smoothstep(0.55, 0.85, upDot)",
+    // Anchored on the ASSIGNMENT: the bare smoothstep(...) literal now also
+    // appears in two explanatory comments above, and the catalog contract is
+    // exactly one hit per knob.
+    find: "float roadMask = smoothstep(0.25, 0.55, upDot)",
+    b:    "float roadMask = smoothstep(0.55, 0.85, upDot)",
     expect: { region: "road", metric: "mean", dir: "~", minRel: 0.25 },
     note: "up-facing gate — B is the old edge that dropped banked-corner reflections" },
   // ── Shadows ──
@@ -195,9 +199,11 @@ const KNOBS = [
     find: "(raceTimeOfDay === \"default\" && track.def.night)) ? 0.78", b: "(raceTimeOfDay === \"default\" && track.def.night)) ? 0.40",
     expect: { region: "frame", metric: "mean", dir: "-", minRel: 0.02 },
     note: "prop emissive ramp at night (lit windows / lens glow level)" },
-  { id: "night.exposure", file: "js/game.js", scene: "qatarNight",
-    find: "frame.exposure = (track && track.def && track.def.theme === \"street_night\") ? 0.86 : 0.90;",
-    b:    "frame.exposure = (track && track.def && track.def.theme === \"street_night\") ? 1.05 : 1.10;",
+  // applyRaceSettings moved to js/game/atmosphere.js; this is its EXPLICIT-night
+  // branch (raceTimeOfDay === "night"), which is what every *Night scene uses.
+  { id: "night.exposure", file: "js/game/atmosphere.js", scene: "qatarNight",
+    find: "G.frame.exposure = (G.track && G.track.def && G.track.def.theme === \"street_night\") ? 0.86 : 0.90;",
+    b:    "G.frame.exposure = (G.track && G.track.def && G.track.def.theme === \"street_night\") ? 1.05 : 1.10;",
     expect: { region: "frame", metric: "mean", dir: "+", minRel: 0.05 },
     note: "explicit-night exposure — the master dark-stays-dark knob" },
   { id: "night.bloomThresh", file: "js/game.js", scene: "vegasNight",
@@ -206,10 +212,11 @@ const KNOBS = [
     note: "night bright-pass threshold; lower = more of the scene blooms" },
 ];
 
-// Applied to js/game.js in EVERY render (baseline AND variant): freeze the
+// Applied to js/game/lighting.js in EVERY render (baseline AND variant): freeze the
 // per-lamp flicker so night scenes are deterministic — otherwise the ±2/10%
 // lamp breathing (performance.now-driven) adds ~1 luma of A-vs-B noise that
 // has nothing to do with the knob under test.
+const FREEZE_FLICKER_FILE = "js/game/lighting.js";
 const FREEZE_FLICKER = ["const amp = hsh > 0.90 ? LT.lampFlicker : LT.lampFlicker * 0.2;", "const amp = 0.0;"];
 
 // ── Static server: serves ROOT, applying {file → [find,replace]} overrides ──
@@ -229,7 +236,7 @@ function startServer(overrides) {
           if (!text.includes(ov[0])) throw new Error(`knob find-string missing in ${p}`);
           text = text.replace(ov[0], ov[1]);
         }
-        if (file === "js/game.js" && text.includes(FREEZE_FLICKER[0]))
+        if (file === FREEZE_FLICKER_FILE && text.includes(FREEZE_FLICKER[0]))
           text = text.replace(FREEZE_FLICKER[0], FREEZE_FLICKER[1]);
         body = Buffer.from(text);
       }
@@ -590,4 +597,4 @@ if (process.argv[1] && process.argv[1].endsWith("ab-lighting.mjs")) {
   main().catch((e) => { console.error("FATAL", e); process.exit(1); });
 }
 
-export { KNOBS, SCENES, REGIONS, FREEZE_FLICKER };
+export { KNOBS, SCENES, REGIONS, FREEZE_FLICKER, FREEZE_FLICKER_FILE };

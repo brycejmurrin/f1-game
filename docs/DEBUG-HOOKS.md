@@ -423,6 +423,16 @@ backend, HDR/MSAA/render scale, plus `info`, `assets`, `lightTune`,
 errors — and downloads it as `apex-diag.json`. `diag({download:false})` logs
 without downloading. See [CONSOLE-RECIPES.md](CONSOLE-RECIPES.md).
 
+For a rendering complaint from a device you cannot reach, four keys carry most
+of the answer:
+
+| Key | Reads |
+|---|---|
+| `canvas` | CSS size vs backing-store size vs DPR. A backing store far below `css × dpr` **is** the blur, whatever else is true |
+| `perf` | PerfGov's `scale`/`fps`/`auto` and `tier`/`tierFloor`/`crashStrikes`. `tierFloor > 0` means features are withheld **on purpose** because this device crashed before — a shed feature, not a renderer fault |
+| `glCaps` | `colorFloat`/`colorHalf` (absent sheds the HDR post chain), `maxFragUnif`, and `lost` — a lost context explains a black screen that reads like a shader bug |
+| `stored` | the `apex26.*` overrides on that device: `lightTune`, `camTune`, `gfxBackend`, `debris`, `gfxHigh`, `resMode`, `forceMobileTier`, `envProbeOff`. Any of these beats every shipped default and lives only there, which is the exact shape of a bug that reproduces for one person and nobody else |
+
 ### `save(data, filename) → bytes`
 Hand a file out of the browser. Objects are JSON-stringified; strings and Blobs
 pass through. This is the reliable way to get state out of a real device —
@@ -557,7 +567,7 @@ Telemetry for every car, leader first: lateral `x` (and smoothed `xv`), visual
 `yaw`, `prog`ress, `speed`, `lap`, in-contact timer `ct`, `kerb` flag, and `p` =
 is-player. For measuring pack jitter / side-by-side stability.
 
-### `carAt(idx?) → {id, isPlayer, team, x, speed, prog, s, lap, finished, finishT, contactT, wrongWay, rescueT, otArmed, otEnabled, xArmed, …} | null`
+### `carAt(idx?) → {id, driverId, isPlayer, team, x, speed, prog, s, lap, finished, finishT, contactT, wrongWay, rescueT, otArmed, otEnabled, xArmed, …} | null`
 Detailed telemetry for one car by index (from the `cars()` list). Called with no
 argument returns **the player** — note that `carAt(0)` is `cars[0]`, which is an
 AI car, so a probe that means "me" must pass no argument. Returns `null` for an
@@ -1019,11 +1029,24 @@ __apex.carInput(4, { steer: 0.3, throttle: true });
 __apex.step(1 / 60, 60);
 ```
 
-### `net() → {active, role, localId, remoteId, net, buffered, events, reason}`
-The live session, or `{active:false}` when racing solo. `localId`/`remoteId` are
-`cars()` indices; `net` is the clock/liveness snapshot (`rtt`, `offset`,
-`synced`, `alive`); `buffered` is how many packets the rival's interpolation
-buffer is holding.
+### `net() → {active, role, localId, remoteId, remotes, slotFallback, net, buffered, events, reason}`
+The live session, or `{active:false}` when racing solo. `net` is the
+clock/liveness snapshot (`rtt`, `offset`, `synced`, `alive`).
+
+`remotes` is the one to read: an entry per rival, `{id, wire, driverId,
+buffered}`. `remoteId`/`buffered` describe only the FIRST rival and are kept
+for older callers.
+
+`id` is a `cars()` index and is **not comparable across peers** — `makeCars()`
+drops the custom team unless the local player picked it, so two screens in the
+same race have grids of different length and order. `wire` (`G.wireId`) and
+`driverId` are content-derived and are the same on every screen; key anything
+cross-peer on those.
+
+`slotFallback` is `null` when a rival got the seat it asked for, `"team"` or
+`"any"` when it did not. Seat exclusivity should make the fallbacks
+unreachable, so a non-null value means something upstream let two players hold
+one seat.
 
 ### `netLoopback({nowMs?, latencyMs?, jitterMs?, loss?, interpDelayMs?, role?, peer?}) → {ok, role, localId, remoteId}`
 Start a session against an **in-page** peer — no signalling, no second browser,
@@ -1035,10 +1058,32 @@ car outright. The rival is **posed from replicated state and not simulated
 locally** — `updateCar()` early-outs on it — so with a session live and nothing
 arriving, the rival does not move at all.
 
-### `netPeerSend(state, atMs?) → {sent, at} | false`
+### `netPeerSend(state, atMs?, wireId?) → {sent, at} | false`
 Publish one car state **as the remote peer**. Omitted fields default to the
 rival's current values, so you can move one axis at a time. Pass `atMs` to
 stamp it on your virtual clock.
+
+`wireId` overrides the id stamped on the packet, so a test can post a car this
+peer holds no slot for and assert it is **dropped** rather than posed over
+whichever car that number happens to name locally. Without it the id is the
+first rival's real `wire`, which is what a genuine peer would send.
+
+### `lobbyInviteAnother() → Promise<{ok, code} | {ok:false, error}>`
+Mint a FURTHER invite without disturbing the room — host only, and refused
+past the four-player cap. Deliberately not `lobbyHost()` twice: that calls the
+lobby's `open()`, which clears the peer maps, so inviting a third player would
+forget the second.
+
+### `lobbyReady(v?) → bool` · `lobbyStart() → bool`
+The two buttons the waiting room ends with. `lobbyStart()` is host-only and
+returns `false` if anyone is still choosing. Exposed for `tools/rtc-e2e-3p`,
+which drives a real handshake and cannot click — Playwright's actionability
+check fights the ~25 s a real ICE exchange takes, so it would end up testing
+the buttons rather than the wire.
+
+Note that saying READY and the host KNOWING it are separated by a real round
+trip, so poll `lobbyRoom().peerReady` before pressing start rather than
+assuming.
 
 ### `netTick(nowMs?) → status`
 Pump the session by hand. The game loop already calls this every frame, but a
@@ -1057,6 +1102,49 @@ __apex.netPeerSend({ s: __apex.info().total * 0.42, x: 2.5, speed: 0 }, 1000);
 __apex.netTick(1010);
 __apex.carAt(s.remoteId);        // the rival, posed where its owner said
 ```
+
+### `turnProbe(ms?) → Promise<{ok, servers, relaysConfigured, summary}>`
+
+Is a TURN relay actually there? One throwaway `RTCPeerConnection` **per
+server**, each with `iceTransportPolicy: "relay"`, gathering for `ms`
+(default 8000).
+
+Relay-only is what makes the answer proof rather than inference: with host
+and srflx candidates discarded, a candidate can only have come from TURN, so
+`relay > 0` cannot be a direct pair in disguise. Per-server is the other half
+— one combined gather says only "something worked", which is exactly the
+answer that leaves a dead entry shipping next to a live one.
+
+Probes `NetTransport.iceServers({})`, i.e. **what the game would really use**,
+including anything `apex26.turn` / `apex26.turnApi` added. STUN entries are
+reported with `stun: true, error: "not_a_relay"` rather than skipped: "you
+have no relay" and "your relay is down" are opposite diagnoses, and the
+lobby's failure copy branches on the difference.
+
+| Field | Description |
+|---|---|
+| `ok` | Did **any** relay answer |
+| `servers[]` | `{urls, relay, ok, stun?, error?}` per server — `relay` is the candidate count |
+| `relaysConfigured` | How many TURN (not STUN) entries were in the config |
+| `summary` | The sentence to paste back |
+
+`error` carries the operator's own verdict when ICE gave one — `ice_701` is a
+DNS failure, `ice_401` a rejected credential, and those want opposite fixes.
+
+```js
+await __apex.turnProbe();
+// → { ok:false, relaysConfigured:0, servers:[…],
+//     summary:"No TURN relay is configured — only STUN. …" }
+```
+
+**No relay ships enabled by default**, because the two free no-signup ones
+were measured dead: trickle-ICE gathers from two independent vantage points,
+each carrying a Google-STUN control that *did* produce an srflx candidate,
+returned zero relay candidates from both Open Relay and freestun. The
+derivation code is still there behind
+`localStorage.setItem("apex26.freeTurn", "true")` — one line the day either
+operator comes back, and `turnProbe()` is how you find out. See
+`js/net/transport.js`.
 
 ---
 
@@ -1199,17 +1287,6 @@ race. Strikes now expire when the build number changes (`js/game/perf.js`);
 ```js
 __apex.safeMode();        // { strikes: 2, tierFloor: 4, tier: 4 }
 __apex.safeMode(false);   // forget the crash history, lift the floor now
-```
-
-### `diag() → {…}`
-Everything needed to explain a rendering complaint from a device you cannot
-reach: build, canvas CSS size vs backing-store size vs DPR, render scale, fps,
-PerfGov tier/floor/strikes, the WebGL renderer string and the float-target
-extensions, the live lighting values, and which `apex26.*` overrides are stored
-on that device. A backing store far below `css × dpr` **is** the blur; a
-`tierFloor > 0` means features are being withheld on purpose.
-```js
-__apex.diag();
 ```
 
 ### `f1api → F1API | null`

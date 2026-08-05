@@ -123,22 +123,114 @@ test("a throwing message handler cannot take down the transport", () => {
 // ICE configuration
 // ---------------------------------------------------------------------------
 
-test("a TURN relay ships by default, because STUN alone leaves people out", () => {
-  // STUN gets roughly 75-90% of pairs connected; symmetric NAT needs a relay,
-  // and "both sides found an address but the link was blocked" is exactly the
-  // failure seen on real devices. Open Relay publishes static credentials meant
-  // to be embedded client-side, so this costs nothing and needs no deployment.
-  const turn = NetTransport.OPEN_RELAY || [];
-  assert.ok(turn.length, "there must be a default relay");
-  const urls = turn.flatMap((s) => (Array.isArray(s.urls) ? s.urls : [s.urls]));
-  assert.ok(urls.every((u) => u.startsWith("turn:")), "these must be relays, not STUN");
-  // 443 and a TCP variant are what get through a corporate firewall; a relay
-  // only reachable on an exotic UDP port helps nobody behind one.
-  assert.ok(urls.some((u) => u.includes(":443")), "needs a 443 endpoint");
-  assert.ok(urls.some((u) => u.includes("transport=tcp")), "needs a TCP fallback");
-  for (const s of turn) {
-    assert.ok(s.username && s.credential, "static credentials, or it cannot be used from a static site");
+test("no HARDCODED-PASSWORD relay ships, and a credentials URL becomes iceServers", async () => {
+  // Open Relay's embeddable static credentials were retired by Metered — the
+  // shipped config gathered ZERO relay candidates on a real device while STUN
+  // worked, which is worse than shipping nothing: it looks like a relay exists
+  // and diagnosis chases the wrong thing. That named constant must stay gone;
+  // build 972's replacement DERIVES an expiring credential instead (see the
+  // next test), which is a different thing wearing the same word "free".
+  assert.equal(NetTransport.OPEN_RELAY, undefined, "the dead static relay must be gone");
+
+  // The fetch path, driven with stubs: a credentials URL configured, the
+  // endpoint answering the documented {iceServers: [...]} shape.
+  const turnServer = { urls: ["turn:relay.example:443?transport=tcp"], username: "u", credential: "c" };
+  global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://app.example/api/turn?apiKey=x" : null) };
+  global.fetch = async () => ({ json: async () => ({ iceServers: [turnServer] }) });
+  try {
+    await NetTransport.prefetchIce();
+    const list = NetTransport.iceServers({});
+    assert.ok(list.some((s2) => s2.username === "u"), "fetched credentials must be merged");
+    const urls = list.flatMap((s2) => (Array.isArray(s2.urls) ? s2.urls : [s2.urls]));
+    assert.ok(urls.some((u) => u.startsWith("turn:")), "the merged entry is a relay");
+    assert.ok(urls.some((u) => u.startsWith("stun:")), "STUN still present");
+  } finally {
+    delete global.localStorage;
+    delete global.fetch;
   }
+});
+
+// A localStorage stub for the tests that need one flag set. The real one is a
+// browser global; these modules read it directly on purpose, so that the real
+// transport and any harness behave identically.
+function withStore(map, fn) {
+  global.localStorage = { getItem: (k) => (k in map ? map[k] : null) };
+  try { return fn(); } finally { delete global.localStorage; }
+}
+
+test("NO relay ships by default, because both free ones were measured dead", () => {
+  // Two independent vantage points, each with a Google-STUN control that DID
+  // produce an srflx candidate, and zero relay candidates from Open Relay or
+  // freestun on both. A dead relay is worse than none — it looks like a relay
+  // exists and diagnosis chases the wrong thing — so the default is none, and
+  // the lobby is then telling the truth when it says so.
+  //
+  // A FRESH module instance, because prefetchIce() memoises what it fetched
+  // and an earlier test in this file configures a credentials URL. Asserting
+  // "the default" against leaked state would pass or fail on test order.
+  const fresh = load("js/net/transport.js", "NetTransport");
+  const urls = fresh.iceServers({})
+    .flatMap((s) => (Array.isArray(s.urls) ? s.urls : [s.urls]));
+  assert.ok(!urls.some((u) => /^turns?:/.test(u)), "no TURN entry by default");
+  assert.ok(urls.some((u) => /^stun:/.test(u)), "STUN is unaffected");
+  assert.equal(fresh.hasRelay(), false,
+    "hasRelay() drives the lobby's failure copy — it must not claim one exists");
+});
+
+test("the coturn REST credential is derived, not hardcoded, and expires", async () => {
+  // The shared secret is published by the operator as its Nextcloud/Matrix
+  // config, and the scheme is coturn's standard one:
+  //   username   = <unix expiry>
+  //   credential = base64(HMAC-SHA1(secret, username))
+  // Pinning it against an independently computed HMAC is the point: a wrong
+  // digest, a hex-instead-of-base64, or signing the secret with the username
+  // as key all produce a credential that LOOKS right and is rejected by the
+  // relay with a 401 nobody sees.
+  const { createHmac } = await import("node:crypto");
+  const before = Math.floor(Date.now() / 1000);
+  global.localStorage = { getItem: (k) => (k === "apex26.freeTurn" ? "true" : null) };
+  let relays;
+  try {
+    await NetTransport.prefetchIce();
+    relays = NetTransport.iceServers({})
+      .filter((s) => /openrelay/.test(Array.isArray(s.urls) ? s.urls[0] : s.urls));
+  } finally { delete global.localStorage; }
+  const after = Math.floor(Date.now() / 1000);
+  assert.ok(relays.length, "opting in must produce a derived relay entry");
+
+  const { username, credential } = relays[0];
+  const expiry = Number(username);
+  assert.ok(Number.isInteger(expiry), "the username IS the expiry, as an integer");
+  assert.ok(expiry >= before + 86400 && expiry <= after + 86400,
+    "the expiry must be a day out — a credential valid forever is a password");
+
+  const want = createHmac("sha1", "openrelayprojectsecret").update(username).digest("base64");
+  assert.equal(credential, want, "credential = base64(HMAC-SHA1(secret, username))");
+
+  // Every derived entry shares one credential — they are the same host on
+  // different ports, and re-deriving per port would spend three HMACs to get
+  // the same answer.
+  for (const r of relays) assert.equal(r.credential, credential);
+  assert.ok(relays.some((r) => /:443\?transport=tcp/.test(r.urls)),
+    "443/TCP must be offered — it is what survives a corporate firewall");
+});
+
+test("opting in adds relays LAST, and hasRelay() then says so", () => {
+  // The lobby's failure copy branches on hasRelay(): "no relay is configured"
+  // and "a relay is configured and did not answer" are opposite instructions
+  // to give a stuck player, and getting it backwards sends them round a loop
+  // that cannot succeed. So the predicate is pinned, not assumed.
+  withStore({ "apex26.freeTurn": "true" }, () => {
+    assert.equal(NetTransport.hasRelay(), true);
+    const urls = NetTransport.iceServers({})
+      .flatMap((s) => (Array.isArray(s.urls) ? s.urls : [s.urls]));
+    assert.ok(urls.some((u) => /^turns?:/.test(u)), "a TURN entry appears");
+    assert.ok(urls.some((u) => /^stun:/.test(u)), "STUN is never displaced by it");
+    // Intent ordering: STUN first (it is the cheap common case), free relays
+    // LAST so anything the player configured outranks them.
+    const freeAt = urls.findIndex((u) => /freestun|openrelay/.test(u));
+    assert.ok(freeAt > 0, "the free relays are appended, never prepended");
+  });
 });
 
 test("more STUN servers than one, from different operators", () => {
@@ -205,6 +297,31 @@ test("a build mismatch is refused, and says which side is stale", () => {
   const newer = NetHandshake.checkBuild(800, 817);
   assert.equal(newer.ok, false);
   assert.match(newer.message, /reload the page to update/i);
+});
+
+// An UNKNOWN build is not a matching build. localBuild() used to answer a failed
+// version.json fetch with 0 and memoise it, so two peers who had both failed —
+// one flaky network, one service worker mid-update — compared 0 === 0 and were
+// waved through the one guard that keeps mismatched splines, barriers and tuning
+// constants off the same track. They then desynced on it, which is a far harder
+// thing to diagnose than a refusal at the lobby.
+test("an unknown build is refused, not treated as a match", () => {
+  for (const [mine, theirs] of [[null, null], [null, 817], [817, null],
+                                [undefined, 817], [817, undefined]]) {
+    const r = NetHandshake.checkBuild(mine, theirs);
+    assert.equal(r.ok, false, `checkBuild(${mine}, ${theirs}) must not pass`);
+    assert.equal(r.error, "build_unknown");
+    // The old failure mode told people to "reload the page to update", which
+    // could not work: the reload hit the same dead fetch. Say what is true.
+    assert.match(r.message, /could not confirm/i);
+  }
+
+  // A real pair of equal builds still matches — the guard above must not have
+  // swallowed the ordinary case.
+  assert.equal(NetHandshake.checkBuild(817, 817).ok, true);
+  // 0 is a LEGITIMATE build number, not the sentinel it used to double as.
+  assert.equal(NetHandshake.checkBuild(0, 0).ok, true);
+  assert.equal(NetHandshake.checkBuild(0, 817).error, "build_mismatch");
 });
 
 test("SDP survives the round trip verbatim, CRLF-terminated", () => {

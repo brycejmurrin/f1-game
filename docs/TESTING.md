@@ -1,6 +1,6 @@
 # Testing reference
 
-102 root Playwright spec files (`tests/*.spec.js`) + 35 `node --test` unit suites
+102 root Playwright spec files (`tests/*.spec.js`) + 37 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -467,6 +467,8 @@ what it covers.
 | `multiplayer-session.spec.js` | what a session does to the grid: rival posing, extrapolation, loss, hand-back to AI — on a virtual clock, never rAF |
 | `multiplayer-lobby.spec.js` | the VS FRIEND screen — the part a person touches |
 | `multiplayer-room.spec.js` | the waiting room both players share before the lights go out |
+| `multiplayer-seats.spec.js` | seat exclusivity — a seat somebody else is already in cannot be picked, and the clash is reported rather than silently resolved |
+| `multiplayer-npeer.spec.js` | the star room with more than two: one session per peer, a car per joiner, and one peer leaving handing only ITS rival back to the AI |
 | `multiplayer-scan.spec.js` | reading a code with the camera, against a Y4M of a real QR played as a webcam |
 | `multiplayer-scan-cancel.spec.js` | getting OUT of a scan and taking the camera down — a camera outliving its screen is a privacy bug nothing on screen reveals |
 | `net-transport.test.mjs` | the wire with no wire: loopback latency/jitter/loss, deterministic via a seeded rnd |
@@ -484,8 +486,11 @@ what it covers.
 | `load-order.test.mjs` | `index.html` and `tools/carview.html` `<script>` order matches `tools/manifest.cjs` exactly, including `HARD_EDGES` eval-time dependencies |
 | `docs-integrity.test.mjs` | live docs, skills AND source comments reference only files that exist; CLAUDE.md's suite counts, the scenery-api member count, the renderer-backend list, and the skills/tools/docs indexes all match the repo |
 | `test-groups.test.mjs` | the taxonomy: pick-tests rules name real groups and route every source dir; this document lists every group and every test file; `RENDER_SPECS` partitions cleanly; the manual suites stay out of default discovery |
+| `circuit-def-fields.test.mjs` | every field authored in `js/circuits/<id>.js` survives the field-by-field copy into `Tracks.LIST`, or is named engine-only with a reason — an uncopied field reads as `undefined` at every consumer, silently, and the circuit renders as though it was never written |
+| `backend-surface-parity.test.mjs` | every name GLX publishes is an own property of WGX and TLX (`undefined` allowed, absent not) — game.js installs a backend by descriptor-copy, so an absent name keeps GLX's own function running against a null `gl`/`CHK`, and every feature test for it passes before throwing |
 | `test-coverage-audit.test.mjs` | the coverage auditor itself |
 | `fixture-consumer-audit.test.mjs` | the specs that must import `tests/fixtures.js` do |
+| `component-inventory.test.mjs` | the class families in `css/` match `docs/COMPONENTS.md` — a class defined in one file and used from another is the drift this catches |
 | `css-layers.test.mjs` | every rule in a `@layer`-wrapped stylesheet stays inside its declared layer — an unlayered rule (a stray brace closing the layer early) silently outranks every layered rule regardless of specificity, with no parse error and no console warning |
 | `deploy-staging.test.mjs` | the Pages workflow uploads an allow-list of directories — every path the shipped code can fetch must be inside it, or it 404s in production while passing every local run |
 | `service-worker.test.mjs` | the SW's install/fetch/version-guard behaviour |

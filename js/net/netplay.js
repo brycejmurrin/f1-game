@@ -222,7 +222,7 @@ const NetPlay = (function () {
     }
 
     // ---- inbound state ----------------------------------------------------
-    function onState(bytes, from) {
+    function onState(bytes, from, fromId) {
       if (!active || !remotes.size) return;
       const pkt = NetSnapshot.decodeSnapshot(bytes);
       if (!pkt || !pkt.cars.length) return;
@@ -252,7 +252,25 @@ const NetPlay = (function () {
       // would be driving against a round-tripped copy of itself. It is dropped
       // here for free, because localCar is by construction not in `remotes`.
       // Do not "helpfully" fall back to cars[] lookup on a miss.
+      //
+      // AUTHORITY: a peer owns its OWN car and nothing else, so the host checks
+      // the id on the wire against the id it filed for the connection the
+      // packet arrived on. Routing on entry.id alone let a guest pose any car
+      // on the grid — including another player's — simply by naming its
+      // wireId. The host then RELAYED that, so it landed on every screen under
+      // the host's own name, which every other guest trusts by construction.
+      // A peer we hold no car for speaks for nobody and is dropped outright.
+      //
+      // Guest side there is nothing to narrow to: packets come from the host,
+      // which legitimately speaks for the whole field. Trusting the host is
+      // not new trust — it already owns the AI and race control.
+      let ownOnly = null;
+      if (role === "host" && fromId != null) {
+        ownOnly = remoteFor(fromId);
+        if (ownOnly == null) return;
+      }
       for (const entry of pkt.cars) {
+        if (ownOnly != null && entry.id !== ownOnly) continue;
         const r = remotes.get(entry.id);
         if (r) r.interp.push(t, entry);
       }
@@ -266,7 +284,14 @@ const NetPlay = (function () {
     // payload: a peer saying which peer it is would be a peer that can claim to
     // be another one, and the connection already knows.
     function bindSession(id, s) {
-      s.onState((bytes) => onState(bytes, s));
+      // ADOPT, don't stack. A session outlives the screen that opened it — the
+      // lobby creates one before a track exists and NetPlay takes it over once
+      // the race is up — and NetSession only ever appended handlers, so the two
+      // owners' sets accumulated: the lobby's GO could re-enter beginRace()
+      // mid-race, and a start() that ran twice (the no_slot path below still
+      // returns after binding) fired every lap event once per attempt.
+      s.clearHandlers();
+      s.onState((bytes) => onState(bytes, s, id));
       // One peer dropping is not the session ending. Hand THAT rival back to
       // the AI and race on; only the last connection going away stops us — and
       // for a guest, losing the host always does, because the host owns race
@@ -276,7 +301,12 @@ const NetPlay = (function () {
         sessions.delete(id);
         const carFor = remoteFor(id);
         if (carFor != null && sessions.size && role === "host") { handBackToAI(why, carFor); }
-        else stop(why);
+        // "peer_closed", never a bare stop(): stop() defaults an absent reason
+        // to "local", and the transport does not always give one — so a
+        // CONNECTION THAT DROPPED was being reported as a deliberate local
+        // stop. That is not cosmetic; it sent this session hunting for a local
+        // caller that does not exist while a real drop went unexamined.
+        else stop(why || "peer_closed");
         session = sessionList()[0] || null;
       });
       for (const type of Object.keys(EV)) {

@@ -88,10 +88,6 @@ const GameAudio = (function () {
   // site in game.js is left untouched and simply delegates here, and the
   // built-in playlist goes quiet until the backend is removed again.
   let backend = null;
-  // Kept for the old startMusic(trackIdx) callers; the playlist is shared now so
-  // the index only decides where a FRESH start begins, never an interruption.
-  const RACE_TRACKS = PLAYLIST;
-
   let listenersAttached = false;
   let rebuildTries = 0;
   let lastFailedResume = 0;

@@ -25,8 +25,10 @@
      experience   races started, roughly. Ages slowly, damps development, and in
                   career decides who is still improving and who is declining.
 
-   Ratings are read through Career.ratingsFor(), which layers a career's per-driver
-   development deltas on top. Outside career these values are used as-is. */
+   Ratings are read through DriverRatings.get(code, tier, dev) — callers pass the
+   career's per-driver development delta as `dev` (Career.devFor(teamId, seat)),
+   which layers on top. Outside career devFor returns nothing and these values are
+   used as-is. */
 const DriverRatings = (function () {
   "use strict";
 
@@ -130,8 +132,11 @@ const SKILL_SPAN = 0.13333;   // × (pace/100)
 const SKILL_JITTER = 0.03;
 
 // `roll` is a [0,1) sample the CALLER has already drawn. It is passed in rather
-// than drawn here so game.js can guarantee it consumes exactly one simRnd() per
-// driver whether or not ratings are in play — see driverSkill() in game.js.
+// than drawn here so this function cannot change how much of the sim stream
+// makeCars() consumes: the draw stays unconditional in driverSkill() (game.js)
+// whether or not ratings are in play. That INVARIANCE is the contract, not a
+// particular count — makeCars() draws twice per driver, the lane jitter as well
+// as this one.
 function skill(r, roll) {
   const jitter = (roll - 0.5) * SKILL_JITTER * (1 - r.consistency / 100);
   return clamp(SKILL_BASE + (r.pace / 100) * SKILL_SPAN + jitter, 0.90, 1.0);

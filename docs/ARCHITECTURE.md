@@ -4,6 +4,11 @@ Pure JS/CSS/HTML, **no build step**. The **runtime has zero dependencies**;
 Playwright is the only `devDependency` (test harness, never shipped). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
+> This file is the module **contract** — what each module is and what it may
+> assume. For an assessment of how the project is built, what the no-build-step
+> bet costs, and the register of known defects (fixed and deferred), see
+> [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md).
+
 Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track
 **engine** — shared spline/mesh/scenery code), `js/circuits/` (the 40 circuit
 **data** files), `js/car/` (car geometry, liveries, parts, teams), `js/data/`
@@ -81,8 +86,11 @@ coherent after the split:
   tier probe.
 - **`TUNE_DEFS` mirror-comment invariants** in `glx.js`/`gfx.js` — comments that
   must track the registry by hand; replace with a checked mapping.
-- **WebGPU lazy-load** — `js/render/webgpu/*` is parsed by every visitor but
-  activated by almost none; load it on opt-in only.
+- **~~WebGPU lazy-load~~ (done)** — `js/render/webgpu/*` and `js/render/three/*`
+  are now DEFERRED: no `<script>` tag, injected by `js/game.js` only when
+  `apex26.gfxBackend` selects one. See `tools/manifest.cjs`'s `DEFERRED` map;
+  `tests/load-order.test.mjs` pins the manifest, game.js's loader table and
+  `sw.js`'s optional precache seed to each other.
 - **`css/*.css` split** — pending committed visual baselines (the visual
   suite has no tracked golden images yet, so a CSS split can't be gated).
 

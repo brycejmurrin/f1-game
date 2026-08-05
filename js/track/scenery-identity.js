@@ -50,9 +50,6 @@ const SceneryIdentity = (function () {
       }
       // Overhead slab intentionally spans tarmac (cars pass under) → RAW.
       const span = hw[k] * 2 + (pierGap + pierW) * 2 + 1.5;
-      const slabC = [px[k] + u[0] * (clearH + thick / 2),
-                     py[k] + u[1] * (clearH + thick / 2),
-                     pz[k] + u[2] * (clearH + thick / 2)];
       overheadSpan({
         id: `underpass-${k}`, frac: s, clearance: clearH,
         thickness: thick, depth, span, color: col,

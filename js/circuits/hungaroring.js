@@ -65,7 +65,6 @@
 
       // ---- Palette: dry dusty bowl (straw-olive; amph still G-dominant for rounded mounds) ----
       const GRASS  = [0.46, 0.50, 0.26];    // sun-baked straw-olive grass
-      const GRASS2 = [0.42, 0.46, 0.24];    // deeper straw verge
       const AMPH   = [0.48, 0.54, 0.28];    // amphitheatre banking — G-dom → rounded mound
       const AMPH2  = [0.54, 0.58, 0.32];    // sun-bleached terrace variant
       const TREE   = [0.28, 0.36, 0.18];    // dry oak / olive tree masses

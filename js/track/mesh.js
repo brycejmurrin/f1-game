@@ -511,7 +511,6 @@ const TrackMesh = (function () {
     // band where cars actually run wide — fast corners (high |curvature|) and the
     // braking zone at the end of a straight (curvature rising ahead). Street
     // circuits keep runoffAmt ~0 (their walls are right at the edge).
-    const APRON_COL = [0.62, 0.55, 0.42];
     const runoffAmt = new Float32Array(n);
     if (!track.def.street) {
       const cur = new Float32Array(n);
@@ -584,12 +583,10 @@ const TrackMesh = (function () {
     // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
     function ribbon(lats, flip) {
       const base = pos.length / 3;
-      const innerSign = lats[0] < 0 ? -1 : 1;     // which side this ribbon is on
       for (let k = 0; k < n; k++) {
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const u = upOf(track, k);
         const w = hw[k];
-        const ramt = runoffAmt[k];
         const bankLift = bp ? bp.lift[k] : 0;
         const bankSide = bp ? bp.bsign[k] : 0;
         for (let v = 0; v < NTV; v++) {

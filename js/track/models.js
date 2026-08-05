@@ -17,25 +17,55 @@ const TrackModels = (function () {
     // at all and silently skipped it. One entry per copy is enough to remap.
     (target.__blocks || (target.__blocks = []))
       .push({ base, from: source, count: source.pos.length / 3 });
-    target.pos.push(...source.pos);
-    target.nrm.push(...source.nrm);
-    target.col.push(...source.col);
-    if (target.mat && source.mat) target.mat.push(...source.mat);
+    // Indexed loops, not push(...source): spread-apply passes every element as a
+    // separate ARGUMENT, so a staged model group large enough (tens of thousands
+    // of vertices) blows the engine's argument limit and throws RangeError from
+    // what looks like an ordinary append. It also allocates an arguments array
+    // per call for no benefit.
+    appendAll(target.pos, source.pos);
+    appendAll(target.nrm, source.nrm);
+    appendAll(target.col, source.col);
+    if (target.mat && source.mat) appendAll(target.mat, source.mat);
     for (const i of source.idx) target.idx.push(base + i);
+  }
+
+  function appendAll(target, source) {
+    for (let i = 0; i < source.length; i++) target.push(source[i]);
+  }
+
+  // Hand-rolled loops rather than Array.prototype.some(fn). These run over the
+  // WHOLE props buffer of every built track — up to ~5 M vertices on Vegas, i.e.
+  // ~15 M floats each for pos/nrm/col plus ~20 M indices, as plain (not typed)
+  // arrays — and they run again on every day↔night rebuild. Through a callback
+  // that is tens of millions of non-inlinable calls per track load; inline, the
+  // same work is a predictable read-and-compare the JIT keeps in registers.
+  // Behaviour is identical, including which reason wins.
+  function firstNonFinite(a) {
+    for (let i = 0; i < a.length; i++) {
+      const v = a[i];
+      // Cheap fast path: only fall back to the real predicate for values that
+      // fail a plain numeric comparison (NaN and both infinities do).
+      if (!(v > -Infinity && v < Infinity)) return true;
+    }
+    return false;
   }
 
   function validateGeometry(geo) {
     if (!geo || !Array.isArray(geo.pos) || geo.pos.length % 3)
       return { ok: false, reason: "invalid position layout" };
-    if (geo.pos.some((v) => !Number.isFinite(v)))
+    if (firstNonFinite(geo.pos))
       return { ok: false, reason: "non-finite position" };
-    if (geo.nrm && (geo.nrm.length !== geo.pos.length || geo.nrm.some((v) => !Number.isFinite(v))))
+    if (geo.nrm && (geo.nrm.length !== geo.pos.length || firstNonFinite(geo.nrm)))
       return { ok: false, reason: "invalid or non-finite normal" };
-    if (geo.col && (geo.col.length !== geo.pos.length || geo.col.some((v) => !Number.isFinite(v))))
+    if (geo.col && (geo.col.length !== geo.pos.length || firstNonFinite(geo.col)))
       return { ok: false, reason: "invalid or non-finite color" };
     const count = geo.pos.length / 3;
-    if (!Array.isArray(geo.idx) || geo.idx.some((i) => !Number.isInteger(i) || i < 0 || i >= count))
-      return { ok: false, reason: "invalid index" };
+    if (!Array.isArray(geo.idx)) return { ok: false, reason: "invalid index" };
+    for (let i = 0; i < geo.idx.length; i++) {
+      const v = geo.idx[i];
+      if (!Number.isInteger(v) || v < 0 || v >= count)
+        return { ok: false, reason: "invalid index" };
+    }
     return { ok: true, vertices: count, indices: geo.idx.length };
   }
 

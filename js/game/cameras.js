@@ -17,6 +17,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 // Scratch samples reused every call (no per-frame allocation).
 const cvA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const cvB = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const _bankScr = { dy: 0, roll: 0 };   // pooled Tracks.banking out-param (ground clamp)
 
 // Cockpit eye offsets from the car origin (fwd along tangent, up in metres).
 // Shared by vantage() and the camera-anchored cockpit-rig draw in render() —
@@ -54,7 +55,13 @@ function vantage(track, mode, s, x, spd, now, extra) {
   };
   // Curvature of the bend we're approaching (speed-scaled look-ahead) — drives the
   // broadcast cams to the OUTSIDE of the corner so they shoot across the apex.
-  const kA = Tracks.curvature(track, wrapS(s + lerp(15, 45, spN)));
+  // ONLY those three read it, and Tracks.curvature is a real sample-and-difference,
+  // so computing it unconditionally spent that every frame in chase, cockpit, hood,
+  // tcam, rear, drift, low, overhead and reverse — i.e. in every mode anyone
+  // actually races in — to throw the answer away.
+  const kA = (mode === "heli" || mode === "side" || mode === "cinematic")
+    ? Tracks.curvature(track, wrapS(s + lerp(15, 45, spN)))
+    : 0;
   // Street-circuit camera corridor: city tracks run a continuous building wall a
   // few metres past the barriers, and the wide broadcast offsets (15-25 m) put
   // the eye INSIDE the towers — the whole view fills with a glowing facade
@@ -265,7 +272,9 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const ex = eye[0] - track.px[k], ez = eye[2] - track.pz[k];
     const lat = ex * track.rx[k] + ez * track.rz[k];
     const beyond = Math.max(0, Math.abs(lat) - track.hw[k]);
-    const bank = Tracks.banking ? Tracks.banking(track, s, lat) : null;
+    // Pooled out-param — this runs once per frame for every camera mode, and
+    // banking() allocates a fresh { dy, roll } for any caller that omits it.
+    const bank = Tracks.banking ? Tracks.banking(track, s, lat, _bankScr) : null;
     const ground = track.surface.heightAt(k, beyond) + (bank ? bank.dy : 0);
     const MIN_CLEAR = 0.8;
     if (eye[1] < ground + MIN_CLEAR) eye[1] = ground + MIN_CLEAR;

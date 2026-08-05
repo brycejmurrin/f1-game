@@ -167,9 +167,17 @@ const NetLobby = (function () {
         session = [...sessions.values()][0] || null;
         if (!sessions.size) {
           clearInterval(pumpTimer); pumpTimer = null;
-          say("Connection closed.", true);
+          // SAY WHICH loss this was. Everyone connects THROUGH the host — that
+          // is what a star is — so the host going away ends the room for
+          // everybody, and there is no recovery to offer. A guest leaving is a
+          // different event with a different answer, and "Connection closed"
+          // for both told a player nothing about which had happened or whether
+          // waiting would help.
+          say(role === "guest"
+            ? "The host left, so the race is over. Everyone connects through them."
+            : "Connection closed.", true);
         } else {
-          say("A player left.");
+          say("A player left. The rest of you are still in.");
         }
         renderRoom();
       });
@@ -245,10 +253,21 @@ const NetLobby = (function () {
           + " after a minute or so. Start a new invite and paste the answer back"
           + " more quickly.";
       }
+      // TWO DIFFERENT PROBLEMS, and they take opposite instructions. With no
+      // relay in the config there is nothing to diagnose and the fix is the
+      // same network. With one configured, the relay itself is the suspect —
+      // and telling that player to change Wi-Fi sends them round a loop that
+      // cannot succeed, which is what the old single sentence did.
       return "Could not connect after " + secs + "s" + last + "."
         + " Both sides found an address but the direct link was blocked, which"
-        + " usually means one of the networks needs a relay to get through."
-        + (st && st.turn ? "" : " Racing over the same Wi-Fi is the reliable fix.");
+        + " means one of these networks needs a relay to get through."
+        + (st && st.turn
+          ? " A relay was offered and did not carry it. Run __apex.turnProbe()"
+            + " in the console to see which relay answered — if none did, set"
+            + " apex26.turnApi to a credentials URL of your own. Racing over"
+            + " the same Wi-Fi works meanwhile."
+          : " No relay is configured at all. Race over the same Wi-Fi, or set"
+            + " apex26.turnApi to a credentials URL.");
     }
 
     // Poll for the DataChannels opening. There is no event that means "the
@@ -257,7 +276,20 @@ const NetLobby = (function () {
     function waitForOpen() {
       clearInterval(pollTimer);
       const started = Date.now();
-      say("Connecting…");
+      // A TEST FLAG MUST ANNOUNCE ITSELF. iceRelayOnly forbids direct
+      // connections so the TURN leg can be exercised — but it PERSISTS, and
+      // with no reachable TURN server it makes every connection sit at
+      // "Connecting…" forever with nothing on screen saying why. It did
+      // exactly that to a real person who had set it on an earlier
+      // instruction and had no reason to remember it.
+      let relayNote = "";
+      try {
+        if (localStorage.getItem("apex26.iceRelayOnly") === "true") {
+          relayNote = " [RELAY-ONLY TEST MODE is on — run "
+            + "localStorage.removeItem('apex26.iceRelayOnly') and reload unless you are testing TURN]";
+        }
+      } catch (e) {}
+      say("Connecting…" + relayNote);
       // Capture the transport and id being watched: by the time this fires the
       // host may have moved on to inviting somebody else, and polling "the
       // current pending one" would then connect the wrong session.
@@ -276,7 +308,7 @@ const NetLobby = (function () {
         // didn't work".
         const st = watched.stats ? watched.stats() : null;
         const secs = Math.round((Date.now() - started) / 1000);
-        if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")");
+        if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")" + relayNote);
 
         // A definite `failed` is final — ICE has exhausted every pair. Waiting
         // out the rest of the timer after that just makes the player watch a
@@ -309,6 +341,11 @@ const NetLobby = (function () {
       if (transport === t) { transport = null; pendingId = null; }
       const made = NetSession.create({ transport: t });
       sessions.set(id, made);
+      // This guest is IN, so the offer it used is spent — an SDP offer belongs
+      // to one connection. Put a fresh one on the table for whoever is next.
+      // Safe here and not earlier: t has moved into `transports` and pendingId
+      // is cleared just above, so minting cannot close a live handshake.
+      if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) {} }
       // The first connection, not the most recent — `session` means "the one
       // most callers mean", and on a guest it is the only one there is.
       session = [...sessions.values()][0];
@@ -618,7 +655,12 @@ const NetLobby = (function () {
       }
       if (e.editRace) e.editRace.hidden = !host;
       if (e.raceNote) {
-        e.raceNote.textContent = host ? "" : "The host chooses the circuit and conditions.";
+        // Both facts a guest needs, said before they matter rather than after.
+        // Everyone connects through the host, so if the host leaves the room
+        // ends — that is inherent to a star and worth stating, not papering
+        // over with a generic "connection closed" once it happens.
+        e.raceNote.textContent = host ? ""
+          : "The host chooses the circuit and conditions — and everyone connects through them, so if they leave, the race ends.";
         e.raceNote.hidden = host;
       }
       if (e.me) e.me.innerHTML = driverLine(localProfile(), "You", selfReady);
@@ -734,7 +776,16 @@ const NetLobby = (function () {
         peerMods: modsFromProfile(firstPeer()),
         // The list form. NetPlay builds one remote slot per entry, so growing
         // the room is a matter of this array getting longer.
-        peers: [..._peers.values()].map((p) => ({ profile: p, mods: modsFromProfile(p) })),
+        //
+        // WITH THE CONNECTION ID, keyed exactly as `sessions` above. NetPlay
+        // files each rival under this id (peerCar) and looks it up on close to
+        // decide whether one guest dropped or the room emptied. Sent without
+        // one, every joiner collapsed onto the `PEER_ONE` fallback while the
+        // sessions stayed keyed "g1"/"g2" — so remoteFor(id) was always null,
+        // the close handler fell through to `stop()`, and ONE guest leaving
+        // ended the race for everybody still driving. Indistinguishable from
+        // correct at two players, which is why it took a third to show up.
+        peers: [..._peers.entries()].map(([id, p]) => ({ id, profile: p, mods: modsFromProfile(p) })),
       });
       clearInterval(pumpTimer);          // the game loop pumps it from here on
       pumpTimer = null;
@@ -1058,26 +1109,71 @@ const NetLobby = (function () {
       // offer belongs to one RTCPeerConnection, so the invite minted above is
       // spent on whoever comes first and the rest are minted on demand.
       if (!NetRendezvous.usingPrivateRelay()) {
-        let first = invite.code;
+        const answersSeen = new Set();
         const sub = await NetRendezvous.hostRoom({
           code, token: codeWait,
+          // The offer already prepared above goes out IMMEDIATELY, exactly as
+          // the two-party path did. Waiting for a peer-join event before
+          // saying anything is what broke this.
+          mine: invite.code,
+          // The room stays open, so a failure after it opens has nowhere else
+          // to go. Without this a host whose relays were all unreachable was
+          // told NOTHING and watched a spinner — the console knew, the player
+          // did not.
+          onFail: (r) => {
+            if (!r || r.error === "cancelled" || r.error === "stopped") return;
+            codeRoom = null;
+            say(r.message || "The room service went away. Use the invite link or QR instead.", true);
+          },
           onTick: () => say(sessions.size
             ? "In the room: " + (sessions.size + 1) + ". Still open (code " + code + ")"
             : "Waiting for them to join… (code " + code + ")"),
           // The first arrival gets the invite already prepared; everyone after
           // gets a fresh transport and a fresh offer.
+          // Only called to REPLACE an offer somebody has taken, never per
+          // arrival — minting is a whole RTCPeerConnection plus an ICE gather,
+          // and doing that on every join is what got us rate-limited.
           mintOffer: async () => {
-            if (first) { const c = first; first = null; return c; }
-            if (sessions.size >= MAX_GUESTS) return null;      // room full: ignore them
+            if (sessions.size >= MAX_GUESTS) return null;      // room full
             if (!newTransport("host")) return null;
             const more = await NetHandshake.createInvite(transport, localProfile());
             return more.ok ? more.code : null;
           },
           onJoiner: async (_who, answer) => {
+            // Each answer ONCE, and only while a handshake is waiting for one.
+            // A repeat (relay quirk, a guest retrying) or an answer landing
+            // after rotation would otherwise be applied to whatever transport
+            // is pending NOW — a fresh stable PC, which throws. Seen in a real
+            // console as an uncaught InvalidStateError.
+            if (answersSeen.has(answer)) return;
+            // MARK IT SEEN ONLY ONCE IT CAN BE ACTED ON. Recording it before
+            // the guard below meant an answer that arrived a moment too early
+            // — between transports, or before pendingId was set — was dropped
+            // AND blacklisted, so the guest's retries all matched
+            // answersSeen and were ignored. The host then waited for an answer
+            // it had already thrown away, which on a LAN, where ICE cannot be
+            // at fault, presents as a permanent "Connecting…".
+            if (!transport || !pendingId) return;   // nothing awaiting an answer
+            answersSeen.add(answer);
             const acc = await NetHandshake.acceptAnswer(transport, answer);
-            if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return; }
+            if (!acc.ok) {
+              // A rejected answer must not stay blacklisted either: the guest
+              // may repost the same string against a transport that is by then
+              // ready for it.
+              answersSeen.delete(answer);
+              if (acc.error !== "already_answered") say(acc.message || "That answer could not be read.", true);
+              return;
+            }
             if (acc.peer && pendingId) _peers.set(pendingId, acc.peer);
             waitForOpen();
+            // NOT rotating here. Minting the next offer means newTransport(),
+            // which drops the PENDING one — and the pending one is this guest's
+            // connection, still gathering ICE. Doing it here killed the
+            // handshake a moment after completing it: the answer arrived, was
+            // accepted, and then the transport it belonged to was closed.
+            // The room rotates once the guest is actually connected, in
+            // onConnected() below, by which point this transport has moved into
+            // `transports` and pendingId is clear.
           },
         });
         if (!sub.ok) { say(sub.message || "Could not open that room.", true); return sub; }
@@ -1151,7 +1247,48 @@ const NetLobby = (function () {
       + " Use the invite link or QR instead — those need nothing.";
 
     // ---- open / close -----------------------------------------------------
+    // A PHONE THAT HOSTS FALLS ASLEEP, and that is the whole reason "desktop
+    // hosts → phone joins" worked while the reverse did not (reported from a
+    // real pair of devices). Hosting means WAITING — you tap NEW CODE, put the
+    // phone down, and spend half a minute getting the other machine into the
+    // lobby. In that time the screen locks, the mobile browser suspends the
+    // page, the relay WebSocket dies, and the friend's answer arrives at a
+    // page that is asleep. The guest never has this problem, because joining
+    // is the one moment the phone is guaranteed to be in somebody's hand.
+    //
+    // So the lobby holds a SCREEN WAKE LOCK while it is open. Browsers
+    // release the lock on every hide (that is spec), so it is re-acquired on
+    // return; close() and cancel() drop it. Where the API is missing (older
+    // iOS) this is a silent no-op — the fix degrades to the old behaviour,
+    // never to an error.
+    let wake = null;
+    let wakeWanted = false;
+    function holdWake() {
+      wakeWanted = true;
+      try {
+        if (!navigator.wakeLock || wake) return;
+        navigator.wakeLock.request("screen").then((l) => {
+          wake = l;
+          l.addEventListener("release", () => { wake = null; });
+        }).catch(() => {});
+      } catch (e) {}
+    }
+    function dropWake() {
+      wakeWanted = false;
+      try { if (wake) wake.release(); } catch (e) {}
+      wake = null;
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && wakeWanted) holdWake();
+    });
+
     function open() {
+      holdWake();
+      // Start fetching relay credentials NOW if a credentials URL is
+      // configured — connecting comes seconds later, and the fetch usually
+      // wins that race, so the first connection attempt already carries relay
+      // candidates. Fire-and-forget: no relay configured is a normal state.
+      try { if (NetTransport.prefetchIce) NetTransport.prefetchIce(); } catch (e) {}
       const e = els();
       if (!e.screen) return false;
       _peers.clear(); _ready.clear();
@@ -1181,6 +1318,10 @@ const NetLobby = (function () {
       // module is most careful about — close() is also the SUCCESS path, since
       // the race starts by closing the lobby.
       stopScan();
+      // The wake lock is the lobby's, not the game's: in-race the screen is
+      // being touched constantly, and holding it past close would silently
+      // change every player's battery life for a feature they left.
+      dropWake();
       const e = els();
       if (e.screen) e.screen.hidden = true;
     }

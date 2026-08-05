@@ -13,9 +13,12 @@
    So a back-marker breaks, a developing team stops breaking, and money buys
    finishes as well as lap time.
 
-   THE DRAW TOUCHES NO STREAM. makeCars() spends exactly one simRnd() per driver
-   and the stream position after it is a hard contract (see driverSkill in
-   game.js) — drawing here would shift every seeded result that follows. This is
+   THE DRAW TOUCHES NO STREAM. makeCars() spends TWO simRnd() draws per driver —
+   the lane jitter and driverSkill() — and the stream position after it is a hard
+   contract (see driverSkill in game.js). Both are unconditional, which is what
+   the contract actually requires; the count itself is incidental and was
+   miscounted here as one. Drawing at all would shift every seeded result that
+   follows, whatever the count. This is
    a STATELESS hash instead, Career.hash(seed, ...parts), with the career's seed
    inside a career and the SIM seed outside one. Nothing is consumed, and the same
    (seed, round, driver) always retires the same car at the same point of the race.
@@ -96,14 +99,23 @@ function buildQuality(setup, team) {
 }
 
 // One car's probability of not finishing. `build` is buildQuality() for a car
-// whose setup we know — which is the human cars only: an AI runs its team's works
-// car, and that is precisely what `tier` already encodes.
+// whose setup we know — which is THE LOCAL PLAYER only: an AI runs its team's
+// works car, and that is precisely what `tier` already encodes.
+//
+// isPlayer, NOT human. In multiplayer the remote rival is `human` too
+// (setCarRole(remoteCar, true, false) in js/net/netplay.js), so a `car.human`
+// gate scaled the RIVAL's risk by THIS peer's engine/gearbox spec. Both peers
+// draw from the same stateless (seed, round, driver) hash, so the draw matched
+// while the threshold did not: `draw >= risk` could land on opposite sides, and
+// one peer would announce a retirement and park a car at the barrier that was
+// still racing — and still being posed from the wire — on the other. On the solo
+// path isPlayer and human are the same car, so nothing there moves.
 function riskFor(car, scale, build) {
   if (!scale) return 0;
   const tier = clamp(car.tier | 0, 0, TIER_RISK.length - 1);
   let risk = TIER_RISK[tier];
   risk *= 1 - DEV_RELIEF * devNorm(car.team && car.team.id);
-  if (car.human && build > 0) risk *= 1 - BUILD_RELIEF * clamp(build, 0, 1);
+  if (car.isPlayer && build > 0) risk *= 1 - BUILD_RELIEF * clamp(build, 0, 1);
   return clamp(risk * scale, 0, 1);
 }
 

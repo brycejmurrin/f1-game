@@ -43,6 +43,43 @@ const els = {
 // awaits when opted in; otherwise it runs fully synchronously). `gfx` is the
 // handle every later renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
+// The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Kept in load
+// order — each group has eval-time dependencies inside it, which the <script>
+// tag order used to enforce and loadBackendScripts() now enforces by awaiting
+// each file before starting the next.
+const BACKEND_FILES = {
+  webgpu: [
+    "js/render/webgpu/wgsl-chunks.js",
+    "js/render/webgpu/wgsl-post.js",
+    "js/render/webgpu/wgsl-fx.js",
+    "js/render/webgpu/wgx.js",
+  ],
+  three: [
+    "js/render/three/tsl-chunks.js",
+    "js/render/three/tsl-lit.js",
+    "js/render/three/tsl-sky.js",
+    "js/render/three/tsl-fx.js",
+    "js/render/three/tsl-post.js",
+    "js/render/three/tlx-shadow.js",
+    "js/render/three/tlx-chunked.js",
+    "js/render/three/tlx-post.js",
+    "js/render/three/tlx.js",
+  ],
+};
+// Inject classic (non-module) scripts one at a time, resolving when all have
+// evaluated. `?v=` mirrors the build the shell was served at — the same cache
+// key every tagged asset carries — so a deploy invalidates these too. A load
+// error RESOLVES rather than rejects: the caller's fallback is "the global is
+// missing", which is already the not-supported path.
+function loadBackendScripts(files) {
+  return files.reduce((chain, src) => chain.then(() => new Promise((resolve) => {
+    const el = document.createElement("script");
+    el.src = src + "?v=" + (window.__APEX_BUILD || 0);
+    el.crossOrigin = "anonymous";
+    el.onload = el.onerror = () => resolve();
+    document.head.appendChild(el);
+  })), Promise.resolve());
+}
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
@@ -66,6 +103,23 @@ try {
   // self-falls-back to WebGL2 inside three so no capability gate here).
   const optIn = !phone && (pref === "three" || (pref === "webgpu" && navigator.gpu));
   if (optIn && typeof Gfx !== "undefined") {
+    // FETCH THE BACKEND ONLY NOW. Neither alternate has a <script> tag any more:
+    // together they are ~532 KB that every visitor downloaded, parsed and
+    // evaluated so that almost none of them could use it. `optIn` above is
+    // resolved synchronously from localStorage, so the default GLX path never
+    // reaches this line and never awaits anything.
+    //
+    // The list is DEFERRED in tools/manifest.cjs (load-order.test.mjs asserts
+    // this loader and that manifest name exactly the same files, and that sw.js
+    // precaches them). Order matters — the groups carry eval-time dependencies
+    // (DEFERRED_EDGES) the tag order used to guarantee — so load STRICTLY IN
+    // SEQUENCE rather than in parallel.
+    //
+    // No error path is needed beyond this: if a fetch fails, the backend global
+    // is simply absent, and Gfx.create already treats that as "unavailable"
+    // (`typeof TLX === "undefined"`) and returns null, which falls through to
+    // GLX below exactly as an unsupported browser always has.
+    await loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu);
     const backend = await Gfx.create(canvas, {});
     if (backend) {
       // Route EVERY renderer call site onto the selected backend. game.js and
@@ -339,7 +393,7 @@ function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c
 const X_OPEN_RATE = 2.6;    // aeroX per second opening (~0.385 s, inside the 400 ms cap)
 const X_CLOSE_RATE = 8.0;   // aeroX per second closing (~0.125 s back to Z — well inside the cap)
 const X_STRAIGHT_T = 3.0;   // s of clear road ahead required to arm (FIA's rule)
-const X_LOOK_MIN = 45, X_LOOK_MAX = 260;   // m — clamps on that look-ahead
+const X_LOOK_MAX = 260;     // m — upper clamp on that look-ahead
 const X_K_MAX = 0.0045;     // curvature that still counts as "straight" (r ~ 220 m)
 // Curvature that counts as straight FOR A ZONE — much stricter than X_K_MAX,
 // which was tuned for "is the car allowed to hold the mode right now" and lets a
@@ -1062,7 +1116,6 @@ function carPaintMat(base) {
 }
 const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sample
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
-const smpC = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // camera anchor
 
 // ---------- helpers ----------
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -1183,10 +1236,21 @@ function playerAnchor(c) {
 // yawVis is produced in the physics step; render it interpolated like position,
 // or the mesh orientation leads the interpolated position by one full physics
 // step (16.7 ms) — a small orientation-vs-position judder during yaw transients.
-// yawVis is a damped residual clamped well inside ±π, so a plain lerp is safe.
+// yawVis USED to be a damped residual clamped well inside ±π, which is what made
+// a plain lerp safe. It is not any more: the player branch below assigns the raw
+// psi (`c.yawVis = psi`, normalised to (-π, π]) precisely so a spin renders as a
+// spin instead of a 40 deg crab. So yawVis now crosses the ±π branch cut once per
+// revolution, and a plain lerp across it sweeps the drawn basis through zero —
+// the car snaps to facing straight down the road and back, mid-spin, which is
+// exactly when the player is looking at it. Same wrap-safe delta headInterp uses
+// two functions down, for the same reason.
 function yawVisInterp(c) {
   const y1 = c.yawVis || 0;
-  return c.rPrevYawVis === undefined ? y1 : c.rPrevYawVis + (y1 - c.rPrevYawVis) * renderAlpha;
+  if (c.rPrevYawVis === undefined) return y1;
+  let dy = y1 - c.rPrevYawVis;
+  while (dy > Math.PI) dy -= 2 * Math.PI;
+  while (dy < -Math.PI) dy += 2 * Math.PI;
+  return c.rPrevYawVis + dy * renderAlpha;
 }
 // c.head is the player's real WORLD heading (full wrapping angle, unlike the
 // small clamped yawVis residual) — read raw by the free-world chase/onboard
@@ -1247,14 +1311,31 @@ const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shad
 // build fully isolated from the free-play garage: your career car and your Grand
 // Prix car for the same team are separate objects that can never leak into one
 // another, and career's own build is the only one subject to the R&D gate.
+// inCareer(), NOT Career.data(). data() is "a save exists on disk", and the save
+// is LOADED AT BOOT so the title screen can offer CONTINUE — so this branch used
+// to fire in a Grand Prix and a Time Trial too, for anyone who had ever started a
+// career with that team. That broke the isolation described above in both
+// directions, and the garage UI made it costly: setup-ui gates its rules on
+// G.careerOwned() (Career.owned(), which IS inCareer()-gated), so a GP garage
+// correctly offered FREE BUILD, the flat 600 cr cap and no R&D lock — and then
+// wrote the result straight into career.fitted. Fitting every top option under
+// FREE BUILD therefore maxed out the CAREER car for nothing: no credits spent, no
+// parts researched, the fitted cap bypassed, and nothing ever re-validates a
+// fitted build afterwards (Parts.resolveSetup deliberately trusts this funnel).
+// Merely opening the GP garage was also enough to mutate the save, since
+// buildSetup() deletes unusable categories out of the object it is handed.
+function careerFitted(teamId) {
+  const c = Career.inCareer() ? Career.data() : null;
+  return c && teamId === c.team ? c : null;
+}
 function getTeamParts(teamId) {
-  const c = Career.data();
-  if (c && teamId === c.team) return c.fitted;
+  const c = careerFitted(teamId);
+  if (c) return c.fitted;
   return store.get("parts." + teamId, {});
 }
 function saveTeamParts(teamId, parts) {
-  const c = Career.data();
-  if (c && teamId === c.team) { c.fitted = parts; Career.save(); return; }
+  const c = careerFitted(teamId);
+  if (c) { c.fitted = parts; Career.save(); return; }
   store.set("parts." + teamId, parts);
 }
 
@@ -1343,7 +1424,7 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only) {
       W[8 + k] = -uu * sa + ff * ca;
       W[12 + k] += uu * fg.y + ff * fg.z;
     }
-    const mesh = CarMesh.getAeroFlap(aLvl, col, i, style);
+    const mesh = CarMesh.getAeroFlap(aLvl, col, i, style, fg);
     if (mesh) gfx.draw(mesh, W, mat);
   }
 }
@@ -1667,8 +1748,23 @@ function buildCarData(team) {
   });
 }
 
+// Memoized per team.id, invalidated by store.rev — same pattern as
+// _livResolveCache above, and for the same reason. This key is rebuilt from
+// getLiveryId (a store read, itself two string concatenations) plus
+// Parts.factoryKey (a fresh 12-element array and a ~60-char join), and teamMesh
+// is called for EVERY drawn car in the body pass, again in the dynamic car-shadow
+// pass and again in the night lamp-shadow pass — up to ~66 times a frame for a
+// value that cannot change unless something was written to the store.
+const _teamMeshKeyCache = new Map();
+function teamMeshKey(team) {
+  const c = _teamMeshKeyCache.get(team.id);
+  if (c && c.rev === store.rev) return c.val;
+  const val = team.id + ":" + getLiveryId(team.id) + ":" + Parts.factoryKey(team);
+  _teamMeshKeyCache.set(team.id, { val, rev: store.rev });
+  return val;
+}
 function teamMesh(team) {
-  const key = team.id + ":" + getLiveryId(team.id) + ":" + Parts.factoryKey(team);
+  const key = teamMeshKey(team);
   if (!teamMeshes[key]) teamMeshes[key] = gfx.createMesh(buildCarData(team));
   return teamMeshes[key];
 }
@@ -1810,6 +1906,9 @@ function queueCarDecals(team, modelMat, num, cockpit, usePlayerSetup) {
 // longer allocates a fresh object ~23×/frame.
 const _bankScratch = { dy: 0, roll: 0 };
 const _bankScratchP = { dy: 0, roll: 0 };
+// ...and a third for the camera, which asks once per frame from render() and
+// was the one call site still letting banking() allocate.
+const _bankScratchCam = { dy: 0, roll: 0 };
 
 function cameraFollowsBank(mode) {
   return mode === "chase" || mode === "far" || mode === "drift" ||
@@ -2122,9 +2221,6 @@ function loadTrack(idx) {
     if (gfx.envProbeReset) gfx.envProbeReset();
     Ghost.setTrack(def.id);
     hud.invalidateMap();        // force minimap redraw for new track
-    sectorIdx = 0; sectorStartT = 0;
-    sectorBests = [Infinity, Infinity, Infinity];
-    sectorLast = [null, null, null];
   }
   const pal = def.palette;
   frame = {
@@ -2292,6 +2388,15 @@ function launchFlyingLap() {
 }
 
 function startRace() {
+  // Abort any incident takeover left over from the last race, FIRST — while the
+  // cars it owns and the track they crashed on are both still the current ones.
+  // IncidentSim owns cars by their cars[] INDEX and only releases them via a
+  // hand-back inside the race loop, so quitting to the menu mid-takeover left an
+  // index owned; after makeCars() below that index is a completely different car,
+  // which would then never drive (updateCar early-outs on owns()) and — if the
+  // same track reloaded, leaving DebrisWorld's generation unchanged — could be
+  // posed straight onto the previous race's crash site from the stale body.
+  IncidentSim.reset();
   loadTrack(trackIdx);
   makeCars();
   // A qualifying lap is a time trial with the rest of the field simulated: one
@@ -2330,6 +2435,16 @@ function startRace() {
   resultT = 0;
   camRoll = 0; camSlipSm = 0;
   sectorIdx = sectorAt(player.s); sectorStartT = 0;
+  // The SPLITS reset here, with the rest of the session — not in loadTrack.
+  // They used to sit inside loadTrack's `builtTrackId !== def.id ||
+  // builtTrackNight !== sessionDark` rebuild gate, so racing the same circuit
+  // twice at the same time of day skipped the reset entirely: session two
+  // opened with session one's bests already in the HUD, and its lap-1 deltas
+  // were measured against a race that had already finished. Changing the time
+  // of day cleared them, which made two otherwise identical sessions differ on
+  // an unrelated setting. Session state belongs to the session.
+  sectorBests = [Infinity, Infinity, Infinity];
+  sectorLast = [null, null, null];
   // Arm the crash sentinel (mobile only) and, after a strike, start the
   // session pre-scaled-down — the governor may restore upward, but only under
   // the clear sustained headroom that proves the device can afford it.
@@ -3338,9 +3453,15 @@ function updateCar(c, dt, ranked) {
     const edge = track.street ? hw - 0.8 : hw + 5;
     roomL = edge + c.x;            // clearance to the left edge from our position
     roomR = edge - c.x;            // clearance to the right edge
-    // Walk OUTWARD from our rank in the prog-sorted field, breaking once the prog
-    // delta leaves the [-6, +18] window — same neighbours as scanning all of ranked,
-    // without the O(n) per-car pass (mirrors resolveCollisions' break pattern).
+    // FULL FIELD, and it has to be. This used to claim it walked outward from our
+    // rank and broke once the prog delta left the [-6, +18] window "mirroring
+    // resolveCollisions' break pattern" — but no such walk was ever written here,
+    // resolveCollisions has no break either, and neither could have one: `ranked`
+    // is sorted by CUMULATIVE prog while the window below is on the WRAPPED delta.
+    // A lapped car is a whole lap away in rank and right beside us on the road, so
+    // an outward walk would break long before reaching it — exactly the miss the
+    // lateral-separation loop further down and resolveCollisions both call out.
+    // The O(n) pass is the price of seeing lapped traffic.
     const L = track.total;
     for (let i = 0; i < ranked.length; i++) {
       const o = ranked[i];
@@ -4276,7 +4397,16 @@ function updateCar(c, dt, ranked) {
     // be reached by a car stuck in the run-off — it idles along at the floor
     // forever, above the gate, and never counts as beached. Measured: a wrong-way
     // car sat at 10.8 m/s and x = -10.9 while its rescue timer decayed back to 0.
-    const beached = c.offroad && c.speed < GRASS_V * 0.6 + 1.5;
+    //
+    // PACE-SCALED, exactly like the floor it sits above. The floor itself is
+    // `GRASS_V * 0.6 * max(PACE, 0.05)` (see the grass-drag clause), so a bare
+    // `GRASS_V * 0.6 + 1.5` only clears it at PACE = 1 — the one setting the
+    // invariant above was measured at. Above ~1.14 the floor climbs past the
+    // gate and a beached car is never rescued; below ~0.57 the gate climbs past
+    // ordinary run-off speeds and a driver in full control is teleported to
+    // x = 0 after 3 s. Both are precisely the bugs this comment says were
+    // fixed, reintroduced through the OVERALL SPEED slider.
+    const beached = c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5;
     const stuck = beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
     // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
     // stuck conditions. Only applies once a rescue has actually happened —
@@ -4643,7 +4773,7 @@ function setFrameLights(eye, scale, fwd, srcSet) {
   LightTune.setFrameLights(frame, track, cars, eye, scale, fwd, gfx.mobileTier, srcSet);
 }
 function appendCarTailLights() {
-  LightTune.appendCarTailLights(frame, track, cars, player);
+  LightTune.appendCarTailLights(frame, track, cars, player, gfx.mobileTier);
 }
 
 // ---------- render ----------
@@ -5106,7 +5236,7 @@ function render(dt) {
     // centimetre of the car, versus the 0.1 s lateral LAG the mesh carried. Left
     // alone deliberately rather than reworked blind.
     // ride the bank with the car so the camera doesn't sink into the banked road
-    const bankCam = Tracks.banking(track, pS, px);
+    const bankCam = Tracks.banking(track, pS, px, _bankScratchCam);
     const bankDy = bankCam ? bankCam.dy : 0;
     const mode = CAM_MODES[camMode].id;
     roadCamRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;

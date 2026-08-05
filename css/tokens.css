@@ -191,9 +191,6 @@
      this scale (see css/hud.css) — its labels are glanced at, not read, and
      they are sized to boxes that have to clear the driving controls. */
   --fs-micro: 10px;
-  --chip-w: 78px;   /* team-chip grid column floor */
-  --gold:   #f6d200;
-  --boost:  #aeea00;
   /* ---- CORNER RADIUS — four steps, plus a pill ----
      These tokens existed and had three users. Everything else hard-coded its
      own: fourteen distinct radii across the stylesheets (1, 2, 3, 4, 5, 6, 7,
@@ -426,7 +423,6 @@ button:disabled:active { background: rgba(255, 255, 255, 0.07); }
     --chip-h: 36px;
     --tap-sm: 28px;
     --label: 10px;
-    --chip-w: 62px;
     --gut: 8px;
   }
 }

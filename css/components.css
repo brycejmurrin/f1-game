@@ -159,9 +159,6 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   font-size: clamp(13px, 3.6vh, 20px);
   padding: clamp(7px, 1.8vh, 14px) 16px;
 }
-/* Secondary actions sit at the far end of the bar, away from the primary. */
-.sheet-foot .foot-end { margin-left: auto; display: flex; gap: var(--gap); }
-
 /* ---------- pane-pair: the LIST/DETAIL primitive ----------
    #select, #carsetup and #career are all the same canonical layout — Material
    calls it list-detail, and every adaptive UI framework ships one — and this

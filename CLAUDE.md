@@ -176,11 +176,11 @@ never scattered at the repo root:
 - **`scratch/renders/`** — car/parts/aero review sheets
 - **`scratch/profiles/`** — CPU/GPU profiles
 
-Both roots are created on demand. `assets/`, committed generated sources, and the
-tracked golden baselines in `tests/*-snapshots/` stay outside these roots. The
-current consolidated visual suite has no tracked replacement baselines yet; do the
-Linux/SwiftShader regeneration as a separate required operation before treating
-`npm run test:visual` as a reliable regression gate.
+Both roots are created on demand. `assets/` and committed generated sources stay
+outside them. There are currently **no** tracked golden baselines — no
+`tests/*-snapshots/` directory exists — so `npm run test:visual` is not a
+regression gate yet; regenerating the baselines on Linux/SwiftShader is a
+separate, still-outstanding operation.
 
 ---
 
@@ -279,9 +279,15 @@ js/car/          — car —
                                   picked to contrast the fin) — the fin is one
                                   flat colour, so art equal to it is invisible
   liverytex.js   LiveryTex      canvas-2D livery texture atlas (crests/sponsors/number)
-  parts.js       Parts          upgrade catalog (8 categories, getMods, getCost, statMult)
+  parts.js       Parts          upgrade catalog (12 categories, getMods, getCost, statMult)
   ghost.js       Ghost          time-trial ghost record/replay data layer
   teams.js       Teams          2026 grid (11 teams, 22 drivers, engine supplier per team)
+  driver-ratings.js  DriverRatings  the five-axis skill table (pace/craft/awareness/
+                                  consistency/experience), keyed by driver CODE.
+                                  Deliberately NOT in teams.js: that file is the
+                                  verified real-world grid, these are balance
+                                  values that get tuned. Career layers its
+                                  per-driver development deltas on top
 
 js/data/         — data hub —
   api.js         F1API          Jolpica + OpenF1 clients, localStorage cache
@@ -434,8 +440,41 @@ js/net/          — multiplayer wire (2-player, WebRTC, NO backend) —
                                   netPlay.owns(c), exactly as it already does
                                   for an incident-sim takeover. tick() also runs
                                   through the paused gate: one player opening a
-                                  menu cannot stop a shared world
-  lobby.js       NetLobby       the VS FRIEND screen. The two code pastes ARE
+                                  menu cannot stop a shared world.
+                                  UP TO FOUR PLAYERS, in a STAR: the host holds
+                                  one session per guest and each guest holds one,
+                                  to the host. Rivals are a Map keyed by
+                                  G.wireId(c) = teamIndex*2 + seat — a byte both
+                                  peers compute identically, which is what lets a
+                                  snapshot say WHICH car it describes. cars[]
+                                  index cannot: makeCars() drops the custom team
+                                  unless the local player picked it, so the grids
+                                  differ in length and order. The host RELAYS —
+                                  guests have no connection to each other, so it
+                                  forwards every rival in one multi-entry
+                                  snapshot, unaltered and under that guest's own
+                                  id. Authority does not move; it is a courier.
+                                  A packet with an unknown id is DROPPED, never
+                                  guessed at — which is also how a guest ignores
+                                  its own car coming back round the relay
+  lobby.js       NetLobby       the VS FRIEND screen. INVITES ARE SEQUENTIAL —
+                                  one negotiation in flight, INVITE ANOTHER once
+                                  a guest lands. Not a limit of the wire
+                                  (createInvite and rtc() are per-transport) but
+                                  of people: with several offers outstanding a
+                                  pasted answer must be matched to the offer that
+                                  produced it, and that is the one thing the
+                                  person pasting cannot tell you. A guest's
+                                  profile is filed under the CONNECTION it
+                                  arrived on, never a `from` in the payload — a
+                                  peer that can name itself can name somebody
+                                  else. The exception is a guest receiving a
+                                  RELAYED roster: there a `from` means the host
+                                  is speaking for another guest, and trusting the
+                                  host is not new trust. Without that relay a
+                                  guest never learns the other guests exist, has
+                                  no slot for them, and drops their packets.
+                                  The two code pastes ARE
                                   the signalling server — the one thing WebRTC
                                   cannot start without, and the one thing two
                                   people already have between them. Opens the
@@ -499,7 +538,7 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   (docs/AGENT-WORLD-API.md)
   atmosphere.js  Atmosphere     applyRaceSettings — time-of-day/weather scene state
   setup-ui.js    SetupUI        GARAGE screen (#carsetup) — WHO you are and WHAT
-                                  you drive: TEAM & DRIVER, the 8 part categories
+                                  you drive: TEAM & DRIVER, the 12 part categories
                                   + budget, LIVERY. The select screen owns WHERE
                                   you race and links here; race settings own HOW
   career.js      Career         CAREER core: the apex26.career.<flavour>.0..2
@@ -554,8 +593,11 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (102) + tests/*.test.mjs unit suites (35)
+tests/*.spec.js                 Playwright specs (102) + tests/*.test.mjs unit suites (37)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
+                 ARCHITECTURE-REVIEW.md is the standing assessment + defect
+                   register: what the no-build-step bet costs, why asserted
+                   invariants hold and prose ones drift, and what is deferred
 ```
 
 ---
@@ -582,6 +624,17 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
   reads A's global at eval time). `tools/verify-track.cjs` and the VM-based tests
   read the manifest's `TRACK_VM` list instead of hardcoding paths.
   `tools/extract-module.mjs` assists further game.js extractions.
+- **DEFERRED modules have no `<script>` tag.** `js/render/three/*` (TLX) and
+  `js/render/webgpu/*` (WGX) are the two opt-in renderer backends — ~532 KB that
+  every visitor used to parse for something almost nobody runs — so they are
+  listed in the manifest's `DEFERRED` map instead of `FULL`, and `js/game.js`
+  injects them at boot only when `apex26.gfxBackend` selects one. Three things
+  must agree and `tests/load-order.test.mjs` asserts all three: `DEFERRED`,
+  `BACKEND_FILES` in game.js, and the OPTIONAL precache seed in `sw.js` (the
+  service worker finds every other asset by parsing the shell's own tags, so a
+  tagless file is invisible to it). A failed injection is not an error path —
+  `Gfx.create` already reads a missing `TLX`/`WGX` global as "unavailable" and
+  falls back to GLX.
 - **`js/track/` = engine, `js/circuits/` = data.** Circuit defs (one per track)
   live in `js/circuits/<id>.js`; all shared spline/mesh/scenery code lives in
   `js/track/`. Circuit script-tag order == `Tracks.LIST` == picker/season order.
@@ -900,8 +953,12 @@ own triplanar convention in `lit.js`) and no new vertex attribute.
 
 - **Blended, not replaced.** `albedo * tex.rgb * 2.0`, so per-track tarmac tint,
   racing-line wear and per-vertex grain all survive.
-- **Ships OFF.** `matTexMix` is a `TUNE_DEFS` knob with `def: 0`. A pack is inert
-  weight until someone moves it (`__apex.matTex(1)`).
+- **Ships ON.** `matTexMix` is a `TUNE_DEFS` knob and its `def` is `1.0`, so the
+  pack is fetched at boot and blended by default; `__apex.matTex(0)` is the A/B
+  knob that turns it back off. (It shipped at 0 once, behind a lazy "only fetch
+  when matTexMix > 0" load — that guard was removed because with the knob on by
+  default nobody can turn it off BEFORE their first load, so it saved nobody
+  anything. See the comment at the Assets.load() call in js/game.js.)
 - **Every failure degrades to procedural** — no pack, malformed pack, or a
   backend with no `createTextureArray` (WGX/WebGPU, which has not ported the
   procedural material system either). Boot never awaits or fails on assets.
@@ -1104,7 +1161,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Writing tests
 
-102 Playwright specs + 35 `node --test` unit suites. **How to RUN them is under
+102 Playwright specs + 37 `node --test` unit suites. **How to RUN them is under
 Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
 to do when writing one.
 
@@ -1143,3 +1200,8 @@ the wrong button.
 
 Active development branch: `claude/project-cleanup-tests-k7mqb6`. Never push to main
 without review.
+
+**The deploy branch is a DIFFERENT branch.** `.github/workflows/pages.yml` fires
+only on a push to `claude/f1-game-project-26h3ng`, so work on any other branch
+builds and tests but does not reach https://brycejmurrin.github.io/f1-game/
+until it is merged there.

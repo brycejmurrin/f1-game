@@ -1592,50 +1592,6 @@ const api = {
     return this.safeMode();
   },
 
-  // diag() — everything needed to explain a rendering complaint from a device
-  // that cannot be reached. Written because three separate guesses were made at
-  // a phone whose picture looked wrong, from screenshots, with no way to tell a
-  // shed feature from a failed shader from a stale cache. Every field here is
-  // something that was actually wanted at some point and had to be inferred.
-  //
-  // Surfaced on screen by the #diag overlay in index.html, so a player can
-  // photograph it rather than open a console they do not have.
-  diag() {
-    const c = document.getElementById("game");
-    const gl = c && c.getContext && (c.getContext("webgl2", { failIfMajorPerformanceCaveat: false }) || null);
-    const dbg = gl && gl.getExtension("WEBGL_debug_renderer_info");
-    const ls = (k) => { try { return localStorage.getItem("apex26." + k); } catch (e) { return null; } };
-    const perf = this.renderScale();
-    return {
-      build: (typeof window !== "undefined" && window.__APEX_BUILD) || 0,
-      // The two numbers that decide whether the 3D view is sharp. A backing
-      // store far below css*dpr IS the blur, whatever else is true.
-      canvas: c ? { css: [c.clientWidth, c.clientHeight], buffer: [c.width, c.height], dpr: window.devicePixelRatio } : null,
-      renderScale: perf.scale, fps: perf.fps, autoRes: perf.auto,
-      // Safe mode. tierFloor > 0 means features are being withheld on purpose
-      // because this device died before — that is not a renderer fault.
-      tier: perf.tier, tierFloor: perf.tierFloor, crashStrikes: perf.crashStrikes,
-      gfx: { isMobile: !!(gfx && gfx.isMobile), mobileTier: !!(gfx && gfx.mobileTier) },
-      gl: gl ? {
-        renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : "?",
-        maxTex: gl.getParameter(gl.MAX_TEXTURE_SIZE),
-        maxFragUnif: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
-        colorFloat: !!gl.getExtension("EXT_color_buffer_float"),
-        colorHalf: !!gl.getExtension("EXT_color_buffer_half_float"),
-        lost: gl.isContextLost(),
-      } : null,
-      lights: (() => { try { const s = this.lightState(); return { amb: s.ambientSky, sun: s.sunColor, exp: s.exposure, n: s.numLights }; } catch (e) { return null; } })(),
-      // Stored overrides. Any of these beats every shipped default and lives
-      // only on this device, which is the exact shape of a bug that reproduces
-      // for one person and nobody else.
-      stored: {
-        lightTune: !!ls("lightTune"), camTune: !!ls("camTune"), gfxBackend: ls("gfxBackend"),
-        debris: ls("debris"), graphics: ls("graphics"), renderScale: ls("renderScale"),
-      },
-      debris: (() => { try { return this.debris(); } catch (e) { return null; } })(),
-    };
-  },
-
   // obs() — full debug observation of the current game state. Superset of
   // physState() and probe() with track context, barrier clearances, lookahead
   // scan, nearest rivals, reward components, and episode terminal flag.
@@ -2082,6 +2038,111 @@ const api = {
     return G.netLobby.acceptAnswer(answerCode);
   },
 
+  // lobbyCodeHost() / lobbyCodeJoin(code) — the ROOM CODE path, driven
+  // directly. Exposed because that path had NO test of any kind: exchange() is
+  // unreachable from the suite (the loopback has no SDP, the lobby specs use a
+  // fake transport), so every change to it shipped on reasoning alone — which
+  // is exactly how four separate regressions got out. tools/rtc-e2e-room.mjs
+  // drives these against a relay on localhost, where a failure is ours by
+  // construction rather than somebody else's server having a bad day.
+  lobbyCodeHost() {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    return G.netLobby.codeHost();
+  },
+  lobbyCodeJoin(code) {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    return G.netLobby.codeJoin(code);
+  },
+
+  // turnProbe() — is a relay actually there?
+  //
+  // "Both sides found an address but the direct link was blocked" is the one
+  // failure a player cannot act on and we cannot reproduce: it needs two real
+  // networks, and every free TURN operator this game has tried either retired
+  // its embeddable credentials or answered a lookup with nothing. So the
+  // aliveness of a relay is not a thing to reason about — it is a thing to
+  // MEASURE, on the machine that has the problem.
+  //
+  // One throwaway RTCPeerConnection PER SERVER, each with
+  // iceTransportPolicy "relay". Per-server is the whole point: a combined
+  // gather says only "something worked", which is exactly the answer that
+  // leaves you shipping a dead entry alongside a live one. Relay-only is the
+  // other half — with host and srflx candidates discarded, a candidate can
+  // only have come from TURN, so `relay > 0` is proof rather than inference.
+  //
+  // Reads NetTransport.iceServers({}) so it probes what the GAME would use,
+  // including anything apex26.turn / apex26.turnApi added. A STUN-only entry
+  // is reported with ok:false and stun:true rather than skipped — "you have
+  // no relay configured" is a distinct diagnosis from "your relay is down",
+  // and it is the one the lobby copy now depends on being distinguishable.
+  turnProbe(ms) {
+    const PC = (typeof RTCPeerConnection !== "undefined") ? RTCPeerConnection : null;
+    if (!PC || typeof NetTransport === "undefined") {
+      return Promise.resolve({ ok: false, error: "no_webrtc" });
+    }
+    const wait = Math.max(1000, Number(ms) || 8000);
+    // Flatten: iceServers() groups the STUN urls under one entry, and a
+    // grouped entry that half works would report as one verdict.
+    const flat = [];
+    for (const e of NetTransport.iceServers({})) {
+      const urls = Array.isArray(e.urls) ? e.urls : [e.urls];
+      for (const u of urls) flat.push({ urls: u, username: e.username, credential: e.credential });
+    }
+    const one = (srv) => new Promise((done) => {
+      const isTurn = /^turns?:/i.test(srv.urls);
+      let pc = null;
+      const out = { urls: srv.urls, relay: 0, ok: false, stun: !isTurn };
+      // A STUN entry cannot yield a relay candidate by definition, so probing
+      // it relay-only would report a false failure. Name it and move on.
+      if (!isTurn) { out.error = "not_a_relay"; done(out); return; }
+      try {
+        pc = new PC({ iceServers: [srv], iceTransportPolicy: "relay" });
+      } catch (e) { out.error = "construct_failed"; done(out); return; }
+      const finish = () => {
+        if (!pc) return;
+        out.ok = out.relay > 0;
+        if (!out.ok && !out.error) out.error = "no_relay_candidates";
+        try { pc.close(); } catch (e) {}
+        pc = null;
+        done(out);
+      };
+      const timer = setTimeout(finish, wait);
+      pc.onicecandidate = (ev) => {
+        if (!ev.candidate) { clearTimeout(timer); finish(); return; }
+        if (/ typ relay /.test(ev.candidate.candidate)) out.relay++;
+      };
+      // The gather error carries the operator's own verdict — 701 is a DNS
+      // failure, 401 a rejected credential, and those want opposite fixes.
+      pc.onicecandidateerror = (ev) => {
+        if (ev && ev.errorCode && !out.error) {
+          out.error = "ice_" + ev.errorCode + (ev.errorText ? " " + ev.errorText : "");
+        }
+      };
+      try {
+        pc.createDataChannel("probe");
+        pc.createOffer().then((o) => pc && pc.setLocalDescription(o)).catch(() => {});
+      } catch (e) { clearTimeout(timer); out.error = "offer_failed"; finish(); }
+    });
+    return Promise.all(flat.map(one)).then((servers) => {
+      const relays = servers.filter((s) => !s.stun);
+      return {
+        ok: relays.some((s) => s.ok),
+        servers,
+        relaysConfigured: relays.length,
+        // The sentence to paste back. A probe whose result needs interpreting
+        // is a probe that gets misreported.
+        summary: !relays.length
+          ? "No TURN relay is configured — only STUN. Cross-network play will fail whenever both sides are behind a strict NAT."
+          : relays.some((s) => s.ok)
+            ? "Relay reachable: " + relays.filter((s) => s.ok).map((s) => s.urls).join(", ")
+            : "A relay is configured but none answered: "
+              + relays.map((s) => s.urls + " (" + s.error + ")").join(", "),
+      };
+    });
+  },
+
   // lobbyInviteAnother() — mint a FURTHER invite without disturbing the room.
   // Deliberately not lobbyHost() twice: that calls open(), which clears the
   // peer maps, so inviting a third player would forget the second.
@@ -2407,7 +2468,16 @@ const api = {
       c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
       c.stuckT = 0; c.deploying = false; c.boostOn = false; c.otArmed = false;
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
-      c.wasOnThrottle = false; c.vertLoad = 1;
+      c.wasOnThrottle = false;
+      // vertLoad is a crest/dip DELTA, not a multiplier: js/game.js computes it
+      // as clamp(kv*v²/9.8, -0.20, 0.20) and spends it as `* (1 + vertLoad)`, so
+      // its baseline is 0 and setting it to 1 handed the car ~2x lateral grip for
+      // the ~0.4 s the damp took to decay. It also made reset() non-idempotent —
+      // the FIRST reset left it undefined so `?? vtRaw` seeded it correctly and
+      // every later one got 1 — which is exactly the run-to-run difference the
+      // rest of this block exists to remove. Deleting it reseeds from vtRaw on
+      // the next tick, i.e. identically to a car that has just been built.
+      delete c.vertLoad;
       // `prog` accumulates via `ds = s - (c._prevS ?? c.s)` (js/game.js:2705).
       // Leaving _prevS at the PREVIOUS episode's final s makes the very first
       // tick bank one bogus delta, so an identically-seeded, identically-driven
@@ -2704,7 +2774,55 @@ const api = {
         msaa: safe(() => gfx && gfx.msaa && gfx.msaa(), null),
         renderScale: safe(() => gfx && gfx.getRenderScale && gfx.getRenderScale(), null),
       },
+      // The two numbers that decide whether the 3D view is SHARP. A backing
+      // store far below css x dpr IS the blur, whatever else is true — and it
+      // is the first thing to check on "the game looks fuzzy on my phone",
+      // which no other field here answers.
+      canvas: safe(() => {
+        const c = document.getElementById("game");
+        return c ? { css: [c.clientWidth, c.clientHeight], buffer: [c.width, c.height],
+                     dpr: window.devicePixelRatio } : null;
+      }, null),
+      // PerfGov's safe mode. tierFloor > 0 means features are being withheld ON
+      // PURPOSE because this device died before — a shed feature that is not a
+      // renderer fault, and indistinguishable from one without this.
+      perf: safe(() => {
+        const p = this.renderScale();
+        return { scale: p.scale, fps: p.fps, auto: p.auto, tier: p.tier,
+                 tierFloor: p.tierFloor, crashStrikes: p.crashStrikes };
+      }),
       gl: glInfo,
+      // Capability probes that decide which render path is even available —
+      // a missing float colour buffer sheds the whole HDR post chain, and a
+      // LOST context explains a black screen that looks like a shader bug.
+      glCaps: safe(() => {
+        const cv = document.querySelector("canvas");
+        const gl = cv && (cv.getContext("webgl2") || cv.getContext("webgl"));
+        if (!gl) return null;
+        return {
+          maxFragUnif: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
+          colorFloat: !!gl.getExtension("EXT_color_buffer_float"),
+          colorHalf: !!gl.getExtension("EXT_color_buffer_half_float"),
+          lost: gl.isContextLost(),
+        };
+      }, null),
+      // Stored overrides. Any of these beats every shipped default and lives
+      // only on this device, which is the exact shape of a bug that reproduces
+      // for one person and nobody else. `resMode`, `gfxHigh`, `forceMobileTier`
+      // and `envProbeOff` are here because they decide the render path and were
+      // the ones actually missing; `graphics` and `renderScale` are NOT, because
+      // no such key is written anywhere in the repo — reporting them as null
+      // every time was worse than not reporting them.
+      stored: safe(() => {
+        const ls = (k) => { try { return localStorage.getItem("apex26." + k); } catch (e) { return null; } };
+        return {
+          lightTune: !!ls("lightTune"), camTune: !!ls("camTune"),
+          gfxBackend: ls("gfxBackend"), debris: ls("debris"),
+          gfxHigh: ls("gfxHigh"), resMode: ls("resMode"),
+          forceMobileTier: ls("forceMobileTier"), envProbeOff: ls("envProbeOff"),
+        };
+      }, null),
+      debris: safe(() => this.debris(), null),
       info: safe(() => this.info()),
       assets: safe(() => this.assets()),
       lightTune: safe(() => this.lightTune()),

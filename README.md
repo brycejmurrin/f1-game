@@ -11,7 +11,8 @@ zero-dependency philosophy, this time in true 3D.
 ## The game
 
 Race the full **2026 grid** — 11 teams, 22 cars, real drivers and liveries —
-across **24 real circuits** recreated as low-poly 3D tracks: Bahrain, Monaco,
+across the **24-round 2026 calendar** recreated as low-poly 3D tracks — plus 16
+retired classics, 40 circuits in all: Bahrain, Monaco,
 Silverstone, Spa, Monza, Suzuka, Singapore, COTA, Interlagos, Las Vegas, the
 brand-new Madrid Madring (with its 24%-banked Monumental curve), Zandvoort in
 its farewell year, Imola, Baku, Jeddah, Albert Park, Shanghai, Miami, Mexico
@@ -72,7 +73,7 @@ tucked behind an **ADVANCED** disclosure for anyone who wants them.
 ### Car Setup
 
 The **CAR SETUP** screen (accessible from the main menu) lets you configure
-your car across **8 upgrade categories** before each race:
+your car across **12 upgrade categories** before each race:
 
 | Category | What it affects |
 |---|---|
@@ -84,6 +85,10 @@ your car across **8 upgrade categories** before each race:
 | **ERS** | Battery deployment curve and harvest efficiency |
 | **GEARBOX** | Shift speed and ratio spread |
 | **FUEL** | Fuel load trade-off (weight vs. range) |
+| **EXHAUST** | Tailpipe layout — pipe count, bore, wastegate |
+| **FLOOR** | Floor edge, fences and skid block |
+| **COCKPIT** | Halo, mirrors and driver furniture |
+| **WHEELS** | Rim and wheel-cover treatment |
 
 Budget is **600 credits** per race. Toggle **UNLIMITED BUDGET** in the setup
 screen to remove the cap for testing. Some parts are **factory/supplier-exclusive**
@@ -130,14 +135,14 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module contract.
 Plain script-tag IIFE modules, grouped by domain: `js/render/` (WebGL2/WebGPU
 renderers + shaders), `js/track/` (the spline → mesh track engine),
 `js/circuits/` (the 40 circuit data files: 24 season rounds + 16 retired), `js/car/` (procedural car geometry,
-liveries, the 8-category upgrade catalog, the 2026 grid), `js/data/`
+liveries, the 12-category upgrade catalog, the 2026 grid), `js/data/`
 (Jolpica/OpenF1 clients + the data hub UI), `js/game/` (input, audio, HUD,
 cameras, lighting, …), with `js/game.js` as the entry (loop, physics, AI, race
 logic). Load order is defined in `tools/manifest.cjs`.
 
 ## Testing & development
 
-The project ships a **Playwright test suite** (99 specs) plus 33 `node --test`
+The project ships a **Playwright test suite** (101 specs) plus 37 `node --test`
 unit suites, covering physics regression, AI behaviour, geometry audits, UI
 screens, multiplayer, career and visual regression. The whole thing is ~40
 minutes of software rendering, so the workflow is: ask which groups a change

@@ -271,11 +271,6 @@ const Car3D = (function () {
       }
     }
   }
-  // Height of a wing element's UPPER surface at chordwise t, measured off its own
-  // chord line — what the nose-clearance check has to respect, since the section
-  // now carries thickness above the mean line where a flat sheet had none.
-  const foilTop = (t, thick, chord) =>
-    thick * 0.5 * foilThick(t) - FOIL_CAMBER * chord * 4 * t * (1 - t);
   // Join a short chain of arbitrary four-corner stations. This keeps low-poly
   // bodywork readable while allowing the sidepod floor and shoulder to follow
   // different curves (a rectangular loft cannot express a real undercut).
@@ -313,18 +308,6 @@ const Car3D = (function () {
     }
   }
 
-  // Thin diagonal strut bar between two points (x0,y0)→(x1,y1) at depth z — a
-  // slim hexahedron with `th` cross-section and `d` z-depth. Used for the
-  // pushrod / pullrod suspension actuators (a diagonal rod, not an axis box).
-  function addStrut(out, x0, y0, x1, y1, z, th, d, col, surface) {
-    const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy) || 1;
-    const px = -dy / L * th / 2, py = dx / L * th / 2;
-    const zf = z + d / 2, zr = z - d / 2;
-    addBlock(out, [
-      [x0 - px, y0 - py, zf], [x0 + px, y0 + py, zf], [x1 + px, y1 + py, zf], [x1 - px, y1 - py, zf],
-      [x0 - px, y0 - py, zr], [x0 + px, y0 + py, zr], [x1 + px, y1 + py, zr], [x1 - px, y1 - py, zr],
-    ], col, null, surface);
-  }
   function addBeamBetween(out, p0, p1, th, col, surface) {
     let dx = p1[0]-p0[0], dy = p1[1]-p0[1], dz = p1[2]-p0[2];
     const len = Math.hypot(dx, dy, dz) || 1; dx /= len; dy /= len; dz /= len;
@@ -593,25 +576,6 @@ const Car3D = (function () {
         addBox(calOut, cx + sgn * (w * 0.52 + 0.006), cy + cr, cz, 0.02, 0.05, 0.11, padCol, SURFACES.metal);
       addBox(calOut, cx, cy + cr + 0.04, cz, w * 1.0, 0.02, 0.10, caliperColor, SURFACES.metal);   // bridge rib
     }
-  }
-
-  // 7-segment digit built from thin boxes, proud of a vertical x = const surface.
-  // m = +1 renders for a viewer on the car's LEFT side (screen-right = +z there),
-  // m = -1 for the RIGHT side — so the number reads correctly from both sides.
-  const SEG7 = [
-    [1,1,1,1,1,1,0],[0,1,1,0,0,0,0],[1,1,0,1,1,0,1],[1,1,1,1,0,0,1],[0,1,1,0,0,1,1],
-    [1,0,1,1,0,1,1],[1,0,1,1,1,1,1],[1,1,1,0,0,0,0],[1,1,1,1,1,1,1],[1,1,1,1,0,1,1],
-  ];
-  function addDigit(out, xp, cy, cz, h, m, d, col) {
-    const w = h * 0.55, t = h * 0.14, q = h / 4, z2 = (w / 2) * m;
-    const L = [                       // [dy, dz, sy, sz] for segments A..G
-      [ h/2,  0,  t,   w ], [ q,  z2, h/2, t ], [ -q,  z2, h/2, t ],
-      [-h/2,  0,  t,   w ], [-q, -z2, h/2, t ], [  q, -z2, h/2, t ],
-      [ 0,    0,  t,   w ],
-    ];
-    const s = SEG7[d] || SEG7[8];
-    for (let i = 0; i < 7; i++) if (s[i])
-      addBox(out, xp, cy + L[i][0], cz + L[i][1], 0.004, L[i][2], L[i][3], col);
   }
 
   // A single wheel centred on the origin, axle along X — so the render layer can
@@ -941,15 +905,41 @@ const Car3D = (function () {
   //
   // Callers MUST treat the records as immutable — they are shared now.
   const _flapSpecs = new Map();
+  // The six-field signature depends ONLY on the recipe object, and callers hand
+  // the same memoised recipe every frame (game.js's teamDecalState caches it), so
+  // resolve it once per object rather than rebuilding an array, a map closure and
+  // a join on every lookup. aeroFlapsGeom is called per car per frame by
+  // drawAeroFlaps, so that key build was pure churn.
+  const _flapSig = new WeakMap();
+  function flapSig(st0) {
+    let sig = _flapSig.get(st0);
+    if (sig === undefined) {
+      // The same six fields the flap MESH cache keys on — the only ones the
+      // planform and the rear slot height read.
+      sig = [st0.frontSweep, st0.frontTaper, st0.frontRise,
+             st0.rearSweep, st0.rearTaper, st0.drs || 0]
+        .map((v) => +v || 0).join(",");
+      _flapSig.set(st0, sig);
+    }
+    return sig;
+  }
   function aeroFlapsGeom(aLvl, style) {
     const st0 = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
-    // The same six fields the mesh cache keys on (js/game/carmesh.js) — the
-    // only ones the planform and the rear slot height read.
-    const key = (aLvl | 0) + "|" + [st0.frontSweep, st0.frontTaper, st0.frontRise,
-                                    st0.rearSweep, st0.rearTaper, st0.drs || 0]
-      .map((v) => +v || 0).join(",");
+    // RAW aLvl, not (aLvl | 0). Several catalog options use FRACTIONAL levels
+    // (see frontCascade) and solveFlapsGeom below reads the exact value, so
+    // truncating here made 2.2 and 2.8 share one cache slot: whichever solved
+    // first served both, and the other option silently wore the wrong flaps.
+    const key = aLvl + "|" + flapSig(st0);
     let hit = _flapSpecs.get(key);
-    if (!hit) { hit = solveFlapsGeom(aLvl, st0); _flapSpecs.set(key, hit); }
+    if (!hit) {
+      hit = solveFlapsGeom(aLvl, st0);
+      // Stamp each element with its resolved identity. js/game/carmesh.js keys its
+      // GPU mesh cache on exactly (level, recipe, element index) and used to
+      // recompute that signature itself, per flap per car per frame — four more
+      // array-map-join builds on top of this one. Now it just reads the stamp.
+      for (let i = 0; i < hit.length; i++) hit[i].cacheKey = key + "|" + i;
+      _flapSpecs.set(key, hit);
+    }
     return hit;
   }
   function solveFlapsGeom(aLvl, style) {
@@ -1363,7 +1353,32 @@ const Car3D = (function () {
     ];
   }
 
+  // Memoised on (parts, teamId) OBJECT IDENTITY. The result is immutable — the
+  // three sampler methods are pure and podStations is already frozen copies — so
+  // handing the same object to every caller is safe, and `parts` here is the
+  // stable cached recipe game.js's teamDecalState already memoises per store.rev.
+  //
+  // Worth doing because the uncached build is ~20 allocations plus four
+  // Object.freeze calls (engine parts, three station arrays, a joined key string,
+  // three fresh method closures) and getCarDecalMesh calls it once per DRAWN CAR
+  // PER FRAME — purely to read anchors.key and discover the decal mesh it wanted
+  // is already cached. A WeakMap keyed on parts means an entry dies with the
+  // recipe that owns it; the inner Map is per teamId, which is a small fixed set.
+  const _anchorCache = new WeakMap();
+  const _anchorNullKey = {};   // stand-in for a null/undefined parts (legacy bodies)
   function bodyAnchors(parts, teamId) {
+    const outer = parts || _anchorNullKey;
+    let byTeam = _anchorCache.get(outer);
+    if (!byTeam) { byTeam = new Map(); _anchorCache.set(outer, byTeam); }
+    const tk = teamId || "";
+    const hit = byTeam.get(tk);
+    if (hit) return hit;
+    const built = buildBodyAnchors(parts, teamId);
+    byTeam.set(tk, built);
+    return built;
+  }
+
+  function buildBodyAnchors(parts, teamId) {
     const T = parts || {};
     const tier = T.engine != null ? T.engine : 1;
     const eng = buildEngineParts(T._visual && T._visual.engine, tier);

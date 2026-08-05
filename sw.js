@@ -39,6 +39,25 @@ async function precacheAssetLists() {
   // OPTIONAL: TLX is opt-in — install success for GLX users must not depend on
   // ~1 MB of vendor they never run (promote to essential at the Phase D flip).
   const optional = new Set(["manifest.json",
+    // The two OPT-IN renderer backends. They have no <script> tag any more —
+    // js/game.js injects them at boot only when apex26.gfxBackend selects one
+    // (tools/manifest.cjs DEFERRED) — so the tag parser below cannot see them.
+    // OPTIONAL for the same reason as the vendored three.js underneath: a GLX
+    // user never runs a byte of this, and an install must not fail over it.
+    // tests/load-order.test.mjs asserts this list stays equal to DEFERRED.
+    "js/render/webgpu/wgsl-chunks.js",
+    "js/render/webgpu/wgsl-post.js",
+    "js/render/webgpu/wgsl-fx.js",
+    "js/render/webgpu/wgx.js",
+    "js/render/three/tsl-chunks.js",
+    "js/render/three/tsl-lit.js",
+    "js/render/three/tsl-sky.js",
+    "js/render/three/tsl-fx.js",
+    "js/render/three/tsl-post.js",
+    "js/render/three/tlx-shadow.js",
+    "js/render/three/tlx-chunked.js",
+    "js/render/three/tlx-post.js",
+    "js/render/three/tlx.js",
     "vendor/three-0.184.0/three.webgpu.min.js",
     "vendor/three-0.184.0/three.core.min.js",
     "vendor/three-0.184.0/three.tsl.min.js",

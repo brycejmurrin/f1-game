@@ -20,7 +20,7 @@
 //
 // Usage: node spike/physics/deep-tuning.mjs      (pure Node, no browser)
 
-import RAPIER from "./vendor/rapier.mjs";
+import RAPIER from "../../vendor/rapier-0.19.3/rapier.mjs";
 
 await RAPIER.init({});
 

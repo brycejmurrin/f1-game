@@ -224,7 +224,6 @@ const SceneryCity = (function () {
       const winBase = opts.windowCol || opts.window || [1.0, 0.88, 0.55];
       const HDR = 1.55;
       const litGlass = [winBase[0] * HDR, winBase[1] * HDR, winBase[2] * HDR];
-      const darkW = [0.05, 0.06, 0.11];                       // unlit pane at night
       // Day glazing: a muted, slightly-darker blue-grey window — desaturated so
       // daytime shows LESS colour (the neon window tint barely reads by day).
       const dayGlass = opts.window

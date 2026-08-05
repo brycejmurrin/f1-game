@@ -69,11 +69,61 @@ test("every js/**/*.js appears in MANIFEST.FULL (and vice versa)", () => {
       else if (name.endsWith(".js")) files.push(rel);
     }
   })("js");
-  const full = new Set(MANIFEST.FULL);
-  const missing = files.filter((f) => !full.has(f));
-  const dead = MANIFEST.FULL.filter((f) => !files.includes(f));
-  assert.deepEqual(missing, [], `js/ files with no manifest entry (add a <script> tag + manifest line): ${missing}`);
+  // FULL ∪ DEFERRED: a deferred file has no <script> tag by design, but it must
+  // still be accounted for somewhere, or "created the file, forgot to load it"
+  // stops being catchable.
+  const known = new Set([...MANIFEST.FULL, ...deferredFiles()]);
+  const missing = files.filter((f) => !known.has(f));
+  const dead = [...known].filter((f) => !files.includes(f));
+  assert.deepEqual(missing, [], `js/ files with no manifest entry (add a <script> tag + manifest line, or a DEFERRED entry): ${missing}`);
   assert.deepEqual(dead, [], `manifest entries with no file on disk: ${dead}`);
+});
+
+// ---- DEFERRED: js/ files with no tag, injected at runtime by game.js --------
+// Three things have to agree or a deferred backend silently 404s in production
+// while every local run passes (the exact failure mode that shipped vendor/ to
+// Pages in build 895): the manifest, game.js's own loader table, and sw.js's
+// optional precache seed (the SW discovers everything else by parsing tags, so
+// a tagless file is invisible to it).
+function deferredFiles() {
+  return Object.values(MANIFEST.DEFERRED).flat();
+}
+
+test("DEFERRED files have no <script> tag", () => {
+  const tagged = new Set(scriptSrcs.map(stripV));
+  for (const f of deferredFiles()) {
+    assert.ok(!tagged.has(f), `${f} is DEFERRED but still has a <script> tag in index.html`);
+  }
+});
+
+test("DEFERRED_EDGES are ordered within their group", () => {
+  for (const [before, after] of MANIFEST.DEFERRED_EDGES) {
+    const group = Object.values(MANIFEST.DEFERRED).find((g) => g.includes(before) && g.includes(after));
+    assert.ok(group, `DEFERRED_EDGES pair ${before} -> ${after} spans no single group`);
+    assert.ok(group.indexOf(before) < group.indexOf(after), `${before} must load before ${after}`);
+  }
+});
+
+test("js/game.js BACKEND_FILES equals MANIFEST.DEFERRED, group for group", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const block = src.match(/const BACKEND_FILES = \{([\s\S]*?)\n\};/);
+  assert.ok(block, "js/game.js must declare a BACKEND_FILES table for the deferred backends");
+  for (const [name, files] of Object.entries(MANIFEST.DEFERRED)) {
+    const group = block[1].match(new RegExp(`\\b${name}:\\s*\\[([\\s\\S]*?)\\]`));
+    assert.ok(group, `BACKEND_FILES is missing the "${name}" group`);
+    const listed = [...group[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    assert.deepEqual(listed, files, `BACKEND_FILES.${name} must match MANIFEST.DEFERRED.${name} exactly, in order`);
+  }
+});
+
+test("sw.js seeds every DEFERRED file into its optional precache set", () => {
+  const sw = readFileSync(join(ROOT, "sw.js"), "utf8");
+  const optional = sw.match(/const optional = new Set\(\[([\s\S]*?)\]\);/);
+  assert.ok(optional, "sw.js must declare an `optional` precache Set");
+  const seeded = new Set([...optional[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+  for (const f of deferredFiles()) {
+    assert.ok(seeded.has(f), `${f} is DEFERRED, so sw.js must seed it (the tag parser cannot find it)`);
+  }
 });
 
 test("HARD_EDGES are ordered in FULL", () => {

@@ -213,6 +213,67 @@ test.describe("Career — isolation", () => {
     });
     expect(merc).toBeGreaterThan(1);   // TIER_V[0] is 1.0; +8 dev lifts it
   });
+
+  // The three guards below all cover the same class of mistake: gating on "a
+  // career SAVE exists" instead of "career rules apply now". The save is loaded
+  // at boot so the title can offer CONTINUE, so `Career.data()`/`Career.active()`
+  // are truthy in every mode for anyone who has ever started one.
+
+  test("a Grand Prix garage writes to free play, not into the career save", async ({ page }) => {
+    // getTeamParts/saveTeamParts used to branch on Career.data(). Fitting a part
+    // in a GP garage for the career's own team therefore wrote career.fitted —
+    // and setup-ui correctly treats a GP garage as free play (FREE BUILD, the
+    // flat 600 cr cap, no R&D lock), so the career car could be maxed out for
+    // nothing. Driven through the REAL garage, because the funnel is the thing
+    // under test: writing localStorage directly would pass either way.
+    await boot(page);
+    await startCareer(page, { teamId: "haas", seat: 1, seed: 11 });
+    // Leaving the hub drops back to flow "gp" with the career's team still
+    // selected — the exact situation the bug needed.
+    await page.locator("#cr-back").click();
+    const fittedBefore = await page.evaluate(() => JSON.stringify(window.__apex.career().fitted));
+    await page.evaluate(() => document.getElementById("mb-garage").click());
+    await expect(page.locator("#carsetup")).toBeVisible();
+    const picked = await page.evaluate(() => {
+      // Any row that is not the one already fitted, so the click is a real change.
+      const rows = [...document.querySelectorAll("#cs-options .cs-opt")];
+      const row = rows.reverse().find((r) => !r.classList.contains("active"));
+      if (!row) return null;
+      row.click();
+      return row.dataset.csOpt;
+    });
+    expect(picked).not.toBeNull();
+    const after = await page.evaluate(() => ({
+      fitted: JSON.stringify(window.__apex.career().fitted),
+      free: JSON.parse(localStorage.getItem("apex26.parts.haas") || "null"),
+      flow: window.__apex.info().flow,
+    }));
+    expect(after.flow).toBe("gp");
+    expect(after.fitted).toBe(fittedBefore);                    // the save is untouched
+    expect(after.free).not.toBeNull();                          // free play took the write
+    expect(Object.values(after.free)).toContain(picked);
+  });
+
+  test("a Grand Prix grid does not depend on which career is on the device", async ({ page }) => {
+    // Quali seeded its field off Career.rnd() (career.seed) at Career.round(),
+    // neither of which is inCareer()-gated — so the same sim seed gave a
+    // different grid depending on a save the Grand Prix has nothing to do with.
+    const gridFor = async (careerOpts) => page.evaluate((o) => {
+      if (o) window.__apex.career(o); else window.__apex.careerReset();
+      window.__apex.seed(1234);
+      window.__apex.race("monza");
+      const q = window.__apex.qualiSim();
+      return (q && q.rows ? q.rows : q || []).map((r) => r.code).join(",");
+    }, careerOpts);
+
+    await boot(page);
+    const noCareer = await gridFor(null);
+    const careerA = await gridFor({ teamId: "haas", seat: 1, seed: 4242 });
+    const careerB = await gridFor({ teamId: "williams", seat: 0, seed: 99 });
+    expect(noCareer.length).toBeGreaterThan(0);
+    expect(careerA).toBe(noCareer);
+    expect(careerB).toBe(noCareer);
+  });
 });
 
 // ── the hub ──────────────────────────────────────────────────────────────────
@@ -1945,5 +2006,29 @@ test.describe("Career — sponsors", () => {
     expect(out.windows).toBeGreaterThan(0);
     expect(out.unique).toBe(out.windows);          // never recorded twice
     expect(out.paidRounds).toBeLessThanOrEqual(out.windows);
+  });
+
+  test("…and the ledger clears at the rollover, so season two still pays", async ({ page }) => {
+    // The test above only proves no DOUBLE pay within a season. paidSponsors
+    // records the window index WITHIN a season (sponsorAt walks from round 0), so
+    // carrying it across the rollover made every season-two window look already
+    // paid — MY TEAM's whole second income stream stopped, silently, from year
+    // two on, with the hub still showing the brief and its fee.
+    await boot(page);
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 7 }));
+    await goRacing(page);
+    const out = await page.evaluate(() => {
+      window.__apex.careerSim(24);
+      const s1 = window.__apex.career().paidSponsors.slice();
+      window.__apex.careerRollover();
+      const cleared = window.__apex.career().paidSponsors.slice();
+      const y2 = window.__apex.careerSim(24) || [];
+      return { s1, cleared, y2Paid: y2.filter((r) => r.sponsorPay > 0).length,
+               y2Ledger: window.__apex.career().paidSponsors.length };
+    });
+    expect(out.s1.length).toBeGreaterThan(0);      // season one recorded windows
+    expect(out.cleared).toEqual([]);               // rollover wipes the ledger
+    expect(out.y2Ledger).toBeGreaterThan(0);       // season two records its own
+    expect(out.y2Paid).toBeGreaterThan(0);         // …and actually pays
   });
 });

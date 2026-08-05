@@ -8,11 +8,9 @@ These three are the in-game playlist: they play in sequence in the menu and on
 through the race, and SKIP TRACK in the pause menu jumps to the next one. Add
 more by dropping files here and listing them in PLAYLIST in js/game/audio.js.
 
-Race loops (CC0 1.0 / public domain), from "Homebrew Free Jingle and Fanfare
-Music Assets" by Beatscribe (https://github.com/Beatscribe/homebrew_vgm,
-more at https://beatscribe.itch.io), downsampled to 22.05 kHz mono:
-  race_a.wav  <- bs-mm-metal
-  race_b.wav  <- bs-p1-ps-md
-  night.wav   <- bs-cyb-city-night-nodrums  (race / night circuits)
-
-To use your own music, drop replacement files with these names here.
+Anything in this folder that PLAYLIST does not name is dead weight, not a
+fallback — the Pages workflow stages assets/ wholesale, so it ships to every
+visitor and is never fetched. Three CC0 race loops from Beatscribe's "Homebrew
+Free Jingle and Fanfare Music Assets" (race_a.wav, race_b.wav, night.wav) sat
+here unreferenced for exactly that reason and were removed; they are in the git
+history if they are ever wanted back.

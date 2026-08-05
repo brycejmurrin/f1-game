@@ -194,32 +194,66 @@ const NetSnapshot = (function () {
       return true;
     }
 
+    // s AND lap ARE ONE QUANTITY. netplay reconstructs cumulative progress as
+    // `c.prog = c.lap * total + c.s` (js/net/netplay.js), and the whole race
+    // order — plus the AI's read of who is leading — is sorted on prog. So the
+    // two have to cross the start/finish line TOGETHER. They used not to: s was
+    // wrapped here while lap was copied from whichever sample happened to be
+    // nearer in time (blend) or left untouched entirely (advance), so either
+    // side of the line the pair disagreed and the rival's prog was out by a
+    // whole lap for up to a packet interval. The +1 case is the bad one — it
+    // briefly ranks the rival as leader, and js/game.js's `_leadHuman` then
+    // rubber-bands the entire AI field off a car that is actually last.
+    //
+    // splitS() takes a raw arc position that may sit outside [0, total) and
+    // returns the in-range s together with the number of lines it crossed to get
+    // there. Both movers below go through it, so they cannot drift apart on the
+    // wrap — the same reason session.js shares this file's toView().
+    function splitS(raw) {
+      const laps = Math.floor(raw / total);
+      return { s: raw - laps * total, laps };
+    }
+
     // Advance a state along the ROAD. This is the whole reason (s, x) is worth
     // having on the wire: it cannot dead-reckon a car off the circuit.
     function advance(st, dtMs) {
       const dt = dtMs / 1000;
+      const w = splitS(st.s + st.speed * dt);
       // Spread the source rather than re-listing its fields: a packet that
       // grows a field would otherwise silently lose it HERE ONLY, i.e. only
       // while extrapolating — invisible to any test that never stalls the
       // buffer. Only s moves; x is deliberately not extrapolated.
       return Object.assign({}, st, {
-        s: ((st.s + st.speed * dt) % total + total) % total,
+        s: w.s,
+        lap: Number.isFinite(st.lap) ? st.lap + w.laps : st.lap,
         extrapolated: true,
       });
     }
 
     function blend(a, b, u) {
-      // Discrete fields (gear, lap, the flags) step rather than blend — half a
-      // gear is not a thing — so start from whichever sample is nearer and
-      // overwrite only what genuinely interpolates. Same reason as advance():
-      // a new packet field is carried automatically.
-      return Object.assign({}, u < 0.5 ? a : b, {
-        s: lerpWrapped(a.s, b.s, u, total),
+      // Discrete fields (gear, the flags) step rather than blend — half a gear
+      // is not a thing — so start from whichever sample is nearer and overwrite
+      // only what genuinely interpolates. Same reason as advance(): a new packet
+      // field is carried automatically.
+      const out = Object.assign({}, u < 0.5 ? a : b, {
         x: a.x + (b.x - a.x) * u,
         head: lerpWrapped(a.head, b.head, u, TAU),
         speed: a.speed + (b.speed - a.speed) * u,
         extrapolated: false,
       });
+      // Take the short way round for the DISTANCE moved (as before), then let
+      // splitS say whether that landed past the line. Deriving the lap from the
+      // same delta that produced s is what keeps the pair consistent; anchoring
+      // on `a` rather than blending the two lap counters means a sender whose
+      // lap ticks a frame before or after its s wrap cannot drag the rival
+      // through a whole phantom lap.
+      let d = b.s - a.s;
+      const half = total / 2;
+      if (d > half) d -= total; else if (d < -half) d += total;
+      const w = splitS(a.s + d * u);
+      out.s = w.s;
+      if (Number.isFinite(a.lap)) out.lap = a.lap + w.laps;
+      return out;
     }
 
     // Where the car should be DRAWN now: delayMs in the past, so there is

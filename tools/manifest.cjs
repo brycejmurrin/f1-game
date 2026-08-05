@@ -15,7 +15,9 @@
 //   js/game/      game-support modules extracted from / loaded before game.js
 //
 // Rules encoded here:
-//  - FULL is every js/ file in the exact index.html <script> order.
+//  - FULL is every TAGGED js/ file, in the exact index.html <script> order.
+//  - DEFERRED is the rest: js/ files with no tag, injected at runtime by
+//    game.js when opted into. FULL ∪ DEFERRED must cover js/**/*.js.
 //  - The circuit tags ("@circuits") stay in their curated order — that
 //    order IS Tracks.LIST, which is the track-picker order. The season
 //    calendar is Tracks.SEASON, the `classic: false` prefix of that list, so
@@ -61,19 +63,8 @@ const FULL = [
   "js/render/glx/shadow.js",
   "js/render/glx/chunked.js",
   "js/render/glx.js",
-  "js/render/webgpu/wgsl-chunks.js",
-  "js/render/webgpu/wgsl-post.js",
-  "js/render/webgpu/wgsl-fx.js",
-  "js/render/webgpu/wgx.js",
-  "js/render/three/tsl-chunks.js",
-  "js/render/three/tsl-lit.js",
-  "js/render/three/tsl-sky.js",
-  "js/render/three/tsl-fx.js",
-  "js/render/three/tsl-post.js",
-  "js/render/three/tlx-shadow.js",
-  "js/render/three/tlx-chunked.js",
-  "js/render/three/tlx-post.js",
-  "js/render/three/tlx.js",
+  // NB: js/render/webgpu/* and js/render/three/* are NOT here — they are
+  // DEFERRED (see below) and injected at boot only when opted into.
   "js/render/gfx.js",
   "js/render/gltf.js",
   "js/render/assets.js",
@@ -265,22 +256,8 @@ const HARD_EDGES = [
   ["js/render/glx/post.js", "js/render/glx.js"],
   ["js/render/glx/shadow.js", "js/render/glx.js"],
   ["js/render/glx/chunked.js", "js/render/glx.js"],
-  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
-  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
-  ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx.js"],
-  ["js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js"],
-  ["js/render/webgpu/wgx.js", "js/render/gfx.js"],
   // TSL shader factories before tlx.js (TLX.create invokes TLXShaders.chunks/
   // .lit — call-time, but keep the ordering explicit like the glx/ modules)
-  ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
-  ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
-  ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],   // TLX.create invokes TLXShaders.sky
-  ["js/render/three/tsl-fx.js", "js/render/three/tlx.js"],    // TLX.create invokes TLXShaders.fx
-  ["js/render/three/tlx-shadow.js", "js/render/three/tlx.js"],  // TLX.create invokes TLXShaders.shadowSys
-  ["js/render/three/tlx-chunked.js", "js/render/three/tlx.js"], // TLX.create invokes TLXShaders.chunked
-  ["js/render/three/tsl-post.js", "js/render/three/tlx-post.js"], // postChain invokes TLXShaders.post
-  ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],   // TLX.create invokes TLXShaders.postChain
-  ["js/render/three/tlx.js", "js/render/gfx.js"],      // gfx.create branches on the TLX global
   ["js/render/glx.js", "js/render/assets.js"],         // Assets feature-detects the backend's createTextureArray
   ["js/track/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
@@ -319,6 +296,70 @@ const HARD_EDGES = [
 // Named paths for direct single-file consumers (tests/tools that load one
 // source file by path). When a file moves, update it here and every consumer
 // follows automatically.
+// ---------------------------------------------------------------------------
+// DEFERRED — js/ files with NO <script> tag, injected at runtime instead.
+//
+// WHY. GLX (WebGL2) is the shipped renderer; TLX (three.js/TSL) and WGX
+// (native WebGPU) are opt-in migrations selected by the localStorage key
+// `apex26.gfxBackend`, and game.js refuses both on phones outright. So these
+// 532 KB were parsed and evaluated by essentially every visitor to be used by
+// essentially none — a tenth of the whole boot payload, spent on nothing.
+//
+// The machinery to defer them already existed: game.js resolves `optIn`
+// synchronously from localStorage BEFORE it awaits Gfx.create(), and gfx.js
+// already treats a missing TLX/WGX global as "not available" and hands the
+// caller back to GLX (`typeof TLX === "undefined"` / `typeof WGX ===
+// "undefined"`). A failed injection is therefore the same no-op as a browser
+// that never had the backend.
+//
+// KEYED BY the apex26.gfxBackend value that selects the group, and ordered —
+// the array IS the load order, and DEFERRED_EDGES below pins the eval-time
+// dependencies inside each group the way HARD_EDGES does for FULL.
+//
+// Adding a file here instead of FULL means: no <script> tag in index.html, and
+// it MUST also be seeded into sw.js's OPTIONAL precache set (the service worker
+// discovers everything else by parsing the shell's own tags, so a deferred file
+// is invisible to it). tests/load-order.test.mjs asserts all three.
+const DEFERRED = {
+  webgpu: [
+    "js/render/webgpu/wgsl-chunks.js",
+    "js/render/webgpu/wgsl-post.js",
+    "js/render/webgpu/wgsl-fx.js",
+    "js/render/webgpu/wgx.js",
+  ],
+  three: [
+    "js/render/three/tsl-chunks.js",
+    "js/render/three/tsl-lit.js",
+    "js/render/three/tsl-sky.js",
+    "js/render/three/tsl-fx.js",
+    "js/render/three/tsl-post.js",
+    "js/render/three/tlx-shadow.js",
+    "js/render/three/tlx-chunked.js",
+    "js/render/three/tlx-post.js",
+    "js/render/three/tlx.js",
+  ],
+};
+
+// Eval-time dependencies WITHIN a deferred group — same meaning as HARD_EDGES,
+// asserted against that group's own array order. The old edges from wgx.js and
+// tlx.js to gfx.js are gone on purpose: gfx.js reads those globals inside
+// Gfx.create(), which the loader only reaches after the group has evaluated, so
+// the ordering is now enforced by the await rather than by tag position.
+const DEFERRED_EDGES = [
+  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
+  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
+  ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js"],
+  ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
+  ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
+  ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],      // TLX.create invokes TLXShaders.sky
+  ["js/render/three/tsl-fx.js", "js/render/three/tlx.js"],       // TLX.create invokes TLXShaders.fx
+  ["js/render/three/tlx-shadow.js", "js/render/three/tlx.js"],   // TLX.create invokes TLXShaders.shadowSys
+  ["js/render/three/tlx-chunked.js", "js/render/three/tlx.js"],  // TLX.create invokes TLXShaders.chunked
+  ["js/render/three/tsl-post.js", "js/render/three/tlx-post.js"], // postChain invokes TLXShaders.post
+  ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],     // TLX.create invokes TLXShaders.postChain
+];
+
 const PATHS = {
   TRACKS_ENGINE: "js/track/tracks.js",
   GLX_CHUNKS: "js/render/shaders/chunks.js",
@@ -341,5 +382,6 @@ const circuitPath = (id) => `${CIRCUITS_DIR}/${id}.js`;
 
 module.exports = {
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CARVIEW, TRACK_VM, HARD_EDGES,
+  DEFERRED, DEFERRED_EDGES,
   PATHS, circuitPath,
 };

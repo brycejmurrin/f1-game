@@ -213,6 +213,20 @@ const NetSession = (function () {
         return this;
       },
       onClose(fn) { closeHandlers.push(fn); return this; },
+      // Drop every registered handler. A session OUTLIVES the screen that opened
+      // it — the lobby creates one before a track exists and NetPlay adopts the
+      // same object once the race is up — so without a way to detach, the two
+      // owners' handlers stack: the lobby's GO could re-enter beginRace() mid-race,
+      // and a NetPlay start() that ran twice (its no_slot path used to return
+      // AFTER registering) fired peerLaps.push and stop("bye") once per attempt.
+      // Whoever takes ownership calls this first, so registration replaces rather
+      // than accumulates.
+      clearHandlers() {
+        stateHandlers.length = 0;
+        closeHandlers.length = 0;
+        eventHandlers.clear();
+        return this;
+      },
       // -- clock --
       rtt, offset, peerToLocal, localToPeer,
       // Half the round trip: how stale a just-arrived snapshot already is.
