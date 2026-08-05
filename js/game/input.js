@@ -70,8 +70,11 @@ const Input = (function () {
   let padPrevButtons = [];     // previous frame's pressed state, for rising edges
   const PAD_DEADZONE = 0.14;   // left-stick centre slop (ignored, then re-scaled)
 
-  // canvas touch halves: id -> -1 | 0 | 1
+  // canvas touch halves: identifier -> { dir: -1 | 0 | 1, seq }
+  // `seq` is a monotonic stamp of when this touch last spoke — see
+  // recomputeTouchSteer for why insertion order cannot answer that question.
   const touches = new Map();
+  let touchSeq = 0;
   let touchSteer = 0;
 
   // on-screen buttons (multi-pointer safe via per-button pointer sets)
@@ -107,6 +110,26 @@ const Input = (function () {
   let tiltSteerT = 0;         // timestamp of the last tiltSteering() call (ms)
 
   let onPauseCb = null;
+
+  // SIM TIME vs WALL TIME. The steering RAMPS (keyboard, and the tilt slew) are
+  // control-loop stages: they belong to the same clock the car is integrated on,
+  // not to the wall. Normally those are the same clock and this is 1.
+  //
+  // HIT-STOP is where they come apart. After a hard crash js/game.js runs the
+  // simulation at 0.15x for a few frames so the impact reads, but the ramps were
+  // still advancing on `performance.now()` — so for the length of the effect the
+  // wheel travelled ~6.7x further per simulated second than it does at any other
+  // moment, and the car came out of a crash with a steering command the driver
+  // never had time to give. The game loop reports its scale here each frame and
+  // the ramps run on the same time base the physics does.
+  //
+  // Deliberately NOT applied to the One-Euro filter in onOrient(): that is a
+  // SENSOR filter running at the deviceorientation rate, and it must keep
+  // tracking the real hand at real speed however slowly the world is moving.
+  let timeScale = 1;
+  function setTimeScale(s) {
+    timeScale = (typeof s === "number" && isFinite(s) && s > 0) ? Math.min(s, 1) : 1;
+  }
 
   function nowMs() {
     return (typeof performance !== "undefined" && performance.now)
@@ -274,7 +297,7 @@ const Input = (function () {
       target = Math.max(-1, Math.min(1, d / (MAX_TILT - DEADZONE)));
     }
     const t = nowMs();
-    const dt = tiltSteerT ? Math.min(0.1, (t - tiltSteerT) / 1000) : 0;
+    const dt = (tiltSteerT ? Math.min(0.1, (t - tiltSteerT) / 1000) : 0) * timeScale;
     tiltSteerT = t;
     const releasing = Math.abs(target) < Math.abs(tiltSteerVal);
     tiltSteerVal = moveToward(tiltSteerVal, target, (releasing ? 1.6 : 1.0) * TILT_SLEW * dt);
@@ -287,10 +310,14 @@ const Input = (function () {
     return v + clamp(target - v, -step, step);
   }
 
-  // Advances the ramp on every call (steer() is polled once per frame).
+  // Advances the ramp on every call. steer() is polled once per PHYSICS STEP
+  // (js/game.js calls it from inside the fixed-step loop), so at 30 fps two
+  // calls share one frame's elapsed time and at 120 fps a frame may make none —
+  // wall-clock deltas keep the aggregate rate right through both. timeScale
+  // folds in hit-stop; see its declaration.
   function keyboardSteer() {
     const t = nowMs();
-    const dt = keySteerT ? Math.min(0.1, (t - keySteerT) / 1000) : 0;
+    const dt = (keySteerT ? Math.min(0.1, (t - keySteerT) / 1000) : 0) * timeScale;
     keySteerT = t;
     const target = (keyRight ? 1 : 0) - (keyLeft ? 1 : 0);
     if (target !== 0) {
@@ -394,17 +421,25 @@ const Input = (function () {
     return t.clientX < window.innerWidth / 2 ? -1 : 1;
   }
 
+  // "Most recent steering touch wins" is the rule, and it needs an explicit
+  // sequence number to be true. The obvious reading — take the last entry of the
+  // Map — is wrong: Map iterates in INSERTION order and `set()` on an existing
+  // key keeps that key where it was. So a finger placed FIRST and then dragged
+  // across the midline could never take the steering from a later finger that
+  // had not moved since. Stamping every start and every move gives the rule its
+  // literal meaning: whichever touch last SAID something is the one steering.
   function recomputeTouchSteer() {
     touchSteer = 0;
-    for (const dir of touches.values()) {
-      if (dir !== 0) touchSteer = dir;   // most recent steering touch wins
+    let best = -1;
+    for (const rec of touches.values()) {
+      if (rec.dir !== 0 && rec.seq > best) { best = rec.seq; touchSteer = rec.dir; }
     }
   }
 
   function onTouchStart(e) {
     e.preventDefault();
     for (const t of e.changedTouches) {
-      touches.set(t.identifier, touchDir(t));
+      touches.set(t.identifier, { dir: touchDir(t), seq: ++touchSeq });
     }
     recomputeTouchSteer();
   }
@@ -412,9 +447,8 @@ const Input = (function () {
   function onTouchMove(e) {
     e.preventDefault();
     for (const t of e.changedTouches) {
-      if (touches.has(t.identifier)) {
-        touches.set(t.identifier, touchDir(t));
-      }
+      const rec = touches.get(t.identifier);
+      if (rec) { rec.dir = touchDir(t); rec.seq = ++touchSeq; }
     }
     recomputeTouchSteer();
   }
@@ -766,6 +800,7 @@ const Input = (function () {
   function reset() {
     touches.clear();
     touchSteer = 0;
+    timeScale = 1;   // the loop re-reports it next frame; never leave it stalled slow
     // Clear the hold buttons THROUGH their closures (ghost-pointer purge), not
     // just the exported booleans — see holdBtns for why both must happen.
     holdReleaseAll();
@@ -834,6 +869,7 @@ const Input = (function () {
     steerToTilt,
     setSteerMode,
     getSteerMode,
+    setTimeScale,
     setTiltSensitivity,
     setTiltSmoothing,
     setTiltDeadzone,

@@ -6703,6 +6703,11 @@ function tickBody(now) {
   // shake still plays out.
   let simTime = dt;
   if (hitStop > 0) { hitStop = Math.max(0, hitStop - dt); simTime = dt * 0.15; }
+  // The steering ramps are part of the control loop, so they run on the SIM's
+  // clock, not the wall's — otherwise hit-stop lets the wheel travel ~6.7x
+  // further per simulated second and the car leaves a crash already turned. The
+  // tilt SENSOR filter is deliberately left on the wall clock (see input.js).
+  Input.setTimeScale(dt > 0 ? simTime / dt : 1);
   // Fixed-step physics: advance the sim in constant 1/60 s chunks regardless of
   // the display framerate, so handling is identical on a 30 fps phone, a 120 fps
   // desktop, and a janky frame — a long frame can never enlarge the integration
