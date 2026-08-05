@@ -169,12 +169,15 @@ function wirePhotoStick(id, vec) {
   const endIf = (e) => { if (pid === null || e.pointerId === pid) end(); };
   el.addEventListener("pointerdown", (e) => {
     pid = e.pointerId;
-    // WebKit throws NotFoundError/InvalidPointerId here often enough that every
-    // other capture in this repo is wrapped (js/game/input.js, js/game.js) —
-    // this was the one that was not, and an unguarded throw aborts the handler
-    // before set() and before preventDefault(), i.e. the stick does nothing at
-    // all and the page keeps the gesture. Exactly the "controls don't work on
-    // iPad" report, on the one platform that throws.
+    /* THE THROW IS SPEC'D, NOT A BROWSER QUIRK. Pointer Events requires
+       setPointerCapture to throw NotFoundError when the pointerId "does not
+       match any of the active pointers", and the pointer can already be gone by
+       the time this line runs — a touch cancelled between pointerdown and the
+       handler (a rapid tap, a gesture the system claimed) is the documented
+       trigger, and it is not platform-specific. An unguarded throw aborts the
+       handler before set() AND before preventDefault(), so the stick reads zero
+       and the page keeps the gesture. Every other capture in this repo is
+       wrapped (js/game/input.js, js/game.js); this was the one that was not. */
     try { el.setPointerCapture(pid); } catch (_) {}
     set(e.clientX, e.clientY);
     e.preventDefault();
