@@ -1227,7 +1227,43 @@ const NetLobby = (function () {
       + " Use the invite link or QR instead — those need nothing.";
 
     // ---- open / close -----------------------------------------------------
+    // A PHONE THAT HOSTS FALLS ASLEEP, and that is the whole reason "desktop
+    // hosts → phone joins" worked while the reverse did not (reported from a
+    // real pair of devices). Hosting means WAITING — you tap NEW CODE, put the
+    // phone down, and spend half a minute getting the other machine into the
+    // lobby. In that time the screen locks, the mobile browser suspends the
+    // page, the relay WebSocket dies, and the friend's answer arrives at a
+    // page that is asleep. The guest never has this problem, because joining
+    // is the one moment the phone is guaranteed to be in somebody's hand.
+    //
+    // So the lobby holds a SCREEN WAKE LOCK while it is open. Browsers
+    // release the lock on every hide (that is spec), so it is re-acquired on
+    // return; close() and cancel() drop it. Where the API is missing (older
+    // iOS) this is a silent no-op — the fix degrades to the old behaviour,
+    // never to an error.
+    let wake = null;
+    let wakeWanted = false;
+    function holdWake() {
+      wakeWanted = true;
+      try {
+        if (!navigator.wakeLock || wake) return;
+        navigator.wakeLock.request("screen").then((l) => {
+          wake = l;
+          l.addEventListener("release", () => { wake = null; });
+        }).catch(() => {});
+      } catch (e) {}
+    }
+    function dropWake() {
+      wakeWanted = false;
+      try { if (wake) wake.release(); } catch (e) {}
+      wake = null;
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && wakeWanted) holdWake();
+    });
+
     function open() {
+      holdWake();
       // Start fetching relay credentials NOW if a credentials URL is
       // configured — connecting comes seconds later, and the fetch usually
       // wins that race, so the first connection attempt already carries relay
@@ -1262,6 +1298,10 @@ const NetLobby = (function () {
       // module is most careful about — close() is also the SUCCESS path, since
       // the race starts by closing the lobby.
       stopScan();
+      // The wake lock is the lobby's, not the game's: in-race the screen is
+      // being touched constantly, and holding it past close would silently
+      // change every player's battery life for a feature they left.
+      dropWake();
       const e = els();
       if (e.screen) e.screen.hidden = true;
     }
