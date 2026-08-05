@@ -47,11 +47,28 @@ function tiltDegFromRange(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); 
 const SMOOTH_LAG_LO = 55, SMOOTH_LAG_HI = 195;   // ms of lag at notch 1 / notch 10
 function lagFromSmooth(v) { return SMOOTH_LAG_LO + (SMOOTH_LAG_HI - SMOOTH_LAG_LO) * (v - 1) / 9; }
 function cutoffFromSmooth(v) { return 1000 / (2 * Math.PI * lagFromSmooth(v)); }
-// High slider = SHORTER wheelbase = snappier; v5 ≈ 3.2 m (the original feel).
-function wheelbaseFromSlider(v) { return 4.3 + (1.9 - 4.3) * (v - 1) / 9; } // 4.3..1.9
+// RESPONSE -> WHEELBASE m (inverted; high slider = shorter = snappier turn-in).
+// 4.4..2.6 m, recentred on a REAL car: a 2026 F1 car is ~3.6 m between the axles,
+// which the old 4.3..1.9 m range put at notch 5.9 — so notches 6-10 (2.97..1.9 m)
+// were go-kart geometry, and a player "ending up on the lower end" was correctly
+// finding the only part of the range that corresponded to an actual car. v5 is
+// now exactly 3.60 m (today's default was already 3.23 m, shorter than any F1
+// car), so the travel that used to sit below 2.6 m is redistributed across the
+// range people actually use. Moves the shipped default — see
+// docs/research/PHASE-C-SLIDER-DESIGN.md §3.
+function wheelbaseFromSlider(v) { return 4.4 + (2.6 - 4.4) * (v - 1) / 9; } // 4.4..2.6, v5=3.60
 function expoFromSlider(v)   { return 3.5 + (1.0 - 3.5) * (v - 1) / 9; } // 3.5..1.0
 function lockFromSlider(v)   { return 0.18 + (0.42 - 0.18) * (v - 1) / 9; } // rad, .18..0.42, v5≈0.29
-function speedRefFromSlider(v) { return 44 + (124 - 44) * (v - 1) / 9; } // 44..124, v5≈80
+// SPEED STEER -> STEER_SPEED_REF, the reference speed for the lock taper in
+// js/game.js. That taper is now `1 / (1 + v/ref)` (hyperbolic — see the comment
+// at lockTaper in game.js), so ref only needs to be in the same NEIGHBOURHOOD as
+// real speeds to matter; the old 44..124 m/s range was tuned for the retired
+// `1 - v/ref` line, which needed a much bigger ref for the same amount of taper.
+// 15..75 m/s is the hyperbolic-law range: every notch now does something at
+// every speed, where the old law was bit-for-bit identical across notches 1-9
+// at 72 m/s (the floor, not the slider, was doing the work). Moves the shipped
+// default — see docs/research/PHASE-C-SLIDER-DESIGN.md §2.
+function speedRefFromSlider(v) { return 15 + (75 - 15) * (v - 1) / 9; } // 15..75, v5≈41.7
 // RACE PACE -> the ground-speed scale G.PACE. GEOMETRIC: a fixed 6.0 % per notch
 // over 19 notches. Pace is a MULTIPLIER on ground speed, so a ratio is its
 // natural unit; the old piecewise-linear grid (0.5 + 0.125/notch below the

@@ -9,12 +9,17 @@ and the taper in `js/game.js`; regenerate with
 `node artifacts/tmp/phase-c-tables.mjs` (the generator is kept with this doc's
 history, not in the tree — it is 90 lines of arithmetic, not a tool).
 
-**Status: HALF SHIPPED.** The two that are safe on arithmetic — §1 RACE PACE and
-§4 STEER SMOOTHING — are in, together with the schema ladder under *Known
-blocker* that had to precede them (`STEER_SCHEMA` is 3). §2 SPEED STEER and §3
-RESPONSE are still DESIGN: both move the shipped feel at the default, so they
-want `tools/tune-sweep.mjs` on a quiet box and a drive before they go in. Marked
-per-section below.
+**Status: SHIPPED, all four.** §1 RACE PACE and §4 STEER SMOOTHING were in
+first, together with the schema ladder under *Known blocker* that had to
+precede them (`STEER_SCHEMA` is 3). §2 SPEED STEER and §3 RESPONSE followed —
+both move the shipped feel at the default, on purpose (see each section) — and
+neither needed a schema bump: both keep their existing 1..10 notches, only what
+a notch *means* moved, the same shape of change §4 already made. Marked
+per-section below. **`tools/tune-sweep.mjs` has NOT run against §2/§3** — the
+box was loaded (`/proc/loadavg` 1-min ~8 on a 4-core box) for the whole of this
+session, and the project's own testing rules are a flat prohibition against
+running a browser tool into that. See each section's *Verification* note for
+the exact command to run when the box is free.
 
 ---
 
@@ -181,7 +186,51 @@ player reaching for "calmer at speed" is reaching for both, so one slider should
 drive both, tuned together — otherwise a second knob appears later and the two
 interact in a way nobody can predict from the labels.
 
-*NOT safe on arithmetic. Needs the sweep and a drive.*
+**NOT implemented.** No numbers were derived anywhere for a rate mechanism, so
+adding one now would be inventing physics on the spot rather than shipping a
+designed change. Left as an open follow-up, not a defect in what shipped.
+
+**SHIPPED.** `lockTaper = 1 / (1 + vStd(v) / STEER_SPEED_REF)` in `js/game.js`,
+and `speedRefFromSlider` in `js/game/steer-tuning.js` is `15 + (75 - 15) *
+(v - 1) / 9`. The `Math.max(0.4, …)` floor is gone entirely — the hyperbolic
+law is never negative, so there is nothing left for a floor to catch.
+
+Measured from the implementation, ref by notch:
+
+| notch | ref (m/s) |
+|---|---|
+| 1 | 15.0 |
+| 5 **← default** | 41.7 |
+| 10 | 75.0 |
+
+Taper by notch, new law:
+
+| notch | ref | @72 m/s | @50 m/s | @30 m/s |
+|---|---|---|---|---|
+| 1 | 15.0 | 0.172 | 0.231 | 0.333 |
+| 5 | 41.7 | 0.367 | 0.455 | 0.581 |
+| 10 | 75.0 | 0.510 | 0.600 | 0.714 |
+
+Matches the design table above exactly (regenerated from the real, shipped
+`speedRefFromSlider` — see `artifacts/tmp/phase-c-2-3-tables.cjs`, a `vm`
+harness that loads the real `js/game/steer-tuning.js`, not a re-derivation).
+
+*NOT verified by drive or `tune-sweep.mjs`.* The box was loaded for this whole
+session (`/proc/loadavg` 1-min ~8, 4 cores) and the project's testing rules are
+a flat "do not run Playwright" past that point, not a threshold to check once
+and forget. Two things specifically still need it:
+
+- **Notch 1 driveability.** 0.172 of `STEER_MAX_SLIP` at 72 m/s is the worst
+  case and only bites at the game's absolute top speed (`VMAX = 72`), where a
+  real driver also uses very little lock — so it may be fine by construction,
+  not despite it. But at a more ordinary fast-corner speed the same notch gives
+  0.231 (50 m/s) to 0.333 (30 m/s) of lock, which is a genuinely small amount of
+  available steer angle at the game's current default `STEER_MAX_SLIP` (v5 ≈
+  16.4°, i.e. 2.8-5.5° of road-wheel angle across that speed range) — worth
+  driving before trusting either the doc's original 2.9° guess or this
+  recomputation.
+- Run: `node tools/tune-sweep.mjs --sliders pm-speedsteer,pm-rate --tracks
+  monza --notches 1,3,5,7,10` on a quiet box (`/proc/loadavg` 1-min < 2 first).
 
 ---
 
@@ -210,7 +259,24 @@ turn-in out of the box. Given the complaint, that is the right direction; given
 that it moves the shipped feel, it is the one Phase C number that should not go
 in on arithmetic alone.
 
-*NOT safe on arithmetic. Sweep + drive.*
+**SHIPPED.** `wheelbaseFromSlider` in `js/game/steer-tuning.js` is `4.4 +
+(2.6 - 4.4) * (v - 1) / 9`. v5 = 3.600 m exactly, matching the table above.
+
+| notch | today (m) | shipped (m) |
+|---|---|---|
+| 1 | 4.30 | 4.400 |
+| 3 | 3.77 | 4.000 |
+| 5 **← default** | 3.23 | 3.600 |
+| 7 | 2.70 | 3.200 |
+| 10 | 1.90 | 2.600 |
+
+(Full 1..10 table regenerated from the real, shipped function in
+`artifacts/tmp/phase-c-2-3-tables.cjs`.)
+
+*NOT verified by drive or `tune-sweep.mjs`* — same reason as §2: the box was
+loaded for the whole of this session. `node tools/tune-sweep.mjs --sliders
+pm-speedsteer,pm-rate --tracks monza --notches 1,3,5,7,10` covers both sliders
+in one run; do it together with §2's check above.
 
 ---
 

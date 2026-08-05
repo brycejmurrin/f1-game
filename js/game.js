@@ -3916,8 +3916,15 @@ function updateCar(c, dt, ranked) {
     // act through the front tyre below, so neither can exceed available grip.
     // vStd: the SPEED STEER slider's reference is a point on the dial, so the lock
     // taper reaches the same place at every pace. The slider's own mapping
-    // (speedRefFromSlider in js/game/steer-tuning.js) is untouched.
-    const lockTaper = Math.max(0.4, 1 - vStd(Math.abs(c.speed)) / STEER_SPEED_REF);
+    // (speedRefFromSlider in js/game/steer-tuning.js) moved with this formula —
+    // see its comment.
+    // HYPERBOLIC, not clamped-linear: `1 - v/ref` goes negative at any real
+    // racing speed, so the old Math.max(0.4, …) floor was not a safety net, it
+    // was the operating point — every notch from 1 to 9 was bit-for-bit
+    // identical at 72 m/s (docs/research/PHASE-C-SLIDER-DESIGN.md §2). 1/(1+x)
+    // is never negative by construction, so the floor is gone entirely rather
+    // than restored: a floor is what broke this control the first time.
+    const lockTaper = 1 / (1 + vStd(Math.abs(c.speed)) / STEER_SPEED_REF);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively
