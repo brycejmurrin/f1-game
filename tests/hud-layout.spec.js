@@ -25,7 +25,17 @@ const VIEWS = [
 ];
 const CTRL = ["btn-throttle", "btn-brake", "btn-boost", "btn-ot", "btn-aero",
               "shift-up", "shift-down", "btn-steer-left", "btn-steer-right", "pausebtn"];
-const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed"];
+// A19: this used to stop at the bottom-bar readouts, so a HUD cluster that
+// overflowed UPWARD (A17's failure mode — wrap-reverse stacked the docks into
+// a column that grew out of the top of the phone) had nothing above it to
+// collide with in this spec. The rejected alternative fix for A17 would have
+// landed the cluster on `.hud-gaps` at 852x393 and this file would still have
+// gone green. `.hud-top`/`.hud-gaps` are checked as CONTAINERS — each has
+// padding and a background in css/hud.css, so it always has a box even if a
+// gap indicator's text is momentarily empty (nobody directly ahead/behind);
+// checking the two leaf spans instead would silently skip that case.
+const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed",
+             ".hud-top", ".hud-gaps", "#minimap", "#hud-sectors"];
 
 async function race(page, steer, manual, ins) {
   await page.goto("/");
@@ -45,8 +55,11 @@ async function race(page, steer, manual, ins) {
 }
 
 const measure = (page, ctrl, hud, W, H, ins) => page.evaluate(([c, h, w, ht, i]) => {
+  // CTRL is bare ids (buttons: getElementById is enough, and every one is #id
+  // in practice); HUD can name a CONTAINER by class (see the comment on HUD
+  // above), so resolve through querySelector with an implicit `#` for a bare id.
   const box = (id) => {
-    const el = document.getElementById(id);
+    const el = document.querySelector(id.startsWith(".") || id.startsWith("#") ? id : "#" + id);
     if (!el) return null;
     const cs = getComputedStyle(el);
     if (el.hidden || cs.display === "none" || cs.visibility === "hidden"
