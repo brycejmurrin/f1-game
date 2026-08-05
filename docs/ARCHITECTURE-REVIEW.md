@@ -475,9 +475,30 @@ would be a worse bug than the one being fixed.
 - `GameStore` has no cross-tab `storage` listener.
 - `TUNE_DEFS` is hand-mirrored in six places.
 
+**Checked and NOT a defect: dead `id` attributes in `index.html`.** Recorded here
+because the naive version of this audit is dangerous and somebody will run it
+again. A scan of the 486 ids in `index.html` against `js/` and `css/` reports
+**45 unreferenced**. Zero of them are dead:
+
+- **14 are referenced elsewhere inside `index.html`** — `aria-labelledby`,
+  `aria-controls`, `for=`. A scan that only looks at `js/`+`css/` cannot see
+  them, and deleting them would break the screen-reader labelling on every
+  `<dialog>`.
+- **31 are built by string concatenation at runtime.** `cz-stripe-none` and its
+  nine siblings come from `$(domId + "-none")`; `pm-steer-easy`/`-assist`/
+  `-normal`/`-sim` and `pm-help-low`/`-med`/`-high` from `$("pm-steer-" + n)`
+  and `$("pm-help-" + n)` over a level list.
+
+So the honest count of removable ids is **0 of 45**, and a scan taken at face
+value would have deleted 31 live controls and 14 accessibility relationships.
+Same trap as the CSS class audit in the same pass, which reported 224 classes
+with no `classList` call and found every one of them produced by an `el(tag,
+className)` helper or a ternary. **In markup, "no reference" means "no reference
+I looked for."**
+
 **Docs.** `docs/ARCHITECTURE.md` says a circuit "can destructure any of those 84
 names" two lines after correctly calling it the 107-member contract, and says
-game.js is "~6,100 lines" against a measured 8,078. `docs/DEBUG-HOOKS.md` and
+game.js is "~6,100 lines" against a file that has never been near that since (the current figure lives in `tests/module-size.test.mjs`, not here). `docs/DEBUG-HOOKS.md` and
 `docs/AGENT-WORLD-API.md` both say "~89 hooks" (the latter annotated "measured at
 runtime") against ~180 members on the object today.
 
