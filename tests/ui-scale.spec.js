@@ -219,7 +219,14 @@ test.describe("UI scale", () => {
     test.slow();   // building a circuit under SwiftShader is the cost here
     await boot(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__apex.info().state === "race", { timeout: 60_000 }).catch(() => {});
+    // Wait for the TRACK, not for `state === "race"`. Measured: race() leaves the
+    // state at "count", and the line that makes it "race" is the go() below — so
+    // waiting for "race" here could never succeed and burned its whole timeout,
+    // every run, before doing any of the work. waitForFunction polls on rAF and
+    // this page's rAF rate collapses to ~2/s under SwiftShader (see the flag
+    // comment in playwright.config.js), which is why a dead wait is expensive
+    // rather than merely wrong.
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
     await page.evaluate(() => {
       // HEADLESS, because this test measures getBoundingClientRect on four DOM
       // clusters and never looks at a pixel. Leaving the GL draw on made it cost
