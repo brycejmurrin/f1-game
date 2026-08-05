@@ -201,6 +201,30 @@ visible edit to the baseline.
    vertices **already exists and is not being used for the upload path**. That is
    the real fix, and it is a much bigger piece of work than the gate.
 
+
+### What instancing would and would not buy
+
+The recommendation above says the real fix already exists half-built. Worth being
+precise about which cost it removes, because instancing is routinely oversold:
+
+- **It removes the MEMORY duplication, which is the problem here.** A baked
+  scene stores every copy's vertices; an instanced one stores the canonical mesh
+  once plus a per-instance transform. At this repo's 40 B/vertex and a
+  column-major `mat4` at 64 B, a prop of even 50 vertices costs 2,000 B baked
+  against 64 B instanced — and `SCENE-GRAPH-PLAN` measured **383,402 of 383,403
+  nodes as instanceable**. That is the 80 MB.
+- **It reduces CPU-side draw-call overhead**, which matters more in WebGL than
+  on desktop GL — the per-call cost is repeatedly reported as high.
+- **It does NOT reduce GPU shading cost, and can slightly increase it.** The
+  same triangles are still rasterised; you have only stopped paying to store and
+  submit them repeatedly. Anyone measuring this should expect the win in memory
+  and CPU frame time, not in fragment throughput.
+
+So the honest framing for the deferred item is: instancing is the fix for *the
+iOS memory ceiling*, not a general "make it faster" change. The number to
+measure first is `__apex.trackGraph().stats()` on vegas — unique models vs total
+nodes — because that ratio IS the saving, and it is one hook call away.
+
 ## Sources (Part 2)
 
 - [Mobile Safari web pages are severely limited by memory](https://lapcatsoftware.com/articles/2026/1/7.html) — the iOS 26.2 ~100 MB/~200 MB measurements, and that no exception is catchable
