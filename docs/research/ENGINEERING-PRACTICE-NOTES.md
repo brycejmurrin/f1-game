@@ -281,3 +281,42 @@ persistence layer and deserves its own commit and its own test.
 - [MDN — Storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) — the ~5 MiB per-origin figure
 - [Fix: HTML5 game localStorage quota exceeded on Safari iOS](https://bugnet.io/blog/fix-html5-game-localstorage-quota-exceeded-on-safari-ios) — Private Browsing reducing the quota to ~0
 - [WebKit bug 157010](https://bugs.webkit.org/show_bug.cgi?id=157010) — QuotaExceededError in private mode, from WebKit's own tracker
+
+## 4b. Where the silence actually is
+
+`docs/ARCHITECTURE-REVIEW.md` records "340 `catch` blocks in `js/`; 59 `Log`
+call sites" as a single number, which is true and not actionable. Measured per
+file, it becomes a work list. Counting `catch (` against `Log.<level>(` across
+`js/` (excluding `vendor/`):
+
+| file | catch | Log | fully empty `catch {}` |
+|---|---:|---:|---:|
+| `js/net/nostr.js` | 37 | **0** | 16 |
+| `js/game/spotify.js` | 35 | **0** | 17 |
+| `js/game.js` | 26 | **0** | 16 |
+| `js/net/lobby.js` | 25 | **0** | 14 |
+| `js/render/webgpu/wgx.js` | 26 | 2 | 12 |
+| `js/render/three/tlx.js` | 29 | 9 | 11 |
+| `js/game/debrisworld.js` | 17 | 1 | 12 |
+| `js/game/incidentsim.js` | 12 | **0** | 7 |
+
+**Totals: 379 `catch`, 165 of them completely empty.**
+
+Two things worth saying before anyone treats this as 379 bugs:
+
+- **Most empty catches are correct.** Disconnecting an already-disconnected
+  WebAudio node, closing a closed context, probing for a feature — these have
+  nothing to report and a log line would be noise. The count is a starting
+  point, not a defect list.
+- **The ones that matter are where the catch hides a USER-VISIBLE outcome.** By
+  that filter the priority order is clear from the table: `nostr.js` and
+  `lobby.js` (a multiplayer connection that silently never forms — and
+  `nostr.js` already intercepts a vendor `console.warn` to detect relay
+  rejection, so it has the seam and just does not use `Log`), `spotify.js` (a
+  soundtrack that silently never plays), and `store.js` (§4 above — the whole
+  persistence layer).
+
+`js/game/audio.js` and `js/net/transport.js` moved off this list during this
+pass (0 → 4 and 0 → 3) by logging exactly the failures that present as a symptom
+with no cause. The same three-or-four-site treatment would clear the top of the
+table without touching the other 350.
