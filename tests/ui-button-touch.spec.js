@@ -234,7 +234,9 @@ test.describe("Lighting tuner — free camera touch controls", () => {
       await new Promise((r) => setTimeout(r, 50));
       return el.querySelector(".pc-nub").style.transform;
     });
-    expect(after).toBe("translate(0,0)");
+    // The browser normalises the `translate(0,0)` the code writes into
+    // `translate(0px, 0px)`, so match on "no offset" rather than on the literal.
+    expect(after.replace(/\s|px/g, "")).toBe("translate(0,0)");
   });
 
   /* THE CANCELLED DRAG. iOS fires pointercancel with no pointerup whenever the

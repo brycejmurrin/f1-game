@@ -357,7 +357,11 @@ test.describe("Escape is BACK", () => {
     });
     await page.locator("#pausebtn").click();
     await page.locator("#pausemenu").waitFor({ state: "visible" });
-    await page.locator("#pm-standings").click();
+    // Shown rather than clicked open: #pm-standings ships hidden and is only
+    // revealed part-way into a season, so a plain Grand Prix has no button for
+    // it. The sheet's own open path is `hidden = false` either way (TopModal
+    // mirrors that onto showModal), which is exactly what is under test here.
+    await page.evaluate(() => { document.getElementById("standings").hidden = false; });
     await page.waitForTimeout(250);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(250);

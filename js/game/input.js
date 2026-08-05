@@ -340,7 +340,46 @@ const Input = (function () {
     // keeps focus after it opens the pause menu, and letting that focus fall
     // through to the switch below is exactly how an arrow key ended up steering a
     // paused car.
-    if (menuOverlayOpen() || (interactive && !hudControl)) {
+    const typing = interactive && !hudControl;
+    /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
+       driving gate — but still below the typing check, because P in a text
+       field is a letter.
+       They used to sit inside the switch below, which only worked by accident:
+       the gate's screen list happened not to mention the two tuner panels, so
+       the pause key reached them. The moment that list was corrected (one list
+       for everyone, js/game/uilayers.js) the key started being swallowed in the
+       LIGHTING TUNER and free camera — the one place its documented
+       all-the-way-out behaviour matters most. Reachability should not be a
+       side effect of a list being incomplete. */
+    if (down && !e.repeat && (e.code === "KeyP" || e.code === "Escape") && !typing) {
+      if (e.code === "KeyP") {
+        if (onPauseCb) onPauseCb();
+        return;
+      }
+      /* ESCAPE IS "BACK", AND ONLY PAUSE WHEN THERE IS NOTHING TO GO BACK FROM.
+         It was a bare alias for KeyP with no state check, which read wrong on a
+         desktop keyboard everywhere the answer to Escape was obviously "close
+         this" — and was actively wrong with a tuner open, where it resumed the
+         race instead of stepping back to SETTINGS. An open layer belongs to the
+         Escape handler in js/game/topmodal.js, which runs first (capture) and
+         presses that screen's own back control; by the time one is open this
+         key normally never even arrives. */
+      if (onPauseCb && window.UiLayers && window.UiLayers.inRace() && !window.UiLayers.anyOpen()) {
+        onPauseCb();
+        /* AND THE KEY IS SPENT — without this, Escape could not pause at all.
+           #pausemenu is a <dialog> (js/game/topmodal.js), so opening it here
+           hands Chrome a fresh close-watcher MID-KEYPRESS, and the watcher
+           takes the KEYUP of the very Escape that opened it: the menu appeared
+           and vanished within one press, measured keydown→shown, keyup→hidden.
+           preventDefault on the keydown suppresses the close request, and it is
+           honest besides — we consumed the key. Only in this branch:
+           preventDefault on an Escape we did NOT handle would stop every dialog
+           on the screen from closing. */
+        e.preventDefault();
+      }
+      return;
+    }
+    if (menuOverlayOpen() || typing) {
       if (down) return;
       switch (e.code) {
         case "ArrowLeft": case "KeyA": keyLeft = false; break;
@@ -373,37 +412,8 @@ const Input = (function () {
         if (down && !e.repeat) shiftDownPressed = true; break;
       case "KeyC":
         if (down && !e.repeat) cameraCyclePressed = true; break;
-      case "KeyP":
-        if (down && !e.repeat && onPauseCb) onPauseCb();
-        break;
-      // ESCAPE IS "BACK", AND ONLY PAUSE WHEN THERE IS NOTHING TO GO BACK FROM.
-      // It used to be a bare alias for KeyP with no state check, which read
-      // wrong on a desktop keyboard everywhere the answer to Escape was
-      // obviously "close this". Worse, it was actively wrong with the LIGHTING
-      // or CAMERA tuner open: neither panel was in the old overlay list, so
-      // Escape fell through to here and setPaused(false) RESUMED THE RACE
-      // instead of going back to SETTINGS the way the panel's own DONE does.
-      // Any open layer now belongs to js/game/topmodal.js's Escape handler,
-      // which runs first (capture) and presses that screen's own back button.
-      // We only pause when a race is actually running with nothing on top of it
-      // — outside a race setPaused() early-returns anyway, so the old code was
-      // a silent no-op on every menu screen.
-      case "Escape":
-        if (down && !e.repeat && onPauseCb &&
-            window.UiLayers && window.UiLayers.inRace() && !window.UiLayers.anyOpen()) {
-          onPauseCb();
-          /* AND THE KEY IS SPENT — without this, Escape could not pause at all.
-             #pausemenu is a <dialog> (js/game/topmodal.js), so opening it here
-             hands Chrome a fresh close-watcher MID-KEYPRESS, and the watcher
-             takes the KEYUP of the very Escape that opened it: the menu
-             appeared and vanished within one press, measured keydown→shown,
-             keyup→hidden. preventDefault on the keydown is what suppresses the
-             close request, and it is honest besides — we consumed the key.
-             Only in this branch: preventDefault on an Escape we did NOT handle
-             would stop every dialog on the screen from closing. */
-          e.preventDefault();
-        }
-        break;
+      // KeyP and Escape are handled ABOVE the driving gate — see the comment
+      // there. They are commands, and a menu being open must not swallow them.
     }
   }
 
