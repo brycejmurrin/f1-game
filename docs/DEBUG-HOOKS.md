@@ -487,6 +487,51 @@ eyeballing — e.g. sweep `lat` across a verge to see the cross-section profile.
 
 ## Telemetry & diagnostics
 
+### `persistState() → {ok, broken, keys, rev}`
+Is `localStorage` actually storing anything? `ok:false` means a read or write has
+thrown, and `broken` names the exception (`"QuotaExceededError"`,
+`"SecurityError"`); `keys` is how many are cached and `rev` the write counter.
+
+This needs a hook of its own because **the failure is otherwise invisible from
+inside the session**. `js/game/store.js` caches every value it writes, so when
+the write throws the cache still answers every later read with the right value —
+the game plays perfectly and only a reload reveals that nothing was ever saved.
+Safari on iOS puts the quota at **zero** in Private Browsing, which is the case
+that actually loses a player's career.
+
+The cache write on failure is deliberate, not a bug: dropping the value would
+break the session as well as the save. What this reports is that the save is
+gone, which is the part nothing used to say. `js/game/store.js` also sends one
+loud `Log.warn` on the first failure and every repeat to the ring buffer only,
+so `__apex.logs({ns:"game"})` has the history without the console being buried.
+
+```js
+__apex.persistState()   // { ok: true, broken: null, keys: 34, rev: 12 }
+```
+
+### `logLevel(spec?, persist?) → {console, buffer, consoleNs, bufferNs}`
+Read or move the two `Log` thresholds (see **Logging** in `CLAUDE.md`). They are
+independent on purpose: the **console** level decides what a human sees (default
+`warn`), the **buffer** level decides what is RETAINED in the 500-entry ring
+(default `info`) and read back with `logs()`. Retention can therefore exceed what
+prints, so a failure that has already happened still has a record.
+
+No argument reads the resolved state. A spec string applies it. `persist` writes
+it to `localStorage` so it survives the reload — the shape to hand a player who
+is reproducing something.
+
+```js
+__apex.logLevel()                   // resolved thresholds
+__apex.logLevel("scenery:debug")    // one namespace up
+__apex.logLevel("buffer:debug")     // retain more without printing more
+__apex.logLevel("debug", true)      // …and remember it across reloads
+__apex.logLevel(null, true)         // forget it
+```
+
+Raising the console level always raises retention with it — the ring can never
+hold less than what printed. Also settable by `?log=scenery:debug` on the URL, by
+`apex26.logLevel` in localStorage, and by `APEX_LOG=<spec>` for a whole test run.
+
 ### `probe() → {x, angle, k, hw, speed, s}`
 Player steering telemetry: lateral `x` (m, +right), heading offset `angle`
 (rad off the track tangent, +right), local curvature `k` (rad/m, **+ = left**

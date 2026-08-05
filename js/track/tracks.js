@@ -2223,7 +2223,9 @@ const Tracks = (function () {
   // by tools/bake-elevation.mjs from SRTM) registers CircuitElevations[id] as an
   // array of metres, relative to the start, sampled evenly by arc-fraction. When
   // present it supersedes the authored cosine `elevations` bumps for that
-  // circuit. Returns 0 when no profile is loaded (the shipped default).
+  // circuit. Returns null when no profile is loaded (the shipped default) —
+  // callers fall back to the authored bumps on null, so 0 would be a real
+  // elevation and would flatten the circuit instead.
   function elevationAt(id, frac) {
     const prof = (typeof CircuitElevations !== "undefined") && CircuitElevations[id];
     if (!prof || !prof.length) return null;

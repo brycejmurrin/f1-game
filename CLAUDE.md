@@ -58,7 +58,13 @@ cat /proc/loadavg          # expect < 3 before a run, on 4 cores
 node tools/test-bg.mjs --status
 ```
 
-Run **at most two groups at once**, and never a group alongside another heavy
+**`test-bg.mjs` now ENFORCES this** — it refuses to start more groups than
+`cores / WORKERS` (counting anything already running) and prints the batches to
+run instead; `--force` overrides. `pick-tests.mjs` prints its suggestion
+pre-batched for the same reason. The rule was in this file and in
+`docs/TESTING.md` for some time and was still broken, by an agent reading both,
+because `pick-tests --bg` handed out a nine-group command — so it lives in the
+tool now. Run **at most two groups at once**, and never a group alongside another heavy
 suite (`test:baseline`, anything `--project=render`, a `tools/*-audit.mjs`
 sweep). Groups are separate processes, which is why parallelism helps at all —
 but only up to the core count.
@@ -228,6 +234,25 @@ Two rules that make step 2 work:
 **While the run is in flight, do not edit `js/` or `css/`** (tests serve them
 from the working tree). Edit `tests/`, `docs/`, `tools/` — or write the commit
 message. There is always non-conflicting work.
+
+**AND ABOVE ALL DO NOT BUMP `version.json` MID-RUN.** This is the sharp edge,
+because it does not look like editing source at all — it is one integer in a
+one-line file. But `index.html`'s shell version guard fetches `version.json`
+(`no-store`) and **force-reloads the page** when the deployed build is newer than
+the cached shell. Every page a running spec has already opened is on the old
+build, so bumping the number reloads them ALL, mid-test. What you get back is a
+test that hung and then died on its own timeout — the machine-oversubscription
+signature, on a quiet box, for a reason that has nothing to do with the machine.
+
+Measured here: `smoke.spec.js › HUD › speed readout updates after jump()` had
+passed at 121 s (limit 120 s) on the run before. `css/` and `version.json` were
+edited under it; it came back at 125.8 s with `Test timeout of 120000ms
+exceeded`. Nothing about the code had changed, and the failure was indexed to
+the one test that needs the page to survive after `jump()`.
+
+The rule that actually holds: **bump `?v=N` and `version.json` as the LAST edit
+before you commit, never while anything is running.** "It's only a version bump"
+is exactly how this one gets rationalised — it was, and it cost a whole group.
 
 **2. Run the groups the change needs, not all of them.** The whole suite is ~40
 minutes of SwiftShader, and which groups a change needs is mechanical — so ask:
@@ -496,8 +521,12 @@ js/game/         — game modules (each created with the G ctx façade from game
   tables.js      GameTables     static game data (CAM_MODES, DIFF, gears, paints)
   lighting.js    LightTune      TUNE_DEFS registry, live LT values, floodColor,
                                   LAMP_KINDS, buildTrackLights, setFrameLights,
-                                  appendCarTailLights (profile store stays in game.js —
-                                  it reads live track/tod/weather state)
+                                  appendCarTailLights
+  light-store.js LightStore     the PROFILE STORE — which layer wins for the
+                                  conditions on screen, and persisting a player's
+                                  edits. Per (track, time-of-day, weather); the
+                                  five-layer resolution is documented in its header
+                                  and under Lighting & sky below
   light-presets.js  LightPresets  shipped lighting-tuner values, keyed "track|tod|weather"
                                   (baked from the LIGHTING TUNER panel's COPY VALUES export)
   carmesh.js     CarMesh        car decal/effect/cockpit-instrument geometry
@@ -622,6 +651,17 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   Knows nothing about a car: xStraightAhead()
                                   and aeroDfMult() stay in game.js because they
                                   read car state
+  racecontrol.js RaceControl    the CAUTION flag machine — green / local yellow /
+                                  VSC / safety car, off DebrisWorld.hazards() at
+                                  ~4 Hz. READ-ONLY w.r.t. the cars: it never
+                                  writes speed/px/pz/head/(s,x) — incidentsim.js
+                                  is the layer that may move one. Raises fast,
+                                  lowers only after a hold (debris despawns, and
+                                  a flag tracking the raw count would flicker).
+                                  The HOST owns it: debris is local and not
+                                  replicated, so a guest adopts apply() and
+                                  computes nothing. otEnabled() — the OVERTAKE
+                                  gate — reads off it
   skidmarks.js   SkidMarks      the 120-entry tyre-mark ring buffer, its batched
                                   vertex build (one draw, not 120) and the per-mark
                                   fallback. Owns all of its own state — game.js only
@@ -635,7 +675,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (104) + tests/*.test.mjs unit suites (39)
+tests/*.spec.js                 Playwright specs (106) + tests/*.test.mjs unit suites (46)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
                  ARCHITECTURE-REVIEW.md is the standing assessment + defect
                    register: what the no-build-step bet costs, why asserted
@@ -805,7 +845,8 @@ each frame instead of a literal. Values are stored per (track, time-of-day,
 weather) profile, resolving lowest→highest: `TUNE_DEFS.def` → `LightPresets["*"]`
 → `LightPresets["track|tod|wx"]` → localStorage `"*"` → localStorage
 `"track|tod|wx"`. So `js/game/light-presets.js` is the shipped baseline and a
-player's live edits always win.
+player's live edits always win. That resolution and its persistence live in
+`js/game/light-store.js`; `js/game/tuner.js` is only the panel.
 
 Adding a knob: append to `TUNE_DEFS` (+ a shader uniform and `frame.tune` upload
 if it is not a driver literal), and point `tools/ab-lighting.mjs`'s catalog at it.
@@ -920,7 +961,7 @@ is the same surface from a shell, with the staging done correctly.
 
 ## Writing tests
 
-104 Playwright specs + 39 `node --test` unit suites. **How to RUN them is under
+106 Playwright specs + 46 `node --test` unit suites. **How to RUN them is under
 Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
 to do when writing one.
 
