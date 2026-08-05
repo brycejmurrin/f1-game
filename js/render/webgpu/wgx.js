@@ -1356,8 +1356,9 @@ const WGX = (function () {
       d[78] = (f.groundMist != null ? f.groundMist : 0) * (T && T.mistDensity != null ? T.mistDensity : 1);
       d[79] = (T && T.mistHeight  != null) ? T.mistHeight  : 0.30;  // MIST HEIGHT
       // params4 (floats 80..83): pcssPen, shadowTintAmt, carReflect, ssrStrength.
-      // carReflect/ssrStrength are forced 0 until the env-probe / SSR passes bind
-      // real resources (the frame group holds 1×1 placeholders for now).
+      // carReflect/ssrStrength are GATED on the env-probe / SSR passes having
+      // bound real resources (_envReady / _ssrReady below); until then the frame
+      // group holds 1×1 placeholders and both read 0.
       // pcssPen is a GLX PENUMBRA-RATE knob (default 80, range 10-300) that GLX
       // feeds into `clamp((z-zb)*pcssPen,0,1)` → a 1.5-6 texel radius. The WGSL
       // shadow shader instead uses it DIRECTLY as `pcfStep = texel*(1+params4.x)`,

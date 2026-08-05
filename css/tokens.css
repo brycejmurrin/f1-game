@@ -118,8 +118,8 @@
      on the notch side and ~21px at the bottom, which is why menus looked
      "crammed": the panel was sized to the full 852px and the first ~59px of
      it was behind the island.
-     --gut is the minimum breathing room at a screen edge; --safe-* are
-     ready-made paddings; --safe-w/h the usable box.
+     --gut is the minimum breathing room at a screen edge; --safe-t/r/b/l are
+     ready-made paddings.
      Height uses svh, not dvh: svh is the viewport with the browser toolbars
      SHOWN, so a menu sized against it can never be swallowed by a toolbar
      sliding back in mid-scroll (dvh also re-lays-out on every toolbar
@@ -142,14 +142,6 @@
   --safe-r: calc(var(--sar) + var(--gut));
   --safe-b: calc(var(--sab) + var(--gut));
   --safe-l: calc(var(--sal) + var(--gut));
-  --safe-w: calc(100vw - var(--sal) - var(--sar));
-  --safe-h: calc(100svh - var(--sat) - var(--sab));
-  /* Re-centre offsets for translate(-50%,-50%) boxes: landscape insets are
-     asymmetric (59px on ONE side), so dead-centring a panel still pushes it
-     under the island. Shift by half the inset difference to centre it in the
-     SAFE box instead. */
-  --safe-cx: calc((var(--sal) - var(--sar)) / 2);
-  --safe-cy: calc((var(--sat) - var(--sab)) / 2);
   /* ---- density ----
      The ONE thing a screen size is allowed to change. Every menu reads these
      instead of hard-coding its own padding/heights, so "make it fit a short
@@ -244,7 +236,6 @@
      --edge is the companion trick: a 1px lighter inset along the top edge,
      reading as light falling from above and giving each layer a defined lip. */
   --surf-1: color-mix(in oklab, #fff 4%, var(--bg));   /* sheets, panels */
-  --surf-2: color-mix(in oklab, #fff 7%, var(--bg));   /* a card ON a sheet */
   --surf-3: color-mix(in oklab, #fff 11%, var(--bg));  /* popovers, raised rows */
   /* A lit lip along the top AND the far edge falling into shade. The lip on
      its own reads as a sticker laid on the page; the pair reads as a slab with
@@ -256,9 +247,6 @@
      the wide one says "by how much". One stop can only do one of those jobs.
      (Still cast at all because this game shows its sheets against a bright 3D
      scene, where a shadow does read.) */
-  --lift-1:
-    0 1px 2px rgba(0, 0, 0, 0.45),
-    0 6px 16px rgba(0, 0, 0, 0.45);
   --lift-2:
     0 2px 4px rgba(0, 0, 0, 0.45),
     0 12px 30px rgba(0, 0, 0, 0.5),
@@ -316,7 +304,8 @@
 /* THE TOUCH LADDER. The tokens above are a FLOOR (44px is the smallest box
    Apple's HIG and WCAG 2.5.5 accept) and a phone was being handed the floor —
    the same targets as a mouse pointer that can hit 20px. `body:not(.desktop)`
-   is the test js/game.js:8107 applies via Input.touchControlsNeeded(). */
+   is the test game.js applies via Input.touchControlsNeeded(), where it sets
+   the `desktop` class on <body>. */
 body:not(.desktop) {
   --tap: 52px;
   --chip-h: 46px;
@@ -397,7 +386,6 @@ body:not(.desktop) {
   --vhz:   calc(1vh  / var(--ui-scale));
   --svhz:  calc(1svh / var(--ui-scale));
   --vwzh:  calc(1vw  / var(--hud-scale));
-  --svhzh: calc(1svh / var(--hud-scale));
 }
 
 /* Per-team accents (ids + colours from js/car/teams.js — vivid brand colour of

@@ -14,18 +14,46 @@ name: CI
 #                                  red; everything it asserts is a property a
 #                                  compiler would enforce in a language that had
 #                                  one.
-#   sweeps   ~5 min, no browser  — the per-circuit geometry sweeps. Separate
+#   sweeps  ~16 min, no browser  — the per-circuit geometry sweeps. Separate
 #                                  because each suite rebuilds all 40 circuits
 #                                  and they run --test-concurrency=1 on purpose
 #                                  (four at once reached 5.4 GB and was
 #                                  OOM-killed, which presents as a SIGKILL with
 #                                  no assertion, i.e. NOT as a test failure).
-#   smoke    ~3 min, Chromium    — the page actually boots and __apex answers.
+#                                  Serialising them was NOT enough on its own —
+#                                  see the NODE_OPTIONS note on the job.
+#   smoke    ~7 min, Chromium    — the page actually boots and __apex answers.
 #                                  If this is red nothing else is worth running.
+#                                  Nine specs; a SwiftShader test costs 90-115 s
+#                                  on a shared runner, so the per-test price is
+#                                  what sets this budget, not the spec count.
+#
+# THE NUMBERS ABOVE ARE THE BUDGET, AND `timeout-minutes` MUST STAY ABOVE THEM.
+# They are a comment, so nothing enforces them: this header read "~3 min" for
+# weeks while the step it described ran 71 specs and needed ~53. Every run hit
+# the cap, and a timed-out job reports `cancelled` rather than `failed`, so the
+# deploy silently stopped happening behind a summary that showed zero failures.
+# If you change what a step RUNS, re-time it and change the number here too.
 #
 # Deliberately NOT here: the full Playwright suite is ~40 minutes of SwiftShader.
 # Run it locally with tools/test-bg.mjs against the groups tools/pick-tests.mjs
 # names. This gate is for what breaks silently, not for everything.
+#
+# THE ONE GROUP THAT ARGUABLY BELONGS HERE AND IS NOT: `test:baseline`, the six
+# golden menu PNGs. The 2026-08 pass found one of them stale — the garage
+# baseline was re-blessed on a branch that did not yet have the garage BACK
+# button, and the two lines merged afterwards. index.html and a .png are
+# different files, so git merged both cleanly and reported no conflict; they
+# conflicted only in meaning, and nothing was running the suite that would have
+# said so. That is exactly the silent class this gate exists for.
+#
+# It is not added yet for one reason: golden images are environment-sensitive,
+# and those six were generated in a dev container. If GitHub's runner renders
+# even slightly differently — a font fallback, a SwiftShader build — the gate
+# goes permanently red and blocks every deploy, which is the failure this
+# workflow already caused once by another route. Add it by first running it on a
+# PR as a non-blocking step and comparing, not by putting it straight into
+# `needs:`.
 
 on:
   push:
@@ -86,7 +114,40 @@ jobs:
   sweeps:
     name: Per-circuit geometry sweeps
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 35, not 20. MEASURED, not estimated: `test:sweeps` takes 14m20s on a
+    # 4-core dev box with the heap ceiling below, and this job then runs
+    # verify-track --all on top of it (~40 circuits at ~2 s each), so the local
+    # job is ~16 min. A shared runner is slower than that box, which puts the
+    # honest range at 20-30 min — i.e. the old cap was BELOW the work even
+    # after the OOM was fixed, and would have kept failing for a second reason
+    # once the first was gone.
+    #
+    # The four suites are serial by construction (--test-concurrency=1) and
+    # each rebuilds all 40 circuits, so this is ~4 full fleet rebuilds:
+    # coplanar-faces 250 s, prop-clipping 210 s, then road-under-floor and the
+    # shared-foundation characterization. Nothing here is parallelisable
+    # without reintroducing the 5.4 GB peak that forced the serialisation.
+    timeout-minutes: 35
+    # THE HEAP CEILING IS NOT THE SAME HERE AS ON A DEVELOPER'S BOX, and that is
+    # why this job failed for days while the identical command passed locally.
+    # V8 sizes its default old-space from the machine, so the runner allowed
+    # ~4 GB where the dev box allowed 8 GB — a suite peaking at 4.1 GB is green
+    # in one place and OOM-dead in the other, with nothing in the diff to
+    # suggest it. Measured on run 31016070670: road-under-floor.test.mjs died
+    # SIGABRT at 4088 MB after 197 s of "Ineffective mark-compacts near heap
+    # limit", and clip-audit.cjs (spawned by prop-clipping.test.mjs) died the
+    # same way. Both surfaced as a cancelled job, never as a test failure.
+    #
+    # Set on the JOB, not the step, so it also reaches the child that
+    # prop-clipping.test.mjs spawns with execFileSync — that child was one of
+    # the two casualties and a step-level flag would not have covered it.
+    #
+    # This buys headroom; it does not make the suites frugal. Rebuilding 40
+    # circuits in one process and peaking above 4 GB is its own defect (each
+    # build's meshes stay reachable for the length of the loop), and the ceiling
+    # is what makes that survivable rather than what fixes it.
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -113,8 +174,48 @@ jobs:
       # Chromium only — the suite never targets firefox/webkit, and installing
       # all three triples the step for nothing.
       - run: npx playwright install --with-deps chromium
+      # test:smoke, NOT test:tiny. This step said `test:tiny` against a
+      # 20-minute cap and a "~3 min" estimate, and the arithmetic never worked:
+      # test:tiny is smoke + dev-tools + logging = 71 tests, CI pins
+      # `workers: 2` (playwright.config.js), and a SwiftShader test on a shared
+      # runner measured 90-115 s. That is ~53 minutes of work in a 20-minute
+      # box. Run 31016070670 got to 30/71 before the timeout killed it — dead on
+      # that trajectory, and with `0 failed` the whole way, so the job was never
+      # telling us anything about the code.
+      #
+      # A gate that is always killed provides no coverage, so this is not a
+      # reduction in what CI checks — it is the difference between nine specs
+      # that report and seventy-one that never finish. dev-tools and logging
+      # belong in a local `tools/test-bg.mjs` run, which is where the workflow
+      # header already says the full suite lives.
+      # ONE WORKER, AND A PER-TEST TIMEOUT THAT FITS THE RUNNER. With the spec
+      # count fixed, run 31019857052 still failed — but as `failure` rather than
+      # `cancelled`, which is the first time this gate reported anything real.
+      # Both failures were `Test timeout of 120000ms exceeded`, neither was an
+      # assertion, and both were the two SwiftShader RENDERING specs (grid start
+      # 175.7 s, corner approach 150.6 s).
+      #
+      # The log contains its own controlled experiment. `speed readout updates
+      # after jump()` timed out at 125.2 s while a second worker was busy, then
+      # PASSED on retry at 110.6 s in the window where the status line shows w8
+      # running alone. Same test, same commit, same machine: two concurrent
+      # SwiftShader contexts blow the limit and one does not. That is the
+      # oversubscription signature CLAUDE.md describes — every failure a timeout,
+      # not one of them an expectation that did not hold — and it is measuring
+      # the runner, not the game.
+      #
+      # `workers: 2` is right for a 4-core dev box and wrong here, so APEX_WORKERS
+      # (playwright.config.js's documented override) pins it to 1. The timeout
+      # goes to 240 s because even uncontended the runner needed 110.6 s against
+      # a 120 s limit — margin that thin is a coin flip, and a coin flip in a
+      # deploy gate is what this whole exercise has been about.
+      #
+      # Serial and slower per pass is still far cheaper than the retries and the
+      # false red: 9 specs, no contention, well inside the 20-minute cap.
       - name: Smoke
-        run: npm run test:tiny
+        env:
+          APEX_WORKERS: 1
+        run: npm run test:smoke -- --timeout=240000
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

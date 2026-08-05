@@ -711,37 +711,17 @@ let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
-// B1 — debris caution (local yellow / VSC / safety car). A READ-ONLY race-logic
-// layer: it consumes DebrisWorld.hazards() (settled debris/broken panels resting
-// ON the racing surface) and drives the HUD flag. It NEVER slows or moves a car
-// — no writes to speed/px/pz/head/(s,x). DEFAULT ON; disable apex26.caution="0".
-let _cautionOn = true;
-try { _cautionOn = (localStorage.getItem("apex26.caution") || "1") !== "0"; } catch (e) {}
-// Written by the CAUTIONS race setting and by __apex.caution({enabled}). Turning
-// it OFF must also DROP a flag that is already flying — otherwise the HUD keeps
-// showing a safety car that nothing is maintaining any more. resetCaution() is
-// declared later, so this is a function declaration (hoisted) rather than a
-// const, and the guard lets it be called before the race loop exists.
-function setCautionEnabled(on) {
-  _cautionOn = !!on;
-  try { localStorage.setItem("apex26.caution", _cautionOn ? "1" : "0"); } catch (e) {}
-  if (!_cautionOn) resetCaution();
-  return _cautionOn;
-}
-// level: 0 GREEN · 1 local YELLOW (sector) · 2 VSC · 3 SAFETY CAR.
-let caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
-// Last flag state broadcast to a networked guest, so only CHANGES are sent.
-// Declared here rather than next to publishCaution(): resetCaution() assigns
-// it and is defined earlier in the file, so a late `let` would be a temporal
-// dead zone error the first time a race reset it.
-let _cautionSent = "";
-let _cautionQT = 0;   // hazard-query throttle accumulator (s) — query at ~4 Hz
-const CAUTION_YELLOW_MIN = 3;   // settled hazards in ONE sector → local yellow
-const CAUTION_VSC_MIN = 6;      // total settled hazards on the surface → VSC
-const CAUTION_SC_MIN = 10;      // a big pile → full safety car
-const CAUTION_MIN_HOLD = 6;     // s a caution holds once raised (anti-flicker)
-const CAUTION_YELLOW_MAX = 30;  // s hard cap on a local yellow
-const CAUTION_SC_MAX = 90;      // s hard cap on VSC/SC — bounded, ~a lap or two
+// B1 — RACE CONTROL (local yellow / VSC / safety car) lives in
+// js/game/racecontrol.js. A READ-ONLY race-logic layer: it consumes
+// DebrisWorld.hazards() and drives the HUD flag, and NEVER writes speed, px,
+// pz, head or (s, x). The five below are thin passes through to it, kept as
+// hoisted function declarations so the G façade below can name them directly.
+let raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
+function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
+function updateCaution(dt) { raceCtl.update(dt); }
+function applyCaution(d) { return raceCtl.apply(d); }
+function cautionInfo() { return raceCtl.info(); }
+function otEnabled() { return raceCtl.otEnabled(); }
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let hideMeshes = {};   // debug: per-mesh visibility toggle (set via __apex.meshToggle)
 let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
@@ -2634,6 +2614,8 @@ function endRace(forcedOrder) {
   els.results.hidden = false;
 }
 
+let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
+
 // ── The shared ctx façade over game.js closure state ─────────────────────────
 // Extracted modules (js/game/results.js, hud.js, apex.js, …) can't reach the
 // closure `let`s in this file, so game.js hands them ONE object of live
@@ -2803,7 +2785,9 @@ const G = {
   get _photoPrevScale() { return _photoPrevScale; }, set _photoPrevScale(v) { _photoPrevScale = v; },
   get photoAlt() { return photoAlt; }, set photoAlt(v) { photoAlt = v; },
   get photoVertT() { return photoVertT; }, set photoVertT(v) { photoVertT = v; },
-  get _ltStore() { return _ltStore; }, set _ltStore(v) { _ltStore = v; },
+  // The live profile object owned by js/game/light-store.js — photomode.js
+  // deletes a key out of it for the tuner's RESET and merges it for COPY VALUES.
+  get _ltStore() { return ltStore.profiles; }, set _ltStore(v) { ltStore.profiles = v; },
   photoCam, photoKeys, photoMouse, photoMove, photoLook,
   applyResMode: (...a) => applyResMode(...a),
   setPaused: (...a) => setPaused(...a),
@@ -2816,6 +2800,7 @@ const G = {
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
   isRaining: () => isRaining(),
   isWetRoad: () => isWetRoad(),
+  initRainDrops: () => initRainDrops(),
   isFloodActiveSession: () => isFloodActiveSession(),
   _nightAmbientBand: () => _nightAmbientBand(),
   applyLightTune: (fromApplyRace) => applyLightTune(fromApplyRace),
@@ -2869,6 +2854,12 @@ const G = {
   startRace, startWeatherArc, update, wrapS,
 };
 
+// Lighting profile resolution + persistence (js/game/light-store.js). FIRST of
+// the module wires: it reads the saved profiles at construction, and
+// Atmosphere's applyRaceSettings — created a few lines down — calls into it.
+ltStore = LightStore.create(G);
+// Race control: the caution flag state machine (js/game/racecontrol.js).
+raceCtl = RaceControl.create(G);
 // Results / TT-leaderboard / standings DOM builders (js/game/results.js).
 const { buildResults, buildTTResults, buildStandings } = GameResults.create(G);
 // In-race HUD + minimap (js/game/hud.js).
@@ -4085,7 +4076,11 @@ function updateCar(c, dt, ranked) {
       const asking = Math.abs(steer) > 0.15;
       if (sat > 1.15 && asking && (c.uslipHapT = (c.uslipHapT || 0) - dt) <= 0) {
         const bite = clamp((sat - 1.15) / 0.85, 0, 1);   // 0 at onset, 1 well past
-        if (navigator.vibrate) { try { navigator.vibrate(10 + (bite * 18) | 0); } catch (e) {} }
+        // Safari throws from vibrate() outside a user gesture and some engines
+        // throw on an out-of-range pattern. A cue the driver may not even feel
+        // is not worth interrupting the physics frame for, so it is ignored on
+        // purpose — the same call is retried a tenth of a second later anyway.
+        if (navigator.vibrate) { try { navigator.vibrate(10 + (bite * 18) | 0); } catch (e) { /* haptics are advisory */ } }
         Input.rumble(0.18 + bite * 0.32, 70);
         c.uslipHapT = 0.16 - bite * 0.06;                // firmer slide = tighter pulse
       }
@@ -4535,125 +4530,6 @@ function updateCar(c, dt, ranked) {
   c._prevS = c.s;
 }
 
-// B1 — debris caution state machine. Consumes the deterministic
-// DebrisWorld.hazards() picture (settled debris/broken panels ON the racing
-// surface, bucketed per sector) at ~4 Hz and resolves the flag state with
-// hysteresis: a caution raises immediately but only lowers after CAUTION_MIN_HOLD
-// (or a hard time cap), so it can't flicker as debris despawns. READ-ONLY: it
-// sets flag state + drives the HUD; it never touches any car's motion. Inert
-// unless the debris side-world is live AND apex26.caution is on AND we're racing.
-const _CAUTION_LBL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR"];
-function resetCaution() {
-  caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
-  _cautionQT = 0;
-  // Clear the change-detector too, or the next race's first flag looks like a
-  // repeat of the last one's and is never sent.
-  _cautionSent = "";
-}
-function updateCaution(dt) {
-  // RACE CONTROL IS THE HOST'S. Debris is generated locally from each car's own
-  // behaviour and is not replicated, so the two peers genuinely see different
-  // hazards; left to decide independently they would fly different flags for
-  // the same race. The guest adopts what the host sends (applyCaution) and
-  // computes nothing of its own.
-  if (!netPlay.ownsRaceControl()) return;
-  if (!_cautionOn || !DebrisWorld.active() || state !== "race") {
-    if (caution.level !== 0) resetCaution();
-    return;
-  }
-  if (caution.level !== 0) caution.sinceT += dt;
-  _cautionQT += dt;
-  if (_cautionQT < 0.25) return;   // query hazards at ~4 Hz
-  _cautionQT = 0;
-  const hz = DebrisWorld.hazards();
-  let desired = 0, dsector = -1, dfrac = 0, dcause = "";
-  if (hz.total >= CAUTION_SC_MIN) { desired = 3; dcause = "SAFETY CAR"; }
-  else if (hz.total >= CAUTION_VSC_MIN) { desired = 2; dcause = "VSC"; }
-  else if (hz.worst.count >= CAUTION_YELLOW_MIN) {
-    desired = 1; dsector = hz.worst.sector; dfrac = hz.worst.frac; dcause = "YELLOW";
-  }
-  caution.total = hz.total;
-  caution.sectors = hz.sectors.slice();
-  if (desired > caution.level) {
-    caution.level = desired; caution.sector = dsector; caution.frac = dfrac;
-    caution.cause = dcause; caution.sinceT = 0;
-  } else if (desired < caution.level) {
-    const cap = caution.level >= 2 ? CAUTION_SC_MAX : CAUTION_YELLOW_MAX;
-    if (caution.sinceT >= CAUTION_MIN_HOLD || caution.sinceT >= cap) {
-      caution.level = desired;
-      caution.sector = desired === 1 ? (dsector >= 0 ? dsector : caution.sector) : -1;
-      caution.frac = dfrac; caution.cause = dcause; caution.sinceT = 0;
-    }
-  } else if (desired === 1 && dsector >= 0) {
-    caution.sector = dsector; caution.frac = dfrac;   // track the worst sector
-  }
-  publishCaution();
-}
-// Adopt race control from the host. Deliberately does not touch sinceT's
-// meaning — the guest holds whatever the host decided, for as long as the host
-// says, rather than running its own hold timers over someone else's flag.
-function applyCaution(d) {
-  if (!d) return false;
-  caution.level = d.level | 0;
-  caution.sector = d.sector != null ? d.sector : -1;
-  caution.frac = d.frac || 0;
-  caution.cause = d.cause || "";
-  caution.total = d.total || 0;
-  if (Array.isArray(d.sectors)) caution.sectors = d.sectors.slice();
-  caution.sinceT = d.sinceT || 0;
-  return true;
-}
-
-// Broadcast only on a CHANGE: the flag state is checked at 4 Hz but changes
-// perhaps a handful of times a race, and the reliable channel is not the place
-// for a steady drip of unchanged state.
-function publishCaution() {
-  if (!netPlay.active() || !netPlay.ownsRaceControl()) return;
-  const key = caution.level + "|" + caution.sector + "|" + caution.cause;
-  if (key === _cautionSent) return;
-  _cautionSent = key;
-  netPlay.reportCaution({
-    level: caution.level, sector: caution.sector, frac: caution.frac,
-    cause: caution.cause, total: caution.total, sectors: caution.sectors,
-    sinceT: caution.sinceT,
-  });
-}
-
-// OVERTAKE IS NOT AVAILABLE ON LAP 1, and not while the race is neutralised.
-// This is the real rule for 2026's overtake mode (the electrical push that
-// replaced DRS as the proximity-gated overtaking aid): it is enabled once the
-// LEADER completes the opening lap, and it goes away under yellows and behind
-// the safety car. It is the same reasoning DRS always had — the field is at its
-// most bunched exactly when an overtaking aid is least safe, and a start where
-// everyone can push is a start decided by whoever gambles hardest.
-//
-// Note this deliberately does NOT gate ACTIVE AERO. X-mode is not the
-// overtaking aid in 2026 and carries none of its restrictions: every driver
-// gets it on every lap in every approved zone, leader and backmarker alike,
-// with no proximity requirement. Its only limits are the activation zones
-// themselves (see js/game/aerozones.js) — which is why Monaco has none.
-//
-// The LEADER's lap, not each car's own: a field-wide switch is what race
-// control actually throws, and gating per-car would hand a lapped driver the
-// push while the leader still had none. `ranked` is already sorted by progress
-// every frame, so the leader is ranked[0] and this stays O(1) — scanning all
-// 22 cars from inside the per-car update would have been 484 checks a frame for
-// a fact that changes once a race.
-function otEnabled() {
-  if (caution.level !== 0) return false;
-  const leader = ranked[0];
-  return !!leader && leader.lap > 1;
-}
-
-function cautionInfo() {
-  return {
-    level: caution.level, label: _CAUTION_LBL[caution.level] || "GREEN",
-    sector: caution.sector, frac: caution.frac, total: caution.total,
-    sectors: caution.sectors, sinceT: +caution.sinceT.toFixed(2), cause: caution.cause,
-    enabled: _cautionOn,
-  };
-}
-
 // Put the player back on the racing line at its CURRENT progress, facing forward
 // at a modest speed — for recovering from a spin, a beached off-track moment, or
 // being pinned to a wall. Progress (s/prog/lap) is preserved; only the lateral
@@ -4770,95 +4646,14 @@ function coast(c, dt) {
 // mutated in place, so the profile-resolution code below and the sliders/
 // __apex.lightTune keep every LT.x call site unchanged.
 const { TUNE_DEFS, LT, floodColor, LAMP_KINDS, buildTrackLights } = LightTune;
-// Profile store shape: { "monza|night|wet": {lampLevel:0.4,…}, "*": {…legacy} }.
-let _ltStore = {};
-{
-  const saved = store.get("lightTune", null);
-  if (saved && typeof saved === "object") {
-    const vals = Object.values(saved);
-    // Legacy flat format was {id:number}. New format nests {key:{id:number}}.
-    if (vals.length && vals.every((v) => typeof v === "number")) _ltStore = { "*": saved };
-    else _ltStore = saved;
-  }
-}
-// The profile key for the CURRENT session conditions ("default" TOD resolves to
-// the track's actual day/night look so it shares one profile with an explicit
-// pick of the same look).
-function ltKey() {
-  if (!track || !track.def) return null;
-  let tod = raceTimeOfDay;
-  if (tod === "default") tod = track.def.night ? "night" : "day";
-  return track.def.id + "|" + tod + "|" + raceWeather;
-}
-// The resolution layers for the current condition, LOWEST precedence first:
-//   TUNE_DEFS default → file "*" → file "track|tod|wx"
-//     → localStorage "*" → localStorage "track|tod|wx"
-// So a committed js/game/light-presets.js is the shipped baseline, and a player's
-// local (localStorage) edits always win over it. A missing layer is skipped.
-function ltLayers() {
-  const F = window.LightPresets || null;
-  const key = ltKey();
-  return [
-    F && F["*"], F && key && F[key],
-    _ltStore["*"], key && _ltStore[key],
-  ];
-}
-// What the current knob would resolve to WITHOUT the current condition's local
-// profile — i.e. the value RESET falls back to. Used to decide whether a slider
-// edit needs storing (store only when it differs from this fallback).
-function ltFallback(id) {
-  const d = TUNE_DEFS.find((t) => t.id === id);
-  let v = d.def;
-  const F = window.LightPresets || null, key = ltKey();
-  if (F && F["*"] && typeof F["*"][id] === "number") v = F["*"][id];
-  if (F && key && F[key] && typeof F[key][id] === "number") v = F[key][id];
-  if (_ltStore["*"] && typeof _ltStore["*"][id] === "number") v = _ltStore["*"][id];
-  return clamp(v, d.min, d.max);
-}
-// Rebuild LT for the current conditions. Called whenever the track/time/weather
-// changes (via applyRaceSettings) so the right profile is live for both the
-// tuner panel and actual racing.
-// Knobs whose effect is baked into frame.*/frameSky.* by applyRaceSettings()
-// (not read per-frame in render). Changing one re-runs applyRaceSettings so it
-// updates live — safe because that function re-derives from the branch values.
-const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance", "skyColorSat", "fogColorSat"]);
-function applyLightTune(fromApplyRace) {
-  const layers = ltLayers();
-  let rebuilt = false, reapply = false, reinit = false;
-  for (const d of TUNE_DEFS) {
-    let v = d.def;
-    for (const L of layers) if (L && typeof L[d.id] === "number") v = L[d.id];
-    v = clamp(v, d.min, d.max);
-    if (LT[d.id] !== v) { LT[d.id] = v; if (d.rebuild) rebuilt = true; if (d.reinitRain) reinit = true; if (_APPLY_RACE_IDS.has(d.id)) reapply = true; }
-  }
-  if (rebuilt && track) { track._lights = null; track._alwaysLights = null; }
-  // Skip the reapply when applyRaceSettings itself invoked us (it derives from
-  // the fresh LT values right after this returns) — re-entering ran the whole
-  // sky/ambient/fog derivation twice per track/time/weather transition.
-  if (reapply && !fromApplyRace && track && state !== "menu" && state !== "select") applyRaceSettings();
-  if (reinit && isWetRoad()) initRainDrops();
-}
-function setLightTune(id, v) {
-  const d = TUNE_DEFS.find((t) => t.id === id);
-  if (!d || typeof v !== "number" || !isFinite(v)) return false;
-  v = clamp(v, d.min, d.max);
-  LT[id] = v;
-  const key = ltKey();
-  if (key) {
-    const prof = _ltStore[key] || (_ltStore[key] = {});
-    // Store only when the value differs from what it would resolve to anyway
-    // (default / file / legacy global). Storing an explicit value IS required
-    // when it matches the default but the file/global would otherwise win —
-    // that's how a local edit overrides a shipped value back down.
-    if (v === ltFallback(id)) delete prof[id]; else prof[id] = v;
-    if (!Object.keys(prof).length) delete _ltStore[key];
-  }
-  if (d.rebuild && track) { track._lights = null; track._alwaysLights = null; }   // re-bake per-track light records next frame
-  if (d.reinitRain && isWetRoad()) initRainDrops();   // re-seed the rain field with the new count/length
-  if (_APPLY_RACE_IDS.has(id) && track && state !== "menu" && state !== "select") applyRaceSettings();
-  return true;
-}
-function persistLightTune() { store.set("lightTune", _ltStore); }
+// The PROFILE STORE — which layer of (default / shipped preset / player edit)
+// wins for the conditions on screen — lives in js/game/light-store.js
+// (LightStore.create(G), assigned with the other modules below). These four are
+// thin passes through to it, kept so every call site here reads unchanged.
+function ltKey() { return ltStore.key(); }
+function applyLightTune(fromApplyRace) { ltStore.apply(fromApplyRace); }
+function setLightTune(id, v) { return ltStore.set(id, v); }
+function persistLightTune() { ltStore.persist(); }
 // LAMP_KINDS + buildTrackLights(track) live in js/game/lighting.js (LightTune).
 
 // Per-frame light assembly (nearest-N flood cull + car tail lights) lives in
@@ -7414,10 +7209,11 @@ function buildRaceSettings() {
   $("rs-caution-section").hidden = isTimeTrial();
   const cauEl = $("rs-caution");
   cauEl.innerHTML = "";
+  const cautionOn = raceCtl.enabled;
   for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
     const b = document.createElement("button");
-    b.className = "sel-chip" + (_cautionOn === on ? " active" : "");
-    b.setAttribute("aria-pressed", _cautionOn === on ? "true" : "false");
+    b.className = "sel-chip" + (cautionOn === on ? " active" : "");
+    b.setAttribute("aria-pressed", cautionOn === on ? "true" : "false");
     b.textContent = label;
     b.onclick = () => {
       setCautionEnabled(on);

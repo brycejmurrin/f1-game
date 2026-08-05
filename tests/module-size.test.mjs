@@ -37,15 +37,7 @@ const CEILINGS = {
   // The monolith. Every line removed here is the point of the extraction work;
   // js/game/ is where it goes. Do not raise this to land a feature — put the
   // feature in a module.
-  // 8300 -> 8316: A16's aStd() helper and the comment explaining WHY it exists —
-  // that PACE multiplies the accel curve exactly as it multiplies ground speed,
-  // so an acceleration compared against a literal needs the same divisor a speed
-  // does, and the launch-smoke effect therefore never fired at all below pace
-  // ~0.65. Sixteen lines, twelve of them the explanation. Raised rather than
-  // extracted because vTop()/vStd()/aStd() are three lines each and sit on PACE
-  // itself; pulling them out is a real refactor, not a tidy-up, and the ratchet
-  // exists to force that decision to be made out loud rather than to forbid it.
-  "js/game.js": 8316,
+  "js/game.js": 8112,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,

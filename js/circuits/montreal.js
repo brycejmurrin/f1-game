@@ -62,7 +62,7 @@
         fence, tyreWall, hedge, billboard, gantry, marshalPost, bush,
         scaffoldStand, broadleafFall,
         ferrisWheel, tower, onTrack, forestEdge, cityFront,
-        modelGroup, overheadSpan, waterSurface, waterBand, groundPatch,
+        modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, foundation,
         broadcastCompound, cameraTower, sponsorHoarding, circuitKit,
         cross, norm, MAT, COL } = api;
       const K = (s) => Math.round(s * n) % n;
@@ -739,7 +739,7 @@
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 5);
           const h = deckY - a.c[1];
-          const legH = h - 0.4;
+          const capY = deckY - 0.4;        // underside of the pier head plate
           const center = vadd(a.c, a.u, h / 2);
           const basis = [a.r, a.u, a.t];
           modelGroup(`montreal-casino-footbridge-support-${side < 0 ? "left" : "right"}`, {
@@ -747,12 +747,36 @@
             size: [1.1, h, 3.4],
             basis,
           }, (stage) => {
+            // The legs used to be plain boxes standing on anchor().c, which is
+            // deliberately sunk 0.3 m BELOW the sampled surface (see the embed
+            // note in js/track/scenery-nature.js) so a flat-based prop cannot
+            // float off the downhill edge of a slope. That embed is right for a
+            // tree or a sign and wrong for a BRIDGE PIER: the feet ended up
+            // buried, 0.3 m clear of the grass they are supposed to bear on.
+            // foundation() is the engine's terrain-anchoring mechanism — it
+            // samples the REAL terrain ribbon at the corners and centre of the
+            // leg's own footprint and fills from `top` down to the lowest of
+            // them, so each leg finds its own grade instead of inheriting one
+            // point's offset. embed 0 because Île Notre-Dame is a dead-level
+            // shelf (flatTerrain) — there is no slope seam here to hide, and a
+            // pier that meets the ground is the whole point. `ground` is the
+            // anchor's own surface reading, used only if the ribbon does not
+            // cover the footprint, so a required model can never fail to build.
+            let ok = false;
             for (const along of [-1.2, 1.2]) {
-              addBox(stage, vadd(vadd(a.c, a.t, along), a.u, legH / 2),
-                [0.65, legH, 0.65], [0.60, 0.62, 0.64], basis);
+              ok = foundation(stage, {
+                center: vadd(a.c, a.t, along),
+                size: [0.65, 0.65],
+                top: capY,
+                basis,
+                col: [0.60, 0.62, 0.64],
+                embed: 0,
+                ground: a.c[1] + 0.3,
+              }) || ok;
             }
             addBox(stage, vadd(a.c, a.u, h - 0.2),
               [1.1, 0.4, 3.4], [0.66, 0.68, 0.70], basis);
+            return ok;
           }, { required: true });
         }
         overheadSpan({

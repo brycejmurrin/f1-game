@@ -9,25 +9,62 @@ const GameStore = (function () {
 const store = {
   _cache: new Map(),   // full-key -> parsed value; kills per-frame getItem + JSON.parse in the render loop
   rev: 0,              // bumped on every set — memo caches key off this to self-invalidate
+  // NON-NULL once a write has failed: the DOMException name ("QuotaExceededError",
+  // "SecurityError", …). See the comment on set().
+  broken: null,
   get(k, d) {
     const key = "apex26." + k;
     let v = this._cache.get(key);
     if (v === undefined && !this._cache.has(key)) {
       try { const raw = localStorage.getItem(key); v = raw === null ? undefined : JSON.parse(raw); }
-      catch (e) { return d; }
+      catch (e) {
+        // A read that throws is either storage being unavailable (same conditions
+        // as set()) or a corrupt value. Either way the default is the right answer
+        // — but say so once, because "your settings reset themselves" is otherwise
+        // reported as a game bug with nothing in the console to go on.
+        noteBroken(e, "read " + k);
+        return d;
+      }
       this._cache.set(key, v);
     }
     // Callers treat hot-path results as read-only; menu callers that mutate a
     // returned object always saveTeamParts()/store.set() after, re-caching the ref.
     return v === undefined ? d : v;
   },
+  // THE CACHE IS WRITTEN EVEN WHEN THE DISK WRITE FAILS, AND THAT IS DELIBERATE —
+  // but it used to be silent, which made it a data-loss bug that looked like
+  // nothing at all. Safari on iOS sets the localStorage quota to ZERO in Private
+  // Browsing, so setItem throws on the very first write. The catch swallowed it,
+  // _cache answered every subsequent get() with the right value, and the game ran
+  // a whole career perfectly — until reload, when all of it was gone and the
+  // player had no way to know it was never being saved.
+  //
+  // Still caching on failure is correct: dropping the value would break the
+  // SESSION as well as the save, which is strictly worse. What was missing is
+  // that anything noticed. `broken` is now the record, Log carries it once, and
+  // __apex.persistState() exposes it so the failure is testable rather than
+  // inferred from a player's reload.
   set(k, v) {
     const key = "apex26." + k;
-    try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {}
+    try { localStorage.setItem(key, JSON.stringify(v)); }
+    catch (e) { noteBroken(e, "write " + k); }
     this._cache.set(key, v);
     this.rev++;
   },
 };
+
+// Report the FIRST failure loudly and every later one only to the buffer. A dead
+// localStorage fails on every single call, so an unconditional warn would bury
+// the console in one identical line; the ring buffer still has the full history
+// for __apex.logs({ns:"game"}).
+function noteBroken(e, what) {
+  const name = (e && e.name) || "Error";
+  const first = !store.broken;
+  if (first) store.broken = name;
+  const msg = `localStorage ${what} failed (${name}) — settings and saves will NOT survive a reload` +
+    (name === "QuotaExceededError" ? "; iOS Safari sets the quota to 0 in Private Browsing" : "");
+  if (first) Log.warn("game", msg); else Log.info("game", msg);
+}
 
 // Per-track time-trial leaderboard: top 10 laps ever, each tagged with the
 // team + driver that set it. Stored sorted ascending by lap time.

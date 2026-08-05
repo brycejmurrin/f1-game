@@ -10,7 +10,7 @@
  * mist). Constants are lifted verbatim from lit.js — line refs in comments.
  *
  * M4: sun/car/lamp SHADOW-MAP sampling is live — a 1:1 port of lit.js
- * sampleShadow (:420-536) + the in-loop lamp shadow (:820-837), fed by the
+ * sampleShadow() + the in-loop lamp shadow (the uLampShadowOn branch), fed by
  * tlx-shadow.js depth targets through ctx.shadow. Depth taps compile to
  * hardware-compare sampler2DShadow on the WebGL backend via TSL's
  * texture(...).compare(z); shadow-map UVs are passed in three's WebGPU
@@ -21,8 +21,10 @@
  *   - PCSS blocker search -> penumbra fixed at R=3 (the GLX far radius);
  *     uPcss stays 0. three can't view one depth texture compare-on AND
  *     compare-off (see tlx-shadow.js header)          (TODO M4-PCSS)
- *   - live env CUBE probe               -> uEnvStr = 0, analytic-gradient
- *     mirror only (the uEnvStr<0.999 branch of lit.js:962-979)  (TODO M9)
+ *
+ * M9 (the live env CUBE probe) HAS landed and is no longer stubbed: tlx.js
+ * builds the cube target and drives setEnvStr() from the probe-ready state,
+ * and the clearcoat mirror below blends the real cube fetch.
  *   - SSR car-paint ALPHA TAG (M8): written when ctx.ssrTag is set — the
  *     post chain's offscreen HDR target carries it to the composite's SSR.
  *     Without a chain (direct to canvas) the tag stays off (the M3 rule).
@@ -131,9 +133,9 @@
       skyRimGlow:     uniform(1.0),   // SKY RIM GLOW
       ambContactDark: uniform(1.0),   // AMBIENT CONTACT DARK
       lampWallSpill:  uniform(1.0),   // LAMP WALL SPILL
-      envStr:         uniform(0.0),   // TODO M9: live env-probe strength (carEnvCube, def 0)
+      envStr:         uniform(0.0),   // live env-probe strength; set by setEnvStr() from tlx.js begin()
       numLights:      uniform(0),
-      // ── M4 shadow uniforms (glx.js:752-823; defaults mirror TUNE_DEFS) ──
+      // ── M4 shadow uniforms (the litU.uShadow* uploads in glx.js; defaults mirror TUNE_DEFS) ──
       // shadowStr is the EFFECTIVE strength: knob × key-luminance fade (with
       // the MOON SHADOWS floor), computed CPU-side in updateFrame like GLX.
       shadowStr:      uniform(0.0),   // SHADOW DARKNESS (def 1.15) × key fade; 0 until a frame arrives
@@ -166,7 +168,7 @@
     U.lampDir = uniformArray(lampDir);
     U.lampGeo = uniformArray(lampGeo);
 
-    /** begin(frame) -> uniform values. Mirrors the glx.js:662-898 semantics:
+    /** begin(frame) -> uniform values. Mirrors the semantics of glx.js begin():
      * ambient scaled CPU-side by tune.ambientMul; keyMul/fog/mist knobs applied
      * where glx.js applies them; every default = TUNE_DEFS def. */
     function updateFrame(frame) {
@@ -211,7 +213,7 @@
       U.ambContactDark.value = k("ambContactDark", 1.0);
       U.lampWallSpill.value = k("lampWallSpill", 1.0);
       U.envStr.value = 0;   // M9: overwritten by lit.setEnvStr() in tlx.js begin() from the probe-ready state
-      // ── M4 shadow upload (glx.js:752-823 1:1) ──────────────────────────
+      // ── M4 shadow upload (1:1 with the litU.uShadow* block in glx.js) ──
       if (shadowOn) {
         U.shadowBias.value = k("shadowBias", 0.001);
         U.pcssPen.value = k("pcssPen", 80.0);
@@ -473,7 +475,7 @@
           const hc = select(an.x.greaterThan(an.z), wp.z, wp.x).toVar();
           const y = wp.y.toVar();
           // fwidth-AA fade on the (hc,y) world footprint — grazing-angle moiré
-          // guard (lit.js:248-259; the 0.04/0.22 constants).
+          // guard (the aaFade 0.04/0.22 constants in lit.js).
           const fp = max(fwidth(hc), fwidth(y));
           const aaFade = clamp(fp.sub(0.04).div(0.22).oneMinus(), 0.0, 1.0).toVar();
           If(aaFade.greaterThan(0.005), () => {
@@ -1091,7 +1093,8 @@
           color.addAssign(ccCol);
         });
 
-        // ── clearcoat ENV mirror (lit.js:939-990). uEnvStr = 0 -> analytic
+        // ── clearcoat ENV mirror (the analytic-clearcoat-ENV block in lit.js).
+        //    uEnvStr = 0 -> analytic
         //    sky-gradient path only; > 0 blends in the M9 live cube fetch
         //    (textureLod(uEnvCube, Rg, rough*2.5) × uEnvStr — glx.js parity). ──
         If(envSurface, () => {

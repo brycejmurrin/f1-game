@@ -25,6 +25,7 @@
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,6 +33,21 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LOGDIR = path.join(ROOT, "artifacts/logs");
 const STATEFILE = path.join(LOGDIR, "test-bg.json");
 const WORKERS = process.env.WORKERS || "2";
+
+// THE CAP EXISTS BECAUSE OVERSUBSCRIPTION DOES NOT LOOK LIKE OVERSUBSCRIPTION.
+// Every Playwright worker drives a SwiftShader Chromium, so the real browser
+// count is (groups × WORKERS) and they are all CPU-bound. Past the core count
+// they starve each other and fail on their own timeouts — a screenshot that
+// takes 60 s, a spec that takes 120 s — which reads as a broken change rather
+// than as a busy machine. Measured here: five groups took the load average to
+// 46 on 4 cores with 94 Chromium processes, and every "failure" was a timeout.
+//
+// The tool used to accept any number and start them all, while docs/TESTING.md
+// and CLAUDE.md both said "at most two". A rule only one of the two places
+// knows is a rule that gets broken, so it lives here now, where it is enforced.
+// --force overrides it for a box that really is bigger.
+const CORES = os.availableParallelism ? os.availableParallelism() : (os.cpus().length || 4);
+const MAX_GROUPS = Math.max(1, Math.floor(CORES / (+WORKERS || 2)));
 
 const readState = () => {
   try { return JSON.parse(fs.readFileSync(STATEFILE, "utf8")); } catch (_) { return { runs: [] }; }
@@ -122,13 +138,30 @@ function stop({ graceMs = 4000 } = {}) {
   setTimeout(spin, 250);
 }
 
-function start(groups) {
+function start(groups, force) {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
   if (unknown.length) {
     console.error(`no such group: ${unknown.join(", ")}`);
     console.error(`available: ${Object.keys(pkg.scripts).filter((k) => k.startsWith("test:")).map((k) => k.slice(5)).join(" ")}`);
     process.exit(2);
+  }
+  // Count what is ALREADY on the CPU. An earlier batch still running is exactly
+  // as expensive as one started now, and is the case most likely to be forgotten
+  // — it does not appear on this command line.
+  const running = readState().runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
+  const total = groups.length + running.length;
+  if (total > MAX_GROUPS && !force) {
+    console.error(`REFUSING: ${total} group(s) would run at once (${groups.length} asked for` +
+      `${running.length ? `, ${running.length} already running: ${running.map((r) => r.group).join(", ")}` : ""}),` +
+      ` but this box has ${CORES} cores and each group drives ${WORKERS} SwiftShader browsers.`);
+    console.error(`Past ~${MAX_GROUPS} they starve each other and fail on TIMEOUTS, which look like`);
+    console.error(`test failures and are not. Run them in batches instead:\n`);
+    for (let i = 0; i < groups.length; i += MAX_GROUPS) {
+      console.error(`    node tools/test-bg.mjs ${groups.slice(i, i + MAX_GROUPS).join(" ")}`);
+    }
+    console.error(`\n(--force overrides; WORKERS=1 raises the cap.)`);
+    process.exit(3);
   }
   fs.mkdirSync(LOGDIR, { recursive: true });
   const runs = [];
@@ -181,6 +214,6 @@ else if (argv.includes("--tail")) {
   const r = readState().runs.find((x) => x.group === g);
   console.log(r ? `tail -f ${path.relative(ROOT, r.log)}` : `no run recorded for group "${g}"`);
 } else if (!argv.length) {
-  console.error("usage: node tools/test-bg.mjs <group> [group...]   |   --status | --wait | --stop | --tail <group>");
+  console.error("usage: node tools/test-bg.mjs <group> [group...] [--force]   |   --status | --wait | --stop | --tail <group>");
   process.exit(2);
-} else start(argv.filter((a) => !a.startsWith("--")));
+} else start(argv.filter((a) => !a.startsWith("--")), argv.includes("--force"));
