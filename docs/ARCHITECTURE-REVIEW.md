@@ -188,7 +188,9 @@ otherwise own a completely different car.
 
 ## 5. The `G` façade — what it does and does not do
 
-`js/game.js` is 8,078 lines and owns the closure state. Extracted modules in
+`js/game.js` is the largest file in the repo and owns the closure state — the
+exact figure is the one `tests/module-size.test.mjs` ratchets, which is the only
+place it can be stated without going stale. Extracted modules in
 `js/game/*` never reach into it directly: game.js builds one `G` object of live
 getters/setters plus stable helpers and instantiates each module as
 `Module.create(G)`.
@@ -203,8 +205,13 @@ it is simply game.js's closure with extra steps. It is a *migration* device that
 has been left in place as an *architecture*, and the distinction matters when
 deciding whether the next extraction should widen it again.
 
-It also does not shrink game.js on its own: 8,078 lines is up from the ~6,100 the
-architecture doc still claims (§7, deferred/docs).
+It also does not shrink game.js on its own. When this review was written the file
+had grown back well past the ~6,100 the architecture doc still claimed — and
+during the 2026-08 cleanup it did it again in miniature, in the space of one
+session: two extractions took 91 lines out while a concurrent branch put 130
+back. Nobody did anything wrong; there was nothing watching. That is what
+`tests/module-size.test.mjs` is for, and it is the reason the number lives in a
+test rather than in this sentence.
 
 ---
 
