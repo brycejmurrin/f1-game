@@ -18,6 +18,9 @@ Three kinds of docs live here.
 | [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md) | Standing assessment + defect register: what the no-build-step bet costs, why asserted invariants hold where prose ones drift, and what is deferred. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (CLAUDE.md has the short list). |
 | [CAREER.md](CAREER.md) | Career mode: the flow/session axes, the six `apex26.career.<flavour>.N` save slots, driver ratings, the economy and R&D gate, qualifying, reliability. |
+| [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. |
+| [PARTS.md](PARTS.md) | The 12-category upgrade catalog: measured ERS and aero tables, SIGNATURE options, the visual recipe registry. |
+| [MULTIPLAYER.md](MULTIPLAYER.md) | The `js/net/` wire: transport channels, the packed invite SDP, Nostr/room-code rendezvous, snapshots and interpolation, and who owns which car. |
 | [SCENERY-API.md](SCENERY-API.md) | The `scenery(api)` callback — buildings, props, barriers, terrain anchoring. |
 | [LIGHTING-REF.md](LIGHTING-REF.md) | Light-record layout, shader uniforms, time-of-day branches, floodlight masts. |
 | [LIGHTING-KNOBS.md](LIGHTING-KNOBS.md) | Every hand-tuned lighting constant, what it does, and how to A/B it (mirrors `tools/ab-lighting.mjs`). |
