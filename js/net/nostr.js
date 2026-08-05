@@ -181,7 +181,208 @@ const NetNostr = (function () {
     return RELAYS;
   }
 
+  /*
+   * DIRECT RELAY EXCHANGE — the relays as a message bus, and nothing else.
+   *
+   * WHY THIS REPLACED THE TRYSTERO ROOM. Trystero is a peer-to-peer library:
+   * joinRoom() uses the relays to bootstrap its OWN RTCPeerConnection, and
+   * makeAction().send() then travels over THAT data channel. So our invite and
+   * answer were riding a WebRTC connection in order to establish a WebRTC
+   * connection — and the first one dies exactly when the second one starts.
+   *
+   * Measured, on real hardware, repeatedly: the offer reaches the guest (the
+   * Trystero link is alive at that moment), the guest builds an answer, and
+   * every attempt to send it back — targeted AND untargeted, retried for six
+   * seconds — returns "Trystero: no peer with id … found". The room is empty.
+   * The host then waits out its full two minutes on "Waiting for them to
+   * join…" without ever starting ICE, which is why both peers looked deaf with
+   * checks sent and nothing answering: nobody was there to answer.
+   *
+   * We never needed the peer connection. Two strings have to cross, once each,
+   * and a relay is already a perfectly good place to leave a string. So this
+   * publishes and subscribes DIRECTLY over our own WebSockets, using
+   * Trystero's own framing helpers (createEvent/subscribe) so the events are
+   * well-formed Nostr and the vendored signing is reused rather than
+   * reimplemented.
+   *
+   * WHAT THE RELAYS SEE. The payload is sealed with AES-GCM under a key
+   * derived from the room code (NetRendezvous.seal/open) and the topic is a
+   * hash of it — the same guarantee Trystero's `password` gave us, now applied
+   * where we can see it. Offers and answers use SEPARATE topics, so neither
+   * side ever reads its own message back.
+   */
+  async function directExchange(opts) {
+    const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail } = opts;
+    if (!available()) {
+      return { ok: false, error: "unsupported",
+               message: "This browser cannot reach the room service." };
+    }
+    let mod;
+    try { mod = await load(); }
+    catch (e) {
+      const why = (e && (e.message || String(e))) || "unknown";
+      return { ok: false, error: "no_module", detail: why,
+               message: "Could not load the room service (" + why.slice(0, 90) + ")."
+                      + " Use the invite link or QR instead." };
+    }
+
+    const hosting = !!(mintOffer || onJoiner);
+    // The side we PUBLISH on and the side we LISTEN on. Separate, or a peer
+    // reads its own publication straight back and answers itself.
+    const mineTopic  = await roomId(code + (hosting ? "|offer" : "|answer"));
+    const theirTopic = await roomId(code + (hosting ? "|answer" : "|offer"));
+
+    const sockets = [];
+    let current = send || null;
+    const seen = new Set();
+
+    return new Promise((resolve) => {
+      let done = false, settled = false;
+      const shut = () => {
+        for (const w of sockets) { try { w.close(); } catch (e) {} }
+        sockets.length = 0;
+      };
+      const finish = (r) => {
+        if (done) return;
+        done = true;
+        clearInterval(tick); clearInterval(repost);
+        shut();
+        if (!settled) { settled = true; resolve(r); return; }
+        if (onFail) { try { onFail(r); } catch (e) {} }
+      };
+
+      const publish = async (text) => {
+        if (!text) return;
+        let frame;
+        try {
+          const sealed = await NetRendezvous.seal(code, text);
+          // base64 so it survives JSON, and short enough that a relay will
+          // take it: an invite is ~240 chars packed.
+          let bin = "";
+          for (let i = 0; i < sealed.length; i++) bin += String.fromCharCode(sealed[i]);
+          frame = await mod.createEvent(mineTopic, btoa(bin));
+        } catch (e) { return; }
+        for (const w of sockets) { if (w.readyState === 1) { try { w.send(frame); } catch (e) {} } }
+      };
+
+      const heard = async (b64) => {
+        if (seen.has(b64)) return;
+        seen.add(b64);
+        let text = null;
+        try {
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          text = await NetRendezvous.open(code, bytes);
+        } catch (e) { text = null; }
+        if (!text || done) return;                 // not ours, or too late
+
+        if (hosting) {
+          // An answer. Hand it over; the room stays open for more joiners.
+          if (onJoiner) { Promise.resolve().then(() => onJoiner(null, text)).catch(() => {}); }
+          return;
+        }
+        // An offer. Answer it once, publish, and we are finished.
+        if (!reply) { finish({ ok: true, payload: text }); return; }
+        if (seen.has("__answering")) return;
+        seen.add("__answering");
+        let out = null;
+        try { out = await reply(text); } catch (e) { out = null; }
+        if (done) return;
+        if (!out) {
+          finish({ ok: false, error: "reply_failed", message: "Could not answer that invite." });
+          return;
+        }
+        await publish(out);
+        // Publish it a few more times before leaving: a relay that dropped the
+        // first copy must not cost the whole handshake, and this is cheap.
+        let n = 0;
+        const again = setInterval(async () => {
+          if (done || ++n > 3) { clearInterval(again); return; }
+          await publish(out);
+        }, 1200);
+        setTimeout(() => { clearInterval(again); finish({ ok: true, payload: text }); }, 5200);
+      };
+
+      const tick = setInterval(() => {
+        if (token && token.cancelled) finish({ ok: false, error: "cancelled", message: "" });
+        else if (onTick) { try { onTick(); } catch (e) {} }
+      }, 1000);
+
+      // Say it again while nobody has taken it. A relay carries live events
+      // only, so a peer that subscribes after we published hears nothing until
+      // we publish again — this is what makes arriving late survivable.
+      const repost = setInterval(() => { if (!done && current) publish(current); }, REPOST_MS);
+
+      setTimeout(() => finish({ ok: false, error: "expired",
+        message: "Nobody joined that code. Codes only last a couple of minutes." }),
+        JOIN_TIMEOUT_MS);
+
+      let opened = 0;
+      for (const url of relayUrls()) {
+        let w;
+        try { w = new WebSocket(url); } catch (e) { continue; }
+        sockets.push(w);
+        w.onopen = () => {
+          opened++;
+          try { w.send(mod.subscribe("s" + Math.floor(Date.now() % 1e6), theirTopic)); } catch (e) {}
+          if (current) publish(current);
+        };
+        w.onmessage = (ev) => {
+          let m;
+          try { m = JSON.parse(String(ev.data)); } catch (e) { return; }
+          if (m[0] === "EVENT" && m[2] && typeof m[2].content === "string") heard(m[2].content);
+        };
+        w.onerror = () => {};
+      }
+
+      // Nothing to publish yet? Mint it now rather than waiting for an arrival.
+      if (!current && mintOffer) {
+        Promise.resolve(mintOffer(null)).then((o) => {
+          if (!done && o) { current = o; publish(o); }
+        }).catch(() => {});
+      }
+
+      setTimeout(() => {
+        if (done) return;
+        if (!sockets.some((w) => w.readyState === 1)) {
+          finish({ ok: false, error: "no_relay",
+            message: "Could not reach any room service — this network may be blocking it."
+                   + " Use the invite link or QR instead." });
+        }
+      }, RELAY_CHECK_MS);
+
+      // A host stays open for further joiners and says so immediately, exactly
+      // as the Trystero path did.
+      if (onJoiner && !settled) {
+        settled = true;
+        resolve({
+          ok: true, subscribed: true,
+          rotate: (next) => {
+            current = next || null;
+            if (!current && mintOffer) {
+              return Promise.resolve(mintOffer(null)).then((o) => {
+                if (!done && o) { current = o; return publish(o); }
+              }).catch(() => {});
+            }
+            return publish(current);
+          },
+          stop: () => finish({ ok: false, error: "stopped", message: "" }),
+        });
+      }
+    });
+  }
+
   async function exchange(opts) {
+    // THE DIRECT PATH IS THE DEFAULT. See directExchange() above for why: the
+    // Trystero room used the relays to build a peer connection, and then sent
+    // our signalling over THAT — a WebRTC link established in order to
+    // establish a WebRTC link, with the first dying as the second starts.
+    // localStorage apex26.nostrTrystero = "true" restores the old route for a
+    // side-by-side comparison.
+    let legacy = false;
+    try { legacy = localStorage.getItem("apex26.nostrTrystero") === "true"; } catch (e) {}
+    if (!legacy) return directExchange(opts);
     // send/reply are the two-party pair this started as. mintOffer+onJoiner are
     // SUBSCRIPTION mode: a host that stays in the room and answers each arrival
     // with an offer of its own, rather than resolving on the first one.
@@ -567,7 +768,7 @@ const NetNostr = (function () {
     });
   }
 
-  return { APP_ID, JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, roomId, exchange, load,
+  return { APP_ID, JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, roomId, exchange, directExchange, load,
     // Exported FOR THE TESTS. A bad stored override used to reach
     // `new WebSocket()` and throw out of joinRoom, and asserting that on the
     // source text is the kind of test that passes while the code is broken.
