@@ -47,10 +47,25 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
     { s: 0.8125, halfM: 300, rise: 11 },
     { s: 0.0625, halfM: 260, rise: -5 },
   ]);
-  expect(audit.raw.bridges).toEqual([{ s: 0.4235, halfM: 150, rise: 7 }]);
+  // The crossover bridge was re-authored after this assertion was written: the
+  // peak moved onto the MEASURED self-crossing and the rise grew to clear the
+  // road passing underneath. js/circuits/suzuka.js states the contract beside
+  // the data — "The bridge peak sits exactly on the measured self-crossing
+  // (lower road racing s≈0.226, upper s≈0.817). The lower road there is already
+  // lifted to y≈5.4 by the Esses elevation, so rise must clear it: 13.5 − 5.4 ≈
+  // 8.1 m of road-to-road daylight". The old {0.4235, 150, 7} predates that: at
+  // rise 7 the upper ribbon would sit ~1.6 m above the lower road, i.e. the
+  // 6.5 m-underside crossover deck could not fit between them at all. Measured
+  // now: { s: 0.4298, halfM: 160, rise: 13.5 }.
+  expect(audit.raw.bridges).toEqual([{ s: 0.4298, halfM: 160, rise: 13.5 }]);
   expect(audit.built.elevations[0].s).toBeCloseTo(0.20, 6);
   expect(audit.built.elevations[1].s).toBeCloseTo(0.45, 6);
-  expect(audit.built.bridges[0].s).toBeCloseTo(0.811, 6);
+  // Source 0.4298 resolves to racing s = 0.8173 (measured) — the self-crossing
+  // the circuit comment quotes as "upper s≈0.817". The old 0.811 was where the
+  // pre-rework bridge (source 0.4235) landed. Pinned to 3 dp, which is tight
+  // enough to catch the lift drifting off the crossing but does not re-break on
+  // the last digit of the source→racing map.
+  expect(audit.built.bridges[0].s).toBeCloseTo(0.8173, 3);
 
   expect(audit.relief.esses).toBeGreaterThan(4);
   expect(audit.relief.degner).toBeLessThan(-2);

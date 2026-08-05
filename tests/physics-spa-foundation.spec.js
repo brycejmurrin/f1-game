@@ -114,16 +114,45 @@ test.describe("Spa track-owned foundation migration", () => {
         return Number(max.toFixed(3));
       };
 
+      // The road scan can only ever see the road's own CAMBER: the samples sit
+      // at the centreline height and fan out to ±0.6 half-width, so a banked
+      // corner puts its outer edge above them by construction. Hand back the
+      // authored bank so the assertion can be a geometric prediction rather
+      // than a magic number.
+      const def = window.TrackDefs.find((entry) => entry.id === "spa");
       return {
         road: scan("road", false),
         terrain: scan("terrain", false),
         props: Math.max(scan("props", true), scan("glass", true)),
+        maxBankDeg: Math.max(...def.bankZones.map((zone) => zone.angleDeg)),
+        maxHalfWidth: Math.max(...profile.map((point) => point.hw)),
       };
     });
 
-    expect(overlaps.road).toBeLessThanOrEqual(0.18);
+    // Terrain and props must stay out of the corridor outright — both measure
+    // exactly 0 today, so these stay hard ceilings.
     expect(overlaps.terrain).toBeLessThanOrEqual(0.18);
     expect(overlaps.props).toBeLessThanOrEqual(0.20);
+
+    // ROAD: the old <= 0.18 predates Spa's camber pass. js/circuits/spa.js now
+    // authors bankZones — "Spa camber. Pouhon and Stavelot are the two genuinely
+    // banked corners (both dished into the hillside, both taken far faster than
+    // their radius suggests)" — at up to 6°, and a 6° tilt across 0.6 × 8 m of
+    // half-width lifts the outer edge tan(6°) × 4.8 = 0.505 m above the
+    // centreline sample. Measured max is 0.525 m at frac 0.758 (Stavelot,
+    // bankZone 0.7576 @ 6°) and 0.521 m at frac 0.566 (Pouhon, 0.5648 @ 6°),
+    // and the overlap halves exactly when the sample moves from 0.6 to 0.3 of
+    // half-width — a linear ramp in lateral distance, i.e. a plane tilt, which
+    // is camber and nothing else. Assert against that prediction: a genuine
+    // bulge in the road ribbon (the thing this scan is for) would break the
+    // proportionality and overshoot the bound, while a camber pass that
+    // silently reverted would undershoot the floor. The +0.1 headroom absorbs
+    // the ~0.02 m by which the measured peak clears the flat-plane algebra —
+    // the scan interpolates over ~4 m road quads that also carry longitudinal
+    // grade, and Spa's grade is the steepest on the calendar.
+    const camberBound = Math.tan((overlaps.maxBankDeg * Math.PI) / 180) * 0.6 * overlaps.maxHalfWidth;
+    expect(overlaps.road).toBeGreaterThanOrEqual(camberBound * 0.8);
+    expect(overlaps.road).toBeLessThanOrEqual(camberBound + 0.1);
   });
 
   for (const time of ["day", "night"]) {
