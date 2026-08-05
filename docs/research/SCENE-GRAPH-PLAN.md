@@ -412,10 +412,25 @@ instances what it can and bakes `bakeOnly`, and nothing is a flag day.
   masses and the baked models the asset pack now places — one at a time, each gated by `npm run test:graph-parity`. Apply the
   five rules above. The broadleaf vegetation will likely hit `pine`'s
   affine-parameter wall; the city masses and facade furniture should not.
-- **S3's data side is DONE** — `graph.batches()` above. What remains is one
-  consumer per backend: GLX via `drawElementsInstanced` (attributes 5–8 are free;
-  WebGL2 core, no extension) plus the same treatment in the three shadow passes,
-  and TLX via `InstancedMesh` when its lit material lands at M3.
+- **S3 is DONE ON BOTH SIDES, and has no CALLER.** The data side is
+  `graph.batches()` above. The GLX consumer landed after this paragraph was first
+  written and is complete: `createInstancedBatch` (`js/render/glx.js:1075`),
+  `drawInstanced` → `drawElementsInstanced` (`:1183`), per-instance frustum
+  culling (`cullInstances`, `:1158`), the shadow pass (`glx/shadow.js:218`), and
+  attributes 5-8 + 9 with `uInstanced` in `shaders/lit.js:18-26`.
+
+  What actually remains is **one build site**: `js/track/tracks.js:222` still
+  fuses every prop into a single soup via `createChunkedMesh`, and nothing in the
+  tree calls `createInstancedBatch` at all — `grep` finds only its definition,
+  its export, and WGX's `undefined` placeholder. Wiring it is that line plus the
+  draw (`js/game.js:5050`), the two shadow casts (`:5441`, `:5730`) and the free
+  (`:2083`).
+
+  TLX still needs `InstancedMesh` when its lit material lands at M3; WGX still
+  needs the `bake()` fallback S2 kept for exactly this reason.
+
+  See `RENDERING-EXTERNAL-RESEARCH.md` §1 — including why peak upload size, not
+  just draw count, is what makes this worth doing on iOS.
 - **S4 gains a prerequisite it did not have**: re-parameterise affine emitters to
   be scale-linear *before* raising their detail, or the detail will not instance
   either.
