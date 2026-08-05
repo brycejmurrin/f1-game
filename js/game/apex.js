@@ -127,6 +127,7 @@ const api = {
     G.state = "race"; G.raceT = Math.max(G.raceT, 1);
     els.lights.hidden = true;
     for (const l of els.lights.children) l.classList.remove("on");
+    G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     G.cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); c.speed = 0; } });
     const r = this.jump(frac, 0, lateral !== undefined ? lateral : 0);
     G.frozen = true;   // hold the scene still for a deterministic screenshot
@@ -864,6 +865,7 @@ const api = {
     G.state = "race"; G.raceT = Math.max(G.raceT, 1);
     els.lights.hidden = true;
     for (const l of els.lights.children) l.classList.remove("on");
+    G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     const f = frac == null ? 0.3 : frac, v = speed == null ? 55 : speed;
     const prog = f * G.track.total, s = wrapS(prog);
     const ai = G.cars.filter((c) => !c.isPlayer);
@@ -885,6 +887,7 @@ const api = {
     G.state = "race"; G.raceT = Math.max(G.raceT, 1);
     els.lights.hidden = true;
     for (const l of els.lights.children) l.classList.remove("on");
+    G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     const ai = G.cars.filter((c) => !c.isPlayer), m = Math.min(n || 5, ai.length);
     const prog = 0.5 * G.track.total;
     const ids = [];
@@ -947,6 +950,7 @@ const api = {
     G.state = "race"; G.raceT = Math.max(G.raceT, 0.5);
     els.lights.hidden = true;
     for (const l of els.lights.children) l.classList.remove("on");
+    G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     return G.state;
   },
   // telemetry snapshot of every car, sorted by prog (leader first): lateral x,
@@ -2258,13 +2262,38 @@ const api = {
   // as the START event does. Lets a test assert that both grids are released
   // at an absolute INSTANT rather than after an equal delay, which is the
   // difference between fair and merely simultaneous-looking.
+  //
+  // With atMs omitted it does the OPPOSITE: drops the sim into the countdown
+  // with nothing armed, which is the state a peer sits in while it waits to be
+  // told (netPlay.awaitingStart). That branch holds the gantry unlit and was
+  // unreachable from a test until this hook could decline to arm.
   netStartArm(nowMs, atMs, hold) {
     if (!G.netPlay || !G.netPlay.active()) return { ok: false, error: "no_session" };
     G.netNow = nowMs;
-    G.netStart = { at: atMs, hold: hold != null ? hold : 0.5, now: () => G.netNow };
+    G.netStart = atMs == null
+      ? null
+      : { at: atMs, hold: hold != null ? hold : 0.5, now: () => G.netNow };
     G.state = "count";
     G.countT = 0;
-    return { ok: true, at: atMs, hold: G.netStart.hold };
+    G.lightsLit = 0;
+    els.lights.hidden = false;
+    for (const l of els.lights.children) l.classList.remove("on");
+    return {
+      ok: true,
+      at: atMs != null ? atMs : null,
+      hold: G.netStart ? G.netStart.hold : null,
+      awaiting: G.netPlay.awaitingStart(),
+    };
+  },
+
+  // netHostStart() — run the host's "name the moment" path for real, the way
+  // js/net/lobby.js does at the end of finishStart. Without it the only route
+  // into nameTheMoment() is the lobby, so the lead that decides whether anyone
+  // SEES the countdown could not be asserted at all — every countdown test
+  // armed netStart directly and skipped the code being tested.
+  netHostStart() {
+    if (!G.netPlay || !G.netPlay.active()) return { ok: false, error: "no_session" };
+    return { ok: !!G.netPlay.hostStart(), startPending: !!G.netStart };
   },
 
   // netPeerEvent(type, data, atMs?) — send a reliable EVENT as the remote peer
@@ -2508,6 +2537,7 @@ const api = {
     G.state = "race"; G.raceT = 0;
     els.lights.hidden = true;
     for (const l of els.lights.children) l.classList.remove("on");
+    G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
     G.player.s     = wrapS(f01 * G.track.total);
     G.player.prog  = f01 * G.track.total;

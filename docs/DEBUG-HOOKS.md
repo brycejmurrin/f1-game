@@ -973,6 +973,33 @@ test must not depend on rAF running at a useful rate — drive it explicitly and
 latency, loss and interpolation become reproducible, the same way `step()`
 does for physics.
 
+### `netStartArm(nowMs, atMs?, hold?) → {ok, at, hold, awaiting}`
+Arm a synchronised lights-out directly, as the START event does — an absolute
+instant on the shared clock, so a test can assert both grids are released at one
+MOMENT rather than after an equal delay.
+
+Omit `atMs` and it does the opposite: drops the sim into the countdown with
+nothing named, which is the state a peer sits in while it waits to be told. That
+branch holds the gantry unlit, and it was unreachable from a test until this
+hook could decline to arm. `awaiting` reports `netPlay.awaitingStart()`.
+
+Resets `countT`, `lightsLit` and the lamp DOM together. Worth knowing why: the
+lamp elements and the counter used to be cleared separately, so a hook that
+cleared the DOM left `lightsLit` at 5 and silently disarmed any later "did every
+lamp light?" assertion.
+
+### `netHostStart() → {ok, startPending}`
+Run the host's `hostStart()` — naming the moment of lights-out, or arming the
+`ARM_WAIT` deadline and holding until every guest reports its circuit built.
+Otherwise reachable only from `js/net/lobby.js`, which meant the lead that
+decides whether anybody SEES the countdown could not be asserted at all: every
+countdown test armed `netStart` by hand and skipped the code under test.
+
+The host names an instant a **whole countdown away** (`COUNTDOWN_S` + the hold +
+a settle), not a short lead. A lead shorter than the sequence puts every peer
+part-way through it by construction — which is what a 2.5 s lead against a
+5.2–7.0 s sequence did, and why a guest reported correct timing and no lights.
+
 ### `netPeerClose() / netStop()`
 Drop the rival's connection, or end the session locally. On a drop the rival's
 car is handed back to the AI rather than left as a driverless obstacle.
