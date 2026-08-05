@@ -72,5 +72,5 @@ try {
   console.error("ground-profile failed:", err.message);
   process.exitCode = 1;
 } finally {
-  done();
+  await shutdown();
 }

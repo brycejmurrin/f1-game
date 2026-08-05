@@ -1,6 +1,6 @@
 ---
 name: bump-cache
-description: Increment the cache-busting `?v=N` version in index.html after editing any JS or CSS file. Use whenever you change a file under js/ or css/ (or add/remove a <script>/<link> tag) so GitHub Pages and browsers fetch the new asset instead of a stale cached copy. Triggers - "bump the version", "cache bust", "I edited game.js", before committing JS/CSS changes.
+description: Use when JS/CSS changed, index.html script/link tags changed, the user says bump the version or cache bust, stale GitHub Pages/browser/PWA cache is suspected, or Apex 26 asset changes need a new ?v=N/version.json build.
 ---
 
 # Bump cache-busting version

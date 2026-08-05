@@ -1,6 +1,6 @@
 ---
 name: debug-tracks
-description: Query and visualize track geometry through the __apex debug hooks — tracks/info, trackShape/trackProfile/trackBounds/mapPts/nodeAt/corners for layout & elevation, groundY/scan/wallStats for surface & barriers — plus the parallel multi-track sweep pattern. Use to inspect a circuit's corners/elevation/curvature, audit walls, find a terrain-vs-road gap, or compare many tracks at once. Triggers - "how many corners does Spa have", "check the elevation profile", "audit the barriers", "compare track curvature", "is terrain poking through the road".
+description: Use when the user asks about track geometry, corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, groundY/scan/wallStats, comparing circuits, or whether terrain is poking through the road in Apex 26.
 ---
 
 # Track debug hooks
@@ -12,7 +12,7 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 
 | Hook | Returns (verified shape) |
 |---|---|
-| `tracks()` | `Array(24)` of track objects (`.id`, name, etc.) |
+| `tracks()` | `Array(40)` of track objects (`.id`, name, etc.) |
 | `info()` | `{state, track, n, total, timeTrial, seasonMode}` — `n` nodes, `total` metres |
 | `trackShape(n)` | `Array(n)` normalised centreline pts + curvature `k` |
 | `trackProfile(n)` | `Array(n)` of `{frac, y, k, hw, slope}` — elevation/curvature/width |
@@ -41,7 +41,7 @@ node tools/apex-eval.mjs suzuka "a.trackProfile(40)" --raw     # full elevation 
 ## Parallel multi-track sweep (compare all circuits fast)
 
 Validated pattern — 4 tracks profiled concurrently in ~10 s using parallel
-servers (see the **playwright-probe** skill for the harness). Example output of a
+Chromium workers (see the **playwright-probe** skill for the harness). Example output of a
 profile sweep:
 
 ```

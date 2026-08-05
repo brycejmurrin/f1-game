@@ -1,6 +1,6 @@
 ---
 name: webgl-debug
-description: Diagnose WebGL2/GLX renderer issues — lights wrong, shadow acne or shimmer, bloom too strong, shader compile failures, GL_INVALID_OPERATION. Covers hdrMode(), lightState() verification, the uniform-array light upload, shadow bias/fade knobs, and Playwright probe patterns. Triggers - "lights wrong", "shadow acne", "shadow flicker", "bloom too strong", "hdrMode", "WebGL error", "GL_INVALID_OPERATION", "shader compile failed", "uniform array", "instancing".
+description: Use when the user reports lights wrong, shadow acne/flicker/shimmer, bloom too strong/missing, HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or renderer artifacts.
 ---
 
 # Debug WebGL2 / GLX renderer issues

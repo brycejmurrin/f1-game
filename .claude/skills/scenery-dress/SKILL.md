@@ -1,12 +1,12 @@
 ---
 name: scenery-dress
-description: Write or edit a track's scenery(api) callback in js/circuits/<id>.js — the per-circuit prop dressing (trees, buildings, grandstands, barriers, mountains, billboards, floodlights). Covers the placement model, the composite-model helpers, the on-track rejection guard, terrain anchoring, the vertex budget, and common failure modes. Use for "add buildings to Monaco", "make Spa's forest denser", "the trees are floating", "dress this circuit".
+description: Use when the user asks to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback.
 ---
 
 # Dress a circuit's scenery
 
 `buildProps` (the `js/track/scenery-*.js` modules — nature/city/structures/identity,
-orchestrated by `js/track/tracks.js`; the 84-member `api` surface is frozen by
+orchestrated by `js/track/tracks.js`; the 107-member `api` surface is frozen by
 `tests/scenery-api-contract.test.mjs`) calls each track's `def.scenery(api)` to lay down
 3D props, then merges everything into one mesh. The full reference is
 `docs/SCENERY-API.md` — **read it before non-trivial work**. This skill is the

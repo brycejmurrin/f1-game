@@ -1,6 +1,6 @@
 ---
 name: audio-debug
-description: Inspect and tune the WebAudio synth engine in js/game/audio.js — engine pitch curve, sfx triggers, music layers, and mute/volume state — using the __apex audio hooks and the browser console. Use for "the engine sounds flat at high speed", "sfx isn't triggering", "tune the gear-shift audio", "the music cuts out", "audio debug". Triggers - "audio", "sound", "engine pitch", "sfx", "music layer", "mute".
+description: Use when the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or debugging WebAudio, engine pitch, sfx, sound, music layers, or audio in Apex 26.
 ---
 
 # Debug and tune the audio engine

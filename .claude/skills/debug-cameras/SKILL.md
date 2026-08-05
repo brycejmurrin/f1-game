@@ -1,6 +1,6 @@
 ---
 name: debug-cameras
-description: Drive the camera via the __apex debug hooks — the 13 in-game camera modes plus the free debug-camera framing hooks (view/eyeAt/orbit/cinematic/roadside/dolly/carOrbit/tourShots) and the camState/viewState inspectors. Use to frame a corner, switch camera mode, set up a cinematic/orbit shot, or check where the camera is. Triggers - "switch to cockpit cam", "orbit this corner", "what camera modes are there", "frame the chicane", "cinematic shot of turn 1".
+description: Use when the user asks to switch or check camera modes, cockpit/chase/orbit/cinematic/roadside shots, frame a corner/chicane, inspect camState/viewState, debug camera lag/framing, or set up Apex 26 screenshots from specific camera angles.
 ---
 
 # Camera debug hooks

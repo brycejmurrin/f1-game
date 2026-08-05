@@ -1,6 +1,6 @@
 ---
 name: bake-lighting
-description: Bake the in-game LIGHTING TUNER's copied settings into the shipped js/game/light-presets.js and commit + push. Use when the user pastes a "window.LightPresets = {…}" blob (the panel's COPY VALUES export) and wants it saved into the game / deployed. Triggers - "bake these lighting settings", "save my lighting presets", "apply the copied lighting values", "commit the lighting tune", "here are my LightPresets", a pasted window.LightPresets = {…} object.
+description: Use when the user pastes a window.LightPresets = {…} blob or asks to bake these lighting settings, save lighting presets, apply copied lighting values, commit a lighting tune, or ship LIGHTING TUNER COPY VALUES output in Apex 26.
 ---
 
 # Bake copied LIGHTING TUNER settings and push
@@ -67,9 +67,8 @@ you don't merge by hand.
    npm run test:smoke
    ```
 
-5. **Commit + push** to the active dev branch (see `CLAUDE.md` — currently
-   `claude/f1-game-project-26h3ng`; never push to `main`). Use the git retry/
-   backoff from the repo's git rules:
+5. **Commit + push** to the active feature branch (`git branch --show-current`;
+   never push to `main`). Use the git retry/backoff from the repo's git rules:
    ```sh
    git add js/game/light-presets.js index.html version.json
    git commit -m "Bake lighting presets: <one line — which tracks/conditions>"

@@ -1,6 +1,6 @@
 ---
 name: car-viewer
-description: Inspect the procedural F1 car in ISOLATION (no track) from any angle, distance, livery, parts spec, and lighting — a fast standalone "photo studio" for verifying js/car/car3d.js, js/car/liverytex.js, js/car/liveries.js, or js/car/parts.js changes. Renders the real GLX-shaded car + LiveryTex decals on a plain backdrop, with controllable point-light rigs for reflection/material tests. Triggers - "show me the car", "render the <team> livery", "how does the new wing/gearbox/brake look", "check the sponsors/number on the car", "test the reflections", "car from the front/side/rear", "does the accent colour read".
+description: Use when the user asks to show/render/check the car, inspect a team livery, sponsors, number, wing/gearbox/brake/part geometry, reflections/material finish, isolated F1 car, or front/side/rear/car-viewer shots in Apex 26.
 ---
 
 # Car viewer — isolated car photo studio
@@ -85,6 +85,9 @@ node tools/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,nig
 - Car: `--team=` `--livery=` `--num=` and any part to inspect its geometry:
   `--engine= --aero= --brakes= --gearbox= --ers= --tyres= --suspension= --fuel=`
   (option ids are in `js/car/parts.js`).
+  `tools/render-car.mjs` currently CLI-parses these 8 of the 12 catalog
+  categories; `tools/carview.html` has all 12 (including exhaust, floor,
+  cockpit, wheels) through the interactive picker/page API.
 - Lighting: `--tod=day|dusk|dawn|night|void` · `--rig=studio|3point|rim|topdown|none`
   · `--intensity=<n>` · `--exp=<n>` (exposure/brightness) · `--bg=RRGGBB`.
 - Reflection: `--refl=<0..1>` scales EVERYTHING shine-related together — roughness,

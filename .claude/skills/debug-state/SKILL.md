@@ -1,6 +1,6 @@
 ---
 name: debug-state
-description: Inspect and visualize live race/physics/lighting state through the __apex telemetry hooks — probe/physState/obs for the player, cars/fieldState for the grid, timing/sectorState/lapHistory for the clock, lightState for the scene, plus the deterministic headless act/obs/reset loop. Use to read the car's slip/grip, dump the field order and gaps, check sector splits, inspect lighting, or drive a headless control loop. Triggers - "what's the car doing", "dump the field", "show sector times", "is the player understeering", "read the telemetry", "headless control loop".
+description: Use when the user asks what the car is doing, read telemetry, inspect slip/grip/physics state, dump field order/gaps, show sector/lap timing, check lightState, debug understeer, or run a headless control/obs/act/reset loop in Apex 26.
 ---
 
 # State & telemetry debug hooks

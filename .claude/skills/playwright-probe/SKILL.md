@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: Drive the game headless with Playwright — single deterministic screenshots (shot.mjs) through parallel multi-server sweeps (apex-eval for one-off __apex expressions, apex-capture for parallel screenshot validation), plus the environment gotchas (preinstalled Chromium executablePath, project-resolved playwright, free-port servers). Use to visually verify a scenery/livery/lighting/track change, frame a corner, or validate at scale. Triggers - "show me the track", "screenshot Monaco at the chicane", "does this look right", "before/after of my change", "screenshot all camera modes / tracks", "validate game modes", "run a parallel sweep", "exercise the debug hooks".
+description: Use when the user asks to screenshot/show a track or car in-game, check whether a visual change looks right, capture before/after, frame Monaco/Spa/etc., validate camera modes/screens/tracks, run Playwright headless probes, exercise __apex hooks, or inspect blank renders.
 ---
 
 # Headless Playwright probing (parallel)
@@ -54,15 +54,15 @@ Portrait UI uses `{width:390,height:844}`; in-race shots must use **landscape**
 
 `apex-capture` exits non-zero and lists any shot that came back `blank:true`
 (< ~5 KB) — so a broken render fails CI-style without opening every file. Both
-tools start their own server(s) + Chromium; no setup beyond `npm install`.
+tools start their own server + Chromium; no setup beyond `npm install`.
 
-## Why parallel servers
+## Why one server + Chromium workers
 
-`python3 -m http.server` is single-threaded. For sweeps (12 camera modes, 24
-tracks, day/night/wet variants) fan pages across **multiple servers** so a slow
-asset fetch on one page doesn't stall the others. Verified: 4 servers + 4 pages
-profiled 4 circuits in ~10 s, and captured all 12 camera modes well under a
-minute. `apex-capture` already does this (`startServers(4)` + `fanout`).
+`tools/apex-capture.mjs` uses **one async Node static server** and fans jobs
+across separate Chromium worker processes. For sweeps (12 camera modes, 40
+tracks, day/night/wet variants), the shared server handles concurrent asset
+GETs while workers pull the next job as they finish. Extra Python servers only
+helped asset fetch; they are not the current harness.
 
 ## Environment gotchas (already handled in the tools — replicate in custom harnesses)
 
@@ -77,7 +77,7 @@ minute. `apex-capture` already does this (`startServers(4)` + `fanout`).
    (e.g. scratchpad):
    ```js
    import { createRequire } from "node:module";
-   const require = createRequire("/home/user/f1-game/");
+   const require = createRequire(process.cwd() + "/"); // run from repo root
    const { chromium } = require("playwright");
    ```
 3. **Free ports**, don't hardcode — bind `:0` and read back the port, or you'll
@@ -116,15 +116,20 @@ minute. `apex-capture` already does this (`startServers(4)` + `fanout`).
 
 ```js
 import { createRequire } from "node:module";
-const require = createRequire("/home/user/f1-game/");
+const require = createRequire(process.cwd() + "/"); // run from repo root
 const { chromium } = require("playwright");
-// startServers(n) -> ports; open(browser,port) -> page; race(page,id);
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium",
-  args: ["--use-angle=swiftshader","--enable-unsafe-webgpu"] });
-const results = await Promise.all(ports.map(async (p, i) => {
-  const page = await open(browser, p);
-  await race(page, TRACKS[i]);
-  return page.evaluate(() => ({ corners: __apex.corners().length, light: __apex.lightState().numLights }));
+// startStaticServer() -> port; open(browser, port) -> page; race(page,id);
+const port = await startStaticServer();
+const results = await Promise.all(TRACKS.map(async (id) => {
+  const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium",
+    args: ["--use-angle=swiftshader","--enable-unsafe-webgpu"] });
+  try {
+    const page = await open(browser, port);
+    await race(page, id);
+    return page.evaluate(() => ({ corners: __apex.corners().length, light: __apex.lightState().numLights }));
+  } finally {
+    await browser.close();
+  }
 }));
 ```
 

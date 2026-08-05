@@ -1,6 +1,6 @@
 ---
 name: new-track
-description: Author a new circuit or edit an existing track's geometry/metadata in js/circuits/. Covers the track-definition schema (segs, palette, theme, bridges, elevations), registering the file, the headless verify-track build guard, and screenshot/test validation. Use for "add a track", "edit the Monza layout", "fix a circuit's corners", "change a track's palette/theme".
+description: Use when the user asks to add a track/circuit, edit Monza/Spa/etc. layout, fix corners, change circuit geometry/metadata/palette/theme/bridges/elevation, register a new circuit, or troubleshoot an Apex 26 track build.
 ---
 
 # Author or edit a track

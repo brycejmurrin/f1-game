@@ -1,6 +1,6 @@
 ---
 name: agent-view
-description: The text-native way to perceive and DRIVE the Apex 26 F1 game as an LLM agent — no screenshots. The window.__apex agent-view API (world/field/trackInfo/scene/atmosphere/describe/query/carView/render/survey/rollout/objective/terminal/seed/agentHelp) and the tools/agent.mjs CLI compose the ~90 debug hooks into one egocentric, typed, compact surface. Use this whenever you need to "see" or "drive" the game without eyes — read the car's situation, understand the track/scenery/car as JSON, run a closed-loop driving policy, reproduce a run deterministically, or check what winning even means. Triggers - "let the agent drive", "perceive the game as text", "what does the car see", "drive a lap headless", "agent world view", "world() / field() / rollout()", "read the track as JSON", "play the game without screenshots", "reproduce this run", "what is the agent trying to do".
+description: Use when the user wants to see or drive Apex 26 without screenshots, asks what the car sees, wants agent world view/world()/field()/rollout(), needs track/scenery/car as JSON, wants a headless lap, deterministic run reproduction, or asks what the agent is trying to do.
 ---
 
 # Agent view — perceive and drive the game as text
@@ -9,8 +9,8 @@ description: The text-native way to perceive and DRIVE the Apex 26 F1 game as an
 `node tools/agent.mjs <track> <tool> [flags]` (it stages `race`/`go`/`jump` +
 frames for you). In-page: `window.__apex.<tool>(...)`. Read `agentHelp()` +
 `objective()` once, then loop `world({detail:"drive"})` → decide →
-`act(...)`/`rollout({policy})` → `terminal()`. Pin `seed(n)` for a **field** A/B
-(`go()` races; it's a no-op for a solo `reset()`). Failures are typed
+`act(...)`/`rollout({policy})` → `terminal()`. Pin `seed(n)` before `race()`/`tt()`,
+or pass it to `reset(frac, speed, x, seed)` for a replayable episode. Failures are typed
 (`{ok:false, error, message, fix}`), never `null` — but two reads fail *quietly*
 instead: `scene()` on a street circuit still building props returns a SUCCESSFUL
 empty list, and `visible()`/`render({what:"view"})` reuse the last **rendered**
@@ -235,14 +235,13 @@ late and silently does nothing: measured across isolated processes, seeds 777 an
 *before* `race()` diverged. `reset(frac, speed, x, seed)` is the exception — it
 applies the seed before rebuilding the grid, which is why it takes an arg at all.
 
-**What the seed actually controls: the AI field, not a lone car.** A `reset()`
-episode is *solo* — no live field — so with fixed inputs it is already
-deterministic and the seed there is a **no-op** (verified: seed 1 vs 2 → identical
-digests). `reset()` re-solos **even after a `go()`**, so its seed arg is inert in
-ANY reset()-based path; the seed only bites when you drive the live field directly
-— `go()` then `act()`/`rollout` with **no `reset()` between**. So: A/B the player's
-own dynamics with a solo `reset()`+`rollout` (seed irrelevant); A/B field-dependent
-behaviour from a `go()` race, no reset.
+**What the seed controls.** The stream feeds AI grid order/lane/skill, the
+start-lights hold, and per-tick AI overtake decisions. `reset(frac, speed, x,
+seed)` applies the seed before `gridUp()`, so a reset-based episode is replayable
+with the same seed and inputs; `seed(n)` before `reset(...)` is equivalent when
+you do not use the fourth arg. So: A/B the player's own dynamics with
+`reset()`+`rollout` and a fixed seed; A/B field-dependent behaviour from a
+seeded `race()`/`go()` run or from seeded resets.
 
 **A physics A/B uses `setPhysics({...})`** — whose keys are lowercase camelCase
 (the full list is tabled in `docs/DEBUG-HOOKS.md` → `setPhysics`), NOT the

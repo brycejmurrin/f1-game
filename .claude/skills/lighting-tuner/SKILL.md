@@ -1,6 +1,6 @@
 ---
 name: lighting-tuner
-description: Tune and validate scene lighting — the TUNE_DEFS slider knobs (via __apex.lightTune), the applyRaceSettings time-of-day branches, live lightState() probes and orbit() screenshots — no guesswork. Use when "night looks washed out", "dawn sun is too high", "floodlights aren't firing on this track", "day scene is flat", or validating a lighting change before committing. Triggers - "lighting", "night looks wrong", "floodlights", "ambient", "sun colour", "time of day", "dawn", "dusk", "applyRaceSettings", "lightTune", "lighting slider".
+description: Use when the user says night looks washed out/like day, dawn sun is too high, floodlights/lamps aren't firing, day scene is flat, ambient/exposure/bloom/fog/lighting slider/lightTune/applyRaceSettings issues, or wants to validate Apex 26 lighting.
 ---
 
 # Tune and validate scene lighting via __apex probes

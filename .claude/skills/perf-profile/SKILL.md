@@ -1,6 +1,6 @@
 ---
 name: perf-profile
-description: Capture a headless V8 CPU flame chart of the game loop via Playwright CDP (Chrome DevTools Protocol) — no manual browser interaction. Writes a .cpuprofile file openable in Chrome DevTools. Use when hunting frame-time spikes, GC jitter on night tracks, or slow track-build times. Triggers - "profile the game loop", "find the frame budget hog", "GC spike", "slow track load", "measure physics cost", "flame chart".
+description: Use when the user asks to profile the game loop, find a frame-budget hog, investigate GC jitter/spikes, slow track load/build times, measure physics/render CPU cost, or capture/open a flame chart/.cpuprofile for Apex 26.
 ---
 
 # Headless CPU profiling via Playwright + CDP

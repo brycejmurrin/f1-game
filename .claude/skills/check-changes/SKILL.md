@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: Pre-commit/pre-push validation for Apex 26 — use tools/pick-tests.mjs to choose the npm test:<group> set for the files you touched, run those groups in the background via tools/test-bg.mjs, run the headless verify-track guard for any track edit, and confirm the cache-busting version was bumped. Use before committing or pushing, when asked "did I break anything?", "run the right tests", "validate my changes", or "ready to push?".
+description: Use when the user asks did I break anything, run the right tests, validate changes, ready to push, pre-commit/pre-push checks, test selection for touched files, verify track edits, or confirm cache bump before shipping Apex 26 changes.
 ---
 
 # Validate changes before committing/pushing
@@ -20,20 +20,22 @@ change is not routed anywhere, that is a missing rule — add it there rather th
 working around it here; `tests/test-groups.test.mjs` fails if a source directory
 routes to nothing.
 
-## Run them in the background and tail
+## Run them in the background (do not sit and wait)
 
 A foreground run blocks for minutes and prints nothing actionable. Always:
 
 ```sh
-node tools/test-bg.mjs <group> [group...]   # starts, returns immediately
-tail -f artifacts/logs/<group>.log          # watch it live
-node tools/test-bg.mjs --status             # running / how each ended
-node tools/test-bg.mjs --wait               # block until all finish (exit 1 if any failed)
+pgrep -cf pw-browsers; cat /proc/loadavg   # expect 0 browsers, load < ~3
+node tools/test-bg.mjs <group> [group...]  # starts, returns immediately
+# Arm a monitor / read the log later — do not poll in a loop
+node tools/test-bg.mjs --status
+node tools/test-bg.mjs --stop              # kill the process GROUP if needed
 ```
 
-A hung test is the one with a `> start` line and no end line; the 30 s heartbeat
-names everything still in flight. Failures carry `apex-state`, `apex-logs` and
-`page-console` inline in the log — read those before re-running anything.
+**One heavy group is full capacity on 4 cores.** `test-bg` refuses oversubscribe
+batches; timeouts with no assertion failures usually mean contention — re-run
+that group alone. Do not edit `js/`/`css/` while a run serves this tree (use a
+worktree). Failures carry `apex-state`, `apex-logs`, `page-console` in the log.
 
 ## Escalation order
 

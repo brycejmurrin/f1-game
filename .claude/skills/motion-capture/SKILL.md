@@ -1,6 +1,6 @@
 ---
 name: motion-capture
-description: Capture RENDERED MOTION headless to diagnose temporal artifacts that only show while driving — z-fighting/clipping flicker, shadow crawl/boil, geometry pop-in, texture shimmer. Static screenshots CANNOT catch these. Use when a bug is described as happening "as I drive", "while moving", "flickering", "shimmering", "crawling", or "popping", or to A/B-verify a renderer change (near/far plane, depth bias, shadow, LOD) actually reduces flicker. Triggers - "clipping as I drive", "shadows shimmer while moving", "does my fix reduce the flicker", "capture the flicker", "verify the z-fighting is gone", "record a driven lap".
+description: Use when the user reports flicker while driving, clipping as I drive, shadows shimmer/crawl/boil, z-fighting, geometry pop-in, texture shimmer, temporal artifacts during motion, or asks to record/compare a driven lap to verify a rendering fix.
 ---
 
 # Headless motion capture (temporal-artifact verification)

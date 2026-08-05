@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: A/B test and tune the driving physics in js/game.js deterministically, using the __apex headless control loop (obs/act/reset), setPhysics overrides, and step/physState probes — single-page or a parallel multi-page sweep. Includes the constant-to-behavior map (WHEELBASE, STEER_*, DRIFT, ROAD_FOLLOW, FRONT_GRIP, LONG_GRIP, PACE, ...) and which test groups to re-run. Use for "the car understeers", "make turn-in snappier", "tune grip", "trail-braking feels wrong", "compare two physics settings", "A/B physics", "physics sweep", "test ROAD_FOLLOW", "does this feel better".
+description: Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved.
 ---
 
 # Tune the physics
@@ -113,3 +113,6 @@ work: `node tools/check-grip.mjs`, `check-bank.mjs`, `check-roadfollow.mjs`,
 
 If you edited `js/game.js`, bump the cache version (`bump-cache` skill) before
 committing.
+
+Related: for deep vehicle-dynamics theory review, read `docs/PHYSICS.md` and
+`docs/research/steering-research.md`.

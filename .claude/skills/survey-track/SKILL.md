@@ -1,6 +1,6 @@
 ---
 name: survey-track
-description: End-to-end playbook for making a circuit look accurate — survey the in-game scene against real-world reference, diagnose geometry problems (floating props, channels/steps, sunk water, terrain over the road), edit the scenery/terrain, then verify and ship. Orchestrates the component skills (scenery-dress, debug-tracks, playwright-probe, check-changes) into one loop and adds a lateral ground-profile probe. Use for "survey Monza", "make Spa more accurate", "do an accuracy pass on this track", "the trees are floating / there's a gap beside the road", "improve a circuit's realism".
+description: Use when the user asks to survey a track, make a circuit more accurate/realistic, compare Apex 26 to real-world reference, fix floating trees/props, gaps beside the road, terrain channels/steps/sunk water, or do a picture-driven accuracy pass.
 ---
 
 # Survey & update a track
@@ -92,7 +92,8 @@ is now flag-free and the eye shots show props on real ground.
 ### 6 · Test & ship
 - Geometry guards: `npx playwright test tests/terrain-over-road.spec.js tests/tracks-walls.spec.js`
 - Visual regression (all circuits): `npm run test:visual`
-  — if your change is **intentional**, regenerate baselines with:
+  — this suite skips when `tests/tracks-visual.spec.js-snapshots/` is absent; if
+  baselines exist and your change is **intentional**, regenerate them with:
   `npm run test:update -- tests/tracks-visual.spec.js` (then eyeball
   `tests/tracks-visual.spec.js-snapshots/`). Prefer Linux/SwiftShader for CI-matching goldens.
 - **bump-cache**: increment `?v=N` in `index.html` (every `js/*`/`css/*` edit).
