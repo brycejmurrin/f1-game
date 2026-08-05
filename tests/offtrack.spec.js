@@ -2,7 +2,17 @@
 // Off-track, reversing, wrong-way and auto-rescue handling, plus the prog↔s
 // coupling fix (progress is derived from the actual signed change in s, so a
 // spin/reverse can't cheat progress forward).
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
+
+// PACE pinned: the assertions here are in METRES (dProg > 50) and M/S (offSpeed <
+// 45, rev/fwd bounds), and PACE is a ground-speed scale that moves both. Without
+// this a red test is ambiguous between "the physics broke" and "the car is slower
+// now, by design" — so the spec states the pace it was written against instead of
+// inheriting an OVERALL SPEED default that can move.
+const pinPace = (page) => page.evaluate(() => window.__apex.setPhysics({ pace: 1 }));
 
 async function startRace(page) {
   await page.goto("/");
@@ -10,6 +20,7 @@ async function startRace(page) {
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
+  await pinPace(page);
 }
 
 test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
@@ -146,6 +157,7 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
     await page.evaluate(() => window.__apex.race("bahrain", "day", "dry"));
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
     await page.evaluate(() => window.__apex.go());
+    await pinPace(page);   // asserts in m/s (movedWithThrottle > 10) — see pinPace
     const r = await page.evaluate(() => {
       // Current rescue contract: stoppedOnTrack only fires while the THROTTLE is
       // held (the wedged-against-a-wall case). A driver who lets off the gas is

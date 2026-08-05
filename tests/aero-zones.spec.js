@@ -8,7 +8,10 @@
 // That distinction is the mechanic. A rolling look-ahead has no start and no
 // end, so there is nothing to learn and nothing to show; a fixed zone is a
 // PLACE, which is why the HUD can count down to it like a DRS board.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/game.js

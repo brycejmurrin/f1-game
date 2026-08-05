@@ -9,7 +9,10 @@
 //   - drives the sharpest corner with NO steering and asserts road-following keeps
 //     the car within the track limits (doesn't run off down/up a slope)
 //   - never NaNs or throws the car off the world
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 // All circuits — every track now carries elevations data.
 const ELEVATION_TRACKS = [

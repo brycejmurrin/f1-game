@@ -2,7 +2,10 @@
 // Preset tests. The three named presets (RELAX / STANDARD / PRO) must each push
 // a coherent bundle of values into the live sim, mark themselves active, persist,
 // and a manual slider edit must drop the "named preset" state back to custom.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 async function load(page) {
   await page.goto("/");

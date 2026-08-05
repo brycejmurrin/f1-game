@@ -5,7 +5,10 @@
 // once-per-frame Input.poll(), then read the public Input surface the game loop
 // uses (steer / throttle / braking and the edge-triggered consume* latches).
 // No race needs to start — the input module is wired by Input.init() at load.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 // Build a standard-mapping gamepad with the given left-stick X (axis 0) and a
 // sparse {index: value} button map, install it as the sole connected pad, then

@@ -4,7 +4,17 @@
 // off-track grass drag, speed-sensitive cornering (understeer), and that a car
 // driven around the whole lap advances s correctly, wraps start/finish, and
 // completes laps.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
+
+// PACE pinned: the standing-start acceleration bounds below are in M/S (20 < acc <
+// 150), and PACE is a ground-speed scale that moves them wholesale. Without this a
+// red test is ambiguous between "the physics broke" and "the car is slower now, by
+// design" — so the spec states the pace it was written against instead of
+// inheriting an OVERALL SPEED default that can move.
+const pinPace = (page) => page.evaluate(() => window.__apex.setPhysics({ pace: 1 }));
 
 async function startRace(page) {
   await page.goto("/");
@@ -12,6 +22,7 @@ async function startRace(page) {
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
+  await pinPace(page);
 }
 // Hold an input from a clean jump and report start/end speed.
 const drive = (page, input, ticks) => page.evaluate(({ input, ticks }) => {
@@ -107,6 +118,7 @@ test.describe("Apex 26 — longitudinal & grip", () => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
     await page.evaluate(() => { window.__apex.race("spa", "day", "dry"); window.__apex.go(); });
+    await pinPace(page);   // climbGain is in m/s — see pinPace
     const r = await page.evaluate(() => {
       // locate the steepest descent and climb on the lap
       let dnAt = 0, dn = 0, upAt = 0, up = 0;

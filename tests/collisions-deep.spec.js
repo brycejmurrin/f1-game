@@ -4,7 +4,10 @@
 // while car-car collisions resolve in Frenet (x, prog) AFTER updateCar — so any
 // collision push to the PLAYER must be fed back to its world state or it gets
 // overwritten next frame. These tests pin that down.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 async function startRace(page) {
   await page.goto("/");

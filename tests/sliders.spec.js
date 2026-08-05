@@ -4,7 +4,10 @@
 // persists to storage — and (2) actually change the car's behaviour. Physics
 // sliders are checked by driving the sim; tilt sliders by their mapped values
 // plus one end-to-end tilt-input check.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 async function load(page) {
   await page.goto("/");

@@ -4,7 +4,10 @@
 // projecting onto the centreline. These tests lock in the observable contract:
 // progress advances with speed, steering direction is correct, the car runs wide
 // to the geometric OUTSIDE with no input, and teleports stay consistent.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 async function startRace(page) {
   await page.goto("/");
@@ -12,6 +15,11 @@ async function startRace(page) {
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
+  // PACE pinned: the progress assertion below is in METRES ("ds > 35 in 1 s") and
+  // PACE is a ground-speed scale, so the OVERALL SPEED default moving would make a
+  // red test ambiguous between "the physics broke" and "the car is slower now, by
+  // design". State the pace this spec was written against rather than inherit one.
+  await page.evaluate(() => window.__apex.setPhysics({ pace: 1 }));
 }
 
 test.describe("Apex 26 — world-space player physics", () => {

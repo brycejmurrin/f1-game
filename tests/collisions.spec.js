@@ -3,7 +3,10 @@
 // lateral x) and must: separate overlapping cars without exploding, keep them on
 // the track, and let a jammed pack dig itself out and resume racing. These use
 // the __apex.pair()/jam() staging hooks and the cars() telemetry.
-import { test, expect } from "@playwright/test";
+// Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
+// apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
+// 50" arrives with the car's state and the retained log ring beside it.
+import { test, expect } from "./fixtures.js";
 
 async function startRace(page) {
   await page.goto("/");
