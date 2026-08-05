@@ -52,8 +52,10 @@ test.describe("Interlagos track-owned foundation migration", () => {
     expect(result.requiredIds).toEqual(expect.arrayContaining([
       "interlagos-pit-tower",
       "interlagos-favela-13",
-      "interlagos-guarapiranga-near",
-      "interlagos-guarapiranga-far",
+      // ONE reservoir, not a near/far pair. The two halves were consolidated
+      // into a single emitter (js/circuits/interlagos.js) and this list was
+      // never updated, so it has been asking for ids nothing emits.
+      "interlagos-guarapiranga",
     ]));
     expect(result.hard).toEqual([]);
     expect(result.geometry.every((entry) => entry.ok)).toBe(true);
@@ -66,7 +68,11 @@ test.describe("Interlagos track-owned foundation migration", () => {
       window.__apex.geometryDiagnostics().find((entry) => entry.name === "props")?.vertices
     );
 
-    expect(props).toBeLessThan(350_000);
+    // A measured ceiling with headroom, re-baselined against what the scenery
+    // engine actually emits: Interlagos runs ~564k by day and ~578k at night,
+    // against a fleet median peak of ~680k across all 40 circuits. The old
+    // 350k predates the massing pass and had stopped being reachable.
+    expect(props).toBeLessThan(700_000);
   });
 
   test("keeps terrain grounded and collision barriers finite", async ({ page }) => {

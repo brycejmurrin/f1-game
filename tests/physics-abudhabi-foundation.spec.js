@@ -61,10 +61,17 @@ for (const timeOfDay of ["day", "night"]) {
       };
     });
 
-    expect(result.definition.hasElevations).toBe(false);
+    // Yas Marina DOES declare elevations now — "~9 m end to end, no gradient
+    // over ~2 %" (js/circuits/abudhabi.js: it climbs away from the pit straight,
+    // crests over the north loop, eases back down through the marina). This
+    // asserted the opposite, from when the trace shipped dead level.
+    expect(result.definition.hasElevations).toBe(true);
     expect(result.definition.sceneryCoordinates).toBe("racing");
     expect(result.definition.dressingExclusions.length).toBeGreaterThanOrEqual(4);
-    expect(result.elevationRange).toBeLessThan(0.1);
+    // Measures 9.20 m. `< 0.1` was the dead-level trace these elevations
+    // replaced; a band keeps this a real ratchet rather than a rubber stamp.
+    expect(result.elevationRange).toBeGreaterThanOrEqual(7.5);
+    expect(result.elevationRange).toBeLessThanOrEqual(11);
     expect(result.geometry.every((entry) => entry.ok)).toBe(true);
 
     const hardFailures = [

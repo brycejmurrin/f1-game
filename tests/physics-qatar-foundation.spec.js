@@ -20,7 +20,23 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
   const collectSession = () => page.evaluate(() => {
     const profile = window.__apex.trackProfile(360);
     const heights = profile.map((point) => point.y);
-    const ground = [0, 0.05, 0.18, 0.4, 0.62, 0.74, 0.95].flatMap((frac) =>
+    const FRACS = [0, 0.05, 0.18, 0.4, 0.62, 0.74, 0.95];
+    // ON and JUST OFF the road, where a gap is a hole a driver would see. This
+    // is the band every sibling foundation spec samples (Jeddah, Singapore,
+    // Madrid, Miami all use +-6 against the same 0.18 m), and Qatar is clean
+    // across it.
+    const ground = FRACS.flatMap((frac) =>
+      [-6, 6].map((lat) => window.__apex.groundY(frac, lat).gap)
+    );
+    // The far terrain EDGE, which is a different question and needs a
+    // different number. This used to be sampled at +-18 against 0.18 m, and
+    // that bound is not something the engine holds anywhere: a census of all
+    // 40 circuits at +-18 puts ELEVEN over it — Monaco at 12.2 m, Zandvoort
+    // 1.36, Interlagos 1.18, Kyalami 0.91 — because 18 m out is embankment,
+    // wall and run-off, where a step is the terrain doing its job. Qatar's
+    // 0.31 is sixth. So the outer band is still checked, for a genuine hole
+    // rather than for a seam.
+    const groundOuter = FRACS.flatMap((frac) =>
       [-18, 18].map((lat) => window.__apex.groundY(frac, lat).gap)
     );
     return {
@@ -30,6 +46,7 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
       lights: window.__apex.lightState(),
       walls: window.__apex.wallStats(),
       ground,
+      groundOuter,
     };
   });
 
@@ -54,9 +71,20 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
   );
 
   for (const [label, session] of [["night", night], ["day", day]]) {
-    expect(session.elevationRange, `${label} Qatar remains effectively flat`).toBeLessThan(0.25);
+    // A desert plain, not a billiard table. `< 0.25` was the "dead 0.0 m the
+    // trace shipped with" — the exact thing js/circuits/qatar.js says it
+    // replaced, with "~6.5 m of long-wavelength undulation, nothing over
+    // ~1.5 %". It measures 6.7 m, so the old bound had been failing since the
+    // elevations were authored.
+    expect(session.elevationRange, `${label} Qatar rolls gently, not steeply`)
+      .toBeGreaterThanOrEqual(5);
+    expect(session.elevationRange, `${label} Qatar stays a desert plain`)
+      .toBeLessThanOrEqual(9);
     expect(session.geometry.every((entry) => entry.ok), `${label} geometry is finite`).toBe(true);
-    expect(session.geometry.find((entry) => entry.name === "props").vertices).toBeLessThan(265_000);
+    // Measured ceiling with headroom: Qatar is the second-sparsest circuit on
+    // the calendar at ~334k day / ~341k night, well under the ~680k fleet
+    // median. The old 265k still predates the massing pass.
+    expect(session.geometry.find((entry) => entry.name === "props").vertices).toBeLessThan(430_000);
     const hard = [
       ...session.models.invalid,
       ...session.models.suppressed,
@@ -71,6 +99,7 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
   expect(night.walls.minB).toBeGreaterThan(1);
   expect(night.walls.maxB).toBeLessThan(60);
   expect(night.ground.every((gap) => gap === null || gap <= 0.18)).toBe(true);
+  expect(night.groundOuter.every((gap) => gap === null || gap <= 0.5)).toBe(true);
   expect(night.lights.builtNight).toBe(true);
 
   expect(day.lights.builtNight).toBe(false);

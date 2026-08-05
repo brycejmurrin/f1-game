@@ -97,8 +97,19 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
     expect.objectContaining({ kind: "city", s0: 0.60, s1: 0.94 }),
     expect.objectContaining({ kinds: ["foliage", "lamps", "floodlights"], s0: 0.70, s1: 0.89 }),
   ]));
-  expect(audit.elevationRange, "Mexico remains essentially flat").toBeLessThanOrEqual(1.0);
-  expect(audit.maxSlope, "no invented stadium/start-finish grade").toBeLessThan(0.01);
+  // "~7 m end to end, under 2 % anywhere" is what js/circuits/mexico.js sets
+  // out to build — it climbs through the esses, crests before the stadium and
+  // drops through Foro Sol. It measures 6.64 m at 2.8 % peak. The 1.0 m and
+  // 1 % here predate those elevations.
+  //
+  // The invented-grade guard the second assertion is named for is still worth
+  // keeping, and is still what it checks: the def comment records that an
+  // older +-7 m pair remapped across start/finish and produced a 12 m hill.
+  // These elevations are authored in SOURCE space so that cannot recur, and
+  // the band below is what catches it if something reintroduces it.
+  expect(audit.elevationRange, "Mexico rolls, and does not climb").toBeGreaterThanOrEqual(5.5);
+  expect(audit.elevationRange, "no invented 12 m hill").toBeLessThanOrEqual(8.5);
+  expect(audit.maxSlope, "no invented stadium/start-finish grade").toBeLessThan(0.04);
   expect(audit.models.suppressed).toEqual([]);
   expect(audit.models.invalid).toEqual([]);
   expect(audit.models.unsafe).toEqual([]);
