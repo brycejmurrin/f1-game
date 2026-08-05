@@ -8,7 +8,8 @@ loaded via `<script>` tags. Static files — runs on GitHub Pages.
 ## Key commands
 
 ```sh
-npx serve -l 3456 .               # run locally (or: python3 -m http.server 3456)
+python3 -m http.server 3456 .     # run locally (reliable; no npx prompt)
+npx -y serve -l 3456 .            # alternative static server
 node tools/assets.mjs bake-synthetic  # rebuild assets/pack (no network, no deps)
 node tools/assets.mjs verify          # licence allow-list + md5 + size budget
 node tools/verify-track.cjs <id>  # headless build check (no browser) — catches a
@@ -16,6 +17,90 @@ node tools/verify-track.cjs <id>  # headless build check (no browser) — catche
                                   #   strand the game on the menu (e.g. a bad ref).
                                   #   Fast pre-push guard for track scenery edits.
 ```
+
+**Cursor / cloud agents:** [`AGENTS.md`](AGENTS.md) is the short entry point;
+this file remains the full reference.
+
+---
+
+## Agent & browser tooling
+
+Three ways to drive or inspect the game. Full tool index: **`tools/README.md`**.
+Task-specific workflows: **`.claude/skills/`** (especially `playwright-probe`,
+`agent-view`, `check-changes`, `bump-cache`).
+
+### Bootstrap
+
+```sh
+npm install
+npx playwright install chromium   # unless pickChromium() finds /opt/pw-browsers/chromium
+```
+
+Set `CHROME` or `PW_CHROMIUM` to override the executable
+(`tools/harness.mjs`). Cloud VMs often have no preinstalled browser; the Playwright
+install step is not optional there.
+
+### Headless CLI (fastest for agents)
+
+Shared harness: `tools/harness.mjs` — in-process static server + tracked Chromium
+teardown (avoids orphaned servers/browsers).
+
+| Tool | Purpose |
+|---|---|
+| `node tools/apex-eval.mjs <track> "<expr>"` | Evaluate one `__apex` expression; `a` = `__apex`; `--raw` for full JSON |
+| `node tools/agent.mjs <track> <cmd> [flags]` | Agent-view surfaces (`world`, `scene`, `rollout`, `help`, …) with correct staging |
+| `node .claude/skills/playwright-probe/shot.mjs <track> <frac> [cam] [out]` | One deterministic screenshot |
+| `node tools/apex-capture.mjs cameras\|tracks\|modes […]` | Parallel screenshot sweeps → `scratch/captures/apex-capture/` |
+| `node tools/quick-validate.mjs` | ~30–60 s headless sanity gate without the full test runner |
+
+Examples:
+
+```sh
+node tools/apex-eval.mjs monza "({ track: a.info().track, corners: a.corners().length })"
+node tools/agent.mjs monza world --detail drive
+node tools/apex-eval.mjs spa "(a.setTimeOfDay('night'), a.lightState())" --raw
+```
+
+API references: `docs/DEBUG-HOOKS.md`, `docs/AGENT-WORLD-API.md`.
+
+### Playwright test suite
+
+```sh
+npm run test:tiny                              # smoke + dev-tools + logging
+node tools/pick-tests.mjs [--staged|--bg]      # groups this diff needs
+node tools/test-bg.mjs <group>                 # background run — never block on it
+npx playwright test tests/smoke.spec.js -g "corner approach" --workers=1
+```
+
+Specs import `tests/fixtures.js` (offline API mocks, `racePage`, `pageErrors`).
+In-race viewport: landscape `{844, 390}` to avoid the `#rotate-device` overlay.
+Full group map: **`docs/TESTING.md`**.
+
+### Visual browser (manual / computer-use)
+
+Serve from repo root, then open `http://127.0.0.1:3456/`. Prefer
+`python3 -m http.server` in unattended environments — bare `npx serve` may prompt
+to install the package. Cloud agents with computer-use can click through menus
+and confirm UI layout; use headless tools for data and regression.
+
+### Canvas screenshots — two rules agents miss
+
+1. **`snapCam()` after `park()` / `jump()`** when using chase-style rigs — the
+   camera eases toward its target; shooting mid-flight yields empty or wrong frames.
+2. **`__apex.headless(true)` before `.screenshot()`** — `park()` freezes physics,
+   not rendering; SwiftShader keeps redrawing forever and Playwright's screenshot
+   queues behind an endless loop (timeouts under load). The pattern lives in
+   `parkForScreenshot()` in `tests/smoke.spec.js`; `shot.mjs` and the smoke
+   rendering specs follow it. Do not verify renders with `canvas.toDataURL()` —
+   the WebGL buffer is often blank without `preserveDrawingBuffer`.
+
+### Cache busting reminder
+
+Any `js/` or `css/` change: increment **every** `?v=N` in `index.html` **and**
+set `version.json` `{ "build": N }` to the same N. Bump as the **last edit before
+commit**, never while a Playwright run is in flight (the shell version guard
+force-reloads open pages). See **Critical conventions** below and the `bump-cache`
+skill.
 
 ---
 
