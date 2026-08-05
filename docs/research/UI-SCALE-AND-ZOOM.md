@@ -292,6 +292,33 @@ and select screens both want), and `text-wrap: balance`. The repo already has
   **landscape-only** and that gap cost the section-1 bug within the hour — a
   portrait-only CSS branch cannot be seen by a landscape-only matrix. It now
   runs both orientations and asserts nothing scrolls sideways.
-- The Chrome DevTools MCP was materially better than a Playwright probe for this
-  work: `evaluate_script` against a live page, resize between measurements, no
-  boot per question. The unit table in section 1 took one call.
+- The Chrome DevTools MCP was materially better than a Playwright probe for
+  MEASUREMENT: `evaluate_script` against a live page, resize between
+  measurements, no boot per question. The unit table in section 1 took one call.
+
+- **But do NOT trust its `take_screenshot` for this page.** Captures of the
+  title screen at 852x393 came back with the entire left 400px solid black,
+  which reads exactly like a layout bug — the brand column apparently pushed off
+  screen. It is not. Proved by three checks in a row: `getBoundingClientRect()`
+  put `#title` at 8.9-247.6 x 8-126 with zero overflow; `elementFromPoint(128,
+  67)` returned `#title` itself as the TOPMOST element, `visibility: visible`,
+  `opacity: 1`, colour `rgb(242,242,245)`; and finally giving `#title` a **lime
+  background** produced a capture with no lime anywhere. An element that
+  measures on screen, hit-tests as topmost, and is painted lime, does not appear
+  in the image. Resuming the render loop (`headless(false)`) did not change it,
+  so it is not a stale compositor frame either.
+
+  Playwright's own screenshots of the same screens are correct — the
+  `menu-baseline` actual/expected PNGs render the full title screen properly.
+  **So: measure with the MCP, capture with Playwright.** Anyone reviewing this
+  UI visually through the MCP will otherwise "find" a brand column that is
+  perfectly fine, and may go on to "fix" it.
+
+- The pixel baselines already follow the visual-testing guidance (render loop
+  stopped, `reducedMotion`, `animations: "disabled"`, a diff-ratio tolerance).
+  The one fragility worth knowing: `maxDiffPixelRatio: 0.01` on an 844x390 shot
+  is ~3294 px of allowance, and the measured canvas-dither noise on the select
+  baseline was **3391 px** — the threshold sits essentially ON the noise floor,
+  so it can fail for no reason. Hiding `#game` outright for these captures would
+  remove the noise and let the tolerance drop a long way, making the gate
+  stronger rather than looser. It costs one re-bless of all six.
