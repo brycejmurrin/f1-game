@@ -386,6 +386,18 @@ This is the failure mode a version-control system cannot see. `index.html` and a
 they conflict only in MEANING. Nothing else would have noticed either, because
 `test:baseline` is not in the CI gate's smoke job and nothing was running it.
 
+**A20, spotted while re-blessing: the garage BACK button is clipped.** The new
+image shows it cut to "ACK" at the sheet's left edge on phone-landscape, and the
+desktop baseline — which PASSES against its existing image — shows no BACK button
+at all. `.sheet-foot` is a plain `display: flex` row with no `justify-content`,
+so the two buttons should sit left-aligned and whole; something is pushing the
+row past its container's start edge. Not diagnosed here, and deliberately not
+fixed as part of a cleanup pass: it is a layout defect with a visible symptom,
+which is a better place to start than most of this register. Keyboard users are
+unaffected — `index.html` gives the screen `data-esc-close="cs-back"`, so Escape
+presses the control whether or not it can be seen — which is likely why nobody
+has reported it.
+
 Re-blessed here rather than deferred, because unlike A14/A15 the intent is not in
 doubt: the BACK button is a shipped control that `index.html` depends on by name
 (`data-esc-close="cs-back"` — the Escape-means-back layer reads it), the pixel
