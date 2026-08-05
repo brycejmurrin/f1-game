@@ -302,6 +302,33 @@ Deferred because the fix touches race classification and wants its own test pass
 **Agreed approach when taken up: symmetric decrement** — mirror the `ds > 0` case
 with a `lap--` on a backward crossing, matching `prog`.
 
+**A13 — `getBoundingClientRect()` inside a zoomed subtree, on Safari.** The UI
+SIZE / HUD SIZE feature is implemented as `zoom` on four subtrees (`.sheet`,
+`#overlay > *`, the HUD clusters, `.dock`). WebKit returned **pre-zoom** rects
+from `getBoundingClientRect()` for thirteen years
+([bug 77998](https://bugs.webkit.org/show_bug.cgi?id=77998)); it was fixed only
+in **Safari 26.4 (May 2026)**, so a large share of installed iOS is still wrong
+today. Chrome and Firefox always returned the scaled values, which is why none
+of this reproduces in the test suite — every spec here runs Chromium.
+
+Two call sites mix a rect from inside a zoomed subtree with a coordinate from
+outside one, and are therefore wrong on older iOS *by default*, because
+`--ui-scale` ships at **1.15** on a coarse pointer:
+
+- `js/data/telemetry.js:942` — `attachScrub()` maps `ev.clientX` (real viewport
+  px) through `canvas.getBoundingClientRect()` (inside `.sheet`). Scrubbing the
+  telemetry trace lands at the wrong time.
+- `js/game.js:5139` — the garage lens shift divides `#cs-inner`'s rect width by
+  the **unzoomed** canvas's `clientWidth`. The turntable is framed as though the
+  panel were narrower than it is, so the car sits partly under it.
+
+Deferred rather than fixed: both want a device to confirm on, and the honest fix
+is a shared "rect in viewport space" helper (dividing by `currentCSSZoom`, or
+reading `offsetX`) rather than two spot patches. **Worth doing before B4 decides
+whether `zoom` stays** — it is the strongest argument found so far that it should
+not. Note that `zoom` itself is otherwise sound: Baseline since May 2024, and
+being standardised in CSS Viewport.
+
 **Structural.**
 - **No CI gate** — the headline. `.github/workflows/pages.yml` deploys
   unconditionally on push and runs nothing; 101 specs + 37 suites are gated by

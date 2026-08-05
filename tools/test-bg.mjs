@@ -125,7 +125,20 @@ function start(groups) {
     runs.push({ group, pid: child.pid, log, started: new Date().toISOString() });
     console.log(`> test:${group.padEnd(14)} pid=${child.pid}  log=${path.relative(ROOT, log)}`);
   }
-  writeState({ runs, started: new Date().toISOString(), workers: WORKERS });
+  // MERGE WITH WHAT IS STILL RUNNING, don't clobber it. Starting a second batch
+  // used to replace the whole list, which ORPHANED everything already in
+  // flight: --status stopped listing it, --wait returned as soon as the new
+  // batch finished, and --stop left it running. That is not a cosmetic bug —
+  // an orphaned run keeps its workers on the CPU, so the next batch is
+  // measured against a machine that is quietly oversubscribed, and its
+  // timeouts read as test failures. Observed exactly that: `test-bg physics`
+  // then `test-bg tiny` left physics alive and invisible.
+  //
+  // A group started again SUPERSEDES its old entry — same log file, and the
+  // old process is about to be writing to a file the new one truncated.
+  const prior = readState().runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
+  if (prior.length) console.log(`  (still running from an earlier start: ${prior.map((r) => r.group).join(", ")})`);
+  writeState({ runs: [...prior, ...runs], started: new Date().toISOString(), workers: WORKERS });
   console.log(`\ntail one:   tail -f ${path.relative(ROOT, runs[0].log)}`);
   console.log(`tail all:   tail -f ${runs.map((r) => path.relative(ROOT, r.log)).join(" ")}`);
   console.log(`check:      node tools/test-bg.mjs --status`);
