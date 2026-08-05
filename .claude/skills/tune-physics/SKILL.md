@@ -92,7 +92,8 @@ const results = await Promise.all(CONFIGS.map(async cfg => {
 console.table(results);   // → finalSpeed / avgSlip / offT / done per config
 ```
 
-See the **playwright-probe** skill for the free-port server + `pickChromium()`
+See `tools/harness.mjs` (`pickChromium`, `startStaticServer`) and the
+**playwright-probe** skill for free-port servers and headless Chromium.
 boilerplate that wraps this. Metrics: `finalSpeed` (speed carried), `avgSlip`
 (< 1 = traction consumed, 1 = on the edge), `offT` (off-track time = stability),
 `done` (crashed out). For a harder, adaptive test, run `tests/autopilot.spec.js`

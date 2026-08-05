@@ -31,6 +31,10 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **bake-lighting** | Baking a pasted `window.LightPresets = {…}` export into shipped presets. |
 | **webgl-debug** | WebGL2/GLX issues — lights, shadows, bloom, shader compile, GL errors. |
 | **game-feel** | Juice/feedback on Apex systems (camera/particles/audio/skids) without touching physics. |
+| **scene-graph-instancing** | Migrating scenery emitters to `TrackGraph`, graph parity, instanced draws, `bakeOnly`. |
+| **garage-parts-livery** | Parts catalog, SIGNATURE/FACTORY presets, garage UI, livery finish/fin, ERS/aero load. |
+| **asset-pack** | Baking/verifying `assets/pack`, MAT layers, `matTexMix`, procedural fallback. |
+| **pwa-cache-service-worker** | `sw.js` precache, `version.json` network-first, DEFERRED optional assets, stale PWA. |
 
 The debug-* skills pair with `tools/apex-eval.mjs` / `tools/apex-capture.mjs` so
 changes are validated visually, not just asserted.
