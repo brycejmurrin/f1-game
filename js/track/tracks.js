@@ -220,6 +220,7 @@ const Tracks = (function () {
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = keepGeometry;
       track.meshes.props = G.createChunkedMesh ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
+      buildPropBatches(track);
       const glassGeo = safe("glass", _props.glass);
       const waterGeo = safe("water", _props.water);
       track.glassGeo = glassGeo;
@@ -309,6 +310,51 @@ const Tracks = (function () {
     // intentionally NOT remapped — the few direct px[k]/upOf(k) reads in bespoke
     // scenery stay mutually consistent on the reversed centreline (cosmetic only).
     return w;
+  }
+
+  // Upload the scene graph's instanceable placements as GL instance batches.
+  //
+  // INERT AS OF THIS STEP. The props above are still baked and drawn exactly as
+  // before, so nothing renders differently and graph-parity is unchanged — these
+  // batches are built, measured and then not drawn. That is deliberate: it makes
+  // the instanced/baked split observable (geometryDiagnostics reports both) one
+  // commit before it becomes load-bearing, so the numbers can be checked against
+  // the fleet census in docs/research/RENDERING-EXTERNAL-RESEARCH.md §1 while a
+  // regression would still be invisible to a player. SCENE-GRAPH-PLAN.md §8.4.
+  //
+  // The 72 m cell matches the chunked grid on purpose, so the two paths agree
+  // about what "nearby" means once both are drawing.
+  function buildPropBatches(track) {
+    track.propBatches = null;
+    track.propBatchStats = null;
+    const G = track._gfx;
+    // Feature-detected, never assumed: WGX has no instanced path and takes the
+    // graph's bake() fallback, which is what S2 kept it for.
+    if (!G || !G.createInstancedBatch || !track.graph || !track.graph.batches) return;
+    let payload;
+    try { payload = track.graph.batches(); } catch (e) { return; }
+    const list = (payload && payload.batches) || [];
+    if (!list.length) return;
+
+    const out = [];
+    let instancedVerts = 0, bakedVerts = 0, placements = 0;
+    for (const b of list) {
+      let handle = null;
+      try {
+        handle = G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 });
+      } catch (e) { continue; }        // one bad model must not lose the track
+      handle.model = b.model;
+      out.push(handle);
+      instancedVerts += b.verts;       // the canonical mesh, uploaded once
+      bakedVerts += b.verts * b.count; // what those placements cost fused
+      placements += b.count;
+    }
+    if (!out.length) return;
+    track.propBatches = out;
+    track.propBatchStats = {
+      batches: out.length, placements, instancedVerts, bakedVerts,
+      bakeOnly: (payload.bakeOnly || []).length,
+    };
   }
 
   function buildProps(track) {

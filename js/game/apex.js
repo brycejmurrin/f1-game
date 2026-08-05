@@ -438,6 +438,29 @@ const api = {
     if (!G.track || !G.track.geometryDiagnostics) return null;
     return JSON.parse(JSON.stringify(G.track.geometryDiagnostics));
   },
+
+  // instanceStats() — what the scene graph's instanceable placements cost as
+  // BATCHES versus what they cost fused into the props soup.
+  //
+  // They are uploaded but not yet drawn (js/track/tracks.js buildPropBatches;
+  // SCENE-GRAPH-PLAN.md §8.4 step 2), so this is the measurement taken while a
+  // mistake is still invisible to a player. `bakedVerts` is what those same
+  // placements contribute to the fused buffer today; `instancedVerts` is the
+  // canonical meshes uploaded once. The ratio is the claim being tested.
+  //
+  // null when the backend has no instanced path (WGX) or the build left no
+  // graph — not an error, just nothing to say.
+  instanceStats() {
+    const t = G.track;
+    if (!t || !t.propBatchStats) return null;
+    const s = t.propBatchStats;
+    return Object.assign({}, s, {
+      // Uploaded handles, which is the thing that would leak on a track switch
+      // if the free path missed them.
+      live: t.propBatches ? t.propBatches.length : 0,
+      ratio: s.instancedVerts ? +(s.bakedVerts / s.instancedVerts).toFixed(1) : 0,
+    });
+  },
   trackGeometry(keep) {
     if (typeof keep === "boolean") Tracks.setKeepGeometry(keep);
     if (!G.track || !G.track.roadGeo || !G.track.terrainGeo) return null;

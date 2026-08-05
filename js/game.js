@@ -2081,6 +2081,14 @@ function loadTrack(idx) {
       gfx.freeMesh(track.meshes.road);
       gfx.freeMesh(track.meshes.terrain);
       if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.props); else gfx.freeMesh(track.meshes.props);
+      // The instanced batches hold their own VBOs (canonical mesh + matrices +
+      // colours) and are NOT reachable from track.meshes, so nothing above
+      // frees them. Missed, a track switch leaks one set per circuit visited —
+      // and peak GPU allocation is exactly what loses an iOS context.
+      if (track.propBatches && gfx.freeInstancedBatch) {
+        for (const b of track.propBatches) gfx.freeInstancedBatch(b);
+        track.propBatches = null;
+      }
       if (track.meshes.glass) { if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.glass); else gfx.freeMesh(track.meshes.glass); }
       if (track.meshes.water) gfx.freeMesh(track.meshes.water);
       gfx.freeMesh(track.meshes.gate);
