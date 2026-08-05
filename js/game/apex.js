@@ -1425,7 +1425,7 @@ const api = {
         // Who it thinks is in the way. `blocker` is this screen's cars[] index
         // (-1 = nobody); blockerCode/blockerId identify the same car portably.
         blocker: c.ai.blockerId ? G.cars.findIndex((o) => o.driverId === c.ai.blockerId) : -1,
-        blockerCode: c.ai.blockerCode || null,
+        blockerCode: c.ai.blockerCode || null, blockerId: c.ai.blockerId || null,
         blockerGap: isFinite(c.ai.blockerGap) ? +c.ai.blockerGap.toFixed(2) : null,
         roomL: isFinite(c.ai.roomL) ? +c.ai.roomL.toFixed(2) : null,   // clearance, m
         roomR: isFinite(c.ai.roomR) ? +c.ai.roomR.toFixed(2) : null,

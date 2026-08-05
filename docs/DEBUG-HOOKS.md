@@ -554,7 +554,7 @@ rubber-banding, or stuck in recovery are **indistinguishable from outside**.
 | `vCorner` | the corner speed it is braking down to, m/s |
 | `kMax` | peak curvature found over the brake-lookahead scan |
 | `blocker` | this screen's `cars[]` index of the car judged to be in the way, `-1` = none |
-| `blockerCode` | driver code of that blocker, `null` = none — portable across peers, unlike the index |
+| `blockerCode` / `blockerId` | driver code and `driverId` of that blocker, `null` = none. `driverId` is the cross-peer key; the `cars[]` index is not |
 | `blockerGap` | arc gap to the blocker in metres, `null` = none |
 | `roomL` / `roomR` | clearance to the left / right (edge or a car alongside), metres |
 | `boxed` | in contact, wedged between both sides, or right behind a blocker |

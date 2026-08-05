@@ -629,7 +629,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (100) + tests/*.test.mjs unit suites (32)
+tests/*.spec.js                 Playwright specs (101) + tests/*.test.mjs unit suites (32)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
 ```
 
@@ -930,9 +930,22 @@ __apex.finishRace()           // trigger results screen
 __apex.freeze(bool?)          // get/set physics-frozen state
 __apex.hud(show?)             // toggle HUD visibility
 __apex.weather("wet"|"dry")   // live weather change
+__apex.difficulty("hard")     // get/set AI difficulty (easy|normal|hard) + the
+                              //   resolved DIFF preset {ai, band}. The ONLY
+                              //   programmatic path — it was #rs-diff chips or nothing
 __apex.setTimeOfDay("night")  // live dawn|day|dusk|night|default — no asset reload (rebuilds only on day↔dark flip)
 __apex.resetPlayer()          // force immediate rescue
-__apex.carAt(idx?)            // detailed telemetry for one car
+__apex.carAt(idx?)            // detailed telemetry for one car — incl. its lap
+                              //   times and, for an AI car, `ai`: THE DECISION
+                              //   BLOCK (vmax, bandFactor, braking, vCorner,
+                              //   kMax, blocker/blockerGap, roomL/roomR, boxed,
+                              //   stuckT/unstuckActive, targetX/overtake/
+                              //   desiredX). These were frame-locals destroyed
+                              //   each tick, so "braking too early" vs "queued
+                              //   behind a phantom blocker" vs "rubber-banding"
+                              //   vs "stuck in recovery" all looked the same
+                              //   from outside. Pure observability — nothing in
+                              //   the driving model reads c.ai; null for a human
 __apex.tracks()               // list all circuit ids
 __apex.teams()                // list all teams + engine suppliers
 __apex.camera("cockpit")      // switch camera mode (clears any view() free-cam)
@@ -960,7 +973,8 @@ __apex.aero(true)             // ACTIVE AERO: request/drop X-mode (2026 moveable
 __apex.setPhysics({pace:0.8}) // override physics params
 __apex.probe()                // player telemetry (x, angle, k, hw, speed, s)
 __apex.physState()            // full state (slip, wrongWay, lap, rescueT)
-__apex.cars()                 // all car telemetry sorted by prog
+__apex.cars()                 // all car telemetry sorted by prog — incl. every
+                              //   car's lap times (best/last), not just the player's
 __apex.scan([10,30,60])       // look-ahead curvature/width at distances
 __apex.corners()              // apex fractions for the loaded track
 __apex.trackGraph()           // the built scenery SCENE GRAPH (js/track/graph.js):
@@ -1085,7 +1099,7 @@ tick). After `race()` + `go()`, call `jump(frac, speed)` or `step(1/60, 1)` firs
 
 ## Testing
 
-100 Playwright specs + 32 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
+101 Playwright specs + 32 `node --test` unit suites. Run groups with `npm run test:<group>` (see Key
 commands). Assert behaviour and geometry via `__apex` hooks — not brittle rendering
 magnitudes. Use `obs()`/`act()`/`reset()` for physics, `groundY()` for terrain
 geometry, `eyeAt()`/`orbit()` for camera framing. Viewport: `hasTouch: true` for
