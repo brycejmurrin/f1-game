@@ -3,8 +3,8 @@
  * (post chain + foreground FX).
  *
  * A second implementer of the GLX draw-API contract (the renderer object
- * returned by the GLX IIFE). See docs/WEBGPU-MIGRATION.md,
- * docs/WEBGPU-PHASE0-NOTES.md, docs/WEBGPU-PHASE2-NOTES.md and js/render/gfx.js for the
+ * returned by the GLX IIFE). See docs/archive/webgpu/WEBGPU-MIGRATION.md,
+ * docs/archive/webgpu/WEBGPU-PHASE0-NOTES.md, docs/archive/webgpu/WEBGPU-PHASE2-NOTES.md and js/render/gfx.js for the
  * interface contract and the frame/opts object shapes.
  *
  * WHAT IS REAL (Phase 1 + Phase 2):
@@ -52,7 +52,7 @@
  * WHAT IS STILL STUBBED/REDUCED (tagged inline):
  *   - MSAA: msaa() stays 1 (a multisampled scene + resolve needs a sampleable
  *     single-sample depth for SSAO — depth resolve is not in core WebGPU; see
- *     docs/WEBGPU-PHASE4-NOTES.md).
+ *     docs/archive/webgpu/WEBGPU-PHASE4-NOTES.md).
  *   - Env probe: FULLY WIRED (envFaceBegin/End render a real RGBA16F cube one face/
  *     frame; Block 7 samples it once a 6-face cycle completes). Default reflection is
  *     still the cheap ANALYTIC sky gradient (carReflect); the real cube only kicks in
@@ -552,7 +552,7 @@ const WGX = (function () {
         vertex: { module: shadowModule, entryPoint: "vs_main", buffers: [SHADOW_VERTEX_LAYOUT] },
         // No fragment stage — depth-only. Slope-scaled bias fights shadow acne.
         // GLX renders the shadow depth with CULLING OFF ("render back faces to avoid
-        // peter-panning", glx.js:3739), so match that with cullMode:"none" — winding is
+        // peter-panning" — js/render/glx/shadow.js, the CULL_FACE disable), so match that with cullMode:"none" — winding is
         // then moot and both faces cast, exactly like GLX.
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "less",
@@ -1356,8 +1356,9 @@ const WGX = (function () {
       d[78] = (f.groundMist != null ? f.groundMist : 0) * (T && T.mistDensity != null ? T.mistDensity : 1);
       d[79] = (T && T.mistHeight  != null) ? T.mistHeight  : 0.30;  // MIST HEIGHT
       // params4 (floats 80..83): pcssPen, shadowTintAmt, carReflect, ssrStrength.
-      // carReflect/ssrStrength are forced 0 until the env-probe / SSR passes bind
-      // real resources (the frame group holds 1×1 placeholders for now).
+      // carReflect/ssrStrength are GATED on the env-probe / SSR passes having
+      // bound real resources (_envReady / _ssrReady below); until then the frame
+      // group holds 1×1 placeholders and both read 0.
       // pcssPen is a GLX PENUMBRA-RATE knob (default 80, range 10-300) that GLX
       // feeds into `clamp((z-zb)*pcssPen,0,1)` → a 1.5-6 texel radius. The WGSL
       // shadow shader instead uses it DIRECTLY as `pcfStep = texel*(1+params4.x)`,

@@ -1,6 +1,6 @@
 # Testing reference
 
-104 root Playwright spec files (`tests/*.spec.js`) + 39 `node --test` unit suites
+107 root Playwright spec files (`tests/*.spec.js`) + 47 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -242,7 +242,12 @@ separate processes with separate ports, and the sizing guidance above applies.
 | `artifacts/logs/` | background-run and shard logs |
 
 All gitignored. Tracked golden baselines live in `tests/*-snapshots/` and stay
-outside these roots.
+outside these roots — but only ONE suite has any: `menu-baseline.spec.js` has
+six (title/select/garage × desktop/phone-landscape), so `npm run test:baseline`
+is a real gate. `tracks-visual.spec.js` has none, so `npm run test:visual`
+SKIPS itself rather than failing 40 circuits on missing snapshots; generating
+them on Linux/SwiftShader is still outstanding, and the suite re-enables itself
+automatically once the directory exists.
 
 ### Fixtures (`tests/fixtures.js`)
 
@@ -254,7 +259,7 @@ Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 | `pageErrors` | `string[]` of uncaught JS exceptions — assert `toHaveLength(0)` after exercising game logic |
 | `consoleLines` | `string[]` of every console line and page error, type-prefixed, favicon noise stripped. Prefer this to a hand-rolled `page.on("console", …)` — the hand-rolled ones drifted into a dozen slightly different filters |
 | `racePage` | navigates to `/` and waits for `window.__apex` (10 s) |
-| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block ~54 specs used to hand-roll, with unified timeouts |
+| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 31 of 102 specs import `tests/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
 
 `tools/fixture-consumer-audit.mjs` enforces the import for the specs that depend
 on those guarantees (`audio-smoke`, `smoke`, `f1-track-accuracy`, `ui-audit`).
@@ -335,6 +340,7 @@ what it covers.
 | `agentview-api-contract.test.mjs` | freezes the shape of the agent-view API |
 | `assets-api.spec.js` | the baked asset pack's runtime path, and that every failure degrades to procedural |
 | `logging.spec.js` | `js/log.js` in a real page: `Log` live before any game module evaluates, retention never lagging the console level, single namespace prefix, records flattened rather than holding references, `logs()` filters, a bad spec ignored not thrown |
+| `persistence.spec.js` | localStorage failing is REPORTED (Log + `persistState()`) and the session still reads back what it wrote — the silent-data-loss case: iOS Private Browsing sets the quota to 0 |
 | `wake-lock.spec.js` | the screen wake lock held for the duration of a race: requested on start, released on finish and on a mid-race quit (no results screen), released on hide and re-acquired on return, and degrades silently when the API is missing or its request rejects |
 
 ### Physics & behaviour
@@ -344,6 +350,7 @@ what it covers.
 | `world-physics.spec.js` | the player integrates a bicycle model in WORLD space; `(s, x)` is read back, not authoritative |
 | `physics-fixes.spec.js` | the physics/collision robustness pass |
 | `longitudinal.spec.js` | longitudinal + grip physics and full-lap progress |
+| `physics-characterization.spec.js` | CHARACTERIZATION of the driving model against a committed baseline — asserts the numbers did not move, not that they are right. Live gate against `tests/physics-baseline.json`; regenerate with `APEX_UPDATE_BASELINE=1` and read the diff |
 | `projection.spec.js` | world↔track (Frenet) projection continuity — no lap-distance teleport near hairpins |
 | `elevation-tracks.spec.js` | slope gravity, banking grip, road-follow on graded circuits |
 | `steering.spec.js` | the player heading model in `updateCar` |
@@ -355,6 +362,7 @@ what it covers.
 | `active-aero.spec.js` | X-mode / Z-mode: flap travel, the downforce/drag trade, the 400 ms transition cap |
 | `aero-zones.spec.js` | fixed ACTIVATION ZONES per circuit, Monaco having none, and the overtake gate on lap 1 / under caution driven through a REAL opening lap |
 | `debris.spec.js` | the Rapier debris side-world — and that it never moves a game car |
+| `race-control.spec.js` | the CAUTION layer in a real page: defaults ON, and the setting survives a reload (which is the guard on its storage format). The machine itself is `race-control.test.mjs` |
 | `autopilot.spec.js` | a closed-loop driver that actually completes laps (monza, suzuka) |
 | `presets.spec.js` | RELAX / STANDARD / PRO each push the sliders somewhere distinct |
 | `sliders.spec.js` | every pause-menu slider is wired and persists |
@@ -374,7 +382,7 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `tracks-walls.spec.js` | barrier geometry on all 40 circuits — the car stays inside a sane corridor |
-| `tracks-visual.spec.js` | per-circuit pixel-diff regression (all 40 circuits × 6 fractions) |
+| `tracks-visual.spec.js` | per-circuit pixel-diff regression (all 40 circuits × 6 fractions) — **skipped: no baselines committed** |
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain or verge triangle renders above the racing line. Point-in-triangle vs the asphalt; large road-over-road is ignored as an intentional crossover (Suzuka's figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line, in 3D, 0.2–5 m above the road. Per-track `BASELINE` caps document justified overheads (Miami's beach canopy, Mexico's Foro Sol, gantries) |
 | `prop-clipping.test.mjs` | ratchet: prop-vs-prop interpenetration must not grow |
@@ -486,6 +494,14 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `load-order.test.mjs` | `index.html` and `tools/carview.html` `<script>` order matches `tools/manifest.cjs` exactly, including `HARD_EDGES` eval-time dependencies |
+| `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
+| `css-comments.test.mjs` | a CSS comment that ends early (or never opens) turns prose into a selector and DROPS the rule after it, silently — caught by measuring prelude length (real max 173, the two live failures were 275 and 759) |
+| `css-tokens.test.mjs` | every custom property in `css/tokens.css` must have a consumer — an unread token is an invitation to use a value nobody has been maintaining |
+| `light-presets.test.mjs` | the 1,921 shipped lighting values must name real `TUNE_DEFS` ids — a renamed knob does not throw, the lookup just misses and the shipped look silently stops applying |
+| `silent-catch.test.mjs` | a RATCHET on bare `catch (e) {}` — silent failure is this repo's most-repeated defect shape; the escape hatch is a COMMENT saying why, which is the sentence that was always missing |
+| `hooks-documented.test.mjs` | every `__apex` hook must have a section in `docs/DEBUG-HOOKS.md` — a RATCHET over the 28 that already had none, so nothing NEW joins them |
+| `race-control.test.mjs` | the caution state machine in a VM — thresholds, the raise-fast/lower-slow hysteresis, the hard time caps, drop-on-disable, host vs guest, and the leader's-lap rule behind OVERTAKE |
+| `comment-citations.test.mjs` | a `other-file.js:412` comment citation must point at a line that EXISTS, plus a RATCHET on how many there are — a line number in another file cannot be kept true, so cite the symbol |
 | `docs-integrity.test.mjs` | live docs, skills AND source comments reference only files that exist; CLAUDE.md's suite counts, the scenery-api member count, the renderer-backend list, and the skills/tools/docs indexes all match the repo |
 | `test-groups.test.mjs` | the taxonomy: pick-tests rules name real groups and route every source dir; this document lists every group and every test file; `RENDER_SPECS` partitions cleanly; the manual suites stay out of default discovery |
 | `circuit-def-fields.test.mjs` | every field authored in `js/circuits/<id>.js` survives the field-by-field copy into `Tracks.LIST`, or is named engine-only with a reason — an uncopied field reads as `undefined` at every consumer, silently, and the circuit renders as though it was never written |

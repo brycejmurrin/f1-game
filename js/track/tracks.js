@@ -117,7 +117,8 @@ const Tracks = (function () {
     //
     // Amplitude scales with the track's own relief: a circuit that already
     // climbs (Spa, Red Bull) gets a little more, a flat street circuit stays
-    // nearly smooth, and nothing exceeds UNDULATE_MAX. Deterministic — seeded
+    // nearly smooth, and nothing exceeds the 0.42 cap applied below.
+    // Deterministic — seeded
     // off the circuit id — so a lap is repeatable and ghosts stay valid.
     if (def.undulate !== false) {
       let lo = Infinity, hi = -Infinity;
@@ -2222,7 +2223,9 @@ const Tracks = (function () {
   // by tools/bake-elevation.mjs from SRTM) registers CircuitElevations[id] as an
   // array of metres, relative to the start, sampled evenly by arc-fraction. When
   // present it supersedes the authored cosine `elevations` bumps for that
-  // circuit. Returns 0 when no profile is loaded (the shipped default).
+  // circuit. Returns null when no profile is loaded (the shipped default) —
+  // callers fall back to the authored bumps on null, so 0 would be a real
+  // elevation and would flatten the circuit instead.
   function elevationAt(id, frac) {
     const prof = (typeof CircuitElevations !== "undefined") && CircuitElevations[id];
     if (!prof || !prof.length) return null;

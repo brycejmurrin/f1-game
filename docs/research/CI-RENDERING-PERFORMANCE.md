@@ -1,0 +1,232 @@
+# CI + software rendering — research notes (2026-08)
+
+Written while the CI gate (`.github/workflows/ci.yml`) was added, after several
+local Playwright runs died to their own timeouts rather than to failures.
+
+**Part 1 is external findings, not measurements on this repo** — every number in
+it is somebody else's, and the section headings exist to say which claims are
+worth spending an afternoon measuring here. **Part 2 is grounded**: its vertex
+counts come from `tools/verify-track.cjs --all` and its byte arithmetic from the
+real interleaved layout in `js/render/glx.js`. Keep the two apart when quoting
+this file.
+
+This repo's culture is measure-then-decide (`playwright.config.js:29-42` is the
+model: a table of rAF rates and click latencies, and a flag rejected because of
+it). Nothing in this document should be adopted without the same treatment.
+
+---
+
+## 1. The headline: SwiftShader is not the only software renderer
+
+`playwright.config.js:25` pins `--use-angle=swiftshader`. That is Chromium's
+own software rasteriser. **Mesa's `llvmpipe` is reportedly ~3× faster** at the
+same job, and the difference is not subtle — one report has canvas-heavy
+three.js tests going 5 min → 1.6 min on llvmpipe alone, before any GPU is
+involved.
+
+Three facts that make this actionable, and one that makes it awkward:
+
+1. **Headless Chromium does not use a GPU by default**, even on a machine that
+   has one. Getting off software rendering at all requires headed mode under a
+   virtual display — `xvfb-run npx playwright test` is the documented Playwright
+   idiom, and `xvfb` is why headed works on a runner with no screen.
+2. **`llvmpipe` requires Mesa to be installed.** The standard GitHub-hosted
+   Ubuntu runner does **not** ship it; the GPU-optimised runner image does. On a
+   standard runner you would need to install it (`libgl1-mesa-dri`, `mesa-utils`)
+   and then *not* force `--use-angle=swiftshader`.
+3. **A GPU runner does not give you a GPU for free.** On GitHub's NVIDIA image
+   the driver is installed but the kernel modules are not loaded, so `/dev/nvidia0`
+   does not exist and Chromium silently falls back to software. Two `modprobe`
+   calls fixed it in the cited write-up.
+4. The awkward part: **this repo deliberately forces SwiftShader**, and the
+   comment block at `playwright.config.js:29-42` shows the author has already
+   been burned once by a plausible-sounding flag that made things 7× worse.
+   Treat §1 as a hypothesis with a good prior, not a patch.
+
+**Worth measuring here:** does `xvfb-run` + Mesa + dropping the swiftshader pin
+change wall-clock for `npm run test:tiny` and `test:render`? That is one CI job
+and one afternoon, and the payoff is the difference between a 40-minute suite
+and a ~13-minute one.
+
+**The stability argument is stronger than the speed one.** The cited report is
+explicit that slow canvas init was the *cause* of its flakiness — timeouts,
+elements not ready, interactions failing — and that the fix removed the need for
+retry logic rather than merely making the same tests faster. This repo already
+carries that scar tissue: `retries: 1` on CI, a 120 s timeout, a `--workers`
+cap, and a comment explaining that a hanging menu click means the box is
+oversubscribed. Those are all SwiftShader-shaped.
+
+## 2. Sharding is the wrong first move
+
+Consistent advice across sources, and it contradicts the obvious instinct:
+
+- **The default GitHub runner has 2 cores.** Pushing workers past ~2-3 there
+  buys nothing but memory pressure. This repo already caps CI workers at 2
+  (`playwright.config.js:71`), which matches.
+- **A larger (4-core) runner is the cheapest real speedup**, and is almost
+  always skipped in favour of sharding, which is more complex and more machines.
+- **Browser download dominates small suites.** One benchmark had 42 s of a
+  3 min 18 s run being nothing but re-fetching browsers on every push. Caching
+  the binaries, or using `mcr.microsoft.com/playwright:v<version>-noble` as a
+  container, removes it. The container also pins the browser version, which
+  kills the "Chrome updated over the weekend and the visual baselines moved"
+  failure — **directly relevant if the 40 `tracks-visual` baselines are ever
+  generated** (see `docs/TESTING.md`; the suite currently skips itself).
+- **Measure CI time on bad days, not good ones.** With `retries: 1`, one flaky
+  test adds its full duration again. A suite that is fast when green and slow
+  when slightly flaky is a slow suite.
+
+Sharding syntax, when it is finally the right move, is `--shard=x/y` across jobs
+(Playwright's `docs/src/test-sharding-js.md`); a GitLab `parallel:matrix` example
+and the GitHub equivalent are in Playwright's own CI docs.
+
+**Applies to the gate as built:** `ci.yml` already splits by *cost* (guards /
+sweeps / smoke) rather than by shard, which is the right first cut — the guards
+job is ~1 min and browser-free, so the common red case is caught fast without
+paying for Chromium at all. Sharding the full render suite is a later step and
+only after §1 is measured.
+
+## 3. WebGPU shipped everywhere — the `Gfx` seam assumption has moved
+
+`docs/ARCHITECTURE.md` describes WGX as "frozen (no new work)" and WebGPU as the
+opt-in nobody runs. **That framing is now out of date as a statement about the
+platform**, whatever we decide about the code:
+
+Per the GPUWeb wiki (the authoritative source — the secondary write-ups checked
+out, but they flatten the gating that actually matters):
+
+- **Safari: macOS Tahoe 26, iOS 26, iPadOS 26, visionOS 26 — enabled by
+  default.** This is the big one: iOS Safari was the reason to treat WebGPU as
+  unreachable, and it is the platform `docs/iOS-OPTIMIZATION.md` exists for.
+- **Chrome desktop** (Mac/Windows/ChromeOS): 113+, default on.
+- **Chrome Android is gated by GPU vendor**, not just version: 121+ on
+  ARM/Qualcomm/Intel (Android 12+), 139+ on Imagination (Android 16+), Samsung
+  Xclipse still WIP.
+- **Chrome Linux is barely there**: Intel Gen12+ from 144, NVIDIA on Wayland from
+  147, everything else behind a flag. Worth knowing before anyone tries to use
+  WebGPU to make CI faster — that is not a route.
+- **Firefox**: 141+ Windows, 145+ macOS Apple Silicon (147+ for all macOS),
+  elsewhere Nightly.
+
+Roughly 70% support is the figure being quoted. The standing advice is still
+feature-detect and fall back to WebGL2 automatically — **which is exactly what
+`js/render/gfx.js` already does**, so the architecture is fine; only the
+commentary about it is stale.
+
+**What this does NOT imply.** It is not an argument to unfreeze WGX. §6 of
+`docs/ARCHITECTURE-REVIEW.md` makes the real point: the cost is *one look in
+three shading languages*, and WGX still lacks volumetrics, PCSS, MSAA and the
+baked material arrays (`docs/ARCHITECTURE.md`, renderer section). Broader
+platform support does not reduce that cost — if anything it raises the stakes of
+having two incomplete backends rather than one good one. The honest options are
+still "invest in one of TLX/WGX" or "keep GLX and let the seam be insurance",
+and this finding only changes the input to that decision, not the answer.
+
+---
+
+## Sources
+
+- [Running Playwright with GPU powered Actions](https://davesnider.com/gputests) — the SwiftShader → llvmpipe → GPU walk-through, with numbers
+- [Playwright on GitHub Actions: the setup that actually runs fast](https://www.reddit.com/r/Playwright/comments/1uvarel/playwright_on_github_actions_the_setup_that/) — worker counts, binary caching, why sharding is usually premature
+- [Playwright CI docs](https://playwright.dev/docs/ci) and [test sharding](https://playwright.dev/docs/test-sharding) — `xvfb-run`, `--shard=x/y`, worker configuration
+- [GPUWeb implementation status](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status) and [web.dev: WebGPU in major browsers](https://web.dev/blog/webgpu-supported-major-browsers) — per-browser WebGPU support
+- [Chromium: support GPU hardware in headless mode](https://issues.chromium.org/40540071) — the `--use-gl=angle` / `--use-angle=*` flag matrix
+
+---
+
+# Part 2 — iOS Safari memory, and what Vegas actually costs
+
+Added the same day. This part **is** grounded in this repo: the vertex counts are
+`tools/verify-track.cjs --all` output and the byte arithmetic is the real
+interleaved layout in `js/render/glx.js:479` (`fpv = 9 + mat + trk`).
+
+## The external numbers
+
+- iOS Safari's WebGL heap ceiling is quoted at **~300–500 MB**, and separately a
+  **256 MB canvas memory** limit is reported. iOS 18.4 lowered limits further.
+- More alarming, and more recent: a developer measuring on **iOS 26.2** could
+  consistently crash a page at **~100 MB on an iPhone SE (3rd gen)** and
+  **~200 MB on an iPad (8th gen)** by growing a JS array. Not a WebGL test — just
+  page memory.
+- **There is no JavaScript exception to catch.** `try/catch` does not help; the
+  tab dies. So a memory kill cannot be logged from inside the page, which is
+  exactly why `js/game/perf.js`'s crash sentinel writes to localStorage BEFORE it
+  can be told anything went wrong. That design is vindicated by this.
+
+## What this repo uploads
+
+Props are interleaved at **10 floats/vertex** — pos(3) + nrm(3) + col(3) + mat(1)
+— so **40 B/vertex**, plus a `Uint32Array` index buffer (forced above 65,535
+vertices, `glx.js`). Taking ~1.5 indices per vertex:
+
+| circuit | prop verts | VBO | +indices | total |
+|---|---:|---:|---:|---:|
+| **vegas** | **1,825,925** | 69.7 MB | 10.4 MB | **80.1 MB** |
+| suzuka | 684,869 | 26.1 MB | 3.9 MB | 30.0 MB |
+| watkins_glen | 679,838 | 25.9 MB | 3.9 MB | 29.8 MB |
+| zandvoort | 532,011 | 20.3 MB | 3.0 MB | 23.3 MB |
+| monaco | 492,895 | 18.8 MB | 2.8 MB | 21.6 MB |
+
+**Vegas alone is ~80 MB of GPU buffer**, before textures, the baked material
+arrays, the car meshes, the shadow map, the post chain's render targets, or the
+JS heap that built it. Against a page that a real iPhone SE kills at ~100 MB,
+that is not a comfortable margin — it is the whole budget.
+
+And the build is worse than the upload: `pos`/`nrm`/`col` are plain JS number
+arrays until `toF32` runs, so peak transient cost during `buildProps` is
+materially higher than the 80 MB the VBO settles at.
+
+## Why this matters for a deferred item
+
+`docs/ARCHITECTURE-REVIEW.md` lists **"no vertex budget gate"** under deferred
+structural work, noting that `verify-track vegas` prints 1,825,925 prop verts and
+**exits 0**, "on a codebase whose own comment names that VBO as the iOS jetsam
+trigger". This part supplies the number that item was missing. The gate is cheap
+— `verify-track.cjs` already computes the count, so it is a threshold and a
+non-zero exit — and the ratchet pattern already used by
+`tools/clip-baseline.json` and `tools/coplanar-baseline.json` fits exactly: pin
+today's per-circuit counts, fail on regression, let a deliberate increase be a
+visible edit to the baseline.
+
+**Recommended follow-up, in order:**
+1. Add the budget gate as a ratchet (cheap, no behaviour change, catches the next
+   circuit that doubles).
+2. Measure real device memory before optimising — `__apex.diag()` already
+   reports GL capabilities; a page that dies without an exception needs the
+   sentinel, not a try/catch.
+3. Only then consider reducing Vegas. `js/track/graph.js`'s `batches()` already
+   returns instanced draws (canonical mesh + per-instance mat4), and
+   `docs/research/SCENE-GRAPH-PLAN.md` measured 383,402 of 383,403 nodes as
+   instanceable — so the mechanism to stop uploading a million duplicated
+   vertices **already exists and is not being used for the upload path**. That is
+   the real fix, and it is a much bigger piece of work than the gate.
+
+
+### What instancing would and would not buy
+
+The recommendation above says the real fix already exists half-built. Worth being
+precise about which cost it removes, because instancing is routinely oversold:
+
+- **It removes the MEMORY duplication, which is the problem here.** A baked
+  scene stores every copy's vertices; an instanced one stores the canonical mesh
+  once plus a per-instance transform. At this repo's 40 B/vertex and a
+  column-major `mat4` at 64 B, a prop of even 50 vertices costs 2,000 B baked
+  against 64 B instanced — and `SCENE-GRAPH-PLAN` measured **383,402 of 383,403
+  nodes as instanceable**. That is the 80 MB.
+- **It reduces CPU-side draw-call overhead**, which matters more in WebGL than
+  on desktop GL — the per-call cost is repeatedly reported as high.
+- **It does NOT reduce GPU shading cost, and can slightly increase it.** The
+  same triangles are still rasterised; you have only stopped paying to store and
+  submit them repeatedly. Anyone measuring this should expect the win in memory
+  and CPU frame time, not in fragment throughput.
+
+So the honest framing for the deferred item is: instancing is the fix for *the
+iOS memory ceiling*, not a general "make it faster" change. The number to
+measure first is `__apex.trackGraph().stats()` on vegas — unique models vs total
+nodes — because that ratio IS the saving, and it is one hook call away.
+
+## Sources (Part 2)
+
+- [Mobile Safari web pages are severely limited by memory](https://lapcatsoftware.com/articles/2026/1/7.html) — the iOS 26.2 ~100 MB/~200 MB measurements, and that no exception is catchable
+- [Fix: Unity WebGL build crashing on Safari iOS](https://bugnet.io/blog/how-to-fix-unity-webgl-build-crashing-on-safari-ios) — the 300–500 MB WebGL heap figure, iOS WebGL 2 feature gaps (float textures, integer samplers, AA)
+- [Jetsam kills WebGL application on iOS](https://stackoverflow.com/questions/44258746/jetsam-kills-webgl-application-on-ios) — jetsam killing at ~25% of device RAM

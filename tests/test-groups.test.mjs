@@ -128,3 +128,36 @@ test("RENDER_SPECS partitions the root specs — every spec lands in exactly one
   assert.deepEqual(dangling, [],
     "RENDER_SPECS names a spec that no longer exists — it would silently run in the headless project");
 });
+
+test("no test:* group pins a --project that excludes one of the specs it names", () => {
+  // The other direction of the partition, and the one that bites hardest.
+  // `test:tiny` used to pass tests/logging.spec.js together with
+  // --project=render while "logging" was NOT in RENDER_SPECS: the render
+  // project is testMatch: RENDER_SPECS, so the spec matched no project and
+  // simply never ran. Playwright reports that as a pass — it has nothing to
+  // say about a file it was never asked to run — so the command CLAUDE.md
+  // tells every agent to run after ANY edit was quietly a third smaller than
+  // it looked. The test above only catches a RENDER_SPECS name with no file;
+  // nothing caught a file with no matching project.
+  const cfg = read("playwright.config.js");
+  const body = cfg.match(/const RENDER_SPECS = \[([\s\S]*?)\]\s*\.map/);
+  assert.ok(body, "could not find RENDER_SPECS in playwright.config.js");
+  const render = new Set([...body[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]));
+
+  const scripts = JSON.parse(read("package.json")).scripts || {};
+  const offenders = [];
+  for (const [name, cmd] of Object.entries(scripts)) {
+    const proj = cmd.match(/--project=(\w+)/);
+    if (!proj) continue;                       // no pin, both projects are eligible
+    const wants = proj[1];
+    if (wants !== "render" && wants !== "headless") continue;
+    for (const m of cmd.matchAll(/tests\/([a-z0-9-]+)\.spec\.js/g)) {
+      const spec = m[1];
+      const inRender = render.has(spec);
+      if (wants === "render" && !inRender) offenders.push(`${name}: ${spec} is not in RENDER_SPECS`);
+      if (wants === "headless" && inRender) offenders.push(`${name}: ${spec} IS in RENDER_SPECS`);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    "a test:* group names a spec its pinned --project cannot match, so that spec never runs");
+});

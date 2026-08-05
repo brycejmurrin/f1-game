@@ -201,8 +201,10 @@
    The identity controls reuse the select screen's .team-card / .sel-chip /
    .sel-label / .sel-edit classes (css/menus.css) so the two screens cannot
    drift apart. Only the vertical rhythm is respecified: #cs-options is a flex
-   column, and the margin rule that spaces these on the select screen is scoped
-   `#sel-left .sel-label + *`, so it does not reach in here. */
+   column, so the two rules below own the spacing outright. (This used to say
+   the select screen's `#sel-left .sel-label + *` rule "does not reach in here";
+   both that rule and #sel-left were removed with the identity column, so there
+   is nothing left to be scoped away from.) */
 #cs-options > .sel-label:not(:first-child) { margin-top: calc(var(--gap) * 0.6); }
 #cs-options > .sel-edit-row { margin-top: calc(var(--gap) * 0.4); }
 

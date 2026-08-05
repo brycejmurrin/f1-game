@@ -1,4 +1,4 @@
-/* Apex 26 — the window.__apex dev/test API for js/game.js (~110 methods:
+/* Apex 26 — the window.__apex dev/test API for js/game.js (~180 methods:
    staging, cameras, track geometry, telemetry, session control, lighting,
    input override, headless obs/act loop). Extracted verbatim from game.js;
    live closure state is reached through the ctx façade G (getters/setters
@@ -1209,12 +1209,40 @@ const api = {
       setLightTune("matTexMix", Math.max(0, Math.min(1, +v || 0)));
       persistLightTune();
       if (typeof refreshLightTunePanel === "function") refreshLightTunePanel();
-      // The pack is fetched lazily, so turning the knob up is what triggers the
-      // download. Kick it here rather than waiting for the frame loop to notice,
-      // so matTex(1) starts fetching immediately instead of a frame later.
+      // The pack is NOT fetched lazily any more — js/game.js loads it
+      // unconditionally at boot, because with matTexMix shipping at 1.0 nobody
+      // can turn it down BEFORE their first load, so the lazy guard saved
+      // nobody anything and was removed. This call is therefore a no-op re-request
+      // in the normal case; it is kept for the one path that still needs it,
+      // matTex(1) after an explicit assetLoad(false) unload.
       if (LT.matTexMix > 0 && typeof Assets !== "undefined") Assets.load();
     }
     return LT.matTexMix;
+  },
+  // envProbe(on?) — the clear path for the apex26.envProbeOff LATCH.
+  //
+  // GLX sets that key on a WebGL context loss that happened while the page was
+  // VISIBLE (the memory-pressure signal, as opposed to iOS's benign loss on
+  // backgrounding). Persisting it stops a lose→reload→lose loop on genuinely
+  // memory-tight devices, which is right — but there was one setItem, one
+  // getItem, and nothing anywhere that could clear it: no UI, no hook, no
+  // mention in the docs. A device that lost its context once kept the live
+  // env-probe reflections disabled forever, and it presents as "reflections
+  // are just worse on my phone" rather than as a setting.
+  //
+  // No argument reads the state. `true` re-enables the probe, `false` disables
+  // it. game.js latches the value at module init, so a change needs a reload —
+  // reported rather than done silently.
+  envProbe(on) {
+    const KEY = "apex26.envProbeOff";
+    const read = () => { try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; } };
+    const was = read();
+    if (on !== undefined) {
+      try { if (on) localStorage.removeItem(KEY); else localStorage.setItem(KEY, "1"); }
+      catch (e) { /* private mode / storage disabled — nothing to clear */ }
+    }
+    const off = read();
+    return { on: !off, off, changed: off !== was, needsReload: off !== was };
   },
   // credits() — attribution roll for every baked asset in the pack.
   credits: () => (typeof Assets === "undefined" ? [] : Assets.credits()),
@@ -1982,7 +2010,9 @@ const api = {
   // whose ICE never completes (a sandboxed CI browser, a locked-down network)
   // spins indefinitely, so a test that builds one does not fail — it HANGS,
   // which is far worse. The far endpoint is kept here so the connection can be
-  // completed on demand via lobbyFakeConnect().
+  // completed on demand by lobbyWatch(), which drives it to onConnected().
+  // (There is no lobbyFakeConnect(); the nearest name, lobbyFakeConnected(), is
+  // a boolean reader.)
   lobbyFake(on) {
     if (!G.netLobby) return false;
     if (!on) { _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false; }
@@ -2745,6 +2775,22 @@ const api = {
     if (persist) Log.persist(spec === undefined ? null : spec);
     else if (spec !== undefined) Log.level(spec);
     return Log.level();
+  },
+
+  // persistState() — is localStorage actually storing anything?
+  //
+  //   { ok, broken, keys, rev }
+  //
+  // `ok:false` means a read or write has thrown, and `broken` names it
+  // ("QuotaExceededError", "SecurityError"). This is worth a hook of its own
+  // because the failure is otherwise INVISIBLE from inside the session: the
+  // store still caches the value it could not write, so every read for the rest
+  // of the session returns the right answer and only a reload reveals that
+  // nothing was ever saved. Safari on iOS puts the quota at 0 in Private
+  // Browsing, which is the case that actually loses a player's career.
+  persistState() {
+    const s = GameStore.store;
+    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev };
   },
 
   // save(data, filename) — hand a file back out of the browser.

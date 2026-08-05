@@ -7,7 +7,6 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | Tool | Does | Paired skill |
 |---|---|---|
 | **verify-track.cjs** | Headless build guard — loads the track defs + engine in a VM (file list from `manifest.cjs` `TRACK_VM`), runs `buildRoad/Terrain/Props/Gate`, fails on any THROW. `verify-track.cjs <id>` or `--all`. The fast pre-push check for any `js/circuits/*` or `js/track/*` edit. | debug-tracks |
-| **.vt-warn.cjs** | `verify-track.cjs` with `console.warn` un-silenced, so a scenery callback's warnings reach stderr instead of the VM's stub. Same usage. Diagnostic variant, not part of any gate. | debug-tracks |
 | **ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR counterpart to the lighting probes. | webgl-debug |
 | **manifest.cjs** | The **load-order single source of truth** — every `js/` file in dependency order, `HARD_EDGES` (eval-time load dependencies), and `TRACK_VM` (the subset verify-track/VM tests load). `index.html` script tags must match it; `tests/load-order.test.mjs` (`npm run test:tooling`) asserts they do. Adding a file = script tag + manifest entry. | check-changes |
 | **extract-module.mjs** | Assists further `game.js` extractions — moves a block into a new `js/game/` module with the `Module.create(G)` boilerplate and updates the manifest + script tags. | — |
@@ -16,7 +15,6 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **motion-capture.mjs** | Capture RENDERED MOTION (screenshots can't — headless rAF is frozen at 0 fps). Records a driven clip via `recordVideo` (which ticks the loop), extracts frames, scores per-frame flicker. For temporal artifacts (z-fight/clipping flicker, shadow crawl, pop-in) and A/B-verifying a renderer fix. Default output: `scratch/captures/motion-capture/<track>/`. `motion-capture.mjs <track> [sec] [speed]`. | motion-capture |
 | **survey-track.mjs** | One-command circuit survey — self-boots the game and emits screenshots (aerial + orbit + driver's-eye per spot → `scratch/captures/survey-track/<id>/`) **and** a lateral ground-profile probe table with auto-flagged holes/steps. `survey-track.mjs <id> [label] [fracs]`. | survey-track |
 | **carshot.mjs** | Cropped studio-orbit car JPEG (+ paint report). Self-boots. `carshot.mjs [az] [tod] [teamIdx] [outPath]` → `artifacts/tmp/carshot.jpg`. | playwright-probe / car-viewer |
-| **shot-car.mjs** | Full-frame chase-cam static + moving PNGs. Self-boots. → `artifacts/tmp/car-static.png` + `car-moving.png`. | playwright-probe |
 | **check-bank.mjs**, **check-grip.mjs**, **check-roadfollow.mjs**, **check-steer.mjs** | Physics stability probes — verify no-NaN / forward-motion / banking grip / steering authority via the headless loop. | tune-physics |
 | **audio-test.cjs** | Objective engine-audio pitch test (we can't listen headless). | audio-debug |
 | **bake-elevation.mjs** | Offline elevation baker — precompute per-track elevation profiles. | new-track |
@@ -29,7 +27,6 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **render-car.mjs** | Headless batch renderer for `carview.html` — screenshots preset orbit angles with studio lighting, writes frames + an HTML contact sheet to `scratch/renders/cars/<team>/`. `render-car.mjs [--views=a,b,c]`. Needs a server on :3456. | car-viewer |
 | **audit-parts.mjs** | Renders EVERY option of chosen part categories through `carview.html` (one page load) at the best view for each; per-category contact sheets → `scratch/renders/parts/<category>/`. `audit-parts.mjs [--cats=brakes,gearbox,ers] [--team=mclaren]`. | car-viewer |
 | **audit-aero.mjs** | Renders EVERY aero option from 3 wing views into one comparison sheet → `scratch/renders/aero/`. `audit-aero.mjs [--team=mclaren]`. | car-viewer |
-| **photoshoot.mjs** | Close-camera photo session across lighting/tracks (small JPEGs) → `artifacts/tmp/shoot`. | — |
 
 ### Test runner & coverage
 
@@ -58,19 +55,29 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **shot-sweep.mjs** | Parallel, LOGGED screenshot sweep. | playwright-probe |
 | **chase-shots.mjs** | N chase-camera screenshots evenly spaced around a lap. | playwright-probe |
 | **profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | perf-profile |
-| **fit-audit.mjs** | Does every menu FIT, and is everything on it big enough to hit — tap targets, type size and fit across nine viewports. | — |
 | **menu-fit.mjs** | Audits every menu screen for cramped/clipped layout at a given viewport. | — |
 | **ui-scale-axis.mjs** | The `--scale=` axis the three fit tools above share. The player can size the interface 80–150 % (SETTINGS ▸ DISPLAY), so "does this screen fit?" is one question per size, not one question — this turns each tool's screen × viewport matrix into screen × viewport × scale. Library, not a command. | — |
 | **track-accuracy-validator.mjs** | Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests. | new-track |
 | **refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data. Tests never call it and never touch the network. | new-track |
 | **import-circuit-path.mjs** | Projects a `bacinger/f1-circuits` (ODbL) GeoJSON feature into a `CircuitPaths` entry for `js/track/geo-paths.js`; `--self-check` regenerates the committed traces and diffs them so the projection can't silently drift. | new-track |
-| **fixture-consumer-audit.mjs** | Asserts every spec that needs the shared fixtures actually imports them (so nothing silently bypasses the API mocks). | — |
+| **fixture-consumer-audit.mjs** | RATCHET on `tests/fixtures.js` adoption: counts specs importing it, fails if the count drops, and pins the four load-bearing consumers. Raise its `FLOOR` when you migrate specs; never lower it. | — |
 | **output-paths.mjs** | Path-containment helpers enforcing the `artifacts/` vs `scratch/` output contract; `tests/output-paths.spec.js` gates it. | — |
 | **lighting-campaign/** | Batch lighting-sweep runner + its captures, driven by `tests/lighting-campaign.test.mjs`. | lighting-tuner |
-| **migrate-output-layout.mjs** | One-shot migration that moved generated output into the standard `artifacts/`/`scratch/` layout. | — |
 
 ## Conventions
 
+- **The capture tools are a family, not duplicates.** They keep getting flagged
+  as redundant, so: `apex-capture.mjs` is the canonical parallel sweep
+  (cameras/modes/tracks/identity/lap-tour); `shot-sweep.mjs` is the same shape
+  but LOGGED per step with a self-check on eye-to-car distance, for when a sweep
+  looks hung; `chase-shots.mjs` drives the real in-game CHASE camera rather than
+  the debug free-cam; `track-sweep.mjs` emits JSON and no images at all;
+  `carshot.mjs` is the ~5 KB cropped studio probe and `render-car.mjs` the full
+  contact sheet. Four tools that WERE redundant — `shot-car.mjs`,
+  `photoshoot.mjs`, `fit-audit.mjs` and the one-shot `migrate-output-layout.mjs`
+  — were deleted rather than merged. `menu-fit.mjs` survives `layout-audit.mjs`
+  only because of `--safe=` notch-inset simulation, which headless Chromium
+  cannot otherwise produce (it reports every `env(safe-area-inset-*)` as 0).
 - **Surveying a track:** `survey-track.mjs <id>` is the one-stop pass (shots +
   flagged probe). For a one-off framed shot use `.claude/skills/playwright-probe/shot.mjs`;
   for a parallel multi-track screenshot sweep use `apex-capture.mjs`; for a quick

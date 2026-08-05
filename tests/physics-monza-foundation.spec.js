@@ -11,7 +11,14 @@ test.describe("Monza track-owned foundation migration", () => {
     const result = await page.evaluate(() => {
       const def = window.TrackDefs.find((entry) => entry.id === "monza");
       const profile = window.__apex.trackProfile(240);
-      return {
+      // Centreline-only rebuild (spline + banking, no meshes) so the probes can
+      // ask where the ROAD SURFACE is, not just where its centreline is. Same
+      // handle tests/terrain-over-road.spec.js uses; note it needs the built
+      // Tracks.LIST entry (which carries `points`), not the authored TrackDefs
+      // one. Verified bit-identical to the live track's px/py/hw and banking().
+      const bankTrack = Tracks.buildCenterline(
+        Tracks.LIST.find((entry) => entry.id === "monza"));
+      const out = {
         coordinates: def.sceneryCoordinates,
         terrainOuter: def.terrainOuter,
         roggiaY: window.__apex.nodeAt(0.30).y,
@@ -21,10 +28,39 @@ test.describe("Monza track-owned foundation migration", () => {
         geometry: window.__apex.geometryDiagnostics(),
         models: window.__apex.modelDiagnostics(),
         walls: window.__apex.wallStats(),
+        // Terrain-over-road probe, measured against the ROAD SURFACE — not
+        // against the centreline. groundY().gap is `terrainY - centrelineY`,
+        // and on a banked corner that is not where the tarmac is: frac 0.30 is
+        // inside the Lesmo 1 bankZone (6 deg across a 16 m road), so the raised
+        // edge stands 0.66 m proud of the centreline plane. Terrain correctly
+        // tucked 0.366 m UNDER that edge therefore read gap = +0.294, "terrain
+        // above road", and failed — a reference error, not a geometry defect.
+        // All twelve probes sit at |lat| = 11 m, 3 m OUTSIDE the 8 m road edge,
+        // where terrain rising with the banking is exactly what should happen.
+        // (The identical trap was fixed once already inside eyeAt(); its header
+        // has the story. groundY() itself still reports the raw centreline gap.)
+        //
+        // Tracks.banking(bankTrack, s, lat).dy is the road's own cross-slope at
+        // that point — the same term buildRoad applies via bankOffsetAt() and
+        // the in-race cameras apply to sit the car on the tarmac. Measured
+        // (2026-08, headless VM build) `overRoad` lands in [-0.369, -0.343] for
+        // all twelve: the verge sits a uniform ~0.36 m below the road edge
+        // everywhere on the lap, banked corners included. Only the four probes
+        // inside a bankZone move at all; the other eight still equal `gap`.
         edgeProbes: [0.04, 0.30, 0.48, 0.73, 0.78, 0.90].flatMap((frac) =>
-          [-11, 11].map((lat) => ({ frac, lat, ...window.__apex.groundY(frac, lat) }))
+          [-11, 11].map((lat) => {
+            const ground = window.__apex.groundY(frac, lat);
+            const bank = Tracks.banking(bankTrack, frac * bankTrack.total, lat);
+            const roadSurfaceY = ground.roadY + (bank ? bank.dy : 0);
+            return {
+              frac, lat, ...ground,
+              roadSurfaceY: +roadSurfaceY.toFixed(3),
+              overRoad: ground.terrainY == null ? null : +(ground.terrainY - roadSurfaceY).toFixed(3),
+            };
+          })
         ),
       };
+      return out;
     });
 
     expect(result.coordinates).toBe("racing");
@@ -61,7 +97,7 @@ test.describe("Monza track-owned foundation migration", () => {
     expect(result.walls.tightFrac).toBeGreaterThan(0.6);
     for (const probe of result.edgeProbes) {
       expect(probe.terrainY, `terrain missing at ${probe.frac}:${probe.lat}`).not.toBeNull();
-      expect(probe.gap, `terrain above road at ${probe.frac}:${probe.lat}`).toBeLessThanOrEqual(0.18);
+      expect(probe.overRoad, `terrain above road at ${probe.frac}:${probe.lat}`).toBeLessThanOrEqual(0.18);
     }
   });
 });

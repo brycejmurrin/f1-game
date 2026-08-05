@@ -25,6 +25,7 @@
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,6 +33,21 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LOGDIR = path.join(ROOT, "artifacts/logs");
 const STATEFILE = path.join(LOGDIR, "test-bg.json");
 const WORKERS = process.env.WORKERS || "2";
+
+// THE CAP EXISTS BECAUSE OVERSUBSCRIPTION DOES NOT LOOK LIKE OVERSUBSCRIPTION.
+// Every Playwright worker drives a SwiftShader Chromium, so the real browser
+// count is (groups × WORKERS) and they are all CPU-bound. Past the core count
+// they starve each other and fail on their own timeouts — a screenshot that
+// takes 60 s, a spec that takes 120 s — which reads as a broken change rather
+// than as a busy machine. Measured here: five groups took the load average to
+// 46 on 4 cores with 94 Chromium processes, and every "failure" was a timeout.
+//
+// The tool used to accept any number and start them all, while docs/TESTING.md
+// and CLAUDE.md both said "at most two". A rule only one of the two places
+// knows is a rule that gets broken, so it lives here now, where it is enforced.
+// --force overrides it for a box that really is bigger.
+const CORES = os.availableParallelism ? os.availableParallelism() : (os.cpus().length || 4);
+const MAX_GROUPS = Math.max(1, Math.floor(CORES / (+WORKERS || 2)));
 
 const readState = () => {
   try { return JSON.parse(fs.readFileSync(STATEFILE, "utf8")); } catch (_) { return { runs: [] }; }
@@ -85,23 +101,67 @@ async function wait() {
   process.exitCode = bad.length ? 1 : 0;
 }
 
-function stop() {
+// KILL THE PROCESS GROUP, NOT THE npm WRAPPER. `process.kill(pid)` reached only
+// the `npm run test:<group>` shim; npm does not forward the signal, so
+// run-playwright, the Playwright runner and every Chromium it had opened were
+// orphaned and kept running — invisible to --status, still holding the CPU, and
+// still writing to the log file the NEXT run truncated under them.
+//
+// That is how this tool produced fake results. Measured after three `--stop`ed
+// groups: 117 Chromium processes on a 4-core box, load average 50.7, three
+// orphaned runners (one of them re-running the same physics specs as the live
+// run, into the same log). Every "failure" in that state was `Test timeout of
+// 120000ms exceeded` and not one was an assertion.
+//
+// spawn() uses `detached: true`, which makes each child a process-group leader
+// with pgid === pid, so a negative pid signals the whole tree. SIGTERM first so
+// Playwright can close its browsers, then SIGKILL anything still up.
+function stop({ graceMs = 4000 } = {}) {
   const s = readState();
+  const live = s.runs.filter((r) => alive(r.pid));
+  const signal = (pid, sig) => {
+    try { process.kill(-pid, sig); return true; } catch (_) {
+      try { process.kill(pid, sig); return true; } catch (_) { return false; } // not a group leader
+    }
+  };
   let n = 0;
-  for (const r of s.runs) {
-    if (!alive(r.pid)) continue;
-    try { process.kill(r.pid, "SIGTERM"); n++; } catch (_) {}
-  }
-  console.log(`sent SIGTERM to ${n} run(s)`);
+  for (const r of live) if (signal(r.pid, "SIGTERM")) n++;
+  console.log(`sent SIGTERM to ${n} run group(s)`);
+  if (!n) return;
+  const deadline = Date.now() + graceMs;
+  const spin = () => {
+    const still = live.filter((r) => alive(r.pid));
+    if (!still.length) return console.log("all stopped");
+    if (Date.now() < deadline) return setTimeout(spin, 250);
+    for (const r of still) { signal(r.pid, "SIGKILL"); console.log(`SIGKILL ${r.group} (pgid ${r.pid})`); }
+  };
+  setTimeout(spin, 250);
 }
 
-function start(groups) {
+function start(groups, force) {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
   if (unknown.length) {
     console.error(`no such group: ${unknown.join(", ")}`);
     console.error(`available: ${Object.keys(pkg.scripts).filter((k) => k.startsWith("test:")).map((k) => k.slice(5)).join(" ")}`);
     process.exit(2);
+  }
+  // Count what is ALREADY on the CPU. An earlier batch still running is exactly
+  // as expensive as one started now, and is the case most likely to be forgotten
+  // — it does not appear on this command line.
+  const running = readState().runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
+  const total = groups.length + running.length;
+  if (total > MAX_GROUPS && !force) {
+    console.error(`REFUSING: ${total} group(s) would run at once (${groups.length} asked for` +
+      `${running.length ? `, ${running.length} already running: ${running.map((r) => r.group).join(", ")}` : ""}),` +
+      ` but this box has ${CORES} cores and each group drives ${WORKERS} SwiftShader browsers.`);
+    console.error(`Past ~${MAX_GROUPS} they starve each other and fail on TIMEOUTS, which look like`);
+    console.error(`test failures and are not. Run them in batches instead:\n`);
+    for (let i = 0; i < groups.length; i += MAX_GROUPS) {
+      console.error(`    node tools/test-bg.mjs ${groups.slice(i, i + MAX_GROUPS).join(" ")}`);
+    }
+    console.error(`\n(--force overrides; WORKERS=1 raises the cap.)`);
+    process.exit(3);
   }
   fs.mkdirSync(LOGDIR, { recursive: true });
   const runs = [];
@@ -125,7 +185,20 @@ function start(groups) {
     runs.push({ group, pid: child.pid, log, started: new Date().toISOString() });
     console.log(`> test:${group.padEnd(14)} pid=${child.pid}  log=${path.relative(ROOT, log)}`);
   }
-  writeState({ runs, started: new Date().toISOString(), workers: WORKERS });
+  // MERGE WITH WHAT IS STILL RUNNING, don't clobber it. Starting a second batch
+  // used to replace the whole list, which ORPHANED everything already in
+  // flight: --status stopped listing it, --wait returned as soon as the new
+  // batch finished, and --stop left it running. That is not a cosmetic bug —
+  // an orphaned run keeps its workers on the CPU, so the next batch is
+  // measured against a machine that is quietly oversubscribed, and its
+  // timeouts read as test failures. Observed exactly that: `test-bg physics`
+  // then `test-bg tiny` left physics alive and invisible.
+  //
+  // A group started again SUPERSEDES its old entry — same log file, and the
+  // old process is about to be writing to a file the new one truncated.
+  const prior = readState().runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
+  if (prior.length) console.log(`  (still running from an earlier start: ${prior.map((r) => r.group).join(", ")})`);
+  writeState({ runs: [...prior, ...runs], started: new Date().toISOString(), workers: WORKERS });
   console.log(`\ntail one:   tail -f ${path.relative(ROOT, runs[0].log)}`);
   console.log(`tail all:   tail -f ${runs.map((r) => path.relative(ROOT, r.log)).join(" ")}`);
   console.log(`check:      node tools/test-bg.mjs --status`);
@@ -141,6 +214,6 @@ else if (argv.includes("--tail")) {
   const r = readState().runs.find((x) => x.group === g);
   console.log(r ? `tail -f ${path.relative(ROOT, r.log)}` : `no run recorded for group "${g}"`);
 } else if (!argv.length) {
-  console.error("usage: node tools/test-bg.mjs <group> [group...]   |   --status | --wait | --stop | --tail <group>");
+  console.error("usage: node tools/test-bg.mjs <group> [group...] [--force]   |   --status | --wait | --stop | --tail <group>");
   process.exit(2);
-} else start(argv.filter((a) => !a.startsWith("--")));
+} else start(argv.filter((a) => !a.startsWith("--")), argv.includes("--force"));

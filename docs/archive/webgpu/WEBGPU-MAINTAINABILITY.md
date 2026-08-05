@@ -1,6 +1,6 @@
 # WebGPU maintainability review + refactor design — Apex 26
 
-Companion / critical review of [`docs/WEBGPU-MIGRATION.md`](./WEBGPU-MIGRATION.md).
+Companion / critical review of [`docs/archive/webgpu/WEBGPU-MIGRATION.md`](./WEBGPU-MIGRATION.md).
 Where that document asks *"how do we add WebGPU?"*, this one asks *"what should we
 refactor so the current renderer is easier to maintain — and, as a side effect,
 so a future WebGPU port is cheaper?"*
@@ -11,8 +11,9 @@ itself. All line citations are against the tree as read on 2026-07-03
 
 > **Status update:** the review below treats the WebGPU backend (roadmap steps
 > 8-12) as gated future work. It has since been **built and wired in, opt-in,
-> through Phase 4b** — `index.html` loads `js/render/webgpu/wgx.js` (+ the WGSL chunk /
-> post / fx files) and `js/render/gfx.js`, activated only via
+> through Phase 4b** — `js/render/webgpu/wgx.js` (+ the WGSL chunk / post / fx
+> files) is `DEFERRED` in `tools/manifest.cjs` with **no `<script>` tag**, injected
+> by `js/game.js` at boot; only `js/render/gfx.js` has a tag. Activated only via
 > `localStorage apex26.gfxBackend = "webgpu"` with WebGL2/GLX as the default
 > fallback. The maintainability arguments here still stand; treat the "if
 > committing to WebGPU" framing as historical.

@@ -22,10 +22,15 @@
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Kept in step with tools/test-bg.mjs, which enforces the same arithmetic.
+const WORKERS = +process.env.WORKERS || 2;
+const CORES = os.availableParallelism ? os.availableParallelism() : (os.cpus().length || 4);
+const MAX_GROUPS = Math.max(1, Math.floor(CORES / WORKERS));
 
 /* [matcher, groups, why] — matcher is a RegExp over the repo-relative path.
    Every rule that matches contributes its groups; the union is what runs. */
@@ -139,9 +144,26 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   console.log(`\n${names.length} group(s) to run:`);
   for (const g of names) console.log(`    test:${g.padEnd(14)} ${[...groups.get(g)][0]}`);
 
+  // BATCHED, because this is deliberately biased toward running too much and a
+  // wide selection pasted as one command oversubscribes the box. Every worker
+  // drives a SwiftShader Chromium, and past the core count they fail on their
+  // own timeouts — which read as a broken change rather than a busy machine.
+  // test-bg.mjs enforces the same cap, so an unbatched paste is now refused
+  // rather than silently producing fake failures; this just prints the shape it
+  // will accept. (Doing this in the suggester alone would not have been enough:
+  // the rule was in CLAUDE.md and docs/TESTING.md the whole time, and this tool
+  // still handed out a nine-group command.)
+  const batches = [];
+  for (let i = 0; i < names.length; i += MAX_GROUPS) batches.push(names.slice(i, i + MAX_GROUPS));
+  const cmds = batches.map((b) => `node tools/test-bg.mjs ${b.join(" ")}`);
   if (argv.includes("--bg")) {
-    console.log(`\nnode tools/test-bg.mjs ${names.join(" ")}`);
+    console.log("\n" + cmds.join("\n"));
   } else {
-    console.log(`\nrun them in the background, with logs:\n    node tools/test-bg.mjs ${names.join(" ")}`);
+    console.log(`\nrun them in the background, with logs — ONE BATCH AT A TIME` +
+      ` (${CORES} cores, ${WORKERS} workers per group):`);
+    for (const c of cmds) console.log(`    ${c}`);
+  }
+  if (batches.length > 1) {
+    console.log(`\nwait for each batch before starting the next:  node tools/test-bg.mjs --wait`);
   }
 }

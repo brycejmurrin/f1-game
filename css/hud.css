@@ -187,7 +187,11 @@
 #announce {
   position: fixed;
   top: calc(30svh / var(--hud-scale)); left: 50%; transform: translateX(-50%);
-  font-size: clamp(30px, 8vw, 64px);
+  /* --vwzh, the HUD twin: this element IS zoomed by --hud-scale (see hud.css:34),
+     so a bare 8vw renders as 9.2vw at the touch default. `nowrap` + a centring
+     translate means the longest banner ran off both edges of a 667px landscape
+     phone. The `top` above has always divided; the type had not. */
+  font-size: clamp(30px, calc(8 * var(--vwzh)), 64px);
   font-weight: 800; font-style: italic;
   text-shadow: 0 0 24px rgba(225, 6, 0, 0.8);
   z-index: 15;
@@ -352,7 +356,7 @@ body.pc-uihidden #pc-restore { display: block; }
    definitely has the keys was the one told nothing about them. `any-pointer`
    describes the union of every input attached, so "no fine pointer anywhere" is
    the honest test for "no keyboard to speak of".
-   Used sparingly and only here, per the note in docs/research/UI-LAYOUT-RESEARCH.md
+   Used sparingly and only here, per the note in docs/archive/research/UI-LAYOUT-RESEARCH.md
    §11: these features mislead in both directions, and this is the narrow case
    where the affordance is otherwise unreachable rather than merely awkward.
    The narrow-screen clause is unchanged — there is no room for it either way. */

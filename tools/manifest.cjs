@@ -110,6 +110,7 @@ const FULL = [
   "js/game/light-presets.js",
   "js/game/tables.js",
   "js/game/lighting.js",
+  "js/game/light-store.js",
   "js/game/carmesh.js",
   "js/game/bodyattitude.js",
   "js/game/particles.js",
@@ -127,11 +128,15 @@ const FULL = [
   "js/game/topmodal.js",
   "js/game/menunav.js",
   "js/game/ariastate.js",
+  "js/game/aerozones.js",
+  "js/game/skidmarks.js",
+  "js/game/racecontrol.js",
   "js/game/photomode.js",
   "js/game/tuner.js",
   "js/game/cam-tuner.js",
   "js/game/steer-tuning.js",
   "js/game/perf.js",
+  "js/game/wakelock.js",
   "js/game/cameras.js",
   "js/game/hud.js",
   "js/game/results.js",
@@ -288,6 +293,11 @@ const HARD_EDGES = [
   ["js/car/parts.js", "js/game/career.js"],     // Career.start seeds owned/fitted from Parts (call time, keep ordered)
   ["js/car/driver-ratings.js", "js/game.js"],   // makeCars reads DriverRatings for every car's skill
   ["js/game/career.js", "js/game/quali.js"],    // quali reads Career.rnd/devFor for its spread
+  ["js/game/aerozones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
+  ["js/game/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create(G) at eval time
+  ["js/game/racecontrol.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
+  ["js/game/lighting.js", "js/game/light-store.js"],  // light-store destructures LightTune's TUNE_DEFS/LT inside create()
+  ["js/game/light-store.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/game/career.js", "js/game/reliability.js"],  // reliability draws through Career.hash (call time, keep ordered)
   ["js/car/parts.js", "js/game/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
   ["js/game/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval

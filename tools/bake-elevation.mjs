@@ -135,7 +135,12 @@ ${body}
 };
 if (typeof window !== "undefined") window.CircuitElevations = CircuitElevations;
 `;
-const outPath = join(ROOT, "js", "circuit-elevations.js");
+// js/track/, not js/ — this was missed in the js/ -> js/track/ reorganisation,
+// so the tool wrote to a path that its own next line then told you to script-tag
+// from js/track/, and following its instructions produced a 404. Everything else
+// (tools/manifest.cjs, js/track/tracks.js, this file's own header) already
+// agreed on js/track/.
+const outPath = join(ROOT, "js", "track", "circuit-elevations.js");
 writeFileSync(outPath, file);
 console.log(`\nWrote ${outPath} (${Object.keys(data).length} circuits).`);
 console.log("Add <script src=\"js/track/circuit-elevations.js?v=NN\"></script> before js/track/tracks.js.");

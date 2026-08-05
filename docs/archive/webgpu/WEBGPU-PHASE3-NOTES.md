@@ -84,7 +84,7 @@ half of every scene — and every shadow caster — would have been clipped.
   paint reflections. **Since implemented (Phase 4b):** they render a real
   RGBA16F cube one face/frame and the LIT shader samples it once a 6-face cycle
   completes; the default reflection is the cheap analytic sky when no probe is
-  active. See `docs/WEBGPU-PHASE4-NOTES.md`.
+  active. See `docs/archive/webgpu/WEBGPU-PHASE4-NOTES.md`.
 - **Phase 5** — instancing (`drawElementsInstanced` equivalent) for lamps/trees/
   wheels/blob-shadows to cut draw calls.
 - **Integration** — wire `js/render/gfx.js` into `index.html` + the async boot in

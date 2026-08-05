@@ -104,7 +104,7 @@ try {
   const optIn = !phone && (pref === "three" || (pref === "webgpu" && navigator.gpu));
   if (optIn && typeof Gfx !== "undefined") {
     // FETCH THE BACKEND ONLY NOW. Neither alternate has a <script> tag any more:
-    // together they are ~532 KB that every visitor downloaded, parsed and
+    // together they are ~550 KB that every visitor downloaded, parsed and
     // evaluated so that almost none of them could use it. `optIn` above is
     // resolved synchronously from localStorage, so the default GLX path never
     // reaches this line and never awaits anything.
@@ -356,7 +356,7 @@ const DOWNFORCE = 0.65;     // extra grip fraction at VMAX (0 = no wings)
 // refuses to rotate the wings outside one — it is not a proximity window like
 // DRS, and it is not a rolling "is the road ahead clear" test either. A zone
 // only exists where a straight exceeds three seconds at racing speed, which is
-// why MONACO has none and runs no active aero at all. See buildAeroZones().
+// why MONACO has none and runs no active aero at all. See js/game/aerozones.js.
 // Leaving the zone (or touching the brake) SLAMS the flap shut — X_CLOSE_RATE is deliberately several times
 // X_OPEN_RATE, so the downforce comes back faster than it left. Both directions
 // sit inside the FIA's 400 ms transition cap.
@@ -392,15 +392,9 @@ function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c
 // Closing is deliberately faster (still inside the cap) — see X_CLOSE_RATE.
 const X_OPEN_RATE = 2.6;    // aeroX per second opening (~0.385 s, inside the 400 ms cap)
 const X_CLOSE_RATE = 8.0;   // aeroX per second closing (~0.125 s back to Z — well inside the cap)
-const X_STRAIGHT_T = 3.0;   // s of clear road ahead required to arm (FIA's rule)
-const X_LOOK_MAX = 260;     // m — upper clamp on that look-ahead
-const X_K_MAX = 0.0045;     // curvature that still counts as "straight" (r ~ 220 m)
-// Curvature that counts as straight FOR A ZONE — much stricter than X_K_MAX,
-// which was tuned for "is the car allowed to hold the mode right now" and lets a
-// 220 m-radius kink through. Approving zones at that threshold gave MONACO four
-// of them, which is exactly the circuit the real rule exists to exclude. A zone
-// is a proper straight (r >= ~700 m), and the length test then does the rest.
-const X_ZONE_K = 0.0014;
+// (X_STRAIGHT_T and X_ZONE_K used to sit here. They belong to the zone SCAN, so
+// they live in js/game/aerozones.js now — along with the X_K_MAX / X_LOOK_MAX
+// story, which is about the rolling look-ahead the zone scan replaced.)
 const X_MIN_SPEED = 25;     // m/s (a vStd() threshold) — no X-mode at crawl speed
 // Lateral grip OFF the racing surface. muBase had no off-track term at all, so
 // grass and gravel cornered exactly like tarmac and only scrubbed forward speed —
@@ -611,82 +605,20 @@ function regenFor(c) { return lerp(REGEN_LO, REGEN_HI, ersRegenOf(c)); }
 function otTimeFor(c) { return lerp(OT_TIME_LO, OT_TIME_HI, ersDeployOf(c)); }
 function otCoolFor(c) { return lerp(OT_COOL_HI, OT_COOL_LO, ersDeployOf(c)); }
 
+let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
 // -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
-// The real system does NOT ask "is the road ahead straight enough right now".
-// The FIA approves fixed ACTIVATION ZONES per circuit, and the standard ECU
-// refuses to rotate the wings unless the car is inside one. A zone only exists
-// if it is longer than three seconds at racing speed — the rule that leaves
-// MONACO with no zones at all, and therefore no active aero.
+// The zone GEOMETRY lives in js/game/aerozones.js (AeroZones.create(G), wired
+// after the G façade as `aeroZ`). It is pure circuit geometry — curvature in,
+// arc-metre spans out — and knows nothing about a car. What stays here is the
+// half that reads car state: whether THIS car is in a zone, and what opening
+// the wing costs it.
 //
-// That distinction is the whole feel of the mechanic. A rolling look-ahead (what
-// this used to be) has no start and no end: the window opens and closes under
-// you as the road bends, so there is nothing to learn and nothing to see coming.
-// Fixed zones are a place on the track. You can be shown the boards, you can
-// know the next one is 400 m away, and pressing the button becomes a thing you
-// do SOMEWHERE rather than a thing you retry until it takes.
-//
-// Zones are measured against a fixed reference speed, not the car's own: they
-// are a property of the CIRCUIT, and the OVERALL SPEED slider must not silently
-// add or remove them (PACE scales real m/s — see vTop()/vStd()).
-const X_ZONE_VREF = 70;                       // m/s — "racing speed" for the 3 s test
-const X_ZONE_MIN = X_STRAIGHT_T * X_ZONE_VREF;  // 210 m — the FIA's three seconds
-const X_ZONE_STEP = 8;                        // m between curvature samples
-let aeroZones = [];                           // [{start, end, len}] in arc metres
-
-// Scan the whole lap for contiguous runs under X_ZONE_K and keep the ones long
-// enough to qualify. Runs are found on the OPEN lap then the wrap is stitched,
-// so a straight crossing the start line is one zone rather than two short ones
-// that each fail the length test.
-function buildAeroZones() {
-  aeroZones = [];
-  if (!track || !track.total) return;
-  const total = track.total, n = Math.max(8, Math.round(total / X_ZONE_STEP));
-  const straight = new Array(n);
-  for (let i = 0; i < n; i++) {
-    straight[i] = Math.abs(Tracks.curvature(track, (i + 0.5) * total / n)) <= X_ZONE_K;
-  }
-  if (straight.every((v) => v)) {   // a full-lap oval: one zone, the whole lap
-    aeroZones = [{ start: 0, end: total, len: total }];
-    return;
-  }
-  let i0 = 0;
-  while (i0 < n && straight[i0]) i0++;          // begin at a corner, so no run is cut
-  const runs = [];
-  let cur = null;
-  for (let k = 0; k < n; k++) {
-    const i = (i0 + k) % n;
-    if (straight[i]) {
-      if (!cur) cur = { start: i * total / n, len: 0 };
-      cur.len += total / n;
-    } else if (cur) { cur.end = cur.start + cur.len; runs.push(cur); cur = null; }
-  }
-  if (cur) { cur.end = cur.start + cur.len; runs.push(cur); }
-  for (const r of runs) if (r.len >= X_ZONE_MIN) aeroZones.push(r);
-}
-// The zone containing arc position s, or null. Zones can run past `total` when
-// they wrap the start line, hence the second test.
-function aeroZoneAt(s) {
-  if (!track || !track.total) return null;
-  for (const z of aeroZones) {
-    if (s >= z.start && s <= z.end) return z;
-    if (z.end > track.total && s + track.total <= z.end) return z;   // wrapped
-  }
-  return null;
-}
-// Metres from s to the start of the next zone (0 when already inside one), or
-// Infinity on a circuit with no zones at all.
-function aeroZoneAhead(s) {
-  if (!aeroZones.length || !track) return Infinity;
-  if (aeroZoneAt(s)) return 0;
-  let best = Infinity;
-  for (const z of aeroZones) {
-    let d = z.start - s;
-    if (d < 0) d += track.total;
-    if (d < best) best = d;
-  }
-  return best;
-}
-function xStraightAhead(c) { return !!aeroZoneAt(wrapS(c.s)); }
+// X_STRAIGHT_T / X_ZONE_K / X_ZONE_VREF / X_ZONE_MIN / X_ZONE_STEP live with the
+// geometry. (The first two were COPIED rather than moved when this was
+// extracted, so dead duplicates sat up at ~line 395 for a while with this
+// comment asserting they had gone. An extraction is not done until the
+// originals are deleted.)
+function xStraightAhead(c) { return !!aeroZ.at(wrapS(c.s)); }
 // Live downforce multiplier on the DOWNFORCE (aero-load) term. 1 in Z-mode,
 // 1 - X_DF_LOSS with the flaps fully open. Nothing else in the grip model
 // changes: mechanical grip, kerbs, weather and the friction ellipse are
@@ -767,37 +699,17 @@ let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
-// B1 — debris caution (local yellow / VSC / safety car). A READ-ONLY race-logic
-// layer: it consumes DebrisWorld.hazards() (settled debris/broken panels resting
-// ON the racing surface) and drives the HUD flag. It NEVER slows or moves a car
-// — no writes to speed/px/pz/head/(s,x). DEFAULT ON; disable apex26.caution="0".
-let _cautionOn = true;
-try { _cautionOn = (localStorage.getItem("apex26.caution") || "1") !== "0"; } catch (e) {}
-// Written by the CAUTIONS race setting and by __apex.caution({enabled}). Turning
-// it OFF must also DROP a flag that is already flying — otherwise the HUD keeps
-// showing a safety car that nothing is maintaining any more. resetCaution() is
-// declared later, so this is a function declaration (hoisted) rather than a
-// const, and the guard lets it be called before the race loop exists.
-function setCautionEnabled(on) {
-  _cautionOn = !!on;
-  try { localStorage.setItem("apex26.caution", _cautionOn ? "1" : "0"); } catch (e) {}
-  if (!_cautionOn) resetCaution();
-  return _cautionOn;
-}
-// level: 0 GREEN · 1 local YELLOW (sector) · 2 VSC · 3 SAFETY CAR.
-let caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
-// Last flag state broadcast to a networked guest, so only CHANGES are sent.
-// Declared here rather than next to publishCaution(): resetCaution() assigns
-// it and is defined earlier in the file, so a late `let` would be a temporal
-// dead zone error the first time a race reset it.
-let _cautionSent = "";
-let _cautionQT = 0;   // hazard-query throttle accumulator (s) — query at ~4 Hz
-const CAUTION_YELLOW_MIN = 3;   // settled hazards in ONE sector → local yellow
-const CAUTION_VSC_MIN = 6;      // total settled hazards on the surface → VSC
-const CAUTION_SC_MIN = 10;      // a big pile → full safety car
-const CAUTION_MIN_HOLD = 6;     // s a caution holds once raised (anti-flicker)
-const CAUTION_YELLOW_MAX = 30;  // s hard cap on a local yellow
-const CAUTION_SC_MAX = 90;      // s hard cap on VSC/SC — bounded, ~a lap or two
+// B1 — RACE CONTROL (local yellow / VSC / safety car) lives in
+// js/game/racecontrol.js. A READ-ONLY race-logic layer: it consumes
+// DebrisWorld.hazards() and drives the HUD flag, and NEVER writes speed, px,
+// pz, head or (s, x). The five below are thin passes through to it, kept as
+// hoisted function declarations so the G façade below can name them directly.
+let raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
+function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
+function updateCaution(dt) { raceCtl.update(dt); }
+function applyCaution(d) { return raceCtl.apply(d); }
+function cautionInfo() { return raceCtl.info(); }
+function otEnabled() { return raceCtl.otEnabled(); }
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let hideMeshes = {};   // debug: per-mesh visibility toggle (set via __apex.meshToggle)
 let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
@@ -1111,42 +1023,11 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0;
-const MAX_SKID = 120;
-const skidMarks = Array.from({ length: MAX_SKID }, () => new Float32Array(16));
-let skidActive = 0;           // how many marks are live (grows to MAX_SKID then stays)
-let skidIdx = 0;
-let skidFrameT = 0;           // frame countdown between stamp placements
-// Batched skid trail: all live marks baked into one world-space vertex buffer
-// (pos3 + uv2 per vertex, 6 verts/mark) drawn in a single call. Rebuilt only
-// when a mark is added/evicted (at most every ~5 frames while sliding) instead
-// of issuing up to 120 per-mark draws every frame.
-const _skidVerts = new Float32Array(MAX_SKID * 6 * 5);
-let _skidVertCount = 0;
-let _skidBatchDirty = false;
-const _SKID_W = 0.6, _SKID_L = 2.2;
-// 6 verts (two tris) — matches the shadowVAO quad winding [0,1,2, 0,2,3].
-const _SKID_CORNERS = [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5];
-function rebuildSkidBatch() {
-  const full = skidActive >= MAX_SKID, cnt = full ? MAX_SKID : skidActive;
-  let o = 0;
-  for (let i = 0; i < cnt; i++) {
-    const M = full ? skidMarks[(skidIdx + i) % MAX_SKID] : skidMarks[i];
-    const m0 = M[0], m1 = M[1], m2 = M[2], m4 = M[4], m5 = M[5], m6 = M[6],
-          m8 = M[8], m9 = M[9], m10 = M[10], m12 = M[12], m13 = M[13], m14 = M[14];
-    for (let v = 0; v < 6; v++) {
-      const ax = _SKID_CORNERS[v * 2], ay = _SKID_CORNERS[v * 2 + 1];
-      const lx = ax * _SKID_W, lz = ay * _SKID_L;
-      _skidVerts[o++] = m0 * lx + m4 * 0.02 + m8 * lz + m12;
-      _skidVerts[o++] = m1 * lx + m5 * 0.02 + m9 * lz + m13;
-      _skidVerts[o++] = m2 * lx + m6 * 0.02 + m10 * lz + m14;
-      _skidVerts[o++] = ax * 2;
-      _skidVerts[o++] = ay * 2;
-    }
-  }
-  _skidVertCount = cnt * 6;
-  _skidBatchDirty = false;
-}
-
+let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
+// Tyre marks (the 120-entry ring buffer, its batched vertex build and the
+// per-mark fallback draw) live in js/game/skidmarks.js — SkidMarks.create(G),
+// wired after the G façade as `skids`. Nothing outside that module reads its
+// state, which is what made it liftable.
 const { PAINT_WET_NIGHT, PAINT_WET_DAY, PAINT_DRY_NIGHT, PAINT_DRY_DAY } = GameTables;  // car paint materials (see js/game/tables.js)
 // Apply the CAR tuner group (LT.car*) to a base paint constant, into a reused
 // scratch object (gfx.draw consumes the material synchronously, so one scratch
@@ -1830,7 +1711,7 @@ Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
-        getErsBar, getOtLamp, getPedalBar } = CarMesh;
+        getErsBar, getOtLamp } = CarMesh;
 const _decalTexCache = {};
 function invalidateDecalTextures(teamId) {
   const prefix = teamId + ":";
@@ -2267,7 +2148,7 @@ function loadTrack(idx) {
     DebrisWorld.registerFurniture(track);
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
-    buildAeroZones();           // fixed ACTIVATION ZONES for this circuit
+    aeroZ.build();              // fixed ACTIVATION ZONES for this circuit
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
     if (gfx.envProbeReset) gfx.envProbeReset();
@@ -2439,33 +2320,6 @@ function launchFlyingLap() {
   announce("QUALIFYING LAP", 1.6);
 }
 
-// SCREEN WAKE LOCK, held for the duration of a race. Without it the system
-// idle timer runs during a Grand Prix same as any other page, and tilt
-// steering sends NO input events by construction (orientation is a sensor
-// read, not user input) — so on a phone driving by tilt the screen dims and
-// locks mid-race with nothing the player did wrong. js/net/lobby.js already
-// holds one for the same reason while the VS FRIEND waiting room is open;
-// this is that shape, copied rather than reinvented. Browsers release the
-// lock on every hide (spec), so it is re-acquired on return by the
-// visibilitychange handler below rather than a second listener here.
-let raceWake = null;
-let raceWakeWanted = false;
-function holdRaceWake() {
-  raceWakeWanted = true;
-  try {
-    if (!navigator.wakeLock || raceWake) return;
-    navigator.wakeLock.request("screen").then((l) => {
-      raceWake = l;
-      l.addEventListener("release", () => { raceWake = null; });
-    }).catch(() => {});
-  } catch (e) {}
-}
-function dropRaceWake() {
-  raceWakeWanted = false;
-  try { if (raceWake) raceWake.release(); } catch (e) {}
-  raceWake = null;
-}
-
 function startRace() {
   // Abort any incident takeover left over from the last race, FIRST — while the
   // cars it owns and the track they crashed on are both still the current ones.
@@ -2531,7 +2385,7 @@ function startRace() {
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
-  skidActive = 0; skidIdx = 0; skidFrameT = 0; _skidBatchDirty = true;
+  skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   clearMenuScreens();
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
@@ -2543,7 +2397,7 @@ function startRace() {
   // and setMusic/setSfx lift it if it is off, so it can never strand you.
   els.soundbtn.hidden = true;
   document.body.classList.add("in-race");
-  holdRaceWake();
+  WakeLock.hold();
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
   dbgCam = null;              // fresh race — drop any leftover debug free-cam
@@ -2672,7 +2526,7 @@ function endRace(forcedOrder) {
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
   state = "results";
   document.body.classList.remove("in-race");
-  dropRaceWake();
+  WakeLock.drop();
   els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
@@ -2733,6 +2587,8 @@ function endRace(forcedOrder) {
   els.results.hidden = false;
 }
 
+let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
+
 // ── The shared ctx façade over game.js closure state ─────────────────────────
 // Extracted modules (js/game/results.js, hud.js, apex.js, …) can't reach the
 // closure `let`s in this file, so game.js hands them ONE object of live
@@ -2763,7 +2619,6 @@ const G = {
   get career() { return Career.data(); },
   get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
-  openCareerSlots: (...a) => openCareerSlots(...a),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   get ttNewRecord() { return ttNewRecord; },
@@ -2855,9 +2710,9 @@ const G = {
   // Repaint the pause-menu button too: __apex.aeroMode() and the button are two
   // doors onto one value, and a stale label is a lie about the car's behaviour.
   set raceAeroMode(v) { raceAeroMode = v; store.set("aeroMode", v); refreshAeroBtn(); },
-  get aeroZones() { return aeroZones; },
-  aeroZoneAt: (s) => aeroZoneAt(s),
-  aeroZoneAhead: (s) => aeroZoneAhead(s),
+  get aeroZones() { return aeroZ ? aeroZ.zones : []; },
+  aeroZoneAt: (s) => aeroZ.at(s),
+  aeroZoneAhead: (s) => aeroZ.ahead(s),
   stepSetupAero: (dt) => stepSetupAero(dt),
   // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
   // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
@@ -2903,7 +2758,9 @@ const G = {
   get _photoPrevScale() { return _photoPrevScale; }, set _photoPrevScale(v) { _photoPrevScale = v; },
   get photoAlt() { return photoAlt; }, set photoAlt(v) { photoAlt = v; },
   get photoVertT() { return photoVertT; }, set photoVertT(v) { photoVertT = v; },
-  get _ltStore() { return _ltStore; }, set _ltStore(v) { _ltStore = v; },
+  // The live profile object owned by js/game/light-store.js — photomode.js
+  // deletes a key out of it for the tuner's RESET and merges it for COPY VALUES.
+  get _ltStore() { return ltStore.profiles; }, set _ltStore(v) { ltStore.profiles = v; },
   photoCam, photoKeys, photoMouse, photoMove, photoLook,
   applyResMode: (...a) => applyResMode(...a),
   setPaused: (...a) => setPaused(...a),
@@ -2916,6 +2773,7 @@ const G = {
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
   isRaining: () => isRaining(),
   isWetRoad: () => isWetRoad(),
+  initRainDrops: () => initRainDrops(),
   isFloodActiveSession: () => isFloodActiveSession(),
   _nightAmbientBand: () => _nightAmbientBand(),
   applyLightTune: (fromApplyRace) => applyLightTune(fromApplyRace),
@@ -2969,6 +2827,12 @@ const G = {
   startRace, startWeatherArc, update, wrapS,
 };
 
+// Lighting profile resolution + persistence (js/game/light-store.js). FIRST of
+// the module wires: it reads the saved profiles at construction, and
+// Atmosphere's applyRaceSettings — created a few lines down — calls into it.
+ltStore = LightStore.create(G);
+// Race control: the caution flag state machine (js/game/racecontrol.js).
+raceCtl = RaceControl.create(G);
 // Results / TT-leaderboard / standings DOM builders (js/game/results.js).
 const { buildResults, buildTTResults, buildStandings } = GameResults.create(G);
 // In-race HUD + minimap (js/game/hud.js).
@@ -2986,6 +2850,10 @@ const careerUi = CareerUI.create(G);
 // QUALIFYING (js/game/quali.js) — the flying lap plus the simulated field it is
 // measured against. Holds the classification between the session and the grid.
 const quali = Quali.create(G);
+// ACTIVE AERO activation zones (js/game/aerozones.js) — pure circuit geometry.
+aeroZ = AeroZones.create(G);
+// Tyre marks (js/game/skidmarks.js) — self-contained ring buffer + batched draw.
+skids = SkidMarks.create(G);
 // Photo mode (js/game/photomode.js).
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
@@ -3047,7 +2915,7 @@ function quitToMenu() {
   closeCamTuner(false);
   state = "menu"; paused = false;
   document.body.classList.remove("in-race");
-  dropRaceWake();
+  WakeLock.drop();
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
@@ -4446,9 +4314,20 @@ function updateCar(c, dt, ranked) {
     }
   }
 
-  // line crossing (forward only: ds > 0 prevents backward crossings from incrementing lap)
+  // Line crossing. `ds > 0` stops a backward crossing INCREMENTING the lap, but
+  // for a long time nothing undid one either — there was no `lap--` anywhere in
+  // js/, while `c.prog` was symmetric. So crossing the line, being shoved back
+  // over it by shiftLong (contact resolution moves a car up to ~4-5 m along the
+  // road) and crossing again added a SECOND lap, and `c.finished` could fire a
+  // full lap early. The backward branch below restores the symmetry `prog`
+  // already had.
   if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
+    // Retained so the backward branch can put the clock back. Without it a
+    // re-crossing records the few tenths since the reset as a completed lap —
+    // which is not just a wrong readout, it beats `c.best` and becomes the
+    // stored ghost.
+    c._lapTimeAtLine = c.lapTime;
     // A takeover (R2/R3/C1) during this lap invalidates it EXPLICITLY: the car
     // was moved by Rapier, so the lap is not a legitimate timed lap. Don't let it
     // set a personal best or become the stored ghost; just start the next lap
@@ -4477,6 +4356,19 @@ function updateCar(c, dt, ranked) {
       c.finished = true;
       c.finishT = raceT;
       if (c.isPlayer) announce("FINISH!", 2);
+    }
+  } else if (ds < 0 && oldS < track.total * 0.5 && c.s > track.total * 0.5) {
+    // Backward over the line: give the lap back and put the clock where it was,
+    // so the next forward crossing re-times the SAME lap rather than a sliver.
+    // Only the player can get here — updateCar overwrites `ds` with
+    // `c.speed * dt` for every AI car, so their `ds` is never negative.
+    if (c.lap > 0) {
+      c.lap--;
+      c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;
+      // Re-crossing forward will re-announce and re-report this lap, so it must
+      // not also count as a fresh completion for the race result.
+      if (c.finished && c.lap <= lapsTarget) { c.finished = false; c.finishT = 0; }
+      if (c.isPlayer) { sectorIdx = sectorAt(c.s); sectorStartT = c.lapTime; }
     }
   }
   // Skip ghost recording while the current lap is incident-invalidated (a
@@ -4553,125 +4445,6 @@ function updateCar(c, dt, ranked) {
     }
   }
   c._prevS = c.s;
-}
-
-// B1 — debris caution state machine. Consumes the deterministic
-// DebrisWorld.hazards() picture (settled debris/broken panels ON the racing
-// surface, bucketed per sector) at ~4 Hz and resolves the flag state with
-// hysteresis: a caution raises immediately but only lowers after CAUTION_MIN_HOLD
-// (or a hard time cap), so it can't flicker as debris despawns. READ-ONLY: it
-// sets flag state + drives the HUD; it never touches any car's motion. Inert
-// unless the debris side-world is live AND apex26.caution is on AND we're racing.
-const _CAUTION_LBL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR"];
-function resetCaution() {
-  caution = { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
-  _cautionQT = 0;
-  // Clear the change-detector too, or the next race's first flag looks like a
-  // repeat of the last one's and is never sent.
-  _cautionSent = "";
-}
-function updateCaution(dt) {
-  // RACE CONTROL IS THE HOST'S. Debris is generated locally from each car's own
-  // behaviour and is not replicated, so the two peers genuinely see different
-  // hazards; left to decide independently they would fly different flags for
-  // the same race. The guest adopts what the host sends (applyCaution) and
-  // computes nothing of its own.
-  if (!netPlay.ownsRaceControl()) return;
-  if (!_cautionOn || !DebrisWorld.active() || state !== "race") {
-    if (caution.level !== 0) resetCaution();
-    return;
-  }
-  if (caution.level !== 0) caution.sinceT += dt;
-  _cautionQT += dt;
-  if (_cautionQT < 0.25) return;   // query hazards at ~4 Hz
-  _cautionQT = 0;
-  const hz = DebrisWorld.hazards();
-  let desired = 0, dsector = -1, dfrac = 0, dcause = "";
-  if (hz.total >= CAUTION_SC_MIN) { desired = 3; dcause = "SAFETY CAR"; }
-  else if (hz.total >= CAUTION_VSC_MIN) { desired = 2; dcause = "VSC"; }
-  else if (hz.worst.count >= CAUTION_YELLOW_MIN) {
-    desired = 1; dsector = hz.worst.sector; dfrac = hz.worst.frac; dcause = "YELLOW";
-  }
-  caution.total = hz.total;
-  caution.sectors = hz.sectors.slice();
-  if (desired > caution.level) {
-    caution.level = desired; caution.sector = dsector; caution.frac = dfrac;
-    caution.cause = dcause; caution.sinceT = 0;
-  } else if (desired < caution.level) {
-    const cap = caution.level >= 2 ? CAUTION_SC_MAX : CAUTION_YELLOW_MAX;
-    if (caution.sinceT >= CAUTION_MIN_HOLD || caution.sinceT >= cap) {
-      caution.level = desired;
-      caution.sector = desired === 1 ? (dsector >= 0 ? dsector : caution.sector) : -1;
-      caution.frac = dfrac; caution.cause = dcause; caution.sinceT = 0;
-    }
-  } else if (desired === 1 && dsector >= 0) {
-    caution.sector = dsector; caution.frac = dfrac;   // track the worst sector
-  }
-  publishCaution();
-}
-// Adopt race control from the host. Deliberately does not touch sinceT's
-// meaning — the guest holds whatever the host decided, for as long as the host
-// says, rather than running its own hold timers over someone else's flag.
-function applyCaution(d) {
-  if (!d) return false;
-  caution.level = d.level | 0;
-  caution.sector = d.sector != null ? d.sector : -1;
-  caution.frac = d.frac || 0;
-  caution.cause = d.cause || "";
-  caution.total = d.total || 0;
-  if (Array.isArray(d.sectors)) caution.sectors = d.sectors.slice();
-  caution.sinceT = d.sinceT || 0;
-  return true;
-}
-
-// Broadcast only on a CHANGE: the flag state is checked at 4 Hz but changes
-// perhaps a handful of times a race, and the reliable channel is not the place
-// for a steady drip of unchanged state.
-function publishCaution() {
-  if (!netPlay.active() || !netPlay.ownsRaceControl()) return;
-  const key = caution.level + "|" + caution.sector + "|" + caution.cause;
-  if (key === _cautionSent) return;
-  _cautionSent = key;
-  netPlay.reportCaution({
-    level: caution.level, sector: caution.sector, frac: caution.frac,
-    cause: caution.cause, total: caution.total, sectors: caution.sectors,
-    sinceT: caution.sinceT,
-  });
-}
-
-// OVERTAKE IS NOT AVAILABLE ON LAP 1, and not while the race is neutralised.
-// This is the real rule for 2026's overtake mode (the electrical push that
-// replaced DRS as the proximity-gated overtaking aid): it is enabled once the
-// LEADER completes the opening lap, and it goes away under yellows and behind
-// the safety car. It is the same reasoning DRS always had — the field is at its
-// most bunched exactly when an overtaking aid is least safe, and a start where
-// everyone can push is a start decided by whoever gambles hardest.
-//
-// Note this deliberately does NOT gate ACTIVE AERO. X-mode is not the
-// overtaking aid in 2026 and carries none of its restrictions: every driver
-// gets it on every lap in every approved zone, leader and backmarker alike,
-// with no proximity requirement. Its only limits are the activation zones
-// themselves (see buildAeroZones) — which is why Monaco has none.
-//
-// The LEADER's lap, not each car's own: a field-wide switch is what race
-// control actually throws, and gating per-car would hand a lapped driver the
-// push while the leader still had none. `ranked` is already sorted by progress
-// every frame, so the leader is ranked[0] and this stays O(1) — scanning all
-// 22 cars from inside the per-car update would have been 484 checks a frame for
-// a fact that changes once a race.
-function otEnabled() {
-  if (caution.level !== 0) return false;
-  const leader = ranked[0];
-  return !!leader && leader.lap > 1;
-}
-
-function cautionInfo() {
-  return {
-    level: caution.level, label: _CAUTION_LBL[caution.level] || "GREEN",
-    sector: caution.sector, frac: caution.frac, total: caution.total,
-    sectors: caution.sectors, sinceT: +caution.sinceT.toFixed(2), cause: caution.cause,
-    enabled: _cautionOn,
-  };
 }
 
 // Put the player back on the racing line at its CURRENT progress, facing forward
@@ -4790,95 +4563,14 @@ function coast(c, dt) {
 // mutated in place, so the profile-resolution code below and the sliders/
 // __apex.lightTune keep every LT.x call site unchanged.
 const { TUNE_DEFS, LT, floodColor, LAMP_KINDS, buildTrackLights } = LightTune;
-// Profile store shape: { "monza|night|wet": {lampLevel:0.4,…}, "*": {…legacy} }.
-let _ltStore = {};
-{
-  const saved = store.get("lightTune", null);
-  if (saved && typeof saved === "object") {
-    const vals = Object.values(saved);
-    // Legacy flat format was {id:number}. New format nests {key:{id:number}}.
-    if (vals.length && vals.every((v) => typeof v === "number")) _ltStore = { "*": saved };
-    else _ltStore = saved;
-  }
-}
-// The profile key for the CURRENT session conditions ("default" TOD resolves to
-// the track's actual day/night look so it shares one profile with an explicit
-// pick of the same look).
-function ltKey() {
-  if (!track || !track.def) return null;
-  let tod = raceTimeOfDay;
-  if (tod === "default") tod = track.def.night ? "night" : "day";
-  return track.def.id + "|" + tod + "|" + raceWeather;
-}
-// The resolution layers for the current condition, LOWEST precedence first:
-//   TUNE_DEFS default → file "*" → file "track|tod|wx"
-//     → localStorage "*" → localStorage "track|tod|wx"
-// So a committed js/game/light-presets.js is the shipped baseline, and a player's
-// local (localStorage) edits always win over it. A missing layer is skipped.
-function ltLayers() {
-  const F = window.LightPresets || null;
-  const key = ltKey();
-  return [
-    F && F["*"], F && key && F[key],
-    _ltStore["*"], key && _ltStore[key],
-  ];
-}
-// What the current knob would resolve to WITHOUT the current condition's local
-// profile — i.e. the value RESET falls back to. Used to decide whether a slider
-// edit needs storing (store only when it differs from this fallback).
-function ltFallback(id) {
-  const d = TUNE_DEFS.find((t) => t.id === id);
-  let v = d.def;
-  const F = window.LightPresets || null, key = ltKey();
-  if (F && F["*"] && typeof F["*"][id] === "number") v = F["*"][id];
-  if (F && key && F[key] && typeof F[key][id] === "number") v = F[key][id];
-  if (_ltStore["*"] && typeof _ltStore["*"][id] === "number") v = _ltStore["*"][id];
-  return clamp(v, d.min, d.max);
-}
-// Rebuild LT for the current conditions. Called whenever the track/time/weather
-// changes (via applyRaceSettings) so the right profile is live for both the
-// tuner panel and actual racing.
-// Knobs whose effect is baked into frame.*/frameSky.* by applyRaceSettings()
-// (not read per-frame in render). Changing one re-runs applyRaceSettings so it
-// updates live — safe because that function re-derives from the branch values.
-const _APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover", "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance", "skyColorSat", "fogColorSat"]);
-function applyLightTune(fromApplyRace) {
-  const layers = ltLayers();
-  let rebuilt = false, reapply = false, reinit = false;
-  for (const d of TUNE_DEFS) {
-    let v = d.def;
-    for (const L of layers) if (L && typeof L[d.id] === "number") v = L[d.id];
-    v = clamp(v, d.min, d.max);
-    if (LT[d.id] !== v) { LT[d.id] = v; if (d.rebuild) rebuilt = true; if (d.reinitRain) reinit = true; if (_APPLY_RACE_IDS.has(d.id)) reapply = true; }
-  }
-  if (rebuilt && track) { track._lights = null; track._alwaysLights = null; }
-  // Skip the reapply when applyRaceSettings itself invoked us (it derives from
-  // the fresh LT values right after this returns) — re-entering ran the whole
-  // sky/ambient/fog derivation twice per track/time/weather transition.
-  if (reapply && !fromApplyRace && track && state !== "menu" && state !== "select") applyRaceSettings();
-  if (reinit && isWetRoad()) initRainDrops();
-}
-function setLightTune(id, v) {
-  const d = TUNE_DEFS.find((t) => t.id === id);
-  if (!d || typeof v !== "number" || !isFinite(v)) return false;
-  v = clamp(v, d.min, d.max);
-  LT[id] = v;
-  const key = ltKey();
-  if (key) {
-    const prof = _ltStore[key] || (_ltStore[key] = {});
-    // Store only when the value differs from what it would resolve to anyway
-    // (default / file / legacy global). Storing an explicit value IS required
-    // when it matches the default but the file/global would otherwise win —
-    // that's how a local edit overrides a shipped value back down.
-    if (v === ltFallback(id)) delete prof[id]; else prof[id] = v;
-    if (!Object.keys(prof).length) delete _ltStore[key];
-  }
-  if (d.rebuild && track) { track._lights = null; track._alwaysLights = null; }   // re-bake per-track light records next frame
-  if (d.reinitRain && isWetRoad()) initRainDrops();   // re-seed the rain field with the new count/length
-  if (_APPLY_RACE_IDS.has(id) && track && state !== "menu" && state !== "select") applyRaceSettings();
-  return true;
-}
-function persistLightTune() { store.set("lightTune", _ltStore); }
+// The PROFILE STORE — which layer of (default / shipped preset / player edit)
+// wins for the conditions on screen — lives in js/game/light-store.js
+// (LightStore.create(G), assigned with the other modules below). These four are
+// thin passes through to it, kept so every call site here reads unchanged.
+function ltKey() { return ltStore.key(); }
+function applyLightTune(fromApplyRace) { ltStore.apply(fromApplyRace); }
+function setLightTune(id, v) { return ltStore.set(id, v); }
+function persistLightTune() { ltStore.persist(); }
 // LAMP_KINDS + buildTrackLights(track) live in js/game/lighting.js (LightTune).
 
 // Per-frame light assembly (nearest-N flood cull + car tail lights) lives in
@@ -4895,7 +4587,9 @@ function appendCarTailLights() {
   LightTune.appendCarTailLights(frame, track, cars, player, gfx.mobileTier);
 }
 
-// ---------- render ----------
+// ---------- cameras ----------
+// (render() itself is further down, after the garage preview — see the
+// `render` banner below it.)
 // Reusable camera-vantage solver — lives in js/game/cameras.js (GameCams).
 // For a player camera `mode` at arc position `s`, lateral `x`, speed `spd`
 // (m/s) and wall-clock `now` (ms), returns { eye, tgt, fov }. Centralised so
@@ -5324,6 +5018,7 @@ const _presentOpts = {};
 const _hazeWorld = [0, 0, 0];
 let _hazeStr = 0;
 const _hazeOpts = { u: 0, v: 0, str: 0 };
+// ---------- render ----------
 function render(dt) {
   if (headlessMode) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
@@ -6058,20 +5753,7 @@ function render(dt) {
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
   // ring buffer filled. Falls back to per-mark draws if the batch path is
   // unavailable (older GPU where the batch program failed to link).
-  {
-    let rebuilt = false;
-    if (_skidBatchDirty) { rebuildSkidBatch(); rebuilt = true; }
-    if (!gfx.drawSkidBatch(_skidVerts, _skidVertCount, rebuilt)) {
-      const ex = camEye[0], ez = camEye[2], SKID_CULL = 170 * 170;
-      const full = skidActive >= MAX_SKID, cnt = full ? MAX_SKID : skidActive;
-      for (let i = 0; i < cnt; i++) {
-        const m = full ? skidMarks[(skidIdx + i) % MAX_SKID] : skidMarks[i];
-        const dx = m[12] - ex, dz = m[14] - ez;
-        if (dx * dx + dz * dz > SKID_CULL) continue;
-        gfx.drawMark(m, 0.6, 2.2);
-      }
-    }
-  }
+  skids.draw(gfx, camEye);
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   const hidePlayerCar = !dbgCam && (state === "race" || state === "count") &&
@@ -6366,18 +6048,7 @@ function render(dt) {
     }
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
-      if ((skid > 0.25 || c.offroad) && c.speed > 10) {
-        skidFrameT--;
-        if (skidFrameT <= 0) {
-          skidFrameT = 5;
-          skidMarks[skidIdx].set(tmpMat);
-          skidIdx = (skidIdx + 1) % MAX_SKID;
-          if (skidActive < MAX_SKID) skidActive++;
-          _skidBatchDirty = true;   // rebuild the batched trail next render
-        }
-      } else {
-        skidFrameT = 0;
-      }
+      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10);
     }
     // ── Transient particle FX emitters (visual-only: they READ car state and
     // write none of it, so headless physics is untouched). They live HERE
@@ -7343,12 +7014,15 @@ $("adv-close").onclick = () => { $("advanced").hidden = true; };
 // The LIGHTING TUNER panel UI lives in js/game/tuner.js
 // (TunerPanel.create(G) — wired after the G façade).
 
-// ---------- Photo mode (free-fly camera) ----------
-// Seed the fly-cam from the camera currently on screen so it starts exactly
-// where the user was, then let them fly. yaw/pitch use view()'s convention:
-// dir = (sin yaw·cos pitch, sin pitch, −cos yaw·cos pitch).
-// Photo mode (free-fly camera + enter/exit + DOM wiring) lives in
-// js/game/photomode.js (Photomode.create(G) — wired after the G façade).
+// ---------- pre-race screens ----------
+// RACE SETTINGS, QUALIFYING, CUSTOM TEAM and the GARAGE wiring. Everything from
+// here to the button wiring below is screen flow, not simulation.
+//
+// This banner used to read "Photo mode (free-fly camera)" and had done since
+// photo mode was extracted to js/game/photomode.js — ~780 lines of unrelated
+// screen code sitting under a heading naming a file that no longer holds any of
+// it. A section banner is the only navigation this file has; one that lies is
+// worse than none.
 
 function buildRaceSettings() {
   // In the room this screen confirms the host's choice and hands it to the
@@ -7436,10 +7110,11 @@ function buildRaceSettings() {
   $("rs-caution-section").hidden = isTimeTrial();
   const cauEl = $("rs-caution");
   cauEl.innerHTML = "";
+  const cautionOn = raceCtl.enabled;
   for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
     const b = document.createElement("button");
-    b.className = "sel-chip" + (_cautionOn === on ? " active" : "");
-    b.setAttribute("aria-pressed", _cautionOn === on ? "true" : "false");
+    b.className = "sel-chip" + (cautionOn === on ? " active" : "");
+    b.setAttribute("aria-pressed", cautionOn === on ? "true" : "false");
     b.textContent = label;
     b.onclick = () => {
       setCautionEnabled(on);
@@ -8167,17 +7842,17 @@ document.addEventListener("visibilitychange", () => {
   // return to a live session.
   if (document.hidden) PerfGov.sentinelArm(false);
   else if (state === "race" || state === "count") PerfGov.sentinelArm(true);
-  // The platform releases a wake lock on every hide and does not give it
-  // back — re-request it here rather than a fourth listener elsewhere.
-  if (!document.hidden && raceWakeWanted) holdRaceWake();
+  // The screen wake lock re-acquires itself on return — js/game/wakelock.js
+  // owns that listener, because the platform releasing it on every hide is
+  // half of what the feature has to handle and the module holds no game state
+  // that would need to come back here to find it.
 });
 window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); });
 
 // ---------- boot ----------
-// Inert in production; only attaches when a test harness pre-sets the flag.
-if (typeof window !== "undefined" && window.__APEX_DEBUG) {
-  window.__APEX = { cars: () => cars, player: () => player, state: () => state, track: () => track };
-}
+// (A `window.__APEX` bridge lived here, gated on a `window.__APEX_DEBUG` flag
+// that nothing in js/, tests/, tools/ or index.html has ever set. The harness
+// it was written for is window.__apex, in js/game/apex.js.)
 
 // MY TEAM's own emblem. Stored as a downscaled data URL under apex26.customLogo
 // so it survives a reload without touching the asset pipeline — LiveryTex takes

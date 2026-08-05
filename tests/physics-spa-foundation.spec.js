@@ -56,15 +56,35 @@ test.describe("Spa track-owned foundation migration", () => {
       const caps = window.__apex.trackGeometry();
       const count = 900;
       const profile = window.__apex.trackProfile(count);
+      // Each corridor sample has to sit on the BANKED road surface, not on the
+      // flat centreline plane. `y: node.y` made `overlaps.road` measure Spa's
+      // own authored camber and nothing else: the road mesh lifts its outer
+      // edge by bankOffsetAt(), and Pouhon (frac 0.5648) and Stavelot (0.7576)
+      // are bankZones at 6 deg across a 16 m road, so at 0.6 x half-width the
+      // tarmac legitimately stands 0.6 * 8 * tan(6 deg) = 0.505 m above the
+      // centreline. The scan reported 0.525 (the extra 0.02 is nodeAt() snapping
+      // frac to the nearest node, plus the mesh chording the elevation curve
+      // between nodes), in 330 hits falling in exactly EIGHT frac bands — one
+      // per bankZone — and not one hit at scale 0. Pure camber, no defect.
+      //
+      // The banking term is what tests/terrain-over-road.spec.js's all-circuits
+      // version of this same scan already does; this copy predates it. Measured
+      // with it (2026-08, headless VM build) the largest road-over-corridor
+      // excursion anywhere on the lap is 0.037 m — below the scan's own 0.1 m
+      // floor, so `overlaps.road` comes back 0 against the 0.18 m budget.
+      const bankTrack = Tracks.buildCenterline(
+        Tracks.LIST.find((entry) => entry.id === "spa"));
       const samples = [];
       for (let i = 0; i < count; i++) {
         const node = window.__apex.nodeAt(i / count);
         const halfWidth = profile[i].hw;
         for (const scale of [-0.6, -0.3, 0, 0.3, 0.6]) {
+          const lat = halfWidth * scale;
+          const bank = Tracks.banking(bankTrack, i / count * bankTrack.total, lat);
           samples.push({
-            x: node.x + node.rx * halfWidth * scale,
-            z: node.z + node.rz * halfWidth * scale,
-            y: node.y,
+            x: node.x + node.rx * lat,
+            z: node.z + node.rz * lat,
+            y: node.y + (bank ? bank.dy : 0),
           });
         }
       }

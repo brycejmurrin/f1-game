@@ -259,7 +259,7 @@ const TLX = (function () {
       // A 64px cubemap rendered around the player car (one face per ~2 frames,
       // driven by game.js's envFaceBegin/End), sky+world only. The car-paint
       // clearcoat samples it for real reflections of the surroundings — GLX's
-      // envInit()/envFaceBegin/envFaceEnd port (glx.js:553-621). Built BEFORE
+      // envInit()/envFaceBegin/envFaceEnd port (those three functions in glx.js). Built BEFORE
       // the lit core so tsl-lit can bind ctx.envCube at factory time; starts
       // black (rendered nothing yet) and uEnvStr gates it to 0 until the first
       // full 6-face cycle completes. Type mirrors GLX: HDR (half-float) when
@@ -642,7 +642,7 @@ const TLX = (function () {
         pcss() { return false; },            // truthful: blocker map skipped (TODO M4-PCSS, tlx-shadow.js)
         isMobile,
         mobileTier,
-        // GPU frame timer — the GLX gpuTimer/gpuMs contract (glx.js:1215-1226).
+        // GPU frame timer — the GLX gpuTimer/gpuMs contract (_gpuTimerBegin/_gpuMs in glx.js).
         // WebGPU exposes it through three's timestamp-query pass; the WebGL2
         // fallback (SwiftShader/CI via tlxForceGL) has no timestamp-query
         // feature -> {supported:false} / gpuMs()=-1, byte-identical to GLX on

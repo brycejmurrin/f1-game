@@ -132,23 +132,51 @@ const PROBE = (rootSel) => {
   return out;
 };
 
+// BOTH ORIENTATIONS. This spec shipped landscape-only and that gap cost a real
+// bug within the hour: `min(78vw, 340px)` on the title button groups takes its
+// vw branch only when 78vw < 340px, i.e. below a 436px-wide window — which is
+// portrait and nothing else. Inside a zoomed subtree a viewport unit resolves
+// against the UNZOOMED viewport and is then multiplied, so at 393x852 the
+// column rendered 398.5px wide at UI SIZE 130 % (17.5px off the right edge) and
+// 459.8px at 150 % (78.8px off), while its CSS width sat unchanged at 306.5px
+// the whole time. A landscape-only matrix cannot see a portrait-only branch.
+const SHAPES = [["landscape", LANDSCAPE], ["portrait", { width: 393, height: 852 }]];
+
 test.describe("UI scale", () => {
-  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  test.use({ hasTouch: true });
 
-  for (const pct of SCALES) {
-    test(`every main screen fits at ${pct}%`, async ({ page }) => {
-      await boot(page);
-      const set = await page.evaluate((p) => window.__apex.uiScale(p), pct);
-      expect(set.stored, "the slider stored what it was given").toBe(pct);
+  for (const [shape, viewport] of SHAPES) {
+    test.describe(shape, () => {
+      test.use({ viewport });
 
-      for (const [name, root, ids] of SCREENS) {
-        await toTitle(page);
-        await open(page, ids);
-        const r = await page.evaluate(PROBE, root);
-        expect(r.error, `${name} did not open`).toBeUndefined();
-        expect(r.n, `${name} has controls to measure`).toBeGreaterThan(0);
-        expect(r.offscreen, `${name} @${pct}% — controls painted off screen`).toEqual([]);
-        expect(r.clipped, `${name} @${pct}% — controls clipped with no way to scroll to them`).toEqual([]);
+      for (const pct of SCALES) {
+        test(`every main screen fits at ${pct}%`, async ({ page }) => {
+          await boot(page);
+          const set = await page.evaluate((p) => window.__apex.uiScale(p), pct);
+          expect(set.stored, "the slider stored what it was given").toBe(pct);
+
+          for (const [name, root, ids] of SCREENS) {
+            await toTitle(page);
+            await open(page, ids);
+            const r = await page.evaluate(PROBE, root);
+            expect(r.error, `${name} did not open`).toBeUndefined();
+            expect(r.n, `${name} has controls to measure`).toBeGreaterThan(0);
+            expect(r.offscreen, `${name} ${shape} @${pct}% — controls painted off screen`).toEqual([]);
+            expect(r.clipped, `${name} ${shape} @${pct}% — controls clipped with no way to scroll to them`).toEqual([]);
+
+            // NOTHING may scroll SIDEWAYS. Vertical overflow is a legitimate
+            // answer to "the type got bigger" and #overlay scrolls on purpose;
+            // horizontal overflow never is, and it is the exact signature of a
+            // viewport unit inside a zoomed subtree (see --vwz in tokens.css).
+            const hx = await page.evaluate((sel) => {
+              const el = document.querySelector(sel);
+              const de = document.documentElement;
+              return { root: el ? el.scrollWidth - el.clientWidth : 0, doc: de.scrollWidth - de.clientWidth };
+            }, root);
+            expect(hx.root, `${name} ${shape} @${pct}% — ${root} scrolls sideways`).toBeLessThanOrEqual(1);
+            expect(hx.doc, `${name} ${shape} @${pct}% — the document scrolls sideways`).toBeLessThanOrEqual(1);
+          }
+        });
       }
     });
   }

@@ -11,7 +11,7 @@
 import { test, expect } from "@playwright/test";
 
 const LANDSCAPE = { width: 844, height: 390 };
-const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/game.js
+const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/game/aerozones.js
 
 async function loadTrack(page, id) {
   await page.goto("/");
