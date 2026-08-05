@@ -225,7 +225,11 @@ test.describe("UI scale", () => {
     // every run, before doing any of the work. waitForFunction polls on rAF and
     // this page's rAF rate collapses to ~2/s under SwiftShader (see the flag
     // comment in playwright.config.js), which is why a dead wait is expensive
-    // rather than merely wrong.
+    // rather than merely wrong. MEASURED, this test end to end: 12.1 min with
+    // the dead wait and the GL draw running, 6.2 min with the draw skipped,
+    // 16.4 s with both fixed. The wait was the dominant term by a long way —
+    // far more than the 30 s it costs when driven outside the runner, because
+    // Playwright's own polling is on the same starved rAF clock.
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
     await page.evaluate(() => {
       // HEADLESS, because this test measures getBoundingClientRect on four DOM
