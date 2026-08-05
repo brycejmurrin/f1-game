@@ -169,7 +169,47 @@ it once at boot does not — subscribe to `change` (`Input.onPointerKindChange`)
 
 ---
 
-## 8. Escape is a desktop-and-keyboard story
+## 8. Gamepad UI conventions are settled — do not invent a mapping
+
+Microsoft's UWP "Gamepad and remote control interactions" guidance is the
+closest thing to a cross-industry standard, and it defines the mapping as a
+translation of the KEYBOARD one rather than a separate scheme:
+
+| keyboard | gamepad / remote |
+|---|---|
+| arrow keys | **D-pad, and the left stick too** |
+| Enter / Space | **A / Select** |
+| Escape | **B / Back** |
+| PageUp / PageDown | left / right **triggers** |
+| — | left / right **bumpers** page horizontally |
+
+Consequences worth keeping in mind here:
+
+- **A menu that works from the keyboard is most of the way to working from a
+  pad.** The guidance says so outright: "A good way to ensure that your app will
+  work well with gamepad/remote is to make sure that it works well with keyboard
+  on PC." `js/game/menunav.js` already does the hard half (spatial XY movement,
+  band-scoped, with wrap); a pad needs a seam into it, not a second
+  implementation.
+- **B is Escape.** Which means a pad's back button should press the same
+  `data-esc-close` control the Escape key does, not a parallel path.
+- **A held direction needs a repeat, and XY navigation only moves up/down/left/
+  right** — a control reachable by neither axis from the current focus is
+  unreachable, so the guidance's "inaccessible UI" warning applies to any layout
+  with a diagonal relationship.
+- **Focus must always be visible.** "One focus visual should always be visible on
+  the screen so that the user can pick up where they left off" — on a pad the
+  focus ring is the cursor, so an unfocused screen is a lost user. This is
+  stricter than the keyboard case, where nothing is shown until you press a key.
+
+The one place the guidance does not apply: it advises hiding a visible back
+button when B goes back. That is a system-back-stack convention, and the
+opposite of this codebase's rule — here Escape and B press the screen's OWN
+visible control precisely so there is never a second code path.
+
+---
+
+## 9. Escape is a desktop-and-keyboard story
 
 Worth stating because it is easy to lose: a bare iPad has no Escape key, so none
 of §1 or §5 reaches a tablet being used with fingers. Touch-side correctness is
