@@ -394,11 +394,29 @@ moves inside; Escape closes AND puts `hidden` back in step so the screen reopens
 Escape on the lobby calls the lobby's own close button; `#results` refuses it.
 `npm run test:net` 65/65 with the lobby as a `<dialog>`, and 300 audit cells clean.
 
-**The four left out** — `#pausemenu`, `#pmsettings`, `#race-settings`, `#quali` —
-own or gate a flow rather than being dismissible, and `#pmsettings` has already
-demonstrated that changing its visibility behind its own back makes every button
-inside it a silent no-op. They deserve their own pass, with the flow reasoned
-about rather than the tag swapped.
+**The four flow screens are done too**, in a second pass with the flow reasoned
+about rather than the tag swapped. All sixteen `.screen.dim` modals are now
+`<dialog>`s. What each one means by "leave this screen" already existed in the
+app, so Escape was pointed at that control rather than given a new meaning:
+
+| screen | Escape presses | because |
+|---|---|---|
+| `#pausemenu` | `#pm-resume` | that is what the pause key already does |
+| `#pmsettings` | `#pm-settings-close` | it must go BACK to the pause menu, not out of both |
+| `#race-settings` | `#rs-cancel` | it is a gate; cancelling is the only "leave" |
+| `#quali` | `#q-back` | which also clears a session nobody ran |
+| `#results` | *(refused)* | MENU and NEXT, and neither means "dismiss" |
+
+Verified the exact interaction that carved these out in the first place: pause →
+settings → Escape lands back on the PAUSE MENU (not out of both), Escape again
+resumes, re-pausing works, and `#pm-advanced` inside settings still opens. That
+last one is the bug that started this — forcing `#pmsettings.hidden = false`
+desynced the screen and made every button inside it a silent no-op — and it is
+the thing the seam had to survive.
+
+`#pmsettings` and `#pausemenu` are mutually exclusive by construction
+(`setPaused` and `closeSettings` toggle one as they toggle the other), so the
+top layer never has to arbitrate between them.
 
 ## 17. Ranked, second pass
 
@@ -409,10 +427,10 @@ about rather than the tag swapped.
    is (1,1,0) against the primitive's (0,3,0)), plus one rule returning the foot
    to `grid-column: 1 / -1` in the band layout, and its `:not([data-shape="tall"])`
    column extras moved off the container query onto `[data-pair="on"]`.
-3. ~~**Migrate the `.screen.dim` modals to `<dialog>.showModal()`**~~ — **12 of
-   16 done** (`js/game/topmodal.js`). See §17. The four left are the ones that
-   own or gate a FLOW rather than being dismissible overlays: `#pausemenu`,
-   `#pmsettings`, `#race-settings`, `#quali`.
+3. ~~**Migrate the `.screen.dim` modals to `<dialog>.showModal()`**~~ — **all 16
+   done** (`js/game/topmodal.js`), and the z-index ladder they made inert is
+   deleted: 49 declarations down to 39, with none left on a migrated screen.
+   See §16.
 4. **Safe-area assertion in the audit probe.** The one axis we claim to handle
    and never verify, on the orientation the game is played in. *(cheap)*
 5. ~~**Cost out `container-type: size` on the sheet**~~ — **costed, and the
