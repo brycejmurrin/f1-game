@@ -206,8 +206,26 @@ test.describe("Zandvoort shared-foundation migration", () => {
       ...result.models.unsafe,
     ].filter((entry) => entry.required);
     expect(requiredFailures).toEqual([]);
+    // Measured: four required models emit, not the two this spec was written
+    // against. Both additions are authored intent sitting beside the data in
+    // js/circuits/zandvoort.js, not drift:
+    //   kit:zandvoort:paddock-club — "PADDOCK CLUB — 2020-21 rebuild.
+    //     Zandvoort's return to the calendar rebuilt the pit complex with a
+    //     full paddock-club/hospitality block behind the garages; the
+    //     hand-built pit-building box above alone was under-scaled against the
+    //     real venue."
+    //   zandvoort-watertoren — "hero: the genuine 1912 landmark, inland side"
+    // Kept as an exact set (not a superset check): `required` is the circuit
+    // promising these survive the on-track footprint guard, so a silently
+    // DROPPED hero must fail here, and a newly promoted one must be a
+    // deliberate edit to this list.
     expect(result.models.emitted.filter((entry) => entry.required).map((entry) => entry.id).sort())
-      .toEqual(["pit-building", "zandvoort-lighthouse"]);
+      .toEqual([
+        "kit:zandvoort:paddock-club",
+        "pit-building",
+        "zandvoort-lighthouse",
+        "zandvoort-watertoren",
+      ]);
     expect(result.walls.anyNaN).toBe(false);
     expect(result.walls.minOverHw).toBeGreaterThan(-1.5);
     expect(result.walls.tightFrac).toBeGreaterThan(0.55);

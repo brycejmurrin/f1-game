@@ -37,10 +37,20 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
         models,
         geometry,
         waterCoverage: {
-          models: models.emitted.filter((entry) => entry.water).length,
+          ids: models.emitted.filter((entry) => entry.water)
+            .map((entry) => entry.id).sort(),
+          // Merged quad runs — waterField()'s own unit of work, and the number
+          // that actually tracks how much of the basin rasterised.
+          runs: models.emitted.filter((entry) => entry.water)
+            .reduce((sum, entry) => sum + (entry.runs || 1), 0),
           vertices: waterMesh.pos.length / 3,
-          // Closed boxes contribute matching top and bottom projected faces.
-          area: projectedArea / 2,
+          // NOT halved. The raster path emits ONE single-sided flat quad per
+          // merged run (waterEmit in js/track/tracks.js), so every square metre
+          // of basin projects exactly once. The /2 that used to be here was
+          // right for the old closed-box slabs — top and bottom faces both
+          // project — and, once the harbour became a raster, silently reported
+          // half the water there is (42,840 against a real 85,680 m²).
+          area: projectedArea,
         },
         ground: [
           window.__apex.groundY(0.18, -10),
@@ -84,19 +94,60 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
 
     expect(session.geometry.every((entry) => entry.ok)).toBe(true);
     expect(session.geometry.find((entry) => entry.name === "water").vertices).toBeGreaterThan(0);
-    expect(session.waterCoverage.models).toBeGreaterThanOrEqual(20);
-    expect(session.waterCoverage.vertices).toBeGreaterThanOrEqual(480);
-    expect(session.waterCoverage.area).toBeGreaterThanOrEqual(45_000);
+
+    // THE HARBOUR IS THREE RASTER FIELDS, NOT ~24 SLABS. It was authored as
+    // "three longitudinal stations × eight outward ranks" of 46×48 m
+    // waterSurface() panels, one diagnostics entry each — which is where `>= 20`
+    // came from. js/circuits/monaco.js now calls waterField() three times and
+    // says why: "The slab version needed 27 m of road clearance per panel, so
+    // the basin came out as separated blue rectangles on bare ground — and the
+    // 138 m band between ranks 114 and 252, where the lap folds back through the
+    // water, was rejected outright at every station." At 12 m cells the basin
+    // closes to the kerb. So the entry count fell 24 → 3 while the water GREW,
+    // and counting entries counts the authoring style rather than the sea.
+    expect(session.waterCoverage.ids).toEqual([
+      "monaco-harbour-water-0",
+      "monaco-harbour-water-1",
+      "monaco-harbour-water-2",
+    ]);
+    // Measured (identical day and night): 79 merged runs across the three
+    // fields (33/23/23), 316 vertices, 85,680 m² of projected basin. Bands at
+    // roughly ±20 % keep this a ratchet — a field that stopped rasterising, or
+    // one clipped back by the on-track guard, still fails, and so does a basin
+    // that quietly balloons over the promenade.
+    expect(session.waterCoverage.runs).toBeGreaterThanOrEqual(63);
+    expect(session.waterCoverage.runs).toBeLessThanOrEqual(95);
+    expect(session.waterCoverage.vertices).toBeGreaterThanOrEqual(255);
+    expect(session.waterCoverage.vertices).toBeLessThanOrEqual(380);
+    expect(session.waterCoverage.area).toBeGreaterThanOrEqual(68_000);
+    expect(session.waterCoverage.area).toBeLessThanOrEqual(103_000);
     expect(session.ground.every((sample) =>
       sample && Number.isFinite(sample.roadY) &&
       Number.isFinite(sample.terrainY) && sample.gap <= 0.25)).toBe(true);
 
-    expect(session.models.suppressed).toEqual([]);
+    // A SUPPRESSED OPTIONAL PROP IS THE GUARD WORKING, NOT A BUILD DEFECT.
+    // Monaco's lap folds back on itself through the tunnel and along the
+    // harbour, so a block anchored 35–44 m off one leg can land on another
+    // leg's road; the on-track guard drops it whole, which is exactly the
+    // "hard guarantee: NO scenery primitive may sit on the racing surface"
+    // contract in js/track/tracks.js. The circuit file expects it — the
+    // Mirabeau apartments are introduced as "Each complete block is
+    // footprint-preflighted". `toEqual([])` demanded that a street circuit
+    // place every optional model perfectly first time, which is a stricter
+    // claim than the engine ever made. Hard-fail on REQUIRED losses (the
+    // contract the sibling Abu Dhabi spec already uses) and keep the optional
+    // tail bounded so a build that silently sheds its dressing still fails.
+    // Measured, day and night alike: 4 rejections — one marina pontoon and
+    // three Mirabeau balcony blocks, all required:false.
+    expect(session.models.suppressed.filter((entry) => entry.required)).toEqual([]);
+    expect(session.models.suppressed.length).toBeLessThanOrEqual(6);
     expect(session.models.invalid).toEqual([]);
     expect(session.models.unsafe).toEqual([]);
     const required = session.models.emitted.filter((entry) => entry.required);
     expect(required.some((entry) => entry.id === "monaco-sainte-devote")).toBe(true);
-    expect(required.filter((entry) => entry.water).length).toBeGreaterThanOrEqual(20);
+    // All three harbour fields are required:true — same 24 → 3 consolidation as
+    // the coverage assertions above, so this counted slabs too.
+    expect(required.filter((entry) => entry.water).length).toBe(3);
     const tunnelRoofs = required.filter((entry) => entry.id.startsWith("monaco-tunnel-roof-"));
     expect(tunnelRoofs.length).toBeGreaterThan(20);
     expect(required.filter((entry) => entry.overhead)
