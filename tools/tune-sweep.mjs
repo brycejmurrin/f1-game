@@ -63,7 +63,7 @@ function flag(name, def) {
 // the one control this tool exists to pick a default FOR, and it would have done
 // it silently — the run would look complete and answer a different question.
 const SLIDERS = [
-  { id: "pm-pace",       label: "RACE PACE (was OVERALL SPEED)", key: "pace", notches: 19 },
+  { id: "pm-pace",       label: "OVERALL SPEED (pace)", key: "pace", notches: 19 },
   { id: "pm-rate",       label: "RESPONSE (wheelbase)",          key: "wheelbase" },
   { id: "pm-expo",       label: "LINEARITY (steer expo)",        key: "expo" },
   { id: "pm-lock",       label: "STEER LOCK (max slip)",         key: "maxSlip" },
