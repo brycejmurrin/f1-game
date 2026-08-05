@@ -558,6 +558,59 @@ which the same spec asserts sits below −1 m, so terrain rising above road leve
 which case the assertion is too strict rather than the geometry being wrong.
 Decide from the number, not from the shape of the test.
 
+### T1 outcome and the six that remain (measured Aug 2026)
+
+**Fixed: Monaco, Abu Dhabi (day+night), Montreal's water count.** All were
+counting the emitter's TESSELLATION. Measured before editing:
+
+| circuit | asserted models | actual | runs | verts | area |
+|---|---|---|---|---|---|
+| Monaco | >= 20 | 3 | 79 | 316 | 42 840 m2 |
+| Abu Dhabi | > 8 | 2 | 93 | 396 | 161 746 m2 |
+| Montreal | > 40 | 10 | 795 | 3 252 | 618 088 m2 |
+
+Nothing suppressed in any of them. `waterSurface()` merges occupied cells into
+flat quad runs, so the counts fell as the merge improved while the water stayed
+put. The area/vertex assertions are the real contract and were kept.
+
+Monaco also had TWO failures hidden behind the water one — it was the only spec
+demanding `models.suppressed` be entirely empty (Monza and Spa filter on
+`required`), rejecting 22 `required: false` pontoons and balconies whose
+footprint overlaps the road. That is the suppression system working. This is why
+each circuit was measured rather than pattern-matched.
+
+**The remaining six are six DIFFERENT defects, not one:**
+
+| # | spec | assertion | value |
+|---|---|---|---|
+| a | monza:64 | `probe.gap <= 0.18` at frac 0.30, lat -11 | **0.525, then 0.294** |
+| b | qatar:57 | `elevationRange < 0.25` — "night Qatar remains effectively flat" | **6.699** |
+| c | spa:124 | `overlaps.road <= 0.18` | 0.525 |
+| d | suzuka:50 | `audit.raw.bridges` toEqual `[{s:0.4235, halfM:150, rise:7}]` | mismatch |
+| e | vegas:72 | `emitted.has("vegas-bellagio-lake")` | **false — a required model is missing** |
+| f | zandvoort:210 | toEqual `["pit-building", "zandvoort-lighthouse"]` | mismatch |
+
+**(a) is NONDETERMINISTIC and that is the most important thing here.** The same
+assertion measured 0.525 on one run and 0.294 on the next, on the same commit.
+Something in terrain or prop placement varies between builds of the same
+circuit. Chase that before treating (a) or (c) as a fixed-value geometry bug —
+a tolerance tuned against a number that moves is worthless, and (c) reporting
+exactly 0.525 suggests the two share a cause.
+
+**(b) is the largest single discrepancy in the suite**: Qatar is asserted flat
+to within 0.25 m and measures 6.7 m at night. Either the night rebuild is
+applying elevation the day build does not, or the assertion predates Qatar
+gaining relief. Cheap to tell apart — build it at both times of day and diff
+the profile.
+
+**(e) is a genuinely missing required model**, not a count: the Bellagio lake is
+not emitted at all. Distinct from the T1 class, where the water was present and
+merely merged.
+
+Montreal now fails on something real that the water assertion had masked: a
+support's `minY` sits 2.72 m from `groundY` against a 0.05 m allowance.
+Deliberately left failing — it wants a fix, not a wider tolerance.
+
 ### Order
 
 T1 first (two failures, one fix, and the measurement is cheap and headless),
