@@ -63,6 +63,7 @@ describe paths not taken or plans only partly implemented.
 | [research/steering-research.md](research/steering-research.md) | Steering-model source notes + citations. |
 | [research/STEERING-PHYSICS-RESEARCH.md](research/STEERING-PHYSICS-RESEARCH.md) | Deep dive on steering/physics literature. |
 | [research/TILT-STEERING-RESEARCH.md](research/TILT-STEERING-RESEARCH.md) | Tilt-steering (device orientation) investigation. |
+| [research/DRIVING-CONTROLS-RESEARCH.md](research/DRIVING-CONTROLS-RESEARCH.md) | What shipped racing games do with assists, setup sheets and speed-sensitive steering — including the two assists we should deliberately never build, and why. |
 | [research/CIRCUIT-BRIEFING-DESIGN.md](research/CIRCUIT-BRIEFING-DESIGN.md) | Circuit-briefing feature design. |
 | [research/CIRCUIT-BRIEFING-UI-RESEARCH.md](research/CIRCUIT-BRIEFING-UI-RESEARCH.md) | Circuit-briefing UI research. |
 | [CONSOLE-RECIPES.md](CONSOLE-RECIPES.md) | Driving the deployed game from DevTools: `__apex.diag()`, browser gotchas, ready-made blocks. |
