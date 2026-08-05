@@ -454,3 +454,108 @@ instances what it can and bakes `bakeOnly`, and nothing is a flag day.
   a prerequisite for using `npm run test:visual` as a gate here at all.
 - **Collision with the graphics migration.** S3 in GLX is work that Phase D
   deletes. S0–S2 are not.
+
+---
+
+## 8. S3 wiring — the concrete plan
+
+Written after auditing the tree at build 999, where the whole instanced path was
+found **complete and uncalled** (see §6's corrected S3 entry, and
+`RENDERING-EXTERNAL-RESEARCH.md` §1). Nothing below writes new rendering code —
+it connects two ends that already exist.
+
+### 8.1 What is already true
+
+Verified, so the plan does not re-derive it:
+
+- `track.graph` is assigned inside `buildProps()` (`js/track/tracks.js:666`),
+  and `buildProps(track)` is called at `js/track/tracks.js:219` — **three lines
+  before** the props mesh is built at `:222`. The graph is in hand at the wiring
+  point; no plumbing needed to get it there.
+- `graph.batches()` (`js/track/graph.js:283`) already returns exactly what
+  `createInstancedBatch(data, matrices, colors, opts)` wants: `geo`, a
+  `Float32Array` of column-major mat4s (basis scaled, origin in column 3), and
+  `colors` only when the model is `nodeColored`. Output is sorted by model id so
+  the draw list cannot reshuffle between builds of the same track.
+- `bakeOnly` already catches the two cases instancing cannot express: a node that
+  is not `full`, and a radial model under non-uniform XZ scale.
+
+### 8.2 The five call sites
+
+| # | site | today | after |
+|---|---|---|---|
+| 1 | `js/track/tracks.js:222` | `createChunkedMesh(propsGeo, 72)` | batches → `createInstancedBatch` each; chunked mesh over the remainder |
+| 2 | `js/game.js:5050` | `drawChunked(track.meshes.props, …)` | + a loop over `track.meshes.propBatches` |
+| 3 | `js/game.js:5441` | `castShadowChunked(props, …)` | + the instanced shadow draw |
+| 4 | `js/game.js:5730` | `castShadowChunked(props, …)` | same, the moon/flood path |
+| 5 | `js/game.js:2083` | `freeChunkedMesh(props)` | + `freeInstancedBatch` per batch |
+
+The remainder at site 1 is **`bakeOnly` plus every emitter that has not been
+migrated** — only 16 are. So the chunked path does not go away and must not be
+treated as a fallback; it stays the majority consumer until S1 finishes.
+
+### 8.3 The one real hazard: `cullDist` is not in the instanced path
+
+`drawChunked` does two culls (`js/render/glx/chunked.js:152-157`): frustum
+planes, **and** a radial draw-distance cap from `frame.cullDist`. Its own comment
+says why the second exists:
+
+> the frustum's far plane is the only distance cull, so when it's pushed out
+> (free camera) a high/wide vantage admits the whole ~5 M-vert city at once — a
+> mobile-tiler OOM.
+
+`cullInstances(batch, planes)` (`js/render/glx.js:1158`) does **frustum AABB
+only**. Wiring instancing naively therefore reintroduces exactly the OOM that
+comment was written to close — and on the platform §4 of the research doc says is
+already near its ceiling.
+
+**So `cullInstances` gains the same radial test before site 2 lands, not after.**
+It already iterates `batch.cells` with `mn`/`mx` bounds, so the cap is the same
+few lines chunked uses. This is the one place where the plan writes new logic
+rather than connecting existing pieces, and it is a prerequisite, not a follow-up.
+
+### 8.4 Order, each step independently verifiable
+
+1. **`cullInstances` radial cap** (§8.3). Alone, gated by
+   `tests/track-graph.test.mjs` plus a new unit assertion that a batch beyond
+   `cullDist` reports zero visible. Nothing renders differently yet — no call
+   site exists.
+2. **Site 1, build only.** Create the batches and keep them on
+   `track.meshes.propBatches`, but keep baking *everything* into the chunked mesh
+   as well. Renders identically by construction; the batches are inert. This is
+   the step where `node tools/graph-parity.cjs --all` still passes trivially,
+   and where `geometryDiagnostics()` can report both numbers side by side so the
+   split is measurable before it is load-bearing.
+3. **Sites 1 + 2 together.** Stop baking the instanced nodes; draw them. This is
+   the pixel-moving commit and the only one that is. Gate:
+   `npm run test:sweeps` (prop-clipping, road-under-floor, coplanar) plus
+   `npm run test:scenery`, and a per-circuit `geometryDiagnostics().props`
+   comparison against the census in `RENDERING-EXTERNAL-RESEARCH.md` §1.
+4. **Sites 3 + 4.** Shadows. Separate because a shadow regression is easy to miss
+   in a still and needs `tools/motion-capture.mjs`, not a screenshot.
+5. **Site 5.** The free. Trivial, but it is what keeps a track switch from
+   leaking every instance buffer — check with `__apex.race()` in a loop and a
+   heap snapshot.
+
+### 8.5 What would say it worked
+
+- `geometryDiagnostics().props.vertices` falls on the circuits §6 measured as
+  high-reuse. The fleet census to compare against (all 40, day and night) is in
+  `RENDERING-EXTERNAL-RESEARCH.md` §1: median peak 680,414, Vegas 1,825,925.
+- **Peak upload** falls, which is the iOS-context-loss number and matters more
+  than the draw count — one 1.8 M-vertex `bufferData` becomes a canonical mesh
+  plus a matrix array.
+- No pixel moves at step 2. Pixels move at step 3 only where a bake became an
+  instance, and `graph-parity` is what proves that set is exactly the intended one.
+
+### 8.6 Explicitly not in scope
+
+- **The `bakeOnly` draws.** The documented technique for many *different* meshes
+  is a model-id vertex attribute plus a data texture read with `texelFetch`
+  (`RENDERING-EXTERNAL-RESEARCH.md` §1). Real, but it is a second optimisation
+  with its own risk, and `bakeOnly` is small.
+- **WGX.** It has `createInstancedBatch: undefined` and takes `bake()`. That is
+  the designed fallback and this plan does not change it.
+- **Reversed-Z / depth work.** Unreachable in WebGL2 at all — see
+  `RENDERING-EXTERNAL-RESEARCH.md` §2. Unrelated to instancing; do not let the
+  two become one commit.
