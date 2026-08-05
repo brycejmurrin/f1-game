@@ -17,26 +17,36 @@ import { test, expect } from "./fixtures.js";
 async function mockWakeLock(page) {
   await page.addInitScript(() => {
     window.__wakeLog = [];
-    navigator.wakeLock = {
-      request: (type) => {
-        window.__wakeLog.push("request:" + type);
-        let released = false;
-        const listeners = {};
-        const sentinel = {
-          addEventListener: (ev, cb) => { listeners[ev] = cb; },
-          release: () => {
-            if (released) return Promise.resolve();
-            released = true;
-            window.__wakeLog.push("release");
-            if (listeners.release) listeners.release();
-            return Promise.resolve();
-          },
-        };
-        const onVis = () => { if (document.hidden) sentinel.release(); };
-        document.addEventListener("visibilitychange", onVis);
-        return Promise.resolve(sentinel);
+    // defineProperty, not assignment: navigator.wakeLock is a getter-only
+    // accessor in real Chromium (Object.getOwnPropertyDescriptor confirms
+    // hasGet:true, hasSet:false) and `=` on it fails SILENTLY — the real Wake
+    // Lock API then answers holdRaceWake()'s request instead of this mock,
+    // __wakeLog stays empty forever, and every waitForFunction() below hangs
+    // to its full timeout. Same trap as navigator.clipboard/share elsewhere
+    // in this suite (see tests/multiplayer-lobby.spec.js).
+    Object.defineProperty(navigator, "wakeLock", {
+      configurable: true,
+      value: {
+        request: (type) => {
+          window.__wakeLog.push("request:" + type);
+          let released = false;
+          const listeners = {};
+          const sentinel = {
+            addEventListener: (ev, cb) => { listeners[ev] = cb; },
+            release: () => {
+              if (released) return Promise.resolve();
+              released = true;
+              window.__wakeLog.push("release");
+              if (listeners.release) listeners.release();
+              return Promise.resolve();
+            },
+          };
+          const onVis = () => { if (document.hidden) sentinel.release(); };
+          document.addEventListener("visibilitychange", onVis);
+          return Promise.resolve(sentinel);
+        },
       },
-    };
+    });
   });
 }
 
@@ -121,9 +131,14 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     // The lobby version's second defensive property: tolerate the request
     // itself REJECTING — it is not guaranteed to succeed even where the API
     // exists. An unhandled rejection here would surface as a Playwright
-    // pageerror, exactly like the missing-API case above.
+    // pageerror, exactly like the missing-API case above. defineProperty, not
+    // assignment — see mockWakeLock() above for why plain `=` silently fails
+    // to override this getter-only accessor.
     await page.addInitScript(() => {
-      navigator.wakeLock = { request: () => Promise.reject(new Error("denied")) };
+      Object.defineProperty(navigator, "wakeLock", {
+        configurable: true,
+        value: { request: () => Promise.reject(new Error("denied")) },
+      });
     });
     const errors = [];
     page.on("pageerror", (e) => errors.push(String(e)));
