@@ -437,3 +437,95 @@ law is a genuinely strong idea, well executed in six places. Because a guard
 nobody runs is prose with extra steps, and this review found two of them red in
 the working tree, from the same day's work, having stopped anyone exactly
 nothing.
+
+---
+
+## 10. Open test failures and the plan to fix them (Aug 2026)
+
+Measured on a QUIET box, after `tools/test-bg.mjs`'s two orphan bugs were fixed.
+Everything below is an **assertion** failure, not a timeout — the ten "failures"
+recorded before those fixes were all the machine and are not in this list.
+
+### T1 — water models: Monaco and Abu Dhabi. ONE root cause, highest value
+
+| test | asserts | got |
+|---|---|---|
+| `physics-monaco-foundation.spec.js:87` | `waterCoverage.models >= 20` | **3** |
+| `physics-abudhabi-foundation.spec.js:93` | emitted water models `> 8` | **2** |
+
+Albert Park's water/fountain test **passes**, so this is not global — it is the
+two harbour circuits.
+
+Monaco calls `waterSurface()` exactly **once** and Abu Dhabi twice, yet the
+tests expect 20 and 8 models. So the count comes from inside the emitter: a
+single call rasterises a basin into fine cells and merges occupied cells into
+flat quad runs. Getting 3 where 20 are expected means either the merge is
+producing far fewer runs than it did, or per-cell suppression is eating the
+basin. `waterSurface` rejects on `onTrack(center, sz[0] / 2 + 4)` — a 4 m
+margin — and Monaco is the tightest circuit on the calendar, which makes
+over-rejection the first hypothesis to test.
+
+**Plan.** (1) Measure before touching anything: `waterCoverage` in the Monaco
+spec reports `models`, `vertices` AND `area`, and the spec asserts all three
+(`>= 480` verts, `>= 45 000` m²). If area and vertices still pass while `models`
+fails, the geometry is fine and the emitter has simply merged into fewer, larger
+runs — in which case **the assertion is stale and counting the wrong thing**,
+and the fix is to assert coverage rather than model count. If area fails too,
+the basin genuinely collapsed and it is a geometry regression. Those two
+outcomes want opposite fixes, so do not guess. (2) `node
+tools/verify-track.cjs monaco` is the cheap loop here — no browser. (3) Whatever
+the outcome, both circuits are one fix.
+
+### T2 — `mugello`: 36 uncaught page errors
+
+`elevation-tracks.spec.js` fails `expect(errors).toEqual([])` with **36**
+`pageerror` entries. `tools/verify-track.cjs mugello` builds clean (637 712 prop
+verts, exit 0), so it is a RUNTIME throw during the race, not a build throw.
+Intermittent — the retry passed, and no failure artifacts survived.
+
+**Plan.** Reproduce with the error text captured: run the single spec with
+`APEX_LOG=scenery:debug` and read `__apex.logs({ns})` rather than scraping the
+console, per the house rule. 36 is a suspiciously round-ish number for a
+per-frame or per-prop throw, so the first question is whether it is 36 distinct
+errors or one error 36 times — the ring buffer answers that directly.
+
+### T3 — `sochi`: 120 s timeout. Probably mine, verify before believing
+
+The only timeout in the clean run, and I was driving a WebGL page through the
+DevTools MCP at that moment — exactly what `docs/PARALLEL-WORK.md` says not to
+do. **Re-run alone before treating it as a defect.**
+
+### T4 — `spa bounded`: the projection snap
+
+`tracks-walls.spec.js:91` asserts `maxAbsX < 60` and measured 181–185 across
+three earlier runs. `x` is lateral metres from the centreline, so the car is
+being reported 180 m off track — too large for runoff, too consistent for noise.
+
+**Hypothesis:** `trackFrom()` refines `(s, x)` with *local* Newton steps
+precisely so it cannot snap onto the wrong leg, and Spa is the 7 km circuit
+where two legs run closest together. 180 m looks like the distance between legs,
+not a car position.
+
+**Plan.** Runs in `test:circuit` / `test:barriers`, not `test:physics`, so it
+needs its own pass. Confirm the number on a quiet box, then use
+`__apex.projTest(frac, lateral)` and `wsInfo()` to find the fraction where the
+foot jumps. If it is the wrong-leg snap, the fix belongs in `trackFrom`'s
+locality guard, not in the test — 180 m is genuinely wrong.
+
+### T5 — Monza terrain gap
+
+`physics-monza-foundation.spec.js:64` asserts `probe.gap <= 0.18`. **The `-11`
+in the failure message is the LATERAL PROBE OFFSET, not the gap** — the test
+sweeps `lat ∈ {-11, +11}`. The magnitude is still unknown.
+
+**Plan.** Read the real number from the current run. frac 0.30 is the Roggia,
+which the same spec asserts sits below −1 m, so terrain rising above road level
+11 m off the centreline beside a sunken section may well be correct scenery — in
+which case the assertion is too strict rather than the geometry being wrong.
+Decide from the number, not from the shape of the test.
+
+### Order
+
+T1 first (two failures, one fix, and the measurement is cheap and headless),
+then T5 (a number is already coming), then T2, then T4 (needs its own run), then
+T3 (probably not a defect at all).
