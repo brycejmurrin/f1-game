@@ -1121,6 +1121,22 @@ const s = __apex.lobbySdp();
 s.remoteTypes.filter((t) => t.includes("relay"))   // did the peer send us any?
 ```
 
+### `lobbyPairs() → Promise<{ice, conn, pairs}>`
+
+**Why** no pair was nominated, straight from ICE's own candidate-pair table —
+the last question `lobbySdp()` cannot answer. Both peers can send relay
+candidates, both relays can be reachable, and ICE can still sit in `checking`
+for ever. Each entry gives `state`, `nominated`, `sent`/`recv` (STUN
+connectivity checks out and answered back) and `bytes`.
+
+`recv: 0` across every pair means our checks are going out and nothing is
+answering. A pair in `succeeded` that was never `nominated` means something
+else ended the connection first.
+
+```js
+(await __apex.lobbyPairs()).pairs.filter((p) => p.local.includes("relay"))
+```
+
 ### `turnProbe(ms?) → Promise<{ok, servers, relaysConfigured, summary}>`
 
 Is a TURN relay actually there? One throwaway `RTCPeerConnection` **per

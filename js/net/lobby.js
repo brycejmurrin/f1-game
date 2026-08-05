@@ -1537,6 +1537,9 @@ const NetLobby = (function () {
           ice: pc.iceConnectionState, conn: pc.connectionState,
           localTypes: types(local), remoteTypes: types(remote),
           local, remote,
+          // The connection itself, for lobbyPairs()' getStats(). Underscored
+          // because it is a live handle and not part of the readable snapshot.
+          _pc: pc,
         };
       },
       status: () => ({
