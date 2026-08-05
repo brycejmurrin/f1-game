@@ -1,6 +1,6 @@
 ---
 name: webgl-debug
-description: Diagnose WebGL2/GLX renderer issues — lights wrong, shadow acne or shimmer, bloom too strong, shader compile failures, GL_INVALID_OPERATION. Covers hdrMode(), lightState() verification, the uniform-array light upload, shadow bias/fade knobs, and Playwright probe patterns. Triggers - "lights wrong", "shadow acne", "shadow flicker", "bloom too strong", "hdrMode", "WebGL error", "GL_INVALID_OPERATION", "shader compile failed", "uniform array", "instancing".
+description: Use when the user reports lights wrong, shadow acne/flicker/shimmer, bloom too strong/missing, HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or renderer artifacts.
 ---
 
 # Debug WebGL2 / GLX renderer issues
@@ -14,12 +14,18 @@ of root causes — start with the probes below before reading shader source.
 
 ```js
 // In browser console or apex-eval:
-GLX.hdrMode()   // true = WebGL2 HDR path active; false = fallback (SwiftShader or old GPU)
+GLX.hdrMode()   // boolean — true = WebGL2 HDR float-FBO path active
 ```
 
 `false` means the WebGL2 context failed to create a float framebuffer — the HDR
 composite pass is skipped and bloom/tone-map won't fire. This is normal under
 SwiftShader in CI; it's a bug in production if a modern GPU returns `false`.
+
+**Do not confuse with GPU timing:** when someone says HDR/GPU features are
+"unsupported", they usually mean `__apex.gpuTimer().supported === false`
+(`EXT_disjoint_timer_query_webgl2` absent — SwiftShader, many mobile GPUs). That
+is unrelated to `hdrMode()`; bloom can still run when `hdrMode()` is true but
+`gpuTimer` is unsupported.
 
 ## 2. Verify the CPU-side light state
 
@@ -31,7 +37,8 @@ before suspecting the GPU upload:
 If `numLights > 0` but lights look wrong in-frame, check the light-record
 layout (§4). If `numLights === 0` on a night track, the `buildTrackLights` /
 `setFrameLights` guard is failing — check `track.def.night` and the scene-dark
-condition in `game.js`.
+condition in `game.js`. **Monza has `night: false`** — for night floodlight
+probes prefer `singapore` or `vegas` (both `night: true`).
 
 ## 3. Detect WebGL errors
 
@@ -49,6 +56,12 @@ gl.getError();   // 0 = GL_NO_ERROR; non-zero = error code
 Check the **browser console** first — WebGL implementations log
 `GL_INVALID_OPERATION` with the call site when debug extensions are active.
 SwiftShader is especially verbose.
+
+**Mobile STANDARD tier:** on mobile UA without GRAPHICS: HIGH, car/lamp shadow
+maps are not created but `game.js` still issues castShadow calls each frame.
+If those casts do not no-op, they spam `GL_INVALID_OPERATION` every frame
+(guarded by `tests/webgl-probes.spec.js` — "mobile standard tier renders without
+GL errors"). Symptom: "STANDARD is buggy and laggy while HIGH runs great".
 
 ## 4. Point-light upload — uniform arrays, 15 floats per light
 
@@ -71,15 +84,16 @@ field COUNT in `buildTrackLights` — every `lights.push(...)` must be exactly
 ### Shadow acne / detached shadows
 
 The lit shader combines a slope-scale bias with the SHADOW BIAS tuner knob
-(`sampleShadow` in glx.js):
+(`sampleShadow` in `js/render/shaders/lit.js`):
 
 ```glsl
-float slopeBias = uShadowTexel * 1.5 * (sqrt(1.0 - c*c) / c);   // tan(theta)
-float z = sc.z - clamp(slopeBias, 0.0005, 0.004) - uShadowBias * 0.5;
+float slopeBias = t * 1.5 * (sqrt(1.0 - cosTheta * cosTheta) / cosTheta);
+float biasTerm = clamp(slopeBias, 0.0005, 0.004) + uShadowBias * 0.5;
+float z = sc.z - biasTerm;
 ```
 
 Acne on flat surfaces → raise the SHADOW BIAS slider (`uShadowBias`, TUNE_DEFS
-def 0.001, max 0.005). Peter-Panning (shadows detach from feet) → lower it.
+def 0.001, **max 0.01**). Peter-Panning (shadows detach from feet) → lower it.
 Do NOT hand-edit the clamp constants first; the tuner knob exists for this.
 
 ### Shadow shimmer / edge flicker while driving
@@ -96,6 +110,13 @@ Bloom requires `hdrMode() === true` (float framebuffer available). Under
 SwiftShader it falls back to the LDR path — bloom is skipped and the scene looks
 flat. In production, verify `GLX.hdrMode()` returns `true` after context
 creation.
+
+### Bloom too strong / scene milky
+
+Tune via the **lighting-tuner** knobs (live or baked into `LightPresets`):
+`bloomMul`, `threshOff`, `bloomKnee`, `exposureMul`. Reproduce at
+`setTimeOfDay('dusk')` on a floodlit track and compare against shipped presets
+for that `track|tod|weather` before editing shader code.
 
 ## 6. Playwright probe pattern
 
@@ -126,6 +147,6 @@ expect(err).toBe(0);   // GL_NO_ERROR
 # Check HDR mode
 node tools/apex-eval.mjs monza "GLX.hdrMode()" --raw
 
-# Light state on a night track (full workflow: lighting-tuner skill)
+# Light state on a night track (Monza has night:false — use vegas/singapore)
 node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw
 ```

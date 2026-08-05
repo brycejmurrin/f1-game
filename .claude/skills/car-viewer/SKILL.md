@@ -1,6 +1,6 @@
 ---
 name: car-viewer
-description: Inspect the procedural F1 car in ISOLATION (no track) from any angle, distance, livery, parts spec, and lighting — a fast standalone "photo studio" for verifying js/car/car3d.js, js/car/liverytex.js, js/car/liveries.js, or js/car/parts.js changes. Renders the real GLX-shaded car + LiveryTex decals on a plain backdrop, with controllable point-light rigs for reflection/material tests. Triggers - "show me the car", "render the <team> livery", "how does the new wing/gearbox/brake look", "check the sponsors/number on the car", "test the reflections", "car from the front/side/rear", "does the accent colour read".
+description: Use when the user asks to show/render/check the car, inspect a team livery, sponsors, number, wing/gearbox/brake/part geometry, reflections/material finish, isolated F1 car, or front/side/rear/car-viewer shots in Apex 26.
 ---
 
 # Car viewer — isolated car photo studio
@@ -41,6 +41,15 @@ node tools/render-car.mjs --team=mclaren --az=205 --el=18 --dist=6 --rig=rim   #
 Then **Read the PNG(s)** it prints (e.g. `scratch/renders/cars/ferrari/side.png`) to
 look at the result. Output lives under `scratch/renders/cars/<team>/` — throwaway,
 don't commit it. For the batch audits, `audit-parts.mjs` writes `scratch/renders/parts/<category>/` and `audit-aero.mjs` writes `scratch/renders/aero/`.
+
+**All-teams side batch** (grid livery read; `custom` / MY TEAM is runtime-only — grep
+the static grid from `js/car/teams.js`):
+
+```sh
+grep -oP 'id: "\K[^"]+' js/car/teams.js | while read -r t; do
+  node tools/render-car.mjs --team="$t" --views=side --out=scratch/renders/cars-grid/
+done
+```
 
 ### Preset views (orbit az: 0 = behind, 180 = head-on)
 `hero` (rear-3/4, default) · `front` · `rear` · `side` · `frontquarter` ·
@@ -85,15 +94,19 @@ node tools/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,nig
 - Car: `--team=` `--livery=` `--num=` and any part to inspect its geometry:
   `--engine= --aero= --brakes= --gearbox= --ers= --tyres= --suspension= --fuel=`
   (option ids are in `js/car/parts.js`).
+  `tools/render-car.mjs` currently CLI-parses these 8 of the 12 catalog
+  categories; `tools/carview.html` has all 12 (including exhaust, floor,
+  cockpit, wheels) through the interactive picker/page API.
 - Lighting: `--tod=day|dusk|dawn|night|void` · `--rig=studio|3point|rim|topdown|none`
   · `--intensity=<n>` · `--exp=<n>` (exposure/brightness) · `--bg=RRGGBB`.
 - Reflection: `--refl=<0..1>` scales EVERYTHING shine-related together — roughness,
   metalness, specular, clearcoat, sparkle, and the env-mirror (`carEnvCube`) — as
-  one matte↔glossy dial. Default `0.2` (mostly matte, reads as team paint); raise
+  one matte↔glossy **studio dial**. Default `0.2` (mostly matte team paint); raise
   it to check clearcoat/reflection behaviour, `0` for flat paint, up to `1` for
-  full chrome. (Scaling only clearcoat/carEnvCube and leaving `specular` fixed
-  was an earlier bug — a hot point-light highlight stayed regardless of the
-  slider. `paintFromRefl()` in carview.html now derives every term from one value.)
+  maximum gloss in the viewer rig. **This is not the in-game livery finish:**
+  real **chrome paint** is `finish:"chrome"` on a livery entry in
+  `js/car/liveries.js` (e.g. `--livery=mer_chrome`). The universal id `chrome`
+  is a **gloss** palette named "Chrome", not the chrome finish material.
 - Look target: `--look=<m>` shifts the orbit target along Z (+nose / −rear),
   `--lookx=<m>` along X (+right / −left) — lets a close `--dist` frame ONE
   corner (a wheel, an axle) instead of cropping both ends of the car when

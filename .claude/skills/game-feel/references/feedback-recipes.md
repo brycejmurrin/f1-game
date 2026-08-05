@@ -87,7 +87,8 @@ feeling either dead (under-juiced) or exhausting (everything maxed).
 - **Reduce/disable flashing** (photosensitivity) — replace white flashes with a static tint.
 - **Reduce camera motion** — cut shake roll and zoom punches.
 
-These pair with `game-ui-ux` (settings menu) and `input-systems` (accessibility section).
+Expose these through the repo's own settings/accessibility UI when an Apex
+implementation needs player control over intensity.
 
 ## 6. Per-engine binding summary
 
@@ -95,6 +96,6 @@ These pair with `game-ui-ux` (settings menu) and `input-systems` (accessibility 
   one-shot; `Engine.time_scale` + `ignore_time_scale` timer; shake on `Camera2D.offset`.
 - **Unity 6:** coroutines + `SmoothDamp`/curves (or a tween package); `ParticleSystem.Play()`;
   `Time.timeScale` + `WaitForSecondsRealtime`; shake via `CinemachineBasicMultiChannelPerlin`
-  amplitude/frequency driven by `trauma^2` (see `camera-systems`).
+  amplitude/frequency driven by `trauma^2`.
 - **Web (Phaser/Pixi/three):** tween via the engine/library tween; `this.cameras.main.shake()`
   in Phaser; `requestAnimationFrame`-driven eases elsewhere.

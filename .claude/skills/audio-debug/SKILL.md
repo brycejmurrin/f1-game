@@ -1,6 +1,6 @@
 ---
 name: audio-debug
-description: Inspect and tune the WebAudio synth engine in js/game/audio.js — engine pitch curve, sfx triggers, music layers, and mute/volume state — using the __apex audio hooks and the browser console. Use for "the engine sounds flat at high speed", "sfx isn't triggering", "tune the gear-shift audio", "the music cuts out", "audio debug". Triggers - "audio", "sound", "engine pitch", "sfx", "music layer", "mute".
+description: Use when the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or debugging WebAudio, engine pitch, sfx, sound, music layers, or audio in Apex 26.
 ---
 
 # Debug and tune the audio engine
@@ -10,8 +10,16 @@ engine voice has two layers: a **sample-based core** (CC0 MP3s in
 `assets/sfx/f1_engine.mp3` + `f1_rev.mp3`, pitched via `playbackRate`) and a
 **synth fallback** (detuned sawtooth oscillators + lowpass) that takes over if
 the samples haven't decoded yet. Gear-shift pops, collision thuds, and ambient
-music tracks are separate layers. All audio paths pass through a single `master`
-gain node.
+music tracks are separate layers. Three **independent toggles** under one master:
+
+| Bus | API | What it carries |
+|---|---|---|
+| **Master** | `GameAudio.setEnabled(b)` / `soundOn` | Both buses — `#soundbtn` on the **title screen only** |
+| **SFX** | `GameAudio.setSfxEnabled(b)` / `sfxOn` | Engine, skids, rain, UI ticks, gear pops |
+| **Music** | `GameAudio.setMusicEnabled(b)` / `musicEnabled` | Race/menu soundtrack (built-in playlist or Spotify backend) |
+
+Signal path: engine/SFX → `sfxBus` → `master` → destination; music → `musicGain` →
+`master`. Muting music does **not** silence the engine — it sits on the sfx bus.
 
 ## Architecture overview
 
@@ -27,17 +35,21 @@ gain node.
 | Collision thud | White-noise burst scaled to impact `dv` |
 | Tyre screech / skid | Filtered noise proportional to lateral slip |
 | Music | Streamed CC0 tracks (`assets/music/`) via `startMusic()` / `stopMusic()` |
-| Master enable | `GameAudio.setEnabled(bool)` — sets master gain 0 or 0.8; wired to `#soundbtn` |
+| Master enable | `GameAudio.setEnabled(bool)` — sets master gain 0 or 0.8; wired to title `#soundbtn` |
+| SFX enable | `GameAudio.setSfxEnabled(bool)` — mutes engine/SFX only; music keeps playing |
+| Music enable | `GameAudio.setMusicEnabled(bool)` — mutes soundtrack only; engine keeps humming |
 
 ## Quick inspection (browser console)
 
 ```js
-// Is the engine enabled?
+// Master mute (both buses — title #soundbtn):
 GameAudio.enabled()   // true | false
+GameAudio.setEnabled(false)   // master gain → 0
+GameAudio.setEnabled(true)    // master gain → 0.8
 
-// Mute / unmute without touching the UI
-GameAudio.setEnabled(false)   // mute (master gain → 0)
-GameAudio.setEnabled(true)    // unmute (master gain → 0.8)
+// Per-bus (in-race pause → #audioset):
+GameAudio.setSfxEnabled(false)    // engine/SFX off; music can stay on
+GameAudio.setMusicEnabled(false)  // soundtrack off; engine keeps humming
 
 // Sample-load status + whether the sample or synth core is active:
 GameAudio.debug()
@@ -57,22 +69,49 @@ GameAudio.centroidHz()  // e.g. 340 at idle, higher at speed
 
 ## Tuning the engine pitch curve
 
-The pitch mapping lives in `js/game/audio.js` — search for the `setEngine(speed,
-gear, ...)` function.  The **sample core** sets `playbackRate` proportional to
-RPM (derived from `speed` and the per-gear ratio array near that function).  The
-**synth fallback** sets oscillator frequencies directly.  To shift the tonal
-range, adjust the gear-ratio constants or the RPM→rate mapping in `setEngine`.
+The pitch mapping lives in `js/game/audio.js` — search for `setEngine(rev01,
+boost01, offroad, speed01, gear)`.  The game loop passes normalised rev/throttle
+and gear each frame; the **sample core** sets `playbackRate` from those inputs,
+and the **synth fallback** sets oscillator frequencies directly until MP3s decode.
+To shift the tonal range, adjust the gear-ratio constants or the rev→rate mapping
+inside `setEngine`.
+
+```js
+// Manual probe (matches the signature the game uses):
+GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
+// rev01, boost01, offroad, speed01, gear
+```
 
 After editing `js/game/audio.js`, **bump the cache version** (`bump-cache` skill) and
 reload — WebAudio doesn't hot-reload.  Use `GameAudio.rate()` before and after
 to confirm the playback-rate changed at the same speed.
 
+## In-race mute (not `#soundbtn`)
+
+During a race `#soundbtn` is **hidden** — the title-screen master toggle is not
+reachable. Open **pause → MUSIC & SOUND** (`#pm-audio` opens `#audioset`):
+
+| Control | DOM ids | Effect |
+|---|---|---|
+| Music ON/OFF | `#as-music-on` / `#as-music-off` | `setMusicEnabled` — soundtrack only |
+| SFX ON/OFF | `#as-sound-on` / `#as-sound-off` | `setSfxEnabled` — engine + effects only |
+
+**Common mistake:** turning **music** off and expecting silence — the engine idle
+still hums on the **sfx** bus. That is correct behaviour, not a failed mute.
+
+**Pause stops the engine:** `setPaused(true)` calls `GameAudio.stopEngine()`; resume
+calls `GameAudio.startEngine()` again when `soundOn` is true (independent of the
+music toggle).
+
 ## Diagnosing silence or flat pitch
 
 1. Check `GameAudio.enabled()` — if `false`, call `GameAudio.setEnabled(true)`.
+   Also check `GameAudio.setSfxEnabled(true)` if only the engine is missing while
+   music plays.
 2. Check `GameAudio.debug().samplesReady` — if `false`, the MP3s haven't decoded
-   yet (network or CORS issue); the synth fallback should be active.  Check
-   `usingSamples` to confirm which core is running.
+   yet (network/CORS issue, or the CC0 files are absent from the checkout); the
+   synth fallback should be active.  Check `usingSamples` to confirm which core
+   is running — absence of sample files is not fatal.
 3. If the AudioContext is suspended (autoplay policy), clicking `#soundbtn` or
    any user gesture resumes it.  In the browser console:
    ```js
@@ -88,9 +127,10 @@ to confirm the playback-rate changed at the same speed.
 
 ## Testing
 
-`tests/audio-smoke.spec.js` covers three checks: `GameAudio` is defined, the
-OfflineAudioContext synthesis pipeline produces non-silent output, and
-`AudioContext.resume()` transitions to `"running"`. Run it with:
+`tests/audio-smoke.spec.js` covers three browser checks: `GameAudio` initialises
+without console errors, re-enabling sound during a race restarts race music, and
+a real user-gesture unlock runs engine synthesis (`setEngine(0.75, 0.4, false,
+0.6, 4)` then `centroidHz() > 50`, `contextState === "running"`). Run it with:
 
 ```sh
 npx playwright test tests/audio-smoke.spec.js
