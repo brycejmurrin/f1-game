@@ -1043,42 +1043,11 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0;
-const MAX_SKID = 120;
-const skidMarks = Array.from({ length: MAX_SKID }, () => new Float32Array(16));
-let skidActive = 0;           // how many marks are live (grows to MAX_SKID then stays)
-let skidIdx = 0;
-let skidFrameT = 0;           // frame countdown between stamp placements
-// Batched skid trail: all live marks baked into one world-space vertex buffer
-// (pos3 + uv2 per vertex, 6 verts/mark) drawn in a single call. Rebuilt only
-// when a mark is added/evicted (at most every ~5 frames while sliding) instead
-// of issuing up to 120 per-mark draws every frame.
-const _skidVerts = new Float32Array(MAX_SKID * 6 * 5);
-let _skidVertCount = 0;
-let _skidBatchDirty = false;
-const _SKID_W = 0.6, _SKID_L = 2.2;
-// 6 verts (two tris) — matches the shadowVAO quad winding [0,1,2, 0,2,3].
-const _SKID_CORNERS = [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5];
-function rebuildSkidBatch() {
-  const full = skidActive >= MAX_SKID, cnt = full ? MAX_SKID : skidActive;
-  let o = 0;
-  for (let i = 0; i < cnt; i++) {
-    const M = full ? skidMarks[(skidIdx + i) % MAX_SKID] : skidMarks[i];
-    const m0 = M[0], m1 = M[1], m2 = M[2], m4 = M[4], m5 = M[5], m6 = M[6],
-          m8 = M[8], m9 = M[9], m10 = M[10], m12 = M[12], m13 = M[13], m14 = M[14];
-    for (let v = 0; v < 6; v++) {
-      const ax = _SKID_CORNERS[v * 2], ay = _SKID_CORNERS[v * 2 + 1];
-      const lx = ax * _SKID_W, lz = ay * _SKID_L;
-      _skidVerts[o++] = m0 * lx + m4 * 0.02 + m8 * lz + m12;
-      _skidVerts[o++] = m1 * lx + m5 * 0.02 + m9 * lz + m13;
-      _skidVerts[o++] = m2 * lx + m6 * 0.02 + m10 * lz + m14;
-      _skidVerts[o++] = ax * 2;
-      _skidVerts[o++] = ay * 2;
-    }
-  }
-  _skidVertCount = cnt * 6;
-  _skidBatchDirty = false;
-}
-
+let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
+// Tyre marks (the 120-entry ring buffer, its batched vertex build and the
+// per-mark fallback draw) live in js/game/skidmarks.js — SkidMarks.create(G),
+// wired after the G façade as `skids`. Nothing outside that module reads its
+// state, which is what made it liftable.
 const { PAINT_WET_NIGHT, PAINT_WET_DAY, PAINT_DRY_NIGHT, PAINT_DRY_DAY } = GameTables;  // car paint materials (see js/game/tables.js)
 // Apply the CAR tuner group (LT.car*) to a base paint constant, into a reused
 // scratch object (gfx.draw consumes the material synchronously, so one scratch
@@ -2436,7 +2405,7 @@ function startRace() {
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
-  skidActive = 0; skidIdx = 0; skidFrameT = 0; _skidBatchDirty = true;
+  skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   clearMenuScreens();
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
@@ -2890,6 +2859,8 @@ const careerUi = CareerUI.create(G);
 const quali = Quali.create(G);
 // ACTIVE AERO activation zones (js/game/aerozones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
+// Tyre marks (js/game/skidmarks.js) — self-contained ring buffer + batched draw.
+skids = SkidMarks.create(G);
 // Photo mode (js/game/photomode.js).
 const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
@@ -5988,20 +5959,7 @@ function render(dt) {
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
   // ring buffer filled. Falls back to per-mark draws if the batch path is
   // unavailable (older GPU where the batch program failed to link).
-  {
-    let rebuilt = false;
-    if (_skidBatchDirty) { rebuildSkidBatch(); rebuilt = true; }
-    if (!gfx.drawSkidBatch(_skidVerts, _skidVertCount, rebuilt)) {
-      const ex = camEye[0], ez = camEye[2], SKID_CULL = 170 * 170;
-      const full = skidActive >= MAX_SKID, cnt = full ? MAX_SKID : skidActive;
-      for (let i = 0; i < cnt; i++) {
-        const m = full ? skidMarks[(skidIdx + i) % MAX_SKID] : skidMarks[i];
-        const dx = m[12] - ex, dz = m[14] - ez;
-        if (dx * dx + dz * dz > SKID_CULL) continue;
-        gfx.drawMark(m, 0.6, 2.2);
-      }
-    }
-  }
+  skids.draw(gfx, camEye);
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   const hidePlayerCar = !dbgCam && (state === "race" || state === "count") &&
@@ -6296,18 +6254,7 @@ function render(dt) {
     }
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
-      if ((skid > 0.25 || c.offroad) && c.speed > 10) {
-        skidFrameT--;
-        if (skidFrameT <= 0) {
-          skidFrameT = 5;
-          skidMarks[skidIdx].set(tmpMat);
-          skidIdx = (skidIdx + 1) % MAX_SKID;
-          if (skidActive < MAX_SKID) skidActive++;
-          _skidBatchDirty = true;   // rebuild the batched trail next render
-        }
-      } else {
-        skidFrameT = 0;
-      }
+      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10);
     }
     // ── Transient particle FX emitters (visual-only: they READ car state and
     // write none of it, so headless physics is untouched). They live HERE

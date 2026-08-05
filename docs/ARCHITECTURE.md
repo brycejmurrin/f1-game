@@ -80,7 +80,26 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
 ### Deferred follow-ups (known debt, in rough priority order)
 
 - **game.js pass 2** — promote the remaining closure `let`s to a shared state
-  object and split the two megafunctions (`render()`, `updateCar()`).
+  object. Two modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`),
+  and the next candidates, verified with their exact boundary crossings, are the
+  lighting profile store, race control / caution, the quali networking block,
+  collisions, and the ~307-line garage preview (whose natural partner
+  `js/game/setup-ui.js` already exists).
+
+  **Splitting the two megafunctions is NOT recommended.** `render()` and
+  `updateCar()` are ~1,376 and ~1,838 lines, and `updateCar`'s tyre model is one
+  continuous integration over ~40 interdependent locals — extracting it means
+  inventing a state struct and risking the determinism that
+  `tests/physics-characterization.spec.js` now pins, for no functional gain.
+  Take the cohesive blocks around them instead.
+
+  `tests/module-size.test.mjs` is the guard that makes this stick: a per-file
+  line ceiling you LOWER when you extract. It exists because this file's own
+  note above — that extraction happened once and nothing stopped the file
+  growing back — was demonstrated again in miniature during the 2026-08 cleanup,
+  when two extractions removed 91 lines from game.js and a concurrent branch
+  added 130 over the same period. Nobody did anything wrong; nothing was
+  watching.
 - **~~tracks.js → GLX direct calls~~ (done, TLX M10)** — `Tracks.build` now
   takes the active backend via `opts.gfx` and routes every `createMesh` /
   `createChunkedMesh` / `mobileTier` read through that injected handle (falling
@@ -589,6 +608,7 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `tuner.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel (COPY VALUES export) |
 | `steer-tuning.js` | `SteerTuning` | ADVANCED STEERING panel (presets + sliders) |
 | `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `xStraightAhead()`/`aeroDfMult()` stay in game.js because they read car state |
+| `skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
 | `sheetshape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
 | `topmodal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 16 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |
 | `ariastate.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |

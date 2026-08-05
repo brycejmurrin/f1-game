@@ -158,6 +158,9 @@ all the traps are in the mechanics:
 ```
 1. Start it backgrounded, redirected to a LOG FILE — never `| tail`, which
    buffers to EOF so the file stays empty and there is nothing to read.
+   `mkdir -p` FIRST: artifacts/ is gitignored, so a fresh clone or worktree does
+   not have it and the redirect fails before the command ever runs.
+     mkdir -p artifacts/logs
      node tools/run-playwright.mjs tests/foo.spec.js --reporter=line \
        > artifacts/logs/foo.log 2>&1
 
@@ -619,6 +622,10 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   Knows nothing about a car: xStraightAhead()
                                   and aeroDfMult() stay in game.js because they
                                   read car state
+  skidmarks.js   SkidMarks      the 120-entry tyre-mark ring buffer, its batched
+                                  vertex build (one draw, not 120) and the per-mark
+                                  fallback. Owns all of its own state — game.js only
+                                  calls reset()/stamp()/draw()
   photomode.js   Photomode      photo mode
   tuner.js       TunerPanel     LIGHTING TUNER pause-menu panel
   cam-tuner.js   CamTunerPanel  CAMERA TUNER pause-menu panel
@@ -628,7 +635,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (104) + tests/*.test.mjs unit suites (38)
+tests/*.spec.js                 Playwright specs (104) + tests/*.test.mjs unit suites (39)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
                  ARCHITECTURE-REVIEW.md is the standing assessment + defect
                    register: what the no-build-step bet costs, why asserted
@@ -913,7 +920,7 @@ is the same surface from a shell, with the staging done correctly.
 
 ## Writing tests
 
-104 Playwright specs + 38 `node --test` unit suites. **How to RUN them is under
+104 Playwright specs + 39 `node --test` unit suites. **How to RUN them is under
 Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
 to do when writing one.
 
