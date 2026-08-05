@@ -77,3 +77,26 @@ test("the dead-class list is still accurate", () => {
     "and docs/COMPONENTS.md does not name them: " +
     dead.filter((c) => !named.includes(c)).join(", "));
 });
+
+// THE CLAIM THAT ACTUALLY ROTTED. `collect()` has always returned class -> Set(file),
+// so the cross-file coupling data was computed and then never asserted — and the
+// "Defined in more than one file" section duly went stale while all three tests
+// stayed green. Twelve classes were missing when this was added, `.sheet-foot`
+// among them: the most-shared class in the project, defined in SIX files
+// (components, menus, overlays, carsetup, career, tuner) and named nowhere.
+//
+// This is the governing law of the repo in one test — what a guard asserts stays
+// true, what only prose says drifts — applied to the guard that was itself only
+// asserting the easy half.
+test("every class defined in more than one file is named in the doc", () => {
+  const doc = fs.readFileSync(DOC, "utf8");
+  const shared = [...collect().entries()]
+    .filter(([, files]) => files.size > 1)
+    .map(([c]) => c)
+    .sort();
+  const missing = shared.filter((c) => !doc.includes("`." + c + "`"));
+  assert.deepStrictEqual(missing, [],
+    "classes are defined in more than one css/ file but are not named in " +
+    "docs/COMPONENTS.md's \"Defined in more than one file\" section. A coupling " +
+    "nobody wrote down is one nobody can collapse: " + missing.join(", "));
+});

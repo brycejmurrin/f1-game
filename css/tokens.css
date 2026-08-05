@@ -394,6 +394,7 @@ body:not(.desktop) {
    --hud-scale by hand while its 8vw was not. */
 :root {
   --vwz:   calc(1vw  / var(--ui-scale));
+  --vhz:   calc(1vh  / var(--ui-scale));
   --svhz:  calc(1svh / var(--ui-scale));
   --vwzh:  calc(1vw  / var(--hud-scale));
   --svhzh: calc(1svh / var(--hud-scale));

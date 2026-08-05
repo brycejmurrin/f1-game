@@ -100,6 +100,31 @@ file changes a screen owned by another.
 `.screen`, `.dim`) are shared by design and are listed here only so nobody
 mistakes them for components.
 
+**Found by the guard, not by hand** — these were defined in more than one
+file and named nowhere, which is exactly the drift the new assertion in
+`tests/component-inventory.test.mjs` now prevents. `.sheet-foot` is the
+most-shared class in the project and had no entry at all:
+
+- `.adv-item` — `components` + `tuner`
+- `.adv-more-btn` — `components` + `tuner`
+- `.cs-stat-bar-wrap` — `carsetup` + `menus` + `responsive`
+- `.cs-stat-label` — `carsetup` + `menus` + `responsive`
+- `.cs-stat-row` — `carsetup` + `menus` + `responsive`
+- `.cs-stat-val` — `carsetup` + `menus` + `responsive`
+- `.cz-liv-none` — `components` + `menus`
+- `.mb-sub` — `menus` + `responsive`
+- `.opt-btn` — `components` + `tuner`
+- `.preset-btn` — `components` + `tuner`
+- `.preset-row` — `components` + `tuner`
+- `.res-name` — `career` + `components`
+- `.season-upcoming-row` — `components` + `menus`
+- `.sf-scroll` — `components` + `tuner`
+- `.sheet-foot` — `career` + `carsetup` + `components` + `menus` + `overlays` + `tuner`
+- `.team-tile` — `components` + `menus`
+- `.track-row` — `components` + `menus`
+- `.tune-label` — `components` + `tuner`
+- `.tune-row` — `components` + `tuner`
+
 ## Dead classes
 
 None, out of 515 — a class defined in `css/` and referenced from neither
