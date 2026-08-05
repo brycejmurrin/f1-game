@@ -181,10 +181,18 @@
      extra size comes out of padding rather than pushing anything off screen. */
   #menu-hero .bigbtn { padding-block: 12px; }
   .mb-sub { font-size: 11px; }
-  /* Horizontal padding is TIGHTER than the type grew, on purpose: the cells are
-     a fixed min(46vw, 300px), so at 17px "RACE A FRIEND" wrapped to two lines
-     and took its whole row's height with it. The room comes out of the gutter,
-     which nobody reads, rather than out of the label, which is the point. */
+  /* Horizontal padding is TIGHTER than the type grew, to buy the labels room
+     back out of the gutter rather than out of the type.
+     IT DOES NOT SAVE "RACE A FRIEND", and this comment used to claim it did.
+     Measured at 667x375: that label needs 209px on one line against a 155px
+     cell — a 54px shortfall, where the whole horizontal padding is 20px. The
+     cell would have to reach ~408px, and the brand column beside it is 273px,
+     so 273 + 32 + 408 = 713 in a 667px window. It wraps to two lines at every
+     landscape width, on touch and desktop alike, and that is the correct
+     outcome: the alternative is either a horizontal overflow on the narrowest
+     phone or that one button carrying smaller type than the five around it.
+     The row is sized by its tallest cell, so SEASON grows to match — which is
+     why the pair still reads as a pair. */
   #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
   #menu-buttons .minibtn { padding: 7px 10px; font-size: 12px; }
 }
