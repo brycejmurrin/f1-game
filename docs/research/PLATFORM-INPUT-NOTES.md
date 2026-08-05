@@ -169,7 +169,7 @@ it once at boot does not — subscribe to `change` (`Input.onPointerKindChange`)
 
 ---
 
-## 8. Gamepad UI conventions are settled — do not invent a mapping
+## 8. SHIPPED: gamepad menu navigation, on the settled UWP mapping
 
 Microsoft's UWP "Gamepad and remote control interactions" guidance is the
 closest thing to a cross-industry standard, and it defines the mapping as a
@@ -213,6 +213,49 @@ The one place the guidance does not apply: it advises hiding a visible back
 button when B goes back. That is a system-back-stack convention, and the
 opposite of this codebase's rule — here Escape and B press the screen's OWN
 visible control precisely so there is never a second code path.
+
+### The fix, shipped
+
+`js/game/input.js`'s `pollGamepad()` now dispatches this exact mapping as REAL
+synthetic `KeyboardEvent`s once `UiLayers.anyOpen()` is true — D-pad and the
+left stick become arrow keys (with a hand-rolled hold-repeat: ~450 ms initial
+delay, ~130 ms steady cadence, since a polled pad has no OS key-repeat of its
+own), the triggers become PageUp/PageDown, the bumpers page horizontally
+(there being no distinct horizontal-pane concept in this codebase, they
+dispatch ArrowLeft/ArrowRight — the closest existing primitive). This is a SEAM
+into `js/game/menunav.js`, not a second focus-mover: the dispatched events flow
+through exactly the same `window`/`document` listeners a real keyboard drives,
+so a menu that already worked from the keyboard picked up pad navigation for
+free, as the guidance above predicted. `padActivate()`/`padEscape()` seed focus
+the same way the first real arrow press already does (`MenuNav.currentItem()`)
+so a lone A or B press before any direction still leaves one focus visual on
+screen, per this section's own "focus must always be visible" note.
+
+**One thing the research above did not anticipate, found while building this:**
+B cannot simply dispatch a synthetic Escape keydown and rely on "the exact same
+path a real Escape key already does" — because for the sixteen-plus screens
+that are real `<dialog>`s (§1, §5), "Escape closes it" is a browser DEFAULT
+ACTION tied to a **trusted** key event (Chromium's CloseWatcher takes the key's
+*release*; WebKit's older path takes the keydown's default action). Neither
+fires for a synthetic, `isTrusted: false` `KeyboardEvent` — measured directly
+against a bare `<dialog>` with no listeners: an untrusted Escape keydown left
+it open, where a real keypress (`page.keyboard.press`) closed it. This is the
+same class of gotcha as `.click()` being required for A (see the guidance's own
+"Enter/Space activates the focused button" caveat) — a default action needs
+trust, a JS-registered listener does not. The fix meets `js/game/topmodal.js`'s
+existing seam at a different point: for a `<dialog>` layer, B dispatches the
+`cancel` `Event` that `TopModal.wire()` already listens for on every
+`dialog.screen` (an ordinary `addEventListener` callback, which does not care
+about trust), which does exactly what a real Escape does — presses the
+screen's own `data-esc-close` control. For the handful of screens that never
+became `<dialog>`s, `TopModal.onEscape` is itself an ordinary `document`
+keydown listener, so a synthetic keydown reaches it exactly like a real one and
+needs no special-casing.
+
+Pinned by `tests/gamepad.spec.js`'s "Gamepad menu navigation" suite — in
+particular "B closes a native `<dialog>` screen (pause menu)", which is the one
+that would have passed against a naive synthetic-Escape-only implementation in
+a mocked-event test harness and only failed in a real browser.
 
 ---
 
