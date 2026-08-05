@@ -2057,6 +2057,20 @@ const api = {
     return G.netLobby.acceptAnswer(answerCode);
   },
 
+  // lobbySdp() — the SDP that actually CROSSED, both directions.
+  //
+  // Every candidate counter in this game reports the LOCAL gather, so "we have
+  // four relay candidates" and "the peer was told about them" looked like the
+  // same fact and are not. Two devices each holding a reachable relay still
+  // fail to pair if the description that reached the other end carried none —
+  // and nothing exposed that difference. Returns the candidate lines of both
+  // descriptions plus the raw SDP, so the answer is read rather than inferred.
+  lobbySdp() {
+    if (!G.netLobby || !G.netLobby.sdp) return { ok: false, error: "no_lobby" };
+    const s = G.netLobby.sdp();
+    return s || { ok: false, error: "no_connection" };
+  },
+
   // lobbyCodeHost() / lobbyCodeJoin(code) — the ROOM CODE path, driven
   // directly. Exposed because that path had NO test of any kind: exchange() is
   // unreachable from the suite (the loopback has no SDP, the lobby specs use a
