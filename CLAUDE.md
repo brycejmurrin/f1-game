@@ -235,6 +235,25 @@ Two rules that make step 2 work:
 from the working tree). Edit `tests/`, `docs/`, `tools/` — or write the commit
 message. There is always non-conflicting work.
 
+**AND ABOVE ALL DO NOT BUMP `version.json` MID-RUN.** This is the sharp edge,
+because it does not look like editing source at all — it is one integer in a
+one-line file. But `index.html`'s shell version guard fetches `version.json`
+(`no-store`) and **force-reloads the page** when the deployed build is newer than
+the cached shell. Every page a running spec has already opened is on the old
+build, so bumping the number reloads them ALL, mid-test. What you get back is a
+test that hung and then died on its own timeout — the machine-oversubscription
+signature, on a quiet box, for a reason that has nothing to do with the machine.
+
+Measured here: `smoke.spec.js › HUD › speed readout updates after jump()` had
+passed at 121 s (limit 120 s) on the run before. `css/` and `version.json` were
+edited under it; it came back at 125.8 s with `Test timeout of 120000ms
+exceeded`. Nothing about the code had changed, and the failure was indexed to
+the one test that needs the page to survive after `jump()`.
+
+The rule that actually holds: **bump `?v=N` and `version.json` as the LAST edit
+before you commit, never while anything is running.** "It's only a version bump"
+is exactly how this one gets rationalised — it was, and it cost a whole group.
+
 **2. Run the groups the change needs, not all of them.** The whole suite is ~40
 minutes of SwiftShader, and which groups a change needs is mechanical — so ask:
 
