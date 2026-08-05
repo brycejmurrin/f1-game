@@ -33,6 +33,7 @@ Sections are unnumbered on purpose: numbering rots the moment one is inserted.
 | **`js/game.js` had zero `Log` calls** | **Fixed** — one envelope line at race start |
 | **Rain spray and launch smoke were pace-broken** — full spray unreachable below pace ~0.8, launch smoke never fired at all at pace 0.5 | **Fixed** (A16), and the lint that found them now runs in `tooling-fast` |
 | **The tilt chain, the touch drag and the store migration had no tests** | **Fixed** — `tilt-pipeline`, `touch-steer`, `steer-migration` specs |
+| **"The arc must not reach the driver" holds** — swept every `Tracks.curvature`/`kCur` read in `js/game.js` and `js/game/*` | Audited clean. All 12 are AI-only, assist-gated, broadcast, surface, or post-flag. The one that looks wrong is not: `bodyattitude.js` rolls the chassis from `speed × yawRateCur` for HUMAN cars and only falls back to `speed² × kCur` for AI, which has no world heading to compute a real yaw rate from |
 | **iOS/iPad platform plumbing is already sound** — `touch-action: none`, `overscroll-behavior: none`, `-webkit-touch-callout`, safe-area tokens, `passive: false` touch listeners, the `DeviceOrientationEvent.requestPermission` gate | Audited, nothing to fix. The iPad gap was input SEMANTICS (absolute-position steering, on/off pedals), which Phase B closed — not the platform layer |
 
 ---
