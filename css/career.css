@@ -198,7 +198,7 @@
    top of it. 30 matches #results/#standings, the other "the session is over" sheets.
    The summary card is a plain .cr-card and the headings are .sel-label: nothing
    here needs a vocabulary of its own, only the offer rows are new. */
-#career-offers { z-index: 30; --sheet-w: 620px; }
+#career-offers { --sheet-w: 620px; }
 
 /* An offer is a TILE, not a list row: it is a commitment of one to three seasons
    and the tap target has to say so. Same grid as .cr-teamtile — colour bar, name,
@@ -231,7 +231,7 @@
    the same z-index because only one of the two is ever open. Narrower than the
    offers sheet — a totals card and a column of season rows are both short lines,
    and a wide sheet would strand the points column half a screen from the year. */
-#career-history { z-index: 30; --sheet-w: 520px; }
+#career-history { --sheet-w: 520px; }
 
 /* The way in, at the foot of the hub's left column. A .cr-card that happens to be
    a button, so it inherits the card's surface and rhythm and only has to undo the
@@ -349,7 +349,7 @@
    measure rather than the full 1020px the career page runs at. Sits above
    #career at the same z-index as the history sheet — both are read-only modals
    opened FROM the hub, and neither can be open at once. */
-#career-guide { z-index: 30; --sheet-w: 560px; }
+#career-guide { --sheet-w: 560px; }
 #cg-body { display: flex; flex-direction: column; gap: 4px; }
 /* Sections are a heading plus one card, and the heading owns the space above it
    — so the gap between a card and the NEXT heading is set once here rather than

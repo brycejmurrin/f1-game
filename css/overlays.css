@@ -555,7 +555,6 @@ body.hud-hidden #hud-restore { display: block; }
    explicit z-index the sheet renders BEHIND the menu: still "visible" to a
    query, but every click lands on the menu instead, which reads as a dead
    button rather than a stacking bug. */
-#vsfriend { z-index: 38; }
 #vsfriend .vs-step { display: flex; flex-direction: column; gap: 10px; }
 #vsfriend .vs-hint {
   margin: 4px 0 0;

@@ -344,17 +344,30 @@ const SCREENS = [
   // The other two STEERING MODES. Each changes which touch controls exist —
   // "touch" hides the gas pedal entirely (autoThrottle), "buttons" adds an
   // explicit GAS — so the control stack is a different shape, not a restyle.
-  // steerMode is read from localStorage at boot, so it has to be set and the
-  // page reloaded rather than poked at runtime.
+  //
+  // Reached by CYCLING #pm-steer, which is the player's own route and takes
+  // effect immediately. The first version set localStorage and reloaded, which
+  // worked for these two cells and wrecked the sweep: `page.reload()` destroys
+  // the execution context, so every screen AFTER them failed with "Execution
+  // context was destroyed" or a null deref in the reset, and two whole viewports
+  // ran out of budget and failed to boot — 98 skipped cells, none of them a
+  // layout finding. A screen that has to reload the page is a screen that
+  // corrupts its neighbours.
   ...[["touch", "touch steering"], ["buttons", "button steering"]].map(([mode, label]) => ({
     id: "hud" + mode, name: "In-race HUD — " + label, root: "#hud", open: async (p) => {
-      await p.evaluate((m) => localStorage.setItem("apex26.steerMode", JSON.stringify(m)), mode);
-      await p.reload({ waitUntil: "domcontentloaded" });
-      await p.waitForFunction(() => !!window.__apex, null, { timeout: 60000 });
-      await p.evaluate(() => window.__apex.headless(true));
       await p.evaluate(async () => { await window.__apex.race("monza"); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
-      await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 45); window.__apex.snapCam(); });
+      await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 45); });
+      // #pm-steer cycles TILT -> BUTTONS -> TOUCH; click until it reads the one
+      // we want, bounded so a renamed mode cannot spin forever.
+      await p.evaluate((want) => {
+        const btn = document.getElementById("pm-steer");
+        for (let i = 0; i < 6; i++) {
+          if (new RegExp(want, "i").test(btn.textContent)) return;
+          btn.click();
+        }
+      }, mode);
+      await p.evaluate(() => window.__apex.snapCam());
       await p.waitForTimeout(600); } })),
 
   // ONE more parts tab, to MEASURE the claim that the garage's ten remaining

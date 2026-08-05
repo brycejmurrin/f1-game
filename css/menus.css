@@ -361,7 +361,7 @@
    four-row grid of 60px chips.
    z-index clears #carsetup (35, css/carsetup.css) — the picker is opened FROM
    the garage now, and at 26 it opened behind it. */
-#teampicker { --sheet-w: 760px; z-index: 36; }
+#teampicker { --sheet-w: 760px; }
 .team-card, .team-tile {
   display: flex; align-items: center; gap: var(--gap);
   width: 100%; text-align: left; cursor: pointer;
