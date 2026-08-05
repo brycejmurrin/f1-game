@@ -1,12 +1,12 @@
 ---
 name: scenery-dress
-description: Write or edit a track's scenery(api) callback in js/circuits/<id>.js — the per-circuit prop dressing (trees, buildings, grandstands, barriers, mountains, billboards, floodlights). Covers the placement model, the composite-model helpers, the on-track rejection guard, terrain anchoring, the vertex budget, and common failure modes. Use for "add buildings to Monaco", "make Spa's forest denser", "the trees are floating", "dress this circuit".
+description: Use when the user asks to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback.
 ---
 
 # Dress a circuit's scenery
 
 `buildProps` (the `js/track/scenery-*.js` modules — nature/city/structures/identity,
-orchestrated by `js/track/tracks.js`; the 84-member `api` surface is frozen by
+orchestrated by `js/track/tracks.js`; the 107-member `api` surface is frozen by
 `tests/scenery-api-contract.test.mjs`) calls each track's `def.scenery(api)` to lay down
 3D props, then merges everything into one mesh. The full reference is
 `docs/SCENERY-API.md` — **read it before non-trivial work**. This skill is the
@@ -42,7 +42,8 @@ scenery: function (api) {
 - **Vegetation**: `tree` (broadleaf), `pine`/`conifer`, `palm`, `bush`, `hedge`,
   `forestEdge(s0,s1,side,gap,opts)` (dense gap-aware treeline).
 - **Structures**: `building(k,side,gap,w,h,d,opts)`, `tower(...)`, `grandstand(...)`,
-  `billboard(...)`, `gantry(...)`, `marshalPost(...)`.
+  `billboard(...)` (use billboard-style fascia in tight street spots),
+  `gantry(...)`, `marshalPost(...)`.
 - **Barriers** (these tighten the driving boundary via `recordBarrier`): `wall`,
   `fence`, `guardrail`, `tyreWall`.
 - **Terrain/relief**: `mountain(cx,cz,baseY,baseR,h,opts)`, plus raw primitives
@@ -54,13 +55,37 @@ scenery: function (api) {
 
 ## Hard rules
 
+- **Survey before placing.** Grep existing dressing at the target frac in
+  `js/circuits/<id>.js` and read `docs/tracks/<id>.md` — avoid duplicating or
+  fighting landmarks already authored there.
 - **On-track rejection guard.** Every primitive emitter (`addBox`/`addCyl`/…) is
   wrapped in a Minkowski test against the road half-width at each node (`rejBox`/
   `onRoadHit` in the `js/track/` scenery modules). If a prop's **full oriented footprint** covers
-  tarmac at **any** node it rises above, the **entire shape is dropped** (logged as
-  `[scenery] ... SUPPRESSED at k=...`). So props never half-clip the track — but a
-  too-close prop silently vanishes. If something you placed isn't showing, check
-  the console for SUPPRESSED and increase `dist`/`gap`.
+  tarmac at **any** node it rises above, the **entire shape is dropped**. So props
+  never half-clip the track — but a too-close prop silently vanishes. If something
+  you placed isn't showing, increase `dist`/`gap` — **don't assume the console will
+  tell you it happened.**
+  - **The console warning is NOT universal.** The composite helpers
+    (`building`, `tree`/`pine`/`palm`, `wall`/`fence`/`guardrail`, `tower`,
+    `billboard`, `grandstand`, …) each call `Log.warn("scenery", "<name>
+    SUPPRESSED at k=…")` on rejection — see `js/track/scenery-{nature,city,
+    identity,structures}.js`. But the **raw primitive path**
+    (`addBox`/`addCyl`/`addCone`/… called directly, e.g. from `RAW` or a bespoke
+    shape) only increments a per-track counter (`_culled` in `js/track/tracks.js`)
+    and logs a **single build-end summary** (`Log.info("track", "<id>: culled N
+    on-track primitive(s)")`) with no per-instance identity — you get a count, not
+    a location. A composite helper's SUPPRESSED warning tells you which call and
+    roughly where; the raw-primitive path does not.
+  - **Circuit-inline composites are still vulnerable.** Several
+    `js/circuits/<id>.js` files call `onTrack(x, z, margin)` directly as a
+    single-point guard for a bespoke shape instead of routing through a
+    footprint-tested composite helper (grep `onTrack(` across `js/circuits/` —
+    it's common). A single-point `onTrack()` check has exactly the bug described
+    below for `building()`/mast helpers before they were fixed: it only proves
+    that one sampled point is clear, not the shape's full oriented footprint. If a
+    circuit-inline shape is silently vanishing OR silently clipping the track,
+    check whether it's using a single `onTrack()` point rather than `rejBox(...)`
+    over its widest section — the console will not distinguish these for you.
   - **Composite helpers must guard their whole footprint, not one point.** The
     footprint test only works if the *thing you test* covers the whole model. The
     "props over the racing line" bug came from `building()`/`neonTower`/floodlight
@@ -86,6 +111,8 @@ scenery: function (api) {
   in tests is tighter than desktop WebGL2). Use `every(20)` for sparse features,
   `every(5)` only for hero sections; jitter sizes with `hash()` so ranks don't look
   like clones; double-place at two distances for depth instead of doubling density.
+- **Overhead landmarks.** Bridges/flyovers (e.g. Monza Ascari) need clearance —
+  a low `place()`/`building()` can intersect the deck from below.
 
 ## Validate
 

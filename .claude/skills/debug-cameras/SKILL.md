@@ -1,6 +1,6 @@
 ---
 name: debug-cameras
-description: Drive the camera via the __apex debug hooks — the 13 in-game camera modes plus the free debug-camera framing hooks (view/eyeAt/orbit/cinematic/roadside/dolly/carOrbit/tourShots) and the camState/viewState inspectors. Use to frame a corner, switch camera mode, set up a cinematic/orbit shot, or check where the camera is. Triggers - "switch to cockpit cam", "orbit this corner", "what camera modes are there", "frame the chicane", "cinematic shot of turn 1".
+description: Use when the user asks to switch or check camera modes, cockpit/chase/orbit/cinematic/roadside shots, frame a corner/chicane, inspect camState/viewState, debug camera lag/framing, or set up Apex 26 screenshots from specific camera angles.
 ---
 
 # Camera debug hooks
@@ -29,8 +29,20 @@ Set by id, label, or index: `__apex.camera("cockpit")` / `__apex.camera(3)`.
 All 13 render non-blank (confirmed via screenshot byte-size). After switching,
 call `__apex.snapCam()` to jump the rig to position without damping — it now snaps
 **every** mode correctly (essential before a screenshot). `camera()` clears any
-active `view()`. Cuts ease in over ~0.35 s (a brief gentle glide, not a hard pop);
-onboard cams (cockpit/hood/tcam) lock instantly to the car.
+active `view()` / debug override. Cuts ease in over ~0.35 s (a brief gentle glide,
+not a hard pop); onboard cams (cockpit/hood/tcam) lock instantly to the car.
+
+**`orbit()` vs in-game modes:** `orbit()` sets `dbgCam` and **replaces** the live
+view — it is not layered on top of a player camera. `camera("cockpit")` then
+`orbit()` does **not** keep cockpit framing; you get a free-orbit shot instead.
+- **Cockpit-style shot at a fraction:** `previewCam("cockpit", frac, speed, lat)`
+  or `camera("cockpit")` + `park(frac)` + `snapCam()` — never `orbit()` after
+  `camera()`.
+- **Orbit inspection shot:** `orbit(frac, az, el, dist)` alone — do **not** call
+  `snapCam()` after `orbit()` (it clears `dbgCam` and snaps back to the game rig).
+- **Recovery after `snapCam()`:** `snapCam()` clears any active `dbgCam` override.
+  Re-call `orbit()` / `eyeAt()` / `view()` with the same args. If you lost them,
+  re-derive `frac` from `js/track/markings.js` or `__apex.corners()`.
 
 ## Preview any in-game mode anywhere (no driving)
 
@@ -48,12 +60,12 @@ Each returns the resolved `{eye, target, ...}` and sets a debug override
 | Hook | Returns | Use |
 |---|---|---|
 | `view({s, radius})` | `{eye,target,span}` | frame a track fraction from a distance |
-| `view({s, side, dist, height, look})` | `{eye,target,look}` | trackside survey; `look` = `in`/`out`/`fwd`/`back` |
+| `view({s, side, dist, height, look})` | `{eye,target}` (no `look` field) | trackside survey. **Only `look:"in"` is special** (faces back across the track); any other value, or omitting `look`, gives the SAME "out into the scenery" framing — `view()` does not recognise `"fwd"`/`"back"` at all (that's `roadside()`, below) |
 | `view({eye, target, fov})` | explicit placement | hand-place the camera |
 | `eyeAt(frac, lat, height)` | `{eye,target}` | driver's-eye / how it reads at the wheel |
 | `orbit(frac, az, el, dist, h)` | `{eye,target,fov}` | inspect a point from any angle |
 | `cinematic(frac)` | `{eye,target,fov,az,k}` | auto outside-of-corner framing (reads curvature `k`) |
-| `roadside(frac, side, dist, h)` | `{eye,target,look}` | stand beside the track |
+| `roadside(frac, side, dist, h, {look})` | `{eye,target,look}` | stand beside the track; unlike `view()`, `roadside()` supports the FULL set — `look` = `"fwd"` (default, direction of travel) / `"back"` / `"in"` (across the track) / `"out"` (into the scenery), and echoes it back in the return |
 | `dolly(frac, fwd, right, up)` | `{eye,target}` | track-relative offset looking at another point |
 | `carOrbit(idx, az, el, dist)` | `{eye,target,fov,carIdx,speed}` | orbit any car (livery/car3d checks) |
 | `previewCam(mode, frac, speed, lat)` | `{eye,target,fov,mode}` | preview any in-game mode's framing at a point (no driving) |
@@ -73,7 +85,7 @@ Each returns the resolved `{eye, target, ...}` and sets a debug override
 # one-off via the reusable evaluator (boots headless, prints JSON):
 node tools/apex-eval.mjs monaco "a.camera()"                 # list modes / current
 node tools/apex-eval.mjs spa    "a.cinematic(0.07)"          # resolve Eau Rouge cinematic
-node tools/apex-eval.mjs monza  "(a.park(0.1), a.orbit(0.1,45,18,45), a.camState())"
+node tools/apex-eval.mjs monza  "(a.park(0.03), a.orbit(0.03,45,18,45), a.camState())"  # T1 ~0.016–0.042 (markings.js)
 
 # lap tour — chase cam at every 5% of a circuit (20 shots in order):
 node tools/apex-capture.mjs lap-tour monza           # → scratch/captures/apex-capture/lap-tour/01-f0.00.png … 20-f0.95.png
@@ -82,12 +94,15 @@ node tools/apex-capture.mjs lap-tour spa 70 scratch/captures/apex-capture/spa # 
 ```
 ```js
 // in a Playwright page or the dev console — frame + freeze + (screenshot):
-__apex.race("monaco"); __apex.park(0.18);   // stationary + frozen
-__apex.orbit(0.18, 60, 20, 40);             // orbit the chicane
+__apex.race("monaco");
+// Probe fractions first — don't hardcode folklore:
+// __apex.trackInfo({what:"corners"}) or __apex.corners() or js/track/markings.js
+__apex.park(0.18);   // stationary + frozen
+__apex.orbit(0.18, 60, 20, 40);             // orbit the chicane (dbgCam — no snapCam after)
 // for a PNG, use the playwright-probe skill's shot.mjs (cam = orbit|eye|cinematic|trackside)
 
 // manual chase-cam snap (the lap-tour pattern in bare JS):
-__apex.jump(0.35, 60, 0);   // teleport to 35% of lap at 60 m/s
+__apex.jump(0.035, 60, 0);  // Monza T1 ~0.016–0.042 (markings.js), not 0.1
 __apex.camera("chase");     // switch to chase mode
 __apex.snapCam();           // snap rig without damping — essential before a screenshot
 ```

@@ -8,7 +8,7 @@
 //   • a one-line verdict + any page errors
 //
 // Usage: node tools/survey-track.mjs <id> [label] [fracs]
-//   id     circuit id (see __apex.tracks() / js/tracks/*.js), e.g. montreal
+//   id     circuit id (see __apex.tracks() / js/circuits/*.js), e.g. montreal
 //   label  shot prefix, e.g. before | after   (default: survey)
 //   fracs  comma list of lap fractions to shoot+probe (default 0,0.25,0.5,0.75)
 //

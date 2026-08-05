@@ -68,7 +68,7 @@ try {
       else if (cam === "cinematic") a.cinematic(frac);
       else if (cam === "trackside")
         a.view({ s: frac, side: 1, dist: 25, height: 6, look: "in" });
-      // "park" leaves the default chase framing
+      else a.snapCam(); // park/chase: camera eases — snap or you shoot mid-flight
     },
     { frac, cam }
   );

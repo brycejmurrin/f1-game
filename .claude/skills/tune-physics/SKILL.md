@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: A/B test and tune the driving physics in js/game.js deterministically, using the __apex headless control loop (obs/act/reset), setPhysics overrides, and step/physState probes — single-page or a parallel multi-page sweep. Includes the constant-to-behavior map (WHEELBASE, STEER_*, DRIFT, ROAD_FOLLOW, FRONT_GRIP, LONG_GRIP, PACE, ...) and which test groups to re-run. Use for "the car understeers", "make turn-in snappier", "tune grip", "trail-braking feels wrong", "compare two physics settings", "A/B physics", "physics sweep", "test ROAD_FOLLOW", "does this feel better".
+description: Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved.
 ---
 
 # Tune the physics
@@ -19,17 +19,37 @@ stale the moment physics is retuned).
 | `maxSlip` (`STEER_MAX_SLIP` 0.32 rad) | max steer lock | sharper low-speed |
 | `speedRef` (`STEER_SPEED_REF` 60 m/s) | speed-sensitive lock taper | keeps lock at speed |
 | `drift` (`DRIFT` 0) | rear looseness / oversteer | more tail-out (debug only) |
-| `roadFollow` (`ROAD_FOLLOW` 0.7) | curvature steering assist | more auto-drive |
-| `frontGrip` (`FRONT_GRIP` 0.89) | front friction bias | less understeer-safe |
+| `roadFollow` (`ROAD_FOLLOW` **0**, ships OFF) | curvature steering assist | more auto-drive |
+| `frontGrip` (`FRONT_GRIP` 0.89) | front friction bias (`muF *= FRONT_GRIP`) | more front grip / less understeer |
 | `playerGrip` (`PLAYER_GRIP` 1.15) | player grip headroom vs AI | more forgiving |
 | `yawDamp` (`YAW_DAMP` 1.0) | yaw damping | calmer rotation |
-| `yawInertia` (`YAW_INERTIA` 0.7) | rotational inertia | snappier turn-in (<1) |
+| `yawInertia` (`YAW_INERTIA` 0.7) | rotational inertia (`<1` = snappier) | lazier turn-in |
 | `pace` (`PACE` 1.0) | global speed multiplier | faster everywhere |
+
+**`ROAD_FOLLOW` ships at `0` (OFF) — this is a deliberate, opt-in default, not
+a stale table entry.** The in-game DRIVING HELP slider (`js/game/steer-tuning.js`
+`helpFromSlider`) maps notch 1..10 to `0..0.70`, with notch 1 = exactly `0`
+(off) — the range used to bottom out at `0.25`, which meant the assist was
+always steering part of every corner with no way to disable it; that floor was
+removed on purpose. `0.70` is only the slider's *ceiling*, reachable by a player
+choosing max assist — never assume it, or a "default" in a sweep/table, without
+saying so. If you are testing whether raising `roadFollow` toward `0.70` "feels
+better", say so explicitly: that direction reintroduces the always-on assist the
+team deliberately took out, so a recommendation to raise the default back up is
+a design reversal, not a tuning tweak — flag it as one.
 
 Fixed (edit `js/game.js` to change): `LONG_GRIP = 34 m/s²` (longitudinal axis of
 the traction circle — braking/accel consumes grip; `slipFactor =
 sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip → trail-braking rotation,
 hard-braking understeer), `CS_FRONT/CS_REAR`, `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
+**`LONG_GRIP` is NOT live-tunable via `setPhysics`** — A/B it with two builds or
+a source edit between runs.
+
+### Trail-brake probe
+
+Mid-corner: `{ brake: true, steer: ±0.3..0.5 }`, then read `physState().slipFactor`
+and `axFrac` while braking. Lower `slipFactor` = longitudinal grip eating lateral
+budget; compare runs directionally, not on absolute thresholds.
 
 ## A/B harness (deterministic, headless)
 
@@ -47,9 +67,11 @@ function trial(phys) {
   return o;                             // o.x, o.speed, o.slipFactor, o.k, o.clearL/R, o.offT, o.wrongWay, o.reward
 }
 
-const a = trial({ frontGrip: 0.89 });
-const b = trial({ frontGrip: 0.80 });
-// Compare: does the lower-frontGrip run carry less apex speed / run wider (larger |x|)?
+const a = trial({ frontGrip: 0.89 });          // baseline
+const b = trial({ frontGrip: 1.00 });          // more front grip → less understeer
+// Compare: does the higher-frontGrip run hold a tighter line (smaller |x|) / keep more apex speed?
+// For mid-corner understeer: RAISE frontGrip (or LOWER yawInertia toward snappier). Do not copy an
+// example that lowers frontGrip — that widens the line.
 ```
 
 For open-loop physics probes use `step` + `physState`/`probe` instead:
@@ -82,7 +104,8 @@ const results = await Promise.all(CONFIGS.map(async cfg => {
 console.table(results);   // → finalSpeed / avgSlip / offT / done per config
 ```
 
-See the **playwright-probe** skill for the free-port server + `pickChromium()`
+See `tools/harness.mjs` (`pickChromium`, `startStaticServer`) and the
+**playwright-probe** skill for free-port servers and headless Chromium.
 boilerplate that wraps this. Metrics: `finalSpeed` (speed carried), `avgSlip`
 (< 1 = traction consumed, 1 = on the edge), `offT` (off-track time = stability),
 `done` (crashed out). For a harder, adaptive test, run `tests/autopilot.spec.js`
@@ -113,3 +136,6 @@ work: `node tools/check-grip.mjs`, `check-bank.mjs`, `check-roadfollow.mjs`,
 
 If you edited `js/game.js`, bump the cache version (`bump-cache` skill) before
 committing.
+
+Related: for deep vehicle-dynamics theory review, read `docs/PHYSICS.md` and
+`docs/research/steering-research.md`.

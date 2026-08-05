@@ -1,6 +1,6 @@
 ---
 name: bump-cache
-description: Increment the cache-busting `?v=N` version in index.html after editing any JS or CSS file. Use whenever you change a file under js/ or css/ (or add/remove a <script>/<link> tag) so GitHub Pages and browsers fetch the new asset instead of a stale cached copy. Triggers - "bump the version", "cache bust", "I edited game.js", before committing JS/CSS changes.
+description: Use when JS/CSS changed, index.html script/link tags changed, the user says bump the version or cache bust, stale GitHub Pages/browser/PWA cache is suspected, or Apex 26 asset changes need a new ?v=N/version.json build.
 ---
 
 # Bump cache-busting version
@@ -18,13 +18,14 @@ only docs, tests, tools, or `index.html`'s non-asset markup, you do NOT need to 
 
 ## Steps
 
-1. Read the current version:
+1. Read the **highest** existing version, not the first match — a stray stale
+   tag from a previous manual edit means `head -1` can hand you an old number:
    ```sh
-   grep -o '?v=[0-9]\+' index.html | head -1
+   grep -o '?v=[0-9]\+' index.html | sed 's/?v=//' | sort -n | tail -1
    ```
 2. Increment it by 1 and replace **every** instance in one shot:
    ```sh
-   sed -i -E 's/\?v=[0-9]+/?v=NEW/g' index.html   # NEW = current + 1
+   sed -i -E 's/\?v=[0-9]+/?v=NEW/g' index.html   # NEW = max(step 1) + 1
    ```
 3. **Sync `version.json` to the SAME number** — this is NOT optional:
    ```sh
@@ -34,7 +35,9 @@ only docs, tests, tools, or `index.html`'s non-asset markup, you do NOT need to 
    force-reloads a stale installed PWA when the deployed build is newer than the
    cached shell. `index.html` itself has no `?v=`, so this is the ONLY thing
    that refreshes the HTML markup for installed-app users.
-4. Verify both are uniform (one distinct version, matching build):
+4. Verify both are uniform (one distinct version, matching build) **and that
+   NEW is strictly greater than the max read in step 1** — landing on or below
+   the old max ships nothing, even though the diff looks like a bump:
    ```sh
    grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
    ```
