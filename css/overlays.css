@@ -604,9 +604,19 @@ body.hud-hidden #hud-restore { display: block; }
   gap: 6px;
 }
 #vsfriend .vs-qr-wrap canvas {
-  /* Capped on HEIGHT as well as width: a landscape phone has ~390px of it in
-     total, and a QR that needs scrolling to see is a QR nobody can scan. */
-  width: min(180px, 38svh);
+  /* Sized to the SMALLER of three limits, because each one is real:
+       320px — the raster NetQr.draw is asked for. It rounds DOWN to a whole
+               number of canvas px per module, so a real invite lands near 276;
+               going much past that is stretching, not detail.
+       82vw  — a phone held in portrait, minus the sheet's padding.
+       46svh — a landscape phone has ~390px of height in TOTAL, and a QR that
+               needs scrolling to see is a QR nobody can scan.
+     The old flat 180px was the binding limit EVERYWHERE except landscape, so a
+     phone in portrait showed a 180px code with 276px of raster behind it and
+     140px of free width beside it — small for no reason. Landscape is where the
+     height cap actually bites, and it still does. */
+  width: min(320px, 82vw, 46svh);
+  max-width: 100%;              /* the two-column layout can be narrower than 320 */
   height: auto;
   image-rendering: pixelated;   /* never blur module edges; that is what breaks a scan */
   border-radius: 6px;
