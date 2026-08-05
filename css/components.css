@@ -174,6 +174,20 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 }
 .sheet-foot {
   display: flex; align-items: center; gap: var(--gap);
+  /* WRAP, because a footer that does not fit must STACK and never clip. Its
+     buttons carry `min-width: 110px` (below), so they stop shrinking well before
+     they stop overflowing — and every sheet in this app clips (#cs-inner,
+     #sel-inner et al are overflow:hidden), so the part that does not fit is not
+     merely off-screen, it is unreachable. Measured instance: at UI SIZE 100 %
+     and up the garage's pane-pair turns on and its foot drops into a 124 px
+     rail holding 161 px of buttons, and BACK painted at 55 % with nothing to
+     scroll to. The select screen's START does the same in portrait at 150 %.
+     Set on the BASE rather than per screen: there are 21 .sheet-foot instances
+     and four of them carry three or four buttons (quali, career, both tuners),
+     none of which any spec visits — so a per-screen patch fixes the two that
+     were measured and leaves the ones more likely to overflow. Wrapping engages
+     only on overflow, so a footer that fits today is untouched. */
+  flex-wrap: wrap;
   padding: calc(var(--pad) * 0.35) var(--pad);
   border-top: 0;
   position: relative;

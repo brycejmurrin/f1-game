@@ -139,7 +139,19 @@ body.manual #btn-ot    { bottom: calc(16px + 3 * var(--btn-pitch) + var(--sab));
 body.manual #btn-aero  { bottom: calc(16px + 4 * var(--btn-pitch) + var(--sab)); }
 
 /* BUTTON mode (console): arrows are bottom-left; right thumb gets GAS (bottom),
-   BRAKE above it, BOOST above that, OT at the top — all at right+16. */
+   BRAKE above it, BOOST above that, OT at the top — all at right+16.
+   THIS COLUMN IS THE PORTRAIT LAYOUT, and it is the only place it applies.
+   Landscape puts every touch control in the flex dock further down, where
+   `body:not(.desktop) .dock .touchbtn { position: static }` beats `.touchbtn`'s
+   own `position: fixed` — and with the box no longer positioned, the right/
+   bottom below are computed and then ignored, however specific the selector
+   that set them. So the height of this stack (16 + 4*84 + 76 = 428px, which
+   would indeed not fit a 393px landscape phone) says nothing at all about a
+   landscape failure. It was read that way once, and the whole diagnosis it
+   produced was wrong; the real landscape budget is the sum in the buttons-mode
+   block at the bottom of this file. In portrait 428px fits with 239px to spare
+   on the shortest screen the suite tests, and racing in portrait is blocked
+   outright (#rotate-device) besides. */
 body.steer-buttons #btn-throttle { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
 body.steer-buttons #btn-brake    { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
 body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); }
@@ -391,23 +403,61 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   #btn-ot   { bottom: calc(12px + var(--btn-pitch) + var(--sab)); }
   #btn-boost { bottom: calc(12px + var(--sab)); }
   #btn-aero { bottom: calc(12px + 2 * var(--btn-pitch) + var(--sab)); }
-  /* button mode: 2 columns on the right — GAS/BOOST outer, BRAKE/OT inboard,
-     AERO on top of the outer column (landscape has width to spread out). */
   body.steer-buttons #btn-throttle { background: rgba(0, 170, 70, 0.42); }
-  /* Buttons mode is the only layout with TWO steer arrows on the left, so it is
-     the only one that needs its own left bound. The RIGHT bound is not repeated
-     here: it belongs to the arc, above. Restating it was the bug — this rule
-     came later in the cascade and quietly pinned the strip back to the old
-     column's reach (160px) while the arc extends to 207px, so the strip ran
-     straight under BOOST and AERO. */
+  /* ---- BUTTONS MODE: THE CLUSTER DROPS TO TWO COLUMNS ----
+     Buttons mode is the only layout with TWO steer arrows on the left, and that
+     one extra 72px circle is what takes the bottom bar over the width it has.
+     The bar is one flex row of three, so the arithmetic is a single sum against
+     the space between the safe-area insets. Painted px (the docks and the
+     cluster both ride `zoom: var(--hud-scale)`, which is 1.15 on a coarse
+     pointer, so authored px x1.15):
+
+                              852x393 notched     667x375 (iPhone SE)
+       bar width              710                 643
+       steer row              152 -> 175          136 -> 156
+       taps + pedals          134 -> 154          120 -> 138
+       two 12px gaps           24                  24
+       left for the readouts  357                 325
+       3-column cluster       ~358 -> ~412        ~313 -> ~359
+
+     Over by ~55px and ~35px — and how flex resolves that is the actual defect.
+     Every item shrinks a little, #dock-right drops below the 134 its two groups
+     need side by side, and `flex-wrap: wrap-reverse` (see the dock, above) then
+     stacks them into one column: 178 + 8 + 166 = 352 authored, 405 painted, on
+     a 393px screen. The dock grows out of the TOP of the phone, and GAS and
+     BRAKE land on the pause button — measured as `btn-throttle+pausebtn` AND
+     `btn-brake+pausebtn` at 852x393, `btn-brake+pausebtn` at 667x375.
+
+     NOTHING SHRINKS HERE. Every control is a thumb target on the smallest
+     screen we support, so the readouts give way instead: the cluster drops its
+     third column and puts the two chips on a row of their own.
+
+       [ GEAR ][ speed  ]
+       [ +tach][ energy ]
+       [ OT   ][ AERO   ]
+
+     That is exactly one column plus one gap narrower — 108px authored, ~124px
+     painted, against a ~55px deficit — and it is one column narrower NO MATTER
+     what the chips say, because the gearbox is wider than OVERTAKE and the
+     energy bar is wider than the longest AERO countdown, so neither surviving
+     column grows to take them.
+     It is also FREE in height: the docks are 178-205px tall and set the bar's
+     height on their own, so the cluster going from ~64 to ~94 moves nothing.
+     AERO stays in the right-hand column, over the thumb that presses it.
+
+     THE BUDGET, for whoever adds the next control: 710 - 24 of gaps - the
+     two-column cluster's ~288 leaves ~398 painted, ~346 authored, for BOTH
+     docks. Buttons mode spends 286 of it, so the bar comes in at 640 of 710
+     (and 565 of 643 on the SE). Spend the remaining ~60 and the wrap comes
+     back — and it comes back as a tap target off the top of the screen, not as
+     anything that looks like a width problem. */
   body.steer-buttons .hud-bottom {
-    left: calc(16px + var(--steer) + var(--btn-gap) + var(--steer) + var(--btn-gap) + var(--sal));
+    grid-template-columns: auto auto;
+    grid-template-areas:
+      "gear speed"
+      "gear energy"
+      "ot   aero";
   }
-  /* Narrow landscape (an iPhone SE is 667 wide): the strip cannot hold its
-     natural 467px between the thumb columns, so tighten the gap and the two
-     widest items rather than let anything cross into a tap target. Below what
-     even this fits, flex-wrap above stacks the strip upward into empty sky —
-     a taller HUD is a fair trade for a readout that never sits under a thumb. */
   /* Small landscape (an iPhone SE is 667 wide): shrink the controls a notch.
      The cluster no longer needs compacting — stacking it took it from 467px to
      ~170px, which fits between the docks on every phone. */
