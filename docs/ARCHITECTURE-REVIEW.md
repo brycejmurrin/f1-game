@@ -307,6 +307,46 @@ marked otherwise.
 | A12 | Career budget upgrade unreachable and advertised: `upgradeBudget()`/`budgetUpgradeCost()` have no caller outside `career.js`, so `budgetLvl` is permanently 0 — while the guide told the player, twice, that they got "three upgrades" | Text corrected and the mechanic marked not-yet-wired. **Wiring the UI is a feature and was deliberately not done here** |
 | A13 | **A failed save was silent, and it loses careers.** `js/game/store.js` caches every value it writes, so when `setItem` throws, the catch swallowed it and `_cache` went on answering every later `get()` with the right value. The session plays perfectly and the save is gone on reload, with nothing on screen and nothing in the console. Safari on iOS is the real case, not a hypothetical: Private Browsing sets the localStorage quota to **zero**, so the first write throws | Fixed, and the cache write **kept** — dropping the value would break the session as well as the save, which is worse. The exception's own name is recorded (`QuotaExceededError` and `SecurityError` mean different things to whoever reads the report), `Log` carries it once loudly and repeats to the ring buffer only, and `__apex.persistState()` reports it. `tests/persistence.spec.js` pins both halves separately, because the cache write looks redundant right up until you know why it is there |
 
+### Tier A2 — four failures the CI gate made visible on its first clean run
+
+Added 2026-08. **None of these are new breakage and none were introduced by the
+cleanup pass** — the branch's entire diff under `js/track/` and `js/circuits/` is
+two comment edits. They are pre-existing failures in `tests/new-hooks.spec.js`
+that nobody had seen, because `test:api` is not in the CI gate's smoke job and
+nothing else ran it. The first clean `api` run in this repo's history surfaced
+all four at once, which is the argument for the gate delivered rather than
+asserted.
+
+| # | Failure | Bound | Measured |
+|---|---|---:|---:|
+| A14 | Shanghai `trackProfile()` elevation range | ≤ 2 m | **6.735 m** |
+| A15 | Jeddah foundation elevation range | ≤ 3 m | **9.586 m** |
+| A16 | Singapore prop vertices | < 700,000 | **1,271,799** |
+| A17 | Madrid prop vertices | < 250,000 | **621,075** |
+
+**A14/A15 are probably stale BOUNDS, not broken code.** Shanghai's own circuit
+def authors a 6.5 m rise at `s = 0.4525` (plus 2.5 m and 0.8 m bumps), so the
+engine is producing exactly what the data asks for, and 6.735 m is the sum of
+overlapping authored bumps. That rise arrived through a deploy-branch merge
+(`bc72569d` / `f649518e`) while the `≤ 2` assertion predates it (`4a373171`) —
+the data was changed and the test that pinned "nearly flat" was not. Deliberately
+NOT re-baselined here: whether Shanghai should be flat or should have its real
+back-straight elevation is a circuit-authoring decision, and quietly widening a
+bound to make a suite green is the exact move this document exists to argue
+against.
+
+**A16/A17 are real, and they are the memory budget.** These are not cosmetic
+ceilings. `docs/research/CI-RENDERING-PERFORMANCE.md` measured Vegas at 1,825,925
+prop vertices — about **80 MB of GPU buffer at 40 B/vertex**, against a page an
+iPhone SE kills at roughly 100 MB. Singapore at 1.27 M is ~51 MB and Madrid at
+621 k is ~25 MB, and both are 1.8×/2.5× a budget somebody set on purpose. The
+right fix is less scenery on those two circuits, not a larger number in the test.
+
+The meta-point: the gate was added in this pass to stop red guards reaching the
+live site, and within hours of its first working run it found four things that
+had been red for an unknown length of time. Neither the bounds nor the budgets
+had drifted — the *observation* had been missing.
+
 ### Tier B — the meta-guards
 
 | # | Defect | Disposition |
