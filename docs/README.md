@@ -64,6 +64,7 @@ describe paths not taken or plans only partly implemented.
 | [research/STEERING-PHYSICS-RESEARCH.md](research/STEERING-PHYSICS-RESEARCH.md) | Deep dive on steering/physics literature. |
 | [research/TILT-STEERING-RESEARCH.md](research/TILT-STEERING-RESEARCH.md) | Tilt-steering (device orientation) investigation. |
 | [research/DRIVING-CONTROLS-RESEARCH.md](research/DRIVING-CONTROLS-RESEARCH.md) | What shipped racing games do with assists, setup sheets and speed-sensitive steering — including the two assists we should deliberately never build, and why. |
+| [research/F1-2026-RULES-FIDELITY.md](research/F1-2026-RULES-FIDELITY.md) | What the 2026 regulations actually say versus what we model — the retired X/Z mode names, Overtake missing its activation zone, and a deploy taper sitting well below the real one. |
 | [research/DRIVING-TEST-REVIEW.md](research/DRIVING-TEST-REVIEW.md) | Read-through of the 17 driving/physics specs (172 tests): why none of them explain their own failures, which have an unstated dependency on the PACE default, and the missing guard for the `vStd()` invariant. |
 | [research/CIRCUIT-BRIEFING-DESIGN.md](research/CIRCUIT-BRIEFING-DESIGN.md) | Circuit-briefing feature design. |
 | [research/CIRCUIT-BRIEFING-UI-RESEARCH.md](research/CIRCUIT-BRIEFING-UI-RESEARCH.md) | Circuit-briefing UI research. |
