@@ -130,15 +130,32 @@ test.describe("Apex 26 — world-space player physics", () => {
       // (measured: minProg -120 after 10 s, i.e. the AI never got away).
       // So drive the player as before and judge only the AI, below.
       //
-      // STILL FAILING, and left failing rather than guessed at further. minProg
-      // after 10 s measures: -120 with the player parked in the pack (it blocks
-      // the grid), 16.8 driving through them as here, 6.9 with the player
-      // teleported half a lap away — so removing the player made it WORSE, which
-      // contradicts the blocking explanation and means the cause is not
-      // understood. Note the AI rubber-band reads player.prog
-      // (`gap = player.prog - c.prog`), so where the player is changes AI pace;
-      // that is the thread to pull. The 70 m threshold assumes a field that gets
-      // away cleanly, and something about the grid start no longer does.
+      // THE PROGRESS METRIC WAS THE BUG, not the AI. It used to be
+      // `min(c.prog) > 70`, which three sessions could not make pass and whose
+      // three readings (-120 parked / 16.8 driving / 6.9 teleported) refused to
+      // tell a story. `prog` is measured from the START LINE, but the grid is
+      // not: gridUp() lays 22 cars out at 8 m intervals BEHIND it, so P1 starts
+      // at prog -14 and P22 at prog -182. minProg is therefore dominated by
+      // whoever drew the last slot, and it moved with the player only because
+      // the rubber band (gap = leadHuman.prog - c.prog) reshuffles which car
+      // that is. Nothing was ever stuck: over the same 10 s every AI covers
+      // 141-221 m (seed default), 92-241 m across five seeds, none goes
+      // backwards, none sits below 2 m/s for more than ~0.3 s bar the launch,
+      // and by 20 s the slowest has covered 255 m.
+      //
+      // And 70 was unreachable BY CONSTRUCTION. Monza's first chicane is 48 m
+      // past the line (R = 17-19 m, so ~20 m/s), and every car in the field was
+      // measured ALONE on an empty road from the P22 slot with the player half a
+      // lap away (maximum rubber band): the best of the 21 reaches prog 68.8 at
+      // 10 s, the worst 66.6. No AI change can clear a bar 1.2 m above the
+      // physical ceiling — only a shorter grid or faster cars could.
+      //
+      // So measure what the test meant: distance covered from each car's OWN
+      // grid slot. Healthy = 141 m here (92 m on the worst of five seeds);
+      // the pathology this test exists to catch — the player parked in the
+      // middle of the grid with the field piling into it — reads 34 m. 70 m
+      // sits between them with room on both sides.
+      const slot = window.__apex.cars().map((c) => c.prog);   // grid, before any stepping
       window.__apex.setInput({ steer: 0, throttle: true });
       for (let i = 0; i < 600; i++) window.__apex.step(1 / 60, 1);  // ~10 s
       window.__apex.clearInput();
@@ -146,10 +163,10 @@ test.describe("Apex 26 — world-space player physics", () => {
       const ai = cars.filter((c) => !c.p);   // the player is hand-driven here
       return {
         offTrack: ai.filter((c) => Math.abs(c.x) > 18).length,   // AI only — see above
-        minProg: Math.min(...ai.map((c) => c.prog)),
+        minDist: Math.min(...ai.map((c) => c.prog - slot[c.id])),
       };
     });
     expect(r.offTrack).toBe(0);
-    expect(r.minProg).toBeGreaterThan(70);
+    expect(r.minDist).toBeGreaterThan(70);
   });
 });
