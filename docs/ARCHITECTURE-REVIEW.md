@@ -320,7 +320,11 @@ with a `lap--` on a backward crossing, matching `prog`.
   specs it named.
 - **No vertex budget gate** — `verify-track vegas` prints 1,825,925 prop verts
   and exits 0, on a codebase whose own comment names that VBO as the iOS jetsam
-  trigger.
+  trigger. **Now quantified** in `docs/research/CI-RENDERING-PERFORMANCE.md`
+  Part 2: at the real 10-float interleave that is ~80 MB of GPU buffer for one
+  circuit, against a page a current iPhone SE kills at ~100 MB. The gate is a
+  threshold on a number `verify-track.cjs` already computes, and the
+  clip/coplanar baseline files are the ratchet pattern to copy.
 - **No CSP.**
 
 **~~Dated.~~ FIXED (2026-08).** Both now read the clock, and

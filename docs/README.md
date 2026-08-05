@@ -67,6 +67,7 @@ by nothing and moved to [`archive/research/`](archive/research/).
 | [research/physics-redesign.md](research/physics-redesign.md) | Cartesian-vs-Frenet physics migration plan. |
 | [research/steering-research.md](research/steering-research.md) | Steering-model source notes + citations. |
 | [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md) | External model/texture/normal-map ingestion: CC0 asset APIs, a `MAT`-indexed texture array, offline bake tool. |
+| [research/CI-RENDERING-PERFORMANCE.md](research/CI-RENDERING-PERFORMANCE.md) | Why the Playwright suite is slow under SwiftShader, what llvmpipe/xvfb/GPU runners would change, why sharding is the wrong first move, and the (now shipped everywhere) state of WebGPU. External findings, not measurements — flagged as such. |
 | [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md) | Why detail is unaffordable without instancing; the staged scenery scene-graph plan and its measured per-emitter reuse. |
 
 ## Archive (`archive/`)
