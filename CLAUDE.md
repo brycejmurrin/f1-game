@@ -21,6 +21,35 @@ node tools/verify-track.cjs <id>  # headless build check (no browser) — catche
 
 ## Testing workflow
 
+> ### AGENTS: NEVER BLOCK ON A TEST RUN. NEVER POLL ONE EITHER.
+>
+> A single SwiftShader spec is 40-90 s on a small box and a group is tens of
+> minutes. Blocking wastes all of it; `tail`-ing in a loop wastes it *and* fills
+> the transcript.
+>
+> **Start it and walk away:** `node tools/test-bg.mjs <groups>`, or a Bash call
+> with `run_in_background`, or arm a `Monitor` with an until-loop and be woken:
+> ```sh
+> until ! pgrep -f "[p]laywright test" >/dev/null; do sleep 10; done; echo done
+> ```
+> One check to confirm it started is fine. After that, go and do real work.
+>
+> **The wait is working time.** In rough order of value: re-read the diff you
+> just wrote; verify a factual claim you put in a code comment; research the
+> platform behaviour behind the bug (TinyFish `search` / `fetch_content`); draft
+> the docs the change needs; plan the follow-up. Two real returns from doing
+> this in one session: a comment blaming WebKit for a spec-mandated
+> `setPointerCapture` throw got corrected before it could mislead anyone, and an
+> iOS report of interactive controls sitting in an invisible top-edge dead zone
+> turned up **five** of ours sitting exactly there.
+>
+> **The one thing that is NOT safe mid-run:** editing `js/` or `css/`. The test
+> server serves the working tree, so later specs would load a mixed build.
+> Editing docs, reading, researching and planning are all fine.
+>
+> Durable findings go in `docs/research/` —
+> **`docs/research/PLATFORM-INPUT-NOTES.md`** is the standing collection.
+
 Three rules, in order. The reference — every group, every spec, the fixtures and
 the philosophy — is **`docs/TESTING.md`**, and `tests/test-groups.test.mjs`
 fails if it and `package.json` disagree. Do not maintain a second copy of that
@@ -48,19 +77,6 @@ hung test is the one with a `> start` line and no end line
 
 `tools/test-shards.sh` is the BLOCKING counterpart, for CI. Raw `npm test -- <spec>`
 is fine for one spec; anything larger goes in the background.
-
-**AGENTS: DO NOT SIT AND WAIT, AND DO NOT POLL.** A full SwiftShader spec can be
-40-90 s on a small box, so a suite is tens of minutes — that time is yours, not
-dead. Two rules:
-
-- **Never block on a run.** Start it with `run_in_background`, or arm a `Monitor`
-  with an until-loop (`until ! pgrep -f "[p]laywright test" >/dev/null; do sleep 10; done`)
-  and get woken. Repeatedly `tail`-ing the log in a loop is the same as blocking,
-  only noisier — one check to confirm it started is enough.
-- **Then go and do something useful.** In rough order of value: read the diff you
-  just wrote with fresh eyes; verify a factual claim you put in a code comment;
-  research the platform behaviour behind the bug (see below); draft the docs the
-  change needs; prepare the follow-up edit.
 
 **Research the mechanism, not just the fix.** The TinyFish MCP tools
 (`search`, `fetch_content`) are the fastest way to check a platform claim, and

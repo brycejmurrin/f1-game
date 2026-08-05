@@ -209,7 +209,118 @@ visible control precisely so there is never a second code path.
 
 ---
 
-## 9. Escape is a desktop-and-keyboard story
+## 9. OPEN QUESTION: a touch dead zone along the top edge in landscape
+
+**Status: unverified, needs a physical device. Written down because it is cheap
+to mitigate and expensive to discover.**
+
+A community iOS-PWA-games guide reports an **undocumented touch dead zone along
+the top edge in landscape** on recent iPhones — touches in it are silently
+swallowed by the OS, there is no visual indication, and
+`env(safe-area-inset-top)` still reports **0px**, so nothing in CSS reveals it.
+Reported on iPhone 15 and later with current iOS; suggested mitigation is to
+keep interactive elements ≥20px from the top edge in landscape regardless of
+what the inset says.
+
+**Why it matters here.** This game is played in landscape, where the top inset
+IS 0 on every iPhone (see the landscape table in that guide: T=0 across all
+models). An audit found **five interactive controls** sitting at
+`top: calc(8px + var(--sat))`, i.e. 8 real pixels from the edge:
+
+| control | file | what is lost if it cannot be tapped |
+|---|---|---|
+| `#pausebtn` | `css/overlays.css:439` | the pause menu, mid-race |
+| `#btn-cam` | `css/overlays.css:450` | camera cycle / picker |
+| `#hud-restore` | `css/overlays.css:473` | **the only way back from HIDE HUD** |
+| `#pc-restore` | `css/hud.css:327` | **the only way back from photo-mode HIDE HUD** |
+| `#soundbtn` | `css/overlays.css:526` | sound toggle |
+
+Two of those are the sole route out of a state that hides everything else, which
+is the worst possible thing to have in a dead zone.
+
+**Before acting on this**, confirm on hardware: put a test button flush against
+the top edge in landscape and see whether it fires. If it reproduces, the fix is
+a floor on the offset under `(pointer: coarse)` — `max(20px, 8px + var(--sat))`
+— which costs nothing on devices without the dead zone. Do NOT apply it blind on
+desktop; 8px is deliberate there.
+
+Note this is a *different* mechanism from the safe-area insets in §4-7: those are
+reported and can be read. This one is invisible to the platform.
+
+---
+
+## 10. PWA standalone is a different runtime from a Safari tab
+
+The game is installable, so it has two hosts with materially different
+behaviour. Worth knowing which one a bug report came from:
+
+| behaviour | Safari tab | PWA standalone |
+|---|---|---|
+| viewport height | toolbar makes `100vh` ≠ visible height | fixed; `100vh` = `100dvh` = `innerHeight` |
+| edge swipe | back/forward navigation | disabled **only while there is no navigation history** |
+| storage | shared | **isolated** — one-time cookie copy at install, then fully separate |
+| backgrounding | tab may be suspended | **killed and restarted from scratch** |
+| Fullscreen API | iPad yes, iPhone never | n/a — standalone IS the chrome-less mode |
+| orientation lock | unsupported on all iOS | manifest `orientation` ignored |
+
+Three consequences for this codebase:
+
+- **Storage isolation** means `apex26.*` localStorage in the installed app is
+  NOT the same store as in a Safari tab. A player who "lost their career" may
+  simply be in the other host. Worth asking before debugging.
+- **Killed on background** makes the persist-continuously design correct rather
+  than merely tidy; there is no resume, only a cold start.
+- **Single-page architecture keeps the back-swipe disabled.** This game is one
+  page and should stay that way — a real navigation would re-arm the left-edge
+  swipe over the driving surface.
+
+The viewport-unit advice in that guide (`100vh` only, never `100dvh`, because
+the dynamic units are wrong on PWA cold start until a rotation "exercises" the
+viewport) is **the opposite of the usual Safari-tab advice** this codebase
+follows with `100svh`. Both can be right — they are different hosts. If a
+cold-start layout bug ever shows up only in the installed app, this is the first
+thing to check.
+
+---
+
+## 11. Two WebKit memory limits worth designing around
+
+- **Canvas resizing leaks.** A confirmed WebKit bug grows memory on every canvas
+  resize until the tab dies around 1.25 GB. Never recreate a WebGL context;
+  resize the existing one, and resize as rarely as you can. `js/game/perf.js`
+  already avoids scale churn for a frame-cost reason — the same restraint
+  happens to be a memory fix.
+- **All canvases on a page share a 256 MB budget.** At `devicePixelRatio` 3 a
+  full-res backbuffer is a large fraction of that on its own, which is an
+  argument for capping render scale at 2x rather than chasing native density.
+
+---
+
+## 12. Headless rAF can silently report ZERO frames
+
+Hit during this work: an in-page probe counted `requestAnimationFrame`
+callbacks and got **0**, which made a perfectly good fly-camera look broken. The
+page was not foreground.
+
+`playwright.config.js` already passes `--disable-background-timer-throttling`
+and `--disable-renderer-backgrounding`. The third flag in that family,
+**`--disable-backgrounding-occluded-windows`**, is not set — it is the one
+repeatedly cited as required since Chrome 87 for offscreen automation, and k6's
+browser docs list it as "done for tests to avoid nondeterministic behavior".
+
+**Do not add it without measuring.** The comment above those args records a
+measured trap in exactly this area: `--disable-frame-rate-limit` looked like the
+cure for hanging menu clicks and made them *seven times slower*, because a CPU
+rasteriser told to render flat out obliges. The lesson recorded there — "the rAF
+rate is not the lever; CPU headroom is" — applies to any flag added here.
+
+The practical rule for agents: **an animation assertion that reads zero is
+suspect before the code is.** Assert input plumbing and layout geometry, which
+are deterministic, and leave integrated motion to a device or a foreground page.
+
+---
+
+## 13. Escape is a desktop-and-keyboard story
 
 Worth stating because it is easy to lose: a bare iPad has no Escape key, so none
 of §1 or §5 reaches a tablet being used with fingers. Touch-side correctness is
