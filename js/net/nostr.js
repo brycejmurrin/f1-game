@@ -315,55 +315,24 @@ const NetNostr = (function () {
             // in a fresh one — rotate() below — rather than this minting a new
             // connection on every join, which is what got us rate-limited.
             let current = send || null;
-            let mintedAt = current ? Date.now() : 0;
-            let minting = false;
-            // A vanilla-ICE offer AGES: its candidates are the host's NAT
-            // mappings at gather time, and on a phone (carrier NAT, aggressive
-            // Wi-Fi) those die in tens of seconds. The pre-minted offer is
-            // gathered when NEW CODE is tapped — but the joiner arrives
-            // however long it takes a human to walk to the other machine and
-            // type. Serving that joiner a half-minute-old offer is how "phone
-            // hosts" fails while "desktop hosts" works: a desktop's mappings
-            // survive the wait, a phone's do not.
-            //
-            // So a JOINER whose offer on the table is stale gets a FRESH one
-            // minted for them. This is not the per-event minting that got us
-            // rate-limited: it fires only on a join, only past the age
-            // threshold, and one at a time.
-            const STALE_MS = 25000;
-            // …but NEVER out from under somebody. Once the current offer has
-            // been handed to a joiner, replacing it also replaces the
-            // connection awaiting their answer (the lobby's mintOffer rotates
-            // the pending transport) — a second joiner arriving mid-answer
-            // would hang up on the first. An offer that has been SERVED is
-            // spoken for; the rotate() in the connected path replaces it the
-            // moment its taker lands.
-            const servedTo = new Set();
-            const put = (to) => {
-              if (!current) return;
-              if (to && mintOffer && !minting && servedTo.size === 0 && Date.now() - mintedAt > STALE_MS) {
-                minting = true;
-                Promise.resolve(mintOffer(null)).then((o) => {
-                  minting = false;
-                  if (done) return;
-                  if (o) { current = o; mintedAt = Date.now(); }
-                  servedTo.add(to);
-                  try { post(current, to); } catch (e) {}
-                }).catch(() => {
-                  // Minting failed: the stale offer is still better than
-                  // silence — on a friendly network it may well work.
-                  minting = false;
-                  if (!done) { servedTo.add(to); try { post(current, to); } catch (e) {} }
-                });
-                return;
-              }
-              if (to) servedTo.add(to);
-              try { post(current, to); } catch (e) {}
-            };
+            // NOTE — DO NOT "refresh a stale offer" HERE. Build 975 tried it:
+            // a joiner arriving more than 25 s after the offer was gathered
+            // got a freshly minted one, on the theory that a phone's NAT
+            // mappings die during the walk to the other machine. It is a real
+            // problem and this is the wrong place to fix it, because the
+            // lobby's mintOffer calls newTransport(), which REPLACES the
+            // pending RTCPeerConnection. The offer was already broadcast to
+            // the room the moment it opened, so the guest is by then answering
+            // the ORIGINAL — and that answer comes back to a connection that
+            // has just been thrown away. The symptom is a permanent
+            // "Connecting…" on the same Wi-Fi, where ICE could not possibly be
+            // at fault. Refreshing offers needs an offer -> transport map, not
+            // a timer.
+            const put = (to) => { if (current) { try { post(current, to); } catch (e) {} } };
             if (!current && mintOffer) {
               // No opening offer supplied: make one now rather than waiting for
               // an arrival to trigger it.
-              Promise.resolve(mintOffer(null)).then((o) => { if (!done && o) { current = o; mintedAt = Date.now(); put(); } }).catch(() => {});
+              Promise.resolve(mintOffer(null)).then((o) => { if (!done && o) { current = o; put(); } }).catch(() => {});
             } else {
               put();
             }
@@ -373,8 +342,6 @@ const NetNostr = (function () {
               if (!current && mintOffer) {
                 try { current = await mintOffer(null); } catch (e) { current = null; }
               }
-              mintedAt = current ? Date.now() : 0;
-              servedTo.clear();
               if (!done) put();
             };
           } else if (send) {

@@ -1137,10 +1137,21 @@ const NetLobby = (function () {
             // is pending NOW — a fresh stable PC, which throws. Seen in a real
             // console as an uncaught InvalidStateError.
             if (answersSeen.has(answer)) return;
-            answersSeen.add(answer);
+            // MARK IT SEEN ONLY ONCE IT CAN BE ACTED ON. Recording it before
+            // the guard below meant an answer that arrived a moment too early
+            // — between transports, or before pendingId was set — was dropped
+            // AND blacklisted, so the guest's retries all matched
+            // answersSeen and were ignored. The host then waited for an answer
+            // it had already thrown away, which on a LAN, where ICE cannot be
+            // at fault, presents as a permanent "Connecting…".
             if (!transport || !pendingId) return;   // nothing awaiting an answer
+            answersSeen.add(answer);
             const acc = await NetHandshake.acceptAnswer(transport, answer);
             if (!acc.ok) {
+              // A rejected answer must not stay blacklisted either: the guest
+              // may repost the same string against a transport that is by then
+              // ready for it.
+              answersSeen.delete(answer);
               if (acc.error !== "already_answered") say(acc.message || "That answer could not be read.", true);
               return;
             }
