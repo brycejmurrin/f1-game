@@ -76,6 +76,76 @@ players should be sitting on.
 
 ---
 
+## 2b. Forza's Blind Driving Assists — the best-documented prior art there is
+
+Microsoft published the mechanics of Forza Motorsport's Blind Driving Assists in
+full, and it is the most useful single source found. Several details change the
+design of our audio cue, and several more are worth stealing later.
+
+**The deceleration cue is a PULSE RATE, not a pitch ramp.** This is the detail I
+would have got wrong:
+
+> The playback of these cues will vary in **speed** to indicate the **rate of
+> deceleration required**. At its fastest speed, players may need to fully engage
+> the brakes, while a slower rate may mean you only need to let up on the
+> throttle a little.
+
+A repeating tick whose *frequency* encodes how hard you must slow is better than
+a tone whose pitch rises, because it separates two things a pitch ramp conflates:
+"a corner is coming" and "how much of the car you need to use". It also degrades
+gracefully — a slow tick is easy to ignore on a straight, a fast one is
+impossible to.
+
+**Lookahead is a player setting, not a constant.** Both the steering guide and
+the deceleration cues carry their own adjustable lookahead offset, explicitly so
+a player can buy themselves reaction time at some cost in lap time. Any cue we
+ship should have the same knob rather than a hard-coded "brake in 60 m".
+
+**Their steering ladder is ours.** Forza: FULLY ASSISTED / PARTIALLY ASSISTED /
+NORMAL ("dampens certain physical effects to make driving easier") / SIMULATION
+("eliminates any damping and steering speed assistance… counter-steering much
+quicker. This mode is difficult with a controller"). Our `STEER_LEVELS` is
+`easy / assist / normal / sim` — the same four-step ladder with almost the same
+names. Another naming decision to leave alone.
+
+**Their throttle assist exists for fatigue, not for thumbs.** Forza's ASSISTED
+throttle "automatically applies throttle, so the driver doesn't need to hold the
+input constantly, **reducing muscle tension and fatigue**." Ours
+(`autoThrottle()`) is gated on `steerMode === "touch"` with the rationale that
+screen-half taps occupy the thumb. Forza's rationale is better and more general:
+holding an input for a whole race is tiring on *any* device. Worth considering
+un-gating it into an explicit setting available in every mode.
+
+**Braking levels, and an honest downside.** Forza splits FULLY ASSISTED
+(brakes for corners *and* to avoid rear-ending other cars) from PARTIALLY
+ASSISTED (corners only), and states the cost of the former outright: *"NOTE:
+This can make it more challenging to pass other cars."* If we ship a FULL level
+it should brake for corners only, for exactly that reason.
+
+**Deadzones are per-axis and player-editable** — steering, acceleration,
+deceleration, clutch, handbrake each get their own. That validates exposing a
+deadzone per input device rather than the single hidden tilt constant we have.
+
+Worth stealing later, all of which we already have the data for:
+
+- **Track-limit cues** — panned hard left/right, rising in pitch *and* repetition
+  as the edge nears, a constant tone when very close, two quick cues when you
+  drop out and the same two reversed when you return. We already track
+  `c.offroad`, the road half-width and a cut count.
+- **Turn navigation** — spoken pace notes graded 1–6 (lower = sharper), plus
+  "Hairpin Left" and "Left 3 Long". `__apex.corners()`, `CircuitMarkings` and the
+  agent view's `nextCorner.apexSpeedKph` already carry everything this needs.
+- **Steering guide by panning** — Forza pans the car's *own* engine and tyre
+  audio toward where you should steer, rather than adding a new tone. Cheaper and
+  less noisy than a fresh cue, and `GameAudio` already synthesises the engine.
+
+One framing note from the same page, worth keeping: the Blind Driving Assists
+"were never intended to be an *easy mode*". Cues that tell you what is happening
+are a different category from assists that drive for you, and the settings menu
+should not present them as points on one scale.
+
+---
+
 ## 3. Our racing-line assist already matches the industry vocabulary
 
 F1 uses **Off / Corners Only / Full**. `LINE_LEVELS = { off: 0, corner: 3,
@@ -194,7 +264,56 @@ Leave the default where it is for now, but it is a prime candidate for
 
 ---
 
-## 7. Framing to keep
+## 7. The understeer cue is doing work expensive hardware demonstrably fails at
+
+Worth recording because it justifies a few lines of `navigator.vibrate`.
+
+A real steering wheel goes **light** when the front tyres let go — the
+self-aligning torque collapses. That is the canonical way a driver feels
+understeer, and it is the thing force feedback exists to reproduce. Except sim
+racers consistently report that it does not arrive, on any hardware:
+
+> I never felt the understeer effect (wheel going lighter when losing grip) in
+> any games. I tried Assetto Corsa, Project Cars 2, Raceroom…
+> — Simucube 2 community
+
+> In LMU there is pretty well zero feel of grip loss, via FFB. Or nothing I have
+> tried in settings, for LMU or the DD wheel
+> — Le Mans Ultimate community
+
+So on a phone or a pad, where there is no wheel to go light at all, an explicit
+rumble on front-axle saturation is not a poor substitute for force feedback — it
+is a channel that direct-drive wheels costing four figures are widely agreed to
+be failing to deliver. The purpose, as Logitech puts it for TRUEFORCE, is that
+slip sensations "let you detect loss of grip **earlier**".
+
+Be honest about it in the code, though: this is **signalling, not simulating**.
+We are not modelling self-aligning torque; we are choosing to tell the player a
+fact about `Fyf` saturation that they have no other way to learn.
+
+---
+
+## 8. iOS frame pacing: the 120 Hz worry is mostly misplaced, the 30 Hz one is not
+
+- **Safari does not run rAF at 120 Hz by default.** ProMotion in Safari sits
+  behind a "prefer page rendering near 60fps" feature flag that ships *on*, so
+  the common iPad case is ~60 Hz, matching `PHYS_DT`. The ProMotion analysis is
+  therefore lower priority than it first appeared.
+- **Low Power Mode throttles rAF to 30 fps.** This is the case that matters, and
+  it is common on a phone deep into a race. At 30 fps the accumulator runs two
+  substeps per frame, which the fixed-step loop handles correctly — but
+  `Input.steer()` is called once per *substep* on wall-clock deltas, so the first
+  substep of a frame absorbs the entire frame's ramp and the second sees ~0. The
+  aggregate rate stays right; the distribution within the frame does not.
+  Harmless today, worth knowing before anything else starts reading input
+  per-substep.
+- Apple's own guidance is that an animation "requesting 120 Hz but unable to keep
+  up may render poorly", where the same content at a lower fixed rate holds a
+  steady cadence — which is an argument for the fixed-step design already here.
+
+---
+
+## 9. Framing to keep
 
 The F1 25 guide is explicit that assists are a **trade**, not a difficulty
 setting: they stabilise the car and they cap what it can do. *"Some assists are

@@ -49,6 +49,32 @@ hung test is the one with a `> start` line and no end line
 `tools/test-shards.sh` is the BLOCKING counterpart, for CI. Raw `npm test -- <spec>`
 is fine for one spec; anything larger goes in the background.
 
+**DO NOT SIT AND WAIT FOR A RUN.** A SwiftShader group is minutes to tens of
+minutes; an agent that polls `--status` in a loop, or blocks on `--wait`, burns
+the entire run doing nothing. Start the run, then go and do work that does not
+touch `js/` or `css/` — research, docs, a `tools/` script, reading the code you
+are about to change, drafting the next commit message. Arrange to be TOLD when
+it finishes (a monitor on the log, or a background command that exits on
+completion) instead of watching it. `--wait` is for CI and for the one case
+where the next edit genuinely cannot be chosen until the result lands.
+
+The one hard constraint while a run is in flight: **the test servers read `js/`
+and `css/` straight from the working tree**, so editing those mid-run makes
+later specs load a mix of versions. Everything else — `tools/`, `docs/`,
+`tests/` (new files), commit messages, `CLAUDE.md` — is fair game.
+
+**Parallelism has a real ceiling, and exceeding it manufactures failures.**
+Each group is its own server plus `WORKERS=2` Chromium+SwiftShader processes, so
+N groups is 2N browsers. On a 4-core box, 2-3 groups is the limit. Past it,
+load average goes to 5-10x core count and tests start failing on the CLOCK
+rather than on an assertion — the signature is
+`Tearing down "context" exceeded the test timeout`, or a spec whose duration is
+several times its usual. Measured here: `elevation-tracks › albert_park` took
+**219 s and failed** with three groups running, and **30 s and passed** alone,
+same commit. Before believing a timing-shaped failure, check `uptime` and
+re-run that ONE spec alone (`npx playwright test <spec> -g "<name>"`) — and
+prefer running heavy groups one at a time over stacking them.
+
 ### 2. Run the groups the change needs — not all of them
 
 The whole suite is ~40 minutes of SwiftShader. Which groups a change needs is
