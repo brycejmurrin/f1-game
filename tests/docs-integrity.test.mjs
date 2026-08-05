@@ -305,6 +305,23 @@ test("the skills index lists every skill", () => {
   assert.deepEqual(missing, [], "a skill exists on disk but is not in .claude/skills/README.md");
 });
 
+test("every tool named in tools/README.md exists on disk", () => {
+  // The other direction, which nothing checked. tools/README.md carried a row
+  // for `.vt-warn.cjs` — a file that is not on disk and CANNOT be, because
+  // .gitignore excludes tools/.* — so the index advertised a tool nobody could
+  // run. Deleting a tool without deleting its row leaves exactly this residue,
+  // and the disk->README test above is blind to it by construction.
+  const index = read("tools/README.md");
+  const onDisk = new Set(fs.readdirSync(path.join(ROOT, "tools")));
+  for (const d of fs.readdirSync(path.join(ROOT, "tools"), { withFileTypes: true }))
+    if (d.isDirectory())
+      for (const f of fs.readdirSync(path.join(ROOT, "tools", d.name))) onDisk.add(f);
+  const ghosts = [...index.matchAll(/^\|\s*\*\*([A-Za-z0-9_.-]+\.(?:mjs|cjs|js|sh|html|json))\*\*/gm)]
+    .map((m) => m[1])
+    .filter((f) => !onDisk.has(f));
+  assert.deepEqual(ghosts, [], "tools/README.md documents a tool that does not exist on disk");
+});
+
 test("the tools index lists every tool", () => {
   // Underscore-prefixed scripts are transient agent scratch by convention
   // (.gitignore: tools/_*.mjs) and are deliberately not indexed.

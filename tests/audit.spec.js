@@ -1,25 +1,18 @@
 // @ts-check
 // Regression tests added from the codebase audit (collisions / physics / AI /
 // boundaries). Each pins down an edge case the existing suites didn't cover.
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
-async function race(page, id = "monza") {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
-  await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
-  await page.evaluate(() => window.__apex.go());
-}
 
 test.describe("Apex 26 — audit regressions", () => {
   test.afterEach(async ({ page }) => {
     await page.evaluate(() => window.__apex?.setPhysics({})).catch(() => {});
   });
 
-  test("race start (bunched grid) settles with no NaN or launched cars", async ({ page }) => {
+  test("race start (bunched grid) settles with no NaN or launched cars", async ({ page, loadTrack }) => {
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
-    await race(page);
+    await loadTrack();
     const r = await page.evaluate(() => {
       let finite = true, maxAbsX = 0;
       for (let i = 0; i < 90; i++) {
@@ -36,8 +29,8 @@ test.describe("Apex 26 — audit regressions", () => {
     expect(r.maxAbsX).toBeLessThan(20);   // nobody flung off the grid
   });
 
-  test("hard cornering forward never false-triggers WRONG WAY", async ({ page }) => {
-    await race(page);
+  test("hard cornering forward never false-triggers WRONG WAY", async ({ page, loadTrack }) => {
+    await loadTrack();
     const wrong = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0.6 });
       let flagged = false;
@@ -57,8 +50,8 @@ test.describe("Apex 26 — audit regressions", () => {
     expect(wrong).toBe(false);   // going forward (even sideways) is never "wrong way"
   });
 
-  test("driving backwards across the line does NOT count a lap", async ({ page }) => {
-    await race(page);
+  test("driving backwards across the line does NOT count a lap", async ({ page, loadTrack }) => {
+    await loadTrack();
     const r = await page.evaluate(() => {
       const total = window.__apex.info().total;
       window.__apex.jump(0.01, 25, 0);          // just past the line
@@ -73,8 +66,8 @@ test.describe("Apex 26 — audit regressions", () => {
     expect(r.lap1).toBeLessThanOrEqual(r.lap0);   // never gains a lap going backwards
   });
 
-  test("rear-ending a car ahead never INCREASES the player's speed", async ({ page }) => {
-    await race(page);
+  test("rear-ending a car ahead never INCREASES the player's speed", async ({ page, loadTrack }) => {
+    await loadTrack();
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.3, 50, 0);
@@ -89,8 +82,8 @@ test.describe("Apex 26 — audit regressions", () => {
     expect(r.maxV).toBeLessThanOrEqual(r.v0 + 0.5);   // contact only scrubs the rear car
   });
 
-  test("no car ever clips through a barrier during a full race (Suzuka: ferris + bridge)", async ({ page }) => {
-    await race(page, "suzuka");
+  test("no car ever clips through a barrier during a full race (Suzuka: ferris + bridge)", async ({ page, loadTrack }) => {
+    await loadTrack("suzuka");
     const maxOver = await page.evaluate(() => {
       window.__apex.setInput({ steer: 0, throttle: true });
       let m = 0;
@@ -104,10 +97,10 @@ test.describe("Apex 26 — audit regressions", () => {
     expect(maxOver).toBeLessThan(0.5);   // everyone stays inside the recorded barriers
   });
 
-  test("extreme tuning + abuse keeps the car finite (tan/grip guards)", async ({ page }) => {
+  test("extreme tuning + abuse keeps the car finite (tan/grip guards)", async ({ page, loadTrack }) => {
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
-    await race(page);
+    await loadTrack();
     const finite = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0.9, wheelbase: 1.9, expo: 1.0, maxSlip: 0.7, speedRef: 124 });
       window.__apex.jump(0.0, 90, 0);
@@ -125,13 +118,13 @@ test.describe("Apex 26 — audit regressions", () => {
     expect(finite).toBe(true);
   });
 
-  test("road-following: entering Bahrain T1 at speed with no steer stays within track limits", async ({ page }) => {
+  test("road-following: entering Bahrain T1 at speed with no steer stays within track limits", async ({ page, loadTrack }) => {
     // Regression for the Bahrain corner slide-off: without the assist the car goes
     // straight through every corner. The assist adds road-curvature yaw so the car
     // tracks most of the corner automatically. It is OPT-IN now (ships at 0), so
     // this enables it explicitly — the subject is that the assist still works, not
     // that it is on by default (see steering.spec.js for the default contract).
-    await race(page, "bahrain");
+    await loadTrack("bahrain");
     const r = await page.evaluate(() => {
       // Approach Bahrain T1 (first right-hand corner, frac ~0.10) at a brisk speed
       // from just before the corner; no steering — the road-following must do the work.
@@ -151,11 +144,11 @@ test.describe("Apex 26 — audit regressions", () => {
     expect(r.maxAbsX).toBeLessThan(r.hw * 1.6);   // some runoff allowed, not wide open
   });
 
-  test("road-following: ROAD_FOLLOW=0 reverts to straight-line in corners", async ({ page }) => {
+  test("road-following: ROAD_FOLLOW=0 reverts to straight-line in corners", async ({ page, loadTrack }) => {
     // Confirm that with road-following off — the SHIPPED default — the car holds a
     // pure world-space straight line and runs wide, vs tracking the curve when the
     // player opts the assist in.
-    await race(page, "bahrain");
+    await loadTrack("bahrain");
     const r = await page.evaluate(() => {
       const runCorner = (rf) => {
         window.__apex.setPhysics({ roadFollow: rf });
