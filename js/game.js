@@ -104,7 +104,7 @@ try {
   const optIn = !phone && (pref === "three" || (pref === "webgpu" && navigator.gpu));
   if (optIn && typeof Gfx !== "undefined") {
     // FETCH THE BACKEND ONLY NOW. Neither alternate has a <script> tag any more:
-    // together they are ~532 KB that every visitor downloaded, parsed and
+    // together they are ~550 KB that every visitor downloaded, parsed and
     // evaluated so that almost none of them could use it. `optIn` above is
     // resolved synchronously from localStorage, so the default GLX path never
     // reaches this line and never awaits anything.
@@ -356,7 +356,7 @@ const DOWNFORCE = 0.65;     // extra grip fraction at VMAX (0 = no wings)
 // refuses to rotate the wings outside one — it is not a proximity window like
 // DRS, and it is not a rolling "is the road ahead clear" test either. A zone
 // only exists where a straight exceeds three seconds at racing speed, which is
-// why MONACO has none and runs no active aero at all. See buildAeroZones().
+// why MONACO has none and runs no active aero at all. See js/game/aerozones.js.
 // Leaving the zone (or touching the brake) SLAMS the flap shut — X_CLOSE_RATE is deliberately several times
 // X_OPEN_RATE, so the downforce comes back faster than it left. Both directions
 // sit inside the FIA's 400 ms transition cap.
@@ -392,15 +392,9 @@ function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c
 // Closing is deliberately faster (still inside the cap) — see X_CLOSE_RATE.
 const X_OPEN_RATE = 2.6;    // aeroX per second opening (~0.385 s, inside the 400 ms cap)
 const X_CLOSE_RATE = 8.0;   // aeroX per second closing (~0.125 s back to Z — well inside the cap)
-const X_STRAIGHT_T = 3.0;   // s of clear road ahead required to arm (FIA's rule)
-// Curvature that counts as straight FOR A ZONE. (It used to be contrasted here
-// with an X_K_MAX of 0.0045 tuned for "is the car allowed to hold the mode right
-// now"; that constant and X_LOOK_MAX were left behind when buildAeroZones()
-// replaced the rolling look-ahead, and neither had been read since.) A kink of
-// ~220 m radius must NOT qualify — approving zones at that threshold gave MONACO
-// four of them, which is exactly the circuit the real rule exists to exclude. A zone
-// is a proper straight (r >= ~700 m), and the length test then does the rest.
-const X_ZONE_K = 0.0014;
+// (X_STRAIGHT_T and X_ZONE_K used to sit here. They belong to the zone SCAN, so
+// they live in js/game/aerozones.js now — along with the X_K_MAX / X_LOOK_MAX
+// story, which is about the rolling look-ahead the zone scan replaced.)
 const X_MIN_SPEED = 25;     // m/s (a vStd() threshold) — no X-mode at crawl speed
 // Lateral grip OFF the racing surface. muBase had no off-track term at all, so
 // grass and gravel cornered exactly like tarmac and only scrubbed forward speed —
@@ -619,8 +613,11 @@ let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
 // half that reads car state: whether THIS car is in a zone, and what opening
 // the wing costs it.
 //
-// X_STRAIGHT_T / X_ZONE_K / X_ZONE_VREF / X_ZONE_MIN / X_ZONE_STEP moved with
-// the geometry; they had no other reader.
+// X_STRAIGHT_T / X_ZONE_K / X_ZONE_VREF / X_ZONE_MIN / X_ZONE_STEP live with the
+// geometry. (The first two were COPIED rather than moved when this was
+// extracted, so dead duplicates sat up at ~line 395 for a while with this
+// comment asserting they had gone. An extraction is not done until the
+// originals are deleted.)
 function xStraightAhead(c) { return !!aeroZ.at(wrapS(c.s)); }
 // Live downforce multiplier on the DOWNFORCE (aero-load) term. 1 in Z-mode,
 // 1 - X_DF_LOSS with the flaps fully open. Nothing else in the grip model
@@ -2669,7 +2666,6 @@ const G = {
   get career() { return Career.data(); },
   get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
-  openCareerSlots: (...a) => openCareerSlots(...a),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   get ttNewRecord() { return ttNewRecord; },
@@ -4582,7 +4578,7 @@ function publishCaution() {
 // overtaking aid in 2026 and carries none of its restrictions: every driver
 // gets it on every lap in every approved zone, leader and backmarker alike,
 // with no proximity requirement. Its only limits are the activation zones
-// themselves (see buildAeroZones) — which is why Monaco has none.
+// themselves (see js/game/aerozones.js) — which is why Monaco has none.
 //
 // The LEADER's lap, not each car's own: a field-wide switch is what race
 // control actually throws, and gating per-car would hand a lapped driver the

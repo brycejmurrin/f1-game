@@ -20,8 +20,8 @@
  *   UP_FS         js/render/glx.js:1383   9-tap tent bloom upsample (additive)
  *   SSAO_FS       js/render/glx.js:1409   depth-based horizon-AO + contact shadow
  *   GODRAY_FS     js/render/glx.js:1484   volumetric shafts (world-march) — see NOTE
- *   COMPOSITE_FS  js/render/glx.js:1602   scene+bloom+ssao+godray, ACES, grade, flare, vignette
- *   FXAA_FS       js/render/glx.js:1996   Timothy Lottes compact FXAA
+ *   COMPOSITE_FS  js/render/shaders/post.js COMPOSITE_FS   scene+bloom+ssao+godray, ACES, grade, flare, vignette
+ *   FXAA_FS       js/render/shaders/post.js COMPOSITE_FS   Timothy Lottes compact FXAA
  *
  * Composed from the shared leaves in js/render/webgpu/wgsl-chunks.js (a global loaded
  * BEFORE this file):
@@ -84,15 +84,15 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * NOW PORTED (Phase 4b) vs the earlier DEFERRED list:
  *   - Wet-road screen-space reflection: the big SSR march block is lifted into a
- *     SEPARATE `SSR` pass (GLX COMPOSITE_FS wet-road block, js/render/glx.js:1738) —
+ *     SEPARATE `SSR` pass (GLX COMPOSITE_FS wet-road block, js/render/shaders/post.js COMPOSITE_FS) —
  *     short 12-step march for mobile, road-only (car-paint tag omitted; the .a
  *     SSR tag path from GLX isn't reproduced here).
  *   - Radial speed-blur, chromatic aberration, unsharp mask: folded into
- *     COMPOSITE (GLX COMPOSITE_FS, js/render/glx.js:1700-1728), each gated by a scalar
+ *     COMPOSITE (GLX COMPOSITE_FS, js/render/shaders/post.js COMPOSITE_FS), each gated by a scalar
  *     so 0 = the shipped no-op look.
  *   - Film grain is KEPT (cheap, one hash); dither is KEPT (8-bit banding fix).
  * GODRAY here is the CHEAPER screen-space radial variant (GLX COMPOSITE_FS sun-
- * shaft block, js/render/glx.js:1899) rather than the world-space shadow-map march
+ * shaft block, js/render/shaders/post.js COMPOSITE_FS) rather than the world-space shadow-map march
  * (GLX GODRAY_FS) — no depth/shadow-map dependency, matches the "reduced" brief.
  */
 "use strict";
@@ -338,7 +338,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 
   // ════════════════════════════════════════════════════════════════════════
   // 4. GODRAY — screen-space radial light-shaft accumulation toward the sun.
-  //    Port of the sun-shaft block in GLX COMPOSITE_FS (js/render/glx.js:1899): 8 taps
+  //    Port of the sun-shaft block in GLX COMPOSITE_FS (js/render/shaders/post.js COMPOSITE_FS): 8 taps
   //    marching from the pixel toward the sun's screen position, reading a
   //    bright source (bloom bright-pass mip0, or scene HDR), weighted by decay
   //    and proximity-to-sun so isolated hotspots can't smear into comet dashes.
@@ -397,7 +397,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 
   // ════════════════════════════════════════════════════════════════════════
   // 5. COMPOSITE — final resolve to LDR.
-  //    Port of GLX COMPOSITE_FS (js/render/glx.js:1602), reduced: scene * SSAO,
+  //    Port of GLX COMPOSITE_FS (js/render/shaders/post.js COMPOSITE_FS), reduced: scene * SSAO,
   //    + godray, * exposure, + bloom (tone-masked), ACES tonemap (shared leaf),
   //    lift-gamma-gain colour grade (contrast / vibrance / saturation / tint /
   //    split-tone shadow+hi / black-lift), soft lens-flare + ghosts, vignette,
@@ -527,7 +527,7 @@ fn applyHdrGrade(c_in : vec3<f32>) -> vec3<f32> {
   return max(c, vec3<f32>(0.0));
 }
 
-// Lift-gamma-gain colour grade (GLX colourGrade, js/render/glx.js:1660), reduced.
+// Lift-gamma-gain colour grade (GLX colourGrade, js/render/shaders/post.js COMPOSITE_FS), reduced.
 fn colourGrade(c_in : vec3<f32>) -> vec3<f32> {
   var c = c_in;
   let contrast   = U.grade.x;
@@ -591,7 +591,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   var c = textureSampleLevel(sceneTex, samp, in.uv, 0.0).rgb;
   let caDir = in.uv - vec2<f32>(0.5);
 
-  // CHROMATIC ABERRATION (GLX js/render/glx.js:1700): split R/B channels radially, the
+  // CHROMATIC ABERRATION (GLX js/render/shaders/post.js COMPOSITE_FS): split R/B channels radially, the
   // fringe growing quadratically toward the frame corners (lens dispersion).
   // 0 = off. textureSampleLevel (explicit LOD) is legal in non-uniform flow.
   if (chromAb > 0.001) {
@@ -600,7 +600,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     c.b = textureSampleLevel(sceneTex, samp, in.uv - caDir * caAmt, 0.0).b;
   }
 
-  // SPEED BLUR (GLX js/render/glx.js:1708): radial smear from the frame centre outward,
+  // SPEED BLUR (GLX js/render/shaders/post.js COMPOSITE_FS): radial smear from the frame centre outward,
   // scaled by the scalar (GLX folds car velocity into it). 4 taps toward centre.
   if (speedBlur > 0.001) {
     var acc = c;
@@ -613,7 +613,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     c = acc / wsum;
   }
 
-  // SHARPEN (GLX js/render/glx.js:1720): unsharp mask vs a 4-tap neighbour blur (uses
+  // SHARPEN (GLX js/render/shaders/post.js COMPOSITE_FS): unsharp mask vs a 4-tap neighbour blur (uses
   // U.texel for the tap offset). Recovers kerb/wire crispness FXAA softens.
   if (sharpen > 0.001) {
     let bl = (textureSampleLevel(sceneTex, samp, in.uv + vec2<f32>(texel.x, 0.0), 0.0).rgb
@@ -660,7 +660,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   c = acesTonemap(c / max(whitePoint, 1e-3), U.aces.x, U.aces.y, U.aces.z, U.aces.w, U.tuneFx.z);
   c = colourGrade(c);
 
-  // Lens flare: anamorphic streak + ghost circles (GLX js/render/glx.js:1934).
+  // Lens flare: anamorphic streak + ghost circles (GLX js/render/shaders/post.js COMPOSITE_FS).
   if (flareStr > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 &&
       sunUV.y >= 0.0 && sunUV.y <= 1.0) {
     var flare = vec3<f32>(0.0);
@@ -722,7 +722,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 }`;
 
   // ════════════════════════════════════════════════════════════════════════
-  // 6. FXAA — Timothy Lottes compact edge AA. Port of GLX FXAA_FS (js/render/glx.js:1996).
+  // 6. FXAA — Timothy Lottes compact edge AA. Port of GLX FXAA_FS (js/render/shaders/post.js COMPOSITE_FS).
   //    Runs LAST on the tonemapped LDR image, straight to the swapchain.
   //
   //    BIND GROUP 0:
@@ -775,7 +775,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 
   // ════════════════════════════════════════════════════════════════════════
   // 7. SSR — wet-road screen-space reflection (its own full-res pass).
-  //    Port of the GLX COMPOSITE_FS wet-road SSR block (js/render/glx.js:1738-1885),
+  //    Port of the GLX COMPOSITE_FS wet-road SSR block (js/render/shaders/post.js COMPOSITE_FS),
   //    reduced for mobile: the road path only (the GLX .a car-paint tag branch
   //    is dropped), a SHORT 12-step reflected-ray march + 4-step binary refine.
   //    Reconstructs view position from depth, a view-space normal from depth

@@ -672,7 +672,7 @@ docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md
   read the manifest's `TRACK_VM` list instead of hardcoding paths.
   `tools/extract-module.mjs` assists further game.js extractions.
 - **DEFERRED modules have no `<script>` tag.** `js/render/three/*` (TLX) and
-  `js/render/webgpu/*` (WGX) are the two opt-in renderer backends — ~532 KB that
+  `js/render/webgpu/*` (WGX) are the two opt-in renderer backends — ~550 KB that
   every visitor used to parse for something almost nobody runs — so they are
   listed in the manifest's `DEFERRED` map instead of `FULL`, and `js/game.js`
   injects them at boot only when `apex26.gfxBackend` selects one. Three things
