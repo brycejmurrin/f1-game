@@ -145,16 +145,24 @@
   #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
   #menu-buttons { grid-column: 2; grid-row: 1; align-self: center; width: auto; }
   #title { font-size: clamp(26px, 7.5vw, 48px); }
-  #subtitle { margin: 8px 0 0; font-size: 12px; }
+  #subtitle { margin: 8px 0 0; font-size: 13px; }
   #menu-meta { margin-top: 12px; gap: 4px; }
-  #audiostate { font-size: 10px; }
-  #disclaimer { font-size: 10px; }
+  #audiostate { font-size: 11px; }
+  #disclaimer { font-size: 11px; }
   /* the group is what gets the width now; the buttons fill their cell */
   #menu-hero, #menu-primary, #menu-secondary { width: min(46vw, 300px); }
-  #menu-hero .bigbtn { padding-block: 10px; }
-  .mb-sub { font-size: 9px; }
-  #menu-buttons .bigbtn { width: 100%; padding: 9px 14px; font-size: 14px; }
-  #menu-buttons .minibtn { padding: 6px 8px; font-size: 11px; }
+  /* One notch up, for the same reason as the HUD and the tap ladder: this
+     block is the PHONE, and it was the smallest type in the app on the device
+     held furthest from your face. The group widths above cap the row, so the
+     extra size comes out of padding rather than pushing anything off screen. */
+  #menu-hero .bigbtn { padding-block: 12px; }
+  .mb-sub { font-size: 11px; }
+  /* Horizontal padding is TIGHTER than the type grew, on purpose: the cells are
+     a fixed min(46vw, 300px), so at 17px "RACE A FRIEND" wrapped to two lines
+     and took its whole row's height with it. The room comes out of the gutter,
+     which nobody reads, rather than out of the label, which is the point. */
+  #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
+  #menu-buttons .minibtn { padding: 7px 10px; font-size: 12px; }
 }
 
 /* ---------- select screen ---------- */

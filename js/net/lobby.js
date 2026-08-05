@@ -488,6 +488,10 @@ const NetLobby = (function () {
       // Only reaches the game while WE hold the session — once NetPlay owns it,
       // its own handler does this and the lobby is out of the loop.
       made.onEvent(NetPlay.EV.QUALI, (d) => { if (d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d); });
+      // The lap in progress. Qualifying runs while the LOBBY still holds the
+      // connection, so the live clock has to exist on this side too or it only
+      // works after the race has already started — which is never.
+      made.onEvent(NetPlay.EV.QLIVE, (d) => { if (d && G.onPeerQualiLive) G.onPeerQualiLive(d); });
       made.sendEvent(NetPlay.EV.HELLO, localProfile());
       if (role === "host") publishSettings();
       openRoom();
@@ -828,6 +832,11 @@ const NetLobby = (function () {
       return broadcast(NetPlay.EV.QUALI, { driverId, t: +t.toFixed(3) });
     }
 
+    function reportQualiLive(driverId, t, frac) {
+      if (!session || !(t >= 0)) return false;
+      return broadcast(NetPlay.EV.QLIVE, { driverId, t: +t.toFixed(2), frac: +(frac || 0).toFixed(3) });
+    }
+
     function finishStart() {
       say("Starting race…");
       // Out of the room: the game screens go back to behaving normally, or the
@@ -934,10 +943,18 @@ const NetLobby = (function () {
         say("That is four players — the grid is full.", true);
         return { ok: false, error: "room_full" };
       }
-      const res = await host();
-      // host() shows the invite step; the room is one BACK away and everybody
-      // in it is still connected.
-      return res;
+      // BOTH WAYS IN, for the second guest as much as the first. This used to
+      // go straight to host(), which meant a room code could only ever invite
+      // ONE player — the rest had to be pasted a link, for no reason other
+      // than which button had been wired. So it returns to the choice, with
+      // the JOIN options hidden: a host inviting somebody is not also looking
+      // for a room to join, and offering it would be a way to destroy the room
+      // you already have.
+      show("pick");
+      if ($("vs-join")) $("vs-join").hidden = true;
+      if ($("vs-code-join")) $("vs-code-join").hidden = true;
+      say("Invite another player — a link or a room code, whichever suits.");
+      return { ok: true, step: "pick" };
     }
 
     async function join() {
@@ -1427,6 +1444,11 @@ const NetLobby = (function () {
       if (!e.screen) return false;
       _peers.clear(); _ready.clear();
       show("pick");
+      // inviteAnother() hides these; a fresh open must always offer all four
+      // routes again, or a player who once invited a second guest can never
+      // JOIN anybody afterwards.
+      if ($("vs-join")) $("vs-join").hidden = false;
+      if ($("vs-code-join")) $("vs-code-join").hidden = false;
       for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
       if (e.answerHint) e.answerHint.hidden = true;
       if (e.answerActions) e.answerActions.hidden = true;
@@ -1512,7 +1534,28 @@ const NetLobby = (function () {
         return handOff({ title: "Apex 26", text: "Race me on Apex 26 — room code " + c }, c);
       });
       on("vs-start", startFromRoom);
-      on("vs-close", cancel);
+      // CLOSE MEANS "BACK", NOT "DESTROY", WHEN THERE IS A ROOM TO GO BACK TO.
+      //
+      // The invite and code steps are reached FROM the waiting room via INVITE
+      // ANOTHER, and closing there used to cancel() — tearing down every
+      // connection and dropping the player on the main menu, taking any
+      // already-connected guests with them. Losing three players because you
+      // changed your mind about inviting a fourth is not a close button, it is
+      // a trapdoor.
+      on("vs-close", () => {
+        const e = els();
+        const inRoom = transports.size > 0;
+        const onSubStep = !!(e.roomStep && e.roomStep.hidden);
+        if (inRoom && onSubStep) {
+          dropPending();      // abandon the half-built invite, keep the room
+          stopCodeWait();
+          show("room");
+          renderRoom();
+          say("");
+          return;
+        }
+        cancel();
+      });
       // A paste straight into the box runs too, so all four routes in behave
       // the same. Deferred a tick because the value is not in the textarea yet
       // while the paste event is being dispatched.
@@ -1578,7 +1621,7 @@ const NetLobby = (function () {
       // Our own qualifying lap goes out through whichever of the lobby and
       // NetPlay currently holds the connection; during the session that is the
       // lobby, because the hand-off has not happened yet.
-      reportQuali,
+      reportQuali, reportQualiLive,
       roomState: () => ({
         open: !!(els().roomStep && !els().roomStep.hidden),
         role, selfReady, peerReady: peersReady(), peer: firstPeer(),

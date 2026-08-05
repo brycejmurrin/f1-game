@@ -171,13 +171,30 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   }
   /* Landscape sizes the readouts DOWN. Portrait can afford a 58px gear because
      the screen is tall and the HUD owns the bottom third; landscape has ~390px
-     of height total and the road is the thing you are actually looking at. */
+     of height total and the road is the thing you are actually looking at.
+     DOWN, NOT ILLEGIBLE. Flattening the cluster to three columns bought back
+     ~74px of screen (126.8 -> 53 measured on a 852x393 phone) and then kept
+     taking: speed went 26px -> 22px -> 20px, the chips 13px -> 11px, the energy
+     bar 150px -> 92px -> 88px, each step reasonable on its own and the sum a
+     HUD you have to look twice at while driving. The flat shape is right and is
+     kept; the type is restored to roughly what it was before the flatten. The
+     cluster is WIDER now (262px vs 201px), so this buys legibility out of the
+     axis landscape actually has, and the block still stands at ~2/3 of the
+     height it had. Measured after: see the table in docs/research/UI-LAYOUT-RESEARCH.md. */
   #hud-gearbox { gap: 2px; padding: 3px 6px; }
-  #hud-gear { font-size: 36px; min-width: 34px; }
-  #hud-tach { width: 76px; height: 10px; }
-  #hud-speed { font-size: 20px; }
-  #hud-energy { width: 88px; height: 11px; }
-  .hud-unit { font-size: 9px; margin-left: 2px; }
+  #hud-gear { font-size: 48px; min-width: 44px; }
+  #hud-tach { width: 96px; height: 13px; }
+  #hud-speed { font-size: 28px; }
+  #hud-energy { width: 132px; height: 15px; }
+  .hud-unit { font-size: 12px; margin-left: 2px; }
+  /* THE LAP BOXES ARE PART OF THE HUD TOO. POS/LAP/TIME/BEST sat at the 9px
+     label / 19px value the stylesheet uses everywhere, with NO touch override
+     at all — so the one place they are read at arm's length, on a phone, in
+     motion, is the place they were smallest relative to the screen. Desktop
+     keeps the base sizes; this is the touch notch they never had. */
+  body:not(.desktop) .hud-box { padding: 5px 13px; }
+  body:not(.desktop) .hud-label { font-size: 11px; }
+  body:not(.desktop) .hud-value { font-size: 22px; }
   /* manual: keep everything on the right — shifts in the outer column, BOOST/OT
      in a second column just inboard (vertical space is too short to stack four).
      Override shift positions so both columns align at the same row heights. */
@@ -249,8 +266,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      The two sizes are VARIABLES because the alignment rule below has to do
      arithmetic on them; as literals repeated in two media queries they went
      stale the moment either one moved. */
-  body:not(.desktop) .dock { --tap: 54px; --hold: 72px; }
-  body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: 10px; }
+  body:not(.desktop) .dock { --tap: 62px; --hold: 82px; }
+  body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: 11px; }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
   body:not(.desktop) .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: 13px; }
@@ -271,8 +288,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body:not(.desktop) #grp-steer { padding-bottom: 14px; }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
-    body:not(.desktop) .dock { --tap: 48px; --hold: 64px; }
-    body:not(.desktop) .dock .touchbtn { font-size: 9px; }
+    body:not(.desktop) .dock { --tap: 56px; --hold: 74px; }
+    body:not(.desktop) .dock .touchbtn { font-size: 10px; }
     body:not(.desktop) .dock .pedal,
     body:not(.desktop) .dock .steerbtn,
     body:not(.desktop) .dock .shiftbtn { font-size: 12px; }
@@ -319,7 +336,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      cluster jump a row taller and back as the car approached a zone. */
   #hud-ot,
   #hud-aero {
-    white-space: nowrap; font-size: 11px; padding: 3px 7px;
+    white-space: nowrap; font-size: 14px; padding: 5px 10px;
   }
 
   /* ---- DESKTOP: THE SAME PARTS, LAID OUT FLAT ----
@@ -384,13 +401,18 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   @media (max-width: 740px) {
     :root { --ped: 64px; --act: 48px; }
     /* An iPhone SE landscape leaves ~323px between the docks in tilt+manual,
-       the widest mode — one notch further down than the sizes above. */
-    #hud-gear { font-size: 30px; }
-    #hud-tach { width: 64px; }
-    body:not(.desktop) #hud-energy { width: 74px; }
-    body:not(.desktop) #hud-speed { font-size: 18px; }
+       the widest mode — one notch further down than the sizes above. Moved up
+       with them: this notch is a RATIO to the block above, not a floor of its
+       own, so leaving it while that block grew would have made the smallest
+       screen the only one still reading at the shrunken size. */
+    #hud-gear { font-size: 40px; }
+    #hud-tach { width: 84px; }
+    body:not(.desktop) #hud-energy { width: 108px; }
+    body:not(.desktop) #hud-speed { font-size: 24px; }
     body:not(.desktop) #hud-ot,
-    body:not(.desktop) #hud-aero { font-size: 10px; padding: 3px 6px; }
+    body:not(.desktop) #hud-aero { font-size: 13px; padding: 4px 8px; }
+    body:not(.desktop) .hud-label { font-size: 10px; }
+    body:not(.desktop) .hud-value { font-size: 20px; }
   }
   /* touch: BRAKE left corner, BOOST/OT right corner */
   /* touch mode differs only in BRAKE dropping to the left corner (no GAS) —
