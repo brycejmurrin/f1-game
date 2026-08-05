@@ -154,11 +154,26 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
   expect(audit.models.invalid).toEqual([]);
   expect(audit.models.suppressed).toEqual([]);
   expect(audit.models.unsafe).toEqual([]);
+  // Measured: seven required models emit, not the four this spec was written
+  // against. The three extras are all authored intent in js/circuits/bahrain.js,
+  // beside the data:
+  //   kit:bahrain:pit-operations — "A guarded second tier behind the legacy pit
+  //     facade gives the Sakhir main straight the deep garage/operations
+  //     profile seen from the grid."
+  //   kit:bahrain:back-straight-service + :back-straight-recovery —
+  //     "Back-straight support campus: sparse, well behind the left-side
+  //     guardrail and separated from the open desert sightline."
+  // Still an exact set rather than a superset: `required: true` is the circuit
+  // promising each of these survives the on-track footprint guard, so one being
+  // silently suppressed has to fail here.
   expect(audit.models.emitted.filter((entry) => entry.required).map((entry) => entry.id).sort())
     .toEqual([
       "bahrain-back-straight-gantry",
       "bahrain-start-gantry",
+      "kit:bahrain:back-straight-recovery",
+      "kit:bahrain:back-straight-service",
       "kit:bahrain:hospitality",
+      "kit:bahrain:pit-operations",
       "kit:bahrain:service-compound",
     ]);
 

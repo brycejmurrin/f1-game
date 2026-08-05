@@ -65,13 +65,26 @@ test.describe("Las Vegas track foundation migration", () => {
       for (const id of [
         "vegas-sphere",
         "vegas-high-roller",
-        "vegas-bellagio-lake",
+        // The reservoir used to be ONE `vegas-bellagio-lake` box and this spec
+        // still asked for that id (measured: it is never emitted, the two ids
+        // below are). js/circuits/vegas.js widened the frontage to the real
+        // ~300 m and split the water deliberately: "Two overlapping basins
+        // follow the lakeshore across the widened frontage instead of one 44 m
+        // patch — a long single box this size would risk clipping the T13 apex
+        // the road carries through this stretch." Same class of change as
+        // Montreal's St. Lawrence bands and the Interlagos Guarapiranga merge,
+        // so follow the same rule: assert the basins EXIST and are TYPED water,
+        // never a count and never one legacy id — the shoreline is free to be
+        // re-cut again as long as it stays water.
+        "vegas-bellagio-lake-east",
+        "vegas-bellagio-lake-west",
         "vegas-strip-gateway",
         "vegas-finish-halo",
       ]) {
         expect(emitted.has(id), `${time} ${id}`).toBe(true);
       }
-      expect(emitted.get("vegas-bellagio-lake").water).toBe(true);
+      for (const id of ["vegas-bellagio-lake-east", "vegas-bellagio-lake-west"])
+        expect(emitted.get(id).water, `${time} ${id} typed water`).toBe(true);
       for (const id of ["vegas-strip-gateway", "vegas-finish-halo"]) {
         expect(emitted.get(id).overhead).toBe(true);
         expect(emitted.get(id).clearance).toBeGreaterThanOrEqual(4.8);
