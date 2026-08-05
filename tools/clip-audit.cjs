@@ -155,13 +155,24 @@ function analyse(env, track, prims, opt) {
       // AABB FIRST, `seen` SECOND. `seen` exists only to stop a pair being
       // processed twice when both primitives span more than one 10 m cell, so
       // it needs to hold the pairs that reach the EXPENSIVE stage — not every
-      // pair that happens to share a cell. Deduping first made it the latter,
-      // and on a dense street circuit that is a Set of millions of keys: it is
-      // what exhausted the heap, reproducibly, in `Runtime_SetGrow` under
-      // OrderedHashSet::Rehash. The overlap test below is pure and depends on
-      // nothing but a and b, so running it before the dedup costs a repeat of
-      // three min/max pairs for a duplicate and saves storing a key forever.
-      // Every counter and every hit is reached exactly as often as before.
+      // pair that happens to share a cell. The overlap test below is pure in a
+      // and b, so running it before the dedup costs a duplicate three repeated
+      // min/max pairs and saves storing a key for the rest of the circuit.
+      // Verified output-identical: all 40 circuits, byte for byte against the
+      // previous code.
+      //
+      // THIS IS NOT WHY `--all` RAN OUT OF MEMORY, though the first OOM stack
+      // pointed straight at it (Runtime_SetGrow under OrderedHashSet::Rehash)
+      // and that was mistaken for the cause. With this in place the sweep still
+      // died at the same ~4090 MB, 215 s against 227 s — twelve seconds bought.
+      // What settled it was measuring one circuit alone: Las Vegas, the densest
+      // on the calendar at ~1.8 M prop verts, finishes in 11.7 s inside the same
+      // 4 GB ceiling. No single circuit is anywhere near the limit, so the cost
+      // is CUMULATIVE across the 40-circuit sweep — the one shared VM context
+      // above (kept because per-track contexts made --all 24x more expensive)
+      // never releases a circuit it has finished with. Raising the ceiling in
+      // .github/workflows/ci.yml is what makes the sweep survive; it is not what
+      // makes it frugal, and the retention is still there to be fixed.
       const ox = Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX);
       const oy = Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY);
       const oz = Math.min(a.maxZ, b.maxZ) - Math.max(a.minZ, b.minZ);
