@@ -2717,12 +2717,15 @@ const api = {
   // DEPRECATED alias — prefer render({what:"circuit"}).
   worldModel(opts) { return agentView.worldModel(opts); },
 
-  // rollout({seconds, dt, input, policy, policyHz, samples}?) — drive an
+  // rollout({seconds, dt, input, policy, policyHz, samples, ids}?) — drive an
   // interval and return a DIGEST instead of every frame: speed min/max/mean,
   // off-track events, minimum barrier clearance, per-corner minimum speed, lap
   // times, terminal reason, and a handful of waypoint samples. `policy` is a
   // function (world) => {steer,throttle,brake} run at policyHz (default 10 Hz)
   // while physics steps every tick; pass `input` instead for an open-loop probe.
+  // update() advances the whole field, so the AI really races through a rollout:
+  // `ids` (car ids or driver codes, or "all") adds `cars{}` — the SAME digest
+  // per named car — without touching the flat player fields.
   rollout(opts) { return agentView.rollout(opts); },
 
   // agentHelp() — a compact manifest of the agent-facing surface and the

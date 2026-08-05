@@ -1477,6 +1477,119 @@ test.describe("rollout()", () => {
   });
 });
 
+// ── rollout({ids}) — the same digest, for the AI ────────────────────────────
+// update(dt) always advanced the whole field; only the REPORTING was pointed at
+// one car. These pin that the extra reporting is additive (a caller that never
+// passes ids sees the identical payload) and that nothing player-only is
+// reported for a car that never computed it.
+
+test.describe("rollout({ids})", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("returns one digest per requested car, and the AI is really driving", async ({ page }) => {
+    await load(page, "monza", 0.0, 55);
+    const r = await page.evaluate(() => {
+      const grid = window.__apex.field({ detail: "brief" }).positions
+        .filter((row) => !row.isPlayer).slice(0, 3);
+      const out = window.__apex.rollout({
+        seconds: 6, input: { steer: 0, throttle: true },
+        ids: [grid[0].id, grid[1].code, "car:" + grid[2].id, "player"],
+      });
+      return { out, asked: grid };
+    });
+    expect(r.out.ok).not.toBe(false);
+    expect(r.out.cars).toBeTruthy();
+    // four distinct cars — three AI plus the player
+    expect(Object.keys(r.out.cars).length).toBe(4);
+
+    for (const row of r.asked) {
+      const d = r.out.cars[String(row.id)];
+      expect(d, "no digest for car " + row.id).toBeTruthy();
+      expect(d.id).toBe(row.id);
+      expect(d.code).toBe(row.code);
+      expect(d.isPlayer).toBe(false);
+      // an AI car under way, digested off (s, x) alone
+      expect(d.speedKph.mean).toBeGreaterThan(30);
+      expect(d.speedKph.max).toBeGreaterThanOrEqual(d.speedKph.min);
+      expect(d.distanceM).toBeGreaterThan(50);
+      expect(typeof d.minClearanceM).toBe("number");
+      expect(Array.isArray(d.cornerMinSpeedKph)).toBe(true);
+      expect(Array.isArray(d.lapTimesS)).toBe(true);
+      // gear is maintained under `if (c.human)` in updateCar(), so an AI car
+      // never leaves gear 1 — report the gap, not the stale 1.
+      for (const s of d.samples) expect(s.gear).toBeNull();
+      expect(d.terminal.done).toBe(false);
+    }
+    // the player's entry is the player's digest, gears and all
+    const me = Object.values(r.out.cars).find((d) => d.isPlayer);
+    expect(me).toBeTruthy();
+    expect(me.samples.every((s) => typeof s.gear === "number")).toBe(true);
+    expect(me.distanceM).toBe(r.out.distanceM);
+    expect(me.speedKph).toEqual(r.out.speedKph);
+  });
+
+  test("AI laps advance, and each completed lap's time comes back", async ({ page }) => {
+    await load(page, "monza", 0.5, 60);
+    // Driving a real Monza lap per crossing would be ~85 s of sim per assertion,
+    // so park the cars just before the line instead. The game only TIMES a lap
+    // from one crossing to the next, so the first crossing advances the counter
+    // with no time (the grid segment) and the second produces the time.
+    const r = await page.evaluate(() => {
+      const ids = window.__apex.field({ detail: "brief" }).positions
+        .filter((row) => !row.isPlayer).slice(0, 3).map((row) => row.id);
+      const place = () => ids.forEach((i) => window.__apex.aiPlace(i, 0.99, 65, 0));
+      place();
+      const a = window.__apex.rollout({ seconds: 6, samples: 2, ids });
+      place();
+      const b = window.__apex.rollout({ seconds: 6, samples: 2, ids });
+      return { a, b, ids };
+    });
+    for (const id of r.ids) {
+      const a = r.a.cars[String(id)], b = r.b.cars[String(id)];
+      // the counter advances — read off (s, prog), which is all an AI car has
+      expect(a.lapsCompleted, "car " + id + " never crossed the line").toBe(1);
+      expect(a.to.lap).toBe(a.from.lap + 1);
+      expect(a.lapTimesS).toEqual([]);         // no timed lap yet, and none faked
+      expect(a.lastLapS).toBeNull();
+      // second crossing: one timed lap, and lastLapS agrees with it
+      expect(b.lapTimesS.length).toBe(1);
+      expect(b.lapTimesS[0]).toBeGreaterThan(0);
+      expect(b.lastLapS).toBe(b.lapTimesS[0]);
+    }
+  });
+
+  test("no ids leaves the payload exactly as it was", async ({ page }) => {
+    await load(page, "monza", 0.0, 55);
+    const r = await page.evaluate(() => {
+      const a = window.__apex.rollout({ seconds: 2, samples: 4,
+                                        input: { steer: 0.05, throttle: true } });
+      const b = window.__apex.rollout({ seconds: 2, samples: 4, ids: ["player"],
+                                        input: { steer: 0.05, throttle: true } });
+      return { keysA: Object.keys(a), keysB: Object.keys(b), cars: a.cars || null,
+               noteA: a.note, noteB: b.note };
+    });
+    expect(r.cars).toBeNull();
+    // additive: same keys, in the same order, plus `cars` before `note`
+    expect(r.keysA).toEqual(r.keysB.filter((k) => k !== "cars"));
+    expect(r.keysB).toContain("cars");
+    expect(r.noteA).not.toContain("cars{}");
+    expect(r.noteB).toContain("cars{}");
+  });
+
+  test("an unknown id is a typed error, not a silent gap", async ({ page }) => {
+    await load(page, "monza", 0.0, 55);
+    const r = await page.evaluate(() => ({
+      bogus: window.__apex.rollout({ seconds: 0.2, ids: ["ZZZ"] }),
+      notArray: window.__apex.rollout({ seconds: 0.2, ids: 7 }),
+    }));
+    expect(r.bogus.ok).toBe(false);
+    expect(r.bogus.error).toBe("NotFoundError");
+    expect(r.bogus.fix).toMatch(/field\(\)/);
+    expect(r.notArray.ok).toBe(false);
+    expect(r.notArray.error).toBe("BadArgumentError");
+  });
+});
+
 // ── agentHelp() ─────────────────────────────────────────────────────────────
 
 test.describe("agentHelp()", () => {
