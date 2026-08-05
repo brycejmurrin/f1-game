@@ -20,6 +20,19 @@
     dressingExclusions: [
       // Qatar owns its sparse palms/scrub; generic foliage muddies the open desert.
       { kind: "foliage", s0: 0, s1: 1 },
+      // …and it owns its LIGHTING outright. The shared furniture pass hangs an
+      // 8 m street-lamp column every ~28 m on BOTH sides of every circuit that
+      // does not opt out — 386 of them here, 35 148 vertices, 10% of Qatar's
+      // whole prop budget. Lusail is 20 km out on open hamada: there is no
+      // street to light, and the scenery() callback below already stands ~200
+      // purpose-built 46-50 m Musco masts (floodMastRing + the S/F run + the
+      // three TV-corner pairs). The generic columns are a second, shorter,
+      // duplicate lighting line under the one thing that makes this venue
+      // recognisable. Geometry only: streetLamp() registers no point light —
+      // track.lampPosts is filled by the separate generic MAST pass, which is
+      // the "floodlights" kind and is deliberately NOT excluded here, so the
+      // night lighting is byte-identical without them.
+      { kind: "lamps", s0: 0, s1: 1 },
     ],
     lengthKm: 5.4,
     sunAzimBias: -0.30,   // Losail's late-afternoon sun hangs low to the NE-facing main straight
@@ -236,8 +249,15 @@
       const MAST_H = 46, MAST_H_SF = 50;
       if (typeof floodMastRing === "function") {
         floodMastRing(90, { h: MAST_H, dist: 34, cool: true, pool: true });
-        // Extra densification on the televised start/finish kilometre
-        along(0.86, 0.14, 45, (k) => {
+        // Extra densification on the televised start/finish kilometre.
+        // 88 m, not 45. THREE mast lines overlap on this stretch: the 90 m ring
+        // above, the engine's own light-bearing mast pass (~44 m stride, the
+        // one that actually fills track.lampPosts), and this run. At 45 m that
+        // put a mast every ~22 m of straight — denser than the real Musco
+        // installation and 6 510 vertices for a row nobody can resolve at
+        // 300 km/h. At 88 m the S/F kilometre still carries visibly more steel
+        // than the rest of the lap, which is the point of the densification.
+        along(0.86, 0.14, 88, (k) => {
           if (typeof floodMast === "function") {
             floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: true });
             floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: true });
