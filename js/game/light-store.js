@@ -79,6 +79,14 @@ const LightStore = (() => {
 
     // A rebuild/reapply/reinit is only worth doing once per call, however many
     // knobs moved — hence the three flags rather than acting inside the loop.
+    //
+    // apply() and set() ran these in DIFFERENT ORDERS before they shared this
+    // function (set() reinitialised the rain before reapplying race settings;
+    // apply() did the reverse). Unifying them is safe because the two branches
+    // are mutually exclusive: the reinitRain knobs are rainCount, rainStreak,
+    // rainSpeed, drizzleCount, drizzleLen and drizzleSpeed, and NONE of them is
+    // in APPLY_RACE_IDS. Checked, not assumed — if a future knob is ever both,
+    // the order becomes load-bearing and this comment is the warning.
     function liveEffects(rebuilt, reapply, reinit, fromApplyRace) {
       const track = G.track;
       if (rebuilt && track) { track._lights = null; track._alwaysLights = null; }
