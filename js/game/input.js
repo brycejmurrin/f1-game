@@ -282,14 +282,10 @@ const Input = (function () {
     tiltSeen = true;
     tiltRaw = rawDeg;
     tiltSmoothed = oneEuro(rawDeg, step);
-    let target = 0, d = tiltSmoothed - tiltZero;
-    if (Math.abs(d) >= DEADZONE) {
-      d -= Math.sign(d) * DEADZONE;
-      target = clamp(d / (MAX_TILT - DEADZONE), -1, 1);
-    }
-    const releasing = Math.abs(target) < Math.abs(tiltSteerVal);
-    tiltSteerVal = moveToward(tiltSteerVal, target, (releasing ? 1.6 : 1.0) * TILT_SLEW * step);
-    return tiltSteerVal;
+    // Same map and same slew the live path uses — deliberately WITHOUT
+    // timeScale, because the caller supplies dt and a reproducible run must not
+    // depend on whether the game happens to be in hit-stop.
+    return tiltSlew(tiltTarget(), step);
   }
   // Reset the tilt filter/slew/zero state so a fresh emulation run starts clean.
   function simTiltReset() {
@@ -303,22 +299,41 @@ const Input = (function () {
     return clamp(cmd, -1, 1) * (MAX_TILT - DEADZONE) + Math.sign(cmd) * DEADZONE;
   }
 
-  function tiltSteering() {
-    // Map the calibrated, filtered tilt to a target steer (-1..1) with a soft
-    // dead zone, then slew-rate limit the change toward that target so the
-    // command can't jump even if the hand does.
-    let target = 0;
+  // THE TILT MAP AND THE SLEW, factored out so the live path and the
+  // deterministic harness cannot disagree about them.
+  //
+  // They used to be written twice — here and in simTilt — and the copies had
+  // already drifted: the hit-stop `timeScale` fix landed in the live one only.
+  // That omission is CORRECT for the harness (it is handed an explicit dt and
+  // exists to be reproducible; hit-stop is a live-loop idea), which is the worst
+  // kind of drift — right by accident, unstated, with autopilot's tilt lap
+  // riding on it. Now the only difference between the two callers is the one
+  // that is supposed to differ: where dt comes from.
+
+  // Calibrated, filtered tilt angle -> steer target (-1..1), with a soft dead
+  // zone subtracted rather than clamped, so there is no step at its edge.
+  function tiltTarget() {
     let d = tiltSmoothed - tiltZero;
-    if (Math.abs(d) >= DEADZONE) {
-      d -= Math.sign(d) * DEADZONE;
-      target = Math.max(-1, Math.min(1, d / (MAX_TILT - DEADZONE)));
-    }
-    const t = nowMs();
-    const dt = (tiltSteerT ? Math.min(0.1, (t - tiltSteerT) / 1000) : 0) * timeScale;
-    tiltSteerT = t;
+    if (Math.abs(d) < DEADZONE) return 0;
+    d -= Math.sign(d) * DEADZONE;
+    return clamp(d / (MAX_TILT - DEADZONE), -1, 1);
+  }
+
+  // Slew-rate limit toward the target so the command cannot jump even if the
+  // hand does. Releasing is 1.6x faster than tightening: letting go is a request
+  // to stop, and should be answered.
+  function tiltSlew(target, dt) {
     const releasing = Math.abs(target) < Math.abs(tiltSteerVal);
     tiltSteerVal = moveToward(tiltSteerVal, target, (releasing ? 1.6 : 1.0) * TILT_SLEW * dt);
     return tiltSteerVal;
+  }
+
+  function tiltSteering() {
+    const t = nowMs();
+    // timeScale belongs to the LIVE path only — see its declaration.
+    const dt = (tiltSteerT ? Math.min(0.1, (t - tiltSteerT) / 1000) : 0) * timeScale;
+    tiltSteerT = t;
+    return tiltSlew(tiltTarget(), dt);
   }
 
   /* ---------------- keyboard ---------------- */
