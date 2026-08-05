@@ -983,6 +983,13 @@ const api = {
     yaw: +(c.yawVis || 0).toFixed(4),
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2), lap: c.lap,
     ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
+    // PER-CAR LAP TIMING. game.js sets lastLap/best for every car, but until now
+    // only the player's were reachable (lapHistory()/timing()), so no AI lap time
+    // existed anywhere in the codebase — "is this car actually slower?" could not
+    // be asked. Same rounding + null convention as lapHistory(): seconds to 3 dp,
+    // null before the car has a time (best starts at Infinity, which JSON eats).
+    best: isFinite(c.best) ? +c.best.toFixed(3) : null,
+    last: c.lastLap != null ? +c.lastLap.toFixed(3) : null,
     // ACTIVE AERO flap travel 0..1 (short key, like the rest of this list —
     // it is polled per frame). Whether a RIVAL has its wing open is the
     // difference between "he's catching me" and "he's about to go past".
@@ -1298,6 +1305,20 @@ const api = {
     return setWeatherLive(w);   // shared live path (rain layer, audio, lighting)
   },
 
+  // Get or set AI DIFFICULTY ("easy" | "normal" | "hard"). Persisted, like the
+  // #rs-diff chips that were until now the ONLY way to move it — there was no
+  // programmatic path at all, so no test could compare two difficulties.
+  // Returns the level plus the resolved GameTables.DIFF preset it selects:
+  // `ai` is the multiplier on every AI car's vmax, `band` the rubber-band
+  // ceiling. Live — updateCar reads DIFF[difficulty] each tick — but it does
+  // NOT redraw an open race-settings panel; reopen it to see the chip move.
+  difficulty(level) {
+    if (level !== undefined) G.difficulty = level;
+    const d = GameTables.DIFF[G.difficulty] || null;
+    return { level: G.difficulty, ai: d ? d.ai : null, band: d ? d.band : null,
+             levels: Object.keys(GameTables.DIFF) };
+  },
+
   // Dynamic weather progression: weatherArc(from, to, seconds) arms a scripted
   // transition that walks the dry↔wet↔rain ladder over `seconds` of race time
   // (fog/overcast jump direct), flipping each stage through the same live
@@ -1379,6 +1400,40 @@ const api = {
       otCool: +(c.otCool || 0).toFixed(2), otEnabled: !!G.otEnabled(),
       aeroX: +(c.aeroX || 0).toFixed(3), xOn: !!c.xOn, xArmed: !!c.xArmed,
       brakeHeat: +(c.brakeHeat || 0).toFixed(2), gear: c.gear || 1,
+      // LAP TIMING for THIS car — the same fields lapHistory()/timing() report
+      // for the player, which is all game.js ever needed to be asked for the
+      // rest of the grid. Same rounding/null convention (3 dp, null before a
+      // time exists; c.best starts at Infinity).
+      lapTime: +(c.lapTime || 0).toFixed(3),
+      best: isFinite(c.best) ? +c.best.toFixed(3) : null,
+      lastLap: c.lastLap != null ? +c.lastLap.toFixed(3) : null,
+      // Stuck timer — already persisted on the car by the AI traffic block, just
+      // never exposed. > 0.7 is what arms the unstuck commitment below.
+      stuckT: +(c.stuckT || 0).toFixed(2),
+      // THE AI DECISION BLOCK (game.js updateCar, mirrored onto c.ai — see the
+      // aiDbg note there). null for a human car, which never writes it. These
+      // are the frame-locals that decide how an AI car drives, so a slow car can
+      // now be told apart: braking early (vCorner/kMax), queuing behind a phantom
+      // blocker (blocker*/boxed), rubber-banding (bandFactor) or digging itself
+      // out (unstuckActive/stuckT) used to look identical from outside.
+      ai: c.ai ? {
+        vmax: +(c.ai.vmax || 0).toFixed(3),          // this car's speed target, m/s, final
+        bandFactor: +(c.ai.bandFactor || 0).toFixed(4),  // rubber-band boost, 0 = none
+        braking: !!c.ai.braking,
+        vCorner: +(c.ai.vCorner || 0).toFixed(3),    // corner speed target it brakes to
+        kMax: +(c.ai.kMax || 0).toFixed(6),          // peak curvature over the brake scan
+        // Who it thinks is in the way. `blocker` is this screen's cars[] index
+        // (-1 = nobody); blockerCode/blockerId identify the same car portably.
+        blocker: c.ai.blockerId ? G.cars.findIndex((o) => o.driverId === c.ai.blockerId) : -1,
+        blockerCode: c.ai.blockerCode || null,
+        blockerGap: isFinite(c.ai.blockerGap) ? +c.ai.blockerGap.toFixed(2) : null,
+        roomL: isFinite(c.ai.roomL) ? +c.ai.roomL.toFixed(2) : null,   // clearance, m
+        roomR: isFinite(c.ai.roomR) ? +c.ai.roomR.toFixed(2) : null,
+        boxed: !!c.ai.boxed, unstuckActive: !!c.ai.unstuckActive,
+        targetX: +(c.ai.targetX || 0).toFixed(3),    // racing line + lane, m
+        overtake: +(c.ai.overtake || 0).toFixed(3),  // lateral commitment to a pass, m
+        desiredX: +(c.ai.desiredX || 0).toFixed(3),  // the line it is actually steering to
+      } : null,
     };
   },
 
