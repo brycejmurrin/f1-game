@@ -1103,6 +1103,24 @@ __apex.netTick(1010);
 __apex.carAt(s.remoteId);        // the rival, posed where its owner said
 ```
 
+### `lobbySdp() → {ice, conn, localTypes, remoteTypes, local, remote}`
+
+The SDP that actually **crossed**, both directions — which is a different
+question from what each side gathered, and the difference was invisible until
+this existed. Every candidate counter in the game (`lobby().wire.candidates`,
+`turnProbe()`) reports the LOCAL gather. Two devices can each hold four
+reachable relay candidates and still fail to pair, if the description that
+reached the other end carried none of them.
+
+`localTypes` / `remoteTypes` are the candidate lines reduced to
+`addr port typ <type>`, so a missing `relay` on the REMOTE side is visible at a
+glance. `local` / `remote` are the raw SDP for when it is not.
+
+```js
+const s = __apex.lobbySdp();
+s.remoteTypes.filter((t) => t.includes("relay"))   // did the peer send us any?
+```
+
 ### `turnProbe(ms?) → Promise<{ok, servers, relaysConfigured, summary}>`
 
 Is a TURN relay actually there? One throwaway `RTCPeerConnection` **per

@@ -1519,6 +1519,26 @@ const NetLobby = (function () {
       }),
       localProfile, modsFromProfile, setTransportFactory,
       failureMsg,
+      // WHAT ACTUALLY CROSSED THE WIRE, which is not the same question as what
+      // each side gathered. Both peers can hold four working relay candidates
+      // and still fail to pair if the SDP that reached the other end carried
+      // none of them — and every counter we have reports the LOCAL gather, so
+      // that difference was invisible. The candidate lines are the whole
+      // point; the descriptions come back whole so nothing is pre-judged.
+      sdp: () => {
+        const t = transport || [...transports.values()][0];
+        const pc = t && t.pc;
+        if (!pc) return null;
+        const types = (s) => (String(s || "").match(/^a=candidate:.*$/gmi) || [])
+          .map((l) => l.split(" ").slice(4, 8).join(" "));
+        const local = pc.localDescription && pc.localDescription.sdp;
+        const remote = pc.remoteDescription && pc.remoteDescription.sdp;
+        return {
+          ice: pc.iceConnectionState, conn: pc.connectionState,
+          localTypes: types(local), remoteTypes: types(remote),
+          local, remote,
+        };
+      },
       status: () => ({
         role, statusText,
         // How many are actually IN, not whether a handshake is in flight.
