@@ -249,6 +249,17 @@ const NetTransport = (function () {
     } catch (e) { return null; }
   }
 
+  // Does this ICE list actually contain a RELAY, as opposed to only STUN?
+  // relayOnly() is meaningless without one, and worse than meaningless — see
+  // the guard in rtc().
+  function hasTurn(list) {
+    return (list || []).some((s) => {
+      const u = s && s.urls;
+      const urls = Array.isArray(u) ? u : (u ? [u] : []);
+      return urls.some((x) => /^turns?:/i.test(String(x)));
+    });
+  }
+
   function iceServers(opts) {
     if (opts.iceServers) return opts.iceServers;
     const list = [{ urls: STUN }];
@@ -271,12 +282,33 @@ const NetTransport = (function () {
     // Report that as "unavailable" like a missing API rather than letting it
     // escape into a click handler, where it would kill the UI silently.
     let pc;
+    let iceList = null;
     try {
-      const cfg = { iceServers: iceServers(opts) };
+      const list = iceServers(opts);
+      iceList = list;
+      const cfg = { iceServers: list };
       // "relay" makes ICE discard host and srflx candidates, so the ONLY way a
       // pair can form is through TURN. If the relay path is broken, it fails
       // here rather than on a stranger's phone.
-      const policy = opts.iceTransportPolicy || (relayOnly() ? "relay" : null);
+      //
+      // BUT NEVER WITH AN EMPTY RELAY LIST. "relay" throws away host and srflx
+      // and then has nothing left to gather: zero candidates, so EVERY pairing
+      // fails — invite link and room code alike — and the failure looks exactly
+      // like a network problem. That state became reachable the moment the dead
+      // static TURN was removed and nothing replaced it: the flag PERSISTS in
+      // localStorage, so a machine that set it to test the relay leg silently
+      // became unable to connect at all. It is not a valid configuration, it is
+      // a broken one, so we refuse to build it and say so loudly rather than
+      // handing back a connection that provably cannot succeed.
+      const wantRelay = relayOnly();
+      const canRelay = hasTurn(list);
+      if (wantRelay && !canRelay) {
+        Log.warn("net", "apex26.iceRelayOnly is set but NO TURN server is configured —"
+          + " relay-only would gather zero candidates, so it is being IGNORED."
+          + " Run localStorage.removeItem('apex26.iceRelayOnly') to silence this,"
+          + " or set apex26.turnApi / apex26.turn to actually test the relay leg.");
+      }
+      const policy = opts.iceTransportPolicy || (wantRelay && canRelay ? "relay" : null);
       if (policy) cfg.iceTransportPolicy = policy;
       pc = new PC(cfg);
     } catch (e) { return null; }
@@ -360,7 +392,14 @@ const NetTransport = (function () {
       ice: pc.iceConnectionState,
       gathering: pc.iceGatheringState,
       candidates: Object.assign({}, found),
-      turn: !!turnFromStore(),
+      // Whether a relay is IN THE LIST WE ACTUALLY BUILT — not merely whether a
+      // static one is stored. A credentials URL that resolved in time puts a
+      // relay in the list without ever touching apex26.turn, and reading the
+      // store alone reported "no relay" while relay candidates were arriving,
+      // which is precisely backwards for the message the lobby prints on
+      // failure.
+      turn: hasTurn(iceList),
+      relayOnly: relayOnly(),
     });
     return ep;
   }
@@ -375,5 +414,9 @@ const NetTransport = (function () {
     // reachable decides whether the hardest ~10-25% of networks can play at
     // all, and that is not something to discover from a user's screenshot.
     STUN, prefetchIce, iceServers,
+    // Whether a relay is actually available RIGHT NOW — static, fetched, or
+    // neither. The lobby needs this to tell "relay-only is biting" apart from
+    // "relay-only is set and being ignored", which read identically otherwise.
+    hasRelay: () => hasTurn(iceServers({})),
   };
 })();

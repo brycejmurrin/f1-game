@@ -254,3 +254,57 @@ test("the invite link keeps the code in the fragment", () => {
   assert.equal(NetHandshake.inviteFromUrl("https://x.dev/?vs=nope"), null,
     "a query-string code must NOT be honoured — that one does reach the server");
 });
+
+test("relay-only with no TURN configured is refused, not obeyed", () => {
+  // THE REGRESSION THIS EXISTS FOR. iceTransportPolicy:"relay" discards host
+  // and srflx candidates, so with an empty relay list ICE gathers NOTHING and
+  // every pairing fails — invite link and room code alike — while looking
+  // exactly like a network problem.
+  //
+  // That state was unreachable while a static TURN shipped, and became
+  // reachable the moment the dead one was removed with nothing in its place.
+  // The flag lives in localStorage, so a machine that had once been told to
+  // set it to exercise the relay leg silently stopped being able to connect at
+  // all, on every path, with nothing on screen naming the cause.
+  //
+  // So the combination is treated as broken rather than as a request: the flag
+  // is ignored and the connection is built without the policy.
+  // A FRESH module instance. prefetchIce() caches the servers it fetched in
+  // module scope and nothing clears them, so the credentials-URL test above
+  // leaves a relay in the list — which is exactly the condition this test
+  // needs absent. Re-loading is cheaper than adding a reset hook that only
+  // tests would ever call.
+  const Net = load("js/net/transport.js", "NetTransport");
+  const seen = [];
+  const stubPc = function (cfg) {
+    seen.push(cfg);
+    this.createDataChannel = () => ({});
+    this.close = () => {};
+  };
+  global.RTCPeerConnection = stubPc;
+  global.Log = { warn: () => {}, info: () => {}, debug: () => {}, enabled: () => false };
+  const store = { "apex26.iceRelayOnly": "true" };
+  global.localStorage = { getItem: (k) => (k in store ? store[k] : null) };
+  try {
+    Net.rtc({ name: "t" });
+    assert.equal(seen.length, 1, "a peer connection should still be built");
+    assert.equal(seen[0].iceTransportPolicy, undefined,
+      "relay-only must be IGNORED when no TURN server is configured");
+    assert.equal(Net.hasRelay(), false, "no relay is configured in this state");
+
+    // With a relay actually present the flag means something again, so it must
+    // be honoured — otherwise the test leg it exists for cannot be exercised.
+    seen.length = 0;
+    store["apex26.turn"] = JSON.stringify({
+      urls: "turn:relay.example:3478", username: "u", credential: "c",
+    });
+    assert.equal(Net.hasRelay(), true, "a static relay is configured now");
+    Net.rtc({ name: "t" });
+    assert.equal(seen[0].iceTransportPolicy, "relay",
+      "relay-only must be honoured once a TURN server exists");
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.Log;
+    delete global.localStorage;
+  }
+});

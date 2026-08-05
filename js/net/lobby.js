@@ -273,11 +273,21 @@ const NetLobby = (function () {
       // "Connecting…" forever with nothing on screen saying why. It did
       // exactly that to a real person who had set it on an earlier
       // instruction and had no reason to remember it.
+      //
+      // The transport now REFUSES the impossible combination (relay-only with
+      // no TURN in the list gathers nothing, so the flag is ignored), which
+      // means the two cases need different words: still set and still biting,
+      // versus still set and being overridden. Saying "TEST MODE is on" for
+      // the second would send someone hunting a problem that is not there.
       let relayNote = "";
       try {
         if (localStorage.getItem("apex26.iceRelayOnly") === "true") {
-          relayNote = " [RELAY-ONLY TEST MODE is on — run "
-            + "localStorage.removeItem('apex26.iceRelayOnly') and reload unless you are testing TURN]";
+          const relaying = NetTransport.hasRelay && NetTransport.hasRelay();
+          relayNote = relaying
+            ? " [RELAY-ONLY TEST MODE is on — run "
+              + "localStorage.removeItem('apex26.iceRelayOnly') and reload unless you are testing TURN]"
+            : " [apex26.iceRelayOnly is set but no TURN server is configured, so it is being"
+              + " IGNORED — run localStorage.removeItem('apex26.iceRelayOnly') to clear it]";
         }
       } catch (e) {}
       say("Connecting…" + relayNote);
