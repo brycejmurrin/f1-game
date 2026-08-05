@@ -113,3 +113,9 @@ or confirm the behaviour is genuinely wrong first.
 
 Only push to the active development branch; never to `main` without review. Bump,
 verify, test, then commit + `git push -u origin <branch>`.
+
+**Order (also in `AGENTS.md`):** run the **fast** gates `pick-tests` named and
+wait for those → commit → push → open/update a **draft PR** for pre-review →
+start heavy groups with `test-bg` and keep working. Do not block an agent turn
+on a SwiftShader group before the first commit/PR. Docs-only: `test:tooling-fast`
+green is enough to commit and open the draft.

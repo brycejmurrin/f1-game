@@ -18,8 +18,9 @@ node tools/verify-track.cjs <id>  # headless build check (no browser) — catche
                                   #   Fast pre-push guard for track scenery edits.
 ```
 
-**Cursor / cloud agents:** [`AGENTS.md`](AGENTS.md) is the short entry point;
-this file remains the full reference.
+**Cursor / cloud agents:** [`AGENTS.md`](AGENTS.md) is the short entry point —
+including **when to wait, commit, push, and open a draft PR**. This file remains
+the full engineering reference.
 
 ---
 
@@ -1353,8 +1354,13 @@ the wrong button.
 
 ## Git branch
 
-Work happens on a `claude/<topic>` feature branch — whichever one the current
-task names. Never push to main without review.
+Work happens on a `claude/<topic>` or `cursor/<topic>` feature branch — whichever
+one the current task names. Never push to main without review.
+
+**Agent ship order** (detail in [`AGENTS.md`](AGENTS.md) → Work loop): fast gates
+→ commit → push → **draft PR for pre-review** → heavy Playwright in the
+background (do not block the turn on SwiftShader). Docs-only diffs: wait for
+`test:tooling-fast`, then commit/push/PR — do not sit on `test:tiny`.
 
 This used to name one specific branch, which was wrong within days of being
 written and stayed wrong: a branch name is a fact about *this week*, and prose
