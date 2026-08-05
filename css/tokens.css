@@ -181,6 +181,14 @@
   --chip-h: 40px;   /* chips are secondary — one step below --tap */
   --tap-sm: 30px;   /* paired micro-toggles only — never a lone control */
   --label: 12px;    /* section label type size */
+  /* A TOUCH DEVICE GETS A BIGGER LADDER, not the desktop one. 44px is a FLOOR
+     — the smallest box Apple and WCAG will accept — and the whole ladder was
+     sitting on it, so a phone (the only place anyone actually aims a thumb)
+     got the same boxes as a mouse pointer that can hit 20px. Reported as
+     "everything has gotten smaller", and this is the half of it that is not
+     the HUD: menu buttons, list rows and tabs were all pinned at the minimum.
+     Desktop keeps the values above; a pointer that precise gains nothing from
+     bigger targets and loses rows off the screen. */
   /* THE TYPE FLOOR. No menu text may be smaller than this.
      A sweep across nine viewports found twenty-four hard-coded sizes below it —
      8px NIGHT/STREET badges on the circuit list, 9px UNIVERSAL and ▲ACCEL tags
@@ -311,6 +319,18 @@
      the bands into grain the eye reads as texture. feTurbulence in a data URI
      keeps it to one tiled 160px tile and no network request. */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* THE TOUCH LADDER. See the note beside --tap above: the values there are a
+   FLOOR, and a phone was being handed the floor. `body:not(.desktop)` is the
+   same test the in-race controls use (js/game.js adds `.desktop` when
+   Input.touchControlsNeeded() is false), so the two halves of the UI move
+   together instead of one being tuned and the other left at the minimum. */
+body:not(.desktop) {
+  --tap: 52px;
+  --chip-h: 46px;
+  --tap-sm: 36px;
+  --label: 13px;
 }
 
 /* Per-team accents (ids + colours from js/car/teams.js — vivid brand colour of
