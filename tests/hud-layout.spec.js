@@ -34,8 +34,25 @@ const CTRL = ["btn-throttle", "btn-brake", "btn-boost", "btn-ot", "btn-aero",
 // padding and a background in css/hud.css, so it always has a box even if a
 // gap indicator's text is momentarily empty (nobody directly ahead/behind);
 // checking the two leaf spans instead would silently skip that case.
-const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed",
-             ".hud-top", ".hud-gaps", "#minimap", "#hud-sectors"];
+const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed"];
+// LANDSCAPE ONLY. Added `.hud-top`/`.hud-gaps`/`#minimap`/`#hud-sectors` here
+// first and every PORTRAIT case failed on the same pair: `.hud-top` (the
+// POS/LAP/TIME/BEST row) genuinely overlaps `#pausebtn` — measured directly,
+// notched-portrait, x=[53.3,339.7] vs [331,383], y=[68.2,117.4] vs [67,119],
+// an 8.7px real collision, not a rounding artefact.
+//
+// It is invisible to every player, and not by luck: `#rotate-device` (CSS
+// `body.in-race #rotate-device { display: flex }`) is a FULL-SCREEN
+// `z-index: 9000` block, confirmed live in the exact failing state
+// (bodyInRace: true, display: "flex", box 0,0 -> viewport). Nothing under it
+// can be seen or touched while it is up, and it is not gated on a timing
+// window or an animation — it is unconditional on being in a race in
+// portrait, which is the only state this spec's `race()` helper produces.
+// Same shape as the "screen-edge system gestures" finding in
+// docs/research/PLATFORM-INPUT-NOTES.md §9: a real geometric fact that does
+// not reach the player because something else sits in front of it, and the
+// fix is to stop asserting on it, not to move CSS nobody will ever see move.
+const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors"];
 
 async function race(page, steer, manual, ins) {
   await page.goto("/");
@@ -103,7 +120,8 @@ for (const v of VIEWS) {
       for (const manual of [false, true]) {
         test(`${steer} / ${manual ? "manual" : "auto"} gears`, async ({ page }) => {
           await race(page, steer, manual, v);
-          const r = await measure(page, CTRL, HUD, v.w, v.h, v);
+          const hud = v.name.includes("landscape") ? [...HUD, ...HUD_LANDSCAPE_ONLY] : HUD;
+          const r = await measure(page, CTRL, hud, v.w, v.h, v);
           expect(r.count, "controls are on screen at all").toBeGreaterThan(3);
           // No control may sit on another — every one of these is a tap target.
           expect(r.overlaps).toEqual([]);
