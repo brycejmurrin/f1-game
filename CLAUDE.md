@@ -1355,19 +1355,23 @@ the wrong button.
 ## Git branch
 
 Work happens on a `claude/<topic>` or `cursor/<topic>` feature branch — whichever
-one the current task names. Never push to main without review.
+one the current task names. Never push to `main` without review. Never push
+feature commits straight onto the deploy branch either — open a PR.
 
 **Agent ship order** (detail in [`AGENTS.md`](AGENTS.md) → Work loop): fast gates
-→ commit → push → **draft PR for pre-review** → heavy Playwright in the
-background (do not block the turn on SwiftShader). Docs-only diffs: wait for
-`test:tooling-fast`, then commit/push/PR — do not sit on `test:tiny`.
+→ commit → push **feature branch** → **draft PR into the deploy branch** for
+pre-review → heavy Playwright in the background (do not block the turn on
+SwiftShader). Docs-only diffs: wait for `test:tooling-fast`, then
+commit/push/PR — do not sit on `test:tiny`.
 
-This used to name one specific branch, which was wrong within days of being
-written and stayed wrong: a branch name is a fact about *this week*, and prose
-has no way to notice it changed. `git branch --show-current` is the answer, and
-it cannot drift.
+This used to name one specific *feature* branch, which was wrong within days of
+being written and stayed wrong: a feature branch name is a fact about *this
+week*, and prose has no way to notice it changed. `git branch --show-current`
+is the answer for *where you are working*, and it cannot drift.
 
-**The deploy branch is a DIFFERENT branch.** `.github/workflows/pages.yml` fires
-only on a push to `claude/f1-game-project-26h3ng`, so work on any other branch
-builds and tests but does not reach https://brycejmurrin.github.io/f1-game/
-until it is merged there.
+**The deploy branch is a DIFFERENT branch, and it is the PR base.** 
+`.github/workflows/pages.yml` fires only on a push to
+`claude/f1-game-project-26h3ng`, so work on any other branch builds and tests
+but does not reach https://brycejmurrin.github.io/f1-game/ until it is
+**merged into that deploy branch**. Open PRs with
+`base=claude/f1-game-project-26h3ng` — not `main`.

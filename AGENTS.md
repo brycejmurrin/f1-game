@@ -33,10 +33,10 @@ unreviewed work.
 | **3. Fast gates** | Run whatever `pick-tests` named that finishes in seconds: usually `npm run test:tooling-fast`. Track edit → `node tools/verify-track.cjs <id>` first. Docs-only → **tooling-fast is enough** before commit. | **Yes — wait for these.** They are short. |
 | **4. Cache bump** | If you touched `js/` or `css/`: bump `?v=N` + `version.json` **last**, after tests you care about for the edit are done or backgrounded. Never mid-run. | No |
 | **5. Commit** | When the change set is coherent and fast gates are green. Descriptive message. Do **not** wait for a SwiftShader group to finish before the first commit. | No (beyond step 3) |
-| **6. Push** | `git push -u origin <branch>` after commit. Cloud agents: push so the PR can track the branch. | No |
-| **7. Open / update PR** | Create a **draft** PR after the first push (pre-review). Update the PR body when you push more commits. Do **not** wait for full browser CI before opening the draft — open it so humans can see the CL. | No |
+| **6. Push** | `git push -u origin <feature-branch>` after commit. Push the **feature branch**, not the deploy branch and not `main`. | No |
+| **7. Open / update PR** | Draft PR with **base = deploy branch** `claude/f1-game-project-26h3ng` (see [`CLAUDE.md`](CLAUDE.md) → Git branch). That is what GitHub Pages deploys from after merge — **not** `main`. Update the PR when you push more commits. Do **not** wait for full browser CI before opening the draft. | No |
 | **8. Heavy Playwright** | Start `node tools/test-bg.mjs <group>` for groups `pick-tests` named. **Arm a log monitor and keep working** (docs, next fix, commit message). One heavy group at a time on 4 cores. | **Do not block.** Come back when the log shows a verdict (`N passed` / `N failed` / `Error:`). |
-| **9. Ready for review** | Mark draft ready (or say so in the PR) when: fast gates green, required `pick-tests` groups green **or** waived with reason (e.g. docs-only), CI structural/smoke green if it has finished. | Wait only for **your** background groups / CI checks you claimed — not for idle loadavg. |
+| **9. Ready for review** | Mark draft ready when fast gates are green and required `pick-tests` groups are green **or** waived with reason. After merge into `claude/f1-game-project-26h3ng`, Pages deploys (workflow `pages.yml`). | Wait only for **your** background groups / CI you claimed — not for idle loadavg. |
 
 ### What "wait" means
 
@@ -85,7 +85,7 @@ Typical files: `AGENTS.md`, `CLAUDE.md`, `docs/**`, `.claude/skills/**` (no `js/
 - Bump `?v=N` in `index.html` **and** `version.json` together after any `js/` or `css/` change (see `bump-cache` skill).
 - Use `Log.*` in game code — not bare `console.*` (see `CLAUDE.md` → Logging).
 - Run `node tools/verify-track.cjs <id>` before pushing any track/scenery edit.
-- Open a **draft PR** after the first meaningful push so the changelist is reviewable early.
+- Open a **draft PR** after the first meaningful push, **base = `claude/f1-game-project-26h3ng`** (deploy), so the changelist is reviewable early.
 
 ### Ask first
 
@@ -101,7 +101,7 @@ Typical files: `AGENTS.md`, `CLAUDE.md`, `docs/**`, `.claude/skills/**` (no `js/
 - Run two **heavy** test groups at once on a 4-core box (`circuit`, `scenery`, `physics`, `behaviour`, `baseline`, `render`).
 - Block the agent turn on a SwiftShader group or poll `--status` in a loop.
 - Wait for "the box to feel quiet" instead of running the **fast** gate that `pick-tests` named.
-- Push to `main` without review. Deploy branch: `claude/f1-game-project-26h3ng`.
+- Push feature work straight to `main` or straight to the deploy branch without a PR. Deploy branch: `claude/f1-game-project-26h3ng` (Pages only fires on that branch — feature branches CI but do not go live until merged there).
 
 ---
 
@@ -228,7 +228,13 @@ Escalation (full rules: [`CLAUDE.md`](CLAUDE.md) → Testing workflow):
 ## Branches
 
 ```sh
-git branch --show-current    # never hardcode a branch name in docs
+git branch --show-current    # feature branch you push — never hardcode this name in docs
 ```
 
-Deploy branch (GitHub Pages): `claude/f1-game-project-26h3ng`.
+| Branch | Role |
+|---|---|
+| `cursor/…` / `claude/<topic>` | Feature work — commit and push here |
+| `claude/f1-game-project-26h3ng` | **Deploy / PR base** — GitHub Pages (`pages.yml`); merge here to ship |
+| `main` | Not the live site; do not treat it as deploy |
+
+PR base must be **`claude/f1-game-project-26h3ng`**, not `main`. See [`CLAUDE.md`](CLAUDE.md) → Git branch.
