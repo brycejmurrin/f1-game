@@ -636,6 +636,49 @@ Montreal now fails on something real that the water assertion had masked: a
 support's `minY` sits 2.72 m from `groundY` against a 0.05 m allowance.
 Deliberately left failing — it wants a fix, not a wider tolerance.
 
+### A15 — the banking reference error, and the track it deformed
+
+Monza's 0.294 and Spa's 0.525 were **one root cause, and neither was a geometry
+defect**. Both assertions measure a height against the **unbanked centreline**,
+but both circuits author `bankZones` and `buildRoad` lifts the outer edge by
+`bankOffsetAt()` (`js/track/mesh.js:139-152`). On a banked corner the centreline
+is simply not where the tarmac is.
+
+- **Monza**: frac 0.30 is inside the Lesmo 1 zone (`angleDeg: 6.0`). Lift is
+  `2·8·tan6° = 1.348 m`, so the -8 m edge stands **+0.661 m** above the
+  centreline. The terrain there is **0.366 m BELOW the tarmac**. Measured
+  against the road surface, all twelve probes land in [-0.369, -0.343] — a
+  uniform verge drop, banked and flat sections alike.
+- **Spa**: 330 hits over 94 fracs falling in exactly **eight bands that match
+  Spa's eight `bankZones` 1:1**, and **zero hits at `scale: 0`**. The entire
+  signal is cross-slope. With the banking term added `overlaps.road` is **0**;
+  the largest genuine excursion on the lap is 0.037 m against a 0.18 m budget.
+
+This trap was already known and fixed in **two** other places — inside
+`__apex.eyeAt` (`js/game/apex.js:624-631`, whose comment says the missing bank
+term "reads exactly like the ground covering the track, and is the sort of false
+alarm this hook exists to rule out") and in `tests/terrain-over-road.spec.js:162`,
+the all-circuits version of the same scan. The two foundation specs are the older
+copies that never got it.
+
+**The part that matters most: a broken measurement deformed the product.**
+`js/circuits/monza.js:77-79` caps the Parabolica at 4°, and its comment gives two
+reasons — the dropped inner edge sliding out from under the apex kerb props, AND
+"the ground-over-road probe starts reporting the verge sitting over the tarmac."
+The second reason is now void. Half the justification for a real camber value on
+a real corner was an artefact of a test that measured against the wrong plane.
+The cap was left alone (it changes grip and lap times and wants physics
+re-verification) but it should be reconsidered on its remaining merits.
+
+**Blast radius, deliberately not acted on.** Every banked circuit carries the
+same reference error at |lat| >= half-width — 0.26-0.86 m across the field, and
+**Zandvoort 2.41 m**. The other ~13 foundation specs probing at lat ±10/±11 pass
+only because their fracs happen to miss a bankZone; Spa's own second test is one
+of those (raw gap +0.425 at Pouhon, +0.365 at Stavelot). The durable fix is for
+`__apex.groundY` to return the banked road surface and an `overRoad` field so no
+spec has to rebuild a centreline. That is a `js/game/apex.js` change and is left
+as the next step rather than smuggled in here.
+
 ### Final tally
 
 **9 of 12 fixed.** Monaco, Abu Dhabi (day+night), Montreal's water count, mugello,
