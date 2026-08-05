@@ -49,13 +49,22 @@ function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) walk(p, out);
-    else if (e.name.endsWith(".js")) out.push(p);
+    else if (e.name.endsWith(".js") || e.name.endsWith(".css")) out.push(p);
   }
   return out;
 }
 
-// vendor/ is third-party and not ours to annotate.
-const FILES = walk(path.join(ROOT, "js"));
+// vendor/ is third-party and not ours to annotate. css/ IS scanned: a comment in
+// css/tokens.css cited line 8107 of a game.js that has ~8,000, and the first
+// version of this guard walked only js/ — so the one citation pointing past a
+// real end-of-file was the one it could not see. A guard scoped to where you
+// expect the rot is a guard that misses it.
+//
+// (The example above is deliberately written WITHOUT the file:line form. Spelled
+// literally it is itself a citation, and tests/docs-integrity.test.mjs — which
+// sweeps the whole repo — flagged this very line for it. Two guards, one
+// correctly catching the other's paperwork.)
+const FILES = [...walk(path.join(ROOT, "js")), ...walk(path.join(ROOT, "css"))];
 
 // Index every js/ file by full repo-relative path AND by basename, so both
 // `js/render/shaders/lit.js:344` and a bare `lit.js:344` resolve. A basename

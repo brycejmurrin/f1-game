@@ -232,19 +232,6 @@
    DIFFICULTY needed to clear the fold on a landscape phone. Columns size to
    their content and share the slack, so CORNERING gets the width it needs; if
    the pane is ever too narrow the row just wraps back to two lines. */
-#sel-stats {
-  margin-top: calc(var(--gap) * 0.7);
-  padding-top: calc(var(--gap) * 0.6);
-  border-top: 1px solid rgba(255,255,255,0.08);
-  display: flex; flex-wrap: wrap;
-  justify-content: space-between; column-gap: var(--gap); row-gap: 2px;
-  font-variant-numeric: tabular-nums;
-}
-#sel-stats .cs-stat-row { margin: 0; gap: 6px; font-size: 10px; }
-#sel-stats .cs-stat-label { width: auto; letter-spacing: 0.06em; }
-#sel-stats .cs-stat-bar-wrap { display: none; }
-#sel-stats .cs-stat-val { width: auto; font-size: 12px; }
-.sel-edit-row { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.7); margin-top: calc(var(--gap) * 0.7); }
 
 /* ONE COLUMN, the circuit list, using the whole sheet.
    This used to be a two-column grid — identity | circuit — with the action bar
@@ -469,10 +456,13 @@
 .sel-chip:active { background: rgba(255,255,255,0.14); }
 /* The selection ring is drawn INSIDE the box (inset shadow), never as an
    `outline`. An outline paints outside the border box, and these chips sit
-   flush against the inline-start edge of #sel-left — a scroll container whose
+   flush against the inline-start edge of their scroll container, whose
    overflow-x is hidden — so the leftmost chip (the selected driver, and the
    selected difficulty) had the left side of its red ring sliced clean off.
-   An inset ring cannot be clipped by any ancestor, in any layout. */
+   An inset ring cannot be clipped by any ancestor, in any layout.
+   (The container used to be #sel-left; the identity column is gone, and the
+   chips now sit in #cs-options on the garage screen. The RULE is unchanged —
+   it is the reason it is inset that matters, and that survives the move.) */
 .sel-chip.active {
   border-color: var(--red);
   background: rgba(225, 6, 0, 0.18);
@@ -491,8 +481,6 @@
 }
 .sel-edit:active { background: rgba(225,6,0,0.3); }
 h3.sel-label { font-size: var(--label); font-weight: 700; }
-#sel-left .sel-label + * { margin-bottom: var(--gap); }
-#sel-stats { font-variant-numeric: tabular-nums; }
 
 /* ---------- circuit preview ---------- */
 #sel-track-preview {
