@@ -202,6 +202,13 @@ Consequences worth keeping in mind here:
   focus ring is the cursor, so an unfocused screen is a lost user. This is
   stricter than the keyboard case, where nothing is shown until you press a key.
 
+**Gamepads do work on iOS/iPadOS** — Safari has had the Gamepad API since 10.3
+and Apple ships the standard Xbox-style mapping, so the pad path is worth
+building for tablets and not only desktops. One caveat to verify: there are
+reports of pads being recognised in a Safari **tab** but not in a **home-screen
+PWA** — the same tab-vs-standalone split as the Wake Lock bug in §9b, and worth
+testing in one sitting since they are probably the same class of gap.
+
 The one place the guidance does not apply: it advises hiding a visible back
 button when B goes back. That is a system-back-stack convention, and the
 opposite of this codebase's rule — here Escape and B press the screen's OWN
@@ -289,6 +296,79 @@ to handle: `js/game/topmodal.js` scans `dialog.screen` and this element is not
 `.screen`, so widen that selector; and a `<dialog>` carries UA defaults
 (`margin: auto`, `border`, `padding`, fit-content sizing) that its full-bleed
 `position: fixed; inset: 0` styling in `css/track-detail.css` must override.
+
+---
+
+## 9b. CONFIRMED: the screen can sleep in the middle of a race
+
+`grep` for `wakeLock` finds exactly **two** hits, both in `js/net/lobby.js`
+(`holdWake`/`dropWake`, lines ~1491-1554). The VS FRIEND waiting room keeps the
+screen awake. **A race does not.**
+
+So on any phone or tablet the system idle timer runs during a Grand Prix and the
+display dims, then locks. Severity depends on how you steer, and the worst case
+is the one this game is proudest of:
+
+| steer mode | events reaching the OS while driving | outcome |
+|---|---|---|
+| **tilt** | **none at all** — orientation is a sensor read, not user input | idle timer never resets; screen dims mid-race |
+| touch / buttons | a `touchstart` and then a long *hold* | a hold is one event, not continuous activity |
+| keyboard / pad | desktop; idle timer is not the same problem | fine |
+
+Tilt is the mode with no input events by construction, so it is the one that
+will always time out.
+
+The API is available where it matters — Screen Wake Lock reached Safari/iOS
+**16.4** and is now in every major browser. And the pattern is already written
+in this repo: `lobby.js` requests `"screen"`, tolerates rejection, and — the
+part that is easy to miss — **re-acquires on `visibilitychange`**, because the
+platform releases the lock whenever the page is hidden and does not give it
+back. Copy that shape; do not write a second one.
+
+One caveat to verify on hardware: WebKit bug **254545** reports the Wake Lock
+API working in a Safari tab but **not** in a home-screen PWA. Sources conflict
+(iOS 16.4's release notes claim home-screen support). If it does fail there,
+it fails in the exact host most likely to be used for a long session.
+
+---
+
+## 9c. CONFIRMED: Low Power Mode makes the game degrade itself for nothing
+
+**iOS throttles `requestAnimationFrame` to 30 fps in Low Power Mode.** Well
+attested — WebKit bug 173434 discusses it as intended behaviour, and it applies
+to CSS animations too. Low Power Mode is not rare: it turns itself on at 20 %
+battery and plenty of people simply leave it on.
+
+Now read `js/game/perf.js` against that. The governor:
+
+- downscales the render resolution when the frame EMA is **> 19 ms**;
+- having downscaled, HOLDS (`_downHold`) and only creeps back up under sustained
+  headroom of **< 12.5 ms**;
+- and when the scale floor is reached, starts **shedding features** — env probe,
+  lamp shadows and SSR, the car's sun shadow, then SSAO, god rays and bloom.
+
+A 30 fps cap is a **33 ms** frame. That is nowhere near 19 ms, so the governor
+downscales immediately; and it can never reach 12.5 ms no matter how much it
+sheds, because the clock is clamped externally and has nothing to do with how
+long the frame took to draw. The ladder therefore runs all the way to the
+bottom and stays there.
+
+**The result on a phone in Low Power Mode is that the game drives its own
+resolution to the floor and switches off every optional effect, permanently, in
+response to a battery policy rather than a performance problem.** Nothing in
+the UI explains it, and it looks exactly like "this game runs badly on iOS".
+
+The distinction the governor is missing is **slow vs capped**. A genuine fill-
+rate bottleneck gets *better* when you cut resolution; an externally clamped
+clock does not move at all. So the honest guard is a causal one: after a
+downscale, if the EMA does not improve by a meaningful margin, the bottleneck
+is not fill rate — revert and stop climbing down. (A capped clock also shows a
+tell in the distribution: frame times pinned tightly to a multiple of the vsync
+interval rather than varying with scene load.)
+
+This is out of scope for a controls pass and is written down rather than fixed.
+It is, on measured impact, probably the largest single mobile-quality defect in
+the codebase.
 
 ---
 
