@@ -93,6 +93,25 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // index.html registers sw.js unconditionally, and Playwright's default
+    // (serviceWorkers: 'allow') lets it actually install in every headless
+    // context. No spec asserts on real SW behaviour — the one that does,
+    // tests/service-worker.test.mjs, runs sw.js in a node:vm harness, not a
+    // browser — so there is nothing here for a live worker to verify and only
+    // a race for it to cause: tests/steer-migration.spec.js's ten-reload test
+    // hit an intermittent `Log is not defined` / `M4 is not defined` on the
+    // FIRST two <script> tags under load (2 confirmed failures, both only
+    // when run inside the full `steering` group with a sibling worker also
+    // driving Chromium; the same spec passed 8/8 run alone on an idle box).
+    // The shape — an early, unrelated global randomly missing, only under CPU
+    // contention, only across many rapid page.reload()s in one context — is
+    // the SW install/activate lifecycle (its own precache fetches racing the
+    // page's <script src> loads) getting starved long enough to lose one,
+    // which a plain script tag failure does not halt the parser for (skip and
+    // continue), so a later script that reads the missing global throws
+    // instead of the page just failing to load. Blocking registration removes
+    // the race outright rather than papering over it with a longer timeout.
+    serviceWorkers: 'block',
   },
   projects: [
     {
