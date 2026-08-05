@@ -385,12 +385,18 @@ body:not(.desktop) {
    insets in hud.css already do this by hand (`var(--sat) / var(--hud-scale)`) —
    same correction, same reason.
 
-   Both are divided by --ui-scale: every viewport-unit site inside a zoomed
-   subtree today is in the MENU layer. A HUD-layer one would need a --hud-scale
-   twin; add it then rather than now, so there is no unused token to keep true. */
+   There are TWO PAIRS because there are two scales. The `z` pair is the MENU
+   layer (--ui-scale: .sheet, #overlay > *); the `zh` pair is the DRIVING layer
+   (--hud-scale: the HUD clusters, .dock). Using the wrong one is worse than
+   using none — it divides by a number the player can move independently.
+   The audit that found this turned up exactly one HUD-layer site, #announce's
+   font-size in hud.css, whose `top` on the line above was already divided by
+   --hud-scale by hand while its 8vw was not. */
 :root {
-  --vwz:  calc(1vw  / var(--ui-scale));
-  --svhz: calc(1svh / var(--ui-scale));
+  --vwz:   calc(1vw  / var(--ui-scale));
+  --svhz:  calc(1svh / var(--ui-scale));
+  --vwzh:  calc(1vw  / var(--hud-scale));
+  --svhzh: calc(1svh / var(--hud-scale));
 }
 
 /* Per-team accents (ids + colours from js/car/teams.js — vivid brand colour of

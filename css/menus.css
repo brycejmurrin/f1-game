@@ -55,7 +55,7 @@
   overflow: auto;
 }
 #title {
-  font-size: clamp(34px, 9vw, 92px);
+  font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
   color: var(--text);
   text-shadow: 0 0 36px rgba(225, 6, 0, 0.75), 0 2px 12px rgba(0, 0, 0, 0.8);
 }
@@ -170,7 +170,7 @@
   }
   #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
   #menu-buttons { grid-column: 2; grid-row: 1; align-self: center; width: auto; }
-  #title { font-size: clamp(26px, 7.5vw, 48px); }
+  #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
   #subtitle { margin: 8px 0 0; font-size: 13px; }
   #menu-meta { margin-top: 12px; gap: 4px; }
   #audiostate { font-size: 11px; }
@@ -664,7 +664,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* In the single-column layout the list is capped so it cannot push the sheet's
    own body into a long scroll — the list scrolls, the screen does not. */
 @container sheet (max-width: 619px) {
-  #sel-tracks { max-height: min(40svh, 300px); overflow-y: auto; }
+  #sel-tracks { max-height: min(calc(40 * var(--svhz)), 300px); overflow-y: auto; }
 }
 .track-row {
   display: flex; align-items: baseline; gap: 8px;

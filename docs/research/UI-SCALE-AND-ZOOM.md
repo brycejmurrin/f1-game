@@ -6,8 +6,9 @@ Research behind the UI SIZE / HUD SIZE sliders and the component restructure
 Dated August 2026.
 
 The short version: `zoom` is a legitimate, standardised mechanism and the right
-retrofit for a UI that is 58 % raw px. It has **exactly two sharp edges**, both
-found here, both now fixed or registered. Neither is a reason to abandon it —
+retrofit for a UI that is 58 % raw px. It has **two sharp edges**, both found
+here, both now fixed or registered — and a full sweep afterwards turned up 30
+viewport-unit sites and four coordinate-space sites, so the edges are wide. Neither is a reason to abandon it —
 but the second one is the strongest argument for eventually retiring it.
 
 ---
@@ -57,9 +58,11 @@ computed, and the damage happens after.
 while the px cap still scales. Verified after: rendered width pinned at 306.5px
 and horizontal overflow 0 at 80/100/115/130/150 %, in both orientations.
 
-Both tokens divide by `--ui-scale` because every viewport-unit site inside a
-zoomed subtree today is in the **menu** layer. A HUD-layer one would need a
-`--hud-scale` twin — add it then, not now.
+There are now TWO pairs, because there are two scales: `--vwz`/`--svhz` divide
+by `--ui-scale` (menu layer) and `--vwzh`/`--svhzh` by `--hud-scale` (driving
+layer). The HUD twin was added when the sweep found its one consumer,
+`#announce`'s font-size. **Using the wrong pair is worse than using none** — it
+divides by a number the player can move independently.
 
 ### The general rule
 
@@ -90,10 +93,15 @@ rect from inside a zoomed subtree with a coordinate from outside one, and are
 therefore wrong on pre-26.4 iOS **by default**, because `--ui-scale` ships at
 1.15 on a coarse pointer:
 
-- `js/data/telemetry.js:942` — `attachScrub()` maps `ev.clientX` (real viewport
-  px) through a canvas rect taken inside `.sheet`.
-- `js/game.js:5139` — the garage lens shift divides `#cs-inner`'s rect width by
-  the **unzoomed** canvas's `clientWidth`.
+**A13's first draft named `js/data/telemetry.js:942` and was WRONG** — the data
+hub is a top-level div, carries no `.sheet`, and `css/data.css` has no `zoom` at
+all, so that scrubber reads both values from the same unzoomed space. Corrected
+in the register. The lesson generalises: *a rect near a zoom is not the defect;
+mixing two spaces is.* The confirmed sites are `js/game.js:5139` (garage lens
+shift) and `js/game/menunav.js:114` (`nearestPane`), plus two that are wrong on
+**every** engine rather than only WebKit — `js/game/sheetshape.js:57` and
+`js/game/menunav.js:132`. See A13/A14 for the full list and why one shared
+helper cannot fix all four.
 
 **`element.currentCSSZoom` is the clean fix** and is available (measured: 1.3
 reports `1.2999999523162842` — note the float, so compare with a tolerance,
@@ -201,6 +209,80 @@ raw font-sizes, migrated **one file per commit** with a before/after size dump s
 each commit is provably a no-op or a deliberate change.
 
 ---
+
+## 5b. The full viewport-unit sweep — 30 live sites
+
+A complete audit of `css/*.css` after the `--vwz` fix landed: **52 viewport-unit
+declarations**, of which 18 are outside every zoomed subtree and correct as-is,
+2 are the token definitions, 2 were already hand-compensated (`hud.css:176`,
+`:189`), and **30 are live bug sites**. Every "phone" row is broken at the
+*shipped default*, not only when the slider is raised.
+
+Fixed in this pass (the HIGH tier):
+
+| site | was | why it mattered |
+|---|---|---|
+| `hud.css:190` `#announce` | `clamp(30px, 8vw, 64px)` | **needed a HUD-scale token that did not exist.** The `top` on the line above already divided by `--hud-scale`; the type did not. `nowrap` + centring translate meant the longest banner ran off both edges of a 667px landscape phone. Verified after: pinned at 8.00vw at 115 % and 150 % |
+| `menus.css:58`, `:173` `#title` | `clamp(34px, 9vw, 92px)`, `clamp(26px, 7.5vw, 48px)` | the wordmark, on the first screen of the game; `#overlay` is `overflow: auto`, so an over-wide title forces horizontal scroll |
+| `menus.css:667` `#sel-tracks` | `min(40svh, 300px)` | first `--svhz` consumer. 40svh → 60svh at 1.5, defeating the cap that stops the list pushing the pinned START foot off |
+| `responsive.css:92`, `:110` | `clamp(320px,24vw,420px)`, `min(66vw,520px)` | the *same selector group* already fixed twice in `menus.css` — a straight completeness gap |
+
+**Deferred, and harder than they look — two custom properties are read from both
+a zoomed and an unzoomed element**, so the division belongs at the *consumption*
+site, not the declaration:
+
+- `--dock-w` (`tuner.css:21/30/372`) is consumed zoomed by `#lighting-inner` /
+  `#camtune-inner` (both `.sheet`) and unzoomed by `#pc-bar` / `.pc-altcol`
+  (photo-mode controls, which `hud.css:31-33` explicitly excludes from zoom).
+  The variable exists precisely so the free-cam controls know the panel's real
+  width, and at any scale ≠ 1 that contract breaks **even on its pure-px
+  branches** — the panel paints 437px while `#pc-bar` reserves 380.
+- `--cs-sheet-w` (`carsetup.css:44/59/72`) is consumed zoomed by `#cs-inner` and
+  unzoomed by `#cs-stack`. `54vw` governs at 796–926px — i.e. **852×393, the
+  game's primary shape**. The camera bar slides under the panel, which is the
+  exact bug the variable was introduced to kill.
+
+## 5c. Anchor positioning and the Popover API — worth it, but verify first
+
+The hand-computed `#campicker` offsets (`top: calc(8px + var(--tap) +
+var(--sat))`) are the textbook case for CSS anchor positioning, and the Popover
+API would replace the `hidden`-attribute plumbing at the same time. MDN states
+the association is **implicit** for a popover and its invoker:
+
+> Associating any kind of popover with its invoker creates an implicit anchor
+> reference between the two … an explicit association does not need to be made
+> using the `anchor-name` and `position-anchor` properties.
+
+Popover also gives, for free, what `AriaState` currently hand-maintains: an
+implicit `aria-details`/`aria-expanded` relationship, focus order that follows
+the popover, Esc-to-close returning focus to the invoker, and light dismiss.
+Note the ARIA half only comes via the **declarative** `popovertarget` path — a
+JS `showPopover()` gets the focus change and not the ARIA relationship.
+
+**Three reasons not to rush it:**
+
+1. **No evidence either way about `zoom`.** Neither MDN page mentions `zoom`,
+   `transform`, or any containing-block-establishing property in relation to
+   anchor positioning. With four zoomed subtrees this is the highest-risk
+   unknown and must be tested on a device, not assumed.
+2. **Both features fail SILENTLY.** `anchor()` takes a `<fallback>` length used
+   "if the element is not absolutely or fixed positioned … or the anchor element
+   doesn't exist", and an unsupported popover simply no-ops. On iOS that reads
+   as a mispositioned panel — the exact class of bug that has already shipped
+   twice here.
+3. **No version numbers.** MDN gives no Baseline statement and no Safari/iOS
+   version for either feature. Third-party posts claim Baseline 2026; that is
+   not a source we should ship against without checking.
+
+The UA stylesheet also fights anchoring (`inset: 0; margin: auto`), so a popover
+needs `margin: 0; inset: auto` reset before any `anchor()` placement takes.
+
+**Not yet used here and worth considering in B1/B2:** native CSS nesting (no
+build step, Baseline widely available — pure ergonomics for a 4600-line
+stylesheet), `subgrid` (aligning card internals across a row, which the garage
+and select screens both want), and `text-wrap: balance`. The repo already has
+`@layer` (29 uses), `@container` (29), `:has()` (10), `color-mix()` (19) and
+`oklab` (40), so it is not behind — the gaps are narrow and specific.
 
 ## 6. Tooling notes
 
