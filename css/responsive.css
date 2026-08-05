@@ -168,7 +168,15 @@ body.desktop #pm-calib { display: none !important; }
 .rotate-inner p { margin: 0; font-size: 1.1rem; letter-spacing: 0.05em; }
 .rotate-inner small { opacity: 0.6; font-size: 0.8rem; }
 
-@media (orientation: portrait) {
+/* GUARDED ON THE DEVICE, NOT JUST THE SHAPE. `orientation: portrait` is nothing
+   more than height > width, so this opaque z-9000 sheet also fired on a rotated
+   1080x1920 monitor and on any desktop window dragged taller than it is wide —
+   mid-race, over the canvas and #pausebtn, with a mouse that has no way to
+   "rotate" anything. `pointer: coarse` asks whether this is a device you HOLD;
+   the 743px ceiling then keeps it to phones, since the narrowest iPad portrait
+   (744 CSS px, the mini) is wide enough to race in and the widest phone (430)
+   is not. */
+@media (orientation: portrait) and (pointer: coarse) and (max-width: 743px) {
   body.in-race #rotate-device { display: flex; }
 }
 

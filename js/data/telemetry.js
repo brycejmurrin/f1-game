@@ -945,14 +945,35 @@ const DataTelemetry = (function () {
       view.cursorT = clamp((bx - PADL) / ((canvas.width - PADL - PADR) || 1), 0, 1) * view.tMax;
       paintFrame(view);
     }
+    /* ONE POINTER OWNS THE SCRUB, AND IT HAS TO SURVIVE A CANCEL.
+       `ev.buttons` is the mouse's question — a touch drag reports 1 while down,
+       which worked, but nothing here released the capture or noticed the drag
+       being taken away. On iPadOS the hub's own scroller claims a vertical drag
+       over the chart and Safari answers with `pointercancel` and no
+       `pointerup`, so the scrub died mid-gesture and the panel scrolled
+       instead. `touch-action: none` on the canvas (css/data.css) is what
+       actually stops that claim — setPointerCapture never did — and tracking
+       the pointerId is what keeps a second finger from yanking the cursor. */
+    let pid = null;
     canvas.addEventListener("pointerdown", function (ev) {
+      if (pid !== null) return;
+      pid = ev.pointerId;
       pauseAnim(view);
-      canvas.setPointerCapture && canvas.setPointerCapture(ev.pointerId);
+      try { canvas.setPointerCapture && canvas.setPointerCapture(pid); } catch (e) {}
       at(ev);
     });
     canvas.addEventListener("pointermove", function (ev) {
-      if (ev.buttons) at(ev);
+      if (ev.pointerId !== pid) return;
+      at(ev);
     });
+    function endScrub(ev) {
+      if (pid === null || (ev && ev.pointerId !== pid)) return;
+      try { canvas.releasePointerCapture && canvas.releasePointerCapture(pid); } catch (e) {}
+      pid = null;
+    }
+    canvas.addEventListener("pointerup", endScrub);
+    canvas.addEventListener("pointercancel", endScrub);
+    canvas.addEventListener("lostpointercapture", endScrub);
   }
 
   function playAnim(view) {

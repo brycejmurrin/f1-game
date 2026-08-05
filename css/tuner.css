@@ -16,9 +16,27 @@
    One variable, declared where the width is decided, and nothing can drift
    again. It is 0 when no panel is docked, so the free-cam layout falls back to
    the full-width arrangement with no extra rule. */
-:root { --dock-w: 0px; }
+:root { --dock-w: 0px; --dock-px: 0px; }
 body:has(#lighting:not([hidden])),
-body:has(#camtune:not([hidden])) { --dock-w: min(88vw, 380px); }
+body:has(#camtune:not([hidden])) {
+  --dock-w: min(88vw, 380px);
+  /* WHAT THE PANEL PAINTS, WHICH IS NOT WHAT IT DECLARES — use this, not
+     --dock-w, to position anything against the dock.
+     #lighting-inner is a `.sheet`, and css/components.css puts
+     `zoom: var(--ui-scale)` on every sheet, so BOTH its width and its `right`
+     inset are expressed in the zoomed local space: the panel really covers
+     (--dock-w + 8px + --sar) x --ui-scale pixels in from the right edge.
+     --ui-scale is 1 with a mouse and 1.15 by default under `(pointer: coarse)`
+     (css/tokens.css), so the un-scaled arithmetic was exact on every desktop
+     and wrong by 15-30% on a touch screen — which is how the free-cam LOOK
+     stick and climb/dive column ended up sitting on the panel on an iPad, and
+     only on an iPad.
+     Declared here beside --dock-w on purpose: a custom property resolves its
+     var() references against this element's own computed values, so the
+     flying override and the wide-rail override below both flow through without
+     repeating this formula. */
+  --dock-px: calc((var(--dock-w) + 8px + var(--sar)) * var(--ui-scale));
+}
 /* FLYING: the dock gives width back to the controls, at every size.
    `:has()` takes the specificity of its argument, so `body:has(#lighting…)` is
    ID-level — a plain `body.photo-mode` override loses to it no matter how many

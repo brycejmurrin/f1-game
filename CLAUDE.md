@@ -626,7 +626,26 @@ js/game/         — game modules (each created with the G ctx façade from game
                                   wheel/trackpad gesture that lands outside a pane
                                   into the open menu's nearest pane, and moves focus
                                   with the arrow keys / Home / End / PageUp / PageDown
-  photomode.js   Photomode      photo mode
+  uilayers.js    UiLayers       THE LAYER STACK — the one answer to "which screen
+                                  is on top", asked by menunav.js (which pane do
+                                  the arrows move), input.js (may a key drive the
+                                  car) and topmodal.js (what does Escape close).
+                                  Was three hand-maintained lists that drifted by
+                                  five screens. top() ranks a showModal() dialog
+                                  ABOVE every z-index, because the top layer is
+                                  not orderable by z-index and parseInt("auto")
+                                  is NaN — that bug handed the arrow keys to
+                                  whatever screen sat behind the open modal.
+                                  ESCAPE IS "BACK": every layer names the control
+                                  Escape should press with data-esc-close in
+                                  index.html (data-esc="none" refuses), and it
+                                  only means PAUSE when a race is running with
+                                  nothing on top of it — inRace() comes from
+                                  game.js via setRaceGetter, never re-derived
+  photomode.js   Photomode      photo mode — the LIGHTING/CAMERA TUNER's FREE
+                                  CAMERA, not a separate screen. #photo-controls
+                                  is a layer above the panel, so Escape steps out
+                                  of the fly-cam and leaves the panel open
   tuner.js       TunerPanel     LIGHTING TUNER pause-menu panel
   cam-tuner.js   CamTunerPanel  CAMERA TUNER pause-menu panel
   steer-tuning.js  SteerTuning  ADVANCED STEERING panel

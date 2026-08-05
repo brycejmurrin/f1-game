@@ -82,12 +82,69 @@ async function expectNormalRaceControls(page) {
 test.describe("Lighting tuner — pause lifecycle", () => {
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
-  test("Escape leaves tuner-owned photo mode and restores race controls", async ({ page }) => {
+  // ESCAPE IS ONE STEP BACK, not the emergency exit it used to be. It called
+  // setPaused(false), which threw away the fly-cam, the tuner panel AND the
+  // pause in a single press — three screens for one key. #photo-controls is a
+  // layer in its own right now (js/game/uilayers.js) carrying
+  // data-esc-close="pc-exit", so the first press lands you back on the panel
+  // you opened the camera from. The pause key and gamepad Start below keep the
+  // old all-the-way-out behaviour, which is the point of the distinction.
+  test("Escape leaves tuner-owned photo mode and leaves the tuner open", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openLightingPhotoMode(page);
     await page.keyboard.press("Escape");
-    await expectNormalRaceControls(page);
+    await expect(page.locator("body")).not.toHaveClass(/photo-mode/);
+    await expect(page.locator("body")).toHaveClass(/lt-open/);
+    expect(await page.evaluate(() => document.getElementById("lighting").hidden)).toBe(false);
+    expect(await page.evaluate(() => document.getElementById("photo-controls").hidden)).toBe(true);
+  });
+
+  // …and pressing it again walks the rest of the way out, one screen per press.
+  test("Escape walks free cam -> tuner -> settings -> pause -> racing", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openLightingPhotoMode(page);
+    const where = async () => page.evaluate(() => {
+      const $ = (id) => document.getElementById(id);
+      return {
+        photo: document.body.classList.contains("photo-mode"),
+        lighting: !$("lighting").hidden,
+        settings: !$("pmsettings").hidden,
+        pause: !$("pausemenu").hidden,
+      };
+    });
+    await page.keyboard.press("Escape");
+    expect(await where()).toEqual({ photo: false, lighting: true, settings: false, pause: false });
+    await page.keyboard.press("Escape");
+    expect(await where()).toEqual({ photo: false, lighting: false, settings: true, pause: false });
+    await page.keyboard.press("Escape");
+    expect(await where()).toEqual({ photo: false, lighting: false, settings: false, pause: true });
+    await page.keyboard.press("Escape");
+    expect(await where()).toEqual({ photo: false, lighting: false, settings: false, pause: false });
+  });
+
+  /* ESCAPE MUST BE ABLE TO PAUSE AT ALL, which is not as obvious as it sounds:
+     #pausemenu is a <dialog>, so opening it from a keydown handler hands Chrome
+     a close-watcher mid-keypress and the watcher consumes the KEYUP of the very
+     Escape that opened it. Measured before the fix: shown on keydown, hidden
+     again on keyup, i.e. one press did nothing at all. js/game/input.js
+     preventDefaults the Escape it spends on PAUSE, which suppresses the close
+     request. Without that line this test fails and the ladder above still
+     passes, so it earns its place. */
+  test("Escape pauses a running race, and the menu survives the keyup", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+    await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40, 0); });
+    await page.waitForTimeout(400);
+    // focus must be off the pause BUTTON, or this measures the button's own key
+    // handling rather than the global one.
+    await page.evaluate(() => document.activeElement && document.activeElement.blur && document.activeElement.blur());
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => document.getElementById("pausemenu").hidden)).toBe(false);
   });
 
   test("pause key leaves tuner-owned photo mode and restores race controls", async ({ page }) => {
@@ -115,6 +172,137 @@ test.describe("Lighting tuner — pause lifecycle", () => {
     });
     await expectNormalRaceControls(page);
   });
+});
+
+/* THE FREE CAMERA'S TOUCH CONTROLS — the half of the tuner nothing had ever
+   exercised. Everything above drives photo mode's LIFECYCLE (does it open, does
+   it close); nothing pressed #pc-move or #pc-look or asserted that photoMove /
+   photoLook ever became non-zero, so the sticks could break outright and CI
+   would stay green. They did break, on iPad specifically, and each test here
+   pins one of the reasons.
+
+   Pointer events are dispatched rather than driven through page.touchscreen
+   because these are about the HANDLERS' bookkeeping — which pointer owns a
+   drag, what happens when one is taken away mid-hold — and that needs pointerId
+   control the high-level helper does not offer. */
+test.describe("Lighting tuner — free camera touch controls", () => {
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
+
+  // Press a stick `dy` px above its centre and report what the handler stored.
+  const pressStick = (page, id, dy) => page.evaluate(({ id, dy }) => {
+    const el = document.getElementById(id);
+    const r = el.getBoundingClientRect();
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const opts = (cy) => ({ pointerId: 7, pointerType: "touch", isPrimary: true,
+      bubbles: true, cancelable: true, clientX: x, clientY: cy, buttons: 1 });
+    el.dispatchEvent(new PointerEvent("pointerdown", opts(y)));
+    el.dispatchEvent(new PointerEvent("pointermove", opts(y + dy)));
+    return { rect: { w: r.width, h: r.height }, nub: el.querySelector(".pc-nub").style.transform };
+  }, { id, dy });
+
+  test("a touch drag on the MOVE stick registers", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openLightingPhotoMode(page);
+    const res = await pressStick(page, "pc-move", -30);
+    expect(res.rect.w, "the stick is laid out and hittable").toBeGreaterThan(10);
+    // The nub tracking the finger is the observable proof the handler ran to
+    // completion — it is set on the same line that writes the movement vector,
+    // AFTER the setPointerCapture that used to be able to throw and abort here.
+    expect(res.nub).toMatch(/translate\(0px, *-\d/);
+  });
+
+  /* THE LATCH. css/hud.css display:none's the whole overlay the moment a
+     .screen.dim opens, and HIDE HUD does the same — both can fire with a thumb
+     down. A touch pointer holds IMPLICIT capture, so removing the element loses
+     the capture instead of delivering a pointerup: the vector kept its last
+     value and updatePhotoCam flew the camera away for good, with no control
+     left on screen to stop it. wirePhotoStick listens for lostpointercapture. */
+  test("a stick taken away mid-hold does not latch the camera on", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openLightingPhotoMode(page);
+    await pressStick(page, "pc-move", -30);
+    const held = await page.evaluate(() => document.querySelector("#pc-move .pc-nub").style.transform);
+    expect(held, "the stick is held before we yank it").toMatch(/translate\(0px, *-\d/);
+
+    const after = await page.evaluate(async () => {
+      const el = document.getElementById("pc-move");
+      // What the CSS does when a modal opens over the fly-cam.
+      document.getElementById("photo-controls").style.display = "none";
+      el.dispatchEvent(new PointerEvent("lostpointercapture", { pointerId: 7, bubbles: true }));
+      await new Promise((r) => setTimeout(r, 50));
+      return el.querySelector(".pc-nub").style.transform;
+    });
+    expect(after).toBe("translate(0,0)");
+  });
+
+  /* THE CANCELLED DRAG. iOS fires pointercancel with no pointerup whenever the
+     system claims a touch. photoMouse.drag latched true, and because the window
+     pointermove handler accepted ANY pointer, the finger working a thumbstick
+     then also fed the look-drag and the view whipped between two positions —
+     which reads as "the sticks don't work". */
+  test("a cancelled scene drag releases, and a foreign pointer cannot move it", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openLightingPhotoMode(page);
+    // camState() is the observable: the fly-cam publishes through dbgCam, so
+    // "did that pointer move the view" is answerable without reading privates.
+    const eye = () => page.evaluate(() => window.__apex.camState().eye.slice());
+    const settle = () => page.waitForTimeout(250);
+
+    const ev = (type, id, x, y, onCanvas) => page.evaluate(({ type, id, x, y, onCanvas }) => {
+      const target = onCanvas ? document.getElementById("game") : window;
+      target.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: "touch",
+        isPrimary: true, bubbles: true, cancelable: true, clientX: x, clientY: y, buttons: 1 }));
+    }, { type, id, x, y, onCanvas });
+
+    // A drag owned by pointer 3 must ignore pointer 9 entirely.
+    await ev("pointerdown", 3, 400, 200, true);
+    const before = await eye();
+    await ev("pointermove", 9, 760, 340, false);
+    await settle();
+    expect(await eye(), "a pointer that never touched the canvas must not steer the view")
+      .toEqual(before);
+
+    // Cancel with no pointerup — the iOS case — must release the drag.
+    await ev("pointercancel", 3, 400, 200, true);
+    await ev("pointermove", 3, 820, 420, false);
+    await settle();
+    expect(await eye(), "a cancelled drag is over; later moves are inert").toEqual(before);
+  });
+
+  /* THE LAYOUT, and the one bug that could only ever show on a touch device.
+     #lighting-inner is a `.sheet`, and css/components.css puts
+     `zoom: var(--ui-scale)` on every sheet — so the panel PAINTS --dock-w x
+     --ui-scale wide, while css/hud.css positioned the LOOK stick and the
+     climb/dive column from the unscaled --dock-w. --ui-scale is 1 with a mouse
+     and 1.15 by default under `(pointer: coarse)`, so the arithmetic was exact
+     on every desktop and short by 15-30% on an iPad: measured, the stick
+     cleared the panel by ~13px at 115% and sat ON it at UI SIZE 130%. */
+  for (const scale of ["1", "1.15", "1.3"]) {
+    test(`the LOOK stick clears the tuner panel at UI scale ${scale}`, async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await openLightingPhotoMode(page);
+      const box = await page.evaluate((s) => {
+        document.documentElement.style.setProperty("--ui-scale", s);
+        // force layout after the custom-property change
+        void document.body.offsetWidth;
+        const panel = document.getElementById("lighting-inner").getBoundingClientRect();
+        const look = document.getElementById("pc-look").getBoundingClientRect();
+        const alt = document.querySelector(".pc-altcol").getBoundingClientRect();
+        return { panelLeft: panel.left, panelW: panel.width, lookRight: look.right, altRight: alt.right };
+      }, scale);
+      expect(box.panelW, "the panel is actually laid out").toBeGreaterThan(10);
+      expect(box.lookRight,
+        `LOOK stick (right ${box.lookRight}) must stay left of the panel (left ${box.panelLeft})`)
+        .toBeLessThanOrEqual(box.panelLeft);
+      expect(box.altRight,
+        `climb/dive column (right ${box.altRight}) must stay left of the panel (left ${box.panelLeft})`)
+        .toBeLessThanOrEqual(box.panelLeft);
+    });
+  }
 });
 
 // hasTouch prevents game from adding body.desktop class (which hides steer/calib btns)

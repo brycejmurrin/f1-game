@@ -24,19 +24,11 @@
 // position indicator stay honest).
 window.MenuNav = (function () {
 
-  // The menu LAYERS. One of these being visible is what "a menu is open" means —
-  // js/game/input.js asks the same question before it lets a key drive the car.
-  // #overlay is the main menu; the rest are the `.screen` overlays plus the two
-  // full-screen panels that are not `.screen` (#track-detail, #datahub).
-  const LAYER_IDS = ["overlay", "pausemenu", "pmsettings", "select", "career", "career-offers",
-    "career-history", "career-guide", "teampicker", "race-settings", "quali", "standings", "results", "customize",
-    "carsetup", "howtoplay", "advanced", "track-detail", "datahub"];
-  // `:not([hidden])` belongs IN the selector rather than in a filter after it.
-  // Every one of these overlays is opened and closed with the hidden attribute, so
-  // mid-race the query matches nothing and no element is ever measured. That is
-  // the hot path: a held arrow key repeats keydown ~30x a second, and the version
-  // that measured all fourteen first forced a style recalc on every repeat.
-  const LAYERS = LAYER_IDS.map((id) => "#" + id + ":not([hidden])").join(",");
+  // The menu LAYERS and "which one is on top" both live in js/game/uilayers.js
+  // now — js/game/input.js and js/game/topmodal.js ask the same module the same
+  // question, which is the whole point of it. This file used to carry its own
+  // copy of the list, and the copies drifted by five screens.
+  const UL = window.UiLayers;
 
   // Scroll regions, same list ScrollFade watches — `.pane` first and by class,
   // because that is the design system's own name for "a scroll region".
@@ -50,29 +42,19 @@ window.MenuNav = (function () {
   const LINE_PX = 16;
   const PAGE_FRAC = 0.9;       // PageUp/PageDown move just under a screenful
 
-  // A zero box is the real test, not the hidden attribute: it also catches an
-  // element inside a display:none ancestor, a control in a collapsed section, and
-  // the several buttons index.html ships hidden and reveals per game mode.
-  function shown(el) {
-    if (!el || el.hidden) return false;
-    const r = el.getBoundingClientRect();
-    if (r.width < 1 || r.height < 1) return false;
-    return getComputedStyle(el).visibility !== "hidden";
-  }
+  const shown = UL.shown;          // a zero box, not the hidden attribute
 
-  // The topmost open menu. Layers stack (the team picker sits over the select
-  // screen, the pause settings over the pause menu), and z-index is how the CSS
-  // already expresses that order; DOM order breaks the ties.
+  /* THE FREE CAMERA IS NOT A MENU, and this is the one layer MenuNav has to
+     refuse. In the tuner's fly-cam the arrow keys PITCH AND YAW the camera
+     (js/game/photomode.js) — but that handler is added when free-cam opens,
+     which puts it AFTER this one among window-capture listeners, so whatever
+     MenuNav does with an arrow happens first. Left to itself it would walk
+     focus around the fly-cam's own EXIT/FOV buttons and preventDefault the key
+     before the camera ever saw it. The tuner panel behind it is equally
+     off-limits: it is open by design the whole time you are flying. */
   function activeLayer() {
-    let best = null, bestZ = -Infinity;
-    const all = document.querySelectorAll(LAYERS);
-    for (const el of all) {
-      if (!shown(el)) continue;
-      const z = parseInt(getComputedStyle(el).zIndex, 10);
-      const zz = isFinite(z) ? z : 0;
-      if (zz >= bestZ) { bestZ = zz; best = el; }
-    }
-    return best;
+    const t = UL.top();
+    return (t && t.id === "photo-controls") ? null : t;
   }
 
   function canScroll(el, dy) {

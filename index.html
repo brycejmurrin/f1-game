@@ -12,17 +12,17 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/tokens.css?v=997">
-<link rel="stylesheet" href="css/components.css?v=997">
-<link rel="stylesheet" href="css/tuner.css?v=997">
-<link rel="stylesheet" href="css/menus.css?v=997">
-<link rel="stylesheet" href="css/carsetup.css?v=997">
-<link rel="stylesheet" href="css/hud.css?v=997">
-<link rel="stylesheet" href="css/overlays.css?v=997">
-<link rel="stylesheet" href="css/responsive.css?v=997">
-<link rel="stylesheet" href="css/track-detail.css?v=997">
-<link rel="stylesheet" href="css/career.css?v=997">
-<link rel="stylesheet" href="css/data.css?v=997">
+<link rel="stylesheet" href="css/tokens.css?v=998">
+<link rel="stylesheet" href="css/components.css?v=998">
+<link rel="stylesheet" href="css/tuner.css?v=998">
+<link rel="stylesheet" href="css/menus.css?v=998">
+<link rel="stylesheet" href="css/carsetup.css?v=998">
+<link rel="stylesheet" href="css/hud.css?v=998">
+<link rel="stylesheet" href="css/overlays.css?v=998">
+<link rel="stylesheet" href="css/responsive.css?v=998">
+<link rel="stylesheet" href="css/track-detail.css?v=998">
+<link rel="stylesheet" href="css/career.css?v=998">
+<link rel="stylesheet" href="css/data.css?v=998">
 <script>// ── SHELL VERSION GUARD ──────────────────────────────────────────────────────
 // index.html is the ONE file with no ?v= cache-buster on itself, so an installed
 // PWA / home-screen shell can go stale (new JS/CSS load, but old HTML markup —
@@ -342,7 +342,7 @@
      left to choose is whether you are ready. Two states share the sheet — the
      new-career setup and the season hub — both built by js/game/career-ui.js into
      the two empty panes. -->
-<div id="career" class="screen" hidden>
+<div id="career" class="screen" data-esc-close="cr-back" hidden>
   <div id="cr-inner" class="sheet pane-pair">
     <div class="sheet-head" id="cr-header">
       <div id="cr-titlebar"><h2 id="cr-title">CAREER</h2><div id="cr-sub"></div></div>
@@ -397,7 +397,7 @@
   </div>
 </dialog>
 
-<div id="select" class="screen" hidden>
+<div id="select" class="screen" data-esc-close="sel-back" hidden>
   <div id="sel-inner" class="sheet pane-pair">
 
     <div class="sheet-head"><h2 id="select-title">SELECT</h2></div>
@@ -621,7 +621,7 @@
 </dialog>
 
 <!-- track detail fullscreen overlay -->
-<div id="track-detail" role="dialog" aria-modal="true" aria-labelledby="track-detail-name" hidden>
+<div id="track-detail" role="dialog" aria-modal="true" aria-labelledby="track-detail-name" data-esc-close="track-detail-close" hidden>
   <div id="track-detail-header">
     <div id="track-detail-name"></div>
     <button id="track-detail-close" class="tdc-close-btn" aria-label="Close">&#x2715;</button>
@@ -810,7 +810,7 @@
      centred, so the live 3D car preview stays visible on the left. Everything
      else is the shared vocabulary: sheet-head / sheet-body / sheet-foot, and
      the two scroll regions are .pane. -->
-<div id="carsetup" class="screen" hidden>
+<div id="carsetup" class="screen" data-esc-close="cs-back" hidden>
   <!-- Preview controls for the live car. Sits OUTSIDE #cs-inner, over the
        region of the canvas the sheet leaves for the car. #carsetup is
        pointer-events:none so the canvas still gets the orbit drag; the controls
@@ -937,7 +937,10 @@
       <div id="cs-tabs" class="pane pair-side"></div>
       <div id="cs-options" class="pane pair-main"></div>
     </div>
-    <div class="sheet-foot"><button id="cs-done" class="bigbtn">DONE</button></div>
+    <!-- BACK returns to whichever screen opened the GARAGE; DONE goes FORWARD
+         (from the circuit picker it lands on race settings). Escape presses
+         BACK — see data-esc-close on #carsetup. -->
+    <div class="sheet-foot"><button id="cs-back">BACK</button><button id="cs-done" class="bigbtn">DONE</button></div>
   </div>
 </div>
 
@@ -1306,7 +1309,7 @@
 <!-- lighting tuner: live sliders for every lighting/rendering tunable on the
      loaded track. Docked right so the scene keeps rendering as a live preview;
      rows are generated from TUNE_DEFS in js/game/lighting.js (wired in game.js). -->
-<div id="lighting" hidden>
+<div id="lighting" data-esc-close="lt-close" hidden>
   <div id="lighting-inner" class="sheet">
     <!-- #lt-rail groups the panel's fixed furniture so a wide-but-short screen
          can stand it up as a column beside the sliders (see css/tuner.css). It
@@ -1338,7 +1341,7 @@
      live camera and the sliders always edit the camera you're looking through.
      Rows are generated from CamTune.defs() in js/game/cam-tune.js (panel UI:
      js/game/cam-tuner.js). -->
-<div id="camtune" hidden>
+<div id="camtune" data-esc-close="ct-close" hidden>
   <div id="camtune-inner" class="sheet">
     <div id="ct-head">
       <h2>CAMERA TUNER</h2>
@@ -1359,7 +1362,7 @@
      Desktop uses WASD / R-F / arrows / drag; touch uses the two thumbsticks
      + the up/down buttons. Container is click-through; only the controls grab
      pointer events (see .pc-* CSS). -->
-<div id="photo-controls" hidden>
+<div id="photo-controls" data-esc-close="pc-exit" hidden>
   <div class="pc-stickwrap pc-move-wrap">
     <span class="pc-lbl">MOVE</span>
     <div id="pc-move" class="pc-stick"><div class="pc-nub"></div></div>
@@ -1409,148 +1412,149 @@
   }
 }
 </script>
-<script crossorigin="anonymous" src="js/log.js?v=997"></script>
-<script crossorigin="anonymous" src="js/mat4.js?v=997"></script>
-<script crossorigin="anonymous" src="js/render/shaders/chunks.js?v=997"></script>
-<script crossorigin="anonymous" src="js/render/shaders/lit.js?v=997"></script>
-<script crossorigin="anonymous" src="js/render/shaders/sky.js?v=997"></script>
-<script crossorigin="anonymous" src="js/render/shaders/fx.js?v=997"></script>
-<script crossorigin="anonymous" src="js/render/shaders/post.js?v=997"></script>
-<script crossorigin="anonymous" src="js/render/glx/post.js?v=997"></script>
-<script crossorigin="anonymous" src="js/render/glx/shadow.js?v=997"></script>
-<script crossorigin="anonymous" src="js/render/glx/chunked.js?v=997"></script>
-<script crossorigin="anonymous" src="js/render/glx.js?v=997"></script>
+<script crossorigin="anonymous" src="js/log.js?v=998"></script>
+<script crossorigin="anonymous" src="js/mat4.js?v=998"></script>
+<script crossorigin="anonymous" src="js/render/shaders/chunks.js?v=998"></script>
+<script crossorigin="anonymous" src="js/render/shaders/lit.js?v=998"></script>
+<script crossorigin="anonymous" src="js/render/shaders/sky.js?v=998"></script>
+<script crossorigin="anonymous" src="js/render/shaders/fx.js?v=998"></script>
+<script crossorigin="anonymous" src="js/render/shaders/post.js?v=998"></script>
+<script crossorigin="anonymous" src="js/render/glx/post.js?v=998"></script>
+<script crossorigin="anonymous" src="js/render/glx/shadow.js?v=998"></script>
+<script crossorigin="anonymous" src="js/render/glx/chunked.js?v=998"></script>
+<script crossorigin="anonymous" src="js/render/glx.js?v=998"></script>
 <!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
      two OPT-IN renderer backends and are injected by js/game.js only when
      apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
      every visitor used to parse for a backend almost nobody runs. sw.js seeds
      them into its OPTIONAL precache set, since it discovers everything else by
      parsing the tags below. -->
-<script crossorigin="anonymous" src="js/render/gfx.js?v=997"></script>
-<script crossorigin="anonymous" src="js/render/gltf.js?v=997"></script>
-<script crossorigin="anonymous" src="js/render/assets.js?v=997"></script>
-<script crossorigin="anonymous" src="js/car/teams.js?v=997"></script>
-<script crossorigin="anonymous" src="js/car/driver-ratings.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/geo-paths.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/geom.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/scenery-data.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/markings.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/space.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/surface.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/models.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/graph.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/themes.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/landmark-kit.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/circuit-kit.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/spline.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/mesh.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/scenery-nature.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/scenery-structures.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/scenery-city.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/scenery-identity.js?v=997"></script>
+<script crossorigin="anonymous" src="js/render/gfx.js?v=998"></script>
+<script crossorigin="anonymous" src="js/render/gltf.js?v=998"></script>
+<script crossorigin="anonymous" src="js/render/assets.js?v=998"></script>
+<script crossorigin="anonymous" src="js/car/teams.js?v=998"></script>
+<script crossorigin="anonymous" src="js/car/driver-ratings.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/geo-paths.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/geom.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/scenery-data.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/markings.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/space.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/surface.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/models.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/graph.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/themes.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/landmark-kit.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/circuit-kit.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/spline.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/mesh.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/scenery-nature.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/scenery-structures.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/scenery-city.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/scenery-identity.js?v=998"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script crossorigin="anonymous" src="js/circuits/bahrain.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/monaco.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/silverstone.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/spa.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/monza.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/suzuka.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/singapore.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/cota.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/interlagos.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/vegas.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/madrid.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/zandvoort.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/jeddah.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/albert_park.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/shanghai.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/miami.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/imola.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/montreal.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/redbull.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/hungaroring.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/baku.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/mexico.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/qatar.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/abudhabi.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/hockenheim.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/nurburgring.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/catalunya.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/sepang.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/istanbul.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/paul_ricard.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/portimao.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/sochi.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/mugello.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/magny_cours.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/estoril.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/kyalami.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/watkins_glen.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/indianapolis.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=997"></script>
-<script crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/tracks.js?v=997"></script>
-<script crossorigin="anonymous" src="js/track/maps.js?v=997"></script>
-<script crossorigin="anonymous" src="js/car/car3d.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/input.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/audio.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/music-lib.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/spotify.js?v=997"></script>
-<script crossorigin="anonymous" src="js/data/api.js?v=997"></script>
-<script crossorigin="anonymous" src="js/data/telemetry.js?v=997"></script>
-<script crossorigin="anonymous" src="js/data/export.js?v=997"></script>
-<script crossorigin="anonymous" src="js/data/schedule.js?v=997"></script>
-<script crossorigin="anonymous" src="js/data/standings.js?v=997"></script>
-<script crossorigin="anonymous" src="js/data/lastrace.js?v=997"></script>
-<script crossorigin="anonymous" src="js/data/live.js?v=997"></script>
-<script crossorigin="anonymous" src="js/data/hub.js?v=997"></script>
-<script crossorigin="anonymous" src="js/car/parts.js?v=997"></script>
-<script crossorigin="anonymous" src="js/car/liveries.js?v=997"></script>
-<script crossorigin="anonymous" src="js/car/liverytex.js?v=997"></script>
-<script crossorigin="anonymous" src="js/car/ghost.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/light-presets.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/tables.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/lighting.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/carmesh.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/bodyattitude.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/particles.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/atmosphere.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/store.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/career.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/reliability.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/cam-tune.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/setup-ui.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/career-ui.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/scrollfade.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/sheetshape.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/topmodal.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/menunav.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/ariastate.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/photomode.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/tuner.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/cam-tuner.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/steer-tuning.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/perf.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/cameras.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/hud.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/results.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/quali.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/debrisworld.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/incidentsim.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/agentview-raster.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/agentview.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game/apex.js?v=997"></script>
-<script crossorigin="anonymous" src="js/net/nostr.js?v=997"></script>
-<script crossorigin="anonymous" src="js/net/rendezvous.js?v=997"></script>
-<script crossorigin="anonymous" src="js/net/sdp.js?v=997"></script>
-<script crossorigin="anonymous" src="js/net/qr.js?v=997"></script>
-<script crossorigin="anonymous" src="js/net/scan.js?v=997"></script>
-<script crossorigin="anonymous" src="js/net/transport.js?v=997"></script>
-<script crossorigin="anonymous" src="js/net/handshake.js?v=997"></script>
-<script crossorigin="anonymous" src="js/net/snapshot.js?v=997"></script>
-<script crossorigin="anonymous" src="js/net/session.js?v=997"></script>
-<script crossorigin="anonymous" src="js/net/netplay.js?v=997"></script>
-<script crossorigin="anonymous" src="js/net/lobby.js?v=997"></script>
-<script crossorigin="anonymous" src="js/game.js?v=997"></script>
+<script crossorigin="anonymous" src="js/circuits/bahrain.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/monaco.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/silverstone.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/spa.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/monza.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/suzuka.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/singapore.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/cota.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/interlagos.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/vegas.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/madrid.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/zandvoort.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/jeddah.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/albert_park.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/shanghai.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/miami.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/imola.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/montreal.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/redbull.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/hungaroring.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/baku.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/mexico.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/qatar.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/abudhabi.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/hockenheim.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/nurburgring.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/catalunya.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/sepang.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/istanbul.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/paul_ricard.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/portimao.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/sochi.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/mugello.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/magny_cours.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/estoril.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/kyalami.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/watkins_glen.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/indianapolis.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=998"></script>
+<script crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/tracks.js?v=998"></script>
+<script crossorigin="anonymous" src="js/track/maps.js?v=998"></script>
+<script crossorigin="anonymous" src="js/car/car3d.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/input.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/audio.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/music-lib.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/spotify.js?v=998"></script>
+<script crossorigin="anonymous" src="js/data/api.js?v=998"></script>
+<script crossorigin="anonymous" src="js/data/telemetry.js?v=998"></script>
+<script crossorigin="anonymous" src="js/data/export.js?v=998"></script>
+<script crossorigin="anonymous" src="js/data/schedule.js?v=998"></script>
+<script crossorigin="anonymous" src="js/data/standings.js?v=998"></script>
+<script crossorigin="anonymous" src="js/data/lastrace.js?v=998"></script>
+<script crossorigin="anonymous" src="js/data/live.js?v=998"></script>
+<script crossorigin="anonymous" src="js/data/hub.js?v=998"></script>
+<script crossorigin="anonymous" src="js/car/parts.js?v=998"></script>
+<script crossorigin="anonymous" src="js/car/liveries.js?v=998"></script>
+<script crossorigin="anonymous" src="js/car/liverytex.js?v=998"></script>
+<script crossorigin="anonymous" src="js/car/ghost.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/light-presets.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/tables.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/lighting.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/carmesh.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/bodyattitude.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/particles.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/atmosphere.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/store.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/career.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/reliability.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/cam-tune.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/setup-ui.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/career-ui.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/scrollfade.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/sheetshape.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/uilayers.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/topmodal.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/menunav.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/ariastate.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/photomode.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/tuner.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/cam-tuner.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/steer-tuning.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/perf.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/cameras.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/hud.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/results.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/quali.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/debrisworld.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/incidentsim.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/agentview-raster.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/agentview.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game/apex.js?v=998"></script>
+<script crossorigin="anonymous" src="js/net/nostr.js?v=998"></script>
+<script crossorigin="anonymous" src="js/net/rendezvous.js?v=998"></script>
+<script crossorigin="anonymous" src="js/net/sdp.js?v=998"></script>
+<script crossorigin="anonymous" src="js/net/qr.js?v=998"></script>
+<script crossorigin="anonymous" src="js/net/scan.js?v=998"></script>
+<script crossorigin="anonymous" src="js/net/transport.js?v=998"></script>
+<script crossorigin="anonymous" src="js/net/handshake.js?v=998"></script>
+<script crossorigin="anonymous" src="js/net/snapshot.js?v=998"></script>
+<script crossorigin="anonymous" src="js/net/session.js?v=998"></script>
+<script crossorigin="anonymous" src="js/net/netplay.js?v=998"></script>
+<script crossorigin="anonymous" src="js/net/lobby.js?v=998"></script>
+<script crossorigin="anonymous" src="js/game.js?v=998"></script>
 </body></html>

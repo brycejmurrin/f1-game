@@ -84,9 +84,58 @@ window.TopModal = (function () {
     (root || document).querySelectorAll("dialog.screen").forEach(wire);
   }
 
-  if (document.readyState === "loading")
-    document.addEventListener("DOMContentLoaded", () => scan(), { once: true });
-  else scan();
+  /* THE SAME DOOR FOR THE SCREENS THAT ARE NOT DIALOGS.
+     Six screens never became <dialog>s and so never got Escape: #select,
+     #career, #carsetup, #track-detail, #lighting and #camtune, plus the
+     free-camera overlay #photo-controls. Two of them must NOT become modal
+     dialogs — #carsetup is `pointer-events: none` so a drag reaches the live
+     turntable rendering behind it, and showModal() would make that canvas
+     inert — so instead of migrating them, the ATTRIBUTE migrates: they carry
+     the same `data-esc-close="<id>"` and this handler presses it, which is
+     exactly what the `cancel` path above does for a real dialog.
 
-  return { scan, wire };
+     ON `document` AND NOT `window`, DELIBERATELY. An inner disclosure has to be
+     able to claim Escape before its screen does — the GARAGE's camera panel is
+     the case: Escape there shuts the panel, not the GARAGE. That handler is on
+     document/capture too (js/game.js) and registers at script-eval time, i.e.
+     before this one, so it runs first and marks the event handled. A listener
+     on `window` would beat it and there would be no way back.
+
+     Stopping propagation is the point, not a side effect: it is what keeps the
+     key from also reaching the pause switch in js/game/input.js, which is on
+     `window` in the BUBBLE phase and therefore downstream of this. When no
+     screen claims the key we return WITHOUT stopping anything, so the data
+     hub's and the telemetry popup's own document-bubble handlers still work. */
+  function onEscape(e) {
+    if (e.key !== "Escape" || e.defaultPrevented) return;
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const layer = window.UiLayers && window.UiLayers.top();
+    if (!layer) return;
+    // A <dialog> gets Escape from the platform — the browser fires `cancel` on
+    // it and wire()'s handler turns that into the screen's own back button.
+    // Doing it here as well would open the door twice.
+    if (layer.tagName === "DIALOG") return;
+    if (layer.getAttribute("data-esc") === "none") {
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+    const via = layer.getAttribute("data-esc-close");
+    if (!via) return;
+    const btn = document.getElementById(via);
+    if (!btn || btn.disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    btn.click();
+  }
+
+  function init() {
+    scan();
+    document.addEventListener("keydown", onEscape, true);
+  }
+
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", init, { once: true });
+  else init();
+
+  return { scan, wire, onEscape };
 })();

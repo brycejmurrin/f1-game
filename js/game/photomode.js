@@ -10,7 +10,7 @@ const Photomode = (function () {
 function create(G) {
 // Stable bindings from the game.js closure.
 const { $, gfx, photoCam, photoKeys, photoMouse, photoMove, photoLook,
-        applyResMode, setPaused, ltKey, persistLightTune, applyLightTune,
+        applyResMode, ltKey, persistLightTune, applyLightTune,
         refreshLightTunePanel } = G;
 
 function initPhotoCam() {
@@ -22,7 +22,8 @@ function initPhotoCam() {
   photoCam.fov = G.camFov;
   const fv = $("pc-fov"); if (fv) fv.value = Math.round(G.camFov);
   photoMove.x = photoMove.y = photoLook.x = photoLook.y = 0;
-  photoMouse.dx = photoMouse.dy = 0; photoMouse.drag = false; G.photoAlt = 0; G.photoVertT = 0;
+  photoMouse.dx = photoMouse.dy = 0; photoMouse.drag = false; photoMouse.pid = null;
+  G.photoAlt = 0; G.photoVertT = 0;
   for (const k in photoKeys) photoKeys[k] = false;
 }
 // Integrate held input into the fly-cam each paused frame and publish dbgCam.
@@ -138,7 +139,12 @@ function photoKeyHandler(e) {
     case "ArrowLeft": photoKeys.yl = down; break;
     case "ArrowRight": photoKeys.yr = down; break;
     case "ShiftLeft": case "ShiftRight": photoKeys.boost = down; break;
-    case "Escape": if (down) setPaused(false); hit = true; break;
+    // Escape is NOT handled here. It used to call setPaused(false), which threw
+    // away the fly-cam, the tuner panel AND the pause in one press — three
+    // screens for one key. #photo-controls is a layer like any other now
+    // (js/game/uilayers.js) and carries data-esc-close="pc-exit", so Escape
+    // steps out of the free camera and leaves you on the panel you opened it
+    // from. Press it again to leave the panel.
     default: hit = false;
   }
   if (hit) { e.preventDefault(); e.stopPropagation(); }
@@ -157,36 +163,86 @@ function wirePhotoStick(id, vec) {
     if (nub) nub.style.transform = "translate(" + (dx * rad * 0.6) + "px," + (dy * rad * 0.6) + "px)";
   };
   const end = () => { vec.x = 0; vec.y = 0; pid = null; if (nub) nub.style.transform = "translate(0,0)"; };
-  el.addEventListener("pointerdown", (e) => { pid = e.pointerId; el.setPointerCapture(pid); set(e.clientX, e.clientY); e.preventDefault(); });
+  // Only the finger that STARTED the drag ends it. Two fingers on one stick used
+  // to mean the first one lifting zeroed the vector while the second was still
+  // pressing, so the stick died under your thumb.
+  const endIf = (e) => { if (pid === null || e.pointerId === pid) end(); };
+  el.addEventListener("pointerdown", (e) => {
+    pid = e.pointerId;
+    // WebKit throws NotFoundError/InvalidPointerId here often enough that every
+    // other capture in this repo is wrapped (js/game/input.js, js/game.js) —
+    // this was the one that was not, and an unguarded throw aborts the handler
+    // before set() and before preventDefault(), i.e. the stick does nothing at
+    // all and the page keeps the gesture. Exactly the "controls don't work on
+    // iPad" report, on the one platform that throws.
+    try { el.setPointerCapture(pid); } catch (_) {}
+    set(e.clientX, e.clientY);
+    e.preventDefault();
+  });
   el.addEventListener("pointermove", (e) => { if (e.pointerId === pid) { set(e.clientX, e.clientY); e.preventDefault(); } });
-  el.addEventListener("pointerup", end);
-  el.addEventListener("pointercancel", end);
+  el.addEventListener("pointerup", endIf);
+  el.addEventListener("pointercancel", endIf);
+  /* THE STICK CAN BE TAKEN AWAY MID-HOLD, AND THEN NO pointerup EVER ARRIVES.
+     css/hud.css display:none's the whole fly-cam overlay whenever a .screen.dim
+     opens, and HIDE HUD does the same to everything but the restore eye — both
+     can fire with a thumb down. A touch pointer holds IMPLICIT capture, so
+     removing the element loses the capture instead of delivering an up, the
+     vector stays at its last value, and updatePhotoCam flies the camera away
+     for good. js/game/input.js:498 added this same listener to the pedals for
+     the same reason. */
+  el.addEventListener("lostpointercapture", endIf);
 }
 function wirePhotoHold(id, on, off) {
   const el = $(id); if (!el) return;
-  el.addEventListener("pointerdown", (e) => { on(); e.preventDefault(); });
-  el.addEventListener("pointerup", off);
-  el.addEventListener("pointercancel", off);
-  el.addEventListener("pointerleave", off);
+  let pid = null;
+  const release = (e) => { if (pid === null || !e || e.pointerId === pid) { pid = null; off(); } };
+  el.addEventListener("pointerdown", (e) => {
+    pid = e.pointerId;
+    try { el.setPointerCapture(pid); } catch (_) {}
+    on();
+    e.preventDefault();
+  });
+  el.addEventListener("pointerup", release);
+  el.addEventListener("pointercancel", release);
+  // With the pointer captured, pointerleave no longer fires while held — which
+  // is the point: a thumb drifting a few px off the button used to stop the
+  // climb. It stays for the mouse, where there is no capture to lose.
+  el.addEventListener("pointerleave", release);
+  el.addEventListener("lostpointercapture", release);   // see wirePhotoStick
 }
 wirePhotoStick("pc-move", photoMove);
 wirePhotoStick("pc-look", photoLook);
 wirePhotoHold("pc-up", () => G.photoAlt = 1, () => G.photoAlt = 0);
 wirePhotoHold("pc-down", () => G.photoAlt = -1, () => G.photoAlt = 0);
-// Drag anywhere on the scene (outside the sticks) to look — mouse or a spare finger.
+/* Drag anywhere on the scene (outside the sticks) to look — mouse or a spare
+   finger. THE DRAG BELONGS TO ONE POINTER, which it did not used to:
+   `pointermove` on `window` accepted every pointer, so with a drag live the
+   finger working a thumbstick ALSO fed photoMouse and the view whipped between
+   two screen positions on every event — the sticks looked broken because the
+   camera was being flung by the same touch that was steering it. And with no
+   `pointercancel` handler the flag latched `true` forever the first time iOS
+   claimed a touch for a system gesture, which it does routinely (edge swipe,
+   notification, gesture arbitration). js/game.js's garage orbit already guards
+   both ways; this is the same guard. */
 {
   const canvas = $("game");
   if (canvas) {
+    const stop = (e) => {
+      if (photoMouse.pid !== null && e && e.pointerId !== photoMouse.pid) return;
+      photoMouse.drag = false; photoMouse.pid = null;
+    };
     canvas.addEventListener("pointerdown", (e) => {
-      if (!G.photoMode) return;
-      photoMouse.drag = true; photoMouse.px = e.clientX; photoMouse.py = e.clientY;
+      if (!G.photoMode || photoMouse.drag) return;
+      photoMouse.drag = true; photoMouse.pid = e.pointerId;
+      photoMouse.px = e.clientX; photoMouse.py = e.clientY;
     });
     window.addEventListener("pointermove", (e) => {
-      if (!G.photoMode || !photoMouse.drag) return;
+      if (!G.photoMode || !photoMouse.drag || e.pointerId !== photoMouse.pid) return;
       photoMouse.dx += e.clientX - photoMouse.px; photoMouse.dy += e.clientY - photoMouse.py;
       photoMouse.px = e.clientX; photoMouse.py = e.clientY;
     });
-    window.addEventListener("pointerup", () => { photoMouse.drag = false; });
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
   }
 }
 $("pc-toggle").onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.photoMode ? exitPhotoMode() : enterPhotoMode(); };

@@ -200,6 +200,48 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     expect(await page.evaluate(() => window.__apex.inputState().key.left), "and clears on release").toBe(false);
   });
 
+  /* A MODAL OUTRANKS EVERY z-index, and getting that wrong made the arrow keys
+     dead inside most of the game's sheets. Every `.screen.dim` is a real
+     <dialog> opened with showModal() (js/game/topmodal.js), and a top-layer
+     dialog computes `z-index: auto` — so the old ranking, `parseInt(zIndex)`
+     with a NaN fallback of 0, scored the open modal at 0 and handed the layer
+     to whatever visible screen sat behind it with a real z-index. Measured on
+     the code before this fix: with #standings open over the pause menu,
+     activeLayer() returned #overlay. Because onKeyDown preventDefaults before
+     it moves, focus() then targeted an inert background node and the browser's
+     own fallback was swallowed too: nothing moved at all.
+     #standings over #pausemenu (z 30) is the cheapest reproduction; the same
+     pairing hit #advanced and #audioset over #pmsettings, the three career
+     sheets over #career, #teampicker over #carsetup, and everything opened
+     from the title over #overlay. */
+  test("an open modal is the active layer, not the screen behind it", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { timeout: 20_000 });
+    await page.evaluate(() => {
+      window.__apex.park(0.1);
+      const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
+      document.getElementById("pausemenu").hidden = false;
+      document.getElementById("standings").hidden = false;
+    });
+    await page.waitForTimeout(250);
+
+    const seen = await page.evaluate(() => ({
+      layer: (window.MenuNav.activeLayer() || {}).id || null,
+      modal: document.getElementById("standings").matches(":modal"),
+      zIndex: getComputedStyle(document.getElementById("standings")).zIndex,
+    }));
+    expect(seen.modal, "the standings sheet really is in the top layer").toBe(true);
+    expect(seen.zIndex, "…and therefore has no z-index to rank it by").toBe("auto");
+    expect(seen.layer).toBe("standings");
+
+    // …and the arrow key lands inside it, which is the behaviour that was lost.
+    await page.keyboard.press("ArrowDown");
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() =>
+      document.getElementById("standings").contains(document.activeElement))).toBe(true);
+  });
+
   test("with the pause menu up the arrow keys stop reaching the car", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("monza"));
@@ -219,5 +261,109 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     expect(held, "a paused car is not being steered by the menu keys").toBe(false);
     // …and the key did something useful instead.
     expect(await page.evaluate(() => document.getElementById("pausemenu").contains(document.activeElement))).toBe(true);
+  });
+});
+
+/* ESCAPE IS "BACK" — the contract in js/game/topmodal.js + js/game/uilayers.js.
+ *
+ * Escape used to be a bare alias for the pause key (js/game/input.js) with no
+ * state check at all, so on a desktop keyboard it meant "pause" on screens
+ * where the only sensible answer was "close this", and on the three screens
+ * that are still plain <div>s it meant nothing whatsoever. Nothing in the suite
+ * covered the `data-esc-close` path either — not for the sixteen <dialog>s that
+ * had it, nor for the six screens that have just been given it.
+ *
+ * The contract: a layer names the control Escape should press, so Escape can
+ * never do something no visible button does.
+ */
+test.describe("Escape is BACK", () => {
+  test.use({ viewport: DESKTOP });
+
+  // THE STRUCTURAL ONE, and the reason the next screen to be added cannot
+  // silently ship without a back key: every layer that claims a back control
+  // must actually name one that exists and can be pressed.
+  test("every layer's data-esc-close names a real, pressable control", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    const bad = await page.evaluate(() => {
+      const out = [];
+      for (const id of window.UiLayers.LAYER_IDS) {
+        const el = document.getElementById(id);
+        if (!el) { out.push({ id, why: "no such element" }); continue; }
+        const via = el.getAttribute("data-esc-close");
+        if (!via) continue;                       // opting out is allowed
+        const btn = document.getElementById(via);
+        if (!btn) out.push({ id, why: "data-esc-close=" + via + " names nothing" });
+        else if (btn.tagName !== "BUTTON") out.push({ id, why: via + " is a " + btn.tagName });
+      }
+      return out;
+    });
+    expect(bad).toEqual([]);
+  });
+
+  test("Escape on the circuit picker goes back to the title", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSelect(page);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(250);
+    expect(await page.evaluate(() => document.getElementById("select").hidden)).toBe(true);
+    expect(await page.evaluate(() => document.getElementById("overlay").hidden)).toBe(false);
+  });
+
+  /* THE GARAGE, which had no back key at all — and could not simply be pointed
+     at DONE, because DONE goes FORWARD: reached from the circuit picker it
+     lands on race settings, so an Escape wired to it would have walked the
+     player further INTO the flow. js/game.js grew a real BACK button
+     (garageBack) that returns to whichever screen opened the garage, and
+     data-esc-close points at that. */
+  test("Escape in the GARAGE goes back to where it was opened from", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSelect(page);
+    // START on the picker opens the GARAGE with garageReturn = "select" — the
+    // exact path where DONE goes forward to race settings.
+    await page.locator("#sel-go").click();
+    await page.locator("#carsetup").waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => document.getElementById("carsetup").hidden)).toBe(true);
+    // BACK, not DONE: race settings is what DONE would have opened.
+    expect(await page.evaluate(() => document.getElementById("race-settings").hidden)).toBe(true);
+    expect(await page.evaluate(() => document.getElementById("select").hidden)).toBe(false);
+  });
+
+  // Escape on the title screen has nothing to close and no race to pause, so it
+  // must be an inert no-op rather than an exception or a phantom pause.
+  test("Escape on the title screen does nothing at all", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => ({
+      overlay: document.getElementById("overlay").hidden,
+      pause: document.getElementById("pausemenu").hidden,
+    }))).toEqual({ overlay: false, pause: true });
+  });
+
+  /* Mid-race with a sheet up, Escape closes the SHEET and leaves the race
+     paused. The old code could not express this: #standings was in the overlay
+     list so Escape was swallowed entirely, and for #lighting/#camtune — which
+     were in NO list — it fell through to the pause toggle and RESUMED THE RACE
+     instead of stepping back to SETTINGS. */
+  test("Escape closes a sheet without resuming the race under it", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { timeout: 20_000 });
+    await page.evaluate(() => {
+      window.__apex.park(0.1);
+      const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
+    });
+    await page.locator("#pausebtn").click();
+    await page.locator("#pausemenu").waitFor({ state: "visible" });
+    await page.locator("#pm-standings").click();
+    await page.waitForTimeout(250);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(250);
+    expect(await page.evaluate(() => ({
+      standings: document.getElementById("standings").hidden,
+      pause: document.getElementById("pausemenu").hidden,
+    }))).toEqual({ standings: true, pause: false });
   });
 });
