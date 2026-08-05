@@ -9,9 +9,29 @@ The point of writing this down is that several of the conclusions are *negative*
 — features worth deliberately NOT building — and a negative decision with no
 record gets re-litigated every six months.
 
+## What this concluded, at a glance
+
+Sections are unnumbered on purpose: numbering rots the moment one is inserted.
+
+| Decision | Status |
+|---|---|
+| **Never ship traction control or ABS** — no longitudinal slip model exists for either to act on | Settled. Reopening needs a slip model first, not a menu entry |
+| **Braking assist is OFF / CUE / LIGHT / FULL** — starts with information, not intervention | Designed, not yet built |
+| **The braking cue is a pulse RATE, not a pitch ramp**, with a player-set lookahead | Designed. Corrects my first instinct |
+| **A FULL braking level brakes for corners only**, never to avoid rear-ending | Designed |
+| **RACE PACE becomes geometric**, ~5.65 %/notch over 0.45–1.35 | Designed; default deferred to `tools/tune-sweep.mjs` |
+| **Its readout must not be km/h** — `dashKph` divides pace out, so the dial reads ~259 km/h at every setting | Settled |
+| **Value-preserving migration is honest** — worst case 2.6 %, under the old scale's smallest step | Verified by calculation |
+| **Do not rename the racing-line assist** — already matches the industry's Off/Corners/Full | Settled |
+| **Speed-sensitive steering is two halves and we ship one** — the rate half belongs in the SPEED STEER retune | Designed |
+| **Setup sheet: wing trim / brake bias / suspension**; gears and diff cut | Designed |
+| **Brake bias belongs in the friction ellipse**, which currently charges both axles for grip one spends | Designed — highest-risk item |
+| **Understeer cue is signalling, not simulating** | **Built** |
+| **`js/game.js` had zero `Log` calls** | **Fixed** — one envelope line at race start |
+
 ---
 
-## 1. Two assists we should never ship, and the reason is structural
+## Two assists we should never ship, and the reason is structural
 
 The industry-standard assist list is: steering assist, braking assist, ABS,
 traction control, racing line, auto gearbox, pit assist, ERS assist, DRS assist.
@@ -43,7 +63,7 @@ applied silently and for free.
 
 ---
 
-## 2. Braking assist: EA ships two different things under one name
+## Braking assist: EA ships two different things under one name
 
 This is the most useful single finding, and it changes the design.
 
@@ -76,7 +96,7 @@ players should be sitting on.
 
 ---
 
-## 2b. Forza's Blind Driving Assists — the best-documented prior art there is
+## Forza's Blind Driving Assists — the best-documented prior art there is
 
 Microsoft published the mechanics of Forza Motorsport's Blind Driving Assists in
 full, and it is the most useful single source found. Several details change the
@@ -146,7 +166,7 @@ should not present them as points on one scale.
 
 ---
 
-## 2c. The RACE PACE slider, measured — the complaint is arithmetic
+## The RACE PACE slider, measured — the complaint is arithmetic
 
 The report was "overall speed is weighted too high and I always end up at the
 lower end". That is not a matter of taste; it falls out of `paceFromSlider`:
@@ -209,7 +229,7 @@ picked here — that is the whole point of building the sweep.
 
 ---
 
-## 3. Our racing-line assist already matches the industry vocabulary
+## Our racing-line assist already matches the industry vocabulary
 
 F1 uses **Off / Corners Only / Full**. `LINE_LEVELS = { off: 0, corner: 3,
 full: 5 }` in `js/game/steer-tuning.js`, with OFF / CORNERS / FULL buttons, is
@@ -223,7 +243,7 @@ referent at all.
 
 ---
 
-## 4. Speed-sensitive steering is TWO halves, and we ship only one
+## Speed-sensitive steering is TWO halves, and we ship only one
 
 This one reverses an instinct worth recording, because the instinct was wrong.
 
@@ -251,7 +271,7 @@ is where it should land.
 
 ---
 
-## 5. Setup-sheet semantics, with the correct signs
+## Setup-sheet semantics, with the correct signs
 
 For the per-track setup sheet. Signs matter — a setup knob wired backwards is
 worse than no setup knob.
@@ -313,7 +333,7 @@ not the end state.
 
 ---
 
-## 6. Touch sensitivity: default conservative
+## Touch sensitivity: default conservative
 
 Real Racing 3 player feedback is consistent that high touch sensitivity destroys
 fine control — *"anything beyond 0–3 sensitivity is making micro turns
@@ -327,7 +347,7 @@ Leave the default where it is for now, but it is a prime candidate for
 
 ---
 
-## 7. The understeer cue is doing work expensive hardware demonstrably fails at
+## The understeer cue is doing work expensive hardware demonstrably fails at
 
 Worth recording because it justifies a few lines of `navigator.vibrate`.
 
@@ -356,7 +376,7 @@ fact about `Fyf` saturation that they have no other way to learn.
 
 ---
 
-## 8. iOS frame pacing: the 120 Hz worry is mostly misplaced, the 30 Hz one is not
+## iOS frame pacing: the 120 Hz worry is mostly misplaced, the 30 Hz one is not
 
 - **Safari does not run rAF at 120 Hz by default.** ProMotion in Safari sits
   behind a "prefer page rendering near 60fps" feature flag that ships *on*, so
@@ -376,7 +396,65 @@ fact about `Fyf` saturation that they have no other way to learn.
 
 ---
 
-## 9. Framing to keep
+## Logging: the channel this work should have been using all along
+
+Investigated while building the above, and the finding is blunt: **`js/game.js`
+contained zero `Log` calls.** Not "few" — zero, alongside zero bare `console.*`.
+`js/log.js` defines the `game` namespace as covering *"game loop, race logic,
+physics (js/game.js, js/game/**)"*, and the file it was created for never used
+it. Across `js/game/` only `apex.js` (5 calls) and `debrisworld.js` (1) log at
+all.
+
+That is a bigger loss than it sounds, because of how the module is built:
+
+- **The buffer retains at `info` whether or not anything prints.** The console
+  threshold defaults to `warn`, the ring buffer to `info`, and they are
+  independent. So an `info` line costs a player nothing and is still there
+  afterwards via `__apex.logs({ns:"game"})`. As `CLAUDE.md` puts it, "a failure
+  that has already happened still has a record" — except the physics had no
+  record to leave.
+- **`tests/fixtures.js` attaches the ring to EVERY failure**, as `apex-logs`,
+  and `live-reporter.js` echoes its tail into the group log. So a physics spec
+  that failed on *"speed was 43, expected > 50"* produced an attachment that said
+  nothing about what the car's top speed even was on that run — pace, weather
+  grip, parts multipliers and assist gains were all invisible.
+
+**Fixed with one line**, at the green light in `startRace()`: circuit, session,
+laps, `PACE`, `vTop()`, `gripMult()`, weather, time of day, the four parts
+multipliers, `aeroLoad`, and the two assist gains. That single record makes the
+whole class of pace/parts/weather failures self-explaining, and it is exactly
+the kind of thing that is invisible when you need it and free when you do not.
+
+Where else this work should use it, in decreasing order of value:
+
+1. **The `STEER_SCHEMA` v3 migration.** It rewrites stored slider values, and
+   one clamped key silently changes someone's car. An `info` line naming every
+   key it moved, from what to what, and which fell outside the new range, is the
+   difference between a bug report of "my steering feels different" being
+   diagnosable or not. This is also what should drive the one-time in-panel
+   notice.
+2. **Braking-assist interventions**, at `debug`. "Why did the car slow down?" is
+   otherwise unanswerable, and a cue/assist that fires when the player did not
+   expect it is the single most likely complaint.
+3. **Resolved setup + parts at race start** — already folded into the envelope
+   line above, and the reason to put a setup sheet's values there too.
+
+Two rules the module imposes that matter for anything in the driving path:
+
+- **Hot paths must guard.** Arguments are evaluated whether or not they print,
+  so a per-frame line needs `if (Log.enabled("game", Log.DEBUG))` around it. The
+  understeer cue is per-frame and deliberately does **not** log for this reason —
+  it is already rate-limited to a haptic pulse, and a per-frame string build in
+  `updateCar` would cost more than the cue.
+- **The namespace is prefixed automatically**, so never repeat it in the message.
+
+For a test run, `APEX_LOG=game:debug` turns the whole thing up without touching
+a spec — and `APEX_LOG=buffer:debug` retains more without printing more, which is
+usually what you actually want when chasing an intermittent failure.
+
+---
+
+## Framing to keep
 
 The F1 25 guide is explicit that assists are a **trade**, not a difficulty
 setting: they stabilise the car and they cap what it can do. *"Some assists are
