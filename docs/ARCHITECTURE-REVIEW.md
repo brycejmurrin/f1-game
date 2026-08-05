@@ -354,6 +354,26 @@ live site, and within hours of its first working run it found four things that
 had been red for an unknown length of time. Neither the bounds nor the budgets
 had drifted — the *observation* had been missing.
 
+**A18 — a golden baseline went stale through a MERGE, not an edit.**
+`tests/menu-baseline.spec.js-snapshots/garage-phone-landscape.png` shows a garage
+footer with one button. The screen has two: `BACK` and `DONE`. The BACK button
+landed in "Escape means BACK, and the free camera works on a touch screen"
+(`35c4e81e`), and the three phone-landscape baselines were re-blessed eleven
+minutes later (`3aa5a6b0`) — **on a branch that did not contain it**. The two
+lines merged afterwards.
+
+This is the failure mode a version-control system cannot see. `index.html` and a
+`.png` are different files, so git merged both cleanly and reported no conflict;
+they conflict only in MEANING. Nothing else would have noticed either, because
+`test:baseline` is not in the CI gate's smoke job and nothing was running it.
+
+Re-blessed here rather than deferred, because unlike A14/A15 the intent is not in
+doubt: the BACK button is a shipped control that `index.html` depends on by name
+(`data-esc-close="cs-back"` — the Escape-means-back layer reads it), the pixel
+diff is 0.02 of the image and is entirely that button, and the five other
+baselines were unaffected. A stale golden image is worse than no golden image,
+because it turns a real gate into one everybody learns to ignore.
+
 ### Tier B — the meta-guards
 
 | # | Defect | Disposition |
