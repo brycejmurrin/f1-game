@@ -189,12 +189,18 @@ test.describe("steering-store schema migration", () => {
     // Each boot is a bare page load with no track, but ten of them is still
     // several times what any other test in this file costs.
     test.slow();
-    // The mapping from docs/research/PHASE-C-SLIDER-DESIGN.md: each old notch to
-    // the new notch nearest it in absolute ground-speed terms. Worst error is
-    // -2.89 % (old 10), under half a new notch. Old 9 and old 10 BOTH land on
-    // 18 — the one lossy pair, and the reason steer-tuning.js logs a warning
-    // there rather than clamping in silence.
-    const TABLE = [[1, 2], [2, 6], [3, 9], [4, 12], [5, 14], [6, 15], [7, 16], [8, 17], [9, 18], [10, 18]];
+    // Each old notch to the new notch nearest it IN LOG SPACE — the ratio is the
+    // unit, because pace is a multiplicative scale and that is why the new grid
+    // is geometric at all. Worst error is +2.94 % (old 10), under half a new
+    // notch whose steps are 6 %.
+    //
+    // The pair to watch is 9 and 10. Under absolute-distance nearest they BOTH
+    // land on 18 and the two fastest settings a player could previously pick
+    // become the same setting; log-nearest sends 10 to 19 and the map is
+    // injective. If this table ever regains a duplicate on the right-hand side,
+    // that is a regression and not a rounding choice.
+    const TABLE = [[1, 2], [2, 6], [3, 9], [4, 12], [5, 14], [6, 15], [7, 16], [8, 17], [9, 18], [10, 19]];
+    expect(new Set(TABLE.map(([, to]) => to)).size).toBe(TABLE.length);
     await boot(page);
     const got = [];
     for (const [from] of TABLE) {

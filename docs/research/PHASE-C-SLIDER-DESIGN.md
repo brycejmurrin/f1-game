@@ -73,14 +73,27 @@ Three properties make this the right shape rather than merely a different one:
 | 7 | 1.120 | 16 | 1.124 | +0.32 % |
 | 8 | 1.180 | 17 | 1.191 | +0.93 % |
 | 9 | 1.240 | 18 | 1.262 | +1.81 % |
-| 10 | 1.300 | 18 | 1.262 | **−2.89 %** |
+| 10 | 1.300 | 19 | 1.338 | **+2.94 %** |
 
-Worst case is under half a new notch, so nobody's car changes character. Note
-that old 9 and old 10 both land on new 18 — the top of today's range is finer
-than the new grid, which is the asymmetry being removed, and it is the one place
-the migration is lossy. It is worth the trade and it should be logged, not
-silent: the migration rewrites a stored value, and a clamp nobody can see is how
-a player's settings get quietly changed.
+Worst case is under half a new notch, so nobody's car changes character, and
+the map is **injective** — every old setting survives as a distinct new one.
+
+Getting that took one decision worth recording, because it looks like rounding
+and is not. Nearest is measured **in log space**, `|ln(a/b)|`, not in absolute
+pace. Pace is a multiplicative scale on ground speed, which is the whole reason
+the new grid is geometric; measuring the distance between two settings in
+absolute m/s would use the very unit the regrid exists to stop using. It changes
+exactly one row: old notch 10 (1.300) sits 0.0007 of pace nearer to notch 18
+than to 19, so absolute distance sends it to 18, where old 9 already is — the
+two fastest settings a player could previously choose collapse into one. In log
+terms 1.300 is +2.94 % from 18 and −2.86 % from 19, so it lands on 19. The price
+is that the worst-case error over all ten notches goes from 2.89 % to 2.94 %:
+five hundredths of a percentage point, against a slider whose steps are 6 %.
+
+The regrid still logs every notch it rewrites, and still warns on a collision —
+there is no longer one, but the guard is cheap and the next person to re-derive
+the grid may reintroduce one. A clamp nobody can see is how a player's settings
+get quietly changed.
 
 **A store that has never been written gets notch 11.** A store that HAS keeps
 its own migrated value. Lowering a default and migrating existing values are
@@ -93,14 +106,6 @@ all.
 (notch 14 = `100%`, the default = `84%`) for the reason given under *What is NOT
 changing*. The v3 ladder step derives the remap from the two mappings rather
 than carrying the table above as a literal, so it cannot drift from either.
-
-*One caveat found in implementation, and left as the doc has it:* old notch 10 is
-a near-tie. Absolute distance puts 1.300 nearer to notch 18 (1.2625, −2.89 %)
-than to notch 19 (1.3382, +2.94 %) — by 0.0007 of pace. In LOG space, which is
-the unit §1 argues is the natural one for a multiplicative scale, the same
-comparison goes the other way and old 10 maps to 19 with no collision and no
-lossy pair at all. The shipped code uses absolute distance, matching this table.
-Worth revisiting if the grid is ever re-derived.
 
 *The DEFAULT notch (11) is still the one judgement call, and the sweep should
 confirm 0.84 rather than 0.79 or 0.89.*

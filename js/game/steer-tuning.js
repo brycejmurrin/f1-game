@@ -200,12 +200,25 @@ function paceFromSliderV2(v) { return v <= 5 ? 0.5 + (v - 1) * 0.125 : 1.0 + (v 
 // car changes character (docs/research/PHASE-C-SLIDER-DESIGN.md has the table).
 // Old 9 and old 10 BOTH land on 18: the top of the v2 range was finer than the
 // even 6 % grid, which is the asymmetry being removed and the one lossy pair.
+// NEAREST IN LOG SPACE, not in absolute pace, and that is not a detail. The new
+// grid is geometric BECAUSE pace is a multiplicative scale on ground speed, so
+// the distance between two settings is the RATIO between them — |ln(a/b)| — and
+// measuring it in absolute m/s would be using the very unit the regrid exists to
+// stop using. Measured, it changes exactly one row and removes the only defect
+// in the table: old notch 10 (1.300) sits 0.0007 of pace nearer to notch 18 than
+// to 19, so absolute distance sends it to 18 where old 9 already is — two
+// settings collapsed into one. In log terms 1.300 is +2.94 % from 18 and −2.86 %
+// from 19, so it lands on 19, the map is INJECTIVE, and no player loses the
+// distinction between the two fastest settings they could previously pick. The
+// price is that the worst-case error over all ten notches goes from 2.89 % to
+// 2.94 % — five hundredths of a percentage point, against a slider whose steps
+// are 6 %.
 const PACE_V2_TO_V3 = (() => {
   const m = {};
   for (let o = 1; o <= 10; o++) {
     let best = PACE_MIN, bd = Infinity;
     for (let n = PACE_MIN; n <= PACE_MAX; n++) {
-      const d = Math.abs(paceFromSlider(n) - paceFromSliderV2(o));
+      const d = Math.abs(Math.log(paceFromSlider(n) / paceFromSliderV2(o)));
       if (d < bd) { bd = d; best = n; }
     }
     m[o] = best;
@@ -275,8 +288,10 @@ const STEER_MIGRATIONS = [
       const err = (paceFromSlider(to) / paceFromSliderV2(from) - 1) * 100;
       migSet(3, "pace", to,
         `RACE PACE regrid 1..10 -> 1..19: ${paceFromSliderV2(from).toFixed(3)} -> ${paceFromSlider(to).toFixed(3)} (${err >= 0 ? "+" : ""}${err.toFixed(2)} %)`);
-      // The lossy pair, named rather than swallowed. A clamp nobody can see is
-      // how a player's settings get quietly changed.
+      // A collision, named rather than swallowed — a clamp nobody can see is how
+      // a player's settings get quietly changed. With log-nearest above there is
+      // no such pair today and this never fires; it stays because the guard is
+      // cheap and the next person to re-derive the grid may reintroduce one.
       const shared = Object.keys(PACE_V2_TO_V3).filter((o) => PACE_V2_TO_V3[o] === to);
       if (shared.length > 1) {
         Log.warn("game", `steer schema v3: old pace notches ${shared.join(" and ")} both land on ${to} — the top of the old grid was finer than the new even-6 % one, so those two settings are no longer distinguishable (this one moved ${err >= 0 ? "+" : ""}${err.toFixed(2)} %)`);

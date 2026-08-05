@@ -58,8 +58,12 @@ function flag(name, def) {
 // real element and dispatch a real "input" event rather than reimplementing the
 // mapping, so the sweep measures the SHIPPED slider-to-physics path — including
 // anything steer-tuning.js does on the way (clearPreset, macro mirroring).
+// `notches` is per-slider because they are no longer all 1..10: Phase C gave
+// RACE PACE nineteen. A shared default would have swept only the bottom 53 % of
+// the one control this tool exists to pick a default FOR, and it would have done
+// it silently — the run would look complete and answer a different question.
 const SLIDERS = [
-  { id: "pm-pace",       label: "RACE PACE (was OVERALL SPEED)", key: "pace" },
+  { id: "pm-pace",       label: "RACE PACE (was OVERALL SPEED)", key: "pace", notches: 19 },
   { id: "pm-rate",       label: "RESPONSE (wheelbase)",          key: "wheelbase" },
   { id: "pm-expo",       label: "LINEARITY (steer expo)",        key: "expo" },
   { id: "pm-lock",       label: "STEER LOCK (max slip)",         key: "maxSlip" },
@@ -70,7 +74,11 @@ const SLIDERS = [
 const wanted = flag("sliders", "").split(",").filter(Boolean);
 const SWEEP = wanted.length ? SLIDERS.filter((s) => wanted.includes(s.id)) : SLIDERS;
 const TRACKS = flag("tracks", "monza,suzuka,bahrain").split(",").filter(Boolean);
-const NOTCHES = flag("notches", "1,2,3,4,5,6,7,8,9,10").split(",").map(Number).filter(Number.isFinite);
+// An explicit --notches applies to every slider swept; otherwise each takes its
+// own range (10 unless it says otherwise).
+const NOTCHES_FLAG = flag("notches", "").split(",").map(Number).filter(Number.isFinite);
+const notchesFor = (s) => NOTCHES_FLAG.length ? NOTCHES_FLAG
+  : Array.from({ length: s.notches || 10 }, (_, i) => i + 1);
 const AGGR = Number(flag("aggr", "0.88"));
 const STEPS = Number(flag("steps", "2600"));
 const JSON_OUT = flag("json", "");
@@ -248,7 +256,7 @@ async function main() {
 
     // One worker per circuit, each sweeping every slider x notch on it.
     const jobs = [];
-    for (const s of SWEEP) for (const notch of NOTCHES) jobs.push({ sliderId: s.id, tuningKey: s.key, notch, label: s.label });
+    for (const s of SWEEP) for (const notch of notchesFor(s)) jobs.push({ sliderId: s.id, tuningKey: s.key, notch, label: s.label });
 
     const queue = TRACKS.slice();
     await Promise.all(pool.map(async (w) => {
