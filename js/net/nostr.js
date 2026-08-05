@@ -277,7 +277,14 @@ const NetNostr = (function () {
       // OUR setup was throwing. Naming it would have pointed straight at it.
       const relayFail = (e) => {
         const why = (e && (e.message || String(e))) || "unknown";
-        return { ok: false, error: "relay", detail: why,
+        // The stack too. A message alone said "The string did not match the
+        // expected pattern" — Safari's SyntaxError — while every individual
+        // step of this setup, run by hand in the same console, succeeded. A
+        // message names WHAT; only the stack names WHERE, and without it the
+        // only method left is elimination, which took several rounds and did
+        // not converge.
+        const where = (e && e.stack) ? String(e.stack).split("\n").slice(0, 4).join(" | ") : "";
+        return { ok: false, error: "relay", detail: why, stack: where,
                  message: "Could not reach the room service (" + why.slice(0, 90) + ")."
                         + " Use the invite link instead." };
       };
