@@ -33,10 +33,17 @@ node tools/test-bg.mjs --status
 node tools/test-bg.mjs --stop              # kill the process GROUP if needed
 ```
 
-**One heavy group is full capacity on 4 cores.** `test-bg` refuses oversubscribe
-batches; timeouts with no assertion failures usually mean contention — re-run
-that group alone. Do not edit `js/`/`css/` while a run serves this tree (use a
-worktree). Failures carry `apex-state`, `apex-logs`, `page-console` in the log.
+**One heavy group is full capacity on 4 cores.** Heavy groups: `circuit`,
+`scenery`, `physics`, `behaviour`, `baseline`, `render`. **Never pair two
+heavy groups** — even when `pick-tests --bg` batches alphabetically by two,
+that can still oversubscribe; override with serial runs.
+
+When a change needs several groups (e.g. circuit + scenery + ui), run **ONE at
+a time**: `circuit` → wait → `scenery` → wait → `ui`. `test-bg` refuses
+oversubscribe batches; timeouts with no assertion failures usually mean
+contention — re-run that group alone. Do not edit `js/`/`css/` while a run
+serves this tree (use a worktree). Failures carry `apex-state`, `apex-logs`,
+`page-console` in the log.
 
 ## Escalation order
 

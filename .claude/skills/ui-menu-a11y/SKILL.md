@@ -52,7 +52,7 @@ Relevant specs in `test:ui`:
 | Spec | What it tends to catch |
 |---|---|
 | `tests/menu-keyboard.spec.js` | Arrow-key movement, wheel redirect, open-layer targeting |
-| `tests/ui-button-touch.spec.js` | Escape/back ladder, touch controls, dialog cancel paths |
+| `tests/ui-button-touch.spec.js` | Escape/back ladder (incl. pause settings → `#pm-settings-close`), touch controls, dialog cancel paths |
 | `tests/ui-scale.spec.js` | UI-size/zoom and coarse-pointer layout regressions |
 | `tests/hud-layout.spec.js` | HUD safe-area, touch landscape, control docking |
 | `tests/ui-desktop.spec.js`, `tests/ui-audit.spec.js` | Desktop/menu galleries and smoke coverage |
@@ -114,6 +114,13 @@ Deep references:
    - Run `npm run test:tooling-fast` for docs/load-order/style inventory checks.
    - Run `test:ui` via `tools/test-bg.mjs`; see `check-changes`.
    - If JS/CSS changed, use `bump-cache` before committing.
+
+### Pause settings overlay
+
+Opening pause settings hides `#pausemenu` so only `#pmsettings` is visible. Escape
+routes through `data-esc-close="pm-settings-close"` on that screen (same ladder
+asserted in `tests/ui-button-touch.spec.js`). Scroll region:
+`#pmsettings-inner .sheet-body.pane`.
 
 ## Common Mistakes
 

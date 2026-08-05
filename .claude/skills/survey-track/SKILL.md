@@ -47,7 +47,8 @@ This self-boots the game (no server needed) and produces, in one boot:
   - **`terrainY === "--"` sandwiched between solid readings** → a terrain *hole*;
     props out there fall back to the closed-form `groundYAt()` estimate and **float
     or sink** (the "channel between rings"). A trailing `--` at the outer lats is
-    just the ribbon edge — benign.
+    just the ribbon edge — benign. At water, also check **`waterSurface` vs
+    `terrainOuter` ribbon mismatch** and `dressingExclusions` at that frac.
   - **a >1 m jump between adjacent lats** → a cliff/step.
   - `terrainY` sliding steadily more negative with distance → the ribbon is
     **sagging** (right for a hill, wrong for a flat island level with water).

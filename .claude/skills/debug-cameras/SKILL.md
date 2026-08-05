@@ -40,6 +40,9 @@ view — it is not layered on top of a player camera. `camera("cockpit")` then
   `camera()`.
 - **Orbit inspection shot:** `orbit(frac, az, el, dist)` alone — do **not** call
   `snapCam()` after `orbit()` (it clears `dbgCam` and snaps back to the game rig).
+- **Recovery after `snapCam()`:** `snapCam()` clears any active `dbgCam` override.
+  Re-call `orbit()` / `eyeAt()` / `view()` with the same args. If you lost them,
+  re-derive `frac` from `js/track/markings.js` or `__apex.corners()`.
 
 ## Preview any in-game mode anywhere (no driving)
 

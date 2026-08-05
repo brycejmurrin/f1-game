@@ -31,7 +31,13 @@ guessing.
 ```sh
 node tools/motion-capture.mjs <track> [seconds] [speed] [outdir]
 node tools/motion-capture.mjs monaco 4 50
+node tools/motion-capture.mjs spa 4 70   # still starts at jump(0.05) — see below
 ```
+
+**No start-frac CLI** — the tool always `jump(0.05, speed)`. To capture Eau Rouge
+(~frac **0.078** on Spa) you must fork the tool or accept the limitation. Look up
+the fraction first via `__apex.corners()`, `__apex.trackInfo({what:"corners"})`,
+or `js/track/markings.js` before choosing a staging point.
 
 It records a throttle-held chase-cam clip, extracts frames, and prints:
 

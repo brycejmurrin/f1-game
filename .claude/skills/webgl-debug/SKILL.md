@@ -14,12 +14,18 @@ of root causes — start with the probes below before reading shader source.
 
 ```js
 // In browser console or apex-eval:
-GLX.hdrMode()   // true = WebGL2 HDR path active; false = fallback (SwiftShader or old GPU)
+GLX.hdrMode()   // boolean — true = WebGL2 HDR float-FBO path active
 ```
 
 `false` means the WebGL2 context failed to create a float framebuffer — the HDR
 composite pass is skipped and bloom/tone-map won't fire. This is normal under
 SwiftShader in CI; it's a bug in production if a modern GPU returns `false`.
+
+**Do not confuse with GPU timing:** when someone says HDR/GPU features are
+"unsupported", they usually mean `__apex.gpuTimer().supported === false`
+(`EXT_disjoint_timer_query_webgl2` absent — SwiftShader, many mobile GPUs). That
+is unrelated to `hdrMode()`; bloom can still run when `hdrMode()` is true but
+`gpuTimer` is unsupported.
 
 ## 2. Verify the CPU-side light state
 
@@ -104,6 +110,13 @@ Bloom requires `hdrMode() === true` (float framebuffer available). Under
 SwiftShader it falls back to the LDR path — bloom is skipped and the scene looks
 flat. In production, verify `GLX.hdrMode()` returns `true` after context
 creation.
+
+### Bloom too strong / scene milky
+
+Tune via the **lighting-tuner** knobs (live or baked into `LightPresets`):
+`bloomMul`, `threshOff`, `bloomKnee`, `exposureMul`. Reproduce at
+`setTimeOfDay('dusk')` on a floodlit track and compare against shipped presets
+for that `track|tod|weather` before editing shader code.
 
 ## 6. Playwright probe pattern
 

@@ -17,11 +17,19 @@ __apex.lightTune({ lampLevel: 0.4 })  // set knobs live (same as the panel slide
 
 Knob resolution, lowest→highest precedence: `TUNE_DEFS.def` → shipped
 `js/game/light-presets.js` `"*"` → shipped `"track|tod|weather"` → localStorage
-`"*"` (player's GLOBAL slider edits) → legacy localStorage per-condition.
-Slider edits write the global `"*"` profile; ship a look by baking the panel's
-COPY VALUES export into `js/game/light-presets.js` (see the **bake-lighting**
-skill). Edit `applyRaceSettings` only for STRUCTURAL changes (new branch
-logic, per-theme behavior) — not for values a knob already owns.
+`"*"` (legacy global profile) → localStorage **`track|tod|weather`** (current
+condition). **Live slider edits write the current condition key** in
+`apex26.lightTune` (`LightStore.set` → `profiles[key()]`), **not** global `"*"`.
+Ship a look by baking the panel's COPY VALUES export into
+`js/game/light-presets.js` (see the **bake-lighting** skill). Edit
+`applyRaceSettings` only for STRUCTURAL changes (new branch logic, per-theme
+behavior) — not for values a knob already owns.
+
+**Why do my edits survive reload?** localStorage (`apex26.lightTune`) outranks
+shipped `LightPresets`, so a baked baseline does not overwrite what you tuned in
+the panel. Use **RESET** in the LIGHTING TUNER for the **current** track/tod/weather
+to drop back to shipped values. Legacy `"*"` profiles from older saves may still
+persist — clear that key in DevTools if a global override keeps winning.
 
 `lightState()` returns the full resolved lighting snapshot *after*
 `applyRaceSettings` has run.  Compare before/after any change to confirm it
@@ -100,7 +108,8 @@ __apex.orbit(0.15, 45, 20, 60);  // frame turn 1
 | "Floodlights not firing" | `numLights === 0` on a dark track | `buildTrackLights` guard — check `track.def.night` (Monza is `false`; use singapore/vegas for night probes) |
 | "Floodlight masts invisible" | `floodEmit === 0` | Night emissive not applied in `buildProps`; check `lightTune({floodEmitMul})` |
 | "Dawn sun too high" | `sunY` close to 1.0 | `lightTune({sunElev: -N})` (deg offset); structural default lives in `applyRaceSettings` |
-| "Scene washed out" | `exposure` too high or `ambientGround` too bright | `lightTune({exposureMul, ambientMul})`; night branch caps ambient |
+| "Scene washed out" / bloom too strong | `exposure` too high, bloom knobs hot | `lightTune({exposureMul, bloomMul, threshOff, bloomKnee})`; try `setTimeOfDay('dusk')` + check shipped `LightPresets` for the condition |
+| "Scene washed out (ambient)" | `ambientGround` too bright | `lightTune({ambientMul})`; night branch caps ambient |
 | "Lamps too bright / too dim" | pool blow-out or dark valleys | `lightTune({lampLevel, poolEnergy, bleedMul})` |
 
 ## Writing a lightstate contract test

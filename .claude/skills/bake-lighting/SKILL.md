@@ -6,9 +6,9 @@ description: Use when the user pastes a window.LightPresets = {…} blob or asks
 # Bake copied LIGHTING TUNER settings and push
 
 The in-game **LIGHTING TUNER** (pause-menu page) stores the player's slider
-edits in localStorage — new edits go to the GLOBAL `"*"` profile (one value
-across every time-of-day/weather; legacy per-condition profiles are still
-honoured) — and its **COPY VALUES** button exports the file+local merge as a
+edits in localStorage under the **current** `track|tod|weather` key (legacy
+`"*"` profiles from older saves are still honoured) — and its **COPY VALUES**
+button exports the file+local merge as a
 `window.LightPresets = {…}` blob. This skill takes that
 blob, writes it into the committed `js/game/light-presets.js` (the shipped baseline
 everyone sees), bumps the cache version, and commits + pushes — the "apply" step
@@ -84,3 +84,8 @@ you don't merge by hand.
   localStorage still overrides them locally until they RESET.
 - If the blob fails to parse, the helper prints the error and writes nothing —
   fix the paste (usually a stray trailing comma or truncated copy) and re-run.
+- If the regex fails (`Could not find the window.LightPresets assignment`), the
+  file must contain a line-anchored assignment: `window.LightPresets = {` … closing
+  `};` on its own line (see the comment in `bake.mjs` — indented header examples
+  must not match). Open `js/game/light-presets.js`, hand-fix the literal, run
+  `node --check js/game/light-presets.js`, then re-run `bake.mjs`.

@@ -19,7 +19,7 @@ node tools/apex-eval.mjs monaco "a.camera()"
 node tools/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
 
 # Parallel screenshot validation (writes PNGs + a blank/fail manifest):
-node tools/apex-capture.mjs cameras [track] [outdir]   # camera-mode sweep (12 of the game's 13 modes)
+node tools/apex-capture.mjs cameras [track] [outdir]   # 12 camera modes (see below; omits drift)
 node tools/apex-capture.mjs modes   [outdir]           # menu / race day,wet,night / results / time-trial
 node tools/apex-capture.mjs tracks  [outdir] [id ...]  # one orbit shot per circuit
 ```
@@ -64,6 +64,25 @@ Portrait UI uses `{width:390,height:844}`; in-race shots must use **landscape**
 `apex-capture` exits non-zero and lists any shot that came back `blank:true`
 (< ~5 KB) — so a broken render fails CI-style without opening every file. Both
 tools start their own server + Chromium; no setup beyond `npm install`.
+
+## `apex-capture cameras` — 12 modes, no drift
+
+The harness hardcodes 12 of the game's **13** `CAM_MODES` (`js/game/tables.js`):
+`chase`, `far`, `cockpit`, `hood`, `overhead`, `heli`, `reverse`, `side`,
+`cinematic`, `low`, `tcam`, `rear` — **`drift` is omitted**. It also hardcodes
+`park(0.1)` (10% lap) for every shot; a different fraction needs a custom sweep
+with `previewCam(frac, mode)` or a fork of `tools/apex-capture.mjs`.
+
+To include **drift**, append it to the `CAMS` array in `apex-capture.mjs` (or
+run a one-off):
+
+```sh
+node tools/apex-eval.mjs monza "(a.park(0.18), a.camera('drift'), a.snapCam())"
+# then screenshot the canvas, or duplicate the cameras fanout with CAMS.push('drift')
+```
+
+For arbitrary lap fractions without forking, use `shot.mjs` with your `frac` arg
+or a `previewCam` loop (see **debug-cameras**).
 
 ## Why one server + Chromium workers
 

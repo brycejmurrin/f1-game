@@ -66,15 +66,14 @@ Read both once; do not re-fetch per tick.
   `world({since:seq})` returns only what *changed* since a prior payload.
 - `field({detail})` — the whole grid: race order, gaps, interval, AI pace.
 - `scene({radius, kinds, limit} | {visible})` — named scenery by distance +
-  bearing (radius around the car), or `{visible:true}` for the camera's on-screen
-  list. Rows land in `props` (plus `lamps`); `counts.inRadius` is how many were in
-  range and `truncated` flags that `limit` clipped the list — check it before
-  concluding something isn't there. **Cross-reference a prop between tools by
-  `trackSide`, not `side`.** `trackSide` is the CENTRELINE side, the one
-  `worldModel()`/`describe()` also report; `side` is EGOCENTRIC — which side of
-  your nose, from `bearingDeg`, where **+ = your right**. They agree when you sit
-  on the centreline pointing down the road and diverge legitimately when you do
-  not: a prop can be left of the road's middle and still right of your nose.
+  bearing. **`radius` is omnidirectional around the car**, NOT "metres ahead" —
+  `scene({radius:80})` collects props within 80 m in every direction. For the
+  road ahead use `world({detail:"drive"}).pacenotes` / `.ahead`. Or
+  `{visible:true}` for the camera's on-screen list. Rows land in `props` (plus
+  `lamps`); `counts.inRadius` / `truncated` flag clipping — check before
+  concluding something isn't there. **Cross-reference props by `trackSide`, not
+  `side`:** `trackSide` is centreline-left/right; `side` is egocentric (+ =
+  your right).
 - `atmosphere()` — the light as prose: day/night, sun/moon, floodlights, fog
   visibility, wet road.
 
@@ -143,7 +142,8 @@ lock**; note `+k` is a **LEFT**-hand turn, so full right lock is toward `-k`.
 ticks; `rollout({policy})` calls your policy repeatedly.
 
 ```
-race("monza"); go(); jump(0.05, 30)   // STAGE FIRST — without this every read
+race("monza"); go(); jump(0.008, 70)   // Monza T1 — ~frac 0.008, ~70 m/s entry
+                                      // STAGE FIRST — without this every read
                                       //   below returns PlayerNotPlacedError
 objective()                       // once — what winning is
 trackInfo({what:"corners"})       // once — the static map

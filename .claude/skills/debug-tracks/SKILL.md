@@ -27,7 +27,7 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 |---|---|
 | `groundY(frac, lat)` | `{x,z, roadY, terrainY, gap}` — **gap finder**: `gap<0` = terrain *below* road (fine); `gap>0` = terrain poking *above* the racing surface (a defect) |
 | `scan([d1,d2,...])` | look-ahead `Array` of `{s,k,hw,slope}` at each distance ahead |
-| `wallStats()` | `{minB, maxB, minOverHw, anyNaN, street, n}` — barrier audit; `anyNaN:true` or tiny `minOverHw` = bad geometry |
+| `wallStats()` | `{minB, maxB, minOverHw, anyNaN, street, n}` — **barrier envelope vs road edge** (`barR`/`barL` lateral limits minus `hw[k]`); NOT road half-width. `anyNaN:true` or tiny `minOverHw` = bad geometry |
 
 ## "How many corners?" — official vs peaks
 
@@ -55,6 +55,24 @@ node tools/apex-eval.mjs monza "a.wallStats()"
 node tools/apex-eval.mjs monaco "a.groundY(0.18, 10)"          # gap finder at a corner
 node tools/apex-eval.mjs suzuka "a.trackProfile(40)" --raw     # full elevation profile
 ```
+
+## Street circuits (`street: true`)
+
+Street layouts are track defs with `street: true` — continuous barrier envelope,
+no terrain ribbon. Currently: **monaco**, **singapore**, **vegas**, **baku**,
+**jeddah** (verify with `grep 'street: true' js/circuits/*.js` if the roster
+changes). `wallStats().street` mirrors the flag; `trackProfile().hw` is still the
+**road** half-width — compare the two, not either alone.
+
+### Half-width vs barrier (one-liner)
+
+```sh
+for id in monaco singapore vegas baku jeddah; do
+  node tools/apex-eval.mjs "$id" "(({id:'$id', hw:a.trackProfile(80).map(p=>p.hw), w:a.wallStats()}))" --raw
+done
+```
+
+Compute min/max/mean of `hw` from the profile array; compare against `w.minOverHw`.
 
 ## Parallel multi-track sweep (compare all circuits fast)
 

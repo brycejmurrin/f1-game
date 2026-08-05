@@ -30,6 +30,14 @@ Fixed (edit `js/game.js` to change): `LONG_GRIP = 34 m/s²` (longitudinal axis o
 the traction circle — braking/accel consumes grip; `slipFactor =
 sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip → trail-braking rotation,
 hard-braking understeer), `CS_FRONT/CS_REAR`, `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
+**`LONG_GRIP` is NOT live-tunable via `setPhysics`** — A/B it with two builds or
+a source edit between runs.
+
+### Trail-brake probe
+
+Mid-corner: `{ brake: true, steer: ±0.3..0.5 }`, then read `physState().slipFactor`
+and `axFrac` while braking. Lower `slipFactor` = longitudinal grip eating lateral
+budget; compare runs directionally, not on absolute thresholds.
 
 ## A/B harness (deterministic, headless)
 

@@ -45,17 +45,24 @@ skill, not how to run it. Bodies carry the workflow.
 
 ## Pressure-test notes (2026-08)
 
-Invoked every skill with fast subagents (`composer-2.5-fast`; Haiku not available
-in this environment) against fictional user requests. Highest-confidence fixes
-applied: wrong APIs (`UiLayers.gateOpen` → `anyOpen`), inverted physics table
-(`frontGrip`/`yawInertia`), wrong `setEngine` signature, shake location
-(`game.js` not `cameras.js`), career facility≠budget-cap, missing `incident()`/
-`net()` hooks, `corners()` vs FIA turns, 40-circuit roster, `perf-profile` tool
-lag, folklore corner fractions.
+Two rounds of fast subagents (`composer-2.5-fast`; Haiku not available)
+invoked every skill against realistic prompts.
 
-Still PARTIAL by design for some requests (e.g. motion-capture is track-generic;
-agent-view race `finished` needs chained rollouts). Re-run a skill scenario after
-editing it.
+**Round 1** fixed: phantom `UiLayers` APIs, inverted physics knobs, wrong
+`setEngine` signature, shake location, career facility≠budget-cap, missing
+`incident()`/`net()`, `corners()` vs FIA turns, 40-circuit roster,
+`perf-profile` tool lag, folklore corner fractions.
+
+**Round 2** fixed: in-race mute dual-bus (music vs sfx), street-circuit hw
+compare recipe, OSM geo-paths clone requirement, lightTune localStorage key
+(not `"*"`), bloom→lighting-tuner, apex-capture 12/13 modes + frac limit,
+chrome finish vs `--refl`, serial heavy test groups, mobile QR ICE, guest/host
+caution proof, trail-brake / LONG_GRIP A/B limits, `scene(radius)`≠ahead,
+snapCam recovery, pause-settings Escape ladder, waterSurface channel diagnosis.
+
+Still PARTIAL for some asks by design (motion-capture start-frac needs a fork;
+agent-view race `finished` needs chained rollouts). Re-run a skill scenario
+after editing it.
 
 The debug-* skills pair with `tools/apex-eval.mjs` / `tools/apex-capture.mjs` so
 changes are validated visually, not just asserted.

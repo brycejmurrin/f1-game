@@ -42,6 +42,15 @@ Then **Read the PNG(s)** it prints (e.g. `scratch/renders/cars/ferrari/side.png`
 look at the result. Output lives under `scratch/renders/cars/<team>/` — throwaway,
 don't commit it. For the batch audits, `audit-parts.mjs` writes `scratch/renders/parts/<category>/` and `audit-aero.mjs` writes `scratch/renders/aero/`.
 
+**All-teams side batch** (grid livery read; `custom` / MY TEAM is runtime-only — grep
+the static grid from `js/car/teams.js`):
+
+```sh
+grep -oP 'id: "\K[^"]+' js/car/teams.js | while read -r t; do
+  node tools/render-car.mjs --team="$t" --views=side --out=scratch/renders/cars-grid/
+done
+```
+
 ### Preset views (orbit az: 0 = behind, 180 = head-on)
 `hero` (rear-3/4, default) · `front` · `rear` · `side` · `frontquarter` ·
 `rearquarter` · `nose` (top-down on the number) · `tail` (rear wing + shark fin) ·
@@ -92,11 +101,12 @@ node tools/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,nig
   · `--intensity=<n>` · `--exp=<n>` (exposure/brightness) · `--bg=RRGGBB`.
 - Reflection: `--refl=<0..1>` scales EVERYTHING shine-related together — roughness,
   metalness, specular, clearcoat, sparkle, and the env-mirror (`carEnvCube`) — as
-  one matte↔glossy dial. Default `0.2` (mostly matte, reads as team paint); raise
+  one matte↔glossy **studio dial**. Default `0.2` (mostly matte team paint); raise
   it to check clearcoat/reflection behaviour, `0` for flat paint, up to `1` for
-  full chrome. (Scaling only clearcoat/carEnvCube and leaving `specular` fixed
-  was an earlier bug — a hot point-light highlight stayed regardless of the
-  slider. `paintFromRefl()` in carview.html now derives every term from one value.)
+  maximum gloss in the viewer rig. **This is not the in-game livery finish:**
+  real **chrome paint** is `finish:"chrome"` on a livery entry in
+  `js/car/liveries.js` (e.g. `--livery=mer_chrome`). The universal id `chrome`
+  is a **gloss** palette named "Chrome", not the chrome finish material.
 - Look target: `--look=<m>` shifts the orbit target along Z (+nose / −rear),
   `--lookx=<m>` along X (+right / −left) — lets a close `--dist` frame ONE
   corner (a wheel, an axle) instead of cropping both ends of the car when

@@ -101,21 +101,30 @@ Read first:
    - `lobbySdp().remoteTypes` answers what the peer actually received.
    - If remote SDP has no `relay`, inspect SDP packing/truncation and make sure
      ICE prefetch completed before `RTCPeerConnection` construction.
+   - **Relay candidates arrive last** — if the invite/answer string is truncated,
+     relay entries are the ones dropped. Symptom: desktop host gathers fine,
+     mobile guest never finishes ICE (`checking`/`connecting` forever). Probe ICE
+     on the **stuck peer** (usually the guest), not only the host.
 
-5. **Debug ICE with candidate pairs.**
+5. **Mobile QR flow is out-of-band.**
+   - Desktop host shows a QR; the phone guest opens the encoded URL in **Safari
+     via the Camera app** (or paste), not the in-page scan UI. Do not debug
+     mobile join by expecting the guest to use `NetScan` inside the game page.
+
+6. **Debug ICE with candidate pairs.**
    - Run `await __apex.turnProbe()` first: no relay and dead relay are different
      fixes.
    - If relays exist but no connection forms, use `await __apex.lobbyPairs()`.
    - `recv: 0` across pairs means checks leave but no answer returns; a
      succeeded-but-not-nominated pair means something else ended first.
 
-6. **Respect build handshakes.**
+7. **Respect build handshakes.**
    - Handshake refuses mismatched `version.json` builds because physics/track
      constants can differ.
    - If JS/CSS changed, use `bump-cache`; stale builds can make peers unable to
      connect by design.
 
-7. **Verify in order.**
+8. **Verify in order.**
    - Run `npm run test:net-unit` before any browser group; it covers transport,
      SDP, rendezvous, QR, snapshot, and session contracts.
    - Run `test:net` in the background through `tools/test-bg.mjs`.
@@ -144,7 +153,10 @@ scripts above rather than three background tabs.
 - Using `cars[]` index across peers; custom-team selection can change grid
   length/order.
 - Treating local candidate counts as proof that the peer received relay
-  candidates; inspect `lobbySdp().remoteTypes`.
+  candidates; inspect `lobbySdp().remoteTypes`. Relay arrives last — truncation
+  drops it first (host OK, guest stuck).
+- Expecting mobile guests to join via in-page scan; they open the QR URL in
+  Safari/Camera, out of band.
 - Building `RTCPeerConnection` before awaiting ICE server prefetch; servers are
   fixed at construction.
 - Letting Nostr or room-code failures throw through the lobby; rendezvous errors

@@ -42,7 +42,8 @@ scenery: function (api) {
 - **Vegetation**: `tree` (broadleaf), `pine`/`conifer`, `palm`, `bush`, `hedge`,
   `forestEdge(s0,s1,side,gap,opts)` (dense gap-aware treeline).
 - **Structures**: `building(k,side,gap,w,h,d,opts)`, `tower(...)`, `grandstand(...)`,
-  `billboard(...)`, `gantry(...)`, `marshalPost(...)`.
+  `billboard(...)` (use billboard-style fascia in tight street spots),
+  `gantry(...)`, `marshalPost(...)`.
 - **Barriers** (these tighten the driving boundary via `recordBarrier`): `wall`,
   `fence`, `guardrail`, `tyreWall`.
 - **Terrain/relief**: `mountain(cx,cz,baseY,baseR,h,opts)`, plus raw primitives
@@ -54,6 +55,9 @@ scenery: function (api) {
 
 ## Hard rules
 
+- **Survey before placing.** Grep existing dressing at the target frac in
+  `js/circuits/<id>.js` and read `docs/tracks/<id>.md` — avoid duplicating or
+  fighting landmarks already authored there.
 - **On-track rejection guard.** Every primitive emitter (`addBox`/`addCyl`/…) is
   wrapped in a Minkowski test against the road half-width at each node (`rejBox`/
   `onRoadHit` in the `js/track/` scenery modules). If a prop's **full oriented footprint** covers
@@ -86,6 +90,8 @@ scenery: function (api) {
   in tests is tighter than desktop WebGL2). Use `every(20)` for sparse features,
   `every(5)` only for hero sections; jitter sizes with `hash()` so ranks don't look
   like clones; double-place at two distances for depth instead of doubling density.
+- **Overhead landmarks.** Bridges/flyovers (e.g. Monza Ascari) need clearance —
+  a low `place()`/`building()` can intersect the deck from below.
 
 ## Validate
 

@@ -127,6 +127,10 @@ Deep references:
       `SC_MIN=10` in `racecontrol.js`)?
    3. `caution({enabled:true})` — cautions not disabled?
    4. Multiplayer: only the **host** computes flags; guests adopt host `apply()`.
+      **`__apex.net()` does NOT carry caution** — compare `__apex.caution()` on
+      BOTH peers. Guest green while host shows VSC (roles correct via
+      `__apex.net().role`) means the guest failed to adopt `EV.CAUTION` via
+      `apply()`. Headless proof: loopback + inject caution, then read both sides.
 
 7. **Verify narrowly, then with browser coverage.**
    - Run the pure unit guard `node --test tests/race-control.test.mjs` after
@@ -142,7 +146,7 @@ Deep references:
 - Adding an IncidentSim path without a hard handback cap and last-good fallback.
 - Changing tire grip/friction ellipse from IncidentSim; the header forbids it.
 - Computing race control on guests; debris is local, so only host flags define
-  the shared race.
+  the shared race. Inspect `caution()` on each peer — `net()` omits it.
 - Lowering flags directly on hazard count with no hysteresis, causing flicker as
   debris despawns.
 - Assuming safety car/VSC slows cars by itself; this layer sets flags and gates

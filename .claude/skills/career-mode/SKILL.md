@@ -48,8 +48,8 @@ Hooks:
 
 | Hook | Use |
 |---|---|
-| `__apex.career(opts?)` | Read, resume, or start a career |
-| `__apex.careerState()` | Compact snapshot; prefer over raw save reads |
+| `__apex.career(opts?)` | Read, resume, or start a career — e.g. `{ flavour:"myteam", hire, seed, … }` |
+| `__apex.careerState()` | Compact snapshot; prefer over raw save reads. **`owned` is a COUNT** — full part ids live on `__apex.career().owned` / `Career.isOwned()` |
 | `__apex.careerMoney(n?)` | Get/set balance for tests |
 | `__apex.careerGrant(n?)` | Grant live career credits |
 | `__apex.careerSim(n)` | Settle rounds through real `Career.settleRound()` |
@@ -120,6 +120,10 @@ Deep references:
 7. **Verify through hooks before UI assertions.**
    - Start with `careerState()`, `careerSlots()`, `careerSim()`, and
      `qualiSim()` to prove the rule.
+   - **`careerSim()` needs the career hub plus a loaded track/grid first** — stage
+     qualifying/race context before calling it.
+   - Garage locked rows: `#cs-options .cs-opt.locked`, or assert owned parts vs
+     `Parts.CATALOG` via `__apex.career().owned` / `Career.isOwned()`.
    - Then assert UI flow through `tests/career.spec.js` / `tests/quali.spec.js`.
    - Run `test:career` in the background via `tools/test-bg.mjs`.
 
@@ -147,4 +151,6 @@ Deep references:
 - Simulating economy with approximations when `careerSim()` exercises the real
   settlement path.
 - Running browser career tests before staging a loaded track/grid for hooks that
-  depend on qualifying.
+  depend on qualifying or `careerSim()`.
+- Reading `careerState().owned` as part ids — it is a count; use
+  `__apex.career().owned` / `Career.isOwned()` for the list.

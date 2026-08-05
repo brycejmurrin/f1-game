@@ -119,6 +119,15 @@ in metres (0 → `track.total`), lateral `x` in metres (+ = right of centreline)
 - **OSM trace wins over `segs`.** If `js/track/geo-paths.js` has a path for this id, your
   `segs` are ignored for the centreline (still useful as a fallback). Use
   `reverse`/`startFrac` to orient a trace, not `segs` rewrites.
+- **Cloning an OSM-backed track:** you **must** copy the `CircuitPaths` entry in
+  `js/track/geo-paths.js` under the new id. Without it the build silently falls
+  back to coarse `segs` — the game loads, but the layout is wrong and hard to spot.
+- **`CircuitMarkings` covers the 24 season rounds only** (`js/track/markings.js`).
+  Classics and new tracks without an entry fall back to **curvature-peak**
+  `__apex.corners()` for turn lists — not the curated FIA apex fractions.
+- **`apex26.track` is a positional index** into `Tracks.LIST` (same order as
+  `tools/manifest.cjs` `CIRCUITS`). Do not reorder the circuit block casually —
+  saved track picks and season routing will point at the wrong def.
 - **`street: true` removes the terrain ribbon** — barriers must line the edge or
   the road floats over the floor slab.
 - For the `scenery(api)` body (trees, buildings, barriers, mountains), use the

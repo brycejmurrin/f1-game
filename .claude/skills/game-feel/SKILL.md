@@ -64,6 +64,7 @@ Apex 26's plain-JS IIFE game loop and `js/game/*` modules.
 | Kerb/grass/spray/sparks | `js/game/particles.js` / `Particles.sparks` | Wall scrape sparks: render loop in `game.js` (~6152) reads `Tracks.wallAt` proximity. Collision sparks via `c.fxSparkI` flag set in physics, consumed in render. |
 | Tyre marks | `js/game/skidmarks.js` | Stamp from measured slip/contact; keep the ring buffer bounded. |
 | Chassis pitch/roll/bob | `js/game/bodyattitude.js` | Visual attitude only; never write back into physics. |
+| Gear-shift punch | `js/game/audio.js` `GameAudio.shift()` + auto-shift call sites near shift audio in `game.js` `updateCar` | Layer a short sfx/camera tick on upshift/downshift; do not retune physics for shift feel. |
 | HUD or menu pop | `js/game/hud.js`, `js/game/menus.js`, CSS components | Prefer short CSS/DOM transitions over per-frame JS where possible. |
 | Performance fallback | `js/game/perf.js` | Lower counts/intensity before dropping simulation quality. |
 

@@ -29,10 +29,10 @@ the basis for the codebase's debug-hooks-first testing.
 | Hook | Returns |
 |---|---|
 | `cars()` | `Array(22)` telemetry, sorted by progress |
-| `fieldState()` | `Array(22)` `{pos,id,name,code,team,isPlayer,lap,frac,speed,gap,finished}` |
-| `timing()` | `{raceT,lapTime,best,lastLap,lap,pos,total,gapAhead,gapBehind,energy,gear,sector,sectorElapsed}` |
+| `fieldState()` | `Array(22)` `{pos,id,name,code,team,isPlayer,lap,frac,speed,gap,finished}` — **`gap` = metres behind leader** |
+| `timing()` | `{raceT,lapTime,best,lastLap,lap,pos,total,gapAhead,gapBehind,energy,gear,sector,sectorElapsed}` — **interval gaps** use `gapAhead` / `gapBehind` here |
 | `sectorState()` | `{idx, elapsed, bests:[3], last:[3]}` (S1/S2/S3) |
-| `lapHistory()` | `{mode, laps:[], best, lastLap}` (full array in TT; best/last in race) |
+| `lapHistory()` | `{mode, laps:[], best, lastLap}` — **in race mode `laps` is empty** (only `best` + `lastLap`); for multi-lap history use Time Trial or accept the limitation |
 
 ## Scene / lighting
 
@@ -56,6 +56,8 @@ Verified single-call from cold: `(a.headless(true), a.reset(0.1,30,0),
 a.act({steer:-0.3,throttle:true,brake:false},1/60,5))` returns a full obs.
 
 ## One-off / scripted
+
+`finishRace()` exists for jumping to the chequered flag without driving every lap.
 
 ```sh
 node tools/apex-eval.mjs monza "(a.go(), a.jump(0.2,55), a.physState())" --raw
