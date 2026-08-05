@@ -202,12 +202,40 @@ const NetTransport = (function () {
   // Since build 972 there are also two free no-account relays, appended LAST
   // so anything you configured still wins — but OFF unless opted into, and
   // the block below says why that is not timidity.
+  // THE SHIPPED RELAY. A Metered free-tier credentials URL on the game owner's
+  // own account — the model the operator actually offers, rather than the
+  // embeddable credentials they retired. It returns a fresh iceServers array
+  // with EXPIRING credentials, so what is published here is a fetch URL and
+  // not a standing password.
+  //
+  // WHY THIS IS NEEDED AT ALL, from a real pair of devices ON ONE WI-FI: the
+  // only host candidate a browser now offers is mDNS-obfuscated
+  // (<uuid>.local), and if the router does client isolation or the OS declines
+  // local-network discovery, that name never resolves. The one remaining pair
+  // is srflx-to-srflx, which needs the router to hairpin its own public
+  // address back at itself, and many will not. Two phones on the same sofa
+  // then fail to connect while each holds a perfectly good address — which is
+  // exactly what "both sides found an address but the direct link was blocked"
+  // was reporting.
+  //
+  // THE KEY IS VISIBLE, and that is inherent rather than sloppy: any
+  // client-side TURN credential is readable in devtools, which is why Metered
+  // documents this exact fetch from the browser. The quota is 50 GB/month and
+  // the owner can rotate the key. Overridable by apex26.turnApi, so a fork
+  // points at its own account by setting one key.
+  const TURN_API =
+    "https://bmurrin-apex.metered.live/api/v1/turn/credentials"
+    + "?apiKey=410aca13505116873c708db45f86cd468871";
+
   let fetchedIce = null;
   let fetchingIce = null;
   function prefetchIce() {
     const jobs = [derivedRelays()];
     let url = null;
     try { url = localStorage.getItem("apex26.turnApi"); } catch (e) {}
+    // Yours first, ours as the default — so a player who configured one is
+    // never quietly moved onto somebody else's quota.
+    if (!url) url = TURN_API;
     if (url && !fetchedIce && !fetchingIce) {
       fetchingIce = fetch(url).then((r) => r.json()).then((body) => {
         const list = Array.isArray(body) ? body : (body && (body.iceServers || body.ice_servers)) || null;
