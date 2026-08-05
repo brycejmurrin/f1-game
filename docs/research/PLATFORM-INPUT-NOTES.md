@@ -209,43 +209,86 @@ visible control precisely so there is never a second code path.
 
 ---
 
-## 9. OPEN QUESTION: a touch dead zone along the top edge in landscape
+## 9. Screen-edge system gestures — what is real, and what was a false alarm
 
-**Status: unverified, needs a physical device. Written down because it is cheap
-to mitigate and expensive to discover.**
+**Investigated and closed with NO code change.** Recorded in full because the
+first pass got it wrong in an instructive way.
 
-A community iOS-PWA-games guide reports an **undocumented touch dead zone along
-the top edge in landscape** on recent iPhones — touches in it are silently
-swallowed by the OS, there is no visual indication, and
-`env(safe-area-inset-top)` still reports **0px**, so nothing in CSS reveals it.
-Reported on iPhone 15 and later with current iOS; suggested mitigation is to
-keep interactive elements ≥20px from the top edge in landscape regardless of
-what the inset says.
+**The claim.** A community iOS-PWA-games guide reports an undocumented touch
+**dead zone** along the top edge in landscape on recent iPhones: taps silently
+do not fire, and `env(safe-area-inset-top)` still reports 0px so nothing in CSS
+reveals it. Acting on that would have meant moving five controls.
 
-**Why it matters here.** This game is played in landscape, where the top inset
-IS 0 on every iPhone (see the landscape table in that guide: T=0 across all
-models). An audit found **five interactive controls** sitting at
-`top: calc(8px + var(--sat))`, i.e. 8 real pixels from the edge:
+**What the evidence actually supports.** Every authoritative source describes
+**swipe/pan recognisers, not taps**:
 
-| control | file | what is lost if it cannot be tapped |
-|---|---|---|
-| `#pausebtn` | `css/overlays.css:439` | the pause menu, mid-race |
-| `#btn-cam` | `css/overlays.css:450` | camera cycle / picker |
-| `#hud-restore` | `css/overlays.css:473` | **the only way back from HIDE HUD** |
-| `#pc-restore` | `css/hud.css:327` | **the only way back from photo-mode HIDE HUD** |
-| `#soundbtn` | `css/overlays.css:526` | sound toggle |
+- Apple's `preferredScreenEdgesDeferringSystemGestures` exists so a native app
+  can make the system ignore the FIRST *swipe* at a chosen edge.
+- Before iOS 11, hiding the status bar implied that deferral; since iOS 11 it
+  must be requested explicitly.
+- Unity exposes the same thing as `deferSystemGesturesMode`: "the system ignores
+  the first swipe".
+- **Web content cannot request it at all** — WICG/proposals#146 (open since
+  April 2024) asks for a web equivalent, and its stated use case is "Cloud
+  Gaming PWAs to prevent accidental app closures", i.e. *swipes* dismissing the
+  app.
 
-Two of those are the sole route out of a state that hides everything else, which
-is the worst possible thing to have in a dead zone.
+No Apple documentation, WebKit bug, or independent developer report corroborates
+a **tap** dead zone. One community guide is not enough to move five controls.
 
-**Before acting on this**, confirm on hardware: put a test button flush against
-the top edge in landscape and see whether it fires. If it reproduces, the fix is
-a floor on the offset under `(pointer: coarse)` — `max(20px, 8px + var(--sat))`
-— which costs nothing on devices without the dead zone. Do NOT apply it blind on
-desktop; 8px is deliberate there.
+**And our exposure was overstated even if it were true.** `--tap` is 52px on a
+coarse pointer, and these are `width/height: var(--tap)` boxes at
+`top: calc(8px + var(--sat))`. On an iPhone in landscape (`--sat` = 0) the pause
+button spans **8px → 60px**: roughly two thirds of it sits below any plausible
+~20px reserved band, so the control would be *degraded*, not unreachable. On
+iPad the status bar makes `--sat` non-zero and pushes it further clear.
 
-Note this is a *different* mechanism from the safe-area insets in §4-7: those are
-reported and can be read. This one is invisible to the platform.
+**The real, documented risk that does apply to us is a DRAG that starts in an
+edge band** — the system's Control/Notification Centre pan can claim it, and a
+web page gets no say. That affects the free-camera look-drag, the garage
+turntable and the telemetry scrub, none of which are buttons. The correct
+mitigation is not to move anything; it is to survive losing the pointer — which
+is exactly the `pointercancel` / `lostpointercapture` release net in §3, added
+for iOS's habit of cancelling touches. The two problems have one fix, and it is
+already in.
+
+**The lesson worth keeping:** "a source said X breaks" is a hypothesis. Check
+whether the mechanism the authoritative docs describe is even the same mechanism
+(here: swipe vs tap), and measure your own exposure (here: a 52px button is not
+"flush against the edge") before changing anything.
+
+---
+
+## 9a. CONFIRMED: `#track-detail` claims to be modal and is not
+
+Verified in code, not inferred. `index.html` declares:
+
+```html
+<div id="track-detail" role="dialog" aria-modal="true" …>
+```
+
+but it is a plain `<div>`: no `showModal()`, so no top layer and **no inert
+background**, and `grep` finds **no focus trap anywhere in this codebase** —
+`js/game/topmodal.js` gets containment from the platform, and nothing else
+implements it by hand.
+
+`aria-modal="true"` is not decoration. It instructs assistive technology to
+treat everything outside the element as inert, so a screen reader removes the
+rest of the page from its virtual cursor. Keyboard focus, meanwhile, walks
+straight out of the div into `#select` behind it. The AT user is told the rest
+of the page is gone and then Tab lands them in it — the worst combination, and
+strictly worse than never having made the claim.
+
+Escape already works here (`data-esc-close="track-detail-close"`, §1). What is
+missing is containment.
+
+**Fix: make the claim true rather than withdraw it** — convert it to a real
+`<dialog>` so the platform supplies the top layer, the inert background and
+focus containment, exactly as it does for the other sixteen screens. Two things
+to handle: `js/game/topmodal.js` scans `dialog.screen` and this element is not
+`.screen`, so widen that selector; and a `<dialog>` carries UA defaults
+(`margin: auto`, `border`, `padding`, fit-content sizing) that its full-bleed
+`position: fixed; inset: 0` styling in `css/track-detail.css` must override.
 
 ---
 
