@@ -624,10 +624,14 @@
 #cs-aero.active .cs-aero-lbl { color: rgba(125,249,255,0.75); }
 #cs-aero.active .cs-aero-val { color: #7df9ff; }
 @media (max-width: 1000px) {
-  #cs-aero { padding: 4px 8px; gap: 5px; min-height: 26px; }
-  .cs-aero-lbl { font-size: 8px; letter-spacing: 0.08em; }
-  .cs-aero-val { font-size: 11px; }
-  #cs-cam { padding: 4px 8px; font-size: 8px; min-height: 26px; }
+  /* 8px was the smallest type in the whole app, on the GARAGE — the screen you
+     sit on longest outside a race — and 26px targets against a 52px touch
+     ladder. Raised to the --label floor; min-height follows so the boxes are
+     aimable as well as readable. */
+  #cs-aero { padding: 6px 10px; gap: 5px; min-height: 34px; }
+  .cs-aero-lbl { font-size: 11px; letter-spacing: 0.08em; }
+  .cs-aero-val { font-size: 13px; }
+  #cs-cam { padding: 6px 10px; font-size: 11px; min-height: 34px; }
   #cs-cam-panel { padding: 6px 8px; gap: 4px; }
   .cs-pan-lbl { flex-basis: 30px; }
 }
@@ -683,12 +687,31 @@
 @media (max-width: 1000px) {
   #cs-view { gap: 3px; }
   .cs-view-btn {
-    font-size: 9px; letter-spacing: 0.05em;
-    padding: 4px 7px; min-height: 26px;
+    font-size: 12px; letter-spacing: 0.05em;
+    padding: 6px 9px; min-height: 34px;
   }
   .cs-view-zoom { font-size: 12px; padding: 2px 8px; }
   /* The dividers cost width and, once the row wraps, land at arbitrary places
      in it — they read as separators of nothing. */
   .cs-view-sep { display: none; }
 }
+
+/* ---------- THE TOUCH TYPE FLOOR ----------------------------------------
+   Same rule as the one at the end of css/menus.css, for the same reason: the
+   GARAGE carried the smallest type in the app (8px aero and camera labels,
+   10px option tags and stat deltas) on the screen you sit on longest outside
+   a race. Raised to the --label floor for touch only.
+
+   LAST IN THE FILE, because the phone media queries above cannot win against
+   the base declarations that follow them at equal specificity — a media query
+   adds no specificity and source order decides. Desktop keeps its density. */
+body:not(.desktop) .cs-tab-lbl,
+body:not(.desktop) .cs-tab-cur { font-size: 12px; }
+body:not(.desktop) .cs-opt-tag { font-size: 11px; }
+body:not(.desktop) .cs-opt-desc { font-size: 13px; }
+body:not(.desktop) .cs-delta { font-size: 11px; }
+body:not(.desktop) .cs-cam-lbl,
+body:not(.desktop) .cs-aero-lbl { font-size: 12px; }
+body:not(.desktop) .cs-cam-caret { font-size: 11px; }
+body:not(.desktop) #cs-unlimited { font-size: 12px; }
 } /* @layer components */

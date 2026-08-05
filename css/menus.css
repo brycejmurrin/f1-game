@@ -519,13 +519,19 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
        the same trap the map's width knob exists to dodge. */
     #sel-track-preview #sel-preview-elev { display: none; }
   }
-  #sel-preview-name { font-size: 13px; }
-  #sel-preview-gp { font-size: 10px; }
-  #sel-preview-meta { font-size: 10px; line-height: 1.35; margin-top: 4px; }
-  #sel-preview-rec { font-size: 10px; margin-top: 3px; }
-  .spf-fact { font-size: 9px; padding: 1px 6px; }
-  #sel-preview-facts { gap: 4px; margin-top: 4px; }
-  #sel-preview-elev { height: 22px; margin-top: 4px; }
+  /* THE PREVIEW TYPE SIZES THAT USED TO SIT HERE WERE INERT, and had been for
+     as long as they existed. #sel-preview-{name,gp,meta,rec} and .spf-fact are
+     all re-declared at the bottom of this file (~588-594) at the SAME
+     specificity, and a media query adds none — so source order decided it and
+     the later block won every time. The 9px facts and 10px GP line this block
+     "set" were never what rendered; the base 10px/11px were.
+     This is the exact trap the note under THE PREVIEW CARD IN THE TWO-COLUMN
+     LAYOUT describes, and it caught the phone sizes too. The touch sizes now
+     live AFTER those base rules, where they can actually win — see THE TOUCH
+     TYPE FLOOR at the end of this file. Only the layout values stay here,
+     because nothing re-declares them. */
+  #sel-preview-facts { gap: 5px; margin-top: 5px; }
+  #sel-preview-elev { height: 26px; margin-top: 4px; }
 }
 
 /* THE PREVIEW CARD IN THE TWO-COLUMN LAYOUT.
@@ -704,8 +710,12 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   #rs-body #rs-time-section, #rs-body #rs-diff-section { grid-column: auto; }
   /* Five chips in a third of the sheet want three across, not five. */
   #rs-time { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  #race-settings .sel-chip { font-size: 11px; padding: 5px 7px; letter-spacing: 0; }
-  #race-settings .sel-label { font-size: 9px; margin-bottom: 3px; }
+  /* RACE SETTINGS is seen before every single race, and its labels were the
+     smallest type in the app at 9px — under the 13px --label floor by a third.
+     The chips are also the thing you AIM at here, so 11px with 5px of padding
+     was a small target as well as small text. */
+  #race-settings .sel-chip { font-size: 13px; padding: 7px 9px; letter-spacing: 0; }
+  #race-settings .sel-label { font-size: 12px; margin-bottom: 3px; }
   .rs-row { margin-bottom: calc(var(--gap) * 0.5); }
 }
 #race-settings .sel-chip {
@@ -789,4 +799,35 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   }
   #cz-body .cz-sep, #cz-body #cz-preview { grid-column: 1 / -1; }
 }
+
+/* ---------- THE TOUCH TYPE FLOOR ----------------------------------------
+   css/tokens.css says --label is "the smallest type this UI has" and sets it
+   to 13px on touch. These are the menu classes that sat under it on a phone —
+   8-11px labels, badges and metadata on the three screens you actually read:
+   the circuit list, the circuit preview, and the season strip.
+
+   PLACED LAST, ON PURPOSE. The phone media queries higher up this file cannot
+   raise any of these: the same selectors are re-declared afterwards at equal
+   specificity, and a media query contributes none, so source order wins and
+   the later declaration always did. A whole block of preview sizes up there
+   was inert for exactly that reason (see the note where it used to be). Last
+   in the file, with body:not(.desktop) to keep the pointer UI untouched, is
+   the one position that cannot lose that race.
+
+   Desktop is deliberately excluded: it reads these at a desk, not at arm's
+   length, and its rows are already dense by choice. */
+body:not(.desktop) #sel-preview-gp { font-size: 13px; }
+body:not(.desktop) #sel-preview-meta,
+body:not(.desktop) #sel-preview-rec { font-size: 13px; }
+body:not(.desktop) .spf-fact { font-size: 12px; padding: 3px 8px; }
+body:not(.desktop) .track-row-meta,
+body:not(.desktop) .track-row-rec { font-size: 13px; }
+body:not(.desktop) .trb { font-size: 11px; }
+body:not(.desktop) .track-group-head { font-size: 12px; }
+body:not(.desktop) .season-upcoming-head,
+body:not(.desktop) .sur-rnd,
+body:not(.desktop) .sur-country { font-size: 12px; }
+body:not(.desktop) #disclaimer,
+body:not(.desktop) #audiostate { font-size: 12px; }
+body:not(.desktop) .mb-sub { font-size: 12px; }
 } /* @layer components */
