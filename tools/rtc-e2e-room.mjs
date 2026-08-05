@@ -30,6 +30,15 @@ const PORT = 4474;
 // the class of bug a real console produced (setRemoteDescription: stable).
 const RELAY = ((process.argv.find((a) => a.startsWith("--relays=")) || process.argv.find((a) => a.startsWith("--relay=")) || "--relay=ws://127.0.0.1:7448").split("=")[1]);
 const PEERS = Number((process.argv.find((a) => a.startsWith("--peers=")) || "--peers=2").slice(8));
+// --delay=SECONDS — how long the host sits on its offer before a guest answers.
+//
+// THE DIFFERENCE THIS HARNESS COULD NOT SEE. It has always joined within a
+// second of hosting, which is nothing like the real thing: a room code is read
+// off one screen and typed into another, and the host's offer waits half a
+// minute for it. An invite link pasted straight across connects in ~6 s on the
+// same hardware where a room code fails, and elapsed time is the only
+// difference left between them that this harness does not model.
+const DELAY_S = Number((process.argv.find((a) => a.startsWith("--delay=")) || "--delay=0").split("=")[1]);
 
 const alive = async () => {
   try { return (await fetch(`http://127.0.0.1:${PORT}/version.json`)).ok; } catch (e) { return false; }
@@ -90,6 +99,10 @@ if (!res || !res.ok) await die("the host could not open a room: " + JSON.stringi
 const CODE = res.code;
 
 // ---- guests join by code ---------------------------------------------------
+if (DELAY_S > 0) {
+  log(el(), `waiting ${DELAY_S}s before any guest joins — modelling a human carrying the code`);
+  await new Promise((r) => setTimeout(r, DELAY_S * 1000));
+}
 for (let i = 1; i < PEERS; i++) {
   const r = await pages[i].evaluate((c) => window.__apex.lobbyCodeJoin(c), CODE);
   log(el(), "P" + (i + 1) + " join:", JSON.stringify(r).slice(0, 140));

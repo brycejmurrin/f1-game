@@ -103,7 +103,12 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   has no SDP and the lobby specs use a fake transport, so four regressions
   shipped through that gap before this existed. Against a relay we run, a
   failure is ours by construction rather than somebody's server having a bad
-  day. Needs `tools/nostr-local.cjs` running.
+  day. Needs `tools/nostr-local.cjs` running. `--delay=SECONDS` makes the host
+  sit on its offer before any guest joins, which is what a human carrying a
+  six-character code across a room actually does — the harness otherwise joins
+  within a second of hosting and cannot model it. (Measured: 45 s still
+  connects, so offer staleness is NOT what breaks room codes on real
+  hardware.)
 - `nostr-probe.mjs` — which public relays will actually CARRY our signalling.
   Publishes what the game publishes (ephemeral kind-22xxx, freshly generated
   key) to each candidate and records the NIP-01 verdict. This is the only

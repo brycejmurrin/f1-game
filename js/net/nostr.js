@@ -403,9 +403,42 @@ const NetNostr = (function () {
                        message: "Could not answer that invite." });
               return;
             }
-            try { post(out, from); } catch (e) {}
-            // Give the relay a moment to carry it before the room is torn down.
-            setTimeout(() => finish({ ok: true, payload: data }), 600);
+            // THE ANSWER IS THE FRAGILE HALF, and it was being sent once, to a
+            // peer id captured up to EIGHT SECONDS EARLIER.
+            //
+            // reply() is a full ICE gather — GATHER_TIMEOUT_MS is 8000 — so by
+            // the time there is an answer to send, the Trystero peer that
+            // delivered the offer may be gone: a relay reconnect, a peer
+            // re-announce, and the id we are targeting no longer resolves.
+            // Trystero's response to that is console.warn("no peer with id …
+            // found") and DROPPING THE MESSAGE. Nothing throws, nothing
+            // returns false, and the host waits out its full two minutes on
+            // "Waiting for them to join…" — which is exactly what a real pair
+            // of devices showed: the guest reached "Connecting…" (so the offer
+            // arrived) while the host never left "Waiting" (so the answer
+            // never did). Every symptom downstream — both peers deaf, no
+            // candidate pair ever answered — follows from the host simply
+            // never having started.
+            //
+            // So: targeted AND untargeted, repeatedly, for a few seconds.
+            // Untargeted reaches whoever is actually in the room when the id
+            // has gone stale; repeating covers a reconnect in flight. The host
+            // dedupes on the answer string itself (answersSeen), so extra
+            // copies cost one comparison each.
+            const shout = () => {
+              try { post(out, from); } catch (e) {}
+              try { post(out); } catch (e) {}
+            };
+            shout();
+            let tries = 0;
+            const resend = setInterval(() => {
+              if (done || ++tries > 4) { clearInterval(resend); return; }
+              shout();
+            }, 1200);
+            // Long enough for those retries to actually go out. finish() leaves
+            // the room, and leaving it is what used to cut the answer off
+            // after a single 600 ms attempt.
+            setTimeout(() => { clearInterval(resend); finish({ ok: true, payload: data }); }, 6500);
           });
 
           // Post on join AND immediately: whoever is already in the room gets
