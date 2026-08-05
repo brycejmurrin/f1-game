@@ -20,15 +20,19 @@
 // seed and inputs reproduce WITHIN a session. This one pins the actual values
 // ACROSS commits. Determinism without a baseline is reproducible drift.
 //
-// THE BASELINE IS NOT COMMITTED YET, so this suite SKIPS until it is — the same
-// honest-skip pattern as tests/tracks-visual.spec.js. Generate it with:
+// THE BASELINE IS COMMITTED (tests/physics-baseline.json), so this is a LIVE
+// GATE. Regenerate it with:
 //
 //   APEX_UPDATE_BASELINE=1 npx playwright test physics-characterization
 //
-// and commit tests/physics-baseline.json. Regenerating it is how you SAY that a
-// physics change was intentional: the diff shows exactly which numbers moved,
-// which is the whole point. Never regenerate to make a red run green without
-// reading that diff.
+// Regenerating is how you SAY a physics change was intentional: the diff shows
+// exactly which numbers moved, which is the whole point. NEVER regenerate to
+// turn a red run green without reading that diff — that converts the one guard
+// on the driving model into a rubber stamp.
+//
+// Verified non-vacuous: changing LAT_MAX from 22 to 27 fails "steady corner
+// load" by name. It runs in ~25 s because it builds ONE track and uses
+// __apex.reset() between scenarios.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,13 +50,13 @@ test.skip(!UPDATING && !fs.existsSync(BASELINE),
 // of the model (steady state, cornering load, trail braking, off-track) so a
 // change anywhere shows up, not to simulate a whole lap.
 const SCENARIOS = [
-  { name: "straight-line accel", track: "monza", seed: 7, frac: 0.05, speed: 20,
+  { name: "straight-line accel", seed: 7, frac: 0.05, speed: 20,
     steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
-  { name: "steady corner load", track: "monza", seed: 7, frac: 0.28, speed: 55,
+  { name: "steady corner load", seed: 7, frac: 0.28, speed: 55,
     steps: [{ n: 90, in: { throttle: true, steer: 0.6 } }] },
-  { name: "trail brake into rotation", track: "monza", seed: 11, frac: 0.28, speed: 70,
+  { name: "trail brake into rotation", seed: 11, frac: 0.28, speed: 70,
     steps: [{ n: 45, in: { brake: true, steer: 0.5 } }, { n: 45, in: { throttle: true, steer: 0.3 } }] },
-  { name: "off-track recovery", track: "monza", seed: 3, frac: 0.5, speed: 45, x: 11,
+  { name: "off-track recovery", seed: 3, frac: 0.5, speed: 45, x: 11,
     steps: [{ n: 90, in: { throttle: true, steer: -0.4 } }] },
 ];
 
@@ -62,39 +66,49 @@ const SCENARIOS = [
 const R = (v) => (typeof v === "number" && isFinite(v) ? Math.round(v * 1e4) / 1e4 : v);
 
 test("the driving model produces the same numbers it did before", async ({ page, loadTrack }) => {
-  const got = {};
-  for (const sc of SCENARIOS) {
-    await loadTrack(sc.track);
-    const trace = await page.evaluate((s) => {
-      const a = window.__apex;
+  // ONE track build for the whole suite. Every scenario runs on monza and
+  // __apex.reset() is a fast episode reset that does not reload assets, so
+  // calling loadTrack() per scenario paid for four full builds and blew the
+  // 120 s test budget on the second one under SwiftShader. Load once, reset
+  // between scenarios.
+  test.setTimeout(300_000);
+  await loadTrack("monza");
+
+  const got = await page.evaluate((scenarios) => {
+    const a = window.__apex;
+    const out = {};
+    for (const s of scenarios) {
       a.seed(s.seed);
       a.reset(s.frac, s.speed, s.x || 0);
-      const out = [];
+      const trace = [];
       for (const stage of s.steps) {
         a.setInput(stage.in);
         for (let i = 0; i < stage.n; i++) {
           a.step(1 / 60, 1);
           if (i % 15 === 0) {
             const p = a.physState();
-            out.push([p.s, p.x, p.speed, p.slipDeg, p.head, p.prog]);
+            trace.push([p.s, p.x, p.speed, p.slipDeg, p.head, p.prog]);
           }
         }
       }
       a.clearInput();
-      return out;
-    }, sc);
-    got[sc.name] = trace.map((row) => row.map(R));
-  }
+      out[s.name] = trace;
+    }
+    return out;
+  }, SCENARIOS);
+
+  const rounded = {};
+  for (const k of Object.keys(got)) rounded[k] = got[k].map((row) => row.map(R));
 
   if (UPDATING) {
-    fs.writeFileSync(BASELINE, JSON.stringify(got, null, 2) + "\n");
+    fs.writeFileSync(BASELINE, JSON.stringify(rounded, null, 2) + "\n");
     test.info().annotations.push({ type: "baseline", description: `wrote ${BASELINE}` });
     return;
   }
 
   const want = JSON.parse(fs.readFileSync(BASELINE, "utf8"));
   for (const sc of SCENARIOS) {
-    expect(got[sc.name], `scenario "${sc.name}" drifted — if this change was intentional, ` +
+    expect(rounded[sc.name], `scenario "${sc.name}" drifted — if this change was intentional, ` +
       `regenerate with APEX_UPDATE_BASELINE=1 and READ THE DIFF`).toEqual(want[sc.name]);
   }
 });

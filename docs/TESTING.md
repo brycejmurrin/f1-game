@@ -348,7 +348,7 @@ what it covers.
 | `world-physics.spec.js` | the player integrates a bicycle model in WORLD space; `(s, x)` is read back, not authoritative |
 | `physics-fixes.spec.js` | the physics/collision robustness pass |
 | `longitudinal.spec.js` | longitudinal + grip physics and full-lap progress |
-| `physics-characterization.spec.js` | CHARACTERIZATION of the driving model against a committed baseline — asserts the numbers did not move, not that they are right. Skips until `tests/physics-baseline.json` exists |
+| `physics-characterization.spec.js` | CHARACTERIZATION of the driving model against a committed baseline — asserts the numbers did not move, not that they are right. Live gate against `tests/physics-baseline.json`; regenerate with `APEX_UPDATE_BASELINE=1` and read the diff |
 | `projection.spec.js` | world↔track (Frenet) projection continuity — no lap-distance teleport near hairpins |
 | `elevation-tracks.spec.js` | slope gravity, banking grip, road-follow on graded circuits |
 | `steering.spec.js` | the player heading model in `updateCar` |
