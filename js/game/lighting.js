@@ -11,7 +11,7 @@ const LightTune = (function () {
 
 // Floodlight set for ANY track (every circuit gets them; the caller only feeds
 // them to the shader when the scene is dark — night/dusk/dawn). A light roughly
-// every ~24 m (alternating sides) at mast height, capped to the 32 shader slots
+// every ~22 m (alternating sides) at mast height, capped to the 32 shader slots
 // (minus a small tail-light reservation in traffic) by the per-frame cull.
 // Flat [x,y,z, r,g,b, rad, …] septets. Colour, brightness, pool
 // size and mast style all vary by circuit character (see floodColor). HDR (>1)

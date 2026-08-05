@@ -19,7 +19,7 @@
    panes go back to being ordinary blocks.
 
    Championship rows deliberately reuse .res-row/.res-pos/.res-swatch/.res-name/
-   .res-pts from css/overlays.css, and the calendar rows reuse
+   .res-pts from css/components.css, and the calendar rows reuse
    .season-upcoming-row from css/menus.css — a standings table should not look
    like a different game depending on which screen it is on. */
 
@@ -258,7 +258,7 @@
 /* ---------- qualifying (#quali) ---------- */
 /* A .dim modal, unlike #career — it lays over whatever screen sent you here and
    the session behind it is still the thing you are in. Rows are the shared
-   .res-row vocabulary from css/overlays.css; the only new part is the time
+   .res-row vocabulary from css/components.css; the only new part is the time
    column, which needs tabular figures so the gaps line up as a column of
    numbers rather than drifting with the glyph widths. */
 #quali { --sheet-w: 560px; }

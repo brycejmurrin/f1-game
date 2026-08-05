@@ -114,6 +114,23 @@ drifts.** "~3 min" was a comment. Nothing compared it to the job's timeout, and
 nothing ever will — so the estimate rotted the moment the step's command changed
 under it, and the only symptom was a colour on a page nobody reads as red.
 
+**A third cause, fixed first and separately: `cancel-in-progress: true`.** The
+gate shipped with it set for every event, so on a branch taking a push every few
+minutes each new push superseded the run in flight. That is a genuine cause and
+it was genuinely fixed — after the change, a run was observed reaching
+`in_progress` and SURVIVING two subsequent pushes, which queued behind it instead
+of killing it.
+
+It was necessary and it was not sufficient, which is the part worth keeping.
+`cancelled` has at least two producers — a superseded run and a timed-out job —
+and they are indistinguishable in the run list. Having fixed one and watched the
+symptom persist, the natural reading was "the fix did not work"; the correct one
+was "there is a second producer". The lesson is not about concurrency settings at
+all: **when a status has more than one cause, fixing one cause and re-checking
+the status cannot tell you whether you were right.** Only the job logs could, and
+they are where the OOM and the 30/71 timeout were eventually read.
+
+
 ---
 
 ## 3. The physics model, and its inverted authority
@@ -191,7 +208,9 @@ otherwise own a completely different car.
 
 ## 5. The `G` façade — what it does and does not do
 
-`js/game.js` is 8,078 lines and owns the closure state. Extracted modules in
+`js/game.js` is the largest file in the repo and owns the closure state — the
+exact figure is the one `tests/module-size.test.mjs` ratchets, which is the only
+place it can be stated without going stale. Extracted modules in
 `js/game/*` never reach into it directly: game.js builds one `G` object of live
 getters/setters plus stable helpers and instantiates each module as
 `Module.create(G)`.
@@ -206,8 +225,13 @@ it is simply game.js's closure with extra steps. It is a *migration* device that
 has been left in place as an *architecture*, and the distinction matters when
 deciding whether the next extraction should widen it again.
 
-It also does not shrink game.js on its own: 8,078 lines is up from the ~6,100 the
-architecture doc still claims (§7, deferred/docs).
+It also does not shrink game.js on its own. When this review was written the file
+had grown back well past the ~6,100 the architecture doc still claimed — and
+during the 2026-08 cleanup it did it again in miniature, in the space of one
+session: two extractions took 91 lines out while a concurrent branch put 130
+back. Nobody did anything wrong; there was nothing watching. That is what
+`tests/module-size.test.mjs` is for, and it is the reason the number lives in a
+test rather than in this sentence.
 
 ---
 
@@ -301,12 +325,115 @@ marked otherwise.
 | A10 | Five circuit-def fields silently dropped by the `Tracks.LIST` copy — `sunAzimBias`, `sceneryTheme`, `sceneryThemeOverrides`, `ownPitStraight`, `undulate` — all authored, all read off the *copied* def, all `undefined` at runtime. Qatar fell back to `desert` and Albert Park to `permanent`; Monza's pit opt-out did not opt out, so the generic fallback kept landing on the Tribuna Centrale, which is the exact bug the field was added to fix. The same trap had bitten once before and was fixed for one field only | Fixed, plus `tests/circuit-def-fields.test.mjs` — the guard is the real fix |
 | A11 | Duplicate `__apex.diag` key: two `diag` members of one object literal, so the device/render diagnostic was unreachable, and `DEBUG-HOOKS.md` documented *that* dead version verbatim | Fixed — dead version deleted, its unique fields (canvas vs backing store, PerfGov tier/floor/strikes, GL capability probes, stored overrides) merged into the live `diag(opts)` |
 | A12 | Career budget upgrade unreachable and advertised: `upgradeBudget()`/`budgetUpgradeCost()` have no caller outside `career.js`, so `budgetLvl` is permanently 0 — while the guide told the player, twice, that they got "three upgrades" | Text corrected and the mechanic marked not-yet-wired. **Wiring the UI is a feature and was deliberately not done here** |
+| A13 | **A failed save was silent, and it loses careers.** `js/game/store.js` caches every value it writes, so when `setItem` throws, the catch swallowed it and `_cache` went on answering every later `get()` with the right value. The session plays perfectly and the save is gone on reload, with nothing on screen and nothing in the console. Safari on iOS is the real case, not a hypothetical: Private Browsing sets the localStorage quota to **zero**, so the first write throws | Fixed, and the cache write **kept** — dropping the value would break the session as well as the save, which is worse. The exception's own name is recorded (`QuotaExceededError` and `SecurityError` mean different things to whoever reads the report), `Log` carries it once loudly and repeats to the ring buffer only, and `__apex.persistState()` reports it. `tests/persistence.spec.js` pins both halves separately, because the cache write looks redundant right up until you know why it is there |
+
+### Tier A2 — fourteen failures the CI gate made visible on its first clean run
+
+Added 2026-08. **None of these are new breakage and none were introduced by the
+cleanup pass** — the branch's entire diff under `js/track/` and `js/circuits/` is
+two comment edits. They are pre-existing failures in `tests/new-hooks.spec.js`
+that nobody had seen, because `test:api` is not in the CI gate's smoke job and
+nothing else ran it. The first clean `api` run in this repo's history surfaced
+all four at once, which is the argument for the gate delivered rather than
+asserted.
+
+| # | Failure | Bound | Measured |
+|---|---|---:|---:|
+| A14 | Shanghai `trackProfile()` elevation range | ≤ 2 m | **6.735 m** |
+| A15 | Jeddah foundation elevation range | ≤ 3 m | **9.586 m** |
+| A16 | Singapore prop vertices (NIGHT build) | < 700,000 | **1,271,799** |
+| A17 | Madrid prop vertices | < 250,000 | **621,075** |
+
+The Singapore spec stages `race("singapore", "night", "dry")` explicitly and
+measures that build, which is both the worst case and the one that matters: night
+adds lit windows, neon and lamp geometry on top of the day mesh, so a street
+circuit's peak memory is its night peak. Naming the time of day IN the test also
+rules the cleanup pass out as a cause — it is not inherited from whatever the
+session last set, so no change to when `applyRaceSettings` runs could flip it.
+
+**A14/A15 are probably stale BOUNDS, not broken code.** Shanghai's own circuit
+def authors a 6.5 m rise at `s = 0.4525` (plus 2.5 m and 0.8 m bumps), so the
+engine is producing exactly what the data asks for, and 6.735 m is the sum of
+overlapping authored bumps. That rise arrived through a deploy-branch merge
+(`bc72569d` / `f649518e`) while the `≤ 2` assertion predates it (`4a373171`) —
+the data was changed and the test that pinned "nearly flat" was not. Deliberately
+NOT re-baselined here: whether Shanghai should be flat or should have its real
+back-straight elevation is a circuit-authoring decision, and quietly widening a
+bound to make a suite green is the exact move this document exists to argue
+against.
+
+**A16/A17 are real, and they are the memory budget.** These are not cosmetic
+ceilings. `docs/research/CI-RENDERING-PERFORMANCE.md` measured Vegas at 1,825,925
+prop vertices — about **80 MB of GPU buffer at 40 B/vertex**, against a page an
+iPhone SE kills at roughly 100 MB. Singapore at 1.27 M is ~51 MB and Madrid at
+621 k is ~25 MB, and both are 1.8×/2.5× a budget somebody set on purpose. The
+right fix is less scenery on those two circuits, not a larger number in the test.
+
+**A19 — nine more in `test:ui`, and this time the bisect was run rather than
+argued.** `tests/hud-layout.spec.js` reports the throttle and brake buttons
+overlapping the pause button (`btn-throttle+pausebtn`, `btn-brake+pausebtn`) in
+BUTTONS steer mode, landscape only — four tests. `tests/ui-scale.spec.js` fails
+five more, on screens fitting at 100/130/150 %.
+
+These were the ones with a real case to answer, because this pass edited `css/`.
+So instead of reasoning about it: `git checkout <before> -- css/`, re-run both
+specs, restore. **Both reproduce identically with the pre-change stylesheets** —
+same four overlaps, same five fits. The CSS work is not the cause.
+
+That is the whole method this document argues for, applied to my own change:
+a claim of "my diff cannot have done this" is worth exactly as much as the
+measurement behind it, and here the measurement was two spec runs and twenty
+minutes.
+
+The meta-point: the gate was added in this pass to stop red guards reaching the
+live site, and within hours of its first working run it surfaced **fourteen**
+failures that had been red for an unknown length of time — four in `test:api`,
+one golden baseline, nine in `test:ui`. Nothing drifted on the day. Neither the
+bounds nor the budgets nor the layouts had moved; the *observation* had been
+missing, which is this document's thesis stated once more and paid for in
+findings rather than argument.
+
+**A18 — a golden baseline went stale through a MERGE, not an edit.**
+`tests/menu-baseline.spec.js-snapshots/garage-phone-landscape.png` shows a garage
+footer with one button. The screen has two: `BACK` and `DONE`. The BACK button
+landed in "Escape means BACK, and the free camera works on a touch screen"
+(`35c4e81e`), and the three phone-landscape baselines were re-blessed eleven
+minutes later (`3aa5a6b0`) — **on a branch that did not contain it**. The two
+lines merged afterwards.
+
+This is the failure mode a version-control system cannot see. `index.html` and a
+`.png` are different files, so git merged both cleanly and reported no conflict;
+they conflict only in MEANING. Nothing else would have noticed either, because
+`test:baseline` is not in the CI gate's smoke job and nothing was running it.
+
+**A20, spotted while re-blessing: the garage BACK button is clipped.** The new
+image shows it cut to "ACK" at the sheet's left edge on phone-landscape, and the
+desktop baseline — which PASSES against its existing image — shows no BACK button
+at all. `.sheet-foot` is a plain `display: flex` row with no `justify-content`,
+so the two buttons should sit left-aligned and whole; something is pushing the
+row past its container's start edge. Not diagnosed here, and deliberately not
+fixed as part of a cleanup pass: it is a layout defect with a visible symptom,
+which is a better place to start than most of this register. Keyboard users are
+unaffected — `index.html` gives the screen `data-esc-close="cs-back"`, so Escape
+presses the control whether or not it can be seen — which is likely why nobody
+has reported it.
+
+Re-blessed here rather than deferred, because unlike A14/A15 the intent is not in
+doubt: the BACK button is a shipped control that `index.html` depends on by name
+(`data-esc-close="cs-back"` — the Escape-means-back layer reads it), the pixel
+diff is 0.02 of the image and is entirely that button, and the five other
+baselines were unaffected. A stale golden image is worse than no golden image,
+because it turns a real gate into one everybody learns to ignore.
 
 ### Tier B — the meta-guards
 
 | # | Defect | Disposition |
 |---|---|---|
 | B2 | `tests/component-inventory.test.mjs` belonged to no `test:*` group, so nothing ever ran it — and it was **red**: `docs/COMPONENTS.md` still listed a `foot` class family and three dead classes since deleted from `css/`. Separately, `docs/TESTING.md` and `README.md` both quoted stale suite counts while `CLAUDE.md` was correct, because `docs-integrity.test.mjs` only checks `CLAUDE.md` | Fixed: doc corrected, test added to `test:tooling` and `test:tooling-fast`, all three counts reconciled |
+| B3 | `npm run test:tiny` — the command `CLAUDE.md` tells every agent to run after *any* edit — silently skipped a third of itself. It passed `tests/logging.spec.js --project=render`, but `"logging"` is not in `RENDER_SPECS`, and the render project is `testMatch: RENDER_SPECS`, so the spec matched no project and never ran. `test-groups.test.mjs` only caught the reverse (a name with no file) | Fixed, plus the **bidirectional** assertion, which is the half that would have caught it |
+| B4 | `npm run test:visual` could never pass: `tracks-visual.spec.js` calls `toHaveScreenshot()` for all 40 circuits and no `tests/tracks-visual.spec.js-snapshots/` was ever committed. It presented as a gate and was not one | Gated behind a baselines-exist skip. Generating them on Linux/SwiftShader is still outstanding |
+| B5 | `tools/test-bg.mjs` would start any number of groups on a 4-core box. Every worker drives a SwiftShader Chromium, so past `cores / WORKERS` they starve each other and die to their own timeouts — which read as test failures and are not. `CLAUDE.md` and `docs/TESTING.md` both said "at most two", and `tools/pick-tests.mjs --bg` printed a paste-ready **nine-group** command anyway | Fixed in the TOOL: it now counts what is already running, refuses past the cap, and prints the batches; `pick-tests` pre-batches its suggestion. Measured before the fix: five groups → load average **46**, 94 Chromiums, every "failure" a 60 s screenshot timeout |
+| B6 | ~200 comments in `js/` cite line numbers in *other* files, and nothing checked them. `js/render/webgpu/wgsl-chunks.js` cited `js/render/glx.js:39-896` for `LIT_FS` about thirty times — glx.js holds no shader source at all; it destructures `GLXShaders`, and the GLSL is in `js/render/shaders/`. Three more port files had the same rot, plus four wrong numeric claims elsewhere (`apex.js` "~110 methods" against 183; `scenery-nature.js` "248 call sites" against 33; `tracks.js` "returns 0" against `return null`) | 49 rewritten to name the SYMBOL and file, no line numbers, since nothing edits both files. `tests/comment-citations.test.mjs` guards it: a cited line must exist, plus a ratchet on the population (197 → 148) |
 
 Also folded in: `js/game/reliability.js` and `js/car/driver-ratings.js` both
 asserted `makeCars()` spends "exactly one" `simRnd()` draw per driver. It spends
@@ -426,14 +553,35 @@ the sandbox (its egress proxy blocks the host) — an unverified API dependency
 would be a worse bug than the one being fixed.
 
 **Silent failure.**
-- 340 `catch` blocks in `js/`; 59 `Log` call sites in the entire codebase. The
-  great majority of failures are swallowed.
+- ~~340 `catch` blocks in `js/`; 59 `Log` call sites. The great majority of
+  failures are swallowed.~~ **RE-MEASURED (2026-08) — the framing was wrong, and
+  the real number is smaller and more actionable.** Counting catch blocks against
+  `Log` calls scores every catch that converts an exception into a TYPED ERROR
+  RETURN as "swallowed", and `js/net/` does that deliberately and well:
+  `js/net/rendezvous.js` turns nearly all of its catches into
+  `ERR("timeout"|"offline"|…)` precisely so the lobby can fall back instead of
+  throwing. Parsing each catch BODY instead:
+
+  | | count |
+  |---|---:|
+  | `catch` blocks in `js/` | 344 |
+  | …that do something with the error | 151 |
+  | …empty but carrying a comment saying why | 26 |
+  | …**bare `catch (e) {}`** | **167** |
+
+  So the target is 167, not 469, and a mass rewrite is still the wrong answer —
+  many of those are legitimate best-effort probes (feature detection, an optional
+  API, a `localStorage` read that may be blocked). `tests/silent-catch.test.mjs`
+  is a RATCHET on the bare count, and its escape hatch is a COMMENT rather than a
+  `Log` call: writing "ignored — this probe may fail on Safari" is the sentence
+  that was missing every time this codebase lost something quietly, and demanding
+  one is a better filter than demanding a log line nobody wants in a hot path.
 - ~~`js/net/` had zero `Log` call sites and `js/game/audio.js` still has none.~~
   **PARTLY FIXED (2026-08).** `audio.js` 0 → 4 (context-resume refusal, sample
   and music decode failure — the three that present as "there is no sound") and
   `transport.js` 0 → 3 (TURN credential fetch failure, connection state). The
-  broad 469-catch problem stands; these were the paths where a documented debug
-  namespace could not emit a single line.
+  broad problem stands (see the re-measurement above); these were the paths where
+  a documented debug namespace could not emit a single line.
 - ~~`apex26.envProbeOff` is a one-way latch~~ **FIXED (2026-08).**
   `__apex.envProbe(on?)` is the clear path, documented in `docs/DEBUG-HOOKS.md`.
 
@@ -445,9 +593,30 @@ would be a worse bug than the one being fixed.
 - `GameStore` has no cross-tab `storage` listener.
 - `TUNE_DEFS` is hand-mirrored in six places.
 
+**Checked and NOT a defect: dead `id` attributes in `index.html`.** Recorded here
+because the naive version of this audit is dangerous and somebody will run it
+again. A scan of the 486 ids in `index.html` against `js/` and `css/` reports
+**45 unreferenced**. Zero of them are dead:
+
+- **14 are referenced elsewhere inside `index.html`** — `aria-labelledby`,
+  `aria-controls`, `for=`. A scan that only looks at `js/`+`css/` cannot see
+  them, and deleting them would break the screen-reader labelling on every
+  `<dialog>`.
+- **31 are built by string concatenation at runtime.** `cz-stripe-none` and its
+  nine siblings come from `$(domId + "-none")`; `pm-steer-easy`/`-assist`/
+  `-normal`/`-sim` and `pm-help-low`/`-med`/`-high` from `$("pm-steer-" + n)`
+  and `$("pm-help-" + n)` over a level list.
+
+So the honest count of removable ids is **0 of 45**, and a scan taken at face
+value would have deleted 31 live controls and 14 accessibility relationships.
+Same trap as the CSS class audit in the same pass, which reported 224 classes
+with no `classList` call and found every one of them produced by an `el(tag,
+className)` helper or a ternary. **In markup, "no reference" means "no reference
+I looked for."**
+
 **Docs.** `docs/ARCHITECTURE.md` says a circuit "can destructure any of those 84
 names" two lines after correctly calling it the 107-member contract, and says
-game.js is "~6,100 lines" against a measured 8,078. `docs/DEBUG-HOOKS.md` and
+game.js is "~6,100 lines" against a file that has never been near that since (the current figure lives in `tests/module-size.test.mjs`, not here). `docs/DEBUG-HOOKS.md` and
 `docs/AGENT-WORLD-API.md` both say "~89 hooks" (the latter annotated "measured at
 runtime") against ~180 members on the object today.
 
