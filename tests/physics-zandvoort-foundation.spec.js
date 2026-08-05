@@ -206,8 +206,23 @@ test.describe("Zandvoort shared-foundation migration", () => {
       ...result.models.unsafe,
     ].filter((entry) => entry.required);
     expect(requiredFailures).toEqual([]);
+    // Zandvoort GAINED two required models after this list was pinned; neither of
+    // the original two went missing. Measured on the current build (day and night
+    // both emit the same four, nothing suppressed/invalid/unsafe):
+    //   kit:zandvoort:paddock-club — the 2020-21 rebuild's hospitality block, added
+    //     because the hand-built pit-building box alone was under-scaled
+    //   zandvoort-watertoren — the genuine 1912 landmark, added ALONGSIDE the
+    //     lighthouse (which is invented; the real one went in 1907) rather than
+    //     replacing it
+    // Kept as an exact list rather than arrayContaining: this assertion's job is
+    // to notice a model quietly becoming, or ceasing to be, required.
     expect(result.models.emitted.filter((entry) => entry.required).map((entry) => entry.id).sort())
-      .toEqual(["pit-building", "zandvoort-lighthouse"]);
+      .toEqual([
+        "kit:zandvoort:paddock-club",
+        "pit-building",
+        "zandvoort-lighthouse",
+        "zandvoort-watertoren",
+      ]);
     expect(result.walls.anyNaN).toBe(false);
     expect(result.walls.minOverHw).toBeGreaterThan(-1.5);
     expect(result.walls.tightFrac).toBeGreaterThan(0.55);

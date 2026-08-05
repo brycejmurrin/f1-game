@@ -81,7 +81,17 @@ class LiveReporter {
     if (mark === "x FAIL  ") { this.failed++; this.failures.push(this.name(test)); }
     this.write(`[${ts()}] ${mark} ${this.done}/${this.total} ${this.name(test)} (${dur}s)`);
     if (result.status !== "passed" && result.status !== "skipped" && result.error) {
-      const msg = (result.error.message || String(result.error)).split("\n").slice(0, 4).join("\n           ");
+      // Keep the first 4 NON-EMPTY lines. Playwright separates the custom
+      // assertion message, the matcher line and the Expected/Received pair with
+      // BLANK lines, so a raw 4-line cut silently drops the VALUES from every
+      // assertion that carries a custom message — and keeps them for every
+      // assertion that does not. That asymmetry is not cosmetic: it is how
+      // monza:64's 0.294 vanished from a live log, how the next `Received:` in
+      // the file (Spa's 0.525, a different test) got read in its place, and how
+      // a bit-stable circuit came to be recorded as a nondeterministic build.
+      // Same 4-line budget, strictly more information.
+      const msg = (result.error.message || String(result.error))
+        .split("\n").filter((l) => l.trim()).slice(0, 4).join("\n           ");
       this.write(`           ${msg}`);
     }
     // On the FINAL result for a test, record its wall time (for the slowest-N

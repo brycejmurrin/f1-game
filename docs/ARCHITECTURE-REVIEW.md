@@ -590,22 +590,47 @@ each circuit was measured rather than pattern-matched.
 | e | vegas:72 | `emitted.has("vegas-bellagio-lake")` | **false — a required model is missing** |
 | f | zandvoort:210 | toEqual `["pit-building", "zandvoort-lighthouse"]` | mismatch |
 
-**(a) is NONDETERMINISTIC and that is the most important thing here.** The same
-assertion measured 0.525 on one run and 0.294 on the next, on the same commit.
-Something in terrain or prop placement varies between builds of the same
-circuit. Chase that before treating (a) or (c) as a fixed-value geometry bug —
-a tolerance tuned against a number that moves is worthless, and (c) reporting
-exactly 0.525 suggests the two share a cause.
+**(a) IS NOT NONDETERMINISTIC. That claim was mine and it was wrong.** Monza is
+bit-stable: identical geometry SHA1s across six separate processes, `gap` =
+**0.294** every time, day/night/wet/dry alike, and `grep` for
+`Math.random|Date.now|performance.now` across `js/track/` and `js/circuits/`
+returns zero hits.
 
-**(b) is the largest single discrepancy in the suite**: Qatar is asserted flat
-to within 0.25 m and measures 6.7 m at night. Either the night rebuild is
-applying elevation the day build does not, or the assertion predates Qatar
-gaining relief. Cheap to tell apart — build it at both times of day and diff
-the profile.
+The variance was in the REPORTING. `tests/live-reporter.js:84` kept the first 4
+**raw** lines of an error, and Playwright separates the custom assertion message
+from the `Expected:`/`Received:` pair with **blank** lines. So an assertion with
+a custom message loses its values past the cut, and one without keeps them —
+Monza has a custom message, Spa does not. Monza's block was read, truncated, and
+the next `Received:` in the file (Spa's 0.525, a different test) was taken as
+Monza's. Monza has never measured 0.525. Correlation was 100 % across the whole
+log: Abu Dhabi, Monaco, Montreal and Spa printed values; Monza, Qatar and Vegas
+did not. Fixed by filtering empty lines — same 4-line budget, strictly more
+information.
 
-**(e) is a genuinely missing required model**, not a count: the Bellagio lake is
-not emitted at all. Distinct from the T1 class, where the water was present and
-merely merged.
+Both geometry numbers are stable and can be treated as fixed-value bugs:
+
+- **Monza 0.294** at frac 0.30 / lat -11. Road half-width there is 8.00 m, so
+  the probe sits **3 m beyond the road edge**, and the terrain ramps smoothly
+  (lat -16: 0.137 -> lat -11: 0.294, null inboard). No spike. This is verge
+  geometry measured against the CENTRELINE rather than the road edge — the fix
+  should decide whether the comparison basis or the verge is wrong, not the
+  tolerance.
+- **Spa 0.525** at world (628.3, -802.4), frac ~0.758 (Stavelot), road triangle
+  102672. A genuine road-surface-above-centreline excursion, probably camber.
+
+**(e) WAS ALSO WRONG, also mine.** `vegas-bellagio-lake` is not missing — it was
+SPLIT into `vegas-bellagio-lake-east` (required) and `-west` when the Bellagio
+frontage was widened to the real ~300 m, because one box that long risked
+clipping the T13 apex. Both emit with `water: true`, nothing suppressed. The
+proof is in the failing run itself: spec:62 (required failures must be empty)
+PASSED before line 72 failed, so a suppressed required lake would have failed
+earlier. Fixed by pinning both new ids.
+
+(d) Suzuka and (f) Zandvoort were stale assertions too. Suzuka's bridge was
+deliberately retuned (rise 7 -> 13.5): at rise 7 the crossover deck's 6.7 m top
+left 1.6 m and went through the upper ribbon, so the retune fixed a real defect
+and the assertion pinned the pre-fix numbers. Zandvoort's required set simply
+grew by two (the 2020-21 paddock club and the watertoren).
 
 Montreal now fails on something real that the water assertion had masked: a
 support's `minY` sits 2.72 m from `groundY` against a 0.05 m allowance.
