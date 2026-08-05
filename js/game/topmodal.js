@@ -85,12 +85,14 @@ window.TopModal = (function () {
   }
 
   /* THE SAME DOOR FOR THE SCREENS THAT ARE NOT DIALOGS.
-     Six screens never became <dialog>s and so never got Escape: #select,
-     #career, #carsetup, #track-detail, #lighting and #camtune, plus the
-     free-camera overlay #photo-controls. Two of them must NOT become modal
-     dialogs — #carsetup is `pointer-events: none` so a drag reaches the live
-     turntable rendering behind it, and showModal() would make that canvas
-     inert — so instead of migrating them, the ATTRIBUTE migrates: they carry
+     Five screens never became <dialog>s and so never got Escape: #select,
+     #career, #carsetup, #lighting and #camtune, plus the free-camera overlay
+     #photo-controls. (#track-detail was a sixth, until it migrated to a real
+     <dialog> — see docs/research/PLATFORM-INPUT-NOTES.md §9a.) Two of the
+     remainder must NOT become modal dialogs — #carsetup is
+     `pointer-events: none` so a drag reaches the live turntable rendering
+     behind it, and showModal() would make that canvas inert — so instead of
+     migrating them, the ATTRIBUTE migrates: they carry
      the same `data-esc-close="<id>"` and this handler presses it, which is
      exactly what the `cancel` path above does for a real dialog.
 

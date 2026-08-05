@@ -77,6 +77,16 @@ const Input = (function () {
   let padPrevButtons = [];     // previous frame's pressed state, for rising edges
   const PAD_DEADZONE = 0.14;   // left-stick centre slop (ignored, then re-scaled)
 
+  // gamepad MENU navigation (see the mapping table above pollGamepad). The pad
+  // has no OS key-repeat, so a held D-pad/stick direction is turned back into
+  // one — an initial delay before the first repeat, then a faster steady
+  // cadence, mirrored from typical desktop OS defaults.
+  let padNavDir = null;           // held direction while a menu is open, or null
+  let padNavNextT = 0;            // nowMs() of the next synthesized repeat
+  const PAD_NAV_DELAY_MS = 450;   // delay before the first repeat
+  const PAD_NAV_REPEAT_MS = 130;  // interval between repeats while held
+  const PAD_NAV_KEYS = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" };
+
   // canvas touch steering: identifier -> { anchorX, x, seq }
   // `seq` is a monotonic stamp of when this touch last spoke — see
   // recomputeTouchSteer for why insertion order cannot answer that question.
@@ -742,13 +752,30 @@ const Input = (function () {
   // Poll the active gamepad once per frame. The Gamepad API has no events for
   // button/axis changes — you must read a fresh snapshot each frame — so this is
   // called at the top of the game loop, before the physics step, to keep input
-  // latency to a single frame. Standard mapping:
+  // latency to a single frame. Standard mapping WHILE DRIVING (UiLayers.anyOpen()
+  // false):
   //   axis 0  left-stick X (steer)      btn 7 RT / btn 0 A  throttle
   //   btn 14/15 d-pad left/right        btn 6 LT / btn 1 B  brake
   //   btn 2 X  boost toggle             btn 3 Y  overtake
   //   btn 4 LB shift down               btn 5 RB shift up
   //   btn 12 d-pad up  active aero (X-mode) toggle
   //   btn 8 View/Back  camera           btn 9 Menu/Start  pause
+  //
+  // Standard mapping WHILE A MENU IS OPEN (UiLayers.anyOpen() true) — the UWP
+  // gamepad/keyboard-parity mapping settled in
+  // docs/research/PLATFORM-INPUT-NOTES.md §8, now shipped:
+  //   d-pad (12-15) AND left stick   arrow keys (with OS-style hold-repeat,
+  //                                  see padNavDir below — the pad has none)
+  //   btn 0 A                        Enter/Space: click the focused control
+  //   btn 1 B                        Escape: back/close the top layer
+  //   btn 6 LT / btn 7 RT            PageUp / PageDown
+  //   btn 4 LB / btn 5 RB            page horizontally (ArrowLeft/ArrowRight) —
+  //                                  no distinct horizontal-pane concept exists
+  //   btn 9 Menu/Start               pause toggle, same as always (KeyP parity)
+  // Everything above is a SYNTHETIC KeyboardEvent (or, for a real <dialog>, the
+  // `cancel` Event TopModal already listens for) dispatched at `document` —
+  // never a second focus-mover. See padDispatchKey/padActivate/padEscape below
+  // and their header comment for why B needs its own branch.
   function pollGamepad() {
     // Skip the whole poll when nothing is connected. navigator.getGamepads()
     // allocates a fresh GamepadList every call, so calling it each frame with no
@@ -761,11 +788,14 @@ const Input = (function () {
       padSteer = 0; padThrottle = false; padBrake = false;
       padThrottleVal = 0; padBrakeVal = 0;
       if (padPrevButtons.length) padPrevButtons.length = 0;
+      padNavDir = null;
       return;
     }
     padConnected = true;
     // steering: left-stick X with a centre dead zone, re-scaled so it still
-    // reaches full lock; d-pad gives a digital override.
+    // reaches full lock; d-pad gives a digital override. Computed unconditionally
+    // (menu open or not) — it drives nothing while paused, so leaving it alone
+    // keeps driving byte-identical to before this change.
     let ax = (pad.axes && pad.axes.length) ? pad.axes[0] : 0;
     if (Math.abs(ax) < PAD_DEADZONE) ax = 0;
     else ax = Math.sign(ax) * (Math.abs(ax) - PAD_DEADZONE) / (1 - PAD_DEADZONE);
@@ -777,17 +807,136 @@ const Input = (function () {
     padBrakeVal = btnDown(pad, 1) ? 1 : clamp(btnVal(pad, 6), 0, 1);
     padThrottle = padThrottleVal > 0.12;
     padBrake = padBrakeVal > 0.12;
-    // edge-triggered actions reuse the same latches the keyboard sets.
-    if (btnEdge(pad, 2)) boostTogglePressed = true;
-    if (btnEdge(pad, 3)) overtakePressed = true;
-    if (btnEdge(pad, 12)) aeroTogglePressed = true;
-    if (btnEdge(pad, 5)) shiftUpPressed = true;
-    if (btnEdge(pad, 4)) shiftDownPressed = true;
-    if (btnEdge(pad, 8)) cameraCyclePressed = true;
+    // Start/Menu is a pause TOGGLE regardless of what is on screen — same as
+    // KeyP, which is also ungated (see the "PAUSE AND BACK ARE COMMANDS" block
+    // in onKey above). Left outside the branch below on purpose.
     if (btnEdge(pad, 9) && onPauseCb) onPauseCb();
+    // A MENU OPEN MEANS THE PAD DRIVES THE MENU, NOT THE CAR — mirroring
+    // menuOverlayOpen() gating the keyboard's own driving keys elsewhere in
+    // this file. Only ONE of the two branches below ever fires per poll, so a
+    // held LB/RB/trigger can never also queue a gear shift or camera cycle
+    // that fires the instant the menu closes (see docs/research note above
+    // clearEdges() for the bug class this avoids).
+    if (window.UiLayers && window.UiLayers.anyOpen()) {
+      padNavPoll(pad);
+    } else {
+      padNavDir = null;   // fresh hold-timer the next time a menu opens
+      // edge-triggered actions reuse the same latches the keyboard sets.
+      if (btnEdge(pad, 2)) boostTogglePressed = true;
+      if (btnEdge(pad, 3)) overtakePressed = true;
+      if (btnEdge(pad, 12)) aeroTogglePressed = true;
+      if (btnEdge(pad, 5)) shiftUpPressed = true;
+      if (btnEdge(pad, 4)) shiftDownPressed = true;
+      if (btnEdge(pad, 8)) cameraCyclePressed = true;
+    }
     const n = pad.buttons ? pad.buttons.length : 0;
     padPrevButtons.length = n;
     for (let i = 0; i < n; i++) padPrevButtons[i] = btnDown(pad, i);
+  }
+
+  // Dispatch a synthetic keydown at `document` (not `window`) — measured: an
+  // event dispatched at `window` only reaches WINDOW's own listeners, never
+  // document's, because window has no descendants of its own in the event
+  // path. MenuNav listens on `window` (capture); TopModal's Escape handler
+  // listens on `document` (capture). Dispatching at `document` reaches both,
+  // in the same order a real keypress would (window-capture, document-capture,
+  // …, document-bubble, window-bubble).
+  function padDispatchKey(key) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  }
+
+  // D-pad OR the left stick, past the same dead zone steering uses. Only one
+  // direction at a time — whichever axis (or digital pair) is further past
+  // the zone wins ties toward vertical, an arbitrary but consistent choice.
+  function padNavDirOf(pad) {
+    if (btnDown(pad, 12)) return "up";
+    if (btnDown(pad, 13)) return "down";
+    if (btnDown(pad, 14)) return "left";
+    if (btnDown(pad, 15)) return "right";
+    const ax = (pad.axes && pad.axes.length > 0) ? pad.axes[0] : 0;
+    const ay = (pad.axes && pad.axes.length > 1) ? pad.axes[1] : 0;
+    const mx = Math.abs(ax) >= PAD_DEADZONE ? Math.abs(ax) : 0;
+    const my = Math.abs(ay) >= PAD_DEADZONE ? Math.abs(ay) : 0;
+    if (!mx && !my) return null;
+    return my >= mx ? (ay < 0 ? "up" : "down") : (ax < 0 ? "left" : "right");
+  }
+
+  // A → activate. Synthetic events do NOT get a browser's native "Enter/Space
+  // clicks the focused button" behaviour (isTrusted:false skips that default
+  // action, same as the Escape case below) — so .click() the focused control
+  // ourselves, mirroring MenuNav's own idea of "focusable" (MenuNav.FOCUSABLE).
+  // If nothing is focused inside the active layer yet (pad used before any
+  // direction press), there is nothing to click — seed focus instead, the same
+  // way MenuNav's own first arrow press would, so the NEXT press has a target.
+  // "One focus visual should always be visible" (research note §8) applies to
+  // A as much as to a direction.
+  function padActivate() {
+    const layer = window.MenuNav && window.MenuNav.activeLayer();
+    if (!layer) return;
+    const active = document.activeElement;
+    const sel = window.MenuNav.FOCUSABLE;
+    if (active && sel && layer.contains(active) && active.matches && active.matches(sel)) {
+      active.click();
+      return;
+    }
+    padDispatchKey("ArrowDown");
+  }
+
+  // B → Escape/Back. Gated on UiLayers.top() (not MenuNav.activeLayer(), which
+  // deliberately excludes the photo-mode free camera) because a real Escape
+  // key reaches the free camera too — it steps out of the fly-cam before
+  // closing the tuner panel behind it.
+  //
+  // A real <dialog>'s "Escape closes it" is UA DEFAULT-ACTION behaviour tied to
+  // a TRUSTED key event — Chromium's CloseWatcher takes the key's release, and
+  // WebKit's older path takes the keydown's default action (see
+  // docs/research/PLATFORM-INPUT-NOTES.md §1) — and neither fires for a
+  // synthetic, untrusted KeyboardEvent (verified empirically: a dispatched
+  // Escape keydown left an open <dialog> open). TopModal already wires a real
+  // `cancel` listener on every dialog.screen that does exactly what a real
+  // Escape does (presses the screen's own data-esc-close button) — so for a
+  // <dialog> layer, meet THAT seam directly. The handful of screens that never
+  // became <dialog>s (TopModal's own comment names them) go through
+  // TopModal.onEscape, an ordinary document keydown listener with no such
+  // trust requirement, so a synthetic keydown reaches it exactly like a real
+  // Escape would.
+  function padEscape() {
+    const layer = window.UiLayers && window.UiLayers.top();
+    if (!layer) return;
+    if (layer.tagName === "DIALOG") {
+      layer.dispatchEvent(new Event("cancel", { cancelable: true }));
+    } else {
+      padDispatchKey("Escape");
+    }
+  }
+
+  // The menu-open half of pollGamepad(): direction hold-repeat, paging, A, B.
+  function padNavPoll(pad) {
+    const dir = padNavDirOf(pad);
+    if (dir) {
+      const now = nowMs();
+      if (dir !== padNavDir) {
+        // Fresh press (including switching straight from one direction to
+        // another): fire immediately, then arm the longer initial delay — a
+        // real key's first repeat is slower than its steady-state cadence.
+        padNavDir = dir;
+        padDispatchKey(PAD_NAV_KEYS[dir]);
+        padNavNextT = now + PAD_NAV_DELAY_MS;
+      } else if (now >= padNavNextT) {
+        padDispatchKey(PAD_NAV_KEYS[dir]);
+        padNavNextT = now + PAD_NAV_REPEAT_MS;
+      }
+    } else {
+      padNavDir = null;   // released the instant input returns to neutral
+    }
+    // Triggers page vertically, bumpers page horizontally (the table's last
+    // two rows) — single-shot, not held-repeat, like the keys they stand in for.
+    if (btnEdge(pad, 6)) padDispatchKey("PageUp");
+    if (btnEdge(pad, 7)) padDispatchKey("PageDown");
+    if (btnEdge(pad, 4)) padDispatchKey("ArrowLeft");
+    if (btnEdge(pad, 5)) padDispatchKey("ArrowRight");
+    if (btnEdge(pad, 0)) padActivate();
+    if (btnEdge(pad, 1)) padEscape();
   }
 
   // A connected pad only "wins" steering when its stick is actually deflected,
@@ -1000,6 +1149,7 @@ const Input = (function () {
       padConnected = false; padSteer = 0; padThrottle = padBrake = false;
       padThrottleVal = padBrakeVal = 0;
       padPrevButtons.length = 0;
+      padNavDir = null;
     });
   }
 
@@ -1032,6 +1182,7 @@ const Input = (function () {
     padThrottleVal = 0;
     padBrakeVal = 0;
     padPrevButtons.length = 0;
+    padNavDir = null;
   }
 
   /* THE EDGE LATCHES NEED EMPTYING WHILE NOBODY IS READING THEM.

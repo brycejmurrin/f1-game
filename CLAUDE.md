@@ -24,6 +24,39 @@ node tools/verify-track.cjs <id>  # headless build check (no browser) — catche
 **The reference is `docs/TESTING.md`** — every group, every spec, the fixtures,
 the philosophy. `tests/test-groups.test.mjs` fails if it and `package.json`
 disagree. Do not copy its tables here; this section is the three rules only.
+> ### AGENTS: NEVER BLOCK ON A TEST RUN. NEVER POLL ONE EITHER.
+>
+> A single SwiftShader spec is 40-90 s on a small box and a group is tens of
+> minutes. Blocking wastes all of it; `tail`-ing in a loop wastes it *and* fills
+> the transcript.
+>
+> **Start it and walk away:** `node tools/test-bg.mjs <groups>`, or a Bash call
+> with `run_in_background`, or arm a `Monitor` with an until-loop and be woken:
+> ```sh
+> until ! pgrep -f "[p]laywright test" >/dev/null; do sleep 10; done; echo done
+> ```
+> One check to confirm it started is fine. After that, go and do real work.
+>
+> **The wait is working time.** In rough order of value: re-read the diff you
+> just wrote; verify a factual claim you put in a code comment; research the
+> platform behaviour behind the bug (TinyFish `search` / `fetch_content`); draft
+> the docs the change needs; plan the follow-up. Two real returns from doing
+> this in one session: a comment blaming WebKit for a spec-mandated
+> `setPointerCapture` throw got corrected before it could mislead anyone, and an
+> iOS report of interactive controls sitting in an invisible top-edge dead zone
+> turned up **five** of ours sitting exactly there.
+>
+> **The one thing that is NOT safe mid-run:** editing `js/` or `css/`. The test
+> server serves the working tree, so later specs would load a mixed build.
+> Editing docs, reading, researching and planning are all fine.
+>
+> Durable findings go in `docs/research/` —
+> **`docs/research/PLATFORM-INPUT-NOTES.md`** is the standing collection.
+
+Three rules, in order. The reference — every group, every spec, the fixtures and
+the philosophy — is **`docs/TESTING.md`**, and `tests/test-groups.test.mjs`
+fails if it and `package.json` disagree. Do not maintain a second copy of that
+table here.
 
 **1. Run tests in the BACKGROUND and tail the log. NEVER BLOCK ON A TEST RUN.**
 A foreground run blocks for minutes and prints nothing you can act on. Start it,
@@ -121,19 +154,6 @@ cores and every one of them reports timeouts.
   `package-lock.json` matches) and `git worktree remove --force` when done.
 - **A plan's fan-out should reduce the NUMBER of verification rounds**, not run
   more of them at once — verification is serial here and is the bottleneck.
-
-**AGENTS: DO NOT SIT AND WAIT, AND DO NOT POLL.** A full SwiftShader spec can be
-40-90 s on a small box, so a suite is tens of minutes — that time is yours, not
-dead. Two rules:
-
-- **Never block on a run.** Start it with `run_in_background`, or arm a `Monitor`
-  with an until-loop (`until ! pgrep -f "[p]laywright test" >/dev/null; do sleep 10; done`)
-  and get woken. Repeatedly `tail`-ing the log in a loop is the same as blocking,
-  only noisier — one check to confirm it started is enough.
-- **Then go and do something useful.** In rough order of value: read the diff you
-  just wrote with fresh eyes; verify a factual claim you put in a code comment;
-  research the platform behaviour behind the bug (see below); draft the docs the
-  change needs; prepare the follow-up edit.
 
 **Research the mechanism, not just the fix.** The TinyFish MCP tools
 (`search`, `fetch_content`) are the fastest way to check a platform claim, and
@@ -909,7 +929,7 @@ css/                            tokens.css (design tokens) + components/menus/hu
                                   overlays/carsetup/data/tuner/track-detail/responsive
 index.html                      shell — script tags, DOM structure, cache-bust version
 tools/manifest.cjs              load-order single source of truth (script tags must match)
-tests/*.spec.js                 Playwright specs (110) + tests/*.test.mjs unit suites (47)
+tests/*.spec.js                 Playwright specs (111) + tests/*.test.mjs unit suites (48)
 docs/            developer docs (ARCHITECTURE.md, DEBUG-HOOKS.md, SCENERY-API.md, …)
                  ARCHITECTURE-REVIEW.md is the standing assessment + defect
                    register: what the no-build-step bet costs, why asserted
@@ -1195,7 +1215,7 @@ is the same surface from a shell, with the staging done correctly.
 
 ## Writing tests
 
-110 Playwright specs + 47 `node --test` unit suites. **How to RUN them is under
+111 Playwright specs + 48 `node --test` unit suites. **How to RUN them is under
 Testing workflow above; `docs/TESTING.md` is the full reference.** This is what
 to do when writing one.
 
