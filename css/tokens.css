@@ -210,10 +210,14 @@
      ONLY THE STEPS WITH A REAL CONSUMER ARE DECLARED BELOW.
      tests/css-tokens.test.mjs fails a defined-but-unread custom property, on
      purpose ("an unread token is an invitation to use a value nobody has been
-     maintaining") — so --fs-1/--fs-3/--fs-4/--fs-7 stay in the table above
-     only, and get their `--fs-N: …;` line added by whichever future file's
-     migration is their first real consumer, not pre-declared here. */
+     maintaining") — so --fs-7 stays in the table above only, and gets its
+     `--fs-N: …;` line added by whichever future file's migration is its
+     first real consumer, not pre-declared here.
+     --fs-1/--fs-3/--fs-4 joined this list with css/data.css's migration. */
+  --fs-1: var(--fs-micro);
   --fs-2: 12px;
+  --fs-3: 13px;
+  --fs-4: 14px;
   --fs-5: 16px;
   --fs-6: 20px;
   /* ---- CORNER RADIUS — four steps, plus a pill ----
