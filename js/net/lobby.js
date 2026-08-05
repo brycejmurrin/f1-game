@@ -253,12 +253,21 @@ const NetLobby = (function () {
           + " after a minute or so. Start a new invite and paste the answer back"
           + " more quickly.";
       }
+      // TWO DIFFERENT PROBLEMS, and they take opposite instructions. With no
+      // relay in the config there is nothing to diagnose and the fix is the
+      // same network. With one configured, the relay itself is the suspect —
+      // and telling that player to change Wi-Fi sends them round a loop that
+      // cannot succeed, which is what the old single sentence did.
       return "Could not connect after " + secs + "s" + last + "."
         + " Both sides found an address but the direct link was blocked, which"
-        + " usually means one of the networks needs a relay to get through."
-        + (st && st.turn ? "" : " Racing over the same Wi-Fi is the reliable fix"
-          + " — no relay is configured (the free one this game once shipped was"
-          + " retired by its operator; see apex26.turnApi).");
+        + " means one of these networks needs a relay to get through."
+        + (st && st.turn
+          ? " A relay was offered and did not carry it. Run __apex.turnProbe()"
+            + " in the console to see which relay answered — if none did, set"
+            + " apex26.turnApi to a credentials URL of your own. Racing over"
+            + " the same Wi-Fi works meanwhile."
+          : " No relay is configured at all. Race over the same Wi-Fi, or set"
+            + " apex26.turnApi to a credentials URL.");
     }
 
     // Poll for the DataChannels opening. There is no event that means "the
