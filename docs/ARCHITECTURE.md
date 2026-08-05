@@ -588,6 +588,10 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `photomode.js` | `Photomode` | photo mode |
 | `tuner.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel (COPY VALUES export) |
 | `steer-tuning.js` | `SteerTuning` | ADVANCED STEERING panel (presets + sliders) |
+| `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `xStraightAhead()`/`aeroDfMult()` stay in game.js because they read car state |
+| `sheetshape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
+| `topmodal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 16 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |
+| `ariastate.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
 ## js/game.js — main
 

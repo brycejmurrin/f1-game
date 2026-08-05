@@ -51,6 +51,11 @@ const SKILL_DOCS = fs.readdirSync(path.join(ROOT, ".claude/skills"), { withFileT
 const PLACEHOLDERS = new Set([
   "tests/foo.spec.js", "tests/a.spec.js", "tests/b.spec.js",
   "js/circuits/<id>.js", "docs/tracks/<id>.md",
+  // A FORWARD REFERENCE, same shape as js/track/circuit-elevations.js in
+  // SOURCE_EXEMPT below: tests/physics-characterization.spec.js GENERATES this
+  // baseline under APEX_UPDATE_BASELINE=1, and skips itself until someone does.
+  // It is legitimately absent until the driving model is characterized.
+  "tests/physics-baseline.json",
 ]);
 
 // The lookbehind (rather than a bare \b) stops a path segment INSIDE a URL from
