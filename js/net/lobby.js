@@ -609,6 +609,17 @@ const NetLobby = (function () {
     // unchanged, which is the whole reason it is written this way.
     function seatRank() { return role === "host" ? 0 : 1; }
 
+    // The same rule applied to SOMEBODY ELSE, so an onlooker can work out which
+    // of two players holding one seat is the one about to move. On a guest the
+    // host is the only peer and outranks us; on the host every peer is a guest
+    // and we outrank all of them. Join order refines this when the room grows,
+    // and every screen must reach the same answer — which is why it is derived
+    // from the same rank rather than guessed at per screen.
+    function peerRank(id) {
+      if (role === "guest") return 0;         // our only peer is the host
+      return 1 + [...peerIds()].indexOf(id);  // guests, in join order
+    }
+
     // Seats we would have to move OUT of, as opposed to peerSeats(), which is
     // every other player and is what the garage greys out. The two differ on
     // purpose: you may not PICK a seat someone else is in whatever your rank,
@@ -702,6 +713,64 @@ const NetLobby = (function () {
       return `rgb(${b[0]},${b[1]},${b[2]})`;
     }
 
+    // A seat two players are BOTH holding, for the moment before it resolves.
+    //
+    // Clashes are settled after the fact: the lower-ranked player learns what
+    // the other picked, moves, and re-announces. That is correct, but it takes
+    // a round trip — and for those ~100-200 ms every OTHER screen honestly
+    // draws two rows in the same car, which reads as the room glitching rather
+    // than as a rule being applied. The mover's own screen never shows it,
+    // because it resolves synchronously; only the onlookers see it.
+    //
+    // So an onlooker does not draw the duplicate at all. The player who will
+    // yield — by the same seatRank rule they will use themselves, so every
+    // screen picks the same one — is shown as still choosing, which is exactly
+    // what they are about to be doing. Nothing is invented: this is the state
+    // one round trip early, not a guess about it.
+    //
+    // How long we will draw a clashing peer as "still choosing" before giving
+    // up and showing the clash for real. A yield is one round trip; anything
+    // longer means the peer is NOT going to move — an older build with no
+    // exclusivity, or one that could find no free seat — and at that point
+    // hiding their car stops being early and starts being a lie. Their row
+    // would sit blank for ever while they sat in a car we refused to draw.
+    const YIELD_GRACE_MS = 2000;
+    const clashSince = new Map();          // peer id -> when we first saw it
+
+    function willYield(id) {
+      if (outranked(id)) return grace(id);
+      clashSince.delete(id);               // no clash, or this peer wins it
+      return false;
+    }
+
+    // Does somebody of LOWER rank hold this peer's seat? Every other player is
+    // checked, ourselves included — when we are host we outrank every guest, so
+    // a guest that lands on our car is the one that moves.
+    function outranked(id) {
+      const mine = _peers.get(id);
+      if (!mine || !mine.team) return false;
+      const rank = peerRank(id);
+      const same = (p) =>
+        p && p.team === mine.team && (p.driver || 0) === (mine.driver || 0);
+      for (const other of peerIds()) {
+        if (other !== id && same(_peers.get(other)) && peerRank(other) < rank) return true;
+      }
+      return same(localProfile()) && seatRank() < rank;
+    }
+
+    // True only while the yield is still plausibly in flight. Also arms one
+    // re-render at the deadline, so a peer that never moves stops being hidden
+    // without needing another event to arrive — otherwise the row would stay
+    // blank until something unrelated happened to repaint it.
+    function grace(id) {
+      const now = performance.now();
+      if (!clashSince.has(id)) {
+        clashSince.set(id, now);
+        setTimeout(() => { if (clashSince.has(id)) renderRoom(); }, YIELD_GRACE_MS + 50);
+      }
+      return now - clashSince.get(id) < YIELD_GRACE_MS;
+    }
+
     function driverLine(profile, label, ready) {
       const team = TEAM_OF(profile);
       const seat = profile ? (profile.driver || 0) : 0;
@@ -761,7 +830,12 @@ const NetLobby = (function () {
         // says; P2/P3/P4 once there are several, because "them" no longer picks
         // anybody out.
         e.them.innerHTML = ids.length
-          ? ids.map((k, i) => row(driverLine(_peers.get(k) || null,
+          ? ids.map((k, i) => row(driverLine(
+              // A player who is about to yield this seat is drawn as still
+              // choosing rather than as a second copy of somebody else's car.
+              // See willYield(): this is the state one round trip early, not a
+              // guess, and every screen derives it from the same rank rule.
+              willYield(k) ? null : (_peers.get(k) || null),
               ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k)))).join("")
           : row(driverLine(null, "Them", false));
       }
