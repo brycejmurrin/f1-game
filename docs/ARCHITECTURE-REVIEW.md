@@ -205,10 +205,9 @@ journal; this is what remains.
   miss a bankZone; Zandvoort's latent error is 2.41 m). Follow-up: Monza's
   Parabolica 4° camber cap lost half its written justification to this bug and
   should be reconsidered on its remaining merits.
-- **A19 residue.** Dead CSS tokens `--btn-col` (`css/overlays.css:32`) and
-  `--ped`/`--act` (`:465`) have no consumer anywhere; `css/overlays.css` still
-  carries mutually inconsistent measured cluster widths in comments (the
-  "467px" family) of which at least two are stale. The hud-layout coverage gap
+- **A19 residue.** `css/overlays.css` still carries mutually inconsistent
+  measured cluster widths in comments (the "467px" family) of which at least
+  two are stale. The hud-layout coverage gap
   is closed for landscape (`HUD_LANDSCAPE_ONLY` now checks `.hud-top`,
   `.hud-gaps`, `#minimap`, `#hud-sectors`); portrait is deliberately excluded,
   with the measured `.hud-top`/pausebtn overlap documented as unreachable
@@ -337,7 +336,8 @@ Deferred with reasoning, none lost:
 
 - **game.js extraction candidates**, ranked by boundary crossings (§4): garage
   live preview ~415 ln (blocked on a car-drawing seam), camera disclosure
-  ~324, pre-race screens ~261, cam modes ~168, liveries ~161, sky state ~107.
+  ~324, pre-race screens ~261, liveries ~161, sky state ~107. (Cam modes was
+  taken: `js/game/cam-modes.js`.)
 - **`wrapDelta` helper** — the shortest-way arc-wrap idiom is hand-written at
   4 sites; one wrong copy sends a car backwards down the lap once per lap.
 - **Elevation-profile drawing duplicated in `js/game/menus.js`** — two

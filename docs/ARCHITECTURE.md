@@ -55,10 +55,12 @@ The July 2026 architecture reorg moved every module into a domain directory
 ~4,700 lines as measured then; `glx-shaders.js` → chunked shader files;
 `buildProps` → four scenery modules).
 
-**That 4,700 is a historical measurement, not a current one.** `game.js` is back
-over 8,000 — extraction moved code out once and nothing stopped it accumulating
-again, because no guard bounds the file. Treat the number as a record of what the
-reorg achieved, and `wc -l js/game.js` as the truth about today.
+**That 4,700 is a historical measurement, not a current one.** `game.js` grew
+back toward 8,000 — extraction moved code out once and nothing stopped it
+accumulating again until `tests/module-size.test.mjs` put a ratcheted ceiling on
+the file (lowered with each extraction). Treat the number as a record of what
+the reorg achieved, and `wc -l js/game.js` against the current ceiling as the
+truth about today.
 
 The mechanisms that keep a no-build, script-tag codebase coherent after the split:
 
@@ -81,11 +83,11 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
 ### Deferred follow-ups (known debt, in rough priority order)
 
 - **game.js pass 2** — promote the remaining closure `let`s to a shared state
-  object. Four modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`,
-  `js/game/light-store.js`, `js/game/racecontrol.js`) — 8,178 → 8,009 lines at
-  the time of that pass; the current count and its ratcheted ceiling live in
-  `tests/module-size.test.mjs` — and the next candidates are the quali
-  networking block and collisions.
+  object. Six modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`,
+  `js/game/light-store.js`, `js/game/racecontrol.js`, and from the 2026-08
+  cleanup `js/game/physics-consts.js` and `js/game/cam-modes.js`); the current
+  count and its ratcheted ceiling live in `tests/module-size.test.mjs`, and the
+  remaining extraction candidates are ranked in ARCHITECTURE-REVIEW.md §8.
 
   **The payoff is testability, not tidiness.** Race control is the clearest
   case: 118 lines in the middle of `game.js` had exactly one assertion anywhere
@@ -628,6 +630,7 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `reliability.js` | `Reliability` | RELIABILITY / DNFs — whether a car reaches the flag. Risk is DERIVED (team tier, relieved by career team development and by the player's fitted engine + gearbox), never authored per team. The whole field's retirements are drawn ONCE at the green light from a stateless hash of `(seed, round, driver)`, so arming a race consumes nothing from the sim RNG stream. Ships OFF — opt-in per race via the RELIABILITY setting |
 | `perf.js` | `PerfGov` | adaptive performance governor (render scale / FX tiers) |
 | `cameras.js` | `GameCams` | the 13 player camera modes + the `__apex.view` debug free-cam framing |
+| `cam-modes.js` | `CamModes` | the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to `cameras.js` |
 | `hud.js` | `GameHud` | in-race DOM HUD (pos/lap/times, speed, energy, gaps, minimap) |
 | `results.js` | `GameResults` | results + season-end screens, penalties, points |
 | `apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md) |
@@ -645,6 +648,13 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `topmodal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 16 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |
 | `ariastate.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
+The table lists the modules whose contracts need prose; the rest of `js/game/`
+(input, audio, lighting/light-store/light-presets, particles, carmesh,
+bodyattitude, debrisworld, incidentsim, racecontrol, agentview,
+agentview-raster, music-lib, spotify, cam-tune, cam-tuner, tables, uilayers)
+is one-line-summarised in CLAUDE.md's file layout, which the docs-integrity
+guard keeps complete.
+
 ## js/game.js — main
 
 The entry point (the largest file in the repo — its line ceiling is ratcheted by
@@ -655,8 +665,7 @@ above are extracted). Player + 21 AI.
 ever assigned to `state`. (This previously listed `select` and `seasonEnd` as
 well; neither exists. The select screen is shown by unhiding `#select` while the
 state stays `menu`, and the season-end panel is the `results` state with
-`#res-next` relabelled. A few vacuously-true `state !== "select"` guards
-survive in game.js.)
+`#res-next` relabelled.)
 
 **Mode** is two independent axes rather than one enum, because a career weekend
 has to be able to say "career" and "qualifying" at the same time:

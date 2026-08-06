@@ -26,6 +26,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -55,7 +56,10 @@ const sweep = () => (cached ||= JSON.parse(execFileSync(
 
 test("same-facing coplanar faces stay within the per-circuit baseline", () => {
   const results = sweep();
-  assert.ok(results.length >= 24, `expected >= 24 circuits, got ${results.length}`);
+  // The floor is the ROSTER, not a number typed once: `>= 24` kept passing after
+  // the roster reached 40, so the sweep could have silently dropped 16 circuits.
+  const roster = createRequire(import.meta.url)("../tools/manifest.cjs").CIRCUITS.length;
+  assert.equal(results.length, roster, `expected ${roster} circuits, got ${results.length}`);
 
   const grown = [];
   for (const r of results) {

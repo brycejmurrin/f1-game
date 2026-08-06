@@ -23,7 +23,12 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 
 // Ratchet: specs importing tests/fixtures.js must not fall below this.
-export const FLOOR = 31;
+export const FLOOR = 54;
+
+// The other failure mode: migrate a batch of specs, never raise the floor, and
+// the ratchet silently stops ratcheting (it sat at 31 while real adoption was
+// 54). A floor more than this far below the measured count has lost its grip.
+export const FLOOR_SLACK = 5;
 
 // These four are load-bearing consumers — they rely on the fixture's mocks and
 // failure telemetry, not merely on `test`/`expect`. Each must keep importing it.
@@ -66,6 +71,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (uses < FLOOR) {
     console.error(`fixture adoption fell to ${uses}/${total}; the ratchet floor is ${FLOOR}. ` +
                   `Migrating a spec OFF the shared fixture also drops its failure attachments.`);
+    process.exitCode = 1;
+  }
+  if (uses - FLOOR > FLOOR_SLACK) {
+    console.error(`fixture adoption is ${uses} but the floor is ${FLOOR} — raise FLOOR so the ` +
+                  `ratchet keeps working (it allows ${FLOOR_SLACK} of slack, no more).`);
     process.exitCode = 1;
   }
   if (!process.exitCode) {

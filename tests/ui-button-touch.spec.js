@@ -455,11 +455,10 @@ test.describe("Auto-throttle in button/touch mode", () => {
     await page.locator("#pm-resume").click();
     await page.locator("#pausemenu").waitFor({ state: "hidden" });
 
-    // Button mode exposes an explicit GAS button for manual throttle control
-    const throttleBtn = page.locator("#btn-throttle");
-    if (await throttleBtn.count() > 0) {
-      await expect(throttleBtn).toBeVisible();
-    }
+    // Button mode exposes an explicit GAS button for manual throttle control.
+    // Unconditional: wrapped in a count() guard this passed even with the
+    // button deleted, which is the regression the test exists to catch.
+    await expect(page.locator("#btn-throttle")).toBeVisible();
     await page.screenshot({ path: galleryPath("ui-button-touch", "hud-button-mode.png") });
   });
 });
