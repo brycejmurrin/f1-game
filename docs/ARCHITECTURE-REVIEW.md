@@ -287,6 +287,13 @@ most-load-bearing first.
   mirror floor is 0.15 vs GLSL's 0.55), and the MIRROR chrome surface id 27
   exists only in GLSL, so chrome liveries lose their mirror on both WGX and TLX.
   These are renderer-parity work, not GLX defects.
+- **`tests/agent-drive-bench.spec.js` › "relational policy out-drives the blind
+  baseline on interlagos" is red** and predates this cleanup — the untouched
+  session-start commit fails it with the identical value (`relational.dist` 251
+  against a `> 300` / `naive×1.5` floor), so the relational agent policy simply
+  under-drives Interlagos. An agent-policy/physics-tuning issue, not a
+  cleanup regression; `test:agent` is not in the CI smoke job, which is why it
+  sat unseen.
 - **`results.js`** the human-rival " PLAYER" tag is `appendChild`-ed and then
   destroyed by a `textContent` assignment on the next line, so it never renders
   (quali.js does the same thing in the correct order).
