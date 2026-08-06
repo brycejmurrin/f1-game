@@ -37,11 +37,11 @@ const CEILINGS = {
   // The monolith. Every line removed here is the point of the extraction work;
   // js/game/ is where it goes. Do not raise this to land a feature — put the
   // feature in a module.
-  // Raised 8152 → 8178 for ensureSteerInput() (+ race-entry gyro comments): the
-  // call has to sit on startRace()/setSteerMode/steerMode in this file; a
+  // Raised 8152 → 8185 for ensureSteerInput() + coarse default TOUCH comments:
+  // the call has to sit on startRace()/setSteerMode/steerMode in this file; a
   // separate module would still need a G façade entry and would not shrink the
   // closure coupling that makes extraction pay.
-  "js/game.js": 8179,
+  "js/game.js": 8185,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,

@@ -496,42 +496,35 @@ const Input = (function () {
 
   /* ---------------- canvas touch steering ---------------- */
 
-  // TOUCH STEERING IS AN ANCHORED DRAG, and it used to be a coin flip.
+  // TOUCH STEERING IS WHERE YOU PUT YOUR FINGER, scaled — not a coin flip and
+  // not a drag-only gesture that ignores a stationary press.
   //
-  // The old rule was: whichever HALF of the screen you touched, steer fully that
-  // way. Not "mostly" — `clientX < innerWidth/2 ? -1 : 1`, the same ±1 a held
-  // arrow key produces, delivered instantly with no ramp. So the one steering
-  // mode aimed squarely at an iPad had exactly two reachable steering angles,
-  // full left and full right, and a drag across the centre of the screen flipped
-  // between them with no hysteresis. Every other input had more resolution than
-  // the touchscreen: the pad has an analog stick, the keyboard at least ramps.
-  //
-  // Now the finger's own displacement IS the wheel. Touch down anywhere in the
-  // free centre of the screen to set an anchor, slide toward the corner you want,
-  // lift to let it ramp back to centre. RELATIVE rather than absolute, so it does
-  // not matter where on the glass the thumb happens to land or how big the device
-  // is, and TOUCH_RANGE scales with the viewport so the same gesture spans an
-  // iPhone SE and a 13-inch iPad.
-  //
-  // A tap therefore steers ZERO where it used to mean full lock. That is the
-  // change, not a side effect of it.
-  const TOUCH_RANGE_FRAC = 0.12;   // viewport widths of drag for full lock
-  const TOUCH_DEAD_PX = 5;         // slop around the anchor: a tap is not a steer
+  // History: the old rule was `clientX < innerWidth/2 ? -1 : 1` (binary half-
+  // screen lock). That was replaced with an anchored drag so a tap steered
+  // ZERO — which read on iOS as "touch steering is broken" because the natural
+  // gesture is to plant a thumb on the side you want to turn toward, not to
+  // slide from an arbitrary anchor. This path is absolute from the viewport
+  // centre: press left of centre → left, further out → more lock, lift → ramp
+  // home. Still analog (Phase B's resolution win); no longer inert on contact.
+  const TOUCH_RANGE_FRAC = 0.35;  // fraction of half-width from centre → full lock
+  const TOUCH_DEAD_PX = 12;       // ignore tiny presses on the exact midline
   let touchRangeFrac = TOUCH_RANGE_FRAC;
 
   function touchRangePx() {
     const w = (typeof window !== "undefined" && window.innerWidth) || 844;
-    // Floored so a very narrow window can't make the range so small that the
-    // dead zone covers all of it (which would leave only ±1 again).
-    return Math.max(40, w * touchRangeFrac);
+    // Half-width * frac, floored so a narrow window cannot collapse the range
+    // into the dead zone (which would leave only ±1 again).
+    return Math.max(40, (w * 0.5) * touchRangeFrac);
   }
 
-  // Displacement from this touch's anchor, as a steer command. Only touch mode
-  // steers from the canvas at all — the control buttons are separate elements in
-  // the corners, and tilt/button modes leave the centre free for other uses.
+  // Horizontal offset from the viewport centre, as a steer command. BUTTONS
+  // mode uses the on-screen arrows and ignores the canvas; TILT and TOUCH both
+  // accept a finger on the glass (see steer()) so a phone still on the old TILT
+  // default is not a dead screen.
   function touchCmd(rec) {
-    if (steerMode !== "touch") return 0;
-    const dx = rec.x - rec.anchorX;
+    if (steerMode === "buttons") return 0;
+    const mid = ((typeof window !== "undefined" && window.innerWidth) || 844) * 0.5;
+    const dx = rec.x - mid;
     const a = Math.abs(dx);
     if (a <= TOUCH_DEAD_PX) return 0;
     return clamp(Math.sign(dx) * (a - TOUCH_DEAD_PX) / touchRangePx(), -1, 1);
@@ -570,8 +563,8 @@ const Input = (function () {
     if (!canvasTouchIsDriving()) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
-      // Anchor AT the touch-down point, so the command starts at exactly zero
-      // however far from centre the thumb landed — there is no jump to absorb.
+      // Record the press point; the command is absolute from screen centre, so
+      // there is no anchor jump to absorb — where the thumb is IS the wheel.
       touches.set(t.identifier, { anchorX: t.clientX, x: t.clientX, seq: ++touchSeq });
     }
     recomputeTouchSteer();
@@ -595,11 +588,11 @@ const Input = (function () {
     recomputeTouchSteer();
   }
 
-  // While a finger is down the drag IS the command and there is nothing to
-  // smooth — the thumb's own position is already continuous, and filtering it
-  // would only add lag to a gesture the player can see. The ramp exists for the
-  // one discontinuity in the scheme: lifting off, which drops the input to
-  // nothing in a single event.
+  // While a finger is down the press position IS the command and there is
+  // nothing to smooth — the thumb's own position is already continuous, and
+  // filtering it would only add lag to a gesture the player can see. The ramp
+  // exists for the one discontinuity in the scheme: lifting off, which drops
+  // the input to nothing in a single event.
   function touchSteering() {
     const t = nowMs();
     const dt = (touchSteerT ? Math.min(0.1, (t - touchSteerT) / 1000) : 0) * timeScale;
@@ -978,6 +971,10 @@ const Input = (function () {
     if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
     if (padSteerActive()) return padSteer;
     if (steerMode === "buttons") return buttonSteering();
+    // A finger on the glass is an explicit steer request — it wins over gyro
+    // while held, so TILT mode is not a dead touchscreen (the iOS report that
+    // started as "touch does nothing" with the old tilt default still stored).
+    if (touchActive && (steerMode === "touch" || steerMode === "tilt")) return touchSteering();
     if (tiltActive()) return tiltSteering();
     return touchSteering();
   }
@@ -1048,10 +1045,10 @@ const Input = (function () {
       btnSteerLeft = btnSteerRight = false;   // drop held buttons
       btnSteerVal = 0; btnSteerT = 0;
     }
-    if (steerMode !== "touch") {
-      // A drag in progress when the mode changed is not a command in the new
-      // mode. Leaving its value latched would hold lock the player can no longer
-      // release, because nothing in the new mode ever calls touchSteering().
+    if (steerMode === "buttons") {
+      // Leaving a canvas press latched when switching to arrows would hold lock
+      // the player can no longer release — button mode never calls touchSteering
+      // for a live command (touchCmd zeros it), but touchSteerVal could ramp.
       touches.clear();
       touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
     }

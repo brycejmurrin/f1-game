@@ -541,8 +541,15 @@ and pause RESTART all reached `startRace()` without that call.
 **Fix.** `ensureSteerInput()` runs from `startRace()` (every race-entry path)
 and from `#rs-go` (so a quali-first path still prompts on the confirming click).
 Already-denied gyro fails closed to BUTTONS immediately. `requestGyro()` is
-idempotent. HOW TO PLAY no longer tells players to "tap screen halves" — that
-gesture was removed when touch steering became an anchored drag.
+idempotent.
+
+**Follow-up (same bug family).** Even with gyro wired, "I touch the screen and
+nothing happens" was still true for two independent reasons: (1) default STEER
+on phones was TILT, so canvas presses were ignored; (2) TOUCH mode used an
+anchored drag that steered ZERO on a stationary press. Touch steering is now
+absolute from the viewport centre (press left/right → turn, analog by distance),
+canvas presses also steer while TILT is selected (finger overrides gyro while
+held), and fresh coarse-pointer installs default to TOUCH.
 
 ---
 

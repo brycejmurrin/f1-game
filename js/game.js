@@ -262,15 +262,21 @@ let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
 let unlimitedBudget = store.get("unlimitedBudget", false); // removes credit cap in car setup
-// how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
-let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "buttons" : "tilt");
+// how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag).
+// Phones/tablets default to TOUCH — finger on the glass — because the previous
+// default (TILT) made every canvas press a no-op while pedals still worked, which
+// read as "touch steering is broken". Desktop keeps TILT as the inert default
+// (keyboard/pad actually drive). An explicit stored choice always wins.
+let steerMode = store.get("steerMode",
+  store.get("buttonSteer", false) ? "buttons"
+    : (Input.touchControlsNeeded() ? "touch" : "tilt"));
 // Manual gears: available in tilt mode (thumbs free) or on desktop keyboard
 // (no thumbs involved). Touch/button modes on mobile force auto to free thumbs.
 function gearsManual() {
   return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded());
 }
-// Auto-throttle: enabled only in touch steering mode (screen-half taps occupy
-// the thumb). Button mode now exposes an explicit GAS button so the thumb is free.
+// Auto-throttle: enabled only in touch steering mode (thumb is busy on the
+// glass). Button mode exposes an explicit GAS button so the thumb is free.
 function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "touch"; }
 let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
 function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season); }
