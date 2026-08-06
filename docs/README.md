@@ -59,7 +59,7 @@ and `js/game/incidentsim.js` implement.
 
 ## Research (cited, but not a description of behaviour)
 
-The twelve that survive here are cited from source, from `CLAUDE.md` or from
+The thirteen that survive here are cited from source, from `CLAUDE.md` or from
 each other — that citation is what keeps them live. Everything else that used to
 sit in this table was indexed by nothing and moved to
 [`archive/research/`](archive/research/).
@@ -78,6 +78,7 @@ sit in this table was indexed by nothing and moved to
 | [research/UI-SCALE-AND-ZOOM.md](research/UI-SCALE-AND-ZOOM.md) | `zoom` as a scaling mechanism, measured: what the UI SIZE / HUD SIZE sliders cost, and why `zoom` is the right tool for them. |
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the phone at arm's length, collapse a primitive only when it passes the three-places-plus-generic test. (Also indexed under Engineering reference above.) |
 | [research/ARCHITECTURE-REDESIGN-2026-08.md](research/ARCHITECTURE-REDESIGN-2026-08.md) | Three competing redesigns (zero-build ESM, TypeScript+esbuild, harden-IIFE-in-place) scored by two judges; Bedrock-with-grafts adopted as the direction, ESM kept as the documented escalation path. |
+| [research/AUDIT-SYNTHESIS-2026-08.md](research/AUDIT-SYNTHESIS-2026-08.md) | The 21-agent audit workflow's synthesized execution plan — FIX-NOW / RESTRUCTURE / DEFER with all 35 verified findings — driving the post-cleanup hardening; archives when spent. |
 
 ## Archive (`archive/`)
 
