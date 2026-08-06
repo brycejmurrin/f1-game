@@ -1530,10 +1530,14 @@ test.describe("agentHelp()", () => {
     }
     expect(h.control, "control verbs missing").toBeTruthy();
     expect(JSON.stringify(h.control)).toMatch(/act\(|weather|jump/);
-    // the deprecated rasters live in notes, not as a peer perception tool
+    // The one-time deprecated aliases (frame/plan/worldModel/visible) are GONE —
+    // callers migrated to render({what})/scene({visible}), and the contract test
+    // pins their absence from the surface. The manifest must not resurrect them:
+    // no note may advertise them as callable, and the canonical calls must be
+    // the ones it teaches.
     const notes = h.notes.join(" ");
-    expect(notes).toContain("DEPRECATED");
-    expect(notes).toMatch(/frame\(\).*plan\(\).*worldModel\(\)|worldModel/);
+    expect(notes).not.toMatch(/frame\(\)|plan\(\)|worldModel\(\)|visible\(\)/);
+    expect(notes).toContain("render({what})");
     expect(h.loop).toContain("world()");
     expect(h.cli).toContain("agent.mjs");
     expect(notes).toContain("null");
