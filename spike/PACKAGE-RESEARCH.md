@@ -2,7 +2,11 @@
 
 Companion to `ADOPTION-PLAN.md`. Consolidates four web-research sweeps
 (physics/vehicle-dynamics, three.js rendering ecosystem, performance/worker/WASM,
-game systems). Research-only — nothing here is adopted yet; it's the menu.
+game systems). Research-only at the time of writing. Since then: Trystero
+shipped (vendored 0.25.3, `js/net/nostr.js` — signalling only), the Rapier
+debris side-world is default-on (`js/game/debrisworld.js`, plain
+`rapier3d-compat` — the SIMD swap below is still open), and async ghosts exist
+(`js/car/ghost.js`). The rest is still the menu.
 
 **The constraint that governs every verdict:** Apex 26 is no-build-step, pure
 IIFE `<script>` globals + one importmap-loaded three.js island, static-hosted on

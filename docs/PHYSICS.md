@@ -9,11 +9,15 @@ The driving model, the pace discipline, active aero and overtake. Extracted from
 Per-axle bicycle model. Key tuning variables in `game.js`: `WHEELBASE`,
 `STEER_EXPO`, `STEER_MAX_SLIP`, `STEER_SPEED_REF`, `DRIFT`, `ROAD_FOLLOW`,
 `PLAYER_GRIP`, `FRONT_GRIP`, `YAW_DAMP`, `YAW_INERTIA`, `PACE`. Modify via
-`__apex.setPhysics(o)` for A/B tests.
+`__apex.setPhysics(o)` for A/B tests. The model's immutable constants (`VMAX`,
+`ACCEL`, `BRAKE`, `LAT_MAX`, `LONG_GRIP`, the `X_*` aero pairs, the ERS/OT
+windows, …) live in `js/game/physics-consts.js` (global `PhysicsConsts`),
+destructured once by game.js at eval time — anything a slider or `setPhysics`
+can change stays a `let` in game.js.
 
 **`PACE` is a ground-speed scale, not a speed cap.** The OVERALL SPEED slider
 scales the car's real m/s (and the accel curve) — nothing else. Everything else
-measured in speed is pace-normalised through two helpers next to `VMAX`:
+measured in speed is pace-normalised through two helpers next to `PACE` in game.js:
 `vTop()` (where the envelope tops out in m/s — divide by it to normalise) and
 `vStd(v)` (that speed on the standard, pace-5 scale — compare hard-coded
 thresholds against it). So `VMAX`, `GEAR_TOP`, `TAPER_LO/HI`, `GRASS_V` and
@@ -111,7 +115,7 @@ misses the minimum gets **no zones and no active aero** — that is MONACO, and
 averaging `startFrac`/`endFrac`.
 
 Braking or leaving the zone shuts the flap AND drops the switch, and
-`X_CLOSE_RATE` is ~4× `X_OPEN_RATE` — the downforce comes back faster than it
+`X_CLOSE_RATE` (8.0/s) is ~3× `X_OPEN_RATE` (2.6/s) — the downforce comes back faster than it
 left. The HUD chip counts the next zone down in metres like a DRS board, and
 reads `NO AERO ZONE` (struck through, button faded) on a circuit that has none.
 
@@ -137,7 +141,7 @@ so it inherits DRS's safety restrictions; active aero inherits none of them.
 | under a caution | available | disabled |
 | circuit with no zones | unavailable (Monaco) | available |
 
-`otEnabled()` in game.js is the race-wide gate — it reads `ranked[0].lap` (the
+`otEnabled()` (a game.js delegate to `RaceControl`, `js/game/racecontrol.js`) is the race-wide gate — it reads `ranked[0].lap` (the
 LEADER's, because a field-wide switch is what race control throws, and it is
 O(1) since `ranked` is already sorted) and `caution.level`. `c.otArmed` folds
 that together with the car's own gap and cooldown. The HUD says `NO OVERTAKE`

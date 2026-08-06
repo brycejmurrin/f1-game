@@ -1,7 +1,7 @@
 # Circuit of the Americas (COTA) — Visual Design Brief
 
 **Setting:** DAY · Green theme (Texas Hill Country)
-**Layout:** 5.513 km, 20 corners, counterclockwise, ~40 m total elevation change.
+**Layout:** 5.513 km, 20 corners, counterclockwise, ~20 m total elevation change.
 
 ## 1. Setting
 A purpose-built motorsport park on 1,500 acres in the rolling hills southeast of
@@ -19,7 +19,7 @@ Light fog mood: thin warm haze low on the ridgelines, fading distant boxes to a
 pale dusty green-gray.
 
 ## 3. Elevation
-- `s≈0.08–0.12` — steep Turn 1 climb, the signature ~30 m ascent from the start
+- `s≈0.08–0.12` — steep Turn 1 climb, the signature ~18 m ascent from the start
   line to a blind hairpin apex (steepest braking zone of the year).
 - `s≈0.12–0.28` — rapid descent off T1 into the flowing Esses, rolling up-and-down.
 - `s≈0.46–0.62` — long back straight with a subtle crest ~1/3 along (briefly blind).

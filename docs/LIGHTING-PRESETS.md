@@ -14,7 +14,7 @@ TUNE_DEFS default  →  file "*"  →  file "track|tod|wx"  →  player localSto
 
 - `js/game/lighting.js` `TUNE_DEFS` holds each knob's factory **default**.
 - `js/game/light-presets.js` `window.LightPresets` holds the shipped overrides:
-  - `"*"` — a **global baseline** applied to every condition (currently `carGloss: 0.35`, near-matte paint).
+  - `"*"` — a **global baseline** applied to every condition (currently `carGloss: 0.35` near-matte paint, plus the shipped broadcast HDR grade: blacks/shadows/midtones/highlights/whites/toe/shoulder and small gainR/gainB trims).
   - `"track|tod|wx"` — a per-condition override that wins over `"*"`.
 - A player's live tuner edits always win over the file; RESET falls back to the file.
 
@@ -90,14 +90,14 @@ per-condition preset — focus on the ones the intent notes above call out._
 - `bounceK` [0..0.3] def 0.04 — lamp bounce onto walls/kerbs/car flanks
 
 ### SHADOWS
-- `shadowStr` [0..2] def 1 — shadow darkness; lower lifts toward ambient, >1 crushes
-- `shadowRange` [16..160] def 64 — sun shadow box half-size (m)
+- `shadowStr` [0..2] def 1.15 — shadow darkness; lower lifts toward ambient, >1 crushes
+- `shadowRange` [16..160] def 80 — sun shadow box half-size (m)
 - `pcssPen` [5..500] def 80 — how fast shadows soften with caster distance
 - `shadowBias` [0..0.01] def 0.001 — depth offset (acne vs peter-pan)
 - `shadowTintAmt` [0..1.5] def 0 — cool-blue tint on shadowed areas (sunny-day look)
 - `carShadow` [0..1] def 1 — real sun-projected car shadows (per-frame car-only map; desktop WebGL2 tier)
 - `aoStr` [0..3] def 1 — SSAO crease/contact darkening
-- `ssaoRadius` [0.1..4] def 0.6 — world-space reach of AO sampling
+- `ssaoRadius` [0.1..4.1] def 0.6 — world-space reach of AO sampling
 - `contactStr` [0..3] def 1 — grounding shadow under car/props
 
 ### FLOODLIGHTS
@@ -146,7 +146,7 @@ per-condition preset — focus on the ones the intent notes above call out._
 
 ### CAR
 - `carReflect` [0..2.5] def 0.05 — world mirror on bodywork
-- `carEnvCube` [0..1] def 0 — live cubemap probe (OFF by default; mobile GPU cost)
+- `carEnvCube` [0..1] def 0.3 desktop / 0 mobile — live cubemap probe (ON by default on desktop; mobile stays OFF for GPU cost)
 - `carGloss` [0..1.6] def 1 — paint gloss (**`"*"` baseline 0.35 matte — leave alone unless a track needs different**)
 - `carSpecular` [0..3.5] def 1 — specular highlight brightness
 - `carClearcoat` [0..3.5] def 0.05 — lacquer coat catching crisp glints

@@ -223,6 +223,14 @@ dressingExclusions: [
 `px/py/pz/hw` (per-node arrays), `pyMin` (lap's low point), plus resolved
 `sceneryTheme`, `landmarkKit`, and `circuitKit`.
 
+Also on the 107-member contract but not detailed in this doc: `MAT` (material
+ids), the math utilities `lerp` / `norm` / `cross` / `upOf`, the `night`
+session flag, the grounding helpers `seat` / `foundation` / `cantilever` and
+`recordBarrier` (see SCENERY-GROUNDING.md), the emitters `cityFront`, `house`,
+`motorhome`, `forestEdge`, `signBoard`, `signDigit`, `waterBand`,
+`waterField`, and `modelDiagnostics` (also exposed as
+`__apex.modelDiagnostics()`).
+
 ### Placement helpers (box-based, terrain-anchored)
 | Helper | Use |
 |---|---|
@@ -236,7 +244,7 @@ dressingExclusions: [
 | `onTrack(x, z, margin)` | true if `(x,z)` is on any tarmac — guard distant props |
 | `groundYAt(k, dist)` | terrain height `dist` beyond the edge |
 | `hash(i)` | deterministic 0–1 pseudo-random |
-| `ATM` / `COL` | named atmosphere & colour packs from `track-scenery-data.js` (see below) |
+| `ATM` / `COL` | named atmosphere & colour packs from `scenery-data.js` (see below) |
 
 ### Geometry primitives (world coords — non-cube shapes)
 | Primitive | Shape |

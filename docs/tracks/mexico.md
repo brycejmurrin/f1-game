@@ -23,9 +23,10 @@ far **Sierra Nevada** volcano ring (Popocatépetl / Iztaccíhuatl blue-grey rock
 snowcaps) reads behind a pale city sprawl.
 
 ## 3. Elevation
-Essentially **flat** — no significant gradient anywhere on the lap. The defining
-"altitude" reads visually (thin haze, washed sky), not as slope. Only a near-flat
-**banking** survives at the old Peraltada line into the final corners (`s≈0.90–0.97`).
+Near-flat — only two long, gentle swells (~5 m and ~3 m) over the lap. The defining
+"altitude" reads visually (thin haze, washed sky), not as slope. The old
+Peraltada line survives as real **banking** into the final corners (6° at
+`s≈0.97`, easing to 5° at the exit).
 
 ## 4. Landmarks & Surroundings by Lap Position
 
@@ -52,7 +53,7 @@ Essentially **flat** — no significant gradient anywhere on the lap. The defini
 - **Foro Sol stadium section (`s≈0.74–0.88`):** slow left-right-left squeezed between
   two packed baseball-stadium grandstand bowls — the iconic enclosed corridor.
 - **The Peraltada (`s≈0.90–0.97`):** the legendary banked sweep, now split into the
-  Estadio corners — model a subtle banked kerb edge.
+  Estadio corners — the road itself carries 6° of camber, easing to 5° at the exit.
 - **Kerbs:** bold red/white striped low boxes at every apex; deep at Turn 1 and Horquilla.
 
 ## 6. Modelling Notes
@@ -67,4 +68,4 @@ Essentially **flat** — no significant gradient anywhere on the lap. The defini
 - Ring the horizon with a **far Sierra Nevada mountain ring** (cool blue-grey rock +
   snowcaps) under denser thin-air haze; keep city towers secondary and further back.
 - Lead the entry with the **lucha-libre statue** box as a small cultural Easter egg.
-- Lay a faint **banked kerb edge** through the final Peraltada/Estadio corners.
+- Bank the final Peraltada/Estadio corners with the road (6° easing to 5°), kerbs tilted with it.

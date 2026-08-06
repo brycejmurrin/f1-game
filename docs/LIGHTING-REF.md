@@ -73,7 +73,7 @@ their existing higher precedence.
 
 ### WebGPU `CompositeU` packing
 
-`CompositeU` is **224 bytes** (14 aligned `vec4<f32>` records). The original
+`CompositeU` is **256 bytes** (16 aligned `vec4<f32>` records). The original
 nine records occupy bytes 0–143; grading appends:
 
 | Offset | Record | Components |
@@ -83,6 +83,8 @@ nine records occupy bytes 0–143; grading appends:
 | 176 | `lift` | Lift R/G/B, padding |
 | 192 | `gamma` | Gamma R/G/B, padding |
 | 208 | `gain` | Gain R/G/B, padding |
+| 224 | `aces` | ACES tone-curve a/b/c/d |
+| 240 | `dirtFx` | Lens-dirt amount, padding |
 
 WebGL uploads the same five records as `uTone0`, `uTone1`, `uLift`, `uGamma`
 and `uGain`.
@@ -113,9 +115,9 @@ Lights are emitted **from the mast list** (`track.lampPosts`), so a circuit that
 suppresses the generic flood masts over a stretch — a `dressingExclusions` rule
 of kind `"floodlights"`, usually because a bespoke structure owns that ground —
 also deleted the *light* there. An audit of all 40 circuits found **nine with a
-genuinely unlit stretch at night**: baku (880 m of road, worst point 431 m from
-any lamp), madrid, mexico, silverstone, redbull (528 m spanning its own
-start/finish straight), suzuka, monaco, abudhabi, montreal.
+genuinely unlit stretch at night** — worst of all baku (1.2 km, a fifth of the
+lap) and redbull (784 m spanning its own start/finish straight), plus madrid,
+mexico, silverstone, suzuka, monaco, abudhabi, montreal.
 
 Placing bespoke masts circuit-side does not fix it: `floodMast()` and
 `floodMastRing()` draw a fixture but never register a lamp post, so they emit
@@ -159,7 +161,7 @@ floodlights are activated.
     (avoids the flat near-overhead look), warm-sun-vs-cool-sky chiaroscuro, crisp
     low haze.
   - **Humid/overcast circuits**: paled-out sky, more haze.
-- Bloom ≈ 0.74, grade strength ≈ 0.34 (set just before `GLX.present()`).
+- Bloom ≈ 0.60 (threshold 0.82), grade strength ≈ 0.34 (set just before `GLX.present()`).
 - `numLights = 0` — sun dominates, floodlights are suppressed.
 
 ---
@@ -177,7 +179,9 @@ Colour is chosen by `floodColor(theme)`:
 | Theme | Colour |
 |---|---|
 | `desert` | Warm sodium orange |
-| `street_day` / `street_night` / `modern` | Cool LED white |
+| `street_night` | Cool LED white |
+| `modern` | Warm-white LED |
+| `street_day` | Warm street-lamp amber (Monaco/Madrid) |
 | `green` (classic) | Neutral warm white |
 
 **Masts**: `buildProps` (the `js/track/` scenery modules) emits a floodlight mast mesh at every light
@@ -196,8 +200,8 @@ each light pool reads as physically cast by a real structure.
 // Read current state
 __apex.lightState()
 // → { ambientSky: [r,g,b], ambientGround: [r,g,b],
-//     sunColor: [r,g,b], sunDir: [x,y,z],
-//     exposure: number, numLights: number }
+//     sunColor: [r,g,b], sunY: number, skySunDir: [x,y,z],
+//     exposure: number, numLights: number, … }
 
 // Switch time of day (no asset reload; rebuilds meshes only on day↔dark flip)
 __apex.setTimeOfDay('night')    // 'dawn' | 'day' | 'dusk' | 'night' | 'default'

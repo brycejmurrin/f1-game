@@ -58,13 +58,15 @@ axis 0   left-stick X  steer        btn 7 RT / btn 0 A   throttle
 btn 14/15 d-pad L/R    steer         btn 6 LT / btn 1 B   brake
 btn 2 X  boost toggle                btn 3 Y   overtake
 btn 4 LB shift down                  btn 5 RB  shift up
+btn 12 d-pad up  active aero (X-mode) toggle
 btn 8 View/Back  camera              btn 9 Menu/Start  pause
 ```
 
 ## Rendering & power
 
-- WebGL2 with procedural geometry and almost no texture uploads keeps memory
-  bandwidth low — comfortable inside the A15/A16 budget at 60 fps landscape.
+- WebGL2 with procedural geometry and few texture uploads (the one baked PBR
+  material array from assets/pack, ≤8 MB, blended by the matTexMix knob) keeps
+  memory bandwidth low — comfortable inside the A15/A16 budget at 60 fps landscape.
 - Physics runs as a **fixed 1/60 s step** with a substep cap (`js/game.js`
   `tick()`), so handling is identical whether Safari renders at 30, 60, or
   120 fps and a janky frame can never enlarge the integration step.

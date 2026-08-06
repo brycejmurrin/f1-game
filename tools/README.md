@@ -74,9 +74,10 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   `track-sweep.mjs` (JSON-only sweep), and earlier `shot-car.mjs` /
   `photoshoot.mjs` / `migrate-output-layout.mjs` — have been deleted; recover
   any of them from git history if a need returns. `menu-fit.mjs` survives
-  `layout-audit.mjs` only because of `--safe=` notch-inset simulation, which
-  headless Chromium cannot otherwise produce (it reports every
-  `env(safe-area-inset-*)` as 0).
+  `layout-audit.mjs` only because `--safe=` simulates ARBITRARY notch insets,
+  where layout-audit injects only its fixed, per-viewport measured ones —
+  headless Chromium itself reports every `env(safe-area-inset-*)` as 0, so
+  both must simulate.
 - **Surveying a track:** `survey-track.mjs <id>` is the one-stop pass (shots +
   flagged probe). For a one-off framed shot use `.claude/skills/playwright-probe/shot.mjs`;
   for a parallel multi-track screenshot sweep use `apex-capture.mjs`; for a quick

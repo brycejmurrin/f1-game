@@ -2,7 +2,10 @@
 
 Companion to `PACKAGE-RESEARCH.md`. Two web-research sweeps: (1) styling &
 component foundations, (2) game-HUD / animation / overlays / telemetry data-viz.
-Research-only — nothing adopted; this is the menu.
+Research-only at the time of writing. Since then #1 shipped — self-hosted
+Titillium Web + Rajdhani (`css/tokens.css` `@font-face`) — and `color-mix()` +
+`@layer` are in use; `<dialog>`/showModal is the shipped modal architecture.
+The rest is still the menu.
 
 **Constraints:** no build step, static GitHub Pages, pure IIFE `<script>` + one
 importmap island, vanilla DOM (NO React/bundler). The UI is already a **mature

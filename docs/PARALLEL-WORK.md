@@ -91,7 +91,7 @@ Three uses have already paid off in this repo:
 ```sh
 WT=/tmp/.../scratchpad/wt-$NAME              # scratchpad, never the repo root
 git worktree add -q "$WT" <ref>
-ln -s "$PWD/node_modules" "$WT/node_modules" # see caveat below
+cp --reflink=auto -r node_modules "$WT/"      # see caveat below
 # ... work / run ...
 git worktree remove --force "$WT"
 git worktree list                            # confirm it is gone
@@ -99,10 +99,10 @@ git worktree list                            # confirm it is gone
 
 **Caveats that actually apply here:**
 
-- **`node_modules` is not created in a new worktree.** Symlinking the main one
-  is only safe when `package-lock.json` is byte-identical — which it is when the
-  worktree is at a nearby ref, and is *not* after a dependency change. When in
-  doubt, `npm ci --prefer-offline`.
+- **`node_modules` is not created in a new worktree.** Copy it in
+  (`cp --reflink=auto` is nearly free on a CoW filesystem) rather than symlink —
+  a shared directory corrupts under concurrent installs. After a dependency
+  change, `npm ci --prefer-offline` instead.
 - **No submodules to trip over.** Everything third-party is vendored
   (`vendor/three-0.184.0`, `vendor/jsqr-1.4.0`, `vendor/trystero-0.25.3`,
   `vendor/rapier-0.19.3`), which sidesteps the multiplying-submodule problem

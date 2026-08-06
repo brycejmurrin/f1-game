@@ -9,7 +9,7 @@ A showcase circuit on flat, reclaimed Yas Island — a modern leisure-and-marina
 Sunset-to-night gradient sky: warm orange-pink low band fading to deep indigo overhead `[0.95,0.45,0.25]` → `[0.06,0.05,0.14]`. Marina water = dark mirror catching warm dock lights `[0.04,0.06,0.12]` with amber speckle. Cool-white floodlit track surface `[0.88,0.92,1.0]`. Warm marina/dock and hotel-base lighting `[1.0,0.72,0.38]`. Hero accent: the Yas Hotel's animated LED shell cycling teal→magenta→amber `[0.2,0.8,0.9]` / `[0.9,0.2,0.7]` / `[1.0,0.6,0.2]`. Ferrari World roof red `[0.85,0.08,0.10]`. Desert sand floor far out `[0.7,0.55,0.35]`.
 
 ## 3. Elevation
-Essentially **flat** — sea-level reclaimed land, no real gradient. Only camber to note: the banked Turn 9 (~s 0.42) and the swept Marsa curve (~s 0.78). Model as subtle tilt, not hills.
+Near sea level but not dead flat — the road climbs gently away from the pit straight, crests over the north loop and eases back down through the marina (~9 m end to end, no gradient over ~2 %). Camber to note: the banked Turn 9 (~s 0.42) and the swept Marsa curve (~s 0.78).
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box-modelling description |

@@ -34,8 +34,11 @@ cd worker
 npx wrangler deploy
 ```
 
-Then paste the resulting `https://apex26-rendezvous.<you>.workers.dev` URL into
-`DEFAULT_URL` at the top of `js/net/rendezvous.js`, and bump the cache version.
+Room codes already work with nothing deployed: `DEFAULT_URL` in
+`js/net/rendezvous.js` is empty **on purpose**, and the public-broker backend
+handles the rendezvous. To make your own relay the default for every player,
+paste the resulting `https://apex26-rendezvous.<you>.workers.dev` URL into
+`DEFAULT_URL` and bump the cache version.
 
 For a staging worker without editing the file, set it per-device instead:
 
@@ -62,8 +65,8 @@ the SQLite-backed class is the one available on the free plan.
 
 ## If you never deploy it
 
-Nothing breaks. `NetRendezvous.configured()` is false, and the room-code buttons
-say a relay has not been deployed and point at the invite link — which needs
-nothing at all. The option is shown rather than hidden on purpose: a feature that
-disappears when a URL is unset guarantees the one person who could fix it never
-finds out it exists.
+Nothing breaks — room codes still work. `NetRendezvous.configured()` is now
+always true: with no private relay set, the public-broker backend does the
+rendezvous, and `usingPrivateRelay()` reports which path is live. The invite
+link and QR code still need nothing at all. Deploying this worker is only for
+moving the room-code path onto infrastructure you control.

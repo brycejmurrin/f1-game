@@ -34,7 +34,7 @@ Near-flat overall (only a few metres). Notable: a gentle **downhill braking zone
 | 0.95 | L | close | Pit entry wall + garage roofline returning to start |
 
 ## 5. Track features
-No banking — flat throughout. Signature corners: **Turn 1** right-hand hairpin (heavy braking, prime overtake), **Turn 4** right hairpin after the Turn 3 kink/DRS, the flowing **Turns 5-6-7 sweep**, **Turn 8** downhill right hairpin, and the technical double-apex **Turns 9-10**. Wide asphalt with generous gravel/asphalt run-off; bold red-white sawtooth kerbs at every apex and exit.
+Near-flat, with modest real camber in the fast sweeps (3–4°: T1, T4, the T5–T7 sweep, T10, the final right). Signature corners: **Turn 1** right-hand hairpin (heavy braking, prime overtake), **Turn 4** right hairpin after the Turn 3 kink/DRS, the flowing **Turns 5-6-7 sweep**, **Turn 8** downhill right hairpin, and the technical double-apex **Turns 9-10**. Wide asphalt with generous gravel/asphalt run-off; bold red-white sawtooth kerbs at every apex and exit.
 
 ## 6. Modelling notes
 - Light from above: bake bright top faces / floodlit pools so night track reads against black sky.

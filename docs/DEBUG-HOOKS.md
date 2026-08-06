@@ -169,7 +169,7 @@ returning `{ mode, index }`; an unknown mode returns `false`.
 ```js
 __apex.camera();            // → { mode:"chase", index:0, modes:["chase","far","drift","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear"] }
 __apex.camera("hood");      // → { mode:"hood", index:4 }
-__apex.camera("tcam");      // → { mode:"tcam", index:12 }
+__apex.camera("tcam");      // → { mode:"tcam", index:11 }
 __apex.camera(3);           // switch by index → cockpit
 ```
 
@@ -377,8 +377,8 @@ lit path and none is needed: the sample reuses the procedural materials' own
 triplanar convention. See
 [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md).
 
-**Loading a pack does not change the render.** The blend knob (`matTexMix`)
-ships at 0, so a pack is inert until you ask for it.
+**The pack ships ON.** The blend knob (`matTexMix`) defaults to `1.0`,
+so the pack is fetched at boot and blended by default; `matTex(0)` turns it off.
 
 ### `assets() → {supported, pack, uploaded, tier, layers, normal, scales, bytes, models, error}`
 State of the pack. `supported:false` means the active renderer has no
@@ -394,13 +394,13 @@ following `gfx.isMobile`; `false` unloads the arrays and frees the GPU memory.
 
 ### `matTex(v?) → number`
 Get/set the **BAKED MATERIALS** blend — the A/B control for the whole feature,
-and the same value as `lightTune({matTexMix})`. `0` is the shipped procedural
-render, `1` is full baked detail. Multiplicative, so the per-track tarmac tint
+and the same value as `lightTune({matTexMix})`. `1` is the shipped default
+(full baked detail), `0` the pure procedural pre-scan look. Multiplicative, so the per-track tarmac tint
 and racing-line wear survive at any setting.
 ```js
 await __apex.assetLoad();      // upload the arrays
 __apex.matTex(1);              // full baked materials
-__apex.matTex(0);              // back to the shipped look
+__apex.matTex(0);              // back to the pure procedural look
 ```
 
 ### `envProbe(on?) → {on, off, changed, needsReload}`
@@ -540,7 +540,7 @@ half-width `hw` (m), `speed` (m/s), arc position `s` (m).
 
 ### `scan(distAhead) → {s, k, hw, slope} | [...]`
 Look-ahead road sampler for closed-loop driving: signed curvature `k` (rad/m,
-+right), half-width `hw` and road pitch `slope` at `distAhead` metres in front of
+**+ = left** turn, same raw sign as `probe()`), half-width `hw` and road pitch `slope` at `distAhead` metres in front of
 the player. Pass an **array** of distances to get one reading each (e.g. to find
 the sharpest corner inside a braking window). Pure read — no state change. This is
 the primitive the autopilot harness (`tests/autopilot.spec.js`) steers and brakes
@@ -564,7 +564,7 @@ Three combined-slip fields expose the traction-circle state in real time:
 | Field | Meaning |
 |---|---|
 | `axEstSm` | Smoothed longitudinal acceleration (m/s²) — positive = accelerating, negative = braking |
-| `axFrac` | `axEstSm / LONG_GRIP` clamped to 1 — fraction of the longitudinal grip budget consumed |
+| `axFrac` | `|axEstSm| / (LONG_GRIP × gripMult)` clamped to 1 — fraction of the longitudinal grip budget consumed |
 | `slipFactor` | `sqrt(1 − axFrac²)` — fraction of lateral grip remaining (1 = none consumed, 0 = all consumed) |
 
 `slipFactor` < 1 means the car is braking or accelerating hard enough to reduce cornering grip. When it approaches 0 the car will wash wide (understeer). Trail-braking — easing off the brake while turning in — lets `slipFactor` rise and rotates the car.
@@ -802,7 +802,7 @@ is a PLACE the HUD can count down to like a DRS board — which a rolling
 **None of DRS's restrictions apply.** There is no proximity requirement (leader
 and backmarker can both run X-mode down the same straight), and no opening-lap
 or caution lock. Those belong to OVERTAKE, which is the actual overtaking aid —
-see `carAt()`'s `otEnabled`. The flap also travels: it opens over ~0.45 s and shuts in ~0.12 s, so
+see `carAt()`'s `otEnabled`. The flap also travels: it opens over ~0.39 s and shuts in ~0.12 s, so
 poll `aeroX` rather than assuming the switch took effect on the same tick.
 
 ```js
@@ -817,7 +817,7 @@ every wing element except the mainplane rotates. At the default downforce level
 the rear wing's top two planes (26 deg / 28 deg) — on every car on track, in
 cockpit view, and on the GARAGE turntable (the ACTIVE AERO button there).
 
-X-mode is worth ~+7.5 % top speed and costs ~55 % of the aero-downforce term
+X-mode is worth ~+10.5 % top speed and costs ~60 % of the aero-downforce term
 (`DOWNFORCE` in `js/game.js`) — it is the only one of the three straight-line
 levers that spends cornering grip instead of battery. `aeroX`/`xOn`/`xArmed`
 also appear in `obs()`, `physState()` and `carAt(i)`; `cars()` carries the flap
@@ -1613,7 +1613,7 @@ freeCutsLeft, timePenaltyS}` — cuts 1-3 warn, every cut from the 4th adds +5 s
 An agent that cannot see this is scored on a rule it cannot perceive.
 `ego.ers` gives `{charge, deploying, overtakeArmed, boostRemainingS, cooldownS}`
 — charge alone never said whether the energy was going anywhere, or whether the
-overtake window (~1 s behind, 4 s boost, 16 s cooldown) was open.
+overtake window (~1 s behind, 4 s boost, 9–14 s cooldown) was open.
 `rivals[].pace` (and `field()` rows at `full`) expose AI skill, so one rival is
 distinguishable from another. `detail:"full"` adds `physics.{rpm, offroad,
 stuckS, wallContactS, vertLoad}` and a `tunables` block — `setPhysics()` can
@@ -1771,7 +1771,7 @@ document each raster under its `render({what})` name.
 sorting — a real hidden-surface solve at grid resolution, not a guess.
 
 **Resolution.** `cols` defaults to 48 (what an agent should read) and clamps
-1–400; `rows` derives from the real viewport aspect unless pinned, clamped
+8–400; `rows` derives from the real viewport aspect unless pinned, clamped
 4–150. Raising `cols` is a human-facing quality knob — a large, sharp view on
 request — not something the default loop should reach for; `agentHelp()` keeps
 pointing decisions at `world()`/`scene()`/`trackInfo()`. `carView({detail:
@@ -2256,7 +2256,7 @@ about them* — `"ego.headingErrDeg": "+ = nose right of the road; steer the
 opposite sign to null it"`; the highest-value part), `read` (the raw `__apex`
 hooks that already return JSON, call them directly), `control` (the drive/stage
 verbs), `model` (static-vs-dynamic and decide-vs-show notes). Read once; it is
-under 5.6 KB and asserted so. What the *game* is — as opposed to the API — is
+under 6 KB and asserted so. What the *game* is — as opposed to the API — is
 `objective()`.
 
 ### From a shell — `tools/agent.mjs`
@@ -2374,7 +2374,7 @@ driver market, and put contract offers on the table. What the end-of-season shee
 reads.
 
 ### `careerReset() → true`
-Wipe the **live** slot. The other two are untouched.
+Wipe the **live** slot. The other five are untouched.
 
 ### `careerSlots(flavour?, i?) → [{flavour, i, used, …}] | save | null`
 Six careers can be saved at once, in **two sets of three** — `apex26.career.driver.N`
@@ -2546,7 +2546,7 @@ proximity. Returns `null` if no track is loaded.
 | `wallR, wallL, clearR, clearL` | Signed barrier distances and clearances to each side (m) |
 | `energy` | ERS charge level 0–1 |
 | `gear` | Current gear (1–8) |
-| `wrongWay, offT, rescueT, done` | Episode flags: `done = wrongWay ∥ rescueT > 8` |
+| `wrongWay, offT, rescueT, done` | Episode flags: `done = wrongWay ∥ rescued within the last 0.5 s` |
 | `input` | Currently applied override input (null fields = live device input) |
 | `posInField, gapAhead, gapBehind` | Race position and gap to nearest rivals (m) |
 | `scan` | Lookahead at [10, 30, 60] m: `{d, k, hw, wallR, wallL, width}` |

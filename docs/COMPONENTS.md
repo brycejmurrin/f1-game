@@ -1,6 +1,6 @@
 # The component inventory — what exists, who owns it, what is shared
 
-`css/` holds **516 classes in 55 families**, and until this document there was no
+`css/` holds **510 classes in 53 families**, and until this document there was no
 list of them. That absence has a cost, and it has already been paid: `.res-*` is
 defined in `components.css` *and* `career.css`, which is something I found by
 grepping in the middle of fixing an unrelated cascade-layer bug rather than by
@@ -127,7 +127,7 @@ most-shared class in the project and had no entry at all:
 
 ## Dead classes
 
-None, out of 515 — a class defined in `css/` and referenced from neither
+None, out of 510 — a class defined in `css/` and referenced from neither
 `index.html` nor any `js/` file. The three this section used to name
 (`dh-leg-swatch`, `dh-sectors`, `foot-end`) have since been deleted from `css/`,
 and the last of them took its whole class family with it — which is why no
@@ -147,7 +147,7 @@ being held to.
 - **Before editing a class, check whether it appears above under "more than one
   file".** If it does, you are editing more than one screen.
 - **Before adding a family**, ask whether an existing one already covers it. The
-  audit grid (`docs/LAYOUT-AUDIT.md`) measures 30 screens; a new family usually
+  audit grid (`docs/LAYOUT-AUDIT.md`) measures 38 screens; a new family usually
   means a new one-off, and one-offs are what `.pane-pair` was built to retire.
 - **Regenerate with the same method** the test uses if the numbers here drift:
   `node --test tests/component-inventory.test.mjs` will say so first.

@@ -1,7 +1,8 @@
 # Apex 26 — Architecture & Module Contract
 
 Pure JS/CSS/HTML, **no build step**. The **runtime has zero dependencies**;
-Playwright is the only `devDependency` (test harness, never shipped). Served as
+every `devDependency` is test-only (Playwright the harness, jsQR to verify the
+QR encoder, espree/eslint-scope for the source audits — never shipped). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
 > This file is the module **contract** — what each module is and what it may
@@ -117,7 +118,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   Take it only together with a real car-drawing seam that `render()` shares.
 
   **Splitting the two megafunctions is NOT recommended.** `render()` and
-  `updateCar()` are ~1,376 and ~1,838 lines, and `updateCar`'s tyre model is one
+  `updateCar()` are ~1,370 and ~1,130 lines (2026-08 measurement), and `updateCar`'s tyre model is one
   continuous integration over ~40 interdependent locals — extracting it means
   inventing a state struct and risking the determinism that
   `tests/physics-characterization.spec.js` now pins, for no functional gain.
@@ -328,7 +329,7 @@ Teams.LIST -> [ { id:"mercedes", name:"Mercedes-AMG Petronas", short:"MER",
                   drivers:[ {name:"George Russell", code:"RUS", num:63},
                             {name:"Kimi Antonelli", code:"ANT", num:12} ] }, ... ]
 // 11 teams in 2026 spec: Mercedes(t0), Ferrari(t1), McLaren(t1, Norris num:1),
-// Red Bull(t2, Verstappen num:3), Alpine(t3), Racing Bulls(t3), Haas(t3),
+// Red Bull(t2, Verstappen num:33), Alpine(t3), Racing Bulls(t3), Haas(t3),
 // Williams(t3), Audi(t4), Aston Martin(t4), Cadillac(t4, Perez 11 / Bottas 77)
 Teams.POINTS  -> [25,18,15,12,10,8,6,4,2,1]   // top 10, no fastest-lap point
 ```
@@ -496,11 +497,11 @@ Input.calibrate()                          // capture neutral tilt
 Input.steer() -> -1..1                     // deadzone 2.5deg, MAX_TILT=36deg for full lock,
                                            // One-Euro low-pass, remap by screen.orientation.angle
 Input.braking() -> bool                    // ArrowDown/S or BRAKE touch button
-Input.boosting() -> bool                   // boost is a TOGGLE (Space / BOOST button taps
+Input.consumeBoostToggle() -> bool         // boost is a TOGGLE (Space / BOOST button taps
                                            // flip it on/off — not held)
 Input.consumeOvertake() -> bool            // X key or OT button tap (edge-triggered)
 Input.tiltActive() -> bool
-Input.setUseTilt(b) / Input.useTilt() -> bool
+Input.setSteerMode("tilt"|"buttons"|"touch")   // tilt opt-in lives in the steer mode
 Input.touchControlsNeeded() -> bool        // coarse pointer
 ```
 Touch layout (game.js shows/hides the DOM buttons, input.js wires them):
@@ -654,8 +655,8 @@ above are extracted). Player + 21 AI.
 ever assigned to `state`. (This previously listed `select` and `seasonEnd` as
 well; neither exists. The select screen is shown by unhiding `#select` while the
 state stays `menu`, and the season-end panel is the `results` state with
-`#res-next` relabelled. Two `state === "select"` comparisons and one
-`state === "pause"` survive in game.js and can never be true.)
+`#res-next` relabelled. A few vacuously-true `state !== "select"` guards
+survive in game.js.)
 
 **Mode** is two independent axes rather than one enum, because a career weekend
 has to be able to say "career" and "qualifying" at the same time:
@@ -675,7 +676,9 @@ arcade — vmax base `VMAX = 72` m/s scaled by tier (player = tier1 equivalent),
 electric deploy (`DEPLOY_A = 3.0` m/s²) tapers to 0 across the `TAPER_LO..TAPER_HI`
 = 41–53 m/s band, boost drains energy bar (recharges under braking + slow
 corners), OVERTAKE: when gap to car ahead < 1.0 s, OT light on; activating gives
-4 s full-taper-free deploy (then 12 s cooldown). OT is FREE — it draws nothing
+a full-taper-free deploy sized by the fitted ERS part — 3.2–5.2 s push, then a
+9–14 s cooldown (`OT_TIME_LO/HI` / `OT_COOL_LO/HI` in
+`js/game/physics-consts.js`; a no-parts car sits at the midpoint). OT is FREE — it draws nothing
 from the battery and fires on a flat one; its OT_GAP/OT_COOL window is the only
 limiter. Grass (|x| > hw) = heavy drag.
 Walls sit at the per-node barrier limit from `Tracks.wallAt`: soft push back.
@@ -726,7 +729,8 @@ installed PWA.
 
 `.github/workflows/pages.yml`: on push to `claude/f1-game-project-26h3ng` or
 workflow_dispatch, stage the runtime subset in `_site` (`index.html`,
-`version.json`, `manifest.json`, `sw.js`, `js/`, `css/`, `icons/`, and `assets/`)
+`version.json`, `manifest.json`, `sw.js`, `.nojekyll`, `js/`, `css/`, `icons/`,
+`assets/`, and `vendor/` — asserted by `tests/deploy-staging.test.mjs`)
 and deploy that Pages artifact. Tests, tools, docs, and other repository-only
 files are not shipped. `manifest.json` defines the PWA. NOT affiliated with
 FIA/F1 — fan project disclaimer in README and menu footer ("Unofficial fan

@@ -1,4 +1,8 @@
-# Per-track foundation migration checklist
+# Per-track foundation checklist
+
+> The migration this checklist was written for is COMPLETE — all 40 circuits
+> set `sceneryCoordinates` (39 racing, monaco source). It stays live as the
+> checklist for a NEW circuit or a foundation-touching edit to an existing one.
 
 Use one isolated track-scoped change at a time.
 

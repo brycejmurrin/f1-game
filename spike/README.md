@@ -4,7 +4,7 @@ Standalone evaluation harness: renders one **real** circuit (geometry from the
 unmodified game pipeline) with three.js, to measure feasibility and performance
 before committing to any renderer migration. **Nothing under `js/`, `index.html`,
 `tools/manifest.cjs` or `tests/` is touched** — the whole suite stays untouched by
-design. See the full plan + research in the session plan file and
+design. See the full plan + research in `ADOPTION-PLAN.md` (this directory) and
 `docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md` for why the candidate is three.js (TSL =
 single-source shaders for WebGL2 + WebGPU; the repo currently hand-maintains
 ~2,900 lines of GLSL *and* ~2,400 lines of WGSL).
@@ -32,10 +32,10 @@ The third, **Babylon.js 9.19.0** (8 MB, `babylon-spike.html/.js`), was the
 comparison arm — and that comparison **concluded**: three.js/TSL was picked and
 has since shipped as `js/render/three/` (see `ADOPTION-PLAN.md`). The measured
 numbers are recorded below and in `ADOPTION-PLAN.md`, which is what the decision
-rests on; the 8 MB binary was only needed to re-derive them. To re-run the
-Babylon arm, drop a `babylon.js` UMD build of 9.19.0 back into
-`spike/vendor/babylon/` — `babylon-spike.html` still expects it at exactly that
-path and is otherwise unchanged.
+rests on; the 8 MB binary was only needed to re-derive them. The harness
+itself (`babylon-spike.html/.js`) has since been deleted as well — the numbers
+stand on their own. Re-running the arm means restoring both files from git
+history and dropping a Babylon 9.19.0 UMD build into `spike/vendor/babylon/`.
 
 ## Run
 
@@ -76,8 +76,9 @@ timeboxed 1-day Babylon.js 8 comparison reusing `spike-data.js` (UMD script tag,
 
 ## Babylon.js comparison arm (run anyway — the numbers were worth having)
 
-`babylon-spike.html/.js` (369 LOC, Babylon **9.19.0** UMD vendored) renders the
-identical SpikeData scene. Same protocol/viewport as three run-3:
+`babylon-spike.html/.js` (369 LOC, Babylon **9.19.0** UMD, both since deleted —
+restore from git history to re-run) rendered the identical SpikeData scene.
+Same protocol/viewport as three run-3:
 
 | | ms/frame | GL draws/frame |
 |---|---:|---:|

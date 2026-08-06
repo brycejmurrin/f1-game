@@ -1,3 +1,8 @@
+> **Dated record (2026-08), executed.** The decision that moved car physics
+> out of the Frenet `(s,x)` frame into Cartesian world space — since shipped
+> (`px/pz/head` are authoritative in `js/game.js`; `trackFrom()` recovers
+> `(s,x)`). Kept as the rationale.
+
 # Driving Physics Redesign — Architecture Decision
 
 ## TL;DR

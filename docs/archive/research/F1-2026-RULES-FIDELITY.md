@@ -1,3 +1,8 @@
+> **Dated record (2026-08).** Gap list of Apex 26's 2026-rules model against
+> the published regulations as of writing. None of the gaps had been acted on
+> when this was filed (the HUD still reads X-MODE) — check the code before
+> assuming any entry is either fixed or still true.
+
 # The 2026 rules we model, checked against the 2026 rules
 
 Apex 26 is built explicitly on the 2026 regulations — moveable wings, Overtake

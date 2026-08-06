@@ -53,12 +53,12 @@ serves this tree (use a worktree). Failures carry `apex-state`, `apex-logs`,
 | Step | Command | Why |
 |---|---|---|
 | 1 | `npm run test:tiny` | page loads, `__apex` responds. If red, nothing else is worth running |
-| 2 | `npm run test:tooling-fast` | ~4 s: load order, docs integrity, test groups, api contracts, validators — **enough for most edits** |
+| 2 | `npm run test:tooling-fast` | ~25 s: load order, docs integrity, test groups, api contracts, validators — **enough for most edits** |
 | 3 | `node tools/verify-track.cjs <id>` | any track edit — 2 s, no browser, catches a build THROW that strands the game on the menu |
 | 4 | the groups `pick-tests` named | in the background, per above |
 | 5 | `npm run test:sweeps` | before pushing, if geometry moved (full-fleet, slow) |
 
-Reserve **`npm run test:tooling` + `npm run test:smoke`** for load-order /
+Reserve **`npm run test:tooling-fast` + `npm run test:smoke`** for load-order /
 `index.html` / core-module changes (see Universal guards below) — not every diff.
 
 ## Universal guards (always, before push)
@@ -93,7 +93,7 @@ Reserve **`npm run test:tooling` + `npm run test:smoke`** for load-order /
 4. **Smoke + load order** if you touched load order, `index.html`, or a core
    module (`index.html` script tags must match `tools/manifest.cjs`):
    ```sh
-   npm run test:tooling && npm run test:smoke
+   npm run test:tooling-fast && npm run test:smoke   # test:tooling would also run the slow full-fleet sweeps (step 5)
    # docs/skills/tools edits: `npm run test:tooling-fast` covers docs-integrity
    # (dead paths, stale counts, unindexed skills/tools/docs)
    ```

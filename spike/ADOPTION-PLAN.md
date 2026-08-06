@@ -1,5 +1,11 @@
 # Adoption plan — graphics library + additive Rapier physics
 
+> **Status (2026-08):** Phase A shipped (`js/render/three/`, opt-in); TLX has
+> since grown its own chunked/shadow/post path; Phase D (flip + delete GLX/WGX)
+> has not happened. R0–R1 shipped as `js/game/debrisworld.js` (default-on), the
+> R2 takeover layer as `js/game/incidentsim.js`, and Part 3's B1 as
+> `js/game/racecontrol.js`.
+
 Written after the evaluation spikes (see `spike/README.md` criteria table and
 `spike/physics/README.md`). This is the working plan for what comes next; the
 follow-on phases only start when explicitly picked up, and each phase leaves
@@ -42,7 +48,7 @@ the game shippable.
   (clamp imparted roll at hand-to; route inverted-rest to the rescue flow; and
   reconstruct y from road height at handback, never the proxy body's y).
 
-## Part 1 — Graphics migration (three.js/TSL, pending the Babylon verdict)
+## Part 1 — Graphics migration (three.js/TSL — verdict landed; Phase A shipped as `js/render/three/`)
 
 Phases A–D as in the approved spike plan, refined with what the spike taught:
 
@@ -128,9 +134,8 @@ pick; (2) desktop WebGPU check; (3) Phase A; (4) R1 in parallel with Phase B.
 
 ## Open items
 
-- Babylon comparison verdict (in flight) → fold into `spike/README.md` + here.
-- Pre-existing `tests/baku-migration.test.mjs` failure on main (missing
-  `baku-caspian-*` landmark) — unrelated to the spikes; fix separately.
+- ~~Babylon comparison verdict~~ — landed; folded into `spike/README.md` and the Inputs above.
+- ~~Pre-existing `tests/baku-migration.test.mjs` failure~~ — since fixed; the suite passes.
 - Rapier determinism is per-platform (standard build) — fine for the game's
   replay/ghost uses; revisit `enhanced-determinism` only if cross-platform
   ghost sharing ever matters. **UPDATE (doc research, see Part 3):** Dimforge

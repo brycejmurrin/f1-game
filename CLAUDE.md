@@ -15,7 +15,9 @@ node tools/pick-tests.mjs             # which test groups does this change need?
 node tools/test-bg.mjs <groups>       # run them in the background (see Testing)
 npm run test:tooling-fast             # the ~15 s no-browser guard suite
 node tools/verify-track.cjs <id>      # 2 s headless build check for track edits
-node tools/assets.mjs bake-synthetic  # rebuild assets/pack (no network, no deps)
+node tools/assets.mjs verify          # asset-pack licence allow-list + md5 + budget
+                                      # (bake-synthetic regenerates a SYNTHETIC pack —
+                                      #  the committed one is baked from Poly Haven CC0)
 tools/README.md                       # the index of all 60+ tools (test-asserted)
 ```
 

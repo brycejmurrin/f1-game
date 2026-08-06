@@ -1,5 +1,11 @@
 # Rapier physics-engine evaluation spike
 
+> **Status:** the recommendation shipped — the side-world is
+> `js/game/debrisworld.js` and the bounded takeover layer is
+> `js/game/incidentsim.js`. `DEEP-DIVE.md` (this directory) is the follow-up;
+> it RETRACTS the "~2× understeer" number below and corrects the load-scaling
+> row of the API-fit table.
+
 **Decision context:** we are NOT replacing the bespoke player physics (the
 deterministic per-axle bicycle model in `js/game.js`). This spike measures
 whether Rapier could serve **additive** roles — car-to-car / wall collision
@@ -60,8 +66,10 @@ Results:
 - **Accelerates: PASS** — 0.3 → 49.6 km/h over the 3 s drive phase.
 - **Turns: PASS** — yaw delta 2.145 rad over the steer phase. Measured turn
   radius 1 s into the steer at 57 km/h: **v/yawRate = 35.1 m** vs the kinematic
-  wheelbase/tan(0.2) = 16.3 m — i.e. the controller understeers ~2× at speed
-  with default tyre settings (`frictionSlip` 10.5, `sideFrictionStiffness` 1.0).
+  wheelbase/tan(0.2) = 16.3 m — i.e. apparently ~2× understeer at speed.
+  **RETRACTED by `DEEP-DIVE.md` §1a**: at this instant the car was already off
+  the road edge with all four wheels out of contact; on a flat plane the
+  controller corners at exactly the kinematic radius.
   Handling character comes from opaque impulse clamps, not slip math.
 - **Tracks road height: PASS** — ride height while over the tarmac stayed in
   [0.395, 0.631] m (expected ~0.54): no fall-through, no launch, 0 non-finite
@@ -130,7 +138,7 @@ grip (trail-braking rotates the car; hard braking mid-corner understeers).
 | `STEER_EXPO`, `STEER_MAX_SLIP`, `STEER_SPEED_REF` | 2.4 / 0.32 / 60 | input shaping stays game-side; `setWheelSteering(rad)` takes the final angle | parity (shaping was never the model's job) |
 | `PLAYER_GRIP`, `gripMult` (weather/kerb/banking), `PACE` | 1.15 / — / 1.0 | per-wheel `frictionSlip` settable per frame; `PACE` external | workable |
 | `ACCEL` 7, `BRAKE` 22 (m/s²) | — | `setWheelEngineForce` / `setWheelBrake` in newtons, per wheel | parity |
-| load transfer → grip (`loadF`/`loadR` scale mu) | explicit | suspension transfers load but `frictionSlip` does not scale with wheel load | **lost** |
+| load transfer → grip (`loadF`/`loadR` scale mu) | explicit | the side-impulse clamp IS load-scaled but the coefficient is load-independent (`DEEP-DIVE.md` §1c) — real load sensitivity (μ falling with load) is absent | **lost** |
 | suspension | none (flat model + kerb hacks) | full per-wheel: rest length, stiffness/compression/relaxation, max force, contact queries | **gained** — but Bullet-style mass-scaled units are opaque to tune |
 | barrier clamp `xPinned` + car-car resolution in `(prog,x)` plane | hard constraints | real contact resolution on the actual trimesh, restitution/friction, torque-induced spins, contact events | **gained** |
 | airborne / rollover | not modelled | full 6-DoF free (verified: clean ballistic fall off the mesh edge) | **gained** |
@@ -140,8 +148,8 @@ grip (trail-braking rotates the car; hard braking mid-corner understeers).
 **Lost** (if the vehicle controller replaced player handling): friction-ellipse
 coupling, slip-angle tyre model, load-sensitive grip, per-axis yaw shaping,
 progressive drift — i.e. exactly the hand-tuned feel the bespoke model exists
-for, plus ~2× understeer at speed out of the box (35 m measured vs 16 m
-kinematic radius). **Gained** (additive roles): real contact resolution against
+for. (The "~2× understeer out of the box" once cited here is retracted —
+`DEEP-DIVE.md` §1a; the structural reasons above stand on their own.) **Gained** (additive roles): real contact resolution against
 the real road mesh, debris, airborne/rollover, contact events, query pipeline,
 sleeping, snapshots, bitwise determinism.
 

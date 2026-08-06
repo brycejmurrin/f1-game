@@ -13,11 +13,11 @@ frames for you). In-page: `window.__apex.<tool>(...)`. Read `agentHelp()` +
 or pass it to `reset(frac, speed, x, seed)` for a replayable episode. Failures are typed
 (`{ok:false, error, message, fix}`), never `null` — but two reads fail *quietly*
 instead: `scene()` on a street circuit still building props returns a SUCCESSFUL
-empty list, and `visible()`/`render({what:"view"})` reuse the last **rendered**
+empty list, and `scene({visible:true})`/`render({what:"view"})` reuse the last **rendered**
 frame. Stage first (see Staging) — an empty scene means "not built yet", not
 "nothing there".
 
-`window.__apex` composes the ~90 raw debug hooks into one small surface that is
+`window.__apex` composes the ~180 raw debug hooks into one small surface that is
 **egocentric** (framed around the car), **typed** (failures are `{ok:false,
 error, message, fix}`, never `null` — with the two quiet exceptions above),
 **compact** (returns an identifier, not a whole record), and **self-describing** (`agentHelp()` is the manifest,
@@ -265,7 +265,7 @@ __apex.race("monza"); __apex.go(); __apex.jump(0.1, 55);  // load, start, place
 //   aiPlace(idx, frac, speed?, x?) moves an AI car by cars[] index and REFUSES
 //   the player index; to sit up-to-speed in a pack, jump() yourself, THEN
 //   aiPlace the RIVALS around your frac.
-// visible()/render({what:"view"}) read the LAST RENDERED frame — let frames draw
+// scene({visible:true})/render({what:"view"}) read the LAST RENDERED frame — let frames draw
 // scene() reads placed props — a heavy street circuit (Singapore, Monaco, Baku)
 //   finishes its prop build a few frames after race(); an empty scene() means
 //   "not built yet", not "nothing there" — let frames draw, or just re-call it

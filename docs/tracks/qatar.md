@@ -17,7 +17,7 @@ Black desert night cut by tall banks of pure white floodlights — the brightest
 Fog: very light, clean dry air — long-straight visibility intact, only the far skyline softened.
 
 ## 3. Elevation
-Effectively flat throughout — a billiard-table desert plain with no meaningful gradient. Model as level; any change is sub-metre and can be ignored.
+Near-flat but not billiard-table: two long, gentle swells (~3.5 m and ~5.5 m, both far under 1 % grade) and a slight late dip. Model as broad cosine bumps, not a dead-level plane.
 
 ## 4. Landmarks & surroundings by lap position
 | s (0–1) | Side | Dist | Box-model description |

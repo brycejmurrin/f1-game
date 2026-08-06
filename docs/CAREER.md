@@ -37,8 +37,9 @@ career-specific branch.
 **`setFlow(v)` is the only way `flow` is written.** It also calls
 `Career.engage(v === "career")` — see the next section for why that matters.
 
-Game states are unchanged: `menu | select | count | race | results`. (There is no
-`seasonEnd` state; the season-end panel is `results` with `#res-next` relabelled.)
+Game states are unchanged: `menu | count | race | results`. (There is no `select`
+or `seasonEnd` state; the select screen is `#select` unhidden while the state
+stays `menu`, and the season-end panel is `results` with `#res-next` relabelled.)
 
 ## A loaded save is not an active career
 
@@ -553,7 +554,7 @@ paid, so a reload cannot double-pay and an unmet window cannot be retried.
 
 Ownership only grows and the budget ladder stops at three, so a successful career
 converged on owning everything with nothing to spend on: the mode had no end game.
-Eight open-ended levels, each a permanent cut to research cost — a geometric price
+Eight levels (FACILITY_MAX = 8), each a permanent cut to research cost — a geometric price
 against a linear, capped discount, so it is always affordable in principle and never
 trivialises the catalog. The discount lands inside `researchCost()` rather than at the
 point of sale, so the garage's price and what the balance is charged cannot disagree.
@@ -662,8 +663,9 @@ foot sits inside at two-column widths — is ~370 px, and four buttons at the sh
 and costs a button's height out of a 390 px-tall screen. A card also states what it
 opens, which a row of exits cannot.
 
-Registered in all three screen registries — `MenuNav.LAYER_IDS`,
-`ScrollFade.SCREENS`, `AriaState.ROOTS` — or it silently loses keyboard nav, scroll
+Registered in all three screen registries — the `UiLayers` layer list
+(`js/game/uilayers.js`, which MenuNav reads), `ScrollFade.SCREENS`, and
+`AriaState.ROOTS` — or it silently loses keyboard nav, scroll
 fades and screen-reader state. Styles are in `css/career.css`; the season rows are
 the shared `.res-row` vocabulary, podium classes included, so a title-winning year
 lights up gold with no new CSS.

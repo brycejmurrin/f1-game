@@ -9,7 +9,7 @@ rasters in `js/game/agentview-raster.js`) — `world()`, `field()`, `trackInfo()
 `js/track/tracks.js` and the scenery modules, and a CLI at `tools/agent.mjs`.
 **Reference documentation is `docs/DEBUG-HOOKS.md` → "Agent world view"**; the
 API also describes itself via `__apex.agentHelp()`. Tests:
-`tests/agent-view.spec.js` (`npm run test:agent`, 63 tests).
+`tests/agent-view.spec.js` (`npm run test:agent`, 117 tests).
 This document keeps the research and the reasoning — §2's audit describes the
 state of the codebase **before** the work, and is retained because it explains
 why the design is shaped the way it is.
@@ -183,7 +183,7 @@ Every payload carries:
 
 ```json
 { "apiVersion": 1, "physicsVersion": 1, "seq": 1841, "t": 41.83,
-  "conventions": "+x right of centreline, +k right turn, metres, m/s, radians" }
+  "conventions": "+x right of centreline, +k LEFT-hand turn, metres, m/s, radians" }
 ```
 
 `physicsVersion` bumps whenever tuning changes could invalidate an
@@ -548,7 +548,7 @@ and interpreting "3" as seven metres needs no shape recognition at all.
 
 The clarifying frame, arrived at late: agent view is not "a driving observation"
 — it is the **text-native mirror of the whole `__apex` debug toolkit**.
-Everything a developer inspects with the ~90 hooks and screenshots, an agent
+Everything a developer inspects with the ~182 hooks and screenshots, an agent
 should do in text. That reframes the surface into three kinds of thing:
 
 1. **Curated calls that COMPOSE and render** the spatial/visual questions a dev

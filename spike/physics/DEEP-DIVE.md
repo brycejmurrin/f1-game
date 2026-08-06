@@ -1,5 +1,9 @@
 # Rapier deep-dive — tuning, side-world cost, airborne handover
 
+> **Status:** R0–R2 subsequently shipped — `js/game/debrisworld.js` (the §2
+> side-world, default-on) and `js/game/incidentsim.js` (the §3 bounded
+> takeover). This file remains the measurement record behind them.
+
 Follow-up to the baseline eval (`README.md` in this directory), de-risking the
 R0–R3 adoption phases in `spike/ADOPTION-PLAN.md` Part 2. Same setup: vendored
 `@dimforge/rapier3d-compat` 0.19.3, Node 22, fixed 1/60 s steps, real Singapore

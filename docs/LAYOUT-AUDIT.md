@@ -15,6 +15,7 @@ The cure is not more screenshots. It is enumerating the matrix and measuring it.
 node tools/layout-audit.mjs                          # measure every cell
 node tools/layout-audit.mjs --shots                  # + a PNG per cell (slow)
 node tools/layout-audit.mjs --screens=select,garage --viewports=ios-*
+node tools/layout-audit.mjs --scale=100,130,150       # each viewport at each UI size
 ```
 
 Output lands in `artifacts/layout-audit/`: `audit.json` (the raw measurements,
@@ -34,7 +35,7 @@ geometry probe reads the same truth out of the DOM in milliseconds:
 | does any visible box escape the thing that clips it | this is "text is cut off", stated in a way a machine can check. Scroll containers are exempt on **either** axis they scroll — that is what scrolling is |
 | is any interactive element outside the viewport | a button you cannot reach is worse than one that looks wrong. "Reachable" means *some ancestor's computed `overflow` scrolls to it*, asked of the DOM rather than of a list of known pane selectors |
 | is any tap target under 24px | WCAG 2.2 SC 2.5.8 (AA) — a conformance floor, so red |
-| is any tap target under the `--tap` token | the house comfort floor (44, deliberately 40 on landscape phones). Above 24px this is a preference, so amber |
+| is any tap target under the `--tap` token | the house comfort floor (44 base, raised to 52 on touch — the tool reads the live `--tap` token). Above 24px this is a preference, so amber |
 | is any text ellipsised | not always a bug — often the point — but it is the difference between SUSPENSION and SUSPENSI… |
 | does the document scroll horizontally | always a bug on a fixed-viewport game |
 | for each scroll region: how much is hidden, and how far it stops above the sheet floor | the measurement that caught the action bar stealing a row from the circuit list |
@@ -279,8 +280,8 @@ only one of them is fixed in `css/`.
 - **green** — nothing clipped, nothing off screen, no horizontal overflow, no
   page errors.
 - **amber** — every finding is a control below the house `--tap` floor but at or
-  above WCAG's 24px. Expected on a landscape phone, where `--tap` is deliberately
-  40, and on the circuit list, whose 40px full-width rows carry 24px+ of spacing
+  above WCAG's 24px. Expected on a landscape phone, where compact rows sit
+  under the touch ladder's `--tap: 52px`, and on the circuit list, whose 40px full-width rows carry 24px+ of spacing
   — the case SC 2.5.8 explicitly allows.
 - **red** — the count of real findings, tap targets under 24px among them. Hover
   for the list; `audit.json` has the element, its clipper, and how many pixels it

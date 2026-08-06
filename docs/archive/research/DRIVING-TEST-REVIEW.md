@@ -1,3 +1,8 @@
+> **Dated record (2026-08), since acted on.** Review of the driving/physics
+> test surface as it stood before the recalibration; the fixture conversion,
+> the vStd lint (`tests/vstd-invariant.test.mjs`) and the pace-pinning it
+> recommends have since shipped. Spec/test counts are historical.
+
 # The driving/physics test surface — a review
 
 Read-through of the 17 specs covering steering, input, physics, off-track,

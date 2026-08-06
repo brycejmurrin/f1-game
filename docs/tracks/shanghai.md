@@ -33,6 +33,7 @@ Model this as three long, gentle cosine bumps, not a flat plane with two dents.
 | 0.05–0.11 | R | near | Snail T1–3: coiling pale `runoffApron` pads + dense red/white kerb verge |
 | 0.30 | L | far | One hazy Pudong cluster (Pearl + Jin Mao + Shanghai Tower) — no wraparound skyline rings |
 | 0.45 | R | mid | Mid-sector grandstand: low stepped grey box bank |
+| 0.47 | over | near | Mid-arena spectator footbridge: white span crossing the track (7.2 m clearance) |
 | 0.62 | L | far | Marsh/treeline: flat green mound strips + wetland plane |
 | 0.78 | R | near | Long back straight: open flat green/grey verges, sparse signage boxes |
 | 0.90 | L | mid | T14 hairpin grandstand: curved bank of stepped grey boxes + pale runoff apron |

@@ -48,7 +48,7 @@ only docs, tests, tools, or `index.html`'s non-asset markup, you do NOT need to 
 
 - Bump by exactly **+1** per logical change set; don't jump numbers. If a merge
   finds the other side already at a higher N, resolve to max(both)+1 in BOTH files.
-- The number in `CLAUDE.md` ("currently v=N") is documentation only and is often
-  behind the real value — trust `index.html`, and don't churn CLAUDE.md for this.
+- `CLAUDE.md` deliberately names no number ("check `index.html` for the current
+  N") — trust `index.html`, and don't add a literal N to CLAUDE.md.
 - This pairs with the `check-changes` skill, which reminds you to bump as part of
   pre-push validation.

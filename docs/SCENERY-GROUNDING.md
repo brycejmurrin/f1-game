@@ -71,9 +71,11 @@ seat.box(out,   { on: roofY,    at: […],    size: […],       basis: b, col }
 ```
 
 `seat.*` normalises the base/centre asymmetry in one place, so Trap A becomes
-unexpressible. Migrate the seven known sites first; new scenery uses it by
-default. This is the single highest-value change — it removes a whole bug class
-rather than instances of it.
+unexpressible. `seat` (and `foundation`, §3.2, plus `cantilever`, §3.4) now
+ship on the `scenery(api)` contract — implemented in `js/track/tracks.js` and
+already used by circuit files — so new scenery uses them by default. This was
+the single highest-value change — it removes a whole bug class rather than
+instances of it.
 
 ### 3.2 `foundation()` — filler instead of hand-built plinths
 
@@ -152,7 +154,7 @@ Not everything elevated is a defect. Expect these and judge them:
 
 ## 5. Suggested gate
 
-Add to CI once a circuit reaches zero:
+This gate now ships — `npm run test:float` in `package.json`:
 
 ```json
 "test:float": "node tools/float-audit.cjs --all"
@@ -293,8 +295,9 @@ grazing angle, costs nothing, and **moves no geometry**. Use it for any new
 decal rather than lifting the mesh.
 
 Further render-side options, in order of value if decal shimmer persists:
-raise the near plane (biggest single win for depth precision — it is the
-*ratio* that matters, so `0.3 → 0.6` roughly halves the error), then reversed-Z
+per-camera near planes (implemented: every view except cockpit and hood now
+runs `near = 0.9` — a *global* raise breaks the cockpit, whose fascia sits
+0.39 m from the eye; see RENDER-CLIPPING.md), then reversed-Z
 with `WEBGL_clip_control` where available, and only then a logarithmic depth
 shader (it writes `gl_FragDepth` and disables early-Z, so it is a real cost).
 

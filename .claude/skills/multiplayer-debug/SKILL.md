@@ -112,9 +112,9 @@ Read first:
      look at countdown *consumption* instead: `js/game.js` reads `netStart`
      (`{ at, hold, now() }`) each frame and derives `countT` from it
      (`countT = (COUNTDOWN_S + startHold) - (netStart.at - netStart.now()) / 1000`,
-     ~line 3052), which drives `lightsLit` (~line 3076) and only clears
+     ~line 2970), which drives `lightsLit` (~line 2993) and only clears
      `netStart` once `lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S +
-     startHold` (~line 3092-3096, the "consumed; never carry it into the next
+     startHold` (~line 3008-3012, the "consumed; never carry it into the next
      race" comment). A guest stuck with lights lit but the race never starting
      means that consumption path never satisfied its exit condition — check the
      guest's own `countT`/`lightsLit` progression via `G.countT`/`G.lightsLit`

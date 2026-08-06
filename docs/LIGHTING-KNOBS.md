@@ -81,7 +81,7 @@ catalog to follow.
 | `vol.lampRange` — `td < 200` | How far along each ray lamps volumetrically in-scatter (was 110 — distant lamps had no glow). | fogwall mean |
 | `vol.beamHeight` — `exp(-Δy*0.07)` | Beam height falloff. Bigger constant = beams hug the road; smaller = tall light cones. | sky mean |
 | `vol.lampStrength` — `0.05 + 0.65*mist`, cap 0.70 | Master beam strength, mist-swelled; the 0.05 base is the clear-night hint. | fogwall mean |
-| GODRAY `N = 32` | March resolution: banding vs cost (half-res pass). | banding by eye |
+| GODRAY `N = 16` | March resolution: banding vs cost (half-res pass; was 32→22→16 — jitter + blur hide the coarser step). | banding by eye |
 
 ## Ambient
 
@@ -95,17 +95,17 @@ catalog to follow.
 
 | Knob | What it changes | Watch |
 |---|---|---|
-| `ssr.dryFloors` — `lights ? 0.16 : 0.07` | Scene-mirror amount on DRY roads (night lamp sheen / day faint tower-and-sky mirror). Wet uses the wetness ramp directly. | road structure |
-| `ssr.sheenFade` — `min(uReflect/0.20, 1)` | Below 0.2 the darker-mirror substitution fades quadratically — faint reflections read as sheen, not dark towers replacing sunlit tarmac. | day road mean stability |
-| `ssr.roadMask` — `smoothstep(0.40, 0.75, upDot)` | Which surfaces count as "road" for SSR; the 0.40 edge keeps banked corners (Zandvoort) reflective. | banked road mean |
+| `ssr.dryFloors` — TUNE_DEFS `ssrDryNight` (def 0.08) / `ssrDryDay` (def 0.07) | Scene-mirror amount on DRY roads (night lamp sheen / day faint tower-and-sky mirror), now two LIGHTING TUNER sliders. Wet uses the wetness ramp directly. | road structure |
+| `ssr.sheenFade` — `min(gateSrc / 0.20, 1.0)` | Below 0.2 the darker-mirror substitution fades quadratically — faint reflections read as sheen, not dark towers replacing sunlit tarmac. | day road mean stability |
+| `ssr.roadMask` — `smoothstep(0.25, 0.55, upDot)` | Which surfaces count as "road" for SSR; the 0.25 edge keeps banked corners (Zandvoort) reflective. | banked road mean |
 
 ## Shadows
 
 | Knob | What it changes | Watch |
 |---|---|---|
 | `pcss.penScale` — `(z-zb) * 80` | How fast penumbra grows with receiver-blocker gap (80 ≈ 3.2 m gap → full softness). | road edgeE ↓ when raised |
-| `pcss.radiusRange` — `mix(1.5, 6.0, pen)` | Contact crispness → max softness range. B (6,6) = PCSS off, uniformly soft (the old fixed-radius look). | road edgeE |
-| `shadow.box` — ortho ±55, snap 10 | Texel density (5.4 cm) vs guaranteed coverage radius (~48 m). Doubling the box halves density. | shadow edge sharpness |
+| `pcss.radiusRange` — `mix(1.5, 6.0, pen)` | Contact crispness → max softness range. B (24,24) = PCSS off, a dramatic uniform blur (4x the old max) for a visible before/after. | road edgeE |
+| `shadow.box` — ortho ±`LT.shadowRange` (def 80, fallback 64), snap sBox/4 | Texel density vs guaranteed coverage radius. Doubling the box halves density. | shadow edge sharpness |
 | `shadow.biasClamp` — `(0.0005, 0.004)` | Acne (too low) vs peter-panning/detached shadows (too high). | road mean ↑ when over-biased |
 
 ## Surface detail (LIT_FS `uDetail` blocks)
@@ -120,10 +120,10 @@ catalog to follow.
 
 | Knob | What it changes | Watch |
 |---|---|---|
-| `night.glowAmp` — `glow * 2.3` | Emissive HDR push for windows/lenses/neon. This one constant is ~half the night frame energy; 3.2 was the historical too-bright look. | frame bloomPct |
+| `night.glowAmp` — `glow * 2.3` | Emissive HDR push for windows/lenses/neon. This one constant is ~half the night frame energy; 3.4 was the historical too-bright look. | frame bloomPct |
 | `night.floodEmit` — `0.78` | Prop emissive ramp after dark (how lit the lit geometry is). | frame mean |
 | `night.exposure` — street 0.86 / other 0.90 | The master dark-stays-dark knob (ACES input scale). | frame mean |
-| `night.bloomThresh` — `0.97` (+ bloom 0.65-0.70) | What counts as "bright enough to halo". Lowering it blooms the mid-tones — instant fog-of-glow. | frame bloomPct |
+| `night.bloomThresh` — `0.97` (+ bloom 0.48 neon-city / 0.55 open) | What counts as "bright enough to halo". Lowering it blooms the mid-tones — instant fog-of-glow. | frame bloomPct |
 
 ## Reading the metrics
 
