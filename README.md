@@ -171,7 +171,7 @@ npx serve -l 3456 .
 ```
 
 Development happens on `claude/<topic>` feature branches; the deploy branch is
-`main`.
+`claude/f1-game-project-26h3ng`.
 
 A debug scripting API — `window.__apex` — is available at runtime (devtools
 console or headless harness). Full reference in

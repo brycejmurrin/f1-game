@@ -727,7 +727,7 @@ installed PWA.
 
 ## Deploy
 
-`.github/workflows/pages.yml`: on push to `main` or
+`.github/workflows/pages.yml`: on push to `claude/f1-game-project-26h3ng` or
 workflow_dispatch, stage the runtime subset in `_site` (`index.html`,
 `version.json`, `manifest.json`, `sw.js`, `.nojekyll`, `js/`, `css/`, `icons/`,
 `assets/`, and `vendor/` — asserted by `tests/deploy-staging.test.mjs`)

@@ -347,6 +347,6 @@ the LAST RENDERED frame and is stale under `headless(true)`.
 
 Work happens on a `claude/<topic>` feature branch — `git branch --show-current`
 is the truth, prose is not. Never push to the deploy branch without review.
-**The deploy branch is `main`**: `.github/workflows/pages.yml` fires only there,
-gated by ci.yml, and ships the runtime subset to
-https://brycejmurrin.github.io/f1-game/.
+**The deploy branch is `claude/f1-game-project-26h3ng`**:
+`.github/workflows/pages.yml` fires only there, gated by ci.yml, and ships the
+runtime subset to https://brycejmurrin.github.io/f1-game/.
