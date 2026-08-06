@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // carshot — one tiny car-inspection render. Boots headless, parks the player,
 // raises the __apex.studio() rig, orbits the car, and writes a small cropped
-// JPEG (~5 KB) plus a numeric paint report. The cheap way to eyeball the car
+// JPEG (~5 KB). The cheap way to eyeball the car
 // model without a full-frame screenshot pipeline.
 //
 //   node tools/carshot.mjs [az] [tod] [teamIdx] [outPath]
@@ -57,7 +57,8 @@ await sleep(400);
 await page.screenshot({ path: out, type: "jpeg", quality: 62,
   clip: { x: 96, y: 40, width: 288, height: 190 } });
 
-// Numeric paint report over the crop
+// Canvas dimensions for the log line (the numeric paint report this once
+// printed was dropped; only the JPEG and the size are the deliverable now).
 const rep = await page.evaluate(() => {
   const cv = document.querySelector("canvas");
   return { w: cv.width, h: cv.height };

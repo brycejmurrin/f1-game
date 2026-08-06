@@ -100,7 +100,11 @@ wss.on("connection", (sock) => {
       // which is the shape of a RATE limit rather than a policy ban — the
       // distinction that decides whether a relay is unusable or merely being
       // asked too often.
-      if (REJECT && acceptedFrom.get(sock) >= REJECT_AFTER) {
+      // `|| 0`: the count is undefined before the first EVENT, and
+      // `undefined >= 0` is false — so plain --reject (REJECT_AFTER=0) used to
+      // let the FIRST publish through (the host's own presence/offer, the one
+      // the hostile-relay test most wants refused).
+      if (REJECT && (acceptedFrom.get(sock) || 0) >= REJECT_AFTER) {
         sock.send(JSON.stringify(["OK", ev.id, false, "blocked: spam not permitted"]));
         if (DEBUG) console.log("EVENT kind=" + ev.kind + " -> REFUSED");
         return;

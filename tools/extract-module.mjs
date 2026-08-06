@@ -9,7 +9,7 @@
    Usage:
      node tools/extract-module.mjs <file> <startLine> <endLine>            # analyse only
      node tools/extract-module.mjs <file> <start> <end> --mutable a,b,c \
-          --out /tmp/body.js --g-out /tmp/g.txt                            # rewrite
+          --out artifacts/tmp/body.js --g-out artifacts/tmp/g.txt         # rewrite
 
    The analyse pass prints FREE names sorted; classify them yourself against
    the source file's `let` vs `const`/`function` declarations, then run the

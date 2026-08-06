@@ -230,7 +230,7 @@ function startServer(overrides) {
       let body = readFileSync(ROOT + p);
       const file = p.slice(1);
       const ov = overrides && overrides[file];
-      if (ov || file === "js/game.js") {
+      if (ov || file === FREEZE_FLICKER_FILE) {
         let text = body.toString();
         if (ov) {
           if (!text.includes(ov[0])) throw new Error(`knob find-string missing in ${p}`);
@@ -469,6 +469,10 @@ async function main() {
     const ver = Math.max(...[...idx.matchAll(/\?v=(\d+)/g)].map((m) => +m[1]));
     idx = idx.replace(/\?v=\d+/g, `?v=${ver + 1}`);
     writeFileSync(idxPath, idx);
+    // version.json must track the SAME N — the PWA shell-version guard reads it
+    // (index.html itself carries no ?v=), so bumping one without the other
+    // leaves an installed shell stale. See the bump-cache contract.
+    writeFileSync(`${ROOT}/version.json`, JSON.stringify({ build: ver + 1 }) + "\n");
 
     console.log(`applied ${knob.id}:`);
     console.log(`  ${knob.file}:  ${knob.find}`);

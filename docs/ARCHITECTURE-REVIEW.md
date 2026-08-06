@@ -228,6 +228,72 @@ journal; this is what remains.
   scrubber becomes a new A13 site.
 - **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
 
+### Found by the 2026-08 whole-codebase survey (unverified beyond a code read)
+
+Each was found by reading the file, not by a failing test; none is fixed here
+(a cleanup pass must not change behaviour without the test that pins it). Listed
+most-load-bearing first.
+
+- **Multiplayer event channel is not authority-gated** (`js/net/netplay.js`
+  `bindSession`). The A4 fix gated the *state* channel (host routes on
+  `remoteFor(fromId)`, drops unknown senders) but the *reliable event* channel
+  applies `EV.CAUTION`/`EV.START`/`EV.RESULT` from any peer, and `EV.QUALI`
+  accepts a caller-supplied `driverId` — so a guest can raise a caution, re-arm
+  the start clock, or post another driver's qualifying time. Receipt of these
+  should be gated `role === "guest"` (guests trust the host by construction; the
+  host must not trust a guest). Needs the net suite to pin it.
+- **A possible curvature-sign inconsistency**, flagged independently by three
+  surveyors. The measured convention is `+k = LEFT` (`js/track/spline.js`, the
+  `bankingProfile` fix, `js/game.js`, and the agent `CONVENTIONS` string all
+  agree), but a stale `findCorners` header (`js/track/mesh.js`) reads
+  `+ = right`, and several sites encode that reading: `buildKerbs` (which feeds
+  `onKerb()` physics), the tyre-barrier pass and corner/braking signage in
+  `tracks.js`, and the agent camera's outside-of-corner azimuth in
+  `js/game/apex.js` (`cinematic()`/`tourShots`). They are mutually consistent,
+  which is why nothing caught it — and the tracks ship with passing autopilot
+  laps and visual specs, so the physics-facing signs are most likely correct and
+  the *comments* are the drift. **Do not flip any sign without a rendered lap
+  that shows kerbs/barriers on the wrong side** — settle it by observation, not
+  by grep. If real, it puts kerbs and tyre walls on the inside of every corner.
+- **Banked-reference class, in geometry this time** (not just the test probes of
+  the entry above): the tyre-barrier and street-barrier loops in `tracks.js`
+  place walls off `py[k]` without `bankOffsetAt`, so on Zandvoort's 18–19°
+  banking a tyre wall sits ~2.3 m off the tarmac.
+- **`incidentsim.js`**: `RETAIN_FLOOR` collapses to the measured speed unless it
+  is exactly 0 (contradicting its "never dead-stopped into instant rescue"
+  comment), and the `notifyCar` gate makes the r2-airborne-only launch path
+  unreachable.
+- **`career.js`** `matePts` is recomputed from finishing position without the
+  `mate.retired` check the comment six lines above warns is required — corrupting
+  a MY TEAM sponsor "double" fact.
+- **`js/game/agentview.js` `describe("span:N")`** treats a span's `s0/s1` as arc
+  metres, but the registry stores lap fractions — every `fromS/toS/lengthM` it
+  returns is off by a factor of `track.total`, while `worldModel()` handles the
+  same records correctly.
+- **`js/game/spotify.js`** the setup-panel PLAY button calls `player.resume()`,
+  null in remote mode, so it silently does nothing (should be `BACKEND.start()`).
+- **`gridUp()` draws `simRnd()` inside an `Array.sort` comparator**
+  (`js/game.js`), so the seeded position after a grid-up depends on the engine's
+  sort implementation — forfeiting the cross-engine half of the "same seed +
+  same inputs → same result" contract that `driverSkill()` protects one function
+  above. A random comparator is also formally inconsistent. Draw the jitter into
+  a keyed array first, then sort on the key.
+- **`buildStudioRig()` emits 14-float light records into the stride-15 light
+  pipeline** (`js/game.js` vs `glx.js`'s `nL = L.length/15`), so every
+  `__apex.studio()` lamp after the first is misread and one is dropped; the
+  sibling `buildSetupPreviewLights` pushes the correct 15. Dev-hook only.
+- **Cross-backend shading divergences the parity test cannot see**: TLX ports the
+  pre-fix wet-surface model (soaked grass mirrors the sky on three.js; the wet
+  mirror floor is 0.15 vs GLSL's 0.55), and the MIRROR chrome surface id 27
+  exists only in GLSL, so chrome liveries lose their mirror on both WGX and TLX.
+  These are renderer-parity work, not GLX defects.
+- **Smaller, catalogued but not itemised here**: `api.js` gives an upcoming GP's
+  session list the 7-day historic cache TTL; `sdp.js` `pack()` over-allocates one
+  byte (a stray `0x00`, decode-harmless); `live.js`'s gap bars read a `timeDiff`
+  field `F1API.positions()` never returns (also in the archived audit); the
+  EXPORT data tab still hardcodes its year list. The full survey with line
+  references is the backlog record for the cleanup.
+
 ---
 
 ## 8. Backlog

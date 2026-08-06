@@ -1,7 +1,10 @@
 // track-build-vm.cjs — run the REAL Apex 26 track build headless, in a Node VM.
 //
-// Extracted from float-audit.cjs so the float audit and the clip audit share one
-// harness instead of drifting apart. It reuses the verify-track.cjs trick — load
+// Extracted from float-audit.cjs to be the shared build harness. clip-audit.cjs
+// and coplanar-audit.cjs use it; float-audit.cjs still carries its own inline
+// buildContext (which HAS since drifted — no liveBufs/trim reconciliation), so
+// consolidating float-audit onto this harness is outstanding. It reuses the
+// verify-track.cjs trick — load
 // every engine source into a sandbox with GLX stubbed — but KEEPS the vertex
 // buffers, and wraps every TrackGeom emitter so each primitive is recorded with
 // its bounds, material, emission order and vertex range.
