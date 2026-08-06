@@ -35,14 +35,24 @@ SPLIT="${SPLIT:-1}"
 pids=(); names=()
 i=0
 for g in "${IN[@]}"; do
+  # --workers/--shard are Playwright flags; a `node --test` group rejects them,
+  # so only forward them to groups that actually run through run-playwright.
+  script=$(node -e "process.stdout.write((require('./package.json').scripts['test:$g'])||'')")
+  [ -n "$script" ] || { echo "unknown group: test:$g"; exit 2; }
+  pw=0; case "$script" in *run-playwright*) pw=1;; esac
   for ((k = 1; k <= SPLIT; k++)); do
     port=$((BASEPORT + i))
-    name="$g"; sharding=()
-    if [ "$SPLIT" -gt 1 ]; then name="$g.$k-of-$SPLIT"; sharding=(--shard="$k/$SPLIT"); fi
+    name="$g"; extra=()
+    if [ "$pw" -eq 1 ]; then
+      extra=(--workers="$WORKERS")
+      if [ "$SPLIT" -gt 1 ]; then name="$g.$k-of-$SPLIT"; extra+=(--shard="$k/$SPLIT"); fi
+    fi
     log="$LOGDIR/$name.log"
-    echo "> test:$g ${sharding[*]:-}  port=$port  workers=$WORKERS  log=$log"
-    APEX_PORT=$port npm run --silent "test:$g" -- --workers="$WORKERS" "${sharding[@]}" >"$log" 2>&1 &
+    echo "> test:$g ${extra[*]:-}  port=$port  log=$log"
+    APEX_PORT=$port npm run --silent "test:$g" ${extra:+--} "${extra[@]}" >"$log" 2>&1 &
     pids+=($!); names+=("$name"); i=$((i + 1))
+    # a node --test group ignores SPLIT (no sharding support): run it once
+    [ "$pw" -eq 0 ] && break
   done
 done
 

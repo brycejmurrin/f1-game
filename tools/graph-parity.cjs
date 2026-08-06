@@ -84,6 +84,23 @@ function compareGeo(name, a, b) {
 function main() {
   const args = process.argv.slice(2);
   const baseRef = process.env.BASE || "HEAD";
+  // The default baseline is HEAD vs the WORKING TREE — meaningful only while
+  // there are uncommitted engine/circuit edits. On a clean tree it diffs HEAD
+  // against itself and "passes" vacuously, which has been mistaken for a real
+  // parity result. Refuse that run instead of blessing it.
+  if (!process.env.BASE) {
+    const dirty = require("child_process")
+      .execSync("git status --porcelain -- js/track js/circuits", { cwd: ROOT })
+      .toString().trim();
+    if (!dirty) {
+      console.error(
+        "graph-parity: nothing to compare — the working tree matches HEAD under " +
+        "js/track/ and js/circuits/, so the default BASE=HEAD would diff a tree " +
+        "against itself and always pass.\n" +
+        "Pass the baseline explicitly: BASE=<ref> node tools/graph-parity.cjs --all");
+      process.exit(2);
+    }
+  }
   const baseDir = materialiseBaseline(baseRef);
 
   let baseTracks, headTracks;

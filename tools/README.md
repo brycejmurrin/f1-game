@@ -38,7 +38,6 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **test-bg.mjs** | Starts test groups in the BACKGROUND and hands back a log to tail (`npm run test:bg -- smoke api`). Returns as soon as the children are up, so the terminal stays yours. `--status` (what is running / how it ended), `--wait`, `--stop`, `--tail <group>`. Each group gets its own free port, report dir and `artifacts/logs/<group>.log`. |
 | **test-coverage-audit.mjs** | Coverage guard (`npm run test:audit`) — every `tests/*.spec.js`, `*.test.mjs` and `*.test.cjs` must be reachable from at least one topical `test:<group>` npm script, so a pre-push group run can't silently skip a test. Exit 1 if any is orphaned. |
 | **layout-audit.mjs** | Every screen crossed with every viewport shape, MEASURED rather than eyeballed — a layout bug here is a bug in a CELL of that matrix, not in a screen. Reports what escapes its clipper, what no scroll can reach, what is under WCAG's 24px, what scrolls sideways. Writes `artifacts/layout-audit/{audit.json,index.html}`; `--shots` adds a PNG per cell, and `--screens=`/`--viewports=` top the grid up rather than replacing it. See docs/LAYOUT-AUDIT.md. |
-| **slow-tests.mjs** | *"Is this failure contention or a test nobody costed?"* — parses the timestamped result lines in `artifacts/logs/*.log` and reports every test whose duration is an outlier against **its own spec file's median** (same file = same setup cost, so it is a fair baseline where a suite-wide average is not). A high multiple is not a bug; it becomes one when the headroom against the shared timeout falls under ~1.5x, because then any busy machine turns it red and it reads as a regression in the code under test. `--ratio N`, `--budget <s>`, or group names. Note it measures THE BOX YOU RAN ON — which is the point. |
 | **test-shards.sh** | Runs whole npm test groups concurrently, one port + log per group, with a pass/fail summary — the BLOCKING counterpart to `test-bg.mjs`. `tools/test-shards.sh smoke api collision`; `WORKERS=N` sets workers per group. |
 
 | **career-economy.mjs** | Measures the CAREER economy against the catalog it buys from — sims a season per starting team through the real `Career.settleRound()` and reports how many median parts a year's income actually affords. `RESEARCH_MULT` is the one knob; re-measure after changing it. Exists because `QUALI_TRIM` shipped as a reasoned guess and was 27% wrong, and the economy is the same class of number. `--years N` follows the arc. | — |
@@ -50,14 +49,12 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **clip-baseline.json** | The per-circuit interpenetration caps clip-audit's `--gate` and `tests/prop-clipping.test.mjs` both read, so the tool and the test can never disagree. | — |
 | **coplanar-audit.cjs** | Z-FIGHTING detector — SAME-FACING coplanar faces (`dot(nA,nB) ≥ 0.999`), the configuration where both faces draw and both write depth. Deliberately not a flag on clip-audit, whose `DEPTH_MIN = 0.5` discards exactly this bucket and whose `ADJ = 8` adjacency filter excuses exactly the defect. Severity is a DISTANCE — the range beyond which the gap collapses to one depth unit — so it re-derives itself if the near/far planes move. `--why` attributes to file:line (aggregated across `--all`, so a shared emitter's reach shows as one row), `--raw` dumps stacks + extents. | scenery-dress |
 | **coplanar-baseline.json** | The per-circuit same-facing-coplanar spot counts `coplanar-audit --gate` ratchets against, so the count can fall but never grow. | — |
-| **graph-parity.cjs** | The gate for the scenery scene-graph migration — builds every circuit TWICE (a baseline git ref via `git archive`, and the working tree) and diffs the prop geometry vertex for vertex, then reports per-emitter instancing reuse. `BASE=<ref> graph-parity.cjs --all` / `npm run test:graph-parity`. | scenery-dress |
+| **graph-parity.cjs** | The gate for the scenery scene-graph migration — builds every circuit TWICE (a baseline git ref via `git archive`, and the working tree) and diffs the prop geometry vertex for vertex, then reports per-emitter instancing reuse. `BASE=<ref> graph-parity.cjs --all` / `npm run test:graph-parity`. With no `BASE` it compares HEAD against the working tree, so on a clean tree it refuses to run (exit 2) rather than pass vacuously — always name the baseline ref. | scenery-dress |
 | **track-build-vm.cjs** | The shared "run the REAL track build headless in a Node VM" harness, extracted from float-audit so the audits and VM tests load the engine one way. | — |
 | **harness.mjs** | Shared process harness for the headless `__apex` tools — in-process static server + Chromium launch, so each tool doesn't reinvent port/browser handling. | playwright-probe |
-| **track-sweep.mjs** | Parallel DATA sweep across circuits (JSON, no screenshots) — the numbers counterpart to `apex-capture.mjs`. | debug-tracks |
-| **shot-sweep.mjs** | Parallel, LOGGED screenshot sweep. | playwright-probe |
-| **chase-shots.mjs** | N chase-camera screenshots evenly spaced around a lap. | playwright-probe |
 | **profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | perf-profile |
 | **menu-fit.mjs** | Audits every menu screen for cramped/clipped layout at a given viewport. | — |
+| **fit-audit.mjs** | The NUMBERS fit audit across a matrix of viewports and interface scales — tap targets under the comfortable touch size (WCAG 2.5.8 spacing rule included), text below the legibility floor, content clipped with no scroll path, scroll regions with no "more below" affordance. `--only=`, `--sizes=`, `--scale=`. `menu-fit.mjs` answers one viewport with pictures; this answers the matrix with numbers. | ui-menu-a11y |
 | **ui-scale-axis.mjs** | The `--scale=` axis the three fit tools above share. The player can size the interface 80–150 % (SETTINGS ▸ DISPLAY), so "does this screen fit?" is one question per size, not one question — this turns each tool's screen × viewport matrix into screen × viewport × scale. Library, not a command. | — |
 | **track-accuracy-validator.mjs** | Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests. | new-track |
 | **refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data. Tests never call it and never touch the network. | new-track |
@@ -69,18 +66,17 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 
 ## Conventions
 
-- **The capture tools are a family, not duplicates.** They keep getting flagged
-  as redundant, so: `apex-capture.mjs` is the canonical parallel sweep
-  (cameras/modes/tracks/identity/lap-tour); `shot-sweep.mjs` is the same shape
-  but LOGGED per step with a self-check on eye-to-car distance, for when a sweep
-  looks hung; `chase-shots.mjs` drives the real in-game CHASE camera rather than
-  the debug free-cam; `track-sweep.mjs` emits JSON and no images at all;
+- **The capture tools are a family, not duplicates.** `apex-capture.mjs` is the
+  canonical parallel sweep (cameras/modes/tracks/identity/lap-tour);
   `carshot.mjs` is the ~5 KB cropped studio probe and `render-car.mjs` the full
-  contact sheet. Four tools that WERE redundant — `shot-car.mjs`,
-  `photoshoot.mjs`, `fit-audit.mjs` and the one-shot `migrate-output-layout.mjs`
-  — were deleted rather than merged. `menu-fit.mjs` survives `layout-audit.mjs`
-  only because of `--safe=` notch-inset simulation, which headless Chromium
-  cannot otherwise produce (it reports every `env(safe-area-inset-*)` as 0).
+  contact sheet. The one-off variants that WERE redundant with it —
+  `shot-sweep.mjs` (logged sweep), `chase-shots.mjs` (chase-cam lap ring),
+  `track-sweep.mjs` (JSON-only sweep), and earlier `shot-car.mjs` /
+  `photoshoot.mjs` / `migrate-output-layout.mjs` — have been deleted; recover
+  any of them from git history if a need returns. `menu-fit.mjs` survives
+  `layout-audit.mjs` only because of `--safe=` notch-inset simulation, which
+  headless Chromium cannot otherwise produce (it reports every
+  `env(safe-area-inset-*)` as 0).
 - **Surveying a track:** `survey-track.mjs <id>` is the one-stop pass (shots +
   flagged probe). For a one-off framed shot use `.claude/skills/playwright-probe/shot.mjs`;
   for a parallel multi-track screenshot sweep use `apex-capture.mjs`; for a quick
@@ -88,6 +84,10 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 - **Chromium:** prefer `CHROME` / `PW_CHROMIUM`, then `/opt/pw-browsers/...`
   when present; otherwise Playwright's bundled browser. Servers bind a free
   port (or `:3456`).
+- **Two Playwright packages on purpose:** the spec suite runs on
+  `@playwright/test`, while ~20 tools here import bare `playwright` (the
+  library) at module scope for direct browser control. Removing either breaks
+  the other's consumers, so `package.json` carries both.
 - Anything that edits `js/*`/`css/*` still needs a `?v=N` cache bump (bump-cache).
 - Never write disposable output to `/tmp`; use `artifacts/tmp/` or the standard `scratch/` subtrees.
 - `rtc-e2e.mjs` — a REAL WebRTC handshake between two pages (`npm run rtc:e2e`).
