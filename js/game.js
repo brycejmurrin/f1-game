@@ -553,7 +553,7 @@ function simRnd() {
   return _simRngState / 0x100000000;
 }
 const { TIER_V } = GameTables;
-// 6-speed gearbox with realistic PROGRESSIVE ratios (research: real/F1 gearboxes
+// 8-speed gearbox with realistic PROGRESSIVE ratios (research: real/F1 gearboxes
 // space the ratios so the steps shrink in the higher gears). So an upshift drops
 // the revs a lot in the low gears and less up top, and every shift lands back in
 // the ~8.7-11.3k power band (F1's optimal ~8-12k) before climbing to the limit —
@@ -847,7 +847,7 @@ let frameSky = {}, frame = {};
 let _skyT = 0;
 // Lightning state: base ambient colours saved from applyRaceSettings(), current
 // flash intensity, remaining flash bright time, and next-flash countdown.
-let _ltBase = null;           // { ambientSky, ambientGround } saved at race start
+let _ltBase = null;           // { ambientSky, ambientGround, exposure } saved at race start
 let _ltFlash = 0;             // 0..1 current flash intensity (decays each frame)
 let _ltNextT = 0;             // seconds until the next lightning strike
 let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
@@ -1285,7 +1285,7 @@ let playerTyreTier = 1, playerBrakesTier = 1, playerTyreId = "medium", playerBra
 let playerTyreVisual = null, playerBrakeVisual = null;
 // WHEELS rides along with the other two wheel-facing categories.
 let playerWheelId = "standard", playerWheelVisual = null;
-// Full 8-char cosmetic key for the PLAYER's body/cockpit mesh caches — computed
+// Full 12-char cosmetic key for the PLAYER's body/cockpit mesh caches — computed
 // once here (parts only change from the setup screen, which calls this on close)
 // so the render loop reads a cached string instead of rebuilding it via
 // partsVisualKey() → getVisualTiers() every frame. Overwritten before the first
@@ -1643,7 +1643,7 @@ function carDecalNum(team, car) {
 }
 // Draw a car's logo/sponsor decals with the same model matrix as its body.
 // A team's rear-wing downforce level (0..4), driving which endplate-number mesh
-// to draw. getVisualTiers is a small 8-category loop and the resulting mesh is
+// to draw. getVisualTiers is a small 12-category loop and the resulting mesh is
 // cached per level, so resolving this per car/frame is negligible.
 const _aeroLevelCache = new Map();   // "player|factory:team.id" -> {val, rev}
 function teamDecalState(team, usePlayerSetup) {
@@ -2259,8 +2259,8 @@ function startRace() {
   makeCars();
   // A qualifying lap is a time trial with the rest of the field simulated: one
   // car on track, the existing lap-timing and validity path, and no new game
-  // state. ONE lap — and because it is the only one, it has to be a FLYING lap:
-  // see the launch at lights-out below. The AI field is built BEFORE cars is
+  // state. ONE lap, STANDING from the line (see launchFlyingLap and the lights-out
+  // branch in update()). The AI field is built BEFORE cars is
   // narrowed, so the classification can still see every car.
   if (isQuali()) {
     qualiField = cars;
@@ -5299,7 +5299,7 @@ function render(dt) {
   // Resolve the moving player before any shadow-map pass. AI keeps using the
   // pooled matrices from the preceding frame; only the player's high-speed,
   // chase-camera shadow makes that latency visible.
-  const _hasLivePlayerShadow = !!(player && state !== "menu" && state !== "select");
+  const _hasLivePlayerShadow = !!(player && state !== "menu");
   if (_hasLivePlayerShadow) currentCarGroundMat(player, _livePlayerShadowMat, dt);
 
   // Shadow pass — render terrain + road from sun's perspective.
@@ -5394,7 +5394,7 @@ function render(dt) {
     // may no-op the pass (blob fallback); menu/select skip because the car loop
     // doesn't run and its pooled AI matrices would be stale race positions.
     if (gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && (_hasLivePlayerShadow || _shadowCount > 0) && player &&
-        state !== "menu" && state !== "select") {
+        state !== "menu") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
       // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
       // the moonlight floor active (game.js frame.moonK), cars keep casting so
@@ -5628,7 +5628,7 @@ function render(dt) {
   // the lamp frustum (barriers, grandstands, buildings). Desktop only — WGX
   // has no lampShadowBegin, the mobile tier never creates the map.
   if (gfx.lampShadowBegin && LT.lampShadow && PerfGov.tier() < 2 && frame.lights && !_studioRig &&
-      player && state !== "menu" && state !== "select") {
+      player && state !== "menu") {
     // Gate on the KEY being dim (true night): by day/dusk the sun owns the
     // shadows, and a daytime-floods pool shadow would fight the sun's.
     const _flk = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
@@ -5707,7 +5707,7 @@ function render(dt) {
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   frameSky.lightning = _ltFlash || 0;
   // ── Live env probe: render ONE 64px cubemap face of the world around the
-  // player car per frame (full refresh every 6 frames). The car-paint clearcoat
+  // player car every other frame (full refresh every 12 frames). The car-paint clearcoat
   // samples it for REAL reflections of the surroundings — trees, buildings,
   // track, sky — including everything behind the camera that SSR can't see.
   // CAR tuner ENV REFLECTION (carEnvCube) = 0 skips the pass entirely.
@@ -6059,7 +6059,7 @@ function render(dt) {
     // computed. Emission is rate-gated with Math.random() < rate·dt so it is
     // framerate-independent; far cars are skipped (sub-pixel puffs would only
     // starve the shared pool).
-    if (state !== "menu" && state !== "select") {
+    if (state !== "menu") {
       const fdx = tmpP[0] - camEye[0], fdz = tmpP[2] - camEye[2];
       if (fdx * fdx + fdz * fdz < 110 * 110) {
         // Collision sparks — flag set by collideFx during the physics step
@@ -7723,7 +7723,7 @@ function setCamMode(m) {
 function cycleCam() { return setCamMode(camMode + 1); }
 // CAM button: quick tap cycles (muscle memory preserved); press-and-hold (or
 // right-click) opens a PICKER GRID of all modes — cycling one-by-one through
-// 14 cameras to reach the one you want was the worst switch in the game.
+// 13 cameras to reach the one you want was the worst switch in the game.
 const camPicker = (() => {
   let el = null;
   const build = () => {

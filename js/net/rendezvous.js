@@ -39,10 +39,11 @@
  * the code itself, so the code is the secret — the same trust model as the
  * invite code this replaces.
  *
- * THE PRIVATE WORKER PATH IS NOT SEALED YET, despite what this header used to
- * say. httpPut() posts the invite/answer as plain JSON, so whoever runs
- * worker/rendezvous.js can read the SDP they relay. seal()/open()/topicFor()
- * below implement the fix and are unit-tested, but nothing calls them — see the
+ * THE PRIVATE WORKER PATH IS NOT SEALED. httpPut() posts the invite/answer as
+ * plain JSON, so whoever runs worker/rendezvous.js can read the SDP they relay.
+ * seal()/open() below implement the fix and ARE now wired on the public
+ * room-code path (NetNostr.directExchange calls them on every exchange); only
+ * `topicFor` and the private httpPut worker path remain unsealed — see the
  * note on them for the specific blocker.
  *
  * IT IS A BACKUP OPTION, NOT A REPLACEMENT. The link and QR paths stay primary

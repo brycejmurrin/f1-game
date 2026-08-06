@@ -92,7 +92,8 @@ let _furnBuilt = false;  // furniture built into the current world?
 
 // ── Group B gameplay-adjacent flags (all DEFAULT ON, each its own disable flag) ─
 // These READ the deterministic side-world and influence race logic (flags/grip)
-// but NEVER write px/pz/head/(s,x)/speed. B1 caution lives in game.js and reads
+// but NEVER write px/pz/head/(s,x)/speed. The caution machine lives in
+// js/game/racecontrol.js and reads
 // hazards() from here; B2 promotes barrier panels here; B3 returns a grip scalar.
 let _breakBarriers = true;   // B2 — apex26.breakBarriers ("0" disables)
 let _marbleGripOn = true;    // B3 — apex26.marbleGrip ("0" disables)

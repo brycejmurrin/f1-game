@@ -28,8 +28,6 @@
   --btn: 76px;                                        /* action button diameter */
   --btn-gap: 8px;
   --btn-pitch: calc(var(--btn) + var(--btn-gap));      /* one slot up the column */
-  --btn-edge: 16px;                                    /* inset from the screen edge */
-  --btn-col: calc(var(--btn) + var(--btn-gap));        /* step to a second column */
   --steer: 84px;                                       /* steering arrow diameter */
 }
 .touchbtn {
@@ -462,7 +460,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      The cluster no longer needs compacting — stacking it took it from 467px to
      ~170px, which fits between the docks on every phone. */
   @media (max-width: 740px) {
-    :root { --ped: 64px; --act: 48px; }
     /* An iPhone SE landscape leaves ~323px between the docks in tilt+manual,
        the widest mode — one notch further down than the sizes above. Moved up
        with them: this notch is a RATIO to the block above, not a floor of its

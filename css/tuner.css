@@ -71,20 +71,6 @@ body.photo-mode:not(.pc-nopanel):has(#camtune:not([hidden])) { --dock-w: min(46v
 body.photo-mode:not(.pc-nopanel) #lt-preview,
 body.photo-mode:not(.pc-nopanel) #lt-profile,
 body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
-/* …and the panel sheds the furniture it does not need while flying. A 300px
-   panel on a 393px-tall phone has ~370px of height, and the fixed head — title,
-   FREE CAMERA, the session line, two rows of TIME chips, two of WEATHER, the
-   help toggle, the category strip — plus the action bar came to ~300px of it.
-   That is the failure the rail layout was built to avoid, reintroduced by
-   forcing the tall layout: KEY LIGHT (SUN) rendered clipped behind DONE with
-   nothing left to scroll.
-   TIME and WEATHER are session SETUP — you pick dusk-and-wet before you go
-   flying, not while framing a shot — so they and the conditions readout stand
-   down and give their ~155px to the sliders, which are the reason the panel is
-   still on screen at all. */
-body.photo-mode:not(.pc-nopanel) #lt-preview,
-body.photo-mode:not(.pc-nopanel) #lt-profile,
-body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 
 /* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
    panel is open, so the left of the screen is the live preview. */

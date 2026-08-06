@@ -4,10 +4,13 @@
    order in index.html preserves the original source order, so the cascade
    is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
 /* ---------- season standings overlay ---------- */
-#standings { max-width: min(92vw, 540px); max-height: 80svh; }
+/* #standings is a `dialog.screen dim` (a top-layer dialog) — its sizing and
+   centring come from `dialog.screen` in css/components.css. A leftover
+   `#standings { max-width; max-height }` here used to clamp it: this file is
+   `@layer overlays`, which beats `@layer components`, so the clamp pinned the
+   whole dialog to 540px in the top-left corner instead of the centred sheet.
+   Only the inner scroll region wants a cap of its own. */
 #standings-body { max-height: 55svh; overflow-y: auto; font-size: 13px; }
-/* Row styling is the shared .res-* component (css/components.css); the size
-   above is the only thing this container wants of its own. */
 
 /* ---------- track detail fullscreen modal ---------- */
 #track-detail {

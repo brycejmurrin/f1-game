@@ -969,7 +969,6 @@ const NetLobby = (function () {
     // right shape (one clock estimate, one liveness clock, one handler table
     // per connection). There are simply several of them.
     const sessions = new Map();
-    const SELF_ONE = "peer";
     // THE session, for the many call sites that mean "the connection we talk
     // over". On a guest that is the only one there will ever be — the host. On
     // the host today it is the single guest.

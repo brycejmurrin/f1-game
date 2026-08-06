@@ -137,7 +137,7 @@ const AgentView = (function () {
       if (!vp) {
         return fail("NoFrameError",
                     "no rendered frame yet, and no camera was named",
-                    'name a camera — frame({camera:"chase"}) — or headless(false) '
+                    'name a camera — render({what:"view", camera:"chase"}) — or headless(false) '
                     + "and let a frame draw");
       }
       return { vp, eye: fr.eye || G.camEye, tgt: G.camTgt,
@@ -1941,7 +1941,7 @@ const AgentView = (function () {
       if (["summary", "sections", "full"].indexOf(detail) < 0) {
         return fail("BadArgumentError",
                     'detail must be "summary", "sections" or "full"',
-                    'call worldModel({detail:"sections"})');
+                    'call render({what:"circuit", detail:"sections"})');
       }
       const track = G.track, total = track.total, def = track.def;
       const reg = track.props;
@@ -2297,7 +2297,7 @@ const AgentView = (function () {
           + "where speed converts to distance — long straights, not corners.",
           "OVERTAKE BOOST: arms only within ~1 s of the car ahead; 4 s of boost "
           + "then 16 s of cooldown, so firing it early wastes the window.",
-          "PARTS: a 600-credit budget across 8 categories. Every credit in "
+          "PARTS: a 600-credit budget across 12 categories. Every credit in "
           + "engine/aero is a credit not in brakes/tyres — see carView().",
         ],
         constraints: [
@@ -2626,7 +2626,7 @@ const AgentView = (function () {
         return fail("NoFrameError",
                     "no rendered frame yet, so there is no camera matrix to test against",
                     "headless(true) skips render() — call __apex.headless(false) "
-                    + "and let one frame draw before calling visible()");
+                    + "and let one frame draw before calling scene({visible:true})");
       }
       const o = opts || {};
       const cap = Math.max(1, Math.min(o.limit | 0 || 16, 64));
