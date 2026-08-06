@@ -14,7 +14,7 @@ line, increasing in the racing direction. Internally that maps to an arc-length
 slip convention is `+steer → turns right (+x)`.
 
 > **Driving this as an LLM agent?** Skip to
-> [Agent world view](#agent-world-view). The ~89 hooks below are a dev console —
+> [Agent world view](#agent-world-view). The ~182 hooks below are a dev console —
 > one narrow question each, `false`/`null` on failure. The agent layer composes
 > them into one egocentric snapshot per decision, renders the view as text
 > instead of a screenshot, and never returns `null`. Start with
@@ -1508,11 +1508,11 @@ measurements and the research behind each decision: `docs/AGENT-WORLD-API.md`.
 | Hook | Question it answers | Cost |
 |---|---|---|
 | `world()` | Where am I, what is next? | cheap — the per-tick call |
-| `frame()` | What does it look like? (replaces a screenshot) | moderate |
+| `render({what:"view"})` | What does it look like? (replaces a screenshot) | moderate |
 | `scene()` | What is around the car? | moderate |
-| `visible()` | What is on screen, as a list? | moderate |
+| `scene({visible:true})` | What is on screen, as a list? | moderate |
 | `trackInfo()` | Corners, sectors, elevation | static — fetch once |
-| `worldModel()` | What is this place? The whole circuit | static — fetch once |
+| `render({what:"circuit"})` | What is this place? The whole circuit | static — fetch once |
 | `carView()` | What am I driving? (replaces the car viewer) | static per setup |
 | `survey()` | Is anything broken? Geometry defects | static per track |
 | `rollout()` | Drive an interval, get a digest | runs the sim |
@@ -1521,12 +1521,12 @@ measurements and the research behind each decision: `docs/AGENT-WORLD-API.md`.
 
 Overlaps worth settling before you pick one:
 
-- **`scene()` vs `visible()`/`frame()`** — `scene()` is a radius around the
-  **car** and ignores where the camera points; the other two are the **camera's**
-  view.
-- **`visible()` vs `frame()`** — `visible()` *names* what is in shot; `frame()`
-  shows *where* it sits and what hides what.
-- **`scene()` vs `worldModel()`** — live surroundings vs the static circuit.
+- **`scene()` vs `scene({visible:true})`/`render({what:"view"})`** — plain `scene()`
+  is a radius around the **car** and ignores where the camera points; the other
+  two are the **camera's** view.
+- **`scene({visible:true})` vs `render({what:"view"})`** — the visible list *names*
+  what is in shot; the view raster shows *where* it sits and what hides what.
+- **`scene()` vs `render({what:"circuit"})`** — live surroundings vs the static circuit.
 
 Every hook here returns `{ok:false, error, message, fix}` on failure and **never
 `null`**; `fix` names the call that resolves it.
@@ -1752,20 +1752,21 @@ the whole `__apex` toolkit** — see `agentHelp()`, whose `read` section names t
 raw hooks that already return JSON (`physState`, `lightState`, `timing`, …) and
 whose `control` section names the drive/stage verbs.
 
-### `render({what, ...})` — and its four deprecated aliases `frame`/`plan`/`worldModel`/`visible`
+### `render({what, ...})` — the one raster entry point
 
 `render({what})` is the **one** entry point for every raster; `what` selects
-`"view"` (the camera, → `frame` below), `"map"` (top-down, → `plan`), `"circuit"`
-(the whole track as a document, → `worldModel`) or `"car"` (measured elevations).
+`"view"` (the camera), `"map"` (top-down), `"circuit"` (the whole track as a
+document) or `"car"` (measured elevations).
 Every raster is flagged `aid: "APPROXIMATE…"` — the evidence is that dense
 character grids read *worse* for an LLM than the structured numbers they are
 drawn from, so this is a composition aid for looking at, not a surface to read
-geometry off. The four named calls remain as deprecated aliases. The rest of
-this section documents the underlying raster via `frame`.
+geometry off. The former `frame`/`plan`/`worldModel`/`visible` aliases have been
+removed — the `what` values above are the only spelling. The next sections
+document each raster under its `render({what})` name.
 
-### `frame({cols, rows, camera, orbit, edges, depth, rangeM, cellAspect, limit}?) → render | typedError`
+### `render({what:"view", cols, rows, camera, orbit, edges, depth, rangeM, cellAspect, limit}?) → render | typedError`
 
-**The screenshot replacement.** `visible()` lists what is on screen; this shows
+**The screenshot replacement.** `scene({visible:true})` lists what is on screen; this shows
 *where*, by rasterising the scene into a character grid with per-cell depth
 sorting — a real hidden-surface solve at grid resolution, not a guess.
 
@@ -1861,7 +1862,7 @@ close call:
 
 ### `scene({radius, kinds, limit}?) → payload | typedError`
 
-**Named** scenery near the car. `visible()` locates scenery mass; this says what
+**Named** scenery near the car. `scene({visible:true})` locates scenery mass; this says what
 it is.
 
 ```js
@@ -1906,7 +1907,7 @@ truncated one would under-report late-built areas non-uniformly.
 Not covered: kerbs, barriers, guardrails and other road furniture — those live
 in `track.barL`/`barR` as a driving limit, and `wallStats()` reports on them.
 
-### `visible({limit}?) → payload | typedError`
+### `scene({visible:true, limit}?) → payload | typedError`
 
 What is actually on screen. The renderer answers this every frame — it extracts
 frustum planes from `frame.viewProj` and tests them against per-chunk AABBs —
@@ -1916,7 +1917,7 @@ and then throws the answer away. This runs the **same** cull test
 and reports it.
 
 ```js
-__apex.visible({ limit: 8 })
+__apex.scene({ visible: true, limit: 8 })
 // { camera:{eye,target,fovDeg,mode,debugCam}, framePending,
 //   scenery:{ available, cellSizeM:72, totalCells, visibleCells, cullDistM,
 //             nearest:[{distM,bearingDeg,centre,sizeM}], truncated, note },
@@ -1989,7 +1990,7 @@ things happen to make the table trustworthy on OSM-derived centrelines:
 Sanity check: Monaco's Grand Hotel hairpin resolves to ~10 m, and integrated
 heading over a lap closes to exactly ±360°.
 
-### `worldModel({detail, offset, limit}?) → document | typedError`
+### `render({what:"circuit", detail, offset, limit}?) → document | typedError`
 
 The **whole circuit as one structured document**. `scene()` answers "what is near
 me"; this answers "what is this place".
@@ -2027,7 +2028,7 @@ primitives across Monza, Monaco, Vegas and Suzuka, at 1,078–3,944 records per
 circuit. Before the anonymous-assembly catch-all it was 85% on Monza and 21% on
 Vegas — the named emitters alone miss almost everything on a street circuit.
 
-**It is not vertex data.** `worldModel()` describes objects and bounds. For raw
+**It is not vertex data.** `render({what:"circuit"})` describes objects and bounds. For raw
 geometry use `__apex.trackGeometry()`, which needs `Tracks.setKeepGeometry(true)`
 before the build and returns megabytes of floats — a file to analyse with code,
 never something to read into context.
@@ -2107,12 +2108,12 @@ a 160 m grandstand on a curve inflates its apparent lateral extent: Monza lists
 Monza reports `clean: true` while Spa, Monaco and Vegas do not — that
 discrimination is the property that makes the check worth running.
 
-### `plan({radiusM, cols, northUp}?) → map | typedError`
+### `render({what:"map", radiusM, cols, northUp}?) → map | typedError`
 
-The **allocentric top-down map** — the companion to `frame()`'s first-person
-view, and the text version of `aerial-survey.mjs`. `frame()` forces a
-reference-frame shift for any "where am I on the circuit" question; `plan()`
-answers it directly, drawn **car-up** (forward is up) so no rotation is needed to
+The **allocentric top-down map** — the companion to `render({what:"view"})`'s
+first-person view, and the text version of `aerial-survey.mjs`. The first-person
+raster forces a reference-frame shift for any "where am I on the circuit"
+question; the map answers it directly, drawn **car-up** (forward is up) so no rotation is needed to
 drive, or `{northUp:true}` for the world frame.
 
 ```

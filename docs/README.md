@@ -34,7 +34,6 @@ Three kinds of docs live here.
 | [PARALLEL-WORK.md](PARALLEL-WORK.md) | Where to spend concurrency: read-only agent fan-out is free, worktrees isolate FILES but not CPU, and the browser suite is serial on 4 cores — the bottleneck every plan has to respect. Written after parallelism produced ten confident, entirely fake test failures. |
 | [LAYOUT-AUDIT.md](LAYOUT-AUDIT.md) | The screen x viewport grid: which mechanism owns which layout decision, what the probe measures, and how to read the results. |
 | [COMPONENTS.md](COMPONENTS.md) | Every class family in `css/`, the file that owns it, and — the part worth reading — which classes are defined in more than one file. |
-| [AUDIT-2026-08.md](AUDIT-2026-08.md) | Open findings from the Aug-2026 repo audit — verified bugs and tooling gaps that are **not** fixed yet. The backlog, not a description of behaviour. |
 | [CONSOLE-RECIPES.md](CONSOLE-RECIPES.md) | Driving the deployed game from DevTools: `__apex.diag()`, browser gotchas, ready-made blocks. |
 | [iOS-OPTIMIZATION.md](iOS-OPTIMIZATION.md) | Mobile/iOS perf and Safari quirks. |
 | [tracks/](tracks/) | Per-circuit reference material. |
@@ -60,9 +59,10 @@ and `js/game/incidentsim.js` implement.
 
 ## Research (cited, but not a description of behaviour)
 
-The four that survive here are cited from source or from `CLAUDE.md`, which is
-what keeps them live. Everything else that used to sit in this table was indexed
-by nothing and moved to [`archive/research/`](archive/research/).
+The eleven that survive here are cited from source, from `CLAUDE.md` or from
+each other — that citation is what keeps them live. Everything else that used to
+sit in this table was indexed by nothing and moved to
+[`archive/research/`](archive/research/).
 
 | Doc | Topic |
 |---|---|
@@ -72,6 +72,11 @@ by nothing and moved to [`archive/research/`](archive/research/).
 | [research/ENGINEERING-PRACTICE-NOTES.md](research/ENGINEERING-PRACTICE-NOTES.md) | Why the game loop's clamps and caps are load-bearing, what `seed()` can and cannot promise given float non-associativity, the characterization-test method for Phase 4 extractions, and the state of the no-build bet. |
 | [research/CI-RENDERING-PERFORMANCE.md](research/CI-RENDERING-PERFORMANCE.md) | Why the Playwright suite is slow under SwiftShader, what llvmpipe/xvfb/GPU runners would change, why sharding is the wrong first move, and the (now shipped everywhere) state of WebGPU. External findings, not measurements — flagged as such. |
 | [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md) | Why detail is unaffordable without instancing; the staged scenery scene-graph plan and its measured per-emitter reuse. |
+| [research/PLATFORM-INPUT-NOTES.md](research/PLATFORM-INPUT-NOTES.md) | The platform behaviours that only bite on one device: pointer capture and the four-way release net, the top layer vs z-index, `zoom` and `--ui-scale`, `(pointer: coarse)`, Escape vs `<dialog>` close watchers, iOS WebGL context loss. Read before debugging anything that reproduces on one device and not another. |
+| [research/DRIVING-CONTROLS-RESEARCH.md](research/DRIVING-CONTROLS-RESEARCH.md) | What shipped racing games (F1 24/25, EA's accessibility docs) do for assists and speed-sensitive steering — including the deliberately NEGATIVE conclusions that keep un-built features from being re-litigated. |
+| [research/PHASE-C-SLIDER-DESIGN.md](research/PHASE-C-SLIDER-DESIGN.md) | The slider recalibration with the numbers: the arithmetic defects behind "I always end up at the bottom", computed from the shipped mappings in `js/game/steer-tuning.js`. |
+| [research/UI-SCALE-AND-ZOOM.md](research/UI-SCALE-AND-ZOOM.md) | `zoom` as a scaling mechanism, measured: what the UI SIZE / HUD SIZE sliders cost, and why `zoom` is the right tool for them. |
+| [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the phone at arm's length, collapse a primitive only when it passes the three-places-plus-generic test. (Also indexed under Engineering reference above.) |
 
 ## Archive (`archive/`)
 
@@ -80,10 +85,12 @@ depends on it.
 
 | Path | What it is |
 |---|---|
-| [archive/superpowers/](archive/superpowers/) | 17 dated plans and specs from individual 2026-07 work sessions. Written against the pre-reorganisation flat `js/` layout, so their paths no longer resolve — expected, not rot. Their checkboxes are unchecked against work that shipped; read them for intent, never for status. |
+| [archive/superpowers/](archive/superpowers/) | 16 dated plans and specs from individual 2026-07 work sessions. Written against the pre-reorganisation flat `js/` layout, so their paths no longer resolve — expected, not rot. Their checkboxes are unchecked against work that shipped; read them for intent, never for status. |
 | [archive/webgpu/](archive/webgpu/) | The WebGPU migration plan, maintainability review and four phase build logs. |
-| [archive/research/](archive/research/) | Ten investigations that no live doc or source file references: steering/tilt physics, circuit-briefing design + UI, rendering improvements, external model sources, longer-horizon physics, multiplayer research + the 4-player plan (both shipped), UI layout research. |
+| [archive/research/](archive/research/) | Twelve investigations that no live doc or source file references: steering/tilt physics, circuit-briefing design + UI, rendering improvements, external model sources, longer-horizon physics, multiplayer research + the 4-player plan (both shipped), UI layout research, the driving-test review and the 2026-rules fidelity gap list. |
 | [archive/SCENERY-UPGRADE-PLAN.md](archive/SCENERY-UPGRADE-PLAN.md) | The scenery upgrade roadmap. Its helpers (`grandstandEx`, `landmarkKit`, `circuitKit`, `sceneryTheme`) are all in the frozen 107-member contract now. |
+| [archive/2026-08-repo-audit.md](archive/2026-08-repo-audit.md) | The Aug-2026 repo audit's finding register — the not-fixed backlog as recorded at the time, kept as provenance for what was found and what has since been worked off. |
+| [archive/2026-08-architecture-review-journal.md](archive/2026-08-architecture-review-journal.md) | The session journal behind the architecture review: the full defect register with fix narratives and measurements, verbatim. The standing review distilled from it lives at [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md). |
 
 For day-to-day workflows, see the **skills** in `.claude/skills/` (`.claude/skills/README.md`)
 and the **tools** in `tools/` (`tools/README.md`).

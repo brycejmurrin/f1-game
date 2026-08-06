@@ -3,9 +3,9 @@
 **Status: implemented.** The surface ships in `js/game/agentview.js` (+ the
 rasters in `js/game/agentview-raster.js`) — `world()`, `field()`, `trackInfo()`,
 `scene()`, `describe()`, `query()`, `atmosphere()`, `objective()`, `carView()`,
-`render()`, `survey()`, `rollout()`, `terminal()`, `agentHelp()`, with
-`frame()`/`plan()`/`worldModel()`/`visible()` kept as deprecated aliases of
-`render({what})`/`scene({visible})` — plus the prop registry in
+`render()`, `survey()`, `rollout()`, `terminal()`, `agentHelp()` — the former
+`frame()`/`plan()`/`worldModel()`/`visible()` aliases have been REMOVED (use
+`render({what})`/`scene({visible})`) — plus the prop registry in
 `js/track/tracks.js` and the scenery modules, and a CLI at `tools/agent.mjs`.
 **Reference documentation is `docs/DEBUG-HOOKS.md` → "Agent world view"**; the
 API also describes itself via `__apex.agentHelp()`. Tests:
@@ -48,7 +48,7 @@ can see forty numbers and still can't tell it's about to miss a braking point."
 
 ## 2. What the codebase can answer today
 
-`window.__apex` exposes ~89 hooks (measured at runtime). `obs()`
+`window.__apex` exposes ~182 hooks. `obs()`
 (`js/game/apex.js:1064`) is already a better observation than most published
 game-agent wrappers: egocentric signed wall clearances, lateral offset,
 look-ahead scan, combined-slip state, applied-input echo, reward components.
@@ -166,13 +166,13 @@ hierarchical (reason at ~1 Hz, act at 60 Hz) or asynchronous.
 real-time problem into a turn-based one. That trio is a bigger asset than any
 observation-format tweak.
 
-**P9 — Consolidate the toolbelt; keep the dev console.** ~89 hooks is a good
+**P9 — Consolidate the toolbelt; keep the dev console.** ~182 hooks is a good
 debug console and a poor agent interface — tool schemas alone can eat 20–40%
 of context. Expose ~6 composed tools; leave `__apex` untouched underneath.
 
 **P10 — Code as an escape hatch.** CodeAct reports up to +20% success and ~30%
 fewer steps for executable code over JSON actions. One `eval` tool over
-`__apex` turns 89 hooks into one tool and lets the agent write filters we
+`__apex` turns ~182 hooks into one tool and lets the agent write filters we
 didn't anticipate. <https://arxiv.org/abs/2402.01030>
 
 ## 4. The design
@@ -251,7 +251,7 @@ canonical form in the 3D-scene-graph-for-LLM literature (3DGraphLLM et al.).
 The accessibility-tree lesson applies directly: don't serialize the scene
 graph, serialize the semantically-labelled *subset*.
 
-**3b. `visible()` — what is in frame (~10 lines).** Export
+**3b. `visible()` (shipped; now `scene({visible:true})`) — what is in frame (~10 lines).** Export
 `_extractPlanes`/`_aabbInFrustum` from `GLXChunked` and test `frame.viewProj`
 against the retained chunk AABBs. Gives the props cells the GPU is actually
 drawing, plus track nodes and cars projected to NDC. Zero new build state.
@@ -282,7 +282,7 @@ driving code executes at 60 Hz.
 | `apex_reset({track, frac, speed, weather, tod})` | `race` / `reset` / `jump` |
 | `apex_track({what})` | `corners` / `trackProfile` / `wallStats` / markings |
 | `apex_scene({radius \| visible})` | prop registry + frustum query |
-| `apex_eval({js})` | escape hatch over the full ~89 hooks |
+| `apex_eval({js})` | escape hatch over the full ~182 hooks |
 
 `__apex` itself stays exactly as it is. This is a layer, not a replacement.
 
@@ -317,7 +317,7 @@ instead of curvature, per-rival rows, typed errors with a `fix` field, split
 `done` into `{done, reason}`, the `brief` string. All of this is derivable from
 state that already exists. Highest value per line of code.
 
-**Phase 2 — `visible()`.** Export the two frustum functions; add the query.
+**Phase 2 — `visible()` (shipped; now `scene({visible:true})`).** Export the two frustum functions; add the query.
 
 **Phase 3 — prop registry.** The only phase that touches the build path, so
 the only one that needs `tools/verify-track.cjs` and the scenery contract test
@@ -347,7 +347,7 @@ metres off the real bend, and some circuits number a double-apex as two turns so
 after snapping both land in the same corner. Hence snap-then-merge, with merged
 corners keeping both numbers (`T9-T10`).
 
-**`visible()` reads the last rendered frame, and nothing says so.** Called
+**`scene({visible:true})` reads the last rendered frame, and nothing says so.** Called
 straight after `jump()`, it reported a camera 380 m from the car — and the
 output looked entirely plausible. `framePending` and a `warning` now surface it.
 The general lesson for this kind of API: a stale answer that looks well-formed
@@ -404,7 +404,7 @@ call sites.
 
 ## 5d. Replacing the screenshot — and checking it against one
 
-`frame()` rasterises the scene into a character grid with per-cell depth
+`render({what:"view"})` rasterises the scene into a character grid with per-cell depth
 sorting. The justification is the same finding the whole design rests on: BALROG
 measured VLMs scoring *lower* with an image than with text alone, so a few
 hundred tokens of raster is not a degraded screenshot, it is the better channel
@@ -433,7 +433,7 @@ picture:
 Every one of those produced confident, well-formed, plausible output. That is
 the fourth time in this work that the failure mode was *plausible staleness*
 rather than an error — enough to call it the characteristic risk of this kind of
-API, and the reason `frame()` documents its approximations inline rather than
+API, and the reason `render({what:"view"})` documents its approximations inline rather than
 presenting the grid as ground truth.
 
 The fix in (3) also improved the registry generally: named placements now take
@@ -469,16 +469,16 @@ The design was validated by driving it, not by reading it. Three findings, one
 of which invalidated a feature's rationale.
 
 **It is sufficient to drive on.** Interlagos — a circuit never inspected during
-development — was learned entirely through `worldModel({detail:"sections"})` in
+development — was learned entirely through `render({what:"circuit", detail:"sections"})` in
 25 KB, then driven by a policy using *only* `nextCorner`, `ego.lateralM` and
 `ego.headingErrDeg`. Against a naive full-throttle baseline over the same 40 s:
 302 m → **1,358 m**, off-track 34.8 s → 11.0 s, mean speed 61.6 → 127.2 km/h.
 The API's own `"BRAKE NOW"` hint drove the braking. That an agent acting on the
 payload does materially better is stronger evidence than any shape assertion.
 
-**The hooks agree with each other.** At a fixed pose every kind `frame()`
+**The hooks agree with each other.** At a fixed pose every kind `render({what:"view"})`
 rasterises is one `scene()` independently reports (`unexplainedKinds: []`), and
-the corner `world()` calls next is one `visible()` independently puts on screen.
+the corner `world()` calls next is one `scene({visible:true})` independently puts on screen.
 Four hooks, four code paths, no disagreement — the check that would catch a
 projection or registry mismatch.
 
@@ -509,7 +509,7 @@ larger share of a small payload — a combination never tested until the numbers
 forced the question. The feature earns its place, but not for the reason it was
 built, and not where it was expected to.
 
-## 5g. Why frame() is not ASCII art
+## 5g. Why the view raster (`render({what:"view"})`) is not ASCII art
 
 The obvious reading of "render the game to text" is a luminance ramp: shade the
 scene, map brightness to `.:-=+*#%@`, done. That is how every ASCII renderer
@@ -630,9 +630,9 @@ whether to also raise the raster's fidelity, given that the evidence says
 denser character grids read *worse* for LLMs, the answer was still yes — as a
 **human-facing** inspection aid, not a change to what an agent should read.
 
-- `render({what:"view"})`/`frame()`: `cols` default stays 48, cap raised
+- `render({what:"view"})`: `cols` default stays 48, cap raised
   8→400. `rows` derives from the true viewport aspect either way.
-- `render({what:"map"})`/`plan()`: `cols` cap raised 200→300, `rows` to 150.
+- `render({what:"map"})`: `cols` cap raised 200→300, `rows` to 150.
 - `render({what:"car"})`/`carView({detail:"render"})`: gained a supersampling
   knob, `ss` (1–6, default 3), through the *existing* Sobel-on-depth pipeline —
   no new glyphs, just more samples per cell before composing down to one

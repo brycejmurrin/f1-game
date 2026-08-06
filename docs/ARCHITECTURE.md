@@ -81,8 +81,10 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
 
 - **game.js pass 2** — promote the remaining closure `let`s to a shared state
   object. Four modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`,
-  `js/game/light-store.js`, `js/game/racecontrol.js`) — 8,178 → 8,009 lines —
-  and the next candidates are the quali networking block and collisions.
+  `js/game/light-store.js`, `js/game/racecontrol.js`) — 8,178 → 8,009 lines at
+  the time of that pass; the current count and its ratcheted ceiling live in
+  `tests/module-size.test.mjs` — and the next candidates are the quali
+  networking block and collisions.
 
   **The payoff is testability, not tidiness.** Race control is the clearest
   case: 118 lines in the middle of `game.js` had exactly one assertion anywhere
@@ -374,7 +376,7 @@ floodmasts), identity (per-circuit landmark passes) — each instantiated with a
 ctx of the placement helpers and accumulators. Together they serve the
 **107-member `scenery(api)` contract**, frozen by
 `tests/scenery-api-contract.test.mjs`: a circuit's `scenery(api)` callback can
-destructure any of those 84 names, so removing/renaming one is a breaking
+destructure any of those 107 names, so removing/renaming one is a breaking
 change the test catches. See [SCENERY-API.md](SCENERY-API.md).
 
 ## js/circuits/<id>.js — `TrackDefs` (circuit data)
@@ -617,6 +619,7 @@ state plus stable helpers, passed to `Module.create(G)`:
 
 | File | Global | Owns |
 |---|---|---|
+| `physics-consts.js` | `PhysicsConsts` | the driving model's immutable numbers (`VMAX`, `LAT_MAX`, `BRAKE`, …), destructured once by game.js at eval time (a `HARD_EDGES` entry in `tools/manifest.cjs`). Values only — anything a slider or `setPhysics` can change stays a `let` in game.js. A plain data global, not a `create(G)` module |
 | `store.js` | `GameStore` | localStorage persistence (settings, season, parts, records) + the career save and its migration ladder |
 | `career.js` | `Career` | CAREER rules: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots in separate sets, one live at a time; both earlier layouts migrate in), the credits economy, contracts, driver/team development, R&D ownership, round settlement. Pure data — no DOM, and a plain global (no ctx), because game.js calls it from `makeCars()`/`recomputePlayerMods()`/`endRace()`. Every GAMEPLAY accessor is gated on `inCareer()`, NOT on "a save exists": the save loads at boot so the title button can offer CONTINUE, but its rules must never reach a Grand Prix |
 | `career-ui.js` | `CareerUI` | the CAREER screen (`#career`) — three states in one sheet: CAREER MODES (both modes, their six slots and their guides — the title button's one door), new-career setup, and the season hub. States rather than screens, so all three inherit the sheet's MenuNav / ScrollFade / AriaState registration instead of needing their own. Replaces `#select` in career, since the calendar owns where you race |
@@ -643,7 +646,8 @@ state plus stable helpers, passed to `Module.create(G)`:
 
 ## js/game.js — main
 
-The entry point (~6,100 lines: loop, physics, AI, race logic — the subsystems
+The entry point (the largest file in the repo — its line ceiling is ratcheted by
+`tests/module-size.test.mjs`; loop, physics, AI, race logic — the subsystems
 above are extracted). Player + 21 AI.
 
 **States** are `menu | count | race | results` — those are the only four values

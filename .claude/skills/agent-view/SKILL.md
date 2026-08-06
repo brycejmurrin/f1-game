@@ -33,7 +33,10 @@ Three ways in — same surface, different cost:
   cap it at **2–3 background jobs**: rendering is CPU-side (SwiftShader), so more
   browsers starve the box and reads stall for minutes. A few CLI subcommands are
   **renamed** from the in-page tool — `trackInfo`→`track`, `carView`→`car`,
-  `worldModel`→`model`, `agentHelp`→`help`; `terminal`/`seed` are in-page only.
+  `agentHelp`→`help`, and `model` is `render({what:"circuit"})`; the legacy
+  `frame`/`plan`/`visible` verbs still work and dispatch to
+  `render({what:"view"})`/`render({what:"map"})`/`scene({visible:true})`;
+  `terminal`/`seed` are in-page only.
   Run `agent.mjs` with no args (or `-h`) for the exact list.
 - `node tools/apex-eval.mjs <track> "<expr>"` — boots once and evaluates one
   expression where `a` = `window.__apex`. The door for **anything past a single
@@ -78,9 +81,8 @@ Read both once; do not re-fetch per tick.
   visibility, wet road.
 
 **What is this place / thing? (static — fetch once)**
-- `worldModel({detail})` (CLI `model`) — a DEPRECATED alias of
-  `render({what:"circuit"})`, kept because the name is clearer; both return the
-  same payload. The WHOLE circuit as ONE document:
+- `render({what:"circuit", detail})` (CLI `model`) — the WHOLE circuit as ONE
+  document:
   repeated dressing clustered into features, named landmarks with sizes, barrier
   spans, and a corner-by-corner walk (`dir`/`radiusM`/`severity` only — for
   banking, signed `k`, gradient/elevation, kerbs and apex speed, pull
@@ -107,7 +109,7 @@ Read both once; do not re-fetch per tick.
 - `render({what})` — a visual aid. `view`/`map` are APPROXIMATE character-grid
   rasters (composition/debugging, not geometry — a glyph grid reads worse than the
   numbers it is drawn from); `circuit`/`car` just route to the structured
-  `worldModel`/`carView` payloads. Prefer the numeric tools to measure anything.
+  circuit-document/`carView` payloads. Prefer the numeric tools to measure anything.
 
 **Act & check**
 - `rollout({seconds, policy|input})` — drive an interval at `policyHz` (default 10,

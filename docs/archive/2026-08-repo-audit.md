@@ -1,3 +1,11 @@
+> **ARCHIVED (2026-08).** Dated backlog record, kept verbatim as provenance.
+> Statuses in this file were live when written and are NOT maintained — several
+> findings were fixed, retracted, or re-measured in place, which is why the file
+> reads as a changelog of its own corrections. One claim was wrong even for its
+> day and stayed misleading: §1 "No CI runs any test" — `.github/workflows/ci.yml`
+> exists and gates the Pages deploy (guards / sweeps / smoke). The standing
+> assessment now lives in docs/ARCHITECTURE-REVIEW.md.
+
 # Audit findings — August 2026
 
 Findings from a repo-wide audit that are **not fixed** in the accompanying
@@ -383,9 +391,11 @@ Compare `$("mb-season")` (`js/game.js:6656-6661`), which resets the season
 - **`tools/README.md:10`** documents a `.vt-warn.cjs` helper under `tools/` that
   does not exist (there are no dotfiles there at all);
   `:42` is a 3-column row appended to a 2-column table and renders broken.
-- **`npm run test:graph-parity`** defaults `BASE=HEAD`, so on a committed tree it
-  diffs HEAD against HEAD and always passes. It is useful as
-  `BASE=<pre-migration-ref>`; the `test:` prefix makes it look like a standing gate.
+- ~~**`npm run test:graph-parity`** defaults `BASE=HEAD`, so on a committed tree it
+  diffs HEAD against HEAD and always passes.~~ Since fixed: with no explicit
+  `BASE` and a working tree clean under `js/track/` + `js/circuits/`, the tool
+  now refuses to run instead of trivially passing. Still most useful as
+  `BASE=<pre-migration-ref>`.
 - **`tools/test-shards.sh:47`** appends `-- --workers=N` to every group, but nine
   `test:*` scripts are `node --test` or bare node.
 - **`docs/TESTING.md`** lists `tooling` twice with different descriptions, and

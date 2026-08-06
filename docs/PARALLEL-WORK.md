@@ -52,8 +52,9 @@ the analysis fans out, the edits and commits come back to one branch in order.
   worktree literature warns about is solved — but the cores are not.
 - **Any group alongside `test:baseline`, a `--project=render` suite, or a
   `tools/*-audit.mjs` sweep.** All of them spawn browsers.
-- **`test:sweeps` / `test:tooling` internally.** They pass
-  `--test-concurrency=1` deliberately: every suite rebuilds all 40 circuits, and
+- **`test:sweeps` internally (and so `test:tooling`, whose body is now
+  `npm run test:tooling-fast && npm run test:sweeps`).** The sweeps pass
+  `--test-concurrency=1` deliberately: every sweep suite rebuilds all 40 circuits, and
   four at once reached 5.4 GB and was OOM-killed — which surfaces as a `SIGKILL`
   with no assertion, so it does not even read as a test failure.
 

@@ -60,7 +60,7 @@ Relevant specs in `test:ui`:
 Deep references:
 
 - `docs/research/PLATFORM-INPUT-NOTES.md`
-- UI notes in `docs/AUDIT-2026-08.md`
+- open UI defects and the layout backlog in `docs/ARCHITECTURE-REVIEW.md`
 - `check-changes` skill for picking/running validation groups.
 
 ## Workflow / Implementation

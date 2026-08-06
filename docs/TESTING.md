@@ -170,7 +170,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 
 | Group | What it runs |
 |---|---|
-| `tooling` | every Node contract suite, including the full-fleet sweeps. `--test-concurrency=1`, see below |
+| `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
 | `tooling-fast` | the structural half in ~4 s — load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The two full-fleet audits dominate `tooling`; this is everything else, for the edit loop |
 | `paths` | output paths are port-scoped and self-creating |
 | `graph-parity` | builds each track from a baseline ref AND the working tree and diffs prop geometry vertex for vertex (`tools/graph-parity.cjs`) |
@@ -225,9 +225,10 @@ source while a run is in flight, or its later specs load mixed versions.
 `test:sweeps` rebuilds all 40 circuits and holds their meshes. Four of those at
 once reached 5.4 GB RSS and the kernel OOM-killed the run — which surfaces as a
 `SIGKILL` with `exitCode: ~` and no assertion, i.e. it does not look like a test
-failure at all. `--test-concurrency=1` on `test:sweeps` and `test:tooling` is
-deliberate: these suites already saturate the machine one at a time, so
-overlapping them buys nothing and costs the whole run.
+failure at all. `--test-concurrency=1` on `test:sweeps` is deliberate — and
+`test:tooling` inherits it, since its body is now `npm run test:tooling-fast &&
+npm run test:sweeps`: the sweep suites already saturate the machine one at a
+time, so overlapping them buys nothing and costs the whole run.
 
 Run several GROUPS concurrently instead (`tools/test-bg.mjs`) — those are
 separate processes with separate ports, and the sizing guidance above applies.
