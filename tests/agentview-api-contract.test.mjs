@@ -24,14 +24,16 @@ import vm from "node:vm";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-// The agent-facing surface, as documented. Deprecated aliases are listed
-// separately because they are still exported on purpose.
+// The agent-facing surface, as documented. The one-time deprecated aliases
+// (visible/worldModel/frame/plan) were removed after every caller migrated to
+// render({what}) and scene({visible}); REMOVED pins them out so a merge can't
+// quietly resurrect them.
 const CURRENT = [
   "world", "field", "trackInfo", "scene", "describe", "query", "atmosphere",
   "objective", "carView", "render", "survey", "rollout", "agentHelp",
   "corners", "terminal",
 ];
-const DEPRECATED = ["visible", "worldModel", "frame", "plan"];
+const REMOVED = ["visible", "worldModel", "frame", "plan"];
 const CONSTS = ["API_VERSION", "PHYSICS_VERSION"];
 
 // What agentview.js relies on the raster module to hand back.
@@ -84,9 +86,10 @@ test("AgentView.create() still returns the whole documented surface", () => {
   for (const name of CURRENT) {
     assert.equal(typeof view[name], "function", `agent view lost ${name}()`);
   }
-  for (const name of DEPRECATED) {
-    assert.equal(typeof view[name], "function",
-                 `deprecated alias ${name}() was dropped — callers still exist`);
+  for (const name of REMOVED) {
+    assert.equal(view[name], undefined,
+                 `removed alias ${name}() is back on the surface — callers were `
+                 + `migrated to render({what})/scene({visible}); keep it out`);
   }
   for (const name of CONSTS) {
     assert.equal(typeof view[name], "number", `${name} missing`);

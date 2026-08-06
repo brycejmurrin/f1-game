@@ -773,6 +773,10 @@ js/net/          — multiplayer wire (2-4 players, WebRTC, NO backend) —
 
 js/game/         — game modules (each created with the G ctx façade from game.js) —
   tables.js      GameTables     static game data (CAM_MODES, DIFF, gears, paints)
+  physics-consts.js  PhysicsConsts  the driving model's immutable numbers (VMAX,
+                                  grip, active-aero spans, ERS spans) with their
+                                  tuning rationale; game.js destructures it once.
+                                  Tunable values stay `let`s in game.js
   lighting.js    LightTune      TUNE_DEFS registry, live LT values, floodColor,
                                   LAMP_KINDS, buildTrackLights, setFrameLights,
                                   appendCarTailLights

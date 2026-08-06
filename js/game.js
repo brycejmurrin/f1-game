@@ -276,8 +276,18 @@ let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPt
 function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season); }
 
 // ---------- physics constants ----------
-const VMAX = 72;            // m/s base (~259 km/h) — F1 race pace; scales all speeds
-const ACCEL = 7;            // m/s^2 at low speed
+// The immutable numbers live in js/game/physics-consts.js (global PhysicsConsts)
+// together with the rationale that tuned them; game.js destructures them once
+// here. Everything slider- or harness-tunable stays a `let` below.
+const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
+        GRAVITY_SLOPE, LAT_MAX, STEER_VMAX, FRONT_WEIGHT, CS_FRONT, CS_REAR,
+        WT_LONG, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
+        X_DF_LOSS_HI, X_COAST_CUT_LO, X_COAST_CUT_HI, X_OPEN_RATE, X_CLOSE_RATE,
+        X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
+        LONG_GRIP, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
+        DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, DRAIN_LO, DRAIN_HI,
+        REGEN_LO, REGEN_HI, OT_TIME_LO, OT_TIME_HI, OT_COOL_LO, OT_COOL_HI,
+        OT_GAP } = PhysicsConsts;
 // Global pace multiplier on top speed AND acceleration, applied to EVERY car
 // (player + AI) so the whole field speeds up/slows down together and the racing
 // stays competitive. 1.0 = stock. Driven by the OVERALL SPEED slider.
@@ -309,13 +319,6 @@ function dashKph(v) { return vStd(v) * 3.6; }
 // full-throttle getaway peaks at ACCEL * 0.5 = 3.5 m/s^2, so the launch-wheelspin
 // smoke's bare 4.5 floor could never fire at all — see A16.
 function aStd(a) { return a / Math.max(PACE, 0.05); }
-const BRAKE = 22;
-const REVERSE_MAX = -5;     // m/s — top reverse crawl speed (brake held at a stop)
-const REVERSE_ACCEL = 5;    // m/s^2 — how quickly the reverse crawl builds
-const COAST_DRAG = 6;       // m/s^2 deceleration when off the throttle
-const GRAVITY_SLOPE = 9;    // m/s^2 along-slope pull on elevation (~g, arcade-tuned)
-const LAT_MAX = 22;         // m/s^2 cornering grip
-const STEER_VMAX = 15;      // lateral m/s at full lock, full speed (AI)
 // Player steering inputs into the dynamic model below. WHEELBASE is the real
 // axle spacing — a SHORTER wheelbase has a smaller yaw inertia so it turns in
 // harder/faster (the RESPONSE slider). STEER_EXPO shapes the input: >1 = gentle
@@ -340,79 +343,12 @@ let STEER_SPEED_REF = 60;   // m/s reference for the speed-sensitive lock taper:
 // DRIFT/ROAD_FOLLOW etc. stay `let` so the pause sliders can tune them live.
 let DRIFT = 0;             // rear looseness 0..1: 0 = planted (no oversteer). Slide was
                           // removed as a player control; left settable for the debug bridge.
-const FRONT_WEIGHT = 0.47;  // static front-axle load fraction (F1 is rear-biased)
-const CS_FRONT = 130;       // front cornering stiffness (accel per rad of slip)
-const CS_REAR  = 175;       // rear stiffer than front → understeer in the linear range too
-const WT_LONG = 0.22;       // longitudinal load transfer (braking loads the front axle)
-// AERODYNAMIC DOWNFORCE. Grip used to FALL with speed (gripScale: 1.00 at 10 m/s
-// down to 0.72 at VMAX) — an arcade understeer taper, and backwards for a car
-// with wings. Aero load rises with v², so a real F1 car pulls roughly 2 g in a
-// slow corner and 5 g in a fast one; this model did the opposite, which is why
-// quick corners felt vague and slow ones felt sharp. Lateral grip is now
-// 1 + DOWNFORCE·(v/VMAX)², so high-speed cornering firms up the way it should.
-const DOWNFORCE = 0.65;     // extra grip fraction at VMAX (0 = no wings)
-// ACTIVE AERO — the 2026 X-mode / Z-mode rules, and the THIRD member of the
-// straight-line toolkit alongside BOOST (spend battery) and OVERTAKE (a free
-// proximity-gated push). It is not a fourth kind of boost: it spends no energy
-// and adds no thrust. It TRADES downforce for drag.
-//   Z-mode (aeroX 0, the default) — flaps closed, full downforce, full drag.
-//   X-mode (aeroX 1)              — flaps open, low drag, MUCH less downforce.
-// The blend `c.aeroX` is what every consumer reads (top speed, coast drag,
-// lateral grip, the rear-wing flap angle the renderer draws).
-//
-// The FIA approves fixed ACTIVATION ZONES per circuit and the standard ECU
-// refuses to rotate the wings outside one — it is not a proximity window like
-// DRS, and it is not a rolling "is the road ahead clear" test either. A zone
-// only exists where a straight exceeds three seconds at racing speed, which is
-// why MONACO has none and runs no active aero at all. See js/game/aerozones.js.
-// Leaving the zone (or touching the brake) SLAMS the flap shut — X_CLOSE_RATE is deliberately several times
-// X_OPEN_RATE, so the downforce comes back faster than it left. Both directions
-// sit inside the FIA's 400 ms transition cap.
-// THE TRADE SCALES WITH THE WING, because that is the only way it can mean
-// anything. A single pair of constants gave a Monza-spec sliver and a
-// maximum-downforce floor exactly the same +7.5%/-55%, which is backwards: a
-// big wing has more drag to shed AND more downforce to lose, a small one has
-// neither. So the aero PART now picks where on each span the car sits, via
-// Parts.aeroLoad() (0 = `minimal`, 1 = `ground_effect`).
-//
-// It also matters MORE than it did. The old numbers made X-mode a rounding
-// error you could ignore for a whole race; at the top of the range it is now
-// worth ~+15.5% of top speed and costs ~78% of the aero load, which is a real
-// decision on every zone rather than a free press.
-//
-// A car with no parts (every AI) sits at the MIDPOINT of each span, so the
-// grid's behaviour stays a single well-defined thing rather than inheriting
-// whatever the catalog default happens to be this month.
-const X_VMAX_GAIN_LO = 0.055;  // top-speed gain at full X-mode, smallest wing
-const X_VMAX_GAIN_HI = 0.155;  // ...and the biggest (more drag to shed)
-const X_DF_LOSS_LO = 0.42;     // fraction of the DOWNFORCE term given up, smallest wing
-const X_DF_LOSS_HI = 0.78;     // ...and the biggest (more downforce to lose)
-const X_COAST_CUT_LO = 0.28;   // fraction of COAST_DRAG shed while coasting, smallest wing
-const X_COAST_CUT_HI = 0.55;   // ...and the biggest
 // Where THIS car sits on those spans, 0..1. Defaults to the midpoint so a car
 // that never had parts resolved behaves like the old single constant did.
 function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }
 function xVmaxGain(c) { return lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
 function xDfLoss(c) { return lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
 function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c)); }
-// The FIA caps the transition between the two wing positions at 400 ms, so the
-// OPENING rate is set by that regulation, not by feel: 2.6/s = 385 ms of travel.
-// Closing is deliberately faster (still inside the cap) — see X_CLOSE_RATE.
-const X_OPEN_RATE = 2.6;    // aeroX per second opening (~0.385 s, inside the 400 ms cap)
-const X_CLOSE_RATE = 8.0;   // aeroX per second closing (~0.125 s back to Z — well inside the cap)
-// (X_STRAIGHT_T and X_ZONE_K used to sit here. They belong to the zone SCAN, so
-// they live in js/game/aerozones.js now — along with the X_K_MAX / X_LOOK_MAX
-// story, which is about the rolling look-ahead the zone scan replaced.)
-const X_MIN_SPEED = 25;     // m/s (a vStd() threshold) — no X-mode at crawl speed
-// Overtake's own crawl floor, and a vStd() threshold for exactly the same
-// reason X_MIN_SPEED is one. Named rather than inline so the next reader can
-// see it is the sibling of the constant above and is measured on the same scale.
-const OT_MIN_SPEED = 15;    // m/s (a vStd() threshold) — no overtake at crawl speed
-// Lateral grip OFF the racing surface. muBase had no off-track term at all, so
-// grass and gravel cornered exactly like tarmac and only scrubbed forward speed —
-// you could take a run-off at full lateral grip. Faded in over the first ~1.5 m
-// past the edge so the transition is continuous, not a step.
-const OFF_GRIP = 0.42;      // fraction of tarmac lateral grip on grass/gravel
 // These four are `let` so the emulation/tuning harness (setPhysics) can sweep them
 // — they are the core feel levers found by emulating real drivers, not pause-menu
 // sliders. FRONT_GRIP: front friction bias (<1) for an understeer-safe default.
@@ -427,10 +363,6 @@ let YAW_INERTIA = 0.7;      // scales the car's rotational inertia: <1 = snappie
 let PLAYER_GRIP = 1.15;     // player-only grip headroom over the AI's LAT_MAX baseline:
                             // keeps the dynamic model's character but forgiving enough
                             // that a tidy line holds the road (neutral-simcade target)
-const ASSIST_KUS = 0.0008;  // s²/m — speed² term in the DRIVING-HELP steer assist so
-                            // it keeps tracking the road as speed rises. Kept modest:
-                            // the grippy car understeers little, so a large term would
-                            // OVER-steer and cut the car to the inside of the corner.
 // Steering-assist ("DRIVING HELP"): adds road-wheel steer toward the upcoming
 // curvature so the car helps drive each corner — but the assist goes THROUGH the
 // tyres (grip-limited) like the driver's own steering, it can't teleport the
@@ -445,11 +377,6 @@ const ASSIST_KUS = 0.0008;  // s²/m — speed² term in the DRIVING-HELP steer 
 // against an invisible hand. The assist still exists, and RELAX still turns it
 // on, but nothing steers the car by default except the driver.
 let ROAD_FOLLOW = 0;
-// Gain on the RACING LINE assist's pure-pursuit steer term (see the assist block
-// in updateCar). 1 = textbook pursuit — reach the line in exactly one look-ahead
-// distance; a little over that so the slider's top notch has real authority
-// without the assist ever outrunning the front tyre.
-const LINE_PURSUIT = 2.6;
 // FRENET SCALE FACTOR. The (s, x) road frame is not rigid: it stretches on the
 // outside of a corner and compresses on the inside. A line running x metres to
 // the side of a centreline of curvature k is itself an arc of curvature k/h and
@@ -546,30 +473,6 @@ function frenetH(s, x) {
   if (!(cLen > 1e-4)) return 1;
   return clamp(Math.hypot(ox, oz) / cLen, 0.45, 1.8);
 }
-// Combined-slip friction ellipse: grip used braking/accelerating is taken out of
-// the cornering budget. LONG_GRIP is the longitudinal axis of the ellipse (m/s²),
-// set a little above BRAKE (22) so straight-line braking keeps most grip, but
-// braking hard WHILE turning washes the front wide; easing off the brake as you
-// turn in (trail-braking) hands grip back to cornering. Higher = more forgiving.
-const LONG_GRIP = 34;
-// Visual animation (render-only, never touches physics): the chassis leans into
-// corners (roll ∝ lateral g) and pitches to the road gradient, and the wheels
-// spin with speed + steer with input — all on a smoothed visual layer, the way
-// SuperTuxKart keeps a rigid physics body and animates only the model.
-// (chassis cornering-lean cap now lives in js/game/bodyattitude.js as ROLL_MAX)
-const WHEEL_R = 0.34;         // wheel radius (m) — matches Car3D geometry, for spin rate
-const WHEEL_STEER_VIS = 0.5;  // rad of visible front-wheel steer at full lock
-const GRASS_V = 18;         // crawl speed on grass
-const KERB_SHAKE = 0.22;    // sustained kerb rumble trauma (was inline 0.3): amt =
-                            //   shake²·0.9 drops 0.081 → 0.044 m of random eye jitter;
-                            //   crash-shake writers are untouched.
-const KERB_CUE_HOLD = 0.10; // s — bridges the ~20 Hz per-node flicker of the raw
-                            //   onKerb flag (~2 node periods at 300 km/h) so the
-                            //   rumble/shake/haptic cue can't machine-gun on/off.
-const DEPLOY_A = 3.0;       // extra accel from electric deploy
-const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed band
-                                     //   (a vStd() band — pace-normalised, so the
-                                     //   taper sits at the same place on the dial)
 // Deploy strength 0..1 for a car holding BOOST (or running OVERTAKE). The taper
 // makes deploy strongest out of slow corners, but it is FLOORED: it used to
 // reach exactly 0 above TAPER_HI, which is only 191 km/h, so on any straight
@@ -577,7 +480,6 @@ const TAPER_LO = 41, TAPER_HI = 53;  // deploy tapers to 0 across this speed ban
 // it also cost nothing. Holding BOOST at speed did literally nothing, while
 // OVERTAKE (which bypasses the taper) worked and drained. Real ERS deploys all
 // the way down the straight; so does this now, at reduced strength.
-const TAPER_FLOOR = 0.35;
 function deployTaper(c) {
   if (c.otT > 0) return 1;
   const t = clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
@@ -592,22 +494,6 @@ function isErsDeploying(c) {
   if (!(c.otT > 0) && (c.energy <= 0 || !c.boostOn)) return false;
   return DEPLOY_A * deployTaper(c) > 0.4;
 }
-// THE ERS PART RUNS THE BATTERY, which until now it did not. The category's
-// options have always DESCRIBED battery behaviour — "harvests extra energy under
-// braking", "maximum recovery window", "immediate deployment" — while doing
-// nothing but move speed and accel like every other part, so the descriptions
-// were simply false. Parts.ersProfile() reads the bias the catalog already
-// encodes in each option's own stats (deploy <- accel, regen <- speed) and hands
-// back two 0..1 axes; deriving them rather than authoring new fields means the
-// SIGNATURE clones, which copy those stats, stay consistent for free.
-//
-// deploy buys BOOST DURATION (a lower drain) and a longer, sooner OVERTAKE.
-// regen buys RECHARGE. A car with no parts — every AI — sits at the midpoint.
-const DRAIN_LO = 0.14, DRAIN_HI = 0.26;    // energy/s while boosting: best -> worst deploy
-const REGEN_LO = 0.085, REGEN_HI = 0.155;  // energy/s recovered: worst -> best regen
-const OT_TIME_LO = 3.2, OT_TIME_HI = 5.2;  // overtake push, seconds
-const OT_COOL_LO = 9, OT_COOL_HI = 14;     // ...and its lockout, best -> worst deploy
-const OT_GAP = 1.0;
 function ersDeployOf(c) { return c && c.ersDeploy != null ? c.ersDeploy : 0.5; }
 function ersRegenOf(c) { return c && c.ersRegen != null ? c.ersRegen : 0.5; }
 // Better deployment DRAINS SLOWER — the same press lasts longer rather than
@@ -2194,7 +2080,7 @@ let flybyBuildTimer = 0;
 function scheduleFlybyTrack() {
   clearTimeout(flybyBuildTimer);
   flybyBuildTimer = setTimeout(() => {
-    if (state === "menu" || state === "select") loadTrack(trackIdx);
+    if (state === "menu") loadTrack(trackIdx);
   }, 120);
 }
 
@@ -3285,6 +3171,33 @@ function collideFx(a, b, impact) {
 // merged. The player is "heavier" (invMass 0.5) so the AI can't shove them off.
 function resolveCollisions(ranked, dt) {
   const LCAR = 4.8, WCAR = 2.0, PASSES = 4;
+  // One kernel for both passes below: the wrap-aware overlap test on the
+  // (prog, x) plane plus the rear-vs-side contact decision. The two passes used
+  // to restate these lines each, under a comment ordering them kept in step by
+  // hand — sharing the kernel is what makes that instruction unnecessary.
+  function pairContact(a, b) {
+    let dProg = a.prog - b.prog;
+    if (!Number.isFinite(dProg)) return null;   // never let a corrupt car spread NaN
+    const L = track.total;
+    dProg = ((dProg + L / 2) % L + L) % L - L / 2;
+    if (Math.abs(dProg) > LCAR) return null;
+    const dX = a.x - b.x;
+    if (!Number.isFinite(dX)) return null;
+    const penLong = LCAR - Math.abs(dProg);
+    const penLat = WCAR - Math.abs(dX);
+    if (penLong <= 0 || penLat <= 0) return null;
+    const { iA, iB, iSum, sA, sB } = sepShares(a, b);
+    // Closing into a nest at the lateral slop must be rear-end. Least-
+    // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
+    // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
+    // Only when the PLAYER is the rear car closing: applying this to every
+    // player↔AI touch (e.g. grid pack with throttle held) drained the field.
+    const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
+    const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
+    const forceRear = nestEdge && ((dProg >= 0 && b.human) || (dProg < 0 && a.human));
+    return { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB,
+             sideContact: penLat < penLong && !forceRear };
+  }
   // Snapshot the player's road coords so the writeback at the end can tell
   // whether this pass actually shoved it (see there for why that matters).
   const _preColS = player ? player.s : 0, _preColX = player ? player.x : 0;
@@ -3306,26 +3219,9 @@ function resolveCollisions(ranked, dt) {
       for (let j = i + 1; j < ranked.length; j++) {
         const b = ranked[j];
         if (incidentSim.owns(b)) continue;
-        let dProg = a.prog - b.prog;
-        if (!Number.isFinite(dProg)) continue;   // never let a corrupt car spread NaN
-        const L = track.total;
-        dProg = ((dProg + L / 2) % L + L) % L - L / 2;
-        if (Math.abs(dProg) > LCAR) continue;
-        const dX = a.x - b.x;
-        if (!Number.isFinite(dX)) continue;
-        const penLong = LCAR - Math.abs(dProg);
-        const penLat = WCAR - Math.abs(dX);
-        if (penLong <= 0 || penLat <= 0) continue;
-        const { iA, iB, iSum, sA, sB } = sepShares(a, b);
-        // Closing into a nest at the lateral slop must be rear-end. Least-
-        // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
-        // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
-        // Only when the PLAYER is the rear car closing: applying this to every
-        // player↔AI touch (e.g. grid pack with throttle held) drained the field.
-        const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
-        const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-        const forceRear = nestEdge && ((dProg >= 0 && b.human) || (dProg < 0 && a.human));
-        const sideContact = penLat < penLong && !forceRear;
+        const ct = pairContact(a, b);
+        if (!ct) continue;
+        const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact } = ct;
         if (sideContact) {
           // side-by-side contact: separate laterally, scrub a little speed. Mark
           // both cars "in contact" so the AI eases off steering this way and
@@ -3381,22 +3277,9 @@ function resolveCollisions(ranked, dt) {
     for (let j = i + 1; j < ranked.length; j++) {
       const b = ranked[j];
       if (incidentSim.owns(b)) continue;
-      let dProg = a.prog - b.prog;
-      if (!Number.isFinite(dProg)) continue;
-      const L = track.total;
-      dProg = ((dProg + L / 2) % L + L) % L - L / 2;
-      if (Math.abs(dProg) > LCAR) continue;
-      const dX = a.x - b.x;
-      if (!Number.isFinite(dX)) continue;
-      const penLong = LCAR - Math.abs(dProg);
-      const penLat = WCAR - Math.abs(dX);
-      if (penLong <= 0 || penLat <= 0) continue;
-      const { iA, iB, iSum, sA, sB } = sepShares(a, b);
-      // Match the relaxation pass for player-as-rear nest-edge contacts.
-      const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
-      const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-      const forceRear = nestEdge && ((dProg >= 0 && b.human) || (dProg < 0 && a.human));
-      const sideContact = penLat < penLong && !forceRear;
+      const ct = pairContact(a, b);
+      if (!ct) continue;
+      const { dProg, dX, penLong, penLat, sA, sB, sideContact } = ct;
       if (sideContact) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
         if (c <= 0) continue;
@@ -5148,7 +5031,7 @@ function render(dt) {
 
   // camera
   let eyeT, tgtT, fovT, roadCamRoll = 0;
-  if (state === "menu" || state === "select") {
+  if (state === "menu") {
     // slow flyby
     const s = wrapS((performance.now() * 0.012) % track.total);
     Tracks.sample(track, s, smp);
@@ -7924,7 +7807,7 @@ function setSteerMode(mode) {
   refreshGearsBtn();   // manual is tilt-only, so the GEARS toggle disables off-tilt
   // Only refresh touch buttons when in an active race — don't bleed controls onto
   // the title/select screen (e.g. when gyro denial auto-switches to buttons mode).
-  if (state === "race" || state === "count" || state === "pause") showTouchControls(true);
+  if (state === "race" || state === "count") showTouchControls(true);
 }
 $("pm-steer").onclick = () => {
   setSteerMode(STEER_MODES[(STEER_MODES.indexOf(steerMode) + 1) % STEER_MODES.length]);
@@ -7959,7 +7842,7 @@ $("pm-gears").onclick = () => {
 function refreshAeroBtn() {
   const b = $("pm-aero");
   if (b) b.textContent = "ACTIVE AERO: " + (raceAeroMode === "auto" ? "AUTO" : "MANUAL");
-  if (state === "race" || state === "count" || state === "pause") showTouchControls(true);
+  if (state === "race" || state === "count") showTouchControls(true);
 }
 $("pm-aero").onclick = () => {
   raceAeroMode = raceAeroMode === "auto" ? "manual" : "auto";

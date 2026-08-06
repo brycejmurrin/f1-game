@@ -810,12 +810,12 @@ test.describe("frame() cameras and edges", () => {
     // A synthetic camera is computed fresh — it does NOT need a rendered frame,
     // which is the whole point vs the live view.
     const r = await page.evaluate(() => {
-      const cock = window.__apex.frame({ cols: 32, camera: "cockpit" });
-      const heli = window.__apex.frame({ cols: 32, camera: "heli" });
+      const cock = window.__apex.render({ what: "view", cols: 32, camera: "cockpit" });
+      const heli = window.__apex.render({ what: "view", cols: 32, camera: "heli" });
       // A chase camera sits behind the car at road level and reliably frames it;
       // an overhead heli can be occluded by tall trackside structures, and the
       // cockpit is inside the car, so neither is a robust "car in shot" probe.
-      const chase = window.__apex.frame({ cols: 64, camera: "chase" });
+      const chase = window.__apex.render({ what: "view", cols: 64, camera: "chase" });
       return { cockMode: cock.camera.mode, cockSyn: cock.camera.synthetic,
                heliMode: heli.camera.mode, heliSyn: heli.camera.synthetic,
                cockRows: cock.grid.lines.length,
@@ -834,7 +834,7 @@ test.describe("frame() cameras and edges", () => {
 
   test("an unknown camera errors with the valid set", async ({ page }) => {
     await load(page);
-    const r = await page.evaluate(() => window.__apex.frame({ camera: "bogus" }));
+    const r = await page.evaluate(() => window.__apex.render({ what: "view", camera: "bogus" }));
     expect(r.ok).toBe(false);
     expect(r.error).toBe("BadArgumentError");
     expect(r.message).toContain("bogus");
@@ -843,7 +843,7 @@ test.describe("frame() cameras and edges", () => {
   test("orbit frames the car from a bearing", async ({ page }) => {
     await load(page, "monza", 0.05, 60);
     const r = await page.evaluate(() =>
-      window.__apex.frame({ cols: 32, orbit: { az: 180, el: 20, dist: 15 } }));
+      window.__apex.render({ what: "view", cols: 32, orbit: { az: 180, el: 20, dist: 15 } }));
     expect(r.camera.mode).toBe("orbit");
     expect(r.camera.synthetic).toBe(true);
     expect((r.coveragePct.player || 0)).toBeGreaterThan(0);
@@ -853,8 +853,8 @@ test.describe("frame() cameras and edges", () => {
     await load(page, "monza", 0.05, 60);
     await renderFrames(page);
     const r = await page.evaluate(() => {
-      const plain = window.__apex.frame({ cols: 56, camera: "chase" });
-      const edged = window.__apex.frame({ cols: 56, camera: "chase", edges: true });
+      const plain = window.__apex.render({ what: "view", cols: 56, camera: "chase" });
+      const edged = window.__apex.render({ what: "view", cols: 56, camera: "chase", edges: true });
       const count = (ls) => ls.join("").split("").filter((c) => "|-/\\".includes(c)).length;
       return { plainEdges: count(plain.grid.lines), edgedEdges: count(edged.grid.lines) };
     });
@@ -871,7 +871,7 @@ test.describe("frame()", () => {
   test("rasterises the view into a labelled grid", async ({ page }) => {
     await load(page);
     await renderFrames(page);
-    const f = await page.evaluate(() => window.__apex.frame({ cols: 48, rows: 16 }));
+    const f = await page.evaluate(() => window.__apex.render({ what: "view", cols: 48, rows: 16 }));
     expect(f.grid.cols).toBe(48);
     expect(f.grid.lines.length).toBe(16);
     for (const line of f.grid.lines) expect(line.length).toBe(48);
@@ -886,7 +886,7 @@ test.describe("frame()", () => {
   test("driving on track, the road dominates the lower frame", async ({ page }) => {
     await load(page, "monza", 0.05, 60);
     await renderFrames(page);
-    const f = await page.evaluate(() => window.__apex.frame({ cols: 48, rows: 16 }));
+    const f = await page.evaluate(() => window.__apex.render({ what: "view", cols: 48, rows: 16 }));
     // The bug this pins: sampling the road as isolated points instead of
     // scan-filling between its edges reported a road that fills half the render
     // as 6% of the frame, and called the rest "ground".
@@ -899,7 +899,7 @@ test.describe("frame()", () => {
   test("the player car is drawn, and no single object owns the frame", async ({ page }) => {
     await load(page);
     await renderFrames(page);
-    const f = await page.evaluate(() => window.__apex.frame({ cols: 48, rows: 16 }));
+    const f = await page.evaluate(() => window.__apex.render({ what: "view", cols: 48, rows: 16 }));
     expect(f.coveragePct.player).toBeGreaterThan(0);
     // A 22 m pine standing 20 m to the SIDE once painted every cell, because a
     // box straddling the near plane was widened to the full screen.
@@ -911,7 +911,7 @@ test.describe("frame()", () => {
   test("sky sits above the horizon row and ground below", async ({ page }) => {
     await load(page);
     await renderFrames(page);
-    const f = await page.evaluate(() => window.__apex.frame({ cols: 32, rows: 16 }));
+    const f = await page.evaluate(() => window.__apex.render({ what: "view", cols: 32, rows: 16 }));
     expect(typeof f.grid.horizonRow).toBe("number");
     const below = f.grid.lines.slice(f.grid.horizonRow + 1).join("");
     expect(below.includes(".")).toBe(false);      // no sky under the horizon
@@ -920,7 +920,7 @@ test.describe("frame()", () => {
   test("objects are ranked by how much of the frame they hold", async ({ page }) => {
     await load(page);
     await renderFrames(page);
-    const objs = await page.evaluate(() => window.__apex.frame().objects);
+    const objs = await page.evaluate(() => window.__apex.render({ what: "view" }).objects);
     expect(objs.length).toBeGreaterThan(0);
     for (let i = 1; i < objs.length; i++) {
       expect(objs[i].cells).toBeLessThanOrEqual(objs[i - 1].cells);
@@ -933,7 +933,7 @@ test.describe("frame()", () => {
     // A character cell is ~2x taller than wide, so a grid whose ratio equals the
     // viewport renders squashed. The old 48x18 default was an effective 1.33
     // against a 2.16 viewport — a square object came out 1.6x too tall.
-    const f = await page.evaluate(() => window.__apex.frame({ cols: 48 }));
+    const f = await page.evaluate(() => window.__apex.render({ what: "view", cols: 48 }));
     expect(f.grid.aspect.corrected).toBe(true);
     expect(Math.abs(f.grid.aspect.renderedAspect - f.grid.aspect.viewport))
       .toBeLessThan(0.15);
@@ -943,7 +943,7 @@ test.describe("frame()", () => {
   test("pinned rows are honoured and flagged as uncorrected", async ({ page }) => {
     await load(page);
     await renderFrames(page);
-    const f = await page.evaluate(() => window.__apex.frame({ cols: 48, rows: 24 }));
+    const f = await page.evaluate(() => window.__apex.render({ what: "view", cols: 48, rows: 24 }));
     expect(f.grid.rows).toBe(24);
     expect(f.grid.aspect.corrected).toBe(false);
     expect(f.grid.aspect.note).toContain("pinned");
@@ -952,7 +952,7 @@ test.describe("frame()", () => {
   test("the depth channel is a real, monotonic depth buffer", async ({ page }) => {
     await load(page, "monza", 0.05, 60);
     await renderFrames(page);
-    const f = await page.evaluate(() => window.__apex.frame({ cols: 40, depth: true }));
+    const f = await page.evaluate(() => window.__apex.render({ what: "view", cols: 40, depth: true }));
     expect(f.depth.lines.length).toBe(f.grid.rows);
     expect(f.depth.scaleM.length).toBe(10);
     // the scale is logarithmic and increasing, so the near field gets resolution
@@ -971,13 +971,13 @@ test.describe("frame()", () => {
   test("depth is omitted unless asked for", async ({ page }) => {
     await load(page);
     await renderFrames(page);
-    const f = await page.evaluate(() => window.__apex.frame({ cols: 32 }));
+    const f = await page.evaluate(() => window.__apex.render({ what: "view", cols: 32 }));
     expect(f.depth).toBeUndefined();
   });
 
   test("never returns null — a render or an actionable error", async ({ page }) => {
     await boot(page);
-    const f = await page.evaluate(() => window.__apex.frame());
+    const f = await page.evaluate(() => window.__apex.render({ what: "view" }));
     expect(f).toBeTruthy();
     if (f.ok === false) {
       // no track, or no frame drawn yet
@@ -995,7 +995,7 @@ test.describe("frame()", () => {
     await renderFrames(page);
     const f = await page.evaluate(() => {
       window.__apex.headless(true);
-      const out = window.__apex.frame({ cols: 24, rows: 8 });
+      const out = window.__apex.render({ what: "view", cols: 24, rows: 8 });
       window.__apex.headless(false);
       return out;
     });
@@ -1013,7 +1013,7 @@ test.describe("plan()", () => {
 
   test("draws a car-up top-down map with a metric index", async ({ page }) => {
     await load(page, "monza", 0.28, 60);
-    const pl = await page.evaluate(() => window.__apex.plan({ radiusM: 180, cols: 60 }));
+    const pl = await page.evaluate(() => window.__apex.render({ what: "map", radiusM: 180, cols: 60 }));
     expect(pl.frame).toContain("car-up");
     expect(pl.grid.lines.length).toBeGreaterThan(10);
     // the player is at the centre of a car-up map
@@ -1031,7 +1031,7 @@ test.describe("plan()", () => {
 
   test("northUp switches to the world frame", async ({ page }) => {
     await load(page, "monza", 0.28, 60);
-    const pl = await page.evaluate(() => window.__apex.plan({ northUp: true }));
+    const pl = await page.evaluate(() => window.__apex.render({ what: "map", northUp: true }));
     expect(pl.frame).toContain("north-up");
     expect(pl.scale.note).toContain("east");
   });
@@ -1039,15 +1039,15 @@ test.describe("plan()", () => {
   test("a bigger radius covers more track", async ({ page }) => {
     await load(page, "monza", 0.28, 60);
     const r = await page.evaluate(() => ({
-      near: window.__apex.plan({ radiusM: 80 }).corners.length,
-      far: window.__apex.plan({ radiusM: 600 }).corners.length,
+      near: window.__apex.render({ what: "map", radiusM: 80 }).corners.length,
+      far: window.__apex.render({ what: "map", radiusM: 600 }).corners.length,
     }));
     expect(r.far).toBeGreaterThanOrEqual(r.near);
   });
 
   test("errors before a track is loaded", async ({ page }) => {
     await boot(page);
-    const pl = await page.evaluate(() => window.__apex.plan());
+    const pl = await page.evaluate(() => window.__apex.render({ what: "map" }));
     expect(pl).toBeTruthy();
     if (pl.ok === false) expect(pl.fix).toContain("race");
     else expect(pl.grid).toBeTruthy();
@@ -1285,7 +1285,7 @@ test.describe("worldModel()", () => {
 
   test("summary aggregates thousands of objects into a readable document", async ({ page }) => {
     await load(page);
-    const w = await page.evaluate(() => window.__apex.worldModel({ detail: "summary" }));
+    const w = await page.evaluate(() => window.__apex.render({ what: "circuit", detail: "summary" }));
     expect(w.track.id).toBe("monza");
     expect(w.totals.objects).toBeGreaterThan(1000);
     expect(w.totals.registryComplete).toBe(true);
@@ -1303,7 +1303,7 @@ test.describe("worldModel()", () => {
     // The bug this pins: trees spaced under the cluster gap all the way round a
     // park circuit collapsed into ONE feature covering 5,741 m of a 5,777 m lap.
     // True, and a useless description of the place.
-    const w = await page.evaluate(() => window.__apex.worldModel());
+    const w = await page.evaluate(() => window.__apex.render({ what: "circuit" }));
     const lap = w.track.lengthM;
     for (const f of w.features) {
       expect(f.runLengthM).toBeLessThan(lap * 0.2);
@@ -1314,7 +1314,7 @@ test.describe("worldModel()", () => {
 
   test("landmarks are structures, not repeated dressing", async ({ page }) => {
     await load(page);
-    const w = await page.evaluate(() => window.__apex.worldModel());
+    const w = await page.evaluate(() => window.__apex.render({ what: "circuit" }));
     const kinds = new Set(w.landmarks.map((l) => l.kind));
     // ridge/peak are landform SEGMENTS emitted in their hundreds — if they leak
     // into landmarks they bury the things a driver would actually point at
@@ -1334,7 +1334,7 @@ test.describe("worldModel()", () => {
 
   test("linear furniture is spans, not thousands of segments", async ({ page }) => {
     await load(page);
-    const w = await page.evaluate(() => window.__apex.worldModel());
+    const w = await page.evaluate(() => window.__apex.render({ what: "circuit" }));
     expect(w.spans.length).toBeLessThan(60);
     expect(w.spans.length, "a built Monza reported no linear furniture at all").toBeGreaterThan(0);
     for (const s of w.spans) {
@@ -1351,7 +1351,7 @@ test.describe("worldModel()", () => {
 
   test("sections walk the lap corner by corner", async ({ page }) => {
     await load(page);
-    const w = await page.evaluate(() => window.__apex.worldModel({ detail: "sections" }));
+    const w = await page.evaluate(() => window.__apex.render({ what: "circuit", detail: "sections" }));
     expect(w.sections.length).toBeGreaterThan(3);
     let sum = 0;
     for (const s of w.sections) {
@@ -1368,8 +1368,8 @@ test.describe("worldModel()", () => {
   test("full paginates the raw object list", async ({ page }) => {
     await load(page);
     const r = await page.evaluate(() => {
-      const a = window.__apex.worldModel({ detail: "full", limit: 50 });
-      const b = window.__apex.worldModel({ detail: "full", offset: 50, limit: 50 });
+      const a = window.__apex.render({ what: "circuit", detail: "full", limit: 50 });
+      const b = window.__apex.render({ what: "circuit", detail: "full", offset: 50, limit: 50 });
       return { aN: a.objects.length, aPage: a.objectPage,
                bFirst: b.objects[0], aFifty: a.objects[49] };
     });
@@ -1383,7 +1383,7 @@ test.describe("worldModel()", () => {
   test("sign boards keep their meaning", async ({ page }) => {
     await load(page, "suzuka");
     const boards = await page.evaluate(() =>
-      window.__apex.worldModel({ detail: "full", limit: 5000 })
+      window.__apex.render({ what: "circuit", detail: "full", limit: 5000 })
         .objects.filter((o) => o.board));
     expect(boards.length).toBeGreaterThan(0);
     // a corner board names its turn; a braking board names its distance
@@ -1392,7 +1392,7 @@ test.describe("worldModel()", () => {
 
   test("rejects an unknown detail level", async ({ page }) => {
     await load(page);
-    const w = await page.evaluate(() => window.__apex.worldModel({ detail: "everything" }));
+    const w = await page.evaluate(() => window.__apex.render({ what: "circuit", detail: "everything" }));
     expect(w.ok).toBe(false);
     expect(w.error).toBe("BadArgumentError");
     expect(w.message).toContain("summary");
@@ -1636,38 +1636,6 @@ test.describe("render() consolidation", () => {
     expect(r.error).toBe("BadArgumentError");
     expect(r.message).toMatch(/view.*map.*circuit.*car|view/);
   });
-
-  test("render({what:'view'}) equals the frame() alias it replaces", async ({ page }) => {
-    await load(page);
-    const same = await page.evaluate(() => {
-      const viaRender = window.__apex.render({ what: "view", cols: 44, camera: "chase" });
-      const viaAlias = window.__apex.frame({ cols: 44, camera: "chase" });
-      return JSON.stringify(viaRender.grid.lines) === JSON.stringify(viaAlias.grid.lines);
-    });
-    expect(same).toBe(true);
-  });
-});
-
-// ── scene({visible}) absorbs visible() ───────────────────────────────────────
-
-test.describe("scene({visible}) consolidation", () => {
-  test.use({ viewport: LANDSCAPE });
-
-  test("scene({visible:true}) returns the same on-screen list as visible()", async ({ page }) => {
-    await load(page);
-    const eq = await page.evaluate(() => {
-      const viaScene = window.__apex.scene({ visible: true });
-      const viaAlias = window.__apex.visible();
-      // structurally the same query — compare the stable summary fields
-      return { sOk: viaScene.ok !== false, aOk: viaAlias.ok !== false,
-               sCars: (viaScene.cars || []).length, aCars: (viaAlias.cars || []).length,
-               sKeys: Object.keys(viaScene).sort().join(","),
-               aKeys: Object.keys(viaAlias).sort().join(",") };
-    });
-    expect(eq.sOk).toBe(true);
-    expect(eq.sKeys).toBe(eq.aKeys);
-    expect(eq.sCars).toBe(eq.aCars);
-  });
 });
 
 // ── scene() ─────────────────────────────────────────────────────────────────
@@ -1792,7 +1760,7 @@ test.describe("visible()", () => {
   test("reports scenery chunks inside the camera frustum", async ({ page }) => {
     await load(page);
     await renderFrames(page);
-    const v = await page.evaluate(() => window.__apex.visible({ limit: 4 }));
+    const v = await page.evaluate(() => window.__apex.scene({ visible: true, limit: 4 }));
     expect(v.scenery.available).toBe(true);
     expect(v.scenery.cellSizeM).toBe(72);
     expect(v.scenery.totalCells).toBeGreaterThan(50);
@@ -1811,7 +1779,7 @@ test.describe("visible()", () => {
     await load(page);
     await renderFrames(page);
     const p = await page.evaluate(() =>
-      window.__apex.visible().cars.find((c) => c.isPlayer));
+      window.__apex.scene({ visible: true }).cars.find((c) => c.isPlayer));
     expect(p.inFrame).toBe(true);
     expect(p.screenPct[0]).toBeGreaterThan(20);
     expect(p.screenPct[0]).toBeLessThan(80);
@@ -1824,7 +1792,7 @@ test.describe("visible()", () => {
   test("screenPct is null for anything not in frame", async ({ page }) => {
     await load(page);
     await renderFrames(page);
-    const cars = await page.evaluate(() => window.__apex.visible().cars);
+    const cars = await page.evaluate(() => window.__apex.scene({ visible: true }).cars);
     const off = cars.filter((c) => !c.inFrame);
     expect(off.length).toBeGreaterThan(0);
     for (const c of off) expect(c.screenPct).toBeNull();
@@ -1837,7 +1805,7 @@ test.describe("visible()", () => {
   test("a corner behind the camera is kept, flagged, and bears ~180 deg", async ({ page }) => {
     await load(page, "monza", 0.05, 60);
     await renderFrames(page);
-    const cs = await page.evaluate(() => window.__apex.visible().corners);
+    const cs = await page.evaluate(() => window.__apex.scene({ visible: true }).corners);
     const behind = cs.find((c) => c.behindCamera);
     expect(behind).toBeTruthy();
     expect(behind.screenPct).toBeNull();
@@ -1850,7 +1818,7 @@ test.describe("visible()", () => {
     await renderFrames(page);
     const v = await page.evaluate(() => {
       window.__apex.headless(true);
-      const out = window.__apex.visible();
+      const out = window.__apex.scene({ visible: true });
       window.__apex.headless(false);
       return out;
     });

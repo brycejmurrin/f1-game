@@ -108,6 +108,7 @@ const FULL = [
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/game/light-presets.js",
+  "js/game/physics-consts.js",
   "js/game/tables.js",
   "js/game/lighting.js",
   "js/game/light-store.js",
@@ -286,6 +287,7 @@ const HARD_EDGES = [
   ["js/data/lastrace.js", "js/data/hub.js"],
   ["js/data/live.js", "js/data/hub.js"],
   ["js/game/tables.js", "js/game/hud.js"],      // hud destructures GameTables at eval
+  ["js/game/physics-consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/car/teams.js", "js/game/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
   ["js/game/store.js", "js/game/cam-tune.js"],  // cam-tune destructures GameStore at eval
   ["js/game/store.js", "js/game/career.js"],    // career destructures GameStore at eval
@@ -312,7 +314,7 @@ const HARD_EDGES = [
 // WHY. GLX (WebGL2) is the shipped renderer; TLX (three.js/TSL) and WGX
 // (native WebGPU) are opt-in migrations selected by the localStorage key
 // `apex26.gfxBackend`, and game.js refuses both on phones outright. So these
-// 532 KB were parsed and evaluated by essentially every visitor to be used by
+// ~550 KB were parsed and evaluated by essentially every visitor to be used by
 // essentially none — a tenth of the whole boot payload, spent on nothing.
 //
 // The machinery to defer them already existed: game.js resolves `optIn`

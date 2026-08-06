@@ -1182,16 +1182,11 @@ window.SpotifyMusic = (function () {
   return {
     available, configured, setClientId,
     connect, disconnect, status, onChange, debug, check,
-    playlists() { return lists.slice(); },
-    // What Spotify thinks is going on, for the console: the devices it can see,
-    // the SDK's own player state, and why the last play call was refused.
+    // What Spotify thinks is going on, for the console: the devices it can see
+    // and why the last play call was refused.
     devices() {
       return api("/me/player/devices")
         .then((r) => (r && r.ok ? r.json().catch(() => null) : { httpStatus: r && r.status }));
-    },
-    sdkState() {
-      if (!player || !player.getCurrentState) return Promise.resolve(null);
-      return player.getCurrentState().catch(() => null);
     },
     lastPlayError() { return lastPlayError; },
     activate,
@@ -1207,12 +1202,6 @@ window.SpotifyMusic = (function () {
     },
     prev, toggle, setShuffle, cycleRepeat, setDeviceVolume, searchPlaylists, playUri,
     useAsMusic, inUse,
-    nowPlaying() {
-      return { title, artist, art, paused, progressMs, durationMs,
-        shuffle: shuffleOn, repeat: repeatMode, device: devName,
-        volume: devVol, supportsVolume: devSupportsVol };
-    },
-    refreshDevices() { return loadDevices(); },
     backend() { return BACKEND; },
     redirectUri, handleRedirect,
   };

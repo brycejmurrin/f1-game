@@ -1,6 +1,6 @@
 /* Apex 26 — AgentView: the agent-facing JSON view of the running game.
 
-   __apex is a dev console: ~89 flat hooks, each answering one narrow question,
+   __apex is a dev console: ~180 flat hooks, each answering one narrow question,
    most of them returning bare `false`/`null` when they can't. That is the right
    shape for a human at a REPL and the wrong shape for a text-only agent, which
    needs (a) one egocentric snapshot per decision, (b) semantics next to the
@@ -2231,9 +2231,9 @@ const AgentView = (function () {
     // world()/scene()/trackInfo(); render() is for coarse spatial intuition and
     // human-readable debugging, not for reading geometry off the pixels.
     //
-    // frame()/plan()/worldModel()/visible() stay exported as deprecated aliases so the
-    // dev console and older callers keep working; the agent-facing surface is
-    // this one call.
+    // (frame()/plan()/worldModel()/visible() were exported as deprecated
+    // aliases for a while; every caller has been migrated to render({what})
+    // and scene({visible}), so the internals below are no longer exported.)
     function render(opts) {
       const o = opts || {};
       const what = o.what || "view";
@@ -2450,8 +2450,6 @@ const AgentView = (function () {
             + "(default 10) while physics runs every tick",
           "render({what}) and scene({visible:true}) reflect the LAST RENDERED "
             + "frame and are stale under headless(true) — flagged when so",
-          "frame()/plan()/worldModel()/visible() remain as DEPRECATED aliases — "
-            + "prefer render({what}) and scene({visible})",
         ],
       };
     }
@@ -2806,8 +2804,6 @@ const AgentView = (function () {
 
     return { world, field, trackInfo, scene, describe, query, atmosphere, objective,
              carView, render, survey, rollout, agentHelp, corners, terminal,
-             // deprecated aliases — prefer render({what}) and scene({visible})
-             visible, worldModel, frame, plan,
              API_VERSION, PHYSICS_VERSION };
   }
 

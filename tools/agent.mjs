@@ -200,11 +200,11 @@ const opts = {
         case "visible":
           return a.scene({ visible: true, limit: o.limit || undefined });
         case "frame":
-          return a.frame({ cols: o.cols, rows: o.rows, rangeM: o.range,
+          return a.render({ what: "view", cols: o.cols, rows: o.rows, rangeM: o.range,
                            camera: o.cam || undefined, edges: o.edges,
                            limit: o.limit || undefined });
         case "plan":
-          return a.plan({ radiusM: o.radius !== 150 ? o.radius : undefined,
+          return a.render({ what: "map", radiusM: o.radius !== 150 ? o.radius : undefined,
                           cols: o.cols, northUp: o.north });
         case "car":
           return a.carView({ team: o.team || undefined, cols: o.cols || undefined,
@@ -215,7 +215,7 @@ const opts = {
                             reachM: o.reach, limit: o.limit || undefined,
                             profile: o.profileFlag });
         case "model":
-          return a.worldModel({ detail: o.modelDetail, offset: o.offset,
+          return a.render({ what: "circuit", detail: o.modelDetail, offset: o.offset,
                                 limit: o.limit || undefined });
         case "rollout":
           return a.rollout({ seconds: o.seconds, samples: o.samples,

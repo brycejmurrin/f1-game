@@ -1049,10 +1049,6 @@ const Input = (function () {
     }
   }
 
-  function getSteerMode() {
-    return steerMode;
-  }
-
   // Tilt sensitivity, driven by the in-game TILT RANGE slider. deg = tilt for
   // full lock (higher = less sensitive).
   function setTiltSensitivity(deg) {
@@ -1251,7 +1247,6 @@ const Input = (function () {
     simTiltReset,
     steerToTilt,
     setSteerMode,
-    getSteerMode,
     setTimeScale,
     setTiltSensitivity,
     setTiltSmoothing,

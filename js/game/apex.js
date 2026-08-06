@@ -2645,11 +2645,6 @@ const api = {
   // scene()/trackInfo(). The result carries an `aid` note saying so.
   render(opts) { return agentView.render(opts); },
 
-  // frame/plan — DEPRECATED aliases, kept for the dev console and older callers.
-  // Prefer render({what:"view"}) and render({what:"map"}).
-  frame(opts) { return agentView.frame(opts); },
-  plan(opts) { return agentView.plan(opts); },
-
   // carView({team, parts}?) — the car as JSON: team identity, livery colours,
   // the full parts spec and its stat effects, the per-team chassis silhouette
   // knobs, and measured geometry from a real Car3D build. Replaces the car
@@ -2663,13 +2658,6 @@ const api = {
   // the road, holes and cliffs in the ground ribbon, plus rejected models.
   // Replaces the screenshot-driven survey pass with coordinates you can act on.
   survey(opts) { return agentView.survey(opts); },
-
-  // worldModel({detail, offset, limit}?) — the WHOLE circuit as one structured
-  // document: layout, totals by kind, clustered scenery features, linear
-  // furniture spans, landmarks, and (detail:"sections") a corner-by-corner walk.
-  // detail:"full" adds the raw object list, paginated via offset/limit.
-  // DEPRECATED alias — prefer render({what:"circuit"}).
-  worldModel(opts) { return agentView.worldModel(opts); },
 
   // rollout({seconds, dt, input, policy, policyHz, samples}?) — drive an
   // interval and return a DIGEST instead of every frame: speed min/max/mean,
@@ -2708,12 +2696,6 @@ const api = {
   // answer is capped, id-bearing, and returned as prototype + instances so
   // hundreds of near-identical props cost a shape plus a position each.
   query(opts) { return agentView.query(opts); },
-
-  // visible({limit}?) — DEPRECATED alias for scene({visible:true}): scenery
-  // chunks in the camera frustum, every car with distance/bearing/screen
-  // position, and corners in view. Needs a rendered frame — typed NoFrameError
-  // under headless(true).
-  visible(opts) { return agentView.visible(opts); },
 
   // terminal() — episode end split into {done, reason}, where reason is
   // "finished" | "wrong_way" | "rescued" | null. obs().done conflates the last

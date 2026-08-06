@@ -316,8 +316,10 @@ test("js/game.js and js/game/*.js contain only APPROVED absolute speed threshold
   );
 
   // Set comparison alone would hide a second, byte-identical copy of an already
-  // approved line, so pin the count too. `closing` is deliberately duplicated.
-  assert.equal(found.length, APPROVED.length + 1);
+  // approved line, so pin the count too. (The `closing` test used to appear
+  // twice — once per collision pass — until the passes were deduplicated into
+  // pairContact(); every approved expression is unique in the source now.)
+  assert.equal(found.length, APPROVED.length);
 });
 
 test("every approved site carries a written justification", () => {

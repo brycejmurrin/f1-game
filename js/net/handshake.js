@@ -327,6 +327,5 @@ const NetHandshake = (function () {
     localBuild, checkBuild, waitForIce,
     createInvite, acceptInvite, acceptAnswer,
     inviteUrl, inviteFromUrl,
-    canCompress,
   };
 })();

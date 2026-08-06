@@ -510,7 +510,6 @@ const F1API = (function () {
     weather: weather,
     positions: positions,
     sessionDrivers: sessionDrivers,
-    sessionLaps: sessionLaps,
     fastestLap: fastestLap,
     carData: carData,
     locationData: locationData,
