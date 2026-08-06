@@ -294,6 +294,18 @@ most-load-bearing first.
   under-drives Interlagos. An agent-policy/physics-tuning issue, not a
   cleanup regression; `test:agent` is not in the CI smoke job, which is why it
   sat unseen.
+- **`#track-detail` regressed from a real `<dialog>` back to a
+  `<div role="dialog">`** in a merge (the markup at `index.html`), so it no
+  longer traps focus or joins the top layer — `tests/menu-keyboard.spec.js`'s
+  "Tab cannot escape the track-detail dialog" fails, and `topmodal.js`'s own
+  comment still says it "migrated to a real dialog". Confirmed pre-existing (red
+  at the session-start commit) and left for a dedicated fix: it is a modal
+  migration, not a markup swap — the show path (`menus.js` `modal.hidden=false`,
+  view-transition-wrapped), the close path (`data-esc-close`/uilayers), and
+  `css/track-detail.css`'s fullscreen positioning all have to move to
+  `showModal()`/`close()`/`dialog.screen` together. The restoring change already
+  exists on an unmerged commit (`33976903`); cherry-pick it rather than
+  reconstruct blind.
 - **`results.js`** the human-rival " PLAYER" tag is `appendChild`-ed and then
   destroyed by a `textContent` assignment on the next line, so it never renders
   (quali.js does the same thing in the correct order).
