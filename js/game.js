@@ -2708,8 +2708,8 @@ const G = {
   applyResMode: (...a) => applyResMode(...a),
   setPaused: (...a) => setPaused(...a),
   ltKey: (...a) => ltKey(...a),
-  // Stable helpers consumed by js/game/tuner.js.
-  setLightTune: (...a) => setLightTune(...a),
+  // (setLightTune is a hoisted function, exposed as a plain shorthand below —
+  // the deferred-arrow copy that used to sit here was a dead duplicate key.)
   exitPhotoMode: (...a) => exitPhotoMode(...a),   // const initialised below — defer
   // Stable helpers consumed by js/game/atmosphere.js.
   clamp: (v, a, b) => clamp(v, a, b),
