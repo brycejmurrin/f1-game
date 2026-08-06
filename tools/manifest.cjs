@@ -138,6 +138,7 @@ const FULL = [
   "js/game/steer-tuning.js",
   "js/game/perf.js",
   "js/game/cameras.js",
+  "js/game/cam-modes.js",
   "js/game/hud.js",
   "js/game/results.js",
   "js/game/quali.js",
@@ -287,6 +288,7 @@ const HARD_EDGES = [
   ["js/data/lastrace.js", "js/data/hub.js"],
   ["js/data/live.js", "js/data/hub.js"],
   ["js/game/tables.js", "js/game/hud.js"],      // hud destructures GameTables at eval
+  ["js/game/tables.js", "js/game/cam-modes.js"], // cam-modes destructures GameTables at eval
   ["js/game/physics-consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/car/teams.js", "js/game/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
   ["js/game/store.js", "js/game/cam-tune.js"],  // cam-tune destructures GameStore at eval

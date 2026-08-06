@@ -209,6 +209,8 @@ js/game/         — game modules, each Module.create(G) with the G ctx façade 
   store.js       GameStore      localStorage persistence
   perf.js        PerfGov        adaptive performance governor
   cameras.js     GameCams       the 13 player camera modes + debug free-cam
+  cam-modes.js   CamModes       the CAM button / picker-grid / C-key mode switch
+                                  UI (broadcast-only; mutates camMode via G)
   cam-tune.js    CamTune        CAMERA TUNER data: per-mode framing values + apply()
   cam-tuner.js   CamTunerPanel  CAMERA TUNER pause-menu panel (the UI for cam-tune)
   hud.js         GameHud        in-race DOM HUD

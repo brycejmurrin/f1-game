@@ -2606,6 +2606,7 @@ const G = {
   get camEye() { return camEye; }, set camEye(v) { camEye = v; },
   get camFov() { return camFov; }, set camFov(v) { camFov = v; },
   get camMode() { return camMode; }, set camMode(v) { camMode = v; },
+  get camCutT() { return camCutT; }, set camCutT(v) { camCutT = v; },   // for cam-modes.js
   get camRoll() { return camRoll; }, set camRoll(v) { camRoll = v; },
   get camTgt() { return camTgt; }, set camTgt(v) { camTgt = v; },
   get dbgCam() { return dbgCam; }, set dbgCam(v) { dbgCam = v; },
@@ -2752,7 +2753,8 @@ const G = {
   get netLobby() { return netLobby; },
   loadCarModel, loadTrack, persistLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
-  rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
+  setCamMode: (...a) => setCamMode(...a),   // const from CamModes.create(G) below — defer
+  rescuePlayer, setLightTune, setWeatherLive, snapGameCam,
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   wireId, carFromWireId,                // stable cross-peer car identity
   setScale,                             // UI SIZE / HUD SIZE — see __apex.uiScale
@@ -7700,92 +7702,12 @@ $("pm-hidehud").onclick = () => {
 $("hud-restore").onclick = () => setHudUserHidden(false);
 
 // ---- player camera modes (CAM button / C key) ----
-function refreshCamBtn() {
-  const b = $("btn-cam");
-  if (b) b.textContent = CAM_MODES[camMode].label;
-  // Cockpit view: the gear/speed/rpm live ON the wheel LCD — hide the floating
-  // HUD duplicates (CSS keys off this class).
-  document.body.classList.toggle("cockpit-cam", CAM_MODES[camMode].id === "cockpit");
-}
-function setCamMode(m) {
-  const prev = camMode;
-  camMode = ((m % CAM_MODES.length) + CAM_MODES.length) % CAM_MODES.length;
-  store.set("camMode", camMode);
-  if (camMode !== prev) camCutT = 0.35;   // brief eased glide into the new angle
-  refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
-  // The CAMERA TUNER edits whichever mode you are looking through, so a mode
-  // change from anywhere (C key, CAM picker, __apex.camera) must re-point its
-  // sliders. Reached through the module global, not the create() const — this
-  // function also runs at boot, before that const is initialised.
-  CamTunerPanel.refresh();
-  return CAM_MODES[camMode].id;
-}
-function cycleCam() { return setCamMode(camMode + 1); }
-// CAM button: quick tap cycles (muscle memory preserved); press-and-hold (or
-// right-click) opens a PICKER GRID of all modes — cycling one-by-one through
-// 13 cameras to reach the one you want was the worst switch in the game.
-const camPicker = (() => {
-  let el = null;
-  const build = () => {
-    el = document.createElement("div");
-    el.id = "campicker";
-    // 13 modes in a 3-wide grid leaves REAR CAM alone on the last line; the
-    // no-orphan rule (css/components.css) widens it across the row instead.
-    el.className = "no-orphan-3";
-    el.hidden = true;
-    for (let i = 0; i < CAM_MODES.length; i++) {
-      const b = document.createElement("button");
-      b.textContent = CAM_MODES[i].label;
-      b.dataset.idx = i;
-      b.onclick = (e) => { e.stopPropagation(); setCamMode(+b.dataset.idx); hide(); };
-      el.appendChild(b);
-    }
-    document.body.appendChild(el);
-  };
-  const sync = () => {
-    for (const b of el.children) b.classList.toggle("active", +b.dataset.idx === camMode);
-  };
-  const show = () => { if (!el) build(); sync(); el.hidden = false; };
-  const hide = () => { if (el) el.hidden = true; };
-  const visible = () => !!el && !el.hidden;
-  return { show, hide, visible };
-})();
-(() => {
-  const b = $("btn-cam");
-  if (!b) return;
-  let holdT = 0, held = false;
-  const HOLD_MS = 340;
-  b.addEventListener("pointerdown", () => {
-    held = false;
-    holdT = setTimeout(() => { held = true; camPicker.show(); }, HOLD_MS);
-  });
-  b.addEventListener("pointerup", () => clearTimeout(holdT));
-  b.addEventListener("pointerleave", () => clearTimeout(holdT));
-  /* A CANCELLED TOUCH IS NOT A LONG PRESS. iOS cancels touches routinely — an
-     edge swipe, a notification, its own gesture arbitration — and a touch
-     pointer holds implicit capture, so `pointerleave` does not fire for one
-     either: neither line above ran, the 340 ms timer went off, and the
-     thirteen-mode camera picker opened mid-corner. `held` then stayed true and
-     ate the NEXT genuine tap as the hold's trailing click, so the camera button
-     appeared to do nothing at all until it was pressed twice. */
-  const cancelHold = () => { clearTimeout(holdT); held = false; };
-  b.addEventListener("pointercancel", cancelHold);
-  b.addEventListener("lostpointercapture", cancelHold);
-  b.addEventListener("contextmenu", (e) => { e.preventDefault(); camPicker.show(); });
-  // Cycle on CLICK (not pointerup): synthetic .click() from tests/assistive tech
-  // works unchanged, and a real tap fires it after pointerup anyway. When the
-  // hold already opened the picker, swallow that one trailing click.
-  b.onclick = () => {
-    if (held) { held = false; return; }
-    if (camPicker.visible()) { camPicker.hide(); return; }
-    cycleCam();
-  };
-  // Tap anywhere outside the grid closes it.
-  document.addEventListener("pointerdown", (e) => {
-    if (camPicker.visible() && e.target !== b && !e.target.closest("#campicker")) camPicker.hide();
-  });
-})();
-refreshCamBtn();
+// The CAM button + picker grid + mode-cycle wiring live in js/game/cam-modes.js
+// (broadcast-only — no physics). game.js keeps `camMode`/`camCutT` as closure
+// state (the render loop reads them); the module mutates them through G. The
+// façade exposes setCamMode as a deferred arrow (const initialised here), and
+// the update loop's `cycleCam()` closes over this const.
+const { setCamMode, cycleCam } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false); startRace(); };
