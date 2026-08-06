@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [claude/f1-game-project-26h3ng]
+    branches: [main]
   workflow_dispatch:
 
 permissions:

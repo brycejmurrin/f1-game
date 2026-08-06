@@ -71,7 +71,7 @@ on:
     # Every branch EXCEPT the deploy branch — that one reaches this workflow
     # through pages.yml's `uses:` call instead, so it is gated exactly once
     # rather than running twice in parallel against itself.
-    branches-ignore: [claude/f1-game-project-26h3ng]
+    branches-ignore: [main]
   pull_request:
   workflow_call:      # pages.yml gates its deploy on this
 
