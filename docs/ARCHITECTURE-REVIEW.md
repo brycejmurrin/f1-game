@@ -287,12 +287,28 @@ most-load-bearing first.
   mirror floor is 0.15 vs GLSL's 0.55), and the MIRROR chrome surface id 27
   exists only in GLSL, so chrome liveries lose their mirror on both WGX and TLX.
   These are renderer-parity work, not GLX defects.
+- **`results.js`** the human-rival " PLAYER" tag is `appendChild`-ed and then
+  destroyed by a `textContent` assignment on the next line, so it never renders
+  (quali.js does the same thing in the correct order).
+- **Test-quality gaps** (from the whole-`tests/` read). One true never-fail:
+  `tests/ui-button-touch.spec.js`'s "throttle button visible" wraps its only
+  `expect` in `if (count > 0)`, so a missing button passes. `menu-survey` and
+  `parts-catalog` join the known `ui-audit`/`ui-desktop` galleries as
+  assertion-light. The banked-reference measurement error (fixed in the Monza and
+  Spa foundation specs with a local `Tracks.banking()` term) is still latent in
+  **Zandvoort's** foundation spec and ~12 others whose probes miss a bankZone —
+  the durable `groundY`/`overRoad` fix above is what retires the whole class.
+  `tests/coplanar-faces.test.mjs` kept the `>= 24` roster floor its sibling
+  `prop-clipping.test.mjs` tightened to `=== roster`, so its sweep can silently
+  drop 16 circuits. The lone `.test.cjs` suite is invisible to the doc-count
+  regexes.
 - **Smaller, catalogued but not itemised here**: `api.js` gives an upcoming GP's
   session list the 7-day historic cache TTL; `sdp.js` `pack()` over-allocates one
   byte (a stray `0x00`, decode-harmless); `live.js`'s gap bars read a `timeDiff`
   field `F1API.positions()` never returns (also in the archived audit); the
-  EXPORT data tab still hardcodes its year list. The full survey with line
-  references is the backlog record for the cleanup.
+  EXPORT data tab still hardcodes its year list; several dev tools have
+  exit-0 error paths and hardcoded chromium/port assumptions. The full 11-part
+  survey with line references is the backlog record for the cleanup.
 
 ---
 
