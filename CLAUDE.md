@@ -26,7 +26,7 @@ tools/README.md                       # the index of all 60+ tools (test-asserte
 **The reference is `docs/TESTING.md`** — every group, every spec, fixtures,
 philosophy. `tests/test-groups.test.mjs` fails if it and `package.json`
 disagree. Concurrency and worktrees: `docs/PARALLEL-WORK.md`. The suite is
-110 Playwright specs plus 56 `node --test` unit suites; the browser half is
+110 Playwright specs plus 57 `node --test` unit suites; the browser half is
 SwiftShader-rendered and slow, which forces three rules:
 
 **1. Run browser groups in the BACKGROUND — never block, never poll.**
@@ -309,7 +309,7 @@ css/             tokens.css + components/menus/hud/overlays/carsetup/data/tuner/
 index.html       shell — script tags, all static DOM, cache-bust version
 sw.js            service worker — precache derived from the shell's own tags
 tools/           see tools/README.md (bidirectionally test-asserted index)
-tests/           110 Playwright specs + 56 `node --test` unit suites (docs/TESTING.md)
+tests/           110 Playwright specs + 57 `node --test` unit suites (docs/TESTING.md)
 docs/            the reference library — docs/README.md is the index
 .claude/         skills/ (task recipes, .claude/skills/README.md) and
                  workflows/ (multi-agent orchestration scripts, README there)

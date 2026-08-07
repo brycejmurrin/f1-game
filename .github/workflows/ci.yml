@@ -124,6 +124,28 @@ jobs:
         run: npm run test:tooling-fast
       - name: Every test file belongs to a topical group
         run: npm run test:audit
+      # WHAT DOES THIS GATE ACTUALLY EXECUTE? A report, never a gate.
+      #
+      # This workflow's whole history is checks that were not checking: it
+      # deployed on every push running NOTHING; its smoke step ran a suite three
+      # times its budget and reported `cancelled`; physics-characterization
+      # drifted through 175 commits of physics work in no job at all. Every one
+      # of those was invisible because nothing said out loud how much of the
+      # suite the gate covers. Today: 2 of 110 Playwright specs. That is a
+      # deliberate choice — the full suite is ~40 minutes of SwiftShader and the
+      # header above explains why it lives in tools/test-bg.mjs instead — but it
+      # should be a choice someone can SEE, not one only visible by reading four
+      # job definitions and resolving every npm script by hand.
+      #
+      # NOT a gate, on purpose. The obvious version — run tools/test-observed.mjs
+      # here and fail on the never-observed count — is broken by construction:
+      # artifacts/ is gitignored, so in CI every title is legitimately unobserved
+      # and the check would be red on an environment fact. That is precisely the
+      # trap that reddened this job once already (docs/research/CAMPAIGN-2026-08
+      # §"a guard that only runs on ONE MACHINE"). tests/ci-coverage.test.mjs
+      # guards the TOOL, which is where a guard belongs.
+      - name: What does this gate cover?
+        run: node tools/ci-coverage.mjs
       - name: Pure-node unit suites
         run: |
           npm run test:net-unit

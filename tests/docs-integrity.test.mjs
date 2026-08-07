@@ -98,6 +98,12 @@ const SOURCE_EXEMPT = new Map([
   // Fake package.json scripts inside the coverage-audit's own fixtures.
   ["tests/alpha.spec.js", /test-coverage-audit\.test\.mjs|docs-integrity/],
   ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],
+  // A path that MUST NOT EXIST. ci-coverage.mjs's glob resolver has to return
+  // nothing for a spec that is not on disk, and the only way to test that is to
+  // name one — so this entry is not a stale reference being tolerated, it is
+  // the assertion. If someone ever creates the file, the test stops proving
+  // anything and should fail; keeping the name absurd is what prevents that.
+  ["tests/there-is-no-such.spec.js", /ci-coverage\.test\.mjs|docs-integrity/],
   // Forward references to the POST-SPLIT tree. tools/tests-split.mjs plans the
   // tests/ move (AUDIT-SYNTHESIS §R2) and its guard asserts the planned
   // destinations, so both must name tests/specs/ and tests/unit/ before either
