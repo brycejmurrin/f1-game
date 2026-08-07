@@ -129,7 +129,7 @@ js/render/       — renderers —
   assets.js      Assets         baked asset-pack loader (assets/pack); every failure
                                   falls back to the procedural look
   webgpu/        WGX            WebGPU backend — DEFERRED (no script tag), frozen,
-                                  not at GLX parity (no volumetrics/PCSS/MSAA/gpuTimer/
+                                  not at GLX parity (no volumetrics/MSAA/gpuTimer/
                                   createTextureArray)
   three/         TLX            three.js r184/TSL backend — DEFERRED, opt-in via
                                   localStorage apex26.gfxBackend="three"; installed by

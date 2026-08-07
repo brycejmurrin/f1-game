@@ -135,14 +135,17 @@ function apply(mode, eye, tgt, fov) {
   if (!prof) return fov;
   const h = prof.height || 0, d = prof.dist || 0, sd = prof.side || 0;
   const pi = prof.pitch || 0, ya = prof.yaw || 0, fo = prof.fov || 0;
-  // Horizontal view direction, and the right vector perpendicular to it. Same
-  // (fz, -fx) right-hand convention the physics integrator and the chase rig
-  // use, so +SIDE is the same "right" the driver would call right.
+  // Horizontal view direction, and the right vector perpendicular to it.
+  // RIGHT of forward (fx, fz) in this Y-up world is (-fz, fx) — measured:
+  // (fz, -fx) dotted against the track's own right vector reads -0.99, i.e.
+  // it is the LEFT vector. This code shipped with (fz, -fx) copied from a
+  // mislabelled physics comment, so the SIDE knob moved the eye LEFT while
+  // its help text said right (and YAW panned left, below).
   let fx = tgt[0] - eye[0], fz = tgt[2] - eye[2];
   let fl = Math.hypot(fx, fz);
   if (fl < 1e-4) { fx = 0; fz = 1; fl = 1; }   // straight-down aim (overhead): fall back to +Z
   fx /= fl; fz /= fl;
-  const rx = fz, rz = -fx;
+  const rx = -fz, rz = fx;
   if (h || d || sd) {
     // Translate the EYE only — the aim point stays where the mode put it, so
     // the car cannot slide out of frame no matter how these are dialled.
@@ -154,7 +157,9 @@ function apply(mode, eye, tgt, fov) {
     let dx = tgt[0] - eye[0], dy = tgt[1] - eye[1], dz = tgt[2] - eye[2];
     if (ya) {
       const c = Math.cos(ya * DEG), s = Math.sin(ya * DEG);
-      const nx = dx * c + dz * s, nz = dz * c - dx * s;   // + = pan toward the right vector
+      // + = pan toward the RIGHT vector (-fz, fx) — the rotation direction is
+      // flipped together with rx/rz above so SIDE and YAW agree.
+      const nx = dx * c - dz * s, nz = dz * c + dx * s;
       dx = nx; dz = nz;
     }
     if (pi) {

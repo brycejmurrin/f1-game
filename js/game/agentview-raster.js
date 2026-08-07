@@ -568,7 +568,7 @@ const AgentRaster = (function () {
       const carUp = o.northUp ? false : true;
       if (p && p.px != null) { ox = p.px; oz = p.pz; }
       else {
-        const b = Tracks; Tracks.sample(G.track, 0, scr); ox = scr.p[0]; oz = scr.p[2];
+        Tracks.sample(G.track, 0, scr); ox = scr.p[0]; oz = scr.p[2];
       }
       let bodyUp = false;
       if (carUp && p && p.head != null) {

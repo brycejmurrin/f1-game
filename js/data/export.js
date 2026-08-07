@@ -209,8 +209,14 @@ const DataExport = (function () {
       "(traces JSON + a labelled map image per circuit) and send it to me."));
 
     const yearRow = el("div", "dh-pick-years");
-    const sel = { year: 2025 };
-    [2025, 2024, 2023].forEach(function (y) {
+    // Newest first, back to 2023 where OpenF1's data begins. Derived from the
+    // clock like hub.js's YEARS, because a hardcoded [2025, 2024, 2023] stops
+    // offering the CURRENT season — the exact trap the sibling picker purged.
+    const OPENF1_FIRST_YEAR = 2023;
+    const years = [];
+    for (let y = Math.max(new Date().getFullYear(), OPENF1_FIRST_YEAR); y >= OPENF1_FIRST_YEAR; y--) years.push(y);
+    const sel = { year: years[0] };
+    years.forEach(function (y) {
       const b = el("button", "dh-pill" + (y === sel.year ? " dh-active" : ""), String(y));
       b.addEventListener("click", function () {
         sel.year = y;
@@ -240,7 +246,7 @@ const DataExport = (function () {
       if (running) return;
       running = true; result = null; dlBtn.disabled = true; logs.length = 0;
       gatherBtn.textContent = "Gathering…";
-      log("Gathering " + sel.year + " — this can take a minute…");
+      log("Gathering " + sel.year + " — this can take ~10 min…");
       gatherStartLines(sel.year, log).then(function (res) {
         result = res; dlBtn.disabled = false;
         log("Ready to download.");

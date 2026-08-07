@@ -281,6 +281,21 @@ that a failed write is indistinguishable from a successful one.
 None of this was implemented in this pass — it is a behaviour change to the
 persistence layer and deserves its own commit and its own test.
 
+> **Postscript (2026-08): the fix shipped.** `js/game/store.js` no longer
+> swallows anything: every failed read or write goes through `noteBroken()`,
+> which records the DOMException name on `store.broken`, emits one loud
+> `Log.warn("game", …)` on the FIRST failure ("settings and saves will NOT
+> survive a reload", with the iOS-Private-Browsing hint on
+> `QuotaExceededError`) and buffer-only `Log.info` on every later one, and
+> `__apex.persistState()` (js/game/apex.js) exposes the state so the failure
+> is testable. Of the four recommendations above: **#1 is done**; **#3 is
+> half-done** (the first failure is announced plainly, but via `Log` on first
+> use rather than a boot-time probe, and there is still no player-facing
+> message); **#2 and #4 remain open** — `set()` still returns nothing, and
+> `apex26.customLogo` is still a data URL in localStorage. The 4b table below
+> is the pre-fix measurement; `js/game.js` has since gained 1 `Log` call (the
+> race-start envelope line).
+
 ## Sources (Part 4)
 
 - [MDN — Storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) — the ~5 MiB per-origin figure

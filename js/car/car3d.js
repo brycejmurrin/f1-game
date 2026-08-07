@@ -73,7 +73,9 @@ const Car3D = (function () {
   //   noseSlim  ×   tip width+height scale                (0.82..1.18)
   //   noseDroop m   tip vertical drop (classic droop nose) (−0.03..+0.01)
   //   airbox    ×   intake scale multiplier on the engine recipe
-  //   fin       0|1|2  engine-cover dorsal fin: none / low blade / shark fin
+  //   fin       0|1|2  engine-cover dorsal fin: none / low blade / tall blade
+  //                 (a SECONDARY ridge blade — the sharkFin tail plate itself
+  //                  is a separate part every non-cockpit car carries)
   //   mirror    0|1|2  housing style: standard / swept-wide / low-slung
   //   inlet     m   sidepod inlet-top bias: +taller / −squashed (±0.035)
   const DEFAULT_STYLE = Object.freeze({ noseTipZ: 0, noseSlim: 1, noseDroop: 0,
@@ -1716,9 +1718,11 @@ const Car3D = (function () {
           0.014, 0.30, [0.30,0.28,0.26], SURFACES.metal);
       }
       // Team-style DORSAL FIN along the engine-cover ridge: 1 = low blade,
-      // 2 = full shark fin. Body-colour plate with an accent crest line — a
-      // strong per-team silhouette tell from chase and TV cameras. Starts
-      // behind the snorkel zone (z −0.95) so the two never intersect.
+      // 2 = tall blade. A SECONDARY ridge blade distinct from the sharkFin
+      // tail plate below (which every non-cockpit car carries). Body-colour
+      // plate with an accent crest line — a strong per-team silhouette tell
+      // from chase and TV cameras. Starts behind the snorkel zone (z −0.95)
+      // so the two never intersect.
       if (teamStyle.fin) {
         const finH = teamStyle.fin >= 2 ? 0.19 : 0.095;
         const ff = anchors.coverAt(-0.95), fr = anchors.coverAt(-1.85);
@@ -1765,14 +1769,13 @@ const Car3D = (function () {
       }
     }
 
-    // SPONSOR BOARD. The titleA wordmark is podDecal(R.titleA, 0.24, 0.84), so the
-    // board must cover yFrac 0.24..0.84 — centre 0.54, height 0.60 x pod height.
-    // At 0.55/0.18 the decal was TALLER than its board at every station, spilling
-    // the glyph tops and tails onto the body paint. One ink then had to serve a
-    // pale board and the paint at once, which is why 70% of liveries fell back to
-    // a halo. 0.20 m clears 0.60 x pod height front, mid and rear (the helper's
-    // own (top-bottom)*0.78 cap does not bite), so the mark sits WHOLLY on the
-    // board and liverytex can ink it for that one colour.
+    // SPONSOR BOARD. The titleA wordmark is podDecal(R.titleA, 0.32, 0.80), so
+    // the board must cover yFrac 0.32..0.80 — centre 0.56, height 0.48 x pod
+    // height (the fracH=true call below). A board shorter than its decal spills
+    // the glyph tops and tails onto the body paint, forcing one ink to serve a
+    // pale board and the paint at once — which is why 70% of liveries once fell
+    // back to a halo; the fractional sizing keeps the mark WHOLLY on the board
+    // at every station so liverytex can ink it for that one colour.
     // Sized in POD FRACTIONS so each band tracks the taper and nothing overlaps:
     // the accent band holds the strip (yFrac 0.08..0.30), the board holds titleA
     // (0.32..0.80), and the accentC flash below sits at 0.88 with its lower edge
@@ -1930,11 +1933,18 @@ const Car3D = (function () {
     // the stripe reads continuous from every camera. Only the cockpit opening
     // legitimately interrupts it. ---
     const stripeC = liv.stripe || null;
+    // Nose TIP z moves per team (TEAM_STYLE.noseTipZ, ±0.10): the cap and both
+    // stripes must end at the STYLED tip, not the shared 3.18 datum, or the
+    // paint floats past a short nose (haas) / stops short of a long one
+    // (williams). anchors.noseAt clamps y/w beyond the tip station, so only
+    // the z endpoints need deriving.
+    const styledTipZ = styledNoseStations(teamStyle)[0].z;
+    const stripeTipZ = styledTipZ - 0.04;
     if (stripeC) {
-      const ns314 = anchors.noseAt(3.14), ns270 = anchors.noseAt(2.70);
+      const ns314 = anchors.noseAt(stripeTipZ), ns270 = anchors.noseAt(2.70);
       const ns155 = anchors.noseAt(1.55), ns105 = anchors.noseAt(1.05);
       addLoft(out, 2.70, 0, ns270.top + 0.012, 0.075, 0.014,
-             3.14, 0, ns314.top + 0.012, 0.040, 0.012, stripeC);
+             stripeTipZ, 0, ns314.top + 0.012, 0.040, 0.012, stripeC);
       addLoft(out, 1.55, 0, ns155.top + 0.012, 0.13, 0.016,
              2.70, 0, ns270.top + 0.012, 0.075, 0.014, stripeC);
       addLoft(out, 1.05, 0, ns105.top + 0.012, 0.12, 0.016,
@@ -1953,21 +1963,22 @@ const Car3D = (function () {
     // crisply on top instead of z-fighting. ---
     const noseStripeC = liv.noseStripe || null;
     if (noseStripeC) {
-      const ns155 = anchors.noseAt(1.55), ns270 = anchors.noseAt(2.70), ns314 = anchors.noseAt(3.14);
+      const ns155 = anchors.noseAt(1.55), ns270 = anchors.noseAt(2.70), ns314 = anchors.noseAt(stripeTipZ);
       addLoft(out, 1.55, 0, ns155.top + 0.016, 0.115, 0.014,
              2.70, 0, ns270.top + 0.016, 0.064, 0.012, noseStripeC);
       addLoft(out, 2.70, 0, ns270.top + 0.016, 0.064, 0.012,
-             3.14, 0, ns314.top + 0.016, 0.036, 0.010, noseStripeC);
+             stripeTipZ, 0, ns314.top + 0.016, 0.036, 0.010, noseStripeC);
     }
 
     // --- Livery `nose` tip cap: a painted band wrapping the slim nose tip, sitting
     // fractionally proud of the nose wedge so it reads as a distinct-colour nose
     // cone (a staple real-F1 livery element). Only when the livery specifies it. ---
     if (noseC) {
-      const nt = anchors.noseAt(3.18), nb = anchors.noseAt(2.80);
-      addSpan(out, { z: 3.185, y: (nt.bottom + nt.top) * 0.5, w: nt.side*2 + 0.010,
+      const capRearZ = styledTipZ - 0.38;
+      const nt = anchors.noseAt(styledTipZ), nb = anchors.noseAt(capRearZ);
+      addSpan(out, { z: styledTipZ + 0.005, y: (nt.bottom + nt.top) * 0.5, w: nt.side*2 + 0.010,
                      h: nt.top - nt.bottom + 0.010, t: 0.70 },
-                   { z: 2.80, y: (nb.bottom + nb.top) * 0.5, w: nb.side*2 + 0.010,
+                   { z: capRearZ, y: (nb.bottom + nb.top) * 0.5, w: nb.side*2 + 0.010,
                      h: nb.top - nb.bottom + 0.010, t: 0.86 }, noseC);
     }
     // --- Livery `pod` panel: a bold contrasting block on each sidepod flank,

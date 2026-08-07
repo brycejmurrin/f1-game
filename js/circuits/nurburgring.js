@@ -445,49 +445,12 @@
           [26, 1.6, 1.3], [0.10, 0.12, 0.20], b);       // lettering band
       }
 
-      // BURG NÜRBURG. The circuit is named after a 12th-century castle standing
-      // on a volcanic cone in the middle of the lap, and it is visible from most
-      // of the GP-Strecke — the single most identifying object in the Eifel and
-      // one no other track on the calendar can borrow. Built on its own hill in
-      // the backdrop ring so it sits above the treeline rather than in it.
-      {
-        const bx = cx + Math.cos(2.35) * (rad + 210), bz = cz + Math.sin(2.35) * (rad + 210);
-        const hillH = 96;
-        mountain(bx, bz, pyMin, 300, hillH, {
-          seg: 8, rough: 0.22, seed: 991, snowline: 2,
-          forest: [0.10, 0.28, 0.14], rock: [0.36, 0.35, 0.33],
-        });
-        // Ruined masonry stepping up the cone: a broken curtain wall low down,
-        // the keep on the summit. mountain() tapers from a ring at 0.70·h and
-        // 0.34·baseR up to the apex, so every piece is seated on that cone
-        // rather than on one flat guess — otherwise the keep floats and the
-        // curtain sinks, or the other way round.
-        const KEEP = [0.52, 0.50, 0.46], KEEP_D = [0.42, 0.40, 0.37];
-        const R70 = 300 * 0.5 * 0.34;
-        const surfY = (r) =>
-          pyMin + hillH * (r >= R70 ? 0.70 : 0.70 + 0.30 * (1 - r / R70));
-        for (let i = 0; i < 7; i++) {
-          // Ragged curtain: alternate merlons and collapsed gaps.
-          if (i === 3) continue;
-          const ang = i / 7 * 6.2832, r = 38;
-          const wx = bx + Math.cos(ang) * r, wz = bz + Math.sin(ang) * r;
-          const hh = i & 1 ? 12 : 8;
-          addBox(out, [wx, surfY(r) - 3 + hh / 2, wz], [10, hh, 10],
-            i & 1 ? KEEP : KEEP_D, null);
-        }
-        const yK = surfY(0) - 3;
-        addBox(out, [bx, yK + 13, bz], [20, 26, 20], KEEP, null);          // keep
-        addBox(out, [bx, yK + 27, bz], [23, 2.4, 23], KEEP_D, null);       // battlement
-        const yT = surfY(18) - 3;
-        addCyl(out, [bx + 13, yT, bz - 13], 5.5, 30, KEEP, 8, null);       // corner turret
-        addCone(out, [bx + 13, yT + 30, bz - 13], 6.4, 7, [0.32, 0.33, 0.36], 8, null);
-      }
       // General-admission grass banks cut into the treeline on the back section.
       spectatorHill(0.36, 0.46, 1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
       spectatorHill(0.70, 0.78, -1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
 
       // =====================================================================
-      // 7. BURG NÜRBURG — the twelfth-century castle on the volcanic plug above
+      // 8. BURG NÜRBURG — the twelfth-century castle on the volcanic plug above
       //    the track. The circuit is NAMED after it, it is visible from most of
       //    the lap, and it is the one thing in the Eifel that could not be
       //    anywhere else. A ring of forested hills is generic upland; a ruined

@@ -214,7 +214,12 @@
   background: var(--surf-1); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--r-sm);
   color: inherit; font: inherit; cursor: pointer;
 }
-.co-offer:hover, .co-offer:focus-visible { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+/* :hover gated per the tokens.css policy (a tap sticks :hover on iOS);
+   :focus-visible stays outside the gate so keyboard focus works everywhere. */
+@media (hover: hover) {
+  .co-offer:hover { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+}
+.co-offer:focus-visible { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
 .co-offer-sw { grid-row: 1 / 3; width: 10px; height: 34px; border-radius: 2px; border: 2px solid transparent; }
 .co-offer-team { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .co-offer-terms { grid-column: 2 / 4; font-size: 10px; color: var(--dim); letter-spacing: 0.04em; }
@@ -243,7 +248,10 @@
   color: inherit; font: inherit; min-height: var(--tap);
   gap: 4px;
 }
-.cr-record:hover, .cr-record:focus-visible { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+@media (hover: hover) {
+  .cr-record:hover { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+}
+.cr-record:focus-visible { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
 .cr-record-line { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 /* The affordance line: dim, tracked-out and red, so the card reads as a door
    rather than one more read-only summary in a column full of them. */
@@ -312,7 +320,10 @@
   border-radius: var(--r-sm);
   transition: border-color 0.15s, background 0.15s;
 }
-.cr-slot-main:hover, .cr-slot-main:focus-visible {
+@media (hover: hover) {
+  .cr-slot-main:hover { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+}
+.cr-slot-main:focus-visible {
   border-color: var(--red); background: rgba(225, 6, 0, 0.12);
 }
 /* An EMPTY slot is an invitation, not a result: dashed edge and dimmed text, so
@@ -340,7 +351,10 @@
   border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--r-sm);
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-.cr-slot-del:hover, .cr-slot-del:focus-visible { color: var(--red); border-color: var(--red); }
+@media (hover: hover) {
+  .cr-slot-del:hover { color: var(--red); border-color: var(--red); }
+}
+.cr-slot-del:focus-visible { color: var(--red); border-color: var(--red); }
 .cr-slot-del.armed {
   color: #fff; border-color: var(--red); background: rgba(225, 6, 0, 0.35);
 }

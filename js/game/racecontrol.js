@@ -37,6 +37,8 @@ const RaceControl = (() => {
   const MIN_HOLD = 6;      // s a caution holds once raised (anti-flicker)
   const YELLOW_MAX = 30;   // s hard cap on a local yellow
   const SC_MAX = 90;       // s hard cap on VSC/SC — bounded, ~a lap or two
+  const CAP_REARM_HOLD = 45;  // s of green after a cap-forced drop before the
+                              // same stale hazard picture may re-raise a flag
   const QUERY_EVERY = 0.25;   // s — hazards() at ~4 Hz, not per frame
 
   function blank() {
@@ -47,6 +49,7 @@ const RaceControl = (() => {
     const { store } = G;
     let caution = blank();
     let queryT = 0;
+    let capHoldT = 0;   // remaining re-arm suppression after a cap-forced drop
     // Last state broadcast to a guest, so only CHANGES are sent.
     let sent = "";
     // DEFAULT ON; the CAUTIONS race setting and __apex.caution({enabled}) write it.
@@ -64,6 +67,7 @@ const RaceControl = (() => {
     function reset() {
       caution = blank();
       queryT = 0;
+      capHoldT = 0;
       // Clear the change-detector too, or the next race's first flag looks like
       // a repeat of the last one's and is never sent.
       sent = "";
@@ -112,12 +116,33 @@ const RaceControl = (() => {
       caution.total = hz.total;
       caution.sectors = hz.sectors.slice();
 
+      // The HARD CAP the constants always promised ("a stuck hazard cannot
+      // neutralise the race forever"): a flag flown for its full cap drops to
+      // GREEN even while the hazard picture persists — marshals have had their
+      // window; racing resumes. Without this the cap clause below was dead code
+      // (MIN_HOLD < cap made the disjunct unreachable, and lowering only ever
+      // ran when the picture had ALREADY cleared), so one never-despawning
+      // piece of debris held a safety car for the rest of the race.
+      // capHold suppresses an instant re-raise from the SAME stale picture;
+      // genuinely new hazards re-arm after it expires.
+      if (caution.level !== 0) {
+        const cap = caution.level >= 2 ? SC_MAX : YELLOW_MAX;
+        if (caution.sinceT >= cap) {
+          caution.level = 0; caution.sector = -1; caution.frac = 0;
+          caution.cause = ""; caution.sinceT = 0;
+          capHoldT = CAP_REARM_HOLD;
+          publish();
+          return;
+        }
+      }
+      if (capHoldT > 0) capHoldT = Math.max(0, capHoldT - QUERY_EVERY);
+
       if (desired > caution.level) {
+        if (capHoldT > 0) { publish(); return; }   // cap just fired; let racing breathe
         caution.level = desired; caution.sector = dsector; caution.frac = dfrac;
         caution.cause = dcause; caution.sinceT = 0;
       } else if (desired < caution.level) {
-        const cap = caution.level >= 2 ? SC_MAX : YELLOW_MAX;
-        if (caution.sinceT >= MIN_HOLD || caution.sinceT >= cap) {
+        if (caution.sinceT >= MIN_HOLD) {
           caution.level = desired;
           caution.sector = desired === 1 ? (dsector >= 0 ? dsector : caution.sector) : -1;
           caution.frac = dfrac; caution.cause = dcause; caution.sinceT = 0;

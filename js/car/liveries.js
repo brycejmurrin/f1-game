@@ -16,8 +16,8 @@
    logo?:[r,g,b] optional TEAM CREST colour — the mark itself, wherever it is
      drawn (engine cover + shark fin). Distinct from finArt: one is the emblem,
      the other the paint job behind it. Absent = the automatic contrast ink.
-   fin?:[r,g,b]  optional SHARK-FIN paint — the dorsal tail plate on the teams
-     whose chassis style fits one (defaults to c2 = today's look).
+   fin?:[r,g,b]  optional SHARK-FIN paint — the dorsal tail plate every
+     non-cockpit car carries (defaults to c2 = today's look).
    finArt?:[r,g,b] optional TAIL-GRAPHIC colour on that fin — the accent wash and
      the motif strokes of the painted tail. When absent it is chosen automatically
      to separate from the fin's own paint (the fin is one flat colour, so an art

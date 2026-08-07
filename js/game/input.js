@@ -1,10 +1,12 @@
 /*
  * Input: keyboard / gamepad / tilt / touch for Apex 26.
  *
- * Steering sources, by priority: keyboard (held or still returning to
- * center) > gamepad (a connected pad with its stick deflected) > tilt
- * (enabled and delivering fresh data) > touch (on-screen steer buttons or
- * lower-screen halves).
+ * Steering sources, by priority (see steer()): keyboard (held or still
+ * returning to center) > gamepad (a connected pad with its stick
+ * deflected) > on-screen steer buttons (steerMode "buttons") > tilt
+ * (enabled and delivering fresh data) > touch (anchored drag on the
+ * canvas — the finger's displacement from its touch-down point is the
+ * wheel; the old lower-screen-halves rule is retired).
  *
  * Gamepad uses the W3C Gamepad API ("standard" mapping). It has no change
  * events, so poll() must be called once per frame from the game loop; it

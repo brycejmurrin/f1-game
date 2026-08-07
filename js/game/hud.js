@@ -2,8 +2,9 @@
    (the panel ticks ~10 Hz but most fields hold steady), cached sector-row
    nodes, and the minimap with its pre-rendered track-outline blit. Live game
    state comes through the ctx façade handed to GameHud.create(ctx) (the `G`
-   object in game.js): els, player, cars, ranked, track, timeTrial, lapsTarget,
-   sectorLast, ttRecord, fmtTime, cssCol, dashKph. Consumes globals Ghost, TrackMaps,
+   object in game.js): els, player, cars, ranked, track, state, timeTrial,
+   lapsTarget, sectorLast, ttRecord, fmtTime, cssCol, dashKph, otEnabled,
+   aeroZoneAhead, aeroZones, cautionInfo. Consumes globals Ghost, TrackMaps,
    GameTables. Must load BEFORE js/game.js (see index.html). */
 const GameHud = (function () {
   "use strict";
@@ -169,9 +170,9 @@ function updateHud(force) {
       hText(_secRows[i], t == null ? "--" : t.toFixed(3));
     }
   }
-  // B1 caution flag (local yellow / VSC / safety car) — driven by the debris
-  // caution state machine in game.js (READ-ONLY; the debris side-world never
-  // moves a car). Hidden when green.
+  // B1 caution flag (local yellow / VSC / safety car) — driven by the caution
+  // state machine in js/game/racecontrol.js, read via G.cautionInfo (READ-ONLY
+  // w.r.t. the cars; the debris side-world never moves one). Hidden when green.
   if (els.flag) {
     const cn = G.cautionInfo ? G.cautionInfo() : null;
     const show = !!(cn && cn.level > 0);

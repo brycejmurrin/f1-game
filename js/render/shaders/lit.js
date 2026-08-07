@@ -57,11 +57,12 @@ void main() {
   vec4 wp = M * vec4(pos, 1.0);
   vWorldPos = wp.xyz;
   vObjPos = aPos;                 // object space: paint flake/orange-peel pattern
+                                  // is glued to the panels, not streaming in world.
   // NOTE mat3(M), not an inverse-transpose: an instance matrix here is a scaled
   // ORTHONORMAL basis (TrackGraph builds columns r*sx, u*sy, t*sz), so this is
   // correct up to a length the shader normalises anyway — the same assumption
   // uModel already relied on.
-  vNrm = mat3(M) * aNrm;          // is glued to the panels, not streaming in world.
+  vNrm = mat3(M) * aNrm;
   vCol = aCol * aInstCol;
   vMat = aMat;                    // constant across the face (flat) — procedural material key
   vTrk = aTrk;                    // road track-space coords; interpolated across the ribbon
@@ -106,11 +107,12 @@ uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflection
 // UV channel exists anywhere on the lit path and none is needed: the sample
 // reuses the procedural materials' own triplanar convention below, so a scanned
 // map lands on exactly the coordinate the noise it augments already uses.
-// uMatTexMix is a LIGHTING TUNER knob shipped at 0 — at 0 nothing here executes
-// and the render is byte-identical to the pure-procedural game.
+// uMatTexMix is a LIGHTING TUNER knob shipped at 1.0 (full baked detail);
+// __apex.matTex(0) is the A/B off-switch — at 0 nothing here executes and the
+// render is byte-identical to the pure-procedural pre-scan game.
 uniform lowp sampler2DArray uMatAlbedoTex;  // rgb = albedo reflectance, a = roughness
 uniform lowp sampler2DArray uMatNormalTex;  // rg = tangent normal xy, b = AO
-uniform float uMatTexMix;                   // 0 = pure procedural (default)
+uniform float uMatTexMix;                   // ships 1.0 = full baked; 0 = pure procedural
 uniform float uMatTexScale[17];             // world metres per tile per layer; 0 = layer absent
 uniform samplerCube uEnvCube;  // live 64px env probe around the player car (one face/frame)
 uniform float uEnvStr;         // 0 until the probe's first full 6-face cycle; then the CAR tuner's envCube strength

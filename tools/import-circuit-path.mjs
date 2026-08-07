@@ -183,11 +183,15 @@ const geo = await loadSource(sourceFile);
 const features = new Map(geo.features.map((f) => [f.properties.id, f]));
 
 if (selfCheck) {
-  const ids = positional.length ? positional : Object.keys(COMMITTED);
+  // geo-paths.js commits the 16 classics alongside the 24 season rounds, so
+  // self-check must resolve feature ids through BOTH maps — COMMITTED alone
+  // silently skipped every classic with "no upstream feature".
+  const KNOWN = { ...COMMITTED, ...CLASSICS };
+  const ids = positional.length ? positional : Object.keys(KNOWN);
   const committed = await loadCommitted();
   let worst = 0, failures = 0;
   for (const gameId of ids) {
-    const featureId = COMMITTED[gameId];
+    const featureId = KNOWN[gameId];
     const feature = featureId && features.get(featureId);
     const have = committed[gameId];
     if (!feature || !have) {

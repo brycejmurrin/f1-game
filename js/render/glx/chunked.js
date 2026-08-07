@@ -142,6 +142,12 @@ const GLXChunked = (function () {
 
     // Draw a chunked mesh, frustum-culling each chunk against the camera. Material
     // setup is identical to draw() (both route through core.litMaterial).
+    // OPAQUE-ONLY: this path keeps depth writes ON regardless of alpha and never
+    // masks alpha writes, so draw()'s translucency invariants (translucent draws
+    // must not write depth; any blended draw masks scene alpha to protect the
+    // SSR car-paint tag) are NOT honoured here. Every current caller passes
+    // alpha 1 (game.js props/glass materials carry no alpha field); route
+    // translucent work through draw() instead.
     function drawChunked(mesh, modelMat, opts) {
       if (!mesh) return;
       const alpha = litMaterial(modelMat, opts);

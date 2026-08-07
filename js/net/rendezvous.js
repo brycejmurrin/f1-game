@@ -232,9 +232,9 @@ const NetRendezvous = (function () {
   // never needs to understand an SDP, and swapping the backend changes nothing
   // downstream.
   //
-  // TWO BACKENDS, ONE INTERFACE. A private worker when its URL is set (a broker
-  // you control beats a stranger's), the public MQTT broker otherwise — which
-  // is the default, and the reason room codes need nothing deployed.
+  // TWO BACKENDS, ONE INTERFACE. A private worker when its URL is set (a relay
+  // you control beats a stranger's), the public Nostr relay pool otherwise —
+  // which is the default, and the reason room codes need nothing deployed.
   const httpPut = (code, slot, payload) => call(`/r/${normalise(code)}/${slot}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -316,10 +316,7 @@ const NetRendezvous = (function () {
     const started = Date.now();
     for (;;) {
       if (token && token.cancelled) return ERR("cancelled", "");
-      // The window is the MQTT listen time per round; the HTTP backend ignores
-      // it. Long enough that a retained message always lands, short enough that
-      // cancelling feels immediate.
-      const res = await get(code, slot, 2500);
+      const res = await get(code, slot);
       if (res.ok && res.body && res.body.payload) return { ok: true, payload: res.body.payload };
       // not_found simply means "not yet" — everything else is fatal and should
       // surface immediately rather than being retried for two minutes.

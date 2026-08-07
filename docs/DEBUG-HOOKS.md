@@ -86,7 +86,7 @@ when testing TT-specific behaviour (ghost delta, TT results, sector splits).
 
 ### `info() → {state, track, n, total, timeTrial, seasonMode, sectors, turns}`
 Snapshot of state: `state` is the state-machine value
-(`menu｜select｜count｜race｜results｜…`), `track` the loaded circuit id, `n` the
+(`menu｜count｜race｜results`), `track` the loaded circuit id, `n` the
 sample count, `total` the lap length (m). `timeTrial` and `seasonMode` reflect the
 active game mode. `sectors` is `[s1End, s2End]` racing-lap fractions from
 `CircuitMarkings` (or `null`); `turns` is the curated FIA turn count (or `null`).

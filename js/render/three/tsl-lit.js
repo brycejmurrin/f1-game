@@ -1312,7 +1312,6 @@
         m.blendSrcAlpha = THREE.ZeroFactor;   // dst alpha preserved (SSR tag / canvas)
         m.blendDstAlpha = THREE.OneFactor;
       }
-      m.__tlxMatU = matU;   // per-draw uniform handles (tlx.js refresh path)
       return m;
     }
 

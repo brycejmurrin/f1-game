@@ -1468,9 +1468,12 @@ const AgentView = (function () {
     // s = 0 and reported them all sitting on the start line.
     function propPos(p) {
       if (p.k != null) {
+        // p.side is the ±1 SIDE SELECTOR, not a distance — reporting it as
+        // `lat` made every node-anchored prop claim lateralM ±1.0 m. The true
+        // lateral offset isn't recorded on these records, so answer null and
+        // let the caller's `side` field carry the side.
         const k = ((p.k % G.track.n) + G.track.n) % G.track.n;
-        return { s: k / G.track.n * G.track.total,
-                 lat: p.side != null ? p.side : null };
+        return { s: k / G.track.n * G.track.total, lat: null, sideSel: p.side != null ? p.side : null };
       }
       const pr = Tracks.project(G.track, p.x, p.z);
       return pr ? { s: pr.s, lat: pr.lat } : { s: 0, lat: null };
@@ -1630,11 +1633,15 @@ const AgentView = (function () {
                       + '; call render({what:"circuit"}) to list them');
         }
         const s = sp[idx];
+        // Span records store s0/s1 as LAP FRACTIONS (noteSpan's callers pass
+        // fractions; along() does s0*n). Reading them as arc-metres reported
+        // sub-metre spans everywhere and fromFrac values of ~1e-4.
+        const s0M = s.s0 * total, s1M = s.s1 * total;
         return {
           apiVersion: API_VERSION, id: "span:" + idx, type: "span",
           kind: s.kind, side: sideOf(s.side),
-          fromS: r1(s.s0), toS: r1(s.s1), lengthM: r1(Math.abs(s.s1 - s.s0)),
-          fromFrac: +(s.s0 / total).toFixed(4), toFrac: +(s.s1 / total).toFixed(4),
+          fromS: r1(s0M), toS: r1(s1M), lengthM: r1(Math.abs(s1M - s0M)),
+          fromFrac: +s.s0.toFixed(4), toFrac: +s.s1.toFixed(4),
           heightM: s.h != null ? r1(s.h) : null,
           gapM: s.gap != null ? r1(s.gap) : null,
           note: "linear furniture recorded as a span, not per segment",

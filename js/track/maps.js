@@ -5,7 +5,7 @@
 const TrackMaps = (function () {
   "use strict";
 
-  const cache = {};   // id -> { pts, py, corners, turns, dir, elevRange, drsZones } | null
+  const cache = {};   // id -> { pts, py, corners, dir, elevRange, drsZones, sectors } | null
 
   // theme accent colour for a circuit (used to tint its outline)
   const THEME = {
@@ -51,7 +51,7 @@ const TrackMaps = (function () {
         const elevRange = elevationRange(tr);
         const drsZones = detectDRS(tr);
         const sectors = (def.sectors && def.sectors.length === 2) ? def.sectors.slice() : null;
-        out = { pts: pts, py: tr.py, corners: crns, turns: crns.length, dir: dir, elevRange: elevRange, drsZones: drsZones, sectors: sectors };
+        out = { pts: pts, py: tr.py, corners: crns, dir: dir, elevRange: elevRange, drsZones: drsZones, sectors: sectors };
       }
     } catch (e) {
       out = null;

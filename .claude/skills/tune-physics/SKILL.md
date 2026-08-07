@@ -14,17 +14,25 @@ stale the moment physics is retuned).
 
 | Param | Effect | Bigger = |
 |---|---|---|
-| `wheelbase` (`WHEELBASE` 3.2 m) | turn-in response | lazier turn-in |
+| `wheelbase` (`WHEELBASE` 3.60 m) | turn-in response | lazier turn-in |
 | `expo` (`STEER_EXPO` 2.4) | input curve shape | gentler near centre |
-| `maxSlip` (`STEER_MAX_SLIP` 0.32 rad) | max steer lock | sharper low-speed |
-| `speedRef` (`STEER_SPEED_REF` 60 m/s) | speed-sensitive lock taper | keeps lock at speed |
+| `maxSlip` (`STEER_MAX_SLIP` ≈0.29 rad) | max steer lock | sharper low-speed |
+| `speedRef` (`STEER_SPEED_REF` ≈41.7 m/s) | speed-sensitive lock taper | keeps lock at speed |
 | `drift` (`DRIFT` 0) | rear looseness / oversteer | more tail-out (debug only) |
 | `roadFollow` (`ROAD_FOLLOW` **0**, ships OFF) | curvature steering assist | more auto-drive |
 | `frontGrip` (`FRONT_GRIP` 0.89) | front friction bias (`muF *= FRONT_GRIP`) | more front grip / less understeer |
 | `playerGrip` (`PLAYER_GRIP` 1.15) | player grip headroom vs AI | more forgiving |
 | `yawDamp` (`YAW_DAMP` 1.0) | yaw damping | calmer rotation |
 | `yawInertia` (`YAW_INERTIA` 0.7) | rotational inertia (`<1` = snappier) | lazier turn-in |
-| `pace` (`PACE` 1.0) | global speed multiplier | faster everywhere |
+| `pace` (`PACE` 0.840; `1.0` is the reference `vStd()`/`vTop()` are defined against) | global speed multiplier | faster everywhere |
+
+The values above are the **boot-effective defaults**: `js/game/steer-tuning.js`
+runs `applySteerTuning()` at `create()` and overwrites game.js's initial
+literals (`3.2 m` / `0.32 rad` / `60 m/s` / `PACE 1.0` — dead values, never
+shipped) from the stored slider notches. Its slider mappings
+(`wheelbaseFromSlider` v5 = 3.60 m, `speedRefFromSlider` v5 ≈ 41.7,
+`paceFromSlider` notch 11 → 0.840) are the source of truth — an A/B baseline
+built from the game.js literals tests a configuration nobody ships.
 
 **`ROAD_FOLLOW` ships at `0` (OFF) — this is a deliberate, opt-in default, not
 a stale table entry.** The in-game DRIVING HELP slider (`js/game/steer-tuning.js`

@@ -372,8 +372,7 @@ function applyRaceSettings() {
     // Wet + overcast: lift exposure to keep the scene moody but readable — BUT a
     // wet NIGHT must stay dark (lifting it to 1.10 greys out the night and kills
     // the lamp-pool contrast), so dark sessions only get a whisker of lift.
-    const _wetDark = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && isNightSession);
-    G.frame.exposure = _wetDark
+    G.frame.exposure = isNightSession
       ? Math.max(G.frame.exposure != null ? G.frame.exposure : 0.90, 0.95)
       : Math.max(G.frame.exposure != null ? G.frame.exposure : 1.0, _storm ? 1.03 : 1.00);
   } else if (G.raceWeather === "overcast") {
@@ -391,8 +390,7 @@ function applyRaceSettings() {
     // A night session must stay dark under overcast too — same guard the wet/fog
     // branches use. Without it the 0.86/0.90 night exposure was forced up to 1.0,
     // greying out the night and killing lamp-pool contrast.
-    const _ovcDark = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && isNightSession);
-    const _ovcFloor = _ovcDark ? 0.95 : 1.0;
+    const _ovcFloor = isNightSession ? 0.95 : 1.0;
     if (G.frame.exposure == null || G.frame.exposure < _ovcFloor) G.frame.exposure = _ovcFloor;
   } else if (G.raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
@@ -411,8 +409,7 @@ function applyRaceSettings() {
     // Lift for visibility in the murk — but a NIGHT fog must stay night: forcing
     // 1.08 over the 0.86-0.90 night base (+25%) grey-washed the dark and killed
     // the lamp-glow-in-fog mood. Dark sessions get a smaller floor.
-    const _fogDark = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && isNightSession);
-    const _fogFloor = _fogDark ? 0.95 : 1.08;
+    const _fogFloor = isNightSession ? 0.95 : 1.08;
     if (G.frame.exposure == null || G.frame.exposure < _fogFloor) G.frame.exposure = _fogFloor;
   } else {
     G.frameSky.cloud = G._cloudBase;
@@ -426,7 +423,7 @@ function applyRaceSettings() {
     let gm = 0;
     if (G.raceTimeOfDay === "dawn") gm = 0.40;
     else if (G.raceTimeOfDay === "dusk") gm = 0.22;
-    else if (G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && isNightSession)) gm = 0.16;
+    else if (isNightSession) gm = 0.16;
     if (isWetRoad()) gm = Math.max(gm, isRaining() ? 0.18 : 0.12);
     else if (G.raceWeather === "overcast") gm = Math.max(gm, 0.34);
     else if (G.raceWeather === "fog") gm = Math.max(gm, 0.58);

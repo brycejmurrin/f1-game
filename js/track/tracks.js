@@ -1509,7 +1509,7 @@ const Tracks = (function () {
           const r0 = [track.rx[k], track.ry[k], track.rz[k]];
           const r1 = [track.rx[kn], track.ry[kn], track.rz[kn]];
           const u0 = upOf(track, k);
-          const barrierOffset = def.barrierGap != null ? def.barrierGap : (def.id === "monaco" ? 2.0 : 0.35);
+          const barrierOffset = def.barrierGap != null ? def.barrierGap : 0.35;
           const o0 = side * (hw[k] + barrierOffset), o1 = side * (hw[kn] + barrierOffset);
           const ax = px[k] + r0[0] * o0, ay = py[k], az = pz[k] + r0[2] * o0;
           const bx = px[kn] + r1[0] * o1, by = py[kn], bz = pz[kn] + r1[2] * o1;
@@ -1529,7 +1529,7 @@ const Tracks = (function () {
       }
       // Record the boundary for EVERY node (the geometry loop steps by 2, which
       // would leave gaps), both sides, at the barrier offset.
-      const off = def.barrierGap != null ? def.barrierGap : (def.id === "monaco" ? 2.0 : 0.35);
+      const off = def.barrierGap != null ? def.barrierGap : 0.35;
       for (let k = 0; k < n; k++) { markBarrier(k, -1, off); markBarrier(k, 1, off); }
     }
     // floodlights for night tracks: generic mast ring (~22 m) covers these —
@@ -1546,7 +1546,11 @@ const Tracks = (function () {
       // Qatar carried 24 such pairs. Claim each (node, side) once.
       const stacked = new Set();
       for (const c of findCorners(track, 0.014)) {
-        const outside = c.sign > 0 ? -1 : 1;
+        // +curv = LEFT turn (mesh.js banking comment; measured in agentview's
+        // corner table), so the outside of a c.sign>0 corner is the RIGHT (+x)
+        // side. The retired "+k = right" read here put every tyre barrier on
+        // the corner INSIDE.
+        const outside = c.sign > 0 ? 1 : -1;
         const lo = Math.max(1, Math.round(c.lo * 0.35));
         const hi = Math.max(1, Math.round(c.hi * 0.35));
         const step = Math.max(2, Math.round(3.5 / ds));
@@ -1598,7 +1602,9 @@ const Tracks = (function () {
         laneCorners = findCorners(track, 0.007).slice().sort((a, b) => a.k - b.k);
       }
       laneCorners.forEach((c, idx) => {
-        const outside = c.sign > 0 ? -1 : 1;
+        // Same convention fix as the tyre barriers above: outside of a
+        // c.sign>0 (LEFT) corner is the +x side.
+        const outside = c.sign > 0 ? 1 : -1;
         signBoard(c.k, outside, 3.5, "corner", idx + 1);
         // Braking trio (3->2->1 stripes counting down to the apex) on roughly
         // half the corners, spaced back along the approach — avoids clutter on
@@ -1620,7 +1626,6 @@ const Tracks = (function () {
     }
 
     const fz = FURN[def.id] || FURN_DEF[theme] || FURN_DEF.green;
-    const furnHarbour = (side, k) => def.id === "monaco" && side === 1 && k < n * 0.14;  // open water — no props
     // Per-tree foliage variation: a real forest is never one flat green. Each
     // tree gets a jittered brightness + a warm/cool hue drift, and a small
     // fraction of broadleaf trees turn autumnal gold/rust — so a stand of trees
@@ -1682,7 +1687,7 @@ const Tracks = (function () {
     const LAMP_STYLES = ["arm", "globe", "post"];
     if (fz.lamp && fz.lamp !== "none") every(26, (k) => {
       for (const side of [-1, 1]) {
-        if (furnHarbour(side, k) || dressingExcluded("lamps", k, side)) continue;
+        if (dressingExcluded("lamps", k, side)) continue;
         const roll = hash(k * 19 + side * 5.5);
         const style = roll > 0.88
           ? LAMP_STYLES[Math.floor(hash(k * 23 + side) * LAMP_STYLES.length) % LAMP_STYLES.length]
@@ -1705,7 +1710,7 @@ const Tracks = (function () {
       const step = fz.sparse ? 30 : (def.street ? 24 : 18);   // street denser than before; sparse = coastal scrub
       every(step, (k) => {
         const side = hash(k * 41) < 0.5 ? -1 : 1;
-        if (furnHarbour(side, k) || dressingExcluded("foliage", k, side)) return;
+        if (dressingExcluded("foliage", k, side)) return;
         const baseH = fz.tree === "palm" ? 8 : 6;
         const cluster = fz.sparse ? 1
           : def.street ? (hash(k * 13) < 0.5 ? 1 : 2)              // streets: 1–2 per stand
@@ -1755,7 +1760,6 @@ const Tracks = (function () {
         const idx = Math.floor(cl * cl * dpal.length) % dpal.length;
         return { n: style.tone && style.tone.n, d: dpal[idx] };
       };
-      const harbourSkip = (side, k) => def.id === "monaco" && side === 1 && k < n * 0.14;
       // neonAmt per building: day = plain; night = neon buildings bright, the rest
       // (general/regular buildings) get just a touch of neon so the city still
       // sparkles without being a wall of neon.
@@ -1773,7 +1777,7 @@ const Tracks = (function () {
       // Front row — dense.
       every(18, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 17 + side * 4) < 0.12 || harbourSkip(side, k) || dressingExcluded("city", k, side)) continue;
+          if (hash(k * 17 + side * 4) < 0.12 || dressingExcluded("city", k, side)) continue;
           const s = hash(k * 5 + side), na = naFor(k, side);
           const h = style.fh[0] + s * style.fh[1], w = 8 + s * 10, d = 8 + hash(k * 9 + side) * 9;
           neonTower(k, side, 13 + s * 12, w, h, d, cn(k, side), pickKind(k, side, na), toneFor(k, side), na);
@@ -1782,7 +1786,7 @@ const Tracks = (function () {
       // Back row — taller, set further back, staggered, for skyline depth.
       every(26, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 23 + side * 7) < 0.34 || harbourSkip(side, k) || dressingExcluded("city", k, side)) continue;
+          if (hash(k * 23 + side * 7) < 0.34 || dressingExcluded("city", k, side)) continue;
           const s = hash(k * 11 + side * 2), na = naFor(k * 1.3, side);
           const h = style.bh[0] + s * style.bh[1], w = 11 + s * 12, d = 11 + s * 10;
           neonTower(k, side, 40 + s * 30, w, h, d, cn(k * 1.7, side), pickKind(k * 1.9, side, na), toneFor(k * 1.7, side), na);
@@ -1791,7 +1795,7 @@ const Tracks = (function () {
       // Sign blades + low retail boxes dressing the gaps.
       every(34, (k) => {
         const side = hash(k * 13) < 0.5 ? -1 : 1;
-        if (harbourSkip(side, k) || dressingExcluded("city", k, side)) return;
+        if (dressingExcluded("city", k, side)) return;
         const lc = cn(k * 3.3, side);
         if (NIGHT && style.bias > 0.3 && hash(k * 19) < 0.5) neonSign(k, side, 8 + hash(k) * 4, 10 + hash(k * 2) * 10, lc);
         else { const rc = toneFor(k * 2.7, side).d || [0.5, 0.5, 0.54]; place(k, side, 9, [9, 4 + hash(k) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc); place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3]); }
@@ -1799,7 +1803,7 @@ const Tracks = (function () {
       // Occasional illuminated billboard accent (more on high-neon circuits).
       if (style.bias > 0.25) every(80, (k) => {
         const side = hash(k * 31) < 0.5 ? -1 : 1;
-        if (harbourSkip(side, k) || dressingExcluded("city", k, side)) return;
+        if (dressingExcluded("city", k, side)) return;
         const neon = cn(k * 5.5, side);
         prop(k, side, 6, [1.0, 6, 1.0], [0.10, 0.10, 0.12]);
         prop(k, side, 6, [1.2, 3.4, 5], NIGHT ? neon : [neon[0] * 0.5 + 0.25, neon[1] * 0.5 + 0.25, neon[2] * 0.5 + 0.25]);
@@ -2184,7 +2188,7 @@ const Tracks = (function () {
     return out;
   }
 
-  // ---------- circuit layouts (turn +=right, lengths in meters pre-SCALE) ----------
+  // ---------- circuit layouts (turn += LEFT, lengths in meters pre-SCALE) ----------
   // palettes
   function dayPal(o) {
     const p = Object.assign({

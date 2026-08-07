@@ -13,8 +13,10 @@ const TrackSpline = (function () {
   const lerp = (a, b, t) => a + (b - a) * t;
 
   // ---------- authoring: segment list -> closed control points ----------
-  // seg = {t:turnDeg(+right), l:len m, h:hillDelta m, b:bank rad, w:halfWidth}
-  // Integrates a heading where direction = (sin t, cos t); +turn = right.
+  // seg = {t:turnDeg(+left), l:len m, h:hillDelta m, b:bank rad, w:halfWidth}
+  // Integrates a heading where direction = (sin t, cos t); +turn = LEFT —
+  // the same measured convention curvatureRaw() documents below (a zero-steer
+  // run through a +k corner drifts wide to the right).
   // A real circuit must net ~±360°; we distribute any deficit as gentle
   // curvature across the whole lap so corner character is preserved and the
   // loop closes without squashing.

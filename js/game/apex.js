@@ -97,6 +97,10 @@ const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
   jump(frac, speed, lateral) {
     if (!G.player || !G.track) return false;
+    // A live IncidentSim takeover would re-impose the Rapier body's old pose
+    // over this teleport every tick (the car "stays" at its crash site while
+    // s/x claim otherwise). Hand the car back BEFORE writing the new state.
+    IncidentSim.release(G.player);
     // Normalize frac to [0,1) so s (wrapped) and prog stay coupled even if the
     // caller passes a value outside the unit range.
     const f01 = (((frac || 0) % 1) + 1) % 1;
@@ -114,6 +118,11 @@ const api = {
       G.player.pz = smp.p[2] + smp.r[2] / rl * G.player.x; }
     G.player.head = Math.atan2(smp.t[0], smp.t[2]);
     G.player.vLat = 0; G.player.yawRateCur = 0;
+    // Teleport hygiene: the wall/rescue accumulators describe the OLD location.
+    // Left alone, a wedge-then-jump sequence carried ~3 s of rescueT into the
+    // new spot and fired a surprise auto-rescue mid-drive (measured).
+    G.player.rescueT = 0; G.player.wallT = 0; G.player.wasOnWall = false;
+    G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0;
     // Sync render-interpolation anchors so lerpS(rPrevS, s, alpha) == s regardless
     // of renderAlpha — ensures the hood/cockpit camera is at exactly this position.
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;

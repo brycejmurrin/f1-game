@@ -20,9 +20,13 @@
  *    text, which is a miserable thing to paste. We strip the lines that can be
  *    rebuilt from a template, then deflate + base64url what remains. Typical
  *    result is a few hundred characters. CompressionStream is used where it
- *    exists and skipped where it doesn't — the format carries a flag byte, so
- *    a compressing peer and a non-compressing peer still understand each
- *    other.
+ *    exists and skipped where it doesn't — the format carries a flag byte,
+ *    and a plain .p code is readable by everyone. The interop is
+ *    ONE-DIRECTIONAL, though: a browser without CompressionStream lacks
+ *    DecompressionStream too (they ship together), so it can send but cannot
+ *    read a compressed .z/.s code — decodeCode's inflate throws there and the
+ *    player is told the code is corrupted rather than that the browser is too
+ *    old.
  *
  * 3. THE BUILD NUMBER IS PART OF THE CODE. Two peers on different cached
  *    builds have different track splines, different barrier positions and
@@ -32,9 +36,11 @@
  *    of a mystery. Scenery is deliberately NOT checked: props never affect
  *    physics, so peers may legitimately differ there.
  *
- * What this cannot do: traverse every NAT. Without a TURN relay (which costs
- * money) some symmetric-NAT pairs will simply never connect P2P. That is a
- * real, unfixable-for-free outcome and the UI must say so plainly rather than
+ * What this cannot do alone: traverse every NAT. Some symmetric-NAT pairs
+ * will never connect P2P without a TURN relay — which is why one ships by
+ * default (transport.js's Metered free-tier credentials URL, overridable via
+ * apex26.turnApi). Only when that relay's quota or endpoint fails does the
+ * unconnectable case return, and then the UI must say so plainly rather than
  * spinning forever.
  */
 "use strict";

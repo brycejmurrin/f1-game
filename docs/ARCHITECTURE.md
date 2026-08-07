@@ -27,8 +27,6 @@ js/log.js                -> Log        (levelled logging; loads FIRST)
 js/mat4.js               -> M4, V3
 js/render/shaders/*      -> GLXChunks, GLXShaders   (pure data, before glx.js)
 js/render/glx.js + glx/* -> GLX        (default WebGL2 renderer + its passes)
-js/render/webgpu/*       -> WGX        (opt-in WebGPU renderer, frozen)
-js/render/three/*        -> TLX        (opt-in three.js/TSL renderer)
 js/render/gfx.js         -> Gfx        (renderer selection seam)
 js/car/teams.js          -> Teams      (2026 grid data)
 js/track/*               -> the track engine (spline, mesh, scenery, markings…)
@@ -434,7 +432,7 @@ track = { def, total,                       // total = length of loop in meters
 
 Tracks.sample(track, s, out)   // s wraps; out = {p:[3], t:[3], r:[3], hw:number}
                                // linear interp between samples; REUSE out, no alloc
-Tracks.curvature(track, s)     // signed curvature 1/m at s (+ = right turn), smoothed
+Tracks.curvature(track, s)     // signed curvature 1/m at s (+ = LEFT turn, measured), smoothed
 ```
 
 Mesh content baked as vertex colors: asphalt `[0.16,0.16,0.17]` with subtle
@@ -699,7 +697,7 @@ default, tier order), five red lights (1 s apart) then out. Race =
 indicator, gaps, minimap canvas 2D. Penalty: 4+ full-off-track shortcuts -> +5 s
 on results screen. Points per Teams.POINTS; SEASON mode = Tracks.SEASON (the 24
 non-`classic` circuits; the 16 retired ones are playable but never a round)
-(`Tracks.LIST.length`) in load order, standings table between races, saved in
+in load order, standings table between races, saved in
 `apex26.season`. localStorage: hiscore N/A, settings (team, difficulty, tilt,
 sound), season.
 

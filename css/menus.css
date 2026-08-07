@@ -774,6 +774,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   width: 48px; height: var(--chip-h); padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: var(--r-sm); background: none; cursor: pointer; flex: none;
 }
+/* NONE'd colour well (game.js toggles cz-off) dims like its inline-livery twin
+   `.cs-liv-off` (carsetup.css) — without this the stale colour showed at full
+   strength with only the NONE chip to say it was off. */
+#customize input[type="color"].cz-off { opacity: 0.35; }
 #cz-preview {
   display: flex; align-items: center; gap: 8px; margin-top: var(--gap);
   padding: 10px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.05);

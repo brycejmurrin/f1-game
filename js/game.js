@@ -1237,9 +1237,9 @@ const _flapWorld = new Float32Array(16);
 // it in mid-air behind a car that has no rear wing.
 function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only) {
   const col = wingColorOf(team), b = clamp(blend, 0, 1);
-  const els = Car3D.aeroFlaps(aLvl, style);
-  for (let i = 0; i < els.length; i++) {
-    const fg = els[i];
+  const flaps = Car3D.aeroFlaps(aLvl, style);   // NOT `els` — that name is the
+  for (let i = 0; i < flaps.length; i++) {      // file-wide DOM registry
+    const fg = flaps[i];
     if (only && fg.wing !== only) continue;
     const ang = fg.zAngle + (fg.xAngle - fg.zAngle) * b;
     const ca = Math.cos(ang), sa = Math.sin(ang);
@@ -1263,7 +1263,7 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only) {
 }
 
 // partsVisualKey(teamId) -> cheap cache key for the resolved cosmetic tiers
-// (e.g. "11111111" = every category at its default/neutral tier). Used by the
+// (e.g. "111111111111" = every category at its default/neutral tier). Used by the
 // setup-screen live preview (getSetupPreviewMesh), which re-keys its mesh every
 // frame so the turntable updates as parts are picked (parts change live there,
 // with no recomputePlayerMods() call). The in-race player/cockpit meshes instead
@@ -1292,7 +1292,7 @@ let playerWheelId = "standard", playerWheelVisual = null;
 // so the render loop reads a cached string instead of rebuilding it via
 // partsVisualKey() → getVisualTiers() every frame. Overwritten before the first
 // race render by startRace()'s recomputePlayerMods() call.
-let playerVisualKey = "11111111";
+let playerVisualKey = "111111111111";
 
 // Performance multipliers for ONE car, from its team's base stats and its own
 // parts setup. Factored out of recomputePlayerMods because these numbers are a
@@ -1353,9 +1353,6 @@ function wireId(c) {
   if (!c || !c.team) return -1;
   const ti = Teams.LIST.findIndex((t) => t.id === c.team.id);
   return ti < 0 ? -1 : ti * 2 + (c.seat || 0);
-}
-function carFromWireId(id) {
-  return (cars || []).find((c) => wireId(c) === id) || null;
 }
 
 // Swap where two cars START. Multiplayer needs this and nothing else does:
@@ -2280,6 +2277,14 @@ function startRace() {
     lapsTarget = raceLaps;
   }
   applyRaceSettings();
+  if (isWetRoad()) {           // "rain" = storm; "wet" = the DRIZZLE tier —
+    initRainDrops();           // initRainDrops seeds sparse/short/slow streaks
+    Particles.rainShow(true);  // per the drizzle* TUNE_DEFS. Gating this on
+  } else {                     // isRaining() made the whole shipped tier (three
+    Particles.rainShow(false); // sliders + rainSeed(drizzle)) unreachable.
+  }
+  gridUp(gridFromQuali() ? quali.order(cars) : null);
+  recomputePlayerMods();
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
   // js/game.js held ZERO Log calls before this one, despite `game` being the
@@ -2290,6 +2295,9 @@ function startRace() {
   // saying what the car's top speed even was that run. One line makes the whole
   // class of pace/parts/weather failures self-explaining, which is what the
   // logging section of CLAUDE.md asks for and what nothing here was doing.
+  // (It sits BELOW recomputePlayerMods() so the mods/aeroLoad it reports are
+  // this session's, not the previous one's — __apex.race()/tt() reach here
+  // with no garage pass to have refreshed them.)
   Log.info("game", `race ${track.def.id} ${session} laps=${lapsTarget} ` +
     `pace=${PACE.toFixed(3)} vTop=${vTop().toFixed(1)}m/s ` +
     `grip=${gripMult().toFixed(2)} weather=${raceWeather} tod=${raceTimeOfDay} ` +
@@ -2297,14 +2305,6 @@ function startRace() {
       `c${playerMods.cornering.toFixed(2)}/b${playerMods.braking.toFixed(2)}` : "none"} ` +
     `aeroLoad=${(playerAeroLoad ?? 0.5).toFixed(2)} assists=` +
     `help${ROAD_FOLLOW.toFixed(2)}/line${raceLineAssist.toFixed(2)}`);
-  if (isRaining()) {           // only "rain" precipitates; "wet" is a damp track
-    initRainDrops();
-    Particles.rainShow(true);
-  } else {
-    Particles.rainShow(false);
-  }
-  gridUp(gridFromQuali() ? quali.order(cars) : null);
-  recomputePlayerMods();
   // Only a RACE can retire a car. A time trial is you against the clock and
   // qualifying is one flying lap — losing the car to a gearbox there would end
   // the session with nothing to show and no race to have lost it in.
@@ -2584,9 +2584,11 @@ const G = {
   get ranked() { return ranked; },
   get sectorLast() { return sectorLast; },
   // Setting the seed also rewinds the stream, so seeding then rebuilding the
-  // grid reproduces a scenario exactly. See simSeed/simRnd.
+  // grid reproduces a scenario exactly. See simSeed. (simRnd itself is NOT
+  // exported: the physics stream stays private to this file — every module
+  // that could draw from it documents that it deliberately must not.)
   get seed() { return simSeed(); }, set seed(v) { simSeed(v); },
-  simSeed, simRnd,
+  simSeed,
   get DRIFT() { return DRIFT; }, set DRIFT(v) { DRIFT = v; },
   get FRONT_GRIP() { return FRONT_GRIP; }, set FRONT_GRIP(v) { FRONT_GRIP = v; },
   // Cameras normalise speed against an injected vmax, so re-inject on every pace
@@ -2627,7 +2629,6 @@ const G = {
   get skyT() { return _skyT; }, set skyT(v) { _skyT = v; },
   get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
-  get renderAlpha() { return renderAlpha; }, set renderAlpha(v) { renderAlpha = v; },
   get sectorBests() { return sectorBests; }, set sectorBests(v) { sectorBests = v; },
   get sectorIdx() { return sectorIdx; }, set sectorIdx(v) { sectorIdx = v; },
   get sectorStartT() { return sectorStartT; }, set sectorStartT(v) { sectorStartT = v; },
@@ -2697,7 +2698,6 @@ const G = {
   // team" by itself, so outside a career this is a no-op the garage can ignore.
   // Read per rebuild rather than held, so a part researched mid-session shows up.
   careerOwned: () => Career.owned(Teams.LIST[teamIdx] && Teams.LIST[teamIdx].id),
-  updateTrackPreview: (...a) => updateTrackPreview(...a),
   // Mutable state + helpers consumed by js/game/photomode.js.
   get photoMode() { return photoMode; }, set photoMode(v) { photoMode = v; },
   get _photoPrevScale() { return _photoPrevScale; }, set _photoPrevScale(v) { _photoPrevScale = v; },
@@ -2708,7 +2708,6 @@ const G = {
   get _ltStore() { return ltStore.profiles; }, set _ltStore(v) { ltStore.profiles = v; },
   photoCam, photoKeys, photoMouse, photoMove, photoLook,
   applyResMode: (...a) => applyResMode(...a),
-  setPaused: (...a) => setPaused(...a),
   ltKey: (...a) => ltKey(...a),
   // (setLightTune is a hoisted function, exposed as a plain shorthand below —
   // the deferred-arrow copy that used to sit here was a dead duplicate key.)
@@ -2758,7 +2757,7 @@ const G = {
   setCamMode: (...a) => setCamMode(...a),   // const from CamModes.create(G) below — defer
   rescuePlayer, setLightTune, setWeatherLive, snapGameCam,
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
-  wireId, carFromWireId,                // stable cross-peer car identity
+  wireId,                               // stable cross-peer car identity
   setScale,                             // UI SIZE / HUD SIZE — see __apex.uiScale
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
@@ -2789,7 +2788,7 @@ const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 // CAR SETUP panel UI (js/game/setup-ui.js).
 const { buildSetup, openSetup, renderStatBars } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
-const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
+const { buildSelect, openTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
 // and the save live in js/game/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -2904,7 +2903,7 @@ const ranked = [];
 // no matter who initiated the change.
 function setWeatherLive(w) {
   raceWeather = (w === "wet" || w === "rain" || w === "overcast" || w === "fog") ? w : "dry";
-  if (isRaining()) {
+  if (isWetRoad()) {   // rain = storm, wet = drizzle tier (see applyRaceSettings)
     initRainDrops();
     Particles.rainShow(true);
   } else {
@@ -4027,7 +4026,11 @@ function updateCar(c, dt, ranked) {
     // Increasing head = CCW / left; +yaw rate = nose right, so SUBTRACT.
     c.head -= c.yawRateCur * dt;
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
-    // world velocity = forward + lateral slip (perp = (fz, -fx) = +right)…
+    // world velocity = forward + lateral slip. NOTE the perp (fz, -fx) is the
+    // LEFT vector (right of forward is (-fz, fx) — measured against the track's
+    // own right vector), so +vLat is leftward slip. The model is self-consistent
+    // with that sign; only this label was ever wrong, but cam-tune.js copied it
+    // into real knob directions once — check there before reusing this basis.
     const vWx = c.speed * fx + c.vLat * fz;
     const vWz = c.speed * fz - c.vLat * fx;
     // …and MOVE THE CAR, in world metres. This is the whole model: a rigid body
@@ -4457,6 +4460,9 @@ function updateCar(c, dt, ranked) {
 // being pinned to a wall. Progress (s/prog/lap) is preserved; only the lateral
 // position, heading and slip are reset, and a little speed restored.
 function rescuePlayer(c) {
+  // A live incident takeover would re-impose the Rapier pose over this rescue
+  // (same authority rule as __apex.jump) — hand the car back first.
+  incidentSim.release(c);
   Tracks.sample(track, c.s, smp);
   c.x = 0; c.xVis = 0;
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
@@ -4654,8 +4660,10 @@ const SP_VIEWS = {
   // the bodywork.
   // Distances are set from the frustum, not by eye: the preview runs a 36 deg
   // VERTICAL fov and the docked sheet leaves ~60% of the canvas, so the usable
-  // width at the target is ~0.62*dist. A 1.66 m front wing therefore needs ~4.5 m
-  // to sit in frame with margin, and the narrower 1.0 m rear wing ~3.6 m.
+  // width at the target is ~0.62*dist. That frustum floor put the 1.66 m front
+  // wing at ~4.5 m and the narrower 1.0 m rear wing at ~3.6 m; the shipped 3.6
+  // and 2.8 then tightened both by ~20% — the flap travel is the subject here,
+  // and a little wing-tip crop reads better than a flap a few pixels tall.
   wingFront: { az: Math.PI * 0.30, el: 0.34, dist: 3.6, aim: "front", minDist: 2.0 },
   wingRear:  { az: Math.PI * 0.72, el: 0.36, dist: 2.8, aim: "rear",  minDist: 1.8 },
 };
@@ -6374,10 +6382,11 @@ function render(dt) {
     }
   }
   gfx.present(po);
-  if (isRaining() && Particles.rainActive()) {
-    // Falling-streak rain, identical in every camera. Only "rain" precipitates;
-    // "wet" is a damp track with no rain in the air. Open-cockpit cars have no
-    // windscreen, so onboard views get the same streaks as the chase cam — no
+  if (isWetRoad() && Particles.rainActive()) {
+    // Falling-streak precipitation, identical in every camera: full storm
+    // streaks when raining, the sparse DRIZZLE tier when merely WET (the
+    // storm flag below picks which). Open-cockpit cars have no windscreen,
+    // so onboard views get the same streaks as the chase cam — no
     // water-on-glass beading and no wiper (there is nothing to wipe).
     Particles.rainDraw(dt, (player && player.speed) || 0, isRaining());
     // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
@@ -7050,7 +7059,9 @@ function buildRaceSettings() {
   // other player — it does not drop the lights. A button saying RACE! there is
   // a lie about what the next tap does.
   $("rs-go").textContent = netRoom ? "CONFIRM" : "RACE!";
-  const lapOpts = isTimeTrial() ? [3, 5, 8] : [3, 5, 10, 25, 57];
+  // TT list includes 4 because TT_LAPS = 4 is the openRaceSettings default —
+  // without it the screen opened with no LAPS chip highlighted.
+  const lapOpts = isTimeTrial() ? [3, 4, 5, 8] : [3, 5, 10, 25, 57];
   const lapsEl = $("rs-laps");
   lapsEl.innerHTML = "";
   for (const n of lapOpts) {
@@ -7289,6 +7300,11 @@ $("q-go").onclick = () => {
 // the sheet without undoing that would leave the flow claiming a qualifying
 // session is running while the player sits in a menu.
 $("q-back").onclick = () => {
+  // After the session ran (.q-done) this button is CSS-hidden and only TO THE
+  // GRID shows — but Escape still routes here via data-esc-close="q-back", and
+  // clear() would silently throw the classification away. Ignore it: with a
+  // result on the sheet, leaving is TO THE GRID's job.
+  if ($("quali").classList.contains("q-done")) return;
   if (soundOn) GameAudio.uiSelect();
   quali.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
@@ -7857,12 +7873,12 @@ $("cz-logo-clear").onclick = () => {
 // Real team marks (assets/logos/<id>.png). Optional and async: every atlas built
 // before they land uses the hand-drawn vector crest, so this drops those cached
 // textures once the images arrive and the cars repaint with the real emblems.
+// liverytex.js kicks off the load itself at eval time — game.js only subscribes.
 if (typeof LiveryTex !== "undefined" && LiveryTex.loadLogos) {
   LiveryTex.onLogosReady(() => {
     for (const t of Teams.LIST) invalidateDecalTextures(t.id);
     _spMeshKey = "";   // force the garage turntable to repaint too
   });
-  LiveryTex.loadLogos(Teams.LIST.map((t) => t.id));
   applyCustomLogo(loadCustomLogo());
 }
 syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve

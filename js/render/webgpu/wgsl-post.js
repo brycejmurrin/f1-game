@@ -859,7 +859,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 
   let dC = textureSampleLevel(depthTex, depthSamp, in.uv, 0i);
   // Cheap early-outs: sky (far plane), upper screen (never wet road), pass off.
-  if (dC >= 0.9999 || in.uv.y >= yCut || strength <= 0.0) {
+  // yCut is GLX's uSsrTopUV in GL's y-UP uv space (keep vUV.y < 0.62 = the
+  // bottom 62%); our uv is y-DOWN, so test the flipped 1 - in.uv.y against it.
+  if (dC >= 0.9999 || (1.0 - in.uv.y) >= yCut || strength <= 0.0) {
     return vec4<f32>(0.0, 0.0, 0.0, 0.0);
   }
 
@@ -963,7 +965,8 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // depth-derivative noise, and this term swings the amount across 0.55..0.97.
   let fres = pow(1.0 - max(dot(Nr, V), 0.0), 3.0);
   var amt = roadMask * strength * (0.55 + 0.42 * fres);
-  amt = amt * (1.0 - smoothstep(yCut - 0.06, yCut, in.uv.y));
+  // Seam fade at the cutoff, in the same flipped y-UP coordinate as the gate.
+  amt = amt * (1.0 - smoothstep(yCut - 0.06, yCut, 1.0 - in.uv.y));
   amt = clamp(amt * cover, 0.0, 0.80);   // road cap 0.94 -> 0.80, matching GLX
   return vec4<f32>(reflCol, amt);
 }`;

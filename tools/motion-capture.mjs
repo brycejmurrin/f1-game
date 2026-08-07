@@ -76,6 +76,9 @@ function ffmpeg() {
   const cands = [
     `${process.env.HOME}/Library/Caches/ms-playwright/ffmpeg-1011/ffmpeg-mac`,
     ...(() => { try { return readdirSync(`${process.env.HOME}/Library/Caches/ms-playwright`).filter((d) => d.startsWith("ffmpeg-")).map((d) => `${process.env.HOME}/Library/Caches/ms-playwright/${d}/ffmpeg-mac`); } catch { return []; } })(),
+    // Sandbox layouts vary: the binary has lived at both /opt/pw-browsers/
+    // ffmpeg-linux and /opt/pw-browsers/ffmpeg-<rev>/ffmpeg-linux.
+    ...(() => { try { return readdirSync("/opt/pw-browsers").filter((d) => d.startsWith("ffmpeg-")).map((d) => `/opt/pw-browsers/${d}/ffmpeg-linux`); } catch { return []; } })(),
     "/opt/pw-browsers/ffmpeg-linux", "ffmpeg",
   ];
   return cands.find((p) => p === "ffmpeg" || existsSync(p)) || "ffmpeg";
@@ -111,8 +114,19 @@ const webm = readdirSync(videoDir).find((f) => f.endsWith(".webm"));
 if (!webm) { console.error("no video recorded — recordVideo failed"); process.exit(1); }
 renameSync(resolveContainedChild(videoDir, webm, "recorded video"), clipPath);
 rmSync(videoDir, { recursive: true, force: true });
-spawnSync(ffmpeg(), ["-i", clipPath, join(vdir, "f_%04d.png")], { stdio: "ignore" });
+// Fail LOUDLY here: an unchecked spawn error used to fall through to a
+// 0-frame flicker report (mean/p90/max 0.00) that read exactly like a pass.
+const FF = ffmpeg();
+const ff = spawnSync(FF, ["-i", clipPath, join(vdir, "f_%04d.png")], { stdio: "ignore" });
+if (ff.error || ff.status !== 0) {
+  console.error(`ffmpeg failed (${FF}): ${ff.error ? ff.error.message : `exit ${ff.status}`} — no frames extracted`);
+  process.exit(1);
+}
 const pngs = readdirSync(vdir).filter((f) => /^f_\d+\.png$/.test(f)).sort();
+if (pngs.length === 0) {
+  console.error(`ffmpeg (${FF}) extracted 0 frames from ${clipPath} — nothing to score`);
+  process.exit(1);
+}
 
 // ── decode pngs → gray arrays in a second Chromium page ───────────────────────
 const W = 150, H = 70;

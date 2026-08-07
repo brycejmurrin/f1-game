@@ -46,9 +46,24 @@
  *   createTexture(src)                           2D texture from a canvas/image.
  *   freeMesh(mesh) / freeChunkedMesh(mesh) / freeTexture(tex)
  *
+ * FEATURE-DETECTED members — callers probe `typeof gfx.x === "function"` and
+ * a backend that lacks one exports it as `undefined` (see the WGX/TLX parity
+ * tables), so the feature degrades instead of crashing:
+ *   createInstancedBatch(data, matrices, colors, opts)   instanced prop batch
+ *     (TrackGraph.batches() consumer); cullInstances(batch, planes) narrows
+ *     batch.visible to the frustum; drawInstanced(batch, opts);
+ *     castShadowInstanced(batch, count); freeInstancedBatch(batch).
+ *     GLX only today — TLX and WGX export the whole family as undefined.
+ *   createTextureArray(size, images, layers)     TEXTURE_2D_ARRAY whose layer
+ *     index IS the MAT id; setMaterialMaps(maps|null) adopts/clears the baked
+ *     arrays. assets.js supported() detects BOTH (GLX + TLX; WGX: undefined,
+ *     the baked pack stays off there).
+ *   drawParticles(data, floatCount, additive)    transient FX vertex batch —
+ *     js/game/particles.js feature-detects it (GLX + TLX; WGX: undefined).
+ *
  * Frame protocol (per rendered frame, in this order):
  *   shadowBegin(lightVP) -> castShadow(mesh,model) / castShadowChunked(mesh,model)
- *     -> shadowEnd()
+ *     / castShadowInstanced(batch,count) -> shadowEnd()
  *   [optional env probe, up to one cube face per frame]:
  *     envFaceBegin(face, eye, frame) -> (redraw world) -> envFaceEnd(face)
  *     envProbeReady()->bool ; envProbeReset()
@@ -69,7 +84,11 @@
  *   invProj / proj / sunViewDir / upViewDir  view-space helpers (post)
  *   skyZenith:vec3, skyHorizon:vec3          sky/atmosphere colours
  *   fogDensity, fogHeight, groundMist, lampFog, wetness, time, cloud,
+ *   cloudSpeed (cloud-scroll rate, default 1),
  *   moonK (clear-night moon factor for the MOON SHADOWS floor)  scalars
+ *   shadowCtr:vec3                 shadow-fade anchor — the unsnapped ground
+ *                                  point the shadow box recentres around
+ *                                  (defaults to eye)
  *   cullDist:number                far cull distance
  *   noEnv:bool                     disable env-cube sheen (menu preview)
  *   tune:object                    live LIGHTING TUNER knobs (LT.*); defaults in
@@ -84,6 +103,9 @@
  * `opts` object consumed by draw()/drawChunked() (see GLX.draw/GLX.drawChunked):
  *   emissive, alpha, roughness, metalness, specular, detail, clearcoat,
  *   carPaint, sparkle : material scalars ; noAlphaWrite:bool ; doubleSided:bool
+ *   depthBias:[factor,units]  polygon-offset depth nudge for DECAL geometry
+ *                             laid on the road (start line) — resolution-safe
+ *                             unlike a Y lift
  *
  * `opts` object consumed by present() (see GLX.present):
  *   exposure, bloom, ssao, contact, threshold, tune, ...

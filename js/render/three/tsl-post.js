@@ -29,7 +29,9 @@
  *
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.post = (THREE, TSL, ctx) => ({ bright, blurAO, blurGR, down,
- *         upAdd, upFinal, ssao, godray, composite, fxaa, blit })
+ *         upAdd, upFinal, spread, ssao, godray, composite, fxaa, blit })
+ * (spread is the shared blur-step uniform — tlx-post.js drives it every
+ * present() from the BLOOM SPREAD knob: `P.spread.value = gk("bloomSpread")`.)
  * ctx = { chunks, shadow, sceneTex, sceneDepthTex, dirtTex, whiteTex,
  *         blackTex } — REAL texture objects (tlx-post.js creates the targets
  * first). NEVER touches THREE/TSL at script eval — three exists only inside

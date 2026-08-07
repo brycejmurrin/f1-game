@@ -515,8 +515,11 @@
         // Provençal parcel, and it gives the middle distance a hard edge.
         const a = anchor(K(0.235), -1, 90);
         const b = [a.r, a.u, a.t];
+        // Bounds cover the COMPLETE composite — hut (t ±4.3) plus the wall
+        // courses running off it to t≈50 — so the footprint preflight guards
+        // the whole model, not just the hut.
         modelGroup("paul-ricard-cabanon", {
-          center: vadd(a.c, a.u, 3), size: [10, 8, 14], basis: b,
+          center: vadd(vadd(a.c, a.t, 22.5), a.u, 3), size: [10, 8, 56], basis: b,
         }, (stage) => {
           const DRY = [0.72, 0.68, 0.58], DRY_D = [0.62, 0.58, 0.49];
           addBox(stage, vadd(a.c, a.u, 2.1), [6, 4.2, 8], DRY, b);

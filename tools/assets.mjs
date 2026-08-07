@@ -271,7 +271,7 @@ function fbm(x, y, baseFreq, octaves, gain = 0.5) {
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 // Height field per material, in tile-normalised (0..1) coordinates.  Mirrors
-// matBumpHeight()'s pattern vocabulary (js/render/shaders/lit.js:196) so a
+// matBumpHeight()'s pattern vocabulary (js/render/shaders/lit.js) so a
 // baked layer reads as the same material, just finer.  Returns 0..1.
 function matHeight(mid, u, v) {
   switch (mid) {
@@ -559,8 +559,15 @@ function importPack(args) {
     fail(`--low ${lowTarget} must divide ${srcSize} and be smaller than --size ${target}`);
 
   fs.mkdirSync(PACK, { recursive: true });
-  const out = { version: 1, materials: { size: target, layers: inMan.materials.layers },
-                models: {}, env: {}, credits: [] };
+  // Start from the committed manifest and overwrite only the materials (and,
+  // below, the rebuilt credits) — building a fresh `{ models: {}, env: {} }`
+  // here used to silently erase every committed bake-model/bake-env entry
+  // while their models/*.bin files stayed orphaned on disk.
+  const out = readManifest();
+  out.version = 1;
+  out.materials = { size: target, layers: inMan.materials.layers };
+  out.models = out.models || {};
+  out.env = out.env || {};
   const keep = new Set();
   let bytes = 0;
   for (const which of ["albedo", "normal"]) {

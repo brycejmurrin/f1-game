@@ -65,12 +65,32 @@ const SCREENS = [
   ["menu", `null`, "#overlay"],
   ["select-gp", `document.getElementById('mb-race').click()`, "#select"],
   ["select-tt", `document.getElementById('mb-tt').click()`, "#select"],
-  ["teampicker", `document.getElementById('mb-race').click(); document.getElementById('sel-team-card').click()`, "#teampicker"],
+  // The garage owns the team card and EDIT MY TEAM now (#cs-team-card /
+  // #cs-customize on its TEAM tab) — the select screen's #sel-team-card /
+  // #sel-customize side doors are gone. Reach both the way a player does and
+  // the way layout-audit.mjs does: main menu → GARAGE → TEAM tab.
+  ["teampicker", `
+     document.getElementById('mb-garage').click();
+     await until('#carsetup:not([hidden])', 4000);
+     const tabs = [...document.querySelectorAll('#cs-tabs .cs-tab')];
+     (tabs.find((e) => /TEAM/i.test(e.textContent)) || tabs[0])?.click();
+     await until('#cs-team-card', 4000);
+     document.getElementById('cs-team-card').click();
+     await until('#teampicker:not([hidden])', 4000);
+   `, "#teampicker"],
   // The garage is a STEP, not a side door: #select's START opens #carsetup and
   // the garage's DONE goes on to #race-settings. `sel-setup` no longer exists,
   // and both routes below had been silently reporting "root missing/hidden".
   ["race-settings", `document.getElementById('mb-race').click(); await until('#carsetup:not([hidden])',4000); document.getElementById('cs-done').click()`, "#race-settings"],
-  ["customize", `document.getElementById('mb-race').click(); document.getElementById('sel-customize').click()`, "#customize"],
+  ["customize", `
+     document.getElementById('mb-garage').click();
+     await until('#carsetup:not([hidden])', 4000);
+     const tabs = [...document.querySelectorAll('#cs-tabs .cs-tab')];
+     (tabs.find((e) => /TEAM/i.test(e.textContent)) || tabs[0])?.click();
+     await until('#cs-customize', 4000);
+     document.getElementById('cs-customize').click();
+     await until('#customize:not([hidden])', 4000);
+   `, "#customize"],
   ["carsetup", `document.getElementById('mb-race').click(); document.getElementById('sel-go').click()`, "#carsetup"],
   ["howtoplay", `document.getElementById('mb-help').click()`, "#howtoplay"],
   ["pause", `window.__apex.race('bahrain'); `, "#pausemenu"],
@@ -247,6 +267,11 @@ async function shot(page, file) {
         for (const [name, setup, sel, opts = {}] of SCREENS) {
           if (ONLY && !ONLY.some((f) => name.includes(f))) continue;
           const page = await browser.newPage({ viewport, hasTouch: true, deviceScaleFactor: 1 });
+          // One broken route must cost ONE SCREEN, not the sweep: report.json
+          // is only written after the loop, and an uncaught setup rejection
+          // (a dead id, a route that moved) used to abort every screen after
+          // it AND the report itself.
+          try {
           if (opts.mock && setupApiMocks) await setupApiMocks(page);
           if (SAFE_CSS) {
             await page.addInitScript((css) => {
@@ -293,7 +318,13 @@ async function shot(page, file) {
             report[tag]["advanced"] = await page.evaluate(AUDIT, ["#advanced", SAFE]);
             await shot(page, `${tag}${SAFE_TAG}-advanced.png`);
           }
-          await page.close();
+          } catch (e) {
+            const msg = String((e && e.message) || e).split("\n")[0];
+            if (!report[tag][name]) report[tag][name] = { error: `setup failed: ${msg}` };
+            console.warn(`  ! ${name}: ${msg}`);
+          } finally {
+            await page.close().catch(() => {});
+          }
         }
       }
     }

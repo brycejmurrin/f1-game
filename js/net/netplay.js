@@ -747,7 +747,7 @@ const NetPlay = (function () {
       predict: (c, now) => {
         if (!active) return null;
         const r = c == null ? remoteList()[0] : remotes.get(G.wireId(c));
-        return r ? r.interp.predict(now == null ? c : now) : null;
+        return r ? r.interp.predict(now == null ? nowMs() : now) : null;
       },
       sendEvent: (type, data) => (sessions.size ? broadcast(type, data) : false),
       onEvent: (type, fn) => (session ? session.onEvent(type, fn) : false),

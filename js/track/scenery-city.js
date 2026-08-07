@@ -21,7 +21,7 @@ const SceneryCity = (function () {
 
   function create(ctx) {
     const { out, glassBuf, def, theme, NIGHT, MAT, lod,
-            seat, cantilever,
+            seat,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             rejBox, blockAt, onTrack, hash, vadd, kitOf,
             anchor, along, massBlocked, massAdd } = ctx;
@@ -752,7 +752,9 @@ const SceneryCity = (function () {
         building(k, side, gap, w, h, depth + (s - 0.5) * depth * 0.3, {
           wall: col, floor: opts.floor || (4 + s * 3),
           lit: lit, windowCol: opts.windowCol || wcol,
-          setback: h > minH + (maxH - minH) * 0.66,   // tall units step back at the top
+          // Tall units step back at the top (building()'s "setback" massing);
+          // the rest keep the hash-picked archetype.
+          arch: h > minH + (maxH - minH) * 0.66 ? "setback" : undefined,
         });
         idx++;
       });

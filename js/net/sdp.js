@@ -235,7 +235,7 @@ const NetSdp = (function () {
     }
     if (!cands.length) return null;                       // nothing to connect to
 
-    let n = 3 + 32 + 1 + uf.length + 1 + pw.length + 1;
+    let n = 3 + 32 + 1 + uf.length + 1 + pw.length;
     for (const c of cands) n += 1 + ADDR_LEN[c.kind] + 2;
     const out = new Uint8Array(n);
     let o = 0;

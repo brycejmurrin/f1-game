@@ -21,11 +21,6 @@ for (let i = 0; i < 10; i++) {
   if (prev != null) gained += st.prog - prev;
   prev = st.prog;
 }
-// bankAngle accessor sanity: should be non-zero somewhere on a banked track
-const hasBank = await page.evaluate(() => {
-  const t = window.__apex; // probe a few positions for authored bank via physState if exposed
-  return true; // accessor tested implicitly by no-crash drive on zandvoort
-});
 console.log("console errors:", errs.filter((e)=>!e.includes("favicon")).slice(0,4));
 console.log("finite:", finite, " progress:", gained.toFixed(1), "m");
 console.log(finite && gained > 50 && errs.filter((e)=>!e.includes("favicon")).length === 0

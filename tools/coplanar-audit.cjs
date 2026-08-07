@@ -13,7 +13,7 @@
 //
 // THE LOAD-BEARING IDEA: only SAME-FACING coplanarity can fight.
 //
-// gl.enable(CULL_FACE) + cullFace(BACK) is on (js/render/glx.js:372-373) and
+// gl.enable(CULL_FACE) + cullFace(BACK) is on (js/render/glx.js, GL state setup) and
 // addBox reverses winding so the OUTWARD face survives (js/track/geom.js:70-82).
 // So for an ANTI-parallel coplanar pair — a window pane's inner face against the
 // wall it sits on, a stacked mass section, an abutting terrace facade, a kerb on
@@ -81,7 +81,8 @@ const PLANAR_TOL = 0.020;    // reject non-planar vertex fans (m)
 const SPOT = 40;             // spot clustering cell (m), same as clip-audit
 
 // Depth-buffer resolution. 24-bit non-reversed; cockpit/hood near plane is the
-// worst case (js/game.js:3736 — 0.3 for cockpit|hood, 0.9 otherwise, far 900).
+// worst case (js/game.js `_nearM` — 0.3 for cockpit|hood, 0.9 otherwise,
+// `farPlane` 900).
 const NEAR = 0.3, FAR = 900, DEPTH_BITS = 24;
 const K = (1 / NEAR - 1 / FAR) / Math.pow(2, DEPTH_BITS);
 // Distance at which a plane gap collapses to one depth unit. gap 0 => 0 => it

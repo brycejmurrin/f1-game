@@ -22,7 +22,7 @@ const LiveryTex = (function () {
   // maps panel UVs to these rects. Do NOT change these numbers — the geometry
   // depends on them.
   const REGIONS = {
-    crest:  { x: 40,  y: 40,  w: 430, h: 430 },  // team crest/logo (sidepods, nose)
+    crest:  { x: 40,  y: 40,  w: 430, h: 430 },  // team crest/logo (engine-cover top; badge copy on the fin via finBadge)
     titleA: { x: 500, y: 40,  w: 484, h: 170 },  // primary sponsor wordmark
     titleB: { x: 500, y: 240, w: 484, h: 130 },  // secondary sponsor
     wing:   { x: 40,  y: 520, w: 620, h: 150 },  // rear-wing sponsor band
@@ -788,11 +788,12 @@ const LiveryTex = (function () {
       for (const cb of _logosReady) { try { cb(); } catch (_) {} }
     }
   }
-  // SELF-INITIALISING on purpose. This used to be kicked off by js/game.js, so
-  // any consumer that loads liverytex.js on its own — tools/carview.html, the
-  // crest sheets, tests — silently fell back to the vector crests and looked
-  // like the real marks had not been picked up at all. The team ids come from
-  // SHORT, which is the canonical list in this file.
+  // SELF-INITIALISING on purpose — this call is THE kick-off (game.js only
+  // subscribes to onLogosReady for decal-cache invalidation; it must not call
+  // loadLogos too, or all 11 PNGs load twice). Loading here means any consumer
+  // that loads liverytex.js on its own — tools/carview.html, the crest sheets,
+  // tests — gets the real marks instead of silently falling back to the vector
+  // crests. The team ids come from SHORT, the canonical list in this file.
   try { loadLogos(Object.keys(SHORT)); } catch (_) {}
 
   // Register a mark at RUNTIME for one team — how MY TEAM's uploaded logo gets
@@ -1014,7 +1015,7 @@ const LiveryTex = (function () {
     // the background set now, so the ink (or its halo) has to clear it too.
     const board = (typeof Car3D !== "undefined" && Car3D.PANEL_COL) || [0.82, 0.82, 0.86];
     // The sponsor board now covers the whole titleA/titleB rect (car3d.js sizes
-    // the flank span to yFrac 0.24..0.84 to match podDecal), so the wordmark sits
+    // the flank span to yFrac 0.32..0.80 to match podDecal), so the wordmark sits
     // on ONE surface and inks for it alone — ~12.6:1 on every livery instead of
     // the compromise between board and paint that forced a halo on 70% of them.
     const podBg = [board];

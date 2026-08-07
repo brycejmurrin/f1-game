@@ -649,20 +649,18 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    washed with the menu behind it reading through. */
 .screen.dim { background: rgba(0, 0, 0, 0.72); }
 
-/* THE LADDER IS ONLY FOR THE SCREENS STILL IN NORMAL FLOW.
+/* Z-INDEX IS ONLY FOR THE SCREENS STILL IN NORMAL FLOW.
    A screen migrated to `<dialog>.showModal()` (js/game/topmodal.js) renders in
    the TOP LAYER, where z-index is not consulted at all — nothing in the document
    can paint over it and no `overflow: hidden` or transformed ancestor can clip
-   it. Every migrated screen still carried a value here (#spotifypanel 42,
-   #advanced 41, #howtoplay 40, #customize 36, #results and #standings 30 …) and
+   it. Every migrated screen once carried a value here (#pausemenu 30,
+   #pmsettings 35, #race-settings 30, #spotifypanel 42, #advanced 41 …) and
    every one of them was dead: inert numbers that still LOOK like a working
    ladder, which is worse than a ladder, because the next person maintains them.
-   Deleted. What is left is the four screens that are still `<div>`s because they
-   own or gate a flow — and they no longer have to be reasoned about against
-   twelve neighbours that have left the stacking context entirely. */
-#pausemenu { z-index: 30; }
-#pmsettings { z-index: 35; }
-#race-settings { z-index: 30; }
+   Deleted — this file declares no screen z-index at all. The screens still in
+   normal flow because they own or gate a flow are the `<div>`s #select and
+   #career (z 25, css/menus.css / css/career.css) and #carsetup (z 35,
+   css/carsetup.css); their values live beside the screens they order. */
 
 /* One-per-line stacks (pause menu, settings groups, results actions). */
 .stack { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }

@@ -29,16 +29,18 @@ function buildResults(order) {
     const sw = document.createElement("span"); sw.className = "res-swatch";
     sw.style.background = G.cssCol(c.team.color);
     const nm = document.createElement("span"); nm.className = "res-name";
+    // A retirement says WHY in the place a penalty would say how much: the two
+    // never co-occur (a car that stopped was not given time back).
+    // Set textContent FIRST — it replaces ALL children, so the PLAYER tag must
+    // append after it (appending first silently destroyed the tag every race).
+    nm.textContent = c.code + "  " + c.name
+      + (c.retired ? "  (" + (c.dnf || "dnf") + ")" : c.penalty ? "  (+" + c.penalty + "s)" : "");
     if (other) {
       // Text as well as colour, for the same reason the quali sheet does it.
       const tag = document.createElement("span");
       tag.className = "q-real-tag"; tag.textContent = " PLAYER";
       nm.appendChild(tag);
     }
-    // A retirement says WHY in the place a penalty would say how much: the two
-    // never co-occur (a car that stopped was not given time back).
-    nm.textContent = c.code + "  " + c.name
-      + (c.retired ? "  (" + (c.dnf || "dnf") + ")" : c.penalty ? "  (+" + c.penalty + "s)" : "");
     const pt = document.createElement("span"); pt.className = "res-pts";
     // Classified last and scoring nothing — the same rule endRace awards on, said
     // in the one word the sport uses for it.

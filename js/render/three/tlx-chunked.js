@@ -45,7 +45,8 @@
  * — hence the explicit call.) ~90 MB reclaimed on the Vegas props+glass.
  *
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
- *     TLXShaders.chunked = (THREE, ctx) => ({ build, cull, visList, free })
+ *     TLXShaders.chunked = (THREE, ctx) =>
+ *         ({ build, cull, visList, releaseMirrors, free })
  * NEVER touches THREE at script eval — three exists only inside TLX.create().
  *
  *   build(data, cellSize)      {pos,nrm,col,idx,mat?} -> chunked mesh handle
@@ -53,6 +54,9 @@
  *                              column-major view-proj `vp` (+ radial cap when
  *                              dist > 0); returns the count. Zero alloc.
  *   visList                    the module-scratch result array cull() fills
+ *   releaseMirrors(mesh)       drop the CPU mirrors of the shared vertex
+ *                              attributes once the GPU buffers provably exist
+ *                              (tlx.js present() calls it; staged release above)
  *   free(mesh)                 dispose every chunk geometry (or the fallback)
  */
 "use strict";

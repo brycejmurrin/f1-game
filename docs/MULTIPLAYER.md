@@ -52,17 +52,26 @@ the room-code rendezvous, over PUBLIC NOSTR RELAYS via a vendored Trystero
 broker because accepting arbitrary events from anonymous clients is what a
 relay is FOR — HiveMQ's and EMQX's free brokers say outright they must NOT be
 used by real applications, and an earlier build did exactly that. SIGNALLING
-ONLY: Trystero opens its channel with createDataChannel("data") and no
-options, i.e. reliable+ordered, which is precisely wrong for snapshots — so it
-carries the two invite/answer STRINGS and the race then runs over our own PC.
-The host posts and waits; the guest passes a `reply` because it cannot answer
+ONLY: it carries the two invite/answer STRINGS and the race then runs over our
+own PC. The DEFAULT path is `directExchange()`: our own WebSockets straight to
+the relays, reusing Trystero's framing helpers (createEvent/subscribe) so the
+events are well-formed Nostr — the payload sealed with AES-GCM under a key
+derived from the room code (`NetRendezvous.seal`/`open`, called on every
+exchange), offers and answers on SEPARATE hashed topics so neither side reads
+its own message back. The full Trystero room join (createDataChannel("data"),
+no options, i.e. reliable+ordered — precisely wrong for snapshots) survives
+only as an OPT-IN LEGACY branch behind localStorage apex26.nostrTrystero. The
+host posts and waits; the guest passes a `reply` because it cannot answer
 until it has seen the invite. ROOM CODES ARE BEST-EFFORT AND THE INVITE LINK
-IS NOT: public relays increasingly refuse anonymous ephemeral events, and a
-refusal is a NIP-01 OK=false that the vendor turns into a console.warn — no
-retry, the relay stays in the pool, nothing reaches us, and getRelaySockets()
-still reports it OPEN because the WebSocket is. So exchange() intercepts that
-warning, and reports `all_rejected` when every live relay has refused.
-Measured on hardware: all six shipped relays healthy, wellorder answering
+IS NOT: public relays increasingly refuse anonymous ephemeral events with a
+NIP-01 OK=false, and getRelaySockets() still reports a refusing relay OPEN
+because the WebSocket is. The `all_rejected` detection for that is
+LEGACY-BRANCH-ONLY: the vendor turns each refusal into a console.warn and
+nothing else, so the legacy exchange() intercepts that warning and reports
+`all_rejected` when every live relay has refused — but the default
+directExchange() reads only `["EVENT", …]` frames and ignores OK=false, so a
+pool refusing every event is a silent wait until the timeout. Measured on
+hardware (legacy branch): all six shipped relays healthy, wellorder answering
 "blocked: spam not permitted", both players on spinners. Pick relays with
 tools/nostr-probe.mjs — which tests the only criterion that decides this,
 whether a relay accepts an ephemeral event from an UNKNOWN pubkey — never by
@@ -74,19 +83,22 @@ room codes — the BACKUP way in, and the only part of the game leaning on
 someone else's server. NOTHING TO DEPLOY: a public Nostr relay network is the
 default meeting place (js/net/nostr.js), and worker/rendezvous.js (one
 Cloudflare Durable Object per code) is an optional upgrade when its URL is
-set. On the DEFAULT public path the payload is encrypted by Trystero under the
-room code and the room id is a hash of it, so a relay operator carries bytes it
-cannot read and the code is the only secret.
+set. On the DEFAULT public path the payload is sealed with AES-GCM under a key
+derived from the room code (`seal()`/`open()`, called by
+`NetNostr.directExchange` on every exchange) and the room id is a hash of the
+code, so a relay operator carries bytes it cannot read and the code is the only
+secret.
 
 **That is not yet true of the optional private Worker path.** `httpPut` posts
 the invite/answer as plain JSON, so an operator running `worker/rendezvous.js`
-CAN read the SDP it relays. `seal()`/`open()`/`topicFor()` implement exactly the
-sealing that would fix it and are unit-tested, but nothing calls them — the
-blocker is `worker/rendezvous.js`'s single-writer rule, which rejects a second
+CAN read the SDP it relays. `seal()`/`open()` implement exactly that sealing
+and are LIVE on the default public path; only `topicFor()` and the private
+`httpPut` Worker path remain unwired — the blocker there is
+`worker/rendezvous.js`'s single-writer rule, which rejects a second
 `offer` by comparing the stored payload against the incoming one. AES-GCM uses a
 random IV, so a host re-posting the SAME offer would produce different bytes and
-be turned away with 409 "that code is already in use". Wiring the sealing means
-changing that comparison too, and testing both halves against a deployed
+be turned away with 409 "that code is already in use". Sealing the Worker path
+means changing that comparison too, and testing both halves against a deployed
 Worker. Until then the private relay is a broker you must TRUST, which is a
 reasonable trade for one you run yourself — but it is a different claim from the
 public path's, and it was previously documented as the same one. A code is DISPOSABLE,

@@ -5,7 +5,9 @@
    (10 s → 20 s, max 2 retries — long waits avoid consuming more quota; callers
    that need more can add their own circuit-level retry on top). Retry-After
    header honoured. On final failure serves stale cache if present (with
-   Log.warn on the "data" namespace), else rejects. Never auto-polls.
+   Log.warn on the "data" namespace), else rejects — EXCEPT live-session auth
+   lockouts ("Live F1 session…" / HTTP 401 / 403), which always reject rather
+   than pass off stale classification as fresh. Never auto-polls.
    No DOM / localStorage access at module top level. */
 const F1API = (function () {
   "use strict";
@@ -98,9 +100,14 @@ const F1API = (function () {
             if (j.detail) throw new Error(j.detail);
             if (j.error) throw new Error(j.error);
           } catch (e) {
-            if (e.message && e.message !== "Unexpected end of JSON input" && e.message.indexOf("Unexpected token") === -1 && e.message !== "Unexpected EOF") {
-              throw e;
-            }
+            // A non-JSON error body just falls through to the generic
+            // "HTTP <status>" error below; the deliberate detail/error throws
+            // above must surface. Matched structurally: JSON.parse failures
+            // are SyntaxErrors on every engine, where the V8 message strings
+            // this used to match let Firefox/Safari parse errors escape —
+            // and an escaped raw SyntaxError lacks "HTTP 401"/"HTTP 403",
+            // defeating request()'s refusal to serve stale cache on lockouts.
+            if (!(e instanceof SyntaxError)) throw e;
           }
           throw new Error("HTTP " + res.status + " for " + url);
         });
@@ -272,11 +279,14 @@ const F1API = (function () {
 
   function meetingTtl(meetingKey) {
     const ds = meetingDates[meetingKey];
-    if (!ds) return TTL_HISTORIC;
+    // Unknown recency: stay conservative so genuinely-live data still
+    // refreshes — the same default sessionTtl() makes. A future date_start
+    // (negative age) is an upcoming weekend whose session list is still
+    // filling in; only a meeting comfortably in the past is frozen.
+    if (!ds) return TTL_LATEST;
     const age = Date.now() - Date.parse(ds);
-    return isFinite(age) && age >= 0 && age <= 7 * 24 * HOUR
-      ? TTL_LATEST
-      : TTL_HISTORIC;
+    if (!isFinite(age) || age < 0) return TTL_LATEST;
+    return age <= 7 * 24 * HOUR ? TTL_LATEST : TTL_HISTORIC;
   }
 
   function mapSession(s) {

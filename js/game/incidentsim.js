@@ -122,7 +122,7 @@ const IncidentSim = (function () {
     try { _r3 = (localStorage.getItem("apex26.r3Contact") || "1") !== "0"; } catch (e) {}
     try { _c1 = (localStorage.getItem("apex26.c1Pileup") || "1") !== "0"; } catch (e) {}
     return { owns, active, notifyWall, notifyCar, preStep, postStep, status,
-             setFlags, reset, forceLaunch };
+             setFlags, reset, forceLaunch, release };
   }
 
   // Any incident feature on AND the Rapier side-world available. A cheap read;
@@ -154,6 +154,21 @@ const IncidentSim = (function () {
       }
     }
     return { r2Airborne: _r2, r3Contact: _r3, c1Pileup: _c1 };
+  }
+
+  // Teleport authority: __apex.jump() and rescuePlayer() overwrite a car's pose,
+  // and a live takeover would silently re-impose the Rapier body's old pose over
+  // them every tick (measured: a wall-wedged car jumped a lap away kept reading
+  // its old wall position at handback crawl speed). The teleporting caller hands
+  // the car back FIRST; the anomaly path restores last-good state, which the
+  // caller then overwrites — deterministic either way. Returns whether a
+  // takeover was actually released.
+  function release(c) {
+    const i = G && G.cars ? G.cars.indexOf(c) : -1;
+    if (i < 0 || !_owned.has(i)) return false;
+    for (const inc of _incidents.slice())
+      if (inc.cars.includes(i)) handbackCar(inc, i, true);
+    return true;
   }
 
   // Full reset (tests): abort every takeover back to bespoke, zero counters.
@@ -435,10 +450,12 @@ const IncidentSim = (function () {
             }
           } catch (e) {}
           // Speed retention: take the real horizontal speed, capped at RETAIN_MAX×
-          // the pre-incident speed, floored (for a non-crash landing) at
-          // RETAIN_FLOOR× so it isn't dead-stopped into an instant rescue.
+          // the pre-incident speed, floored at RETAIN_FLOOR× so a clean settle
+          // isn't handed back dead-stopped into an instant rescue. The old
+          // min(floor, outV) lower bound meant the floor only ever applied at
+          // EXACTLY zero — every nonzero settle handed back at crawl speed.
           let outV = fin(c.speed) ? Math.abs(c.speed) : 0;
-          if (inV > 0) outV = clamp(outV, Math.min(inV * RETAIN_FLOOR, outV || inV * RETAIN_FLOOR), inV * RETAIN_MAX);
+          if (inV > 0) outV = clamp(outV || inV * RETAIN_FLOOR, inV * RETAIN_FLOOR, inV * RETAIN_MAX);
           c.speed = fin(outV) ? outV : (inV * RETAIN_FLOOR);
           c.vLat = 0; c.yawRateCur = 0;
           c.wasOnWall = false; c.rescueT = 0;
@@ -490,5 +507,5 @@ const IncidentSim = (function () {
   }
 
   return { create, owns, active, notifyWall, notifyCar, preStep, postStep, status,
-           setFlags, reset, forceLaunch };
+           setFlags, reset, forceLaunch, release };
 })();

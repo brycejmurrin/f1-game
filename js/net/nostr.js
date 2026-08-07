@@ -1,5 +1,5 @@
 /*
- * NetNostr — the room-code rendezvous, over public Nostr relays via Trystero.
+ * NetNostr — the room-code rendezvous, over public Nostr relays.
  *
  * WHY NOSTR AND NOT A PUBLIC MQTT BROKER. The first version of this used the
  * free public MQTT brokers (EMQX, HiveMQ, Mosquitto). It worked, and it should
@@ -10,23 +10,28 @@
  *
  * Nostr relays are the opposite case. Accepting arbitrary signed events from
  * anonymous clients is what a relay is FOR — it is the protocol's entire
- * premise, not a courtesy being abused. Trystero's Nostr strategy connects to
- * five of several hundred at once, so no single operator is load-bearing.
+ * premise, not a courtesy being abused. The shipped RELAYS list below opens a
+ * handful at once, so no single operator is load-bearing.
  *
- * WHY TRYSTERO IS SIGNALLING ONLY, AND NOT THE TRANSPORT. Trystero opens its
- * data channel with `pc.createDataChannel("data")` and no options — reliable
- * and ordered. Our snapshot channel must be neither: a lost position update is
- * worthless by the time a retransmit arrives, and ordering it head-of-line
- * blocks every packet behind the one that dropped. So Trystero carries the two
- * invite/answer STRINGS and nothing else; the race then runs over our own
+ * HOW THE EXCHANGE ACTUALLY RUNS. The default path is directExchange(): our
+ * OWN WebSockets straight to the relays, publishing and subscribing the two
+ * invite/answer STRINGS and nothing else. The vendored Trystero module is
+ * used only for its Nostr event framing and signing helpers (createEvent /
+ * subscribe) — no Trystero room is opened. The race then runs over our own
  * RTCPeerConnection with its unreliable state channel, its reliable event
- * channel, and its TURN relay. Everything downstream is untouched.
+ * channel, and its TURN relay; everything downstream is untouched. The old
+ * route — a full Trystero room, whose own WebRTC data channel carried the
+ * strings — survives as the opt-in legacy branch in exchange(), behind
+ * localStorage apex26.nostrTrystero; directExchange()'s header records why
+ * it was replaced.
  *
- * WHAT THE RELAYS SEE. Trystero's `password` option encrypts the signalling
- * payload, and the room id is a hash of the code rather than the code itself.
- * We pass the room code as that password, so a relay operator carries bytes it
- * cannot read and someone watching the room namespace learns nothing. The code
- * is the secret — the same trust model as the invite code it replaces.
+ * WHAT THE RELAYS SEE. The payload is sealed with AES-GCM under a key derived
+ * from the room code (NetRendezvous.seal/open), and the topics are hashes of
+ * the code rather than the code itself — so a relay operator carries bytes it
+ * cannot read, and someone watching the room namespace learns nothing. The
+ * code is the secret: the same trust model as the invite code it replaces.
+ * (On the legacy branch, Trystero's `password` option gives the equivalent
+ * guarantee.)
  *
  * WHY IT IS LOADED LATE. Trystero is an ES module and ~170 KB with its schnorr
  * dependency. It is imported the first time somebody uses a room code and

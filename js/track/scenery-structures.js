@@ -555,7 +555,12 @@ const SceneryStructures = (function () {
         : cols[Math.floor(t * cols.length) % cols.length];
       const prevMat = out._mat;
       out._mat = MAT.FABRIC;
-      addBox(out, c, [thick, h, len], pick(hash(seed * 1.7)), b);
+      // Band colour: at NIGHT clamp below pick()'s phone-screen branch
+      // (t > 0.945 → HDR [2.5,2.3,1.9]) — the whole band lighting up as one
+      // glowing slab is exactly the read the speckle exists to avoid. The HDR
+      // colour stays reachable only through the speckle pick(hp) calls below.
+      const bt = hash(seed * 1.7);
+      addBox(out, c, [thick, h, len], pick(NIGHT ? Math.min(0.94, bt) : bt), b);
       // One speckle head per ~6 m, capped — the same budget monza's tieredBowl
       // arrived at by hand. Each stands proud of the band (taller, nudged
       // trackward) so it is never coplanar with it: buried inside it would cost
@@ -830,8 +835,17 @@ const SceneryStructures = (function () {
       addCyl(out, vadd(p.c, p.u, -0.3), 0.06, postH + 0.3, [0.55, 0.55, 0.58], 4, b);   // base sunk
       if (kind === "speed") {
         const R = 0.52, cc = vadd(p.c, p.u, postH + R);
-        addFrustum(out, cc, R, R, 0.05, [0.85, 0.16, 0.14], 12, b);                       // red rim disc
-        addFrustum(out, vadd(cc, p.r, -side * 0.02), R * 0.80, R * 0.80, 0.05, [0.95, 0.95, 0.93], 12, b);  // white face
+        // The disc stands VERTICAL facing the road: the ring spans (u,t) and
+        // the 5 cm depth runs along -side*r — the same toward-the-viewer axis
+        // the digit relief uses. addCyl, not addFrustum: the frustum emits
+        // side quads only (no caps), so face-on the disc would have no visible
+        // face; the cylinder's top cap IS the sign face, auto-oriented toward
+        // the track. (The old code passed [r,u,t], which laid both discs flat
+        // as horizontal open rings around the post — floating digits.)
+        const fwd = [-side * p.r[0], -side * p.r[1], -side * p.r[2]];
+        const db = [p.u, fwd, p.t];
+        addCyl(out, cc, R, 0.05, [0.85, 0.16, 0.14], 12, db);                             // red rim disc
+        addCyl(out, vadd(cc, fwd, 0.02), R * 0.80, 0.05, [0.95, 0.95, 0.93], 12, db);     // white face
         const digs = String(Math.max(10, Math.min(99, value || 80))).split("").map(Number);
         digs.forEach((d, i) => {
           const dc = vadd(cc, p.t, (i - (digs.length - 1) / 2) * 0.36);

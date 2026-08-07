@@ -138,21 +138,10 @@
       };
 
       // ── 1. Grey concrete canyon + intermittent Saudi green/gold accents ───
-      // Prefer shared helper when present; else pale wall() + sparse stripe boxes.
+      // The shared helper is always wired (tracks.js assigns SceneryIdentity's
+      // toolkit into every scenery api), so no local fallback is needed.
       // Heights 1.3–1.5 m read as Jersey barriers (not the solid-green night rails).
-      const canyon = api.concreteCanyon || ((s0, s1, side, gap, opts) => {
-        const h = (opts && opts.h) != null ? opts.h : 1.4;
-        const col = (opts && opts.col) || GREY;
-        const thick = (opts && opts.thick) != null ? opts.thick : 0.45;
-        wall(s0, s1, side, gap, h, col, thick);
-        const step = (opts && opts.stripeStep) != null ? opts.stripeStep : 0.028;
-        let si = 0;
-        for (let s = s0; s < s1 - 1e-6; s += step, si++) {
-          if (hash(si * 7.3 + side * 2.1 + s * 40) > 0.38) continue; // intermittent
-          const stripe = (si % 2) ? GREEN : GOLD;
-          place(K(s), side, gap + 0.15, [0.12, 0.55, 3.2], stripe);
-        }
-      });
+      const canyon = api.concreteCanyon;
       // The wall runs in alternating GREEN and GOLD blocks rather than one
       // colour or a random speckle. Saudi event dressing colour-blocks its
       // barriers in long runs, and at 300 km/h a block is the only thing that

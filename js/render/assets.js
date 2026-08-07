@@ -18,9 +18,10 @@
  *     and WGX (WebGPU) does not — WGX has not ported the procedural material
  *     system either (js/render/webgpu/wgsl-chunks.js:147), so there is nothing
  *     there for a baked map to augment. Feature-detected, never assumed.
- *  3. IT IS OFF UNTIL ASKED. Uploading the arrays does NOT change the render:
- *     the lit shader's uMatTexMix is a LIGHTING TUNER knob shipped at 0. The
- *     pack is inert weight until someone moves `matTexMix`.
+ *  3. THE KNOB IS THE OFF-SWITCH. The lit shader's uMatTexMix is a LIGHTING
+ *     TUNER knob shipped at 1.0 (TUNE_DEFS matTexMix), so a present pack is ON
+ *     by default. `matTexMix` 0 / `__apex.matTex(0)` is the A/B off-switch that
+ *     restores the pure-procedural render — and at 0 the pack is never fetched.
  *
  * NO build step, no ES modules: "use strict" IIFE assigning one global
  * `Assets`. Loads after glx.js and before game.js. Nothing runs at load time.

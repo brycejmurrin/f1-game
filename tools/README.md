@@ -15,7 +15,7 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **motion-capture.mjs** | Capture RENDERED MOTION (screenshots can't — headless rAF is frozen at 0 fps). Records a driven clip via `recordVideo` (which ticks the loop), extracts frames, scores per-frame flicker. For temporal artifacts (z-fight/clipping flicker, shadow crawl, pop-in) and A/B-verifying a renderer fix. Default output: `scratch/captures/motion-capture/<track>/`. `motion-capture.mjs <track> [sec] [speed]`. | motion-capture |
 | **survey-track.mjs** | One-command circuit survey — self-boots the game and emits screenshots (aerial + orbit + driver's-eye per spot → `scratch/captures/survey-track/<id>/`) **and** a lateral ground-profile probe table with auto-flagged holes/steps. `survey-track.mjs <id> [label] [fracs]`. | survey-track |
 | **carshot.mjs** | Cropped studio-orbit car JPEG. Self-boots. `carshot.mjs [az] [tod] [teamIdx] [outPath]` → `artifacts/tmp/carshot.jpg`. | playwright-probe / car-viewer |
-| **check-bank.mjs**, **check-grip.mjs**, **check-roadfollow.mjs**, **check-steer.mjs** | Physics stability probes — verify no-NaN / forward-motion / banking grip / steering authority via the headless loop. | tune-physics |
+| **check-bank.mjs**, **check-grip.mjs**, **check-roadfollow.mjs**, **check-steer.mjs** | Physics stability probes — verify no-NaN / forward-motion / stability on a banked track / steering authority via the headless loop. | tune-physics |
 | **tune-sweep.mjs** | Measures how DRIVEABLE each notch of each handling slider is, so a default can be argued from data instead of feel. Drives the REAL DOM slider, then a closed-loop policy whose speed target comes from the circuit's curvature and a grip budget in m/s² — a force, so it is pace-invariant and PACE itself can be swept (the policies in `autopilot.spec.js` / `agent-drive-bench.spec.js` cannot: they carry bare m/s literals). Reports completion, off-track excursions, seconds off, slip and peak lateral g. `tune-sweep.mjs [--sliders ids] [--tracks ids] [--notches n,…] [--aggr f] [--json path]`. | tune-physics |
 | **audio-test.cjs** | Objective engine-audio pitch test (we can't listen headless). | audio-debug |
 | **bake-elevation.mjs** | Offline elevation baker — precompute per-track elevation profiles. | new-track |
@@ -60,7 +60,7 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data. Tests never call it and never touch the network. | new-track |
 | **import-circuit-path.mjs** | Projects a `bacinger/f1-circuits` (ODbL) GeoJSON feature into a `CircuitPaths` entry for `js/track/geo-paths.js`; `--self-check` regenerates the committed traces and diffs them so the projection can't silently drift. | new-track |
 | **fixture-consumer-audit.mjs** | RATCHET on `tests/fixtures.js` adoption: counts specs importing it, fails if the count drops, and pins the four load-bearing consumers. Raise its `FLOOR` when you migrate specs; never lower it. | — |
-| **vstd-lint.mjs** | The PACE invariant as a check instead of a paragraph — flags every `.speed` compared against a numeric literal without `vStd()` in `js/game.js` + `js/game/*.js`. `PACE` scales real m/s, so such a threshold is a different fraction of the car's envelope at every OVERALL SPEED setting; it escaped twice (A5's beached-rescue gate, A13's `c.otArmed`). Run bare for a report, or pass paths. Gated by `tests/vstd-invariant.test.mjs`, whose allow-list makes every legitimately-absolute site state its reason. | tune-physics |
+| **vstd-lint.mjs** | The PACE invariant as a check instead of a paragraph — flags every `.speed` compared against a numeric literal without `vStd()` in `js/game.js` + `js/game/*.js`. `PACE` scales real m/s, so such a threshold is a different fraction of the car's envelope at every OVERALL SPEED setting; it escaped four times (A5's beached-rescue gate, A13's `c.otArmed`, and A16's two FX-block cases). Run bare for a report, or pass paths. Gated by `tests/vstd-invariant.test.mjs`, whose allow-list makes every legitimately-absolute site state its reason. | tune-physics |
 | **output-paths.mjs** | Path-containment helpers enforcing the `artifacts/` vs `scratch/` output contract; `tests/output-paths.spec.js` gates it. | — |
 | **lighting-campaign/** | Batch lighting-sweep runner + its captures, driven by `tests/lighting-campaign.test.mjs`. | lighting-tuner |
 
@@ -92,6 +92,11 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 - Anything that edits `js/*`/`css/*` still needs a `?v=N` cache bump (bump-cache).
 - Never write disposable output to `/tmp`; use `artifacts/tmp/` or the standard `scratch/` subtrees.
 - `rtc-e2e.mjs` — a REAL WebRTC handshake between two pages (`npm run rtc:e2e`).
+  Covers the one path nothing else can: the loopback transport has no SDP, and
+  the lobby spec uses a fake transport because a real `RTCPeerConnection` never
+  finishes ICE gathering in a sandboxed CI browser. Deliberately outside every
+  test group — it takes minutes and depends on the host's network stack. Run it
+  by hand after touching `js/net/handshake.js` or `js/net/transport.js`.
 - `rtc-e2e-3p.mjs` — THREE real WebRTC peers in one room, which is the only
   thing that can test the multi-peer path: the loopback transport has no SDP
   and the lobby specs use a fake one, so `test:net` cannot see it. Checks that
@@ -134,8 +139,3 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   mode testable at all: on one machine ICE forms a direct pair instantly and
   TURN is never touched. Needs `npm i --no-save node-turn` — a test fixture,
   deliberately not a dependency. See its header for a known, unattributed drop.
-  Covers the one path nothing else can: the loopback transport has no SDP, and
-  the lobby spec uses a fake transport because a real `RTCPeerConnection` never
-  finishes ICE gathering in a sandboxed CI browser. Deliberately outside every
-  test group — it takes minutes and depends on the host's network stack. Run it
-  by hand after touching `js/net/handshake.js` or `js/net/transport.js`.

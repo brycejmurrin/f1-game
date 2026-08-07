@@ -194,6 +194,7 @@ const TrackModels = (function () {
       if (!validSize(spec.size) || !ctx.groundHeight) return false;
       const samples = Math.max(2, Math.round(spec.samples || 4));
       const depth = spec.size[0] / samples;
+      const posBefore = out.pos.length;
       let emitted = 0;
       for (let i = 0; i < samples; i++) {
         const dist = (spec.gap || 0) + depth * (i + 0.5);
@@ -206,13 +207,16 @@ const TrackModels = (function () {
         diagnostics.invalid.push({ id: spec.id || "ground-patch", reason: "no finite ground samples" });
         return false;
       }
-      diagnostics.emitted.push({ id: spec.id || "ground-patch", vertices: emitted, groundPatch: true });
+      // Real vertex count (buffer delta), matching modelGroup/overheadSpan —
+      // recording the box count here under-reported size ~24x.
+      diagnostics.emitted.push({ id: spec.id || "ground-patch", vertices: (out.pos.length - posBefore) / 3, groundPatch: true });
       return true;
     }
 
     function groundedSegments(spec) {
       spec = spec || {};
       if (!Array.isArray(spec.points) || spec.points.length < 2 || !ctx.groundHeight) return false;
+      const posBefore = out.pos.length;
       let emitted = 0;
       for (let i = 0; i < spec.points.length - 1; i++) {
         const a = spec.points[i], b = spec.points[i + 1];
@@ -246,7 +250,8 @@ const TrackModels = (function () {
           spec.basis || [right, up, forward])) emitted++;
       }
       if (!emitted) return false;
-      diagnostics.emitted.push({ id: spec.id || "grounded-segments", vertices: emitted, groundedSegments: true });
+      // Real vertex count (buffer delta) — see groundPatch above.
+      diagnostics.emitted.push({ id: spec.id || "grounded-segments", vertices: (out.pos.length - posBefore) / 3, groundedSegments: true });
       return true;
     }
 

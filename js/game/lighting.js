@@ -1,11 +1,12 @@
 /* Apex 26 — lighting tuner data + parametric light builders for js/game.js:
    TUNE_DEFS (the LIGHTING TUNER slider registry — the def values ARE the
-   shipped tuning), the live LT value object (mutated in place by game.js's
-   profile resolution and __apex.lightTune), floodColor / LAMP_KINDS (per-
-   theme + per-fixture light character) and buildTrackLights(track) (bakes
-   the per-track light records). No game state: profile persistence and the
-   (track, time-of-day, weather) resolution live in game.js. Must load
-   BEFORE js/game.js (see index.html). */
+   shipped tuning), the live LT value object (mutated in place by
+   js/game/light-store.js's profile resolution and __apex.lightTune),
+   floodColor / LAMP_KINDS (per-theme + per-fixture light character) and
+   buildTrackLights(track) (bakes the per-track light records). No game
+   state: profile persistence and the (track, time-of-day, weather)
+   resolution live in js/game/light-store.js. Must load BEFORE js/game.js
+   (see index.html). */
 const LightTune = (function () {
   "use strict";
 
@@ -257,11 +258,13 @@ const TUNE_DEFS = [
   // ── FX ── transient particle effects (js/game/particles.js pool)
   { id: "particleMul",  label: "PARTICLE FX",     group: "FX", min: 0, max: 2, step: 0.05, def: 1.0, help: "Transient particle amount — tyre smoke, collision sparks, gravel kickup and rain spray. 0 = off, 1 = as-shipped, 2 = double the emission rate." },
 ];
-// LT holds the LIVE values the driver reads every frame. They are resolved from
-// a per-CONDITION profile store: each (track, time-of-day, weather) combination
-// keeps its own set of overrides, so night+wet Monaco and day+dry Monza are
-// tuned independently. Resolution per id: condition profile → migrated legacy
-// global ("*") → TUNE_DEFS default. Only non-default values are stored.
+// LT holds the LIVE values the driver reads every frame. They are resolved by
+// js/game/light-store.js from a per-CONDITION profile store: each (track,
+// time-of-day, weather) combination keeps its own set of overrides, so
+// night+wet Monaco and day+dry Monza are tuned independently. Resolution per
+// id, lowest precedence first: TUNE_DEFS default → LightPresets["*"] →
+// LightPresets[key] → player "*" → player [key] (the player layers live in
+// localStorage). Only non-default values are stored.
 const LT = {};
 for (const d of TUNE_DEFS) LT[d.id] = d.def;
 

@@ -83,11 +83,6 @@
       const GRASS  = [0.32, 0.62, 0.28];
       const WATER  = [0.20, 0.45, 0.62];
       const WHITE  = [0.92, 0.92, 0.92], RED = [0.80, 0.15, 0.15];
-      // ---- Track centre (for skyline / lake placement reference) ----
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-
       // ====================================================================
       // ALBERT PARK LAKE — broad expanse of calm water dominating the circuit's
       // left side (s≈0.27–0.65 L). Multi-layered water planes with depth
@@ -348,8 +343,8 @@
       });
 
       // ---- Palm avenue along lakeside Lakeside Drive section (s≈0.50–0.60 L) ----
-      // Palms frame the dramatic lakeside stretch.  gap 26 keeps canopy clear of
-      // the guardrail at gap=3 and the grandstand shell that extends to ~gap+15m.
+      // Palms frame the dramatic lakeside stretch, planted at gap 15-23 —
+      // clear of the guardrail at gap=3.
       for (let j = 0; j < 10; j++) {
         const kk = (k(0.52) + j * 2) % n;
         palm(kk, -1, 15 + hash(kk * 9 + j) * 8, 12 + hash(kk * 12 + j) * 4, [0.21, 0.47, 0.25]);
@@ -544,7 +539,7 @@
           stage._mat = 0;
         }, { required: true });
       }
-      // marquee tent caps beside the s≈0.62 grandstand — at dist≥42, clear of stand
+      // marquee tent caps beside the s≈0.62 grandstand — at dist 34/42/50, behind the stand line
       for (let j = 0; j < 3; j++) {
         const a = anchor(k(0.62), 1, 34 + j * 8);
         if (onTrack(a.c[0], a.c[2], 6)) continue;
@@ -921,7 +916,7 @@
       gantry(0.0,  7.5, [0.30, 0.32, 0.36]);
       gantry(0.50, 7.0, [0.25, 0.27, 0.32]);
 
-      void prop; void cx; void cz; void WATER; void pyMin; void bush; void hedge; void cityFront; void addPyramid;
+      void prop; void WATER; void pyMin; void bush; void hedge; void cityFront; void addPyramid;
     },
   }
   );

@@ -15,7 +15,9 @@
  * consequence of the coordinate system: a car is a position along the road
  * plus an offset across it, so there is very little to send.
  *
- *   id     u8    index into cars[]
+ *   id     u8    G.wireId (teamIndex*2 + seat) — never a cars[] index: each
+ *                peer's grid is ordered differently, so only a grid-invariant
+ *                id can say WHICH car this is (netplay.js routes by it)
  *   s      u32   arc position, centimetres  (a 7 km circuit is 700,000 cm)
  *   x      i16   lateral offset, centimetres (±327 m — the road is ~8 m)
  *   head   u16   world heading, full turn mapped across the range

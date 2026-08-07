@@ -335,7 +335,7 @@ const WGX = (function () {
     // Shadow-pass objects (Phase 3).
     let shadowTex = null, shadowView = null, shadowSampler = null;
     let envCubeView = null, ssrView = null;   // Phase-4b: env-probe cube + SSR result (placeholders until their passes run)
-    let _envReady = true, _ssrReady = false;  // env reflection is analytic-sky (no probe needed); SSR flips true once its pass runs
+    let _ssrReady = false;   // SSR flips true once its pass runs (env reflection is analytic-sky — no probe gate needed)
     let _frameReflect = 0;   // wet-road SSR strength (== GLX present opts.reflect / game.js po.reflect); captured each present(), consumed by the NEXT begin()/_writeFrame to line up with the 1-frame ssrTex lag
     // ── Live env-cube probe (Phase-4b): a real RGBA16F cube captured one face/frame,
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
@@ -1324,7 +1324,7 @@ const WGX = (function () {
       // lightVP (floats 56..71) — the Z01-remapped sun view-proj, identical to the
       // matrix the depth map was rasterised with in shadowBegin (so refD matches).
       d.set(_shadowRendered ? shadowLVPData : IDENT, 56);
-      // params2 (floats 72..75): shadowOn, strength, texel, _. Sun below the
+      // params2 (floats 72..75): shadowOn, strength, texel, shadowBias. Sun below the
       // horizon (sunDir.y < -0.05) forces shadows off so a stale daytime depth
       // map can't leak shadows into a night scene.
       const sunUp = !sd || sd[1] > -0.05;
@@ -1356,9 +1356,10 @@ const WGX = (function () {
       d[78] = (f.groundMist != null ? f.groundMist : 0) * (T && T.mistDensity != null ? T.mistDensity : 1);
       d[79] = (T && T.mistHeight  != null) ? T.mistHeight  : 0.30;  // MIST HEIGHT
       // params4 (floats 80..83): pcssPen, shadowTintAmt, carReflect, ssrStrength.
-      // carReflect/ssrStrength are GATED on the env-probe / SSR passes having
-      // bound real resources (_envReady / _ssrReady below); until then the frame
-      // group holds 1×1 placeholders and both read 0.
+      // ssrStrength is GATED on the SSR pass having bound real resources
+      // (_ssrReady below); until then the frame group holds a 1×1 placeholder
+      // and it reads 0. carReflect needs no such gate — its reflection term is
+      // analytic-sky (no probe resource to wait for).
       // pcssPen is a GLX PENUMBRA-RATE knob (default 80, range 10-300) that GLX
       // feeds into `clamp((z-zb)*pcssPen,0,1)` → a 1.5-6 texel radius. The WGSL
       // shadow shader instead uses it DIRECTLY as `pcfStep = texel*(1+params4.x)`,
@@ -1368,7 +1369,7 @@ const WGX = (function () {
       // (≈1.3 texels), scaling with the knob and capped so it can't blow out again.
       d[80] = Math.min(2.0, ((T && T.pcssPen != null) ? T.pcssPen : 80) * 0.00375);
       d[81] = (T && T.shadowTintAmt != null) ? T.shadowTintAmt : 0.0;
-      d[82] = _envReady ? ((T && T.carReflect != null) ? T.carReflect : 0.0) : 0.0;
+      d[82] = (T && T.carReflect != null) ? T.carReflect : 0.0;
       d[83] = _ssrReady ? _frameReflect : 0.0;   // wet-road SSR strength = present opts.reflect (GLX), 0 until the SSR pass is ready
       // params5 (floats 84..87): envProbeStr — the REAL cube probe's strength, live only
       // after a full 6-face capture (_envProbeLive) and driven by the CAR ENV REFLECTION

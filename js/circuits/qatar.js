@@ -578,7 +578,7 @@
       // ================= KATARA TOWERS + LUSAIL STADIUM =======================
       // Real Lusail landmarks the brief flags as missing from an otherwise
       // anonymous random-box skyline. Both sit s 0.50-0.55, L, ~550 m out —
-      // the skyline() loop above carves out this frac range for them.
+      // alone on a horizon the section above deliberately leaves empty.
       (function katharaAndStadium() {
         const BRONZE = [0.20, 0.15, 0.10];
         const GOLD = [0.58, 0.46, 0.20], GOLD_ROOF = [0.66, 0.54, 0.26];

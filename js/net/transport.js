@@ -190,18 +190,16 @@ const NetTransport = (function () {
   // candidates while STUN worked, which is worse than shipping nothing,
   // because it looks like a relay exists and diagnosis chases the wrong thing.
   //
-  // So: no static TURN is shipped. A relay comes from ONE of
-  //   apex26.turnApi — a credentials URL (Metered-style: returns
+  // That is why no static CREDENTIALS ship — what ships is a credentials URL
+  // (THE SHIPPED RELAY, next block). iceServers() MERGES every source it has:
+  //   apex26.turnApi — your own credentials URL (Metered-style: returns
   //     {iceServers|iceServers:[…]} or a bare array), fetched by prefetchIce()
-  //     when the lobby opens and merged here once it arrives. The free tier is
-  //     50 GB/month on an account the game's OWNER controls — the model the
-  //     operator actually offers, rather than freeloading on credentials they
-  //     retired.
-  //   apex26.turn — a single static server you run yourself.
-  //
-  // Since build 972 there are also two free no-account relays, appended LAST
-  // so anything you configured still wins — but OFF unless opted into, and
-  // the block below says why that is not timidity.
+  //     when the lobby opens; when set it replaces the shipped URL, so a
+  //     player who configured one is never quietly moved onto another quota.
+  //   apex26.turn — a single static server you run yourself, listed first.
+  //   Since build 972, two free no-account relays, appended LAST so anything
+  //   you configured still wins — but OFF unless opted into, and the
+  //   free-relays block below says why that is not timidity.
   // THE SHIPPED RELAY. A Metered free-tier credentials URL on the game owner's
   // own account — the model the operator actually offers, rather than the
   // embeddable credentials they retired. It returns a fresh iceServers array
@@ -255,8 +253,8 @@ const NetTransport = (function () {
         return fetchedIce;
       }).catch((err) => {
         // No relay is a NORMAL state and must not block the lobby (see below),
-        // but CLAUDE.md documents prefetchIce() as the thing that has to land
-        // before a connection is built — and when it does not, every wire dump
+        // but docs/MULTIPLAYER.md documents prefetchIce() as the thing that has
+        // to land before a connection is built — and when it does not, every wire dump
         // reads relay:0 while the relay is demonstrably alive. Retained so that
         // symptom has a cause attached to it.
         Log.warn("net", "TURN credential fetch failed, gathering STUN-only: " + ((err && err.message) || err));

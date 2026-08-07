@@ -114,15 +114,25 @@ test("a caution RAISES immediately but does not LOWER before the hold", () => {
 });
 
 test("a stuck hazard cannot neutralise the race forever", () => {
-  // The hard cap. Without it, one piece of debris that never despawns holds a
-  // safety car for the rest of the race.
+  // The hard cap, now real. This test previously pinned the OPPOSITE ("the
+  // flag stays — the cap only applies once the picture clears"): the cap
+  // clause was dead code because MIN_HOLD always fired first and lowering
+  // only ran when the picture had cleared, so a never-despawning hazard held
+  // a safety car for the rest of the race — exactly what the constants'
+  // comments promised could not happen.
   const rc = load({ active: () => true, hazards: () => hazards(10, 2) }).create(makeCtx());
   run(rc, 1);
   assert.equal(rc.info().level, 3);
-  // sinceT only accumulates while a flag flies, and the SC cap is 90 s.
+  // SC cap is 90 s: the flag must DROP even though the hazard picture persists.
   run(rc, 95);
-  assert.equal(rc.info().level, 3,
-    "the hazard is still there, so the flag stays — the cap only applies once the picture CLEARS");
+  assert.equal(rc.info().level, 0,
+    "flown for its full cap, the flag drops to green — marshals had their window");
+  // The same stale picture must not instantly re-raise (re-arm hold)…
+  run(rc, 10);
+  assert.equal(rc.info().level, 0, "re-arm hold suppresses the stale picture");
+  // …but after the hold expires the (still-present) hazards legitimately re-arm.
+  run(rc, 50);
+  assert.equal(rc.info().level, 3, "after the hold, a persistent hazard re-raises");
 });
 
 test("switching the layer off DROPS a flag already flying", () => {

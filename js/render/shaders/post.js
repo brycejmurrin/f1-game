@@ -158,7 +158,6 @@ uniform float uStrength;
 uniform float uContact;  // contact-shadow strength (0 = off)
 uniform float uRadius;   // AO world-space sample reach (def 0.6)
 out vec4 outColor;
-const float NEARP = 0.1, FARP = 900.0;
 vec3 viewPos(vec2 uv) {
   float d = texture(uDepth, uv).r;
   vec4 c = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);

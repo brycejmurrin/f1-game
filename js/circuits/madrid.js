@@ -555,13 +555,8 @@
       // file. The pit/paddock modules below already occupy side R at gap 8-22,
       // so the main stand is built facing them from the OPPOSITE side of the
       // straight (side L) — fans across from the pits, not stacked on top of
-      // them. Two raked tiers + glazed suites + end walls reads as a proper
+      // them. Three raked tiers + glazed suites + end walls reads as a proper
       // international-broadcast main grandstand instead of a grey slab.
-      // Split into two bays rather than one 100 m stand. grandstandEx lays its
-      // crowd risers as rigid boxes along ONE node's tangent, so a 100 m span
-      // chords across a straight that is not actually straight — props-over-road
-      // measured the riser 0.77 m over the tarmac. Two 46 m bays follow the
-      // curvature and read as one continuous stand from trackside.
       // Kept to one 52 m bay. grandstandEx lays its crowd risers as rigid boxes
       // along ONE node's tangent, so the original 100 m span chorded across a
       // start "straight" that is not actually straight — props-over-road measured

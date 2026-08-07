@@ -25,8 +25,9 @@ const TrackMesh = (function () {
   const hash = (i) => { let x = Math.sin(i * 12.9898) * 43758.5453; return x - Math.floor(x); };
 
   // Corner apexes: local maxima of |curvature| above thresh. Returns
-  // [{k, sign, lo, hi}] — sign>0 = right turn (center of curvature on the
-  // right), lo/hi = node span where curvature stays above ~half the apex.
+  // [{k, sign, lo, hi}] — sign is the raw curvature sign: sign>0 = LEFT turn
+  // (measured; see the bank-zone note below), so its inside is the -x side and
+  // its outside +x. lo/hi = node span where curvature stays above ~half the apex.
   function findCorners(track, thresh) {
     const n = track.n, ds = track.total / n;
     const kv = new Float32Array(n), sg = new Float32Array(n);
@@ -201,7 +202,11 @@ const TrackMesh = (function () {
       }
     }
     for (const c of findCorners(track, 0.006)) {
-      const inside = c.sign > 0 ? 1 : -1;
+      // +curv = LEFT turn (the banking code above says so and is correct), so the
+      // inside of a c.sign>0 corner is the LEFT (-x) side. This read `? 1 : -1`
+      // under the retired "+k = right" belief, putting the full-length apex kerb
+      // on the OUTSIDE of every corner and the short exit kerb inside.
+      const inside = c.sign > 0 ? -1 : 1;
       ribbon(c.k - c.lo, c.k + c.hi, inside);
       markKerb(c.k - c.lo, c.k + c.hi, inside);
       const exLen = Math.max(2, Math.round(c.hi * 0.7));
@@ -316,12 +321,9 @@ const TrackMesh = (function () {
     const { n, px, py, pz, hw } = track;
     const pos = [], nrm = [], col = [], mat = [], trk = [];
     const idxArr = [];
-    const bp = track.bankP;
     const grid = nodeGrid(track);              // shared node grid (also used by buildTerrain/buildProps)
     const _cand = new Array(n);                // reusable candidate scratch for the shoulder clip
     const pal = track.def.palette;
-    const ka = pal.kerbA, kb = pal.kerbB;
-    const line = pal.line || [0.95, 0.95, 0.98];
     // Per-circuit tarmac & verge shade: nudge the base asphalt/grass by a stable
     // per-track hash so no two circuits share the exact same road tone — some
     // run a cooler/darker fresh-laid black, others a sun-bleached warmer grey;
@@ -415,7 +417,7 @@ const TrackMesh = (function () {
         // line analytically from the (s, x, hw) in `trk`. Columns 2/3/10/11 and
         // 6/7 still exist geometrically (they are removed in a follow-up) but
         // now carry plain asphalt, so the shader owns the paint outright and
-        // the two cannot disagree. `line` stays referenced by nothing here.
+        // the two cannot disagree.
         let c, m;
         if (v === 0 || v === 13) {
           c = grass; m = MAT.GRASS;
@@ -534,13 +536,9 @@ const TrackMesh = (function () {
         }
       }
     }
-    // Lowest point on the whole lap. The OUTER edge of every terrain ribbon
-    // settles to this baseline so that, on circuits with real elevation, the far
-    // grass of a raised section (e.g. COTA's Turn 1) never floats up across a
-    // lower part of the lap as a plane bisecting the car. The inner seam still
-    // tracks the road exactly; only the distant verts drop away.
-    let pyMin = Infinity;
-    for (let k = 0; k < n; k++) if (py[k] < pyMin) pyMin = py[k];
+    // The terrain baseline (the level distant verts settle toward) is owned by
+    // TrackSurface.profile — ribbon() reads surface.heightAt, which derives from
+    // the profile's own pyMin/floorY (surface.js).
     // For bridge sections the terrain ribbon stays at ground level so the
     // elevated deck floats above flat ground (supported visually by the bridge
     // pillars in buildProps) instead of pulling the whole ground plane up with it.

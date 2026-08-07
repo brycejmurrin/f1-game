@@ -284,7 +284,7 @@
           // Pole — slender dark steel column, 10 m tall
           addCyl(out, ap.c, 0.12, 10, [0.18, 0.18, 0.20], 6, [ap.r, ap.u, ap.t]);
           // Horizontal arm stub
-          addBox(out, vadd(ap.c, ap.u, 9.8), [side < 0 ? 1.8 : 1.8, 0.18, 0.18],
+          addBox(out, vadd(ap.c, ap.u, 9.8), [1.8, 0.18, 0.18],
                  [0.18, 0.18, 0.20], [ap.r, ap.u, ap.t]);
           // Lamp head — warm white, slightly yellow-tinted
           addBox(out, vadd(vadd(ap.c, ap.r, side * 0.9), ap.u, 9.65),

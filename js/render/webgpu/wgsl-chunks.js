@@ -438,10 +438,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // no -1..1 remap). shadowSamp is a comparison sampler — Level variant is legal
   // in non-uniform control flow. shadow = fraction lit (1 = fully lit).
   //
-  // PHASE 4: PCSS-STYLE PENUMBRA (F.params4.x = pcssPen) widens the PCF sample
-  // radius so contact edges stay crisp while the body softens — a fixed-kernel
-  // approximation of PCSS (no blocker search; pcssPen scales the filter step).
-  // pcssPen=0 keeps the exact Phase-3 1-texel 3×3 kernel (byte-for-byte no-op).
+  // PHASE 4: PCSS-STYLE PENUMBRA (F.params4.x = pcssPen). Near-field (inside
+  // 80% of the shadow range, pcssPen > 0) runs a REAL blocker search: a 4-tap
+  // min-depth read of blockerTex (findBlocker above) scales the PCF step with
+  // the receiver-blocker gap, so contact edges stay crisp while the body
+  // softens. Outside that band the kernel falls back to a fixed widening
+  // (step * (1 + pcssPen)). pcssPen=0 keeps the exact Phase-3 1-texel 3×3
+  // kernel (byte-for-byte no-op).
   var shadow = 1.0;
   if (F.params2.x > 0.5) {
     let sc = F.lightVP * vec4<f32>(in.wpos, 1.0);
@@ -698,13 +701,18 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // wgsl-post.js) scaled by wetness * ssrStrength — a real mirror where puddles pool.
   // Screen uv comes from the fragment framebuffer position / SSR texture size
   // (textureDimensions), so it stays aligned without a resolution uniform. Reuses
-  // envSamp (clamped). A 1×1 placeholder or ssrStrength=0 makes this a no-op.
+  // envSamp (clamped). Per the SSR pass's CONSUMER CONTRACT (wgsl-post.js) .a is
+  // the mix amount — 0 wherever the pass masked out or missed — and the blend is
+  // the darker-mirror substitution c*0.10 + rgb*0.92; honouring .a is what keeps
+  // masked-out texels (transparent black, incl. the 1×1 placeholder and the
+  // cleared texture) from darkening wet road toward black. ssrStrength=0 also
+  // makes this a no-op.
   let ssrStrength = max(F.params4.w, 0.0);
   if (wet > 0.001 && ssrStrength > 0.001) {
     let ssrUV = in.clip.xy / vec2<f32>(textureDimensions(ssrTex));
-    let ssr = textureSampleLevel(ssrTex, envSamp, ssrUV, 0.0).rgb;
-    let ssrK = clamp(wet * ssrStrength, 0.0, 1.0) * (1.0 - metalness);
-    color = mix(color, ssr, ssrK);
+    let ssr = textureSampleLevel(ssrTex, envSamp, ssrUV, 0.0);
+    let ssrK = ssr.a * clamp(wet * ssrStrength, 0.0, 1.0) * (1.0 - metalness);
+    color = mix(color, color * 0.10 + ssr.rgb * 0.92, ssrK);
   }
 
   // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so

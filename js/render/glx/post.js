@@ -455,7 +455,10 @@ const GLXPost = (function () {
         gl.uniform1f(godrayU.uTime, F.time);
         gl.uniform1f(godrayU.uCloudCover, F.cloud);
         gl.uniform1f(godrayU.uCloudSpeed, F.cloudSpeed);
-        // Lamp volumetrics: upload the nearest-8 lamps to the eye + the haze gate.
+        // Lamp volumetrics: upload the nearest-12 lamps to the eye (GR_MAX_LIGHTS
+        // slots) + the haze gate. The beam march in GODRAY_FS only reads the
+        // nearest 6 of them (shaders/post.js "nearest-6 lamps for beams" loop);
+        // slots 6-11 are uploaded headroom with no consumer today.
         let grNL = 0, grLampIdx = -1;
         const frameLights = F.lights, frameEye = F.eye;
         if (lampVol > 0 && frameLights) {

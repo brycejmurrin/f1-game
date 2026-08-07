@@ -6,8 +6,8 @@
 
    Rules and persistence live in js/game/career.js; this file is DOM only. Live
    game state comes through the ctx façade handed to CareerUI.create(ctx) at boot
-   (see the `G` object in game.js): els, $, cssCol, openGarage, openRaceSettings,
-   updateTrackPreview. Consumes globals Career, Teams, Tracks, Parts, GameAudio,
+   (see the `G` object in game.js): els, $, cssCol, openGarage,
+   openRaceSettings. Consumes globals Career, Teams, Tracks, Parts, GameAudio,
    plus DriverRatings, Reliability and GameTables — but only from inside the
    GUIDE builders, which run when a player opens the sheet rather than at eval
    time, so none of them is a load-order dependency.
@@ -253,8 +253,11 @@ function create(G) {
       + "you have earned carries over — that is the long arc.",
     ]));
     out.push(guideSection("RELIABILITY", [
-      "A race setting, and it ships OFF. Turn it on and cars stop — an "
-      + (Reliability.REASONS.filter((r, i, a2) => a2.indexOf(r) === i).join(", a ")) + ".",
+      "A race setting, and it ships OFF. Turn it on and cars stop — "
+      // a/an per reason, not one article baked into the join — "a accident"
+      // read like a typo next to the hand-written copy below, which gets it right.
+      + (Reliability.REASONS.filter((r, i, a2) => a2.indexOf(r) === i)
+          .map((r) => (/^[aeiou]/i.test(r) ? "an " : "a ") + r).join(", ")) + ".",
       ["Risk per race, best car to worst",
         Math.round(Reliability.TIER_RISK[0] * 100) + "% – "
         + Math.round(Reliability.TIER_RISK[Reliability.TIER_RISK.length - 1] * 100) + "%"],
@@ -516,11 +519,14 @@ function create(G) {
         else if (draft.teamId === "custom") draft.teamId = freshDraft().teamId;
         // The slot belongs to the MODE's set, so changing mode here has to move
         // the target with it — slot 3 of the driver set is not slot 3 of MY TEAM.
-        // -1 (that set is full) is left as-is: Career.start() falls back to the
-        // live slot of the set it is actually writing to.
+        // When the set is FULL (-1) do NOT touch the slot pointer: useSlot(id, 0)
+        // here loaded slot 0's EXISTING save, so Career.active() went true and
+        // START CAREER silently continued someone's old career instead of the
+        // one being configured. Career.start() falls back to the live slot of
+        // the set it is actually writing to.
         const free = Career.firstFree(id);
-        if (free >= 0) draft.slot = free; else delete draft.slot;
-        Career.useSlot(id, free >= 0 ? free : 0);
+        if (free >= 0) { draft.slot = free; Career.useSlot(id, free); }
+        else delete draft.slot;
         buildSetupPanes();
         if (G.soundOn) GameAudio.uiTick();
       };

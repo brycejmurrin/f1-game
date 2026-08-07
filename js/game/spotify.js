@@ -1154,7 +1154,10 @@ window.SpotifyMusic = (function () {
     on("as-sp-play", "click", () => {
       activate();                       // must happen inside the click itself
       if (!BACKEND.active()) return;
-      if (track) { try { player.resume(); } catch (e) {} } else playChosen();
+      // BACKEND.start(), not player.resume(): in the default REMOTE mode there
+      // is no local `player` object, so resume() threw into the empty catch and
+      // the PLAY button silently did nothing whenever a track was loaded.
+      if (track) BACKEND.start(); else playChosen();
     });
     on("as-sp-pause", "click", () => BACKEND.stop());
     on("as-sp-next", "click", () => BACKEND.skip());

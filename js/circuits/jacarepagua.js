@@ -103,7 +103,7 @@
       // Low hazy treeline closing the rest of the horizon (the seaward side).
       for (let i = 0; i < 34; i++) {
         const a = i / 34 * 6.2832;
-        if (a > 3.3 && a < 8.6) continue;   // leave the mountain arc alone
+        if (a > 3.3 || a < 2.2) continue;   // leave the (wrapped) mountain arc alone
         const h = hash(i * 11 + 3);
         const r = rad + 130 + h * 40;
         const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;

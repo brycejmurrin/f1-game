@@ -611,12 +611,12 @@ if (args.includes("--clip")) {
       console.log(`   ${h.ov.toFixed(1).padStart(7)} m3  ${h.a.name} x ${h.b.name}  ` +
                   `@(${((h.a.minX + h.a.maxX) / 2).toFixed(0)}, ${((h.a.minZ + h.a.maxZ) / 2).toFixed(0)})`);
   }
-  console.log(`\nNOTE: counts are NOT yet actionable. Dense scenery interpenetrates
+  console.log(`\nNOTE: counts are NOT actionable. Dense scenery interpenetrates
 by design — forest canopies, crowd boxes, stacked building detail — and this
-pass cannot tell those from mistakes because it has no model identity. To make
-it useful, tag primitives with their emitting call site (as --why does) and
-report only pairs from DIFFERENT models. Until then treat the ranked list as a
-lead, not a defect count.`);
+pass cannot tell those from mistakes because it has no model identity.
+tools/clip-audit.cjs is the actionable form (call-site tagging, cross-model
+pairs only, baseline-gated by tests/prop-clipping.test.mjs) — use that; treat
+this ranked list as a lead at most.`);
   process.exit(0);
 }
 

@@ -276,10 +276,9 @@ const DataTelemetry = (function () {
       // Driver chips → left pane; chart detail → right pane
       leftPane.appendChild(pick);
       rightPane.appendChild(detail);
-    }, function () {
-      if (myDriverGen !== driverGen) return;
-      clear(rightPane); rightPane.appendChild(emptyMsg(NO_TELEM_MSG));
     });
+    // No rejection arm: the .catch above resolves every failure to null, and
+    // the null/empty-drivers path already renders NO_TELEM_MSG.
   }
 
   // fetch one driver's fastest-lap bundle (extras = stints + pits for primary)

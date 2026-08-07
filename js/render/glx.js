@@ -54,8 +54,9 @@ const GLX = (function () {
   const IDENT4 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
   // Baked PBR material arrays (js/render/assets.js). Layer index == MAT id, so
   // the shader indexes them with the per-vertex material id it already carries.
-  // Null until a pack is loaded — the game ships without one and renders the
-  // pure-procedural look, so every path below has to survive them staying null.
+  // Null until a pack is loaded — a pack ships in assets/pack and loads at boot
+  // (matTexMix def 1.0), but load is async and can fail, so every path below
+  // has to survive them staying null and degrade to the procedural look.
   let matAlbedoTex = null, matNormalTex = null, matDummyArrTex = null;
   const MAT_TEX_LAYERS = 17;                                 // MAT.FLAT(0) … MAT.ASPHALT(16)
   const matTexScales = new Float32Array(MAT_TEX_LAYERS);     // world metres per tile; 0 = absent
@@ -922,10 +923,11 @@ const GLX = (function () {
     gl.uniform1f(litU.uMistHeight,  T && T.mistHeight  != null ? T.mistHeight  : 0.30);
     gl.uniform1f(litU.uShadowTintAmt, T && T.shadowTintAmt != null ? T.shadowTintAmt : 0.0);
     gl.uniform1f(litU.uWetDark,     T && T.wetDark     != null ? T.wetDark     : 1.0);
-    // BAKED MATERIALS knob. Default 0 = pure procedural, which is the shipped
-    // look AND the look when no asset pack is installed, so a missing pack and
-    // a slider at zero are the same render by construction.
-    bindMaterialMaps(T && T.matTexMix != null ? T.matTexMix : 0.0);
+    // BAKED MATERIALS knob. Ships at 1.0 (mirrors TUNE_DEFS matTexMix def);
+    // __apex.matTex(0) is the A/B off-switch back to pure procedural. A missing
+    // pack still renders procedural — bindMaterialMaps forces uMatTexMix to 0
+    // whenever no albedo array is loaded, whatever the slider says.
+    bindMaterialMaps(T && T.matTexMix != null ? T.matTexMix : 1.0);
     gl.uniform3fv(litU.uFogColor, frame.fogColor);
     // FOG DENSITY knob: scale the per-condition haze depth (multiplier, def 1).
     gl.uniform1f(litU.uFogDensity, frame.fogDensity * (T && T.fogDensityMul != null ? T.fogDensityMul : 1));
@@ -1040,8 +1042,9 @@ const GLX = (function () {
     // frame.noEnv forces it off for probe-less views (the SETUP MENU preview)
     // even when a stale cube lingers from a prior race — so the menu car reads
     // matte (gentle analytic sheen) instead of mirroring last race's scene.
-    // Fallback mirrors the TUNE_DEFS carEnvCube default (0 = probe OFF); the old
-    // 1.0 fallback inverted the shipped default for any caller with no tune obj.
+    // Fallback 0 (= probe OFF) is the SAFE side of the tier-gated TUNE_DEFS
+    // carEnvCube default (0.3 desktop / 0.0 mobile) — a caller with no tune obj
+    // gets no probe rather than the old 1.0 fallback's full-mirror surprise.
     gl.uniform1f(litU.uEnvStr, (envTex && envReady && !_envActive && !frame.noEnv)
       ? (T && T.carEnvCube != null ? T.carEnvCube : 0.0) : 0.0);
     // Point lights (floodlights / street lights). frame.lights is a flat array
@@ -1230,6 +1233,11 @@ const GLX = (function () {
     return n;
   }
 
+  // OPAQUE-ONLY: a blended instanced draw would drop depth writes (below) but
+  // would NOT mask alpha writes the way draw() does, so it would drag the SSR
+  // car-paint tag stored in scene alpha. Every current caller (the TrackGraph
+  // prop batches; tests/instanced-draw.spec.js) passes alpha 1 — route
+  // translucent work through draw() instead.
   function drawInstanced(batch, opts) {
     if (!batch || !batch.instances) return;
     const o = opts ? Object.assign({}, opts, { _instanced: 1 }) : { _instanced: 1 };

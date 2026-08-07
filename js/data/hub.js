@@ -39,7 +39,7 @@ const DataHub = (function () {
   let openFlag = false;
   let active = "schedule";
   let returnFocus = null;
-  const state = {};               // id -> {node, at, gen}
+  const state = {};               // id -> {node, at}
   const gen = {};                 // id -> load generation (ignores stale resolutions)
 
   /* ================= helpers ================= */

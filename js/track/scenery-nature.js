@@ -15,8 +15,8 @@ const SceneryNature = (function () {
     const { out, track, n, hw, px, py, pz, NIGHT, MAT, def, theme,
             clearTreeDist,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
-            addMountain, emit, RAW, rejBox, recordBarrier, groundYAt,
-            terrainYAt, onTrack, hash, upOf, vadd, bankOffsetAt } = ctx;
+            addMountain, emit, rejBox, recordBarrier, groundYAt,
+            terrainYAt, onTrack, hash, upOf, norm, vadd, bankOffsetAt } = ctx;
     const { CROWD_DAY } = TrackSceneryData;
 
     // Resolve a trackside anchor: ground position + the track basis [r,u,t] at
@@ -525,8 +525,8 @@ const SceneryNature = (function () {
     // `depth` m of recede, split into blocks by aisles. Empty seats + a dark
     // riser behind each row read as shadow, not sky, through the gaps. At night
     // most bodies go dark with a sparse scatter of phone-lights / camera flashes.
-    // Emitted with RAW.addBox (spectators always sit safely behind the shell, so
-    // the per-box on-road test is skipped for speed).
+    // Emitted with ctx.instance(..., {unguarded:true}) — spectators always sit
+    // safely behind the shell, so the per-box on-road test is skipped for speed.
     // `lift` (optional) raises the whole bank on the up axis — used by
     // grandstandEx to stack an upper deck above the lower rake.
     const crowdBank = (k, side, gap, len, rise, depth, riserCol, lift) => {
@@ -546,9 +546,9 @@ const SceneryNature = (function () {
         out._mat = MAT.CONCRETE;
         const riserC = vadd(vadd(a.c, a.u, up), a.r, side * back);
         // If the riser is rejected, this row has no seating — so skip its
-        // spectators too. The bodies below go out through RAW (unguarded), so
-        // without this they stayed behind as a row of people sitting on thin
-        // air where the stand had been dropped.
+        // spectators too. The bodies below go out unguarded, so without this
+        // they stayed behind as a row of people sitting on thin air where the
+        // stand had been dropped.
         if (rejBox(riserC, [1.3, 1.5, len], b)) continue;
         // The rejBox above stays explicit — it also decides whether this row's
         // spectators are emitted at all — so the replay below is UNGUARDED, which
@@ -589,7 +589,7 @@ const SceneryNature = (function () {
     // grandstandEx(): the full raked-stand model. grandstand() below is the
     // legacy 6-arg entry point and delegates here with `opts` empty — with no
     // opts this emits byte-identical geometry to the pre-split implementation,
-    // so all 248 existing call sites are untouched.
+    // so every existing call site is untouched.
     //
     // opts (all optional):
     //   livery     name into TrackSceneryData.STAND_LIVERIES; supplies
@@ -609,8 +609,8 @@ const SceneryNature = (function () {
       // rotation grandstandEx uses, but nothing read it — the table was dead
       // config and circuits hand-copied its values into local arrays instead.
       // It is now the FALLBACK, and only the fallback: an explicit opts.livery
-      // or a positional `shell` colour still wins, so the 221 of 226 call sites
-      // that specify one are untouched. In practice this governs the handful of
+      // or a positional `shell` colour still wins, so the call sites that
+      // specify one (nearly all of them) are untouched. In practice this governs the handful of
       // calls that ask for a stand without saying what colour it is, which is
       // exactly what a house style is for.
       // Picked by HASH off the node index, not by a sequential cursor: a cursor
@@ -764,9 +764,9 @@ const SceneryNature = (function () {
       if (NIGHT && roofKind !== "none")
         addBox(out, vadd(a.c, a.u, roofY - 0.65), [8.5, 0.28, len - 1], [1.30, 1.12, 0.74], [a.r, a.u, a.t]);
     };
-    // Legacy 6-arg entry point — 33 remaining call sites across js/circuits/*.js
-    // (the rest migrated to grandstandEx, which is now the ~230 of them). With no
-    // opts, grandstandEx reproduces the original geometry exactly.
+    // Legacy 6-arg entry point — 33 call sites remain across js/circuits/*.js
+    // vs 230 migrated to grandstandEx (counted 2026-08). With no opts,
+    // grandstandEx reproduces the original geometry exactly.
     const grandstand = (s, side, gap, len, shell, crowd) =>
       grandstandEx(s, side, gap, len, shell, crowd, null);
 
@@ -960,7 +960,7 @@ const SceneryNature = (function () {
     // Bush / shrub clump: 2-3 jittered cones offset around a centre so it reads
     // as an irregular clump of foliage rather than one uniform cone (every bush
     // on every track used to be geometrically identical).
-    //   opts: { form: "clump"(default) | "grass" | "agave" | "scrub", lobes }
+    //   opts: { form: "clump"(default) | "grass" | "agave", lobes }
     const bush = (k, side, dist, col, opts) => {
       const bform = (opts && opts.form) || "clump";
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];

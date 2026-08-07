@@ -653,14 +653,15 @@
       // The uncovered general-admission terracing that continues the
       // Arquibancadas round toward the climb — bare concrete, no canopy.
       arquibancada("interlagos-arq-subida", 0.86, -1, 16, 6, { rows: 7, roof: false });
-      // Upper terrace behind the three bays. crowdBank takes a NODE INDEX, not a
-      // lap fraction, and needs an explicit `depth` — called with (0.8375, …, 6)
-      // it indexed the node arrays at a fractional index (undefined -> NaN) and
-      // ran with depth undefined, so every row's setback was NaN. Split into two
-      // short banks on real nodes: a single 150 m bank is a rigid box laid on one
-      // node's tangent and chords straight across this bend.
-      crowdBank(K(0.830), -1, 30, 56, 6, 4.2);
-      crowdBank(K(0.845), -1, 30, 56, 6, 4.2);
+      // Upper terrace behind the three bays. crowdBank takes a LAP FRACTION —
+      // the helper applies K() itself — and has no depth argument. (Passing
+      // K(0.830)/K(0.845) node indices here re-applied K() to an integer,
+      // collapsing both banks onto node 0 at the pit straight as identical
+      // z-fighting duplicates.) Two short banks rather than one 150 m run:
+      // a bank is a rigid box laid on one node's tangent, and a single long
+      // one chords straight across this bend.
+      crowdBank(0.830, -1, 30, 56, 6);
+      crowdBank(0.845, -1, 30, 56, 6);
       cameraTower(K(0.8375), 1, 10, { h: 16 });
       for (const [s, col] of [[0.822, [0.96, 0.82, 0.16]], [0.853, [0.12, 0.58, 0.30]]]) {
         billboard(K(s), 1, 20, 12, 4.5, col);

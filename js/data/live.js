@@ -9,9 +9,78 @@ const DataLive = (function () {
     let liveTimer = null;
     let liveRefreshGen = 0;
     const liveOpts = { auto: false, sort: "pos" };
+    // Re-arm hook for the CURRENT live body. renderLiveBody() points this at a
+    // closure over its own dataEl/refresh, so resuming always drives the body
+    // actually on screen rather than one a picker change has since replaced.
+    let armAuto = null;
 
     function stopLiveAuto() {
       if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+    }
+
+    // Re-arm auto-refresh if AUTO is on and the interval is not running. The
+    // hub stops the interval whenever the player leaves this tab (hub.js
+    // showTab) — but it re-shows the tab from a CACHED node without calling
+    // back into this module, so nothing here ever ran again and the player
+    // came back to an AUTO button still lit over a permanently disarmed
+    // interval. The sentinel below calls this the moment the cached node is
+    // re-attached.
+    function resumeLiveAuto() {
+      if (!liveOpts.auto || liveTimer || !armAuto) return;
+      armAuto();
+    }
+
+    // The one standard hook a detached-and-reattached DOM subtree gets: a
+    // custom element's connectedCallback fires every time the node lands back
+    // in the document. renderLiveBody() plants one in the controls bar, so the
+    // hub's cached-node fast path (clear + appendChild, no call into this
+    // module) still resumes auto-refresh. The class closes over THIS create()'s
+    // resumeLiveAuto; the hub only ever calls create() once.
+    const SENTINEL = "dh-live-sentinel";
+    function makeSentinel() {
+      if (typeof customElements === "undefined") return null;
+      if (!customElements.get(SENTINEL)) {
+        customElements.define(SENTINEL, class extends HTMLElement {
+          connectedCallback() {
+            // Fires mid-appendChild — a resume failure must not break the
+            // hub's tab switch, and there is nothing to tell the player.
+            try { resumeLiveAuto(); } catch (e) { /* see above */ }
+          }
+        });
+      }
+      const s = document.createElement(SENTINEL);
+      s.hidden = true;
+      return s;
+    }
+
+    // The truthful "updated" time: when this session's data last came from the
+    // NETWORK, not when we last asked for it. F1API.request() serves its
+    // localStorage cache silently (TTL_LATEST is 10 minutes for a live
+    // session — api.js), so stamping the wall clock on every refresh cycle
+    // claimed a freshness the 30 s loop was not actually delivering. The API
+    // layer records the real landing time as `t` on every cache write
+    // ("apex26.api.<url>" -> {t, data}, the shape api.js's header documents),
+    // so the newest `t` across this tab's three endpoints IS the moment the
+    // panel's data last truly arrived. Finding no entry means the responses
+    // cannot have come from cache — a first fetch, storage unavailable, or a
+    // stubbed API — and then "now" is honest.
+    function lastFetchedAt(sessionKey) {
+      let newest = 0;
+      try {
+        const marker = "session_key=" + encodeURIComponent(sessionKey);
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key || key.indexOf("apex26.api.") !== 0) continue;
+          const at = key.indexOf(marker);
+          if (at === -1) continue;
+          const after = key.charAt(at + marker.length);
+          if (after && after !== "&") continue;   // session_key=11 must not match =110
+          if (!/\/(weather|position|drivers)\?/.test(key)) continue;
+          const obj = JSON.parse(localStorage.getItem(key));
+          if (obj && typeof obj.t === "number" && obj.t > newest) newest = obj.t;
+        }
+      } catch (e) { /* no storage: every response was a real fetch */ }
+      return newest || null;
     }
 
     function loadLive() {
@@ -82,11 +151,12 @@ const DataLive = (function () {
             return;
           }
           fillLive(dataEl, res[0], res[1], res[2]);
-          stamp.textContent = "updated " + new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        }, () => {
-          if (myGen !== liveRefreshGen) return;
-          clear(dataEl); dataEl.appendChild(emptyMsg(NO_LIVE_MSG));
+          const fetchedAt = lastFetchedAt(meta.sessionKey);
+          stamp.textContent = "updated " + new Date(fetchedAt || Date.now())
+            .toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
         });
+        // No rejection arm: every input above is pre-caught by catchLive
+        // (which always returns null), so Promise.all cannot reject.
       }
 
       refreshBtn.addEventListener("click", refresh);
@@ -94,13 +164,21 @@ const DataLive = (function () {
         liveOpts.auto = !liveOpts.auto;
         autoBtn.classList.toggle("dh-active", liveOpts.auto);
         stopLiveAuto();
-        if (liveOpts.auto) {
-          liveTimer = setInterval(() => { if (dataEl.isConnected) refresh(); }, LIVE_REFRESH);
-        }
+        resumeLiveAuto();
       });
-      if (liveOpts.auto) {
+      // From here on, resuming means THIS body. Set before the sentinel goes
+      // in, or a picker-change rebuild would re-arm the replaced body instead.
+      armAuto = () => {
+        stopLiveAuto();
         liveTimer = setInterval(() => { if (dataEl.isConnected) refresh(); }, LIVE_REFRESH);
-      }
+      };
+      const sentinel = makeSentinel();
+      if (sentinel) bar.appendChild(sentinel);
+      // ...and directly too, not only via the sentinel: the FIRST render
+      // happens while the node is still detached (the hub attaches it after
+      // loadLive resolves, which is when the sentinel fires), but a picker
+      // change rebuilds in place, where this call is the one that re-arms.
+      resumeLiveAuto();
       refresh();
     }
 
@@ -215,7 +293,7 @@ const DataLive = (function () {
       renderRows();
     }
 
-    return { loadLive, stopLiveAuto };
+    return { loadLive, stopLiveAuto, resumeLiveAuto };
   }
   return { create };
 })();

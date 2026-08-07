@@ -11,7 +11,11 @@ const DataSchedule = (function () {
         }
         const today = todayISO();
         let nextMarked = false;
-        wrap.appendChild(el("h3", "dh-section", "2026 CALENDAR"));
+        // Clock-derived, exactly like the fetch under it: F1API.schedule()
+        // asks for the season the clock says (api.js season(), which uses
+        // getFullYear()), so a baked "2026" here would caption the 2027
+        // calendar as 2026 for the rest of time.
+        wrap.appendChild(el("h3", "dh-section", new Date().getFullYear() + " CALENDAR"));
         const grid = el("div", "dh-race-grid");
         items.forEach(r => {
           const row = el("div", "dh-race");

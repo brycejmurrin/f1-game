@@ -779,7 +779,7 @@
       // Sparse park trees on the open sections (avoiding stadium/park sections)
       every(22, (k) => {
         const s = k / n;
-        if (s < 0.04 || (s > 0.04 && s < 0.50)) return;   // start-finish straight + park/city sections handled
+        if (s < 0.50) return;   // start-finish straight + park/city sections handled
         if (s > 0.70 && s < 0.90) return;   // stadium section
         for (const side of [-1, 1]) {
           const r = hash(k * 91 + side);
@@ -819,7 +819,7 @@
       every(24, (k) => {
         for (const side of [1, -1]) {
           const s = k / n;
-          if (s < 0.04 || (s > 0.04 && s < 0.50)) continue;   // start-finish straight + park/city sections handled elsewhere
+          if (s < 0.50) continue;   // start-finish straight + park/city sections handled elsewhere
           if (s > 0.70 && s < 0.90) continue;   // stadium section
           if (hash(k * 57 + side) > 0.62) continue;
           const d = cityBand(s) ? 22 + hash(k * 63 + side) * 8

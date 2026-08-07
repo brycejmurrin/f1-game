@@ -291,7 +291,12 @@ const NetLobby = (function () {
     function failureMsg(st, secs) {
       const c = (st && st.candidates) || {};
       const last = st ? " (" + st.ice + "/" + st.connection + ")" : "";
-      const slow = secs > 90;
+      // Kept below CONNECT_TIMEOUT_MS (60 s) or this branch is unreachable:
+      // the watcher gives up at ~60, so the old `> 90` could only fire from a
+      // suspended tab. Running most of the clock WITHOUT a definite ICE
+      // `failed` is the stale signature — expired addresses grind through
+      // pair timeouts, while a live-but-blocked path fails outright sooner.
+      const slow = secs > 45;
       if (!c.srflx && !c.relay) {
         return "Could not connect after " + secs + "s" + last + "."
           + " This network never revealed a public address, so the other side had"
@@ -950,6 +955,21 @@ const NetLobby = (function () {
       clearInterval(pumpTimer);          // the game loop pumps it from here on
       pumpTimer = null;
       session = null;                    // owned by NetPlay now
+      // ...and so is every entry in the map — FORGET them, not just the
+      // singular. The transport.onClose hook armed in newTransport() lives for
+      // the whole life of each connection, and it closes whatever
+      // `sessions.get(id)` returns. NetSession.close() fires the close
+      // handlers with the hardcoded reason "local" — and those handlers are
+      // NetPlay's from the moment start() ran (bindSession clearHandlers) —
+      // so a mid-race peer drop was reported to NetPlay as a deliberate local
+      // stop, which it maps to "say nothing": RIVAL DISCONNECTED only ever
+      // appeared when the 6 s heartbeat timeout happened to win the race.
+      // With the map empty that hook keeps only its own bookkeeping
+      // (transports/_peers/_ready and the status line) and the session's own
+      // transport.onClose reaches NetPlay with the truthful "transport".
+      // `transports` is deliberately KEPT: the raw connections are still the
+      // lobby's to report (status()/sdp()) and to close in teardown().
+      sessions.clear();
       if (!started.ok) { say(started.message || "Could not start the session.", true); return; }
       // Host names the instant of lights-out; the guest receives it as an
       // event and both drive their countdown to the same moment. Without this
