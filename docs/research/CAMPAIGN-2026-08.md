@@ -245,6 +245,36 @@ fast-forward after each green wave" assumes the shipping mechanism works. For
   nobody reads is not a signal — the same blind spot as the never-run tests, one
   level up.
 
+## Post-ship foundation failures — bisected, and one of them is mine
+
+The `foundation` group ran for the first time after the rename and produced
+three failures. `physics-characterization` is resolved (stale baseline, see
+`c563e875`). The other two were bisected against `js/` at `fdd4082f` in a
+worktree, with the CURRENT specs copied in so the only variable is the engine:
+
+| spec | pre-Batch | current | verdict |
+|---|---|---|---|
+| `qatar-foundation` | fails `:123` | fails `:123` | **pre-existing** — night ground-gap check, untouched by the ship |
+| `montreal-foundation` | fails `:108` (elevation 3.309 vs <= 1.3) | fails `:99` (support grounding 0.0633 vs <= 0.05) | **`:99` is NEW** |
+
+Montreal is the one worth being precise about. Line 99 runs BEFORE line 108, so
+pre-Batch it PASSED and the test died later at the elevation range. It now dies
+at 99. Batch A/B/C therefore changed Montreal's support grounding — a genuinely
+new failure, inside a test that was already red for a different reason. It is
+not a new RED SPEC, which is why the ship gate did not catch it, and that
+distinction is exactly the kind that hides a regression: a test already failing
+cannot report a second, different failure.
+
+Neither is a player-visible break on the evidence so far — both are foundation
+geometry contracts, 27% over a 5 cm tolerance in one case — but the Montreal
+delta is a real consequence of the shipped commit and should be fixed rather
+than absorbed.
+
+METHOD NOTE worth keeping: the first version of this bisect ran BOTH trees from
+the worktree, because `cd` persisted between commands and the "current" run
+silently re-ran the old code. The paths in the output were the only tell. A
+comparison whose two halves are the same half looks exactly like a clean result.
+
 ## Open failures blocking W2-verify
 
 - **`tlx-probes` — ONE HALF FIXED (`767d3ec7`), ONE HALF NOW A DIFFERENT AND
