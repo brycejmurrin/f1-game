@@ -165,11 +165,20 @@ test("carOrbit works for AI car (non-player)", async ({ page }) => {
 test("setSpeed sets player speed", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
-  const res = await page.evaluate(() => __apex.setSpeed(55));
-  expect(res).not.toBeFalsy();
-  expect(res.speed).toBeCloseTo(55, 1);
-  const probe = await page.evaluate(() => __apex.probe());
-  expect(probe.speed).toBeCloseTo(55, 1);
+  // ONE evaluate, deliberately. headless(true) only skips RENDERING — see the
+  // hook's own comment at js/game/apex.js:1513 — so the physics loop keeps
+  // integrating between round-trips and the car coasts. Read across two
+  // evaluates this measured 54.498 against a toBeCloseTo(55, 1) tolerance of
+  // 0.05: a real race that only shows up when the box is loaded enough to
+  // stretch the gap. Sampling both in one round-trip closes the window and
+  // still asserts what the name promises.
+  const r = await page.evaluate(() => {
+    const res = __apex.setSpeed(55);
+    return { res, probeSpeed: __apex.probe().speed };
+  });
+  expect(r.res).not.toBeFalsy();
+  expect(r.res.speed).toBeCloseTo(55, 1);
+  expect(r.probeSpeed).toBeCloseTo(55, 1);
 });
 
 test("setSpeed clamps to 0 minimum", async ({ page }) => {

@@ -2,20 +2,26 @@
 // One-lap qualifying: the simulated field, the sheet, and the grid it produces.
 // Qualifying is a `session`, not a game state — it reuses the time-trial path —
 // so several of these also guard that a Grand Prix is left exactly as it was.
-import { sharedTest as test, expect } from "./fixtures.js";
+//
+// DELIBERATELY ON THE VIRGIN-PAGE FIXTURE, same as tests/career.spec.js. This
+// was converted to `sharedTest` and reverted after measurement: 5 of its 20
+// tests failed, all of them on the 120 s timeout. toQuali() below CLICKS its
+// way from the main menu (#mb-season → #sel-go → #cs-done → #rs-go), and a
+// shared page starts each test wherever the previous one left the app — so
+// #mb-season is simply not there to click.
+//
+// The selection mistake worth not repeating: this spec was picked for reuse on
+// the criterion "no localStorage coupling, one boot helper", which it satisfies.
+// That is the wrong axis. What decides it is whether the spec drives MENU
+// SCREENS, because screen state is the thing the shared-page reset cannot
+// restore. Count the locator() calls before converting, not the goto()s.
+import { test, expect } from "@playwright/test";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function boot(page) {
-  // Shared page: booted once per worker by the fixture, so this is a no-op
-  // in the common case. Tests that need a VIRGIN page (asserting
-  // pre-track state) keep their own explicit page.goto("/") below —
-  // that reloads the shared page and gives them exactly that.
-  const live = await page.evaluate(() => window.__apex != null).catch(() => false);
-  if (!live) {
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
-  }
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
 }
 
 // A championship weekend: SEASON -> select -> race settings -> QUALIFYING.
