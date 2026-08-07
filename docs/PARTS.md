@@ -39,7 +39,7 @@ Budget = 600 cr. `Parts.getMods(setup, teamEngine)` returns
 
 Every option also carries a parametric `visual` **recipe** consumed by `Car3D`
 (`getVisualTiers().._visual`); `VISUAL_FIELD_REGISTRY` names the one consumer of
-each recipe field, and `tests/parts-physics.spec.js` fails on an unregistered or
+each recipe field, and `tests/specs/parts-physics.spec.js` fails on an unregistered or
 stale field, a duplicate recipe within a category, or an engine that repeats
 another's six-field bodywork shape. The newer STRUCTURE knobs are
 `aero.plate/casc/swan/tvane` (endplate profile, cascade count, swan-neck mount,

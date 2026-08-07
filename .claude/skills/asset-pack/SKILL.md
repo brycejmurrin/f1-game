@@ -44,8 +44,8 @@ Deep reference: `docs/research/ASSET-API-RESEARCH.md`. Hooks:
 |---|---|
 | `node tools/assets.mjs bake-synthetic [--size N]` | Regenerate pack, no network/deps |
 | `node tools/assets.mjs verify` | Licence allow-list, md5, 8 MB budget |
-| `npm run test:tooling-fast` | Includes `tests/assets-pack.test.mjs` |
-| `npm run test:api` | Includes `tests/assets-api.spec.js` |
+| `npm run test:tooling-fast` | Includes `tests/unit/assets-pack.test.mjs` |
+| `npm run test:api` | Includes `tests/specs/assets-api.spec.js` |
 
 | Runtime | Role |
 |---|---|

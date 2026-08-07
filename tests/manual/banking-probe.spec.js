@@ -1,7 +1,7 @@
 // @ts-check
 // banking-probe — WHY DOES THE BROWSER'S BANKING TERM READ ~2x NODE'S?
 //
-// tests/terrain-over-road.spec.js reports nurburgring ROAD 0.37 m over the
+// tests/specs/terrain-over-road.spec.js reports nurburgring ROAD 0.37 m over the
 // racing line at sourceFrac 0.7808 (the Schumacher-S bank, authored
 // { frac: 0.780, angleDeg: 4.0, widthM: 130 }). Reproducing the test's own
 // arithmetic in a Node VM gives

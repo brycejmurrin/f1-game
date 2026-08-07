@@ -14,7 +14,7 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 
 | Wave | What | Status |
 |---|---|---|
-| W0 | Fix the red spec the cleanup itself created (`tests/agent-view.spec.js`) | **LANDED** `788ac8d3`, verified 117/117 |
+| W0 | Fix the red spec the cleanup itself created (`tests/specs/agent-view.spec.js`) | **LANDED** `788ac8d3`, verified 117/117 |
 | W1 | The audit synthesis's FIX-NOW list (8 items) | **LANDED** `33114382` + `af05fa98` — incl. the discovered camera inside-of-corner bug; camera group 45/45 |
 | W1.5 | Test-audit mechanical strengthen batch (guard blind spots + ten weak specs) | **LANDED** `46b999e8`, `89f6889d`, `6112fb74`, `f9bbf479` — caught the stale Mexico terrain pin (a spec that never runs is prose) |
 | W2a | Test-semantics audit workflow (all 162 test files) | **DONE** — record: [TEST-AUDIT-2026-08.md](TEST-AUDIT-2026-08.md) |
@@ -23,7 +23,7 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 | W2-perf | Shared-page test fixture (`sharedTest`) — kill the per-test page boot | **LANDED** `e52bb772`, `9b91f807`, `3fa9d047`, `75ae72f9`, `85a91f40`. Settled at **6 specs / 284 tests** on the shared page after 8/405 was tried and two specs reverted. Headline: `agent-view` **117/117 in 11m16s against ~43 min** before. Also green: `new-hooks` 56/56, `headless-api` 24/24, `logging` 6/6. `career` (101) and `quali` (20) reverted — both drive MENU SCREENS, which is the axis that decides reuse; `dev-tools` + `camera-driving-hooks` verifying. Full rationale, the three conversion edges and the load-inversion diagnostic are in [docs/TESTING.md](../TESTING.md) |
 | W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is verified from BOTH directions: bisect-cleared locally (all three elevation failures reproduce byte-identically at `fdd4082f`) and CI's per-circuit geometry sweep green throughout. **CI #204 is fully green — guards, sweeps AND smoke.** Verified: `agent-view` 117/117, `steering` 96/96, `api` 193/193, `smoke`+`net` 79/79, shared-fixture set 101/101, `camera` 45/45, `elevation-tracks` 47/47 (after 3 repairs), `smoke` 9/9, plus `audio`/`debris`/`ab`/`paths`/`map`/`baseline`/`shimmer` inside the 56-test tail batch, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. **Execution integrity checked, not assumed: every green group's count equals its declared total, with zero skips, zero retries and zero flakes.** `tlx` **14/15** after `767d3ec7`; `gallery` **78/78**. **`circuit` 64/64, ONE failure — and the SHIP GATE IS SATISFIED.** Both questions registered before that run came back clean: `tracks-walls`'s `monza bounded: 770.4 vs < 60` (a real assertion failure from 02:09, PREDATING the 03:01 side-flip) **did not reproduce**, and the street-wall sweep passed at 134.5 s once it had budget. With `audit`, `autopilot` (monza 42.7 s, suzuka 46.5 s) and `elevation` 47/47 also green, **wall containment across the 40-circuit kerb/barrier side-flip is verified** — the last hole from Batch A/B/C. The single failure was the 40-circuit boundary sweep timing out at 372.8 s, since replaced by the per-circuit split (`93234ab1`). **BOTH remaining failures are now CLOSED and both were test defects:** `menu-keyboard` ×1 (`7bafa71b`, a race on `vt()`'s async reveal) and `tlx-probes` M6 skid (`5c735736`, waiting on a value that could not move — `skids.stamp()` lives in `render()` and the stint never renders). **COMPLETE 2026-08-07 20:47. 490 tests across eight groups, 18 failures.** `tlx` 15/15 clean (first time ever) · `parts` 167/167, **12 red** · `modes` 140/140, 1 red · `scenery` 13/13, **2 red** · `webgl` 28/28, 1 red · `collision` 46/46, **2 red** · `barriers` 62/62 **clean** · `physics` 19/19 **clean**. Of the 18: **six were contention and ALL SIX pass solo unchanged**; **eight were test defects, fixed and verified** (`39c65beb`, `9bd62d57`, verified `5cff488d`); **four are open findings**. **`barriers` and `physics` are the two groups that had never run since Batch A/B/C and the reason W2 was blocked — both fully clean**, so the kerb/barrier side-flip broke neither wall containment nor the driving model. W2's stated condition is met: no red test remains whose history is unknown |
 | W2-step0 | Make the tests/ split's SILENT failures loud — before the split | **LANDED** `d6f09674`. R2's lockstep marks five items "no guard turns red"; a guard that arrives after the commit it protects has protected nothing. `tools/cross-file-paths.mjs` + guard: every relative reference in `tests/`+`tools/` (static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)`) must resolve — **137 refs across 239 files, green**. espree, not grep: two test files build fixtures out of source text containing import statements, and a guard with false positives gets switched off. **`output-paths.spec.js` could not have detected the move breaking it** — it asserted against `resolve(import.meta.dirname, "..")`, the identical expression the module under test uses, so both sides move together and agree; post-split both resolve to `tests/`, galleries land in the test tree, and `existsSync(dir)` passes too because `galleryDir()` CREATES what it returns. Both modules now walk up for `package.json`. Two vacuous-pass regexes widened to admit subdirectories, each with a tripwire. **Live finding:** `test-groups`' pinned-`--project` check has ZERO inputs — only `test:render`/`test:headless` carry `--project` and neither names a spec, so its loop body has never run. It is a regression guard for a bug fixed by removing the pin that fed it. It HAS an assertion, so `assert-audit` cannot see it — a fourth category beyond asserting/implicit/vacuous: **structurally unreachable**. It now asserts WHY its input set is empty |
-| W2-assert | "A test that asserts nothing is prose too" — the third sibling of the never-run finding | **LANDED** `3eadb40d` + `a50c18ae`. Gallery split **VERIFIED 78/78, zero skips, zero retries** — 34 portrait + 34 landscape + the 10 merged large-screen tests, all green, including the ten that were committed unrun. `tools/assert-audit.mjs` grades every declared test **asserting / implicit / vacuous** and flags empty `.catch(() => {})`. Tree: **1152 tests, 0 vacuous, 40 implicit-only**. The gallery specs were the whole of the implicit set: `ui-audit` (34) and `ui-desktop` (5) are PNG harnesses whose ticks were being read as `test:ui` coverage. `ui-desktop` is merged into `ui-audit` as two viewport rows and deleted; `ui-audit` moves to an on-demand `test:gallery` group (test-audit §1a/§1d, executed early because W2-verify surfaced it). `tests/assert-audit.test.mjs` is the ratchet. **The tool's own first version was 20% false** — a body-only scan called hud-audit's eight steer-mode tests vacuous because they assert only through `assertHud()`; helper-following to a fixpoint is the tool, and two guard cases pin it |
+| W2-assert | "A test that asserts nothing is prose too" — the third sibling of the never-run finding | **LANDED** `3eadb40d` + `a50c18ae`. Gallery split **VERIFIED 78/78, zero skips, zero retries** — 34 portrait + 34 landscape + the 10 merged large-screen tests, all green, including the ten that were committed unrun. `tools/assert-audit.mjs` grades every declared test **asserting / implicit / vacuous** and flags empty `.catch(() => {})`. Tree: **1152 tests, 0 vacuous, 40 implicit-only**. The gallery specs were the whole of the implicit set: `ui-audit` (34) and `ui-desktop` (5) are PNG harnesses whose ticks were being read as `test:ui` coverage. `ui-desktop` is merged into `ui-audit` as two viewport rows and deleted; `ui-audit` moves to an on-demand `test:gallery` group (test-audit §1a/§1d, executed early because W2-verify surfaced it). `tests/unit/assert-audit.test.mjs` is the ratchet. **The tool's own first version was 20% false** — a body-only scan called hud-audit's eight steer-mode tests vacuous because they assert only through `assertHud()`; helper-following to a fixpoint is the tool, and two guard cases pin it |
 | W2 | RESTRUCTURE + change-aware CI | **BLOCKED on W2-verify**, and the block is now EVIDENCE rather than caution: the `parts` group ran for the first time and returned SIX tests that could never have passed under any code (see its section below). Moving 175 files while that is still true of other groups makes "broken by the move" and "never worked" indistinguishable. Scope changed since the records were written: **R3 tools/ subdirs — CUT** (churn across 60+ tools and their test-asserted index, zero defects found), **CI selection — taken as its OWN wave, not inside W2** (the driving-model job split showed CI-shape changes have their own failure modes; bundling one with 175 moves makes a red run ambiguous between the two) |
 | W3 | Bedrock Ph0-1: dependency scanner + global registry, `.d.ts` contracts, `tsc --checkJs` CI, `@ts-check` tranche + ratchet | Planned — [ARCHITECTURE-REDESIGN-2026-08.md](ARCHITECTURE-REDESIGN-2026-08.md) is the adopted direction |
 | W4 | Loop-until-dry lens-diverse review of the post-restructure tree, CAP 3 ROUNDS | Planned (shrinks if W2b leaves little) |
@@ -362,7 +362,7 @@ summary, trending, is enough to make a silent group visible.
 
 ### The third sibling: a gate that runs INSIDE another job inherits its fate
 
-`tests/physics-characterization.spec.js` pins six-sample traces of four driving
+`tests/specs/physics-characterization.spec.js` pins six-sample traces of four driving
 scenarios and fails when the model's numbers move. It was in no CI job at all —
 not `guards` (browser spec, not node), not `sweeps` (geometry only), not
 `smoke`'s spec list — so **175 commits of deliberate physics work drifted past
@@ -498,9 +498,9 @@ The file had never been fully green before.
 
   **Fixed: all three canvas screenshots ran against a LIVE render loop.**
   `park()` freezes physics, not rendering, so a `.screenshot()` queues behind an
-  endless SwiftShader redraw. `tests/smoke.spec.js:35-56` had already measured
+  endless SwiftShader redraw. `tests/specs/smoke.spec.js:35-56` had already measured
   exactly this — 88-96 s solo, 154-214 s under two workers, **29-32 s once
-  `headless(true)` stops the loop** — and `tests/track-helpers.js:117` already
+  `headless(true)` stops the loop** — and `tests/helpers/track-helpers.js:117` already
   relies on the compositor keeping the last drawn frame. Ten specs use the
   pattern; tlx-probes used it at none of its three sites. Measured before and
   after, the three screenshot tests each dropped 25-33 s and nothing else moved:
@@ -757,7 +757,7 @@ accept that most runs will never report.
   reset();`, plus call `raceCtl.reset()` from `startRace()` (a stale
   `caution.level` carrying into the next race is the same latent class,
   pre-existing). Blocked on the browser driver; verify with the node suite
-  `tests/race-control.test.mjs`, which needs a new cross-race case.
+  `tests/unit/race-control.test.mjs`, which needs a new cross-race case.
 
 - **PRE-EXISTING, CAUSE FOUND — `#track-detail` claims to be a modal and is
   not.** `index.html` ships `<div id="track-detail" role="dialog"
@@ -797,9 +797,9 @@ accept that most runs will never report.
   as an art change across all six sites at once, with the clip baselines
   re-measured.
 
-- `tests/camera-driving-hooks.spec.js` spin test asserts nothing; add
+- `tests/specs/camera-driving-hooks.spec.js` spin test asserts nothing; add
   heading-change + sign asserts (test-audit strengthen 1).
-- `tests/headless-api.spec.js` obs()-false test accepts both outcomes; pick a
+- `tests/specs/headless-api.spec.js` obs()-false test accepts both outcomes; pick a
   contract (strengthen 2).
 - Camera-family mechanical items deferred while the group ran: yawRate expect,
   the fixed 3 s sleeps → waitForFunction, the dolly eye-position assert,
@@ -807,7 +807,7 @@ accept that most runs will never report.
 - `parts-livery-contrast` asserts its own inline mirror of buildAtlas — needs a
   real helper export from `js/car/liverytex.js` (+ bump) (strengthen 11).
 - ~~racecontrol.js SC_MAX/YELLOW_MAX are dead code~~ — DECIDED AND SHIPPED in
-  `89ce4f2f` (force-green at the cap, `tests/race-control.test.mjs` re-pinned).
+  `89ce4f2f` (force-green at the cap, `tests/unit/race-control.test.mjs` re-pinned).
   The remaining work is the re-arm refinement at the top of this list.
 - Synthesis §DEFER stands unchanged (js/game rename NO-GO is final; tlx.js
   header collapse on next touch; phone-UA sniff dedup wants a shared file; the

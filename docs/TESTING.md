@@ -1,7 +1,7 @@
 # Testing reference
 
-110 root Playwright spec files (`tests/*.spec.js`) + 58 `node --test` unit suites
-(`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
+110 root Playwright spec files (`tests/specs/*.spec.js`) + 58 `node --test` unit suites
+(`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
 [`tests/manual/README.md`](../tests/manual/README.md).
@@ -18,7 +18,7 @@ the docs honest.
 ### Run them in the background. Always.
 
 A foreground Playwright run on this suite blocks the terminal for minutes and
-prints nothing you can act on. The default reporter is `tests/live-reporter.js`:
+prints nothing you can act on. The default reporter is `tests/helpers/live-reporter.js`:
 one timestamped, immediately-flushed line per test start and end, plus a
 30-second heartbeat naming everything still in flight — so a piped log is
 genuinely tail-able and a hung test is the one with a `> start` line and no end
@@ -67,7 +67,7 @@ node tools/pick-tests.mjs --bg            # ready-to-paste background command
 The routing rules live in `RULES` at the top of `tools/pick-tests.mjs` and are
 deliberately coarse and biased toward running too much — a rule that is too
 narrow is a missed regression, one that is too wide costs minutes.
-`tests/test-groups.test.mjs` asserts every group they name exists.
+`tests/unit/test-groups.test.mjs` asserts every group they name exists.
 
 ### Start here, then widen
 
@@ -104,7 +104,7 @@ whether the TLX backend happens to be installed.
 
 **319 `waitForFunction` calls across 97 specs still carry a timeout without
 `polling`**, so those bounds are decoration. 43 sites now pass it. The count is
-a RATCHET, not a target — `tests/wait-polling.test.mjs` fails if the population
+a RATCHET, not a target — `tests/unit/wait-polling.test.mjs` fails if the population
 grows, and lowering the ceiling as sites are fixed is the intended direction.
 (Count by AST via `tools/wait-polling-lint.mjs`. A grep undercounts the
 multi-line calls; this file said 312 for exactly that reason.)
@@ -149,11 +149,11 @@ Levels come from `js/log.js`. `APEX_LOG` is written to `localStorage` before any
 game script evaluates, so a spec needs no change to become verbose:
 
 ```sh
-APEX_LOG=scenery:debug npm test -- tests/props-over-road.spec.js
+APEX_LOG=scenery:debug npm test -- tests/specs/props-over-road.spec.js
 APEX_LOG=debug node tools/test-bg.mjs scenery
 ```
 
-Every failure automatically attaches three things (see `tests/fixtures.js`), and
+Every failure automatically attaches three things (see `tests/helpers/fixtures.js`), and
 `live-reporter.js` echoes the tail of each inline:
 
 | Attachment | What it holds |
@@ -168,7 +168,7 @@ Every failure automatically attaches three things (see `tests/fixtures.js`), and
 
 Run with `npm run test:<group>`. Every group below names an intentional set of
 specs; `npm run test:audit` fails if any test file belongs to none of them, and
-`tests/test-groups.test.mjs` fails if this table and `package.json` disagree.
+`tests/unit/test-groups.test.mjs` fails if this table and `package.json` disagree.
 
 ### Start-here / breadth
 
@@ -185,7 +185,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | Group | What it runs |
 |---|---|
 | `physics` | the driving model itself: physics-characterization, physics-fixes, longitudinal, projection, understeer-cue. world-physics and active-aero bill to `behaviour`, elevation-tracks to `circuit`. The 16 per-circuit foundation specs LEFT this group — they contain no driving-model physics, and the `physics-` filename prefix existed only to be caught by this glob, so every driving-model edit paid ~16 circuit builds it could not break while `js/circuits/` edits never ran them. Misgrouped in both directions |
-| `foundation` | the 16 per-circuit foundation specs (`tests/*-foundation.spec.js`) — required models present, props clear of the racing surface, terrain grounded, water safe, walls sane. Routed from `js/circuits/` and the track engine, which is what actually breaks them |
+| `foundation` | the 16 per-circuit foundation specs (`tests/specs/*-foundation.spec.js`) — required models present, props clear of the racing surface, terrain grounded, water safe, walls sane. Routed from `js/circuits/` and the track engine, which is what actually breaks them |
 | `collision` | car-to-car and wall collision, drift, off-track |
 | `behaviour` | world-physics, active-aero, aero-zones. The collision/drift/offtrack members and physics-fixes LEFT in the double-billing dedupe — each spec was running twice whenever two of its groups co-ran, which `pick-tests` makes routine. Coverage is unchanged: the dedupe shipped WITH new `pick-tests` routing (game.js and physics-consts.js now select `collision` and `hooks` too), verified by comparing the SPEC-FILE union before and after, not the group names |
 | `barriers` | track wall geometry + the AI-fixes barrier regressions |
@@ -277,7 +277,7 @@ is gone — filter with `--project=headless` or `--project=render`.
 
 `RENDER_SPECS` is the partition: the headless project is "everything NOT in that
 list", so a name in it that matches no file silently drops a GL spec into the
-wide pool. `tests/test-groups.test.mjs` catches that.
+wide pool. `tests/unit/test-groups.test.mjs` catches that.
 
 ### Server lifecycle
 
@@ -289,7 +289,7 @@ an output directory.
 Direct `npx playwright test` defaults to port 3456 and lets Playwright start its
 configured Python server. A direct local run may reuse an already-running
 server; explicit `APEX_PORT` runs own their server unless `APEX_REUSE_SERVER=1`.
-`tests/global-setup.js` pings the port before any spec begins, so a dead server
+`tests/helpers/global-setup.js` pings the port before any spec begins, so a dead server
 aborts the run with one clear message instead of dozens of
 `net::ERR_CONNECTION_REFUSED`.
 
@@ -327,7 +327,7 @@ SKIPS itself rather than failing 40 circuits on missing snapshots; generating
 them on Linux/SwiftShader is still outstanding, and the suite re-enables itself
 automatically once the directory exists.
 
-### Fixtures (`tests/fixtures.js`)
+### Fixtures (`tests/helpers/fixtures.js`)
 
 Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 
@@ -337,7 +337,7 @@ Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 | `pageErrors` | `string[]` of uncaught JS exceptions — assert `toHaveLength(0)` after exercising game logic |
 | `consoleLines` | `string[]` of every console line and page error, type-prefixed, favicon noise stripped. Prefer this to a hand-rolled `page.on("console", …)` — the hand-rolled ones drifted into a dozen slightly different filters |
 | `racePage` | navigates to `/` and waits for `window.__apex` (10 s) |
-| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 58 of 111 specs import `tests/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
+| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 58 of 111 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
 
 `tools/fixture-consumer-audit.mjs` enforces the import for the specs that depend
 on those guarantees (`audio-smoke`, `smoke`, `f1-track-accuracy`, `ui-audit`).
@@ -345,7 +345,7 @@ Other specs may use the base Playwright fixture.
 
 ### `sharedTest` — one booted page per worker
 
-`tests/fixtures.js` also exports `sharedTest`, a drop-in replacement for `test`
+`tests/helpers/fixtures.js` also exports `sharedTest`, a drop-in replacement for `test`
 that boots the page **once per worker** and hands the same page to every test in
 the file:
 
@@ -364,7 +364,7 @@ for every single test. Across the suite that is 294 `goto("/")` calls in 98 spec
 files, and not one of them used `beforeAll`.
 
 **Why it is safe.** `__apex.race(id)` is re-entrant against a live page —
-`tests/tracks-walls.spec.js` has always raced through many circuits in ONE page
+`tests/specs/tracks-walls.spec.js` has always raced through many circuits in ONE page
 — so the reload was never required by the app. It was the default `page`
 fixture's scope, nothing more.
 
@@ -560,8 +560,8 @@ off-track specs were tightened this way after several thresholds drifted stale.
 regardless (sky/cloud animation continues on purpose). Under SwiftShader that
 redraw never idles, so a `.screenshot()` issued while it is still running queues
 behind an endless render loop instead of a quiet compositor — measured on
-`tests/smoke.spec.js`'s rendering checks, `headless(true)` after the pose settles
-cut solo wall time from 88-96s to 29-32s. `tests/track-helpers.js`'s visual-regression
+`tests/specs/smoke.spec.js`'s rendering checks, `headless(true)` after the pose settles
+cut solo wall time from 88-96s to 29-32s. `tests/helpers/track-helpers.js`'s visual-regression
 capture already does this (`snapCam()` → settle → `headless(true)`); reach for the
 same shape rather than raising a test's timeout budget.
 
@@ -612,7 +612,7 @@ comment saying why they are not one.
 ## 5. Coverage table
 
 Every file below is asserted present in this table by
-`tests/test-groups.test.mjs` — a new spec fails the tooling suite until it says
+`tests/unit/test-groups.test.mjs` — a new spec fails the tooling suite until it says
 what it covers.
 
 ### Boot, API & agent surface
@@ -640,7 +640,7 @@ what it covers.
 | `world-physics.spec.js` | the player integrates a bicycle model in WORLD space; `(s, x)` is read back, not authoritative |
 | `physics-fixes.spec.js` | the physics/collision robustness pass |
 | `longitudinal.spec.js` | longitudinal + grip physics and full-lap progress |
-| `physics-characterization.spec.js` | CHARACTERIZATION of the driving model against a committed baseline — asserts the numbers did not move, not that they are right. Live gate against `tests/physics-baseline.json`; regenerate with `APEX_UPDATE_BASELINE=1` and read the diff |
+| `physics-characterization.spec.js` | CHARACTERIZATION of the driving model against a committed baseline — asserts the numbers did not move, not that they are right. Live gate against `tests/data/physics-baseline.json`; regenerate with `APEX_UPDATE_BASELINE=1` and read the diff |
 | `projection.spec.js` | world↔track (Frenet) projection continuity — no lap-distance teleport near hairpins |
 | `elevation-tracks.spec.js` | slope gravity, banking grip, road-follow on graded circuits |
 | `steering.spec.js` | the player heading model in `updateCar` |
@@ -808,9 +808,9 @@ what it covers.
 | `tests-split.test.mjs` | the `tests/` split's PLAN, pinned before the move runs: every spec/suite/helper lands in exactly one bucket, `data/` and `manual/` stay, a snapshot dir follows its spec (Playwright resolves those spec-relative, and a missed move reads as "baseline missing" — which `--update-snapshots` would then re-bless), and the derived rewrites cover the ⚠ swallowed `f1-api-mock` imports nobody has to remember. Two cases guard the tool against itself: **history is never rewritten** (archived docs, dated research records and stored workflow scripts describe the tree as it WAS — the first plan would have falsified 700+ lines of it), and it does not rewrite its own header, which documents the move. A scratch-tree case caught a real bug: `rel()` ignored its `root` argument, so every check against the real repo passed while a foreign tree found zero references |
 | `select-budget.test.mjs` | guards `tools/select-budget.mjs`, the arithmetic behind the change-aware CI decision. Pins the MODEL and not the constants: the measured 79.7 s/test is expected to move when CI is re-measured, but the shape must not — a failure costs `timeout x (1 + retries)`, capacity falls as survivable failures rise, and a budget smaller than one failure must report **0** rather than a positive number for a job that dies on the first red test. One case pins the design conclusion itself (cutting the failure cost buys more than doubling the budget) so it cannot quietly stop being true |
 | `ci-coverage.test.mjs` | guards `tools/ci-coverage.mjs`, which answers what the deploy gate actually executes — today **2 of 110 Playwright specs**, with 108 gated by nothing. Pins the MECHANISM and never the number: the count is meant to move as the gate grows, and a test that froze it would just be a chore. Anti-vacuity is the load-bearing case — a broken `ci.yml` parse would report "CI executes 0 specs", which reads as an alarming finding rather than as a broken tool. One case deliberately names a spec that MUST NOT exist, so the resolver is shown to reject it |
-| `cross-file-paths.test.mjs` | every relative reference in `tests/` and `tools/` — static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)` — resolves to a file that exists. Landed BEFORE the `tests/` split, because a guard that arrives after the commit it was meant to protect has protected nothing. The silent class it exists for: `fit-audit.mjs`/`menu-fit.mjs` wrap their `../tests/f1-api-mock.js` import in a `catch` that is correct at runtime and fatal to a move — afterwards both tools quietly audit an empty data hub with nothing red anywhere. Anti-vacuity: one case builds a moved-file-with-stale-`../` in a temp dir and requires a complaint |
+| `cross-file-paths.test.mjs` | every relative reference in `tests/` and `tools/` — static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)` — resolves to a file that exists. Landed BEFORE the `tests/` split, because a guard that arrives after the commit it was meant to protect has protected nothing. The silent class it exists for: `fit-audit.mjs`/`menu-fit.mjs` wrap their `../tests/helpers/f1-api-mock.js` import in a `catch` that is correct at runtime and fatal to a move — afterwards both tools quietly audit an empty data hub with nothing red anywhere. Anti-vacuity: one case builds a moved-file-with-stale-`../` in a temp dir and requires a complaint |
 | `assert-audit.test.mjs` | no test in the default suite is VACUOUS — a body with no assertion passes as long as the page does not throw, so it is a green tick that means nothing. The ratchet exempts an allow-list of capture harnesses (`ui-audit`, `ui-desktop`, whose product is a PNG gallery) and asserts they still are ones. Two cases pin the tool's own failure mode: an assertion reached only through a same-file helper still counts, because a body-only scan calls hud-audit's eight steer-mode tests vacuous and a report that is 20% false gets ignored |
-| `fixture-consumer-audit.test.mjs` | the specs that must import `tests/fixtures.js` do |
+| `fixture-consumer-audit.test.mjs` | the specs that must import `tests/helpers/fixtures.js` do |
 | `component-inventory.test.mjs` | the class families in `css/` match `docs/COMPONENTS.md` — a class defined in one file and used from another is the drift this catches |
 | `span-kinds.test.mjs` | the agent view's span vocabulary matches the `ctx.noteSpan(...)` emitters — the list had fallen four kinds behind, so any circuit placing a tiered bowl failed `agent-view.spec.js` with a message that pointed nowhere near the cause |
 | `css-layers.test.mjs` | every rule in a `@layer`-wrapped stylesheet stays inside its declared layer — an unlayered rule (a stray brace closing the layer early) silently outranks every layered rule regardless of specificity, with no parse error and no console warning |
@@ -827,6 +827,6 @@ what it covers.
 - [`tests/manual/README.md`](../tests/manual/README.md) — the human-run suites
 - `docs/DEBUG-HOOKS.md` — the full `__apex` reference
 - `js/log.js` — the logging facility the fixtures capture
-- `playwright.config.js`, `tests/fixtures.js`, `tests/global-setup.js`,
-  `tests/live-reporter.js` — the infrastructure sources
+- `playwright.config.js`, `tests/helpers/fixtures.js`, `tests/helpers/global-setup.js`,
+  `tests/helpers/live-reporter.js` — the infrastructure sources
 - `tools/pick-tests.mjs`, `tools/test-bg.mjs`, `tools/test-shards.sh` — the runners

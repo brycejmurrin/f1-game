@@ -130,7 +130,7 @@ circuit, via `tools/apex-capture.mjs identity`):
 ## 2. Proposed shared models
 
 Ranked by how many circuits asked for them. Names are proposals; each addition
-needs an entry in `CONTRACT` in `tests/scenery-api-contract.test.mjs`, a row in
+needs an entry in `CONTRACT` in `tests/unit/scenery-api-contract.test.mjs`, a row in
 `docs/SCENERY-API.md`, and — where the signature leads with `(k, side, …)`,
 `(s, side, …)` or `(s0, s1, side, …)` — registration in the matching list in
 `transformSceneryApi` (`js/track/tracks.js:277-299`) so reversed/source-coordinate

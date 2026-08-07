@@ -44,7 +44,7 @@ and Chromium deliberately does **not** count Escape as a user activation. So an
 Escape that closes one screen and opens another — exactly what a BACK ladder
 does — is opening a dialog *during* a close request with no activation to spend.
 Without the `preventDefault()` above, one press can collapse two screens.
-`js/game/topmodal.js` does this; `tests/ui-button-touch.spec.js` walks the whole
+`js/game/topmodal.js` does this; `tests/specs/ui-button-touch.spec.js` walks the whole
 ladder to keep it honest.
 
 Sources: WICG/close-watcher explainer (merged into the HTML Standard),
@@ -268,7 +268,7 @@ became `<dialog>`s, `TopModal.onEscape` is itself an ordinary `document`
 keydown listener, so a synthetic keydown reaches it exactly like a real one and
 needs no special-casing.
 
-Pinned by `tests/gamepad.spec.js`'s "Gamepad menu navigation" suite — in
+Pinned by `tests/specs/gamepad.spec.js`'s "Gamepad menu navigation" suite — in
 particular "B closes a native `<dialog>` screen (pause menu)", which is the one
 that would have passed against a naive synthetic-Escape-only implementation in
 a mocked-event test harness and only failed in a real browser.
@@ -372,7 +372,7 @@ was added to `css/track-detail.css` anyway to remove any doubt rather than rely
 on the auto-margin-resolves-to-zero case of the CSS2.1 abspos algorithm holding
 identically across engines.
 
-`tests/menu-keyboard.spec.js` — "Tab cannot escape the track-detail dialog into
+`tests/specs/menu-keyboard.spec.js` — "Tab cannot escape the track-detail dialog into
 the select screen behind it" — pins the actual defect: opens `#track-detail`
 from the select screen's circuit preview, confirms `showModal()` parked focus
 inside it, walks Tab six times asserting focus never leaves the dialog, and
@@ -411,7 +411,7 @@ back. Copy that shape; do not write a second one.
 `holdRaceWake`/`dropRaceWake` in `js/game.js` copy `lobby.js`'s shape exactly.
 Held in `startRace` (so it covers every driving session, including the
 count-in), dropped in `endRace` and in `quitToMenu` — the mid-race PAUSE > QUIT
-exit that never reaches `endRace` at all, and the one `tests/wake-lock.spec.js`
+exit that never reaches `endRace` at all, and the one `tests/specs/wake-lock.spec.js`
 exists specifically to keep honest. The re-acquire needed **no new listener**:
 the existing `visibilitychange` handler in `js/game.js` gained a third clause
 beside the two it already had (auto-pausing a hidden race, arming/disarming the
@@ -419,7 +419,7 @@ crash sentinel).
 
 Both requirements the lobby version encodes survived the copy: `navigator.wakeLock`
 being absent and the request **rejecting** are both tolerated silently — see the
-two dedicated specs in `tests/wake-lock.spec.js`.
+two dedicated specs in `tests/specs/wake-lock.spec.js`.
 
 One caveat to verify on hardware: WebKit bug **254545** reports the Wake Lock
 API working in a Safari tab but **not** in a home-screen PWA. Sources conflict
@@ -513,7 +513,7 @@ discards real, working steps on a genuinely slow device and turns a settle
 into an endless down/up cycle instead.
 
 A is the right model; B is the safety net for when the model is wrong.
-`tests/perf-governor.test.mjs` exercises both against the real `tick()` logic:
+`tests/unit/perf-governor.test.mjs` exercises both against the real `tick()` logic:
 a 30 fps-capped device settles at full quality, a genuinely GPU-bound one still
 downscales and holds, and a reverted step does not repeat forever.
 

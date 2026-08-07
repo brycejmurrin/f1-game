@@ -1,0 +1,84 @@
+/* hooks-documented.test.mjs — every __apex hook must be in docs/DEBUG-HOOKS.md.
+ *
+ * `docs/DEBUG-HOOKS.md` opens by calling itself the full reference for the dev
+ * API. It documented 155 of 183 hooks. Nothing checked, so nothing noticed —
+ * including, immediately, a hook added earlier in this same cleanup pass
+ * (`persistState`), which is how this guard came to be written.
+ *
+ * The gap is not cosmetic. `logLevel` was undocumented while CLAUDE.md tells
+ * every agent to use it; the whole `lobby*` family — fifteen hooks that are the
+ * only way to drive the multiplayer screens from a test — was invisible to
+ * anyone reading the reference rather than the source.
+ *
+ * A RATCHET, not a wall. Documenting 28 hooks properly is real work and is not
+ * this pass's job, so the ones already missing are named in UNDOCUMENTED below
+ * and the assertion is that NOTHING NEW joins them. Delete a name from that list
+ * when you write its section; the second test fails if a name is listed but has
+ * since been documented, so the list cannot rot in the other direction either.
+ *
+ * Same idiom as tests/unit/module-size.test.mjs and tests/unit/comment-citations.test.mjs:
+ * a number (or a list) you must look at gets thought about, where a rule nobody
+ * can satisfy gets deleted the first time it is inconvenient.
+ *
+ * Run: node --test tests/unit/hooks-documented.test.mjs   (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+
+// Known-undocumented as of the 2026-08 cleanup pass. SHRINK THIS LIST.
+// Grouped by why they are here, because the reason decides who should fix them.
+const UNDOCUMENTED = new Set([
+  // The multiplayer test surface — the only way to drive the lobby and the wire
+  // from a spec, and entirely absent from the reference.
+  "lobbyAccept", "lobbyCodeHost", "lobbyCodeJoin", "lobbyFailure", "lobbyFake",
+  "lobbyFakeConnected", "lobbyJoin", "lobbyMods", "lobbyPeerEvent", "lobbyShare",
+  "lobbyWatch", "netPeerEvent", "netPeerLaps", "netStop",
+  // Garage / car-visual staging.
+  "garageAero", "garageFlaps", "garageStep", "carEffects",
+  // Subsystem doors that grew their own hooks after the reference was written.
+  "bodyAttitude", "debris", "incident", "trackGraph", "weatherArc",
+  "renderClock",
+]);
+
+/** Top-level keys of the `const api = {…}` literal in js/game/apex.js. */
+function hookNames() {
+  const src = read("js/game/apex.js");
+  const body = src.slice(src.indexOf("const api = {"));
+  const names = new Set();
+  for (const m of body.matchAll(/^ {2}([a-zA-Z_$][\w$]*)\s*[(:]/gm)) names.add(m[1]);
+  return names;
+}
+
+// A hook counts as documented if the reference names it as `__apex.foo` or as a
+// `foo(` heading — both forms are in use and neither is wrong.
+function documented(doc, name) {
+  return new RegExp("__apex\\." + name + "\\b|`" + name + "\\(").test(doc);
+}
+
+test("no NEW __apex hook ships undocumented", () => {
+  const doc = read("docs/DEBUG-HOOKS.md");
+  const missing = [...hookNames()].filter((n) => !documented(doc, n) && !UNDOCUMENTED.has(n)).sort();
+  assert.deepEqual(missing, [],
+    "a hook exists in js/game/apex.js with no section in docs/DEBUG-HOOKS.md. Write one — " +
+    "the file calls itself the full reference, and a hook nobody can find is a hook nobody uses");
+});
+
+test("the undocumented list does not name a hook that has since been documented", () => {
+  const doc = read("docs/DEBUG-HOOKS.md");
+  const stale = [...UNDOCUMENTED].filter((n) => documented(doc, n)).sort();
+  assert.deepEqual(stale, [],
+    "these are documented now — delete them from UNDOCUMENTED so the ratchet keeps its grip");
+});
+
+test("the undocumented list does not name a hook that no longer exists", () => {
+  const names = hookNames();
+  const gone = [...UNDOCUMENTED].filter((n) => !names.has(n)).sort();
+  assert.deepEqual(gone, [],
+    "these hooks are gone from js/game/apex.js — drop them from UNDOCUMENTED");
+});

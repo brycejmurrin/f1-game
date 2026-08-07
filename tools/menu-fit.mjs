@@ -29,7 +29,7 @@ import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 // card; if the import ever fails the hub still renders its empty/error state and
 // the geometry checks below stay meaningful.
 let setupApiMocks = null;
-try { ({ setupApiMocks } = await import("../tests/f1-api-mock.js")); } catch { /* audit degrades to live/offline data */ }
+try { ({ setupApiMocks } = await import("../tests/helpers/f1-api-mock.js")); } catch { /* audit degrades to live/offline data */ }
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const OUT = join(ROOT, "scratch/captures/menu-fit");

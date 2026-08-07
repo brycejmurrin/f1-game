@@ -28,14 +28,14 @@
 - Modify `js/game/lighting.js`: define new controls, ranges, labels, help, and internal section metadata.
 - Modify `js/game.js`: render section headings inside an existing tuner group.
 - Modify `css/style.css`: style tuner section headings.
-- Create `tests/lighting-tuner-grade.spec.js`: verify UI organization, live values, clamping, persistence, Reset, and Copy Values.
+- Create `tests/specs/lighting-tuner-grade.spec.js`: verify UI organization, live values, clamping, persistence, Reset, and Copy Values.
 - Modify `js/shaders/glx-shaders.js`: add packed grade uniforms and the HDR grade implementation.
 - Modify `js/glx.js`: discover and upload the new WebGL uniforms.
-- Create `tests/image-grade-shaders.test.mjs`: verify GLSL/WGSL contracts, neutral math, zone direction, and finite extremes.
+- Create `tests/unit/image-grade-shaders.test.mjs`: verify GLSL/WGSL contracts, neutral math, zone direction, and finite extremes.
 - Modify `js/webgpu/wgsl-post.js`: expand `CompositeU` and mirror the HDR grade in WGSL.
 - Modify `js/webgpu/wgx.js`: pack the five new vectors into the WebGPU uniform buffer.
-- Modify `tests/webgpu-lifecycle.test.mjs`: verify the 224-byte layout, offsets, defaults, and extreme uploads.
-- Create `tests/image-grade-visual.spec.js`: exercise actual rendered tonal and RGB behavior and guard the broadcast baseline.
+- Modify `tests/unit/webgpu-lifecycle.test.mjs`: verify the 224-byte layout, offsets, defaults, and extreme uploads.
+- Create `tests/specs/image-grade-visual.spec.js`: exercise actual rendered tonal and RGB behavior and guard the broadcast baseline.
 - Modify `js/light-presets.js`: add the selected global broadcast-grade values.
 - Modify `docs/LIGHTING-REF.md`: document the new controls, order, and packed WebGPU layout.
 - Modify `index.html` and `version.json`: final synchronized cache/build bump.
@@ -48,7 +48,7 @@
 - Modify: `js/game/lighting.js:149-167`
 - Modify: `js/game.js:6028-6069`
 - Modify: `css/style.css:140-176`
-- Create: `tests/lighting-tuner-grade.spec.js`
+- Create: `tests/specs/lighting-tuner-grade.spec.js`
 
 **Interfaces:**
 - Consumes: existing `TUNE_DEFS` records and generic `setLightTune(id, value)`.
@@ -56,7 +56,7 @@
 
 - [ ] **Step 1: Write the failing Playwright coverage**
 
-Create `tests/lighting-tuner-grade.spec.js` with a small boot helper and these assertions:
+Create `tests/specs/lighting-tuner-grade.spec.js` with a small boot helper and these assertions:
 
 ```js
 // @ts-check
@@ -105,7 +105,7 @@ condition falls back to the shipped/default values.
 Run:
 
 ```bash
-npx playwright test tests/lighting-tuner-grade.spec.js
+npx playwright test tests/specs/lighting-tuner-grade.spec.js
 ```
 
 Expected: FAIL because the new slider IDs and `.lt-section` headings do not exist.
@@ -181,7 +181,7 @@ Style `.lt-section` as a compact sticky-safe divider distinct from `.adv-sec`:
 Run:
 
 ```bash
-npx playwright test tests/lighting-tuner-grade.spec.js
+npx playwright test tests/specs/lighting-tuner-grade.spec.js
 ```
 
 Expected: PASS. Then inspect IDE diagnostics for `js/game/lighting.js`,
@@ -192,7 +192,7 @@ Expected: PASS. Then inspect IDE diagnostics for `js/game/lighting.js`,
 ### Task 2: WebGL2 HDR grade
 
 **Files:**
-- Create: `tests/image-grade-shaders.test.mjs`
+- Create: `tests/unit/image-grade-shaders.test.mjs`
 - Modify: `js/shaders/glx-shaders.js:1840-1958,2239-2242`
 - Modify: `js/glx.js:237,1810-1829`
 
@@ -202,7 +202,7 @@ Expected: PASS. Then inspect IDE diagnostics for `js/game/lighting.js`,
 
 - [ ] **Step 1: Write failing shader and reference-math tests**
 
-Create `tests/image-grade-shaders.test.mjs`. Load the GLSL source with
+Create `tests/unit/image-grade-shaders.test.mjs`. Load the GLSL source with
 `readFileSync`, assert the five packed uniforms exist, and include a JavaScript
 reference evaluator with the same constants:
 
@@ -255,7 +255,7 @@ and Lift/Gain channel changes primarily alter their matching channel.
 Run:
 
 ```bash
-node --test tests/image-grade-shaders.test.mjs
+node --test tests/unit/image-grade-shaders.test.mjs
 ```
 
 Expected: FAIL because the uniforms and `applyHdrGrade` do not exist.
@@ -311,7 +311,7 @@ composition and immediately before `acesTonemap`.
 Run:
 
 ```bash
-node --test tests/image-grade-shaders.test.mjs
+node --test tests/unit/image-grade-shaders.test.mjs
 npm run test:smoke
 ```
 
@@ -322,7 +322,7 @@ Expected: both PASS and the composite shader compiles.
 ### Task 3: WebGPU parity and uniform packing
 
 **Files:**
-- Modify: `tests/webgpu-lifecycle.test.mjs:253-293`
+- Modify: `tests/unit/webgpu-lifecycle.test.mjs:253-293`
 - Modify: `js/webgpu/wgsl-post.js:374-535,828`
 - Modify: `js/webgpu/wgx.js:1498-1530`
 
@@ -390,7 +390,7 @@ Call it after bloom and before ACES, exactly matching WebGL.
 
 - [ ] **Step 5: Extend the shader contract test for WGSL parity**
 
-In `tests/image-grade-shaders.test.mjs`, load `js/webgpu/wgsl-post.js` and add
+In `tests/unit/image-grade-shaders.test.mjs`, load `js/webgpu/wgsl-post.js` and add
 assertions that WGSL defines `applyHdrGrade`, uses `log2(max(` with the same
 mask constants, and calls the helper after bloom composition and before
 `acesTonemap`.
@@ -400,7 +400,7 @@ mask constants, and calls the helper after bloom composition and before
 Run:
 
 ```bash
-node --test tests/image-grade-shaders.test.mjs
+node --test tests/unit/image-grade-shaders.test.mjs
 npm run test:webgpu-lifecycle
 ```
 
@@ -411,7 +411,7 @@ Expected: PASS.
 ### Task 4: Rendered behavior and broadcast baseline
 
 **Files:**
-- Create: `tests/image-grade-visual.spec.js`
+- Create: `tests/specs/image-grade-visual.spec.js`
 - Modify: `js/light-presets.js:20-23`
 
 **Interfaces:**
@@ -420,8 +420,8 @@ Expected: PASS.
 
 - [ ] **Step 1: Write rendered directional tests**
 
-Create `tests/image-grade-visual.spec.js`. Reuse the boot pattern and screenshot
-decode technique from `tests/lighting-ab.spec.js`. Return per-pixel RGB arrays,
+Create `tests/specs/image-grade-visual.spec.js`. Reuse the boot pattern and screenshot
+decode technique from `tests/specs/lighting-ab.spec.js`. Return per-pixel RGB arrays,
 then compare the same baseline pixel positions after a live control change:
 
 ```js
@@ -455,7 +455,7 @@ Add tests that:
 Run:
 
 ```bash
-npx playwright test tests/image-grade-visual.spec.js
+npx playwright test tests/specs/image-grade-visual.spec.js
 ```
 
 Expected: PASS with neutral defaults; no global regrade has been selected yet.
@@ -505,7 +505,7 @@ met. Do not hide a per-track lighting problem with a global extreme.
 
 - [ ] **Step 5: Add broad baseline clipping guards**
 
-In `tests/image-grade-visual.spec.js`, compute screenshot luminance and assert on
+In `tests/specs/image-grade-visual.spec.js`, compute screenshot luminance and assert on
 the representative matrix:
 
 ```js
@@ -523,7 +523,7 @@ letterbox/UI areas, hide the HUD and sample only the game viewport.
 Run:
 
 ```bash
-npx playwright test tests/image-grade-visual.spec.js tests/lighting-ab.spec.js tests/lightstate.spec.js
+npx playwright test tests/specs/image-grade-visual.spec.js tests/specs/lighting-ab.spec.js tests/lightstate.spec.js
 ```
 
 Expected: PASS. Keep the final global values, not necessarily the starting values
@@ -566,9 +566,9 @@ node --check js/shaders/glx-shaders.js
 node --check js/webgpu/wgsl-post.js
 node --check js/webgpu/wgx.js
 node --check js/light-presets.js
-node --test tests/image-grade-shaders.test.mjs
+node --test tests/unit/image-grade-shaders.test.mjs
 npm run test:webgpu-lifecycle
-npx playwright test tests/lighting-tuner-grade.spec.js tests/image-grade-visual.spec.js
+npx playwright test tests/specs/lighting-tuner-grade.spec.js tests/specs/image-grade-visual.spec.js
 ```
 
 Expected: all PASS.
@@ -588,7 +588,7 @@ Run:
 npm run test:smoke
 npm run test:webgl
 npm run test:webgpu-lifecycle
-npx playwright test tests/lighting-tuner-grade.spec.js tests/image-grade-visual.spec.js
+npx playwright test tests/specs/lighting-tuner-grade.spec.js tests/specs/image-grade-visual.spec.js
 ```
 
 Expected: all focused checks PASS.

@@ -35,7 +35,7 @@
 //
 // Not every hit is a bug — a force, a divide-by-zero floor, a sign test and the
 // reverse crawl are all legitimately absolute. Those live in ALLOWED in
-// tests/vstd-invariant.test.mjs, each with a written justification. The point of
+// tests/unit/vstd-invariant.test.mjs, each with a written justification. The point of
 // the allow-list is that a NEW absolute speed threshold cannot be added without
 // somebody writing down why it is allowed to be absolute.
 //
@@ -205,6 +205,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log("✓ no raw speed-vs-literal comparisons");
   } else {
     for (const v of hits) console.log(`${v.file}:${v.line}  ${v.expr}\n    ${v.code}`);
-    console.log(`\n${hits.length} speed-vs-literal comparison(s). Each must be vStd()-normalised or justified in tests/vstd-invariant.test.mjs.`);
+    console.log(`\n${hits.length} speed-vs-literal comparison(s). Each must be vStd()-normalised or justified in tests/unit/vstd-invariant.test.mjs.`);
   }
 }

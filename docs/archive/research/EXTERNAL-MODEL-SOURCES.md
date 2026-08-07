@@ -64,7 +64,7 @@ does.
 
 1. **On-track rejection.** Every primitive is wrapped in a full-footprint
    Minkowski test (`rejBox`/`onRoadHit`) against the road half-width. A prop
-   overlapping tarmac is dropped whole. `tests/props-over-road.spec.js` audits
+   overlapping tarmac is dropped whole. `tests/specs/props-over-road.spec.js` audits
    all 24 circuits.
 2. **Terrain anchoring.** `anchor(k, side, dist)` raycasts the *built* terrain
    ribbon (`terrainYAt`, a binned XZ triangle grid) and returns
@@ -120,7 +120,7 @@ about.**
   cannot await anything. Assets must be resident *before* the build.
 - **PWA/offline.** The shell is cached and version-guarded (`version.json`); a
   track that needs a network fetch to look right breaks offline play.
-- **Determinism.** `tests/props-over-road.spec.js`, `tracks-visual.spec.js` and
+- **Determinism.** `tests/specs/props-over-road.spec.js`, `tracks-visual.spec.js` and
   the agent-view specs assume a track builds identically every time.
 
 So the shape is: **fetch at authoring time, commit the baked asset, load it as a

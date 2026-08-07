@@ -1,7 +1,7 @@
 // manifest.cjs — the single source of truth for script load order.
 //
 // index.html cannot be generated (no build step), so it is hand-edited and
-// ASSERTED against this file by tests/load-order.test.mjs. Node VM loaders
+// ASSERTED against this file by tests/unit/load-order.test.mjs. Node VM loaders
 // (verify-track.cjs, the track-foundation tests) iterate the subsets below
 // instead of keeping their own copies, so adding/moving a file is a one-line
 // edit here plus the matching <script> tag.
@@ -329,7 +329,7 @@ const HARD_EDGES = [
 // Adding a file here instead of FULL means: no <script> tag in index.html, and
 // it MUST also be seeded into sw.js's OPTIONAL precache set (the service worker
 // discovers everything else by parsing the shell's own tags, so a deferred file
-// is invisible to it). tests/load-order.test.mjs asserts all three.
+// is invisible to it). tests/unit/load-order.test.mjs asserts all three.
 const DEFERRED = {
   webgpu: [
     "js/render/webgpu/wgsl-chunks.js",

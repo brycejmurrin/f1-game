@@ -1,7 +1,7 @@
 // @ts-check
 // skid-probe — WHY DOES `GLX.__tlx.fxState().skidVerts` STAY ZERO?
 //
-// tests/tlx-probes.spec.js "M6 skid batch records after a hard driven stint"
+// tests/specs/tlx-probes.spec.js "M6 skid batch records after a hard driven stint"
 // has never passed. Four mechanisms have already been proposed and disproved:
 // act() hangs (measured 309 ms), a slow ~30 s prediction, arithmetic in an
 // un-timeouted evaluate, and rAF starvation of the wait (the `polling: 100`

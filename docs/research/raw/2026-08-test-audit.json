@@ -1,5 +1,5 @@
 {
- "design": "Everything below is grounded in the files read this session: `package.json` test scripts, `docs/TESTING.md` \u00a71\u20132, `tools/pick-tests.mjs` (RULES + `--since`), `.github/workflows/ci.yml` (full header), `tests/test-groups.test.mjs`, `tests/test-coverage-audit.test.mjs`, `playwright.config.js`, and `docs/research/AUDIT-SYNTHESIS-2026-08.md` \u00a7R2.\n\n# Test taxonomy, tests/ split map, and change-aware CI design\n\n## 1. Group taxonomy\n\nGroup **names stay stable** (19 docs cite them; `tests/test-groups.test.mjs:66-74` asserts the docs table \u2194 `package.json` in lockstep, and `RULES` in `tools/pick-tests.mjs` must keep resolving \u2014 its own guard at test-groups:35-42 enforces that). Two new groups are added: `foundation` and `gallery`. Every membership change below is a coordinated 3-file edit: `package.json` + `docs/TESTING.md` \u00a72 table + (where routing changes) `tools/pick-tests.mjs` RULES.\n\n### 1a. Files that move groups (regroup verdicts)\n\n**The 16 circuit-foundation specs leave `test:physics`.** They contain zero driving-model physics; the `physics-` filename prefix exists only to be caught by `test:physics`'s `tests/physics-*.spec.js` glob (package.json:15), so today every driving-model edit pays ~16 circuit builds it cannot break, while `js/circuits/` edits (routed by pick-tests to `circuit`+`scenery`, RULES line 56) never run them \u2014 misgrouped in **both** directions.\n\n- Rename `physics-<circuit>-foundation.spec.js` \u2192 `<circuit>-foundation.spec.js` (abudhabi, albert-park, bahrain, cota, hungaroring, imola, monaco, montreal, monza, qatar, redbull, spa, suzuka, vegas, zandvoort) and `physics-interlagos-migration.spec.js` \u2192 `interlagos-foundation.spec.js`.\n- New group: `\"test:foundation\": \"node tools/run-playwright.mjs tests/*-foundation.spec.js\"` (after the tests/ split: `tests/specs/*-foundation.spec.js`). All 16 land here and nowhere else.\n- `test:physics`'s glob now matches exactly `physics-characterization` + `physics-fixes` \u2014 the two genuine physics files \u2014 so the glob can stay.\n- pick-tests RULES: add `foundation` to the `js/circuits/` rule (line 56 \u2192 `[\"circuit\", \"scenery\", \"foundation\"]`) and to the track-engine rule (line 52-53 \u2192 `[\"circuit\", \"physics\", \"sweeps\", \"foundation\"]`). Remove nothing \u2014 RULES are deliberately over-wide by design (header lines 16-18).\n- `docs/TESTING.md` \u00a72 gains a `foundation` row under \"Track & scenery\"; the \u00a75 family glob row (`physics-*` per test-groups:81-82) is re-pointed at `*-foundation.spec.js`.\n\n**Gallery specs leave `test:ui`.** `ui-audit.spec.js` (63 shots, 0 expects, 13\u2013108 s each \u2014 it dominates test:ui's wall time) moves to a new on-demand `test:gallery` group, absorbing `ui-desktop.spec.js` (see merges). `test:ui` becomes: `ui-button-touch`, `ui-scale`, `hud-layout`, `menu-keyboard`, `menu-survey` (menu-survey stays only because its verdict is strengthen, not regroup \u2014 see 1c#8). `test:gallery` names explicit files, so `test:audit` / `test-coverage-audit.test.mjs` still sees topical coverage and nothing goes orphan. `test:gallery` is **not** added to any pick-tests rule \u2014 galleries are run on purpose, like `tests/manual/`.\n\n**De-duplication of double-billed specs** (each currently executes twice when its two groups co-run, which pick-tests makes routine \u2014 `js/game.js` selects `behaviour`+`api`+`circuit`+`physics` at RULES:72):\n\n| Spec | Today | After |\n|---|---|---|\n| `world-physics.spec.js` | physics + behaviour | **behaviour** only |\n| `active-aero.spec.js` | physics + behaviour | **behaviour** only (pairs with aero-zones, whose trade tests it partially duplicates) |\n| `physics-fixes.spec.js` | physics glob + behaviour | **physics** only (glob keeps it) |\n| `elevation-tracks.spec.js` (heaviest file in the batch, ~24 s \u00d7 40 circuits) | physics + circuit | **circuit** only |\n| `new-hooks.spec.js` | api + hooks | **hooks** only (post-split, see 1b) |\n| `collision-ai-fixes.spec.js` | collision glob + behaviour glob + barriers | collision + barriers only \u2014 `test:behaviour` drops its `collision*.spec.js`/drift/offtrack members entirely |\n\nResulting `test:behaviour` = `world-physics, physics-fixes\u2192(no, physics), active-aero, aero-zones` \u2192 final: `world-physics.spec.js active-aero.spec.js aero-zones.spec.js`. Coverage is unchanged for every pick-tests selection: game.js edits still select behaviour **and** physics **and** circuit, so the union is identical \u2014 each spec just runs once. `test:barriers` keeps `tracks-walls + collision-ai-fixes` unchanged (no pick-tests rule routes to it; it is a manual convenience group).\n\n### 1b. Splits\n\n1. **`agent-view.spec.js`** (1857 lines, ~90 tests, 30+ min monolith) \u2192 4 files, all staying in `test:agent`: `agent-view-contract.spec.js` (world/trackInfo/agentHelp + size budgets), `agent-view-render.spec.js` (rasters), `agent-view-scene.spec.js` (scene/describe/query/carView), `agent-view-survey.spec.js` (survey/rollout/atmosphere).\n2. **`career.spec.js`** (2049 lines, ~80 tests, documented 120 s-budget fights) \u2192 `career-core.spec.js` (save versioning/migration, GP\u2194career isolation, slots), `career-economy.spec.js` (garage/R&D/objectives/rollover/sponsors/reliability/settlement), `career-ui.spec.js` (hub, MY TEAM roster, modes screen, guides). All three in `test:career` and `test:modes`.\n3. **`new-hooks.spec.js`** lines 509-877 (the Silverstone/COTA/Miami/Jeddah/Singapore/Madrid/Shanghai foundation-diagnostics half) \u2192 `track-foundation-diagnostics.spec.js`, into **`test:foundation`**. The remaining hooks-contract half stays as `new-hooks.spec.js` in `test:hooks` only (dropped from `test:api`, closing the api+hooks double-run). Both new files switch their import from `@playwright/test` to `./fixtures.js` while being touched.\n4. **`parts-physics.spec.js`** (1481 lines, ~70% geometry under a \"physics\" name that misleads pick-tests) \u2192 `parts-geometry.spec.js` (Car3D/CarMesh geometry contracts, visual recipes, shader-parity strings); the final ERS-battery test (lines 1415-1481, 3 monza rebuilds) moves into `parts-ers.spec.js`; catalog/getMods/getCost/resolveSetup/statMult stay in `parts-physics.spec.js`. The `parts-*` glob (package.json:20) absorbs the new name automatically; `test:fast`'s explicit `parts-physics.spec.js` reference still resolves.\n5. **`steering.spec.js`** lines 292-405 (keyboard/pedal input-latch block \u2014 `js/game/input.js` territory, no race build needed) \u2192 moved into `touch-steer.spec.js` (its verdicted natural home: same module, same page-boot-only cost, same fixtures import). No group change; both are in `test:steering`.\n\n### 1c. Strengthen list (weak/vacuous asserts, file:line + one-line fix)\n\nFixes 1\u20132 are flagged DEFER in AUDIT-SYNTHESIS (\"per-test design decision, not a mechanical fix\") \u2014 carry them as design tickets, not batch edits:\n\n1. `tests/camera-driving-hooks.spec.js:191-193` \u2014 spin computes before/after headings, asserts neither: assert `after !== before` and sign against the spin argument.\n2. `tests/headless-api.spec.js:290-303` \u2014 \"obs() returns false when player not initialised\" accepts both outcomes: pick one contract and assert it.\n3. `tests/camera-driving-hooks.spec.js:209-217` \u2014 title claims \"zeroes vLat and yawRate\", only vLat asserted: add the yawRate expect.\n4. `tests/camera-driving-hooks.spec.js:12-17` (and camera-hooks:9-16, camera-tuner:11-16) \u2014 fixed 3 s sleeps: replace with `waitForFunction` on `__apex.info().track`; also import `./fixtures.js` instead of `@playwright/test`.\n5. `tests/camera-hooks.spec.js:19-33` \u2014 dolly never checks the eye landed at the requested (frac, lateral, height): assert eye position against `Tracks`-projected expectation within a band.\n6. `tests/collision-ai-fixes.spec.js:131` \u2014 \"speed is scrubbed against Monza barrier\" passes on coasting drag alone: add a no-wall control run and assert scrubbed < control \u2212 margin.\n7. `tests/css-layers.test.mjs:63` \u2014 a file that loses its opening `@layer` wrapper is silently skipped: add a roster test that every `css/` file except `tokens.css` opens with `@layer`.\n8. `tests/menu-survey.spec.js:57-165` \u2014 tests 30/33-36/40-43 have zero expects: one-line DOM assert per captured state (cycleTo landed on TILT/MANUAL, sound/music toggles reflect state), and delete the `.catch(() => {})` at :162 that green-lights a broken campicker.\n9. `tests/fixture-consumer-audit.test.mjs:5-19` \u2014 the FLOOR=31 adoption ratchet is dead code from CI's perspective: add `assert.deepEqual(fixtureImportViolations(readSpecs()), [])` and `adoption(readSpecs()).uses >= FLOOR` so the guarantee actually runs in `test:tooling-fast`.\n10. `tests/map-hooks.spec.js:32-33, 43` \u2014 north-up claimed but only span asserted, and `orbit()` has no assertion after it: pin a known-frac landmark's normalized map position; assert `camState` changed after orbit.\n11. `tests/parts-livery-contrast.spec.js:29-51, 240-254` \u2014 the ink half tests its own inline mirror of buildAtlas: export the atlas's real lum/ink helpers and assert against those.\n12. `tests/props-over-road.spec.js:57-59` \u2014 \"Shanghai uses the default baseline\" asserts a literal in the same file: delete it (the real check runs inline at :144-145).\n13. `tests/scenery-kits.spec.js:82-88` \u2014 \"emits validated street kit facilities\" never asserts the theme: return the resolved theme from the evaluate and assert it; make the vertex bound fail on a missing `vertices` field.\n14. `tests/terrain-over-road.spec.js:246` \u2014 road faces >1.5 m over the line pass everywhere: gate the exemption on `CROSSOVER_TRACKS` (the :203 frac-distance filter already handles the three known tracks).\n15. `tests/tracks-walls.spec.js:37-53, 89` \u2014 test 2 builds all ~40 circuits to assert 5 street circuits: build just those 5; and make `if (r.skip) continue` a failure \u2014 a track whose `race()` failed must not vanish.\n16. `tests/webgl-probes.spec.js:27-34, 79-98` \u2014 typeof-only `hdrMode()`/`lightState()` shape tests: fold into the adjacent behavioural tests (night>day, shadow-transform).\n17. `tests/coplanar-faces.test.mjs:58` \u2014 the `>= 24` roster floor against 40 circuits: assert against the `js/circuits/` file count (the fix `prop-clipping.test.mjs:65-67` already made).\n18. `tests/parts-budget.spec.js:40-41` \u2014 duplicated `toContain(\"600\")`: make the second assert spent-vs-remaining.\n19. `tests/smoke.spec.js:212-219` \u2014 minimap \"content\" is a width>0 check: sample pixels via getImageData (copy telemetry-compare:88-93's pattern).\n20. `tests/race-control.test.mjs:116-126` \u2014 the 90 s cap it names is never exercised: add the cap-expiry test (flag drops after the cap once the picture clears).\n21. `tests/carview-parts.spec.js:5` \u2014 stale \"eight parts categories\" title vs the twelve asserted: fix the title.\n\n### 1d. Merges (merge verdicts + merge candidates)\n\n**Do now (merge BEFORE the tests/ move \u2014 see \u00a72):**\n- `hud-audit.spec.js` \u2192 **into `hud-layout.spec.js`**: its assertHud (:39-45) is a strict subset of hud-layout's real geometry checks; keep the 8 screenshots as an extra shot per existing mode/orientation combo. File deleted; leaves test:ui shorter.\n- `ui-desktop.spec.js` \u2192 **into `ui-audit.spec.js`** as two more viewport rows (strict subset of ui-audit's screens; 0 expects). File deleted; rides along into `test:gallery`.\n- `tests/manual/inspect.spec.js` \u2192 **into `tests/manual/blank-scan.spec.js`**: byte-identical capture loop; one pass asserts blanks AND writes the contact sheet, halving the 40-circuit run. Update `tests/manual/README.md`.\n\n**Merge candidates (flagged, not scheduled):**\n- `active-aero.spec.js:214-261` trade tests vs `aero-zones.spec.js`'s \"downforce traded for top speed\" block \u2014 same trade against the same constants; collapse into aero-zones when either is next touched.\n- `physics-monaco-foundation` test 2 (:140-220) \u2014 hand-copied `props-over-road` scan with an identical 1.4 cap to props-over-road:52; **drop it** in the foundation rename commit (one of the two is dead weight, per verdict).\n- `physics-spa-foundation` test 3 (:52-147) and `physics-zandvoort-foundation`'s ~170-line `propClearance` helper \u2014 third and fourth hand copies of the shared corridor scan: extract to `track-helpers.js` or drop in favour of the all-circuit audit.\n- `albert-park-foundation.test.mjs` + `baku-migration.test.mjs` \u2014 parameterise into one shared circuit-characterization suite when a third circuit joins the pattern (verdict: two files don't yet justify churn).\n- `parts-ers.spec.js` absorbing parts-physics's ERS test is already scheduled under splits (1b#4); the four ERS sweeps in parts-ers should share one page load while touched.\n\n## 2. tests/ split map\n\nBase plan is AUDIT-SYNTHESIS \u00a7R2 verbatim \u2014 `tests/specs/` + `tests/unit/` + `tests/helpers/`; `tests/data/`, `tests/manual/` stay; **one commit via `git mv`, never with a background run in flight, no ?v bump** \u2014 including all 13 R2 lockstep items (package.json paths; playwright.config globalSetup/reporter; the 66 `./fixtures.js` imports; the \u26a0 output-paths/qr-camera symmetric-drift pair; the \u26a0 `tools/fit-audit.mjs:27`/`menu-fit.mjs:32` swallowed dynamic imports; \u26a0 `f1-track-accuracy.spec.js:18` `./data/`; \u26a0 manual/ imports + README; the test-groups:154 + docs-integrity:343 regex widenings and flat-readdir walks; test-coverage-audit tool+test scans and fixture-consumer-audit readSpecs; \u26a0 ci.yml sweeps filter; span-kinds:46/docs-integrity:217 hardcoded reads; the TESTING.md/CLAUDE.md/README count-phrase triple). Nothing here contradicts R2; the ordering rule and per-file additions below **extend** it.\n\n**Ordering (audit feed-in): merge \u2192 regroup-rename \u2192 move \u2192 split.** The three merges in 1d delete `hud-audit.spec.js`, `ui-desktop.spec.js`, and `manual/inspect.spec.js` *before* the move (a merged file must never be moved and then deleted \u2014 it would churn the R2 lockstep edits twice), so the move relocates **109** specs, not 111. The 16 foundation renames also land before the move for the same reason (one path rewrite per file, not two). The splits (1b) land *after* the move, inside `tests/specs/`, so their new filenames never exist at the old paths.\n\nPer-file mapping:\n\n| Destination | Files |\n|---|---|\n| `tests/specs/` | All `*.spec.js` (109 post-merge): the 16 renamed `*-foundation.spec.js`, and every other root spec named in the package.json groups \u2014 smoke, dev-tools, logging, headless-api, obs-act-edge, new-hooks, data-lifecycle, telemetry-compare, assets-api, persistence, wake-lock, camera{,-hooks,-driving-hooks,-tuner}, map-hooks, world-physics, longitudinal, elevation-tracks, projection, active-aero, understeer-cue, physics-characterization, physics-fixes, collision{s,-deep,-ai-fixes}, drift, offtrack, debris, race-control, aero-zones, tracks-walls, autopilot, audit, parts-* (all), car-effects, carview-parts, custom-team, garage-aero, presets, sliders, steering, gamepad, touch-steer, tilt-pipeline, steer-migration, ui-audit, ui-button-touch, ui-scale, hud-layout, menu-survey, menu-keyboard, menu-baseline, tracks-visual, props-over-road, terrain-over-road, f1-track-accuracy, scenery-kits, instanced-draw, webgl-probes, lighting-ab, image-grade-visual, lighting-tuner-grade, material-shimmer, tlx-probes, audio-smoke, music-library, season, time-trial, career, quali, agent-view, agent-drive-bench, agent-determinism, multiplayer-* (8), output-paths.spec.js |\n| `tests/unit/` | All 49 `*.test.mjs` + `shared-track-foundation-characterization.test.cjs`: the 34 tooling-fast suites, 7 net-unit suites, 4 sweeps suites, service-worker, webgpu-lifecycle, agentview-api-contract |\n| `tests/helpers/` | The 7: `fixtures.js`, `track-helpers.js`, `qr-camera.js`, `f1-api-mock.js`, `output-paths.js`, `global-setup.js`, `live-reporter.js` |\n| `tests/data/` | `f1-circuit-reference.geojson` (stays) |\n| `tests/manual/` | stays: `README.md`, `blank-scan.spec.js` (post-merge), `circuits.js`, `galleries/` |\n\n**Extensions the per-file audit adds to R2's lockstep list:**\n\n14. **Snapshot dir moves with its spec**: `tests/menu-baseline.spec.js-snapshots/` \u2192 `tests/specs/menu-baseline.spec.js-snapshots/` in the same `git mv` commit \u2014 Playwright resolves snapshot paths relative to the spec file, and these are the repo's ONLY golden baselines (CLAUDE.md); a missed move reads as \"baseline missing\", which `toHaveScreenshot` under `--update-snapshots` would silently re-bless. Same rule pre-arms `tests/specs/tracks-visual.spec.js-snapshots/` \u2014 the skip gate at tracks-visual:27-30 keys on that (spec-relative) dir existing, so the gate keeps skipping correctly after the move with no edit.\n15. **`tests/physics-baseline.json`** sits flat in tests/ (verified on disk) and is in no R2 bucket: move to `tests/data/physics-baseline.json` and update `physics-characterization.spec.js`'s read plus whatever tool regenerates it (grep `physics-baseline` across tools/ in the same commit \u2014 the characterization gate being unable to find its committed baseline must fail loudly, and the spec's header says the baseline's presence is what makes the gate live).\n16. **`tests/manual/` internals**: `manual/circuits.js` and `manual/galleries/` stay put, but R2 item 7's manual/ fix-ups shrink by one file (inspect.spec.js is deleted by the 1d merge before the move).\n17. **Group-taxonomy lockstep**: the \u00a71 package.json membership edits and the R2 path rewrites touch the same ~28 script lines \u2014 land \u00a71's regroup/dedupe **before** the R2 move commit so the move is a pure path rewrite, and `test-groups.test.mjs` / `test-coverage-audit.test.mjs` adjudicate each step separately.\n18. **New-group guards**: `test:foundation` and `test:gallery` each need a `docs/TESTING.md` \u00a72 row (test-groups:66-74 fails otherwise) and their member files satisfy `test:audit` by being explicitly named/globbed.\n\n## 3. Change-aware CI\n\nDesign constraints taken from `ci.yml` as read: guards ~25 s / sweeps 15m12s / smoke 14m24s are **measured** budgets (run 31023778264) and `timeout-minutes` must stay above them; a timed-out job reports `cancelled`, not `failed`, and that once hid a dead deploy behind \"0 failures\"; SwiftShader on a shared runner measured **90\u2013115 s/test** (smoke-step comment), serial one-worker with `--timeout=240000` is the proven-stable shape; `concurrency` cancels **only** `pull_request` runs; pages.yml gates deploy via `workflow_call` + `needs: ci`, so jobs must always run and report (step-level conditions only, never job-level `if` \u2014 the sweeps filter comment states this explicitly).\n\n### The `selected` job (additive, non-deploy branches)\n\n```yaml\n  selected:\n    name: Change-selected groups (advisory on feature branches)\n    # Never part of the deploy gate: pages.yml needs guards/sweeps/smoke, not this.\n    # Skipped entirely when ci.yml runs via workflow_call from pages.yml.\n    if: github.event_name != 'workflow_call'\n    runs-on: ubuntu-latest\n    # BUDGET (state and re-measure per the header's rule): setup ~4 min\n    # (npm ci + playwright install chromium), node-only groups ~2 min,\n    # browser step capped at 25 min below => 31 min worst case. 35 > 31.\n    timeout-minutes: 35\n    steps:\n      - uses: actions/checkout@v4\n        with: { fetch-depth: 0 }   # --since needs the base commit reachable\n      - uses: actions/setup-node@v4\n        with: { node-version: \"20\", cache: npm }\n      - run: npm ci\n      - name: Resolve diff base + fallback check\n        id: base\n        ...\n      - name: Node-only selected groups\n        timeout-minutes: 5        # measured: tooling-fast ~30 s, net-unit <1 s\n        ...\n      - name: Browser selected groups (fixed budget)\n        if: steps.base.outputs.fallback != 'true'\n        timeout-minutes: 25       # 12 tests x 115 s = 23 min; cap above it\n        env: { APEX_WORKERS: \"1\" }\n        ...\n```\n\n**Diff refs (exact, per event):**\n- `push`: base = `${{ github.event.before }}`, head = `${{ github.sha }}`. Copy the sweeps filter's fail-safe ladder verbatim (ci.yml:196-217): empty or all-zero `before` (new branch/first push), `git cat-file -e \"$BEFORE^{commit}\"` failing (force push), or `git diff` erroring each set `fallback=true`. **Fail safe, never fail open** \u2014 an unresolvable diff must not be read as \"nothing changed\".\n- `pull_request`: base = `${{ github.event.pull_request.base.sha }}`; compute `MB=$(git merge-base \"$BASE\" HEAD)` (the checkout is the merge commit, so merge-base keeps unrelated base-branch churn out of the diff) and use `MB` as the ref. If merge-base fails \u2192 `fallback=true`.\n\n**Selection**: run `node tools/pick-tests.mjs --since \"$REF\"`. `--since` does exactly `git diff --name-only <ref>` against the checked-out tree (pick-tests:120-121), which in a clean CI checkout is base\u2192head. Parse the `test:<group>` lines from the \"group(s) to run\" block. Partition:\n- **Node-only groups, run directly, uncapped** (their package.json commands are `node --test` or pure tools): `tooling-fast`, `net-unit`, `service-worker`, `webgpu-lifecycle`, `agent-contract`, `audit`. **Exclude `sweeps`/`tooling`** \u2014 the sweeps job already owns that work with its `NODE_OPTIONS: --max-old-space-size=6144` heap ceiling (job-level, to reach prop-clipping's execFileSync child); re-running it here without that env would reproduce the documented 4 GB SIGABRT-as-`cancelled` failure. Guards-job overlap (tooling-fast/audit run twice) costs ~30 s and is accepted for locality of failure.\n- **Browser groups, fixed budget**: install Chromium only (`npx playwright install --with-deps chromium` \u2014 the smoke job's rationale). Budget rule, derived from the measured 90\u2013115 s/test and the 35-min job cap: **at most 2 selected browser groups AND at most 12 total tests** (12 \u00d7 115 s \u2248 23 min, inside the 25-min step cap with margin; margin-that-thin-is-a-coin-flip is the header's own lesson). Count with `npx playwright test --list <group's spec paths> | tail -1` before running. Run serial: `APEX_WORKERS: 1` (playwright.config.js's documented override; CI default `workers: 2` is the proven oversubscription signature) with `-- --timeout=240000`. Take groups in pick-tests' sorted output order until the budget is hit.\n- **Overflow**: if selection exceeds 2 groups / 12 tests, run what fits, and write the remainder to `$GITHUB_STEP_SUMMARY` as `run locally: node tools/test-bg.mjs <groups>` \u2014 do **not** fail. This job is advisory; the three-job gate below stays the authority.\n\n### Fallback-to-full-gate rule\n\nIf the diff (or an unresolvable diff, per the fail-safe ladder) touches any **infra path**, the selected job sets `fallback=true`: the browser step is skipped with a printed reason and the node-only step runs only `tooling-fast` + `audit`. Coverage then rests entirely on the unconditional three-job gate, which is already running on the same push. Infra paths:\n\n```\npackage.json  package-lock.json  tools/manifest.cjs  tools/pick-tests.mjs\ntools/run-playwright.mjs  tools/test-bg.mjs  .github/**  playwright.config.js\ntests/helpers/**          (pre-R2-move: tests/{fixtures,track-helpers,qr-camera,\n                           f1-api-mock,output-paths,global-setup,live-reporter}.js)\nindex.html  sw.js  version.json      (index.html's script block IS the load\n                                      order; a ?v/version.json bump invalidates\n                                      every cached page \u2014 gate at file granularity)\n```\n\nRationale: these files change what selection *means* (pick-tests RULES, group scripts, project partition, fixtures every spec loads, the shell the server serves), so a selector reading them to route its own validity would be circular. This list also matches R2 item 10's obligation to update ci.yml's sweeps filter regex to `tests/unit/(...)` when the move lands \u2014 do the selected-job path list and the sweeps filter in that same commit, or the sweeps filter fails open.\n\n### Coexistence with guards / sweeps / smoke\n\nUnchanged, byte-for-byte, as the deploy gate: `pages.yml` keeps `needs: ci`, ci.yml keeps `workflow_call`, and guards/sweeps/smoke keep their measured budgets (10/35/30 `timeout-minutes`) and step-level conditionality. `selected` is **additive on non-deploy branches only** \u2014 it is excluded from `workflow_call` runs so a slow advisory job can never delay or cancel a deploy, and it is deliberately *not* listed in any `needs:`. The sweeps job's geometry filter and the selected job share the pick-tests-derived worldview but stay independent implementations, per the sweeps comment's fail-safe doctrine.\n\n### Failure-mode notes (the header's demands, restated as obligations on this design)\n\n- **Every step states its `timeout-minutes` next to a measured figure**, and the header rule applies: change what a step runs \u2192 re-time it \u2192 change the number. The 25-min browser cap sits above the computed 23-min worst case for the same reason smoke's 30 sits above 14m24s: thin margins produced `cancelled` verdicts nobody read as failures.\n- **No cancel-in-progress on push** \u2014 the existing `concurrency` block (`cancel-in-progress: ${{ github.event_name == 'pull_request' }}`) already encodes the fifteen-consecutive-cancelled-runs lesson; `selected` adds no concurrency group of its own and inherits it.\n- **`cancelled` \u2260 `failed`**: any step in `selected` that can exceed its cap must overflow-to-summary rather than run long; a budget overflow is a *reported decision*, never a timeout.\n- **Step-level `if`, job always reports** \u2014 same pattern as the sweeps filter, so a future `needs:` consumer of `selected` (if it ever becomes gating) inherits working semantics.\n- **Heap ceiling stays with the sweeps job**: `selected` must never run `test:sweeps`/`test:tooling`; the OOM story (road-under-floor SIGABRT at 4088 MB on run 31016070670, surfacing as `cancelled`) belongs to the job that carries `NODE_OPTIONS=--max-old-space-size=6144`.\n- **Worker discipline**: browser steps pin `APEX_WORKERS=1` + `--timeout=240000` \u2014 the smoke step's own controlled experiment (125.2 s timeout contended \u2192 110.6 s pass alone) is the evidence; two SwiftShader contexts on a shared runner measure the runner, not the code.",
+ "design": "Everything below is grounded in the files read this session: `package.json` test scripts, `docs/TESTING.md` \u00a71\u20132, `tools/pick-tests.mjs` (RULES + `--since`), `.github/workflows/ci.yml` (full header), `tests/unit/test-groups.test.mjs`, `tests/unit/test-coverage-audit.test.mjs`, `playwright.config.js`, and `docs/research/AUDIT-SYNTHESIS-2026-08.md` \u00a7R2.\n\n# Test taxonomy, tests/ split map, and change-aware CI design\n\n## 1. Group taxonomy\n\nGroup **names stay stable** (19 docs cite them; `tests/unit/test-groups.test.mjs:66-74` asserts the docs table \u2194 `package.json` in lockstep, and `RULES` in `tools/pick-tests.mjs` must keep resolving \u2014 its own guard at test-groups:35-42 enforces that). Two new groups are added: `foundation` and `gallery`. Every membership change below is a coordinated 3-file edit: `package.json` + `docs/TESTING.md` \u00a72 table + (where routing changes) `tools/pick-tests.mjs` RULES.\n\n### 1a. Files that move groups (regroup verdicts)\n\n**The 16 circuit-foundation specs leave `test:physics`.** They contain zero driving-model physics; the `physics-` filename prefix exists only to be caught by `test:physics`'s `tests/physics-*.spec.js` glob (package.json:15), so today every driving-model edit pays ~16 circuit builds it cannot break, while `js/circuits/` edits (routed by pick-tests to `circuit`+`scenery`, RULES line 56) never run them \u2014 misgrouped in **both** directions.\n\n- Rename `physics-<circuit>-foundation.spec.js` \u2192 `<circuit>-foundation.spec.js` (abudhabi, albert-park, bahrain, cota, hungaroring, imola, monaco, montreal, monza, qatar, redbull, spa, suzuka, vegas, zandvoort) and `physics-interlagos-migration.spec.js` \u2192 `interlagos-foundation.spec.js`.\n- New group: `\"test:foundation\": \"node tools/run-playwright.mjs tests/*-foundation.spec.js\"` (after the tests/ split: `tests/specs/*-foundation.spec.js`). All 16 land here and nowhere else.\n- `test:physics`'s glob now matches exactly `physics-characterization` + `physics-fixes` \u2014 the two genuine physics files \u2014 so the glob can stay.\n- pick-tests RULES: add `foundation` to the `js/circuits/` rule (line 56 \u2192 `[\"circuit\", \"scenery\", \"foundation\"]`) and to the track-engine rule (line 52-53 \u2192 `[\"circuit\", \"physics\", \"sweeps\", \"foundation\"]`). Remove nothing \u2014 RULES are deliberately over-wide by design (header lines 16-18).\n- `docs/TESTING.md` \u00a72 gains a `foundation` row under \"Track & scenery\"; the \u00a75 family glob row (`physics-*` per test-groups:81-82) is re-pointed at `*-foundation.spec.js`.\n\n**Gallery specs leave `test:ui`.** `ui-audit.spec.js` (63 shots, 0 expects, 13\u2013108 s each \u2014 it dominates test:ui's wall time) moves to a new on-demand `test:gallery` group, absorbing `ui-desktop.spec.js` (see merges). `test:ui` becomes: `ui-button-touch`, `ui-scale`, `hud-layout`, `menu-keyboard`, `menu-survey` (menu-survey stays only because its verdict is strengthen, not regroup \u2014 see 1c#8). `test:gallery` names explicit files, so `test:audit` / `test-coverage-audit.test.mjs` still sees topical coverage and nothing goes orphan. `test:gallery` is **not** added to any pick-tests rule \u2014 galleries are run on purpose, like `tests/manual/`.\n\n**De-duplication of double-billed specs** (each currently executes twice when its two groups co-run, which pick-tests makes routine \u2014 `js/game.js` selects `behaviour`+`api`+`circuit`+`physics` at RULES:72):\n\n| Spec | Today | After |\n|---|---|---|\n| `world-physics.spec.js` | physics + behaviour | **behaviour** only |\n| `active-aero.spec.js` | physics + behaviour | **behaviour** only (pairs with aero-zones, whose trade tests it partially duplicates) |\n| `physics-fixes.spec.js` | physics glob + behaviour | **physics** only (glob keeps it) |\n| `elevation-tracks.spec.js` (heaviest file in the batch, ~24 s \u00d7 40 circuits) | physics + circuit | **circuit** only |\n| `new-hooks.spec.js` | api + hooks | **hooks** only (post-split, see 1b) |\n| `collision-ai-fixes.spec.js` | collision glob + behaviour glob + barriers | collision + barriers only \u2014 `test:behaviour` drops its `collision*.spec.js`/drift/offtrack members entirely |\n\nResulting `test:behaviour` = `world-physics, physics-fixes\u2192(no, physics), active-aero, aero-zones` \u2192 final: `world-physics.spec.js active-aero.spec.js aero-zones.spec.js`. Coverage is unchanged for every pick-tests selection: game.js edits still select behaviour **and** physics **and** circuit, so the union is identical \u2014 each spec just runs once. `test:barriers` keeps `tracks-walls + collision-ai-fixes` unchanged (no pick-tests rule routes to it; it is a manual convenience group).\n\n### 1b. Splits\n\n1. **`agent-view.spec.js`** (1857 lines, ~90 tests, 30+ min monolith) \u2192 4 files, all staying in `test:agent`: `agent-view-contract.spec.js` (world/trackInfo/agentHelp + size budgets), `agent-view-render.spec.js` (rasters), `agent-view-scene.spec.js` (scene/describe/query/carView), `agent-view-survey.spec.js` (survey/rollout/atmosphere).\n2. **`career.spec.js`** (2049 lines, ~80 tests, documented 120 s-budget fights) \u2192 `career-core.spec.js` (save versioning/migration, GP\u2194career isolation, slots), `career-economy.spec.js` (garage/R&D/objectives/rollover/sponsors/reliability/settlement), `career-ui.spec.js` (hub, MY TEAM roster, modes screen, guides). All three in `test:career` and `test:modes`.\n3. **`new-hooks.spec.js`** lines 509-877 (the Silverstone/COTA/Miami/Jeddah/Singapore/Madrid/Shanghai foundation-diagnostics half) \u2192 `track-foundation-diagnostics.spec.js`, into **`test:foundation`**. The remaining hooks-contract half stays as `new-hooks.spec.js` in `test:hooks` only (dropped from `test:api`, closing the api+hooks double-run). Both new files switch their import from `@playwright/test` to `./fixtures.js` while being touched.\n4. **`parts-physics.spec.js`** (1481 lines, ~70% geometry under a \"physics\" name that misleads pick-tests) \u2192 `parts-geometry.spec.js` (Car3D/CarMesh geometry contracts, visual recipes, shader-parity strings); the final ERS-battery test (lines 1415-1481, 3 monza rebuilds) moves into `parts-ers.spec.js`; catalog/getMods/getCost/resolveSetup/statMult stay in `parts-physics.spec.js`. The `parts-*` glob (package.json:20) absorbs the new name automatically; `test:fast`'s explicit `parts-physics.spec.js` reference still resolves.\n5. **`steering.spec.js`** lines 292-405 (keyboard/pedal input-latch block \u2014 `js/game/input.js` territory, no race build needed) \u2192 moved into `touch-steer.spec.js` (its verdicted natural home: same module, same page-boot-only cost, same fixtures import). No group change; both are in `test:steering`.\n\n### 1c. Strengthen list (weak/vacuous asserts, file:line + one-line fix)\n\nFixes 1\u20132 are flagged DEFER in AUDIT-SYNTHESIS (\"per-test design decision, not a mechanical fix\") \u2014 carry them as design tickets, not batch edits:\n\n1. `tests/specs/camera-driving-hooks.spec.js:191-193` \u2014 spin computes before/after headings, asserts neither: assert `after !== before` and sign against the spin argument.\n2. `tests/specs/headless-api.spec.js:290-303` \u2014 \"obs() returns false when player not initialised\" accepts both outcomes: pick one contract and assert it.\n3. `tests/specs/camera-driving-hooks.spec.js:209-217` \u2014 title claims \"zeroes vLat and yawRate\", only vLat asserted: add the yawRate expect.\n4. `tests/specs/camera-driving-hooks.spec.js:12-17` (and camera-hooks:9-16, camera-tuner:11-16) \u2014 fixed 3 s sleeps: replace with `waitForFunction` on `__apex.info().track`; also import `./fixtures.js` instead of `@playwright/test`.\n5. `tests/specs/camera-hooks.spec.js:19-33` \u2014 dolly never checks the eye landed at the requested (frac, lateral, height): assert eye position against `Tracks`-projected expectation within a band.\n6. `tests/specs/collision-ai-fixes.spec.js:131` \u2014 \"speed is scrubbed against Monza barrier\" passes on coasting drag alone: add a no-wall control run and assert scrubbed < control \u2212 margin.\n7. `tests/unit/css-layers.test.mjs:63` \u2014 a file that loses its opening `@layer` wrapper is silently skipped: add a roster test that every `css/` file except `tokens.css` opens with `@layer`.\n8. `tests/specs/menu-survey.spec.js:57-165` \u2014 tests 30/33-36/40-43 have zero expects: one-line DOM assert per captured state (cycleTo landed on TILT/MANUAL, sound/music toggles reflect state), and delete the `.catch(() => {})` at :162 that green-lights a broken campicker.\n9. `tests/unit/fixture-consumer-audit.test.mjs:5-19` \u2014 the FLOOR=31 adoption ratchet is dead code from CI's perspective: add `assert.deepEqual(fixtureImportViolations(readSpecs()), [])` and `adoption(readSpecs()).uses >= FLOOR` so the guarantee actually runs in `test:tooling-fast`.\n10. `tests/specs/map-hooks.spec.js:32-33, 43` \u2014 north-up claimed but only span asserted, and `orbit()` has no assertion after it: pin a known-frac landmark's normalized map position; assert `camState` changed after orbit.\n11. `tests/specs/parts-livery-contrast.spec.js:29-51, 240-254` \u2014 the ink half tests its own inline mirror of buildAtlas: export the atlas's real lum/ink helpers and assert against those.\n12. `tests/specs/props-over-road.spec.js:57-59` \u2014 \"Shanghai uses the default baseline\" asserts a literal in the same file: delete it (the real check runs inline at :144-145).\n13. `tests/specs/scenery-kits.spec.js:82-88` \u2014 \"emits validated street kit facilities\" never asserts the theme: return the resolved theme from the evaluate and assert it; make the vertex bound fail on a missing `vertices` field.\n14. `tests/specs/terrain-over-road.spec.js:246` \u2014 road faces >1.5 m over the line pass everywhere: gate the exemption on `CROSSOVER_TRACKS` (the :203 frac-distance filter already handles the three known tracks).\n15. `tests/specs/tracks-walls.spec.js:37-53, 89` \u2014 test 2 builds all ~40 circuits to assert 5 street circuits: build just those 5; and make `if (r.skip) continue` a failure \u2014 a track whose `race()` failed must not vanish.\n16. `tests/specs/webgl-probes.spec.js:27-34, 79-98` \u2014 typeof-only `hdrMode()`/`lightState()` shape tests: fold into the adjacent behavioural tests (night>day, shadow-transform).\n17. `tests/unit/coplanar-faces.test.mjs:58` \u2014 the `>= 24` roster floor against 40 circuits: assert against the `js/circuits/` file count (the fix `prop-clipping.test.mjs:65-67` already made).\n18. `tests/specs/parts-budget.spec.js:40-41` \u2014 duplicated `toContain(\"600\")`: make the second assert spent-vs-remaining.\n19. `tests/specs/smoke.spec.js:212-219` \u2014 minimap \"content\" is a width>0 check: sample pixels via getImageData (copy telemetry-compare:88-93's pattern).\n20. `tests/unit/race-control.test.mjs:116-126` \u2014 the 90 s cap it names is never exercised: add the cap-expiry test (flag drops after the cap once the picture clears).\n21. `tests/specs/carview-parts.spec.js:5` \u2014 stale \"eight parts categories\" title vs the twelve asserted: fix the title.\n\n### 1d. Merges (merge verdicts + merge candidates)\n\n**Do now (merge BEFORE the tests/ move \u2014 see \u00a72):**\n- `hud-audit.spec.js` \u2192 **into `hud-layout.spec.js`**: its assertHud (:39-45) is a strict subset of hud-layout's real geometry checks; keep the 8 screenshots as an extra shot per existing mode/orientation combo. File deleted; leaves test:ui shorter.\n- `ui-desktop.spec.js` \u2192 **into `ui-audit.spec.js`** as two more viewport rows (strict subset of ui-audit's screens; 0 expects). File deleted; rides along into `test:gallery`.\n- `tests/manual/inspect.spec.js` \u2192 **into `tests/manual/blank-scan.spec.js`**: byte-identical capture loop; one pass asserts blanks AND writes the contact sheet, halving the 40-circuit run. Update `tests/manual/README.md`.\n\n**Merge candidates (flagged, not scheduled):**\n- `active-aero.spec.js:214-261` trade tests vs `aero-zones.spec.js`'s \"downforce traded for top speed\" block \u2014 same trade against the same constants; collapse into aero-zones when either is next touched.\n- `physics-monaco-foundation` test 2 (:140-220) \u2014 hand-copied `props-over-road` scan with an identical 1.4 cap to props-over-road:52; **drop it** in the foundation rename commit (one of the two is dead weight, per verdict).\n- `physics-spa-foundation` test 3 (:52-147) and `physics-zandvoort-foundation`'s ~170-line `propClearance` helper \u2014 third and fourth hand copies of the shared corridor scan: extract to `track-helpers.js` or drop in favour of the all-circuit audit.\n- `albert-park-foundation.test.mjs` + `baku-migration.test.mjs` \u2014 parameterise into one shared circuit-characterization suite when a third circuit joins the pattern (verdict: two files don't yet justify churn).\n- `parts-ers.spec.js` absorbing parts-physics's ERS test is already scheduled under splits (1b#4); the four ERS sweeps in parts-ers should share one page load while touched.\n\n## 2. tests/ split map\n\nBase plan is AUDIT-SYNTHESIS \u00a7R2 verbatim \u2014 `tests/specs/` + `tests/unit/` + `tests/helpers/`; `tests/data/`, `tests/manual/` stay; **one commit via `git mv`, never with a background run in flight, no ?v bump** \u2014 including all 13 R2 lockstep items (package.json paths; playwright.config globalSetup/reporter; the 66 `./fixtures.js` imports; the \u26a0 output-paths/qr-camera symmetric-drift pair; the \u26a0 `tools/fit-audit.mjs:27`/`menu-fit.mjs:32` swallowed dynamic imports; \u26a0 `f1-track-accuracy.spec.js:18` `./data/`; \u26a0 manual/ imports + README; the test-groups:154 + docs-integrity:343 regex widenings and flat-readdir walks; test-coverage-audit tool+test scans and fixture-consumer-audit readSpecs; \u26a0 ci.yml sweeps filter; span-kinds:46/docs-integrity:217 hardcoded reads; the TESTING.md/CLAUDE.md/README count-phrase triple). Nothing here contradicts R2; the ordering rule and per-file additions below **extend** it.\n\n**Ordering (audit feed-in): merge \u2192 regroup-rename \u2192 move \u2192 split.** The three merges in 1d delete `hud-audit.spec.js`, `ui-desktop.spec.js`, and `manual/inspect.spec.js` *before* the move (a merged file must never be moved and then deleted \u2014 it would churn the R2 lockstep edits twice), so the move relocates **109** specs, not 111. The 16 foundation renames also land before the move for the same reason (one path rewrite per file, not two). The splits (1b) land *after* the move, inside `tests/specs/`, so their new filenames never exist at the old paths.\n\nPer-file mapping:\n\n| Destination | Files |\n|---|---|\n| `tests/specs/` | All `*.spec.js` (109 post-merge): the 16 renamed `*-foundation.spec.js`, and every other root spec named in the package.json groups \u2014 smoke, dev-tools, logging, headless-api, obs-act-edge, new-hooks, data-lifecycle, telemetry-compare, assets-api, persistence, wake-lock, camera{,-hooks,-driving-hooks,-tuner}, map-hooks, world-physics, longitudinal, elevation-tracks, projection, active-aero, understeer-cue, physics-characterization, physics-fixes, collision{s,-deep,-ai-fixes}, drift, offtrack, debris, race-control, aero-zones, tracks-walls, autopilot, audit, parts-* (all), car-effects, carview-parts, custom-team, garage-aero, presets, sliders, steering, gamepad, touch-steer, tilt-pipeline, steer-migration, ui-audit, ui-button-touch, ui-scale, hud-layout, menu-survey, menu-keyboard, menu-baseline, tracks-visual, props-over-road, terrain-over-road, f1-track-accuracy, scenery-kits, instanced-draw, webgl-probes, lighting-ab, image-grade-visual, lighting-tuner-grade, material-shimmer, tlx-probes, audio-smoke, music-library, season, time-trial, career, quali, agent-view, agent-drive-bench, agent-determinism, multiplayer-* (8), output-paths.spec.js |\n| `tests/unit/` | All 49 `*.test.mjs` + `shared-track-foundation-characterization.test.cjs`: the 34 tooling-fast suites, 7 net-unit suites, 4 sweeps suites, service-worker, webgpu-lifecycle, agentview-api-contract |\n| `tests/helpers/` | The 7: `fixtures.js`, `track-helpers.js`, `qr-camera.js`, `f1-api-mock.js`, `output-paths.js`, `global-setup.js`, `live-reporter.js` |\n| `tests/data/` | `f1-circuit-reference.geojson` (stays) |\n| `tests/manual/` | stays: `README.md`, `blank-scan.spec.js` (post-merge), `circuits.js`, `galleries/` |\n\n**Extensions the per-file audit adds to R2's lockstep list:**\n\n14. **Snapshot dir moves with its spec**: `tests/specs/menu-baseline.spec.js-snapshots/` \u2192 `tests/specs/menu-baseline.spec.js-snapshots/` in the same `git mv` commit \u2014 Playwright resolves snapshot paths relative to the spec file, and these are the repo's ONLY golden baselines (CLAUDE.md); a missed move reads as \"baseline missing\", which `toHaveScreenshot` under `--update-snapshots` would silently re-bless. Same rule pre-arms `tests/specs/tracks-visual.spec.js-snapshots/` \u2014 the skip gate at tracks-visual:27-30 keys on that (spec-relative) dir existing, so the gate keeps skipping correctly after the move with no edit.\n15. **`tests/physics-baseline.json`** sits flat in tests/ (verified on disk) and is in no R2 bucket: move to `tests/data/physics-baseline.json` and update `physics-characterization.spec.js`'s read plus whatever tool regenerates it (grep `physics-baseline` across tools/ in the same commit \u2014 the characterization gate being unable to find its committed baseline must fail loudly, and the spec's header says the baseline's presence is what makes the gate live).\n16. **`tests/manual/` internals**: `manual/circuits.js` and `manual/galleries/` stay put, but R2 item 7's manual/ fix-ups shrink by one file (inspect.spec.js is deleted by the 1d merge before the move).\n17. **Group-taxonomy lockstep**: the \u00a71 package.json membership edits and the R2 path rewrites touch the same ~28 script lines \u2014 land \u00a71's regroup/dedupe **before** the R2 move commit so the move is a pure path rewrite, and `test-groups.test.mjs` / `test-coverage-audit.test.mjs` adjudicate each step separately.\n18. **New-group guards**: `test:foundation` and `test:gallery` each need a `docs/TESTING.md` \u00a72 row (test-groups:66-74 fails otherwise) and their member files satisfy `test:audit` by being explicitly named/globbed.\n\n## 3. Change-aware CI\n\nDesign constraints taken from `ci.yml` as read: guards ~25 s / sweeps 15m12s / smoke 14m24s are **measured** budgets (run 31023778264) and `timeout-minutes` must stay above them; a timed-out job reports `cancelled`, not `failed`, and that once hid a dead deploy behind \"0 failures\"; SwiftShader on a shared runner measured **90\u2013115 s/test** (smoke-step comment), serial one-worker with `--timeout=240000` is the proven-stable shape; `concurrency` cancels **only** `pull_request` runs; pages.yml gates deploy via `workflow_call` + `needs: ci`, so jobs must always run and report (step-level conditions only, never job-level `if` \u2014 the sweeps filter comment states this explicitly).\n\n### The `selected` job (additive, non-deploy branches)\n\n```yaml\n  selected:\n    name: Change-selected groups (advisory on feature branches)\n    # Never part of the deploy gate: pages.yml needs guards/sweeps/smoke, not this.\n    # Skipped entirely when ci.yml runs via workflow_call from pages.yml.\n    if: github.event_name != 'workflow_call'\n    runs-on: ubuntu-latest\n    # BUDGET (state and re-measure per the header's rule): setup ~4 min\n    # (npm ci + playwright install chromium), node-only groups ~2 min,\n    # browser step capped at 25 min below => 31 min worst case. 35 > 31.\n    timeout-minutes: 35\n    steps:\n      - uses: actions/checkout@v4\n        with: { fetch-depth: 0 }   # --since needs the base commit reachable\n      - uses: actions/setup-node@v4\n        with: { node-version: \"20\", cache: npm }\n      - run: npm ci\n      - name: Resolve diff base + fallback check\n        id: base\n        ...\n      - name: Node-only selected groups\n        timeout-minutes: 5        # measured: tooling-fast ~30 s, net-unit <1 s\n        ...\n      - name: Browser selected groups (fixed budget)\n        if: steps.base.outputs.fallback != 'true'\n        timeout-minutes: 25       # 12 tests x 115 s = 23 min; cap above it\n        env: { APEX_WORKERS: \"1\" }\n        ...\n```\n\n**Diff refs (exact, per event):**\n- `push`: base = `${{ github.event.before }}`, head = `${{ github.sha }}`. Copy the sweeps filter's fail-safe ladder verbatim (ci.yml:196-217): empty or all-zero `before` (new branch/first push), `git cat-file -e \"$BEFORE^{commit}\"` failing (force push), or `git diff` erroring each set `fallback=true`. **Fail safe, never fail open** \u2014 an unresolvable diff must not be read as \"nothing changed\".\n- `pull_request`: base = `${{ github.event.pull_request.base.sha }}`; compute `MB=$(git merge-base \"$BASE\" HEAD)` (the checkout is the merge commit, so merge-base keeps unrelated base-branch churn out of the diff) and use `MB` as the ref. If merge-base fails \u2192 `fallback=true`.\n\n**Selection**: run `node tools/pick-tests.mjs --since \"$REF\"`. `--since` does exactly `git diff --name-only <ref>` against the checked-out tree (pick-tests:120-121), which in a clean CI checkout is base\u2192head. Parse the `test:<group>` lines from the \"group(s) to run\" block. Partition:\n- **Node-only groups, run directly, uncapped** (their package.json commands are `node --test` or pure tools): `tooling-fast`, `net-unit`, `service-worker`, `webgpu-lifecycle`, `agent-contract`, `audit`. **Exclude `sweeps`/`tooling`** \u2014 the sweeps job already owns that work with its `NODE_OPTIONS: --max-old-space-size=6144` heap ceiling (job-level, to reach prop-clipping's execFileSync child); re-running it here without that env would reproduce the documented 4 GB SIGABRT-as-`cancelled` failure. Guards-job overlap (tooling-fast/audit run twice) costs ~30 s and is accepted for locality of failure.\n- **Browser groups, fixed budget**: install Chromium only (`npx playwright install --with-deps chromium` \u2014 the smoke job's rationale). Budget rule, derived from the measured 90\u2013115 s/test and the 35-min job cap: **at most 2 selected browser groups AND at most 12 total tests** (12 \u00d7 115 s \u2248 23 min, inside the 25-min step cap with margin; margin-that-thin-is-a-coin-flip is the header's own lesson). Count with `npx playwright test --list <group's spec paths> | tail -1` before running. Run serial: `APEX_WORKERS: 1` (playwright.config.js's documented override; CI default `workers: 2` is the proven oversubscription signature) with `-- --timeout=240000`. Take groups in pick-tests' sorted output order until the budget is hit.\n- **Overflow**: if selection exceeds 2 groups / 12 tests, run what fits, and write the remainder to `$GITHUB_STEP_SUMMARY` as `run locally: node tools/test-bg.mjs <groups>` \u2014 do **not** fail. This job is advisory; the three-job gate below stays the authority.\n\n### Fallback-to-full-gate rule\n\nIf the diff (or an unresolvable diff, per the fail-safe ladder) touches any **infra path**, the selected job sets `fallback=true`: the browser step is skipped with a printed reason and the node-only step runs only `tooling-fast` + `audit`. Coverage then rests entirely on the unconditional three-job gate, which is already running on the same push. Infra paths:\n\n```\npackage.json  package-lock.json  tools/manifest.cjs  tools/pick-tests.mjs\ntools/run-playwright.mjs  tools/test-bg.mjs  .github/**  playwright.config.js\ntests/helpers/**          (pre-R2-move: tests/{fixtures,track-helpers,qr-camera,\n                           f1-api-mock,output-paths,global-setup,live-reporter}.js)\nindex.html  sw.js  version.json      (index.html's script block IS the load\n                                      order; a ?v/version.json bump invalidates\n                                      every cached page \u2014 gate at file granularity)\n```\n\nRationale: these files change what selection *means* (pick-tests RULES, group scripts, project partition, fixtures every spec loads, the shell the server serves), so a selector reading them to route its own validity would be circular. This list also matches R2 item 10's obligation to update ci.yml's sweeps filter regex to `tests/unit/(...)` when the move lands \u2014 do the selected-job path list and the sweeps filter in that same commit, or the sweeps filter fails open.\n\n### Coexistence with guards / sweeps / smoke\n\nUnchanged, byte-for-byte, as the deploy gate: `pages.yml` keeps `needs: ci`, ci.yml keeps `workflow_call`, and guards/sweeps/smoke keep their measured budgets (10/35/30 `timeout-minutes`) and step-level conditionality. `selected` is **additive on non-deploy branches only** \u2014 it is excluded from `workflow_call` runs so a slow advisory job can never delay or cancel a deploy, and it is deliberately *not* listed in any `needs:`. The sweeps job's geometry filter and the selected job share the pick-tests-derived worldview but stay independent implementations, per the sweeps comment's fail-safe doctrine.\n\n### Failure-mode notes (the header's demands, restated as obligations on this design)\n\n- **Every step states its `timeout-minutes` next to a measured figure**, and the header rule applies: change what a step runs \u2192 re-time it \u2192 change the number. The 25-min browser cap sits above the computed 23-min worst case for the same reason smoke's 30 sits above 14m24s: thin margins produced `cancelled` verdicts nobody read as failures.\n- **No cancel-in-progress on push** \u2014 the existing `concurrency` block (`cancel-in-progress: ${{ github.event_name == 'pull_request' }}`) already encodes the fifteen-consecutive-cancelled-runs lesson; `selected` adds no concurrency group of its own and inherits it.\n- **`cancelled` \u2260 `failed`**: any step in `selected` that can exceed its cap must overflow-to-summary rather than run long; a budget overflow is a *reported decision*, never a timeout.\n- **Step-level `if`, job always reports** \u2014 same pattern as the sweeps filter, so a future `needs:` consumer of `selected` (if it ever becomes gating) inherits working semantics.\n- **Heap ceiling stays with the sweeps job**: `selected` must never run `test:sweeps`/`test:tooling`; the OOM story (road-under-floor SIGABRT at 4088 MB on run 31016070670, surfacing as `cancelled`) belongs to the job that carries `NODE_OPTIONS=--max-old-space-size=6144`.\n- **Worker discipline**: browser steps pin `APEX_WORKERS=1` + `--timeout=240000` \u2014 the smoke step's own controlled experiment (125.2 s timeout contended \u2192 110.6 s pass alone) is the evidence; two SwiftShader contexts on a shared runner measure the runner, not the code.",
  "feasibilityGaps": [
   "BROKEN workflow_call GUARD (blocking): `if: github.event_name != 'workflow_call'` never fires \u2014 in a reusable workflow, github.event_name is inherited from the CALLER's triggering event ('push' when pages.yml runs on the deploy branch, 'workflow_dispatch' on manual deploys); 'workflow_call' is a trigger name, not a runtime event_name value. The condition is always true, so `selected` runs inside every pages.yml-called CI run. Workable discriminators exist (github.ref == 'refs/heads/claude/f1-game-project-26h3ng', or a workflow_call input with a default) but the design names neither.",
   "FALSE 'not in any needs:' SAFETY CLAIM (blocking, compounds gap 1): pages.yml's `ci` job (pages.yml:30-31, `uses: ./.github/workflows/ci.yml`) succeeds only if EVERY job in the called workflow succeeds \u2014 a reusable-workflow caller aggregates all jobs, so 'deliberately not listed in any needs:' protects nothing. With gap 1, a failing selected job blocks deploy, and a selected job that hits its 35-min cap reports `cancelled` \u2014 reproducing byte-for-byte the invisible-deploy-outage mode ci.yml's header documents (lines 42-47). (A job-level `if:` skip WOULD be safe \u2014 skipped counts as success \u2014 but the design's skip condition doesn't work, per gap 1.)",
@@ -19,31 +19,31 @@
  "perFileCount": 162,
  "perFile": [
   {
-   "file": "tests/active-aero.spec.js",
+   "file": "tests/specs/active-aero.spec.js",
    "purpose": "Failing means the 2026 active-aero mechanic broke: state surface, zone-gated arming, flap travel asymmetry, brake cutoff, the speed/grip trade, or AI usage of X-mode.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/aero-zones.spec.js"
+    "tests/specs/aero-zones.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Exemplary relative assertions with anti-vacuity guards (asserts flap position before comparing runs, on-track checks); note it runs in BOTH test:physics and test:behaviour so it executes twice when both groups run.",
    "weakSpots": "None vacuous; the trade tests (L214-261) partially duplicate aero-zones' 'downforce traded for top speed' block, which measures the same trade against physState constants."
   },
   {
-   "file": "tests/aero-zones.spec.js",
+   "file": "tests/specs/aero-zones.spec.js",
    "purpose": "Failing means the FIA activation-zone model broke: zone minimums, Monaco's zero-zone case, pace-slider invariance, inZone/zoneAhead wrap handling, overtake's opening-lap gate, or the per-wing trade scaling.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/active-aero.spec.js"
+    "tests/specs/active-aero.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Every assertion is a real invariant (flicker-proof whole-trail overtake gate at L150, envelope derived from constants not literals); the 133s test.slow wing-sweep (L224-278) is expensive but self-justifying with anti-vacuity ordering checks.",
    "weakSpots": "The 3-reload wing-sweep test (L224-278) is the single most expensive test in the file and is the main reason the file needs its own budget; nothing vacuous."
   },
   {
-   "file": "tests/agent-determinism.spec.js",
+   "file": "tests/specs/agent-determinism.spec.js",
    "purpose": "Failing means seeded replay broke \u2014 some code path draws Math.random() into the sim or reset() leaks episode state, invalidating every A/B comparison and the drive bench.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -53,80 +53,80 @@
    "weakSpots": "None; the eval(episodeScript) pattern is unusual but sound."
   },
   {
-   "file": "tests/agent-drive-bench.spec.js",
+   "file": "tests/specs/agent-drive-bench.spec.js",
    "purpose": "Failing means the agent world-view fields stopped carrying actionable driving signal (a semantic regression shape tests cannot see), or a prescribed-racing-line field leaked back into the payload.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/agent-view.spec.js"
+    "tests/specs/agent-view.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "The task-success bench (relational > 1.5x naive, >300m) is the one test that catches meaning-level regressions; recent logs show it actually failing on a live branch, i.e. it bites.",
    "weakSpots": "L99 margin (1.5x, 300m) is a judgment call vulnerable to physics retunes \u2014 the comment acknowledges it; the honest-geometry block (L108-158) partially duplicates corner-table checks in agent-view.spec.js."
   },
   {
-   "file": "tests/agent-view.spec.js",
+   "file": "tests/specs/agent-view.spec.js",
    "purpose": "Failing means the agent-facing JSON contract broke somewhere across world()/trackInfo()/scene()/describe()/query()/render()/carView()/survey()/rollout()/atmosphere()/agentHelp() \u2014 payload shapes, typed errors, geometric invariants, or size budgets.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/agentview-api-contract.test.mjs",
-    "tests/agent-drive-bench.spec.js"
+    "tests/unit/agentview-api-contract.test.mjs",
+    "tests/specs/agent-drive-bench.spec.js"
    ],
    "verdict": "split",
    "verdictDetail": "1857 lines and ~90 tests spanning at least five separable surfaces (world/trackInfo contract, render rasters, scene/describe/query drill-down, carView, survey/rollout) \u2014 splitting into 3-4 files would let pick-tests and test-bg schedule a fraction of it per edit instead of the whole 30+ minute monolith.",
    "weakSpots": "Assertions are uniformly strong; the weakness is granularity, plus a few tripwire budgets (agentHelp <6000 bytes L1554, drive payload <4500 L305) that fire on wording changes rather than regressions \u2014 deliberately, per their comments."
   },
   {
-   "file": "tests/agentview-api-contract.test.mjs",
+   "file": "tests/unit/agentview-api-contract.test.mjs",
    "purpose": "Failing means the agentview/agentview-raster module split silently dropped or resurrected a surface method \u2014 the class of bug that otherwise only throws the first time an agent calls the untested name.",
    "assertionQuality": "strong",
    "costTier": "trivial",
    "overlaps": [
-    "tests/agent-view.spec.js"
+    "tests/specs/agent-view.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Cheap VM-loaded freeze of CURRENT/REMOVED/CONSTS plus a re-coupling regex guard; complements (does not duplicate) the behavioural spec, and pins the removed aliases from both sides.",
    "weakSpots": "None; the source-regex check at L102-108 is mildly brittle to refactors but its failure message explains itself."
   },
   {
-   "file": "tests/albert-park-foundation.test.mjs",
+   "file": "tests/unit/albert-park-foundation.test.mjs",
    "purpose": "Failing means someone edited js/circuits/albert_park.js away from its authored foundation contract: racing-space coordinates, essentially-flat terrain, full-lap dressing exclusions, or the typed water/ground helpers.",
    "assertionQuality": "mixed",
    "costTier": "trivial",
    "overlaps": [
-    "tests/baku-migration.test.mjs"
+    "tests/unit/baku-migration.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "A legitimate per-circuit characterization pin in test:tooling-fast; same pattern as baku-migration, so if more circuits gain foundation tests a shared parameterised suite would be tidier, but two files does not yet justify the churn.",
    "weakSpots": "L43-46 asserts source-text regexes (waterSurface(/groundPatch(/no groundPlane() \u2014 brittle to renames and proves call presence, not behaviour; thresholds (terrainOuter>=90, rise<=0.75) are authored choices, not derived invariants."
   },
   {
-   "file": "tests/assets-api.spec.js",
+   "file": "tests/specs/assets-api.spec.js",
    "purpose": "Failing means the baked asset pack's runtime path broke: load/upload state, matTex clamping, the ON-by-default contract, procedural fallback on unload, GL-error-free rendering at full mix, credits traceability, or the diag()/stats() debug surface.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/assets-pack.test.mjs"
+    "tests/unit/assets-pack.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Runtime complement to the static pack test; the 'still renders' check honestly asserts the GL error channel (L127-128) instead of pretending pixels prove shader health.",
    "weakSpots": "L109-129 cannot detect an all-black-but-error-free frame (acknowledged in its own comment); layer-count bounds 10..16 (L42-43) are loose by design."
   },
   {
-   "file": "tests/assets-pack.test.mjs",
+   "file": "tests/unit/assets-pack.test.mjs",
    "purpose": "Failing means the committed pack or bake tooling rotted: MAT table drift from TrackGeom, a non-CC0 licence, budget overrun, malformed filmstrip PNGs, broken bake-model/toGLB/zip round-trips, or bad addMesh placement math.",
    "assertionQuality": "strong",
    "costTier": "cheap",
    "overlaps": [
-    "tests/assets-api.spec.js"
+    "tests/specs/assets-api.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Outstanding static guard: verifies against the real shipping modules in VM, the game's own GLB loader, and the system unzip rather than transcribed copies.",
    "weakSpots": "L413 silently passes when unzip is absent on the box (env-conditional vacuity for that one test); L422 registers a process-exit cleanup handler per run (harmless leak)."
   },
   {
-   "file": "tests/audio-smoke.spec.js",
+   "file": "tests/specs/audio-smoke.spec.js",
    "purpose": "Failing means GameAudio errors at boot, the sound-toggle stopped re-issuing race music with the correct track index, or real WebAudio unlock/engine synthesis broke after a user gesture.",
    "assertionQuality": "mixed",
    "costTier": "moderate",
@@ -136,7 +136,7 @@
    "weakSpots": "L4-24 asserts only 'global defined + no filtered console errors' \u2014 a silent audio failure that logs nothing passes; the filter list (L17-21) could miss differently-worded errors."
   },
   {
-   "file": "tests/audit.spec.js",
+   "file": "tests/specs/audit.spec.js",
    "purpose": "Failing means an audited edge-case regressed: grid-settle NaN/launch, wrong-way false positives, lap-counter symmetry over the line, rear-end speed injection, barrier clipping at Suzuka, tan/grip finiteness under abuse, or the opt-in road-follow assist.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -146,19 +146,19 @@
    "weakSpots": "Magnitude thresholds are tuned rather than derived (maxAbsX<20 L29, maxOver<0.5 L181, hw*1.6 L228, 0.7 ratio L255) \u2014 justified in comments but would need retuning after physics changes."
   },
   {
-   "file": "tests/autopilot.spec.js",
+   "file": "tests/specs/autopilot.spec.js",
    "purpose": "Failing means the car can no longer be driven hard by a closed-loop controller without NaN-ing, clipping a barrier, or stalling \u2014 the end-to-end drivability/safety floor for steering and physics changes.",
    "assertionQuality": "mixed",
    "costTier": "heavy",
    "overlaps": [
-    "tests/agent-drive-bench.spec.js"
+    "tests/specs/agent-drive-bench.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "The asserted floor (finite, maxWall<1, distPct>40/30) is deliberately loose because completion is unachievable by the naive controller; it still catches the failures it exists for, and the rich metrics it computes are the tuning instrument even though only logged.",
    "weakSpots": "L196/L216 progress floors (40%/30% in 150s) are arbitrary and PACE-coupled (mitigated by pinning pace=1 at L36); most computed metrics (lapTime, avgSpeed, jitter, offFrames) are console.log'd (L192, L211-212), never asserted."
   },
   {
-   "file": "tests/backend-surface-parity.test.mjs",
+   "file": "tests/unit/backend-surface-parity.test.mjs",
    "purpose": "Failing means WGX or TLX stopped declaring a name GLX publishes \u2014 the descriptor-copy install would then leave a live-but-broken inherited GLX function that defeats every feature test (the bug that bit twice).",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -168,43 +168,43 @@
    "weakSpots": "Scanner depends on indentation conventions of the three files (L61-63); the floor test would let the scanner miss a minority of keys undetected, though the parity diff then errs toward false positives, not silence."
   },
   {
-   "file": "tests/baku-migration.test.mjs",
+   "file": "tests/unit/baku-migration.test.mjs",
    "purpose": "Failing means Baku's authored contract broke: racing coordinates, the two curated dressing exclusions, the castle-crest elevation profile, required landmarks, near-full street barrier tightness, or the seafront staying flat within the undulation envelope.",
    "assertionQuality": "strong",
    "costTier": "cheap",
    "overlaps": [
-    "tests/albert-park-foundation.test.mjs"
+    "tests/unit/albert-park-foundation.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Builds the real track twice (day/night) in a VM and asserts derived invariants \u2014 trend-vs-envelope (L124-139) is a model of how to assert 'flat' in an undulating world; keep as-is.",
    "weakSpots": "L49-66 deepEquals the exact exclusion zones and elevation tuple, so any legitimate re-curation of Baku must edit the test in lockstep (characterization by intent, per the eb0b6b3 comment)."
   },
   {
-   "file": "tests/camera-driving-hooks.spec.js",
+   "file": "tests/specs/camera-driving-hooks.spec.js",
    "purpose": "Failing means the v196 __apex hooks regressed: orbit/cinematic/carOrbit fov plumbing and clamps, cinematic outside-of-corner placement, or the setSpeed/spin/nudge state mutators and their clamps/guards.",
    "assertionQuality": "mixed",
    "costTier": "heavy",
    "overlaps": [
-    "tests/camera-hooks.spec.js"
+    "tests/specs/camera-hooks.spec.js"
    ],
    "verdict": "strengthen",
    "verdictDetail": "Real substance exists (cinematic az-sign vs curvature L75-105, clamps, no-player guards) but several asserts are dead or under-claim their titles, and 24 tests each paying a full page load + fixed 3s sleep (~20-42s apiece, ~11 min total measured) is a lot of box time for hook plumbing \u2014 consolidate loads and fix the asserts.",
    "weakSpots": "L191-193: before/after headings computed and never asserted (the known dead computation); L209-217: title claims 'zeroes vLat and yawRate' but only vLat is asserted (L216); L22-44 and L120-132 fov tests mostly echo the input back; imports from @playwright/test not ./fixtures.js so failures arrive without apex-state attachments; L12-17 fixed 3s setTimeout instead of waitForFunction."
   },
   {
-   "file": "tests/camera-hooks.spec.js",
+   "file": "tests/specs/camera-hooks.spec.js",
    "purpose": "Failing means the composition hooks broke: dolly/roadside placement, tourShots coverage and corner framing, previewCam's non-invasive mode solver, view()'s whole-track aerial, or orbit's underground clamp.",
    "assertionQuality": "mixed",
    "costTier": "heavy",
    "overlaps": [
-    "tests/camera-driving-hooks.spec.js"
+    "tests/specs/camera-driving-hooks.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Most tests assert real semantics (tourShots lap-ordering and az magnitude L77-84, orbit-above-roadY L127-136, previewCam not moving the car L88-108); one weak test and the fixed-sleep load pattern keep it from 'strong'.",
    "weakSpots": "L19-33 dolly test never verifies the eye landed at the requested (frac, lateral, height) \u2014 only eye\u2260target and the debug flag, so a dolly that ignores its arguments entirely still passes; L9-16 fixed 3s sleep per test; console.log noise stands in for some verification."
   },
   {
-   "file": "tests/camera-tuner.spec.js",
+   "file": "tests/specs/camera-tuner.spec.js",
    "purpose": "Failing means the CAMERA TUNER broke its core invariant \u2014 a knob moves only its own camera by exactly the tuned amount, untuned modes keep the shipped framing \u2014 or the clamp/persist/reset flow or pause-menu panel regressed.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -214,7 +214,7 @@
    "weakSpots": "L11-16 fixed 3s sleep in the loader; otherwise none of note."
   },
   {
-   "file": "tests/camera.spec.js",
+   "file": "tests/specs/camera.spec.js",
    "purpose": "Failing means the 13 player camera modes broke: the mode list/cycling/wrap, persistence, a mode collapsing onto another's vantage or failing to draw, the grid world-pose seed that stops the chase rig jumping at lights-out, or the C-key cycle.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -224,7 +224,7 @@
    "weakSpots": "The single screenshot proves 'draws something >1KB' (L98), not that each mode draws correctly \u2014 an accepted, documented limitation."
   },
   {
-   "file": "tests/car-effects.spec.js",
+   "file": "tests/specs/car-effects.spec.js",
    "purpose": "Failing means visual effect state decoupled from physics: ERS deploying an exhaust flame, brake glow ignoring the heat threshold, the ERS lamp tracking the switch instead of actual deployment, or exhaust flames burning continuously on steady throttle.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -234,7 +234,7 @@
    "weakSpots": "L20-23 tolerates carEffects being absent by returning null, but every test then fails on the null, so no silent pass; none otherwise."
   },
   {
-   "file": "tests/career.spec.js",
+   "file": "tests/specs/career.spec.js",
    "purpose": "Failing means CAREER broke somewhere across its whole surface: save versioning/migration, GP\u2194career isolation, hub/garage/R&D economy, MY TEAM roster and wages, objectives/reputation/rollover determinism, reliability DNFs, save slots, guides, settlement, or sponsors.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -244,7 +244,7 @@
    "weakSpots": "Assertions are consistently excellent (anti-vacuity everywhere, e.g. L1412 'the plan is real, so the equality above is not vacuous'); the one honest coin-flip is the gated test.skip at L1028; L1459-1463 defines addrOf after use inside the same test (works, hoisting) alongside an unused const addr at L1454."
   },
   {
-   "file": "tests/carview-parts.spec.js",
+   "file": "tests/specs/carview-parts.spec.js",
    "purpose": "Failing means the standalone tools/carview.html audit page broke: parts-category selectors missing, the frame counter not advancing after state changes, or the effects API not round-tripping onto a rendered frame.",
    "assertionQuality": "mixed",
    "costTier": "moderate",
@@ -254,7 +254,7 @@
    "weakSpots": "L5 title says 'eight parts categories' while the loop asserts twelve (L9-10) \u2014 stale title; L27-34 is visibility-only (controls could be wired to nothing and pass); no test asserts a rendered pixel changed with the parts."
   },
   {
-   "file": "tests/circuit-def-fields.test.mjs",
+   "file": "tests/unit/circuit-def-fields.test.mjs",
    "purpose": "Failing means a field authored in js/circuits/<id>.js was silently dropped by the field-by-field copy into Tracks.LIST and reads undefined at every consumer (the pal/sunAzimBias/sceneryTheme bug class).",
    "assertionQuality": "strong",
    "costTier": "cheap",
@@ -264,57 +264,57 @@
    "weakSpots": "None. hasOwnProperty (not truthiness) at lines 60-63 is exactly right; spa ownPitStraight=false pin at line 109 catches the falsy-copy edge."
   },
   {
-   "file": "tests/collision-ai-fixes.spec.js",
+   "file": "tests/specs/collision-ai-fixes.spec.js",
    "purpose": "Failing means one of the June 2026 audit fixes regressed: wrong-way threshold/hysteresis, wall penalty on open circuits, rescue-grace reset, rear-end contactT, >6-car separation window, AI banking grip, or Jeddah barrier alignment.",
    "assertionQuality": "mixed",
    "costTier": "heavy",
    "overlaps": [
-    "tests/collisions.spec.js",
-    "tests/elevation-tracks.spec.js"
+    "tests/specs/collisions.spec.js",
+    "tests/specs/elevation-tracks.spec.js"
    ],
    "verdict": "strengthen",
    "verdictDetail": "Most tests are genuinely strong relative regressions (banking grip vs flat-straight reference is model quality), but the wall-scrub test proves nothing and the file is triple-billed (test:collision + test:behaviour globs plus explicit test:barriers), so its 10 race builds across 3 tracks run three times over.",
    "weakSpots": "Line 131: 'speed is scrubbed when pinned against Monza barrier' asserts only speedAfter < 20 after 10 throttle-off frames \u2014 coasting drag alone passes this with the pushIn penalty deleted; it needs a no-wall control run or a magnitude floor. Line 34: the slow-crawl loop breaks the moment speed > 13, so how long the sub-threshold state is actually held is timing-dependent. Line 353 pins hw + barrierGap - 1.1 with an unexplained 1.1 (deliberate pin, but opaque). 'Player stays on banked Zandvoort section' (315-334) substantially re-proves elevation-tracks' zandvoort banked-corner test; '10-car pack digs out' (248-276) re-proves collisions.spec.js jam dig-out at n=10 vs n=5."
   },
   {
-   "file": "tests/collisions-deep.spec.js",
+   "file": "tests/specs/collisions-deep.spec.js",
    "purpose": "Failing means player-side collision feedback broke: Frenet-space pushes not fed back to world-space player state, interpenetration, energy injection, wall overshoot, or the perpetual-side-rub speed-death regression.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/collisions.spec.js"
+    "tests/specs/collisions.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "15 scenario tests each asserting a physically meaningful invariant (push direction, min-gap while alongside, per-frame displacement cap, monotonic prog across the line, maxWallOvershoot < 0.01) \u2014 the model of a behavior suite; uses fixtures.js for failure attachments; the cost (15 race builds, Monza+Monaco) is what it costs.",
    "weakSpots": "Thresholds like hw+9.5 (line 81) and maxAbsX < 20 (176) are stated-as-band rather than derived, but each has an in-file rationale; only mild redundancy with collisions.spec.js's full-pack-no-NaN test."
   },
   {
-   "file": "tests/collisions.spec.js",
+   "file": "tests/specs/collisions.spec.js",
    "purpose": "Failing means AI-to-AI collision resolution broke: an overlapped pair no longer separates while alongside, a jammed pack cannot dig out, or a full pack NaNs/leaves the track within 10 s.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/collision-ai-fixes.spec.js",
-    "tests/collisions-deep.spec.js"
+    "tests/specs/collision-ai-fixes.spec.js",
+    "tests/specs/collisions-deep.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Three tight tests; the peak-gap-while-alongside fix (documented at lines 28-36) shows the assertion was hardened against exactly the sampling bug that made the old version meaningless; the jam(5) dig-out overlaps collision-ai-fixes' jam(10) pack tests but asserts the extra pairwise non-overlap condition.",
    "weakSpots": "None vacuous; jam dig-out speed floor of 12 m/s (line 73) and on-track bound of 12 m are judgment thresholds with generous margins."
   },
   {
-   "file": "tests/comment-citations.test.mjs",
+   "file": "tests/unit/comment-citations.test.mjs",
    "purpose": "Failing means a cross-file 'other.js:412' comment citation points past the end of the file it names, or the citation population grew (or the ratchet ceiling was left slack).",
    "assertionQuality": "strong",
    "costTier": "trivial",
    "overlaps": [
-    "tests/docs-integrity.test.mjs"
+    "tests/unit/docs-integrity.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Existence check + growth ratchet + anti-slack ratchet is the complete idiom; overlaps docs-integrity's cited-line test but deliberately: this one covers css/ and carries the ratchet, docs-integrity sweeps tools/ and tests/ \u2014 the files document each other.",
    "weakSpots": "Comment-detection heuristic (lines 93-95) intentionally under-matches (strings containing // etc.), so the ratchet count is approximate \u2014 acknowledged in-file and the right trade."
   },
   {
-   "file": "tests/component-inventory.test.mjs",
+   "file": "tests/unit/component-inventory.test.mjs",
    "purpose": "Failing means docs/COMPONENTS.md drifted from css/: a class family exists undocumented, a documented family left, the dead-class list is wrong, or a cross-file shared class is unnamed.",
    "assertionQuality": "strong",
    "costTier": "cheap",
@@ -324,7 +324,7 @@
    "weakSpots": "Line 72: dead-class detection uses substring includes() over concatenated js/ + index.html, so a dead class whose name is a substring of any identifier is counted live (misses, never false-fails) \u2014 acceptable for a rot guard."
   },
   {
-   "file": "tests/coplanar-faces.test.mjs",
+   "file": "tests/unit/coplanar-faces.test.mjs",
    "purpose": "Failing means a circuit gained same-facing coplanar face pairs \u2014 z-fighting that flickers at every distance and that clip-audit structurally cannot see \u2014 or the baseline went stale.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -334,7 +334,7 @@
    "weakSpots": "Line 58: roster floor of >= 24 against 40 circuits (confirmed known-already) \u2014 a sweep that silently dropped up to 16 circuits would still pass the floor; the stale-baseline test only protects baseline-listed ids, so a NEW circuit vanishing from the sweep is invisible. Cheap fix: assert against the js/circuits/ file count."
   },
   {
-   "file": "tests/css-comments.test.mjs",
+   "file": "tests/unit/css-comments.test.mjs",
    "purpose": "Failing means a CSS comment ended early or never opened, turning prose into a selector prelude and silently dropping the rule after it.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -344,7 +344,7 @@
    "weakSpots": "None; the 220 threshold is arbitrary only in the harmless sense \u2014 both populations are measured and far apart."
   },
   {
-   "file": "tests/css-layers.test.mjs",
+   "file": "tests/unit/css-layers.test.mjs",
    "purpose": "Failing means a rule fell outside its file's @layer block (stray closing brace or trailing rules), making it unlayered and silently outranking every layered rule in the project.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -354,7 +354,7 @@
    "weakSpots": "Line 63: `if (!/^@layer\\s+[\\w-]+\\s*\\{/.test(first)) continue;` \u2014 a stylesheet that loses its opening @layer wrapper entirely is silently skipped, i.e. 100% of its rules become unlayered and no test fires; nothing asserts WHICH files must be layered."
   },
   {
-   "file": "tests/css-tokens.test.mjs",
+   "file": "tests/unit/css-tokens.test.mjs",
    "purpose": "Failing means a design token in css/tokens.css has no var()/setProperty consumer anywhere \u2014 an invitation for the next author to inherit an unmaintained value.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -364,7 +364,7 @@
    "weakSpots": "None material; a token consumed only by another unused token's var() inside tokens.css would count as used, but that chain terminates at this same test on the outer token."
   },
   {
-   "file": "tests/custom-team.spec.js",
+   "file": "tests/specs/custom-team.spec.js",
    "purpose": "Failing means the MY TEAM save flow leaks or fails to rebuild GPU resources (decal atlas, cached body meshes) after a repaint, or the livery row's select/edit/delete stopped being independent keyboard buttons.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -374,7 +374,7 @@
    "weakSpots": "None vacuous; the flow's fragility is UI-path length (two full garage round-trips), not assertion quality."
   },
   {
-   "file": "tests/data-lifecycle.spec.js",
+   "file": "tests/specs/data-lifecycle.spec.js",
    "purpose": "Failing means a stale async response (older year/meeting/session/driver/refresh request resolving late) overwrites newer data-hub state, or the hub's modal/focus contract broke.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -384,7 +384,7 @@
    "weakSpots": "Line 279 waitForTimeout(1100) exists to force a distinct timestamp \u2014 justified but a fixed sleep; setInterval capture (99-101) monkey-patches globals per test, contained."
   },
   {
-   "file": "tests/debris.spec.js",
+   "file": "tests/specs/debris.spec.js",
    "purpose": "Failing means the Rapier debris side-world broke a phase-R0/R1 promise: not inert/zero-fetch when opted out, no debris from a real wall hit, seeded episodes not bitwise-replayable, or the pool cap not enforced.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -394,7 +394,7 @@
    "weakSpots": "None; the wall-hit test's bounded retry loop (lines 114-117) exits on lastImpact rather than sleeping."
   },
   {
-   "file": "tests/deploy-staging.test.mjs",
+   "file": "tests/unit/deploy-staging.test.mjs",
    "purpose": "Failing means the Pages workflow's hand-edited cp allow-list no longer covers something the shipped code can fetch (or stages a path that does not exist) \u2014 the vendor/-404-in-production-only bug class.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -404,7 +404,7 @@
    "weakSpots": "The runtime-URL scan (lines 71-77) only catches vendor/ paths in string literals \u2014 a dynamically concatenated path would slip through, an accepted heuristic bound."
   },
   {
-   "file": "tests/dev-tools.spec.js",
+   "file": "tests/specs/dev-tools.spec.js",
    "purpose": "Failing means a window.__apex dev-API method changed shape or stopped mutating game state as documented \u2014 this is the living contract for the surface every other test and agent workflow drives.",
    "assertionQuality": "mixed",
    "costTier": "heavy",
@@ -414,19 +414,19 @@
    "weakSpots": "Lines 609-619: 'setInput and clearInput work together' is self-described no-assert-beyond-no-crash. Many tests assert only typeof (e.g. camState 237-246, viewState 251-259, probe 363-373, physState 385-395) \u2014 would catch a rename/removal, not a wrong value; acceptable for the contract role. Screenshots at 118 and 320 are gallery side-effects, not assertions."
   },
   {
-   "file": "tests/docs-integrity.test.mjs",
+   "file": "tests/unit/docs-integrity.test.mjs",
    "purpose": "Failing means a mechanically checkable doc claim drifted from the repo: dead file paths in live docs/skills/source comments, wrong suite/circuit/category counts, stale citation line numbers, unindexed tools/skills/docs, or a re-hardcoded season year.",
    "assertionQuality": "strong",
    "costTier": "cheap",
    "overlaps": [
-    "tests/comment-citations.test.mjs"
+    "tests/unit/comment-citations.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Every check is anchored to a documented past failure and stays strictly in mechanically-verifiable territory; the cited-line check (lines 103-171) overlaps comment-citations' first assertion, but with different scope (tools/tests here, css + ratchet there) and both are trivial-cost, so consolidation would buy little.",
    "weakSpots": "Longest exemption surface in the batch (PLACEHOLDERS, SOURCE_EXEMPT, archive/research skips) \u2014 each entry carries a reason, which is the discipline that keeps it honest; regex path-matching is inherently heuristic but tuned (longest-first extensions, URL lookbehind)."
   },
   {
-   "file": "tests/drift.spec.js",
+   "file": "tests/specs/drift.spec.js",
    "purpose": "Failing means the dynamic bicycle tyre model lost its qualitative contract: default stability at the limit, SLIDE loosening the rear, self-alignment on release, grip-limited (not speed-proportional) yaw, or SPEED STEER's lock taper.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -436,7 +436,7 @@
    "weakSpots": "Absolute bands (peakSlip < 45 at line 53, maxAbsX < 60, tail < 1.5 at line 82) are qualitative judgment values, but each states the failure mode it separates from (spin vs wash, fly-off, non-decaying slide)."
   },
   {
-   "file": "tests/elevation-tracks.spec.js",
+   "file": "tests/specs/elevation-tracks.spec.js",
    "purpose": "Failing means slope gravity, banking geometry, or road-following broke on some circuit: descents overspeeding past a measured flat reference, climbs acting as walls, banked corners undrivable, or the banking mesh pivoting wrong.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -446,7 +446,7 @@
    "weakSpots": "The 1.35x overspeed ceiling (line 273) and hw+8 road-follow band (line 280) are generous judgment bands; climbGain > 0.5 (line 277) is a weak floor by admission ('just require the car is still moving') \u2014 all rationalized in-file."
   },
   {
-   "file": "tests/f1-track-accuracy.spec.js",
+   "file": "tests/specs/f1-track-accuracy.spec.js",
    "purpose": "Failing means a game circuit's centreline no longer matches its pinned real-world GeoJSON reference in shape or race direction, or the circuit-to-reference mapping went incomplete.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -456,7 +456,7 @@
    "weakSpots": "None; MAX_SHAPE_ERROR lives in the shared validator (itself unit-tested by track-accuracy-validator.test.mjs), and the failure list is asserted empty, not logged-only (line 109)."
   },
   {
-   "file": "tests/fixture-consumer-audit.test.mjs",
+   "file": "tests/unit/fixture-consumer-audit.test.mjs",
    "purpose": "Nominally: failing means the fixture-import detection regex broke; in practice it is the only CI-run trace of the fixture-adoption ratchet, and it does not enforce the ratchet.",
    "assertionQuality": "weak",
    "costTier": "trivial",
@@ -466,7 +466,7 @@
    "weakSpots": "Whole file (lines 5-19): synthetic two-entry Maps only; never imports readSpecs/adoption/FLOOR; the real-world enforcement path is dead code from CI's perspective."
   },
   {
-   "file": "tests/gamepad.spec.js",
+   "file": "tests/specs/gamepad.spec.js",
    "purpose": "Failing means the W3C standard-mapping gamepad contract broke: steering dead zone, digital d-pad lock, trigger/face pedals, edge-triggered latches, disconnect/blur/hidden release, or the menu-navigation mapping (including the native-<dialog> cancel seam and the driving/menu mode split).",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -476,7 +476,7 @@
    "weakSpots": "Fixed sleeps at lines 233, 252, 275, 280 (waitForTimeout 250-400ms) are flake-prone on a loaded box but back real assertions; the held-repeat test (334-358) depends on wall-clock exceeding 450ms between polls, which a very slow evaluate round-trip could theoretically violate on the no-repeat step."
   },
   {
-   "file": "tests/garage-aero.spec.js",
+   "file": "tests/specs/garage-aero.spec.js",
    "purpose": "Proves the GARAGE X-MODE demo actually eases the flaps, moves real wing geometry by a visible amount, and re-aims the camera at the rear wing \u2014 failing means the button visibly does nothing again (the exact bug that shipped).",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -486,19 +486,19 @@
    "weakSpots": "The dist<3.2 camera thresholds (lines 86, 97) are magic numbers, but the file documents why (135mm projects to ~10px at whole-car framing); no genuinely weak asserts."
   },
   {
-   "file": "tests/headless-api.spec.js",
+   "file": "tests/specs/headless-api.spec.js",
    "purpose": "Contract of the RL-style headless loop (headless()/obs()/act()/reset()) \u2014 failing means an agent driving via obs/act gets wrong shapes or physics that don't respond to inputs.",
    "assertionQuality": "mixed",
    "costTier": "heavy",
    "overlaps": [
-    "tests/obs-act-edge.spec.js"
+    "tests/specs/obs-act-edge.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Core is strong and behavioral (throttle raises speed, brake lowers it, n=10 advances further than n=1, reset places within \u00b150m), but each of 25 tests re-boots and rebuilds monza \u2014 api.log shows 17-55s per test, several minutes wall; trimming the three trivial toggle tests into one would cut real cost.",
    "weakSpots": "Confirmed known: 'returns false when player not yet initialised' (lines 290-303) accepts BOTH outcomes so it can only fail on a throw. Lines 22-45 are three separate boots for trivial getter/setter round-trips. The big obs test (64-131) is mostly typeof/shape checks \u2014 fine for a contract, but the position/motion values are only checked as numbers, not for plausibility (speedKph cross-check line 73 is the exception)."
   },
   {
-   "file": "tests/hooks-documented.test.mjs",
+   "file": "tests/unit/hooks-documented.test.mjs",
    "purpose": "Ratchet: no new __apex hook may ship absent from docs/DEBUG-HOOKS.md, and the UNDOCUMENTED grandfather list cannot rot in either direction \u2014 failing means the dev-API reference stopped being trustworthy.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -508,20 +508,20 @@
    "weakSpots": "hookNames() regex (line 54) depends on 2-space indentation of the api literal in js/game/apex.js \u2014 a reformat would silently shrink the hook set, though the UNDOCUMENTED-gone test would likely trip on it."
   },
   {
-   "file": "tests/hud-audit.spec.js",
+   "file": "tests/specs/hud-audit.spec.js",
    "purpose": "Screenshot gallery of the HUD across 4 steer modes x 2 orientations with a minimal 'it actually rendered' assert \u2014 failing means the HUD or the mode's on-screen controls didn't appear at all.",
    "assertionQuality": "weak",
    "costTier": "heavy",
    "overlaps": [
-    "tests/hud-layout.spec.js",
-    "tests/ui-audit.spec.js"
+    "tests/specs/hud-layout.spec.js",
+    "tests/specs/ui-audit.spec.js"
    ],
    "verdict": "merge",
-   "verdictDetail": "Merge into tests/hud-layout.spec.js (or fold the shots into the ui-audit gallery): its only assertions (assertHud, lines 39-45 \u2014 #hud visible plus one steering control visible) are a strict subset of what hud-layout proves per mode/orientation with real geometry, yet each of 8 tests pays a reload + bahrain build; the screenshots are the only unique value.",
+   "verdictDetail": "Merge into tests/specs/hud-layout.spec.js (or fold the shots into the ui-audit gallery): its only assertions (assertHud, lines 39-45 \u2014 #hud visible plus one steering control visible) are a strict subset of what hud-layout proves per mode/orientation with real geometry, yet each of 8 tests pays a reload + bahrain build; the screenshots are the only unique value.",
    "weakSpots": "shot() (lines 30-33) is the real payload and asserts nothing; assertHud checks only visibility of #hud and '#btn-steer-left, #btn-throttle' .first() (line 43) \u2014 a broken layout, overlapping controls, or a blank canvas behind a visible DOM HUD all pass."
   },
   {
-   "file": "tests/hud-layout.spec.js",
+   "file": "tests/specs/hud-layout.spec.js",
    "purpose": "No touch control may overlap another, no HUD readout may sit on a tap target, and everything must stay inside the safe area across notched/small phones in both orientations \u2014 failing means a shipped layout collision like the AERO-chip-over-BRAKE bug.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -531,31 +531,31 @@
    "weakSpots": "HUD_LANDSCAPE_ONLY (lines 38-55) deliberately stops asserting a measured 8.7px portrait collision because #rotate-device covers it \u2014 documented and defensible, but it means portrait .hud-top/.hud-gaps/minimap overlap is permanently untested; count>3 floor (line 125) is a loose liveness check."
   },
   {
-   "file": "tests/image-grade-shaders.test.mjs",
+   "file": "tests/unit/image-grade-shaders.test.mjs",
    "purpose": "The HDR grade math must be identical across the JS reference model, the GLSL post shader, and the WGSL mirror (zone weights, toe/shoulder, guards, composite order) \u2014 failing means the backends' grades drift apart or a control goes non-finite.",
    "assertionQuality": "mixed",
    "costTier": "cheap",
    "overlaps": [
-    "tests/image-grade-visual.spec.js"
+    "tests/specs/image-grade-visual.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "The behavioral tests (neutral preservation 115-127, all 65k min/max combos finite 129-151, channel isolation 153-165) run against a local JS reimplementation (hdrGrade, lines 39-55) and only bind to shipped code via the exact-source regex pins in tests 66-113 \u2014 brittle to harmless reformatting but genuinely enforcing GLSL/WGSL formula parity, and image-grade-visual covers the end-to-end pixels; keep as the fast half of that pair.",
    "weakSpots": "Tests 115-165 cannot catch a bug in the actual shaders except through the regex pins; the pins themselves (e.g. lines 72-87, 93-107) fail on any whitespace/reorder refactor even when behavior is preserved \u2014 change-detector risk, mitigated by the visual spec."
   },
   {
-   "file": "tests/image-grade-visual.spec.js",
+   "file": "tests/specs/image-grade-visual.spec.js",
    "purpose": "The grading sliders must change actual rendered pixels in the correct tonal range/channel, extremes must not kill the canvas, and five representative track/tod/weather conditions must keep broad tonal range without clipping \u2014 failing means the grade is cosmetic-in-name-only or a shipped condition clips.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/image-grade-shaders.test.mjs"
+    "tests/unit/image-grade-shaders.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Signed and relative pixel deltas with count floors (darkCount>1000) guard against vacuous blank captures, and the histogram gates on five real conditions are the only thing standing between a lighting retune and shipped black-crush; serial mode + 180s timeouts + 6 distinct circuit builds make it one of the most expensive files in test:webgl, justifiably.",
    "weakSpots": "Thresholds are judgment calls: 2x dominance ratios (194, 204, 214-215), clip fractions 0.08/0.03 and p95-p05>45 (250-252) \u2014 reasoned but tunable; the discard-first-frame pattern (172, 186) papers over render-cache settling with no assertion that it settled."
   },
   {
-   "file": "tests/import-models.test.mjs",
+   "file": "tests/unit/import-models.test.mjs",
    "purpose": "tools/import-models.mjs must emit AX26 bytes that js/render/assets.js can parse, with palette-atlas colour baked into vertex colour \u2014 failing means CI-imported models arrive corrupt or flat grey.",
    "assertionQuality": "strong",
    "costTier": "cheap",
@@ -565,19 +565,19 @@
    "weakSpots": "None material; cleanup deferral via process.on('exit') inside finally (line 115) is odd but harmless."
   },
   {
-   "file": "tests/instanced-draw.spec.js",
+   "file": "tests/specs/instanced-draw.spec.js",
    "purpose": "The GLX consumer of TrackGraph.batches(): a real Monza payload uploads to GL instance buffers, frustum culling packs correctly, and instancing state does not black out ordinary draws \u2014 failing means scenery instancing silently broke in the browser half that track-graph.test.mjs cannot see.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/track-graph.test.mjs"
+    "tests/unit/track-graph.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Explicitly de-vacuoused (the line 53-57 comment converts what used to be a skip into a hard failure on zero batches), the culling test uses raw planes so it cannot drift with the projection, and the overlap with track-graph.test.mjs is a documented division of labour (maths vs wiring), but it pays 3 Monza builds with 180s waits.",
    "weakSpots": "Lines 17-24 and 100-103 are typeof-only existence checks \u2014 castShadowInstanced is asserted to exist, not to actually draw a shadow; line 115's 20KB screenshot-size heuristic for 'scene not black' is a proxy (reasoned: blank frames compress to a few KB)."
   },
   {
-   "file": "tests/light-presets.test.mjs",
+   "file": "tests/unit/light-presets.test.mjs",
    "purpose": "Every one of the ~1,921 shipped lighting preset knobs must name a live TUNE_DEFS id \u2014 failing means a knob rename silently orphaned shipped looks (the resolution falls back to defaults without any error).",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -587,7 +587,7 @@
    "weakSpots": "tuneIds() scrapes id: \"...\" by regex from lighting.js source (line 40) \u2014 an id built dynamically would be invisible, though the size floor would catch wholesale breakage."
   },
   {
-   "file": "tests/lighting-ab.spec.js",
+   "file": "tests/specs/lighting-ab.spec.js",
    "purpose": "The A/B harness knob catalog cannot rot against its source files, and the live lighting invariants hold (weather() applies lighting not just wetness, night fog glows, night light budget and exposure floors) \u2014 failing means a shipped lighting regression or a silently stale A/B harness.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -597,7 +597,7 @@
    "weakSpots": "Absolute pins exposure 0.90 / floodEmit 0.78 (lines 119-120) fail on any deliberate retune \u2014 intended as a catalog, but they make retunes noisy; fog-glow 1.1x region-mean threshold (line 104) and the fixed 2200/1100/3000ms sleeps (lines 28-31, 101) are empirically tuned to the SwiftShader box."
   },
   {
-   "file": "tests/lighting-campaign.test.mjs",
+   "file": "tests/unit/lighting-campaign.test.mjs",
    "purpose": "The offline lighting-campaign tooling behaves: the 800-condition matrix enumerates uniquely, config validation rejects bad shards/cameras, capture retry/cleanup lifecycle is leak-free, merges reject duplicates/gaps, and metrics/gates classify clipping correctly \u2014 failing means a multi-hour campaign run produces wrong or lost data.",
    "assertionQuality": "strong",
    "costTier": "cheap",
@@ -607,7 +607,7 @@
    "weakSpots": "Lines 315-328 assert capture.mjs's source by regex (export names, doesNotMatch /3456/) \u2014 change-detector-ish; the minimalProfile trace assertions (lines 175-180, 225-233) pin exact call sequences, so a behavior-preserving reorder of the search fails them."
   },
   {
-   "file": "tests/lighting-tuner-grade.spec.js",
+   "file": "tests/specs/lighting-tuner-grade.spec.js",
    "purpose": "The IMAGE & COLOUR tuner tab exposes all 16 grading controls in the right sections, and values clamp, persist across reload, reset to shipped, and export \u2014 failing means the panel or its persistence pipeline broke.",
    "assertionQuality": "mixed",
    "costTier": "moderate",
@@ -617,7 +617,7 @@
    "weakSpots": "First test (lines 26-34) is pure presence \u2014 heading text equality and input visibility, no behavior; the reset comparison (lines 51-59) computes 'shipped' from the same LightPresets global the app reads, so a preset-loading bug that broke both sides identically would pass."
   },
   {
-   "file": "tests/load-order.test.mjs",
+   "file": "tests/unit/load-order.test.mjs",
    "purpose": "index.html, tools/carview.html, sw.js and game.js's BACKEND_FILES must all agree with tools/manifest.cjs (script order, CSS order, uniform ?v=, deferred files accounted for, HARD_EDGES ordered) \u2014 failing means a hand-edited shell diverged from the single source of truth, the exact failure that once shipped vendor/ to Pages.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -627,7 +627,7 @@
    "weakSpots": "Regex extraction of BACKEND_FILES (line 109) and sw.js's optional Set (line 121) depends on exact declaration shapes \u2014 a formatting change fails loudly rather than silently, which is acceptable."
   },
   {
-   "file": "tests/logging.spec.js",
+   "file": "tests/specs/logging.spec.js",
    "purpose": "js/log.js semantics in a real page: loads first, retention follows the raised console level, records are flattened strings not live references, namespace tag printed once, filters work and bad specs don't throw \u2014 failing means the diagnostic facility became quietly useless (or a leak).",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -637,7 +637,7 @@
    "weakSpots": "The track-build test (lines 67-76) only asserts count>0 and that scenery-or-track appears among namespaces \u2014 loose, but deliberately so since build content varies."
   },
   {
-   "file": "tests/longitudinal.spec.js",
+   "file": "tests/specs/longitudinal.spec.js",
    "purpose": "Longitudinal physics ordering (brake < coast < throttle), grass drag, speed-sensitive steering, slope sanity on Spa, and lap-counter wrap at start/finish \u2014 failing means the driving model's basic force balance or lap accounting regressed.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -671,7 +671,7 @@
    "weakSpots": "No assertions anywhere (entire file); honest about it in the header ('it emits images for a human, it does not gate anything'), so the only question is whether the duplicate capture pass earns its keep \u2014 it doesn't."
   },
   {
-   "file": "tests/map-hooks.spec.js",
+   "file": "tests/specs/map-hooks.spec.js",
    "purpose": "Contract of __apex.mapPts()/trackBounds() (normalized picker outline points, world span, centerFrac) \u2014 failing means the minimap/picker data hooks broke.",
    "assertionQuality": "mixed",
    "costTier": "moderate",
@@ -681,7 +681,7 @@
    "weakSpots": "Line 32-33: north-up orientation claimed, only span asserted. Line 43: orbit(b.centerFrac,...) result never checked. Line 17: fixed 3000ms sleep instead of waiting on info().track. Lines 37-38: spanX/spanZ>100 are loose sanity floors. Variable nullPts (line 12) documents an inverted historical expectation."
   },
   {
-   "file": "tests/material-shimmer.spec.js",
+   "file": "tests/specs/material-shimmer.spec.js",
    "purpose": "The baked tarmac must not add more than 2x the frame-to-frame temporal noise of the procedural look while driving (the 'road is boiling' risk the asset pack carries) \u2014 but only when APEX_SHIMMER=1 is set.",
    "assertionQuality": "mixed",
    "costTier": "moderate",
@@ -691,19 +691,19 @@
    "weakSpots": "Line 89: test.skip(!process.env.APEX_SHIMMER) \u2014 never exercised in CI or any test:* group except test:shimmer, which nothing invokes automatically; header admits 'it has never been run to completion'; the 2.0 ratio (line 114) is untested against any real measurement."
   },
   {
-   "file": "tests/menu-baseline.spec.js",
+   "file": "tests/specs/menu-baseline.spec.js",
    "purpose": "Six blessed pixel baselines (title/select/garage x phone-landscape/desktop) catching the IDENTITY half the geometry audit can't see \u2014 failing means the menus' colour/type/spacing changed and a human must bless it.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/menu-survey.spec.js"
+    "tests/specs/menu-survey.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "toHaveScreenshot against committed snapshots (the repo's only golden baselines, per CLAUDE.md) with the render loop stopped via headless(true) so the baseline can actually match; deliberately capped at six so review stays honest rather than rubber-stamped; no circuit builds but 1440x900 SwiftShader captures need the 60s timeout.",
    "weakSpots": "maxDiffPixelRatio 0.01 (line 71) is ~5,000 pixels at phone size \u2014 a small accent element could change entirely inside the tolerance; baselines are SwiftShader-platform-locked (documented, lines 19-22), so any runner change invalidates all six at once."
   },
   {
-   "file": "tests/menu-keyboard.spec.js",
+   "file": "tests/specs/menu-keyboard.spec.js",
    "purpose": "Failing means desktop menu input is broken: wheel redirection to the circuit list, arrow-key nav vs car steering, modal top-layer ranking, dialog inertness, and the Escape-is-back contract.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -713,19 +713,19 @@
    "weakSpots": "Minor only: sleep-based settling via waitForTimeout(400/300/250) throughout (lines 175, 227, 272, 311, 364...); test at line 165 depends on waitForTimeout(400) for selection to land; the e-ui log failure on the line-265 test needs triage (regression or flake) but the assertion itself is sound."
   },
   {
-   "file": "tests/menu-survey.spec.js",
+   "file": "tests/specs/menu-survey.spec.js",
    "purpose": "Failing would mean a settings/HUD state could not even be reached and screenshotted -- it is a gallery generator, not a regression net.",
    "assertionQuality": "vacuous",
    "costTier": "heavy",
    "overlaps": [
-    "tests/ui-audit.spec.js"
+    "tests/specs/ui-audit.spec.js"
    ],
    "verdict": "strengthen",
    "verdictDetail": "Deliberate screenshot companion to ui-audit (confirmed mostly screenshot-only), but one-line DOM asserts would make each captured state verifiable at near-zero cost instead of trusting the picture.",
    "weakSpots": "Tests 30/33/34/35/36/40/41/42/43 contain zero expects beyond implicit waits (lines 57-62, 78-84, 86-99, 101-105, 108-115, 132-165); cycleTo at line 61/81 is not asserted to have landed on TILT/MANUAL; test 34 never asserts music/sound actually toggled off (lines 92-97); test 43's campicker wait swallows failure with .catch(() => {}) (line 162), so a broken picker still screenshots green; only tests 31/32 (lines 67, 74) assert anything."
   },
   {
-   "file": "tests/module-size.test.mjs",
+   "file": "tests/unit/module-size.test.mjs",
    "purpose": "Failing means a big module (game.js, apex.js, agentview.js, car3d.js, tracks.js) grew past its ratchet ceiling, or a ceiling drifted >400 lines above its file and stopped ratcheting.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -735,32 +735,32 @@
    "weakSpots": "None material; the ceilings are policy numbers by design, with the raise/lower protocol documented in the header."
   },
   {
-   "file": "tests/multiplayer-lobby.spec.js",
+   "file": "tests/specs/multiplayer-lobby.spec.js",
    "purpose": "Failing means the VS FRIEND lobby screen/flow is broken: real RTCPeerConnection constructibility, invite links/QR/share fallbacks, junk-code refusal, and the ids-not-multipliers wire-profile security claim.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/net-transport.test.mjs",
-    "tests/net-qr.test.mjs"
+    "tests/unit/net-transport.test.mjs",
+    "tests/unit/net-qr.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "The rtc()-constructs test closes a documented blind spot the fake-transport suite created, and the lobbyMods liar test is a genuine anti-cheat assertion; the deliberate delegation of code-format and QR correctness to the net-unit suites is documented per test, so the overlap is layering, not duplication.",
    "weakSpots": "Line 99: not.toHaveText(\"\") passes on any text including an error; line 222 asserts an environment property (!navigator.share) that a headless-Chromium update could flip independent of this code; lines 287-288's QR structural check (odd, 21+4n) is a shape check only -- real decode correctness lives in net-qr.test.mjs as stated."
   },
   {
-   "file": "tests/multiplayer-npeer.spec.js",
+   "file": "tests/specs/multiplayer-npeer.spec.js",
    "purpose": "Failing means the rival is keyed by a local grid index again instead of a cross-peer identity: wrong car posed, seat fallback firing, unknown packets routed onto somebody, or both humans gridded in the same box.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/multiplayer-session.spec.js"
+    "tests/specs/multiplayer-session.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Asserts exactly the surface multiplayer-session cannot see (wire id == driverId, slotFallback === null proving the exact-seat arm fired, unknown-id drop) and its header explicitly defers behavioural coverage to that file, so the pairing is intentional and non-redundant.",
    "weakSpots": "Line 77-79: the unknown-packet test only asserts the one existing buffer count is unchanged -- it cannot see a packet mis-routed onto a car with no buffer, though carAt inspection before/after partially covers that; four full monza builds for four tests is the cost of the seam."
   },
   {
-   "file": "tests/multiplayer-roles.spec.js",
+   "file": "tests/specs/multiplayer-roles.spec.js",
    "purpose": "Failing means the human/local role split regressed: a promoted car does not get the bicycle model, a non-local human reads the local stick, per-car mods leak from the local player, or fed-input and local-input trajectories diverge.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -770,7 +770,7 @@
    "weakSpots": "Line 145: strong-brakes bound (strong < weak - 1) is a directional threshold, arbitrary by 1 m/s but robust; asAi.vLat === 0 (line 80) encodes an implementation fact (AI is kinematic) that a future AI physics upgrade would legitimately break -- the comment says so, which is fine."
   },
   {
-   "file": "tests/multiplayer-room.spec.js",
+   "file": "tests/specs/multiplayer-room.spec.js",
    "purpose": "Failing means the waiting room rules regressed: guest editing the race, START before double-ready, settings starting the race, GO not starting it, screens surviving lights-out, or the friend-quali gating breaking.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -780,56 +780,56 @@
    "weakSpots": "Line 135/189/224: 60s timeouts on circuit builds make these the slowest specs in test:net (self-documented with test.slow()); line 101/103 ContainText(\"FER\")/(\"MCL\") depends on team-code rendering conventions, mildly brittle to copy changes."
   },
   {
-   "file": "tests/multiplayer-scan-cancel.spec.js",
+   "file": "tests/specs/multiplayer-scan-cancel.spec.js",
    "purpose": "Failing means abandoning a QR scan leaves the camera live (privacy) -- CANCEL, lobby CLOSE, or tab backgrounding failing to tear down getUserMedia tracks.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/multiplayer-scan.spec.js"
+    "tests/specs/multiplayer-scan.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Must stay a separate file from multiplayer-scan because the fake camera is a Chromium launch argument (blank feed here so mid-scan is a stable state, not a race) -- the header explains why merging would make the teardown-under-test unreachable.",
    "weakSpots": "Line 76-78 fakes visibilitychange via defineProperty on document.hidden, which tests the handler wiring rather than real browser backgrounding -- acceptable, since real backgrounding is untestable headless; liveTracks reads only the video element's srcObject, so a stream cloned elsewhere would evade it (no evidence the code does that)."
   },
   {
-   "file": "tests/multiplayer-scan.spec.js",
+   "file": "tests/specs/multiplayer-scan.spec.js",
    "purpose": "Failing means the camera-scan path is silently dead: getUserMedia, video, canvas readback and jsQR no longer land the decoded invite code in the box, or the camera outlives a successful decode.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/multiplayer-scan-cancel.spec.js"
+    "tests/specs/multiplayer-scan-cancel.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "A genuinely end-to-end pipeline test (real Y4M of a code produced by the shipped encoder, real decoder script fetch) covering a failure class the header correctly notes is always silent; only two tests, both necessary.",
    "weakSpots": "45s decode budgets (lines 60, 68) are load-dependent generosity, mitigated by serial mode; the second test re-runs the whole first scan just to check track release -- could fold into one test, but serial isolation after a decode is cheap insurance."
   },
   {
-   "file": "tests/multiplayer-seats.spec.js",
+   "file": "tests/specs/multiplayer-seats.spec.js",
    "purpose": "Failing means two players can hold the same seat again: the guest not yielding (or not being told), the garage handing out a TAKEN chip, team-switch landing on an occupied seat 0, or seat logic leaking into solo play.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/parts-setup-ids.spec.js"
+    "tests/specs/parts-setup-ids.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Covers both halves (garage prevention, room resolution) plus the solo-untouched property, with the awaitPeer poll correctly closing the loopback delivery race its own comment describes; the parts-setup-ids overlap (line 213) is a deliberate cross-reference asserting the solo behaviour did NOT change.",
    "weakSpots": "Lines 89-90 pin driver display names (Verstappen/Hadjar) so a roster update breaks this test for non-logic reasons; localStorage seeding depends on the js/game.js:186 read noted in the comment -- a boot-order change would invalidate the fixture silently."
   },
   {
-   "file": "tests/multiplayer-session.spec.js",
+   "file": "tests/specs/multiplayer-session.spec.js",
    "purpose": "Failing means the game side of a net session is wrong: authority rule (rival posed, never simulated), extrapolation along s, AI handback on drop, shared lights-out instant, lamp sequencing, adopted classification/flags, or contact pushing only the owned car.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/net-snapshot.test.mjs",
-    "tests/net-session.test.mjs"
+    "tests/unit/net-snapshot.test.mjs",
+    "tests/unit/net-session.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Exemplary: virtual-clock driven, every negative assertion has a control (a stepped AI car proving the sim ran, lamp-dwell sample counts proving no backfill), and most tests cite the real field bug they pin; the net-unit overlaps are unit-vs-integration layering, not duplication.",
    "weakSpots": "Sixteen monza builds make this the heaviest file in test:net; lines 154-156 extrapolation window (4-6 m for an expected ~5 m) and line 208 lossy-link floor (0.04 of a lap) are tuned-but-defensible bounds; line 380's named computation (startPending || state===race) accepts two paths, slightly loosening what 'named' proves."
   },
   {
-   "file": "tests/music-library.spec.js",
+   "file": "tests/specs/music-library.spec.js",
    "purpose": "Failing means the bring-your-own-music library or Spotify backend regressed: upload/decode/persist/dedupe/remove in IndexedDB, backend delegation, or Spotify making any network contact while unconfigured.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -839,19 +839,19 @@
    "weakSpots": "Line 340's waitForTimeout(1500) makes the 'no deferred network' claim a time-budget assertion (inherent to proving a negative); lines 110-113 pin the exact builtin playlist ids, so adding a shipped song breaks this test for a benign reason."
   },
   {
-   "file": "tests/net-qr.test.mjs",
+   "file": "tests/unit/net-qr.test.mjs",
    "purpose": "Failing means the shipped QR encoder produces symbols a real camera cannot read -- every assertion round-trips through jsQR, an independent third-party decoder.",
    "assertionQuality": "strong",
    "costTier": "cheap",
    "overlaps": [
-    "tests/multiplayer-lobby.spec.js"
+    "tests/specs/multiplayer-lobby.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "The independent-decoder design defeats the self-consistency trap the header names, and the quiet-zone negative test turns a rendering constraint into an executable fact; the lobby spec's QR test only checks which string is handed to the encoder, so the split of concerns is clean.",
    "weakSpots": "Line 70's version <= 14 scannability bound is a judgment call (stated as such); real-camera optics are obviously out of scope -- jsQR is the right proxy."
   },
   {
-   "file": "tests/net-rendezvous.test.mjs",
+   "file": "tests/unit/net-rendezvous.test.mjs",
    "purpose": "Failing means the room-code client broke: code alphabet/normalisation, the offer/answer swap protocol against a contract-faithful relay, soft-failure reporting (down/unreachable/empty/taken), or the seal/open encryption that makes a public broker safe.",
    "assertionQuality": "strong",
    "costTier": "cheap",
@@ -861,55 +861,55 @@
    "weakSpots": "Timer-driven tests (lines 142, 192, 207: 200-300 ms setTimeouts) add a couple of wall-clock seconds and a slim flake window under extreme load; line 102's uniqueness check (>495/500 distinct codes) is statistical but effectively deterministic for the alphabet size."
   },
   {
-   "file": "tests/net-sdp.test.mjs",
+   "file": "tests/unit/net-sdp.test.mjs",
    "purpose": "Failing means the compact invite codec corrupts a rebuild: lost ICE facts, missing CRLF termination (the Chrome-refusal regression), candidate-type mangling, partial packs, or the relay-candidate-dropped-by-budget bug.",
    "assertionQuality": "strong",
    "costTier": "trivial",
    "overlaps": [
-    "tests/net-transport.test.mjs"
+    "tests/unit/net-transport.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Pinned against SDP captured verbatim from a real gathered RTCPeerConnection rather than invented, with the relay-survives-the-budget test documenting a measured field failure; the CRLF overlap with net-transport covers two different modules (pack/unpack vs normaliseSdp) that both shipped the same bug class.",
    "weakSpots": "Line 82's size bound (<100 bytes) would fail on a legitimate format extension, but that is the stated intent (growth must be deliberate); nothing vacuous."
   },
   {
-   "file": "tests/net-session.test.mjs",
+   "file": "tests/unit/net-session.test.mjs",
    "purpose": "Failing means clock sync, channel routing, or liveness broke: offset/RTT recovery across skewed clocks, ping vs state separation, events surviving loss on the reliable channel, the shared-stall-is-not-a-disconnect fix, or handler-throw containment.",
    "assertionQuality": "strong",
    "costTier": "cheap",
    "overlaps": [
-    "tests/net-transport.test.mjs"
+    "tests/unit/net-transport.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Deterministic virtual-clock pair with deliberate 10 s skew and the RIVAL DISCONNECTED field bug pinned as its own test including the forgiveness-must-not-hide-real-death counter-assertion; the loss overlap with net-transport is layered (transport proves the loss model, session proves survival on top of it).",
    "weakSpots": "Numeric tolerances (lines 68-69, 75-76, 94: <5 ms, <3 ms, <25 ms) are tight but justified by the 1 ms pump documented at line 48; no weak assertions found."
   },
   {
-   "file": "tests/net-snapshot.test.mjs",
+   "file": "tests/unit/net-snapshot.test.mjs",
    "purpose": "Failing means the 13-byte wire codec or the interpolation buffer silently corrupts a rival's pose: quantisation, signed speed, truncation, lap-wrap shortest-path, along-road extrapolation with cap, out-of-order handling, predict-vs-sample, and lap+s crossing the line together.",
    "assertionQuality": "strong",
    "costTier": "trivial",
    "overlaps": [
-    "tests/multiplayer-session.spec.js"
+    "tests/specs/multiplayer-session.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "The prog-monotonic-across-the-line walk and the reversing-loses-a-lap test close exactly the composite gap the file's own comment describes letting a real bug through, and the 13-byte size pin makes bandwidth growth a deliberate act; ms-fast and dense.",
    "weakSpots": "None material; the multiplayer-session overlap is intentional (unit codec/buffer here, integrated pose-on-a-car there)."
   },
   {
-   "file": "tests/net-transport.test.mjs",
+   "file": "tests/unit/net-transport.test.mjs",
    "purpose": "Failing means the loopback wire model, ICE/TURN configuration, or the handshake codec broke: deterministic latency/loss, reliable-channel ordering, no dead hardcoded relay, coturn credential derivation, build-mismatch/unknown-build refusal, CRLF-preserving SDP normalisation, fragment-only invite links.",
    "assertionQuality": "strong",
    "costTier": "trivial",
    "overlaps": [
-    "tests/net-sdp.test.mjs"
+    "tests/unit/net-sdp.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "The foundation the whole net stack's testability rests on, plus real regression pins (unknown-build 0===0 waved through, the retired Open Relay credentials, HMAC derivation checked against node:crypto independently); global fetch/localStorage stubbing is scoped with try/finally and fresh module loads where order-dependence threatened.",
    "weakSpots": "Line 133 asserts OPEN_RELAY === undefined -- an absence-of-name check that a rename would satisfy while reintroducing the behaviour (the behavioural tests around it mostly cover that); line 173-176's fresh-module reload pattern is the right fix for the memoisation leak it documents but shows the module has hidden global state the tests must dance around."
   },
   {
-   "file": "tests/net-trystero-api.test.mjs",
+   "file": "tests/unit/net-trystero-api.test.mjs",
    "purpose": "Failing means the vendored Trystero surface or our use of it drifted: setter-vs-method shapes, targeted send options, room leave, importmap/bare-specifier completeness, .nojekyll/.mjs deployability, rejection-vs-down distinguishability, and bad relay-override sanitisation.",
    "assertionQuality": "mixed",
    "costTier": "trivial",
@@ -919,46 +919,46 @@
    "weakSpots": "Lines 34-36, 49-55, 70-79, 197-203: assert.match/doesNotMatch on source text can pass while behaviour is broken by anything the pattern does not capture (e.g. a second unmatched call site); line 180-183's 400-char window around 'relay failure from' is fragile to vendor formatting; the importmap/file-existence tests (105-160) are structural but genuinely fail-able and load-bearing for deploy."
   },
   {
-   "file": "tests/new-hooks.spec.js",
+   "file": "tests/specs/new-hooks.spec.js",
    "purpose": "Failing means either an __apex hook contract regressed (timing/sectorState/lapHistory/fieldState/aiPlace/setEnergy/setLap/trackProfile/obs().gear) OR one of eight circuits' foundation diagnostics (elevation, walls, groundY gaps, model manifests, vertex budgets) drifted -- two unrelated concerns in one file.",
    "assertionQuality": "mixed",
    "costTier": "heavy",
    "overlaps": [
-    "tests/headless-api.spec.js",
-    "tests/terrain-over-road.spec.js",
-    "tests/tracks-walls.spec.js",
-    "tests/shared-track-foundation-characterization.test.cjs"
+    "tests/specs/headless-api.spec.js",
+    "tests/specs/terrain-over-road.spec.js",
+    "tests/specs/tracks-walls.spec.js",
+    "tests/unit/shared-track-foundation-characterization.test.cjs"
    ],
    "verdict": "split",
    "verdictDetail": "Split lines 509-877 ('shared track foundation diagnostics' + 'Madrid track foundation migration' -- Silverstone/COTA/Miami/Jeddah/Singapore x2/Madrid-at-300s/Shanghai x2 builds) into a foundation spec under test:scenery or test:circuit, leaving the hooks contract here -- doubly urgent because new-hooks.spec.js is listed in BOTH test:api and test:hooks in package.json, so today the entire heavy foundation half runs twice per full sweep (api.log shows even trivial hook tests costing 15-77 s each).",
    "weakSpots": "Hooks half: lines 33-51 and 198-213 are typeof-only shape checks (catch removal, not wrong values); line 292's 'some frac near 0.8' could coincidentally pass on a 22-car grid. Foundation half is actually the stronger set (specific measured bounds with re-measurement provenance at lines 446-472, 733-744, 804-819) but has no business in a hooks-contract group; also imports @playwright/test directly rather than ./fixtures.js, so it skips the pageErrors fixture the rest of the suite gets."
   },
   {
-   "file": "tests/obs-act-edge.spec.js",
+   "file": "tests/specs/obs-act-edge.spec.js",
    "purpose": "Failing means the headless RL control loop breaks at the edges: act(n=0) semantics, reset at the lap seam, scan finiteness/wrap at s ~= total, done-flag lifecycle, and NaN sweeps around the full lap on four circuits.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/headless-api.spec.js"
+    "tests/specs/headless-api.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Genuine boundary coverage the happy-path headless-api.spec.js does not attempt (seam fractions to 0.9995, wrong-way done semantics, 20-position NaN sweep), and the seam bugs it hunts are exactly the silent-corruption class worth paying browser cost for; the monaco/suzuka/spa parametrised seam tests earn their builds.",
    "weakSpots": "Lines 71-73: +/-50 m window around expected s is loose for a placement assertion; lines 32/43 toBeCloseTo(precision 1) tolerates 0.05 m drift under 'did not advance' (adequate); line 16's waitForTimeout(100) is sleep-based settling; like new-hooks it imports @playwright/test directly and skips the fixtures.js pageErrors net."
   },
   {
-   "file": "tests/offtrack.spec.js",
+   "file": "tests/specs/offtrack.spec.js",
    "purpose": "Off-track/reverse/wrong-way/auto-rescue behaviour and the prog<->s coupling; failing means progress can be cheated, rescue is broken, or grass no longer slows the car.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/physics-fixes.spec.js"
+    "tests/specs/physics-fixes.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Exemplary: pace pinned with a written rationale, relative assertions (onSpeed > offSpeed+2), both branches of the rescue contract tested (throttle held vs released); 8 tests each rebuild a circuit so it is heavy but every test earns it.",
    "weakSpots": "None material; absolute metre/m-s thresholds are justified by the pinPace header comment."
   },
   {
-   "file": "tests/output-paths.spec.js",
+   "file": "tests/specs/output-paths.spec.js",
    "purpose": "The gallery path helper's contract (port-scoped dirs, traversal rejection, stable per-suite dirs); failing means every screenshot-producing spec writes to the wrong or an unsafe place.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -968,157 +968,157 @@
    "weakSpots": "None."
   },
   {
-   "file": "tests/parts-budget.spec.js",
+   "file": "tests/specs/parts-budget.spec.js",
    "purpose": "The 600cr budget system UI: display, decrement, over-budget gating, and the persisted FREE BUILD toggle; failing means players can over-spend or the budget readout lies.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/parts-persistence.spec.js",
-    "tests/parts-physics.spec.js"
+    "tests/specs/parts-persistence.spec.js",
+    "tests/specs/parts-physics.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "14 real UI assertions (exact 440 remainder, over class, scaleX fill, persistence across reload) with screenshots as supplements, not substitutes; the cost math itself is double-covered by parts-physics getCost tests, which is acceptable layering.",
    "weakSpots": "Lines 40-41: expect(text).toContain(\"600\") twice \u2014 the second is a copy-paste no-op (presumably meant to check spent vs total separately); parts-persistence line 137-150 re-asserts the same 440-after-reload."
   },
   {
-   "file": "tests/parts-catalog.spec.js",
+   "file": "tests/specs/parts-catalog.spec.js",
    "purpose": "Setup-panel catalog rendering: all 12 category tabs, option visibility/activation, cost badges, and factory/supplier/signature gating per team; failing means the garage offers wrong or missing parts.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/parts-setup-ids.spec.js",
-    "tests/parts-physics.spec.js"
+    "tests/specs/parts-setup-ids.spec.js",
+    "tests/specs/parts-physics.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Real visibility/class/count assertions incl. negative gating (manu_mercedes absent for Red Bull Ford, sig_mclaren_flex absent for Mercedes); the one vacuous test could be dropped into a gallery suite but does not justify churn.",
    "weakSpots": "Lines 233-238 'portrait setup screenshot' has zero expects \u2014 screenshot-only; option-activation tests (lines 103-123) duplicate parts-setup-ids line 55-63 (same high_octane click-makes-active check)."
   },
   {
-   "file": "tests/parts-ers.spec.js",
+   "file": "tests/specs/parts-ers.spec.js",
    "purpose": "ERS BOOST must both push and cost at every speed (the taper-reaches-zero + drain-gated-on-deploy>0 regression); failing means BOOST is silently inert or free somewhere in the speed range.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/parts-physics.spec.js"
+    "tests/specs/parts-physics.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Pins both halves of a documented real bug with a 5-speed sweep and a no-boost control run; parts-physics's final ERS test covers per-part scaling, this covers the taper/drain invariant \u2014 complementary, not redundant, though co-locating them is a reasonable future merge target.",
    "weakSpots": "Drain thresholds (>0.05 per 1.5 s) are magic but generous enough to be robust; 4 tests each rebuild monza \u2014 the 4 sweeps could share one page load."
   },
   {
-   "file": "tests/parts-factory-presets.spec.js",
+   "file": "tests/specs/parts-factory-presets.spec.js",
    "purpose": "AI car meshes must be built from deterministic team factory presets, never the player's saved setup; failing means the whole grid renders wearing the player's parts.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/parts-physics.spec.js"
+    "tests/specs/parts-physics.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Instruments Car3D.build to capture what was actually rendered for all 11 teams and proves the saved extreme aero did NOT reach the AI mesh \u2014 tests the render path where parts-physics only tests the catalog side.",
    "weakSpots": "None; the poisoned-save setup (saved aero=extreme, factory differs) makes the negative assertion real."
   },
   {
-   "file": "tests/parts-liveries.spec.js",
+   "file": "tests/specs/parts-liveries.spec.js",
    "purpose": "Livery catalog well-formedness and the finish (gloss/satin/chrome) surface-remap semantics plus the creator round-trip; failing means malformed liveries ship or a finish repaints the wrong faces.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/parts-livery-contrast.spec.js"
+    "tests/specs/parts-livery-contrast.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "The remap tests are exactly right (only paint faces move, geometry/colours untouched, chrome->mirror with the rationale written down) and the creator UI round-trip lands in localStorage with the correct absent-finish encoding.",
    "weakSpots": "None material; count>=30 per team (line 65) is a roster floor like coplanar-faces, acceptable."
   },
   {
-   "file": "tests/parts-livery-contrast.spec.js",
+   "file": "tests/specs/parts-livery-contrast.spec.js",
    "purpose": "Sponsor/crest ink legibility: every livery must be readable on the panel it actually sits on (the white-on-white family of bugs); failing means an invisible wordmark shipped or a decal region moved off its paint.",
    "assertionQuality": "mixed",
    "costTier": "moderate",
    "overlaps": [
-    "tests/parts-liveries.spec.js"
+    "tests/specs/parts-liveries.spec.js"
    ],
    "verdict": "strengthen",
    "verdictDetail": "The geometry probe (decal->backing-surface via sentinel colours) is genuinely strong and catches region/paint drift, but the ink-choice half never calls buildAtlas \u2014 assert against the atlas's real lum/ink helpers (or export them) so a production linearisation regression fails here instead of only in a human's eyes.",
    "weakSpots": "Test 1 (lines 29-40) asserts properties of the spec's OWN inline CONTRAST_FN, not production code \u2014 it cannot catch buildAtlas reverting to gamma-space lum; test 2's inkOn (lines 47-51) re-implements the picker, so it proves legibility is ACHIEVABLE, not that the atlas achieves it; INKED_FOR (lines 240-254) is a hand-maintained mirror of buildAtlas rather than read from it."
   },
   {
-   "file": "tests/parts-mesh-cache.spec.js",
+   "file": "tests/specs/parts-mesh-cache.spec.js",
    "purpose": "Bounded GPU mesh caches (body/cockpit <=3 keys, wheels <=8 pairs, decal cache <=24) with real eviction and no double-free; failing means a garage session leaks GPU meshes until the tab dies.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/parts-physics.spec.js"
+    "tests/specs/parts-physics.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Instruments real GLX create/free and asserts oldest-evicted/newest-live plus no duplicate frees \u2014 exactly the leak class it exists for; the 240/360 s timeouts and 13 race start/quit cycles are the honest price of exercising the real eviction path.",
    "weakSpots": "Wheel-centre test (lines 400-401) pins y~=0.34 absolute, but that constant is co-asserted as Car3D.AXLES in parts-physics so drift is caught coherently."
   },
   {
-   "file": "tests/parts-persistence.spec.js",
+   "file": "tests/specs/parts-persistence.spec.js",
    "purpose": "Part selections persist to apex26.parts.<teamId>, survive reload, and are team-isolated; failing means setups silently reset or bleed between teams.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/parts-budget.spec.js",
-    "tests/parts-catalog.spec.js"
+    "tests/specs/parts-budget.spec.js",
+    "tests/specs/parts-catalog.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Asserts the actual storage payload, the post-reload active class, and cross-team isolation \u2014 each a distinct failure mode; the 440-budget-after-reload test duplicates parts-budget's number but from the persistence side, tolerable.",
    "weakSpots": "None material."
   },
   {
-   "file": "tests/parts-physics.spec.js",
+   "file": "tests/specs/parts-physics.spec.js",
    "purpose": "A 69-test omnibus: catalog structure, getMods/getCost/resolveSetup/statMult, the visual-recipe registry, ~40 Car3D/CarMesh geometry contracts, shader parity strings, signatures/factory presets, and ERS battery axes; failing means anything from a wrong price to a detached rear wing.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/parts-ers.spec.js",
-    "tests/parts-factory-presets.spec.js",
-    "tests/parts-budget.spec.js",
-    "tests/parts-mesh-cache.spec.js"
+    "tests/specs/parts-ers.spec.js",
+    "tests/specs/parts-factory-presets.spec.js",
+    "tests/specs/parts-budget.spec.js",
+    "tests/specs/parts-mesh-cache.spec.js"
    ],
    "verdict": "split",
    "verdictDetail": "The assertions are individually excellent (mesh-signature uniqueness, per-knob deform probes, exact endplate containment) but 1481 lines under a name that says 'physics' while ~70% is geometry/visual-recipe contracts: split the Car3D/CarMesh geometry tests into parts-geometry.spec.js, move the final ERS-battery test (lines 1415-1481, which reloads and rebuilds monza 3 times) into parts-ers.spec.js, and keep catalog/mods/cost/resolve here \u2014 each test does its own page.goto so 69 boots is also where the runtime goes.",
    "weakSpots": "Lines 69-77 'near-1.0 multipliers' only asserts >0.9 (loose); lines 1090-1104 assert shader source by literal string-containment \u2014 an intentional parity pin but brittle to whitespace; the name misleads pick-tests toward driving-model relevance."
   },
   {
-   "file": "tests/parts-setup-ids.spec.js",
+   "file": "tests/specs/parts-setup-ids.spec.js",
    "purpose": "Stable data-cs-cat/data-cs-opt DOM contract, the no-screen-shows-through layering rules, the TEAM tab flows, and the garage preview orbit camera; failing means every parts spec's selectors break or the transparent garage shows the menu through it.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/parts-catalog.spec.js"
+    "tests/specs/parts-catalog.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Goes beyond attribute checks to hit-testing z-order (elementFromPoint) and full camera semantics (pan is not zoom, dolly perpendicular to strafe, clamps under a 70-click mash) \u2014 each assertion maps to a named shipped bug; the driver-chip test.skip on single-driver teams is a legitimate guard, not a wrapped expect.",
    "weakSpots": "Line 55-63 duplicates parts-catalog's click-makes-active check for the same high_octane option."
   },
   {
-   "file": "tests/perf-governor.test.mjs",
+   "file": "tests/unit/perf-governor.test.mjs",
    "purpose": "The adaptive governor must not chase an externally capped clock (30 fps Low Power Mode) to the quality floor, and must revert steps that did not help; failing means capped devices play in needless safe-mode.",
    "assertionQuality": "strong",
    "costTier": "trivial",
    "overlaps": [
-    "tests/perf-sentinel.test.mjs"
+    "tests/unit/perf-sentinel.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Runs the REAL tick() via eval of js/game/perf.js against carefully distinguished dt signals (cap vs coupled GPU load vs jitter) and pins the mechanism (floorMs convergence) as well as the outcome; pure node, ms-cheap, correctly in test:tooling-fast.",
    "weakSpots": "None."
   },
   {
-   "file": "tests/perf-sentinel.test.mjs",
+   "file": "tests/unit/perf-sentinel.test.mjs",
    "purpose": "Crash strikes expire with the build that earned them (the one-way safe-mode door); failing means devices stay pinned in broken-looking safe mode after the offending build is fixed.",
    "assertionQuality": "strong",
    "costTier": "trivial",
    "overlaps": [
-    "tests/perf-governor.test.mjs"
+    "tests/unit/perf-governor.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Covers the full matrix \u2014 strike accrual, floor pinning, new-build expiry, mid-race update not a crash, same-build accumulation, manual clear, desktop exemption \u2014 each against real perf.js state transitions; in test:tooling-fast where it belongs.",
    "weakSpots": "None."
   },
   {
-   "file": "tests/persistence.spec.js",
+   "file": "tests/specs/persistence.spec.js",
    "purpose": "A failing localStorage write (iOS Private Browsing zero quota) must be reported (persistState ok:false, named exception, one loud warning) while the session keeps working from cache; failing means careers vanish silently again.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -1133,9 +1133,9 @@
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/props-over-road.spec.js",
-    "tests/terrain-over-road.spec.js",
-    "tests/tracks-walls.spec.js"
+    "tests/specs/props-over-road.spec.js",
+    "tests/specs/terrain-over-road.spec.js",
+    "tests/specs/tracks-walls.spec.js"
    ],
    "verdict": "regroup",
    "verdictDetail": "The tests are good, but this file (like its 14 siblings) contains zero driving-model physics \u2014 the physics- prefix exists only to be caught by test:physics's glob, so every driving-model change pays 15 circuit builds; rename to abudhabi-foundation.spec.js and give the foundations their own test:foundation group (TESTING.md documents today's grouping, so update both together).",
@@ -1147,8 +1147,8 @@
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/albert-park-foundation.test.mjs",
-    "tests/terrain-over-road.spec.js"
+    "tests/unit/albert-park-foundation.test.mjs",
+    "tests/specs/terrain-over-road.spec.js"
    ],
    "verdict": "regroup",
    "verdictDetail": "Same regroup/rename as the other foundations (no physics here, glob-named); compact and complementary to its no-browser twin albert-park-foundation.test.mjs which covers the pure-node side.",
@@ -1160,20 +1160,20 @@
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/props-over-road.spec.js",
-    "tests/terrain-over-road.spec.js"
+    "tests/specs/props-over-road.spec.js",
+    "tests/specs/terrain-over-road.spec.js"
    ],
    "verdict": "regroup",
    "verdictDetail": "Same regroup/rename as the other foundations; its exact (not subset) required-model list with the written justification is the pattern the other circuit specs should copy, and its cheap night recheck is the right way to cover the second tod.",
    "weakSpots": "None material; the in-page O(samples x triangles) scan is expensive but grid-bucketed and inside a deliberate 300 s budget."
   },
   {
-   "file": "tests/physics-characterization.spec.js",
+   "file": "tests/specs/physics-characterization.spec.js",
    "purpose": "Characterization gate on the driving model: four scripted scenarios must reproduce the committed physics-baseline.json numbers exactly (1e-4); failing means the physics changed \u2014 intentionally or not \u2014 and the diff names where.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/agent-determinism.spec.js"
+    "tests/specs/agent-determinism.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "The single most valuable spec for the extraction work game.js is undergoing: baseline is committed (verified present) so the gate is live, header documents the verified-non-vacuous check (LAT_MAX 22->27 fails by name), and one build + reset() keeps it ~25 s; the agent-determinism overlap is explicitly distinguished in the header (within-session vs across-commits).",
@@ -1185,20 +1185,20 @@
    "assertionQuality": "strong",
    "costTier": "heavy",
    "overlaps": [
-    "tests/props-over-road.spec.js",
-    "tests/terrain-over-road.spec.js"
+    "tests/specs/props-over-road.spec.js",
+    "tests/specs/terrain-over-road.spec.js"
    ],
    "verdict": "regroup",
    "verdictDetail": "Same regroup/rename as the other foundations; the double-bounded elevation range with peak location is exactly the shape-not-absence contract the abudhabi header argues for.",
    "weakSpots": "None material; the embedded scan is explicitly documented as the focused form of props-over-road.spec.js."
   },
   {
-   "file": "tests/physics-fixes.spec.js",
+   "file": "tests/specs/physics-fixes.spec.js",
    "purpose": "Two named physics regressions: world->s projection must not teleport lap distance onto the other leg of a Monaco hairpin, and wall scrub must scale with entry angle; failing reintroduces lap-distance teleports or the flat-stop wall.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "overlaps": [
-    "tests/offtrack.spec.js"
+    "tests/specs/offtrack.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Textbook regression spec: worst-case geometry chosen deliberately (Monaco hairpins), seam-unwrapped continuous monitoring over ~25 s of driving, and a purely relative gentle-vs-hard comparison for the wall; correctly in both test:behaviour and the physics glob.",
@@ -1364,7 +1364,7 @@
    "weakSpots": "L13 waitForTimeout(1200) arbitrary settle; the clearance scan duplicates the shared audit verbatim, so its passing adds nothing props-over-road.spec.js does not already guarantee."
   },
   {
-   "file": "tests/presets.spec.js",
+   "file": "tests/specs/presets.spec.js",
    "purpose": "The RELAX/STANDARD/PRO preset bundles: relative ordering on every feel axis (survives retunes), active-state marking, persistence, and manual-edit-drops-to-custom \u2014 failing means presets stopped forming a coherent ladder or stopped persisting.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -1374,7 +1374,7 @@
    "weakSpots": "None \u2014 ordering-based by design."
   },
   {
-   "file": "tests/projection.spec.js",
+   "file": "tests/specs/projection.spec.js",
    "purpose": "Tracks.project() is the faithful inverse of the (s, lat) -> world mapping, with error bounds derived from node spacing and the +right sign convention \u2014 failing means the world-space physics migration's coordinate bridge broke.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -1384,7 +1384,7 @@
    "weakSpots": "startLiveRace's UI walk is slow ceremony unrelated to what is asserted; per-point evaluate calls add avoidable wall time."
   },
   {
-   "file": "tests/prop-clipping.test.mjs",
+   "file": "tests/unit/prop-clipping.test.mjs",
    "purpose": "Ratchet on prop-vs-prop interpenetration across all 40 circuits (the third axis after road and ground guards): a new circuit or new defect reads 0-cap and fails, growth over baseline fails, and a stale over-generous baseline fails.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -1394,7 +1394,7 @@
    "weakSpots": "The Silverstone cap knowingly carries a detector limitation (documented L39-49) \u2014 acceptable, but it means same-assembly crowdMound growth under that cap is invisible."
   },
   {
-   "file": "tests/props-over-road.spec.js",
+   "file": "tests/specs/props-over-road.spec.js",
    "purpose": "All-circuit audit that no prop/glass triangle sits 0.2-5 m above the racing line, with per-circuit caps documenting justified overheads \u2014 failing means scenery intruded into the racing space somewhere on the fleet.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -1407,7 +1407,7 @@
    "weakSpots": "L57-59 vacuous self-referential constant test; L47 miami_note as a string entry inside a numeric BASELINE map is a fragile convention (harmless today because lookups are by track id)."
   },
   {
-   "file": "tests/quali.spec.js",
+   "file": "tests/specs/quali.spec.js",
    "purpose": "The full qualifying feature: session staging, deterministic sim model, grid = classification car-for-car, no leakage into GPs or later rounds, standing-start flying-lap rules, BACK semantics, and the one-off QUALIFYING LAP setting \u2014 failing means a real player-facing quali regression.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -1417,7 +1417,7 @@
    "weakSpots": "L66-68 spread bounds (0.4-12 s) are deliberately loose; nothing vacuous."
   },
   {
-   "file": "tests/quick-validate.test.mjs",
+   "file": "tests/unit/quick-validate.test.mjs",
    "purpose": "Unit-tests the pure helpers of tools/quick-validate.mjs: failure-message mapping and that a false camera() result reads as failed while an object reads as success \u2014 failing means the refactor gate would mislabel probe outcomes.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -1427,7 +1427,7 @@
    "weakSpots": "No test for probeFailures' error-truncation (slice(0,5)) or for obs/light being marked false on non-finite values \u2014 cheap additions if the tool ever churns."
   },
   {
-   "file": "tests/race-control.spec.js",
+   "file": "tests/specs/race-control.spec.js",
    "purpose": "The browser-only slice of race control: the layer is on by default with a coherent GREEN, the enabled flag survives a real localStorage round trip (guarding the '0'-parses-truthy storage-format bug), and per-sector hazards are reportable.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -1437,7 +1437,7 @@
    "weakSpots": "None \u2014 each test states why it cannot live in the VM suite."
   },
   {
-   "file": "tests/race-control.test.mjs",
+   "file": "tests/unit/race-control.test.mjs",
    "purpose": "The caution state machine in a VM: thresholds (worst-sector YELLOW vs total VSC/SC), raise-fast/hold-before-lower hysteresis, drop-on-disable, both storage formats, guest-adopts-host-verbatim, broadcast-on-change-only, leader's-lap OVERTAKE gating, inert states.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -1447,7 +1447,7 @@
    "weakSpots": "L116-126 'a stuck hazard cannot neutralise the race forever' never exercises the 90 s cap it names \u2014 it asserts the flag STAYS at 95 s under a persistent hazard; the cap-expiry path (flag dropping after the cap once the picture clears) is untested anywhere in the file."
   },
   {
-   "file": "tests/road-under-floor.test.mjs",
+   "file": "tests/unit/road-under-floor.test.mjs",
    "purpose": "Fleet-wide invariant that the flat world-floor slab sits with real daylight below the lowest upward-facing road vertex \u2014 failing means a banked corner's low edge is buried under the floor (the invisible-to-everything-else Zandvoort bug).",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -1457,44 +1457,44 @@
    "weakSpots": "The -0.05 daylight epsilon is a judgment call, but a z-fighting slab is exactly what it exists to forbid."
   },
   {
-   "file": "tests/scenery-api-contract.test.mjs",
+   "file": "tests/unit/scenery-api-contract.test.mjs",
    "purpose": "Freezes the 107-member scenery(api) surface handed to every circuit's scenery callback; failure means a buildProps refactor dropped/renamed/added a member that 24 circuit files depend on.",
    "assertionQuality": "strong",
    "costTier": "cheap",
    "weakSpots": "Third test (line 76) silently passes with `if (!def) return` when no reversed/source-coordinate circuit exists \u2014 a conditional no-op today only because such circuits do ship; if they were all removed the wrapped-api path would go untested with no signal.",
    "overlaps": [
-    "tests/scenery-kits.spec.js"
+    "tests/specs/scenery-kits.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Exactly the right shape for a contract freeze \u2014 sorted-list + count tripwire + real build diff of Object.keys, done headlessly in seconds; the landmarkKit/circuitKit membership overlap with scenery-kits.spec.js is one level up and harmless."
   },
   {
-   "file": "tests/scenery-kits.spec.js",
+   "file": "tests/specs/scenery-kits.spec.js",
    "purpose": "Proves the shared landmark/circuit kits are bound into the scenery api with the right themes, and that five representative circuits actually emit validated kit facilities with clean diagnostics; failure means kit wiring or a track's kit usage broke.",
    "assertionQuality": "mixed",
    "costTier": "heavy",
    "weakSpots": "The 5-track parameterized loop (lines 65-94) passes themeName into page.evaluate (line 82) but destructures only [id] and NEVER asserts the theme \u2014 the test titled 'emits validated street kit facilities' never checks the theme is street. emitted.length >= 2 (line 86) is a low floor for 'facilities'. Vertex bound uses `!entry.vertices || entry.vertices <= 50000` (line 88) so a missing vertices field vacuously passes.",
    "overlaps": [
-    "tests/scenery-kits.test.mjs",
-    "tests/scenery-api-contract.test.mjs"
+    "tests/unit/scenery-kits.test.mjs",
+    "tests/unit/scenery-api-contract.test.mjs"
    ],
    "verdict": "strengthen",
    "verdictDetail": "The binding-contract half is good; make the per-track tests earn their titles by asserting the resolved theme name (one extra field in the evaluate return) and consider whether five full circuit builds are needed when the kit logic itself is unit-covered in scenery-kits.test.mjs."
   },
   {
-   "file": "tests/scenery-kits.test.mjs",
+   "file": "tests/unit/scenery-kits.test.mjs",
    "purpose": "Unit-tests SceneryThemes resolution and the LandmarkKit/CircuitKit helpers in a node VM: emission bounds, spec validation, failure propagation, fail-closed deps; failure means a kit helper regressed its validation or emission contract.",
    "assertionQuality": "strong",
    "costTier": "trivial",
    "weakSpots": "The worst-case emission cap pins an exact 58 (line 179), which will churn on any intentional geometry change \u2014 a bound would be less brittle; otherwise the rejection matrices and failure-propagation cases are unusually thorough.",
    "overlaps": [
-    "tests/scenery-kits.spec.js"
+    "tests/specs/scenery-kits.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Dense, cheap, and every assertion maps to a real defect class (unbounded emission, NaN geometry, throwing on bad deps); the method-list overlap with the spec is the unit/integration split working as intended."
   },
   {
-   "file": "tests/season.spec.js",
+   "file": "tests/specs/season.spec.js",
    "purpose": "Season mode end-to-end: seasonMode flag, races not ending at the quick-race 360 s cap, standings button/panel after round 1, and the legacy-points-to-stable-identity migration; failure means season progression or points identity broke.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -1504,7 +1504,7 @@
    "verdictDetail": "The migration test alone (custom:0 gets 50 pts, NEW never appears in the store but does on the results table) justifies the file; trimming the 3-lap parameterization to one case would cut two full heavy boots for zero coverage loss."
   },
   {
-   "file": "tests/service-worker.test.mjs",
+   "file": "tests/unit/service-worker.test.mjs",
    "purpose": "VM-harnessed sw.js lifecycle semantics: install fails on essential-asset failure, tolerates optional failures, cache writes gate responses/waitUntil, and activation only deletes old caches after a complete install; failure means the PWA could serve a broken or half-written cache.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -1514,19 +1514,19 @@
    "verdictDetail": "This is the only test of sw.js's actual behavior (load-order only checks the precache seed list), it tests race-condition ordering that a browser test could not do deterministically, and it costs milliseconds."
   },
   {
-   "file": "tests/shared-track-foundation-characterization.test.cjs",
+   "file": "tests/unit/shared-track-foundation-characterization.test.cjs",
    "purpose": "Characterizes the shared track foundation across every circuit: startFrac/reverse point transforms, anchor() grounding profiles (the 0.3 m sink + bank fallback), recordBarrier full-lap semantics, place() suppression vertex deltas, and all-40-track mesh finiteness plus the 24/16 roster split; failure means the shared foundation refactor changed pinned behavior.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "weakSpots": "BANK_BOUND = 3 m (line 226) is deliberately generous \u2014 a half-metre grounding regression in the raycast-miss fallback would pass; documented and accepted in-file. The suppression test's exact +24/+36 (lines 313-314) is properly tight after the summing fix described at line 277.",
    "overlaps": [
-    "tests/coplanar-faces.test.mjs"
+    "tests/unit/coplanar-faces.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Runs at node speed (~2m40s, no browser) yet covers every circuit; the roster assertions (LIST 40, SEASON 24, no classic in SEASON, lines 353-355) overlap coplanar-faces' >=24 floor but here they are exact, which is the version that catches a classic leaking into the championship."
   },
   {
-   "file": "tests/silent-catch.test.mjs",
+   "file": "tests/unit/silent-catch.test.mjs",
    "purpose": "Ratchet on bare `catch (e) {}` blocks in js/ (ceiling 167) plus an anti-slack check that the ceiling stays within 15 of reality; failure means silent-swallow catches are multiplying or the ratchet stopped ratcheting.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -1536,19 +1536,19 @@
    "verdictDetail": "A well-designed ratchet: two-sided (ceiling AND slack), aimed at the codebase's documented most-repeated defect shape, with an actionable failure message naming the worst files."
   },
   {
-   "file": "tests/sliders.spec.js",
+   "file": "tests/specs/sliders.spec.js",
    "purpose": "Every steering pause-menu slider is wired (direction, label, persistence) AND genuinely changes car behavior \u2014 including the three PACE-envelope regressions (dial\u2192gear mapping, full-gearbox reach, manual-gearbox limiter) and the simplified-control fan-out; failure means a slider is dead or PACE re-broke the speed envelope.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "weakSpots": "Label assertion is only loLabel !== hiLabel (line 62) \u2014 a label showing the wrong value but changing would pass. Behavior multipliers (1.2x line 86, 1.15x line 98, +5 m/s lines 136/154) are somewhat arbitrary but relative and documented. The tilt end-to-end gap is explicitly declared un-runnable headless (lines 293-299) rather than faked.",
    "overlaps": [
-    "tests/steering.spec.js"
+    "tests/specs/steering.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "One of the best-annotated specs in the suite \u2014 each behavior test names the exact bug it pins (traffic-pinned measurement, coast-drag decay, the 73.5 m/s manual clamp) and asserts through the real sim; the racing-line overlap with steering.spec.js is wiring-vs-physics, not duplication."
   },
   {
-   "file": "tests/smoke.spec.js",
+   "file": "tests/specs/smoke.spec.js",
    "purpose": "The boot gate: page loads without WebGL/console errors, the menu-to-race flow works, __apex is live, rendering produces a non-blank frame, and the HUD updates; failure means the game fundamentally does not boot or race.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -1558,7 +1558,7 @@
    "verdictDetail": "This is test:tiny's backbone and per artifacts/logs runs 13-128 s per test under SwiftShader; strengthen the minimap test to sample pixels (the telemetry-compare spec already has the getImageData pattern) next time it is touched."
   },
   {
-   "file": "tests/span-kinds.test.mjs",
+   "file": "tests/unit/span-kinds.test.mjs",
    "purpose": "Keeps agent-view.spec.js's SPAN_KINDS list bidirectionally in sync with every noteSpan() call site in js/track; failure means the agent-view spec would either reject a real span kind (circuit-dependent flake) or list fiction.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -1568,7 +1568,7 @@
    "verdictDetail": "A deterministic, free guard replacing a probabilistic browser failure whose message pointed away from the cause \u2014 exactly the kind of meta-test that earns its file."
   },
   {
-   "file": "tests/steer-migration.spec.js",
+   "file": "tests/specs/steer-migration.spec.js",
    "purpose": "Pins the STEER_SCHEMA migration ladder: each step runs exactly once per version, touches only its own keys, the v3 pace regrid is injective and log-nearest, and current-schema stores are never re-reset (the data-loss bug); failure means a migration would silently overwrite player choices.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -1578,80 +1578,80 @@
    "verdictDetail": "Model migration testing: every direction of the ladder invariant is covered, the assertions distinguish store-level from physics-level effects, and the comments record why each case exists."
   },
   {
-   "file": "tests/steering.spec.js",
+   "file": "tests/specs/steering.spec.js",
    "purpose": "The player heading model's core physics contracts (default = nothing steers the car, driver authority, expo curve, symmetry, racing-line PULL/PUSH) plus four real input-latch regressions (keyup-while-focused, lostpointercapture, ghost pointerId, retargeted pointerup); failure means steering physics or throttle-release handling regressed.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "weakSpots": "First test's corner filter (`if (Math.abs(off.before.k) < 0.012) continue`, line 107) can shrink the sample, backstopped only by checked > 0 (line 124). Expo bounds 8-35% (lines 211-212) and symmetry 15% (line 238) are wide but relative. The keyboard-latch describe block (lines 292-405) is input-module territory, not heading-model physics.",
    "overlaps": [
-    "tests/touch-steer.spec.js",
-    "tests/sliders.spec.js"
+    "tests/specs/touch-steer.spec.js",
+    "tests/specs/sliders.spec.js"
    ],
    "verdict": "split",
    "verdictDetail": "Move the four keyboard/pedal latch tests (lines 292-405) into touch-steer.spec.js or an input.spec.js \u2014 they test js/game/input.js with no race needed, and splitting them off the heavy startLiveRace file lets them run at page-boot cost; the physics half stays as-is."
   },
   {
-   "file": "tests/telemetry-compare.spec.js",
+   "file": "tests/specs/telemetry-compare.spec.js",
    "purpose": "Data-hub TELEMETRY multi-lane comparison with a stubbed F1API: three lanes with legends and a genuinely painted map canvas, cross-session R/Q lane badges surviving a session switch, lane removal; failure means the compare UI flow broke.",
    "assertionQuality": "strong",
    "costTier": "cheap",
    "weakSpots": "None material \u2014 the getImageData painted-pixel check (lines 88-93) is the pattern smoke.spec.js's minimap test should copy; per artifacts/logs the whole file runs in ~8 s.",
    "overlaps": [
-    "tests/telemetry-trace.test.mjs"
+    "tests/unit/telemetry-trace.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "Fast because it setContent's a bare hub instead of booting the game, and the assertions are all user-visible outcomes; the overlap with telemetry-trace is UI-vs-math and correct."
   },
   {
-   "file": "tests/telemetry-trace.test.mjs",
+   "file": "tests/unit/telemetry-trace.test.mjs",
    "purpose": "The telemetry map's math defenses in pure node: stray-sample rejection without truncating real excursions, gap detection, non-degenerate bounds, dropout-row filtering in F1API, and the playback dot completing exactly one forward lap on its OWN lap length; failure means session maps would rescale or dots would lag/jump.",
    "assertionQuality": "strong",
    "costTier": "trivial",
    "weakSpots": "None material \u2014 each test names the field bug it pins (the Hungary map mismatch, the num(0) !== null filter bug, the borrowed-path tMax scaling regression) and the sweep-angle technique properly handles wrap-around.",
    "overlaps": [
-    "tests/telemetry-compare.spec.js"
+    "tests/specs/telemetry-compare.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "A model unit suite: real regressions, deterministic synthetic laps, milliseconds of cost, and it tests internals (_dropStrays, _locAt) the browser spec could only observe indirectly."
   },
   {
-   "file": "tests/terrain-over-road.spec.js",
+   "file": "tests/specs/terrain-over-road.spec.js",
    "purpose": "No terrain or road-mesh triangle sits above the racing surface (the green-wedge/mound bug class), checked geometrically across all 40 circuits plus targeted Hungaroring/Red Bull Ring/Mexico/Madrid probes; failure means a circuit ships with geometry poking through the track.",
    "assertionQuality": "mixed",
    "costTier": "heavy",
    "weakSpots": "Line 246: road overs are flagged only when `> TOL && < 1.5` \u2014 a road face 2 m above the racing line on ANY track passes silently, because the crossover exemption is a blanket magnitude cut instead of being gated on CROSSOVER_TRACKS (which line 203's frac-distance filter already handles for the three known tracks). The all-circuits test carries a 25-minute budget (test.setTimeout(1500000), line 134). Hungaroring/RBR gap === null acceptance (lines 32, 50) is correct, not vacuous.",
    "overlaps": [
-    "tests/props-over-road.spec.js"
+    "tests/specs/props-over-road.spec.js"
    ],
    "verdict": "strengthen",
    "verdictDetail": "The terrain half genuinely catches its bug class, but restrict the >=1.5 m road exemption to CROSSOVER_TRACKS so a gross road-over-road defect on the other 37 circuits cannot hide behind the Suzuka figure-8 carve-out."
   },
   {
-   "file": "tests/test-coverage-audit.test.mjs",
+   "file": "tests/unit/test-coverage-audit.test.mjs",
    "purpose": "Asserts every test file in THIS repo belongs to a topical test:* group (plus two logic checks of the auditor itself); failure means a test file exists that nothing runs.",
    "assertionQuality": "strong",
    "costTier": "trivial",
    "weakSpots": "None \u2014 the file's own header documents the vacuity trap it climbed out of ('a unit test of a checker is not the check') and the real-repo assertion (lines 54-70) now includes .test.cjs, closing the gap that hid shared-track-foundation-characterization for months.",
    "overlaps": [
-    "tests/test-groups.test.mjs"
+    "tests/unit/test-groups.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "The orphan-file guard belongs in the suite everyone runs, and the >100-file sanity floor (line 63) protects the scan itself; the adjacency with test-groups.test.mjs is two different invariants (group membership vs docs/config sync), not duplication."
   },
   {
-   "file": "tests/test-groups.test.mjs",
+   "file": "tests/unit/test-groups.test.mjs",
    "purpose": "Keeps the test taxonomy honest: pick-tests rules point at real scripts, every source dir routes somewhere, docs/TESTING.md matches the groups and file counts, manual suites stay out of discovery, and the RENDER_SPECS project partition has no silently-never-run specs; failure means the routing that tells agents what to test has drifted.",
    "assertionQuality": "strong",
    "costTier": "trivial",
    "weakSpots": "The docs count regexes (lines 96-98) depend on exact phrasing in TESTING.md but self-fail with 'no longer states a count' if the phrasing changes, which is the safe direction. Note the header still says '98 specs' (line 4) while the count assertions are live \u2014 the prose is stale, the checks are not.",
    "overlaps": [
-    "tests/test-coverage-audit.test.mjs"
+    "tests/unit/test-coverage-audit.test.mjs"
    ],
    "verdict": "keep",
    "verdictDetail": "The --project/RENDER_SPECS partition checks (lines 117-163) guard a genuinely nasty silent-pass failure mode Playwright itself will never report; every assertion here has a documented drift incident behind it."
   },
   {
-   "file": "tests/tilt-pipeline.spec.js",
+   "file": "tests/specs/tilt-pipeline.spec.js",
    "purpose": "Every stage of the tilt steering pipeline (dead zone subtraction, MAX_TILT map, steerToTilt inverse, 1.6x slew asymmetry, calibration from raw angle, One-Euro smoothing) plus the live-deviceorientation-vs-simTilt anti-drift guard; failure means tilt steering regressed or the live/harness paths re-diverged.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -1661,19 +1661,19 @@
    "verdictDetail": "Model coverage of a previously untested default input mode; the final wall-clock test is the only non-deterministic member and it exists precisely to police the shared-helper contract that stops the two paths drifting again."
   },
   {
-   "file": "tests/time-trial.spec.js",
+   "file": "tests/specs/time-trial.spec.js",
    "purpose": "Time Trial mode: TT flags/HUD, ghost recording monotonicity and reverse-sample rejection, sector-split timing at the S/F wrap and S1 announce, and the TT results panel with leaderboard persistence after CLEAR GHOST; failure means TT ghosts or sector timing broke.",
    "assertionQuality": "strong",
    "costTier": "heavy",
    "weakSpots": "Fixed waitForTimeout sleeps (lines 30, 44, 181-184, 194) are flake-prone. The sector-announce test (lines 145-171) reads #announce textContent that 'persists even after hiding' \u2014 if a later announce (e.g. RECOVERED) overwrites it despite the low-speed precaution, the /S1/ match fails for the wrong reason; it mitigates but depends on auto-rescue not firing.",
    "overlaps": [
-    "tests/season.spec.js"
+    "tests/specs/season.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "Eleven monza boots is real cost, but each test asserts a distinct behavior with a named failure mode (formation-lap S3 suppression, the ghost/leaderboard separation); the overlap with season.spec.js is only the shared finishRace/results plumbing."
   },
   {
-   "file": "tests/tlx-probes.spec.js",
+   "file": "tests/specs/tlx-probes.spec.js",
    "purpose": "The opt-in three.js/TSL backend: descriptor-copy install onto GLX, per-milestone subsystem state (shadows, post/HDR, godrays, sky night gate, FX, skids, chunked culling with source-array frees, env probe, gpuTimer contract, mesh-build routing) with a console/GL-error scrape on every test; failure means TLX drifted from GLX parity or a milestone regressed.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -1683,19 +1683,19 @@
    "verdictDetail": "Asserting exact expected-idle states (lamp arms === 0/idx -1 on a day race, gpuTimer {supported:false} on SwiftShader) rather than only expected-active ones is what makes this parity suite trustworthy; webgl-probes.spec.js is its designed GLX mirror, not an overlap."
   },
   {
-   "file": "tests/touch-steer.spec.js",
+   "file": "tests/specs/touch-steer.spec.js",
    "purpose": "Canvas touch steering is an anchored proportional drag (not the old binary screen-half rule), arrows ramp like keys, and pedals report analog travel that reaches the physics; failure means touch/pedal input semantics regressed.",
    "assertionQuality": "strong",
    "costTier": "moderate",
    "weakSpots": "None material \u2014 assertions are orderings and bounds ('a sensitivity retune must not rewrite this test', line 69), each regression case names its mechanism (the Map.set identifier-ordering bug at lines 121-131), and no race boot is needed.",
    "overlaps": [
-    "tests/steering.spec.js"
+    "tests/specs/steering.spec.js"
    ],
    "verdict": "keep",
    "verdictDetail": "This is the natural home for steering.spec.js's input-latch describe block if that split happens \u2014 same module, same page-boot-only cost model, same fixtures import."
   },
   {
-   "file": "tests/track-accuracy-validator.test.mjs",
+   "file": "tests/unit/track-accuracy-validator.test.mjs",
    "purpose": "Failing means tools/track-accuracy-validator.mjs's shape comparator or mapping validation broke \u2014 the tool that judges circuit geometry against reference shapes would accept reversed/distorted layouts or miss unmapped circuits.",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -1705,7 +1705,7 @@
    "weakSpots": "Minor: single square fixture only; shapeError < 0.02 (line 14) is a soft bound, though MAX_SHAPE_ERROR is exercised properly at line 25."
   },
   {
-   "file": "tests/track-foundation.test.mjs",
+   "file": "tests/unit/track-foundation.test.mjs",
    "purpose": "Failing means the track engine's coordinate/space contracts broke \u2014 TrackSpace racing/source frac reversibility, node-rotation permutation, TrackSurface monotonic terrain rails, or TrackModels' atomic group commit/rollback and vertex-budget diagnostics.",
    "assertionQuality": "strong",
    "costTier": "cheap",
@@ -1715,7 +1715,7 @@
    "weakSpots": "The Miami dressing-exclusion deepEqual (lines 63-67) pins exact curated s0/s1 values, so any legitimate scenery retune fails it \u2014 accepted brittleness, but it makes this 'foundation' file partly a circuit-data test; it covers three unrelated modules plus one circuit in one file."
   },
   {
-   "file": "tests/track-graph.test.mjs",
+   "file": "tests/unit/track-graph.test.mjs",
    "purpose": "Failing means the scenery model library/node graph broke its core contract \u2014 record-once/replay-many, guarded-emitter suppression, bake() reconstruction, instance-matrix equivalence with replay, or NODE_COLOR tint sharing \u2014 i.e. instanced rendering would diverge from the baked world.",
    "assertionQuality": "strong",
    "costTier": "cheap",
@@ -1725,17 +1725,17 @@
    "weakSpots": "None material."
   },
   {
-   "file": "tests/tracks-visual.spec.js",
+   "file": "tests/specs/tracks-visual.spec.js",
    "purpose": "Failing would mean a per-circuit chase-cam render pixel-diverged from a golden baseline \u2014 but no baselines are committed, so today it can only skip.",
    "assertionQuality": "vacuous",
    "costTier": "trivial",
    "overlaps": [],
    "verdict": "keep",
    "verdictDetail": "Deliberately skip-gated (known-already, confirmed at lines 27-30) with a self-documenting path to activation (--update-snapshots) and zero cost while dormant; the file body itself carries no assertions \u2014 all delegated to track-helpers.js describeTrack.",
-   "weakSpots": "Entirely inert as shipped: test.skip fires unconditionally because tests/tracks-visual.spec.js-snapshots/ does not exist; if baselines are ever generated the suite becomes heavy (40 circuits x LAP_FRACTIONS renders)."
+   "weakSpots": "Entirely inert as shipped: test.skip fires unconditionally because tests/specs/tracks-visual.spec.js-snapshots/ does not exist; if baselines are ever generated the suite becomes heavy (40 circuits x LAP_FRACTIONS renders)."
   },
   {
-   "file": "tests/tracks-walls.spec.js",
+   "file": "tests/specs/tracks-walls.spec.js",
    "purpose": "Failing means a circuit's driving boundary went insane \u2014 NaN walls, collapsed track (minB<=1), runaway boundary (maxB>=60), barriers deep inside the tarmac, street circuits losing their tight walls, or ramming an edge producing non-finite/unbounded positions.",
    "assertionQuality": "mixed",
    "costTier": "heavy",
@@ -1745,20 +1745,20 @@
    "weakSpots": "Thresholds minB>1 / maxB<60 / minOverHw>-1.5 (lines 30-33) are broad sanity bounds, not tuned values; test 2's whole-grid build asserts nothing for non-street tracks; the driving test's `if (r.skip) continue` (line 89) silently drops a track whose race() failed rather than failing on it."
   },
   {
-   "file": "tests/ui-audit.spec.js",
+   "file": "tests/specs/ui-audit.spec.js",
    "purpose": "Nominally: failing means a menu/screen flow can no longer be navigated (locator timeouts); in substance it is a 63-shot screenshot gallery generator for human review.",
    "assertionQuality": "vacuous",
    "costTier": "heavy",
    "overlaps": [
     "tests/ui-desktop.spec.js",
-    "tests/menu-survey.spec.js"
+    "tests/specs/menu-survey.spec.js"
    ],
    "verdict": "regroup",
    "verdictDetail": "Confirmed 0 expect() calls across ~63 executions at 13-108s each (e-ui.log) \u2014 it dominates test:ui's wall time while only failing on navigation timeouts already covered by asserted specs; move it to an on-demand gallery group so test:ui runs the specs that can actually fail on a UI regression.",
    "weakSpots": "No expect() anywhere \u2014 the imported expect (line 5) is never used; every test ends in shot() (lines 31-34); several tests bypass real navigation by force-toggling hidden (lines 116, 186-189), so even the navigation-smoke value is partial."
   },
   {
-   "file": "tests/ui-button-touch.spec.js",
+   "file": "tests/specs/ui-button-touch.spec.js",
    "purpose": "Failing means a touch/pause interaction regressed \u2014 the Escape one-step-back ladder, photo-mode stick latch/cancel/foreign-pointer bugs, LOOK-stick overlap at scaled UI, steer-mode-change layout stability, calibrate-button state, the GAS button, or HOW TO PLAY completeness.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -1773,14 +1773,14 @@
    "assertionQuality": "vacuous",
    "costTier": "heavy",
    "overlaps": [
-    "tests/ui-audit.spec.js"
+    "tests/specs/ui-audit.spec.js"
    ],
    "verdict": "merge",
    "verdictDetail": "Merge into ui-audit.spec.js (or whatever gallery group it lands in) as two more viewport rows \u2014 it is a strict subset of ui-audit's screens (main menu, select, howtoplay, HUD, pause) at different sizes, costing 25-71s per shot (e-ui.log) for no assertable outcome.",
    "weakSpots": "0 expect() calls in the file; the only failure modes are waitFor timeouts; does not even import expect."
   },
   {
-   "file": "tests/ui-scale.spec.js",
+   "file": "tests/specs/ui-scale.spec.js",
    "purpose": "Failing means a player-selectable UI/HUD scale (80-150%) paints a control off-screen, clips it behind an unscrollable ancestor, introduces horizontal scroll, or the two scale sliders stop being independent.",
    "assertionQuality": "strong",
    "costTier": "moderate",
@@ -1790,7 +1790,7 @@
    "weakSpots": "toTitle() (lines 61-69) force-hides overlays instead of navigating, so a broken back-navigation path would not be seen here (acceptable \u2014 documented as a cost tradeoff); the HUD test skips missing/hidden clusters silently (line 264), so a cluster that stops rendering entirely passes."
   },
   {
-   "file": "tests/understeer-cue.spec.js",
+   "file": "tests/specs/understeer-cue.spec.js",
    "purpose": "Failing means the front-axle-saturation haptic fires when it shouldn't (gentle steering, below the speed floor, off-track), stays silent when it should fire, machine-guns past its cooldown, loses a channel, or stops encoding saturation depth in its pulse rate.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -1800,7 +1800,7 @@
    "weakSpots": "Only the +2-tick slack on maxGap (line 304) and the grip-sweep runtime (11 drive episodes in one test, lines 318-323) are debatable; every constant is cited to the cue block it mirrors."
   },
   {
-   "file": "tests/vstd-invariant.test.mjs",
+   "file": "tests/unit/vstd-invariant.test.mjs",
    "purpose": "Failing means someone added, moved, or refactored a bare `.speed` vs numeric-literal comparison in js/game.js or js/game/* without justifying it \u2014 the PACE-invariant escape that has shipped real bugs twice (A5, A13).",
    "assertionQuality": "strong",
    "costTier": "trivial",
@@ -1810,7 +1810,7 @@
    "weakSpots": "None material; the `why.length > 20` check (line 327) is a soft floor but every current row far exceeds it."
   },
   {
-   "file": "tests/wake-lock.spec.js",
+   "file": "tests/specs/wake-lock.spec.js",
    "purpose": "Failing means the screen wake lock stops being held for a race's duration or released on exit \u2014 request on race start, release on finish AND on the quitToMenu path, re-acquire on visibility return, and silent degradation when the API is absent or rejects.",
    "assertionQuality": "strong",
    "costTier": "heavy",
@@ -1820,7 +1820,7 @@
    "weakSpots": "None material; individual tests run 17-59s (api.log) purely because each boots a race \u2014 the platform behaviour under test genuinely requires it."
   },
   {
-   "file": "tests/webgl-probes.spec.js",
+   "file": "tests/specs/webgl-probes.spec.js",
    "purpose": "Failing means a renderer API/lighting contract broke \u2014 the dynamic player shadow using a stale transform, floodlights not rising at night or not clearing by day, the reported light count exceeding the 32-light uniform sizing, or the mobile STANDARD tier spamming GL errors again.",
    "assertionQuality": "mixed",
    "costTier": "heavy",
@@ -1830,7 +1830,7 @@
    "weakSpots": "'hdrMode() returns a boolean' (lines 27-34) is typeof-only and nearly cannot fail meaningfully; 'lightState() returns expected shape' (lines 79-98) asserts structure, not values; the day-settle wait is hedged with .catch (lines 105-110, acceptable since the final night>day compare is real); the cap test (lines 138-150) never reads the UBO, as its own comment admits."
   },
   {
-   "file": "tests/webgpu-lifecycle.test.mjs",
+   "file": "tests/unit/webgpu-lifecycle.test.mjs",
    "purpose": "Failing means the frozen WGX backend leaks or corrupts GPU resources on resize/allocation failure (partial textures not destroyed, old targets destroyed prematurely, retry-storm on persistent failure), or its packed uniform lanes drift from the GLX-parity offsets.",
    "assertionQuality": "strong",
    "costTier": "cheap",
@@ -1840,7 +1840,7 @@
    "weakSpots": "Several assertions regex-match source comments rather than behaviour (lines 262-268 'off 352', lines 363-365) \u2014 they pin documentation, which is deliberate but weaker than the harness tests around them."
   },
   {
-   "file": "tests/world-physics.spec.js",
+   "file": "tests/specs/world-physics.spec.js",
    "purpose": "Failing means the Cartesian world-space bicycle model broke its observable contract \u2014 errors during driving, progress no longer tracking speed, inverted steer sign, no-input runs-wide going to the wrong side or road-follow not helping, RESPONSE slider dead, or AI cars stuck/off-track after launch.",
    "assertionQuality": "strong",
    "costTier": "heavy",

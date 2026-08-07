@@ -1,6 +1,6 @@
 > **Dated record (2026-08), since acted on.** Review of the driving/physics
 > test surface as it stood before the recalibration; the fixture conversion,
-> the vStd lint (`tests/vstd-invariant.test.mjs`) and the pace-pinning it
+> the vStd lint (`tests/unit/vstd-invariant.test.mjs`) and the pace-pinning it
 > recommends have since shipped. Spec/test counts are historical.
 
 # The driving/physics test surface — a review
@@ -58,7 +58,7 @@ so it cannot change behaviour. The risk of conversion is therefore close to zero
 and the payoff is every future physics failure arriving with the car's state
 attached.
 
-`tests/touch-steer.spec.js` has been converted as the first one. It originally
+`tests/specs/touch-steer.spec.js` has been converted as the first one. It originally
 copied its neighbour `gamepad.spec.js` and took the raw import, which is exactly
 how the pattern propagates.
 
@@ -106,7 +106,7 @@ that divides a speed by `VMAX`, or compares one against a literal, must pick
 
 This repo already knows the answer to that shape of problem. `A10` was five
 circuit-def fields silently dropped by a copy, fixed once for one field and then
-recurring — and the disposition reads *"plus `tests/circuit-def-fields.test.mjs`
+recurring — and the disposition reads *"plus `tests/unit/circuit-def-fields.test.mjs`
 — the guard is the real fix"*.
 
 **Recommended:** a `node --test` unit suite that reads `js/game.js` as text and

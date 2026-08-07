@@ -26,10 +26,10 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 
-const ALL_SPECS = fs.readdirSync(path.join(ROOT, "tests"))
-  .filter((f) => f.endsWith(".spec.js")).map((f) => `tests/${f}`).sort();
+const ALL_SPECS = fs.readdirSync(path.join(ROOT, "tests", "specs"))
+  .filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`).sort();
 
-// A spec token may be a literal path or a single-star glob (tests/parts-*.spec.js).
+// A spec token may be a literal path or a single-star glob (tests/specs/parts-*.spec.js).
 function expand(token) {
   if (!token.startsWith("tests/") || !token.endsWith(".spec.js")) return [];
   if (!token.includes("*")) return ALL_SPECS.includes(token) ? [token] : [];

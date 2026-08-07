@@ -43,7 +43,7 @@ const GEO_PATHS = path.join(ROOT, "js/track/geo-paths.js");
 const R = 6378137;
 
 // Circuits already in the game — game id → upstream feature id. Mirrors
-// CIRCUIT_MAP in tests/f1-track-accuracy.spec.js; used only by --self-check.
+// CIRCUIT_MAP in tests/specs/f1-track-accuracy.spec.js; used only by --self-check.
 const COMMITTED = {
   abudhabi: "ae-2009", albert_park: "au-1953", bahrain: "bh-2002",
   baku: "az-2016", cota: "us-2012", hungaroring: "hu-1986",

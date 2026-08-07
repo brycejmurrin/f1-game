@@ -36,7 +36,12 @@ export function auditCoverage(testFiles, scripts) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
-  const testFiles = fs.readdirSync(path.join(ROOT, "tests"))
+  // specs/ and unit/ since the tests/ split — auditCoverage matches on
+  // BASENAME, so discovery is the only layout-aware line. The root readdir is
+  // kept so a stray suite dropped at tests/ root still gets audited rather
+  // than silently escaping the taxonomy.
+  const testFiles = ["", "specs", "unit"]
+    .flatMap((d) => fs.readdirSync(path.join(ROOT, "tests", d)))
     .filter((file) => /\.(spec\.js|test\.(mjs|cjs))$/.test(file))
     .sort();
   const { orphans } = auditCoverage(testFiles, pkg.scripts);

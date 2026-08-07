@@ -5,8 +5,8 @@ in `playwright.config.js`) and gates nothing. These suites either render hundred
 of SwiftShader frames or emit images for review, so they are run deliberately, by
 path, when someone is looking at a circuit.
 
-The regression suite lives one directory up in `tests/*.spec.js` and
-`tests/*.test.mjs`; if a check should fail a build, it belongs there, not here.
+The regression suite lives one directory up in `tests/specs/*.spec.js` and
+`tests/unit/*.test.mjs`; if a check should fail a build, it belongs there, not here.
 
 | Suite | What it does |
 |---|---|

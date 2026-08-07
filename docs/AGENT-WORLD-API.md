@@ -9,7 +9,7 @@ rasters in `js/game/agentview-raster.js`) — `world()`, `field()`, `trackInfo()
 `js/track/tracks.js` and the scenery modules, and a CLI at `tools/agent.mjs`.
 **Reference documentation is `docs/DEBUG-HOOKS.md` → "Agent world view"**; the
 API also describes itself via `__apex.agentHelp()`. Tests:
-`tests/agent-view.spec.js` (`npm run test:agent`, 117 tests).
+`tests/specs/agent-view.spec.js` (`npm run test:agent`, 117 tests).
 This document keeps the research and the reasoning — §2's audit describes the
 state of the codebase **before** the work, and is retained because it explains
 why the design is shaped the way it is.
@@ -321,7 +321,7 @@ state that already exists. Highest value per line of code.
 
 **Phase 3 — prop registry.** The only phase that touches the build path, so
 the only one that needs `tools/verify-track.cjs` and the scenery contract test
-(`tests/scenery-api-contract.test.mjs`, which freezes a 107-member API) run
+(`tests/unit/scenery-api-contract.test.mjs`, which freezes a 107-member API) run
 against it. Vertex-budget sensitive.
 
 **Phase 4 — rollout summariser and the toolbelt.**

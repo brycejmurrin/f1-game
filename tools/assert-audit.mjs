@@ -190,10 +190,11 @@ export function scanSource(src, file = "<src>") {
   return { file, tests };
 }
 
-export function audit(dir = TESTS) {
+export function audit(dir = path.join(TESTS, "specs")) {
   const out = [];
   for (const name of fs.readdirSync(dir).filter((n) => n.endsWith(".spec.js")).sort()) {
-    out.push(scanSource(fs.readFileSync(path.join(dir, name), "utf8"), `tests/${name}`));
+    const label = path.relative(ROOT, path.join(dir, name)).split(path.sep).join("/");
+    out.push(scanSource(fs.readFileSync(path.join(dir, name), "utf8"), label));
   }
   return out;
 }
@@ -202,7 +203,7 @@ export function audit(dir = TESTS) {
 // inferred: "no expect() anywhere in the file" would also swallow a real spec
 // that had its last assertion deleted, which is the case worth catching.
 export const CAPTURE_HARNESSES = new Set([
-  "tests/ui-audit.spec.js",
+  "tests/specs/ui-audit.spec.js",
 ]);
 
 function main() {

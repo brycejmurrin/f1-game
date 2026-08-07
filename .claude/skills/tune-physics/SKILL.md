@@ -116,7 +116,7 @@ See `tools/harness.mjs` (`pickChromium`, `startStaticServer`) and the
 **playwright-probe** skill for free-port servers and headless Chromium.
 boilerplate that wraps this. Metrics: `finalSpeed` (speed carried), `avgSlip`
 (< 1 = traction consumed, 1 = on the edge), `offT` (off-track time = stability),
-`done` (crashed out). For a harder, adaptive test, run `tests/autopilot.spec.js`
+`done` (crashed out). For a harder, adaptive test, run `tests/specs/autopilot.spec.js`
 under each config and compare lap times — it stresses the racing line in a way a
 fixed input sequence can't.
 

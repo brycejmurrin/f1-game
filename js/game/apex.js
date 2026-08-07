@@ -1137,7 +1137,7 @@ const api = {
   //
   // Needs a track and a grid loaded, because the quali model reads both: stage
   // one weekend first (the hub -> race settings -> TO THE GRID path, or
-  // tests/career.spec.js's goRacing helper). Every round is simulated on THAT
+  // tests/specs/career.spec.js's goRacing helper). Every round is simulated on THAT
   // circuit — the per-round variation comes from the seeded draw, not from
   // rebuilding twenty-four tracks headlessly.
   careerSim(n) {
@@ -1441,7 +1441,7 @@ const api = {
   // it, do not mutate it.
   // Get or PIN the render clock (sky/cloud drift, FLAG cloth wave). It normally
   // accumulates real frame dt, so two runs of the same frozen scene render
-  // different pixels — the reason tests/tracks-visual.spec.js could never hold a
+  // different pixels — the reason tests/specs/tracks-visual.spec.js could never hold a
   // baseline. Setting it makes a capture reproducible; it keeps advancing from
   // the value you set unless the scene is also headless().
   renderClock(t) { if (t !== undefined) G.skyT = t; return G.skyT; },

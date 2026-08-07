@@ -9,7 +9,7 @@
     classic: true,
     // Upstream za-1961 is drawn anti-clockwise, but Kyalami is raced CLOCKWISE
     // (Crowthorne at the end of the main straight is a right-hander), so the
-    // trace is flipped. tests/f1-track-accuracy.spec.js carries the matching
+    // trace is flipped. tests/specs/f1-track-accuracy.spec.js carries the matching
     // RACE_DIRECTION_OVERRIDES entry so the direction assertion still holds.
     reverse: true,
     // A ~500 m straight spans the trace's wrap point (source 0.945→0.055) —

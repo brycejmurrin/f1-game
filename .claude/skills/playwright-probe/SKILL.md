@@ -55,9 +55,9 @@ under `tests/` are updated only via `npx playwright test --update-snapshots`.
 
 ## UI screens (DOM, not canvas)
 
-The menu/setup/results screens are DOM — follow the `tests/ui-audit.spec.js`
+The menu/setup/results screens are DOM — follow the `tests/specs/ui-audit.spec.js`
 pattern (navigate the menus, `page.screenshot` to `artifacts/galleries-<port>/<suite>/`) and
-use `tests/f1-api-mock.js` so the data hub renders without network egress.
+use `tests/helpers/f1-api-mock.js` so the data hub renders without network egress.
 Portrait UI uses `{width:390,height:844}`; in-race shots must use **landscape**
 `{width:844,height:390}` to avoid the `#rotate-device` overlay.
 
@@ -168,7 +168,7 @@ Use this to validate work from the camera / track / state debug skills
 (`debug-cameras`, `debug-tracks`, `debug-state`) at scale. For single
 deterministic screenshots, `shot.mjs` (above) is simpler.
 
-## Shared Playwright fixtures (`tests/fixtures.js`)
+## Shared Playwright fixtures (`tests/helpers/fixtures.js`)
 
 When writing specs rather than ad-hoc scripts, import from the shared fixtures
 file instead of `@playwright/test` directly — it mocks Jolpica/OpenF1 API calls

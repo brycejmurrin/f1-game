@@ -25,8 +25,8 @@
 ### Task 1: Port-scoped test gallery path helper
 
 **Files:**
-- Create: `tests/output-paths.js`
-- Create: `tests/output-paths.spec.js`
+- Create: `tests/helpers/output-paths.js`
+- Create: `tests/specs/output-paths.spec.js`
 
 **Interfaces:**
 - Produces: `galleryDir(suite: string, ...segments: string[]): string`
@@ -36,7 +36,7 @@
 
 - [ ] **Step 1: Write the failing helper contract tests**
 
-Create `tests/output-paths.spec.js`:
+Create `tests/specs/output-paths.spec.js`:
 
 ```js
 // @ts-check
@@ -69,14 +69,14 @@ test("gallery paths reject traversal and empty segments", () => {
 Run:
 
 ```sh
-npm test -- tests/output-paths.spec.js
+npm test -- tests/specs/output-paths.spec.js
 ```
 
-Expected: FAIL because `tests/output-paths.js` does not exist.
+Expected: FAIL because `tests/helpers/output-paths.js` does not exist.
 
 - [ ] **Step 3: Implement the helper**
 
-Create `tests/output-paths.js`:
+Create `tests/helpers/output-paths.js`:
 
 ```js
 // @ts-check
@@ -136,28 +136,28 @@ export function galleryUrl(suite, ...segments) {
 Run:
 
 ```sh
-npm test -- tests/output-paths.spec.js
+npm test -- tests/specs/output-paths.spec.js
 ```
 
 Expected: 2 tests pass and the run writes only beneath `artifacts/`.
 
 - [ ] **Step 5: Version-control checkpoint**
 
-Review `tests/output-paths.js` and `tests/output-paths.spec.js`. Do not commit unless the user explicitly requests a commit.
+Review `tests/helpers/output-paths.js` and `tests/specs/output-paths.spec.js`. Do not commit unless the user explicitly requests a commit.
 
 ---
 
 ### Task 2: Root UI and parts screenshot writers
 
 **Files:**
-- Modify: `tests/ui-audit.spec.js`
+- Modify: `tests/specs/ui-audit.spec.js`
 - Modify: `tests/ui-desktop.spec.js`
-- Modify: `tests/ui-button-touch.spec.js`
-- Modify: `tests/hud-audit.spec.js`
-- Modify: `tests/parts-budget.spec.js`
-- Modify: `tests/parts-catalog.spec.js`
-- Modify: `tests/parts-persistence.spec.js`
-- Modify: `tests/dev-tools.spec.js`
+- Modify: `tests/specs/ui-button-touch.spec.js`
+- Modify: `tests/specs/hud-audit.spec.js`
+- Modify: `tests/specs/parts-budget.spec.js`
+- Modify: `tests/specs/parts-catalog.spec.js`
+- Modify: `tests/specs/parts-persistence.spec.js`
+- Modify: `tests/specs/dev-tools.spec.js`
 
 **Interfaces:**
 - Consumes: `galleryPath(suite, ...segments)` from Task 1.
@@ -165,7 +165,7 @@ Review `tests/output-paths.js` and `tests/output-paths.spec.js`. Do not commit u
 
 - [ ] **Step 1: Strengthen the helper test with the suite naming contract**
 
-Add to `tests/output-paths.spec.js`:
+Add to `tests/specs/output-paths.spec.js`:
 
 ```js
 test("each producer can own a stable suite directory", () => {
@@ -182,7 +182,7 @@ test("each producer can own a stable suite directory", () => {
 Run:
 
 ```sh
-npm test -- tests/output-paths.spec.js
+npm test -- tests/specs/output-paths.spec.js
 ```
 
 Expected: 3 tests pass.
@@ -196,7 +196,7 @@ import { galleryPath } from "./output-paths.js";
 ```
 
 ```js
-// tests/ui-audit.spec.js
+// tests/specs/ui-audit.spec.js
 await page.screenshot({
   path: galleryPath("ui-audit", `${name}.png`),
   fullPage: false,
@@ -208,7 +208,7 @@ await page.screenshot({
   fullPage: false,
 });
 
-// tests/hud-audit.spec.js
+// tests/specs/hud-audit.spec.js
 await page.screenshot({
   path: galleryPath("hud-audit", `hud-audit-${name}.png`),
   fullPage: false,
@@ -234,7 +234,7 @@ path: galleryPath("dev-tools", "<filename>.png")
 Keep each existing filename unchanged. Correct the `ui-audit` header to:
 
 ```js
-// Run with: npm test -- tests/ui-audit.spec.js
+// Run with: npm test -- tests/specs/ui-audit.spec.js
 // Output: artifacts/galleries-<port>/ui-audit/
 ```
 
@@ -244,9 +244,9 @@ Run:
 
 ```sh
 rg -n 'tests/ui-screenshots' \
-  tests/ui-audit.spec.js tests/ui-desktop.spec.js tests/ui-button-touch.spec.js \
-  tests/hud-audit.spec.js tests/parts-budget.spec.js tests/parts-catalog.spec.js \
-  tests/parts-persistence.spec.js tests/dev-tools.spec.js
+  tests/specs/ui-audit.spec.js tests/ui-desktop.spec.js tests/specs/ui-button-touch.spec.js \
+  tests/specs/hud-audit.spec.js tests/specs/parts-budget.spec.js tests/specs/parts-catalog.spec.js \
+  tests/specs/parts-persistence.spec.js tests/specs/dev-tools.spec.js
 ```
 
 Expected: no matches.
@@ -271,7 +271,7 @@ Review only the eight screenshot writers and helper test additions. Do not commi
 
 **Files:**
 - Modify: `tests/inspect/_capture.js`
-- Modify: `tests/f1-track-accuracy.spec.js`
+- Modify: `tests/specs/f1-track-accuracy.spec.js`
 - Modify: `tests/galleries/track-lap-audit.spec.js`
 - Modify: `tests/galleries/track-trace.spec.js`
 - Modify: `tests/galleries/all-tracks-buildings.spec.js`
@@ -318,7 +318,7 @@ await page.setContent(html);
 
 - [ ] **Step 2: Move the accuracy report**
 
-In `tests/f1-track-accuracy.spec.js`, import `galleryDir`:
+In `tests/specs/f1-track-accuracy.spec.js`, import `galleryDir`:
 
 ```js
 import { galleryDir } from "./output-paths.js";
@@ -367,7 +367,7 @@ ordinary `page.screenshot()` output.
 Run:
 
 ```sh
-npm test -- tests/output-paths.spec.js
+npm test -- tests/specs/output-paths.spec.js
 TRACK=monza FRAMES=2 npm test -- tests/galleries/track-trace.spec.js
 ```
 
@@ -702,7 +702,7 @@ that Linux/SwiftShader regeneration is a separate required operation before
 Update `docs/TESTING.md` so:
 
 ```sh
-npm test -- tests/ui-audit.spec.js
+npm test -- tests/specs/ui-audit.spec.js
 # output: artifacts/galleries-<allocated-port>/ui-audit/
 ```
 
@@ -777,7 +777,7 @@ Run:
 ```sh
 node -e 'const fs=require("fs"); const v=require("./version.json").build; const html=fs.readFileSync("index.html","utf8"); const q=[...html.matchAll(/\?v=(\d+)/g)].map(m=>+m[1]); if(!q.length||q.some(n=>n!==v)) process.exit(1); console.log(`build ${v}: ${q.length} asset URLs aligned`)'
 git check-ignore -v artifacts/galleries-3456/ui-audit/a.png scratch/renders/cars/mclaren/hero.png
-if git check-ignore -q tests/tracks-visual.spec.js-snapshots/example.png; then
+if git check-ignore -q tests/specs/tracks-visual.spec.js-snapshots/example.png; then
   echo "snapshot baseline is incorrectly ignored"
   exit 1
 fi
@@ -811,10 +811,10 @@ Review documentation against executable defaults and inspect the merged
 Run:
 
 ```sh
-node --check tests/output-paths.js
-node --check tests/output-paths.spec.js
+node --check tests/helpers/output-paths.js
+node --check tests/specs/output-paths.spec.js
 node --check tests/inspect/_capture.js
-node --check tests/f1-track-accuracy.spec.js
+node --check tests/specs/f1-track-accuracy.spec.js
 node --check tests/galleries/track-lap-audit.spec.js
 node --check tests/galleries/track-trace.spec.js
 node --check tests/galleries/all-tracks-buildings.spec.js
@@ -833,7 +833,7 @@ Run independently:
 ```sh
 npm run test:audit
 npm run test:smoke
-npm test -- tests/output-paths.spec.js
+npm test -- tests/specs/output-paths.spec.js
 ```
 
 Expected: all checks pass.

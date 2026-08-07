@@ -53,7 +53,7 @@
     // MEASURED off the built spline, 240 samples: 6.64 m end to end, peaking at
     // 2.83 % grade on the flank of the s = 0.245 rise, with 6 samples over 2 %.
     // This said "under 2 % anywhere" — a figure nobody computed, which
-    // tests/terrain-over-road.spec.js then pinned verbatim in `f9bbf479` and
+    // tests/specs/terrain-over-road.spec.js then pinned verbatim in `f9bbf479` and
     // sat red on. The geometry is unchanged and correct; only the claim was
     // wrong. Re-measure if these three rows change, rather than adjusting the
     // sentence to taste.

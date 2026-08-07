@@ -55,7 +55,7 @@
       // night) but rejected: it would also blank the ~35% of side -1
       // (s 0.20-0.48, 0.88-0.955) that has NO bespoke facade, leaving those
       // stretches with no buildings at all. This is the redundant-layer class
-      // of cut in tests/new-hooks.spec.js's Qatar precedent (fc40591b) — cut
+      // of cut in tests/specs/new-hooks.spec.js's Qatar precedent (fc40591b) — cut
       // where two systems draw the same wall twice, not where only one draws
       // it. Measured: these three rules alone took night from 1,271,799 to
       // 1,006,947 with ZERO change to the bespoke facade wall itself.
@@ -81,7 +81,7 @@
     // with no bespoke coverage) is itself already close to a 700,000 budget,
     // so 700,000 was never reachable here without either bare street or
     // shared-engine (js/track/tracks.js / scenery-city.js) changes touching
-    // every street/night circuit. tests/new-hooks.spec.js's budget for this
+    // every street/night circuit. tests/specs/new-hooks.spec.js's budget for this
     // circuit is raised to 1,050,000 to match the real, verified number.
     // Cool night: near-black zenith + cool fog/ambient so CBD glass & neon pop.
     // Warm flood pools on tarmac stay in scenery — not the sky.

@@ -138,7 +138,7 @@ Deep references:
      qualifying/race context before calling it.
    - Garage locked rows: `#cs-options .cs-opt.locked`, or assert owned parts vs
      `Parts.CATALOG` via `__apex.career().owned` / `Career.isOwned()`.
-   - Then assert UI flow through `tests/career.spec.js` / `tests/quali.spec.js`.
+   - Then assert UI flow through `tests/specs/career.spec.js` / `tests/specs/quali.spec.js`.
    - Run `test:career` in the background via `tools/test-bg.mjs`.
 
 8. **Cache-bust JS/CSS edits.**

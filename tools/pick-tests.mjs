@@ -18,14 +18,14 @@
  * it becomes a silent consumer of an unversioned format. Two of its lines are
  * live traps for an unanchored `test:<group>` grep: the zero-match message
  * names `test:fast`, and the batching lines name `tools/test-bg.mjs <groups>`.
- * The JSON shape is asserted by tests/pick-tests.test.mjs, so it cannot drift
+ * The JSON shape is asserted by tests/unit/pick-tests.test.mjs, so it cannot drift
  * out from under a consumer the way the prose can.
  *
  * The rules below are deliberately COARSE and biased toward running too much.
  * A rule that is too narrow is a missed regression; a rule that is too wide
  * costs minutes. When in doubt, widen.
  *
- * `tests/test-groups.test.mjs` asserts every group named here exists in
+ * `tests/unit/test-groups.test.mjs` asserts every group named here exists in
  * package.json, so a renamed script cannot leave a rule pointing at nothing.
  */
 import { execFileSync } from "node:child_process";
@@ -37,7 +37,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // The branch `.github/workflows/pages.yml` deploys from — the repo's real trunk.
-// tests/pick-tests.test.mjs asserts this against pages.yml, so the two cannot
+// tests/unit/pick-tests.test.mjs asserts this against pages.yml, so the two cannot
 // drift apart silently the way a comment naming a branch would.
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
 // Kept in step with tools/test-bg.mjs, which enforces the same arithmetic.

@@ -69,8 +69,8 @@ transform per node. Full plan and measured reuse numbers:
 | `node tools/graph-parity.cjs <id>` / `--all` | Vertex-for-vertex prop geometry vs baseline |
 | `BASE=<ref> node tools/graph-parity.cjs --all` | Real migration gate (pre-migration ref) |
 | `npm run test:graph-parity` | Same as `--all` with default `BASE=HEAD` |
-| `npm run test:tooling-fast` | Includes `tests/track-graph.test.mjs` (math contract) |
-| `npm run test:webgl` | Includes `tests/instanced-draw.spec.js` (GLX wiring) |
+| `npm run test:tooling-fast` | Includes `tests/unit/track-graph.test.mjs` (math contract) |
+| `npm run test:webgl` | Includes `tests/specs/instanced-draw.spec.js` (GLX wiring) |
 | `node tools/verify-track.cjs <id>` | Catches scenery THROW before browser tests |
 
 | Hook | Role |

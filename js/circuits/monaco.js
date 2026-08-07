@@ -370,7 +370,7 @@
           // walls and the section reads as an arch from the cockpit. Band depths
           // differ (1.06 / 1.02 / 1.10) so no two bands share a front/back plane
           // — same-facing coplanar pairs are exactly what the z-fighting ratchet
-          // in tests/coplanar-faces.test.mjs exists to catch.
+          // in tests/unit/coplanar-faces.test.mjs exists to catch.
           overheadSpan({
             id: `monaco-tunnel-roof-${k}`, frac: k / n, clearance: 6.45,
             thickness: 1.35, depth: dz * 1.06, span: cw * 0.34,

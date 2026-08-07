@@ -12,7 +12,7 @@
 > taken; contact is in scope from the start.
 >
 > **Built:** the §3.1 role split (`human` / `local`), the per-car input seam,
-> and per-car part multipliers — see `tests/multiplayer-roles.spec.js` and
+> and per-car part multipliers — see `tests/specs/multiplayer-roles.spec.js` and
 > `__apex.carRoles/carRole/carInput`. Networking itself is not built yet.
 >
 > One correction to §3.1 below, found while implementing it: the audit of
@@ -59,7 +59,7 @@ game engine, for four concrete reasons.
 
 `js/game.js:455–467` — there is a real seeded LCG (`simSeed` / `simRnd`) and a
 documented, test-enforced rule that **sim paths never touch `Math.random()`**
-while cosmetic paths deliberately do. `tests/agent-determinism.spec.js` guards
+while cosmetic paths deliberately do. `tests/specs/agent-determinism.spec.js` guards
 it, and its header records the five leaks that were closed to get there.
 
 That is the exact discipline network play needs, and it is normally the thing

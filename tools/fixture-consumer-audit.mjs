@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// fixture-consumer-audit — how many specs actually use tests/fixtures.js.
+// fixture-consumer-audit — how many specs actually use tests/helpers/fixtures.js.
 //
 // This tool used to hold a hardcoded four-name allow-list and print
 // "✓ 4 intended fixture consumers use shared fixtures", which is true and says
@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 
-// Ratchet: specs importing tests/fixtures.js must not fall below this.
+// Ratchet: specs importing tests/helpers/fixtures.js must not fall below this.
 export const FLOOR = 54;
 
 // The other failure mode: migrate a batch of specs, never raise the floor, and
@@ -39,7 +39,7 @@ export const FIXTURE_CONSUMERS = [
   "ui-audit.spec.js",
 ];
 
-const IMPORTS_FIXTURES = /from\s+["']\.\/fixtures\.js["']/;
+const IMPORTS_FIXTURES = /from\s+["']\.\.\/helpers\/fixtures\.js["']/;
 
 export function fixtureImportViolations(files, consumers = FIXTURE_CONSUMERS) {
   return consumers.filter((file) => {
@@ -54,7 +54,7 @@ export function adoption(specSources) {
   return { uses, total: specSources.size };
 }
 
-export function readSpecs(dir = path.join(ROOT, "tests")) {
+export function readSpecs(dir = path.join(ROOT, "tests", "specs")) {
   return new Map(fs.readdirSync(dir)
     .filter((f) => f.endsWith(".spec.js"))
     .map((f) => [f, fs.readFileSync(path.join(dir, f), "utf8")]));
@@ -65,7 +65,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const violations = fixtureImportViolations(specs);
   const { uses, total } = adoption(specs);
   if (violations.length) {
-    console.error(`fixture consumers must import ./fixtures.js: ${violations.join(", ")}`);
+    console.error(`fixture consumers must import ../helpers/fixtures.js: ${violations.join(", ")}`);
     process.exitCode = 1;
   }
   if (uses < FLOOR) {
@@ -79,7 +79,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     process.exitCode = 1;
   }
   if (!process.exitCode) {
-    console.log(`✓ ${uses}/${total} specs use tests/fixtures.js (floor ${FLOOR}); ` +
+    console.log(`✓ ${uses}/${total} specs use tests/helpers/fixtures.js (floor ${FLOOR}); ` +
                 `${FIXTURE_CONSUMERS.length} load-bearing consumers intact`);
   }
 }

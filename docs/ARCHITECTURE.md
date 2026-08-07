@@ -17,7 +17,7 @@ Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track
 the `js/game.js` entry at the root.
 
 **`tools/manifest.cjs` is the single source of truth for load order.** The
-`<script>` tag order in `index.html` must match it — `tests/load-order.test.mjs`
+`<script>` tag order in `index.html` must match it — `tests/unit/load-order.test.mjs`
 (run via `npm run test:tooling`) asserts they never diverge. Adding a file means
 a script tag AND a manifest entry. The abbreviated sketch below is a subset;
 consult the manifest for the full, current order:
@@ -57,7 +57,7 @@ The July 2026 architecture reorg moved every module into a domain directory
 
 **That 4,700 is a historical measurement, not a current one.** `game.js` grew
 back toward 8,000 — extraction moved code out once and nothing stopped it
-accumulating again until `tests/module-size.test.mjs` put a ratcheted ceiling on
+accumulating again until `tests/unit/module-size.test.mjs` put a ratcheted ceiling on
 the file (lowered with each extraction). Treat the number as a record of what
 the reorg achieved, and `wc -l js/game.js` against the current ceiling as the
 truth about today.
@@ -70,7 +70,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   instantiates each module once via `Module.create(G)`. A module reads
   `G.player`, calls `G.helpers`, and stays testable/loadable in isolation.
 - **`tools/manifest.cjs`** — the load-order single source of truth, asserted by
-  `tests/load-order.test.mjs`. Its `HARD_EDGES` list records **eval-time load
+  `tests/unit/load-order.test.mjs`. Its `HARD_EDGES` list records **eval-time load
   dependencies** (B destructures A's global at eval time, so A must precede B —
   e.g. shaders before glx.js). Its `TRACK_VM` list names the files
   `tools/verify-track.cjs` and the VM-based tests load into a bare Node VM, so
@@ -86,14 +86,14 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   object. Six modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`,
   `js/game/light-store.js`, `js/game/racecontrol.js`, and from the 2026-08
   cleanup `js/game/physics-consts.js` and `js/game/cam-modes.js`); the current
-  count and its ratcheted ceiling live in `tests/module-size.test.mjs`, and the
+  count and its ratcheted ceiling live in `tests/unit/module-size.test.mjs`, and the
   remaining extraction candidates are ranked in ARCHITECTURE-REVIEW.md §8.
 
   **The payoff is testability, not tidiness.** Race control is the clearest
   case: 118 lines in the middle of `game.js` had exactly one assertion anywhere
   in the suite, because the only way to reach the machine was to stage real
   settled debris in a browser. As a module taking its hazard picture through a
-  seam, it gets `tests/race-control.test.mjs` — ten tests in milliseconds
+  seam, it gets `tests/unit/race-control.test.mjs` — ten tests in milliseconds
   covering the hysteresis, the time caps and the storage-format migration. None
   of that was reachable before, and nobody had chosen for it not to be.
 
@@ -123,10 +123,10 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   `updateCar()` are ~1,370 and ~1,130 lines (2026-08 measurement), and `updateCar`'s tyre model is one
   continuous integration over ~40 interdependent locals — extracting it means
   inventing a state struct and risking the determinism that
-  `tests/physics-characterization.spec.js` now pins, for no functional gain.
+  `tests/specs/physics-characterization.spec.js` now pins, for no functional gain.
   Take the cohesive blocks around them instead.
 
-  `tests/module-size.test.mjs` is the guard that makes this stick: a per-file
+  `tests/unit/module-size.test.mjs` is the guard that makes this stick: a per-file
   line ceiling you LOWER when you extract. It exists because this file's own
   note above — that extraction happened once and nothing stopped the file
   growing back — was demonstrated again in miniature during the 2026-08 cleanup,
@@ -147,7 +147,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
 - **~~WebGPU lazy-load~~ (done)** — `js/render/webgpu/*` and `js/render/three/*`
   are now DEFERRED: no `<script>` tag, injected by `js/game.js` only when
   `apex26.gfxBackend` selects one. See `tools/manifest.cjs`'s `DEFERRED` map;
-  `tests/load-order.test.mjs` pins the manifest, game.js's loader table and
+  `tests/unit/load-order.test.mjs` pins the manifest, game.js's loader table and
   `sw.js`'s optional precache seed to each other.
 - **`css/*.css` split** — pending committed visual baselines (the visual
   suite has no tracked golden images yet, so a CSS split can't be gated).
@@ -380,7 +380,7 @@ generator, neon, glass), structures (grandstands, gantries, barriers,
 floodmasts), identity (per-circuit landmark passes) — each instantiated with a
 ctx of the placement helpers and accumulators. Together they serve the
 **107-member `scenery(api)` contract**, frozen by
-`tests/scenery-api-contract.test.mjs`: a circuit's `scenery(api)` callback can
+`tests/unit/scenery-api-contract.test.mjs`: a circuit's `scenery(api)` callback can
 destructure any of those 107 names, so removing/renaming one is a breaking
 change the test catches. See [SCENERY-API.md](SCENERY-API.md).
 
@@ -459,9 +459,9 @@ over the road. The raw geometry is kept on `track.terrainGeo` so the scenery
 modules' `anchor()` can raycast it (`terrainY`) and seat roadside props on the
 real carved ground rather than the closed-form `groundYAt` estimate — no
 floating/sunk props. Two whole-circuit audits assert nothing renders over the
-racing line: `tests/terrain-over-road.spec.js` for terrain/road faces (large
+racing line: `tests/specs/terrain-over-road.spec.js` for terrain/road faces (large
 road-over-road overs ignored as intentional crossovers, e.g. Suzuka figure-8),
-and `tests/props-over-road.spec.js` for scenery props (roofs/canopies/buildings/
+and `tests/specs/props-over-road.spec.js` for scenery props (roofs/canopies/buildings/
 crowds). The prop guard itself wraps every primitive emitter in a
 full-footprint Minkowski test (`rejBox`/`onRoadHit`) against the road
 half-width, so `building()`/`neonTower`/floodlight masts drop any part that
@@ -660,7 +660,7 @@ guard keeps complete.
 ## js/game.js — main
 
 The entry point (the largest file in the repo — its line ceiling is ratcheted by
-`tests/module-size.test.mjs`; loop, physics, AI, race logic — the subsystems
+`tests/unit/module-size.test.mjs`; loop, physics, AI, race logic — the subsystems
 above are extracted). Player + 21 AI.
 
 **States** are `menu | count | race | results` — those are the only four values
@@ -728,7 +728,7 @@ Per-circuit scenery design briefs live in [docs/tracks/](tracks/).
 
 `index.html` owns ALL static DOM: canvas `#game`, HUD, overlay menus, select
 screen, pause menu, data hub root, touch buttons, help modal. Script tags must
-match `tools/manifest.cjs` (asserted by `tests/load-order.test.mjs`).
+match `tools/manifest.cjs` (asserted by `tests/unit/load-order.test.mjs`).
 `css/*.css` = layout/HUD/menus (F1 style: black `#0a0a0f`, red `#e10600`
 accents, bold italic headings); `css/data.css` = data hub only. Cache-bust
 every script/style URL with `?v=N`, where `N` is a monotonic per-build integer
@@ -741,7 +741,7 @@ installed PWA.
 `.github/workflows/pages.yml`: on push to `claude/f1-game-project-26h3ng` or
 workflow_dispatch, stage the runtime subset in `_site` (`index.html`,
 `version.json`, `manifest.json`, `sw.js`, `.nojekyll`, `js/`, `css/`, `icons/`,
-`assets/`, and `vendor/` — asserted by `tests/deploy-staging.test.mjs`)
+`assets/`, and `vendor/` — asserted by `tests/unit/deploy-staging.test.mjs`)
 and deploy that Pages artifact. Tests, tools, docs, and other repository-only
 files are not shipped. `manifest.json` defines the PWA. NOT affiliated with
 FIA/F1 — fan project disclaimer in README and menu footer ("Unofficial fan

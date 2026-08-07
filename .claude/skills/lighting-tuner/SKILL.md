@@ -129,11 +129,11 @@ __apex.orbit(0.15, 45, 20, 60);  // frame turn 1
 Day/night **light counts and exposure** are asserted in:
 
 ```sh
-npx playwright test tests/webgl-probes.spec.js   # mobile tier GL errors + render probes
-npx playwright test tests/lighting-ab.spec.js    # "night light budget: lamps on at night, off by day"
+npx playwright test tests/specs/webgl-probes.spec.js   # mobile tier GL errors + render probes
+npx playwright test tests/specs/lighting-ab.spec.js    # "night light budget: lamps on at night, off by day"
 ```
 
-`tests/lighting-tuner-grade.spec.js` is **IMAGE & COLOUR UI grading only** (tonal
+`tests/specs/lighting-tuner-grade.spec.js` is **IMAGE & COLOUR UI grading only** (tonal
 range, lift/gamma/gain knobs, persist/reset/export) — it does NOT check
 `numLights` or day/night ambient. After any `applyRaceSettings` edit, run
 `lighting-ab.spec.js` first for the common regression (accidentally lighting the

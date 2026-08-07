@@ -220,7 +220,7 @@ node tools/clip-audit.cjs <track> [--why]     # defect list + call-site pairings
 node tools/clip-audit.cjs --all --gate        # npm run test:clip
 ```
 
-Gated by `tests/prop-clipping.test.mjs` against `tools/clip-baseline.json`, on
+Gated by `tests/unit/prop-clipping.test.mjs` against `tools/clip-baseline.json`, on
 the same ratchet semantics as `props-over-road.spec.js`: a circuit not in the
 map must read 0, a capped circuit fails when it grows, no `ALLOW` hatch.
 

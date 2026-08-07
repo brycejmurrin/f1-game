@@ -80,7 +80,7 @@ sensitivity vs speed" curve, and a drift-watchdog that suggests recalibration.
 
 ## Test coverage added alongside this research
 
-- `tests/longitudinal.spec.js`: throttle/coast/brake ordering, top speed bound,
+- `tests/specs/longitudinal.spec.js`: throttle/coast/brake ordering, top speed bound,
   grass drag, speed-sensitive cornering, start/finish lap-cross + wrap.
 - (existing) `world-physics`, `steering`, `sliders`, `collisions`, `projection`.
 

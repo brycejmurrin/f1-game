@@ -166,7 +166,7 @@ const TEXT_EXTS = new Set([".md", ".mjs", ".cjs", ".js", ".json", ".yml"]);
 // does not update a reference, it falsifies a record, and it would have been
 // invisible in a 174-file commit.
 //
-// The boundary is the one tests/docs-integrity.test.mjs already draws (its
+// The boundary is the one tests/unit/docs-integrity.test.mjs already draws (its
 // LIVE_DOCS skips archive/, research/ and tracks/), restated here so the two
 // cannot disagree about what counts as live. Dated records under
 // docs/research/ hold the R2 lockstep lists themselves — they are the PLAN,

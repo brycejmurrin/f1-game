@@ -543,7 +543,7 @@ Look-ahead road sampler for closed-loop driving: signed curvature `k` (rad/m,
 **+ = left** turn, same raw sign as `probe()`), half-width `hw` and road pitch `slope` at `distAhead` metres in front of
 the player. Pass an **array** of distances to get one reading each (e.g. to find
 the sharpest corner inside a braking window). Pure read — no state change. This is
-the primitive the autopilot harness (`tests/autopilot.spec.js`) steers and brakes
+the primitive the autopilot harness (`tests/specs/autopilot.spec.js`) steers and brakes
 from; combine with `probe()` for a full closed-loop driver:
 
 ```js
@@ -943,7 +943,7 @@ __apex.setPhysics({ drift: 0.6 });                // slidey
 
 ## Autopilot — programmatic driving to test steering settings
 
-`tests/autopilot.spec.js` is a closed-loop driver built entirely on these hooks.
+`tests/specs/autopilot.spec.js` is a closed-loop driver built entirely on these hooks.
 Each tick it reads `probe()` + `scan()`, picks a target speed from the sharpest
 upcoming curvature (`v = sqrt(aLat / |k|)`), and steers pure-pursuit toward the
 centreline (aiming at where the centreline reaches `L` m ahead). `runLap()` drives
@@ -995,7 +995,7 @@ Set tilt params with `setPhysics({ maxTilt, deadzone, tiltCutoff })`, the pause-
 sliders, or `Input.setTilt*`. `runLap(page, settings, { mode: "tilt" })` drives a
 whole lap this way; `opts.tremorDeg` controls the tremor amplitude.
 
-Run it: `npx playwright test tests/autopilot.spec.js` (or against a separate
+Run it: `npx playwright test tests/specs/autopilot.spec.js` (or against a separate
 server with `--config playwright.alt.config.js`, see below).
 
 ---
@@ -1755,7 +1755,7 @@ shake, lightning, particles, audio noise — deliberately stays on
 `Math.random()`** so it can never perturb the sim; if it drew from the seeded
 stream, whether a spark spawned would change where a car ended up.
 
-Guarded by `tests/agent-determinism.spec.js`.
+Guarded by `tests/specs/agent-determinism.spec.js`.
 
 ### `field({detail}?) → payload | typedError`
 

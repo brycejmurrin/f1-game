@@ -6,7 +6,7 @@
 // driver-eye + orbit screenshots per hotspot to artifacts/tmp/pov-<track>-*.png.
 //
 // This is the shared harness for the props-over-road fix pass. It mirrors the
-// geometry used by tests/props-over-road.spec.js so a number here matches CI.
+// geometry used by tests/specs/props-over-road.spec.js so a number here matches CI.
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";

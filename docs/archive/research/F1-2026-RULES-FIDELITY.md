@@ -41,7 +41,7 @@ reading `CORNER` / `STRAIGHT` needs no explanation; `Z-MODE` needs a manual.
 **Note the size of this change before doing it.** The internal names (`aeroX`,
 `xOn`, `xArmed`, `X_OPEN_RATE`, `xVmaxGain`) are load-bearing across
 `js/game.js`, `js/game/hud.js`, `js/car/car3d.js`, `__apex.aero()`,
-`physState()`, `docs/DEBUG-HOOKS.md` and `tests/active-aero.spec.js` (23 tests).
+`physState()`, `docs/DEBUG-HOOKS.md` and `tests/specs/active-aero.spec.js` (23 tests).
 The *display* strings are a small, safe change; renaming the internals is a
 large mechanical one with no gameplay benefit. Do the first, and only consider
 the second if it stops confusing readers.
@@ -69,7 +69,7 @@ new geometry work.
 
 **This is a design decision, not just a bug.** Gating Overtake on zones would
 make it rarer and more tactical, and it would give MONACO (which has no zones at
-all, and `tests/aero-zones.spec.js` pins that) no Overtake either — which is
+all, and `tests/specs/aero-zones.spec.js` pins that) no Overtake either — which is
 arguably correct under the real rules and arguably terrible for the game.
 Worth deciding deliberately rather than leaving it unmodelled by accident.
 

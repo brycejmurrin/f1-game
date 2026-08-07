@@ -10,13 +10,13 @@ drops) is [raw/2026-08-test-audit.json](raw/2026-08-test-audit.json).
 
 ---
 
-Everything below is grounded in the files read this session: `package.json` test scripts, `docs/TESTING.md` §1–2, `tools/pick-tests.mjs` (RULES + `--since`), `.github/workflows/ci.yml` (full header), `tests/test-groups.test.mjs`, `tests/test-coverage-audit.test.mjs`, `playwright.config.js`, and `docs/research/AUDIT-SYNTHESIS-2026-08.md` §R2.
+Everything below is grounded in the files read this session: `package.json` test scripts, `docs/TESTING.md` §1–2, `tools/pick-tests.mjs` (RULES + `--since`), `.github/workflows/ci.yml` (full header), `tests/unit/test-groups.test.mjs`, `tests/unit/test-coverage-audit.test.mjs`, `playwright.config.js`, and `docs/research/AUDIT-SYNTHESIS-2026-08.md` §R2.
 
 # Test taxonomy, tests/ split map, and change-aware CI design
 
 ## 1. Group taxonomy
 
-Group **names stay stable** (19 docs cite them; `tests/test-groups.test.mjs:66-74` asserts the docs table ↔ `package.json` in lockstep, and `RULES` in `tools/pick-tests.mjs` must keep resolving — its own guard at test-groups:35-42 enforces that). Two new groups are added: `foundation` and `gallery`. Every membership change below is a coordinated 3-file edit: `package.json` + `docs/TESTING.md` §2 table + (where routing changes) `tools/pick-tests.mjs` RULES.
+Group **names stay stable** (19 docs cite them; `tests/unit/test-groups.test.mjs:66-74` asserts the docs table ↔ `package.json` in lockstep, and `RULES` in `tools/pick-tests.mjs` must keep resolving — its own guard at test-groups:35-42 enforces that). Two new groups are added: `foundation` and `gallery`. Every membership change below is a coordinated 3-file edit: `package.json` + `docs/TESTING.md` §2 table + (where routing changes) `tools/pick-tests.mjs` RULES.
 
 ### 1a. Files that move groups (regroup verdicts)
 
@@ -65,34 +65,34 @@ Mexico terrain test had been asserting a flatness the circuit stopped having.
 
 Fixes 1–2 are flagged DEFER in AUDIT-SYNTHESIS ("per-test design decision, not a mechanical fix") — carry them as design tickets, not batch edits:
 
-1. `tests/camera-driving-hooks.spec.js:191-193` — spin computes before/after headings, asserts neither: assert `after !== before` and sign against the spin argument.
-2. `tests/headless-api.spec.js:290-303` — "obs() returns false when player not initialised" accepts both outcomes: pick one contract and assert it.
-3. `tests/camera-driving-hooks.spec.js:209-217` — title claims "zeroes vLat and yawRate", only vLat asserted: add the yawRate expect.
-4. `tests/camera-driving-hooks.spec.js:12-17` (and camera-hooks:9-16, camera-tuner:11-16) — fixed 3 s sleeps: replace with `waitForFunction` on `__apex.info().track`; also import `./fixtures.js` instead of `@playwright/test`.
-5. `tests/camera-hooks.spec.js:19-33` — dolly never checks the eye landed at the requested (frac, lateral, height): assert eye position against `Tracks`-projected expectation within a band.
-6. `tests/collision-ai-fixes.spec.js:131` — "speed is scrubbed against Monza barrier" passes on coasting drag alone: add a no-wall control run and assert scrubbed < control − margin.
-7. `tests/css-layers.test.mjs:63` — a file that loses its opening `@layer` wrapper is silently skipped: add a roster test that every `css/` file except `tokens.css` opens with `@layer`.
-8. `tests/menu-survey.spec.js:57-165` — tests 30/33-36/40-43 have zero expects: one-line DOM assert per captured state (cycleTo landed on TILT/MANUAL, sound/music toggles reflect state), and delete the `.catch(() => {})` at :162 that green-lights a broken campicker.
-9. `tests/fixture-consumer-audit.test.mjs:5-19` — the FLOOR=31 adoption ratchet is dead code from CI's perspective: add `assert.deepEqual(fixtureImportViolations(readSpecs()), [])` and `adoption(readSpecs()).uses >= FLOOR` so the guarantee actually runs in `test:tooling-fast`.
-10. `tests/map-hooks.spec.js:32-33, 43` — north-up claimed but only span asserted, and `orbit()` has no assertion after it: pin a known-frac landmark's normalized map position; assert `camState` changed after orbit.
-11. `tests/parts-livery-contrast.spec.js:29-51, 240-254` — the ink half tests its own inline mirror of buildAtlas: export the atlas's real lum/ink helpers and assert against those.
-12. `tests/props-over-road.spec.js:57-59` — "Shanghai uses the default baseline" asserts a literal in the same file: delete it (the real check runs inline at :144-145).
-13. `tests/scenery-kits.spec.js:82-88` — "emits validated street kit facilities" never asserts the theme: return the resolved theme from the evaluate and assert it; make the vertex bound fail on a missing `vertices` field.
-14. `tests/terrain-over-road.spec.js:246` — road faces >1.5 m over the line pass everywhere: gate the exemption on `CROSSOVER_TRACKS` (the :203 frac-distance filter already handles the three known tracks).
-15. `tests/tracks-walls.spec.js:37-53, 89` — test 2 builds all ~40 circuits to assert 5 street circuits: build just those 5; and make `if (r.skip) continue` a failure — a track whose `race()` failed must not vanish.
-16. `tests/webgl-probes.spec.js:27-34, 79-98` — typeof-only `hdrMode()`/`lightState()` shape tests: fold into the adjacent behavioural tests (night>day, shadow-transform).
-17. `tests/coplanar-faces.test.mjs:58` — the `>= 24` roster floor against 40 circuits: assert against the `js/circuits/` file count (the fix `prop-clipping.test.mjs:65-67` already made).
-18. `tests/parts-budget.spec.js:40-41` — duplicated `toContain("600")`: make the second assert spent-vs-remaining.
-19. `tests/smoke.spec.js:212-219` — minimap "content" is a width>0 check: sample pixels via getImageData (copy telemetry-compare:88-93's pattern).
-20. `tests/race-control.test.mjs:116-126` — the 90 s cap it names is never exercised: add the cap-expiry test (flag drops after the cap once the picture clears).
-21. `tests/carview-parts.spec.js:5` — stale "eight parts categories" title vs the twelve asserted: fix the title.
+1. `tests/specs/camera-driving-hooks.spec.js:191-193` — spin computes before/after headings, asserts neither: assert `after !== before` and sign against the spin argument.
+2. `tests/specs/headless-api.spec.js:290-303` — "obs() returns false when player not initialised" accepts both outcomes: pick one contract and assert it.
+3. `tests/specs/camera-driving-hooks.spec.js:209-217` — title claims "zeroes vLat and yawRate", only vLat asserted: add the yawRate expect.
+4. `tests/specs/camera-driving-hooks.spec.js:12-17` (and camera-hooks:9-16, camera-tuner:11-16) — fixed 3 s sleeps: replace with `waitForFunction` on `__apex.info().track`; also import `./fixtures.js` instead of `@playwright/test`.
+5. `tests/specs/camera-hooks.spec.js:19-33` — dolly never checks the eye landed at the requested (frac, lateral, height): assert eye position against `Tracks`-projected expectation within a band.
+6. `tests/specs/collision-ai-fixes.spec.js:131` — "speed is scrubbed against Monza barrier" passes on coasting drag alone: add a no-wall control run and assert scrubbed < control − margin.
+7. `tests/unit/css-layers.test.mjs:63` — a file that loses its opening `@layer` wrapper is silently skipped: add a roster test that every `css/` file except `tokens.css` opens with `@layer`.
+8. `tests/specs/menu-survey.spec.js:57-165` — tests 30/33-36/40-43 have zero expects: one-line DOM assert per captured state (cycleTo landed on TILT/MANUAL, sound/music toggles reflect state), and delete the `.catch(() => {})` at :162 that green-lights a broken campicker.
+9. `tests/unit/fixture-consumer-audit.test.mjs:5-19` — the FLOOR=31 adoption ratchet is dead code from CI's perspective: add `assert.deepEqual(fixtureImportViolations(readSpecs()), [])` and `adoption(readSpecs()).uses >= FLOOR` so the guarantee actually runs in `test:tooling-fast`.
+10. `tests/specs/map-hooks.spec.js:32-33, 43` — north-up claimed but only span asserted, and `orbit()` has no assertion after it: pin a known-frac landmark's normalized map position; assert `camState` changed after orbit.
+11. `tests/specs/parts-livery-contrast.spec.js:29-51, 240-254` — the ink half tests its own inline mirror of buildAtlas: export the atlas's real lum/ink helpers and assert against those.
+12. `tests/specs/props-over-road.spec.js:57-59` — "Shanghai uses the default baseline" asserts a literal in the same file: delete it (the real check runs inline at :144-145).
+13. `tests/specs/scenery-kits.spec.js:82-88` — "emits validated street kit facilities" never asserts the theme: return the resolved theme from the evaluate and assert it; make the vertex bound fail on a missing `vertices` field.
+14. `tests/specs/terrain-over-road.spec.js:246` — road faces >1.5 m over the line pass everywhere: gate the exemption on `CROSSOVER_TRACKS` (the :203 frac-distance filter already handles the three known tracks).
+15. `tests/specs/tracks-walls.spec.js:37-53, 89` — test 2 builds all ~40 circuits to assert 5 street circuits: build just those 5; and make `if (r.skip) continue` a failure — a track whose `race()` failed must not vanish.
+16. `tests/specs/webgl-probes.spec.js:27-34, 79-98` — typeof-only `hdrMode()`/`lightState()` shape tests: fold into the adjacent behavioural tests (night>day, shadow-transform).
+17. `tests/unit/coplanar-faces.test.mjs:58` — the `>= 24` roster floor against 40 circuits: assert against the `js/circuits/` file count (the fix `prop-clipping.test.mjs:65-67` already made).
+18. `tests/specs/parts-budget.spec.js:40-41` — duplicated `toContain("600")`: make the second assert spent-vs-remaining.
+19. `tests/specs/smoke.spec.js:212-219` — minimap "content" is a width>0 check: sample pixels via getImageData (copy telemetry-compare:88-93's pattern).
+20. `tests/unit/race-control.test.mjs:116-126` — the 90 s cap it names is never exercised: add the cap-expiry test (flag drops after the cap once the picture clears).
+21. `tests/specs/carview-parts.spec.js:5` — stale "eight parts categories" title vs the twelve asserted: fix the title.
 
 **Five more found by RUNNING the suite, not by reading it** (landed `75ae72f9`,
 `85a91f40`). Both are the audit's own weak-assertion class, and neither was
 visible to a reader — which is the argument for running a converted spec at its
 known-good count rather than trusting a review:
 
-22. `tests/agent-view.spec.js` — "full paginates the raw object list" asserted
+22. `tests/specs/agent-view.spec.js` — "full paginates the raw object list" asserted
     that page 2's first object differs from page 1's last, as a proxy for "pages
     do not repeat". Not a property the data model has: the `detail:"full"`
     projection drops `k`, `measured` and rotation, so genuinely distinct props at
@@ -101,13 +101,13 @@ known-good count rather than trusting a review:
     while no pair straddled the 50-boundary, and `89ce4f2f`'s corner-board side
     fix reordered the list. **LANDED**: each page must BE the corresponding slice
     of the whole list, plus the offset/total bookkeeping.
-23. `tests/camera-driving-hooks.spec.js` — "setSpeed sets player speed" set the
+23. `tests/specs/camera-driving-hooks.spec.js` — "setSpeed sets player speed" set the
     value in one `evaluate` and read `probe()` in the next. `headless(true)` only
     skips RENDERING (`js/game/apex.js:1513`), so the physics loop coasts the car
     across the round-trip: measured 54.498 against a `toBeCloseTo(…, 1)`
     tolerance of 0.05, latent until load stretched the gap. **LANDED**: both
     values sampled in one `evaluate`.
-24. `tests/audit.spec.js` — "crossing the line, reversing back over it and
+24. `tests/specs/audit.spec.js` — "crossing the line, reversing back over it and
     re-crossing counts ONE lap" shipped using `step(90)/step(120)/step(150)`
     while its OWN commit (`7e3bafd3`) says both lap tests "step until the counter
     moves rather than guessing frame counts — a fixed budget either stops short
@@ -116,7 +116,7 @@ known-good count rather than trusting a review:
     46 m short. **LANDED** `afd546ed`: the stepping loop is installed into the
     page once and shared, so the two cannot diverge again, plus the sibling's
     anti-vacuity check.
-25. `tests/elevation-tracks.spec.js` — the `flatMax` "flat-out reference" was
+25. `tests/specs/elevation-tracks.spec.js` — the `flatMax` "flat-out reference" was
     measuring **the length of the start straight**, not a top speed. It holds
     `steer: 0` for three seconds, which drives straight while the road turns, so
     on most circuits the car is in the runoff within a second and its speed
@@ -134,10 +134,10 @@ known-good count rather than trusting a review:
     short to yield half a second on the road, so no dwell number fixes it; the
     reference has to be taken on the STRAIGHTEST stretch of the lap (lowest mean
     `|k|` over a window, via `trackProfile`) rather than at frac 0.0. OPEN.
-26. `tests/elevation-tracks.spec.js` — the climb assertion contradicted its own
+26. `tests/specs/elevation-tracks.spec.js` — the climb assertion contradicted its own
     comment: the prose says "just require the car is still moving", the code
     said `climbGain > 0.5`, which demands ACCELERATION. **LANDED** `2b2ab54c`.
-27. `tests/tracks-walls.spec.js` — two tests each rebuild all 40 circuits inside
+27. `tests/specs/tracks-walls.spec.js` — two tests each rebuild all 40 circuits inside
     ONE test case. `test.slow()` (360 s) was still not enough: measured 378 s
     with the box idle. No timeout value is the right fix — **split per circuit**,
     which also turns "the walls are broken" into "the walls are broken at Baku".
@@ -215,7 +215,7 @@ Per-file mapping:
 
 **Extensions the per-file audit adds to R2's lockstep list:**
 
-14. **Snapshot dir moves with its spec**: `tests/menu-baseline.spec.js-snapshots/` → `tests/specs/menu-baseline.spec.js-snapshots/` in the same `git mv` commit — Playwright resolves snapshot paths relative to the spec file, and these are the repo's ONLY golden baselines (CLAUDE.md); a missed move reads as "baseline missing", which `toHaveScreenshot` under `--update-snapshots` would silently re-bless. Same rule pre-arms `tests/specs/tracks-visual.spec.js-snapshots/` — the skip gate at tracks-visual:27-30 keys on that (spec-relative) dir existing, so the gate keeps skipping correctly after the move with no edit.
+14. **Snapshot dir moves with its spec**: `tests/specs/menu-baseline.spec.js-snapshots/` → `tests/specs/menu-baseline.spec.js-snapshots/` in the same `git mv` commit — Playwright resolves snapshot paths relative to the spec file, and these are the repo's ONLY golden baselines (CLAUDE.md); a missed move reads as "baseline missing", which `toHaveScreenshot` under `--update-snapshots` would silently re-bless. Same rule pre-arms `tests/specs/tracks-visual.spec.js-snapshots/` — the skip gate at tracks-visual:27-30 keys on that (spec-relative) dir existing, so the gate keeps skipping correctly after the move with no edit.
 15. **`tests/physics-baseline.json`** sits flat in tests/ (verified on disk) and is in no R2 bucket: move to `tests/data/physics-baseline.json` and update `physics-characterization.spec.js`'s read plus whatever tool regenerates it (grep `physics-baseline` across tools/ in the same commit — the characterization gate being unable to find its committed baseline must fail loudly, and the spec's header says the baseline's presence is what makes the gate live).
 16. **`tests/manual/` internals**: `manual/circuits.js` and `manual/galleries/` stay put, but R2 item 7's manual/ fix-ups shrink by one file (inspect.spec.js is deleted by the 1d merge before the move).
 17. **Group-taxonomy lockstep**: the §1 package.json membership edits and the R2 path rewrites touch the same ~28 script lines — land §1's regroup/dedupe **before** the R2 move commit so the move is a pure path rewrite, and `test-groups.test.mjs` / `test-coverage-audit.test.mjs` adjudicate each step separately.
@@ -311,7 +311,7 @@ literal string `"HEAD~3"` as the only changed file, matched no rule, and printed
 "nothing to run". For any diff, since the flag was introduced. The skeptic found
 14 gaps in the design and none of them, because it reviewed the design and not
 the tool underneath it. **LANDED** `a8174e5a`, pinned by
-`tests/pick-tests.test.mjs`.
+`tests/unit/pick-tests.test.mjs`.
 
 | Gap | Resolution |
 |---|---|
@@ -397,7 +397,7 @@ and treat the workflow file as a separate, deliberate decision.
 | garage-aero.spec.js | strong | moderate | keep | Every assertion is behavioral and monotone (ease progression, close-faster-than-open, mm of leading-edge travel, camera dist/az), driven via __apex.garageStep because rAF never fires headlessly; 6 tests boot the page but never build a circuit. Grouped in test:parts. |
 | headless-api.spec.js | mixed | heavy | keep | Core is strong and behavioral (throttle raises speed, brake lowers it, n=10 advances further than n=1, reset places within ±50m), but each of 25 tests re-boots and rebuilds monza — api.log shows 17-55s per test, several minutes wall; trimming the three trivial toggle tests into one would cut real cost. |
 | hooks-documented.test.mjs | strong | trivial | keep | Textbook ratchet with both anti-rot directions asserted (stale entries at 72-77, ghost entries at 79-84); pure fs reads, milliseconds, in test:tooling-fast. |
-| hud-audit.spec.js | weak | heavy | merge | Merge into tests/hud-layout.spec.js (or fold the shots into the ui-audit gallery): its only assertions (assertHud, lines 39-45 — #hud visible plus one steering control visible) are a strict subset of what hud-layout proves per mode/orientation with real geometry, yet each of 8 tests pays a reload + bahrain build; the screenshots are the only unique value. |
+| hud-audit.spec.js | weak | heavy | merge | Merge into tests/specs/hud-layout.spec.js (or fold the shots into the ui-audit gallery): its only assertions (assertHud, lines 39-45 — #hud visible plus one steering control visible) are a strict subset of what hud-layout proves per mode/orientation with real geometry, yet each of 8 tests pays a reload + bahrain build; the screenshots are the only unique value. |
 | hud-layout.spec.js | strong | heavy | keep | Measures real geometry (circle-aware clash test for arc buttons, conservative rects for readouts, safe-area insets injected because headless Chromium reports them as 0) across 24 combos plus a desktop hide check; e-ui.log shows 27-48s per test so it is genuinely expensive, but every dollar buys a real assertion. |
 | image-grade-shaders.test.mjs | mixed | cheap | keep | The behavioral tests (neutral preservation 115-127, all 65k min/max combos finite 129-151, channel isolation 153-165) run against a local JS reimplementation (hdrGrade, lines 39-55) and only bind to shipped code via the exact-source regex pins in tests 66-113 — brittle to harmless reformatting but genuinely enforcing GLSL/WGSL formula parity, and image-grade-visual covers the end-to-end pixels; keep as the fast half of that pair. |
 | image-grade-visual.spec.js | strong | heavy | keep | Signed and relative pixel deltas with count floors (darkCount>1000) guard against vacuous blank captures, and the histogram gates on five real conditions are the only thing standing between a lighting retune and shipped black-crush; serial mode + 180s timeouts + 6 distinct circuit builds make it one of the most expensive files in test:webgl, justifiably. |

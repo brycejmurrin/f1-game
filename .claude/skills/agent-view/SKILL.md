@@ -290,5 +290,5 @@ built to be driven by its own error messages.
 - `docs/AGENT-WORLD-API.md` — the design and the research behind each choice.
 - `__apex.agentHelp()` — the live manifest, including the `fields` glossary and
   the `read`/`control` sections listing the raw hooks and the drive/stage verbs.
-- Tests: `npm run test:agent` (`tests/agent-view.spec.js`,
-  `tests/agent-drive-bench.spec.js`, `tests/agent-determinism.spec.js`).
+- Tests: `npm run test:agent` (`tests/specs/agent-view.spec.js`,
+  `tests/specs/agent-drive-bench.spec.js`, `tests/specs/agent-determinism.spec.js`).

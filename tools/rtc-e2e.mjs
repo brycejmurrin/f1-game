@@ -3,9 +3,9 @@
 //
 //   node tools/rtc-e2e.mjs
 //
-// This covers the one path nothing else in the repo can: tests/net-*.test.mjs
+// This covers the one path nothing else in the repo can: tests/unit/net-*.test.mjs
 // run over the loopback transport, which has no SDP at all, and
-// tests/multiplayer-lobby.spec.js deliberately swaps in a fake transport
+// tests/specs/multiplayer-lobby.spec.js deliberately swaps in a fake transport
 // because a real RTCPeerConnection never finishes ICE gathering in a sandboxed
 // CI browser. So the offer/answer exchange, ICE negotiation and the two
 // DataChannels actually opening were, until this existed, entirely unverified.

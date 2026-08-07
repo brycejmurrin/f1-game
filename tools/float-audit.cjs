@@ -615,7 +615,7 @@ if (args.includes("--clip")) {
 by design — forest canopies, crowd boxes, stacked building detail — and this
 pass cannot tell those from mistakes because it has no model identity.
 tools/clip-audit.cjs is the actionable form (call-site tagging, cross-model
-pairs only, baseline-gated by tests/prop-clipping.test.mjs) — use that; treat
+pairs only, baseline-gated by tests/unit/prop-clipping.test.mjs) — use that; treat
 this ranked list as a lead at most.`);
   process.exit(0);
 }

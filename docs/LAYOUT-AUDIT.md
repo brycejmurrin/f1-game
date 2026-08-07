@@ -230,7 +230,7 @@ Two traps worth writing on the wall:
   normal declarations outrank every `@layer`, so a one-ID unlayered rule defeats a
   two-ID layered one and no amount of specificity closes the gap. A stray `}` put
   200 lines of `css/menus.css` outside `@layer components` and quietly defeated
-  the phone layout's own overrides. `tests/css-layers.test.mjs` guards it now.
+  the phone layout's own overrides. `tests/unit/css-layers.test.mjs` guards it now.
   (`!important` inverts the order: unlayered `!important` is the *weakest*, and
   the first layer declared wins — that is the emergency hatch, not a habit.)
 

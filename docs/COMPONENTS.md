@@ -8,7 +8,7 @@ looking it up. Cross-file coupling you cannot see is cross-file coupling you
 break by accident.
 
 Generated from `css/` and cross-checked against `index.html` and `js/`. The
-family table is asserted by `tests/component-inventory.test.mjs`, so a new family
+family table is asserted by `tests/unit/component-inventory.test.mjs`, so a new family
 cannot appear without this document noticing.
 
 ---
@@ -102,7 +102,7 @@ mistakes them for components.
 
 **Found by the guard, not by hand** — these were defined in more than one
 file and named nowhere, which is exactly the drift the new assertion in
-`tests/component-inventory.test.mjs` now prevents. `.sheet-foot` is the
+`tests/unit/component-inventory.test.mjs` now prevents. `.sheet-foot` is the
 most-shared class in the project and had no entry at all:
 
 - `.adv-item` — `components` + `tuner`
@@ -135,7 +135,7 @@ and the last of them took its whole class family with it — which is why no
 
 That the count reached zero is the real headline of this exercise: the
 stylesheet was never carrying rot, it was just carrying no map. Keep this
-section even at zero — `tests/component-inventory.test.mjs` asserts that every
+section even at zero — `tests/unit/component-inventory.test.mjs` asserts that every
 dead class is named here, so the number moving is a prompt to decide whether the
 class is unfinished work or a leftover, and an empty list is a claim worth
 being held to.
@@ -150,4 +150,4 @@ being held to.
   audit grid (`docs/LAYOUT-AUDIT.md`) measures 38 screens; a new family usually
   means a new one-off, and one-offs are what `.pane-pair` was built to retire.
 - **Regenerate with the same method** the test uses if the numbers here drift:
-  `node --test tests/component-inventory.test.mjs` will say so first.
+  `node --test tests/unit/component-inventory.test.mjs` will say so first.

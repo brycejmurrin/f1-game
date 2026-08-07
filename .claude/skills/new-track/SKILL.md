@@ -87,14 +87,14 @@ in metres (0 → `track.total`), lateral `x` in metres (+ = right of centreline)
 2. **Register it** (new tracks only): add `<script src="js/circuits/<id>.js?v=N"></script>`
    to `index.html` in the circuit block (before `js/track/tracks.js`) **and add the
    matching entry to the `CIRCUITS` array in `tools/manifest.cjs`** — the load-order
-   single source of truth; `tests/load-order.test.mjs` (`npm run test:tooling`) fails
+   single source of truth; `tests/unit/load-order.test.mjs` (`npm run test:tooling`) fails
    if the two diverge. Tag order == `Tracks.LIST` == picker/season order:
    - **Season circuits** (24 rounds): append in calendar order at the end of the
      season block (before the `classic: true` section).
    - **Retired circuits**: set `classic: true` in the def and append after the 24
      season rounds (see the `// ── retired / off-calendar ──` comment in
      `manifest.cjs`).
-   - **Roster is capped at 40 circuits** — `tests/shared-track-foundation-characterization.test.cjs`
+   - **Roster is capped at 40 circuits** — `tests/unit/shared-track-foundation-characterization.test.cjs`
      asserts `Tracks.LIST.length === 40`. Adding a new circuit at 40 means
      **replacing** an existing `classic: true` one, not "retiring" it further —
      e.g. `jacarepagua` (`js/circuits/jacarepagua.js`) is **already**
@@ -105,7 +105,7 @@ in metres (0 → `track.total`), lateral `x` in metres (+ = right of centreline)
      3. Remove its entry from the `CIRCUITS` array in `tools/manifest.cjs`.
      4. Remove its `CircuitPaths` entry in `js/track/geo-paths.js`, if any.
      Then add the new circuit's four matching pieces. Skipping any one of the
-     four leaves a dangling reference that `tests/load-order.test.mjs` or the
+     four leaves a dangling reference that `tests/unit/load-order.test.mjs` or the
      40-cap test will catch — but don't rely on the test to tell you which
      file you forgot; delete all four together.
    Verify with `__apex.tracks()` that the id appears.

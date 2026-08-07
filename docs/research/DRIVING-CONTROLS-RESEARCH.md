@@ -231,7 +231,7 @@ sits between them.)
 
 **The readout must not be km/h.** `dashKph()` divides pace back out, so the
 in-game dial reads 0 → ~259 km/h at *every* setting and
-`tests/sliders.spec.js` pins that to within 1 km/h. A label saying "top speed
+`tests/specs/sliders.spec.js` pins that to within 1 km/h. A label saying "top speed
 207 km/h" would print a number the speedometer will never show. A percentage of
 standard pace is the honest alternative.
 
@@ -483,7 +483,7 @@ That is a bigger loss than it sounds, because of how the module is built:
   afterwards via `__apex.logs({ns:"game"})`. As `CLAUDE.md` puts it, "a failure
   that has already happened still has a record" — except the physics had no
   record to leave.
-- **`tests/fixtures.js` attaches the ring to EVERY failure**, as `apex-logs`,
+- **`tests/helpers/fixtures.js` attaches the ring to EVERY failure**, as `apex-logs`,
   and `live-reporter.js` echoes its tail into the group log. So a physics spec
   that failed on *"speed was 43, expected > 50"* produced an attachment that said
   nothing about what the car's top speed even was on that run — pace, weather

@@ -1487,7 +1487,7 @@ const NetLobby = (function () {
     // unconditionally true BY DESIGN — with no private Worker URL set, room
     // codes fall back to the public Nostr relay pool, which needs no account
     // and nothing deployed (js/net/rendezvous.js, and pinned by
-    // tests/net-rendezvous.test.mjs). Two guards here tested that function and
+    // tests/unit/net-rendezvous.test.mjs). Two guards here tested that function and
     // therefore could never fire, and the message they would have shown —
     // "Room codes need a relay deployed" — was the opposite of true. Both are
     // deleted rather than rewritten: an unreachable branch that lies is worse

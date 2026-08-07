@@ -578,14 +578,14 @@ const NetNostr = (function () {
           // receive] tuple older versions did, and its onMessage is a setter
           // like onPeerJoin. Both mistakes throw into the catch below and come
           // back as "could not reach the room service" — a bug wearing a
-          // network failure's clothes. tests/net-trystero-api.test.mjs pins
+          // network failure's clothes. tests/unit/net-trystero-api.test.mjs pins
           // both shapes against the vendored source.
           const swap = room.makeAction("swap");
           // TARGETED send. Trystero 0.25's signature is
           // send(data, options) with options.target — NOT send(data, id) as
           // the older tuple API suggested. Getting that wrong posts to
           // EVERYONE, which is exactly what makes two joiners collide on the
-          // host's single offer. Pinned in tests/net-trystero-api.test.mjs.
+          // host's single offer. Pinned in tests/unit/net-trystero-api.test.mjs.
           const post = (data, to) => (to ? swap.send(data, { target: to }) : swap.send(data));
           // Per-JOINER, not global. As one boolean this was "somebody is being
           // answered", which with three joiners means two of them are dropped.

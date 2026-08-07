@@ -142,7 +142,7 @@ jobs:
       # artifacts/ is gitignored, so in CI every title is legitimately unobserved
       # and the check would be red on an environment fact. That is precisely the
       # trap that reddened this job once already (docs/research/CAMPAIGN-2026-08
-      # §"a guard that only runs on ONE MACHINE"). tests/ci-coverage.test.mjs
+      # §"a guard that only runs on ONE MACHINE"). tests/unit/ci-coverage.test.mjs
       # guards the TOOL, which is where a guard belongs.
       - name: What does this gate cover?
         run: node tools/ci-coverage.mjs
@@ -343,7 +343,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       # THE DRIVING MODEL'S OWN GATE, which nothing was running.
       #
-      # tests/physics-characterization.spec.js pins six-sample traces of four
+      # tests/specs/physics-characterization.spec.js pins six-sample traces of four
       # scenarios and fails if the driving model's numbers move. It is not in
       # guards (browser spec, not node), not in sweeps (geometry only), and not
       # in smoke's spec list — so it had never run in CI, and locally it had
@@ -374,7 +374,7 @@ jobs:
       - name: Characterization traces
         env:
           APEX_WORKERS: 1
-        run: npm test -- tests/physics-characterization.spec.js --timeout=240000
+        run: npm test -- tests/specs/physics-characterization.spec.js --timeout=240000
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

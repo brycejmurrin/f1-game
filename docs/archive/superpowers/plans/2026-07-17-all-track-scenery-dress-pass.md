@@ -183,7 +183,7 @@ done
 - [ ] Run scenery geometry regressions:
 
 ```bash
-npm test -- tests/props-over-road.spec.js tests/terrain-over-road.spec.js tests/f1-track-accuracy.spec.js
+npm test -- tests/specs/props-over-road.spec.js tests/specs/terrain-over-road.spec.js tests/specs/f1-track-accuracy.spec.js
 ```
 
 - [ ] Use the cache-bump skill once to update every `?v=` reference and `version.json` to one shared build number.

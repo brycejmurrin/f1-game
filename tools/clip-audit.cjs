@@ -246,7 +246,7 @@ const asJson = args.includes("--json");
 const gate = args.includes("--gate");
 const why = args.includes("--why");
 
-// Per-circuit SEVERE spot caps. Same semantics as tests/props-over-road.spec.js:
+// Per-circuit SEVERE spot caps. Same semantics as tests/specs/props-over-road.spec.js:
 // a circuit NOT in this map must read 0, and a capped circuit fails when its
 // number GROWS. Lower each cap as circuits are cleaned — that is the ratchet.
 const BASELINE = require("./clip-baseline.json");

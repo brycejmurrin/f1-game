@@ -18,7 +18,7 @@ node tools/pick-tests.mjs --bg            # -> a ready-to-paste background comma
 
 The routing rules live in `RULES` at the top of `tools/pick-tests.mjs`. If a
 change is not routed anywhere, that is a missing rule — add it there rather than
-working around it here; `tests/test-groups.test.mjs` fails if a source directory
+working around it here; `tests/unit/test-groups.test.mjs` fails if a source directory
 routes to nothing. **One exception exists today:** `js/track/graph.js` IS routed
 to a `test:<group>`, but its real correctness gate — `tools/graph-parity.cjs`,
 which diffs built geometry vertex-for-vertex against a baseline ref — is a

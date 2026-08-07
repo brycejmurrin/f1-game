@@ -127,13 +127,13 @@ music toggle).
 
 ## Testing
 
-`tests/audio-smoke.spec.js` covers three browser checks: `GameAudio` initialises
+`tests/specs/audio-smoke.spec.js` covers three browser checks: `GameAudio` initialises
 without console errors, re-enabling sound during a race restarts race music, and
 a real user-gesture unlock runs engine synthesis (`setEngine(0.75, 0.4, false,
 0.6, 4)` then `centroidHz() > 50`, `contextState === "running"`). Run it with:
 
 ```sh
-npx playwright test tests/audio-smoke.spec.js
+npx playwright test tests/specs/audio-smoke.spec.js
 ```
 
 For live inspection, start the dev server and use DevTools Web Audio:

@@ -24,7 +24,7 @@
 import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 let setupApiMocks = null;
-try { ({ setupApiMocks } = await import("../tests/f1-api-mock.js")); } catch { /* hub degrades to its empty state */ }
+try { ({ setupApiMocks } = await import("../tests/helpers/f1-api-mock.js")); } catch { /* hub degrades to its empty state */ }
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const argv = process.argv.slice(2);

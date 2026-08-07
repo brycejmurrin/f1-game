@@ -6,7 +6,7 @@ Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
 / `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
 `js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
 primitives, and composite models. The **107-member `api` surface is a frozen
-contract** — `tests/scenery-api-contract.test.mjs` fails on any rename/removal,
+contract** — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/removal,
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
 
@@ -530,7 +530,7 @@ whole shape is dropped (`[scenery] ... SUPPRESSED at k=...`). Composite helpers
 same for any new composite (`rejBox(centre,[w,h,d],basis)`), never a single
 `onTrack()` point, which misses a long/deep model swinging over a curving stretch.
 `RAW.*` emissions (crowd spectators) skip the guard for speed — keep them behind a
-shell. `tests/props-over-road.spec.js` audits all 40 circuits and fails on any new
+shell. `tests/specs/props-over-road.spec.js` audits all 40 circuits and fails on any new
 intrusion; measure one with `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots`.
 
 ## Pattern: an encircling mountain range

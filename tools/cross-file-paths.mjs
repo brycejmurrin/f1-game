@@ -9,12 +9,12 @@
 // ⚠ "no guard turns red":
 //
 //   tools/fit-audit.mjs and tools/menu-fit.mjs wrap their import of
-//   ../tests/f1-api-mock.js in `try { … } catch { /* degrades */ }`. That catch
+//   ../tests/helpers/f1-api-mock.js in `try { … } catch { /* degrades */ }`. That catch
 //   is correct at runtime and fatal to a move: after the split the import fails
 //   forever, the tools silently audit an empty data hub, and nothing anywhere
 //   goes red.
 //
-//   tests/f1-track-accuracy.spec.js reads its GeoJSON through
+//   tests/specs/f1-track-accuracy.spec.js reads its GeoJSON through
 //   `new URL("./data/…", import.meta.url)` — a browser-side failure a grep for
 //   `../helpers` will never find.
 //
@@ -22,8 +22,8 @@
 //   by definition (see tools/test-observed.mjs).
 //
 // Parsed with espree, not grepped: this repo's test files are full of source
-// strings that CONTAIN import statements (tests/assert-audit.test.mjs and
-// tests/test-observed.test.mjs both build fixtures out of them), and a regex
+// strings that CONTAIN import statements (tests/unit/assert-audit.test.mjs and
+// tests/unit/test-observed.test.mjs both build fixtures out of them), and a regex
 // cannot tell a real import from a quoted one. A guard with false positives is
 // a guard that gets switched off.
 import fs from "node:fs";

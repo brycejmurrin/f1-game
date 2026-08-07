@@ -15,7 +15,7 @@
 // Exit code 1 if any knob produces NO visible change — "this constant no
 // longer does anything" is a caught regression, not a silent one. Per-lamp
 // flicker is frozen during renders so night A/Bs isolate the knob.
-// tests/lighting-ab.spec.js separately asserts every knob's `find` string
+// tests/specs/lighting-ab.spec.js separately asserts every knob's `find` string
 // still exists EXACTLY ONCE in its file, so retuning a constant without
 // updating this catalog fails fast.
 
@@ -62,7 +62,7 @@ const SCENES = {
 };
 
 // ── The knob catalog ─────────────────────────────────────────────────────────
-// find: EXACT unique source string (verified 1x by tests/lighting-ab.spec.js).
+// find: EXACT unique source string (verified 1x by tests/specs/lighting-ab.spec.js).
 // b:    the alternate to A/B against.
 // watch: { region, metric } — the region+metric a human should READ in the
 //        JSON/composite to judge this knob (documented in LIGHTING-KNOBS.md).
@@ -442,7 +442,7 @@ async function main() {
 
     // 2. Self-sync THIS catalog: the applied value becomes the new `find`; the
     //    old value becomes the new `b` (so the knob now A/Bs the reverse) —
-    //    keeping tests/lighting-ab.spec.js catalog-integrity green. All edits
+    //    keeping tests/specs/lighting-ab.spec.js catalog-integrity green. All edits
     //    are confined to THIS knob's own entry (located by its id) so a short
     //    literal shared with another knob can never be corrupted, and the swap
     //    happens even when the applied value IS the current b (a placeholder
@@ -595,7 +595,7 @@ async function main() {
   if (fails.length) { console.error("NO VISIBLE CHANGE (dead knob or too-small B delta):", fails.map((f) => f.id).join(", ")); process.exitCode = 1; }
 }
 
-// Only run as a CLI — tests/lighting-ab.spec.js imports KNOBS for the
+// Only run as a CLI — tests/specs/lighting-ab.spec.js imports KNOBS for the
 // catalog-integrity check and must not launch a browser.
 if (process.argv[1] && process.argv[1].endsWith("ab-lighting.mjs")) {
   main().catch((e) => { console.error("FATAL", e); process.exit(1); });

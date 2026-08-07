@@ -191,10 +191,10 @@ rather than merely making it unlikely.
 
 ### A.6 Tests
 
-New spec `tests/multiplayer-seats.spec.js`, added to `test:net` in
+New spec `tests/specs/multiplayer-seats.spec.js`, added to `test:net` in
 `package.json:34`. Rig is the existing two-peers-in-one-page one — `lobbyFake`
 (`js/game/apex.js:1976`), `lobbyWatch`, `lobbyPeerEvent(type, data)` — and the
-`enterRoom(page, role)` helper pattern from `tests/multiplayer-room.spec.js:27`.
+`enterRoom(page, role)` helper pattern from `tests/specs/multiplayer-room.spec.js:27`.
 
 1. **The guest yields.** Enter as guest on `redbull/0`; `lobbyPeerEvent("hello",
    {team:"redbull", driver:0})`; assert `lobbyRoom().profile.driver === 1`,
@@ -212,7 +212,7 @@ New spec `tests/multiplayer-seats.spec.js`, added to `test:net` in
    disabled, picking a team still lands on seat 0.
 
 Run: `npm run test:net` and `npm run test:parts` (the garage chips are covered
-by `tests/parts-setup-ids.spec.js:115`).
+by `tests/specs/parts-setup-ids.spec.js:115`).
 
 ---
 
@@ -301,9 +301,9 @@ stacked.
 
 ### B.6 Tests
 
-Extend `tests/net-snapshot.test.mjs` with a multi-entry round-trip keyed by id
+Extend `tests/unit/net-snapshot.test.mjs` with a multi-entry round-trip keyed by id
 (the codec already supports it — assert the *reader* now uses it). Add to
-`tests/multiplayer-session.spec.js` a two-remote case driven through
+`tests/specs/multiplayer-session.spec.js` a two-remote case driven through
 `netPeerSend` with distinct ids. Run `npm run test:net`, `npm run test:net-unit`,
 `npm run test:modes`, `npm run test:career` (classification keying).
 
@@ -466,7 +466,7 @@ Independently, streamlit-webrtc's own docs (July 2026) describe Open Relay as
 - **The derivation is written, tested and dormant.** `js/net/transport.js`
   derives the coturn REST credential properly —
   `username = <unix expiry>`, `credential = base64(HMAC-SHA1(secret, username))`
-  via WebCrypto, pinned in `tests/net-transport.test.mjs` against an
+  via WebCrypto, pinned in `tests/unit/net-transport.test.mjs` against an
   independently computed HMAC — behind
   `localStorage.setItem("apex26.freeTurn", "true")`. One line the day either
   operator comes back.

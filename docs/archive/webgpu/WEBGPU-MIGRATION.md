@@ -436,7 +436,7 @@ payoff is real (see below).
 
 Validation infrastructure already exists and should be reused verbatim: the
 `playwright-probe` deterministic screenshot harness, the
-`tests/tracks-visual.spec.js` pixel-diff suite, `__apex.park/jump/orbit`
+`tests/specs/tracks-visual.spec.js` pixel-diff suite, `__apex.park/jump/orbit`
 for fixed poses, and `__apex.lightState/probe/wallStats` for numeric assertions.
 Add a backend switch so each spec can run twice.
 

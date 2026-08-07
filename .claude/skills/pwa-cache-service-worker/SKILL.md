@@ -41,7 +41,7 @@ run: the shell guard force-reloads open pages mid-spec.
 
 **Adding a DEFERRED file** (no `<script>` tag): register in **`tools/manifest.cjs`
 `DEFERRED`**, mirror in **`js/game.js` `BACKEND_FILES`**, seed in **`sw.js`
-optional** — `tests/load-order.test.mjs` asserts all three stay equal.
+optional** — `tests/unit/load-order.test.mjs` asserts all three stay equal.
 
 ## When to Use
 

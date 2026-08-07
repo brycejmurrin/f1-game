@@ -90,7 +90,7 @@ it. The moment a primitive needs a fifth modifier to express one screen's
 variant, that screen wanted a local class instead.
 
 **This repo already has the enforcement half.** `docs/COMPONENTS.md` plus
-`tests/component-inventory.test.mjs` assert which class families exist and which
+`tests/unit/component-inventory.test.mjs` assert which class families exist and which
 are defined in more than one file. That is the governance layer Cusick says most
 teams lack — the gap here is not process, it is that nobody has done the
 collapsing yet.

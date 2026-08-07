@@ -1116,7 +1116,7 @@ const Car3D = (function () {
     // rather than onto the fin. (This does not get the panel CLEAR of the
     // pinstripe — it runs the fin's whole length a few cm below it, so the
     // decal legitimately spans both paints, which is what
-    // tests/parts-livery-contrast.spec.js records. It just stops the graphic
+    // tests/specs/parts-livery-contrast.spec.js records. It just stops the graphic
     // sitting ON it.)
     const vBase = Math.max(i, 0.18);
     const at = (u, v) => {

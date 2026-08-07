@@ -1423,7 +1423,7 @@ const DataTelemetry = (function () {
 
   // ---- playback position: lap clock -> point on the GPS trace ----------
   // Pure functions of a driver's own sample arrays, so they live at module
-  // scope (and are exported below for tests/telemetry-trace.test.mjs).
+  // scope (and are exported below for tests/unit/telemetry-trace.test.mjs).
   // cumulative distance (m) along the lap, sampled at each car-data time, so we
   // can compute a real position-based time delta between two laps.
   function cumDist(car) {
@@ -1614,7 +1614,7 @@ const DataTelemetry = (function () {
   }
 
   // The GPS-sanity helpers are pure functions of a sample list, so they are
-  // exported for tests/telemetry-trace.test.mjs — the rest of this module needs
+  // exported for tests/unit/telemetry-trace.test.mjs — the rest of this module needs
   // a DOM, a canvas and the network before it will do anything at all, and the
   // bugs these fix (a stray sample rescaling the whole map, a coverage gap
   // drawn as a straight) are exactly what wants asserting without one.

@@ -41,17 +41,17 @@ than behaviour:
 
 | Guard | What it holds |
 |---|---|
-| `tests/load-order.test.mjs` | `index.html` == `tools/manifest.cjs`, including `HARD_EDGES` and the three-way `DEFERRED`/`BACKEND_FILES`/sw.js precache agreement |
-| `tests/scenery-api-contract.test.mjs` | the 107-member `scenery(api)` surface every circuit file was written against |
-| `tests/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
-| `tests/docs-integrity.test.mjs` | live docs reference only files that exist; counts match the repo; no live doc reaches into the archive |
-| `tests/deploy-staging.test.mjs` | every path shipped code can fetch is inside the Pages upload allow-list |
+| `tests/unit/load-order.test.mjs` | `index.html` == `tools/manifest.cjs`, including `HARD_EDGES` and the three-way `DEFERRED`/`BACKEND_FILES`/sw.js precache agreement |
+| `tests/unit/scenery-api-contract.test.mjs` | the 107-member `scenery(api)` surface every circuit file was written against |
+| `tests/unit/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
+| `tests/unit/docs-integrity.test.mjs` | live docs reference only files that exist; counts match the repo; no live doc reaches into the archive |
+| `tests/unit/deploy-staging.test.mjs` | every path shipped code can fetch is inside the Pages upload allow-list |
 | `tools/graph-parity.cjs` | scene-graph migrations are vertex-for-vertex identical to a baseline ref |
-| `tests/backend-surface-parity.test.mjs` | a renderer backend declares every GLX member, absent ones as explicit `undefined` (§5) |
-| `tests/module-size.test.mjs` | the game.js line ceiling — a ratchet, so extraction lowers it and regrowth fails |
-| `tests/vstd-invariant.test.mjs` + `tools/vstd-lint.mjs` | no `.speed` compared against a numeric literal without a written reason (§3) |
-| `tests/comment-citations.test.mjs` | a comment citing another file names a symbol that exists; ratchet on the cross-file-citation population |
-| `tests/silent-catch.test.mjs` | ratchet on bare `catch {}` — the escape hatch is a comment saying why, not a log line |
+| `tests/unit/backend-surface-parity.test.mjs` | a renderer backend declares every GLX member, absent ones as explicit `undefined` (§5) |
+| `tests/unit/module-size.test.mjs` | the game.js line ceiling — a ratchet, so extraction lowers it and regrowth fails |
+| `tests/unit/vstd-invariant.test.mjs` + `tools/vstd-lint.mjs` | no `.speed` compared against a numeric literal without a written reason (§3) |
+| `tests/unit/comment-citations.test.mjs` | a comment citing another file names a symbol that exists; ratchet on the cross-file-citation population |
+| `tests/unit/silent-catch.test.mjs` | ratchet on bare `catch {}` — the escape hatch is a comment saying why, not a log line |
 
 Where one of these exists, the invariant has held; where the same class of
 invariant had only a comment, it has not. The archived journal is ~950 lines of
@@ -85,7 +85,7 @@ in. It has held so far. It is exactly the shape of thing that stops holding.
 that divides a speed by `VMAX` or compares one against a literal must go
 through `vTop()`/`vStd()` (and accelerations through `aStd()`). Four defects of
 this one class were found across three passes before the rule got its guard:
-`tools/vstd-lint.mjs` + `tests/vstd-invariant.test.mjs` now fail the suite on a
+`tools/vstd-lint.mjs` + `tests/unit/vstd-invariant.test.mjs` now fail the suite on a
 raw `.speed`-vs-literal comparison unless the absoluteness is justified in
 place. The lint sees speeds only; the acceleration case is recorded in its
 header rather than asserted. Physics constants now live in
@@ -112,7 +112,7 @@ Easy to mistake for one system:
 ## 4. The `G` façade
 
 `js/game.js` is the largest file in the repo (the figure lives in
-`tests/module-size.test.mjs`, the only place it cannot go stale). Extracted
+`tests/unit/module-size.test.mjs`, the only place it cannot go stale). Extracted
 modules never reach into it: game.js builds one `G` object of live
 getters/setters plus stable helpers and instantiates each module as
 `Module.create(G)`.
@@ -144,7 +144,7 @@ working — with one sharp edge: a member the backend does not define keeps
 GLX's *live function*, closing over a `gl`/`SHD`/`CHK` that stay null because
 `GLX.init()` never ran. Every feature test written the obvious way
 (`if (gfx.member)`) therefore passes, and the call dies one line later. This
-bit twice, identically, before `tests/backend-surface-parity.test.mjs` pinned
+bit twice, identically, before `tests/unit/backend-surface-parity.test.mjs` pinned
 the fix (absent members declared as explicit `undefined`) — and found a second
 instance on its first run.
 
@@ -185,7 +185,7 @@ Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
 - **Montreal: a bridge support floats 2.72 m off the ground** against a 0.05 m
-  allowance (`tests/montreal-foundation.spec.js`). Deliberately left
+  allowance (`tests/specs/montreal-foundation.spec.js`). Deliberately left
   failing — it wants a geometry fix, not a wider tolerance.
 - **Per-circuit vertex budgets are ad hoc; the repo-wide gate is missing.**
   Qatar itself is resolved — cut 340,858 → 299,386 (a redundant street-lamp
@@ -286,7 +286,7 @@ most-load-bearing first.
   mirror floor is 0.15 vs GLSL's 0.55), and the MIRROR chrome surface id 27
   exists only in GLSL, so chrome liveries lose their mirror on both WGX and TLX.
   These are renderer-parity work, not GLX defects.
-- **`tests/agent-drive-bench.spec.js` › "relational policy out-drives the blind
+- **`tests/specs/agent-drive-bench.spec.js` › "relational policy out-drives the blind
   baseline on interlagos" is red** and predates this cleanup — the untouched
   session-start commit fails it with the identical value (`relational.dist` 251
   against a `> 300` / `naive×1.5` floor), so the relational agent policy simply
@@ -295,7 +295,7 @@ most-load-bearing first.
   sat unseen.
 - **`#track-detail` regressed from a real `<dialog>` back to a
   `<div role="dialog">`** in a merge (the markup at `index.html`), so it no
-  longer traps focus or joins the top layer — `tests/menu-keyboard.spec.js`'s
+  longer traps focus or joins the top layer — `tests/specs/menu-keyboard.spec.js`'s
   "Tab cannot escape the track-detail dialog" fails, and `topmodal.js`'s own
   comment still says it "migrated to a real dialog". Confirmed pre-existing (red
   at the session-start commit) and left for a dedicated fix: it is a modal
@@ -309,13 +309,13 @@ most-load-bearing first.
   destroyed by a `textContent` assignment on the next line, so it never renders
   (quali.js does the same thing in the correct order).
 - **Test-quality gaps** (from the whole-`tests/` read). One true never-fail:
-  `tests/ui-button-touch.spec.js`'s "throttle button visible" wraps its only
+  `tests/specs/ui-button-touch.spec.js`'s "throttle button visible" wraps its only
   `expect` in `if (count > 0)`, so a missing button passes. `menu-survey` and
   `parts-catalog` join the known `ui-audit` gallery as assertion-light. The banked-reference measurement error (fixed in the Monza and
   Spa foundation specs with a local `Tracks.banking()` term) is still latent in
   **Zandvoort's** foundation spec and ~12 others whose probes miss a bankZone —
   the durable `groundY`/`overRoad` fix above is what retires the whole class.
-  `tests/coplanar-faces.test.mjs` kept the `>= 24` roster floor its sibling
+  `tests/unit/coplanar-faces.test.mjs` kept the `>= 24` roster floor its sibling
   `prop-clipping.test.mjs` tightened to `=== roster`, so its sweep can silently
   drop 16 circuits. The lone `.test.cjs` suite is invisible to the doc-count
   regexes.
@@ -344,27 +344,27 @@ Deferred with reasoning, none lost:
 - **Shared `clamp`/`lerp`** — many local copies, one divergent
   (`js/track/scenery-structures.js`).
 - **`simTilt`/`tiltSteering`** now share `tiltTarget()`/`tiltSlew()`;
-  `tests/tilt-pipeline.spec.js` pins every stage so the next re-inlining fails.
+  `tests/specs/tilt-pipeline.spec.js` pins every stage so the next re-inlining fails.
 - **Mobile-tier detection ×4** — reimplemented in four files; `js/game.js`
   omits `_forceMobile`, defeating `apex26.forceMobileTier` there.
 - **`TUNE_DEFS` hand-mirrors** — the registry is restated in six places.
 - **`GameStore`** has no cross-tab `storage` listener; two tabs silently
   overwrite each other's saves.
-- **Assertion-free specs** — RESOLVED. `tests/ui-audit.spec.js` (34 tests, 0
+- **Assertion-free specs** — RESOLVED. `tests/specs/ui-audit.spec.js` (34 tests, 0
   `expect`) and the former `ui-desktop.spec.js` (5/0) were screenshot galleries
   presenting as tests. The second is now absorbed into the first as two more
   viewport rows, and the survivor is declared a capture harness: its own
   `test:gallery` group, run on demand, out of `test:ui`'s pass count.
   `tools/assert-audit.mjs` now grades every test in the tree
-  asserting/implicit/vacuous and `tests/assert-audit.test.mjs` fails on a
+  asserting/implicit/vacuous and `tests/unit/assert-audit.test.mjs` fails on a
   vacuous body anywhere outside that one allow-listed file.
-- **`tests/tracks-visual.spec.js` baselines were never generated** — the spec
+- **`tests/specs/tracks-visual.spec.js` baselines were never generated** — the spec
   is skip-gated on the snapshot dir existing; generating 40 circuit baselines
   on Linux/SwiftShader is its own operation.
 - **Catalogued dead exports (~60)**, each wanting re-verification before
   deletion — the catalogue has been wrong before (`NetSnapshot.predict()` and
   `EV.BYE` were both re-reported dead while having live callers, and the GLX
-  instancing path listed dead is exercised by `tests/instanced-draw.spec.js`).
+  instancing path listed dead is exercised by `tests/specs/instanced-draw.spec.js`).
   Still believed dead: `Career.isOwned`, `TrackSpline.centerline()` and the
   authored-`segs` path, the SRTM elevation branch, 8 of `Reliability`'s 14
   exports.

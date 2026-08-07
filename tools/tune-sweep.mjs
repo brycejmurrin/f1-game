@@ -19,8 +19,8 @@
 //
 // THE POLICY IS PACE-NORMALISED, WHICH IS THE WHOLE METHODOLOGICAL POINT.
 // The two closed-loop policies already in the repo cannot be reused here:
-// tests/autopilot.spec.js hard-codes VMAX = 94 / aLat = 13 / A_BRAKE = 24 and
-// tests/agent-drive-bench.spec.js caps at `sp > 33` — bare m/s literals, which
+// tests/specs/autopilot.spec.js hard-codes VMAX = 94 / aLat = 13 / A_BRAKE = 24 and
+// tests/specs/agent-drive-bench.spec.js caps at `sp > 33` — bare m/s literals, which
 // is exactly what CLAUDE.md forbids ("comparing one against a literal means
 // picking vTop() or vStd()"). Sweeping PACE with either measures the POLICY's
 // mismatch rather than the car: the true force constants (LAT_MAX, BRAKE) do
@@ -36,7 +36,7 @@
 // wins.
 //
 // SECOND METHODOLOGICAL HOLE, and why `completed` is reported per run:
-// tests/autopilot.spec.js says outright that a centreline follower cannot
+// tests/specs/autopilot.spec.js says outright that a centreline follower cannot
 // complete tight circuits, and deliberately does not assert lap completion. A
 // sweep whose policy never finishes a lap is measuring the policy's ceiling,
 // not the slider's knee. Check `completed` before trusting a single number —

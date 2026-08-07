@@ -66,7 +66,7 @@ Commands:
 ```sh
 npm run test:tooling-fast
 npm run test:debris
-node --test tests/race-control.test.mjs
+node --test tests/unit/race-control.test.mjs
 node tools/test-bg.mjs debris
 ```
 
@@ -144,7 +144,7 @@ Deep references:
       `apply()`. Headless proof: loopback + inject caution, then read both sides.
 
 7. **Verify narrowly, then with browser coverage.**
-   - Run the pure unit guard `node --test tests/race-control.test.mjs` after
+   - Run the pure unit guard `node --test tests/unit/race-control.test.mjs` after
      race-control logic changes.
    - Run `test:debris` for debris and caution browser coverage.
    - Use `test:tooling-fast` for docs/hooks/unit inventory checks.

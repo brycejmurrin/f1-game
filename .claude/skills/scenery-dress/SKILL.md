@@ -7,7 +7,7 @@ description: Use when the user asks to add/edit track scenery, dress a circuit, 
 
 `buildProps` (the `js/track/scenery-*.js` modules — nature/city/structures/identity,
 orchestrated by `js/track/tracks.js`; the 107-member `api` surface is frozen by
-`tests/scenery-api-contract.test.mjs`) calls each track's `def.scenery(api)` to lay down
+`tests/unit/scenery-api-contract.test.mjs`) calls each track's `def.scenery(api)` to lay down
 3D props, then merges everything into one mesh. The full reference is
 `docs/SCENERY-API.md` — **read it before non-trivial work**. This skill is the
 working summary.
@@ -97,7 +97,7 @@ scenery: function (api) {
     `onTrack()` point — or it will re-introduce that class of bug.
   - **`RAW.*` bypasses the guard.** Crowd spectators are emitted via `RAW.addBox`
     for speed and are NOT footprint-tested; only place them safely BEHIND a shell.
-  - **Regression coverage:** `tests/props-over-road.spec.js` audits all 40 circuits
+  - **Regression coverage:** `tests/specs/props-over-road.spec.js` audits all 40 circuits
     in 3D and fails if any prop sits on/above the racing line beyond its documented
     `BASELINE` cap. Run it after scenery edits; measure a single track with
     `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots`.

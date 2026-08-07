@@ -1,7 +1,7 @@
 # Scene graph + detailed models — staged plan
 
 > **Status: S0–S2 infrastructure has LANDED** (`js/track/graph.js`,
-> `tools/graph-parity.cjs`, `tests/track-graph.test.mjs`), with sixteen emitters
+> `tools/graph-parity.cjs`, `tests/unit/track-graph.test.mjs`), with sixteen emitters
 > migrated: `windowPane`, `crowd`, `fence`, `guardrail`, `tyreWall`, `wall`,
 > `facadeRail`, `streetLamp`, `facadeMullion`, `streetBarrier`, `facadeNeon`,
 > `crowdRiser`, `billboard`, `marshalPost`, `buildingMass`, `pine`. All 24 circuits are at exact geometry parity — nothing renders
@@ -370,7 +370,7 @@ Matrices are **column-major** — the layout `M4` and `THREE.Matrix4` share —
 with columns 0–2 the scaled basis vectors `r`/`u`/`t` and column 3 the origin.
 That is exactly `xform()`'s `world = o + R·(local·s)`, so an instanced draw of
 `geo` under the matrix lands where `replay()` put the geometry;
-`tests/track-graph.test.mjs` asserts that vertex-for-vertex against a rotated,
+`tests/unit/track-graph.test.mjs` asserts that vertex-for-vertex against a rotated,
 translated, non-uniformly scaled placement rather than trusting the derivation.
 
 Two classes of node **cannot** be instanced, and are returned in `bakeOnly`

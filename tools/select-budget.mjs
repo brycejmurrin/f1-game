@@ -88,8 +88,8 @@ export function capacity(budgetMin, failures = 1, m = MEASURED) {
     tests: room <= 0 ? 0 : Math.floor(room / m.secPerTest) + failures };
 }
 
-const SPECS = fs.readdirSync(path.join(ROOT, "tests"))
-  .filter((f) => f.endsWith(".spec.js")).map((f) => `tests/${f}`);
+const SPECS = fs.readdirSync(path.join(ROOT, "tests", "specs"))
+  .filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`);
 const counts = SPECS.map((f) => ({ file: f, tests: declaredTests(f) }))
   .filter((r) => r.tests != null).sort((a, b) => a.tests - b.tests);
 

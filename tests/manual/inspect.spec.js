@@ -17,7 +17,7 @@
  */
 import { test } from "@playwright/test";
 import fs from "fs";
-import { galleryPath, galleryUrl } from "../output-paths.js";
+import { galleryPath, galleryUrl } from "../helpers/output-paths.js";
 import { circuits } from "./circuits.js";
 
 async function loadTrack(page, circuit) {

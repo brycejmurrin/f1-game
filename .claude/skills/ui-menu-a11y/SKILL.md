@@ -51,11 +51,11 @@ Relevant specs in `test:ui`:
 
 | Spec | What it tends to catch |
 |---|---|
-| `tests/menu-keyboard.spec.js` | Arrow-key movement, wheel redirect, open-layer targeting |
-| `tests/ui-button-touch.spec.js` | Escape/back ladder (incl. pause settings → `#pm-settings-close`), touch controls, dialog cancel paths |
-| `tests/ui-scale.spec.js` | UI-size/zoom and coarse-pointer layout regressions |
-| `tests/hud-layout.spec.js` | HUD safe-area, touch landscape, control docking |
-| `tests/ui-audit.spec.js` | The screen gallery — every menu at four viewports (portrait, landscape, iPad, desktop). A capture harness: it asserts nothing, so read its PNGs, do not read its pass count. `npm run test:gallery` |
+| `tests/specs/menu-keyboard.spec.js` | Arrow-key movement, wheel redirect, open-layer targeting |
+| `tests/specs/ui-button-touch.spec.js` | Escape/back ladder (incl. pause settings → `#pm-settings-close`), touch controls, dialog cancel paths |
+| `tests/specs/ui-scale.spec.js` | UI-size/zoom and coarse-pointer layout regressions |
+| `tests/specs/hud-layout.spec.js` | HUD safe-area, touch landscape, control docking |
+| `tests/specs/ui-audit.spec.js` | The screen gallery — every menu at four viewports (portrait, landscape, iPad, desktop). A capture harness: it asserts nothing, so read its PNGs, do not read its pass count. `npm run test:gallery` |
 
 Deep references:
 
@@ -119,7 +119,7 @@ Deep references:
 
 Opening pause settings hides `#pausemenu` so only `#pmsettings` is visible. Escape
 routes through `data-esc-close="pm-settings-close"` on that screen (same ladder
-asserted in `tests/ui-button-touch.spec.js`). Scroll region:
+asserted in `tests/specs/ui-button-touch.spec.js`). Scroll region:
 `#pmsettings-inner .sheet-body.pane`.
 
 ## Common Mistakes

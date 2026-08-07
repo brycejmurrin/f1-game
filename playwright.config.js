@@ -50,7 +50,7 @@ const LAUNCH = {
 // up. These run in the "render" project (cap its workers via
 // `--project=render --workers=4`). Everything NOT in this list is a headless
 // physics/geometry/hook/data spec that scales wide — the "headless" project.
-// Keep this list exhaustive against tests/*.spec.js (a coverage-audit npm script
+// Keep this list exhaustive against tests/specs/*.spec.js (a coverage-audit npm script
 // asserts every spec lands in exactly one project).
 const RENDER_SPECS = [
   "dev-tools", "f1-track-accuracy", "hud-audit", "image-grade-visual",
@@ -132,7 +132,7 @@ export default defineConfig({
     stderr: "ignore",
   },
   reporter: [
-    // Live tail-able progress (see tests/live-reporter.js): timestamped
+    // Live tail-able progress (see tests/helpers/live-reporter.js): timestamped
     // start/end line per test, written immediately — `tail -f` friendly.
     ["./tests/live-reporter.js"],
     ["html", { open: "never", outputFolder: `artifacts/report${SUF}` }],

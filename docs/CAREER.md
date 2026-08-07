@@ -50,7 +50,7 @@ team development and its garage build.
 
 So every **gameplay** accessor in `Career` is gated on `inCareer()` — `paceMult`,
 `teamStats`, `driverOverride`, `devFor`, `owned`, `settleRound`. Save/UI accessors
-(`data`, `state`, `start`, `load`, `save`) are not. `tests/career.spec.js` pins both
+(`data`, `state`, `start`, `load`, `save`) are not. `tests/specs/career.spec.js` pins both
 directions: development must not reach a Grand Prix, and must reach the career.
 
 ## The saves — `apex26.career.<flavour>.0` … `.2`
@@ -672,14 +672,14 @@ lights up gold with no new CSS.
 
 ## Tests
 
-`tests/career.spec.js` and `tests/quali.spec.js`, both in `npm run test:career`
+`tests/specs/career.spec.js` and `tests/specs/quali.spec.js`, both in `npm run test:career`
 (and in `test:modes`). They cover the mode axes, the save and its migration, the
 isolation guarantees, the hub flow, a settled round, the R&D garage, MY TEAM's two
 cars and its wage bill, the objectives, the rollover and the contracts, the ratings,
 the grid, and RELIABILITY — that OFF changes nothing, that a seeded season retires
 the same cars for the same reasons every time, that a retirement classifies below
 every finisher and scores no points, and that the draw leaves the sim RNG stream
-exactly where it found it. `tests/ui-audit.spec.js` screenshots the career hub, its
+exactly where it found it. `tests/specs/ui-audit.spec.js` screenshots the career hub, its
 new-career state, qualifying and the offers sheet in both orientations.
 
 Run `npm run test:modes` after any change here, and `npm run test:parts` after

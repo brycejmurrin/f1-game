@@ -288,7 +288,7 @@ and select screens both want), and `text-wrap: balance`. The repo already has
 
 - `tools/ui-scale-axis.mjs` adds `--scale=` to `layout-audit`, `menu-fit` and
   `fit-audit`, turning screen × viewport into screen × viewport × scale.
-- `tests/ui-scale.spec.js` is the cheap standing guard. It shipped
+- `tests/specs/ui-scale.spec.js` is the cheap standing guard. It shipped
   **landscape-only** and that gap cost the section-1 bug within the hour — a
   portrait-only CSS branch cannot be seen by a landscape-only matrix. It now
   runs both orientations and asserts nothing scrolls sideways.

@@ -215,7 +215,7 @@ assets/pack/CREDITS.md        per-asset author + licence + source URL
 `verify` is the guard that matters: it re-checks every md5, refuses any licence
 that is not CC0 or an explicitly allow-listed permissive one, and fails if a
 manifest entry has no `source` URL. Wire it into `npm run test:tooling`
-alongside the existing `tests/load-order.test.mjs` so licence drift is a red
+alongside the existing `tests/unit/load-order.test.mjs` so licence drift is a red
 test, not a discovery three years later.
 
 For the model path, [glTF-Transform](https://gltf-transform.dev/cli) is the
@@ -365,7 +365,7 @@ __apex.credits()                   // licence roll, for a settings-screen credit
 ```
 
 `__apex.matTex()` is the important one: it makes a screenshot A/B of the whole
-feature a two-line Playwright test, and `tests/lighting-ab.spec.js` already
+feature a two-line Playwright test, and `tests/specs/lighting-ab.spec.js` already
 does exactly that kind of pixel comparison.
 
 ---
@@ -375,7 +375,7 @@ does exactly that kind of pixel comparison.
 | phase | work | status |
 |---|---|---|
 | 0 | `MAT` ids for road/terrain | **was already done** — `mesh.js:412-424`, `:713` |
-| 1 | `tools/assets.mjs` + manifest + licence `verify` | **shipped**, guarded by `tests/assets-pack.test.mjs` |
+| 1 | `tools/assets.mjs` + manifest + licence `verify` | **shipped**, guarded by `tests/unit/assets-pack.test.mjs` |
 | 2 | `Assets` global + `createTextureArray` + `uMatTexMix` at 0 | **shipped** on GLX and TLX |
 | 3 | Tune `matTexMix` per profile, bake into `light-presets.js` | **open** — needs a human eye on a real screen |
 | 4 | KTX2 container + vendored transcoder | **open** — the 561 KB PNG pack is far under budget, so this is not yet needed |

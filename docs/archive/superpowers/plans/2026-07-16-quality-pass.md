@@ -25,7 +25,7 @@
 
 **Files:**
 - Modify: `js/game.js` (`startRace()`, player sector transition in `updateCar()`)
-- Modify: `tests/time-trial.spec.js`
+- Modify: `tests/specs/time-trial.spec.js`
 
 **Interfaces:**
 - Consumes: existing `__apex.sectorState()`, `__apex.go()`, `__apex.jump()`, and `__apex.step()`
@@ -65,7 +65,7 @@ test("records S3 before resetting timing at the finish line", async ({ page }) =
 Run:
 
 ```sh
-npx playwright test tests/time-trial.spec.js --grep "grid sector|records S3"
+npx playwright test tests/specs/time-trial.spec.js --grep "grid sector|records S3"
 ```
 
 Expected: initial sector is `0`, and/or S3 remains `null`.
@@ -82,7 +82,7 @@ Keep the existing forward-progress guard and public `sectorState()` shape.
 Run the focused command above, then:
 
 ```sh
-npx playwright test tests/time-trial.spec.js
+npx playwright test tests/specs/time-trial.spec.js
 ```
 
 Expected: all tests pass.
@@ -93,7 +93,7 @@ Expected: all tests pass.
 
 **Files:**
 - Modify: `js/game.js` (lights-out and finish-line ghost lifecycle)
-- Modify: `tests/time-trial.spec.js`
+- Modify: `tests/specs/time-trial.spec.js`
 - Read only: `js/ghost.js`
 
 **Interfaces:**
@@ -119,7 +119,7 @@ expect(ghost.s.every((s, i) => i === 0 || s >= ghost.s[i - 1])).toBe(true);
 Run:
 
 ```sh
-npx playwright test tests/time-trial.spec.js --grep "flying lap"
+npx playwright test tests/specs/time-trial.spec.js --grep "flying lap"
 ```
 
 Expected: the first sample is near the circuit end or the sequence wraps backward.
@@ -137,7 +137,7 @@ so wrapped start-line samples belong to the new lap.
 Run the focused command and then:
 
 ```sh
-npx playwright test tests/time-trial.spec.js
+npx playwright test tests/specs/time-trial.spec.js
 ```
 
 Expected: all tests pass and persisted distance is monotonic.
@@ -148,8 +148,8 @@ Expected: all tests pass and persisted distance is monotonic.
 
 **Files:**
 - Modify: `js/game.js` (`update()`, `finishRace()`, optionally `endRace(forcedOrder)`)
-- Modify: `tests/season.spec.js`
-- Modify: `tests/dev-tools.spec.js`
+- Modify: `tests/specs/season.spec.js`
+- Modify: `tests/specs/dev-tools.spec.js`
 
 **Interfaces:**
 - Produces: emergency cutoff `360 * lapsTarget`; `finishRace()` results matching current `fieldState()` order
@@ -179,7 +179,7 @@ for (const laps of [10, 25, 57]) {
 Run:
 
 ```sh
-npx playwright test tests/season.spec.js --grep "does not end"
+npx playwright test tests/specs/season.spec.js --grep "does not end"
 ```
 
 Expected: current state is `results`.
@@ -196,7 +196,7 @@ Keep winner-finished handling unchanged.
 
 - [ ] **Step 4: Add failing forced-order regression**
 
-In `tests/dev-tools.spec.js`, arrange distinct car progress using the existing
+In `tests/specs/dev-tools.spec.js`, arrange distinct car progress using the existing
 debug car seam, capture expected driver codes from `fieldState()`, call
 `finishRace()`, and assert results rows use that same order.
 
@@ -205,7 +205,7 @@ debug car seam, capture expected driver codes from `fieldState()`, call
 Run:
 
 ```sh
-npx playwright test tests/dev-tools.spec.js --grep "current field order"
+npx playwright test tests/specs/dev-tools.spec.js --grep "current field order"
 ```
 
 Expected: results follow construction order instead.
@@ -222,8 +222,8 @@ penalty sorting for organic races.
 Run:
 
 ```sh
-npx playwright test tests/season.spec.js --grep "does not end"
-npx playwright test tests/dev-tools.spec.js --grep "current field order"
+npx playwright test tests/specs/season.spec.js --grep "does not end"
+npx playwright test tests/specs/dev-tools.spec.js --grep "current field order"
 npm run test:modes
 npm run test:api
 ```
@@ -236,7 +236,7 @@ Expected: all commands pass.
 
 **Files:**
 - Modify: `js/game.js` (`_decalTexCache`, `syncCustomTeam()`)
-- Create: `tests/custom-team.spec.js`
+- Create: `tests/specs/custom-team.spec.js`
 
 **Interfaces:**
 - Produces: private `invalidateDecalTextures(teamId)` that frees and deletes all matching cache entries
@@ -256,7 +256,7 @@ expect(secondTextureId).not.toBe(firstTextureId);
 Run:
 
 ```sh
-npx playwright test tests/custom-team.spec.js --grep "frees and rebuilds" --workers=1
+npx playwright test tests/specs/custom-team.spec.js --grep "frees and rebuilds" --workers=1
 ```
 
 Expected: no old texture is freed and the cache reuses it.
@@ -292,7 +292,7 @@ Run the focused command. Expected: pass.
 - Modify: `js/api.js`
 - Modify: `js/data.js`
 - Modify: `js/data-telemetry.js`
-- Create: `tests/data-lifecycle.spec.js`
+- Create: `tests/specs/data-lifecycle.spec.js`
 
 **Interfaces:**
 - Produces: meeting-date registry, `meetingTtl(meetingKey)`, picker generation counter, telemetry driver generation counter
@@ -314,7 +314,7 @@ expect(historicMeetingSessionRequests).toBe(1);
 Run:
 
 ```sh
-npx playwright test tests/data-lifecycle.spec.js --grep "meeting session lists" --workers=1
+npx playwright test tests/specs/data-lifecycle.spec.js --grep "meeting session lists" --workers=1
 ```
 
 Expected: the recent meeting makes only one request.
@@ -355,7 +355,7 @@ mutate the visible picker or telemetry panes.
 Run:
 
 ```sh
-npx playwright test tests/data-lifecycle.spec.js --grep "latest year response|latest meeting response|latest telemetry driver response" --workers=1
+npx playwright test tests/specs/data-lifecycle.spec.js --grep "latest year response|latest meeting response|latest telemetry driver response" --workers=1
 ```
 
 Expected: at least one late response overwrites the latest selection.
@@ -373,7 +373,7 @@ DOM mutation.
 
 - [ ] **Step 7: Verify GREEN**
 
-Run all tests in `tests/data-lifecycle.spec.js`. Expected: pass.
+Run all tests in `tests/specs/data-lifecycle.spec.js`. Expected: pass.
 
 ---
 
@@ -381,8 +381,8 @@ Run all tests in `tests/data-lifecycle.spec.js`. Expected: pass.
 
 **Files:**
 - Modify: `js/game.js` (`setSound()`)
-- Modify: `tests/audio-smoke.spec.js`
-- Modify: `tests/smoke.spec.js`
+- Modify: `tests/specs/audio-smoke.spec.js`
+- Modify: `tests/specs/smoke.spec.js`
 
 **Interfaces:**
 - Produces: race music restart through existing `GameAudio.startMusic(trackIdx)`
@@ -397,7 +397,7 @@ Wrap `GameAudio.startMusic`, start Monza, clear startup calls, toggle
 Run:
 
 ```sh
-npx playwright test tests/audio-smoke.spec.js --grep "re-enabling sound during a race" --workers=1
+npx playwright test tests/specs/audio-smoke.spec.js --grep "re-enabling sound during a race" --workers=1
 ```
 
 Expected: no race `startMusic()` call.
@@ -431,8 +431,8 @@ should pass without a production change.
 Run:
 
 ```sh
-npx playwright test tests/audio-smoke.spec.js --grep "re-enabling sound during a race" --workers=1
-npx playwright test tests/smoke.spec.js --grep "jump\\(\\) sets player speed and lateral offset"
+npx playwright test tests/specs/audio-smoke.spec.js --grep "re-enabling sound during a race" --workers=1
+npx playwright test tests/specs/smoke.spec.js --grep "jump\\(\\) sets player speed and lateral offset"
 npm run test:smoke
 ```
 
@@ -449,7 +449,7 @@ Expected: all commands pass.
 - Modify: `js/webgpu/wgsl-fx.js`
 - Modify: `js/game.js`
 - Modify: `js/game/tables.js`
-- Modify: `tests/camera.spec.js`
+- Modify: `tests/specs/camera.spec.js`
 - Modify: `tools/apex-capture.mjs`
 - Modify: `.claude/skills/playwright-probe/SKILL.md`
 - Modify: `docs/ARCHITECTURE.md`
@@ -481,7 +481,7 @@ Run:
 
 ```sh
 rg -n "track-batch-verify|shot-car\\.mjs|inspect-scene|tools/carshot\\.mjs|audio-test\\.js|currently 539" docs tools js .claude
-npx playwright test tests/camera.spec.js
+npx playwright test tests/specs/camera.spec.js
 ```
 
 Expected: no stale-reference matches; camera tests pass.
@@ -532,9 +532,9 @@ Expected: all checks exit zero.
 Run independent Playwright groups on distinct ports:
 
 ```sh
-APEX_PORT=3461 npx playwright test tests/time-trial.spec.js tests/season.spec.js tests/dev-tools.spec.js --reporter=line
-APEX_PORT=3462 npx playwright test tests/custom-team.spec.js tests/data-lifecycle.spec.js tests/audio-smoke.spec.js --reporter=line
-APEX_PORT=3463 npx playwright test tests/smoke.spec.js tests/camera.spec.js --reporter=line
+APEX_PORT=3461 npx playwright test tests/specs/time-trial.spec.js tests/specs/season.spec.js tests/specs/dev-tools.spec.js --reporter=line
+APEX_PORT=3462 npx playwright test tests/specs/custom-team.spec.js tests/specs/data-lifecycle.spec.js tests/specs/audio-smoke.spec.js --reporter=line
+APEX_PORT=3463 npx playwright test tests/specs/smoke.spec.js tests/specs/camera.spec.js --reporter=line
 ```
 
 Then run:

@@ -148,7 +148,7 @@ Mapped to the waves in docs/research/AUDIT-SYNTHESIS-2026-08.md § RESTRUCTURE:
 - js/game/audio.js:1029 — stale "trackIdx >= 0 → race loop" block above setMusicEnabled, contradicted by startMusic's own :1050-1055 → delete the two lines while re-reading the panel↔audio seam during the extraction.
 - js/game/photomode.js:257 — lt-help-on/lt-reset/lt-copy (including the COPY VALUES export bake-lighting depends on) wired in photomode.js while every other #lighting control lives in tuner.js → move into tuner.js's create(G) as an R1 companion commit; it is the lighting-panel twin of the ownership problem R1 fixes for the audio panel.
 
-**R2 (tests/ split) — 0 new findings, one sequencing constraint.** No finding lands inside tests/ (out of scope), but R2 step 5 edits tools/fit-audit.mjs:27 and tools/menu-fit.mjs:32 (the `../tests/f1-api-mock.js` imports). Land the Batch-C dead-route fixes for those two files **before** R2, so the mechanical git-mv commit stays mechanical and doesn't carry functional fixes.
+**R2 (tests/ split) — 0 new findings, one sequencing constraint.** No finding lands inside tests/ (out of scope), but R2 step 5 edits tools/fit-audit.mjs:27 and tools/menu-fit.mjs:32 (the `../tests/helpers/f1-api-mock.js` imports). Land the Batch-C dead-route fixes for those two files **before** R2, so the mechanical git-mv commit stays mechanical and doesn't carry functional fixes.
 
 **R3 (tools/ subdirs, reduced form) — 6 findings:**
 - tools/rtc-e2e.mjs:58 (+ rtc-e2e-3p.mjs:54, rtc-e2e-room.mjs:56) — hardcoded `/opt/pw-browsers/chromium` with no ladder → fold the pickChromium/env fallback into the `tools/net/` move commit (the move already rewrites their path handling).

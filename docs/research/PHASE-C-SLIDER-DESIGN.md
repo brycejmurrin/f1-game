@@ -361,14 +361,14 @@ not land.
 
 | Where | What it encodes | Why it moves |
 |---|---|---|
-| `tests/sliders.spec.js:35-42` | a table of `{id, key, store, min: 1, max: 10}` per slider | the pace row becomes `max: 19` and its default `11`. The other four rows are unchanged — only PACE grows a wider control |
-| `tests/sliders.spec.js` (the four `OVERALL SPEED …` tests) | drive `pm-pace` to specific notch values | notch numbers no longer denote the same pace. They assert *invariants* (the dial and gearbox span their full range at every setting) rather than magnitudes, so they need new notch numbers and nothing else — which is the sign the `vTop()`/`vStd()` discipline was worth having |
-| `tests/steer-migration.spec.js` "the migration touches only its own two keys" | seeds `pace: 3` and asserts it survives untouched | **v3's whole job is to remap `pace`.** This assertion is correct for v2 and will be wrong for v3. It must be re-scoped to the keys v3 genuinely leaves alone (`steerRate`, `steerSmooth`), not deleted — the "too wide a blast radius" invariant it exists for still matters |
+| `tests/specs/sliders.spec.js:35-42` | a table of `{id, key, store, min: 1, max: 10}` per slider | the pace row becomes `max: 19` and its default `11`. The other four rows are unchanged — only PACE grows a wider control |
+| `tests/specs/sliders.spec.js` (the four `OVERALL SPEED …` tests) | drive `pm-pace` to specific notch values | notch numbers no longer denote the same pace. They assert *invariants* (the dial and gearbox span their full range at every setting) rather than magnitudes, so they need new notch numbers and nothing else — which is the sign the `vTop()`/`vStd()` discipline was worth having |
+| `tests/specs/steer-migration.spec.js` "the migration touches only its own two keys" | seeds `pace: 3` and asserts it survives untouched | **v3's whole job is to remap `pace`.** This assertion is correct for v2 and will be wrong for v3. It must be re-scoped to the keys v3 genuinely leaves alone (`steerRate`, `steerSmooth`), not deleted — the "too wide a blast radius" invariant it exists for still matters |
 | `index.html:1064-1065` | `min="1" max="10" value="5"` on `#pm-pace` | → `max="19" value="11"` |
 
 **Should NOT move, and it is worth checking they don't:**
 
-- `tests/drift.spec.js` › *SPEED STEER: higher keeps more turn-in at high speed*
+- `tests/specs/drift.spec.js` › *SPEED STEER: higher keeps more turn-in at high speed*
   drives `setPhysics({speedRef})` at 50 vs 120 and asserts `sharp > calm * 1.1`.
   It tests the **physics constant**, not the slider notch, so the remapping
   cannot touch it — and the shape change does not either: at 58 m/s the ratio
@@ -394,7 +394,7 @@ Bumping `STEER_SCHEMA` to 3 makes a store already at 2 fall through and receive
 **v2's reset a second time**, silently discarding a `drivingHelp` or `raceLine`
 value the player chose deliberately after v2 ran. Phase C must convert this to a
 per-version ladder before it changes the constant.
-`tests/steer-migration.spec.js` exists to make that failure loud.
+`tests/specs/steer-migration.spec.js` exists to make that failure loud.
 
 **CLEARED.** `STEER_MIGRATIONS` is now a list of `{to, apply}` steps and
 `migrateSteerStore()` runs only those above the stored schema — the shape

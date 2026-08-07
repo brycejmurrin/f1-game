@@ -56,7 +56,7 @@
     //
     // The four `rise` values below WERE the real-world ~9 m figures verbatim —
     // 6.5/-3.0/5.0/-1.5 — a straight contradiction of the comment two lines up,
-    // caught by tests/new-hooks.spec.js asserting elevationRange <= 3 while this
+    // caught by tests/specs/new-hooks.spec.js asserting elevationRange <= 3 while this
     // authored 9.586 m. Scaled by the same 2.2/9.586 ratio the comment always
     // implied, keeping the s/halfM shape (the real corniche's wavelengths)
     // and only correcting the amplitude back to what "shipped" was meant to mean.

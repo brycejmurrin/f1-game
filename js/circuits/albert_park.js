@@ -40,7 +40,7 @@
     // Source-trace fractions. Sub-metre relief preserves measurable grade for
     // physics without turning the essentially-flat lakeside park into hills.
     // NB the ~5 m of real Albert Park roll is deliberately NOT modelled here:
-    // tests/albert-park-foundation.test.mjs codifies this circuit's flat terrain
+    // tests/unit/albert-park-foundation.test.mjs codifies this circuit's flat terrain
     // contract (|rise| <= 0.75 m, total range <= 1.2 m). Raising it needs that
     // guard relaxed first.
     elevations: [{ s: 0.2125, halfM: 340, rise: 0.6 }, { s: 0.6425, halfM: 300, rise: -0.4 }],

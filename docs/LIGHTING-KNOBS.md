@@ -54,7 +54,7 @@ localized, or chromatically neutral for a robust automated whole-frame gate
 These are still rendered, measured, and composited every run for human review —
 they just don't fail the exit code. The `-AB.jpg` side-by-side is the judge.
 
-`tests/lighting-ab.spec.js` additionally fails if any catalog `find` string no
+`tests/specs/lighting-ab.spec.js` additionally fails if any catalog `find` string no
 longer matches its file exactly once, so retuning a constant forces the
 catalog to follow.
 

@@ -1398,7 +1398,7 @@ const AgentView = (function () {
         profile: o.profile ? profile : undefined,
         authoritative: {
           propsOverRoad: "tools/measure-props-over-road.mjs (vertex-level)",
-          terrainOverRoad: "tests/terrain-over-road.spec.js",
+          terrainOverRoad: "tests/specs/terrain-over-road.spec.js",
         },
         note: "pass {profile:true} for the full lateral ground table. A terrain "
               + "hole (null between solid readings) is the classic cause of "

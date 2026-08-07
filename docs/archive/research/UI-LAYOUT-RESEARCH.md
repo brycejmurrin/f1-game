@@ -236,7 +236,7 @@ Two further details we should not have to rediscover:
   components, hud, overlays`), declared once in `css/tokens.css`. That is right;
   the problem was never the design, only that files leaked out of it.
 
-`tests/css-layers.test.mjs` now enforces the boundary. The remaining gap is that
+`tests/unit/css-layers.test.mjs` now enforces the boundary. The remaining gap is that
 it checks *structure*, not *intent* — a rule can be in the wrong layer and still
 pass. Nothing cheap fixes that; the structural check is what caught the real bug.
 
@@ -449,7 +449,7 @@ top layer never has to arbitrate between them.
    overlay position now uses it; the type and gap clamps deliberately stay on
    `vh` (a font-size that changed as the toolbar slid would be worse than the
    imprecision). House rule recorded in css/tokens.css.
-8. ~~**Six blessed pixel baselines**~~ — **done**, `tests/menu-baseline.spec.js`.
+8. ~~**Six blessed pixel baselines**~~ — **done**, `tests/specs/menu-baseline.spec.js`.
    Proved they can fail before trusting them: swapping `--red` to blue fails four
    of six, restoring it passes all six.
 9. ~~**`any-hover` for hybrid devices**~~ — **done, in exactly one place.**

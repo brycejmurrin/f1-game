@@ -1236,7 +1236,7 @@ const GLX = (function () {
   // OPAQUE-ONLY: a blended instanced draw would drop depth writes (below) but
   // would NOT mask alpha writes the way draw() does, so it would drag the SSR
   // car-paint tag stored in scene alpha. Every current caller (the TrackGraph
-  // prop batches; tests/instanced-draw.spec.js) passes alpha 1 — route
+  // prop batches; tests/specs/instanced-draw.spec.js) passes alpha 1 — route
   // translucent work through draw() instead.
   function drawInstanced(batch, opts) {
     if (!batch || !batch.instances) return;

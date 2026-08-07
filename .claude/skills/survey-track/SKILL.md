@@ -57,7 +57,7 @@ Add fractions or a label as needed: `survey-track.mjs <id> after 0.1,0.55,0.78`.
 For a quick numbers-only re-probe (no screenshots) use
 `node .claude/skills/survey-track/ground-profile.mjs <id>`. For one bespoke framing
 use `playwright-probe`'s `shot.mjs`. Deeper geometry hooks (`scan`, `wallStats`,
-`groundY`) live in **debug-tracks**; `tests/terrain-over-road.spec.js` catches the
+`groundY`) live in **debug-tracks**; `tests/specs/terrain-over-road.spec.js` catches the
 terrain-over-road class.
 
 ### 3 · Edit
@@ -93,12 +93,12 @@ Compare `scratch/captures/survey-track/<id>/before-*.png` vs `after-*.png`; conf
 is now flag-free and the eye shots show props on real ground.
 
 ### 6 · Test & ship
-- Geometry guards: `npx playwright test tests/terrain-over-road.spec.js tests/tracks-walls.spec.js`
+- Geometry guards: `npx playwright test tests/specs/terrain-over-road.spec.js tests/specs/tracks-walls.spec.js`
 - Visual regression (all circuits): `npm run test:visual`
-  — this suite skips when `tests/tracks-visual.spec.js-snapshots/` is absent; if
+  — this suite skips when `tests/specs/tracks-visual.spec.js-snapshots/` is absent; if
   baselines exist and your change is **intentional**, regenerate them with:
-  `npm run test:update -- tests/tracks-visual.spec.js` (then eyeball
-  `tests/tracks-visual.spec.js-snapshots/`). Prefer Linux/SwiftShader for CI-matching goldens.
+  `npm run test:update -- tests/specs/tracks-visual.spec.js` (then eyeball
+  `tests/specs/tracks-visual.spec.js-snapshots/`). Prefer Linux/SwiftShader for CI-matching goldens.
 - **bump-cache**: increment `?v=N` in `index.html` (every `js/*`/`css/*` edit).
   See the **bump-cache** skill / `sed -i -E 's/\?v=[0-9]+/?v=N/g' index.html`.
 - Commit with a message that says the *why*, and push. Pick the test group with

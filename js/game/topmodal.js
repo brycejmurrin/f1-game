@@ -90,7 +90,7 @@ window.TopModal = (function () {
      #photo-controls. (#track-detail was a sixth, until it migrated to a real
      <dialog> — see docs/research/PLATFORM-INPUT-NOTES.md §9a. That migration
      shipped, silently lost its markup hunk to a merge, and was restored in
-     2026-08 after tests/menu-keyboard.spec.js's ":modal" assertion — which had
+     2026-08 after tests/specs/menu-keyboard.spec.js's ":modal" assertion — which had
      been red and unrun the whole time — was found pinning it.) Two of the
      remainder must NOT become modal dialogs — #carsetup is
      `pointer-events: none` so a drag reaches the live turntable rendering

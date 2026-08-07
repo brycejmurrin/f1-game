@@ -48,7 +48,7 @@ absolute time in a float. No action needed — recorded so nobody "fixes" it.
 ## 2. What `__apex.seed()` can and cannot promise
 
 The repo's determinism story — seeded `simRnd()`, `__apex.seed()`, and
-`tests/agent-determinism.spec.js` — is sound for its actual use, which is
+`tests/specs/agent-determinism.spec.js` — is sound for its actual use, which is
 **same-machine, same-build reproducibility**. Worth writing down that this is a
 strictly weaker property than the one the word "deterministic" usually implies:
 
@@ -93,7 +93,7 @@ exists for the physics/game-loop side. Before extracting anything from
 `updateCar` or `render`, the cheap move is a characterization harness in the same
 spirit: fix a seed, drive a scripted input sequence through `__apex.act()` for N
 steps, and snapshot the resulting `physState()` trace. Any extraction that
-changes one number fails. `tests/agent-determinism.spec.js` is close to this
+changes one number fails. `tests/specs/agent-determinism.spec.js` is close to this
 already and may only need a stored baseline.
 
 The other standard advice, which matches the plan already agreed:
@@ -125,7 +125,7 @@ like in 2026, because it is no longer 2015:
   and unused-export detection instead of a review finding "~60 dead exports".
 
 **This is not a recommendation to migrate.** 150 files, 140 script tags and a
-load order pinned by `tests/load-order.test.mjs` is a working system, and the
+load order pinned by `tests/unit/load-order.test.mjs` is a working system, and the
 review's own law applies: the invariant has a guard, so it holds. The point of
 recording it is that the *reason* for the bet should be "the guard works",
 not "ESM would be slow" — the second half of that has quietly stopped being true.

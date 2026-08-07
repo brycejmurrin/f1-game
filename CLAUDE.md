@@ -24,7 +24,7 @@ tools/README.md                       # the index of all 60+ tools (test-asserte
 ## Testing
 
 **The reference is `docs/TESTING.md`** — every group, every spec, fixtures,
-philosophy. `tests/test-groups.test.mjs` fails if it and `package.json`
+philosophy. `tests/unit/test-groups.test.mjs` fails if it and `package.json`
 disagree. Concurrency and worktrees: `docs/PARALLEL-WORK.md`. The suite is
 110 Playwright specs plus 58 `node --test` unit suites; the browser half is
 SwiftShader-rendered and slow, which forces three rules:
@@ -161,7 +161,7 @@ buffer (default `info`) decides what the 500-entry ring retains for
 Regenerable output goes in two gitignored roots — never `/tmp`, never the repo
 root: `artifacts/` (test results/reports/logs/galleries/tmp) and `scratch/`
 (captures, renders, profiles). Golden baselines exist for the MENUS only
-(`tests/menu-baseline.spec.js-snapshots/`); `npm run test:visual` is skip-gated
+(`tests/specs/menu-baseline.spec.js-snapshots/`); `npm run test:visual` is skip-gated
 until circuit baselines are ever generated.
 
 ---
@@ -217,7 +217,7 @@ js/track/        — track ENGINE (shared code) —
   scenery-nature.js / scenery-city.js / scenery-structures.js / scenery-identity.js
                  Scenery*.create(ctx)  the buildProps split; together they serve the
                                   107-member scenery(api) contract frozen by
-                                  tests/scenery-api-contract.test.mjs (docs/SCENERY-API.md)
+                                  tests/unit/scenery-api-contract.test.mjs (docs/SCENERY-API.md)
 
 js/circuits/     — circuit DATA — one file per circuit, registers on Tracks.LIST
 
@@ -327,7 +327,7 @@ worker/          optional Cloudflare rendezvous relay (worker/README.md)
   The single exception is the vendored three.js island used by the deferred TLX
   backend.
 - **Load order lives in `tools/manifest.cjs`** — asserted against `index.html`
-  by `tests/load-order.test.mjs`. New-file checklist: (1) IIFE file in the
+  by `tests/unit/load-order.test.mjs`. New-file checklist: (1) IIFE file in the
   right `js/<domain>/`; (2) `<script>` tag at the matching position;
   (3) manifest entry (+ a `HARD_EDGES` pair if something destructures its
   global at eval time); (4) name it in this file's layout; (5) bump `?v=N` +
@@ -338,7 +338,7 @@ worker/          optional Cloudflare rendezvous relay (worker/README.md)
   `js/circuits/<id>.js`; engine/placement changes go in `js/track/`.
 - **The `G` ctx façade**: extracted `js/game/*` modules never reach into
   game.js — it builds one `G` object of live getters/setters and instantiates
-  each module via `Module.create(G)`. `tests/module-size.test.mjs` ratchets
+  each module via `Module.create(G)`. `tests/unit/module-size.test.mjs` ratchets
   game.js's size; lower the ceiling when you extract.
 - **Naming in `js/game/`**: new multi-word files are hyphenated
   (`light-store.js`); the older squashed names (`debrisworld.js`) are
@@ -361,7 +361,7 @@ worker/          optional Cloudflare rendezvous relay (worker/README.md)
 - **`PACE` is a ground-speed scale, not a cap.** Anything that divides a speed
   by `VMAX` or compares one against a literal must use `vTop()` / `vStd()`
   (accelerations: `aStd()`). Enforced by `tools/vstd-lint.mjs` +
-  `tests/vstd-invariant.test.mjs` — a bare literal needs a written reason.
+  `tests/unit/vstd-invariant.test.mjs` — a bare literal needs a written reason.
 - **The arc must not reach the driver.** With assists off, nothing derived
   from track curvature or the racing line may affect the player — steering,
   lap progress, rendered position, nose angle, squeal, barrier alignment all
@@ -394,7 +394,7 @@ not. `tools/assets.mjs verify` enforces licence allow-list + 8 MB budget.
 ## `window.__apex` dev API
 
 ~180 hooks; `docs/DEBUG-HOOKS.md` is the full reference and
-`tests/hooks-documented.test.mjs` keeps it honest. `__apex.agentHelp()` is the
+`tests/unit/hooks-documented.test.mjs` keeps it honest. `__apex.agentHelp()` is the
 machine-readable manifest — read it once per session. The short list:
 
 ```js

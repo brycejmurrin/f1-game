@@ -156,7 +156,7 @@ node tools/test-bg.mjs --status              # running / how each ended
 
 npm run test:tiny                            # start here: page loads, __apex responds
 npm run test:fast                            # quick subset (~3 min)
-npm test -- tests/autopilot.spec.js          # single file
+npm test -- tests/specs/autopilot.spec.js          # single file
 node tools/verify-track.cjs --all            # headless build check, all 40 circuits (no browser)
 ```
 

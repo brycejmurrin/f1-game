@@ -1419,7 +1419,7 @@ function recomputePlayerMods() {
 // The simRnd() draw is UNCONDITIONAL and comes FIRST. The stream position after
 // makeCars() must be identical whatever the ratings say: move the draw inside a
 // branch and a career's mere existence shifts every subsequent seeded result,
-// silently breaking tests/agent-determinism.spec.js, tests/autopilot.spec.js and
+// silently breaking tests/specs/agent-determinism.spec.js, tests/specs/autopilot.spec.js and
 // the seeded visual baselines. DriverRatings.skill() takes the sample rather than
 // drawing its own for exactly this reason.
 function driverSkill(team, d, di) {
@@ -2290,7 +2290,7 @@ function startRace() {
   // js/game.js held ZERO Log calls before this one, despite `game` being the
   // namespace js/log.js defines for exactly this file. That mattered more than
   // it sounds: the buffer retains at `info` whether or not it prints, and
-  // tests/fixtures.js attaches the ring to EVERY failure — so a physics spec
+  // tests/helpers/fixtures.js attaches the ring to EVERY failure — so a physics spec
   // that failed on "speed was 43, expected > 50" had nothing in its attachment
   // saying what the car's top speed even was that run. One line makes the whole
   // class of pace/parts/weather failures self-explaining, which is what the
@@ -4143,7 +4143,7 @@ function updateCar(c, dt, ranked) {
       // rotating out of a scrape. Sound in isolation, wrong in effect: a car at
       // full lock washes wide into the barrier, and letting it keep lateral
       // velocity there means the slide never decays. Bisected to this line:
-      // tests/drift.spec.js went 6/0 -> 4/2, with "full lock washes wide, never
+      // tests/specs/drift.spec.js went 6/0 -> 4/2, with "full lock washes wide, never
       // spins" reaching 82 deg of slip against its 45 deg limit, and "slide
       // self-aligns" failing alongside it. The wall is a hard constraint; slip
       // against it is not something the car gets to keep.

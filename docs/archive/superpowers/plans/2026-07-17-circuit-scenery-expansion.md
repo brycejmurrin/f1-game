@@ -44,8 +44,8 @@ git add index.html version.json
 - Modify `js/tracks.js`: bind theme, landmark, and circuit helpers into `scenery(api)`.
 - Modify `index.html`: load the three modules before `tracks.js`.
 - Modify `tools/verify-track.cjs`: load the modules in the Node verification harness.
-- Create `tests/scenery-kits.test.mjs`: pure contracts for all three modules and budget behavior.
-- Create `tests/scenery-kits.spec.js`: browser integration and representative-circuit diagnostics.
+- Create `tests/unit/scenery-kits.test.mjs`: pure contracts for all three modules and budget behavior.
+- Create `tests/specs/scenery-kits.spec.js`: browser integration and representative-circuit diagnostics.
 - Modify five representative track files after their agent commits land: `js/tracks/singapore.js`, `js/tracks/bahrain.js`, `js/tracks/albert_park.js`, `js/tracks/silverstone.js`, and `js/tracks/qatar.js`.
 - Modify `docs/SCENERY-API.md`, `docs/TESTING.md`, `package.json`, `index.html`, and `version.json` for integration.
 
@@ -55,7 +55,7 @@ git add index.html version.json
 
 **Files:**
 - Create: `js/scenery-themes.js`
-- Create: `tests/scenery-kits.test.mjs`
+- Create: `tests/unit/scenery-kits.test.mjs`
 
 **Interfaces:**
 - Produces: `SceneryThemes.resolve(name, overrides?, context?) -> resolvedTheme`
@@ -105,7 +105,7 @@ test("SceneryThemes variant selection is stable and bounded", () => {
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `node --test tests/scenery-kits.test.mjs`
+Run: `node --test tests/unit/scenery-kits.test.mjs`
 
 Expected: FAIL because `js/scenery-themes.js` does not exist.
 
@@ -175,14 +175,14 @@ const SceneryThemes = (function () {
 
 - [ ] **Step 4: Run the tests**
 
-Run: `node --test tests/scenery-kits.test.mjs`
+Run: `node --test tests/unit/scenery-kits.test.mjs`
 
 Expected: 2 tests pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add js/scenery-themes.js tests/scenery-kits.test.mjs
+git add js/scenery-themes.js tests/unit/scenery-kits.test.mjs
 git commit -m "Add deterministic scenery themes"
 ```
 
@@ -192,7 +192,7 @@ git commit -m "Add deterministic scenery themes"
 
 **Files:**
 - Create: `js/landmark-kit.js`
-- Modify: `tests/scenery-kits.test.mjs`
+- Modify: `tests/unit/scenery-kits.test.mjs`
 
 **Interfaces:**
 - Consumes: primitive callbacks `{ box, prism, cylinder }`.
@@ -239,7 +239,7 @@ test("LandmarkKit rejects invalid and unbounded specs", () => {
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `node --test tests/scenery-kits.test.mjs`
+Run: `node --test tests/unit/scenery-kits.test.mjs`
 
 Expected: FAIL because `LandmarkKit` is missing.
 
@@ -344,14 +344,14 @@ const LandmarkKit = (function () {
 
 - [ ] **Step 4: Run the tests**
 
-Run: `node --test tests/scenery-kits.test.mjs`
+Run: `node --test tests/unit/scenery-kits.test.mjs`
 
 Expected: all theme and landmark tests pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add js/landmark-kit.js tests/scenery-kits.test.mjs
+git add js/landmark-kit.js tests/unit/scenery-kits.test.mjs
 git commit -m "Add bounded landmark building forms"
 ```
 
@@ -361,7 +361,7 @@ git commit -m "Add bounded landmark building forms"
 
 **Files:**
 - Modify: `js/track-models.js`
-- Modify: `tests/track-foundation.test.mjs`
+- Modify: `tests/unit/track-foundation.test.mjs`
 
 **Interfaces:**
 - Extends: `modelGroup(id, bounds, emit, { required?, maxVertices?, kind? })`
@@ -398,7 +398,7 @@ test("TrackModels rejects an entire staged model over its vertex budget", () => 
 
 - [ ] **Step 2: Run the failing test**
 
-Run: `node --test tests/track-foundation.test.mjs`
+Run: `node --test tests/unit/track-foundation.test.mjs`
 
 Expected: FAIL because `modelGroup` currently commits both vertices.
 
@@ -422,14 +422,14 @@ Include `kind` in the successful emitted diagnostic.
 
 - [ ] **Step 4: Run foundation tests**
 
-Run: `node --test tests/track-foundation.test.mjs`
+Run: `node --test tests/unit/track-foundation.test.mjs`
 
 Expected: all tests pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add js/track-models.js tests/track-foundation.test.mjs
+git add js/track-models.js tests/unit/track-foundation.test.mjs
 git commit -m "Enforce atomic scenery vertex budgets"
 ```
 
@@ -439,7 +439,7 @@ git commit -m "Enforce atomic scenery vertex budgets"
 
 **Files:**
 - Create: `js/circuit-kit.js`
-- Modify: `tests/scenery-kits.test.mjs`
+- Modify: `tests/unit/scenery-kits.test.mjs`
 
 **Interfaces:**
 - Consumes: `CircuitKit.create({ models, landmarks, theme, frameAt, groundHeight, hash })`
@@ -497,7 +497,7 @@ test("CircuitKit rejects missing IDs and unbounded repeated counts", () => {
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `node --test tests/scenery-kits.test.mjs`
+Run: `node --test tests/unit/scenery-kits.test.mjs`
 
 Expected: FAIL because `CircuitKit` is missing.
 
@@ -529,14 +529,14 @@ pit garages cap at `24`; hospitality modules cap at `12`.
 
 - [ ] **Step 4: Run the tests**
 
-Run: `node --test tests/scenery-kits.test.mjs`
+Run: `node --test tests/unit/scenery-kits.test.mjs`
 
 Expected: all tests pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add js/circuit-kit.js tests/scenery-kits.test.mjs
+git add js/circuit-kit.js tests/unit/scenery-kits.test.mjs
 git commit -m "Add reusable circuit infrastructure kit"
 ```
 
@@ -551,7 +551,7 @@ git commit -m "Add reusable circuit infrastructure kit"
 - Modify: `package.json`
 - Modify: `docs/SCENERY-API.md`
 - Modify: `docs/TESTING.md`
-- Create: `tests/scenery-kits.spec.js`
+- Create: `tests/specs/scenery-kits.spec.js`
 
 **Interfaces:**
 - Produces on `scenery(api)`: `sceneryTheme`, `landmarkKit`, and `circuitKit`.
@@ -579,7 +579,7 @@ test("shared scenery kits are bound and diagnostics stay finite", async ({ page 
 
 - [ ] **Step 2: Run the test and confirm loading fails**
 
-Run: `npm test -- tests/scenery-kits.spec.js --workers=1`
+Run: `npm test -- tests/specs/scenery-kits.spec.js --workers=1`
 
 Expected: FAIL until modules are loaded and bound.
 
@@ -621,7 +621,7 @@ Expose all three in the scenery API object.
 
 - [ ] **Step 5: Update tooling and documentation**
 
-- Add `tests/scenery-kits.test.mjs` to `test:tooling`.
+- Add `tests/unit/scenery-kits.test.mjs` to `test:tooling`.
 - Document theme names, precedence, every CircuitKit helper, all LandmarkKit
   forms, stable IDs, and budgets in `docs/SCENERY-API.md`.
 - Add both new test files to the testing coverage table.
@@ -631,9 +631,9 @@ Expose all three in the scenery API object.
 Run:
 
 ```bash
-node --test tests/scenery-kits.test.mjs tests/track-foundation.test.mjs
+node --test tests/unit/scenery-kits.test.mjs tests/unit/track-foundation.test.mjs
 node tools/verify-track.cjs --all
-npm test -- tests/scenery-kits.spec.js tests/new-hooks.spec.js --workers=1
+npm test -- tests/specs/scenery-kits.spec.js tests/specs/new-hooks.spec.js --workers=1
 ```
 
 Expected: all commands pass.
@@ -642,7 +642,7 @@ Expected: all commands pass.
 
 ```bash
 git add js/tracks.js index.html tools/verify-track.cjs package.json \
-  docs/SCENERY-API.md docs/TESTING.md tests/scenery-kits.spec.js
+  docs/SCENERY-API.md docs/TESTING.md tests/specs/scenery-kits.spec.js
 git commit -m "Wire shared scenery kits into track builds"
 ```
 
@@ -656,7 +656,7 @@ git commit -m "Wire shared scenery kits into track builds"
 - Modify: `js/tracks/albert_park.js`
 - Modify: `js/tracks/silverstone.js`
 - Modify: `js/tracks/qatar.js`
-- Modify: `tests/scenery-kits.spec.js`
+- Modify: `tests/specs/scenery-kits.spec.js`
 
 **Interfaces:**
 - Consumes: the runtime-bound `sceneryTheme`, `landmarkKit`, and `circuitKit`.
@@ -677,7 +677,7 @@ adding only the kit calls described below.
 
 - [ ] **Step 2: Add failing representative diagnostics assertions**
 
-Extend `tests/scenery-kits.spec.js`:
+Extend `tests/specs/scenery-kits.spec.js`:
 
 ```js
 for (const entry of [
@@ -702,7 +702,7 @@ for (const entry of [
 
 - [ ] **Step 3: Run and confirm all five tests fail**
 
-Run: `npm test -- tests/scenery-kits.spec.js --workers=1`
+Run: `npm test -- tests/specs/scenery-kits.spec.js --workers=1`
 
 Expected: FAIL because no emitted IDs start with `kit:`.
 
@@ -734,7 +734,7 @@ node tools/verify-track.cjs bahrain
 node tools/verify-track.cjs albert_park
 node tools/verify-track.cjs silverstone
 node tools/verify-track.cjs qatar
-npm test -- tests/scenery-kits.spec.js --workers=1
+npm test -- tests/specs/scenery-kits.spec.js --workers=1
 ```
 
 Expected: all builds and five representative tests pass.
@@ -744,7 +744,7 @@ Expected: all builds and five representative tests pass.
 ```bash
 git add js/tracks/singapore.js js/tracks/bahrain.js \
   js/tracks/albert_park.js js/tracks/silverstone.js js/tracks/qatar.js \
-  tests/scenery-kits.spec.js
+  tests/specs/scenery-kits.spec.js
 git commit -m "Adopt scenery kits across representative circuits"
 ```
 
@@ -764,7 +764,7 @@ git commit -m "Adopt scenery kits across representative circuits"
 Run:
 
 ```bash
-node --test tests/scenery-kits.test.mjs tests/track-foundation.test.mjs
+node --test tests/unit/scenery-kits.test.mjs tests/unit/track-foundation.test.mjs
 node tools/verify-track.cjs --all
 npm run test:smoke
 ```
@@ -776,9 +776,9 @@ Expected: all pass with no required invalid/suppressed/unsafe models.
 Run:
 
 ```bash
-npm test -- tests/props-over-road.spec.js --workers=1
-npm test -- tests/terrain-over-road.spec.js --workers=1
-npm test -- tests/tracks-walls.spec.js tests/scenery-kits.spec.js --workers=1
+npm test -- tests/specs/props-over-road.spec.js --workers=1
+npm test -- tests/specs/terrain-over-road.spec.js --workers=1
+npm test -- tests/specs/tracks-walls.spec.js tests/specs/scenery-kits.spec.js --workers=1
 ```
 
 Expected: all pass; no representative track needs a raised overlap baseline.
@@ -789,7 +789,7 @@ Run:
 
 ```bash
 npm run test:visual -- --workers=2
-npm test -- tests/ui-audit.spec.js --project=render --workers=1
+npm test -- tests/specs/ui-audit.spec.js --project=render --workers=1
 ```
 
 Expected: tests pass or only report the repository's documented pre-existing

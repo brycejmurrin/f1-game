@@ -65,7 +65,7 @@ regression hides.
 | `physics-abudhabi-foundation` ×2 | the circuit gained elevation data; the spec still pinned `hasElevations === false`. Range measured at 9.24 m and pinned as a band. |
 | `physics-bahrain-foundation` | the required-model list had grown 4 → 7. |
 | `physics-interlagos-migration` ×2 | two reservoirs consolidated into one; the vertex budget had moved to 563,578 against a 350,000 cap. |
-| `agent-view` "linear furniture is spans" | the span vocabulary grew to 8 kinds and the spec's list of 4 was never updated. Now guarded mechanically by `tests/span-kinds.test.mjs`. |
+| `agent-view` "linear furniture is spans" | the span vocabulary grew to 8 kinds and the spec's list of 4 was never updated. Now guarded mechanically by `tests/unit/span-kinds.test.mjs`. |
 | `agent-view` "agentHelp()" | the manifest measured 5507 bytes against a 5500 ceiling — a bound seven bytes above the artefact. Trimmed one redundant entry; ceiling restated at 6 KB. |
 | `collisions` "two overlapping cars push apart" | **measuring the wrong thing.** It sampled the lateral gap once at t = 2 s, by which point the pair is ~5 m apart along the road and each is simply driving its own line. The push is prompt and correct: 1.2 → 1.97 m within 0.25 s. Now measured over the window in which the cars are actually alongside. |
 | `world-physics` "AI stays on track after the racing-line flip" | **measuring the wrong thing**, and the open question in its own comment is now answered. `minProg > 70` is not a progress measurement: the last of 22 cars *starts* at prog −182 on Monza, so the assertion demanded a back marker average 25 m/s from a standstill through the whole field. Measured per-car delta instead — every car covers 142–221 m in 10 s, nobody stuck. |
@@ -91,7 +91,7 @@ air beside the wing for the length of every activation zone.
 Fixing it properly means the band has to ride its element: either a small
 textured mesh drawn inside `drawAeroFlaps` with the same hinge transform, or
 moving the band onto the mainplane, which does not rotate — but the mainplane
-is painted `c1`, and `tests/parts-livery-contrast.spec.js` deliberately inks
+is painted `c1`, and `tests/specs/parts-livery-contrast.spec.js` deliberately inks
 that band for the `wing` slot, so that second option is a livery decision and
 not a mechanical one.
 
@@ -110,10 +110,10 @@ guard in the repo is advisory, enforced only by whoever remembers to run it.
 That matters most for the guards written *because* production diverged from
 local:
 
-- `tests/load-order.test.mjs` — the only thing that catches a missing or
+- `tests/unit/load-order.test.mjs` — the only thing that catches a missing or
   misordered `<script>`. No build step, so a missing tag is a missing global is
   a dead game.
-- `tests/deploy-staging.test.mjs` — its own header recounts `vendor/` shipping
+- `tests/unit/deploy-staging.test.mjs` — its own header recounts `vendor/` shipping
   broken to Pages for real. It runs in `test:tooling-fast`, which CI does not run.
 - The `?v=N` / `version.json` equality check — a mismatch ships a permanently
   stale PWA shell.
@@ -132,7 +132,7 @@ Verified: `expect(` appears **0 times** in both.
 
 | spec | tests | `expect(` |
 |---|---|---|
-| `tests/ui-audit.spec.js` | 34 | 0 |
+| `tests/specs/ui-audit.spec.js` | 34 | 0 |
 | `tests/ui-desktop.spec.js` | 5 | 0 |
 
 Both only `goto → click → waitFor → page.screenshot(...)`. They pass unless a
@@ -156,11 +156,11 @@ controls present).
 
 ## 3. ~~Skips that swallow the regression the test exists for~~ — PARTLY FIXED
 
-**`tests/instanced-draw.spec.js` fixed on this branch:** both `skipped` escapes
+**`tests/specs/instanced-draw.spec.js` fixed on this branch:** both `skipped` escapes
 are gone and a built Monza must now produce a non-zero batch count. The
 remaining items in this section stand.
 
-- **`tests/instanced-draw.spec.js:34,70`** — `if (!batches.length) return
+- **`tests/specs/instanced-draw.spec.js:34,70`** — `if (!batches.length) return
   { skipped: … }` then `test.skip(!!r.skipped)`. If `TrackGraph.batches()`
   regresses to returning nothing — instancing completely broken — both tests
   **skip green**. The file header says its job is that "a real track's batches()
@@ -168,12 +168,12 @@ remaining items in this section stand.
   that failing and is the one outcome routed to `skip`. Assert
   `batches.length > 0` instead; `track-graph.test.mjs` already proves Monza
   produces batches headlessly.
-- **`npm run test:shimmer`** — `tests/material-shimmer.spec.js:89` is
+- **`npm run test:shimmer`** — `tests/specs/material-shimmer.spec.js:89` is
   `test.skip(!process.env.APEX_SHIMMER, …)` at describe scope, and
   `package.json`'s `test:shimmer` does not set `APEX_SHIMMER`. The documented
   invocation runs zero tests and exits 0, while satisfying the coverage guard
   (which is name-matching only).
-- **`tests/webgl-probes.spec.js:144`** — titled "UBO light count **matches**
+- **`tests/specs/webgl-probes.spec.js:144`** — titled "UBO light count **matches**
   lightState", but never reads the UBO. `expect(ls.numLights)
   .toBeGreaterThanOrEqual(0)` on a count is always true; only the `<= 32` half is
   real.
@@ -199,7 +199,7 @@ carDom ? conf : 0.60;`), so `--debug=hitmiss` and `--debug=hitcol` both throw.
 It fails loudly by design, which is why this is a broken tool rather than silent
 rot. One-line fix. Its `mix` mode is implemented but missing from the usage text.
 
-## 6. `tests/shared-track-foundation-characterization.test.cjs` is unrunnable-by-design
+## 6. `tests/unit/shared-track-foundation-characterization.test.cjs` is unrunnable-by-design
 
 299 lines, 5 `node:test` tests, referenced by nothing — not `package.json`, not
 any doc or workflow. And it cannot be caught: `tools/test-coverage-audit.mjs:36`
@@ -277,7 +277,7 @@ not one — `menus.css` (200 lines outside its layer, and the true cause of the
 phone-portrait preview card never applying), `career.css` (129), `overlays.css`
 (the whole VS FRIEND lobby, 234) and `components.css` (9).
 
-It is now guarded by `tests/css-layers.test.mjs`, which checks every stylesheet's
+It is now guarded by `tests/unit/css-layers.test.mjs`, which checks every stylesheet's
 braces balance, that its layer closes on its last line of content, and that the
 cascade order is declared only in `tokens.css`. Kept here only as the record that
 the finding was real.
@@ -370,7 +370,7 @@ Compare `$("mb-season")` (`js/game.js:6656-6661`), which resets the season
 
 ## 18. Smaller items
 
-- **`tests/agent-view.spec.js:154`** and **`tests/tracks-walls.spec.js:48-52`** —
+- **`tests/specs/agent-view.spec.js:154`** and **`tests/specs/tracks-walls.spec.js:48-52`** —
   loop-only assertions with no non-empty guard; an empty collection passes.
   Contrast `agent-view.spec.js:1812`, which asserts length first.
 - **`playwright.config.js:38-39`** claims "a coverage-audit npm script asserts
@@ -378,7 +378,7 @@ Compare `$("mb-season")` (`js/game.js:6656-6661`), which resets the season
   `tools/test-coverage-audit.mjs` only checks `test:*` group membership by
   filename. The partition happens to be sound; the invariant is unenforced and
   the config says otherwise.
-- **`tests/parts-liveries.spec.js:196,238`** take screenshots but are not in
+- **`tests/specs/parts-liveries.spec.js:196,238`** take screenshots but are not in
   `RENDER_SPECS` — the only such spec on disk — so they run in the wide-worker
   headless project.
 - **`js/game/scrollfade.js:124-129`** never `unobserve`s, and only observes the

@@ -119,14 +119,15 @@ export function lintSource(source) {
 
 export function lintAll() {
   const out = [];
-  const files = fs.readdirSync(TESTS).filter((n) => n.endsWith(".spec.js")).sort();
+  const SPECS = path.join(TESTS, "specs");
+  const files = fs.readdirSync(SPECS).filter((n) => n.endsWith(".spec.js")).sort();
   for (const f of files) {
-    const src = fs.readFileSync(path.join(TESTS, f), "utf8");
+    const src = fs.readFileSync(path.join(SPECS, f), "utf8");
     try {
       const bad = lintSource(src);
-      if (bad.length) out.push({ file: `tests/${f}`, violations: bad });
+      if (bad.length) out.push({ file: `tests/specs/${f}`, violations: bad });
     } catch (e) {
-      out.push({ file: `tests/${f}`, parseError: e.message, violations: [] });
+      out.push({ file: `tests/specs/${f}`, parseError: e.message, violations: [] });
     }
   }
   return out;

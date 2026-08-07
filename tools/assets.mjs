@@ -48,7 +48,7 @@ const BUDGET_BYTES = 8 * 1024 * 1024;
 const ALLOWED_LICENCES = new Set(["CC0", "CC0-1.0", "Apex26-Procedural"]);
 
 // MAT ids — MUST match TrackGeom.MAT (js/track/geom.js).  Asserted by
-// tests/assets-pack.test.mjs so the two cannot drift.
+// tests/unit/assets-pack.test.mjs so the two cannot drift.
 const MAT = {
   FLAT: 0, CONCRETE: 1, BRICK: 2, GLASS: 3, METAL: 4, WOOD: 5, FOLIAGE: 6,
   FABRIC: 7, SAND: 8, GRASS: 9, ROCK: 10, SNOW: 11, ROOF: 12, STONE: 13,

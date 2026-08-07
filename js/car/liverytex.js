@@ -1028,7 +1028,7 @@ const LiveryTex = (function () {
     // The engine-cover crest is BISECTED by the shark fin, which is painted c2 —
     // the mark genuinely spans two colours, so it is inked for both and takes a
     // halo when they disagree. (Verified by the mesh probe in
-    // tests/parts-livery-contrast.spec.js, which reads what is actually behind
+    // tests/specs/parts-livery-contrast.spec.js, which reads what is actually behind
     // each decal rather than trusting this list.)
     const inkCrest = inkOn([c1, finPaint]);
     // The SHARK FIN is painted `fin` (c2 unless the livery picks one — see the

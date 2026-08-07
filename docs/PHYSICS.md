@@ -110,7 +110,7 @@ three seconds at racing speed). Zones are measured against a FIXED reference
 speed, never the car's, because they are a property of the circuit and the
 OVERALL SPEED slider must not redraw them. A circuit whose longest straight
 misses the minimum gets **no zones and no active aero** — that is MONACO, and
-`tests/aero-zones.spec.js` pins it. Zones can WRAP the start line, so
+`tests/specs/aero-zones.spec.js` pins it. Zones can WRAP the start line, so
 `aeroZones()` exposes `midFrac` and every consumer should use it rather than
 averaging `startFrac`/`endFrac`.
 
@@ -147,7 +147,7 @@ O(1) since `ranked` is already sorted) and `caution.level`. `c.otArmed` folds
 that together with the car's own gap and cooldown. The HUD says `NO OVERTAKE`
 and fades the button while the gate is shut, because "not armed yet" (keep
 closing) and "switched off" (nothing you do will arm it) are different messages.
-`tests/aero-zones.spec.js` pins both halves, driving a REAL opening lap —
+`tests/specs/aero-zones.spec.js` pins both halves, driving a REAL opening lap —
 `setLap()` moves only the player's counter, so a teleport cannot exercise a
 leader-based gate.
 
@@ -197,5 +197,5 @@ time, silently discarding a `drivingHelp`/`raceLine` value the player chose
 deliberately after v2 ran. Each step now runs only if the stored schema is below
 its own target, and every key a step rewrites is logged through `Log.info` —
 a migration quietly rewriting someone's settings should leave a record.
-`tests/steer-migration.spec.js` pins all of it, including that a store at the
+`tests/specs/steer-migration.spec.js` pins all of it, including that a store at the
 current schema is left completely alone.

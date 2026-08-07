@@ -60,7 +60,7 @@ SwiftShader is especially verbose.
 **Mobile STANDARD tier:** on mobile UA without GRAPHICS: HIGH, car/lamp shadow
 maps are not created but `game.js` still issues castShadow calls each frame.
 If those casts do not no-op, they spam `GL_INVALID_OPERATION` every frame
-(guarded by `tests/webgl-probes.spec.js` — "mobile standard tier renders without
+(guarded by `tests/specs/webgl-probes.spec.js` — "mobile standard tier renders without
 GL errors"). Symptom: "STANDARD is buggy and laggy while HIGH runs great".
 
 ## 4. Point-light upload — uniform arrays, 15 floats per light

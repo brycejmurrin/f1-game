@@ -9,7 +9,7 @@
     classic: true,
     // Upstream fr-1969 is drawn anti-clockwise, but the Grand Prix lap runs
     // CLOCKWISE, so this trace has to be flipped. The matching entry in
-    // RACE_DIRECTION_OVERRIDES (tests/f1-track-accuracy.spec.js) orients the
+    // RACE_DIRECTION_OVERRIDES (tests/specs/f1-track-accuracy.spec.js) orients the
     // reference the same way so the direction assertion still means something.
     reverse: true,
     // The trace's first vertex opens the pit straight; the 1044 m run at
