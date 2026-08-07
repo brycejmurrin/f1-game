@@ -53,10 +53,38 @@ Playwright process may hold it.
    4. `barriers` and `physics` — the last groups never run post-Batch-A/B/C.
 
 **2. W2 restructure**, unblocked by step 1.
-   5. R2 tests/ split — `tools/tests-split.mjs --apply`. Node guards first
-      (load-order, docs-integrity, test-groups, coverage-audit,
-      cross-file-paths): **the guard suite passing IS the proof the lockstep
-      held.** Then browser groups serially. Cache bump LAST.
+   5. R2 tests/ split — **LANDED `72e9df33` + `ffff348d` + the config fix,
+      2026-08-07.** `--apply` moved 178 files and rewrote 218; the guard suite
+      went red as designed (77 failures) and was driven to **331/331 green**,
+      then all 59 unit suites **461/461**. What the landing tail actually held,
+      recorded because each item is a class the next move will hit again:
+      - THREE distinct ROOT-anchor forms in unit suites (the `resolve()` climb,
+        `join(dirname(),"..")`, `new URL("..")`) plus inline
+        `createRequire("../tools/…")` calls — a single sed catches one form and
+        reports done; the guard suite named the other 41 files.
+      - Every flat-`tests/` scanner in tools/ (coverage-audit, ci-coverage,
+        select-budget, assert-audit, evaluate-scope-lint, fixture-consumer-audit,
+        test-observed). test-observed also maps PRE-split log history onto the
+        new paths, or every test would have read never-run.
+      - **Two silent-failure catches the guards get credit for:**
+        `physics-characterization.spec.js` resolved its baseline beside itself —
+        post-split it would have `test.skip`ped forever, green; and ci.yml's
+        sweeps path-filter named pre-split sweep-suite paths, so the sweeps
+        would have skipped exactly when a sweep suite changed.
+      - **One escape both rewriters missed, caught only by RUNNING the browser
+        half:** `playwright.config.js`'s `./tests/global-setup.js` +
+        `./tests/live-reporter.js` — the mover's token regex has a lookbehind a
+        `./` prefix defeats, and the comment sweep skipped root configs. Every
+        browser group died at config load. The lesson is already in this doc's
+        §"a test that never runs is prose": a lockstep proven by node guards
+        alone is proven for the node half only.
+      - tests-split's own guards were rewritten for their post-apply life: the
+        live invariant is now "the planner finds NOTHING left to move" (a stray
+        file at tests/ root goes red), derivation + history-protection pinned
+        on scratch trees.
+      Browser groups running serially now (smoke → scenery → collision →
+      steering → physics → circuit). Cache bumped 1031 (comment-only js/ edits
+      from the 878-reference sweep).
    6. R1 audio-panel — a `js/` edit, so it wants a tree with nothing running.
    7. Ship by fast-forward once green.
 
