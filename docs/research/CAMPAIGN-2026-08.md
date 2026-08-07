@@ -20,6 +20,7 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 | W2a | Test-semantics audit workflow (all 162 test files) | **DONE** — record: [TEST-AUDIT-2026-08.md](TEST-AUDIT-2026-08.md) |
 | W2b | Total-audit workflow (all code + all docs) | **DONE** — 197 verified findings: [TOTAL-AUDIT-2026-08.md](TOTAL-AUDIT-2026-08.md). Survived a mid-run token-limit crash via cached resume with slimmed (haiku, batched) verification |
 | W2-fix | The total-audit's Batch A/B/C fix train (headline: the LIVE curvature-sign trio in the track engine — kerbs/barriers/corner boards on the wrong side — plus the session-verified jump()/IncidentSim authority bug, career slot overwrite, racecontrol dead caps, DRIZZLE tier, matTexMix truth cluster) | **LANDED** `89ce4f2f` (A+B+C together, bump v1025) + `d23b70b8` (tail, bump v1026). The tail also REPAIRED a regression the first commit shipped — an intermediate paul_ricard.js whose widened modelGroup bounds made preflight reject the cabanon AND its wall (299,716 vs 299,946 verts) — and REVERTED an art change it had smuggled in (city-building `setback` massing; see the design ticket below). Geometry sweeps green across all 40 circuits; browser groups running |
+| W2-perf | Shared-page test fixture (`sharedTest`) — kill the per-test page boot | **IN FLIGHT** `e52bb772`, `9b91f807`, `3fa9d047`. 8 specs / 405 tests converted; verifying at the full-405 gate. Rationale and the two conversion edges are documented in [docs/TESTING.md](../TESTING.md) |
 | W2 | RESTRUCTURE + change-aware CI | **NEXT** — the W2-fix gate is released |
 | W3 | Bedrock Ph0-1: dependency scanner + global registry, `.d.ts` contracts, `tsc --checkJs` CI, `@ts-check` tranche + ratchet | Planned — [ARCHITECTURE-REDESIGN-2026-08.md](ARCHITECTURE-REDESIGN-2026-08.md) is the adopted direction |
 | W4 | Loop-until-dry lens-diverse review of the post-restructure tree, CAP 3 ROUNDS | Planned (shrinks if W2b leaves little) |
@@ -138,6 +139,13 @@ step lists — it fixes the ORDER and the gates:
 
 - Browser suites run in the MAIN LOOP, serially, backgrounded with watchers —
   agents never run them. One heavy group is the 4-core box's full capacity.
+- **One Playwright PROCESS at a time, however many specs it covers.** Local runs
+  set `reuseExistingServer`, so a second process attaches to the first's
+  `python3 -m http.server` instead of starting its own; killing either run pulls
+  the server out from under the other and the survivor's remaining tests all die
+  with `net::ERR_CONNECTION_REFUSED` (measured: 33 false failures in
+  `career.spec.js`). To cover more at once, pass every spec to ONE process and
+  raise `APEX_WORKERS` — never start a second one.
 - No `js/`/`css/` edits and no `?v` bump while a browser run serves the tree;
   bump LAST, once per landing commit set.
 - Every file move carries its guard lockstep (manifest, index.html, load-order,

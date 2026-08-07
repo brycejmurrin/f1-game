@@ -266,6 +266,73 @@ Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 on those guarantees (`audio-smoke`, `smoke`, `f1-track-accuracy`, `ui-audit`).
 Other specs may use the base Playwright fixture.
 
+### `sharedTest` — one booted page per worker
+
+`tests/fixtures.js` also exports `sharedTest`, a drop-in replacement for `test`
+that boots the page **once per worker** and hands the same page to every test in
+the file:
+
+```js
+import { sharedTest as test, expect } from "./fixtures.js";
+```
+
+Everything `test` gives you, `sharedTest` gives you — the mocks, the console
+capture, the failure attachments, `racePage` and `loadTrack` — so switching a
+spec over is a one-line import change.
+
+**Why.** Measured on the camera group: 45 tests, 1985 s of test time, and the
+*fastest* test took 21.7 s. That floor is not assertion work, it is
+`page.goto("/")` plus ~155 script tags plus WebGL context creation, paid again
+for every single test. Across the suite that is 294 `goto("/")` calls in 98 spec
+files, and not one of them used `beforeAll`.
+
+**Why it is safe.** `__apex.race(id)` is re-entrant against a live page —
+`tests/tracks-walls.spec.js` has always raced through many circuits in ONE page
+— so the reload was never required by the app. It was the default `page`
+fixture's scope, nothing more.
+
+**What it resets between tests** is deliberately shallow: held input, headless
+mode, log level, the frozen flag, the camera, and any open `<dialog>`. It does
+**not** rewind settings or `localStorage`, because `GameStore` caches those in
+memory and a truthful reset there means a reload — which is the cost being
+removed. A spec needing a specific setting must set it.
+
+Two edges that bite when converting a spec:
+
+- **`page.addInitScript()` only applies on the NEXT navigation.** On a shared
+  page there is no next navigation, so the injected code never runs. A test that
+  needs it must reload explicitly — the converted specs keep a small local
+  `bootFresh()` helper that does `goto("/")` and re-waits, and use it only for
+  those tests (see `tests/career.spec.js`).
+- **Camera state is the one that leaked.** `park()` sets `G.frozen`, and
+  `view()`/`orbit()`/`cinematic()` install a `G.dbgCam` free-camera that
+  outranks the game camera. A raster test after one of those measured 0.5 where
+  it wanted >0.7. The reset now calls `freeze(false)` and `camera("chase")`,
+  which clears `dbgCam` and restores the default mode in one call.
+
+**When NOT to use it.** Anything asserting FIRST-LOAD behaviour: the boot
+sequence, the service worker, the shell version guard, PWA install,
+`localStorage` migrations. Those want a virgin page — keep importing `test`.
+The opt-in is deliberate; this is not a silent change of meaning for the 54
+spec files already on the base fixture.
+
+### Never run two Playwright processes at once
+
+`playwright.config.js` sets `reuseExistingServer` for local runs, so a second
+`playwright test` process does **not** start its own `python3 -m http.server` —
+it attaches to the one the first process owns. Kill the first run and the second
+loses its server mid-flight: every remaining test dies with
+`net::ERR_CONNECTION_REFUSED`, which reads like a product failure and is not one.
+(Measured: 33 consecutive false failures in `career.spec.js` from exactly this.)
+
+It is also pointless on a 4-core box — two processes with 3 workers each is five
+renderers fighting for four cores, and load went past 20. If you want more specs
+covered at once, pass them all to **one** process and raise `APEX_WORKERS`:
+
+```sh
+APEX_WORKERS=3 npx playwright test tests/a.spec.js tests/b.spec.js
+```
+
 ---
 
 ## 4. Philosophy — debug-hooks first
