@@ -21,7 +21,7 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 | W2b | Total-audit workflow (all code + all docs) | **DONE** — 197 verified findings: [TOTAL-AUDIT-2026-08.md](TOTAL-AUDIT-2026-08.md). Survived a mid-run token-limit crash via cached resume with slimmed (haiku, batched) verification |
 | W2-fix | The total-audit's Batch A/B/C fix train (headline: the LIVE curvature-sign trio in the track engine — kerbs/barriers/corner boards on the wrong side — plus the session-verified jump()/IncidentSim authority bug, career slot overwrite, racecontrol dead caps, DRIZZLE tier, matTexMix truth cluster) | **LANDED** `89ce4f2f` (A+B+C together, bump v1025) + `d23b70b8` (tail, bump v1026). The tail also REPAIRED a regression the first commit shipped — an intermediate paul_ricard.js whose widened modelGroup bounds made preflight reject the cabanon AND its wall (299,716 vs 299,946 verts) — and REVERTED an art change it had smuggled in (city-building `setback` massing; see the design ticket below). Geometry sweeps green across all 40 circuits; browser groups running |
 | W2-perf | Shared-page test fixture (`sharedTest`) — kill the per-test page boot | **LANDED** `e52bb772`, `9b91f807`, `3fa9d047`, `75ae72f9`, `85a91f40`. Settled at **6 specs / 284 tests** on the shared page after 8/405 was tried and two specs reverted. Headline: `agent-view` **117/117 in 11m16s against ~43 min** before. Also green: `new-hooks` 56/56, `headless-api` 24/24, `logging` 6/6. `career` (101) and `quali` (20) reverted — both drive MENU SCREENS, which is the axis that decides reuse; `dev-tools` + `camera-driving-hooks` verifying. Full rationale, the three conversion edges and the load-inversion diagnostic are in [docs/TESTING.md](../TESTING.md) |
-| W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is BISECT-CLEARED: all three elevation failures reproduce byte-identically at `fdd4082f`, the commit before it. **`elevation-tracks` now 47/47** after four repairs (`afd546ed`, `2b2ab54c`, `ce359164`, `0f458925`). Verified green: `agent-view` 117/117, `new-hooks`, `dev-tools`, `headless-api`, `logging`, `camera-driving-hooks`, `quali`, `career`, `audit`, `elevation-tracks`, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. RUNNING: `steering` (88, never run). NEXT: `net` (70, never run) |
+| W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is verified from BOTH directions now: bisect-cleared locally (all three elevation failures reproduce byte-identically at `fdd4082f`) and CI's per-circuit geometry sweep green throughout. **CI #204 is fully green — guards, sweeps AND smoke.** Groups verified: `agent-view` 117/117, `steering` **96/96**, `elevation-tracks` 47/47 (after 3 repairs), `new-hooks` 56/56, `dev-tools` 56/56, `headless-api` 24/24, `camera-driving-hooks` 25/25, `quali` 20/20, `logging` 6/6, `career`, `audit`, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. RUNNING: `smoke`+`net` (79). REMAINING: `audio`, `tlx`, `debris`, `ab`, `paths`, `map`, `baseline`, `shimmer`, `sweeps` |
 | W2 | RESTRUCTURE + change-aware CI | **BLOCKED on W2-verify** — see "the finding that outgrew its wave" below. Moving files while half the suite has never been executed makes a never-run red test indistinguishable from one the move broke |
 | W3 | Bedrock Ph0-1: dependency scanner + global registry, `.d.ts` contracts, `tsc --checkJs` CI, `@ts-check` tranche + ratchet | Planned — [ARCHITECTURE-REDESIGN-2026-08.md](ARCHITECTURE-REDESIGN-2026-08.md) is the adopted direction |
 | W4 | Loop-until-dry lens-diverse review of the post-restructure tree, CAP 3 ROUNDS | Planned (shrinks if W2b leaves little) |
@@ -120,42 +120,74 @@ Worth stating plainly, since the campaign records its own errors: this happened
 while building tooling to find tests that never run. The blind spot was not
 knowing the rule, it was assuming my box was the environment.
 
+**NOT every never-run group is rotten, and the record should say so.** The two
+largest came back completely clean on first execution — `steering` 96/96 and
+`net-unit` 99/99 — while the broken tests clustered in `elevation-tracks` and
+`audit`. "Never run" means UNKNOWN, not "rotten"; the value of the tooling is
+telling those apart, and a register that only recorded the failures would
+misstate the risk of the ones still unrun.
+
 **Consequence for the campaign**: the tests/ split (W2 R2) must not move files
 while half of them have never been executed — a red test that has never run
 looks identical to a test broken by the move. Burning down the never-observed
 list by group is now a prerequisite of W2, not a follow-up to it.
 
-## OPERATIONAL: the deploy has been STUCK, not failing
+## OPERATIONAL: the deploy is WEDGED, and the error says how
 
-`pages.yml`'s run for `a187ecb0` has sat in **`queued`** since 2026-08-06 18:17 —
-~14.5 hours at the time of writing. It has not failed; it has never started. The
-last deploy that actually reached the site was `a162b00a` on 2026-08-05 22:52.
+`pages.yml`'s run #1267 for `a187ecb0` sat in `queued` from 2026-08-06 18:17 —
+over 14 hours — and the last deploy that actually reached the site was
+`a162b00a` on 2026-08-05 22:52.
 
-This matters to the plan's ship step, which reads "the deploy branch advances by
-fast-forward after each green wave". Fast-forwarding on top of a stuck queue
-adds a second job BEHIND the stuck one — green tests do not make it ship. The
-ship cadence silently assumes the shipping mechanism works, and right now it
-does not.
+**My reading of it was wrong, and the API corrected me.** I described it as
+"queued, never started" and offered environment-protection approval or runner
+capacity as the likely causes. Cancelling it returns:
 
-Deploy branch is at build 1022; the work branch is at 1029. The live build could
-not be read from this sandbox (the proxy returns 403 for github.io), so
-confirming what the site actually serves needs a check from outside.
+```
+409 Cannot cancel a workflow re-run that has not yet queued
+```
 
-**Held for the user**: unblocking a queued Pages run means cancelling and
-re-dispatching it, or clearing the Pages environment. That is the deployment
-pipeline rather than the codebase, so it is not something to do unasked.
+So it was never waiting for a runner and there is no approval gate. It is a
+RE-RUN REQUEST THAT NEVER ENTERED THE QUEUE — consistent with the session plan's
+note that run 31125635974 had been "re-queued" for `a187ecb0`. Nothing is
+cancellable because there is nothing running, which is also why it could not be
+cancelled from the UI. A wedged re-run is a GitHub-side state, not a repo
+misconfiguration, and no amount of testing or pushing clears it.
+
+**The way past it is a fresh dispatch, not a re-run.** `pages.yml` declares
+`workflow_dispatch`, so run #1268 (`31165492254`) was dispatched against the
+deploy branch with the user's explicit authorisation — a new run rather than
+another re-run of the wedged one, which is the whole point.
+
+Still to confirm: whether #1268 leaves `queued`. A healthy deploy on this repo
+takes about two minutes end to end (#1266: 22:52:14 → success). If #1268 also
+parks, the wedge is environmental after all and the fix is in repo settings.
+The live build could not be read from the sandbox — the proxy 403s github.io —
+so what the site actually serves needs checking from outside.
+
+**Consequence for the ship step, unchanged**: "the deploy branch advances by
+fast-forward after each green wave" assumes the shipping mechanism works. For
+14 hours it did not, and green tests would not have made anything ship.
 
 ## CI failures NOT caused by this session
 
-- **`smoke` › "minimap canvas has content after race starts"** — fails in CI,
-  passes locally three runs over (including a full 71/71 `tiny`). Not a flake:
-  a genuine local-vs-CI split. It is strengthen item 19, rewritten in W1.5 from
-  a `width > 0` check to sampling real pixels via `getImageData` — exactly the
-  kind of assertion that can hold under this box's SwiftShader and fail on a
-  different GPU stack. The failed runs upload a ~36 MB artifact bundle with
-  screenshots; that decides "genuinely blank in CI" versus "below the sample's
-  threshold", i.e. whether the product or the test is wrong. OPEN, and
-  deliberately not fixed on the hypothesis alone.
+- **`smoke` › "minimap canvas has content after race starts"** — RESOLVED
+  `b7a636d3`, and it was NOT what this document first said. I recorded it as a
+  local-vs-CI split and guessed strengthen item 19's pixel sampling had become
+  too strict for a different GPU stack. The log says otherwise: it never reached
+  an assertion. `Test timeout of 240000ms exceeded`, twice (328 s, then 356 s on
+  retry), with the car correctly parked at s=0. The passing tests in the same
+  job give the real constraint — "select screen is a circuit picker" measures
+  179 s on that runner and "grid start renders a non-blank frame" 164 s, against
+  seconds locally, so `goToRace` + `park` eats most of the budget before this
+  test asserts anything. On top of that the first-paint poll read back the WHOLE
+  canvas every tick, which Chromium warned about in the CI console on both
+  attempts ("Multiple readback operations using getImageData are faster with the
+  willReadFrequently attribute set to true"). Fixed by polling five 1-pixel
+  strips instead — the exact count that follows is unchanged, so the assertion
+  is exactly as strong — plus `test.slow()`. **CI smoke now passes in 14m16s.**
+  Strengthen item 19 was not the mistake; strengthening the assertion was right,
+  and only the POLLING needed to be cheap.
+
 - **Most of the day's CI never reported.** Every commit fires a push run and a
   pull_request run, and the pull_request ones are cancelled by `concurrency` on
   the next push. Pushing every few minutes meant run after run reported

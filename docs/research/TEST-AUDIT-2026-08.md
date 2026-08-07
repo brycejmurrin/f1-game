@@ -166,6 +166,22 @@ known-good count rather than trusting a review:
     the missing input is skipped. The practice that follows is in
     docs/TESTING.md — verify an environment-sensitive guard in a
     `git clone --depth 1` with no `artifacts/` BEFORE landing it.
+30. **The CI-BUDGET class**: an assertion that is right and a MECHANISM that is
+    too expensive for the runner. `smoke`'s "minimap canvas has content" polled
+    `getImageData` over the WHOLE canvas on every tick waiting for first paint.
+    Locally that is free; on GitHub's software renderer it contributed to two
+    240 s timeouts (328 s, 356 s on retry) that never reached an assertion at
+    all, and Chromium logged the reason both times — "Multiple readback
+    operations using getImageData are faster with the willReadFrequently
+    attribute set to true". The context belongs to the game, so a test cannot
+    set that attribute; what it can do is stop asking for every pixel merely to
+    learn whether ANY pixel is painted. **LANDED** `b7a636d3`: five 1-pixel
+    strips (~5/height of a full readback) plus `test.slow()`, with the exact
+    count that follows unchanged — CI smoke now passes in 14m16s.
+    Item 19's strengthening was NOT the error: rewriting `width > 0` into real
+    pixel sampling was right, and only the polling needed to be cheap. The
+    general rule: when strengthening an assertion, cost the POLL separately from
+    the CHECK — the runner is 20-40x slower at rendering than a dev box.
 
 ### 1d. Merges (merge verdicts + merge candidates)
 
