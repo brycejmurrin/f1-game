@@ -284,6 +284,26 @@ jobs:
         env:
           APEX_WORKERS: 1
         run: npm run test:smoke -- --timeout=240000
+      # THE DRIVING MODEL'S OWN GATE, which nothing was running.
+      #
+      # tests/physics-characterization.spec.js pins six-sample traces of four
+      # scenarios and fails if the driving model's numbers move. It is not in
+      # guards (browser spec, not node), not in sweeps (geometry only), and not
+      # in smoke's spec list — so it has never run in CI, and locally it had
+      # never passed either. The result: 175 commits of deliberate physics work
+      # (geometric RACE PACE, the PACE regrid, the SPEED STEER taper, the
+      # wheelbase recentre) drifted past it with nothing to say so, and the
+      # baseline was ~9 % stale before anyone looked. A gate nobody runs is not
+      # a gate.
+      #
+      # Cheap enough to be unconditional: ONE test, headless physics with no
+      # rendering, ~30 s locally. Its own step so a failure reads as "the
+      # driving model changed" rather than "smoke went red", which is the whole
+      # point of pinning it.
+      - name: Driving-model characterization
+        env:
+          APEX_WORKERS: 1
+        run: npm test -- tests/physics-characterization.spec.js --timeout=240000
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

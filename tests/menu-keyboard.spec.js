@@ -269,7 +269,22 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     // map on the select screen, same trigger tests/ui-audit.spec.js uses.
     await page.locator("#sel-preview-map").click();
     await page.locator("#track-detail").waitFor({ state: "visible" });
-    await page.waitForTimeout(300);
+    /* WAIT FOR MODAL, DO NOT SLEEP TOWARD IT.
+       This was `waitForTimeout(300)` and it produced a red `:modal` assertion
+       under load — the ui group at two workers — which read as a product bug
+       for hours. It is a race. openTrackDetail() reveals the dialog through
+       vt() (js/game/menus.js), a startViewTransition wrapper with a 60 ms
+       setTimeout safety net, so `hidden` clears asynchronously; TopModal's
+       MutationObserver then calls showModal(). Visible therefore arrives
+       BEFORE modal, and 300 ms is a guess about how much before.
+       `polling: 100` is required rather than decorative here: this screen is
+       the worst case for the default rAF polling, because vt()'s own comment
+       records that the game PARKS ITS rAF LOOP behind a menu — a raf-polled
+       predicate on a document that has stopped producing frames is not slow,
+       it is stopped. See docs/TESTING.md. */
+    await page.waitForFunction(
+      () => document.getElementById("track-detail")?.matches(":modal") === true,
+      { polling: 100, timeout: 5_000 });
 
     expect(await page.evaluate(() =>
       document.getElementById("track-detail").matches(":modal")), "real top-layer dialog").toBe(true);
