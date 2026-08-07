@@ -1376,16 +1376,29 @@ test.describe("worldModel()", () => {
   test("full paginates the raw object list", async ({ page }) => {
     await load(page);
     const r = await page.evaluate(() => {
+      const all = window.__apex.render({ what: "circuit", detail: "full", limit: 5000 });
       const a = window.__apex.render({ what: "circuit", detail: "full", limit: 50 });
       const b = window.__apex.render({ what: "circuit", detail: "full", offset: 50, limit: 50 });
-      return { aN: a.objects.length, aPage: a.objectPage,
-               bFirst: b.objects[0], aFifty: a.objects[49] };
+      return { aN: a.objects.length, aPage: a.objectPage, bPage: b.objectPage,
+               a: JSON.stringify(a.objects), b: JSON.stringify(b.objects),
+               wantA: JSON.stringify(all.objects.slice(0, 50)),
+               wantB: JSON.stringify(all.objects.slice(50, 100)),
+               total: all.objectPage.total };
     });
     expect(r.aN).toBe(50);
     expect(r.aPage.more).toBe(true);
     expect(r.aPage.total).toBeGreaterThan(50);
-    // page 2 must start where page 1 ended, not repeat it
-    expect(JSON.stringify(r.bFirst)).not.toBe(JSON.stringify(r.aFifty));
+    // Each page must BE the corresponding slice of the whole list. The earlier
+    // form of this — "page 2's first object differs from page 1's last" — was
+    // not a pagination assertion at all: the detail:"full" projection drops
+    // `k`, `measured` and rotation, so genuinely distinct props at one point
+    // (a double-sided board, say) serialise identically. Monza has 20 such
+    // adjacent pairs in 2690 props, and once one of them straddled the
+    // 50-boundary the test went red with pagination working perfectly.
+    expect(r.a).toBe(r.wantA);
+    expect(r.b).toBe(r.wantB);
+    expect(r.bPage.offset).toBe(50);
+    expect(r.bPage.total).toBe(r.total);
   });
 
   test("sign boards keep their meaning", async ({ page }) => {
