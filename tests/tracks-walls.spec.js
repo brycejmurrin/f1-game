@@ -3,31 +3,68 @@
 // finite driving boundary (derived from where solid barriers/grandstands sit),
 // so you can't clip into models or drive off forever — and you can always
 // recover. Street circuits should be tight; open circuits keep some runoff.
-import { test, expect } from "@playwright/test";
+/* ONE TEST PER CIRCUIT, NOT ONE SWEEP OVER FORTY.
+   The boundary check used to build all ~40 circuits inside a single test. That
+   test never once completed here: it timed out at 151 s and 155 s against the
+   default 120 s budget, then — with test.slow() tripling it — at 372.8 s
+   against 360 s. Raising the budget again was the obvious move and the wrong
+   one, for four reasons the split fixes at a stroke:
+     - each circuit is ~9 s, comfortably inside the DEFAULT budget, so no
+       test.slow() is needed at all;
+     - a failure NAMES THE CIRCUIT instead of saying "the sweep timed out";
+     - the work parallelises across workers instead of serialising in one test;
+     - a timeout kills the loop midway, so every circuit after the one that ran
+       long is simply never checked. The sweep reported one failure; the split
+       reports forty results.
+   The pattern is not new here — tests/elevation-tracks.spec.js does the
+   identical workload as one test per track and passes comfortably, in the very
+   run where this sweep timed out.
 
-async function load(page) {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
-}
+   sharedTest, not test: this file never drives a menu screen, it calls
+   __apex.race() directly, which is the axis that decides shared-page safety.
+   tests/fixtures.js's own rationale cites THIS FILE as the proof that race(id)
+   is re-entrant against a live page — "tracks-walls.spec.js has always raced
+   its way through many circuits in ONE page without reloading". Splitting into
+   40 tests on the default fixture would have paid 40 page boots to undo exactly
+   that; on the shared page the split costs a build per circuit and nothing
+   more. */
+import { sharedTest as test, test as freshTest, expect } from "./fixtures.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// DERIVED, NOT WRITTEN DOWN. Playwright decides the test list at module load,
+// before any page exists, so the ids cannot come from Tracks.LIST in the page —
+// they come from the definition files that Tracks.LIST is built from. Same
+// reasoning as tests/manual/circuits.js: a hardcoded list means adding a
+// circuit silently leaves it unswept, and nothing would ever say so.
+const ALL = fs.readdirSync(path.join(ROOT, "js/circuits"))
+  .filter((f) => f.endsWith(".js"))
+  .map((f) => f.replace(/\.js$/, ""))
+  .sort();
+
 const ONLY_TRACK = process.env.TRACK;
-const trackIds = (page) => ONLY_TRACK
-  ? Promise.resolve([ONLY_TRACK])
-  : page.evaluate(() => Tracks.LIST.map((t) => t.id));
+const IDS = ONLY_TRACK ? ALL.filter((id) => id === ONLY_TRACK) : ALL;
+const STREET = ["monaco", "singapore", "vegas", "baku", "jeddah"]
+  .filter((id) => !ONLY_TRACK || id === ONLY_TRACK);
 
 test.describe("Apex 26 — track boundaries", () => {
-  test("every track has a finite, sane driving boundary on both sides", async ({ page }) => {
-    // FORTY CIRCUIT BUILDS IN ONE TEST. Each `race(id)` rebuilds road, terrain
-    // and scenery, so the default 120 s budget is not a safety margin here — it
-    // is roughly the work itself, and this timed out at 132 s with the box
-    // otherwise IDLE (and at 163 s when it was not). A timeout is reported as a
-    // failure that looks like a boundary bug, which is the worst way to spend
-    // it. test.slow() triples the budget rather than hiding the cost.
-    test.slow();
-    await load(page);
-    const ids = await trackIds(page);
-    if (ONLY_TRACK) expect(ids).toEqual([ONLY_TRACK]);
-    else expect(ids.length).toBeGreaterThan(10);
-    for (const id of ids) {
+  test("the swept circuit list matches what the game actually loads", async ({ page }) => {
+    // Replaces the old sweep's `expect(ids.length).toBeGreaterThan(10)`, and is
+    // strictly stronger: that only said "the list is not empty". This says the
+    // list read off disk IS the list the game builds — so a circuit whose
+    // definition file exists but never reaches Tracks.LIST (or the reverse)
+    // fails here, by name, instead of quietly going untested for months.
+    const live = await page.evaluate(() => Tracks.LIST.map((t) => t.id).sort());
+    expect(live.length).toBeGreaterThan(30);
+    if (!ONLY_TRACK) expect(ALL).toEqual(live);
+    else expect(live).toContain(ONLY_TRACK);
+  });
+
+  for (const id of IDS) {
+    test(`${id}: finite, sane driving boundary on both sides`, async ({ page }) => {
       const s = await page.evaluate((tid) => {
         window.__apex.race(tid, "day", "dry");
         return window.__apex.wallStats();
@@ -38,19 +75,12 @@ test.describe("Apex 26 — track boundaries", () => {
       expect(s.maxB, `${id} bounded`).toBeLessThan(60);               // never runs away
       // a barrier never sits absurdly far inside the tarmac edge
       expect(s.minOverHw, `${id} boundary not deep inside edge`).toBeGreaterThan(-1.5);
-    }
-  });
+    });
+  }
 
-  test("street circuits are walled tight; open circuits keep runoff", async ({ page }) => {
-    test.slow();   // same 40-circuit sweep as above
-    // Only the five street circuits are asserted, so only those five are built
-    // (a previous version built all ~40 circuits for the same five asserts).
-    const STREET = ["monaco", "singapore", "vegas", "baku", "jeddah"];
-    const ids = ONLY_TRACK ? STREET.filter((id) => id === ONLY_TRACK) : STREET;
-    test.skip(ids.length === 0, `TRACK=${ONLY_TRACK} is not a street circuit`);
-    await load(page);
+  for (const id of STREET) {
     // Street circuits: the WIDEST boundary still hugs the edge (no big runoff).
-    for (const id of ids) {
+    test(`${id}: walled tight, as a street circuit`, async ({ page }) => {
       const r = await page.evaluate((tid) => {
         const ok = window.__apex.race(tid, "day", "dry");
         if (!ok) return { failed: `race("${tid}") returned ${String(ok)}` };
@@ -60,11 +90,11 @@ test.describe("Apex 26 — track boundaries", () => {
       expect(r.stats, `${id} wallStats`).not.toBeNull();
       expect(r.stats.street, `${id} flagged street`).toBe(true);
       expect(r.stats.minOverHw, `${id} barrier near edge`).toBeLessThan(3);
-    }
-  });
+    });
+  }
 
   test("full-lap visual barriers register collision boundaries across the wrap", async ({ page }) => {
-    await load(page);
+    // Read-only: race() then wallStats(). Safe on the shared page.
     const stats = await page.evaluate(() => {
       window.__apex.race("montreal", "day", "dry");
       return window.__apex.wallStats();
@@ -72,8 +102,16 @@ test.describe("Apex 26 — track boundaries", () => {
     expect(stats.tightFrac, "Montreal full-lap walls tighten nearly every boundary node").toBeGreaterThan(0.95);
   });
 
-  test("driving hard into either edge stops bounded and recovers (sampled tracks)", async ({ page }) => {
-    await load(page);
+  /* THE ONE TEST HERE THAT MUST NOT SHARE A PAGE.
+     It calls __apex.go() and setPhysics({ drift: 0.3 }), and the shared
+     fixture's reset is deliberately shallow — held input, headless mode, the
+     frozen flag, dialogs, log level. It does NOT rewind setPhysics, so that
+     drift would leak into every later test on the same worker and quietly
+     change what "bounded" means for them. A virgin page costs one boot and
+     removes the whole question. */
+  freshTest("driving hard into either edge stops bounded and recovers (sampled tracks)", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
     for (const id of ["monaco", "monza", "baku", "spa"]) {
       const r = await page.evaluate((tid) => {
         const ok = window.__apex.race(tid, "day", "dry");

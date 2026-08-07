@@ -135,6 +135,25 @@ function scanReachable(body, helpers) {
   return { direct, implicit, swallow, viaHelper };
 }
 
+// `import { test as freshTest } from "./fixtures.js"` declares tests under a
+// name this tool has never heard of, and an unrecognised name is not a warning
+// — it is silence. Those tests simply drop out of the ratchet, so one could
+// lose its last assertion and nothing would say so. The alias is resolved from
+// the import rather than guessed, and the local name is what the call site
+// uses.
+const TEST_SOURCES = /^(\.\/fixtures\.js|\.\.\/helpers\/fixtures\.js|@playwright\/test)$/;
+
+function testNamesIn(ast) {
+  const names = new Set(TEST_FNS);
+  each(ast, (n) => {
+    if (n.type !== "ImportDeclaration" || !TEST_SOURCES.test(n.source.value)) return;
+    for (const s of n.specifiers) {
+      if (s.type === "ImportSpecifier" && TEST_FNS.has(s.imported.name)) names.add(s.local.name);
+    }
+  });
+  return names;
+}
+
 export function scanSource(src, file = "<src>") {
   let ast;
   try {
@@ -142,12 +161,13 @@ export function scanSource(src, file = "<src>") {
   } catch (e) {
     return { file, parseError: e.message, tests: [] };
   }
+  const testFns = testNamesIn(ast);
   const helpers = collectHelpers(ast);
   const tests = [];
   each(ast, (n) => {
     if (n.type !== "CallExpression") return;
     const r = resolveCallee(n.callee);
-    if (!r || !TEST_FNS.has(r.base)) return;
+    if (!r || !testFns.has(r.base)) return;
     if (r.mods.includes("describe") || !r.mods.every((m) => MODS.has(m))) return;
     const title = titleOf(n.arguments[0]);
     // The last function argument is the body — test("x", {annotation}, fn) and

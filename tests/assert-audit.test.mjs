@@ -125,3 +125,24 @@ test("the declared capture harnesses are still capture harnesses", () => {
       `${file} now has real assertions — take it off the capture-harness list`);
   }
 });
+
+test("an aliased test import is still a test — `import { test as freshTest }`", () => {
+  // An unrecognised name is not a warning, it is silence: those tests drop out
+  // of the ratchet entirely, so one could lose its last assertion and nothing
+  // would say so. tests/tracks-walls.spec.js imports BOTH sharedTest and the
+  // virgin `test` under an alias, because one of its tests mutates physics the
+  // shared reset does not rewind — a legitimate shape the tool must not blind
+  // itself to.
+  const src = `import { sharedTest as test, test as freshTest, expect } from "./fixtures.js";
+    test("shared one", async () => { expect(1).toBe(1); });
+    freshTest("virgin one", async () => {});`;
+  const { tests } = scanSource(src);
+  assert.deepEqual(tests.map((t) => [t.title, t.verdict]),
+    [["shared one", "asserting"], ["virgin one", "vacuous"]]);
+});
+
+test("an alias of something that is NOT a test function is not a test", () => {
+  const src = `import { expect as check } from "./fixtures.js";
+    check("not a test", 1);`;
+  assert.deepEqual(scanSource(src).tests, []);
+});
