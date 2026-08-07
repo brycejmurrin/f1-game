@@ -5,7 +5,9 @@
  *   GLX  (WebGL2)          the DEFAULT — everyone gets it, no opt-in.
  *   TLX  (three.js/TSL)    opt-in via localStorage apex26.gfxBackend="three".
  *   WGX  (WebGPU)          opt-in via apex26.gfxBackend="webgpu"; FROZEN and
- *                          not at GLX parity (no volumetrics/PCSS/MSAA/gpuTimer).
+ *                          not at GLX parity (no volumetrics/MSAA/gpuTimer/
+ *                          createTextureArray). It DOES ship a PCSS-lite
+ *                          blocker search — pcss() returns true.
  *
  * TLX and WGX are DEFERRED backends: they have NO <script> tags. game.js
  * injects their files at boot (see DEFERRED/BACKEND_FILES in game.js) only when

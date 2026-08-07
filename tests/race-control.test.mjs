@@ -135,6 +135,48 @@ test("a stuck hazard cannot neutralise the race forever", () => {
   assert.equal(rc.info().level, 3, "after the hold, a persistent hazard re-raises");
 });
 
+test("the cap's re-arm hold never masks an ESCALATION", () => {
+  // The hold exists to stop the SAME stale picture instantly re-flagging. It
+  // must not also swallow a genuinely worse incident: a local yellow that
+  // grows into a safety-car pile has to fly immediately, or the race runs
+  // green through a real SC-worthy event for the length of the hold.
+  let hz = hazards(0, 3);          // enough for a local YELLOW only
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().level, 1, "yellow flies");
+  run(rc, 32);                     // YELLOW_MAX is 30 s
+  assert.equal(rc.info().level, 0, "capped to green");
+
+  hz = hazards(3, 3);              // still yellow-grade: the SAME picture
+  run(rc, 1);
+  assert.equal(rc.info().level, 0, "a same-level re-raise stays suppressed");
+
+  hz = hazards(10, 2);             // now a safety-car pile — an ESCALATION
+  run(rc, 1);
+  assert.equal(rc.info().level, 3,
+    "a worse incident during the hold must still fly");
+});
+
+test("a cap-forced drop does not leak its hold into the next race", () => {
+  // reset() is reached only when the race leaves "race" state, and it used to
+  // be gated on a flag still flying — so a cap that fired near the flag left
+  // level 0 with the hold armed, and the NEXT race swallowed its first real
+  // caution. Nothing decrements the hold outside race state, so it never aged.
+  const ctx = makeCtx();
+  const rc = load({ active: () => true, hazards: () => hazards(10, 2) }).create(ctx);
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  run(rc, 95);
+  assert.equal(rc.info().level, 0, "capped to green, hold armed");
+
+  ctx.state = "results";           // chequered flag
+  run(rc, 2);
+  ctx.state = "race";              // next race starts
+  run(rc, 1);
+  assert.equal(rc.info().level, 3,
+    "the new race's first caution flies immediately — no inherited hold");
+});
+
 test("switching the layer off DROPS a flag already flying", () => {
   // Not "stop computing" but "stop computing AND clear". Without the clear the
   // HUD keeps showing a safety car nothing maintains, which reads as a stuck

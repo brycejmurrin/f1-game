@@ -49,7 +49,8 @@ const RaceControl = (() => {
     const { store } = G;
     let caution = blank();
     let queryT = 0;
-    let capHoldT = 0;   // remaining re-arm suppression after a cap-forced drop
+    let capHoldT = 0;       // remaining re-arm suppression after a cap-forced drop
+    let capHoldLevel = 0;   // the level that capped; escalations ABOVE it still fly
     // Last state broadcast to a guest, so only CHANGES are sent.
     let sent = "";
     // DEFAULT ON; the CAUTIONS race setting and __apex.caution({enabled}) write it.
@@ -67,7 +68,7 @@ const RaceControl = (() => {
     function reset() {
       caution = blank();
       queryT = 0;
-      capHoldT = 0;
+      capHoldT = 0; capHoldLevel = 0;
       // Clear the change-detector too, or the next race's first flag looks like
       // a repeat of the last one's and is never sent.
       sent = "";
@@ -98,7 +99,11 @@ const RaceControl = (() => {
     function update(dt) {
       if (!G.netPlay.ownsRaceControl()) return;
       if (!enabled || !DebrisWorld.active() || G.state !== "race") {
-        if (caution.level !== 0) reset();
+        // `|| capHoldT` matters: a cap-forced drop leaves level 0 with the
+        // re-arm hold still armed, and this is the ONLY path that clears state
+        // when a race ends. Without it the hold leaked into the NEXT race and
+        // swallowed its first genuine caution for up to CAP_REARM_HOLD.
+        if (caution.level !== 0 || capHoldT) reset();
         return;
       }
       if (caution.level !== 0) caution.sinceT += dt;
@@ -128,6 +133,7 @@ const RaceControl = (() => {
       if (caution.level !== 0) {
         const cap = caution.level >= 2 ? SC_MAX : YELLOW_MAX;
         if (caution.sinceT >= cap) {
+          capHoldLevel = caution.level;   // what capped — see the re-raise gate below
           caution.level = 0; caution.sector = -1; caution.frac = 0;
           caution.cause = ""; caution.sinceT = 0;
           capHoldT = CAP_REARM_HOLD;
@@ -135,10 +141,17 @@ const RaceControl = (() => {
           return;
         }
       }
-      if (capHoldT > 0) capHoldT = Math.max(0, capHoldT - QUERY_EVERY);
+      if (capHoldT > 0) {
+        capHoldT = Math.max(0, capHoldT - QUERY_EVERY);
+        if (capHoldT === 0) capHoldLevel = 0;
+      }
 
       if (desired > caution.level) {
-        if (capHoldT > 0) { publish(); return; }   // cap just fired; let racing breathe
+        // The hold suppresses a re-raise from the SAME stale picture, but must
+        // never mask an ESCALATION: debris growing from a local yellow into a
+        // safety-car pile has to fly, or the race runs green through a real
+        // SC-worthy event for the length of the hold.
+        if (capHoldT > 0 && desired <= capHoldLevel) { publish(); return; }
         caution.level = desired; caution.sector = dsector; caution.frac = dfrac;
         caution.cause = dcause; caution.sinceT = 0;
       } else if (desired < caution.level) {
