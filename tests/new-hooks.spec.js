@@ -2,13 +2,20 @@
 // Contract tests for the 8 new __apex hooks added in the tracks-refactor-elevation session:
 //   timing(), sectorState(), lapHistory(), fieldState(), aiPlace(),
 //   setEnergy(), setLap(), trackProfile(), and obs().gear
-import { test, expect } from "@playwright/test";
+import { sharedTest as test, expect } from "./fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function load(page, trackId = "monza") {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+  // Shared page: booted once per worker by the fixture, so this is a no-op
+  // in the common case. Tests that need a VIRGIN page (asserting
+  // pre-track state) keep their own explicit page.goto("/") below —
+  // that reloads the shared page and gives them exactly that.
+  const live = await page.evaluate(() => window.__apex != null).catch(() => false);
+  if (!live) {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+  }
   await page.evaluate((id) => window.__apex.race(id), trackId);
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
   // go() advances past countdown; jump() initialises player.px so obs()/physState() work

@@ -2,13 +2,20 @@
 // and driving hooks (setSpeed, spin, nudge) added in v196.
 // All tests use the headless control loop so they run fast with no rendering.
 
-import { test, expect } from "@playwright/test";
+import { sharedTest as test, expect } from "./fixtures.js";
 
 const VIEWPORT = { width: 844, height: 390 };
 
 async function loadTrack(page, track = "monza") {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex, { timeout: 15000 });
+  // Shared page: booted once per worker by the fixture, so this is a no-op
+  // in the common case. Tests that need a VIRGIN page (asserting
+  // pre-track state) keep their own explicit page.goto("/") below —
+  // that reloads the shared page and gives them exactly that.
+  const live = await page.evaluate(() => window.__apex != null).catch(() => false);
+  if (!live) {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex, { timeout: 15000 });
+  }
   await page.evaluate(async t => {
     __apex.race(t);
     await new Promise(r => setTimeout(r, 3000));
