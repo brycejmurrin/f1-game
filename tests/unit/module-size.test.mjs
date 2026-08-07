@@ -40,7 +40,9 @@ const CEILINGS = {
   // after dead-code removals, from comments explaining real fixed bugs at
   // their sites — the quali-Escape guard, the DRIZZLE gates, the vLat basis
   // label. Bug-explaining comments are the one growth the ratchet tolerates.)
-  "js/game.js": 7975,
+  // Lowered from 7975 after the R1 audio-panel extraction (AUDIT-SYNTHESIS)
+  // took the MUSIC & SOUND panel out — the ratchet follows the file down.
+  "js/game.js": 7795,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,

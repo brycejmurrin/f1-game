@@ -90,6 +90,9 @@ export const RULES = [
   [/^js\/game\/(lighting|light-presets|atmosphere|tuner)\.js/, ["webgl", "ab"], ""],
   [/^js\/game\/(career|career-ui|reliability|quali)\.js/, ["career"], ""],
   [/^js\/game\/(audio|music-lib|spotify)\.js/, ["audio"], ""],
+  // The MUSIC & SOUND panel is DOM the menu specs click through, not just audio
+  // plumbing — menu-survey/ui-scale/ui-button-touch/menu-keyboard all open it.
+  [/^js\/game\/audio-panel\.js/, ["audio", "ui"], "mixer panel: audio behaviour + menu DOM"],
   [/^js\/game\/(agentview|agentview-raster)\.js/, ["agent", "agent-contract"], ""],
   [/^js\/game\/apex\.js/, ["api", "hooks", "agent-contract"], "the __apex contract"],
   [/^js\/game\/(debrisworld|incidentsim)\.js/, ["debris", "collision"], ""],

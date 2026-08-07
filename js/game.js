@@ -2670,6 +2670,7 @@ const G = {
   setSetupAero: (on) => setSetupAero(on),
   get setupPreviewXOn() { return setupPreviewXOn; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
+  get musicEnabled() { return musicEnabled; }, set musicEnabled(v) { musicEnabled = v; },
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; },
   // Stable helpers consumed by js/game/setup-ui.js.
@@ -2825,6 +2826,10 @@ const netLobby = NetLobby.create(G);
 // C2 visual suspension (js/game/bodyattitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
+// MUSIC & SOUND panel (js/game/audio-panel.js) — the mixer screen, the ♪
+// master button and the audio-settings persistence. create() wires the DOM;
+// init() runs at the boot-restore position near the end of this file.
+const audioPanel = AudioPanel.create(G);
 
 function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
 function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
@@ -6540,191 +6545,6 @@ document.addEventListener("pointerdown", () => {
   if (gestured) return; gestured = true; firstGesture();
 }, { once: false, capture: true });
 
-els.soundbtn.hidden = false;
-function setSound(b) {
-  soundOn = b; store.set("sound", b);
-  GameAudio.setEnabled(b);
-  els.soundbtn.textContent = b ? "♪ ON" : "♪ OFF";
-  if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); }
-  else {
-    if (state === "menu") GameAudio.startMusic(-1);
-    else if (state === "race") GameAudio.startMusic(trackIdx);
-  }
-  // SOUND is the master, so the MUSIC & SOUND panel's music controls follow it
-  if (typeof syncAudioPanel === "function") syncAudioPanel();
-}
-els.soundbtn.onclick = () => setSound(!soundOn);
-
-// Music on/off, independent of the master sound toggle: engine + SFX keep
-// playing with music off.
-function setMusic(b) {
-  // The master gates both buses and its only button lives on the title screen,
-  // so asking for music mid-race has to lift it — otherwise the switch reads
-  // ON and nothing plays, which is exactly the confusion the duplicated
-  // pause-menu toggle used to cause.
-  if (b && !soundOn) { setSound(true); }
-  musicEnabled = b; store.set("music", b);
-  GameAudio.setMusicEnabled(b);
-  syncAudioPanel();
-}
-
-/* ---------------- MUSIC & SOUND panel ----------------
-   The mixer lives on its own screen: two sliders and a now-playing readout do
-   not fit the settings grid, which is one control per line. Levels persist. */
-let musicVol = store.get("volMusic", 0.5);
-let sfxVol = store.get("volSfx", 1);
-let sfxOn = store.get("sfx", true);
-GameAudio.setMusicVolume(musicVol);
-GameAudio.setSfxVolume(sfxVol);
-GameAudio.setSfxEnabled(sfxOn);
-
-// SOUND EFFECTS on/off. Only the sfx bus is muted, so the soundtrack keeps
-// playing — the sources stay alive at zero gain rather than being torn down, so
-// there is nothing to rebuild when it comes back on.
-function setSfx(b) {
-  if (b && !soundOn) { setSound(true); }
-  sfxOn = b; store.set("sfx", b);
-  GameAudio.setSfxEnabled(b);
-  syncAudioPanel();
-}
-
-/* ---------------- MUSIC SOURCE ----------------
-   ALL / DEFAULT / MY TRACKS pick which part of the local library plays;
-   SPOTIFY hands the music role to js/game/spotify.js. It is a four-way choice
-   rather than a Spotify on/off switch because "my uploads only" and "the
-   shipped songs only" are both things people actually want. */
-let musicSrc = store.get("musicSource", "all");
-
-function spotifyReady() {
-  return typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse &&
-    SpotifyMusic.status().state === "connected";
-}
-
-function setMusicSrc(v) {
-  if (v === "spotify") {
-    if (!spotifyReady()) { syncAudioPanel(); return; }   // not connected: ignore, the note says why
-    musicSrc = "spotify";
-    store.set("musicSource", musicSrc);
-    SpotifyMusic.useAsMusic(true);
-    syncAudioPanel();
-    return;
-  }
-  // Leaving Spotify releases the music role but keeps the session, so coming
-  // back does not cost another sign-in.
-  if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.useAsMusic) SpotifyMusic.useAsMusic(false);
-  const applied = GameAudio.setMusicSource(v);
-  musicSrc = applied;                        // refused (nothing in that set) -> keep the old one
-  store.set("musicSource", musicSrc);
-  syncAudioPanel();
-}
-
-function syncMusicSrcRow() {
-  const counts = GameAudio.sourceCounts ? GameAudio.sourceCounts() : { builtin: 0, user: 0 };
-  const spot = spotifyReady();
-  const on = (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
-    ? "spotify" : GameAudio.musicSource();
-  [["as-src-all", "all"], ["as-src-builtin", "builtin"],
-   ["as-src-user", "user"], ["as-src-spotify", "spotify"]].forEach(([id, v]) => {
-    const b = $(id);
-    if (!b) return;
-    b.classList.toggle("active", on === v);
-    b.disabled = v === "user" ? counts.user === 0 : v === "spotify" ? !spot : false;
-  });
-  const note = $("as-src-note");
-  if (note) {
-    note.textContent = on === "spotify"
-        ? "Spotify is driving the music. The controls above drive it too."
-      : counts.user === 0
-        ? "Add your own files under YOUR TRACKS to use MY TRACKS."
-      : on === "user" ? "Playing your " + counts.user + " uploaded track" + (counts.user === 1 ? "" : "s") + " only."
-      : on === "builtin" ? "Playing the " + counts.builtin + " shipped tracks only."
-      : "Playing everything: " + counts.builtin + " shipped + " + counts.user + " of yours.";
-  }
-}
-
-function syncAudioPanel() {
-  // The two switches are INDEPENDENT — music with no sound effects is a normal
-  // way to play. Each only follows its own switch and the master (the ♪ button /
-  // SOUND in the settings grid), which mutes everything.
-  const musicLive = musicEnabled && soundOn;
-  const sfxLive = sfxOn && soundOn;
-  $("as-music-on").classList.toggle("active", musicEnabled);
-  $("as-music-off").classList.toggle("active", !musicEnabled);
-  $("as-sound-on").classList.toggle("active", sfxOn);
-  $("as-sound-off").classList.toggle("active", !sfxOn);
-  // Disabled, not hidden: the row keeps its slot so nothing reflows under a
-  // thumb mid-tap, and .tune-row greys to say the control is inert.
-  $("as-mvol").disabled = !musicLive;
-  $("as-svol").disabled = !sfxLive;
-  $("as-mvol").closest(".tune-row").classList.toggle("tune-off", !musicLive);
-  $("as-svol").closest(".tune-row").classList.toggle("tune-off", !sfxLive);
-  $("as-mvol").value = String(Math.round(musicVol * 10));
-  $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
-  $("as-svol").value = String(Math.round(sfxVol * 10));
-  $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
-  $("as-now").textContent = musicLive ? (GameAudio.trackName() || "—") : "Music off";
-  // The caption says WHERE the track came from, which is the question the old
-  // single line could not answer — "Now playing X" with four possible sources.
-  const SRC_LABEL = { all: "All music", builtin: "Built-in", user: "My tracks", spotify: "Spotify" };
-  $("as-now-src").textContent = musicLive ? (SRC_LABEL[musicSrc] || "") : "";
-  $("as-play").innerHTML = musicEnabled ? "&#10074;&#10074;" : "&#9654;";
-  $("as-play").setAttribute("aria-label", musicEnabled ? "Pause music" : "Play music");
-  for (const id of ["as-prev", "as-skip"]) $(id).disabled = !musicLive;
-  $("as-play").disabled = !soundOn;
-  // The uploaded-track rows carry a "playing" marker, so they have to be
-  // re-rendered whenever the panel is opened or the track changes — MusicLib
-  // owns the list, we only tell it the picture is stale.
-  if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
-  syncMusicSrcRow();
-}
-
-$("pm-audio").onclick = () => { syncAudioPanel(); $("audioset").hidden = false; };
-// The SPOTIFY entry is owned by js/game/spotify.js — it knows whether there is
-// anything to control, and keeps its own button's disabled state in sync.
-// Spotify's state changes on its own schedule (a redirect completing, a device
-// dropping); the source row has to follow it, not just panel-open events.
-if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.onChange) {
-  SpotifyMusic.onChange(() => { if (!$("audioset").hidden) syncMusicSrcRow(); });
-}
-$("as-src-all").onclick = () => { setMusicSrc("all"); if (soundOn) GameAudio.uiTick(); };
-$("as-src-builtin").onclick = () => { setMusicSrc("builtin"); if (soundOn) GameAudio.uiTick(); };
-$("as-src-user").onclick = () => { setMusicSrc("user"); if (soundOn) GameAudio.uiTick(); };
-$("as-src-spotify").onclick = () => { setMusicSrc("spotify"); if (soundOn) GameAudio.uiTick(); };
-$("as-sp-open").onclick = () => {
-  if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.openPanel) SpotifyMusic.openPanel();
-};
-$("as-close").onclick = () => { $("audioset").hidden = true; };
-$("as-music-on").onclick = () => { setMusic(true); if (soundOn) GameAudio.uiTick(); };
-$("as-music-off").onclick = () => { setMusic(false); if (soundOn) GameAudio.uiTick(); };
-$("as-sound-on").onclick = () => { setSfx(true); GameAudio.uiTick(); };
-$("as-sound-off").onclick = () => { GameAudio.uiTick(); setSfx(false); };
-// `input` not `change`: the level should follow the thumb while it is dragged.
-$("as-mvol").oninput = (e) => {
-  musicVol = GameAudio.setMusicVolume((+e.target.value || 0) / 10);
-  store.set("volMusic", musicVol);
-  $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
-};
-$("as-svol").oninput = (e) => {
-  sfxVol = GameAudio.setSfxVolume((+e.target.value || 0) / 10);
-  store.set("volSfx", sfxVol);
-  $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
-};
-// One handler for all three transport buttons: they differ only in which
-// GameAudio call they make, and all three then have to refresh the same
-// now-playing card and the uploaded-track list's "playing" marker.
-function audioTransport(fn) {
-  const name = fn();
-  if (name) $("as-now").textContent = name;
-  if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
-  syncAudioPanel();
-  if (soundOn) GameAudio.uiTick();
-}
-$("as-skip").onclick = () => audioTransport(() => GameAudio.skipTrack());
-$("as-prev").onclick = () => audioTransport(() => GameAudio.prevTrack());
-// PLAY/PAUSE is the music switch, not a separate transport state — there is
-// one music bus and `musicEnabled` already owns whether it is running, so a
-// third notion of "paused" here would be a second source of truth.
-$("as-play").onclick = () => { setMusic(!musicEnabled); if (soundOn) GameAudio.uiTick(); };
 
 // UI SIZE / HUD SIZE: how big the interface is, as a percentage, on two
 // independent sliders. Each writes a custom property the stylesheets consume as
@@ -7941,16 +7761,7 @@ DataHub.init(els.datahub);
 $("pm-steer").textContent = steerLabel();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
-setSound(soundOn);
-setMusic(musicEnabled);
-// Restore the saved source once the uploaded tracks are in the playlist —
-// "MY TRACKS" is refused while the library looks empty, which it does until
-// MusicLib's IndexedDB read lands.
-if (musicSrc && musicSrc !== "spotify") {
-  const applySrc = () => { musicSrc = GameAudio.setMusicSource(musicSrc); syncMusicSrcRow(); };
-  if (typeof MusicLib !== "undefined" && MusicLib.init) MusicLib.init().then(applySrc, applySrc);
-  else applySrc();
-}
+audioPanel.init();
 loadTrack(trackIdx);
 window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();

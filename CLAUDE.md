@@ -272,6 +272,8 @@ js/game/         — game modules, each Module.create(G) with the G ctx façade 
                                   on top"; Escape is "back" via data-esc-close
   music-lib.js   MusicLib       bring-your-own-music library (IndexedDB)
   spotify.js     SpotifyMusic   optional Spotify Premium soundtrack
+  audio-panel.js AudioPanel     MUSIC & SOUND panel — mixer screen, ♪ master
+                                  button, audio-settings persistence
   input.js       Input          keyboard / gamepad / touch / tilt
   audio.js       GameAudio      WebAudio synth: engine, sfx, music
   store.js       GameStore      localStorage persistence

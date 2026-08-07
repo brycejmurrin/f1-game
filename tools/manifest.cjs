@@ -95,6 +95,7 @@ const FULL = [
   "js/game/audio.js",
   "js/game/music-lib.js",
   "js/game/spotify.js",
+  "js/game/audio-panel.js",
   "js/data/api.js",
   "js/data/telemetry.js",
   "js/data/export.js",
@@ -300,6 +301,7 @@ const HARD_EDGES = [
   ["js/game/racecontrol.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
   ["js/game/lighting.js", "js/game/light-store.js"],  // light-store destructures LightTune's TUNE_DEFS/LT inside create()
   ["js/game/light-store.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
+  ["js/game/audio-panel.js", "js/game.js"],   // game.js calls AudioPanel.create(G) at eval time
   ["js/game/career.js", "js/game/reliability.js"],  // reliability draws through Career.hash (call time, keep ordered)
   ["js/car/parts.js", "js/game/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
   ["js/game/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval
