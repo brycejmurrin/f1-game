@@ -12,6 +12,14 @@
  *   node tools/pick-tests.mjs --since HEAD~3
  *   node tools/pick-tests.mjs js/car/parts.js js/game/hud.js   # explicit paths
  *   node tools/pick-tests.mjs --bg            # print the background-run command
+ *   node tools/pick-tests.mjs --json         # machine-readable, for CI
+ *
+ * `--json` exists because the human output is PROSE and a CI selector reading
+ * it becomes a silent consumer of an unversioned format. Two of its lines are
+ * live traps for an unanchored `test:<group>` grep: the zero-match message
+ * names `test:fast`, and the batching lines name `tools/test-bg.mjs <groups>`.
+ * The JSON shape is asserted by tests/pick-tests.test.mjs, so it cannot drift
+ * out from under a consumer the way the prose can.
  *
  * The rules below are deliberately COARSE and biased toward running too much.
  * A rule that is too narrow is a missed regression; a rule that is too wide
@@ -27,6 +35,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// The branch `.github/workflows/pages.yml` deploys from — the repo's real trunk.
+// tests/pick-tests.test.mjs asserts this against pages.yml, so the two cannot
+// drift apart silently the way a comment naming a branch would.
+export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
 // Kept in step with tools/test-bg.mjs, which enforces the same arithmetic.
 const WORKERS = +process.env.WORKERS || 2;
 const CORES = os.availableParallelism ? os.availableParallelism() : (os.cpus().length || 4);
@@ -113,15 +126,28 @@ export function pick(files) {
 }
 
 function changedFiles(argv) {
-  const explicit = argv.filter((a) => !a.startsWith("--"));
+  const since = argv.indexOf("--since");
+  // `--since <ref>` TAKES A VALUE, and that value is not a path. Filtering on
+  // `!a.startsWith("--")` alone swallowed the ref as an explicit file, so
+  // `--since HEAD~3` reported the literal string "HEAD~3" as the only changed
+  // file, matched no rule, and printed "nothing to run" — the one answer a test
+  // selector must never give wrongly. It had never worked, and the change-aware
+  // CI design in docs/research/TEST-AUDIT-2026-08.md §3 is built entirely on it.
+  const explicit = argv.filter((a, n) => !a.startsWith("--") && n !== since + 1);
   if (explicit.length) return explicit;
   const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
   if (argv.includes("--staged")) return git(["diff", "--cached", "--name-only"]).split("\n").filter(Boolean);
-  const i = argv.indexOf("--since");
-  if (i >= 0 && argv[i + 1]) return git(["diff", "--name-only", argv[i + 1]]).split("\n").filter(Boolean);
+  if (since >= 0 && argv[since + 1]) return git(["diff", "--name-only", argv[since + 1]]).split("\n").filter(Boolean);
   // Default: everything not yet on the branch point, plus the working tree.
+  //
+  // THE DEPLOY BRANCH IS THE BASE, not `main`. main is a stale diverged fork
+  // (CLAUDE.md says so and nothing merges into it), so merge-basing against it
+  // returns an ancient commit and the "changed files" set balloons to most of
+  // the repo — which reads as "run everything", i.e. the tool silently gives up
+  // exactly when it is asked the real question. It is kept as a fallback only
+  // for a clone that has no deploy branch.
   let base = "";
-  for (const ref of ["origin/main", "main", "HEAD~1"]) {
+  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "origin/main", "main", "HEAD~1"]) {
     try { base = git(["merge-base", "HEAD", ref]); break; } catch (_) { /* try the next */ }
   }
   const out = new Set(git(["diff", "--name-only", "HEAD"]).split("\n").filter(Boolean));
@@ -133,6 +159,28 @@ function changedFiles(argv) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const files = changedFiles(argv);
+
+  // --json short-circuits BEFORE any prose path, deliberately. The two early
+  // exits below ("no changed files", "no rule matched") are the cases a
+  // consumer most needs to distinguish — one means run nothing, the other means
+  // run everything — and the prose renders them as sentences that happen to
+  // contain a `test:` token. Emitting the same three fields for all outcomes is
+  // what lets CI branch on `reason` instead of grepping English.
+  if (argv.includes("--json")) {
+    const g = pick(files);
+    const pkgJ = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const named = [...g.keys()].filter((n) => pkgJ.scripts[`test:${n}`]).sort();
+    console.log(JSON.stringify({
+      // "none" — nothing changed, run nothing. "unmatched" — files changed but
+      // no rule claimed them, so the selection is NOT trustworthy and the
+      // caller must fall back to a full run. "matched" — groups is the answer.
+      reason: !files.length ? "none" : (named.length ? "matched" : "unmatched"),
+      files,
+      groups: named.map((n) => ({ group: n, script: `test:${n}`, because: [...g.get(n)][0] })),
+    }));
+    process.exit(0);
+  }
+
   if (!files.length) {
     console.log("no changed files — nothing to run");
     process.exit(0);

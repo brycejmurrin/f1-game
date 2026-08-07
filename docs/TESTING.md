@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/*.spec.js`) + 48 `node --test` unit suites
+111 root Playwright spec files (`tests/*.spec.js`) + 49 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -641,6 +641,7 @@ what it covers.
 | `circuit-def-fields.test.mjs` | every field authored in `js/circuits/<id>.js` survives the field-by-field copy into `Tracks.LIST`, or is named engine-only with a reason — an uncopied field reads as `undefined` at every consumer, silently, and the circuit renders as though it was never written |
 | `backend-surface-parity.test.mjs` | every name GLX publishes is an own property of WGX and TLX (`undefined` allowed, absent not) — game.js installs a backend by descriptor-copy, so an absent name keeps GLX's own function running against a null `gl`/`CHK`, and every feature test for it passes before throwing |
 | `test-coverage-audit.test.mjs` | the coverage auditor itself |
+| `pick-tests.test.mjs` | the SELECTOR's own contract, upstream of the taxonomy: `--since <ref>` reads a ref and not a path (it swallowed the ref as a filename and answered "nothing to run" for every diff, for as long as the flag had existed), `--json` reports a `reason` CI can branch on rather than prose that happens to contain a `test:` token, and the default diff base is the DEPLOY branch — `main` is a stale fork here, so merge-basing against it balloons the changed set to most of the repo and the tool gives up silently, dressed as an answer |
 | `fixture-consumer-audit.test.mjs` | the specs that must import `tests/fixtures.js` do |
 | `component-inventory.test.mjs` | the class families in `css/` match `docs/COMPONENTS.md` — a class defined in one file and used from another is the drift this catches |
 | `span-kinds.test.mjs` | the agent view's span vocabulary matches the `ctx.noteSpan(...)` emitters — the list had fallen four kinds behind, so any circuit placing a tiered bowl failed `agent-view.spec.js` with a message that pointed nowhere near the cause |
