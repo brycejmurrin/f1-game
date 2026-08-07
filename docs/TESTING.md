@@ -36,7 +36,18 @@ Each group gets its own free port, its own `artifacts/report-<port>/` and its
 own log, so groups cannot tear down each other's web server and a stall is
 attributable to one log rather than to "the run". `WORKERS=2` per group is the
 default; every worker is a Chromium + SwiftShader process, so total browsers is
-groups × workers and 2-3 groups is the sweet spot on a small box.
+groups × workers.
+
+**ONE GROUP AT A TIME on a four-core box.** This line used to read "2-3 groups
+is the sweet spot", which contradicted CLAUDE.md's "one heavy group is its full
+capacity" — and CLAUDE.md is the one the measurement supports. Running `tiny` +
+`circuit` together is 2 groups × 2 workers = four SwiftShader browsers on four
+cores; load reached 16.8 and the batch produced **five failures, four of which
+were bare 120 s timeouts** (138 s, 148 s, 153 s, 163 s) with a single genuine
+assertion failure among them. Four fabricated failures per real one is not a
+sweet spot — and each one reads like a product bug until you check the clock.
+`test-bg.mjs`'s cap ALLOWS two groups; that is a ceiling, not a recommendation.
+Scale the group count to the cores you actually have.
 
 `tools/test-shards.sh` does the same fan-out but WAITS for the result — use it
 in CI or when you genuinely want to block.
