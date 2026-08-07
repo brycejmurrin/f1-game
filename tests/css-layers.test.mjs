@@ -90,6 +90,23 @@ for (const file of files) {
   });
 }
 
+test("every stylesheet except tokens.css opens with its @layer wrapper", () => {
+  // The per-file test above SKIPS files that don't open with `@layer x {` —
+  // so a file that loses its wrapper entirely (the worst version of the
+  // defect this guard exists for: every rule unlayered, outranking every
+  // layer in the project) would silently exit the guard. Pin the roster.
+  const unwrapped = files.filter((f) => {
+    if (f === "tokens.css") return false;   // declares the order; sections layer individually
+    const s = stripComments(fs.readFileSync(path.join(CSS_DIR, f), "utf8"));
+    const first = (s.split("\n").find((l) => l.trim()) || "").trim();
+    return !/^@layer\s+[\w-]+\s*\{/.test(first);
+  });
+  assert.deepStrictEqual(unwrapped, [],
+    "these css/ files do not open with `@layer <name> {`, so ALL their rules " +
+    "are unlayered (beating every layered rule) and the per-file guard above " +
+    "cannot see them: " + unwrapped.join(", "));
+});
+
 test("the cascade order is declared exactly once, in tokens.css", () => {
   const decls = files.filter((f) => {
     const s = stripComments(fs.readFileSync(path.join(CSS_DIR, f), "utf8"));
