@@ -40,15 +40,21 @@ node tools/test-bg.mjs --status --wait --stop
 The watcher pattern (each stdout line becomes one notification):
 
 ```
-Monitor: until grep -qE "[0-9]+ (passed|failed)|Error:" artifacts/logs/<g>.log
-         do sleep 15; done; grep -E "[0-9]+ (passed|failed)|Error:" artifacts/logs/<g>.log | head -3
+Monitor: until grep -qE "= run (passed|failed|timedout|interrupted)" artifacts/logs/<g>.log
+         do sleep 15; done; grep -E "= run " artifacts/logs/<g>.log | tail -1
 ```
 
-Match every terminal state, not just success — a watcher that greps only for
-`passed` is silent through a crash, and silence looks like "still running".
-Watch the LOG, never the process table (a watcher whose command line contains
-its own grep pattern matches itself). Never `| tail` a background run — tail
-buffers to EOF and the file stays empty.
+Anchor on the reporter's terminal line `= run <status>` and NOTHING looser:
+the 30 s heartbeat lines contain `N/M done, K failed`, so a pattern like
+`[0-9]+ (passed|failed)` fires on the FIRST heartbeat (this file recommended
+exactly that for weeks and every watcher built from it misfired). Match every
+terminal status, not just `passed` — a success-only watcher is silent through
+a crash, and silence looks like "still running". Watch the LOG, never the
+process table (a watcher whose command line contains its own grep pattern
+matches itself). Never `| tail` a live background run — tail buffers to EOF
+and the file stays empty. Adding `|Error:` to the UNTIL pattern makes the
+watcher fire on the first failing test's stack trace — useful for early
+warning, but then re-arm it for the terminal line.
 
 **2. Run the groups the change needs — not all of them.** Ask
 `node tools/pick-tests.mjs [--staged|<paths>]`. Escalate: `npm run test:tiny`
@@ -243,6 +249,8 @@ sw.js            service worker — precache derived from the shell's own tags
 tools/           see tools/README.md (bidirectionally test-asserted index)
 tests/           111 Playwright specs + 48 `node --test` unit suites (docs/TESTING.md)
 docs/            the reference library — docs/README.md is the index
+.claude/         skills/ (task recipes, .claude/skills/README.md) and
+                 workflows/ (multi-agent orchestration scripts, README there)
 spike/           concluded renderer/physics evaluations (kept as provenance)
 worker/          optional Cloudflare rendezvous relay (worker/README.md)
 ```
@@ -278,7 +286,11 @@ worker/          optional Cloudflare rendezvous relay (worker/README.md)
   `light-presets` = shipped values.
 - **localStorage keys** are all prefixed `apex26.`.
 - **Coordinates**: +Y up, metres, radians, arc position `s` in metres
-  (0 → track.total), lateral `x` metres (+right of centreline).
+  (0 → track.total), lateral `x` metres (+right of centreline). Curvature
+  sign: **+k = LEFT-hand turn** (measured — the corner-table note in
+  js/game/agentview.js is the proof). The opposite label shipped for months
+  and put three broadcast cameras on the inside of every corner; when code
+  reads `sign(k)`, check it against that note, not against a comment.
 
 ## Physics
 
