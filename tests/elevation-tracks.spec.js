@@ -210,8 +210,31 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         let finite = true;
         window.__apex.jump(0.0, FLAT_LAUNCH, 0);
         window.__apex.setInput({ steer: 0, throttle: true });
-        let flatMax = 0;
-        for (let i = 0; i < 180; i++) { window.__apex.step(1 / 60, 1); flatMax = Math.max(flatMax, window.__apex.physState().speed); }
+        let flatMax = 0, flatSteps = 0;
+        // STOP SAMPLING ONCE THE CAR LEAVES THE ROAD. `steer: 0` held for three
+        // seconds drives STRAIGHT while the road turns, so on most circuits the
+        // car is in the runoff within a second or two and its speed collapses —
+        // measured, by probing six circuits: monza reached 41.8 then fell to
+        // 22.9 at x=-7.9; paul_ricard 38.8 then 9.1 at x=-9.1; cota 40.8 then
+        // 9.1 at x=+14.9; monaco 41.9 then 10.1. Only spa (+5.05) and
+        // hungaroring (+4.75) stayed on and accelerated cleanly.
+        //
+        // So this never measured a flat-out top speed. It measured HOW LONG THE
+        // START STRAIGHT IS before an unsteered car falls off — which is why
+        // cota and paul_ricard "failed" and spa "passed", and why the old
+        // `> 41` threshold was really asking whether a circuit has a long
+        // enough straight. Everything downstream inherited the error: the
+        // descent check compares maxV against flatMax * 1.35, i.e. against a
+        // reference set by a car in the gravel.
+        //
+        // Bounded to the on-road stretch, the reference is what its name says.
+        for (let i = 0; i < 180; i++) {
+          window.__apex.step(1 / 60, 1);
+          const p = window.__apex.physState();
+          if (Math.abs(p.x) > window.__apex.probe().hw) break;   // off the road — stop counting
+          flatMax = Math.max(flatMax, p.speed);
+          flatSteps++;
+        }
         window.__apex.clearInput();
 
         // Scan the lap for the steepest descent and climb (road pitch via slope).
@@ -265,7 +288,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         }
         window.__apex.clearInput();
         window.__apex.setPhysics({ roadFollow: 0 });   // restore the shipped default
-        return { dn, up, maxV, flatMax, climbGain: cv1 - cv0, climbEnd: cv1, widest, hw, finite };
+        return { dn, up, maxV, flatMax, flatSteps, climbGain: cv1 - cv0, climbEnd: cv1, widest, hw, finite };
       });
 
       expect(errors).toEqual([]);
@@ -286,6 +309,12 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
       // it exists to catch is half the launch speed, not 0.1 under it — and
       // CLAUDE.md's PACE rule wants the launch constant here rather than a bare
       // speed literal in any case.
+      // The reference is only meaningful if the car spent real time ON the road:
+      // a single on-road step would make flatMax the launch speed and nothing
+      // more, and the ratio below would be comparing against a number that
+      // measured nothing.
+      expect(r.flatSteps, "reference run left the road immediately — no usable reference")
+        .toBeGreaterThan(30);
       expect(r.flatMax, "flat-out reference run was blocked — it lost ground from the launch")
         .toBeGreaterThanOrEqual(FLAT_LAUNCH);
       expect(r.maxV).toBeLessThan(r.flatMax * 1.35); // no descent runaway past flat top speed (gravity adds a little downhill, but doesn't run away)
