@@ -58,6 +58,19 @@ step lists — it fixes the ORDER and the gates:
 
 ## Design tickets (carried into W2 reconciliation, not mechanical)
 
+- **FOLLOW-UP TO OUR OWN FIX — race-control's cap re-arm hold is too blunt.**
+  `js/game/racecontrol.js` now force-drops a flag at its cap (90 s SC / 30 s
+  yellow) and suppresses re-raising for `CAP_REARM_HOLD` (45 s) so the same
+  stale hazard picture cannot instantly re-flag. But the suppression is
+  unconditional: during those 45 s a *genuinely worse* incident — debris
+  growing from a local yellow into a safety-car pile — is also swallowed, so
+  the race runs green through a real SC-worthy event for up to three quarters
+  of a minute. Fix: remember the level that capped, and let `desired` through
+  when it EXCEEDS that level (escalation), suppressing only same-or-lower
+  re-raises. The existing test still holds under that rule (a capped SC has no
+  higher level to escalate to). Not applied yet — a browser run was serving
+  the working tree when this was found.
+
 - **City-building `setback` massing is dormant, deliberately.** `building()`'s
   massing knob is `arch`; six call sites (`js/track/scenery-city.js`'s generated
   rows plus `suzuka.js`, `monaco.js` ×3, `bahrain.js`) pass a `setback:` key it
