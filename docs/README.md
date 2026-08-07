@@ -81,6 +81,7 @@ sit in this table was indexed by nothing and moved to
 | [research/CAMPAIGN-2026-08.md](research/CAMPAIGN-2026-08.md) | THE live plan of record for the cleanup & hardening campaign: wave status, the W2 execution order and gates, the design-ticket register, and which dated record owns which piece. Start here. |
 | [research/AUDIT-SYNTHESIS-2026-08.md](research/AUDIT-SYNTHESIS-2026-08.md) | The 21-agent audit workflow's synthesized execution plan — FIX-NOW (landed, marked in place) / RESTRUCTURE / DEFER with all 35 verified findings — driving the post-cleanup hardening; archives when spent. |
 | [research/TEST-AUDIT-2026-08.md](research/TEST-AUDIT-2026-08.md) | The 11-agent test-semantics audit: per-file verdicts for all 162 test files, the corrected group taxonomy, the tests/ split map, and the change-aware CI design with its feasibility gaps — feeds the W2 restructure; archives when spent. |
+| [research/TOTAL-AUDIT-2026-08.md](research/TOTAL-AUDIT-2026-08.md) | The whole-tree audit: 197 adversarially-verified findings over every source file and doc, synthesized into fix batches — headlined by the live curvature-sign trio in the track engine and the jump()/IncidentSim authority bug; feeds the campaign fix waves; archives when spent. |
 
 ## Archive (`archive/`)
 
