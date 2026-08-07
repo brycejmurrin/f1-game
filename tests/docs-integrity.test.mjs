@@ -103,7 +103,7 @@ const SOURCE_EXEMPT = new Map([
   // name one — so this entry is not a stale reference being tolerated, it is
   // the assertion. If someone ever creates the file, the test stops proving
   // anything and should fail; keeping the name absurd is what prevents that.
-  ["tests/there-is-no-such.spec.js", /ci-coverage\.test\.mjs|docs-integrity/],
+  ["tests/there-is-no-such.spec.js", /ci-coverage\.test\.mjs|select-budget\.test\.mjs|docs-integrity/],
   // Forward references to the POST-SPLIT tree. tools/tests-split.mjs plans the
   // tests/ move (AUDIT-SYNTHESIS §R2) and its guard asserts the planned
   // destinations, so both must name tests/specs/ and tests/unit/ before either
