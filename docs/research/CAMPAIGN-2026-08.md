@@ -22,7 +22,8 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 | W2-fix | The total-audit's Batch A/B/C fix train (headline: the LIVE curvature-sign trio in the track engine — kerbs/barriers/corner boards on the wrong side — plus the session-verified jump()/IncidentSim authority bug, career slot overwrite, racecontrol dead caps, DRIZZLE tier, matTexMix truth cluster) | **LANDED** `89ce4f2f` (A+B+C together, bump v1025) + `d23b70b8` (tail, bump v1026). The tail also REPAIRED a regression the first commit shipped — an intermediate paul_ricard.js whose widened modelGroup bounds made preflight reject the cabanon AND its wall (299,716 vs 299,946 verts) — and REVERTED an art change it had smuggled in (city-building `setback` massing; see the design ticket below). Geometry sweeps green across all 40 circuits; browser groups running |
 | W2-perf | Shared-page test fixture (`sharedTest`) — kill the per-test page boot | **LANDED** `e52bb772`, `9b91f807`, `3fa9d047`, `75ae72f9`, `85a91f40`. Settled at **6 specs / 284 tests** on the shared page after 8/405 was tried and two specs reverted. Headline: `agent-view` **117/117 in 11m16s against ~43 min** before. Also green: `new-hooks` 56/56, `headless-api` 24/24, `logging` 6/6. `career` (101) and `quali` (20) reverted — both drive MENU SCREENS, which is the axis that decides reuse; `dev-tools` + `camera-driving-hooks` verifying. Full rationale, the three conversion edges and the load-inversion diagnostic are in [docs/TESTING.md](../TESTING.md) |
 | W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is verified from BOTH directions: bisect-cleared locally (all three elevation failures reproduce byte-identically at `fdd4082f`) and CI's per-circuit geometry sweep green throughout. **CI #204 is fully green — guards, sweeps AND smoke.** Verified: `agent-view` 117/117, `steering` 96/96, `api` 193/193, `smoke`+`net` 79/79, shared-fixture set 101/101, `camera` 45/45, `elevation-tracks` 47/47 (after 3 repairs), `smoke` 9/9, plus `audio`/`debris`/`ab`/`paths`/`map`/`baseline`/`shimmer` inside the 56-test tail batch, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. **Execution integrity checked, not assumed: every green group's count equals its declared total, with zero skips, zero retries and zero flakes.** OPEN FAILURES: `tlx-probes` ×2 and `menu-keyboard` ×1 (both below). NOT YET RUN post-Batch-A/B/C: **`tracks-walls` + `autopilot`** (the `circuit` run was SIGTERM'd at 07:58 and never completed — the largest remaining hole, and the one place a red result could still be a product bug), `parts`, `modes`, `scenery`, `webgl`, `barriers`, `collision`, `physics` |
-| W2-assert | "A test that asserts nothing is prose too" — the third sibling of the never-run finding | **LANDED** `3eadb40d` + `a50c18ae`. `tools/assert-audit.mjs` grades every declared test **asserting / implicit / vacuous** and flags empty `.catch(() => {})`. Tree: **1152 tests, 0 vacuous, 40 implicit-only**. The gallery specs were the whole of the implicit set: `ui-audit` (34) and `ui-desktop` (5) are PNG harnesses whose ticks were being read as `test:ui` coverage. `ui-desktop` is merged into `ui-audit` as two viewport rows and deleted; `ui-audit` moves to an on-demand `test:gallery` group (test-audit §1a/§1d, executed early because W2-verify surfaced it). `tests/assert-audit.test.mjs` is the ratchet. **The tool's own first version was 20% false** — a body-only scan called hud-audit's eight steer-mode tests vacuous because they assert only through `assertHud()`; helper-following to a fixpoint is the tool, and two guard cases pin it |
+| W2-step0 | Make the tests/ split's SILENT failures loud — before the split | **LANDED** `d6f09674`. R2's lockstep marks five items "no guard turns red"; a guard that arrives after the commit it protects has protected nothing. `tools/cross-file-paths.mjs` + guard: every relative reference in `tests/`+`tools/` (static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)`) must resolve — **137 refs across 239 files, green**. espree, not grep: two test files build fixtures out of source text containing import statements, and a guard with false positives gets switched off. **`output-paths.spec.js` could not have detected the move breaking it** — it asserted against `resolve(import.meta.dirname, "..")`, the identical expression the module under test uses, so both sides move together and agree; post-split both resolve to `tests/`, galleries land in the test tree, and `existsSync(dir)` passes too because `galleryDir()` CREATES what it returns. Both modules now walk up for `package.json`. Two vacuous-pass regexes widened to admit subdirectories, each with a tripwire. **Live finding:** `test-groups`' pinned-`--project` check has ZERO inputs — only `test:render`/`test:headless` carry `--project` and neither names a spec, so its loop body has never run. It is a regression guard for a bug fixed by removing the pin that fed it. It HAS an assertion, so `assert-audit` cannot see it — a fourth category beyond asserting/implicit/vacuous: **structurally unreachable**. It now asserts WHY its input set is empty |
+| W2-assert | "A test that asserts nothing is prose too" — the third sibling of the never-run finding | **LANDED** `3eadb40d` + `a50c18ae`. Gallery split **VERIFIED 78/78, zero skips, zero retries** — 34 portrait + 34 landscape + the 10 merged large-screen tests, all green, including the ten that were committed unrun. `tools/assert-audit.mjs` grades every declared test **asserting / implicit / vacuous** and flags empty `.catch(() => {})`. Tree: **1152 tests, 0 vacuous, 40 implicit-only**. The gallery specs were the whole of the implicit set: `ui-audit` (34) and `ui-desktop` (5) are PNG harnesses whose ticks were being read as `test:ui` coverage. `ui-desktop` is merged into `ui-audit` as two viewport rows and deleted; `ui-audit` moves to an on-demand `test:gallery` group (test-audit §1a/§1d, executed early because W2-verify surfaced it). `tests/assert-audit.test.mjs` is the ratchet. **The tool's own first version was 20% false** — a body-only scan called hud-audit's eight steer-mode tests vacuous because they assert only through `assertHud()`; helper-following to a fixpoint is the tool, and two guard cases pin it |
 | W2 | RESTRUCTURE + change-aware CI | **BLOCKED on W2-verify** — see "the finding that outgrew its wave" below. Moving files while half the suite has never been executed makes a never-run red test indistinguishable from one the move broke |
 | W3 | Bedrock Ph0-1: dependency scanner + global registry, `.d.ts` contracts, `tsc --checkJs` CI, `@ts-check` tranche + ratchet | Planned — [ARCHITECTURE-REDESIGN-2026-08.md](ARCHITECTURE-REDESIGN-2026-08.md) is the adopted direction |
 | W4 | Loop-until-dry lens-diverse review of the post-restructure tree, CAP 3 ROUNDS | Planned (shrinks if W2b leaves little) |
@@ -40,6 +41,23 @@ Sources of authority: [AUDIT-SYNTHESIS-2026-08.md](AUDIT-SYNTHESIS-2026-08.md)
 CI design + its 14 feasibility gaps). This doc does not duplicate their
 step lists — it fixes the ORDER and the gates:
 
+**Re-measured against the tree 2026-08-07** (the records were written before the
+fix train and this session's guards):
+
+| Record's claim | Actual | Consequence |
+|---|---|---|
+| R1 citations — game.js 7972 lines, ceiling 7975 | **exact match** | R1 is landable as written; locate by content, not number |
+| R2 relocates 109 specs | 110 − the `hud-audit` merge = **109** | still right, by a different route (`ui-desktop` already merged) |
+| `tests/unit/` = 48 files | **55** | this session added six guards; the plan must not hardcode counts |
+| 66 specs import `./fixtures.js` | **58** | mechanical |
+| all five ⚠ silent-failure citations | **all still resolve exactly** | lockstep is line-accurate; `ci.yml`'s sweeps filter is now `:211` |
+
+**0. Step 0 — de-silence the ⚠ set. LANDED `d6f09674`, see the wave table.**
+This was not in the original ordering and belongs at the front: R2's five ⚠
+items are the ones no guard catches, and `output-paths.spec.js` turned out to be
+structurally incapable of catching its own breakage rather than merely likely to
+miss it.
+
 1. **Taxonomy first** (test-audit §1): merges → foundation renames + new
    `foundation`/`gallery` groups → double-billing dedupe. The **`gallery` group
    and the `ui-desktop`→`ui-audit` merge are DONE** (`a50c18ae`, pulled forward
@@ -53,9 +71,28 @@ step lists — it fixes the ORDER and the gates:
    `git mv` commit, no background runs in flight, snapshot dirs and
    `physics-baseline.json` move with their specs.
 3. **R1 audio-panel extraction** (synthesis R1, 10-step lockstep).
-4. **R3 tools/ subdirs, reduced form** (synthesis R3 — net/car/capture/lighting
-   only), last, one family per commit.
-5. **Change-aware CI** — REDESIGN REQUIRED before landing; the drafted
+4. **R3 tools/ subdirs — RECOMMEND CUTTING, on the measurement.** The synthesis
+   already downgraded it to "CONDITIONAL GO, last". Enumerating the four kept
+   families against the tree settles it: `net/` is two files
+   (`nostr-local.cjs`, `nostr-probe.mjs`), `lighting/` is essentially one
+   (`ab-lighting.mjs`), and `carshot.mjs`/`render-car.mjs` are genuinely
+   ambiguous between `car/` and `capture/` — either home is arguable, which is
+   the signature of a split that is not carving at a joint. Item 5 keeps
+   everything frequently used flat anyway. So: ~9 of 65 files moved into four
+   directories, four commits of lockstep risk (including the
+   `docs-integrity:395-402` deepening, without which every moved tool leaves the
+   index guard permanently), for navigability that does not measurably improve.
+   Cut it, or re-scope it to a single `tools/net/` move if the itch persists.
+5. **Change-aware CI — RECOMMEND MOVING OUT OF W2 into its own wave.** Not a
+   new judgement: the record's own closing recommendation is to land the tooling
+   (done — `pick-tests --json`, `DEPLOY_BRANCH`, `cache-bump-only`, all green),
+   then *re-derive the budget* and treat the workflow file as a separate
+   deliberate decision. Gaps 7/8/13 are not polish — real groups are 71-193
+   tests against a 12-test cap, and `retries: 1` with `--timeout=240000` makes
+   one timing-out test cost 8 minutes rather than 115 s, so the cap fits only
+   the all-pass case and the step dies exactly when the selection finds a
+   regression. Bundling an unlandable YAML design into the restructure is how a
+   wave stalls behind its weakest item. The drafted
    `selected` job is not landable (test-audit gaps 1-2 are blocking: the
    `workflow_call` guard never fires and a failing advisory job would gate the
    deploy). The redesign must fix: the discriminator (branch-ref check or a
@@ -220,6 +257,16 @@ fast-forward after each green wave" assumes the shipping mechanism works. For
   drawn frame. Ten specs use the pattern; tlx-probes is not one of them. So this
   is not an undocumented lesson, it is a documented one that was missed three
   times in one file.
+  **MEASURED, and it lands inside the recorded band.** A re-run of tlx-probes
+  alone gives M2 (screenshot) **92.6 s against 125.8 s in the batch**, while M4
+  (no screenshot) is **41.9 s against 38.8 s** — unchanged. smoke.spec.js's
+  recorded figures for the identical mistake are 88-96 s solo, 154-214 s under a
+  2-worker suite, **29-32 s once `headless(true)` stops the loop first**. 92.6
+  sits inside 88-96. The diagnosis is therefore confirmed against this repo's own
+  prior measurement rather than against reasoning, and the fix predicts ~30 s.
+  NOTE the solo run is NOT a contention control: both runs use 2 workers, and in
+  the batch TLX shared its worker pair with lighter specs, so this run is if
+  anything harder on the renderer. What it measures is repeatability.
   **M6 skid (:188) is a different thing**: no screenshot, but `race("monza")` +
   120 `act()` steps + a wait for a presented frame carrying the skid batch. It
   sits above the file's 85-92 s band with extra work bolted on.
