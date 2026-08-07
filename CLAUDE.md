@@ -108,6 +108,16 @@ to wait 30 s. `tlx-probes`' M6 skid is the worked example — 344 s inside a 30 
 wait. Reasoning of the form "this test's explicit waits total N seconds, so the
 time must be elsewhere" is UNSOUND until the call sites are fixed.
 
+And once they are fixed, a wait that still overruns is telling you the CONDITION
+is unreachable, not that the page is slow. M6 skid took four wrong mechanisms
+before anyone asked whether `skidVerts` could ever move: `skids.stamp()` runs
+inside `render()`, the stint was driven through `act()` (which never presents a
+frame), and 120 steps of full lock crashed the car below both stamp gates
+anyway. Both of that file's never-passing tests are green now — M9 env from
+`polling` alone, M6 from being rewritten against what the code actually does.
+The habit that settled it was reaching for an instrument
+(`tests/manual/skid-probe.spec.js`) instead of a fifth theory.
+
 Write tests against `__apex` hooks, not rendering magnitudes; prefer relative
 assertions ("faster on tarmac than grass") over absolute thresholds. New-test
 checklist and the two-project (headless/render) split: `docs/TESTING.md`.
