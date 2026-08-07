@@ -59,7 +59,14 @@ structurally incapable of catching its own breakage rather than merely likely to
 miss it.
 
 1. **Taxonomy first** (test-audit §1): merges → foundation renames + new
-   `foundation`/`gallery` groups → double-billing dedupe. The **`gallery` group
+   `foundation`/`gallery` groups → double-billing dedupe. **The foundation
+   renames are DONE** (`6a495374`): 16 specs left `physics-` for
+   `<circuit>-foundation.spec.js` and a new `test:foundation` group, so the glob
+   left behind now matches exactly the two genuine physics files. The routing
+   landed in the SAME commit — gap 11's requirement — and is verified:
+   `js/circuits/monza.js` selects circuit+foundation+scenery,
+   `js/track/mesh.js` selects circuit+foundation+physics+sweeps. The group has
+   not yet been RUN. **The `gallery` group
    and the `ui-desktop`→`ui-audit` merge are DONE** (`a50c18ae`, pulled forward
    by W2-assert); `hud-audit`→`hud-layout` is NOT — it swaps a helper's `#hud`
    visibility check for real geometry assertions, so it is a behaviour change to
@@ -347,12 +354,46 @@ fast-forward after each green wave" assumes the shipping mechanism works. For
   wrong, which would make it the first product bug of the day; every other
   failure has been the test's fault. Confirm solo before believing it.
 
-## Ship queue
+## Ship queue — PR vs fast-forward, decided on the evidence
 
-The work branch is **53 commits ahead** of the deploy branch. Two mechanics are
-on the table and they are not the same: PR #13 exists with the deploy branch as
-its base, while this doc's cadence says fast-forward after a green wave. That is
-a user decision, not a mechanical one — recorded here so it is not lost.
+Measured 2026-08-07: deploy is `a187ecb0`, the work branch `6a495374`, **67
+commits ahead and 0 behind — a clean fast-forward**.
+
+**The two options differ less than they appear, and not where you would think.**
+PR #13's head IS this branch and its base IS the deploy branch, so merging it
+and fast-forwarding land the same 67 commits. Both then push the deploy branch,
+which fires `pages.yml` → the full `ci.yml` gate → deploy. Identical CI, identical
+risk. Where they differ:
+
+- **The record.** PR #13 is titled *"Record the architecture-redesign panel:
+  Bedrock-with-grafts adopted"* — one early commit, not 67. Merged as-is its
+  merge commit misdescribes the entire wave. Fast-forward writes no merge commit
+  at all and leaves the 67 individual messages as the record, which is what they
+  were written to be.
+- **Review.** 67 commits is not reviewable in a PR UI in any useful sense. The
+  PR adds ceremony without adding review.
+- **History shape.** Fast-forward stays linear; a PR merge adds a merge commit.
+  This doc's cadence already says fast-forward.
+
+**What does NOT differ, and is worth knowing either way:** four other PRs target
+the deploy branch — #12, #11, #10 (draft), #5, from other sessions. Advancing
+deploy by 67 commits moves their merge base and they will likely need rebasing.
+That happens under BOTH options equally; it is a consequence of shipping, not of
+the mechanism.
+
+**Recommendation: fast-forward, and close or retitle PR #13** so it stops
+standing as a stale description of this work.
+
+**Two known-red tests ship with it, and that should be a conscious choice, not a
+silent one:** `tlx-probes` M6 skid (a test defect — the TLX backend is DEFERRED
+and opt-in, so nothing a player touches) and `menu-keyboard`'s `:modal` failure
+(focus containment on the track-detail dialog — an accessibility behaviour, and
+the one open item that may be a real product bug). Neither blocks a deploy on
+the evidence available, but the second is a user-facing claim and shipping it
+red is a decision worth making deliberately.
+
+**CLAUDE.md forbids pushing the deploy branch without review, so this is
+recorded as a recommendation and not acted on.**
 
 Push cadence remains the standing hazard: four CI runs today (#193, #199, #200,
 #202) were cancelled by subsequent pushes from this session. Batch pushes, or
