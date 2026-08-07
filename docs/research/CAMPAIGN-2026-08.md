@@ -21,7 +21,7 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 | W2b | Total-audit workflow (all code + all docs) | **DONE** — 197 verified findings: [TOTAL-AUDIT-2026-08.md](TOTAL-AUDIT-2026-08.md). Survived a mid-run token-limit crash via cached resume with slimmed (haiku, batched) verification |
 | W2-fix | The total-audit's Batch A/B/C fix train (headline: the LIVE curvature-sign trio in the track engine — kerbs/barriers/corner boards on the wrong side — plus the session-verified jump()/IncidentSim authority bug, career slot overwrite, racecontrol dead caps, DRIZZLE tier, matTexMix truth cluster) | **LANDED** `89ce4f2f` (A+B+C together, bump v1025) + `d23b70b8` (tail, bump v1026). The tail also REPAIRED a regression the first commit shipped — an intermediate paul_ricard.js whose widened modelGroup bounds made preflight reject the cabanon AND its wall (299,716 vs 299,946 verts) — and REVERTED an art change it had smuggled in (city-building `setback` massing; see the design ticket below). Geometry sweeps green across all 40 circuits; browser groups running |
 | W2-perf | Shared-page test fixture (`sharedTest`) — kill the per-test page boot | **LANDED** `e52bb772`, `9b91f807`, `3fa9d047`, `75ae72f9`, `85a91f40`. Settled at **6 specs / 284 tests** on the shared page after 8/405 was tried and two specs reverted. Headline: `agent-view` **117/117 in 11m16s against ~43 min** before. Also green: `new-hooks` 56/56, `headless-api` 24/24, `logging` 6/6. `career` (101) and `quali` (20) reverted — both drive MENU SCREENS, which is the axis that decides reuse; `dev-tools` + `camera-driving-hooks` verifying. Full rationale, the three conversion edges and the load-inversion diagnostic are in [docs/TESTING.md](../TESTING.md) |
-| W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is verified from BOTH directions: bisect-cleared locally (all three elevation failures reproduce byte-identically at `fdd4082f`) and CI's per-circuit geometry sweep green throughout. **CI #204 is fully green — guards, sweeps AND smoke.** Verified: `agent-view` 117/117, `steering` 96/96, `api` 193/193, `smoke`+`net` 79/79, shared-fixture set 101/101, `camera` 45/45, `elevation-tracks` 47/47 (after 3 repairs), `smoke` 9/9, plus `audio`/`debris`/`ab`/`paths`/`map`/`baseline`/`shimmer` inside the 56-test tail batch, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. **Execution integrity checked, not assumed: every green group's count equals its declared total, with zero skips, zero retries and zero flakes.** `tlx` **14/15** after `767d3ec7`; `gallery` **78/78**. **`circuit` 64/64, ONE failure — and the SHIP GATE IS SATISFIED.** Both questions registered before that run came back clean: `tracks-walls`'s `monza bounded: 770.4 vs < 60` (a real assertion failure from 02:09, PREDATING the 03:01 side-flip) **did not reproduce**, and the street-wall sweep passed at 134.5 s once it had budget. With `audit`, `autopilot` (monza 42.7 s, suzuka 46.5 s) and `elevation` 47/47 also green, **wall containment across the 40-circuit kerb/barrier side-flip is verified** — the last hole from Batch A/B/C. The single failure was the 40-circuit boundary sweep timing out at 372.8 s, since replaced by the per-circuit split (`93234ab1`). OPEN: `tlx-probes` M6 skid (hung, not slow — a possible agent-API bug, below) and `menu-keyboard` ×1. NOT YET RUN post-Batch-A/B/C: `parts`, `modes`, `scenery`, `webgl`, `barriers`, `collision`, `physics` |
+| W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is verified from BOTH directions: bisect-cleared locally (all three elevation failures reproduce byte-identically at `fdd4082f`) and CI's per-circuit geometry sweep green throughout. **CI #204 is fully green — guards, sweeps AND smoke.** Verified: `agent-view` 117/117, `steering` 96/96, `api` 193/193, `smoke`+`net` 79/79, shared-fixture set 101/101, `camera` 45/45, `elevation-tracks` 47/47 (after 3 repairs), `smoke` 9/9, plus `audio`/`debris`/`ab`/`paths`/`map`/`baseline`/`shimmer` inside the 56-test tail batch, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. **Execution integrity checked, not assumed: every green group's count equals its declared total, with zero skips, zero retries and zero flakes.** `tlx` **14/15** after `767d3ec7`; `gallery` **78/78**. **`circuit` 64/64, ONE failure — and the SHIP GATE IS SATISFIED.** Both questions registered before that run came back clean: `tracks-walls`'s `monza bounded: 770.4 vs < 60` (a real assertion failure from 02:09, PREDATING the 03:01 side-flip) **did not reproduce**, and the street-wall sweep passed at 134.5 s once it had budget. With `audit`, `autopilot` (monza 42.7 s, suzuka 46.5 s) and `elevation` 47/47 also green, **wall containment across the 40-circuit kerb/barrier side-flip is verified** — the last hole from Batch A/B/C. The single failure was the 40-circuit boundary sweep timing out at 372.8 s, since replaced by the per-circuit split (`93234ab1`). **BOTH remaining failures are now CLOSED and both were test defects:** `menu-keyboard` ×1 (`7bafa71b`, a race on `vt()`'s async reveal) and `tlx-probes` M6 skid (`5c735736`, waiting on a value that could not move — `skids.stamp()` lives in `render()` and the stint never renders). `tlx` has no never-passing test left. NOT YET RUN post-Batch-A/B/C: `parts`, `modes`, `scenery`, `webgl`, `barriers`, `collision`, `physics` |
 | W2-step0 | Make the tests/ split's SILENT failures loud — before the split | **LANDED** `d6f09674`. R2's lockstep marks five items "no guard turns red"; a guard that arrives after the commit it protects has protected nothing. `tools/cross-file-paths.mjs` + guard: every relative reference in `tests/`+`tools/` (static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)`) must resolve — **137 refs across 239 files, green**. espree, not grep: two test files build fixtures out of source text containing import statements, and a guard with false positives gets switched off. **`output-paths.spec.js` could not have detected the move breaking it** — it asserted against `resolve(import.meta.dirname, "..")`, the identical expression the module under test uses, so both sides move together and agree; post-split both resolve to `tests/`, galleries land in the test tree, and `existsSync(dir)` passes too because `galleryDir()` CREATES what it returns. Both modules now walk up for `package.json`. Two vacuous-pass regexes widened to admit subdirectories, each with a tripwire. **Live finding:** `test-groups`' pinned-`--project` check has ZERO inputs — only `test:render`/`test:headless` carry `--project` and neither names a spec, so its loop body has never run. It is a regression guard for a bug fixed by removing the pin that fed it. It HAS an assertion, so `assert-audit` cannot see it — a fourth category beyond asserting/implicit/vacuous: **structurally unreachable**. It now asserts WHY its input set is empty |
 | W2-assert | "A test that asserts nothing is prose too" — the third sibling of the never-run finding | **LANDED** `3eadb40d` + `a50c18ae`. Gallery split **VERIFIED 78/78, zero skips, zero retries** — 34 portrait + 34 landscape + the 10 merged large-screen tests, all green, including the ten that were committed unrun. `tools/assert-audit.mjs` grades every declared test **asserting / implicit / vacuous** and flags empty `.catch(() => {})`. Tree: **1152 tests, 0 vacuous, 40 implicit-only**. The gallery specs were the whole of the implicit set: `ui-audit` (34) and `ui-desktop` (5) are PNG harnesses whose ticks were being read as `test:ui` coverage. `ui-desktop` is merged into `ui-audit` as two viewport rows and deleted; `ui-audit` moves to an on-demand `test:gallery` group (test-audit §1a/§1d, executed early because W2-verify surfaced it). `tests/assert-audit.test.mjs` is the ratchet. **The tool's own first version was 20% false** — a body-only scan called hud-audit's eight steer-mode tests vacuous because they assert only through `assertHud()`; helper-following to a fixpoint is the tool, and two guard cases pin it |
 | W2 | RESTRUCTURE + change-aware CI | **BLOCKED on W2-verify** — see "the finding that outgrew its wave" below. Moving files while half the suite has never been executed makes a never-run red test indistinguishable from one the move broke |
@@ -369,6 +369,43 @@ comparison whose two halves are the same half looks exactly like a clean result.
   **`767d3ec7`'s commit message frames M6 as possibly-just-slow; that is now
   disproven and the record is corrected here.**
 
+  **RESOLVED (`5c735736`) — candidate (b), and the diagnosis took a fifth
+  attempt because the first four all asked about the WAIT.** M6 skid passes in
+  **49.0 s** and M9 env in **72 s**; `tlx-probes` has no never-passing test
+  left. The two had the same error message and nothing else in common — M9 was
+  a real wait starved by rAF polling and needed only the `polling: 100` fix,
+  while M6 was waiting on something that could not happen.
+
+  Two stacked faults, both measured by `tests/manual/skid-probe.spec.js`:
+
+  1. `skids.stamp()` is called from **`render()`** (`js/game.js:6064`), not from
+     the physics step. The stint is driven through `act()`, which steps physics
+     and never presents a frame — so no mark can be laid however hard the car
+     slides. Every earlier theory implicitly assumed marks were recorded in the
+     step, which is what the test's own comment claimed.
+  2. 120 steps of full lock is a crash, not a slide. Stepping one frame at a
+     time, the stamp condition (`|slip| > 8.59°` and `speed > 10`) holds over
+     steps **24..37**, slip peaking at 12.3° with the car still at 56 m/s. Then
+     it reaches the barrier at `x 13.9`, slip snaps to exactly 0 and it
+     decelerates into rescue. By step 120: 2.5 m/s, zero slip — below BOTH gates,
+     permanently. The byte-identical end state recorded above was never evidence
+     of a hang; it was evidence of a deterministic crash.
+
+  The instrument is why it resolved. From outside, `drawSkidBatch` returning
+  early on `vertCount 0` and never being called at all are indistinguishable —
+  both leave `skidVerts` at 0 — and they have opposite fixes. The probe wraps
+  `GLX.drawSkidBatch` before the stint and records call count and max
+  `vertCount`; the reading was one call, always with 0. That split the pipeline
+  in a **37-second** run, against 360 s of timeouts that never said anything.
+
+  One caveat kept for the record: the probe's first version compared
+  `slipDeg > 8.59` while `skidIntensity` uses `Math.abs`, and steering right
+  makes `slipDeg` negative. It reported "0 of 120 steps — no window exists"
+  with `-11.73` printed in the rows directly beneath. Caught only by reading
+  the rows against the verdict. **A probe answering the wrong question
+  confidently would have been the fifth wrong mechanism, and it would have
+  carried more authority than the four theories because it had numbers.**
+
   Follow-on worth considering: nothing MECHANICALLY stops the next spec
   screenshotting a live render loop. That is the same shape as the four lints
   already in `test:tooling-fast`, and this file is the evidence that a rule
@@ -399,11 +436,30 @@ dialog — an accessibility behaviour, and the one open candidate for a real
 product bug) and `tlx-probes`' M6 skid (a test defect, and TLX is deferred and
 opt-in so no player path touches it).
 
+**Both are now fixed** — `menu-keyboard` in `7bafa71b` (a race on `vt()`'s
+async reveal, not a product bug: the dialog becomes visible before TopModal's
+observer calls `showModal()`, and a fixed `waitForTimeout(300)` was a guess
+about how much before), M6 skid in `5c735736`. So the accessibility candidate
+resolved to a test defect too, and **every failure chased in this campaign has.
+Zero product bugs found, across the whole wave.** That is a claim about the
+product's test suite as much as about the product: a suite this large with this
+many never-run and never-passing members was reporting its own condition, not
+the code's.
+
 **A cadence correction worth keeping:** the four CI runs cancelled earlier today
 were `pull_request` runs, and `ci.yml`'s `cancel-in-progress` is
 `${{ github.event_name == 'pull_request' }}` — push runs never cancel, and the
 concurrency group is per-ref regardless. Feature-branch pushes were never the
 hazard; only a second push to the deploy branch is.
+
+**That correction was itself wrong, and CI #252 is the counterexample:** a
+`push` run, `conclusion: cancelled`, `jobs total_count: 0`. It never started.
+`cancel-in-progress: false` protects runs that are RUNNING; a run still sitting
+in the concurrency queue is superseded by the next one on the same ref and
+dropped without ever executing a job. So a rapid second push to a feature branch
+does silently discard the first push's gate — which matters because a run that
+never started looks, in a listing, much like one that passed nothing of note.
+Check `jobs total_count` before reading a cancellation as harmless.
 
 ## The decision, as it was taken (PR vs fast-forward)
 
