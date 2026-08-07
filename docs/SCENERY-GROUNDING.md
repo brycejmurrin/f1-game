@@ -315,7 +315,7 @@ not. Tightening it needs the same call-site tagging as `--clip`.
 
 ### The canopy contract, and where it still does not reach
 
-`canopyR(kind, h)` in `js/track/tracks.js` is now the single source of truth for how
+`canopyR(kind, h)` in `js/track/scenery-nature.js` is now the single source of truth for how
 far a species' foliage reaches sideways. Both `forestEdge()` and the FURN
 roadside scatter derive placement from it, so `dist` means *the clearance the
 canopy's inner edge gets* — not the trunk offset. Two bugs were fixed by

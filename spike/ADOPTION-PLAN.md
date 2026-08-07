@@ -87,7 +87,7 @@ zero, end where it touches them. Every phase ships behind a flag and the
 physics regression suite must pass unchanged with the flag off.
 
 - **R0 — loading + sync layer (prereq).** The 2.2 MB compat bundle must never
-  block boot: lazy-load `spike/physics/vendor/rapier.mjs`-style module the
+  block boot: lazy-load `vendor/rapier-0.19.3/rapier.mjs`-style module island the
   first time a feature needs it (module island like three's, or
   dynamic-import on demand). Side-world design: Rapier steps on the same fixed
   tick as the game (`__apex.step` compatible); game cars mirror in as

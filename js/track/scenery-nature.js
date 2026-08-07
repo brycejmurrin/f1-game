@@ -540,8 +540,9 @@ const SceneryNature = (function () {
         // dark step riser behind each seating row (blocks sky/ground show-through).
         // Guarded (unlike the tiny spectator boxes): the riser is a wide flat slab,
         // so a mis-placed bank whose front row creeps toward the tarmac would
-        // otherwise overhang the road here — the exact bypass this RAW path used to
-        // leave open. rejBox drops only a riser actually over the road; a bank
+        // otherwise overhang the road here — the exact bypass the old unguarded
+        // raw-addBox path used to leave open. rejBox drops only a riser actually
+        // over the road; a bank
         // safely behind the shell never trips it, so intended crowds are unchanged.
         out._mat = MAT.CONCRETE;
         const riserC = vadd(vadd(a.c, a.u, up), a.r, side * back);
@@ -552,7 +553,7 @@ const SceneryNature = (function () {
         if (rejBox(riserC, [1.3, 1.5, len], b)) continue;
         // The rejBox above stays explicit — it also decides whether this row's
         // spectators are emitted at all — so the replay below is UNGUARDED, which
-        // is what this emitter already did via RAW.
+        // is what this emitter already did before the graph migration.
         ctx.instance(`crowd-riser|${riser.join(",")}`,
           { o: riserC, r: a.r, u: a.u, t: a.t, s: [1, 1, len] },
           (rec) => { rec.mat(MAT.CONCRETE); rec.box([0, 0, 0], [1.3, 1.5, 1], riser); },
@@ -646,7 +647,10 @@ const SceneryNature = (function () {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
-      // Skip only if crowd inner face (= road edge + gap) literally sits on track.
+      // Guard strategy: the stand uses addBox directly to avoid place()'s
+      // per-box onTrack guard, which fires false-positives at hairpins
+      // (La Source at Spa, etc.). One single guard instead, on the crowd inner
+      // face — skip only if the seating (= road edge + gap) literally sits on track.
       const oInner = side * (hw[k] + gap);
       const ifx = px[k] + r[0] * oInner, ifz = pz[k] + r[2] * oInner;
       if (onTrack(ifx, ifz, 0)) {

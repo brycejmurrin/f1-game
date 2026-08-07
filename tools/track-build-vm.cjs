@@ -77,9 +77,9 @@ function buildContext(opts) {
 
   for (const f of PRELUDE) runFile(f);
 
-  // Instrument the geometry emitters. Emitters called from INSIDE track-geom.js
-  // (addCyl -> emit) use module-scope references and are untouched, so nothing
-  // is double-counted.
+  // Instrument the geometry emitters. Emitters called from INSIDE
+  // js/track/geom.js (addCyl -> emit) use module-scope references and are
+  // untouched, so nothing is double-counted.
   const prims = [];
   let q = 0;                      // monotonic emission sequence
   const TG = ctx.TrackGeom;
@@ -116,7 +116,7 @@ function buildContext(opts) {
             // shim, so the innermost frames are always that shim.
             const st = new Error().stack.split("\n").slice(2, 14)
               .map((l) => l.trim().replace(/^at\s+/, ""))
-              .filter((l) => !/track-geom/.test(l));
+              .filter((l) => !/track\/geom\.js/.test(l));
             rec.stack = st.slice(0, 6).join("  <-  ");
           }
         }

@@ -20,9 +20,9 @@ what is still open. The research below is kept as the rationale.
 
 The lit pipeline is **vertex colour + a per-vertex procedural material id**.
 The interleaved lit vertex is `pos(3) + nrm(3) + col(3) [+ mat(1)] [+ trk(3)]`
-(`js/render/glx.js:446-450`) — **there is no UV channel at all** on the lit
-path, and none on the chunked prop path either (`glx.js:481-483` is the
-*separate* textured-decal layout).
+(`createMesh()` in `js/render/glx.js`) — **there is no UV channel at all** on
+the lit path, and none on the chunked prop path either (`createTexMesh()` is
+the *separate* textured-decal layout, and the only one carrying `uv`).
 
 Surface detail comes from `js/render/shaders/lit.js`:
 
@@ -51,7 +51,7 @@ Two paths already carry real textures:
 | livery / sponsor decals | `LiveryTex.buildAtlas()` — canvas 2D, generated at runtime | `game.js:1048-1055`, `carmesh.js:126-176` |
 | lens-dirt for the flare | procedural canvas | `glx/post.js:174-180` |
 
-`gfx.createTexture(src)` (`glx.js:492-507`) takes a canvas/image, mipmaps it,
+`gfx.createTexture(src)` (`createTexture()` in `glx.js`) takes a canvas/image, mipmaps it,
 and applies anisotropy. `createTexMesh({pos,nrm,uv,idx})` + `drawDecal()` are
 the UV-carrying pair. So the *plumbing* for images exists — it has simply never
 been pointed at anything but a canvas.
@@ -324,7 +324,7 @@ Keep `js/render/gltf.js` runtime-only for the **car** — that seam
 
 ### 3.4 Bonus, nearly free: HDRIs into the existing env probe
 
-`glx.js:557-576` already maintains an env cube (`envTex`, `ENV_SIZE`) and the
+`glx.js`'s `envInit()`/`envFaceBegin()`/`envFaceEnd()` already maintain an env cube (`envTex`, `ENV_SIZE`) and the
 lit shader already blends it for sheen and the wet-road mirror
 (`lit.js:1130`). Poly Haven's HDRIs are CC0 and its API serves them at 1k.
 Baking one per (track, time-of-day) into a small pre-filtered cube + a

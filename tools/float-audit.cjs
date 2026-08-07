@@ -87,8 +87,8 @@ function buildContext(opts) {
   // Instrument the geometry emitters so every flagged cluster can name the
   // primitive that produced it. tracks.js destructures TrackGeom at load time,
   // so the wrappers must be installed BEFORE it runs. Emitters called from
-  // inside track-geom.js (addCyl -> emit) use module-scope references and are
-  // untouched, so nothing is double-counted.
+  // inside js/track/geom.js (addCyl -> emit) use module-scope references and
+  // are untouched, so nothing is double-counted.
   const prims = [];
   const TG = ctx.TrackGeom;
   for (const name of Object.keys(TG)) {
@@ -123,7 +123,7 @@ function buildContext(opts) {
             // that names a real builder.
             const st = new Error().stack.split("\n").slice(2, 14)
               .map((l) => l.trim().replace(/^at\s+/, ""))
-              .filter((l) => !/track-geom/.test(l));
+              .filter((l) => !/track\/geom\.js/.test(l));
             rec.stack = st.slice(0, 6).join("  <-  ");
           }
         }

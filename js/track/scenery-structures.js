@@ -95,10 +95,6 @@ const SceneryStructures = (function () {
         ctx.instance(`fence-post|${h}|${st}|${postCol.join(",")}`, place,       // post, base sunk
           (rec) => {
             rec.cyl([0, -0.4, 0], 0.13, h + 0.4, postCol, 5);
-            // A leaning catch fence cants its top third back over the track,
-            // which is what a real debris fence does and what makes it read as
-            // a catch fence rather than a garden boundary.
-
           },
           { kind: "fence", k, side });
         const meshCol = col || [0.72, 0.74, 0.78];
@@ -122,6 +118,9 @@ const SceneryStructures = (function () {
                 rec.box([0, h * 0.55, (i - 1) * 0.30], [0.06, h * 0.9, 0.09], meshCol);
               rec.box([0, h * 0.95, 0], [0.08, 0.07, 1], postCol);
             } else if (st === "leaning") {
+              // A leaning catch fence cants its top third back over the track,
+              // which is what a real debris fence does and what makes it read
+              // as a catch fence rather than a garden boundary.
               rec.box([0, h * 0.50, 0], [0.05, h * 0.80, 1], meshCol);
               rec.box([-side * h * 0.09, h * 0.95, 0], [h * 0.20, 0.05, 1], meshCol);
             } else {

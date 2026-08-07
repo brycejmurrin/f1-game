@@ -305,11 +305,6 @@ in on arithmetic alone.
 (Full 1..10 table regenerated from the real, shipped function in
 `artifacts/tmp/phase-c-2-3-tables.cjs`.)
 
-*NOT verified by drive or `tune-sweep.mjs`* — same reason as §2: the box was
-loaded for the whole of this session. `node tools/tune-sweep.mjs --sliders
-pm-speedsteer,pm-rate --tracks monza --notches 1,3,5,7,10` covers both sliders
-in one run; do it together with §2's check above.
-
 ---
 
 ## 4. STEER SMOOTHING — linear in lag, not in Hz

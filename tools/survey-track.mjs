@@ -13,7 +13,8 @@
 //   fracs  comma list of lap fractions to shoot+probe (default 0,0.25,0.5,0.75)
 //
 // Read the PNGs (the EYE shots expose floating props/gaps best) AND the probe table.
-// For just the numbers without screenshots, use ground-profile.mjs.
+// For just the numbers without screenshots, use
+// .claude/skills/survey-track/ground-profile.mjs.
 
 import { mkdirSync } from "node:fs";
 import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";

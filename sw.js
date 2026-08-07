@@ -67,6 +67,13 @@ async function precacheAssetLists() {
     // OPTIONAL for the same reason as three.js: most sessions never scan, and
     // an install must not fail over 257 KB they will not run.
     "vendor/jsqr-1.4.0/jsQR.js",
+    // Rapier (js/game/debrisworld.js) is dynamic-import()ed, never tagged, so
+    // the parser below cannot find it either. Unlike the entries around it this
+    // one is ON by default — an installed-but-not-yet-raced PWA that never
+    // seeded it loses debris/incident physics offline. Still OPTIONAL, not
+    // essential: debrisworld degrades to "no side world" on a load failure, so
+    // an install must not fail over it.
+    "vendor/rapier-0.19.3/rapier.mjs",
     // Trystero + its schnorr dependency, reached by dynamic import() through
     // the importmap for the room-code path only. OPTIONAL for the same reason
     // as three.js: most sessions never open a room code, and an install must
@@ -164,9 +171,16 @@ self.addEventListener("fetch", (event) => {
   // browser automation harness) can behave the same way. Either way the cache
   // fallback should win once it's clearly not going to resolve promptly; the
   // real network response, if it does eventually land, still gets cached.
-  if (req.mode === "navigate" || url.pathname.endsWith("version.json")) {
+  const isVersion = url.pathname.endsWith("version.json");
+  if (req.mode === "navigate" || isVersion) {
+    // version.json is NEVER written to the cache here. index.html fetches it as
+    // "version.json?_=<Date.now()>", so every launch would put one more entry
+    // under a URL (query included) that caches.match can never hit again — an
+    // entry per launch until the next build bump sweeps the generation. The
+    // precache already holds the bare "version.json" key, which is what the
+    // offline fallback below reads.
     const network = fetch(req, { cache: "no-store" }).then(async (res) => {
-      if (res && res.ok) {
+      if (res && res.ok && !isVersion) {
         const cache = await caches.open(await currentCacheName());
         await cache.put(req, res.clone());
       }
@@ -181,6 +195,11 @@ self.addEventListener("fetch", (event) => {
         const res = await Promise.race([network, timeout]);
         if (res) return res;
       } catch (_) { /* network rejected — fall through to cache */ }
+      // Offline: the version request reads the PRECACHED bare key. Without this
+      // it fell through to the index.html fallback below and answered a JSON
+      // request with the shell's HTML (survivable only because the version
+      // guard swallows the parse error).
+      if (isVersion) return (await caches.match("version.json")) || Response.error();
       return (await caches.match(req)) || (await caches.match("index.html")) || Response.error();
     })());
     return;

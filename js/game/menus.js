@@ -14,7 +14,6 @@ const Menus = (function () {
 function create(G) {
 // Stable helpers from the game.js closure.
 const { $, els, store, cssCol, fmtTime, ttBoard, tickUi, scheduleFlybyTrack } = G;
-const renderStatBars = (...a) => G.renderStatBars(...a);
 
 // Progressive-enhancement screen swap: run a DOM change inside a native
 // same-document View Transition when the browser supports it (Baseline 2025)

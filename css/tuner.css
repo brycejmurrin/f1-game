@@ -289,7 +289,10 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   font-size: 16px; background: rgba(255,255,255,0.15);
   border-color: rgba(255,255,255,0.28);
 }
-.as-tbtn:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
+/* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
+@media (hover: hover) {
+  .as-tbtn:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
+}
 .as-tbtn:disabled { opacity: 0.35; cursor: default; }
 .as-note { font-size: 11px; color: var(--dim); margin: calc(var(--gap) * 0.4) 0 0; line-height: 1.35; }
 
@@ -493,7 +496,10 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   font-size: 13px; line-height: 1; border-radius: var(--r-sm);
 }
 .music-del { opacity: 0.7; }
-.music-del:hover, .music-del:focus-visible { opacity: 1; border-color: var(--red); color: var(--red); }
+@media (hover: hover) {
+  .music-del:hover { opacity: 1; border-color: var(--red); color: var(--red); }
+}
+.music-del:focus-visible { opacity: 1; border-color: var(--red); color: var(--red); }
 
 /* ---------- MUSIC & SOUND: Spotify (personal use) ---------- */
 #as-sp-id {

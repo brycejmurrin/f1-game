@@ -9,7 +9,7 @@
 > fleet's entire scenery mass (9.67 M vertices) collapses to 24,585**, while
 > `pine` sits at 1.00× for a structural reason that changes the S4 plan.
 
-Companion to `EXTERNAL-MODEL-SOURCES.md`, which asked "where do models come
+Companion to [`../archive/research/EXTERNAL-MODEL-SOURCES.md`](../archive/research/EXTERNAL-MODEL-SOURCES.md), which asked "where do models come
 from". This asks the prior question: **why can't we afford detailed models
 today, and what has to change first.**
 
@@ -203,7 +203,7 @@ flags, crowd sway. Retire the `MAT.FLAG` vertex-displacement hack.
 
 ## 5. Where imported models fit
 
-`EXTERNAL-MODEL-SOURCES.md` concluded that external assets need an offline bake
+[`../archive/research/EXTERNAL-MODEL-SOURCES.md`](../archive/research/EXTERNAL-MODEL-SOURCES.md) concluded that external assets need an offline bake
 to vertex colours. That conclusion is unchanged, but the sequencing shifts: with
 a model library (S0) there is a **named slot** to drop an imported mesh into —
 `models["grandstand-a"]` is just geometry, and nothing cares whether it came
@@ -247,7 +247,7 @@ match exactly everywhere.
 ### The finding: instanceable vs. continuous
 
 `graph.stats().byKind` splits migrated emitters by how much reuse they actually
-have. Across all 24 circuits, for the six emitters migrated so far:
+have. Across all 24 circuits, for the sixteen emitters migrated so far:
 
 | emitter | nodes | models | fused verts | instanced | reuse |
 |---|---|---|---|---|---|
@@ -407,7 +407,7 @@ instances what it can and bakes `bakeOnly`, and nothing is a flag day.
 ### Where this leaves the stages
 
 - **S0/S1/S2 — done for the migrated subset.** Model library, node graph, guarded
-  replay, `bake()` reconstruction, parity gate, unit tests, six emitters.
+  replay, `bake()` reconstruction, parity gate, unit tests, sixteen emitters.
 - **Remaining S1 work is mechanical**: `tree`/`palm`/`conifer`/`bush`, building
   masses and the baked models the asset pack now places — one at a time, each gated by `npm run test:graph-parity`. Apply the
   five rules above. The broadleaf vegetation will likely hit `pine`'s

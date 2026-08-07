@@ -70,13 +70,14 @@
   ::view-transition-new(*) { animation: none !important; }
 }
 
-/* Scroll-fade custom properties, registered so they can be INTERPOLATED by the
-   scroll-driven animation in css/components.css (.scroll-y). An unregistered
-   custom property animates discretely, which would make the fade pop instead of
-   ease. Both start at 0px on purpose: when a scroll container has nothing to
-   scroll its scroll timeline is inactive, the animation never applies, and the
-   initial values leave the content completely unmasked — so the fade appears
-   only when there really is more content off-screen.
+/* Scroll-fade custom properties. The fade is driven by JS, not a scroll
+   timeline: js/game/scrollfade.js toggles .sf-t/.sf-b on exactly the panes with
+   content hidden above/below, and css/components.css maps those classes to
+   these lengths in the pane's mask-image. Registered with typed 0px initials so
+   the mask expression is always well-formed: a pane without the classes keeps
+   the initial values and the gradient collapses to fully opaque — content is
+   completely unmasked, and the fade appears only when there really is more
+   content off-screen.
    @property is not part of the element cascade, so it sits outside the layers. */
 @property --sfade-t { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --sfade-b { syntax: "<length>"; inherits: false; initial-value: 0px; }

@@ -752,9 +752,19 @@ const SceneryCity = (function () {
         building(k, side, gap, w, h, depth + (s - 0.5) * depth * 0.3, {
           wall: col, floor: opts.floor || (4 + s * 3),
           lit: lit, windowCol: opts.windowCol || wcol,
-          // Tall units step back at the top (building()'s "setback" massing);
-          // the rest keep the hash-picked archetype.
-          arch: h > minH + (maxH - minH) * 0.66 ? "setback" : undefined,
+          // NO `setback:` KEY HERE. This used to pass `setback: <bool>`, which
+          // building() has never read — its massing knob is `arch` ("setback"
+          // among others), so the option was inert for the life of the file and
+          // every city circuit was tuned and shipped with the hash-picked
+          // archetypes you see now. Wiring it up (arch: "setback" for the tall
+          // third) is a real CHANGE OF LOOK on every street circuit, not a
+          // cleanup: measured, it also drives one more severe interpenetration
+          // on Baku (clip-audit 31 -> 32) where a stepped mass meets a
+          // neighbour. Five circuit call sites (suzuka, monaco x3, bahrain)
+          // still pass the same dead `setback: true`, so honouring it here
+          // alone would also be inconsistent. If the setback look is wanted,
+          // do it deliberately across all six sites with the clip baselines
+          // re-measured — see docs/research/CAMPAIGN-2026-08.md.
         });
         idx++;
       });

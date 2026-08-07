@@ -58,6 +58,15 @@ step lists — it fixes the ORDER and the gates:
 
 ## Design tickets (carried into W2 reconciliation, not mechanical)
 
+- **City-building `setback` massing is dormant, deliberately.** `building()`'s
+  massing knob is `arch`; six call sites (`js/track/scenery-city.js`'s generated
+  rows plus `suzuka.js`, `monaco.js` ×3, `bahrain.js`) pass a `setback:` key it
+  has never read, so every street circuit was tuned and shipped with the
+  hash-picked archetypes. Honouring it is a change of LOOK, not a cleanup —
+  measured, switching on the generated rows alone adds a severe
+  interpenetration on Baku (clip-audit 31 → 32). Decide it as an art change
+  across all six sites at once, with the clip baselines re-measured.
+
 - `tests/camera-driving-hooks.spec.js` spin test asserts nothing; add
   heading-change + sign asserts (test-audit strengthen 1).
 - `tests/headless-api.spec.js` obs()-false test accepts both outcomes; pick a

@@ -14,7 +14,7 @@
  *   --cam=<mode>        any __apex.camera() mode     (default cockpit)
  *   --label=<s>         filename suffix              (default shot)
  *   --hi                render at 2556x1180 (phone DPR2) instead of 960x440
- *   --debug=<mode>      off (default) | gates | hitmiss | hitcol
+ *   --debug=<mode>      off (default) | gates | hitmiss | hitcol | mix
  *
  * Debug modes paint the road pixels in the composite instead of shading them:
  *   gates    R = upDot gate, G = near gate, B = far fade. Their product IS
@@ -24,6 +24,9 @@
  *            frame edge, red = miss (fell back to the sky).
  *   hitcol   the raw colour the march is mirroring; magenta = miss. Tarmac
  *            showing up here means the ray grazed into the road itself.
+ *   mix      HOW REFLECTIVE each road pixel ends up — the final substitution
+ *            amount. black -> blue -> cyan -> green -> yellow -> red = 0 .. 0.8.
+ *            The map to read when the question is "why is that bit matte".
  *
  * WHY THIS EXISTS: the wet mirror is the product of a mask, a ray march and a
  * substitution, and a beauty shot cannot tell you which of the three went wrong

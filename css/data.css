@@ -434,7 +434,10 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   border-radius: var(--r-pill); border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.06); color: #f2f2f5; font-size: var(--fs-4);
 }
-.dh-lane-x:hover { background: rgba(225, 6, 0, 0.8); border-color: #e10600; }
+/* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
+@media (hover: hover) {
+  .dh-lane-x:hover { background: rgba(225, 6, 0, 0.8); border-color: #e10600; }
+}
 .dh-lane-clear { background: rgba(255, 255, 255, 0.04); }
 /* the 3-4 lane readout board in the gauge column */
 .dh-laneboard { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; grid-column: 1 / -1; }

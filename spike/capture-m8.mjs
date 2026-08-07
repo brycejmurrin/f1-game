@@ -43,12 +43,17 @@ const MIME = { ".html": "text/html; charset=utf-8", ".js": "application/javascri
   ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".glb": "application/octet-stream" };
 async function startServer() {
   const port = await freePort();
+  // Containment compares against ROOT + sep, never the bare prefix: without the
+  // separator a sibling directory that merely SHARES the prefix (…/f1-game-extra)
+  // passes the check. spike/capture.mjs already guards it this way.
+  const root = ROOT + sep;
   const server = createHttpServer((req, res) => {
     try {
       const url = new URL(req.url, "http://x");
-      let p = normalize(join(ROOT, decodeURIComponent(url.pathname)));
-      if (!p.startsWith(ROOT)) { res.writeHead(403).end(); return; }
-      if (url.pathname === "/") p = join(ROOT, "index.html");
+      let rel = decodeURIComponent(url.pathname);
+      if (rel === "/") rel = "/index.html";
+      const p = normalize(join(ROOT, rel));
+      if (!p.startsWith(root)) { res.writeHead(403).end(); return; }
       if (!existsSync(p) || !statSync(p).isFile()) { res.writeHead(404).end(); return; }
       res.writeHead(200, { "content-type": MIME[extname(p)] || "application/octet-stream" });
       createReadStream(p).pipe(res);

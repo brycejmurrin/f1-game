@@ -17,9 +17,12 @@ see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 > **Separate from this:** `buildProps` *also* lays down shared, theme/`def.id`-keyed
 > **city dressing** on top of each `scenery(api)` — procedural buildings, armco
 > barrier liveries, roadside trees/lamps, and per-track tarmac/verge tints. That
-> system (the `STYLES` / `BARRIER` / `FURN` maps, `neonTower`, `streetLamp`,
-> `conifer`, …) is summarised in the **City & scenery dressing** section of
-> `CLAUDE.md`. This doc covers only the per-circuit `scenery(api)` toolkit.
+> system lives in the code, not in a prose section: the `STYLES` / `BARRIER` /
+> `FURN` tables are in `js/track/scenery-data.js`, the generators (`neonTower`,
+> `streetLamp`, …) in `js/track/scenery-city.js`, `conifer` and the rest of the
+> flora in `js/track/scenery-nature.js`, and the theme tables in
+> `js/track/themes.js`. This doc covers only the per-circuit `scenery(api)`
+> toolkit.
 
 ## Road half-width overlays (`hwZones`)
 

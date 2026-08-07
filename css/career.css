@@ -170,7 +170,9 @@
   background: var(--surf-1); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--r-sm);
   color: inherit; font: inherit; font-weight: 700; padding: 0 10px;
 }
-.cr-input:focus-visible { outline: 2px solid var(--red); outline-offset: 1px; }
+/* No focus-ring override here: the tokens.css base ring applies (white, inset —
+   red measures ~2.6:1 on this page, under the 3:1 WCAG 1.4.11 floor, and an
+   outset ring gets clipped by the .pane scrollers this input sits inside). */
 
 .cr-seats { display: flex; flex-wrap: wrap; gap: 6px; }
 .cr-seat {

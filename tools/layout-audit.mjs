@@ -696,7 +696,7 @@ const OVERLAY_IDS = ["select", "carsetup", "career", "career-offers", "career-hi
   // this list they stay open into the NEXT cell and swallow its clicks — which is
   // how fourteen consecutive cells came back "SKIPPED: page.click timeout" from
   // one screen that had opened a session and never closed it.
-  "audioset", "spotifypanel", "lighting", "camtune", "photomode"];
+  "audioset", "spotifypanel", "lighting", "camtune", "photo-controls"];
 // Viewports run in PARALLEL, a few at a time. Each one is an independent browser
 // context doing mostly single-threaded work, and the sweep is dominated by boot
 // and by waits, not by CPU — three at once measured ~3x the throughput, which is

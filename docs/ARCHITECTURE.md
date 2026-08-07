@@ -27,7 +27,9 @@ js/log.js                -> Log        (levelled logging; loads FIRST)
 js/mat4.js               -> M4, V3
 js/render/shaders/*      -> GLXChunks, GLXShaders   (pure data, before glx.js)
 js/render/glx.js + glx/* -> GLX        (default WebGL2 renderer + its passes)
-js/render/gfx.js         -> Gfx        (renderer selection seam)
+js/render/gfx.js         -> Gfx        (renderer selection seam; the WGX and
+                                        TLX backends are DEFERRED — no script
+                                        tag, injected at boot when opted into)
 js/car/teams.js          -> Teams      (2026 grid data)
 js/track/*               -> the track engine (spline, mesh, scenery, markings…)
 js/circuits/*.js         -> TrackDefs  (one file per circuit; registers itself on the list)
@@ -108,7 +110,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   | candidate | lines | crossings | verdict |
   |---|---:|---:|---|
   | lighting profile store | ~94 | 0 new | taken — the whole surface was ALREADY on `G` for four other files |
-  | garage live preview | ~303 | ~15 new | **left** — `teamDecalState`, `drawAeroFlaps`, `drawCarDecals`, `carDecalNum`, `carPaintMat`, `partsVisualKey`, `resolveLivery`, `getTeamParts`, `teamIdx`, `MAT_REFLECT_X` … none of which `G` carries |
+  | garage live preview | ~415 (ARCHITECTURE-REVIEW.md's measurement) | ~15 new | **left** — `teamDecalState`, `drawAeroFlaps`, `drawCarDecals`, `carDecalNum`, `carPaintMat`, `partsVisualKey`, `resolveLivery`, `getTeamParts`, `teamIdx`, `MAT_REFLECT_X` … none of which `G` carries |
 
   The garage preview is the bigger block and the more obvious target — its
   natural partner `js/game/setup-ui.js` already exists — but taking it would
@@ -284,7 +286,8 @@ strings live in `js/render/shaders/` (globals `GLXChunks`/`GLXShaders`).
 
 ```
 GLX.init(canvasEl) -> boolean         // false if no WebGL2
-GLX.resize()                          // canvas.clientWidth*dpr, dpr capped at 2;
+GLX.resize()                          // canvas.clientWidth*dpr, dpr capped at 2
+                                      // (1.5 on the mobile tier);
                                       // sets GLX.width, GLX.height, GLX.aspect
 GLX.createMesh(data) -> mesh          // data = {pos:Float32Array(3n), nrm:Float32Array(3n),
                                       //         col:Float32Array(3n), idx:Uint16Array|Uint32Array}
@@ -307,8 +310,9 @@ GLX.drawShadow(modelMat, w, l)        // dark radial-alpha blob quad, w x l mete
                                       // at local y=0 plane of modelMat, blended, no depth write
 ```
 
-Depth test LEQUAL, backface culling CCW, `alpha:false, antialias:true`
-context. The lit fragment shader fades to `fogColor` with
+Depth test LEQUAL, backface culling CCW, `alpha:false` context;
+`antialias` is desktop-only (`!IS_MOBILE` — phones never take the
+context-level AA path). The lit fragment shader fades to `fogColor` with
 `1-exp(-(d*fogDensity)^2)`.
 
 ## js/render/gltf.js — `GLTF`
@@ -483,7 +487,7 @@ shading (duplicated verts, face normals).
 | `liveries.js` | `Liveries` | custom paint jobs — `{id, name, c1, c2, stripe?, noseStripe?, …}` |
 | `liverytex.js` | `LiveryTex` | per-team livery texture atlas (canvas-2D; stylised fan-art crests, invented sponsor wordmarks, car number onto a 1024² atlas mapped by panel UVs) |
 | `driver-ratings.js` | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` |
-| `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 600 cr budget (see CLAUDE.md "Parts system") |
+| `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 600 cr budget (see docs/PARTS.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
 
 ## js/game/input.js — `Input`

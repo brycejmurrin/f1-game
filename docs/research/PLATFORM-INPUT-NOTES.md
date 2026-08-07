@@ -149,7 +149,8 @@ Already handled here — `js/render/glx.js:225-234` listens for
 `js/game.js` persists a flag so a device that has lost a context once starts
 more conservatively. Noted so the next person does not re-diagnose it.
 
-Note the distinction `js/game/perf.js:45` already draws: a **jetsam/OOM kill**
+Note the distinction the crash-sentinel section of `js/game/perf.js` (`:91`)
+already draws: a **jetsam/OOM kill**
 leaves no signal at all — no `pagehide`, no `contextlost`, no error. Context
 loss is the recoverable case; the silent one is not.
 

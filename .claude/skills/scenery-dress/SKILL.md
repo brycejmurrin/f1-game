@@ -107,8 +107,15 @@ scenery: function (api) {
   diverges — pull them in or use `anchor()` and read its `c[1]` height.
 - **Reverse circuits.** When `reverse: true`, the engine auto-flips `side`; author
   scenery in the original trace direction and let it remap.
-- **Vertex budget.** Keep the props mesh roughly **under ~50k verts** (SwiftShader
-  in tests is tighter than desktop WebGL2). Use `every(20)` for sparse features,
+- **Vertex budget — a per-edit INCREMENT budget, not an absolute ceiling.**
+  Shipped circuits run **400k–900k prop verts** (monaco ~493k, zandvoort ~532k,
+  watkins_glen ~680k, suzuka ~685k), and **vegas ~1.8M is the known ceiling
+  case — do not grow it** (~80 MB of GPU buffer against an iPhone SE that dies
+  near 100 MB; see docs/research/CI-RENDERING-PERFORMANCE.md Part 2 and
+  SCENE-GRAPH-PLAN.md §2). So the rule is relative: run
+  `node tools/verify-track.cjs <id>` before and after, and keep your edit at or
+  below the circuit's existing count unless you can say why the feature is
+  worth the delta. Use `every(20)` for sparse features,
   `every(5)` only for hero sections; jitter sizes with `hash()` so ranks don't look
   like clones; double-place at two distances for depth instead of doubling density.
 - **Overhead landmarks.** Bridges/flyovers (e.g. Monza Ascari) need clearance —

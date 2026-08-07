@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // verify-track.cjs — headless build check for Apex 26 track definitions.
-// Loads js/track/tracks.js (+ js/track/geo-paths.js) in a Node.js VM, stubs GLX so that
+// Loads the full TRACK_VM manifest list (the track engine — geom, mesh,
+// surface, graph, the scenery-* files — plus every circuit and tracks.js) in a
+// Node.js VM, stubs GLX so that
 // buildRoad / buildTerrain / buildProps / buildGate actually run and their
 // vertex counts are captured.  Any THROW during the build is a hard failure —
 // the game would strand on the menu with the same error.
@@ -124,7 +126,7 @@ function buildContext(rootOverride) {
 
   // The load list lives in tools/manifest.cjs (TRACK_VM) — the same source of
   // truth the load-order test asserts index.html against. "@circuits" expands
-  // to every js/tracks/<id>.js: each pushes itself onto window.TrackDefs, and
+  // to every js/circuits/<id>.js: each pushes itself onto window.TrackDefs, and
   // tracks.js reads that list at load time, so they must run BEFORE it.
   for (const entry of manifest.TRACK_VM) {
     if (entry === "@circuits") {

@@ -81,7 +81,10 @@ executable version of this table — **it is the inventory**, so a screen missin
 from it is a screen nobody measures.
 
 The first draft of this grid held twelve entries and reported "130 cells, 0 red",
-which read as full coverage. It was not: the app has **21 screen roots**, and
+which read as full coverage. It was not: the app has far more screen roots than
+that (**22** top-level ones are tabled below; counting the sub-views, `SCREENS`
+in `tools/layout-audit.mjs` now spans 34 cells over 24 distinct roots — that
+inventory, not this prose, is the count that matters), and
 several change shape entirely between states behind one root. Qualifying, the
 livery editor, the standings table, both tuner panels and every career
 sub-screen had never been measured once. The first sweep that included them

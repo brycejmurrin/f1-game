@@ -673,7 +673,8 @@ leaks *visible* — both only findable once a run could actually be repeated:
 
 - `gridUp()` clears the race-level fields but not the drivetrain, so gear, rpm
   and smoothed steering leaked between episodes.
-- `prog` accumulates from `c._prevS` (`js/game.js:2705`), which `reset()` never
+- `prog` accumulates from `c._prevS` (written by `updateCar()` in
+  `js/game.js`), which `reset()` never
   cleared — so the first tick of a fresh episode banked one delta measured
   against the *previous* episode's final position. Measured as ~1 m of drift over
   a 4 s rollout at identical seed and inputs.

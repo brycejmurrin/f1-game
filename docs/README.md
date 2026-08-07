@@ -59,7 +59,8 @@ and `js/game/incidentsim.js` implement.
 
 ## Research (cited, but not a description of behaviour)
 
-The thirteen that survive here are cited from source, from `CLAUDE.md` or from
+The docs that survive here (sixteen at last count — the table below is the
+authoritative list) are cited from source, from `CLAUDE.md` or from
 each other — that citation is what keeps them live. Everything else that used to
 sit in this table was indexed by nothing and moved to
 [`archive/research/`](archive/research/).
@@ -86,13 +87,14 @@ sit in this table was indexed by nothing and moved to
 ## Archive (`archive/`)
 
 Provenance only. Nothing here describes current structure, and no live doc
-depends on it.
+depends on it for current structure (two research docs cite archived
+investigations as historical companions — see the research row below).
 
 | Path | What it is |
 |---|---|
 | [archive/superpowers/](archive/superpowers/) | 16 dated plans and specs from individual 2026-07 work sessions. Written against the pre-reorganisation flat `js/` layout, so their paths no longer resolve — expected, not rot. Their checkboxes are unchecked against work that shipped; read them for intent, never for status. |
 | [archive/webgpu/](archive/webgpu/) | The WebGPU migration plan, maintainability review and four phase build logs. |
-| [archive/research/](archive/research/) | Twelve investigations that no live doc or source file references: steering/tilt physics, circuit-briefing design + UI, rendering improvements, external model sources, longer-horizon physics, multiplayer research + the 4-player plan (both shipped), UI layout research, the driving-test review and the 2026-rules fidelity gap list. |
+| [archive/research/](archive/research/) | Twelve investigations kept for provenance — no live doc depends on them for current structure, though two research docs cite them as historical companions (ASSET-API-RESEARCH.md → RENDERING-IMPROVEMENTS.md, SCENE-GRAPH-PLAN.md → EXTERNAL-MODEL-SOURCES.md): steering/tilt physics, circuit-briefing design + UI, rendering improvements, external model sources, longer-horizon physics, multiplayer research + the 4-player plan (both shipped), UI layout research, the driving-test review and the 2026-rules fidelity gap list. |
 | [archive/SCENERY-UPGRADE-PLAN.md](archive/SCENERY-UPGRADE-PLAN.md) | The scenery upgrade roadmap. Its helpers (`grandstandEx`, `landmarkKit`, `circuitKit`, `sceneryTheme`) are all in the frozen 107-member contract now. |
 | [archive/2026-08-repo-audit.md](archive/2026-08-repo-audit.md) | The Aug-2026 repo audit's finding register — the not-fixed backlog as recorded at the time, kept as provenance for what was found and what has since been worked off. |
 | [archive/2026-08-architecture-review-journal.md](archive/2026-08-architecture-review-journal.md) | The session journal behind the architecture review: the full defect register with fix narratives and measurements, verbatim. The standing review distilled from it lives at [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md). |

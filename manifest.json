@@ -1,7 +1,7 @@
 {
   "name": "Apex 26",
   "short_name": "Apex 26",
-  "description": "Unofficial F1 fan game & data hub — 2026 grid, 24 real circuits in 3D WebGL, tilt to steer, plus live championship data.",
+  "description": "Unofficial F1 fan game & data hub — 2026 grid, a 24-round season plus 16 classic circuits in 3D WebGL, tilt to steer, plus live championship data.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

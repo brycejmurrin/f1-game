@@ -14,7 +14,7 @@ function buildResults(order) {
   const els = G.els, season = G.season, track = G.track, cars = G.cars;
   els.resultsTable.textContent = "";
   els.resultsTitle.textContent = G.seasonMode
-    ? "ROUND " + season.round + (season.round > 1 ? "" : "") + " — " + track.def.name
+    ? "ROUND " + season.round + " — " + track.def.name
     : track.def.name + " RESULT";
   order.forEach((c, i) => {
     const row = document.createElement("div");

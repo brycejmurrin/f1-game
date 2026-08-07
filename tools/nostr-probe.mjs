@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // nostr-probe.mjs — WHICH RELAYS WILL ACTUALLY CARRY OUR SIGNALLING?
 //
-//   npm i --no-save ws @noble/curves    # or run with --skip-publish
+//   npm i --no-save ws @noble/curves
 //   node tools/nostr-probe.mjs
 //   node tools/nostr-probe.mjs wss://a wss://b
 //

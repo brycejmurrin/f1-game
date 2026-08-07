@@ -568,7 +568,10 @@
   backdrop-filter: blur(3px);
   min-height: 30px;
 }
-#cs-cam:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+/* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
+@media (hover: hover) {
+  #cs-cam:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+}
 .cs-cam-caret { font-size: 8px; line-height: 1; transition: transform 0.15s ease; }
 #cs-cam[aria-expanded="true"] {
   background: rgba(0,204,136,0.18); color: #0c8;
@@ -627,7 +630,9 @@
   backdrop-filter: blur(3px);
   min-height: 30px;
 }
-#cs-aero:hover { border-color: rgba(255,255,255,0.3); }
+@media (hover: hover) {
+  #cs-aero:hover { border-color: rgba(255,255,255,0.3); }
+}
 .cs-aero-lbl {
   font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
   color: rgba(255,255,255,0.42);
@@ -663,7 +668,9 @@
   /* Touch targets: the visual chip stays small, the hit area does not. */
   min-height: 30px;
 }
-.cs-view-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+@media (hover: hover) {
+  .cs-view-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+}
 /* `active` is the codebase's "this one is chosen" class (see AriaState's ON
    list), so the lit state hangs off it rather than off aria-pressed — that
    keeps the attribute purely a screen-reader concern. Only SPIN ever takes it;

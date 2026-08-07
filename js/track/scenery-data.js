@@ -41,11 +41,6 @@ const TrackSceneryData = (function () {
 
   const BLD = ["setback", "tiered", "podium", "slab", "twin", "jenga", "cylinder", "spire", "dome", "chevron", "notch", "fin", "antenna", "cross", "arch", "ziggurat", "drum", "hall"];
 
-  // Tiered grandstand running along the track: a raked seating wedge (prism on
-  // its side reads as a rake), a back shell and a flat roof slab on posts.
-  // Uses addBox directly to avoid place()'s per-box onTrack guard, which fires
-  // false-positives at hairpins (La Source at Spa, etc.). Single guard uses the
-  // crowd inner face — only skips if the seating literally overlaps the tarmac.
   // Varied spectator clothing for a DAY crowd — a realistic mix of neutrals
   // (denim, grey, white, khaki) with pops of team colour so a packed stand
   // reads as thousands of individuals, not a flat painted slab.
@@ -104,8 +99,8 @@ const TrackSceneryData = (function () {
     8: ["top", "topL", "topR", "mid", "botL", "botR", "bottom"], 9: ["top", "topL", "topR", "mid", "botR", "bottom"],
   };
 
-  // Per-circuit barrier identity — each city gets its own armco livery (two
-  // alternating day stripe colours + a tinted night rail) so no two street
+  // Per-circuit barrier identity — each city gets its own armco livery (three
+  // cycling day stripe colours + a tinted night rail) so no two street
   // walls look alike. Themes nod to each locale: Monaco classic red/white,
   // Vegas casino gold/black, Madrid & Mexico national colours, Miami pastel
   // vice, Saudi green at Jeddah, Azerbaijan teal at Baku, etc. `tyre` is the
@@ -439,7 +434,7 @@ const TrackSceneryData = (function () {
     abudhabi:    ["darkSteel", "teal", "sandstone"],
     shanghai:    ["crimson", "alu", "darkSteel"],             // China red against modern steel
     albert_park: ["steel", "pastel", "alu"],                  // temporary park build, pale Melbourne palette
-    madrid:      ["crimson", "sandstone", "terracotta"],    // the file hardcodes these at its own call sites
+    madrid:      ["crimson", "sandstone", "steel"],         // the file hardcodes these at its own call sites
     // ── retired / off-calendar circuits (def `classic: true`) ──
     hockenheim:    ["concrete", "darkSteel", "crimson"],        // Motodrom concrete bowl, German-GP red accents
     nurburgring:   ["darkSteel", "concrete", "alu"],        // cold Eifel steel and poured concrete

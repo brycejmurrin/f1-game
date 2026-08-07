@@ -78,7 +78,7 @@ const QUALI_TRIM = 0.75;
 const EXEC_SPREAD = 0.012;
 
 function create(G) {
-  const { $, els } = G;
+  const { $ } = G;
 
   // The classification for the session just run: [{driverId, code, name, team,
   // t, gap, isPlayer}], fastest first. Null until a session has been held.

@@ -424,7 +424,6 @@ $("adv-more").onclick = () => {
 // Any granular Advanced edit refreshes the simplified controls (events bubble up).
 $("advanced-inner").addEventListener("input", refreshMacros);
 applySteerTuning();
-// GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
 return { applySteerTuning };
 }
 

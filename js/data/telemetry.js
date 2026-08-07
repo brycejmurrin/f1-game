@@ -333,6 +333,10 @@ const DataTelemetry = (function () {
     if (telView) {
       pauseAnim(telView);
       if (telView._ro) { telView._ro.disconnect(); telView._ro = null; }
+      // Drop the reference too: the view holds canvases, offscreen bases and
+      // every lane's sample arrays, and a stopped view is never resumed — a
+      // new one is assigned on the next lap load.
+      telView = null;
     }
   }
 
@@ -574,7 +578,7 @@ const DataTelemetry = (function () {
 
     // Canvas width: detail is the popup body, already in DOM (called via setTimeout).
     // In landscape the side panel takes 200px + 1px border + 24px padding = 225px.
-    const isLS = typeof window !== "undefined" && window.innerWidth > window.innerHeight && window.innerHeight < 520;
+    const isLS = shortLS();
     const sideW = isLS ? 225 : 0;
     const CW = detail.clientWidth > 40
       ? Math.min(600, Math.max(260, detail.clientWidth - sideW - 28))
@@ -1532,7 +1536,9 @@ const DataTelemetry = (function () {
     // gap in the first third of the interval. So take the fraction from the
     // car's own DISTANCE TRAVELLED (its speed trace integrated, the same series
     // the delta chart runs on) rather than from elapsed time.
-    const cum = tel._cum || (tel._cum = cumDist(tel.car || []));
+    // Every lane already carries .cum (buildTelemetryView computes it for the
+    // delta chart); the fallback only covers a lane locAt sees first.
+    const cum = tel.cum || (tel.cum = cumDist(tel.car || []));
     if (cum.t.length > 1) {
       const dA = distAtT(cum, tAtDate(tel.car, +loc[lo].date));
       const dB = distAtT(cum, tAtDate(tel.car, +loc[hi].date));

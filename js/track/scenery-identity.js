@@ -82,8 +82,8 @@ const SceneryIdentity = (function () {
       const top = vadd(a.c, a.u, h);
       // Dual (or multi) arms reaching toward the track (−side along r).
       for (let i = 0; i < arms; i++) {
-        const along = (i - (arms - 1) / 2) * 1.8;
-        const arm = vadd(vadd(top, a.t, along), a.r, -side * 1.6);
+        const armOff = (i - (arms - 1) / 2) * 1.8;
+        const arm = vadd(vadd(top, a.t, armOff), a.r, -side * 1.6);
         addBox(out, arm, [3.4, 0.35, 0.55], poleCol, b);
         addBox(out, vadd(arm, a.r, -side * 1.3), [1.6, 0.55, 1.1], lens, b);
       }

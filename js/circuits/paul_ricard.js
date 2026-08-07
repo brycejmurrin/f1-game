@@ -515,19 +515,27 @@
         // Provençal parcel, and it gives the middle distance a hard edge.
         const a = anchor(K(0.235), -1, 90);
         const b = [a.r, a.u, a.t];
-        // Bounds cover the COMPLETE composite — hut (t ±4.3) plus the wall
-        // courses running off it to t≈50 — so the footprint preflight guards
-        // the whole model, not just the hut.
+        const DRY = [0.72, 0.68, 0.58], DRY_D = [0.62, 0.58, 0.49];
         modelGroup("paul-ricard-cabanon", {
-          center: vadd(vadd(a.c, a.t, 22.5), a.u, 3), size: [10, 8, 56], basis: b,
+          center: vadd(a.c, a.u, 3), size: [10, 8, 14], basis: b,
         }, (stage) => {
-          const DRY = [0.72, 0.68, 0.58], DRY_D = [0.62, 0.58, 0.49];
           addBox(stage, vadd(a.c, a.u, 2.1), [6, 4.2, 8], DRY, b);
           addPrism(stage, vadd(a.c, a.u, 4.9), [6.6, 1.8, 8.6], [0.58, 0.40, 0.30], b);
           addBox(stage, vadd(vadd(a.c, a.r, -3.2), a.u, 1.5), [0.25, 2.2, 1.1],
             [0.34, 0.28, 0.22], b);                              // door
-          // The wall running off it, in irregular courses.
-          for (let i = 0; i < 14; i++)
+        });
+        // The wall running off the cabanon, in irregular courses — its OWN
+        // guarded run, not part of the cabanon group. The 14-course version
+        // reached t≈48, i.e. ~34 m past the hut group's ±7 m bounds, so most
+        // of the wall escaped the atomic footprint preflight the group exists
+        // to provide; the per-box road guard then silently dropped courses
+        // 7-13 (measured), shipping half a wall the code claimed was whole.
+        // Seven courses is what has always actually shipped, and these bounds
+        // cover exactly that run.
+        modelGroup("paul-ricard-drywall", {
+          center: vadd(vadd(a.c, a.t, 17.3), a.u, 0.75), size: [0.8, 2, 22], basis: b,
+        }, (stage) => {
+          for (let i = 0; i < 7; i++)
             addBox(stage, vadd(vadd(a.c, a.t, 8 + i * 3.1), a.u, 0.6 + (i & 1) * 0.1),
               [0.7, 1.2 + (i % 3) * 0.15, 3.0], (i & 1) ? DRY_D : DRY, b);
         });

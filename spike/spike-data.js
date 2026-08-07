@@ -13,7 +13,7 @@
  *   carGrid: [{x,y,z,heading}],  // 22 grid slots behind the start line
  *   start: {pos, fwd},           // start-line camera anchor
  * }
- * SpikeData.frameLights(out, eye, fwd) -> flat stride-15 light array culled to
+ * SpikeData.frameLights(eye, fwd) -> flat stride-15 light array culled to
  *   32 nearest lamps (the REAL per-frame cull incl. flicker), or null.
  */
 "use strict";

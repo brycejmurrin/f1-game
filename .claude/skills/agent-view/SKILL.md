@@ -93,7 +93,7 @@ Read both once; do not re-fetch per tick.
   `lengthErrorPct`).
 - `carView({detail})` (CLI `car`) — the car as JSON: team, the CHOSEN parts spec +
   net `mods` multipliers, measured geometry. `detail:"parts"` adds per-part boxes —
-  the ~19 MESH components (wheels, wings, halo…), NOT the 8 upgrade categories; it
+  the ~19 MESH components (wheels, wings, halo…), NOT the 12 upgrade categories; it
   reads the current loadout, not the catalog of options — to CHOOSE a build, read
   `Parts.CATALOG` (cost + stat multipliers per option) from `js/car/parts.js`, and
   verify a candidate in-page with `Parts.getMods(setup, teamEngine)`/`Parts.getCost`.

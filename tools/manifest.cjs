@@ -263,8 +263,6 @@ const HARD_EDGES = [
   ["js/render/glx/post.js", "js/render/glx.js"],
   ["js/render/glx/shadow.js", "js/render/glx.js"],
   ["js/render/glx/chunked.js", "js/render/glx.js"],
-  // TSL shader factories before tlx.js (TLX.create invokes TLXShaders.chunks/
-  // .lit — call-time, but keep the ordering explicit like the glx/ modules)
   ["js/render/glx.js", "js/render/assets.js"],         // Assets feature-detects the backend's createTextureArray
   ["js/track/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
@@ -308,9 +306,6 @@ const HARD_EDGES = [
   ["js/game/career.js", "js/game/career-ui.js"],  // the screen reads the Career rules
 ];
 
-// Named paths for direct single-file consumers (tests/tools that load one
-// source file by path). When a file moves, update it here and every consumer
-// follows automatically.
 // ---------------------------------------------------------------------------
 // DEFERRED — js/ files with NO <script> tag, injected at runtime instead.
 //
@@ -375,6 +370,9 @@ const DEFERRED_EDGES = [
   ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],     // TLX.create invokes TLXShaders.postChain
 ];
 
+// Named paths for direct single-file consumers (tests/tools that load one
+// source file by path). When a file moves, update it here and every consumer
+// follows automatically.
 const PATHS = {
   TRACKS_ENGINE: "js/track/tracks.js",
   GLX_CHUNKS: "js/render/shaders/chunks.js",

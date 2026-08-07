@@ -59,8 +59,9 @@ done
 fail=0
 for j in "${!pids[@]}"; do
   wait "${pids[$j]}"; code=$?
-  # last "N passed/failed" style line, with the line-reporter's \r progress
-  # unrolled so grep sees real lines
+  # The reporter's terminal "= run <status>" line (and any "x FAIL") — these
+  # are real newline-terminated lines, unlike the \r-rewritten progress counter
+  # in between, which is why the pattern anchors on them and nothing looser.
   summary=$(grep -aE '= run (passed|failed|timedout|interrupted)|x FAIL' "$LOGDIR/${names[$j]}.log" | tail -3 | tr '\n' ' ')
   printf '%-12s exit=%-3s %s\n' "${names[$j]}" "$code" "${summary:-<no summary — check log>}"
   [ "$code" -ne 0 ] && fail=1

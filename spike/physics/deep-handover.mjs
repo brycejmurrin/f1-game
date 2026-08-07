@@ -75,15 +75,19 @@ function nodeAtS(s) {
 // node, then signed lateral via the left vector. Returns {s, x, node, clamped}.
 function projectLocal(px, pz, sGuess, W = 40) {
   const c0 = nodeAtS(sGuess);
-  let best = c0, bd = Infinity;
+  let best = c0, bd = Infinity, bestK = 0;
   for (let k = -W; k <= W; k++) {
     const i = ((c0 + k) % N + N) % N;
     const dx = C.px[i] - px, dz = C.pz[i] - pz, d = dx * dx + dz * dz;
-    if (d < bd) { bd = d; best = i; }
+    if (d < bd) { bd = d; best = i; bestK = k; }
   }
   const i = best, lx = C.tz[i], lz = -C.tx[i];      // left = up x tangent
   const x = (px - C.px[i]) * lx + (pz - C.pz[i]) * lz;
-  return { s: cum[i], x, node: i, hitWindowEdge: Math.abs(bd) === W };
+  // `clamped` = the winner sat ON the search window's edge, i.e. the true
+  // nearest node may lie outside +-W and this projection is not trustworthy.
+  // It is a test on the winning OFFSET k (node counts); the old form compared
+  // `bd`, a squared xz distance in m2, against W and could only ever be false.
+  return { s: cum[i], x, node: i, clamped: Math.abs(bestK) === W };
 }
 
 function projectGlobal(px, pz) {
