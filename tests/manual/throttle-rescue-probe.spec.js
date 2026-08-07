@@ -57,11 +57,17 @@ async function sample(page, seconds) {
     rows.push(await page.evaluate(() => {
       const s = window.__apex.inputState();
       const p = window.__apex.physState();
+      const info = window.__apex.info();
       return {
         t: performance.now(),
         btnThrottle: s.btn.throttle, keyThrottle: s.key.throttle,
         padThrottle: s.pad.throttle, throttle: s.throttle,
         speed: +p.speed.toFixed(2), x: +p.x.toFixed(1),
+        // Constant speed with every input false fits NO branch of the
+        // integrator (coast is -6 m/s^2) — unless the sim is not stepping the
+        // car at all. `s` advancing at ~speed*dt says the sim is live; frozen
+        // `s` convicts the loop, not the throttle.
+        s: +p.s.toFixed(1), state: info.state,
       };
     }));
     await page.waitForTimeout(250);
@@ -75,7 +81,12 @@ function verdict(rows, label) {
   console.log(`--- ${label}: ${rows.length} samples over ~${(rows.length / 4).toFixed(0)}s`);
   for (const r of rows) console.log(
     `  speed ${String(r.speed).padStart(6)}  x ${String(r.x).padStart(5)}  ` +
+    `s ${String(r.s).padStart(7)}  ${r.state}  ` +
     `throttle ${r.throttle}  (btn ${r.btnThrottle} key ${r.keyThrottle} pad ${r.padThrottle})`);
+  const dS = rows[rows.length - 1].s - rows[0].s;
+  if (Math.abs(dS) < 1 && rows[0].speed > 5) console.log(
+    `NOTE(${label}): s moved ${dS.toFixed(1)} m in ${(rows.length / 4).toFixed(0)}s at ` +
+    `${rows[0].speed} m/s — the sim is NOT stepping this car; the constant speed is a frozen readout`);
   console.log(
     last.btnThrottle ? `VERDICT(${label}): btn.throttle STILL TRUE after release — INPUT LATCH (new mechanism)`
     : last.throttle ? `VERDICT(${label}): throttle asserted by key/pad, not btn — see the source flags`
