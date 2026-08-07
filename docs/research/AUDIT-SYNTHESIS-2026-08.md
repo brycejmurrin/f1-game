@@ -12,7 +12,14 @@ confirmed findings with full evidence, 4 feasibility-checked move clusters,
 
 ---
 
-## FIX-NOW
+## FIX-NOW — ALL LANDED 2026-08-07
+
+Worked off in three commits: item 1 in `788ac8d3` (verified 117/117);
+items 2, 4, 6 in `33114382`; items 3, 5, 7, 8 in `af05fa98` (bump v1023,
+camera group 45/45). Item 3 grew: verifying the sign exposed that the
+cinematic/heli/corner-shot cameras placed themselves on the INSIDE of every
+corner (`-sign(k)` built on the backwards label) — fixed and re-pinned in the
+same commit. The list below stands as the record of what was found.
 
 Ordered by severity. Items 2, 3, 5, 7, 8 touch `js/` — batch them into at most two commits with ONE `?v=N` + `version.json` bump as the last edit (`.claude/skills/bump-cache`); items 1, 4, 6 need no bump.
 
