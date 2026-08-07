@@ -496,16 +496,42 @@ passed at 110.6 s once alone — and that is why the CI smoke job pins
 `APEX_WORKERS: 1`.
 
 **The consequence is that every declared budget means roughly half what it
-says.** The default 120 s timeout admits about 65 s of solo work at two workers;
-`test.slow()`'s 360 s admits about 190 s. A test written and timed alone will
-time out in its own group without anything being wrong with it.
+says.** The default 120 s timeout admits about 65 s of solo work at two workers.
+A test written and timed alone will time out in its own group without anything
+being wrong with it.
 
 So: **a timeout from a group run is a measurement of the box, not a verdict on
-the test.** Re-run it alone before you touch a number. The `parts` group on
-2026-08-07 produced twelve failures, of which FOUR were timeouts —
-`unlimited state persists after page reload` among them, at 155.5 s for a toggle
-and a reload, with the box at load 8-10 on four cores. Raising those budgets
-would have baked contention in as if it were the cost of the work.
+the test.** Re-run it alone before you touch a number.
+
+### The factor predicts the VERDICT, not the duration
+
+That was put to the test. Six tests timed out across the 2026-08-07 burndown,
+every one a bare `Test timeout` with no assertion reached. The prediction — all
+six pass solo, unchanged — was written down before the runs. It held 6/6. The
+*durations* did not:
+
+| test | contended | predicted | solo | ratio |
+|---|---|---|---|---|
+| wheel mesh cache | 371 s | 195 s | **198 s** | 1.87 |
+| budget persists on reload | 155 s | 82 s | **72 s** | 2.15 |
+| ERS deploy/recovery | 137 s | 72 s | **108 s** | 1.27 |
+| carview effect API | 130 s | 68 s | **12.7 s** | **10.2** |
+| career determinism | 157 s | 83 s | **56.4 s** | 2.78 |
+| lighting-tuner grading | >120 s | 63 s | **120 s** | ~1.0 |
+
+**Do not quote 1.9x as if it forecast a runtime.** The spread is 1.0x to 10.2x.
+`carview` at 12.7 s solo against 130 s contended is not proportional slowdown at
+all — a test waiting on a synchronized frame plausibly waits on something that
+never arrives when the box is saturated, rather than running ten times slower.
+Use the factor to decide whether a timeout is worth investigating; use a
+measurement to set a budget.
+
+**And read the other end of the table.** `lighting-tuner-grade` passed at 120 s
+against a 120 s budget on a QUIET box at load 2.72 — no headroom alone, let
+alone in a group. Six timeouts, five of them pure contention and one a genuinely
+undersized budget. "Re-run it alone" is what tells them apart; without it the
+right answer for five of them would have been indistinguishable from the right
+answer for the sixth.
 
 ---
 
