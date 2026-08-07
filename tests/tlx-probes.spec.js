@@ -62,7 +62,7 @@ test.describe("TLX — boot", () => {
       if (msg.type() === "error" && !/favicon/i.test(msg.text())) errors.push(msg.text());
     });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
 
     // The descriptor-copy install is the compatibility contract: the SAME GLX
     // object every test monkey-patches must now carry the TLX surface.
@@ -86,7 +86,7 @@ test.describe("TLX — boot", () => {
       try { localStorage.removeItem("apex26.gfxBackend"); } catch (_) {}
     });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     const backend = await page.evaluate(() => GLX.backend);
     expect(backend).toBeUndefined();   // plain GLX carries no backend id
   });
@@ -95,9 +95,9 @@ test.describe("TLX — boot", () => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0));
     await page.waitForTimeout(400);
     await stopRendering(page);
@@ -112,9 +112,9 @@ test.describe("TLX — boot", () => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
     await page.waitForTimeout(600);
     const st = await page.evaluate(() => ({
@@ -140,9 +140,9 @@ test.describe("TLX — boot", () => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
     await page.waitForTimeout(600);
     const st = await page.evaluate(() => GLX.__tlx.postState());
@@ -163,14 +163,14 @@ test.describe("TLX — boot", () => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await page.evaluate(() => window.__apex.race("singapore"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
     // Singapore night: lampVol > 0 opens the volumetric pass, and the lamp
     // spot map arms per frame — present() snapshots the armed flag for the
     // godray lamp-index mapping before clearArmed() retires it.
-    await page.waitForFunction(() => GLX.__tlx.postState().blocks.shafts === true, { timeout: 60_000 });
+    await page.waitForFunction(() => GLX.__tlx.postState().blocks.shafts === true, { polling: 100, timeout: 60_000 });
     const st = await page.evaluate(() => ({
       post: GLX.__tlx.postState(),
       lamp: GLX.lampShadowState(),
@@ -185,9 +185,9 @@ test.describe("TLX — boot", () => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
     await page.waitForTimeout(400);
     const day = await page.evaluate(() => GLX.__tlx.skyState());
@@ -200,7 +200,7 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.setTimeOfDay("night"));
     // The day->night flip rebuilds scenery before the next sky frame lands —
     // wait on the uniform, not a fixed sleep (SwiftShader rebuilds are slow).
-    await page.waitForFunction(() => GLX.__tlx.skyState().stars === 1, { timeout: 60_000 });
+    await page.waitForFunction(() => GLX.__tlx.skyState().stars === 1, { polling: 100, timeout: 60_000 });
     const night = await page.evaluate(() => GLX.__tlx.skyState());
     expect(night.on).toBe(true);
     expect(night.stars).toBe(1);
@@ -211,13 +211,13 @@ test.describe("TLX — boot", () => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await page.evaluate(() => window.__apex.race("singapore"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
     // Singapore is a night race: floodlights populate frame.lights and the
     // glare-halo pass runs. Wait for a presented frame that carried FX.
-    await page.waitForFunction(() => GLX.__tlx.fxState().glow > 0, { timeout: 60_000 });
+    await page.waitForFunction(() => GLX.__tlx.fxState().glow > 0, { polling: 100, timeout: 60_000 });
     const st = await page.evaluate(() => GLX.__tlx.fxState());
     expect(st.on).toBe(true);
     expect(st.glow).toBeGreaterThan(0);        // near-field lamp halos in view
@@ -230,9 +230,9 @@ test.describe("TLX — boot", () => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     // Drive hard with full lock so the tyres slip and lay marks (the skid
     // recorder keys off slip, not just steering).
     await page.evaluate(() => {
@@ -242,7 +242,7 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.freeze(true));
     // Marks are recorded in the physics step; the batch record lands on the
     // next presented frame.
-    await page.waitForFunction(() => GLX.__tlx.fxState().skidVerts > 0, { timeout: 30_000 });
+    await page.waitForFunction(() => GLX.__tlx.fxState().skidVerts > 0, { polling: 100, timeout: 30_000 });
     const st = await page.evaluate(() => GLX.__tlx.fxState());
     expect(st.skidVerts).toBeGreaterThan(0);
     expect(st.skidVerts % 6).toBe(0);          // 6 verts per mark
@@ -253,12 +253,12 @@ test.describe("TLX — boot", () => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await page.evaluate(() => window.__apex.race("singapore"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
     // Wait for a presented frame that carried chunked records (props + glass).
-    await page.waitForFunction(() => GLX.__tlx.chunkState().total > 0, { timeout: 60_000 });
+    await page.waitForFunction(() => GLX.__tlx.chunkState().total > 0, { polling: 100, timeout: 60_000 });
     const st = await page.evaluate(() => {
       const geo = window.__apex.trackGeometry();
       return {
@@ -282,9 +282,9 @@ test.describe("TLX — boot", () => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     // The probe only runs when CAR ENV REFLECTION (carEnvCube) > 0 — many
     // shipped profiles default it to 0, so opt the knob on for this test.
     await page.evaluate(() => window.__apex.lightTune({ carEnvCube: 0.6 }));
@@ -294,7 +294,7 @@ test.describe("TLX — boot", () => {
     await page.waitForFunction(() => {
       const e = GLX.__tlx.envState();
       return e && e.on && e.ready;
-    }, { timeout: 60_000 });
+    }, { polling: 100, timeout: 60_000 });
     const st = await page.evaluate(() => ({
       env: GLX.__tlx.envState(),
       readyHook: GLX.envProbeReady(),
@@ -314,9 +314,9 @@ test.describe("TLX — boot", () => {
 
   test("M9 gpuTimer is contract-legal on the WebGL2 fallback (SwiftShader)", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     const st = await page.evaluate(() => {
       const before = GLX.gpuTimer();
       const on = GLX.gpuTimer(true);
@@ -336,11 +336,11 @@ test.describe("TLX — boot", () => {
 
   test("M4 shadow-state hooks report through the TLX surface (car + lamp)", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
-    await page.waitForFunction(() => GLX.carShadowState().arms > 0, { timeout: 30_000 });
+    await page.waitForFunction(() => GLX.carShadowState().arms > 0, { polling: 100, timeout: 30_000 });
     const st = await page.evaluate(() => ({ car: GLX.carShadowState(), lamp: GLX.lampShadowState() }));
     expect(st.car.enabled).toBe(true);
     expect(st.car.arms).toBeGreaterThan(0);
@@ -352,12 +352,12 @@ test.describe("TLX — boot", () => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     // Singapore is a street circuit: the build emits both plain meshes
     // (floor/road/terrain/water/gate/startline) AND chunked meshes (props +
     // glass), so it exercises createMesh AND createChunkedMesh on the backend.
     await page.evaluate(() => window.__apex.race("singapore"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
     await page.waitForTimeout(400);
     const st = await page.evaluate(() => ({
@@ -383,7 +383,7 @@ test.describe("TLX — boot", () => {
 
   test("menu is reachable and canvas is sized (no-track begin/present path)", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
     await expect(page.locator("#mb-race")).toBeVisible();
     const dims = await page.evaluate(() => {
       const c = document.getElementById("game");

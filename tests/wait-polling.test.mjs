@@ -23,9 +23,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { lintSource, lintAll, count } from "../tools/wait-polling-lint.mjs";
 
-// Measured 2026-08-07. LOWER this as call sites are fixed; raising it needs a
+// Measured 2026-08-07: 353, then 319 once tests/tlx-probes.spec.js — the file
+// that produced the finding, and its largest single holder at 34 sites — was
+// converted. LOWER this as call sites are fixed; raising it needs a
 // reason, and "I added a new wait" is not one.
-const CEILING = 353;
+const CEILING = 319;
 // Far enough below and the ratchet has stopped ratcheting — the same trap
 // tools/fixture-consumer-audit.mjs records, where a floor sat at 31 while real
 // adoption was 54.
