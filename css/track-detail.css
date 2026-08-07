@@ -15,13 +15,16 @@
 /* ---------- track detail fullscreen modal ---------- */
 #track-detail {
   position: fixed; inset: 0; z-index: 400;
-  /* STILL A PLAIN <div>, not a <dialog> — the commit that converted it lost its
-     index.html hunk in a merge and only this half survived, so the comment here
-     claimed a migration that never reached the markup. That means `z-index: 400`
-     above is LOAD-BEARING (a real dialog would sit in the top layer and need
-     none): do not delete it. `margin: 0` is now belt-and-braces rather than a UA
-     override, and harmless — keep it so the rule still reads correctly if the
-     element does become a <dialog>. */
+  /* A real <dialog> (js/game/topmodal.js) — margin: 0 overrides the UA
+     stylesheet's `margin: auto`, whose centring only bites when width/height are
+     non-auto. inset:0 with an auto width fills the containing block regardless
+     (CSS2.1 10.3.7 case 6), but a one-line override beats trusting that
+     computation across engines.
+     NOTE: this comment was true, then FALSE for months — the conversion commit
+     lost its index.html hunk in a merge while this half survived, so the
+     stylesheet described a migration the markup never got. Restored 2026-08.
+     `z-index: 400` is now redundant (the top layer outranks every z-index) but
+     harmless; it is what kept the div stacking correctly in the interim. */
   margin: 0;
   background: #0a0a0e;
   display: flex; flex-direction: column;
