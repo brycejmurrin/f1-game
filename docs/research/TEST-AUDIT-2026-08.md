@@ -222,6 +222,38 @@ Unchanged, byte-for-byte, as the deploy gate: `pages.yml` keeps `needs: ci`, ci.
 
 ---
 
+## REDESIGN 2026-08-07 — what the gaps resolve to, and what the tooling now supports
+
+The gap list below stands as written. This section records how each is answered
+and what has LANDED, because four of them were tooling problems, not YAML
+problems — and one of those was a defect nobody had noticed.
+
+**The prerequisite nobody checked: `pick-tests --since` had never worked.**
+The whole design rests on `node tools/pick-tests.mjs --since "$REF"`.
+`changedFiles()` filtered argv with `!a.startsWith("--")` to find explicit
+paths, which swallowed the REF as a path — so `--since HEAD~3` reported the
+literal string `"HEAD~3"` as the only changed file, matched no rule, and printed
+"nothing to run". For any diff, since the flag was introduced. The skeptic found
+14 gaps in the design and none of them, because it reviewed the design and not
+the tool underneath it. **LANDED** `a8174e5a`, pinned by
+`tests/pick-tests.test.mjs`.
+
+| Gap | Resolution |
+|---|---|
+| 1, 2 (blocking) | **`selected` moves to its own workflow file**, triggered on `push`/`pull_request` only and never `workflow_call`. A reusable-workflow caller aggregates EVERY job in the called workflow, so no `if:` and no absence from `needs:` can keep an in-`ci.yml` job off the deploy gate. A separate file makes it structurally impossible rather than conditionally unlikely. This also answers gap 3 by construction — the uncovered events are exactly the ones `pages.yml` triggers, and they no longer reach this job. **DESIGN SETTLED, YAML NOT LANDED.** |
+| 5 | **LANDED** `a8174e5a`. `pick-tests` now merge-bases against the DEPLOY branch, not `main` — `main` is a stale diverged fork, so basing on it ballooned the changed set to most of the repo, which reads as "run everything" i.e. the tool giving up silently. `DEPLOY_BRANCH` is asserted against `pages.yml` so the two cannot drift. |
+| 6 | **LANDED** `a8174e5a`. `--json` emits `{reason, files, groups[]}` and short-circuits before any prose path. `reason` separates the two cases prose renders identically and a selector must never confuse: `none` (nothing changed → run nothing) vs `unmatched` (files changed, nothing routed them → the selection is NOT trustworthy, run everything). The parsing traps the gap names — `test:fast` inside the zero-match sentence, `test-bg.mjs <groups>` in the batching lines — stop existing rather than being worked around. |
+| 10 | **LANDED** `e81ccd29`. `tools/cache-bump-only.mjs` decides whether an `index.html` diff is purely a `?v=N` rewrite, so the bump commit that ends every shippable change no longer forces fallback. Pairs lines POSITIONALLY: `af05fa98` is +156/-156 and hides a real markup edit, so counts are not enough; a reordered script block has identical lines on both sides, so sets are not enough either. |
+| 4, 12 | Accepted and RELABELLED rather than fixed. An advisory job running LESS when it knows less is a defensible trade; quoting "fail safe, never fail open" while doing the opposite is not. The fallback path is duplication of the guards job and should say so in its step summary instead of being framed as coverage. |
+| 7, 8, 13 | **The design's headline capability does not survive its own budget** and needs re-deriving before any YAML lands. Real groups are 71–193 tests against a 12-test cap; `retries: 1` with `--timeout=240000` makes one timing-out test cost 8 minutes, not 115 s, so the cap fits only the all-pass case — the step dies exactly when the selection finds a real regression. Per-spec rather than per-group granularity is the only way this executes at all, and `visual`/`ab`/`tiny`/`baseline` still need classifying. |
+| 9, 11, 14 | Mechanical; unchanged from the gap text. |
+
+**Recommendation before landing any YAML**: gaps 7/8/13 mean the browser step as
+specified would almost never run useful work, and the two most common triggers
+(first push of a branch, and the `?v` bump commit) are only now unblocked. Land
+the tooling — done — then re-derive the budget against measured per-spec counts,
+and treat the workflow file as a separate, deliberate decision.
+
 ## Feasibility skeptic — gaps in the CI design (address before landing)
 
 1. BROKEN workflow_call GUARD (blocking): `if: github.event_name != 'workflow_call'` never fires — in a reusable workflow, github.event_name is inherited from the CALLER's triggering event ('push' when pages.yml runs on the deploy branch, 'workflow_dispatch' on manual deploys); 'workflow_call' is a trigger name, not a runtime event_name value. The condition is always true, so `selected` runs inside every pages.yml-called CI run. Workable discriminators exist (github.ref == 'refs/heads/claude/f1-game-project-26h3ng', or a workflow_call input with a default) but the design names neither.
