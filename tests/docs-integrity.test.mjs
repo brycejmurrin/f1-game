@@ -98,6 +98,14 @@ const SOURCE_EXEMPT = new Map([
   // Fake package.json scripts inside the coverage-audit's own fixtures.
   ["tests/alpha.spec.js", /test-coverage-audit\.test\.mjs|docs-integrity/],
   ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],
+  // Forward references to the POST-SPLIT tree. tools/tests-split.mjs plans the
+  // tests/ move (AUDIT-SYNTHESIS §R2) and its guard asserts the planned
+  // destinations, so both must name tests/specs/ and tests/unit/ before either
+  // directory exists. These retire when the move lands — at which point the
+  // paths resolve and the exemption is simply unused, not silently wrong.
+  ["tests/specs/", /tests-split/],
+  ["tests/unit/", /tests-split/],
+  ["tests/helpers/", /tests-split/],
 ]);
 
 test("a `file.js:NNN` citation in a comment points inside that file", () => {
@@ -196,7 +204,13 @@ test("source comments reference only files that exist", () => {
   const broken = [];
   for (const file of files) {
     for (const p of brokenPathsIn(file)) {
-      const exempt = SOURCE_EXEMPT.get(p);
+      // Exact path first; then any key ending in "/" as a DIRECTORY prefix.
+      // The prefix form exists for a whole tree that does not exist yet — the
+      // tests/ split's destinations, named by the tool that plans the move and
+      // by its guard — where listing every future filename would break on the
+      // next case added and teach nobody anything.
+      const exempt = SOURCE_EXEMPT.get(p)
+        || [...SOURCE_EXEMPT].find(([k]) => k.endsWith("/") && p.startsWith(k))?.[1];
       if (exempt && exempt.test(file)) continue;
       broken.push(`${file} -> ${p}`);
     }
