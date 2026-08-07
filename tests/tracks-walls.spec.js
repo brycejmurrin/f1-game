@@ -16,6 +16,13 @@ const trackIds = (page) => ONLY_TRACK
 
 test.describe("Apex 26 — track boundaries", () => {
   test("every track has a finite, sane driving boundary on both sides", async ({ page }) => {
+    // FORTY CIRCUIT BUILDS IN ONE TEST. Each `race(id)` rebuilds road, terrain
+    // and scenery, so the default 120 s budget is not a safety margin here — it
+    // is roughly the work itself, and this timed out at 132 s with the box
+    // otherwise IDLE (and at 163 s when it was not). A timeout is reported as a
+    // failure that looks like a boundary bug, which is the worst way to spend
+    // it. test.slow() triples the budget rather than hiding the cost.
+    test.slow();
     await load(page);
     const ids = await trackIds(page);
     if (ONLY_TRACK) expect(ids).toEqual([ONLY_TRACK]);
@@ -35,6 +42,7 @@ test.describe("Apex 26 — track boundaries", () => {
   });
 
   test("street circuits are walled tight; open circuits keep runoff", async ({ page }) => {
+    test.slow();   // same 40-circuit sweep as above
     // Only the five street circuits are asserted, so only those five are built
     // (a previous version built all ~40 circuits for the same five asserts).
     const STREET = ["monaco", "singapore", "vegas", "baku", "jeddah"];

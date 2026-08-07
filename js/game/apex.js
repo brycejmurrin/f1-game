@@ -418,6 +418,12 @@ const api = {
     return {
       s: G.player.s, x: G.player.x, speed: G.player.speed, prog: G.player.prog,
       head: G.player.head, vLat: G.player.vLat || 0,
+      // yawRate (rad/s) belongs beside vLat: they are the pair every hook that
+      // perturbs the car writes together — spin() and nudge() both zero or set
+      // them — and it was the only one of the two a test could read back. A
+      // spec titled "spin zeroes vLat and yawRate" could assert half its own
+      // name, which is how it sat as a half-test in the strengthen list.
+      yawRate: G.player.yawRateCur || 0,
       slipDeg: slip * 180 / Math.PI, slope: smp.t[1] || 0,
       wrongWay: !!G.player.wrongWay, rescueT: G.player.rescueT || 0, lap: G.player.lap,
       axEstSm: +(G.player.axEstSm ?? 0).toFixed(2),

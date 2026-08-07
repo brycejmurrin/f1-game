@@ -236,11 +236,22 @@ test("spin rotates heading by deg", async ({ page }) => {
 test("spin zeroes vLat and yawRate", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
-  // Nudge to give some lateral velocity first
-  await page.evaluate(() => { __apex.nudge(15, 0); });
-  await page.evaluate(() => __apex.spin(45));
-  const state = await page.evaluate(() => __apex.physState());
-  expect(state.vLat).toBe(0);
+  // The title names TWO quantities and only vLat used to be asserted, because
+  // physState() did not report yawRate at all — the test could cover half its
+  // own name and no more. yawRate is exposed now (js/game/apex.js), so both
+  // halves are checked, in one evaluate so the physics loop cannot run between
+  // the nudge and the read.
+  const r = await page.evaluate(() => {
+    __apex.nudge(15, 0);                       // give it lateral velocity first
+    const before = __apex.physState();
+    __apex.spin(45);
+    const after = __apex.physState();
+    return { beforeVLat: before.vLat, afterVLat: after.vLat, afterYaw: after.yawRate };
+  });
+  // Anti-vacuity: zero-after means nothing if it was already zero before.
+  expect(Math.abs(r.beforeVLat)).toBeGreaterThan(0);
+  expect(r.afterVLat).toBe(0);
+  expect(r.afterYaw).toBe(0);
 });
 
 test("spin false without initialised player", async ({ page }) => {
