@@ -60,11 +60,27 @@ Playwright process may hold it.
    6. R1 audio-panel — a `js/` edit, so it wants a tree with nothing running.
    7. Ship by fast-forward once green.
 
-**3. Separated out, with reasons.**
-   8. CI change-aware selection — its own wave (see the W2 row).
-   9. A never-observed REPORTER in CI — reports, never gates. The durable
+**3. Records cleanup — archive the spent campaign records.** Sequenced here, not
+   left to "when the campaign completes", because half its lockstep is
+   unguarded (see §Record lifecycle → *the archive move itself*).
+   8. **Widen the relative-link check from `docs/README.md` to EVERY live doc,
+      and watch it pass on the current tree FIRST.** Today only README's links
+      are validated, so archiving a record silently breaks the ten cross-record
+      links between AUDIT-SYNTHESIS / TEST-AUDIT / TOTAL-AUDIT / CAMPAIGN. This
+      is `d6f09674`'s move applied a second time: de-silence before you move.
+   9. Archive the spent records **together**, per the lifecycle table, plus
+      their `raw/*.json` evidence. Rewrite inbound links in the records that
+      STAY (`ARCHITECTURE-REDESIGN-2026-08`). This doc goes LAST — it is the
+      index that points at the rest.
+   Note: `docs/` root has **no** archive candidates. All 22 files are cited from
+   a live place and all were touched within three days; the tree was rewritten
+   during this campaign. Do not go looking for dead weight there.
+
+**4. Separated out, with reasons.**
+  10. CI change-aware selection — its own wave (see the W2 row).
+  11. A never-observed REPORTER in CI — reports, never gates. The durable
       output of the `parts` finding.
-  10. W3–W5 Bedrock — the largest remaining commitment, and the one worth
+  12. W3–W5 Bedrock — the largest remaining commitment, and the one worth
       re-deciding with today's evidence in hand rather than on the strength of
       a plan written before it.
 
@@ -716,6 +732,49 @@ accept that most runs will never report.
 | ARCHITECTURE-REDESIGN-2026-08 | Stays — decision record for W3/W5 (Bedrock-with-grafts adopted, ESM the escalation path) |
 | TOTAL-AUDIT-2026-08 | Batch A/B/C are worked off (`89ce4f2f`, `d23b70b8`); archives when §"Feed the restructure" and §Defer are absorbed into W2 |
 | This doc | Campaign completes → `docs/archive/` |
+| `research/raw/*.json` | With their parent record — they are its uncompressed evidence and mean nothing alone |
+
+### The archive move itself, and the one thing that is NOT guarded
+
+Measured 2026-08-07, before any of it moves. Half the lockstep already fails
+loudly and half fails silently, which is the same shape as R2's ⚠ set.
+
+**Guarded — an incomplete move turns `docs-integrity` red:**
+
+- *"a doc under docs/ is not linked from docs/README.md"* — the index must gain
+  the archive row.
+- *"docs/README.md links to a path that does not exist"* — the old
+  `research/…` href must become `archive/…`.
+
+**NOT guarded — dead links between records, and there are ten of them.** The
+link check only walks `docs/README.md`. Cross-record links are unchecked, and
+these four records cite each other heavily:
+
+| record | inbound links from live docs |
+|---|---|
+| AUDIT-SYNTHESIS-2026-08 | TEST-AUDIT, CAMPAIGN, TOTAL-AUDIT, README |
+| TEST-AUDIT-2026-08 | CAMPAIGN, README |
+| TOTAL-AUDIT-2026-08 | CAMPAIGN, README |
+| CAMPAIGN-2026-08 | TEST-AUDIT, TOTAL-AUDIT, README |
+
+So archiving AUDIT-SYNTHESIS on its own leaves three dead links behind it and
+nothing says so. **Do the de-silencing FIRST**, exactly as `d6f09674` did for the
+tests split: widen the relative-link check from README to EVERY live doc, watch
+it pass on the current tree, and only then move a file. A guard that arrives
+after the commit it protects has protected nothing — that sentence is already in
+this document and this is its second application.
+
+Also worth knowing before planning a bigger sweep: **`docs/` root has no archive
+candidates.** Every one of its 22 files is cited from at least one live place
+(`TRACK-MIGRATION-CHECKLIST.md` is the thinnest at 1) and every one was touched
+within three days — the tree was rewritten during this campaign. The archiving
+work is the dated records in `research/`, nothing else.
+
+**Order, once the link check is widened:** archive the spent records together
+rather than one at a time, since they are mutually linked and a partial move
+maximises the rewriting. Records that STAY (`ARCHITECTURE-REDESIGN-2026-08`)
+keep live links and must have theirs rewritten to `archive/…`. This doc goes
+last, when the campaign closes — it is the index that points at the rest.
 
 ## Standing rules (unchanged, restated because every wave trips over them)
 
