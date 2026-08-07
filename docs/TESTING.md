@@ -480,6 +480,33 @@ covered at once, pass them all to **one** process and raise `APEX_WORKERS`:
 APEX_WORKERS=3 npx playwright test tests/a.spec.js tests/b.spec.js
 ```
 
+### The second worker costs ~1.9x per test — so a 120 s budget is ~65 s of work
+
+Not an estimate. Two tests ran SOLO and again inside their group on the same box
+and the same commit, 2026-08-07:
+
+| test | solo (1 worker) | in group (2 workers) | ratio |
+|---|---|---|---|
+| `tlx-probes` M6 skid | 49.0 s | 80.9 s | **1.65x** |
+| `tlx-probes` M9 env | 72 s | 149.9 s | **2.08x** |
+
+`ci.yml` had already measured the same effect from the other direction — `speed
+readout updates after jump()` timed out at 125.2 s with a second worker busy and
+passed at 110.6 s once alone — and that is why the CI smoke job pins
+`APEX_WORKERS: 1`.
+
+**The consequence is that every declared budget means roughly half what it
+says.** The default 120 s timeout admits about 65 s of solo work at two workers;
+`test.slow()`'s 360 s admits about 190 s. A test written and timed alone will
+time out in its own group without anything being wrong with it.
+
+So: **a timeout from a group run is a measurement of the box, not a verdict on
+the test.** Re-run it alone before you touch a number. The `parts` group on
+2026-08-07 produced twelve failures, of which FOUR were timeouts —
+`unlimited state persists after page reload` among them, at 155.5 s for a toggle
+and a reload, with the box at load 8-10 on four cores. Raising those budgets
+would have baked contention in as if it were the cost of the work.
+
 ---
 
 ## 4. Philosophy — debug-hooks first
