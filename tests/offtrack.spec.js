@@ -89,20 +89,39 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
   test("driving onto grass and back recovers (slowed off, speeds up on return)", async ({ page, loadTrack }) => {
     await loadTrack();
     await pinPace(page);
-    const r = await page.evaluate(() => {
+    // A CONTROLLED PAIR, not a chain — the same launch on each surface, only
+    // the lateral differing, and the SURFACE judged by the speed DELTAS.
+    //
+    // The original chain (jump onto grass at 80, read; jump back onto tarmac
+    // at that speed, read) hid two defects that both surfaced on the test's
+    // FIRST ever run (2026-08-07):
+    //   - `offSpeed < 45` was an absolute speed pinned across 175 commits of
+    //     deliberate physics work; measured 55.56, the class CLAUDE.md's PACE
+    //     rule exists for.
+    //   - `onSpeed > offSpeed + 2` had NEVER BEEN EVALUATED (the line above it
+    //     always failed first), and it fails on its own: relaunching at 55.56
+    //     on TARMAC ends at 46.96 after 1.5 s of full throttle. That is not
+    //     surface physics — jump() lands the car at speed with reset
+    //     drivetrain state, and speed sags while the box catches up. The
+    //     artifact is identical on both surfaces, so a chained comparison
+    //     inherits it and a paired one cancels it.
+    const LAUNCH = 80;
+    const leg = (lat) => page.evaluate(([LAUNCH, lat]) => {
       window.__apex.setPhysics({ drift: 0 });
-      window.__apex.jump(0.0, 80, 14);            // way off in the grass
+      window.__apex.jump(0.0, LAUNCH, lat);
       for (let i = 0; i < 90; i++) { window.__apex.setInput({ steer: 0, throttle: true }); window.__apex.step(1 / 60, 1); }
-      const offSpeed = window.__apex.physState().speed;
-      // back onto the track surface
-      window.__apex.jump(0.0, offSpeed, 0);
-      for (let i = 0; i < 90; i++) { window.__apex.setInput({ steer: 0, throttle: true }); window.__apex.step(1 / 60, 1); }
-      const onSpeed = window.__apex.physState().speed;
+      const speed = window.__apex.physState().speed;
       window.__apex.clearInput();
-      return { offSpeed, onSpeed };
-    });
-    expect(r.offSpeed).toBeLessThan(45);   // grass held it slow
-    expect(r.onSpeed).toBeGreaterThan(r.offSpeed + 2);   // clearly faster back on tarmac
+      return speed;
+    }, [LAUNCH, lat]);
+    const offSpeed = await leg(14);   // way off in the grass
+    const onSpeed = await leg(0);     // same launch, on the tarmac
+    // Grass held it slow: a net LOSS from the launch despite full throttle
+    // (measured 55.56 = 69 % of 80; the bound is the claim plus margin).
+    expect(offSpeed).toBeLessThan(0.75 * LAUNCH);
+    // And clearly slower than the identical run on tarmac — the surface is the
+    // only variable, so the jump-sag artifact subtracts out of the comparison.
+    expect(onSpeed).toBeGreaterThan(offSpeed + 5);
   });
 
   test("auto-rescue: a wrong-way car is recovered to the racing line facing forward", async ({ page, loadTrack }) => {

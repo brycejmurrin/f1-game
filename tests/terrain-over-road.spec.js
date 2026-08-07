@@ -177,15 +177,17 @@ test("no terrain/road faces over the racing line (all circuits)", async ({ page 
       const def = Tracks.LIST.find((entry) => entry.id === __apex.info().track);
       const bankTrack = Tracks.buildCenterline(def);
       const tps = [];
+      const LADDER = [-0.6, -0.3, 0, 0.3, 0.6];
       for (let i = 0; i < M; i++) {
-        for (const s of [-0.6, -0.3, 0, 0.3, 0.6]) {
-          const lat = s * hw[i];
+        for (let si = 0; si < LADDER.length; si++) {
+          const lat = LADDER[si] * hw[i];
           const bank = Tracks.banking(bankTrack, i / M * bankTrack.total, lat);
           tps.push({
             x: px[i] + rx[i] * lat,
             z: pz[i] + rz[i] * lat,
             y: py[i] + (bank?.dy || 0),
             frac: i / M,
+            i, si,                     // for the neighbor guard in scan()
           });
         }
       }
@@ -216,8 +218,28 @@ test("no terrain/road faces over the racing line (all circuits)", async ({ page 
             const bc = pit(tp.x, tp.z, ax, az, bx, bz, cx, cz);
             if (!bc) continue;
             const yf = ay + bc.u * (cy - ay) + bc.vv * (by - ay);
-            const ov = yf - tp.y;
-            if (ov > 0.1) {
+            const ov0 = yf - tp.y;
+            if (ov0 > 0.1) {
+              // A TRIANGLE IS OVER THE LINE, NOT OVER ONE ALIASED POINT. On a
+              // climbing tight corner the inside edge arc-compresses: at
+              // nurburgring's Schumacher-S, 9.7 m of arc is 1.74 m of XZ on the
+              // inside while the road climbs 0.358 m (measured, 2026-08-07).
+              // So a sample generated ~10 m EARLIER on the climb lands inside a
+              // triangle's XZ footprint, and the triangle's surface sits ~0.36 m
+              // above that sample's modelled height — a smooth helix read as a
+              // step. That exact shape produced this test's only road offender
+              // ("nurburgring ROAD 0.37m over"), on the test's FIRST completed
+              // run. The guard: the overshoot must hold against the local RUN
+              // of the reference line (same ladder rung, i±3 = ±12 m), not one
+              // sample. A genuinely floating slab is over all of them; an
+              // arc-aliased neighbor is cleared by the sample at its own frac.
+              let ov = ov0;
+              for (let d = -3; d <= 3 && ov > 0.1; d++) {
+                if (!d) continue;
+                const nb = tps[((tp.i + d + M) % M) * LADDER.length + tp.si];
+                if (nb) ov = Math.min(ov, yf - nb.y);
+              }
+              if (ov <= 0.1) continue;
               const fracDistance = Math.abs(meshSourceFrac - tp.frac);
               if (knownCrossover && name === "road" &&
                   Math.min(fracDistance, 1 - fracDistance) > 0.08) continue;

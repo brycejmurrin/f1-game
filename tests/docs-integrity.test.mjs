@@ -469,21 +469,42 @@ test("docs/README indexes every live engineering doc", () => {
   assert.deepEqual(missing, [], "a doc under docs/ is not linked from docs/README.md");
 });
 
-test("every relative link in docs/README.md resolves", () => {
+test("every relative link in EVERY live doc resolves", () => {
   // The index links RELATIVELY ("[TESTING.md](TESTING.md)"), and the broken-path
   // guard above only matches paths that start with a known top-level directory
   // (js/, tools/, tests/, css/, …). So a docs-relative link pointed at nothing
   // and no test noticed — which is exactly what happened when six WebGPU notes,
   // ten research files and the scenery upgrade plan moved into docs/archive/ and
   // left thirteen dead rows behind in the table that indexes them.
+  //
+  // EVERY LIVE DOC, NOT JUST THE INDEX. This walked only docs/README.md, while
+  // the four dated campaign records cite each other through TEN cross-record
+  // links (AUDIT-SYNTHESIS is cited by TEST-AUDIT, CAMPAIGN and TOTAL-AUDIT;
+  // CAMPAIGN by TEST-AUDIT and TOTAL-AUDIT; and so on). Archiving any one of
+  // them would leave dead links in the others with nothing to say so — the
+  // archive plan's whole first step is this widening, landed BEFORE any file
+  // moves, because a guard that arrives after the commit it protects has
+  // protected nothing (d6f09674's lesson, applied again). Links resolve
+  // relative to the DOC'S OWN DIRECTORY, so research/-to-research/ hops and
+  // README's rows both check under the same rule. docs/archive/ is excluded:
+  // it describes trees that no longer exist, and that is its job.
   const dead = [];
-  for (const m of read("docs/README.md").matchAll(/\]\(([^)#:]+)\)/g)) {
-    const href = m[1].trim();
-    if (/^(https?:)?\/\//.test(href)) continue;          // external
-    const target = path.resolve(ROOT, "docs", href);
-    if (!fs.existsSync(target)) dead.push(href);
+  const docs = ["docs/README.md",
+    ...ls("docs", /\.md$/).filter((f) => f !== "README.md").map((f) => `docs/${f}`),
+    ...fs.readdirSync(path.join(ROOT, "docs", "research"))
+      .filter((f) => f.endsWith(".md")).map((f) => `docs/research/${f}`),
+    ...fs.readdirSync(path.join(ROOT, "docs", "tracks"))
+      .filter((f) => f.endsWith(".md")).map((f) => `docs/tracks/${f}`),
+  ];
+  for (const doc of docs) {
+    const dir = path.dirname(path.join(ROOT, doc));
+    for (const m of read(doc).matchAll(/\]\(([^)#:\s]+)(?:#[^)]*)?\)/g)) {
+      const href = m[1].trim();
+      if (/^(https?:)?\/\//.test(href)) continue;        // external
+      if (!fs.existsSync(path.resolve(dir, href))) dead.push(`${doc} -> ${href}`);
+    }
   }
-  assert.deepEqual(dead, [], "docs/README.md links to a path that does not exist");
+  assert.deepEqual(dead, [], "a live doc links to a path that does not exist");
 });
 
 test("no live doc points a reader at docs/archive/", () => {

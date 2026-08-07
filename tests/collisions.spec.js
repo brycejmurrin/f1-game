@@ -70,6 +70,11 @@ test.describe("Apex 26 — collisions", () => {
     expect(errors).toEqual([]);
     // Every previously-jammed car should be moving again...
     for (const c of jammed) {
+      // DELIBERATELY ABSOLUTE, with the reason written down (the PACE rule
+      // demands one): this is a LIVENESS bound — a car that was jammed at ~0
+      // has resumed racing six seconds later — not a performance envelope.
+      // 12 m/s is walking-out-of-a-jam pace at any tier; the failure mode it
+      // catches is a car still wedged, which reads 0-2, not 11.
       expect(c.speed).toBeGreaterThan(12);
       expect(Math.abs(c.x)).toBeLessThan(12);                 // and on track
     }

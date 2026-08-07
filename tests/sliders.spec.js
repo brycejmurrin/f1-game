@@ -287,7 +287,12 @@ test.describe("Apex 26 — steering sliders", () => {
       return out;
     });
     expect(r.gear).toBe(8);
-    expect(r.speed).toBeGreaterThan(78);   // the old clamp pinned this at 73.5
+    // DERIVED FROM THE PIN IT RETIRES, not a fresh literal. The claim is "no
+    // longer pinned at the old clamp", so the bound is the documented 73.5 pin
+    // plus a clear margin — a bare 78 was a second absolute speed that would
+    // drift with the driving model for reasons unrelated to the clamp.
+    const OLD_CLAMP_PIN = 73.5;
+    expect(r.speed).toBeGreaterThan(OLD_CLAMP_PIN + 3);
   });
 
   // The tilt INPUT sliders (TILT RANGE, STEER SMOOTHING) are covered by the wiring

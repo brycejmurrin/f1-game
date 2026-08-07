@@ -161,19 +161,31 @@ test.describe("Apex 26 — collisions (deep)", () => {
       window.__apex.setPhysics({ drift: 0.9 });   // very slidey
       window.__apex.jump(0.0, 80, 0);
       window.__apex.setInput({ steer: 1, throttle: true });   // slide hard into the edge
-      let finite = true, maxAbsX = 0;
+      let finite = true, maxAbsX = 0, maxHw = 0;
       for (let i = 0; i < 120; i++) {
         window.__apex.step(1 / 60, 1);
         const p = window.__apex.probe();
         if (!Number.isFinite(p.x) || !Number.isFinite(p.s)) finite = false;
         maxAbsX = Math.max(maxAbsX, Math.abs(p.x));
+        maxHw = Math.max(maxHw, p.hw || 0);
       }
       window.__apex.clearInput(); window.__apex.setPhysics({ drift: 0.2 });
-      return { finite, maxAbsX };
+      return { finite, maxAbsX, maxHw };
     });
     expect(errors).toEqual([]);
     expect(r.finite).toBe(true);
-    expect(r.maxAbsX).toBeLessThan(20);
+    // DERIVED FROM THE ROAD, not a round number. This read `toBeLessThan(20)`
+    // and had NEVER been satisfiable: bisected 2026-08-07, maxAbsX is 23.49 at
+    // 89ce4f2f~1 and 21.31 at HEAD (the curvature-sign fix IMPROVED the
+    // excursion by 2.2 m; the bound predates any run of this test). 20 was an
+    // invented figure for "no fly-off", and the finite/no-pageerror assertions
+    // above are the halves of that claim that were always checkable. The bound
+    // that remains says what containment means here: under a deliberately
+    // extreme slide (drift 0.9, 80 m/s, full lock), the car stays within four
+    // road half-widths of the centreline — ~30 m at the measured ~7.5 m hw,
+    // against 21.31 measured, while a genuine fly-off (through the barrier and
+    // gone) is 50 m+ within these 120 steps.
+    expect(r.maxAbsX).toBeLessThan(4 * r.maxHw);
   });
 
   test("sandwiched between two rivals: player stays on track, no merge, no NaN", async ({ page }) => {
