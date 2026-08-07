@@ -40,7 +40,7 @@ const UNDOCUMENTED = new Set([
   "lobbyFakeConnected", "lobbyJoin", "lobbyMods", "lobbyPeerEvent", "lobbyShare",
   "lobbyWatch", "netPeerEvent", "netPeerLaps", "netStop",
   // Garage / car-visual staging.
-  "garageAero", "garageFlaps", "garageStep", "carEffects", "spin", "nudge",
+  "garageAero", "garageFlaps", "garageStep", "carEffects",
   // Subsystem doors that grew their own hooks after the reference was written.
   "bodyAttitude", "debris", "incident", "trackGraph", "weatherArc",
   "renderClock",

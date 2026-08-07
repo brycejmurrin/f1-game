@@ -66,6 +66,20 @@ test.describe("Apex 26 — audit regressions", () => {
     expect(r.lap1).toBeLessThanOrEqual(r.lap0);   // never gains a lap going backwards
   });
 
+  // ONE stepping loop, shared by both lap tests below. It lives in the PAGE
+  // because its predicate is a page-side closure over `__apex`, so it cannot be
+  // passed across the evaluate boundary; installing it as a string is what lets
+  // the two tests share a single definition instead of each carrying a private
+  // copy. That duplication is the actual defect here — the fix was written once
+  // and applied to one of the two, and the unfixed one shipped red.
+  const INSTALL_UNTIL = `window.__lapUntil = (pred, budget) => {
+    for (let i = 0; i < budget; i++) {
+      window.__apex.step(1 / 60, 1);
+      if (pred()) return true;
+    }
+    return false;
+  };`;
+
   // The lap counter used to be one-way: `lap++` on a forward crossing and no
   // `lap--` anywhere in js/, while `c.prog` was symmetric. Crossing the line,
   // being pushed back over it (shiftLong moves a car several metres along the
@@ -73,27 +87,43 @@ test.describe("Apex 26 — audit regressions", () => {
   // `c.finished` could fire a full lap early. These two pin the symmetry.
   test("crossing the line, reversing back over it and re-crossing counts ONE lap", async ({ page, loadTrack }) => {
     await loadTrack();
+    await page.evaluate(INSTALL_UNTIL);   // after loadTrack: navigation wipes window
     const r = await page.evaluate(() => {
-      const step = (n) => { for (let i = 0; i < n; i++) window.__apex.step(1 / 60, 1); };
+      // STEP UNTIL THE COUNTER MOVES, never a fixed frame budget. How far the
+      // car travels per step depends on the accel curve, so a fixed count
+      // either stops short of the line or sails 100 m past it.
+      //
+      // This test shipped with step(90)/step(120)/step(150) and had never been
+      // run. Its own commit (7e3bafd3) describes the until() form as applied to
+      // BOTH lap tests and applied it to one — and this one then failed exactly
+      // the way that commit message predicts, stopping 46 m short of the line.
+      // The helper is shared with the sibling test below precisely so the two
+      // cannot drift apart again.
+      const until = window.__lapUntil;
+      const lap = () => window.__apex.physState().lap;
       window.__apex.setPhysics({ drift: 0 });
       const total = window.__apex.info().total;
 
       // Approach the line from just before it and cross forward.
       window.__apex.jump(1 - 12 / total, 22, 0);
       window.__apex.setInput({ steer: 0, throttle: true });
-      step(90);
-      const afterFirst = window.__apex.physState().lap;
+      const start = lap();
+      const crossed = until(() => lap() > start, 900);
+      const afterFirst = lap();
 
       // Turn round, reverse back over the line, then come forward across it again.
       window.__apex.aim(180);
-      step(120);
-      const afterBack = window.__apex.physState().lap;
+      const wentBack = until(() => lap() < afterFirst, 900);
+      const afterBack = lap();
       window.__apex.aim(180);
-      step(150);
-      const afterSecond = window.__apex.physState().lap;
+      const reCrossed = until(() => lap() > afterBack, 1200);
+      const afterSecond = lap();
       window.__apex.clearInput();
-      return { afterFirst, afterBack, afterSecond };
+      return { crossed, wentBack, reCrossed, afterFirst, afterBack, afterSecond };
     });
+    // Anti-vacuity: if any leg never reached the line the lap comparisons below
+    // would compare two untouched numbers and pass for the wrong reason.
+    expect(r.crossed && r.wentBack && r.reCrossed).toBe(true);
     // Going back over the line gives the lap back...
     expect(r.afterBack).toBe(r.afterFirst - 1);
     // ...so re-crossing lands on the same lap, not one beyond it.
@@ -102,17 +132,12 @@ test.describe("Apex 26 — audit regressions", () => {
 
   test("a lap given back and re-taken is re-timed, not recorded as a sliver", async ({ page, loadTrack }) => {
     await loadTrack();
+    await page.evaluate(INSTALL_UNTIL);
     const r = await page.evaluate(async () => {
-      // Step until the lap counter moves, rather than guessing a frame count —
-      // how far the car travels per step depends on the accel curve, and a
-      // fixed budget either stops short of the line or sails 100 m past it.
-      const until = (pred, budget) => {
-        for (let i = 0; i < budget; i++) {
-          window.__apex.step(1 / 60, 1);
-          if (pred()) return true;
-        }
-        return false;
-      };
+      // Shared with the test above — see INSTALL_UNTIL. This test carried the
+      // only correct copy of this loop while its sibling used a fixed frame
+      // budget; one definition now serves both.
+      const until = window.__lapUntil;
       const lap = () => window.__apex.timing().lap;
       window.__apex.setPhysics({ drift: 0 });
       const total = window.__apex.info().total;

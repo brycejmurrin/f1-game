@@ -553,11 +553,15 @@ const kMax = Math.max(...ahead.map(a => Math.abs(a.k)));
 const targetSpeed = Math.sqrt(24 / Math.max(kMax, 1e-4));   // v = sqrt(aLat/|k|)
 ```
 
-### `physState() → {s, x, speed, prog, head, vLat, slipDeg, slope, wrongWay, rescueT, lap, axEstSm, axFrac, slipFactor}`
+### `physState() → {s, x, speed, prog, head, vLat, yawRate, slipDeg, slope, wrongWay, rescueT, lap, axEstSm, axFrac, slipFactor}`
 Richer readout for the world-space / drift model: world `head`ing (rad), lateral
-slip velocity `vLat` (m/s) and slip `slipDeg` (°), road pitch `slope`
-(+up/−down), `wrongWay` flag, auto-rescue timer `rescueT`, cumulative `prog` (m)
-and `lap`.
+slip velocity `vLat` (m/s), yaw rate `yawRate` (rad/s) and slip `slipDeg` (°),
+road pitch `slope` (+up/−down), `wrongWay` flag, auto-rescue timer `rescueT`,
+cumulative `prog` (m) and `lap`.
+
+`vLat` and `yawRate` are the pair every hook that perturbs the car writes
+together — `spin()` and `nudge()` both set or zero them — so reading one back
+without the other left assertions able to cover only half of what a hook did.
 
 Three combined-slip fields expose the traction-circle state in real time:
 
@@ -769,6 +773,25 @@ Instantly set the player's forward speed (m/s, clamped `[0, 200]`) without
 cutting the throttle (which would coast). Handy for scripted entry-speed tests
 and overspeed physics. Does not touch heading or yaw rate. Returns `false` if the
 player isn't initialised yet.
+
+### `spin(deg) → {head} | false`
+Rotate the player's heading by `deg` degrees, instantly and exactly — the
+implementation adds `deg * PI / 180` to `player.head`, so the sign is the
+rotation's direction and a test can assert the signed delta rather than its
+magnitude. Also ZEROES `vLat` and `yawRateCur`, which is the point: it puts the
+car at a known attitude with no residual rotation, rather than mid-slide. Both
+are readable back through `physState()` as `vLat` and `yawRate`. Returns the new
+heading formatted in degrees, or `false` if the player isn't initialised.
+
+Pair it with `aim(deg)` — `aim` points the car at an absolute bearing, `spin` is
+relative to wherever it already points.
+
+### `nudge(dLat, dSpeed) → {speed, vLat} | false`
+Add an instantaneous lateral impulse (m/s, **+right of travel**) and/or a forward
+speed delta (m/s); both default to 0 and speed clamps at 0. Unlike `spin` this
+leaves heading alone, so it is the way to start a car sliding: push it toward a
+barrier, simulate a kerb hop, or apply a standing-start bump without `jump()`.
+Returns `false` if the player isn't initialised.
 
 ### `setBoost(on) → boolean`
 Toggle the player's ERS boost flag (`player.boostOn`) for tests/screenshots.
