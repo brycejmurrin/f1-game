@@ -108,3 +108,60 @@ test("full lock for 25 steps — the longest full lock anywhere else in the suit
     { steer: 1, steps: 25, launch: LAUNCH, stallMs: STALL_MS }));
   expect(r.total).toBeGreaterThan(0);
 });
+
+/* THE SECOND PROBE, after the first one measured the wrong thing.
+   The three cases above ran in the HEADLESS project — act-probe.spec.js is not
+   in RENDER_SPECS — so they exercised the default GLX backend. M6 runs under
+   TLX: tlx-probes.spec.js:10-14 sets apex26.gfxBackend="three" and
+   apex26.tlxForceGL="1" via addInitScript in a beforeEach. So the first probe
+   cleared act() under a renderer M6 does not use, and its 309 ms says nothing
+   about M6's 240 missing seconds.
+
+   This one reproduces M6's sequence EXACTLY, backend included, and times every
+   await separately — because that is the actual question. Three of M6's steps
+   carry explicit timeouts totalling 120 s; the three page.evaluate calls carry
+   NONE and inherit the test budget, so the time is in one of them and this says
+   which. */
+test("M6's own sequence, under TLX, timed step by step", async ({ page }) => {
+  test.slow();
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("apex26.gfxBackend", "three");
+      localStorage.setItem("apex26.tlxForceGL", "1");
+    } catch (_) { /* storage unavailable — the run below will say so */ }
+  });
+
+  const marks = [];
+  const at = async (label, fn) => {
+    const t0 = Date.now();
+    let err = null;
+    try { await fn(); } catch (e) { err = e.message.split("\n")[0]; }
+    marks.push({ label, s: +((Date.now() - t0) / 1000).toFixed(1), err });
+    if (err) throw new Error(`${label} failed after ${marks[marks.length - 1].s}s: ${err}`);
+  };
+
+  try {
+    await at("goto", () => page.goto("/"));
+    await at("__apex ready", () => page.waitForFunction(() => window.__apex != null, { timeout: 30_000 }));
+    await at("backend check", async () => {
+      const b = await page.evaluate(() => ({
+        tlx: !!(window.GLX && window.GLX.__tlx),
+        want: localStorage.getItem("apex26.gfxBackend"),
+      }));
+      console.log(`    backend: want=${b.want} tlx-installed=${b.tlx}`);
+    });
+    await at("race(monza)", () => page.evaluate(() => window.__apex.race("monza")));
+    await at("track != null", () => page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 }));
+    await at("jump + act x120", () => page.evaluate(() => {
+      window.__apex.jump(0.1, 70);
+      window.__apex.act({ steer: 1, throttle: true }, 1 / 60, 120);
+    }));
+    await at("freeze(true)", () => page.evaluate(() => window.__apex.freeze(true)));
+    await at("wait skidVerts > 0", () => page.waitForFunction(
+      () => GLX.__tlx.fxState().skidVerts > 0, { timeout: 30_000 }));
+  } finally {
+    console.log("\n=== M6 sequence under TLX");
+    for (const m of marks) console.log(`    ${String(m.s).padStart(6)}s  ${m.label}${m.err ? `   <-- ${m.err}` : ""}`);
+  }
+  expect(marks.length).toBeGreaterThan(0);
+});
