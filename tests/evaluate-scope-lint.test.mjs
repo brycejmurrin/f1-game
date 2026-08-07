@@ -51,12 +51,42 @@ test("waitForFunction is checked too — same boundary, same trap", () => {
   assert.equal(bad[0].method, "waitForFunction");
 });
 
-test("it catches the REAL bug it was written for, at both sites", () => {
-  // Anti-vacuity against the actual commit rather than a hand-made example: if
-  // the analysis ever stops resolving module bindings, the synthetic cases
-  // above could keep passing while the lint silently detects nothing.
-  const broken = execFileSync("git", ["show", "58614db2:tests/elevation-tracks.spec.js"],
-                              { cwd: ROOT, encoding: "utf8", maxBuffer: 8 << 20 });
+// The exact shape 58614db2 shipped, kept inline so this file asserts something
+// real even where the commit is unreachable. CI's guards job checks out SHALLOW
+// (`actions/checkout@v4` with no fetch-depth), so a `git show <old-sha>` there
+// fails outright — which is how the first version of this test turned CI red
+// while passing locally on a full clone. A guard that only works on one machine
+// is the same species of problem as a test that never runs.
+const BROKEN_SHAPE = `
+const FLAT_LAUNCH = 40;
+const CLIMB_LAUNCH = 10;
+test("x", async ({ page }) => {
+  const r = await page.evaluate(() => {
+    window.__apex.jump(0.0, FLAT_LAUNCH, 0);
+    window.__apex.jump(upAt, CLIMB_LAUNCH, 0);
+    return 1;
+  });
+});`;
+
+test("it catches the shape that actually broke — both sites", () => {
+  const bad = lintSource(BROKEN_SHAPE);
+  assert.deepEqual(bad.map((b) => b.name).sort(), ["CLIMB_LAUNCH", "FLAT_LAUNCH"]);
+});
+
+test("and catches it in the REAL file, wherever history is available", () => {
+  // Strongest form of the check, run whenever the clone has the commit: if the
+  // analysis ever stops resolving module bindings, the synthetic cases above
+  // could keep passing while the lint silently detects nothing in real code.
+  // Skipped rather than failed on a shallow clone — absence of history is not
+  // evidence of a defect.
+  let broken;
+  try {
+    execFileSync("git", ["cat-file", "-e", "58614db2^{commit}"], { cwd: ROOT, stdio: "ignore" });
+    broken = execFileSync("git", ["show", "58614db2:tests/elevation-tracks.spec.js"],
+                          { cwd: ROOT, encoding: "utf8", maxBuffer: 8 << 20 });
+  } catch (_) {
+    return;   // shallow clone (CI guards job) — the inline shape above still ran
+  }
   const bad = lintSource(broken);
   assert.deepEqual(bad.map((b) => b.name).sort(), ["CLIMB_LAUNCH", "FLAT_LAUNCH"]);
 });
