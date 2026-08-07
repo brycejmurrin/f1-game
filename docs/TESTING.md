@@ -260,7 +260,7 @@ Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 | `pageErrors` | `string[]` of uncaught JS exceptions — assert `toHaveLength(0)` after exercising game logic |
 | `consoleLines` | `string[]` of every console line and page error, type-prefixed, favicon noise stripped. Prefer this to a hand-rolled `page.on("console", …)` — the hand-rolled ones drifted into a dozen slightly different filters |
 | `racePage` | navigates to `/` and waits for `window.__apex` (10 s) |
-| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 54 of 111 specs import `tests/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
+| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 58 of 111 specs import `tests/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
 
 `tools/fixture-consumer-audit.mjs` enforces the import for the specs that depend
 on those guarantees (`audio-smoke`, `smoke`, `f1-track-accuracy`, `ui-audit`).
@@ -297,24 +297,65 @@ mode, log level, the frozen flag, the camera, and any open `<dialog>`. It does
 memory and a truthful reset there means a reload — which is the cost being
 removed. A spec needing a specific setting must set it.
 
-Two edges that bite when converting a spec:
+**WHICH SPECS CAN SHARE — the one question that decides it.** Does the spec
+drive MENU SCREENS? Screen state is exactly what the shallow reset cannot
+restore: a spec whose helper clicks its way from the main menu starts each test
+wherever the previous one left the app, and the element it wants to click is not
+there. That failure looks like a 120 s timeout, not an assertion, so it reads as
+a hung box rather than a broken precondition.
+
+Count `locator()` calls, **not** `goto()` calls. The tranche below was first
+chosen on "zero `localStorage` coupling and a single boot helper", and two specs
+that satisfy that criterion had to be reverted — the criterion measures the wrong
+thing. Hook, physics and raster specs that reach the app through `__apex` share
+happily; UI-flow specs do not.
+
+| Spec | Tests | Verdict |
+|---|---|---|
+| `agent-view` | 117 | shared — **117/117**, 43 min → 11 min |
+| `new-hooks` | 56 | shared — 56/56 |
+| `dev-tools` | 56 | shared |
+| `camera-driving-hooks` | 25 | shared |
+| `headless-api` | 24 | shared — 24/24 |
+| `logging` | 6 | shared — 6/6 |
+| `career` | 101 | **reverted** — hub/garage flows click through menus |
+| `quali` | 20 | **reverted** — `toQuali()` clicks from `#mb-season` |
+
+Three edges that bite when converting a spec:
 
 - **`page.addInitScript()` only applies on the NEXT navigation.** On a shared
   page there is no next navigation, so the injected code never runs. A test that
-  needs it must reload explicitly — the converted specs keep a small local
-  `bootFresh()` helper that does `goto("/")` and re-waits, and use it only for
-  those tests (see `tests/career.spec.js`).
+  needs it must reload explicitly, via a local `bootFresh()` that does
+  `goto("/")` and re-waits. Note the second half of that trap: an init script
+  seeding `localStorage` establishes a *precondition*, and a shared page carries
+  the previous test's keys into it — so the seed must clear what it depends on,
+  not merely add to it. `career.spec.js`'s migration test read a stale-but-valid
+  save this way and asserted against the wrong object.
 - **Camera state is the one that leaked.** `park()` sets `G.frozen`, and
   `view()`/`orbit()`/`cinematic()` install a `G.dbgCam` free-camera that
   outranks the game camera. A raster test after one of those measured 0.5 where
   it wanted >0.7. The reset now calls `freeze(false)` and `camera("chase")`,
   which clears `dbgCam` and restores the default mode in one call.
+- **Physics keeps running between round-trips.** `headless(true)` only skips
+  RENDERING (`js/game/apex.js:1513`), so a test that sets a value in one
+  `evaluate` and reads it in the next is racing the game loop. `setSpeed(55)`
+  then `probe()` measured 54.498 against a `toBeCloseTo(…, 1)` tolerance of
+  0.05 — latent until the box was loaded enough to stretch the gap. Sample both
+  in ONE `evaluate`.
 
-**When NOT to use it.** Anything asserting FIRST-LOAD behaviour: the boot
-sequence, the service worker, the shell version guard, PWA install,
-`localStorage` migrations. Those want a virgin page — keep importing `test`.
-The opt-in is deliberate; this is not a silent change of meaning for the 54
-spec files already on the base fixture.
+**When NOT to use it.** UI-flow specs, per the rule above; and anything
+asserting FIRST-LOAD behaviour — the boot sequence, the service worker, the
+shell version guard, PWA install, `localStorage` migrations. Those want a virgin
+page, so keep importing `test`. The opt-in is deliberate: this is not a silent
+change of meaning for the specs already on the base fixture.
+
+**Telling a real failure from a busy box.** Both present as a 120 s timeout, and
+CLAUDE.md's standing rule is that a timeout on four cores measures the machine.
+The discriminator is a load INVERSION: `career`'s "the garage returns to the hub"
+passed in 18.2 s while two Playwright processes fought for the box, then timed
+out at 123.9 s when one process had it to itself. Load cannot invert like that,
+so the cause is test-order-dependent state. Look for that comparison in the logs
+before either blaming or absolving the machine.
 
 ### Never run two Playwright processes at once
 

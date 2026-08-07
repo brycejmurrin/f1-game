@@ -20,7 +20,7 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 | W2a | Test-semantics audit workflow (all 162 test files) | **DONE** — record: [TEST-AUDIT-2026-08.md](TEST-AUDIT-2026-08.md) |
 | W2b | Total-audit workflow (all code + all docs) | **DONE** — 197 verified findings: [TOTAL-AUDIT-2026-08.md](TOTAL-AUDIT-2026-08.md). Survived a mid-run token-limit crash via cached resume with slimmed (haiku, batched) verification |
 | W2-fix | The total-audit's Batch A/B/C fix train (headline: the LIVE curvature-sign trio in the track engine — kerbs/barriers/corner boards on the wrong side — plus the session-verified jump()/IncidentSim authority bug, career slot overwrite, racecontrol dead caps, DRIZZLE tier, matTexMix truth cluster) | **LANDED** `89ce4f2f` (A+B+C together, bump v1025) + `d23b70b8` (tail, bump v1026). The tail also REPAIRED a regression the first commit shipped — an intermediate paul_ricard.js whose widened modelGroup bounds made preflight reject the cabanon AND its wall (299,716 vs 299,946 verts) — and REVERTED an art change it had smuggled in (city-building `setback` massing; see the design ticket below). Geometry sweeps green across all 40 circuits; browser groups running |
-| W2-perf | Shared-page test fixture (`sharedTest`) — kill the per-test page boot | **IN FLIGHT** `e52bb772`, `9b91f807`, `3fa9d047`. 8 specs / 405 tests converted; verifying at the full-405 gate. Rationale and the two conversion edges are documented in [docs/TESTING.md](../TESTING.md) |
+| W2-perf | Shared-page test fixture (`sharedTest`) — kill the per-test page boot | **LANDED** `e52bb772`, `9b91f807`, `3fa9d047`, `75ae72f9`, `85a91f40`. Settled at **6 specs / 284 tests** on the shared page after 8/405 was tried and two specs reverted. Headline: `agent-view` **117/117 in 11m16s against ~43 min** before. Also green: `new-hooks` 56/56, `headless-api` 24/24, `logging` 6/6. `career` (101) and `quali` (20) reverted — both drive MENU SCREENS, which is the axis that decides reuse; `dev-tools` + `camera-driving-hooks` verifying. Full rationale, the three conversion edges and the load-inversion diagnostic are in [docs/TESTING.md](../TESTING.md) |
 | W2 | RESTRUCTURE + change-aware CI | **NEXT** — the W2-fix gate is released |
 | W3 | Bedrock Ph0-1: dependency scanner + global registry, `.d.ts` contracts, `tsc --checkJs` CI, `@ts-check` tranche + ratchet | Planned — [ARCHITECTURE-REDESIGN-2026-08.md](ARCHITECTURE-REDESIGN-2026-08.md) is the adopted direction |
 | W4 | Loop-until-dry lens-diverse review of the post-restructure tree, CAP 3 ROUNDS | Planned (shrinks if W2b leaves little) |
@@ -58,6 +58,23 @@ step lists — it fixes the ORDER and the gates:
    (gap 6), and the `?v` bump exemption problem (gap 10).
 
 ## Design tickets (carried into W2 reconciliation, not mechanical)
+
+- **W2-perf fan-out — pick the next tranche on the RIGHT axis.** The first
+  tranche was chosen on "zero `localStorage` coupling and a single boot helper";
+  `career` and `quali` both satisfy that and both had to be reverted, because
+  the axis that decides reuse is whether the spec drives MENU SCREENS. Screen
+  state is what the shallow reset cannot restore, and the failure presents as a
+  120 s timeout rather than an assertion. Count `locator()` calls, not `goto()`
+  calls. That reclassifies the obvious remaining candidates by `goto()` volume —
+  `ui-audit` (34), `ui-button-touch` (20), `menu-keyboard` (16), `menu-survey`
+  (11), `ui-desktop` (5) — as NO-GO: they are the menu suite, and `__apex` has
+  no return-to-main-menu hook to reset them with. `page.goto("/")` is the honest
+  reset there, so the remaining win is small and lives in the hook/physics
+  specs: `steering` (5), `collisions-deep` (4), `terrain-over-road` (5),
+  `elevation-tracks` (5). Decide whether that is worth the churn before doing
+  it — the large win (`agent-view`, 43 min → 11 min) is already banked.
+  Adding a `__apex` hook that returns the UI to the main menu would unlock ~86
+  menu tests, and is the only thing that would change this verdict.
 
 - **BUG WE INTRODUCED — race-control's `capHoldT` leaks across races.**
   `reset()` does not zero `capHoldT`, and every path that reaches `reset()` is

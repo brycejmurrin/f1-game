@@ -87,6 +87,27 @@ Fixes 1–2 are flagged DEFER in AUDIT-SYNTHESIS ("per-test design decision, not
 20. `tests/race-control.test.mjs:116-126` — the 90 s cap it names is never exercised: add the cap-expiry test (flag drops after the cap once the picture clears).
 21. `tests/carview-parts.spec.js:5` — stale "eight parts categories" title vs the twelve asserted: fix the title.
 
+**Two more found by RUNNING the suite, not by reading it** (landed `75ae72f9`,
+`85a91f40`). Both are the audit's own weak-assertion class, and neither was
+visible to a reader — which is the argument for running a converted spec at its
+known-good count rather than trusting a review:
+
+22. `tests/agent-view.spec.js` — "full paginates the raw object list" asserted
+    that page 2's first object differs from page 1's last, as a proxy for "pages
+    do not repeat". Not a property the data model has: the `detail:"full"`
+    projection drops `k`, `measured` and rotation, so genuinely distinct props at
+    one point serialise identically (monza has 20 such adjacent pairs in 2690,
+    verified headlessly through `verify-track.cjs`'s VM harness). It held only
+    while no pair straddled the 50-boundary, and `89ce4f2f`'s corner-board side
+    fix reordered the list. **LANDED**: each page must BE the corresponding slice
+    of the whole list, plus the offset/total bookkeeping.
+23. `tests/camera-driving-hooks.spec.js` — "setSpeed sets player speed" set the
+    value in one `evaluate` and read `probe()` in the next. `headless(true)` only
+    skips RENDERING (`js/game/apex.js:1513`), so the physics loop coasts the car
+    across the round-trip: measured 54.498 against a `toBeCloseTo(…, 1)`
+    tolerance of 0.05, latent until load stretched the gap. **LANDED**: both
+    values sampled in one `evaluate`.
+
 ### 1d. Merges (merge verdicts + merge candidates)
 
 **Do now (merge BEFORE the tests/ move — see §2):**
