@@ -183,7 +183,6 @@ export function audit(dir = TESTS) {
 // that had its last assertion deleted, which is the case worth catching.
 export const CAPTURE_HARNESSES = new Set([
   "tests/ui-audit.spec.js",
-  "tests/ui-desktop.spec.js",
 ]);
 
 function main() {

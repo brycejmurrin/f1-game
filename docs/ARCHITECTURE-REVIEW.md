@@ -311,8 +311,7 @@ most-load-bearing first.
 - **Test-quality gaps** (from the whole-`tests/` read). One true never-fail:
   `tests/ui-button-touch.spec.js`'s "throttle button visible" wraps its only
   `expect` in `if (count > 0)`, so a missing button passes. `menu-survey` and
-  `parts-catalog` join the known `ui-audit`/`ui-desktop` galleries as
-  assertion-light. The banked-reference measurement error (fixed in the Monza and
+  `parts-catalog` join the known `ui-audit` gallery as assertion-light. The banked-reference measurement error (fixed in the Monza and
   Spa foundation specs with a local `Tracks.banking()` term) is still latent in
   **Zandvoort's** foundation spec and ~12 others whose probes miss a bankZone —
   the durable `groundY`/`overRoad` fix above is what retires the whole class.
@@ -351,9 +350,14 @@ Deferred with reasoning, none lost:
 - **`TUNE_DEFS` hand-mirrors** — the registry is restated in six places.
 - **`GameStore`** has no cross-tab `storage` listener; two tabs silently
   overwrite each other's saves.
-- **Assertion-free specs**: `tests/ui-audit.spec.js` (34 tests, 0 `expect`)
-  and `tests/ui-desktop.spec.js` (5/0) are screenshot galleries presenting as
-  tests — rename them as galleries or give them assertions.
+- **Assertion-free specs** — RESOLVED. `tests/ui-audit.spec.js` (34 tests, 0
+  `expect`) and the former `ui-desktop.spec.js` (5/0) were screenshot galleries
+  presenting as tests. The second is now absorbed into the first as two more
+  viewport rows, and the survivor is declared a capture harness: its own
+  `test:gallery` group, run on demand, out of `test:ui`'s pass count.
+  `tools/assert-audit.mjs` now grades every test in the tree
+  asserting/implicit/vacuous and `tests/assert-audit.test.mjs` fails on a
+  vacuous body anywhere outside that one allow-listed file.
 - **`tests/tracks-visual.spec.js` baselines were never generated** — the spec
   is skip-gated on the snapshot dir existing; generating 40 circuit baselines
   on Linux/SwiftShader is its own operation.

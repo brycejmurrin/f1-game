@@ -1,7 +1,18 @@
 // @ts-check
-// UI audit — captures every screen/menu in portrait and landscape.
-// Run with: npm test -- tests/ui-audit.spec.js
+// UI audit — captures every screen/menu at four viewports.
+//
+// A CAPTURE HARNESS, not a test file: its product is a PNG gallery and it
+// asserts nothing beyond "the screen appeared". That is legitimate for what it
+// does and misleading where it sat — inside `test:ui`, where its 39 green ticks
+// were counted as coverage alongside real assertions, while dominating the
+// group's wall time (13-108 s per shot). It now has its own on-demand group.
+//
+// Run with: npm run test:gallery   (or: npm test -- tests/ui-audit.spec.js)
 // Output: artifacts/galleries-<port>/ui-audit/
+//
+// tools/assert-audit.mjs allow-lists this file by name. If it ever grows real
+// assertions, tests/assert-audit.test.mjs fails and says so — the exemption is
+// not allowed to quietly cover a file that stopped being a harness.
 import { test, expect } from "./fixtures.js";
 import { setupApiMocks } from "./f1-api-mock.js";
 import { galleryPath } from "./output-paths.js";
@@ -457,6 +468,74 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#cr-go").click();
       await page.locator("#career-offers").waitFor({ state: "visible" });
       await shot(page, `${orient}-32-career-offers`);
+    });
+  });
+}
+
+// ─── large screens ────────────────────────────────────────────────────────────
+//
+// Absorbed from the former ui-desktop.spec.js (deleted), which captured five screens
+// at iPad and desktop sizes and asserted nothing — a strict subset of the
+// screens above, in a second file, in the same group, contributing five more
+// green ticks that meant "the page booted". One capture harness is enough.
+//
+// These five are a SUBSET on purpose rather than two more rows of the outer
+// loop: running all 32 screens at four viewports would quadruple the slowest
+// file in the suite to catch layout breakage that the portrait/landscape pair
+// already surfaces. What large screens genuinely change is the menu shell and
+// the HUD's use of the extra width, so those are what get shot.
+const IPAD    = { width: 1024, height: 768 };
+const DESKTOP = { width: 1280, height: 800 };
+
+// The shared prologue for the in-race shots. park() freezes physics but the
+// render loop keeps running, so give it time to present a settled frame.
+async function raceParked(page) {
+  await page.evaluate(() => window.__apex.race("bahrain"));
+  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+  await page.evaluate(() => window.__apex.park(0.1));
+  await page.waitForTimeout(800);
+}
+
+for (const [label, vp] of [["ipad", IPAD], ["desktop", DESKTOP]]) {
+  test.describe(`UI audit — ${label}`, () => {
+    test.use({ viewport: vp });
+
+    test("01 main menu", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await shot(page, `${label}-01-main-menu`);
+    });
+
+    test("02 select screen", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-race").click();
+      await page.locator("#select").waitFor({ state: "visible" });
+      await shot(page, `${label}-02-select`);
+    });
+
+    test("06 how to play", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await page.locator("#mb-help").click();
+      await page.locator("#howtoplay").waitFor({ state: "visible" });
+      await shot(page, `${label}-06-howtoplay`);
+    });
+
+    test("07 in-race HUD", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await raceParked(page);
+      await shot(page, `${label}-07-hud`);
+    });
+
+    test("08 pause menu", async ({ page }) => {
+      await page.goto("/");
+      await waitReady(page);
+      await raceParked(page);
+      await page.locator("#pausebtn").click();
+      await page.locator("#pausemenu").waitFor({ state: "visible" });
+      await shot(page, `${label}-08-pause`);
     });
   });
 }

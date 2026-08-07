@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/*.spec.js`) + 53 `node --test` unit suites
+110 root Playwright spec files (`tests/*.spec.js`) + 53 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -153,7 +153,8 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | Group | What it runs |
 |---|---|
 | `parts` | catalog, budget, persistence, recipes, factory presets, mesh caches, liveries, ERS, the car viewer, garage aero |
-| `ui` | UI screenshots: audit, button/touch, desktop, HUD layout + audit, menu survey + keyboard (slow) |
+| `ui` | UI behaviour and layout: button/touch, UI scale, HUD layout + audit, menu survey + keyboard (slow) |
+| `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
 | `camera` | the 13 camera modes, camera + driving hooks, the camera tuner |
 | `audio` | WebAudio engine/sfx smoke + the music library |
 
