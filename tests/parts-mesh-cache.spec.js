@@ -391,13 +391,37 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       window.__apex.jump(0.10, 35, 0);
       window.__apex.setInput({ throttle: false, brake: true, steer: 0 });
       window.__apex.step(1 / 60, 90);
+      // FREEZE, so the probe samples and the road reading below describe the
+      // SAME position. freeze() pauses physics and not rendering, so the draws
+      // keep coming while the car stays put; without it the car rolls on
+      // between the last captured frame and the evaluate that measures under
+      // it, and on an undulating circuit that is centimetres of drift.
+      window.__apex.freeze(true);
       window.__wheelGroundProbe.length = 0;
     });
-    await page.waitForFunction(() => window.__wheelGroundProbe.length >= 4, { timeout: 10_000 });
+    await page.waitForFunction(() => window.__wheelGroundProbe.length >= 4,
+      { polling: 100, timeout: 20_000 });
 
-    const centreYs = await page.evaluate(() =>
-      window.__wheelGroundProbe.slice(-4).map((centre) => centre[1]));
-    expect(Math.max(...centreYs) - Math.min(...centreYs)).toBeLessThan(0.005);
-    for (const y of centreYs) expect(y).toBeCloseTo(0.34, 2);
+    const probe = await page.evaluate(() => {
+      const st = window.__apex.physState();
+      return {
+        centreYs: window.__wheelGroundProbe.slice(-4).map((centre) => centre[1]),
+        roadY: window.__apex.groundY(st.s / window.__apex.info().total, st.x).roadY,
+      };
+    });
+    expect(Math.max(...probe.centreYs) - Math.min(...probe.centreYs)).toBeLessThan(0.005);
+    // AGAINST THE ROAD UNDER THE CAR, not against sea level. This compared the
+    // WORLD y to a bare 0.34 — AXLES.wheelY (js/car/car3d.js:47), which is the
+    // wheel centre height ABOVE THE ROAD — and so silently assumed monza's
+    // surface sits at y = 0. It does not: over the ~35 m the car covers while
+    // braking here the centreline runs -0.044, -0.012, -0.006, +0.110, -0.111,
+    // so 0.34 + roadY sweeps 0.23 to 0.45. The failing reading, 0.3292, is
+    // exactly 0.34 above the road at the point the car actually stopped — the
+    // wheels were grounded to the millimetre and the test was measuring the
+    // elevation profile. A +-0.005 window on that profile was a coin flip on
+    // where the car came to rest, under any braking model.
+    for (const y of probe.centreYs)
+      expect(y - probe.roadY, `wheel centre above the road at s (roadY ${probe.roadY})`)
+        .toBeCloseTo(0.34, 2);
   });
 });

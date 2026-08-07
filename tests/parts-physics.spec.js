@@ -892,9 +892,19 @@ test.describe("Parts module — visual recipes", () => {
           const parts = Parts.getVisualTiers({ [cat.id]: opt.id }, team);
           const body = Car3D.build([0.7,0.05,0.05], [0.95,0.8,0.1],
             { noWheels: true, parts });
+          // PASS wheelStyle — buildWheel takes EIGHT arguments (car3d.js:586)
+          // and this passed seven. Without it every option in the `wheels`
+          // category rendered the default rim, so all 17 non-default rims —
+          // spoked, dished, taped, mag_forged, aero_disc, works_rim and the 11
+          // signature team rims — hashed identically to `standard` and the test
+          // reported them as duplicates. The catalog does differentiate them
+          // (getVisualTiers gives sig_ferrari_rim {spokes:0,tape:1,dish:2,nut:…}
+          // against standard's {spokes:0,tape:0,dish:0,nut:null}); the argument
+          // that carries the difference was simply dropped. Measured over all
+          // 279 options: 17 duplicates without it, 0 with it.
           const tyre = parts._visual.tyres, brake = parts._visual.brakes;
           const wheel = Car3D.buildWheel(0.32, tyre.band, brake.cal, brake.rim,
-            !!tyre.grooved, tyre, brake);
+            !!tyre.grooved, tyre, brake, parts._visual.wheels);
           const sig = hashMesh(body) + "|" + hashMesh(wheel);
           if (seen.has(sig)) failures.push(`${cat.id}:${seen.get(sig)}=${opt.id}`);
           else seen.set(sig, opt.id);
@@ -1089,6 +1099,16 @@ test.describe("Parts module — visual recipes", () => {
 
   test("WebGL and WebGPU share the same car environment-surface gate", async ({ page }) => {
     await load(page);
+    // LOAD THE DEFERRED BACKEND FIRST. js/render/webgpu/wgsl-chunks.js has NO
+    // SCRIPT TAG — index.html says so where the tags end ("js/render/webgpu/*
+    // (WGX) and js/render/three/* (TLX) have NO tags"); game.js injects it
+    // through loadBackendScripts only when apex26.gfxBackend asks for WebGPU.
+    // load(page) is the default GLX boot, so `WGSLChunks` was never defined and
+    // this threw ReferenceError on its first line, every time, from the day it
+    // was written. It failed FAST rather than by timeout, which is the same
+    // asymmetry docs/TESTING.md records: a throwing predicate propagates
+    // without polling while a merely-false one burns the budget.
+    await page.addScriptTag({ url: "/js/render/webgpu/wgsl-chunks.js" });
     const sources = await page.evaluate(() => ({
       glsl: GLXShaders.LIT_FS,
       wgsl: WGSLChunks.LIT,
@@ -1167,7 +1187,15 @@ test.describe("Parts module — visual recipes", () => {
     expect(triangles.cockpit).toBeLessThanOrEqual(1500);
     expect(triangles.frontWheel).toBeLessThanOrEqual(400);
     expect(triangles.rearWheel).toBeLessThanOrEqual(400);
-    expect(triangles.decals).toBeLessThanOrEqual(32);
+    // 48, FROM A MEASUREMENT. This said 32 and the decal sheet has been 36
+    // triangles (18 quads over LiveryTex's 8 regions) at EVERY revision of
+    // js/game/carmesh.js — bisected, not assumed. So the ceiling was never
+    // satisfiable and the test never passed; 32 was a number someone liked.
+    // 48 is the measured 36 plus a third, which is room for a few more decal
+    // regions and still far below anything that would cost a frame. The tier
+    // argument does not affect the count (identical for tiers 0-3), so the 2
+    // above is arbitrary and harmless.
+    expect(triangles.decals).toBeLessThanOrEqual(48);
   });
 
   test("every recipe has primary and secondary visual parameters", async ({ page }) => {
@@ -1207,14 +1235,21 @@ test.describe("Parts module — visual recipes", () => {
       };
       // The conduit hangs off the lit ERS strip, so probing it needs a lit pack.
       const ACTIVE = Object.assign({}, NEUTRAL, { ers: { led: [0.15, 0.55, 1.6], pack: 1, cells: 3 } });
+      // THE WHOLE CAR, WHEELS INCLUDED. This built with `noWheels: true`, and
+      // five of the twenty-seven knobs below are wheel-side — tyres.shoulder
+      // and brakes.discFace reach only addWheel (js/car/car3d.js:474-477), and
+      // the three wheels.* knobs are rim geometry. A wheel knob cannot deform a
+      // wheel-less mesh, so those five asserted something the helper made
+      // impossible and the test could never pass. (Measured: noWheels 17964
+      // verts, with wheels 33084.) Every knob deforms once the wheels are here,
+      // and the neutral recipes stay inert either way.
       const build = (cat, visual) => Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
-        noWheels: true,
         parts: { [cat]: 1, _visual: { [cat]: Object.assign({ id: "probe", tier: 1 }, visual) } },
       });
       const differs = (a, b) => a.pos.length !== b.pos.length
         || a.pos.some((v, i) => Math.abs(v - b.pos[i]) > 1e-6);
 
-      const bare = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true });
+      const bare = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {});
       const out = { inert: {}, active: {} };
       const KNOBS = [
         ["aero", "plate", 2], ["aero", "casc", 3], ["aero", "swan", 1], ["aero", "tvane", 1],
@@ -1233,12 +1268,15 @@ test.describe("Parts module — visual recipes", () => {
       }
       return out;
     });
-    for (const [knob, changed] of Object.entries(result.inert)) {
-      expect(changed, `${knob} neutral recipe must build the shipped geometry`).toBe(false);
-    }
-    for (const [knob, changed] of Object.entries(result.active)) {
-      expect(changed, `${knob} must deform the mesh`).toBe(true);
-    }
+    // REPORT EVERY KNOB, NOT THE FIRST. These were two `expect`-per-iteration
+    // loops, and expect throws — so when five knobs were broken the run named
+    // ONE (tyres.shoulder, the 22nd of 27) and the other four stayed invisible
+    // through the whole investigation. Collecting first costs nothing and turns
+    // one failure message into the entire fault.
+    const notInert = Object.entries(result.inert).filter(([, changed]) => changed).map(([k]) => k);
+    const notDeformed = Object.entries(result.active).filter(([, changed]) => !changed).map(([k]) => k);
+    expect(notInert, "neutral recipes that did NOT build the shipped geometry").toEqual([]);
+    expect(notDeformed, "knobs that did NOT deform the mesh").toEqual([]);
   });
 
   test("recipe fingerprints are unique within every category", async ({ page }) => {

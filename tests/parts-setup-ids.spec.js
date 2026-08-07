@@ -97,7 +97,16 @@ test.describe("Car setup — nothing shows through from the screen below", () =>
       await page.locator(enter).click();
       await page.locator("#carsetup").waitFor({ state: "visible" });
 
-      expect(await screens(page)).toEqual({ overlay: true, select: true, carsetup: false });
+      // ALL FOUR KEYS. screens() returns four; this compared against three, and
+      // toEqual is deep equality — so a 4-key object could never equal a 3-key
+      // one, and BOTH routes failed with the same "+1" diff from the moment
+      // "race-settings" was added to the helper for the backTo check below
+      // without the expectation above it being updated. Spelled out rather than
+      // relaxed to toMatchObject on purpose: a partial matcher here would have
+      // silently stopped covering the very key that was just added, which is
+      // how a screen bleeds through unnoticed in the first place.
+      expect(await screens(page)).toEqual({
+        overlay: true, select: true, carsetup: false, "race-settings": true });
 
       await page.locator("#cs-done").click();
       await page.locator("#carsetup").waitFor({ state: "hidden" });
@@ -184,8 +193,16 @@ test.describe("Garage — TEAM tab owns team, driver and MY TEAM", () => {
     await openTeamTab(page);
     const chips = await page.locator("#cs-driver .sel-chip").count();
     if (chips > 1) await page.locator("#cs-driver .sel-chip").nth(1).click();
+    // NO .toUpperCase(). This read the chip's own text and then transformed it
+    // into something the chip cannot contain: the label is "#81 Oscar Piastri"
+    // (js/game/setup-ui.js builds "#" + num + " " + name, and teams.js stores
+    // "Oscar Piastri"), so the surname is "Piastri" and toContainText is
+    // case-sensitive. There is no CSS text-transform on .sel-chip either, so
+    // the uppercase form has never existed anywhere — the round trip could only
+    // close if the DOM text were already caps. Deriving the surname FROM the
+    // chip is right and survives a roster change; uppercasing it was the bug.
     const driver = await page.locator("#cs-driver .sel-chip.active").textContent();
-    const surname = (driver ?? "").trim().split(" ").pop().toUpperCase();
+    const surname = (driver ?? "").trim().split(" ").pop();
 
     await page.locator("#cs-done").click();
     await page.locator("#mb-race").click();
