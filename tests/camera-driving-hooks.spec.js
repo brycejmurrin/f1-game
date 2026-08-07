@@ -16,12 +16,17 @@ async function loadTrack(page, track = "monza") {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex, { timeout: 15000 });
   }
-  await page.evaluate(async t => {
-    __apex.race(t);
-    await new Promise(r => setTimeout(r, 3000));
+  // Wait for the BUILD, not for a stopwatch. This was `await new Promise(r =>
+  // setTimeout(r, 3000))` inside the evaluate — wrong in both directions at
+  // once: on a loaded box a 40-circuit build can exceed 3 s and the test then
+  // races a half-built track, and on a quiet box it burns most of 3 s per call
+  // for nothing. waitForFunction polls, so it costs what the build costs.
+  await page.evaluate((t) => { __apex.race(t); }, track);
+  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20000 });
+  await page.evaluate(() => {
     __apex.headless(true);
     __apex.reset(0.1, 30);
-  }, track);
+  });
 }
 
 // ── orbit() — fov option ─────────────────────────────────────────────────────
@@ -207,22 +212,25 @@ test("setSpeed false without initialised player", async ({ page }) => {
 test("spin rotates heading by deg", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
-  const before = await page.evaluate(() => __apex.probe().angle);
-  await page.evaluate(() => __apex.spin(90));
-  const after  = await page.evaluate(() => __apex.probe().angle);
-  // heading should have changed by ~90° (probe().angle is track-relative, but heading changes)
-  const headBefore = await page.evaluate(() => {
+  // ONE evaluate: physics keeps integrating between round-trips even under
+  // headless(true) (that only skips RENDERING — js/game/apex.js:1513), so a
+  // heading sampled in a separate call has drifted by an unknown amount.
+  const r = await page.evaluate(() => {
     __apex.reset(0.1, 0);
-    const h0 = window._spin_test_h0 = __apex.physState().head;
-    return h0;
-  });
-  const headAfter = await page.evaluate(() => {
+    const angleBefore = __apex.probe().angle;
+    const headBefore = __apex.physState().head;
     __apex.spin(90);
-    return __apex.physState().head;
+    return { angleBefore, headBefore,
+             angleAfter: __apex.probe().angle, headAfter: __apex.physState().head };
   });
-  // head increased by ~90° in radians ≈ 1.5708
-  const delta = headAfter - headBefore;
-  expect(Math.abs(delta) % (2 * Math.PI)).toBeCloseTo(Math.PI / 2, 1);
+  // spin() adds exactly deg*PI/180 (apex.js:540), so assert the SIGNED delta.
+  // The old form took Math.abs() before the modulo, which passed just as
+  // happily for spin(-90) — i.e. it could not tell the hook's direction from
+  // its opposite, and direction is the whole contract.
+  expect(r.headAfter - r.headBefore).toBeCloseTo(Math.PI / 2, 3);
+  // probe().angle is track-relative and was computed twice and never asserted.
+  // Turning the car 90° off the tangent must move it.
+  expect(r.angleAfter).not.toBeCloseTo(r.angleBefore, 2);
 });
 
 test("spin zeroes vLat and yawRate", async ({ page }) => {
