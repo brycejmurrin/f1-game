@@ -185,7 +185,7 @@ Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
 - **Montreal: a bridge support floats 2.72 m off the ground** against a 0.05 m
-  allowance (`tests/physics-montreal-foundation.spec.js`). Deliberately left
+  allowance (`tests/montreal-foundation.spec.js`). Deliberately left
   failing — it wants a geometry fix, not a wider tolerance.
 - **Per-circuit vertex budgets are ad hoc; the repo-wide gate is missing.**
   Qatar itself is resolved — cut 340,858 → 299,386 (a redundant street-lamp

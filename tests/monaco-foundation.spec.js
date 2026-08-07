@@ -110,7 +110,7 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
       sample && Number.isFinite(sample.roadY) &&
       Number.isFinite(sample.terrainY) && sample.gap <= 0.25)).toBe(true);
 
-    // REQUIRED models only — the same rule physics-monza-foundation.spec.js:40
+    // REQUIRED models only — the same rule monza-foundation.spec.js:40
     // and physics-spa-foundation.spec.js:141 already use. Monaco was the one
     // spec demanding that NOTHING be suppressed, which forbids the footprint
     // check from ever firing on the tightest circuit on the calendar. It was

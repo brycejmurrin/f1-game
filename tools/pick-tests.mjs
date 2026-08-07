@@ -63,10 +63,10 @@ export const RULES = [
   // ── track engine + circuit data ─────────────────────────────────────────
   [/^js\/track\/scenery/, ["scenery", "sweeps"], "prop placement and the full-fleet clip audits"],
   [/^js\/track\/(tracks|mesh|spline|surface|geom|graph)\.js/,
-   ["circuit", "physics", "sweeps"], "road geometry reaches walls, elevation and physics"],
+   ["circuit", "physics", "sweeps", "foundation"], "road geometry reaches walls, elevation, physics and every circuit's foundation"],
   [/^js\/track\/space\.js/, ["physics"], "world<->track projection"],
   [/^js\/track\/(markings|maps|geo-paths)\.js/, ["map", "circuit"], "layout metadata"],
-  [/^js\/circuits\//, ["circuit", "scenery"], "a circuit def: walls + its scenery callback"],
+  [/^js\/circuits\//, ["circuit", "scenery", "foundation"], "a circuit def: walls, its scenery callback, and its own foundation spec"],
 
   // ── car ─────────────────────────────────────────────────────────────────
   [/^js\/car\/parts\.js/, ["parts"], "the catalog, budgets, recipes and their physics"],

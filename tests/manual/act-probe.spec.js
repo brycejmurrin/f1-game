@@ -165,3 +165,66 @@ test("M6's own sequence, under TLX, timed step by step", async ({ page }) => {
   }
   expect(marks.length).toBeGreaterThan(0);
 });
+
+/* THE DIRECT QUESTION, asked directly.
+   Two probes narrowed M6's 240 missing seconds to its final wait — 344.4 s
+   inside waitForFunction(skidVerts > 0) — without ever establishing the two
+   facts that decide the fix. So: no timing, no manoeuvre theory, just look.
+     - does TLX actually install in this project? (the first probe silently ran
+       under GLX, which is how it cleared act() against the wrong renderer)
+     - does skidVerts EVER become non-zero, at any point in the run?
+   Everything here is bounded by its own deadline rather than the test budget,
+   because the flaw that wasted the last two probes was assuming a declared
+   timeout bounds anything. */
+test("does TLX install, and does skidVerts ever move?", async ({ page }) => {
+  test.slow();
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("apex26.gfxBackend", "three");
+      localStorage.setItem("apex26.tlxForceGL", "1");
+    } catch (_) { /* reported below */ }
+  });
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+
+  const backend = await page.evaluate(() => ({
+    want: localStorage.getItem("apex26.gfxBackend"),
+    hasGLX: typeof window.GLX !== "undefined",
+    hasTlx: !!(window.GLX && window.GLX.__tlx),
+    fxStateFn: !!(window.GLX && window.GLX.__tlx && typeof window.GLX.__tlx.fxState === "function"),
+  }));
+  console.log(`\n=== backend: ${JSON.stringify(backend)}`);
+
+  await page.evaluate(() => window.__apex.race("monza"));
+  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+
+  // Drive M6's manoeuvre and SAMPLE skidVerts throughout, rather than waiting
+  // for it. A number that is zero at every sample is a different finding from
+  // one that rises and is missed, and only sampling can tell them apart.
+  const trace = await page.evaluate(() => {
+    const read = () => {
+      try { return window.GLX.__tlx.fxState().skidVerts; } catch (e) { return `ERR:${e.message.slice(0, 40)}`; }
+    };
+    const rows = [{ at: "before jump", skid: read() }];
+    window.__apex.jump(0.1, 70);                    // M6's exact two-arg form
+    rows.push({ at: "after jump", skid: read() });
+    for (let i = 0; i < 120; i += 20) {
+      window.__apex.act({ steer: 1, throttle: true }, 1 / 60, 20);
+      const p = window.__apex.physState();
+      rows.push({ at: `step ${i + 20}`, skid: read(), x: +p.x.toFixed(1),
+                  speed: +p.speed.toFixed(1), rescueT: +(p.rescueT || 0).toFixed(2) });
+    }
+    return rows;
+  });
+  console.log("=== skidVerts through M6's manoeuvre");
+  for (const r of trace) console.log(`    ${JSON.stringify(r)}`);
+
+  // Then give the renderer real frames — M6's comment says the batch lands on
+  // the next PRESENTED frame, and nothing above presented one.
+  await page.waitForTimeout(2000);
+  const after = await page.evaluate(() => {
+    try { return window.GLX.__tlx.fxState().skidVerts; } catch (e) { return `ERR:${e.message.slice(0, 40)}`; }
+  });
+  console.log(`=== skidVerts after 2 s of frames: ${after}`);
+  expect(trace.length).toBeGreaterThan(0);
+});

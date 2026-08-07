@@ -120,7 +120,8 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 
 | Group | What it runs |
 |---|---|
-| `physics` | per-circuit foundation specs + world-physics, longitudinal, elevation, projection, active aero |
+| `physics` | the driving model itself: physics-characterization, physics-fixes, world-physics, longitudinal, elevation, projection, active aero. The 16 per-circuit foundation specs LEFT this group — they contain no driving-model physics, and the `physics-` filename prefix existed only to be caught by this glob, so every driving-model edit paid ~16 circuit builds it could not break while `js/circuits/` edits never ran them. Misgrouped in both directions |
+| `foundation` | the 16 per-circuit foundation specs (`tests/*-foundation.spec.js`) — required models present, props clear of the racing surface, terrain grounded, water safe, walls sane. Routed from `js/circuits/` and the track engine, which is what actually breaks them |
 | `collision` | car-to-car and wall collision, drift, off-track |
 | `behaviour` | `collision` plus world-physics, physics-fixes, active-aero, aero-zones |
 | `barriers` | track wall geometry + the AI-fixes barrier regressions |
@@ -548,8 +549,8 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
-| `physics-*-foundation.spec.js` (15 circuits: abudhabi, albert_park, bahrain, cota, hungaroring, imola, monaco, montreal, monza, qatar, redbull, spa, suzuka, vegas, zandvoort) | per-circuit runtime build: required models present, props clear of the racing surface, terrain grounded, water safe, walls sane |
-| `physics-interlagos-migration.spec.js` | Interlagos' migration to the track-owned foundation |
+| `*-foundation.spec.js` (16 circuits: abudhabi, albert-park, bahrain, cota, hungaroring, imola, interlagos, monaco, montreal, monza, qatar, redbull, spa, suzuka, vegas, zandvoort) | per-circuit runtime build: required models present, props clear of the racing surface, terrain grounded, water safe, walls sane |
+| `interlagos-foundation.spec.js` | Interlagos' migration to the track-owned foundation (renamed from `physics-interlagos-migration` with the rest of the family) |
 | `albert-park-foundation.test.mjs`, `baku-migration.test.mjs` | the same, as pure Node VM builds — no browser |
 | `shared-track-foundation-characterization.test.cjs` | pins the shared-foundation compatibility behaviour: `startFrac`/`reverse` transforms, open vs street grounding, `recordBarrier` wrap, whole-model road suppression, finite mesh buffers |
 
