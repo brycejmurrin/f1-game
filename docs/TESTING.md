@@ -120,10 +120,10 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 
 | Group | What it runs |
 |---|---|
-| `physics` | the driving model itself: physics-characterization, physics-fixes, world-physics, longitudinal, elevation, projection, active aero. The 16 per-circuit foundation specs LEFT this group — they contain no driving-model physics, and the `physics-` filename prefix existed only to be caught by this glob, so every driving-model edit paid ~16 circuit builds it could not break while `js/circuits/` edits never ran them. Misgrouped in both directions |
+| `physics` | the driving model itself: physics-characterization, physics-fixes, longitudinal, projection, understeer-cue. world-physics and active-aero bill to `behaviour`, elevation-tracks to `circuit`. The 16 per-circuit foundation specs LEFT this group — they contain no driving-model physics, and the `physics-` filename prefix existed only to be caught by this glob, so every driving-model edit paid ~16 circuit builds it could not break while `js/circuits/` edits never ran them. Misgrouped in both directions |
 | `foundation` | the 16 per-circuit foundation specs (`tests/*-foundation.spec.js`) — required models present, props clear of the racing surface, terrain grounded, water safe, walls sane. Routed from `js/circuits/` and the track engine, which is what actually breaks them |
 | `collision` | car-to-car and wall collision, drift, off-track |
-| `behaviour` | `collision` plus world-physics, physics-fixes, active-aero, aero-zones |
+| `behaviour` | world-physics, active-aero, aero-zones. The collision/drift/offtrack members and physics-fixes LEFT in the double-billing dedupe — each spec was running twice whenever two of its groups co-ran, which `pick-tests` makes routine. Coverage is unchanged: the dedupe shipped WITH new `pick-tests` routing (game.js and physics-consts.js now select `collision` and `hooks` too), verified by comparing the SPEC-FILE union before and after, not the group names |
 | `barriers` | track wall geometry + the AI-fixes barrier regressions |
 | `debris` | the Rapier debris side-world |
 | `steering` | presets, sliders, steering modes, gamepad |

@@ -58,7 +58,7 @@ export const RULES = [
   [/^js\/render\/shaders\//, ["webgl", "ab"], "GLSL leaves feed every lit surface"],
   [/^js\/render\/webgpu\//, ["webgl"], "WGX is feature-detected; GLX must still boot"],
   [/^js\/render\/three\//, ["tlx"], "the three.js backend has its own probe spec"],
-  [/^js\/render\/assets\.js/, ["api"], "assets-api.spec.js lives in test:api"],
+  [/^js\/render\/assets\.js/, ["api", "hooks"], "assets-api.spec.js lives in test:api; new-hooks moved to test:hooks in the dedupe"],
 
   // ── track engine + circuit data ─────────────────────────────────────────
   [/^js\/track\/scenery/, ["scenery", "sweeps"], "prop placement and the full-fleet clip audits"],
@@ -82,8 +82,8 @@ export const RULES = [
   // change to the FX block's pace normalisation came back "no physics group
   // needed". Four groups for a game.js edit is a lot; running the wrong three is
   // worse, and these RULES are deliberately biased toward running too much.
-  [/^js\/game\.js/, ["behaviour", "api", "circuit", "physics"], "the loop: physics, AI, race logic"],
-  [/^js\/game\/physics-consts\.js/, ["behaviour", "api", "circuit", "physics"], "the driving model's immutable numbers — same blast radius as game.js"],
+  [/^js\/game\.js/, ["behaviour", "api", "circuit", "physics", "collision", "hooks"], "the loop: physics, AI, race logic"],
+  [/^js\/game\/physics-consts\.js/, ["behaviour", "api", "circuit", "physics", "collision", "hooks"], "the driving model's immutable numbers — same blast radius as game.js"],
   [/^js\/game\/(cameras|cam-tune|cam-tuner|cam-modes)\.js/, ["camera"], ""],
   [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["steering"], ""],
   [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes)\.js/, ["ui"], "DOM screens"],
@@ -99,7 +99,7 @@ export const RULES = [
 
   // ── the rest ────────────────────────────────────────────────────────────
   [/^js\/net\//, ["net-unit", "net"], "wire logic first (1 s), then the browser session"],
-  [/^js\/data\//, ["api"], "data hub lifecycle + telemetry compare"],
+  [/^js\/data\//, ["api", "hooks"], "data hub lifecycle + telemetry compare; new-hooks moved to test:hooks in the dedupe"],
   [/^sw\.js|^manifest\.json/, ["service-worker"], ""],
   [/^worker\//, ["net-unit"], "the rendezvous Durable Object"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
