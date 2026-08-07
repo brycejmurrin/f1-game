@@ -35,9 +35,18 @@ name: CI
 #                                  per-test timeout on a shared runner. The
 #                                  per-test price sets this budget, not the
 #                                  spec count.
+#   driving-  ~1 min, Chromium   — the characterization traces. ONE spec, and
+#   model                          its own job rather than a step in smoke,
+#                                  because a step inherits its job's fate: it
+#                                  would run only after smoke's twelve minutes
+#                                  (so a red smoke means it never runs at all)
+#                                  and it would report under smoke's NAME, since
+#                                  the checks list shows jobs and not steps. It
+#                                  ran as a step exactly once; see the job.
 #
 # Both figures above are MEASURED on run 31023778264 — the first run that ever
 # completed end to end — not estimated: sweeps 15m12s, smoke 14m24s, guards 25s.
+# driving-model is measured on 31197770813: 42 s of test.
 #
 # THE NUMBERS ABOVE ARE THE BUDGET, AND `timeout-minutes` MUST STAY ABOVE THEM.
 # They are a comment, so nothing enforces them: this header read "~3 min" for
@@ -284,23 +293,63 @@ jobs:
         env:
           APEX_WORKERS: 1
         run: npm run test:smoke -- --timeout=240000
+      - name: Failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  driving-model:
+    name: Driving model (characterization traces)
+    runs-on: ubuntu-latest
+    # 42 s measured in CI (run 31197770813, step 7). 10 covers a cold runner
+    # and a browser install; if this ever approaches the cap, the trace count
+    # grew and the number here needs re-measuring, not raising.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
       # THE DRIVING MODEL'S OWN GATE, which nothing was running.
       #
       # tests/physics-characterization.spec.js pins six-sample traces of four
       # scenarios and fails if the driving model's numbers move. It is not in
       # guards (browser spec, not node), not in sweeps (geometry only), and not
-      # in smoke's spec list — so it has never run in CI, and locally it had
+      # in smoke's spec list — so it had never run in CI, and locally it had
       # never passed either. The result: 175 commits of deliberate physics work
       # (geometric RACE PACE, the PACE regrid, the SPEED STEER taper, the
       # wheelbase recentre) drifted past it with nothing to say so, and the
       # baseline was ~9 % stale before anyone looked. A gate nobody runs is not
       # a gate.
       #
-      # Cheap enough to be unconditional: ONE test, headless physics with no
-      # rendering, ~30 s locally. Its own step so a failure reads as "the
-      # driving model changed" rather than "smoke went red", which is the whole
-      # point of pinning it.
-      - name: Driving-model characterization
+      # ITS OWN JOB, NOT A STEP IN SMOKE — and it landed as a step first, which
+      # is the mistake worth recording. Appending it to smoke was the cheap
+      # move: smoke is the only job that installs the browser binaries, so it
+      # cost nothing extra. But a step inherits its job's fate in both
+      # directions. It ran only AFTER smoke's twelve minutes, so a red smoke
+      # meant the driving-model gate never executed at all — a gate that
+      # silently does not run is the exact failure class the header above
+      # documents. And GitHub's checks list reports JOBS, not steps, so a
+      # failure surfaced as "Smoke (page boots, __apex responds)" — defeating
+      # the stated reason for making it a separate step in the first place.
+      #
+      # The cost argument was also weaker than it looked. The gate's critical
+      # path is sweeps (~15 min) and smoke (13m21s measured); a job that takes
+      # ~40 s of setup plus 42 s of test runs alongside them and adds ZERO
+      # wall-clock. One runner is the whole price of an independent verdict.
+      #
+      # No `needs:` — this is orthogonal to whether the page boots. It answers
+      # one question, in its own name: did the driving model's numbers move?
+      - name: Characterization traces
         env:
           APEX_WORKERS: 1
         run: npm test -- tests/physics-characterization.spec.js --timeout=240000
@@ -308,7 +357,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts
+          name: playwright-artifacts-driving-model
           path: |
             artifacts/test-results-*/
             artifacts/report-*/
