@@ -88,8 +88,14 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
     expect.objectContaining({ kind: "city", s0: 0.60, s1: 0.94 }),
     expect.objectContaining({ kinds: ["foliage", "lamps", "floodlights"], s0: 0.70, s1: 0.89 }),
   ]));
-  expect(audit.elevationRange, "Mexico remains essentially flat").toBeLessThanOrEqual(1.0);
-  expect(audit.maxSlope, "no invented stadium/start-finish grade").toBeLessThan(0.01);
+  // mexico.js authors a deliberate gentle profile — "~7 m end to end, under
+  // 2 % anywhere" (its elevations comment). The old "essentially flat" <= 1.0
+  // pin predated that authoring and sat red, unrun, until 2026-08. Pin the
+  // authored contract from both sides instead: the profile must exist AND
+  // must not grow back into the invented 12 m hill the comment retired.
+  expect(audit.elevationRange, "Mexico keeps its authored gentle profile (~7 m)").toBeGreaterThan(4.0);
+  expect(audit.elevationRange, "and does not regrow the invented 12 m hill").toBeLessThanOrEqual(8.0);
+  expect(audit.maxSlope, "under 2 % grade anywhere (the authored bound)").toBeLessThan(0.02);
   expect(audit.models.suppressed).toEqual([]);
   expect(audit.models.invalid).toEqual([]);
   expect(audit.models.unsafe).toEqual([]);
