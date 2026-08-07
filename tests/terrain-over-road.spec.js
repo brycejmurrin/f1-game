@@ -88,14 +88,28 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
     expect.objectContaining({ kind: "city", s0: 0.60, s1: 0.94 }),
     expect.objectContaining({ kinds: ["foliage", "lamps", "floodlights"], s0: 0.70, s1: 0.89 }),
   ]));
-  // mexico.js authors a deliberate gentle profile — "~7 m end to end, under
-  // 2 % anywhere" (its elevations comment). The old "essentially flat" <= 1.0
-  // pin predated that authoring and sat red, unrun, until 2026-08. Pin the
-  // authored contract from both sides instead: the profile must exist AND
+  // mexico.js authors a deliberate gentle profile. The old "essentially flat"
+  // <= 1.0 pin predated that authoring and sat red, unrun, until 2026-08. Pin
+  // the authored contract from both sides instead: the profile must exist AND
   // must not grow back into the invented 12 m hill the comment retired.
+  //
+  // BOTH NUMBERS BELOW ARE MEASURED. `f9bbf479` repaired this test by lifting
+  // "~7 m end to end, under 2 % anywhere" out of mexico.js's prose comment and
+  // pinning it — replacing one unverified number with another, and landing
+  // without a run. The range half happened to be right (6.642 m). The slope
+  // half was not: the authored elevations peak at 2.83 %, on the flank of the
+  // s = 0.245 rise (3.0 m over halfM 380), with 6 of 240 profile samples over
+  // 2 %. That is neither a regression nor a product defect — it reads 0.0283
+  // identically at HEAD, at `fdd4082f` and at `89ce4f2f~1`; the range is what
+  // the author intended; and 2.83 % is gentle by any standard (Eau Rouge is
+  // ~18 %). The claim in mexico.js was simply never computed, and is corrected
+  // there too.
+  //
+  // 3.5 % is the measured 2.83 % plus headroom for spline resampling — still
+  // tight enough that regrowing the retired hill trips it.
   expect(audit.elevationRange, "Mexico keeps its authored gentle profile (~7 m)").toBeGreaterThan(4.0);
   expect(audit.elevationRange, "and does not regrow the invented 12 m hill").toBeLessThanOrEqual(8.0);
-  expect(audit.maxSlope, "under 2 % grade anywhere (the authored bound)").toBeLessThan(0.02);
+  expect(audit.maxSlope, "stays a gentle grade (measured 2.83 % max)").toBeLessThan(0.035);
   expect(audit.models.suppressed).toEqual([]);
   expect(audit.models.invalid).toEqual([]);
   expect(audit.models.unsafe).toEqual([]);

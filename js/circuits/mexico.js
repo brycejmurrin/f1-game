@@ -46,9 +46,17 @@
     ],
     // Source-coordinate undulations. Hermanos Rodríguez sits on a drained lakebed
     // and is gentle, but not flat: it climbs through the esses, crests before the
-    // stadium and drops through Foro Sol — ~7 m end to end, under 2 % anywhere.
+    // stadium and drops through Foro Sol.
     // (The old ±7 m pair remapped across start/finish and invented a 12 m hill;
     // these are authored in SOURCE space so that cannot happen.)
+    //
+    // MEASURED off the built spline, 240 samples: 6.64 m end to end, peaking at
+    // 2.83 % grade on the flank of the s = 0.245 rise, with 6 samples over 2 %.
+    // This said "under 2 % anywhere" — a figure nobody computed, which
+    // tests/terrain-over-road.spec.js then pinned verbatim in `f9bbf479` and
+    // sat red on. The geometry is unchanged and correct; only the claim was
+    // wrong. Re-measure if these three rows change, rather than adjusting the
+    // sentence to taste.
     elevations: [
       { s: 0.855, halfM: 420, rise: 5.0 },
       { s: 0.245, halfM: 380, rise: 3.0 },
