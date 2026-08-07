@@ -13,7 +13,12 @@
 // including one verified green minutes earlier.
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { titlesIn, audit } from "../tools/test-observed.mjs";
+
+const LOGS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../artifacts/logs");
 
 test("a top-level test carries the file's basename as an implicit suite", () => {
   const src = `import { test } from "./fixtures.js";\ntest("does a thing", async () => {});`;
@@ -92,8 +97,18 @@ test("the audit finds real tests, and its titles match real log lines", () => {
   // would report the entire suite as never-run rather than failing.
   const rows = audit();
   const declared = rows.reduce((a, r) => a + (r.declared || 0), 0);
-  const observed = rows.reduce((a, r) => a + (r.observed || 0), 0);
   assert.ok(declared > 500, `expected the suite to declare 500+ tests, got ${declared}`);
+
+  // The observed half needs logs to compare against, and `artifacts/` is
+  // GITIGNORED — it does not exist in CI at all, so there every title is
+  // legitimately unobserved. Asserting observed > 0 unconditionally turned CI
+  // red for an environment fact rather than a defect. Run the check where
+  // there is something to check.
+  const logs = fs.existsSync(LOGS)
+    ? fs.readdirSync(LOGS).filter((n) => n.endsWith(".log"))
+    : [];
+  if (!logs.length) return;
+  const observed = rows.reduce((a, r) => a + (r.observed || 0), 0);
   assert.ok(observed > 0,
     "no declared title matched any artifacts/logs line — extraction and the " +
     "live-reporter format have diverged, which makes the tool useless rather than wrong");

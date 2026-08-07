@@ -46,12 +46,17 @@ test("a file no rule claims reports 'unmatched', not an empty success", () => {
 });
 
 test("--since takes a REF, and does not read it as a path", () => {
-  // The regression this pins. Before the fix `files` was ["HEAD~1"] — the ref
+  // The regression this pins. Before the fix `files` was ["HEAD"] — the ref
   // itself — and `reason` was "unmatched", i.e. "nothing to run" for a diff
   // that certainly had files in it.
-  const r = json("--since", "HEAD~1");
-  assert.ok(!r.files.includes("HEAD~1"), "the ref leaked into the file list");
-  const real = execFileSync("git", ["diff", "--name-only", "HEAD~1"],
+  //
+  // HEAD, not HEAD~1: CI's guards job checks out SHALLOW (`actions/checkout@v4`
+  // with no fetch-depth), where HEAD~1 does not exist and git fails with
+  // "ambiguous argument". HEAD resolves in every clone and pins the same
+  // property — the ref must not end up in the FILE list.
+  const r = json("--since", "HEAD");
+  assert.ok(!r.files.includes("HEAD"), "the ref leaked into the file list");
+  const real = execFileSync("git", ["diff", "--name-only", "HEAD"],
                             { cwd: ROOT, encoding: "utf8" }).trim();
   const expected = real ? real.split("\n").filter(Boolean) : [];
   assert.deepEqual(r.files.slice().sort(), expected.slice().sort());
